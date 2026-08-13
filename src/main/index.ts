@@ -1,6 +1,7 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { appendFileSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
 import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
@@ -198,15 +199,33 @@ app.whenReady().then(() => {
 // 즉사한다(PtyBackend.drainKilledPtys 주석의 실측). 그래서 종료를 딱 한 번 미루고, 배수한 뒤 다시
 // 요청한다 — 두 번째 진입에서는 정리를 반복하지 않고 그대로 통과시킨다.
 let ptyExitsDrained = false
+
+// #64 종료 추적. `ARA_EXIT_TRACE=<파일>` 이 있을 때만 단계를 남긴다 — 평소에는 아무 일도 안 한다.
+// 앱이 안 내려가는 일이 e2e 에서 간헐로 나는데(7회 중 3회), **어디까지 갔다가 멈추는지**를 알아야
+// 고칠 수 있다. appendFileSync 라 죽기 직전까지 쓴 것은 반드시 남는다(비동기 로거는 그걸 못 한다).
+const exitTrace = (stage: string): void => {
+  const file = process.env['ARA_EXIT_TRACE']
+  if (!file) return
+  try {
+    appendFileSync(file, `${Date.now()} ${stage}
+`)
+  } catch {
+    /* 추적을 못 남겨도 종료는 계속한다 */
+  }
+}
+
 app.on('before-quit', (e) => {
+  exitTrace(ptyExitsDrained ? 'before-quit(2nd)' : 'before-quit(1st)')
   if (ptyExitsDrained) return
   store?.flush()
   history?.flush()
   telemetry?.stopAll()
   remoteConsole?.stopAll()
   forwards?.stopAll()
+  exitTrace('flushed')
   sessionLog?.closeAll()
   sessions?.destroyAll()
+  exitTrace('sessions-destroyed')
   // F16: 진행 중 스트림 abort — 종료 후에도 살아 있는 좀비 HTTP 요청을 남기지 않는다.
   ara?.cancel()
   // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
@@ -217,16 +236,21 @@ app.on('before-quit', (e) => {
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).
   closeAllRdpSpanWindows()
   stopAllRdpRelays()
+  exitTrace('services-stopped')
   // 정리는 여기까지 전부 끝났다. 남은 건 죽인 pty 의 exit 콜백이 메인 루프에 도착하기를 기다리는 것뿐
   // (실측 14~16ms, 상한 500ms). 그 뒤 다시 quit 하면 위 early return 으로 곧장 종료된다.
   e.preventDefault()
   const finish = (): void => {
+    exitTrace('drained')
     ptyExitsDrained = true
     app.quit()
   }
   // 성공/실패 어느 쪽이든 반드시 다시 quit 한다 — 배수가 삐끗해서 "앱이 안 꺼진다"가 되면 안 된다.
   void drainKilledPtys().then(finish, finish)
 })
+
+app.on('will-quit', () => exitTrace('will-quit'))
+app.on('quit', () => exitTrace('quit'))
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
