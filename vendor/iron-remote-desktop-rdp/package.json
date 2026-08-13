@@ -1,0 +1,16 @@
+{
+  "name": "@devolutions/iron-remote-desktop-rdp",
+  "version": "0.7.0-ara.1",
+  "description": "RDP backend for iron-remote-desktop — A.R.A fork with multi-monitor (TS_UD_CS_MONITOR) support",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Devolutions/IronRDP.git"
+  },
+  "main": "iron-remote-desktop-rdp.js",
+  "types": "index.d.ts",
+  "files": [
+    "iron-remote-desktop-rdp.js",
+    "index.d.ts"
+  ]
+}

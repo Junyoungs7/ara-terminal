@@ -1,0 +1,55 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+.vite/
+coverage/
+*.tsbuildinfo
+
+# F6/F7 E2E 하네스 번들(esbuild 산출물 — npm run f6:bundle / f7:bundle 로 재생성)
+tests/.f6-harness-main.cjs
+tests/.f7-harness-main.cjs
+tests/.w1b-harness-main.cjs
+tests/.w2-harness-main.cjs
+tests/.w4sat-harness-main.cjs
+tests/.fixdestroy-harness-main.cjs
+tests/.fb-sync-harness-main.cjs
+tests/.shutdown-harness-main.cjs
+
+# Playwright 실행 산출물(T1) — 리포트·실패 아티팩트는 커밋하지 않는다
+tests/e2e/.last-run.json
+test-results/
+playwright-report/
+
+# transient session/runtime state (not part of the app)
+.omc/state/
+.omc/logs/
+.omc/sessions/
+.playwright-mcp/
+
+# ── 저장소 밖에 두는 작업 산출물 (2026-08-13 준영님 결정 — 개인 GitHub 로 옮기면서) ──
+# 기준은 하나다: **앱을 빌드·실행·검증하는 데 필요한 것만 남긴다.**
+# 아래는 전부 만드는 과정의 기록이라 코드가 없어도 아쉽지 않고, 저장소만 불린다.
+# 파일은 이 PC 에 그대로 있다 — 지운 것이 아니라 추적만 뗐다.
+
+# 목업 HTML·PNG(37개 2.9MB) — 디자인 확정 전 시안. 확정된 결과는 코드와 docs/design-system.md 에 있다.
+mockups/
+
+# 계획·인터뷰 문서. .omc/state·logs 와 같은 성격(작업 진행 상태)이라 함께 뺀다.
+.omc/
+
+# 루트에 흩어진 옛 확인 캡처.
+/v3-*.png
+/verify-*.png
+
+# agent_talk/ 은 **저장소 밖에 둔다**.
+# 두 가지 이유다:
+#   ① 캡처(163장 7.5MB)는 e2e·스모크가 돌 때마다 다시 써지는 테스트 산출물이라 매번 git status 를
+#      더럽히고 저장소만 불렸다.
+#   ② 작업 보고서(.md)에 사내 실서버 주소·계정·호스트명이 그대로 적혀 있다. 코드는 이것 없이도
+#      완전히 동작하므로, 사내 정보를 개인 계정 저장소에 남기지 않는다.
+agent_talk/
+
+# 남기는 것: src/ tests/ scripts/ resources/(번들 폰트·아이콘) vendor/(패치한 RDP 라이브러리)
+#            assets/(브랜드 원본) docs/(코드 주석이 가리키는 디자인 시스템) + 루트 설정 파일

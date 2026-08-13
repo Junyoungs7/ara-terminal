@@ -1,0 +1,190 @@
+/* ============================================================
+   A.R.A DESIGN TOKENS — design-system.md 단일 출처 (§1~§3)
+   이 파일이 매직넘버 스캔의 유일한 예외(토큰 정의부).
+   ============================================================ */
+:root {
+  /* 표면 스택 (§1.1) — 2026-08-03 "너무 어둡다" 피드백으로 전 단계 한 칸 상향.
+     5단 깊이 간격은 유지(단계당 대략 +6/+8/+10). */
+  --bg-abyss: #0d1119;
+  --bg-canvas: #12161f;
+  --bg-surface: #181d28;
+  --bg-raised: #1e2532;
+  --bg-overlay: #252e3e;
+  --bg-terminal: #0e1219;
+
+  /* 헤어라인 (§1.2) — 밝아진 표면 위에서 같은 세기로 보이도록 함께 상향. */
+  --line: #28313f;
+  --line-soft: #212934;
+  --line-strong: #35404f;
+
+  /* 텍스트 (§1.3) — 2026-08-03 실사용 가독성 피드백 반영.
+     상향한 배경 기준 canvas 대비 hi 15.4 / mid 9.9 / lo 7.0 / dim 5.0.
+     --text-lo 는 알파를 빼 불투명색으로 고정(배경 스택마다 대비가 달라지는 것을 막는다). */
+  --text-hi: #e8edf5;
+  --text-mid: #b6c0d0;
+  --text-lo: #95a1b7;
+  --text-dim: #7a879f;
+
+  /* 액센트 시안 (§1.4) */
+  --accent: #38bdf8;
+  --accent-bright: #7dd3fc;
+  --accent-deep: #0ea5e9;
+  /* R8: --accent-glow 는 "상태 표시"에만 쓴다 — 포커스 링 · 활성/선택 배경 틴트.
+     장식성 발광(box-shadow 로 번지는 빛, 버튼 hover glow, 로고 글로우)에는 쓰지 않는다.
+     "빛나는 네온"이 아니라 "차분한 다크"가 목표다(2026-08-04 실사용 피드백). */
+  --accent-glow: rgba(56, 189, 248, 0.16);
+  --accent-line: rgba(56, 189, 248, 0.35);
+
+  /* 그림자 (§3.4 — R8). 전부 중립 검정. 발광 그림자는 쓰지 않는다.
+     띄움 정도만 3단으로 나눈다: 카드/패널 · 팝오버/드롭다운 · 모달/드로어. */
+  --shadow-sm: 0 4px 16px -8px rgba(0, 0, 0, 0.7);
+  --shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.75);
+  --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
+
+  /* 시맨틱 (§1.5) */
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --idle: #64748b;
+  --purple: #a78bfa;
+
+  /* 세션 타입 칩 테두리(목업 .sess-type/.chip — F4b) */
+  --ok-line: rgba(52, 211, 153, 0.25);
+  --purple-line: rgba(167, 139, 250, 0.25);
+  --err-line: rgba(248, 113, 113, 0.25);
+  --t-yellow-line: rgba(227, 179, 65, 0.25);
+  --t-cyan-line: rgba(86, 212, 221, 0.25);
+
+  /* 터미널 ANSI (§1.6) */
+  --t-green: #7ee787;
+  --t-cyan: #56d4dd;
+  --t-blue: #79c0ff;
+  --t-yellow: #e3b341;
+  --t-red: #ff7b72;
+  --t-purple: #d2a8ff;
+  --t-gray: #6e7a8a;
+  --t-fg: #cdd6e4;
+
+  /* ANSI bright 8색 (§1.6 — R3.5). normal 색상을 같은 hue 로 밝게 파생(명도 +12~15%, 채도 -10%)해
+     `ls --color`·git·tmux 의 bright 계열이 배경에서 뜨되 팔레트 밖으로 튀지 않게 한다.
+     bright black 은 --t-gray(주석/메타)를 그대로 재사용한다. */
+  /* ANSI black(색상 0) — 배경(--bg-terminal)과 같게 두면 검정으로 찍은 글자가 사라진다.
+     헤어라인 계열의 어두운 슬레이트로 두어 "가장 어두운 전경색" 역할만 하게 한다. */
+  --t-black: #3b4653;
+  --t-red-b: #ffa198;
+  --t-green-b: #a2f2ab;
+  --t-yellow-b: #f2cc60;
+  --t-blue-b: #a5d6ff;
+  --t-purple-b: #e2c5ff;
+  --t-cyan-b: #84e8ef;
+
+  /* 터미널 드래그 선택 배경 — 액센트 반투명(글자가 비쳐야 하므로 알파 필수) */
+  --sel-bg: rgba(56, 189, 248, 0.28);
+
+  /* Radius (§3.1) */
+  --radius-lg: 12px;
+  --radius: 9px;
+  --radius-sm: 6px;
+
+  /* 폰트 (§2.1) — 전부 resources/fonts/ 번들(@font-face, styles/fonts.css). CDN 금지. */
+  --ui: 'Pretendard', -apple-system, 'Segoe UI', sans-serif;
+  /* UI-font(2026-08-04): --mono는 --term과 항상 같은 스택이다(store/font.ts bindCssVars가
+     설정에서 고른 터미널 폰트로 두 변수를 함께 갱신) — 사이드바·상태바·탭·설정 등 UI 라벨도
+     터미널과 같은 폰트를 쓴다는 확정 요구. 여기 정적값은 하이드레이트 전 첫 페인트용 기본값이라
+     기본 터미널 폰트(나눔고딕코딩)와 반드시 맞춰 둔다 — 1순위가 한글 미지원 폰트(JetBrains Mono
+     등)면 줄 상자 메트릭이 실제 렌더 폰트와 어긋나 한글 상단이 잘린다(실측: agent_talk/UI-font-done.md).
+     UI-font4(2026-08-05): 1순위 'KR System' 은 한글 음절/자모에만 국한된 @font-face(unicode-range,
+     styles/fonts.css) — 라틴은 그대로 다음 순위로 폴백해 이 규칙 자체는 안 바뀐다. 기본 켜짐
+     (FontConfig.krSystemFallback, 설정에서 되돌릴 수 있음). 근거: agent_talk/UI-font4-done.md. */
+  --mono: 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
+  --term: 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
+
+  /* 터미널 본문 크기·행간 (§2.2, 10–20px 슬라이더) + 셸 치수 (§4.1) */
+  /* --tt(크기)·--tl(행간)은 F5 폰트 설정이 workspace.json ui.font 에서 하이드레이트.
+     터미널은 자체 설정이 있으므로 아래 --ui-scale 을 타지 않는다. */
+  --tt: 14px;
+  --tl: 1.58;
+  --sidebar-w: 264px;
+
+  /* ── UI 글자 척도 (UI-font5, 2026-08-11) ────────────────────────────────
+     준영님: "폰트가 작아서 살짝 가독성이 떨어진다."
+
+     왜 토큰으로 모으는가: 이전까지 크기가 shell.css·interactions.css 에 **230곳, 12종**
+     (9 / 9.5 / 10 / 10.5 / 11 / 12 / 12.5 / 13 / 13.5 / 14 / 14.5 / 15.5px)으로 흩어져 있어
+     한 번에 조절할 방법이 없었다. UI-font3 이 크기 조정을 실험하고도 적용하지 못한 이유가 이것이다.
+     scan-magic-numbers.mjs 가 styles/ 를 안 보고 있어서 쌓였다 — 그 스캐너도 함께 넓혔다.
+
+     --ui-scale: 설정 [모양]의 UI 배율. 1 = 기본. 모든 단계와 행 높이가 함께 움직인다.
+     transform: scale() 을 쓰지 않는 이유는 글자가 흐려지기 때문이다.
+
+     하한 규칙: 어떤 UI 글자도 11px 미만이 되지 않는다. 옛 9·9.5·10px(30곳)이
+     "가독성이 떨어진다"의 실체였다. */
+  --ui-scale: 1;
+  --fs-micro: calc(11px * var(--ui-scale)); /* 구 9 · 9.5 · 10 */
+  --fs-xs: calc(12px * var(--ui-scale)); /* 구 10.5 */
+  --fs-sm: calc(12.5px * var(--ui-scale)); /* 구 11 */
+  --fs-md: calc(13.5px * var(--ui-scale)); /* 구 12 · 12.5 — 가장 많이 쓰는 본문 크기 */
+  --fs-base: calc(15px * var(--ui-scale)); /* 구 13 · 13.5 — body 기준 */
+  --fs-lg: calc(16px * var(--ui-scale)); /* 구 14 · 14.5 */
+  --fs-xl: calc(17.5px * var(--ui-scale)); /* 구 15.5 */
+
+  /* 행 높이도 같은 배율을 탄다 — 글자만 키우면 그 줄에서 잘린다. */
+  --row-titlebar: calc(32px * var(--ui-scale));
+  --row-statusbar: calc(28px * var(--ui-scale));
+  /* FB-tabs: 30→40px(피드백 "탭 사이즈가 너무 작아") — 사이드바 탭 전환·탐색기 헤더 등
+     같은 토큰을 쓰는 행도 함께 커진다(디자인 시스템 값 하나로 일관 유지). */
+  --row-tabbar: calc(40px * var(--ui-scale));
+
+  /* 좌측 사이드바 아이콘(2026-08-13 준영님 "아이콘 사이즈를 키워줘"). 12~13px 로 흩어져 있던 것을
+     토큰 하나로 모은다 — 다음에 또 조절할 때 한 곳만 고치면 된다. 배율 토큰을 타 큰 배율에서도
+     글자와 같이 커진다. --sb-hit 는 그 아이콘을 감싸는 클릭 표적. */
+  --sb-icon: calc(15px * var(--ui-scale));
+  --sb-hit: calc(26px * var(--ui-scale));
+
+  /* 타이틀바 신호등. 12px 는 보기에도 클릭 표적으로도 작았다(준영님 피드백 2026-08-13).
+     배율 토큰을 타야 한다 — 안 그러면 큰 배율에서 바만 커지고 점은 그대로 남는다. */
+  --tb-dot: calc(16px * var(--ui-scale));
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: var(--ui);
+  /* R8: 앰비언트 시안 글로우(radial 2개) 제거 — 창 모서리가 은은히 빛나던 것이 "네온" 인상의
+     가장 큰 원인이었다. 배경은 단색 abyss 로 두고, 색은 상태(액센트·시맨틱)만 담당한다. */
+  background: var(--bg-abyss);
+  color: var(--text-hi);
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'kern' 1;
+}
+::selection {
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 20px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-overlay);
+}

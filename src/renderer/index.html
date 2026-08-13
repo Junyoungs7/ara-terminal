@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- CSP: 렌더러는 self만 (계획서 §B.1). dev HMR용 ws는 electron-vite가 주입.
+         connect-src data: 는 RDP wasm 때문 — 공식 패키지가 wasm 을 base64 data: URL 로 내장해
+         fetch 로 읽는다(외부로 나가는 통로가 아니다, 자기 안의 바이트다). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' data: ws://127.0.0.1:*"
+    />
+    <title>A.R.A</title>
+    <!-- 파비콘: 별자리 노드 거미 (ara-favicon) inline data URI (design-system §8.3) -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23080e18'/%3E%3Cg fill='none' stroke='%2338bdf8' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 12 L7.5 8 L5 9.5'/%3E%3Cpath d='M13.7 15 L6.5 15 L4.5 17'/%3E%3Cpath d='M14 18 L7.5 21.5 L6 24'/%3E%3Cpath d='M18 12 L24.5 8 L27 9.5'/%3E%3Cpath d='M18.3 15 L25.5 15 L27.5 17'/%3E%3Cpath d='M18 18 L24.5 21.5 L26 24'/%3E%3C/g%3E%3Cellipse cx='16' cy='13' rx='2.6' ry='2.3' fill='%237dd3fc'/%3E%3Cellipse cx='16' cy='20.5' rx='4.4' ry='5.6' fill='%237dd3fc'/%3E%3Ccircle cx='16' cy='20.5' r='1.6' fill='%23080e18'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

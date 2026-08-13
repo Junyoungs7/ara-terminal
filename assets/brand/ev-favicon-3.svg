@@ -1,0 +1,8 @@
+<!-- E.V. Favicon — Concept 3: >_ prompt (simplified for 16–32px) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#080a10"/>
+  <polyline points="4,10 11,16 4,22"
+            fill="none" stroke="#38bdf8" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="14" y="19" width="8" height="3" rx="1" fill="#38bdf8" opacity="0.9"/>
+</svg>

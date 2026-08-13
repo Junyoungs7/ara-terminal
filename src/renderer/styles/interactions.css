@@ -1,0 +1,616 @@
+/* ============================================================
+   F4c 인터랙션 — 라디얼 메뉴 / 스마트 팔레트 / 치트시트
+   목업 variant-final-3.html §RADIAL/§SMART PALETTE/§CHEATSHEET 를 그대로 이식.
+   HEX 컬러는 tokens.css 변수로 치환(디자인 시스템 §9). shell.css 와 동일하게 styles/ 에 둔다.
+   ============================================================ */
+
+/* ---------- 라디얼 컨텍스트 메뉴 (§9.1) ---------- */
+.radial-menu {
+  position: fixed;
+  pointer-events: none;
+  z-index: 200;
+  display: none;
+}
+.radial-menu.open {
+  display: block;
+  pointer-events: auto;
+}
+.radial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  display: none;
+}
+.radial-backdrop.open {
+  display: block;
+}
+.radial-center {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-overlay);
+  border: 1.5px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition:
+    background 0.14s,
+    border-color 0.14s;
+  box-shadow: var(--shadow-md);
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+.radial-center:hover {
+  background: var(--bg-raised);
+  border-color: var(--err);
+  color: var(--err);
+}
+.ri {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.18s ease,
+    background 0.12s;
+  pointer-events: none;
+}
+.ri.shown {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.ri-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-overlay);
+  border: 1.5px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    box-shadow 0.14s,
+    transform 0.12s;
+  color: var(--text-mid);
+}
+.ri-icon svg {
+  width: 16px;
+  height: 16px;
+}
+/* tint·hover 색은 모두 반투명 토큰이라 background 로 쓰면 디스크가 비쳐서
+   뒤의 divider·패널 헤더·터미널 글자가 아이콘을 통과해 보인다(= "아이콘 가림").
+   .ri-icon 의 불투명 --bg-overlay 를 배경색으로 남기고 tint 는 background-image 로 얹는다. */
+.ri:hover .ri-icon {
+  background-image: linear-gradient(var(--accent-glow), var(--accent-glow));
+  border-color: var(--accent-line);
+  color: var(--accent-bright);
+  transform: scale(1.12);
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+/* AI 항목 tint(§9.1 --purple), 위험 항목 tint(--err) */
+.ri.tint-ai .ri-icon {
+  border-color: var(--purple-line);
+  background-image: linear-gradient(rgba(167, 139, 250, 0.08), rgba(167, 139, 250, 0.08));
+  color: var(--purple);
+}
+.ri.tint-danger .ri-icon {
+  border-color: var(--err-line);
+  background-image: linear-gradient(rgba(248, 113, 113, 0.06), rgba(248, 113, 113, 0.06));
+  color: var(--err);
+}
+/* 미래 기능(로그 저장 / AI 질문) — 비활성 스타일. hover glow 억제.
+   디스크 전체에 opacity 를 걸면 배경이 비치므로 글리프만 흐리게 한다. */
+.ri.future .ri-icon svg {
+  opacity: 0.5;
+}
+.ri.future:hover .ri-icon {
+  transform: none;
+  background-image: none;
+  border-color: var(--line-strong);
+}
+.ri-label {
+  font-size: var(--fs-xs);
+  font-family: var(--ui);
+  font-weight: 500;
+  color: var(--text-mid);
+  white-space: nowrap;
+  background: rgba(13, 17, 25, 0.85);
+  backdrop-filter: blur(4px);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 0.14s,
+    transform 0.14s;
+  pointer-events: none;
+}
+.ri:hover .ri-label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- 스마트 팔레트 (§9.2) ---------- */
+.smart-palette {
+  position: fixed;
+  z-index: 200;
+  width: 280px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  display: none;
+  animation: paletteIn 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.smart-palette.open {
+  display: block;
+}
+@keyframes paletteIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sp-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sp-search svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-dim);
+  flex: none;
+}
+.sp-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-base);
+}
+.sp-search input::placeholder {
+  color: var(--text-dim);
+}
+.sp-search .esc-kbd {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.sp-section {
+  padding: 6px 10px 4px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+.sp-empty {
+  padding: 14px 10px;
+  text-align: center;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.sp-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: 0.12s;
+}
+.sp-item:hover {
+  background: var(--bg-overlay);
+}
+.sp-item:hover .sp-ic {
+  border-color: var(--accent-line);
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+}
+.sp-item.future .sp-ic svg {
+  opacity: 0.55;
+}
+.sp-ic {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--text-mid);
+  transition: 0.12s;
+}
+.sp-item.tint-ai .sp-ic {
+  border-color: var(--purple-line);
+  background: rgba(167, 139, 250, 0.07);
+  color: var(--purple);
+}
+.sp-item.tint-danger .sp-ic {
+  border-color: var(--err-line);
+  background: rgba(248, 113, 113, 0.06);
+  color: var(--err);
+}
+.sp-ic svg {
+  width: 14px;
+  height: 14px;
+}
+.sp-lbl {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-mid);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---------- 치트시트 오버레이 (§9.4) ---------- */
+.cheatsheet {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(4, 6, 11, 0.78);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.cheatsheet.open {
+  display: flex;
+  animation: fade 0.16s ease;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.cs-card {
+  width: 820px;
+  max-width: 96vw;
+  max-height: 88vh;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  animation: pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  display: flex;
+  flex-direction: column;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.97) translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.cs-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.cs-hd-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.cs-hd-ico svg {
+  width: 15px;
+  height: 15px;
+}
+.cs-hd h2 {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+.cs-hd p {
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.cs-hd .x svg {
+  width: 13px;
+  height: 13px;
+}
+.radial-center svg {
+  width: 12px;
+  height: 12px;
+}
+.cs-hd .x {
+  margin-left: auto;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fs-xl);
+  transition: 0.14s;
+}
+.cs-hd .x:hover {
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+}
+.cs-body {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.cs-col-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cs-col-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--accent-line);
+}
+.cs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.cs-row:last-child {
+  border-bottom: none;
+}
+.cs-desc {
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  /* 한글은 어절 중간에서 끊지 않는다 — "연결 관/리자" 같은 줄바꿈 방지. */
+  word-break: keep-all;
+}
+.cs-keys {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.cs-k {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-hi);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.cs-sep {
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+}
+.cs-foot {
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+/* 탭바 도구 버튼(.tterm-tools/.cs-open-btn)은 R5 에서 제거했다 — 설정은 타이틀바 기어·Ctrl+,·
+   File>설정, 치트시트는 타이틀바 ? 버튼·? 키·Help 메뉴로 간다. 규칙도 함께 지웠다. */
+
+/* ---------- F18 명령어 북 목록·펼침 상세 ---------- */
+/* 바깥 껍데기는 .cheatsheet/.cs-*(위)를 그대로 쓴다. 예시 코드블록은 .ai-code/.ai-code-*(shell.css,
+   아라 패널)를 그대로 쓴다 — 여기서 새로 정의하는 건 검색 결과 행·펼침 컨테이너뿐이다. */
+.cb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cb-item {
+  border-bottom: 1px solid var(--line-soft);
+}
+.cb-item:last-child {
+  border-bottom: none;
+}
+.cb-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.cb-row:hover {
+  background: var(--bg-overlay);
+}
+.cb-cat {
+  flex: none;
+  width: 68px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.cb-cmd {
+  flex: none;
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  color: var(--accent-bright);
+  white-space: nowrap;
+}
+.cb-desc {
+  flex: 1;
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  word-break: keep-all;
+}
+.cb-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 4px 10px 78px;
+}
+.cb-caution {
+  font-size: var(--fs-md);
+  color: var(--warn);
+}
+
+/* ---------- 컴팩트 컨텍스트 메뉴 (사이드바 트리 우클릭 / 탭바 ＋ 메뉴) ---------- */
+/* 스마트 팔레트와 같은 표면·헤어라인·등장 애니메이션을 쓰되, 그리드 대신 목록 행으로 컴팩트하게. */
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+}
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  width: 224px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
+  overflow: hidden;
+  animation: paletteIn 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-mid);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: 0.1s;
+}
+/* 터미널 메뉴 행 = 아이콘 + 라벨 + 단축키 힌트. 트리 메뉴는 라벨만 넣어 같은 컴포넌트를 공유한다. */
+.ctx-item .ci-ic {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  flex: none;
+  color: var(--text-dim);
+}
+.ctx-item .ci-ic svg {
+  width: 13px;
+  height: 13px;
+}
+.ctx-item.cur .ci-ic {
+  color: var(--accent-bright);
+}
+.ctx-item.danger .ci-ic {
+  color: var(--err);
+}
+.ctx-item .ci-lbl {
+  flex: 1;
+}
+.ctx-item .ci-kbd {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex: none;
+}
+/* 미래 기능(로그 저장 · AI 질문) — 눌리되 비활성 톤. */
+.ctx-item.dim .ci-lbl,
+.ctx-item.dim .ci-ic {
+  opacity: 0.55;
+}
+.ctx-item.cur {
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+}
+.ctx-item.danger {
+  color: var(--err);
+}
+.ctx-item.danger.cur {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--err);
+}
+/* FB-monitor(F19 tmux): 정보 전용 행(로딩·미설치·세션 없음 안내) — 클릭·호버 하이라이트 없음. */
+.ctx-item.disabled {
+  cursor: default;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+/* 서브메뉴를 여는 상위 행(캐럿과 같은 텍스트 글리프 예외 — §8.4). */
+.ctx-item .ci-sub-arrow {
+  flex: none;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.ctx-item.has-sub.cur .ci-sub-arrow {
+  color: var(--accent-bright);
+}
+/* 서브메뉴 패널 — 부모 우측에 나란히(clampMenu 재사용 배치), 표면·행 스타일은 .ctx-menu/.ctx-item 그대로. */
+.ctx-submenu {
+  z-index: 201;
+}

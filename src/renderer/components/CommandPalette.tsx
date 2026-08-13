@@ -1,0 +1,164 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ConnectionProfile, WorkProfile } from '@shared/types'
+import { matchBinding } from '../../shared/keymap'
+import { filterPalette, groupPalette, moveCursor, paletteItems, PALETTE_GROUPS, type PaletteRun } from '../store/palette'
+import { t } from '../i18n'
+
+// F31 통합 검색 — 타이틀바에 **박혀 있는 검색창**이다. 목록·검색·묶기는 store/palette.ts 의
+// 순수 함수이고 여기는 그리기만 한다.
+//
+// 2026-08-13 준영님 재요청("단축키 뿐만 아니라 상단에 검색창을 추가해줘. vscode처럼")으로 모양을
+// 바꿨다. 처음엔 **누르면 가운데 창이 뜨는 버튼**이었는데, 그건 검색창처럼 보이지 않았다.
+// 지금은 타이틀바 그 자리에서 바로 타이핑하고 결과가 **그 아래로** 펼쳐진다.
+//
+// 이름이 비슷한 SmartPalette 와는 다른 물건이다:
+//  · SmartPalette = 터미널 **우클릭** 자리에 뜨는 8칸 격자(그 자리의 작업).
+//  · 여기 = 앱 전체 기능·프로필을 이름으로 찾는 곳(VS Code 의 상단 검색줄).
+
+type Props = {
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+  profiles: readonly ConnectionProfile[]
+  workProfiles: readonly WorkProfile[]
+  onRun: (run: PaletteRun) => void
+}
+
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+
+export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, onRun }: Props): JSX.Element {
+  const [q, setQ] = useState('')
+  const [cursor, setCursor] = useState(0)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  // 펼침 목록의 자리. 타이틀바 안에 두면 아래 본문이 덮으므로 position:fixed 로 띄우고
+  // 검색창 사각형에 맞춘다(폭까지 같게 — VS Code 와 같은 모양).
+  const [drop, setDrop] = useState<{ left: number; top: number; width: number } | null>(null)
+
+  const items = useMemo(() => paletteItems(profiles, workProfiles, isMac), [profiles, workProfiles])
+  const shown = useMemo(() => filterPalette(items, q), [items, q])
+  const groups = useMemo(() => groupPalette(shown), [shown])
+  // 커서는 **화면에 보이는 순서**를 따라야 한다 — 검색 순위대로 정렬된 shown 을 그대로 세면
+  // 묶어서 그린 목록과 어긋나 ↑↓ 가 위아래로 튄다.
+  const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const r = boxRef.current?.getBoundingClientRect()
+    if (r) setDrop({ left: r.left, top: r.bottom + 4, width: r.width })
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      // 닫힐 때 검색어를 버린다 — 다음에 열었을 때 지난 검색어가 남아 있으면 "왜 목록이 짧지"가 된다.
+      setQ('')
+      inputRef.current?.blur()
+      return
+    }
+    setCursor(0)
+    inputRef.current?.focus()
+  }, [open])
+
+  // 검색어가 바뀌면 첫 항목으로. 커서가 사라진 항목을 가리킨 채 Enter 하는 일이 없게 한다.
+  useEffect(() => setCursor(0), [q])
+
+  // 커서가 목록 밖으로 나가면 따라 스크롤한다(↑↓ 로만 훑을 때 화면이 안 따라오면 못 쓴다).
+  useEffect(() => {
+    listRef.current?.querySelector('.cp-item.on')?.scrollIntoView({ block: 'nearest' })
+  }, [cursor, q])
+
+  const pick = (i: number): void => {
+    const item = ordered[i]
+    if (!item) return
+    // **실행 전에 포커스를 내려놓는다.** onClose 는 React 상태라 이번 틱에 반영되지 않는데,
+    // 그 사이에 실행된 기능이 "입력칸에 타이핑 중이면 무시"로 스스로를 막을 수 있다
+    // (치트시트의 `?` 가 정확히 그렇다 — 이걸 빠뜨려 PAL-5 가 빨갰다).
+    inputRef.current?.blur()
+    onClose()
+    onRun(item.run)
+  }
+
+  return (
+    <div
+      className="tb-omni"
+      ref={boxRef}
+      data-action="palette.open"
+      // 칸 어디를 눌러도 타이핑을 시작할 수 있어야 한다(돋보기·여백을 눌렀을 때도).
+      onClick={() => inputRef.current?.focus()}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4-4" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="text"
+        data-field="palette"
+        aria-label={t('palette.title')}
+        spellCheck={false}
+        placeholder={t('palette.placeholder')}
+        value={q}
+        onFocus={onOpen}
+        onBlur={onClose}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          // 터미널·트리 단축키가 검색 중에 발동하지 않게 여기서 끊는다. 그래서 **여는 키를 다시
+          // 눌러 닫는 것도 여기서** 받아야 한다 — 안 그러면 창 단축키 핸들러까지 닿지 않는다.
+          // 키 조합은 여전히 keymap 단일 소스에서 온다(여기에 'F1' 을 적지 않는다).
+          e.stopPropagation()
+          if (matchBinding(e.nativeEvent, 'palette.all')) {
+            e.preventDefault()
+            onClose()
+          } else if (e.key === 'Escape') onClose()
+          else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setCursor((c) => moveCursor(c, 1, ordered.length))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setCursor((c) => moveCursor(c, -1, ordered.length))
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            pick(cursor)
+          }
+        }}
+      />
+      <span className="tb-omni-key">F1</span>
+
+      {open && drop && (
+        <div
+          className="cp-drop"
+          style={{ left: drop.left, top: drop.top, width: drop.width }}
+          // 항목을 누를 때 입력칸이 먼저 포커스를 잃으면(onBlur → 닫힘) 클릭이 도착하기도 전에
+          // 목록이 사라진다. mousedown 을 막아 포커스를 붙잡아 둔다.
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div className="cp-list" ref={listRef}>
+            {shown.length === 0 && <div className="cp-empty">{t('palette.empty')}</div>}
+            {groups.map((g) => (
+              <div key={g.kind}>
+                <div className="cp-group">{t(PALETTE_GROUPS.find((x) => x.kind === g.kind)!.key)}</div>
+                {g.items.map((item) => {
+                  const i = ordered.indexOf(item)
+                  return (
+                    <div
+                      key={item.id}
+                      className={'cp-item' + (i === cursor ? ' on' : '')}
+                      data-item={item.id}
+                      onMouseEnter={() => setCursor(i)}
+                      onClick={() => pick(i)}
+                    >
+                      <span className="cp-label">{item.label}</span>
+                      {item.hint && <span className="cp-hint">{item.hint}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="cp-foot">{t('palette.hint')}</div>
+        </div>
+      )}
+    </div>
+  )
+}

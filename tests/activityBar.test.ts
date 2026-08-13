@@ -1,0 +1,124 @@
+import { describe, it, expect } from 'vitest'
+import {
+  ACTIVITY_ITEMS,
+  activityHiddenOf,
+  activityOrderOf,
+  isActivityOpen,
+  moveActivity,
+  toggleActivityHidden,
+  visibleActivities,
+  type ActivityId,
+  type ActivityOpenState
+} from '../src/renderer/store/activityBar'
+
+// FB-ui2(FB-0006) 우측 액티비티 바 — 항목 정의·활성 판정의 순수 로직.
+
+describe('액티비티 바 항목 정의', () => {
+  it('아라·모니터·시스템·AI세션·로그·프리뷰·탐색기·콘솔·설정 9항목을 이 순서로 갖는다', () => {
+    // F26: 서버 콘솔(console)은 탐색기 다음 자리 — 둘 다 서버를 마우스로 다루는 떠 있는 창이다.
+    // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
+    expect(ACTIVITY_ITEMS).toEqual([
+      'ai',
+      'monitor',
+      'sys',
+      'aisess',
+      'log',
+      'preview',
+      'explorer',
+      'console',
+      'settings'
+    ])
+  })
+})
+
+describe('활성 판정(isActivityOpen)', () => {
+  const state: ActivityOpenState = {
+    ai: true,
+    monitor: false,
+    sys: false,
+    aisess: false,
+    log: true,
+    preview: false,
+    explorer: false,
+    console: false,
+    settings: false
+  }
+
+  it('각 항목은 상태 객체의 자기 값만 그대로 읽는다(서로 배타적이지 않음)', () => {
+    expect(isActivityOpen('ai', state)).toBe(true)
+    expect(isActivityOpen('monitor', state)).toBe(false)
+    expect(isActivityOpen('log', state)).toBe(true)
+    expect(isActivityOpen('settings', state)).toBe(false)
+  })
+
+  it('둘 다 열려 있어도(아라+로그) 서로 간섭하지 않는다', () => {
+    for (const id of ACTIVITY_ITEMS) {
+      expect(isActivityOpen(id, state)).toBe(state[id])
+    }
+  })
+})
+
+// 2026-08-13 준영님 요청: 우측 바 항목을 껐다 켜고 순서도 바꾼다. 저장값은 신뢰 경계 밖이라
+// 읽는 쪽에서 손보는 규칙이 이 블록의 검증 대상이다.
+describe('저장된 순서 읽기(activityOrderOf)', () => {
+  it('저장된 것이 없으면 기본 순서 그대로', () => {
+    expect(activityOrderOf(undefined)).toEqual([...ACTIVITY_ITEMS])
+    expect(activityOrderOf([])).toEqual([...ACTIVITY_ITEMS])
+    expect(activityOrderOf('쓰레기')).toEqual([...ACTIVITY_ITEMS])
+  })
+
+  it('모르는 이름은 버리고 중복은 하나만 남긴다', () => {
+    const got = activityOrderOf(['log', '없는항목', 'log', 'ai'])
+    expect(got.filter((x) => x === 'log')).toHaveLength(1)
+    expect(got).not.toContain('없는항목')
+    expect(got.slice(0, 2)).toEqual(['log', 'ai']) // 저장해 둔 순서가 앞에 그대로
+  })
+
+  it('★ 빠진 항목을 기본 순서 자리에 끼워 넣는다 — 새 기능이 영영 안 보이면 안 된다', () => {
+    // 사용자가 예전에 세 개만 저장해 뒀다고 하자. 나머지가 전부 살아 있어야 한다.
+    const got = activityOrderOf(['console', 'ai', 'log'])
+    expect([...got].sort()).toEqual([...ACTIVITY_ITEMS].sort())
+    // 저장해 둔 순서는 그대로 지킨다.
+    expect(got.indexOf('console')).toBeLessThan(got.indexOf('ai'))
+    expect(got.indexOf('ai')).toBeLessThan(got.indexOf('log'))
+  })
+
+  it('빠진 항목은 기본 순서대로 뒤에 붙는다(예측 가능하게)', () => {
+    const got = activityOrderOf(['monitor', 'console'])
+    expect(got.slice(0, 2)).toEqual(['monitor', 'console'])
+    // 나머지는 기본 순서 그대로 뒤에.
+    expect(got.slice(2)).toEqual(ACTIVITY_ITEMS.filter((x) => x !== 'monitor' && x !== 'console'))
+  })
+})
+
+describe('숨김·순서 바꾸기', () => {
+  it('숨긴 항목만 바에서 빠진다(순서는 그대로)', () => {
+    const order = [...ACTIVITY_ITEMS]
+    expect(visibleActivities(order, ['log', 'preview'])).toEqual(order.filter((x) => x !== 'log' && x !== 'preview'))
+  })
+
+  it('★ 껐다 켜면 원래 자리로 돌아온다 — 순서 배열을 건드리지 않기 때문', () => {
+    const order = [...ACTIVITY_ITEMS]
+    const off = toggleActivityHidden([], 'sys')
+    expect(visibleActivities(order, off)).not.toContain('sys')
+    const on = toggleActivityHidden(off, 'sys')
+    expect(visibleActivities(order, on)).toEqual(order)
+  })
+
+  it('한 칸씩 옮기고, 끝에서는 그대로 둔다(감아 돌지 않는다)', () => {
+    const order: ActivityId[] = ['ai', 'monitor', 'sys']
+    expect(moveActivity(order, 'monitor', -1)).toEqual(['monitor', 'ai', 'sys'])
+    expect(moveActivity(order, 'monitor', 1)).toEqual(['ai', 'sys', 'monitor'])
+    expect(moveActivity(order, 'ai', -1)).toEqual(order) // 맨 위에서 위로
+    expect(moveActivity(order, 'sys', 1)).toEqual(order) // 맨 아래에서 아래로
+  })
+
+  it('숨김 목록도 모르는 이름을 버린다', () => {
+    expect(activityHiddenOf(['log', '없는항목', 'log'])).toEqual(['log'])
+    expect(activityHiddenOf(undefined)).toEqual([])
+  })
+
+  it('전부 숨기는 것도 허용한다 — 바가 빈 채로 남는다(설정은 Ctrl+, 로 연다)', () => {
+    expect(visibleActivities([...ACTIVITY_ITEMS], [...ACTIVITY_ITEMS])).toEqual([])
+  })
+})

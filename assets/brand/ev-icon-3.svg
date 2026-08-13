@@ -1,0 +1,85 @@
+<!-- E.V. Icon — Concept 3: Terminal prompt >_ fused with E.V. wordmark -->
+<!-- 100% original design. No Marvel/Spider-Man IP. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g3a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="g3b" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#7dd3fc"/>
+    </linearGradient>
+    <filter id="glow3" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="termglow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background: terminal dark -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#080a10"/>
+  <!-- Subtle scanline texture via gradient -->
+  <linearGradient id="scan3" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#38bdf8" stop-opacity="0.03"/>
+    <stop offset="50%"  stop-color="#38bdf8" stop-opacity="0"/>
+    <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.03"/>
+  </linearGradient>
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#scan3)"/>
+
+  <!-- Terminal window chrome: thin rounded rect -->
+  <rect x="56" y="100" width="400" height="312" rx="20" ry="20"
+        fill="none" stroke="#1c2431" stroke-width="2"/>
+  <!-- Window titlebar line -->
+  <rect x="56" y="100" width="400" height="36" rx="20" ry="20" fill="#0d1218"/>
+  <rect x="56" y="118"  width="400" height="18" fill="#0d1218"/>
+  <!-- Traffic light dots in titlebar -->
+  <circle cx="88"  cy="118" r="6" fill="#ff5f57"/>
+  <circle cx="108" cy="118" r="6" fill="#febc2e"/>
+  <circle cx="128" cy="118" r="6" fill="#28c840"/>
+  <!-- Titlebar label: E.V. -->
+  <text x="256" y="124" text-anchor="middle" dominant-baseline="middle"
+        font-family="'JetBrains Mono', monospace" font-size="13" fill="#4b5568" letter-spacing="1">E.V.</text>
+
+  <!-- Prompt area inside terminal -->
+  <!-- Prompt chevron ">" — large, cyan, glowing -->
+  <g filter="url(#glow3)" opacity="0.95">
+    <!-- > as two lines forming a right-pointing chevron -->
+    <polyline points="96,220 148,256 96,292"
+              fill="none" stroke="url(#g3a)" stroke-width="18"
+              stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Underscore cursor block — animated in HTML context, static here -->
+  <!-- "_" as a rectangle block -->
+  <rect x="168" y="266" width="52" height="14" rx="3" fill="#38bdf8"
+        opacity="0.9" filter="url(#termglow)"/>
+
+  <!-- E·V wordmark — bold, below prompt -->
+  <!-- Using geometric path letterforms -->
+  <!-- "E" -->
+  <g transform="translate(180,190)">
+    <rect x="0"  y="0"  width="10" height="56" rx="4" fill="url(#g3b)"/>
+    <rect x="0"  y="0"  width="40" height="10" rx="4" fill="url(#g3b)"/>
+    <rect x="0"  y="23" width="32" height="10" rx="4" fill="url(#g3b)"/>
+    <rect x="0"  y="46" width="40" height="10" rx="4" fill="url(#g3b)"/>
+  </g>
+
+  <!-- dot separator -->
+  <circle cx="244" cy="218" r="5" fill="#7dd3fc" filter="url(#termglow)"/>
+
+  <!-- "V" -->
+  <g transform="translate(258,190)">
+    <!-- left arm of V -->
+    <polygon points="0,0 12,0 26,56 14,56" fill="url(#g3a)"/>
+    <!-- right arm of V -->
+    <polygon points="52,0 40,0 26,56 38,56" fill="url(#g3a)"/>
+  </g>
+
+  <!-- Border rim -->
+  <rect x="3" y="3" width="506" height="506" rx="110" ry="110"
+        fill="none" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.18"/>
+</svg>

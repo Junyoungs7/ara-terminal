@@ -1,0 +1,65 @@
+<!-- E.V. Icon — Concept 1: Interlocked E·V Monogram with circuit trace -->
+<!-- 100% original design. No Marvel/Spider-Man IP. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g1a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="g1b" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="glow1">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- rounded square clip -->
+    <clipPath id="clip1">
+      <rect width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background: deep dark -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#070910"/>
+  <!-- Subtle radial ambient -->
+  <radialGradient id="bg1g" cx="30%" cy="20%" r="70%">
+    <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.12"/>
+    <stop offset="100%" stop-color="#070910" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#bg1g)"/>
+
+  <!-- Circuit trace lines: horizontal scan marks (design element, not IP) -->
+  <g opacity="0.10" stroke="#38bdf8" stroke-width="1" fill="none">
+    <line x1="60" y1="180" x2="452" y2="180"/>
+    <line x1="60" y1="332" x2="452" y2="332"/>
+    <!-- corner dots -->
+    <circle cx="68" cy="180" r="3" fill="#38bdf8" stroke="none"/>
+    <circle cx="444" cy="332" r="3" fill="#38bdf8" stroke="none"/>
+  </g>
+
+  <!-- E letterform: bold geometric sans, left half -->
+  <!-- Vertical stroke -->
+  <rect x="114" y="148" width="38" height="216" rx="8" fill="url(#g1b)"/>
+  <!-- Top bar -->
+  <rect x="114" y="148" width="148" height="36" rx="8" fill="url(#g1b)"/>
+  <!-- Mid bar (shorter) -->
+  <rect x="114" y="238" width="118" height="36" rx="8" fill="url(#g1b)"/>
+  <!-- Bottom bar -->
+  <rect x="114" y="328" width="148" height="36" rx="8" fill="url(#g1b)"/>
+
+  <!-- V letterform: right half, angled strokes -->
+  <!-- Left diagonal of V -->
+  <polygon points="270,148 316,148 336,364 288,364" fill="url(#g1a)" rx="8"/>
+  <!-- Right diagonal of V -->
+  <polygon points="390,148 338,148 318,364 366,364" fill="url(#g1a)"/>
+  <!-- V tip cover: sharp bottom joint -->
+  <polygon points="302,364 336,364 336,320 302,320" fill="#38bdf8"/>
+
+  <!-- Dot separator between E and V — accent marker -->
+  <circle cx="256" cy="256" r="9" fill="#38bdf8" filter="url(#glow1)" opacity="0.9"/>
+
+  <!-- Border rim: thin cyan stroke -->
+  <rect x="3" y="3" width="506" height="506" rx="110" ry="110"
+        fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-opacity="0.22"/>
+</svg>

@@ -1,0 +1,249 @@
+// main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
+import { app, BrowserWindow } from 'electron'
+import { join } from 'node:path'
+import { WorkspaceStore } from './workspace/WorkspaceStore'
+import { HistoryStore } from './history/HistoryStore'
+import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
+import { ProfileStore } from './secrets/ProfileStore'
+import { registerWorkspaceIpc } from './ipc/registerWorkspaceIpc'
+import { registerSessionIpc } from './ipc/registerSessionIpc'
+import { registerProfileIpc } from './ipc/registerProfileIpc'
+import { registerSshIpc } from './ipc/registerSshIpc'
+import { registerRdpIpc, stopAllRdpRelays } from './ipc/registerRdpIpc'
+import { closeAllRdpSpanWindows } from './rdp/RdpWindows'
+import { registerSftpIpc } from './ipc/registerSftpIpc'
+import { registerFsIpc } from './ipc/registerFsIpc'
+import { registerEditorIpc } from './ipc/registerEditorIpc'
+import { closeEditorsForSession } from './editor/EditorWindows'
+import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
+import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
+import { registerRemoteIpc } from './ipc/registerRemoteIpc'
+import { registerWindowIpc } from './ipc/registerWindowIpc'
+import { registerForwardIpc } from './ipc/registerForwardIpc'
+import { registerAiIpc } from './ipc/registerAiIpc'
+import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
+import { createSessionLog, type SessionLogService } from './log/SessionLog'
+import { logMainError } from './log/MainErrorLog'
+import { aiModelsOf, aiProviderOf, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
+import type { MainSessionManager } from './sessions/MainSessionManager'
+import { drainKilledPtys } from './sessions/PtyBackend'
+import type { ForwardService } from './forward/PortForward'
+import { aiKeyVaultId, type AraSession } from './ai/AraSession'
+
+let store: WorkspaceStore
+let history: HistoryStore
+let sessions: MainSessionManager
+// W1: 폴링·tail 정리 훅(종료 시 원격에 프로세스를 남기지 않는다).
+let telemetry: { stopAll: () => void } | null = null
+// F26 서버 콘솔: 프로세스 표 등 주기 실행 구독. 텔레메트리와 같은 정리 훅.
+let remoteConsole: { stopAll: () => void } | null = null
+// W2 F8: 활성 포워딩. 세션 종료·앱 종료 때 리스너와 소켓을 접는다.
+let forwards: ForwardService | null = null
+// W2 F12: 세션 로그 tee. 기본 off — 설정에서 켜야 파일이 생긴다.
+let sessionLog: SessionLogService | null = null
+// W3 F16: 아라 대화. main 이 소유하므로 패널을 닫아도 살아 있고, 종료 시 진행 중 스트림을 끊는다.
+let ara: AraSession | null = null
+// W4 F23: MCP 서버 + 승인 매니저. 기본 꺼짐 — 설정 [MCP]에서 켜야 리스너가 생긴다.
+let mcp: McpRuntime | null = null
+let mainWindow: BrowserWindow | null = null
+
+function createWindow(): void {
+  // F6: 저장된 창 크기·위치로 복원. 없으면 기본 크기(최초 실행).
+  const bounds = store?.get().ui.window
+  const win = new BrowserWindow({
+    width: bounds?.width ?? 1440,
+    height: bounds?.height ?? 900,
+    ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
+    show: false,
+    frame: false,
+    backgroundColor: '#0d1119',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      // 보안 기본값 불변식 (계획서 §A.1 / §B.1)
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true
+    }
+  })
+
+  mainWindow = win
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
+
+  // F6: 창 크기·위치 변경을 스냅샷에 반영(주기 flush 경로 재사용 — 별도 저장 경로 없음).
+  // 최대화 중 bounds 를 저장하면 다음 기동이 "최대화 크기의 일반 창"으로 뜨므로 건너뛴다(R2.6).
+  const saveBounds = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return
+    store?.setWindowBounds(win.getBounds())
+  }
+  win.on('resize', saveBounds)
+  win.on('move', saveBounds)
+
+  // e2e 는 창을 300번 띄운다 — 그때마다 show() 가 사용자가 타이핑하던 창에서 포커스를 빼앗는다.
+  // 숨기지는 않는다(숨은 창은 Chromium 이 rAF 를 늦춰 xterm 렌더가 틀어진다) — 포커스만 안 뺏는다.
+  win.once('ready-to-show', () => (process.env['ARA_E2E'] === '1' ? win.showInactive() : win.show()))
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+app.whenReady().then(() => {
+  const userData = app.getPath('userData')
+  store = new WorkspaceStore(join(userData, 'workspace.json'), app.getVersion())
+  history = new HistoryStore(join(userData, 'history.json'))
+  const secrets = new SafeStorageSecretStore(join(userData, 'secrets.vault'))
+  const profiles = new ProfileStore(store, secrets)
+
+  // 현재 창의 webContents 접근자(세션·SFTP·AI·MCP 이벤트 공용). 반환값이 이미 destroyed 일 수도
+  // 있다(창 close()~'closed' 구간) — 실제 파괴 가드는 util/windowPush.ts 하나로 모았다(FIX-destroyed).
+  const getWebContents = () => {
+    try {
+      return mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
+    } catch {
+      return null
+    }
+  }
+
+  const logDir = join(userData, 'logs')
+  // ui:setPrefs 가 도착하면 로거에 즉시 반영한다(전용 설정 채널을 만들지 않는다).
+  registerWorkspaceIpc(store, history, (prefs) => sessionLog?.setPrefs(prefs.sessionLog, prefs.logRetentionDays))
+  // F8/F23: 세션이 끝나면 그 세션의 포워딩도 접는다. 사람이 타이핑하면(session:input) MCP 승인
+  // 매니저가 그 세션의 autoAllow 를 해제한다(설계 §3.3). forwards·mcp 는 아래에서 대입되지만 화살표가
+  // 변수를 캡처하므로 실행 시점엔 채워져 있다(늦은 바인딩 — forwards 와 같은 최소 diff 경로).
+  sessions = registerSessionIpc(
+    getWebContents,
+    (id) => {
+      forwards?.stopSession(id)
+      mcp?.approval.forget(id) // S3: 세션 종료 시 승인 매니저의 유령 항목도 같이 지운다(GAP #6).
+      // 커넥션이 없으면 저장할 길이 없다 — 그 세션으로 연 편집기 창도 함께 닫는다.
+      closeEditorsForSession(id)
+    },
+    (id) => mcp?.approval.onHumanInput(id)
+  )
+  registerProfileIpc(profiles)
+  registerSshIpc(profiles, store, sessions)
+  registerRdpIpc(profiles, getWebContents)
+  const sftpService = registerSftpIpc(sessions, getWebContents)
+  registerFsIpc()
+  registerEditorIpc(sftpService, sessions, () => mainWindow)
+  telemetry = registerTelemetryIpc(sessions, getWebContents, sftpService)
+  // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
+  // 넘길 수 있는 경로는 계약에 존재하지 않는다.
+  remoteConsole = registerRemoteIpc(sessions, getWebContents)
+  forwards = registerForwardIpc(sessions, () => mainWindow, logDir).forwards
+  // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
+  const savedUi = store.get().ui
+  sessionLog = createSessionLog(
+    logDir,
+    savedUi.sessionLog ?? DEFAULT_SESSION_LOG,
+    savedUi.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS
+  )
+  sessionLog.sweep()
+  sessions.setLog(sessionLog)
+  // 로그 패널: 기록 파일이 있으면 그걸, 없으면 링버퍼를 읽어 준다(늦은 바인딩 — 로거가 방금 생겼다).
+  registerSessionLogIpc(sessions, () => sessionLog)
+  // W5: F16 시절 단일 키(`ai.apiKey`)를 프로바이더별 분리 저장(`ai.apiKey.<provider>`)으로 옮긴 뒤 —
+  // 1회성, 이미 옮겨졌으면 조건이 거짓이라 매 기동마다 비용이 없다. 사용자가 다시 키를 입력하지 않게 한다.
+  const LEGACY_AI_KEY_VAULT = 'ai.apiKey'
+  if (secrets.has(LEGACY_AI_KEY_VAULT) && !secrets.has(aiKeyVaultId('anthropic'))) {
+    const legacy = secrets.get(LEGACY_AI_KEY_VAULT)
+    if (legacy) secrets.set(aiKeyVaultId('anthropic'), legacy)
+    secrets.delete(LEGACY_AI_KEY_VAULT)
+  }
+  // F16: 키는 기존 vault(secrets.vault)에, 모델·프로바이더는 기존 ui prefs 에 얹는다 — 새 저장소를
+  // 만들지 않는다. 값은 렌더러가 ui:setPrefs 로 보낸 것이라 신뢰 경계 밖이다: aiProviderOf/aiModelsOf 로
+  // 목록 안으로 클램프한다(모델명 자체는 자유 입력이라 목록 클램프 대상이 아니다 — sanitizeModelName 만 거친다).
+  ara = registerAiIpc(
+    secrets,
+    () => {
+      const ui = store.get().ui
+      const provider = aiProviderOf(ui.aiProvider)
+      const model = aiModelsOf(ui.aiModels)[provider]
+      return { provider, model, ...(ui.aiCompatibleBaseUrl ? { baseUrl: ui.aiCompatibleBaseUrl } : {}) }
+    },
+    getWebContents
+  )
+  // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
+  // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
+  mcp = registerMcpIpc(
+    {
+      sessions,
+      profiles,
+      ws: store,
+      forwards,
+      sftp: sftpService,
+      downloadsDir: join(userData, 'mcp-downloads'),
+      uploadsDir: join(userData, 'mcp-uploads')
+    },
+    secrets,
+    logDir,
+    () => store.get().ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
+    getWebContents
+  )
+  registerWindowIpc(() => mainWindow)
+  createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+// 종료 훅 이중화: 마지막 스냅샷 동기 flush (계획서 §B.3 저장 분리) + 전체 pty 정리(좀비 금지).
+// pty 를 죽인 직후 프로세스를 끝내면 node-pty 의 네이티브 exit 스레드가 사라지는 V8 환경을 만져
+// 즉사한다(PtyBackend.drainKilledPtys 주석의 실측). 그래서 종료를 딱 한 번 미루고, 배수한 뒤 다시
+// 요청한다 — 두 번째 진입에서는 정리를 반복하지 않고 그대로 통과시킨다.
+let ptyExitsDrained = false
+app.on('before-quit', (e) => {
+  if (ptyExitsDrained) return
+  store?.flush()
+  history?.flush()
+  telemetry?.stopAll()
+  remoteConsole?.stopAll()
+  forwards?.stopAll()
+  sessionLog?.closeAll()
+  sessions?.destroyAll()
+  // F16: 진행 중 스트림 abort — 종료 후에도 살아 있는 좀비 HTTP 요청을 남기지 않는다.
+  ara?.cancel()
+  // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
+  // 가능해야 한다(좀비 리스너 없음).
+  void mcp?.server.stop()
+  // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.
+  // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
+  // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).
+  closeAllRdpSpanWindows()
+  stopAllRdpRelays()
+  // 정리는 여기까지 전부 끝났다. 남은 건 죽인 pty 의 exit 콜백이 메인 루프에 도착하기를 기다리는 것뿐
+  // (실측 14~16ms, 상한 500ms). 그 뒤 다시 quit 하면 위 early return 으로 곧장 종료된다.
+  e.preventDefault()
+  const finish = (): void => {
+    ptyExitsDrained = true
+    app.quit()
+  }
+  // 성공/실패 어느 쪽이든 반드시 다시 quit 한다 — 배수가 삐끗해서 "앱이 안 꺼진다"가 되면 안 된다.
+  void drainKilledPtys().then(finish, finish)
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})
+
+// 안전망: 종료 레이스 등 잔여 uncaught 예외가 Electron 에러 창으로 표출되지 않도록.
+// 이 핸들러는 근본 수정(util/windowPush.ts 단일 가드)을 대체하지 않는다 — 그 수정이 1차 방어이고
+// 이 핸들러는 예측 못 한 레이스를 위한 2차 방어. 스택은 stderr에 유지해 개발 중 버그를 숨기지 않는다.
+// FIX-destroyed 실측: AraSession.run() 처럼 `void fn()`(await/catch 없는 fire-and-forget)에서 던진
+// 예외는 UnhandledPromiseRejection 이 되어 이 uncaughtException 핸들러를 타지 않는다 — 그래서
+// "삼키는 방식"에 의존하지 않고 push 경로 자체(windowPush.ts)를 안전하게 만드는 쪽으로 고쳤다.
+// FIX-shutdown §4: stderr 로만 쓰면 실행 중인 앱에서는 아무도 못 본다 — 같은 스택을
+// userData/logs/main-error.log 에도 남긴다(logMainError 가 stderr 쓰기까지 겸한다).
+process.on('unhandledRejection', (err) => {
+  logMainError('unhandledRejection', err)
+})
+// ponytail: global handler, not per-caller — upgrade to per-module if new error sources appear.
+process.on('uncaughtException', (err) => {
+  logMainError('uncaughtException', err)
+})

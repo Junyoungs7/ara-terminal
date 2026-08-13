@@ -1,0 +1,77 @@
+<!-- E.V. Icon — Concept 2: AI Orb / Radar Pulse — eye·sensor motif -->
+<!-- 100% original abstract design. No Marvel/Spider-Man IP. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="orbg" cx="50%" cy="44%" r="55%">
+      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.95"/>
+      <stop offset="60%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </radialGradient>
+    <radialGradient id="bg2g" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#0e2030" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#070910" stop-opacity="1"/>
+    </radialGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow2" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#bg2g)"/>
+
+  <!-- Concentric rings: radar / pulse (4 rings, decreasing opacity outward) -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#38bdf8" stroke-width="1.2" opacity="0.10"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#38bdf8" stroke-width="1.4" opacity="0.16"/>
+  <circle cx="256" cy="256" r="110" fill="none" stroke="#38bdf8" stroke-width="1.8" opacity="0.24"/>
+  <circle cx="256" cy="256" r="72"  fill="none" stroke="#38bdf8" stroke-width="2.2" opacity="0.38"/>
+
+  <!-- Cross-hair lines at 45° — sensor scan (not crosshair/scope) -->
+  <g stroke="#38bdf8" stroke-width="1" opacity="0.15" fill="none">
+    <line x1="256" y1="56"  x2="256" y2="456"/>
+    <line x1="56"  y1="256" x2="456" y2="256"/>
+  </g>
+
+  <!-- Radar sweep arc (1/6 of circle, bright) -->
+  <!-- Arc from 270° sweeping ~60°, drawn as path -->
+  <path d="M256,256 L256,66 A190,190 0 0,1 422,355 Z"
+        fill="none" stroke="none" opacity="0"/>
+  <!-- Subtle filled sweep wedge -->
+  <path d="M256,256 L256,106 A150,150 0 0,1 386,356 Z"
+        fill="url(#coreGlow)" opacity="0.18"/>
+
+  <!-- Eye motif: horizontal almond shape (abstract sensor eye) -->
+  <ellipse cx="256" cy="256" rx="88" ry="42" fill="#0c1824" stroke="#38bdf8" stroke-width="2.5"/>
+  <!-- Iris ring -->
+  <circle cx="256" cy="256" r="28" fill="#0a1520"
+          stroke="#7dd3fc" stroke-width="2" opacity="0.9"/>
+  <!-- Pupil: solid glowing core -->
+  <circle cx="256" cy="256" r="14" fill="url(#orbg)" filter="url(#softglow)"/>
+
+  <!-- E·V micro label below eye -->
+  <!-- E: small pill letterform -->
+  <g transform="translate(206,300)" fill="#38bdf8" opacity="0.72">
+    <!-- E -->
+    <rect x="0"  y="0"  width="5"  height="22" rx="1.5"/>
+    <rect x="0"  y="0"  width="16" height="5"  rx="1.5"/>
+    <rect x="0"  y="8.5" width="13" height="5" rx="1.5"/>
+    <rect x="0"  y="17" width="16" height="5"  rx="1.5"/>
+    <!-- separator dot -->
+    <circle cx="24" cy="11" r="3" fill="#7dd3fc"/>
+    <!-- V -->
+    <polygon points="30,0 36,0 41,22 35,22" />
+    <polygon points="52,0 46,0 41,22 47,22" />
+  </g>
+
+  <!-- Border rim -->
+  <rect x="3" y="3" width="506" height="506" rx="110" ry="110"
+        fill="none" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.20"/>
+</svg>

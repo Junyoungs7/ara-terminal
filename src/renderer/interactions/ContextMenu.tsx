@@ -1,0 +1,175 @@
+import { useEffect, useState, type ReactNode } from 'react'
+
+// 컴팩트 컨텍스트 메뉴 (F4c 스마트 팔레트 계열 — 같은 표면·헤어라인·등장 애니메이션).
+// 앱 전체에서 이 컴포넌트 하나만 쓴다: 사이드바 트리 우클릭, 탭바 ＋ 메뉴.
+// 항목 정의는 호출측이 넘긴다(액션 레지스트리의 id + 라벨) — 메뉴는 배치·키보드·닫기만 책임진다.
+// 라디얼 메뉴는 터미널 그리드 전용으로 남는다(계획서 §9.1).
+
+// icon/hint 는 터미널 메뉴(아이콘 + 단축키)에서만 쓰고, 트리 메뉴는 라벨만 넣는다.
+export type MenuItem = {
+  id: string
+  label: string
+  danger?: boolean
+  icon?: ReactNode
+  hint?: string
+  dim?: boolean // 미래 기능(로그 저장·AI) — 눌리되 "추후 지원" 안내
+  disabled?: boolean // FB-monitor: 정보 전용 행(로딩·상태 안내) — 클릭·Enter 모두 무시
+  // FB-monitor(F19 tmux): 1단계 서브메뉴(호버로 열림). 중첩은 이 한 단계만 지원한다.
+  submenu?: readonly MenuItem[]
+}
+
+// 배치 계산에 쓰는 메뉴 실측 치수(styles/interactions.css .ctx-menu 와 일치).
+const MENU_W = 224
+const ROW_H = 29
+const MENU_PAD = 10
+const EDGE = 8
+
+// 뷰포트 경계 안으로 보정한 좌표(순수 — 단위 테스트 대상). 높이는 항목 수로 산출한다.
+export function clampMenu(
+  x: number,
+  y: number,
+  count: number,
+  vw: number,
+  vh: number
+): { left: number; top: number } {
+  const h = count * ROW_H + MENU_PAD
+  return {
+    left: Math.max(EDGE, Math.min(x, vw - MENU_W - EDGE)),
+    top: Math.max(EDGE, Math.min(y, vh - h - EDGE))
+  }
+}
+
+type Props = {
+  open: boolean
+  x: number
+  y: number
+  items: MenuItem[]
+  onPick: (id: string) => void
+  onClose: () => void
+}
+
+export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
+  const [idx, setIdx] = useState(0)
+  // FB-monitor(F19 tmux): 서브메뉴를 열고 있는 상위 항목 인덱스(마우스 호버로만 연다 — 중첩 1단계).
+  const [subIdx, setSubIdx] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setIdx(0)
+      setSubIdx(null)
+    }
+  }, [open, x, y])
+
+  // ↑↓ 이동 / →로 서브메뉴 열기 · ←로 닫기 / Enter 실행(서브메뉴가 있으면 열기) / ESC 닫기.
+  // 캡처 단계로 잡아 뒤쪽 전역 단축키(ESC 등)와 겹치지 않게 한다.
+  useEffect(() => {
+    if (!open || items.length === 0) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        setIdx((i) => (i + 1) % items.length)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        setIdx((i) => (i - 1 + items.length) % items.length)
+      } else if (e.key === 'ArrowRight') {
+        if (items[idx]?.submenu) {
+          e.preventDefault()
+          e.stopPropagation()
+          setSubIdx(idx)
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (subIdx !== null) {
+          e.preventDefault()
+          e.stopPropagation()
+          setSubIdx(null)
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        e.stopPropagation()
+        const it = items[idx]
+        if (!it || it.disabled) return
+        if (it.submenu) setSubIdx(idx)
+        else onPick(it.id)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open, items, idx, subIdx, onPick, onClose])
+
+  if (!open || items.length === 0) return null
+  const pos = clampMenu(x, y, items.length, window.innerWidth, window.innerHeight)
+  const subItems = subIdx !== null ? items[subIdx]?.submenu : undefined
+  const subPos = subItems
+    ? clampMenu(pos.left + MENU_W, pos.top + subIdx! * ROW_H, subItems.length, window.innerWidth, window.innerHeight)
+    : null
+
+  return (
+    <>
+      <div
+        className="ctx-backdrop"
+        onMouseDown={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onClose()
+        }}
+      />
+      <div className="ctx-menu open" style={{ left: pos.left, top: pos.top }} role="menu">
+        {items.map((it, i) => (
+          <div
+            key={it.id}
+            role="menuitem"
+            data-action={it.id}
+            className={
+              'ctx-item' +
+              (it.danger ? ' danger' : '') +
+              (it.dim ? ' dim' : '') +
+              (it.disabled ? ' disabled' : '') +
+              (it.submenu ? ' has-sub' : '') +
+              (i === idx ? ' cur' : '')
+            }
+            onMouseEnter={() => {
+              if (it.disabled) return
+              setIdx(i)
+              setSubIdx(it.submenu ? i : null)
+            }}
+            onClick={() => {
+              if (it.disabled || it.submenu) return
+              onPick(it.id)
+            }}
+          >
+            {it.icon && <span className="ci-ic">{it.icon}</span>}
+            <span className="ci-lbl">{it.label}</span>
+            {it.hint && <span className="ci-kbd">{it.hint}</span>}
+            {it.submenu && <span className="ci-sub-arrow">▸</span>}
+          </div>
+        ))}
+      </div>
+      {subItems && subPos && (
+        <div className="ctx-menu open ctx-submenu" style={{ left: subPos.left, top: subPos.top }} role="menu">
+          {subItems.map((sub) => (
+            <div
+              key={sub.id}
+              role="menuitem"
+              data-action={sub.id}
+              className={'ctx-item' + (sub.danger ? ' danger' : '') + (sub.disabled ? ' disabled' : '')}
+              onClick={() => {
+                if (sub.disabled) return
+                onPick(sub.id)
+              }}
+            >
+              {sub.icon && <span className="ci-ic">{sub.icon}</span>}
+              <span className="ci-lbl">{sub.label}</span>
+              {sub.hint && <span className="ci-kbd">{sub.hint}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}

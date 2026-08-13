@@ -1,0 +1,99 @@
+/* ============================================================
+   A.R.A 번들 폰트 — @font-face 로컬 로드 (CDN 금지, 오프라인 사내망 보장)
+   폰트 원본·라이선스: resources/fonts/ (OFL). Vite가 빌드 시 out/renderer/assets 로 해시 복사.
+   CSP font-src 'self' 로 로컬만 로드 — 네트워크 요청 0.
+   ============================================================ */
+
+/* 한글 고정폭 primary (design-system §2.1) — Google Fonts / SIL OFL */
+@font-face {
+  font-family: 'Nanum Gothic Coding';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../../../resources/fonts/NanumGothicCoding-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Nanum Gothic Coding';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('../../../resources/fonts/NanumGothicCoding-Bold.ttf') format('truetype');
+}
+
+/* 한글 고정폭 폴백 (naver/d2codingfont) — SIL OFL */
+@font-face {
+  font-family: 'D2Coding';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../../../resources/fonts/D2Coding-Regular.ttf') format('truetype');
+}
+
+/* 라틴 모노(리거처) — JetBrains Mono, 가변축 wght — SIL OFL */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url('../../../resources/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+}
+
+/* UI 폰트 — Pretendard (orioncactus/pretendard) — SIL OFL. 변경 불가(터미널만 사용자 선택). */
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../resources/fonts/Pretendard-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../resources/fonts/Pretendard-Bold.woff2') format('woff2');
+}
+
+/* ------------------------------------------------------------------------
+   한글 시스템 폴백 — "전부 로컬 번들" 원칙의 명시적 예외 (UI-font4, 2026-08-05).
+   근거: agent_talk/UI-font4-done.md. 준영님이 기준으로 삼은 Tabby(Electron+xterm.js)도
+   라틴 고정폭(Consolas)엔 한글 글리프가 없어, 한글 음절만 OS 기본 한글 폰트로 대체해 그린다
+   (Tabby 소스 tabby-core/src/utils.ts getCSSFontFamily 확인). 이 페이스도 같은 메커니즘을
+   CSS 만으로 재현한다:
+     - unicode-range 로 한글 음절/자모에만 적용을 국한한다 — 라틴 문자는 이 페이스에 매치되지
+       않아 항상 다음 순위(번들 나눔고딕코딩/D2Coding)로 그대로 폴백한다.
+     - src 의 local() 후보가 전부 없는 OS(예: 한글 폰트 미설치 Linux)에서는 이 @font-face 자체가
+       매치되지 않아 별도 OS 분기 없이 CSS 캐스케이드만으로 다음 폰트로 넘어간다.
+     - macOS는 Apple SD Gothic Neo(OS 기본 한글 폰트)를 명시해 폴백 체인에 포함한다.
+   라이선스: 파일을 내려받거나 재배포하지 않는다 — local() 은 이미 설치된 OS 폰트를 참조할
+   뿐이라 재배포 라이선스가 필요 없다(-apple-system 과 같은 방식).
+   설정에서 끌 수 있다(store/font.ts FontConfig.krSystemFallback) — 끄면 이 페이스가
+   font-family 스택에서 빠지고 이전 동작(번들 폰트만)으로 되돌아간다.
+   ------------------------------------------------------------------------ */
+@font-face {
+  font-family: 'KR System';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7A3, U+D7B0-D7FF;
+  src:
+    local('Malgun Gothic'),
+    local('Apple SD Gothic Neo'),
+    local('Noto Sans CJK KR'),
+    local('Noto Sans KR'),
+    local('NanumGothic');
+}
+@font-face {
+  font-family: 'KR System';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7A3, U+D7B0-D7FF;
+  src:
+    local('Malgun Gothic Bold'),
+    local('Malgun Gothic'),
+    local('Apple SD Gothic Neo'),
+    local('Noto Sans CJK KR'),
+    local('Noto Sans KR'),
+    local('NanumGothic');
+}

@@ -1,0 +1,207 @@
+diff --git a/crates/ironrdp-connector/src/connection.rs b/crates/ironrdp-connector/src/connection.rs
+index e1b35ce..250d773 100644
+--- a/crates/ironrdp-connector/src/connection.rs
++++ b/crates/ironrdp-connector/src/connection.rs
+@@ -1446,7 +1446,15 @@ fn create_gcc_blocks<'a>(
+         },
+         // TODO(#139): support for Some(ClientClusterData { flags: RedirectionFlags::REDIRECTION_SUPPORTED, redirection_version: RedirectionVersion::V4, redirected_session_id: 0, }),
+         cluster: None,
+-        monitor: None,
++        // Multi-monitor: only sent when the caller asked for it. Without this block the server sees
++        // one screen the size of the whole bounding box (the old behavior, kept as the default).
++        monitor: if config.monitors.is_empty() {
++            None
++        } else {
++            Some(gcc::ClientMonitorData {
++                monitors: config.monitors.clone(),
++            })
++        },
+         // Request the MCS message channel, which carries network auto-detect
+         // ([MS-RDPBCGR] 2.2.14) and the multitransport / heartbeat PDUs. The
+         // server assigns its ID in Server Message Channel Data.
+diff --git a/crates/ironrdp-connector/src/lib.rs b/crates/ironrdp-connector/src/lib.rs
+index 24d778f..25666dd 100644
+--- a/crates/ironrdp-connector/src/lib.rs
++++ b/crates/ironrdp-connector/src/lib.rs
+@@ -246,6 +246,18 @@ pub struct Config {
+     pub enable_audio_playback: bool,
+     pub performance_flags: PerformanceFlags,
+ 
++    /// Monitors to advertise in the GCC Conference Create Request
++    /// ([MS-RDPBCGR] 2.2.1.3.6 TS_UD_CS_MONITOR).
++    ///
++    /// Empty means "single monitor": the server then treats `desktop_size` as one screen, which is
++    /// what IronRDP did before this field existed. With entries, the server learns where the seams
++    /// are, so maximize, the taskbar and window snapping behave per monitor.
++    ///
++    /// Coordinates are relative to the primary monitor's top-left corner, so the primary monitor is
++    /// at `(0, 0)` and monitors placed to its left/above have negative `left`/`top`.
++    /// `desktop_size` must equal the bounding box of these rectangles.
++    pub monitors: Vec<gcc::Monitor>,
++
+     pub license_cache: Option<Arc<dyn LicenseCache>>,
+ 
+     // For Timezone Redirection to sync the server's timezone with the client's.
+diff --git a/crates/ironrdp-web/src/session.rs b/crates/ironrdp-web/src/session.rs
+index 8308af4..e70df44 100644
+--- a/crates/ironrdp-web/src/session.rs
++++ b/crates/ironrdp-web/src/session.rs
+@@ -90,6 +90,8 @@ struct SessionBuilderInner {
+ 
+     use_display_control: bool,
+     enable_credssp: bool,
++    /// Multi-monitor layout (TS_UD_CS_MONITOR). Empty = single monitor, the default.
++    monitors: Vec<ironrdp::pdu::gcc::Monitor>,
+     outbound_message_size_limit: Option<usize>,
+ }
+ 
+@@ -131,6 +133,7 @@ impl Default for SessionBuilderInner {
+ 
+             use_display_control: false,
+             enable_credssp: true,
++            monitors: Vec::new(),
+             outbound_message_size_limit: None,
+         }
+     }
+@@ -248,6 +251,16 @@ impl iron_remote_desktop::SessionBuilder for SessionBuilder {
+             |kdc_proxy_url: String| { self.0.borrow_mut().kdc_proxy_url = Some(kdc_proxy_url) };
+             |display_control: bool| { self.0.borrow_mut().use_display_control = display_control };
+             |enable_credssp: bool| { self.0.borrow_mut().enable_credssp = enable_credssp };
++            // Multi-monitor layout. Flat array of 5 numbers per monitor:
++            //   left, top, right, bottom, primary(0|1)
++            // A flat array keeps this binding free of serde/JSON deps; the TypeScript wrapper
++            // (`monitorLayout()`) is what callers actually use.
++            |monitors: JsValue| {
++                match parse_monitor_layout(&monitors) {
++                    Ok(list) => self.0.borrow_mut().monitors = list,
++                    Err(e) => warn!("Ignoring invalid monitor layout: {e}"),
++                }
++            };
+             |outbound_message_size_limit: f64| {
+                 let limit = if outbound_message_size_limit >= 0.0 && outbound_message_size_limit <= f64::from(u32::MAX) {
+                     #[expect(clippy::as_conversions, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+@@ -402,6 +415,7 @@ impl iron_remote_desktop::SessionBuilder for SessionBuilder {
+ 
+         let enable_credssp = self.0.borrow().enable_credssp;
+         config.enable_credssp = enable_credssp;
++        config.monitors = self.0.borrow().monitors.clone();
+ 
+         let (input_events_tx, input_events_rx) = mpsc::unbounded();
+ 
+@@ -1463,7 +1477,74 @@ fn build_config(
+         timezone_info: TimezoneInfo::default(),
+         alternate_shell: String::new(),
+         work_dir: String::new(),
++        // Filled in by SessionBuilder::connect when the caller passed a `monitors` extension.
++        monitors: Vec::new(),
++    }
++}
++
++/// Parse the flat `[left, top, right, bottom, primary, ...]` array from the `monitors` extension.
++///
++/// Validation mirrors [MS-RDPBCGR] 2.2.1.3.6 so a bad layout fails here instead of getting the
++/// connection rejected mid-handshake (the server just drops us, with no useful error):
++///  - at most 16 monitors, at least one
++///  - exactly one primary, and the primary must sit at the origin
++///  - each monitor between 200x200 and 8192x8192
++fn parse_monitor_layout(value: &JsValue) -> Result<Vec<ironrdp::pdu::gcc::Monitor>, String> {
++    use ironrdp::pdu::gcc::{Monitor, MonitorFlags};
++
++    const FIELDS: usize = 5;
++    const MAX_MONITORS: usize = 16;
++    const MIN_EDGE: i32 = 200;
++    const MAX_EDGE: i32 = 8192;
++
++    let array = js_sys::Array::from(value);
++    let len = array.length() as usize;
++    if len == 0 || len % FIELDS != 0 {
++        return Err(format!("expected a flat array of {FIELDS} numbers per monitor, got {len}"));
++    }
++    let count = len / FIELDS;
++    if count > MAX_MONITORS {
++        return Err(format!("too many monitors: {count} (max {MAX_MONITORS})"));
++    }
++
++    let num = |i: usize| -> Result<i32, String> {
++        array
++            .get(i as u32)
++            .as_f64()
++            .map(|v| v as i32)
++            .ok_or_else(|| format!("element {i} is not a number"))
++    };
++
++    let mut monitors = Vec::with_capacity(count);
++    let mut primaries = 0usize;
++    for m in 0..count {
++        let base = m * FIELDS;
++        let (left, top, right, bottom) = (num(base)?, num(base + 1)?, num(base + 2)?, num(base + 3)?);
++        let is_primary = num(base + 4)? != 0;
++
++        let (width, height) = (right - left + 1, bottom - top + 1);
++        if !(MIN_EDGE..=MAX_EDGE).contains(&width) || !(MIN_EDGE..=MAX_EDGE).contains(&height) {
++            return Err(format!("monitor {m} is {width}x{height}, outside {MIN_EDGE}..={MAX_EDGE}"));
++        }
++        if is_primary {
++            primaries += 1;
++            if left != 0 || top != 0 {
++                return Err(format!("primary monitor must be at the origin, got ({left}, {top})"));
++            }
++        }
++
++        monitors.push(Monitor {
++            left,
++            top,
++            right,
++            bottom,
++            flags: if is_primary { MonitorFlags::PRIMARY } else { MonitorFlags::empty() },
++        });
++    }
++    if primaries != 1 {
++        return Err(format!("expected exactly one primary monitor, got {primaries}"));
+     }
++    Ok(monitors)
+ }
+ 
+ async fn writer_task(
+diff --git a/web-client/iron-remote-desktop-rdp/src/main.ts b/web-client/iron-remote-desktop-rdp/src/main.ts
+index ccc39a8..81198c8 100644
+--- a/web-client/iron-remote-desktop-rdp/src/main.ts
++++ b/web-client/iron-remote-desktop-rdp/src/main.ts
+@@ -46,6 +46,37 @@ export function enableCredssp(enable: boolean): Extension {
+     return new Extension('enable_credssp', enable);
+ }
+ 
++/** One physical monitor, in the RDP coordinate space. Right/bottom are inclusive. */
++export type MonitorRect = {
++    left: number;
++    top: number;
++    right: number;
++    bottom: number;
++    primary?: boolean;
++};
++
++/**
++ * Advertise a multi-monitor layout ([MS-RDPBCGR] 2.2.1.3.6 TS_UD_CS_MONITOR).
++ *
++ * Without this the server sees one screen the size of the whole desktop, so maximizing a window
++ * covers every monitor and the taskbar stretches across all of them. With it, the server knows
++ * where the seams are and behaves per monitor.
++ *
++ * Coordinates are relative to the primary monitor's top-left, so the primary is at `(0, 0)` and
++ * monitors to its left/above have negative `left`/`top`. The desktop size passed to
++ * `SessionBuilder.desktopSize()` must be the bounding box of these rectangles.
++ *
++ * Invalid layouts are rejected on the Rust side and logged, leaving the session single-monitor —
++ * a bad layout makes the server drop the connection during the handshake with no useful error.
++ */
++export function monitorLayout(monitors: MonitorRect[]): Extension {
++    const flat: number[] = [];
++    for (const m of monitors) {
++        flat.push(m.left, m.top, m.right, m.bottom, m.primary ? 1 : 0);
++    }
++    return new Extension('monitors', flat);
++}
++
+ // --- File transfer (RDP-specific) ---
+ 
+ export { RdpFileTransferProvider } from './RdpFileTransferProvider';
