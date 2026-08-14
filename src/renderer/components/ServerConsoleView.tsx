@@ -6,8 +6,15 @@
 //    새로 배울 것이 없다(창 로직은 store/floatWindow.ts 를 공유한다, 새 창 인프라 없음).
 //  · 런치패드에서 아이콘을 누르면 그 도구가 **같은 창의 탭**으로 열린다(①+③ 조합). 런치패드 탭은
 //    항상 첫 자리에 남는다 — 도구를 닫아도 돌아올 곳이 있어야 한다.
-//  · 실제로 도는 도구는 지금 셋이다(프로세스·서비스·디스크). 나머지 칸은 흐리게 "추후"로 두고
-//    눌러도 아무 일이 없다 — 눌리는데 빈 화면이 뜨는 것보다 낫다.
+//
+// #69(2026-08-14): 아홉 칸이 똑같이 생겼는데 넷은 **콘솔을 닫고** 다른 데로 보냈다 — 돌아올 곳이
+// 없어졌다(준영님 지적: "파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이 켜지는것").
+// 셋을 고쳤다:
+//  · [파일] 은 콘솔 안 탭이 됐다. 떠 있는 탐색기가 쓰는 FileTree 를 그대로 끼운다(새 구현 0줄) —
+//    그 컴포넌트는 원래 끼워 넣으라고 만들어졌다(active 로 숨을 때 파일시스템을 안 읽는다).
+//  · [로그]·[포트] 는 우측 레일을 열되 **콘솔을 닫지 않는다.** 대신 타일에 ↗ 를 달아
+//    "여기가 아니라 다른 곳에서 열린다"를 미리 알린다.
+//  · [터미널] 만 콘솔을 닫는다 — 세션을 만드는 동작이라 터미널이 보여야 한다.
 import { useState } from 'react'
 import {
   Activity,
@@ -22,6 +29,7 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { useFloatWindow } from '../store/floatWindow'
+import { FileTree } from './FileTree'
 import { ProcessTable } from './ProcessTable'
 import { ServiceTable } from './ServiceTable'
 import { DiskTable } from './DiskTable'
@@ -33,16 +41,15 @@ import type { DialogSpec, DialogResult } from './Dialog'
 import { t } from '../i18n'
 
 /** 탭으로 열 수 있는 도구. 나머지 런치패드 칸은 R3 이후다. */
-export type ConsoleToolId = 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr'
+export type ConsoleToolId = 'files' | 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr'
 
-// 런치패드 격자 4열 × 2줄. soon 칸은 자리만 잡아 둔다 — 다음 라운드에 무엇이 오는지 보이는 편이
-// "도구가 이것뿐인가?"보다 낫다(목업 ①과 같은 배치).
-/** 콘솔 안에 탭으로 뜨지 않고 **기존 창·패널을 그대로 여는** 칸. 같은 화면을 두 번 만들지 않는다 —
-    런치패드의 값어치는 흩어진 진입점을 한자리에 모으는 것이다(R1 설계 §3). */
-export type ConsoleLaunchId = 'files' | 'log' | 'port' | 'term'
+// 런치패드 격자 4열 × 2줄(목업 ①과 같은 배치). 아홉 칸이 전부 살아 있다 — "추후" 칸은 없다.
+/** 콘솔 안이 아니라 **기존 창·패널을 여는** 칸. 타일에 ↗ 가 붙어 미리 알린다.
+    같은 화면을 두 번 만들지 않는다 — 런치패드의 값어치는 흩어진 진입점을 한자리에 모으는 것이다. */
+export type ConsoleLaunchId = 'log' | 'port' | 'term'
 
 const TOOLS = [
-  { id: 'files', Icon: FolderOpen, tool: null, launch: 'files' as ConsoleLaunchId },
+  { id: 'files', Icon: FolderOpen, tool: 'files' as ConsoleToolId, launch: null },
   { id: 'ps', Icon: Activity, tool: 'ps' as ConsoleToolId, launch: null },
   { id: 'svc', Icon: Server, tool: 'svc' as ConsoleToolId, launch: null },
   { id: 'disk', Icon: HardDrive, tool: 'disk' as ConsoleToolId, launch: null },
@@ -62,6 +69,8 @@ type Props = {
   serverName: string
   onClose: () => void
   ask: (spec: DialogSpec) => Promise<DialogResult>
+  /** [파일] 탭의 새 폴더·이름 바꾸기 입력. 탐색기 창이 FileTree 에 넘기는 것과 같은 함수다. */
+  askText: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
   onAskAi: (text: string) => void
   /** 디스크 창의 [탐색기로 열기] — 기존 파일 탐색기 창을 그 경로로 연다(새 창 인프라 없음). */
   onOpenExplorer: (path: string) => void
@@ -78,6 +87,7 @@ export function ServerConsoleView({
   serverName,
   onClose,
   ask,
+  askText,
   onAskAi,
   onOpenExplorer,
   onLaunch,
@@ -156,19 +166,23 @@ export function ServerConsoleView({
               {TOOLS.map(({ id, Icon, tool, launch }) => (
                 <div
                   key={id}
-                  className={'con-app' + (tool || launch ? '' : ' soon')}
+                  className={'con-app' + (launch ? ' ext' : '')}
                   data-tool={id}
-                  {...(tool
-                    ? { onClick: () => open(tool) }
-                    : launch
-                      ? { onClick: () => onLaunch(launch) }
-                      : {})}
+                  title={launch ? t('console.ext.hint') : undefined}
+                  onClick={tool ? () => open(tool) : () => onLaunch(launch)}
                 >
                   <span className="ic">
                     <Icon />
                   </span>
                   <span className="nm">{t('console.tool.' + id)}</span>
-                  <span className="sm">{t(tool || launch ? 'console.tool.' + id + '.sub' : 'console.soon')}</span>
+                  <span className="sm">{t('console.tool.' + id + '.sub')}</span>
+                  {/* 이 칸만 콘솔 밖에서 열린다 — 누르기 전에 알린다(전에는 눌러야 알았고, 그때는
+                      콘솔이 닫혀 돌아올 곳도 없었다). */}
+                  {launch && (
+                    <span className="ext-mark" aria-label={t('console.ext.hint')}>
+                      ↗
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -176,6 +190,17 @@ export function ServerConsoleView({
                 원격에 명령을 보내지 않는다 — 탐색기의 숨은 트리와 같은 규칙. */}
             {tabs.map((tool) => (
               <div key={tool} className="con-pane" style={active === tool ? undefined : { display: 'none' }}>
+                {/* #69: 떠 있는 탐색기와 **같은 FileTree** 다 — 파일 UI 구현은 이 앱에 하나뿐이다. */}
+                {tool === 'files' && (
+                  <FileTree
+                    session={sessionId ? { id: sessionId, type: 'ssh' } : null}
+                    active={active === tool}
+                    cwd={null}
+                    ask={ask}
+                    askText={askText}
+                    toolbar
+                  />
+                )}
                 {tool === 'ps' && <ProcessTable sessionId={sessionId} active={active === tool} ask={ask} onAskAi={onAskAi} />}
                 {tool === 'svc' && <ServiceTable sessionId={sessionId} active={active === tool} ask={ask} onAskAi={onAskAi} />}
                 {tool === 'disk' && (

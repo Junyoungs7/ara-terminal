@@ -1097,6 +1097,7 @@ export function Shell() {
           sessionId={activeSession?.id ?? null}
           isSsh={activeSession?.type === 'ssh'}
           serverName={activeSession?.serverKey ?? ''}
+          askText={askText}
           onClose={() => setConsoleOpen(false)}
           ask={ask}
           onAskAi={(text) => {
@@ -1120,12 +1121,9 @@ export function Shell() {
             if (sid) window.ev?.session.input(sid, text)
           }}
           onLaunch={(id) => {
-            if (id === 'files') {
-              const profileId = activeSession?.profileId
-              if (!profileId) return
-              setExplorerOpen(true)
-              setExplorerReveal({ profileId, path: '', at: Date.now() })
-            } else if (id === 'log') openRail('log')
+            // #69: 콘솔을 닫는 것은 [터미널] 하나뿐이다(아래). [로그]·[포트]는 레일만 연다 —
+            // 예전엔 셋 다 콘솔을 닫아서 런치패드로 돌아갈 길이 없었다.
+            if (id === 'log') openRail('log')
             else if (id === 'port') openRail('monitor')
             else if (id === 'term') {
               // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
@@ -1134,8 +1132,9 @@ export function Shell() {
               const pid = activeSession?.profileId
               if (pid) void connectProfile(pid)
               else dispatchAction('session.new') // 로컬 세션에서 열었으면 로컬이 맞다
+              // 세션을 만드는 동작이라 터미널이 보여야 한다 — 이 칸만 콘솔을 닫는다.
+              setConsoleOpen(false)
             }
-            setConsoleOpen(false)
           }}
         />
       )}

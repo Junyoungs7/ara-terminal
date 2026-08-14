@@ -129,17 +129,48 @@ test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 
   await expect(ara.page.locator('.con-ps .con-empty')).toHaveCount(0)
 })
 
-// CON-1b (R3 에서 뜻이 바뀜) 예전엔 "추후 칸은 눌러도 아무 일이 없다" 였다. 이제 추후 칸이 없다 —
-// 대신 지켜야 할 성질은 **콘솔 안에 탭으로 뜨는 것은 원격 표 넷뿐**이라는 것이다.
-// 파일·로그·포트·터미널은 기존 창·패널을 열고 콘솔은 닫힌다(CON-22·CON-23 이 그쪽을 본다).
-test('CON-1b 콘솔 안에 탭으로 뜨는 것은 원격 표 넷뿐이다', async ({ ara, ssh }) => {
+// CON-1b 콘솔 밖에서 열리는 칸은 셋(로그·포트·터미널)이고, 그 셋만 ↗ 를 단다.
+// 이력: R1·R2 때는 "추후 칸은 눌러도 아무 일이 없다" 였고, R3 에서 추후 칸이 없어졌으며,
+// #69(2026-08-14)에서 [파일] 이 밖에서 열리는 쪽 → **콘솔 안 탭**으로 옮겨 왔다.
+test('CON-1b★ 콘솔 밖에서 열리는 칸은 셋뿐이고 ↗ 로 미리 알린다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con1b', execHandler: ps.exec })
   await openConsole(ara.page, 'con1b', h.port, 'pw-con1b')
-  // 외부 도구 칸은 탭을 만들지 않는다.
+
+  await expect(ara.page.locator('.con-app .ext-mark')).toHaveCount(3)
+  for (const id of ['log', 'port', 'term']) {
+    await expect(ara.page.locator(`.con-app[data-tool="${id}"] .ext-mark`)).toBeVisible()
+  }
+  // 탭으로 열리는 칸에는 표시가 없다 — 표시가 아무 데나 붙으면 뜻이 사라진다.
+  for (const id of ['files', 'ps', 'svc', 'disk', 'pkg', 'ctr']) {
+    await expect(ara.page.locator(`.con-app[data-tool="${id}"] .ext-mark`)).toHaveCount(0)
+  }
+  // 밖에서 열리는 칸은 탭을 만들지 않는다.
   await ara.page.click('.con-app[data-tool="log"]')
   await ara.page.waitForTimeout(300)
   await expect(ara.page.locator('.exp-tab[data-tab="log"]')).toHaveCount(0)
+})
+
+// CON-33★ [파일] 은 콘솔 안 탭으로 열린다 (#69, 2026-08-14)
+// 준영님 지적: "런처패드의 파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이 켜지는것".
+// 예전엔 떠 있는 탐색기를 띄우고 **콘솔을 닫아** 런치패드로 돌아갈 길이 없었다.
+// 파일 UI 구현은 이 앱에 FileTree 하나뿐이라(떠 있는 탐색기도 그걸 쓴다) 새로 만든 화면이 없다.
+test('CON-33★ [파일] 은 콘솔 안 탭으로 열리고 런치패드로 돌아갈 수 있다', async ({ ara, ssh }) => {
+  const ps = makePs()
+  const h = await ssh({ password: 'pw-con33', execHandler: ps.exec })
+  await openConsole(ara.page, 'con33', h.port, 'pw-con33')
+
+  await ara.page.click('.con-app[data-tool="files"]')
+  await expect(ara.page.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
+  // 콘솔이 살아 있고, 떠 있는 탐색기 창이 따로 뜨지 않았다.
+  await expect(ara.page.locator('.con-win')).toBeVisible()
+  await expect(ara.page.locator('.exp-win:not(.con-win)')).toHaveCount(0)
+  // 파일 트리가 실제로 그려졌다(툴바 켠 모드 — 탐색기 창과 같은 구성).
+  await expect(ara.page.locator('.con-pane .ftree')).toHaveCount(1)
+
+  // 런치패드 탭으로 돌아갈 수 있다 — 이 검사의 요점이다.
+  await ara.page.click('.exp-tab[data-tab="pad"]')
+  await expect(ara.page.locator('.con-pad')).toBeVisible()
 })
 
 // CON-2 아이콘 → 같은 창의 탭. 원격 ps 출력이 표로 그려진다.
@@ -730,15 +761,18 @@ test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는
 })
 
 // CON-22 나머지 칸은 콘솔 안에 다시 그리지 않고 **기존 창·패널**을 연다.
-test('CON-22 [포트] 칸은 포트 모니터 패널을 열고 콘솔은 닫는다', async ({ ara, ssh }) => {
+test('CON-22★ [포트] 칸은 포트 모니터를 열되 콘솔을 닫지 않는다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw22', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c22', h.port, 'pw22')
+
+  // 누르기 전에 "여긴 밖에서 열린다"를 알려 준다 — 아홉 칸이 똑같이 생겼기 때문이다(#69).
+  await expect(ara.page.locator('.con-app[data-tool="port"] .ext-mark')).toBeVisible()
 
   await ara.page.click('.con-app[data-tool="port"]')
   // 기존 포트 모니터 패널이 뜬다(콘솔 안에 같은 화면을 두 번 만들지 않는다).
   await expect(ara.page.locator('.monitor-panel:not(.sysm)')).toBeVisible()
-  // 방금 연 창을 콘솔이 덮지 않게 콘솔은 닫는다.
-  await expect(ara.page.locator('.con-win')).toHaveCount(0)
+  // #69: 콘솔은 **살아 있다** — 예전엔 여기서 닫아 버려 런치패드로 돌아갈 길이 없었다.
+  await expect(ara.page.locator('.con-win')).toBeVisible()
   // 콘솔 안에 port 탭이 생기지는 않았다.
   await expect(ara.page.locator('.exp-tab[data-tab="port"]')).toHaveCount(0)
 })
@@ -751,6 +785,8 @@ test('CON-23★ [터미널] 칸은 그 서버의 새 세션을 연다(로컬 셸
   await openConsole(ara.page, 'c23', h.port, 'pw23')
   const before = await ara.page.locator('.term-tabbar .ttab').count()
 
+  // [터미널] 은 세션을 만드는 동작이라 **이 칸만** 콘솔을 닫는다(#69) — 터미널이 보여야 한다.
+  await expect(ara.page.locator('.con-app[data-tool="term"] .ext-mark')).toBeVisible()
   await ara.page.click('.con-app[data-tool="term"]')
   await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
   await expect(ara.page.locator('.con-win')).toHaveCount(0)
