@@ -155,19 +155,21 @@ describe('isAppShortcut (터미널이 셸로 흘리면 안 되는 키)', () => {
     expect(isAppShortcut(ev({ altKey: true, key: 'a' }))).toBe(true) // ai.toggle
   })
 
-  it('미구현 키와 평범한 타이핑은 셸로 그대로 보낸다', () => {
-    expect(isAppShortcut(ev({ ctrlKey: true, shiftKey: true, key: 's' }))).toBe(false) // log.save 미배선
+  it('평범한 타이핑은 셸로 그대로 보낸다', () => {
+    // 2026-08-14: Ctrl+Shift+S(log.save)가 실배선돼 이제 앱 단축키다 — 예시에서 뺐다.
     expect(isAppShortcut(ev({ key: 'a' }))).toBe(false)
     expect(isAppShortcut(ev({ shiftKey: true, key: '?' }))).toBe(false) // 치트시트는 입력 포커스에서 제외
   })
 })
 
 describe('치트시트 노출 대상 (R2.5 implemented 플래그)', () => {
-  it('미구현으로 표시된 키는 실제 미배선 기능뿐이다', () => {
-    // R3.8 에서 fileTree.toggle(Ctrl+Shift+E)·terminal.search(Ctrl+Shift+F)가 실배선됐고,
-    // W3(F16)에서 ai.ask(Ctrl+Shift+A)·ai.toggle(Alt+A)가 배선됐다. 남은 것은 log.save 뿐이다.
+  it('★ 미배선으로 남은 단축키가 하나도 없다', () => {
+    // R3.8 에서 fileTree.toggle·terminal.search 가, W3 에서 ai.ask·ai.toggle 이 배선됐고,
+    // 2026-08-14 에 마지막 하나였던 log.save 가 배선됐다(로그 패널을 연다).
+    // **치트시트와 통합 검색이 이 플래그로 목록을 만든다** — false 로 남겨 두면 그 기능은
+    // 어디에서도 안 보인다. 새 항목을 false 로 넣었다면 배선까지 끝내고 true 로 올릴 것.
     const dead = KEYMAP.filter((k) => !k.implemented).map((k) => k.action).sort()
-    expect(dead).toEqual(['log.save'])
+    expect(dead).toEqual([])
   })
 
   it('배선된 항목이 치트시트를 채운다(4열 표 기준 15행 이상)', () => {

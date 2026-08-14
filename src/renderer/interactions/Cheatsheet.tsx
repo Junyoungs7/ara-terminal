@@ -79,7 +79,6 @@ export function Cheatsheet({ open, onClose }: Props) {
         </div>
         <div className="cs-foot">
           <span>ESC · 바깥 클릭 · ✕ 로 닫기</span>
-          <span>단일 소스: shared/keymap.ts</span>
         </div>
       </div>
     </div>

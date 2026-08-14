@@ -80,14 +80,17 @@ test('CTX-4 스마트 팔레트가 열리고 한글로 액션을 거른다', asy
 
 // CTX-5 미래 기능(로그 저장)은 흐리게 표시되고 "추후 지원" 안내만 한다.
 // (ai.ask 는 W3 F16 에서 실배선돼 더 이상 미래 기능이 아니다 — AI-9 가 실제 동작을 검증한다.)
-test('CTX-5 미래 기능은 안내 토스트만 띄운다', async ({ ara }) => {
+// CTX-5★ 2026-08-14: 마지막 "추후 지원" 항목(로그 저장)이 실배선됐다 — 그전에는 토스트만 냈는데
+// 로그 패널의 [내려받기]는 이미 동작하고 있었다. 이제 우클릭 메뉴에 **흐린 항목이 하나도 없어야**
+// 한다. 눌렀는데 안 되는 메뉴를 두지 않는다는 것이 이 검사가 지키는 성질이다.
+test('CTX-5★ 우클릭 메뉴에 "추후 지원" 항목이 하나도 없다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await rightClickTerminal(page)
-  await expect(page.locator('.ctx-menu .ctx-item[data-action="ai.ask"]')).not.toHaveClass(/dim/)
-  await expect(page.locator('.ctx-menu .ctx-item[data-action="log.save"]')).toHaveClass(/dim/)
+  await expect(page.locator('.ctx-menu .ctx-item.dim')).toHaveCount(0)
+  // [로그 저장]은 이제 실제로 로그 패널을 연다.
   await page.click('.ctx-menu .ctx-item[data-action="log.save"]')
-  await expect(page.locator('.pane-toast')).toHaveText('추후 지원 예정입니다')
+  await expect(page.locator('.log-panel')).toBeVisible({ timeout: 10_000 })
 })
 
 // CTX-6 사이드바 빈 영역 · 로컬 그룹 · 세션 행 메뉴 구성

@@ -11,8 +11,8 @@ test('KEY-1 ? 로 치트시트가 열리고 배선된 단축키만 보여 준다
   expect(rows).toContain('세로 분할')
   expect(rows).toContain('터미널 내 검색')
   expect(rows).toContain('AI 창 토글') // W3 F16 에서 실배선됐다(더 이상 미구현이 아니다)
-  expect(rows).not.toContain('로그 저장') // 여전히 미구현 — 싣지 않는다
-  await expect(page.locator('.cheatsheet .cs-foot')).toContainText('shared/keymap.ts')
+  expect(rows).toContain('로그 저장') // 2026-08-14 실배선 — 이제 싣는다
+  // 푸터의 "단일 소스: shared/keymap.ts" 는 지웠다 — 소스 경로를 사용자에게 보여 줄 이유가 없다.
   await page.keyboard.press('Escape')
   await expect(page.locator('.cheatsheet')).toHaveCount(0)
 })

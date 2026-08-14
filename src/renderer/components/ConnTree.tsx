@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
-import type { ConnState } from '../store/profiles'
+import { connDotClass, type ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, tmuxMenuItem, type TreeActionId, type TreeMenuKind } from '../interactions/actions'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
 import { IconClose } from './icons'
-import { Monitor, Terminal } from 'lucide-react'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
 // 사이드바 연결 트리 — 목업 S1(순수 트리). 2026-08-08 재설계.
@@ -58,12 +57,8 @@ type Props = {
   onOpenWork?: (w: WorkProfile) => void
 }
 
-// 상태 dot 클래스(연결됨=on, 연결 중/오류=warn, 미연결=off).
-function stDot(state: ConnState[string] | undefined): string {
-  if (state === 'connected') return 'st on'
-  if (state === 'error' || state === 'connecting') return 'st warn'
-  return 'st off'
-}
+// 상태 dot — 판정은 store/profiles.ts 의 connDotClass 하나가 한다(연결 관리자와 공유).
+const stDot = (state: ConnState[string] | undefined): string => 'st ' + connDotClass(state)
 
 // FB-monitor(F19 tmux 후속): 메뉴 종류 + tmux 조회 상태 → 실제로 그릴 항목. tmuxSessionId 가
 // 없으면(로컬·RDP·연결 안 된 서버) tmux 항목 자체가 안 붙는다 — sudo 상승 없이 조회 가능한 대상만.
@@ -92,22 +87,15 @@ export function typeBadge(type: string | undefined): { cls: string; label: strin
 // 세션 행 — 서버 행보다 한 단 들여쓴 한 줄. 부모가 서버면 타입 배지를 달지 않는다(서버 행이 이미 말했다).
 // 로컬 그룹 아래 세션은 부모 서버 행이 없어 스스로 SYS 를 달아야 한다.
 /**
- * 세션 종류 → 아이콘. Lucide(ISC) 를 쓴다 — 손으로 그리던 icons.tsx 와 같은 규격(24×24, stroke 2,
- * round cap)이라 나란히 놓아도 이질감이 없다.
+ * 세션 행 맨 앞은 **타입 배지**(SSH·RDP·SYS)다. 2026-08-14 준영님 제안으로 `>_` 아이콘을 대체했다.
  *
- * 프로토콜 로고를 쓰지 않은 이유: 찾아봤지만 **없다**. Iconify 로 200여 세트를 훑어도 ssh 는
- * `mdi:ssh`(솔리드 계열이라 우리 선 아이콘과 안 맞는다) 하나뿐이고, rdp 검색 결과는 전부 암호화폐
- * 토큰(rdpx), ftp 는 안드로이드 앱 런처 아이콘(CC BY-SA)뿐이다. 그래서 **개념 아이콘**으로 간다 —
- * 프로토콜 이름은 서버 행의 SSH/RDP 배지가 이미 말하고 있다.
+ * 아이콘이 하던 일이 없었다: 모든 셸 세션이 같은 프롬프트 기호였고(rdp 만 모니터), 정작 타입은
+ * 행 **끝**의 배지가 따로 말하고 있었다. 같은 것을 두 자리에서 말하면서 앞자리는 아무 말도
+ * 안 하는 꼴이었다. 배지를 앞으로 옮기면 한 요소가 사라지고 그 자리가 정보가 된다.
+ *
+ * 서버 아래 세션은 배지가 부모와 겹친다(그 서버가 이미 SSH 다). 그래도 다는 이유는 **줄이 맞아야
+ * 읽히기** 때문이다 — 앞자리를 비우면 cwd 가 들쭉날쭉해진다. 겹치는 정보라도 자리를 지키는 편이 낫다.
  */
-const SESS_ICON: Record<string, typeof Terminal> = {
-  ssh: Terminal,
-  // 원격 화면은 셸이 아니다 — 프롬프트 기호를 달면 거짓말이 된다. 나머지는 전부 프롬프트 하나로 통일
-  // (준영님 선택: 타입별로 다르게 하지 말 것 — 타입은 서버 행의 SSH/RDP/SYS 배지가 이미 말한다).
-  rdp: Monitor,
-  local: Terminal
-}
-
 function SessRow({
   s,
   active,
@@ -127,7 +115,6 @@ function SessRow({
   onCtx: (e: React.MouseEvent, kind: TreeMenuKind, target: TreeTarget, tmuxSessionId?: string) => void
 }) {
   const badge = typeBadge(s.type)
-  const SessIcon = SESS_ICON[s.type] ?? Terminal
   return (
     <div
       className={'sess-node' + (active ? ' active' : '')}
@@ -137,16 +124,12 @@ function SessRow({
       // 이름(main 이 정한 탭 제목)은 행에 안 싣지만 툴팁으로는 남긴다 — 사용자가 rename 한 값일 수 있다.
       title={cwd ? `${s.title} · ${cwd}` : s.title}
     >
-      {/* 숫자(1·2·3)를 세션 아이콘으로 바꿨다(준영님 요청) — 몇 번째인지보다 어떤 세션인지가 쓸모 있다.
-          순서는 위에서 아래로 이미 보이고, 번호는 어디서도 쓰이지 않았다(단축키는 탭 기준이다). */}
-      {/* 크기는 CSS(--sb-icon)가 정한다 — lucide 의 size prop 은 px 를 박아 배율을 안 탄다. */}
-      <SessIcon className="sicon" strokeWidth={2} aria-hidden />
+      <span className={'sess-type ' + badge.cls}>{badge.label}</span>
       {/* 부모 서버 행이 있으면 이름은 생략하고 경로만 — 이름(서버명·N)은 부모가 이미 말했다.
           로컬은 부모 행이 없어 셸 이름(PowerShell/cmd)을 스스로 달아야 어느 셸인지 알 수 있다.
           경로를 아직 못 받았으면 어느 쪽이든 이름으로 버틴다(빈 줄을 보여 주지 않는다). */}
       {(standalone || !cwd) && <span className="sess-name">{s.title}</span>}
       {cwd && <span className="sess-cwd">{cwd}</span>}
-      {standalone && <span className={'sess-type ' + badge.cls}>{badge.label}</span>}
       {onClose && (
         <span className="rowact">
           <span

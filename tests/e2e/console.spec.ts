@@ -14,6 +14,7 @@ import {
   dialogCancel,
   dialogConfirm,
   newLocalShell,
+  sessionList,
   REPO_ROOT
 } from './fixtures'
 
@@ -714,15 +715,22 @@ test('CON-22 [포트] 칸은 포트 모니터 패널을 열고 콘솔은 닫는�
   await expect(ara.page.locator('.exp-tab[data-tab="port"]')).toHaveCount(0)
 })
 
-// CON-23 [터미널] 칸은 새 세션을 만든다(같은 단축키 경로 session.new).
-test('CON-23 [터미널] 칸은 새 세션을 연다', async ({ ara, ssh }) => {
+// CON-23★ [터미널] 칸은 **그 서버의** 새 세션을 연다.
+// 2026-08-13 감사 전까지 이 검사는 "탭이 하나 늘었다"만 봤고, 그래서 실제로는 내 PC 로컬 셸이
+// 열리는 결함을 못 잡았다(창 제목엔 서버 이름이 박혀 있는데). **무엇이 열렸는지**를 본다.
+test('CON-23★ [터미널] 칸은 그 서버의 새 세션을 연다(로컬 셸이 아니다)', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw23', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c23', h.port, 'pw23')
   const before = await ara.page.locator('.term-tabbar .ttab').count()
 
   await ara.page.click('.con-app[data-tool="term"]')
-  await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1)
+  await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
   await expect(ara.page.locator('.con-win')).toHaveCount(0)
+
+  // 늘어난 세션이 **ssh** 여야 한다 — 여기가 이 검사의 요점이다.
+  const types = (await sessionList(ara.page)).map((s) => s.type)
+  expect(types.filter((t) => t === 'ssh')).toHaveLength(2)
+  expect(types).not.toContain('local')
 })
 
 // ── F28 컨테이너 ────────────────────────────────────────────────────────────

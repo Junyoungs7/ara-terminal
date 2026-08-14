@@ -18,6 +18,17 @@ export function connectErrorMessage(res: ConnectFailure): string {
 // 프로필 목록 + 연결 상태(F3). CRUD는 main(vault 경유), 연결은 ssh:connect.
 export type ConnState = Record<string, 'idle' | 'connecting' | 'connected' | 'error'>
 
+/**
+ * 상태 점 클래스(연결됨=on, 연결 중/오류=warn, 미연결=off).
+ * **연결 트리와 연결 관리자가 같은 함수를 쓴다** — 2026-08-13 감사에서 관리자 쪽이 `var(--idle)`
+ * 하드코딩이라 같은 서버가 화면마다 다른 색으로 보이던 것을 여기로 모았다.
+ */
+export function connDotClass(state: ConnState[string] | undefined): string {
+  if (state === 'connected') return 'on'
+  if (state === 'error' || state === 'connecting') return 'warn'
+  return 'off'
+}
+
 export function useProfiles() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [conn, setConn] = useState<ConnState>({})

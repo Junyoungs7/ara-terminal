@@ -108,8 +108,8 @@ test('SET-7 단축키 섹션이 실제 배선된 단축키만 보여 준다', as
   const rows = await page.locator(`${drawer} .set-keys .cs-row .cs-desc`).allTextContents()
   expect(rows).toContain('가로 분할')
   expect(rows).toContain('연결 관리자')
-  // 로그 저장(F12 미구현)은 의도적으로 제외.
-  expect(rows).not.toContain('로그 저장')
+  // 2026-08-14: 로그 저장이 실배선돼(로그 패널을 연다) 이제 여기에도 실린다.
+  expect(rows).toContain('로그 저장')
   // 백로그 M-5(FINAL-batch 에서 수정됨): KEY_GROUPS 에 { title:'AI', cats:['ai'] } 그룹이 추가돼
   // ai.ask/ai.toggle 이 이제 설정 [단축키]에도 나온다(치트시트 `?` 에는 원래부터 나왔다 — KEY-1).
   // 이 테스트는 그 수정 전에는 반대(not.toContain)를 기대하고 있었다 — 갱신.

@@ -1755,6 +1755,8 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  /* 끊김 카드(.restore-err-card.over)가 이 안에 얹힌다 — 기준 상자가 필요하다. */
+  position: relative;
 }
 /* F6 부분 복원(C-4): SSH 재접속 실패 패널 — 오류 카드 + 재시도/닫기. */
 .pane.restore-error {
@@ -1770,6 +1772,14 @@
   gap: 10px;
   text-align: center;
   padding: 20px;
+}
+/* 쓰던 중에 끊긴 세션 — 터미널 위에 얹는다(대신 그리지 않는다). 마지막 화면이 비쳐야
+   "왜 끊겼나"의 단서가 남는다. 반투명이 아니라 살짝 어둡게 덮어 카드 글자를 읽히게 한다. */
+.restore-err-card.over {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(13, 17, 25, 0.82);
 }
 .restore-err-card .rec-icon svg {
   width: 34px;
@@ -2413,15 +2423,6 @@
    화살표처럼 보였다. 구분감은 줄기와 들여쓰기만으로 충분하고, 활성 표시는 아이콘·이름의 강조색이
    이미 맡고 있다. 다시 넣고 싶으면 아이콘과 겹쳐 보이지 않는지부터 확인할 것. */
 /* 세션 아이콘(Lucide) — 숫자 대신 어떤 세션인지 보여 준다. */
-.sess-node .sicon {
-  flex: none;
-  width: var(--sb-icon);
-  height: var(--sb-icon);
-  color: var(--text-dim);
-}
-.sess-node.active .sicon {
-  color: var(--accent-bright);
-}
 .sess-node .sess-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2451,16 +2452,24 @@
 .sess-node.active .sess-cwd {
   color: var(--accent-bright);
 }
-/* 로컬 세션은 부모 서버 행이 없어 타입을 스스로 말해야 한다(SYS). */
+/* 세션 행 맨 앞의 타입 배지(2026-08-14 — `>_` 아이콘을 대체했다).
+   **폭을 고정한다**: SSH·RDP·SYS 가 글자 수는 같지만 폰트에 따라 미세하게 달라지는데,
+   그러면 그 뒤 경로가 행마다 어긋나 목록이 지저분해진다. 줄이 맞아야 훑어 읽힌다. */
 .sess-node .sess-type {
   flex: none;
-  padding: 1px 5px;
+  width: 34px;
+  padding: 1px 0;
+  text-align: center;
   border-radius: 3px;
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 700;
   border: 1px solid var(--line);
   color: var(--text-dim);
+}
+/* 고른 세션은 배지도 함께 밝아진다 — 예전 아이콘이 하던 일이다(.sicon.active). */
+.sess-node.active .sess-type {
+  border-color: var(--accent-line);
 }
 .sess-node .sess-type.sys {
   color: var(--ok);

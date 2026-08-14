@@ -8,8 +8,9 @@ import type { TmuxListResult } from '../../shared/tmuxList'
 // (이중 정의 금지, 계획서 §C F4c). 목업 variant-final-3 의 8항목·순서·아이콘을 그대로 이식.
 //
 // tint: 'ai' → --purple, 'danger' → --err (목업의 인라인 HEX 대신 토큰 — 매직넘버 스캔 통과).
-// future: true → 미래 기능(F12 로그 저장). 비활성 스타일 + "추후 지원" 토스트.
-// (ai.ask 는 W3 에서 실배선됐다 — future 를 뗐다.)
+// future: true → 아직 없는 기능. 비활성 스타일 + "추후 지원" 토스트.
+// (ai.ask 는 W3 에서, log.save 는 2026-08-14 에 실배선돼 future 를 뗐다 — 지금은 쓰는 곳이 없다.
+//  없는 기능을 메뉴에 남겨 두면 "눌렀는데 안 되네"가 되므로 다음에도 신중히 쓸 것.)
 
 export type ActionId =
   | 'copy'
@@ -92,7 +93,6 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
   {
     id: 'log.save',
     labelKo: '로그 저장',
-    future: true,
     icon: svg(<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />)
   },
   {
@@ -327,6 +327,14 @@ export type MenuCommandId =
   | 'font.zoomOut'
   | 'help.cheatsheet'
   | 'help.about'
+  // 2026-08-13 감사: 우측 바에만 있던 패널 다섯이 메뉴에도 통합 검색(F1)에도 없어서
+  // "콘솔"·"포트"를 쳐도 안 나왔다. 팔레트가 MENUBAR 를 그대로 읽으므로 여기 올리면
+  // **메뉴와 검색이 한 번에** 해결된다(팔레트 쪽은 손댈 것이 없다).
+  | 'panel.console'
+  | 'panel.ports'
+  | 'panel.sysmon'
+  | 'panel.aisessions'
+  | 'panel.log'
   // F17: 단축키 없는 진입점(패널 상단 버튼이 또 하나 있다 — AiPanel.onOpenBootstrap).
   | 'ai.bootstrap'
 
@@ -371,6 +379,11 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
   {
     title: 'View',
     items: [
+      { command: 'panel.console' },
+      { command: 'panel.ports' },
+      { command: 'panel.sysmon' },
+      { command: 'panel.aisessions' },
+      { command: 'panel.log' },
       { action: 'sidebar.collapse' },
       { action: 'fileTree.toggle' },
       { action: 'explorer.toggle' },

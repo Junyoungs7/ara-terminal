@@ -105,7 +105,9 @@ export const KEYMAP: readonly KeyBinding[] = [
   // R3.8 정책(단일 Ctrl+문자 금지)을 그대로 지켜 Shift 를 얹는다.
   { action: 'explorer.toggle', category: 'view', labelKo: '탐색기 모드', win: 'Ctrl+Shift+O', mac: 'Cmd+Shift+O', implemented: true },
   // Ctrl+S 단독은 터미널 흐름제어(XOFF — 화면이 멈춘 것처럼 보인다).
-  { action: 'log.save', category: 'file', labelKo: '로그 저장', win: 'Ctrl+Shift+S', mac: 'Cmd+Shift+S', implemented: false },
+  // 2026-08-13 감사: `implemented:false` 인데 실제로는 로그 패널의 [내려받기]가 동작했다 —
+  // "추후 지원" 토스트만 내고 있었다. 패널을 여는 것으로 배선한다.
+  { action: 'log.save', category: 'file', labelKo: '로그 저장', win: 'Ctrl+Shift+S', mac: 'Cmd+Shift+S', implemented: true },
   // Ctrl+Shift+C 는 복사(터미널 표준)로 넘겼다 — 연결 관리자는 M(anager).
   { action: 'connection.manager', category: 'connection', labelKo: '연결 관리자', win: 'Ctrl+Shift+M', mac: 'Cmd+Shift+M', implemented: true },
   { action: 'terminal.toggle', category: 'panel', labelKo: '터미널 토글', win: 'Ctrl+`', mac: 'Cmd+`', implemented: true },

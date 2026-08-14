@@ -194,10 +194,20 @@ export function PaneGrid({
 
   // 렌더 슬롯 = 모든 세션(패널 배치 여부 무관) + 복원 실패 placeholder(실 세션 아님, xterm 없음).
   type Slot = { key: string; cell?: PaneCell; session?: Session; err?: RestoreError }
+  //
+  // 오류에는 두 종류가 있고 슬롯 만드는 법이 다르다:
+  //  · **부팅 복원 실패**(F6) — placeholder 라 `sessions` 에 없다. 자기 슬롯을 따로 만든다.
+  //  · **쓰던 중 끊김**(2026-08-14) — 세션이 `sessions` 에 **그대로 있다.** 따로 만들면 key 가
+  //    겹쳐 같은 패널이 두 번 그려진다. 그래서 그 세션 슬롯에 err 를 얹기만 한다.
   const slots: Slot[] = [
-    ...sessions.map((s) => ({ key: s.id, session: s, cell: cells.find((c) => c.sessionId === s.id) })),
+    ...sessions.map((s) => ({
+      key: s.id,
+      session: s,
+      cell: cells.find((c) => c.sessionId === s.id),
+      err: restoreErrors?.get(s.id)
+    })),
     ...cells
-      .filter((c) => restoreErrors?.has(c.sessionId))
+      .filter((c) => restoreErrors?.has(c.sessionId) && !sessions.some((s) => s.id === c.sessionId))
       .map((c) => ({ key: c.sessionId, cell: c, err: restoreErrors!.get(c.sessionId)! }))
   ]
 
@@ -265,8 +275,9 @@ export function PaneGrid({
               )}
             </div>
             <div className="pane-body">
-              {err ? (
+              {err && !session ? (
                 // F6 부분 복원(C-4): SSH 재접속 실패 — 오류 + 재시도/닫기. 다른 패널은 정상.
+                // 여기는 **placeholder 전용**이다(세션이 없어 터미널을 그릴 수 없다).
                 <div className="restore-err-card">
                   <div className="rec-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -274,7 +285,9 @@ export function PaneGrid({
                       <path d="M10.3 3.9l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.1l-8-14a2 2 0 00-3.4 0z" />
                     </svg>
                   </div>
-                  <div className="rec-title">{t('restore.failed')}</div>
+                  {/* 같은 카드를 두 상황이 쓴다 — 부팅 복원 실패와, 쓰던 중에 끊긴 것.
+                      제목이 갈리지 않으면 "복원 실패"가 멀쩡히 쓰던 세션에 뜬다. */}
+                  <div className="rec-title">{t(err.reason === 'dropped' ? 'restore.dropped' : 'restore.failed')}</div>
                   <div className="rec-sub">
                     {err.serverKey} · {t('restore.reason.' + err.reason)}
                   </div>
@@ -304,6 +317,34 @@ export function PaneGrid({
                   onTitle={onTitle}
                   onLink={onLink}
                 />
+              )}
+              {/* 쓰던 중에 끊긴 세션 — 카드를 터미널 **위에** 얹는다. 대신 그리면 끊기기 직전
+                  화면이 사라지는데, 그 화면이 대개 "왜 끊겼나"의 유일한 단서다. */}
+              {err && session && (
+                <div className="restore-err-card over">
+                  <div className="rec-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M12 9v4M12 17h.01" />
+                      <path d="M10.3 3.9l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.1l-8-14a2 2 0 00-3.4 0z" />
+                    </svg>
+                  </div>
+                  <div className="rec-title">{t('restore.dropped')}</div>
+                  <div className="rec-sub">
+                    {err.serverKey} · {t('restore.reason.' + err.reason)}
+                  </div>
+                  <div className="rec-actions">
+                    {/* 프로필이 없으면 되살릴 방법이 없다 — 버튼을 내주지 않는다(눌러도 안 되는
+                        버튼보다 없는 편이 낫다). 사유는 위 문구가 이미 말한다. */}
+                    {err.profileId && (
+                      <button type="button" className="rec-btn primary" onClick={() => onRetryRestore?.(err.sessionId)}>
+                        {t('restore.reconnect')}
+                      </button>
+                    )}
+                    <button type="button" className="rec-btn" onClick={() => onDismissError?.(err.sessionId)}>
+                      {t('restore.dismiss')}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

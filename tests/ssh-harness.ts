@@ -2,7 +2,7 @@
 // 비밀번호/키 인증을 받고, shell 채널에서 입력을 에코하는 최소 서버. 호스트키는 테스트용 ed25519.
 // F7: sftp 서브시스템 지원(임시 디렉토리를 원격 루트로 노출) — list/download/upload/취소 실증.
 import { Server, utils } from 'ssh2'
-import type { ServerChannel } from 'ssh2'
+import type { Connection, ServerChannel } from 'ssh2'
 import type { AddressInfo } from 'node:net'
 import { serveSftp } from './sftp-harness'
 
@@ -27,6 +27,12 @@ export type Harness = {
   hostKeyPem: string
   password: string
   close: () => Promise<void>
+  /**
+   * **이미 붙어 있는 연결을 끊는다.** `close()` 는 새 연결만 막고 살아 있는 연결은 그대로 두므로
+   * (Node 의 기본 동작) "쓰던 중에 끊겼다"를 만들 수 없다 — 그 상황이 필요한 검사는 이걸 쓴다.
+   * 서버는 계속 살아 있어 재접속 검사를 이어서 할 수 있다.
+   */
+  dropAll: () => void
 }
 
 // 비밀번호 인증 SSH 서버를 임시 포트에 띄운다. shell 채널은 받은 입력을 그대로 에코한다.
@@ -69,7 +75,13 @@ export async function startPasswordServer(opts?: {
   // 커넥션 하나가 셸·exec·sftp 채널을 공유한다 — 실제 sshd 와 같은 구조라야 이 기능이 성립한다.
   let procCwdNow = proc?.initial ?? '/home/tester'
 
+  // 살아 있는 연결. dropAll() 이 이걸 끊는다.
+  const live = new Set<Connection>()
+
   const server = new Server({ hostKeys: [hostKeyPem] }, (client) => {
+    live.add(client)
+    client.on('close', () => live.delete(client))
+    client.on('error', () => live.delete(client))
     client.on('authentication', (ctx) => {
       if (ctx.method === 'password' && ctx.password === password) ctx.accept()
       else if (ctx.method === 'none') ctx.reject(['password'])
@@ -191,7 +203,13 @@ export async function startPasswordServer(opts?: {
     password,
     close: () =>
       new Promise<void>((resolve) => {
+        for (const c of live) c.end()
+        live.clear()
         server.close(() => resolve())
-      })
+      }),
+    dropAll: () => {
+      for (const c of live) c.end()
+      live.clear()
+    }
   }
 }

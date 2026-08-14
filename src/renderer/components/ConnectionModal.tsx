@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConnectionProfile, ProfileInput } from '@shared/types'
+import { connDotClass, type ConnState } from '../store/profiles'
 import { Dropdown } from './Dropdown'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
@@ -75,6 +76,8 @@ type Props = {
   profiles: ConnectionProfile[]
   // R6: 그룹 콤보 선택지(트리와 같은 목록 — 빈 그룹 포함, 이름순).
   groups: string[]
+  /** 서버별 연결 상태 — 목록의 상태 점에 쓴다. 트리와 같은 값을 받아 같은 색을 그린다. */
+  conn?: ConnState
   onClose: () => void
   onSave: (input: ProfileInput) => Promise<ConnectionProfile>
   // Shell 의 connectProfile — 호스트키 확인·실패 다이얼로그까지 처리하고 성공 여부만 돌려준다
@@ -88,7 +91,7 @@ type Props = {
 }
 
 // 연결 관리자 모달 (design-system §5.3, 목업 variant-final-3.html 919행~). 좌:프로필 리스트 / 우:폼.
-export function ConnectionModal({ open, request, profiles, groups, onClose, onSave, onConnect, onDuplicate, onDelete }: Props) {
+export function ConnectionModal({ open, request, profiles, groups, conn, onClose, onSave, onConnect, onDuplicate, onDelete }: Props) {
   const [form, setForm] = useState<Form>(emptyForm)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string>('')
@@ -277,7 +280,11 @@ export function ConnectionModal({ open, request, profiles, groups, onClose, onSa
                     {p.username}@{p.host}
                   </div>
                 </div>
-                <span className="pf-st" style={{ background: 'var(--idle)' }} />
+                {/* 2026-08-13 감사: 여기가 var(--idle) 하드코딩이라, 트리에서 초록인 서버가
+                    이 화면에서는 늘 회색이었다. 같은 서버가 화면마다 다른 색이면 안 된다. */}
+                {/* 2026-08-13 감사: 여기가 var(--idle) 하드코딩이라, 트리에서 초록인 서버가
+                    이 화면에서는 늘 회색이었다. 같은 서버가 화면마다 다른 색이면 안 된다. */}
+                <span className={'pf-st ' + connDotClass(conn?.[p.id])} />
               </div>
             ))}
           </div>

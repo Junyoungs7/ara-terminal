@@ -791,8 +791,8 @@ app.whenReady().then(async () => {
     'R3.1: 우클릭 복사/붙여넣기에 Ctrl+Shift+C/V 힌트',
     f4c.listHints.includes('Ctrl+Shift+C') && f4c.listHints.includes('Ctrl+Shift+V')
   ])
-  // W3: ai.ask 가 실배선돼 흐린 항목은 로그 저장 하나만 남았다.
-  checks.push(['남은 미래 기능 1종 흐림 + 패널 닫기 위험 톤', f4c.listDim === 1 && f4c.listDanger === 1])
+  // 2026-08-14: 마지막 흐린 항목(로그 저장)이 실배선돼 이제 흐린 항목이 하나도 없다.
+  checks.push(['흐린(추후) 항목 0 + 패널 닫기 위험 톤', f4c.listDim === 0 && f4c.listDanger === 1])
   checks.push(['ESC → 리스트 닫힘', f4c.listClosed === true])
   checks.push(['R1.4: 탭바 우클릭 스타일 토글 버튼 제거', f4c.toggleGone === true])
   checks.push(['R5: 탭바 폰트·단축키 버튼 제거(설정으로 통합)', f4c.tabbarToolsGone === true])
@@ -1441,8 +1441,9 @@ app.whenReady().then(async () => {
     await wait(350)
     const csLabels = [...document.querySelectorAll('.cheatsheet.open .cs-row .cs-desc')].map(d => d.textContent)
     const csRows = csLabels.length
-    // R3.8 에서 터미널 내 검색·파일 트리 토글이, W3 에서 AI 2종이 실배선됐다 — 남은 미구현은 로그 저장뿐.
-    const csDead = csLabels.filter(l => ['로그 저장'].includes(l)).length
+    // 2026-08-14 로그 저장까지 실배선돼 미구현 목록이 비었다. 배열을 비워 두는 이유는 다음에
+    // 미구현 항목이 생기면 여기 이름만 넣으면 되게 하려는 것이다(검사 구조는 그대로 쓴다).
+    const csDead = csLabels.filter(l => [].includes(l)).length
     // 반대 방향도 확인한다: 배선된 AI 키가 치트시트에 실제로 올라왔는지(implemented 파생이 도는지).
     const csHasAi = ['AI에게 질문', 'AI 창 토글'].every(l => csLabels.includes(l))
     const csHasR3 = ['터미널 내 검색', '복사', '붙여넣기', '파일 트리 토글'].every(l => csLabels.includes(l))

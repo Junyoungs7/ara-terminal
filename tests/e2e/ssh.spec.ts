@@ -138,3 +138,56 @@ test('SSH-8 프로필을 삭제하면 트리에서 사라진다', async ({ ara, 
   const profiles = await page.evaluate(() => window.ev.profile.list())
   expect(profiles).toHaveLength(0)
 })
+
+// ── 쓰던 중에 끊겼을 때 (2026-08-14) ─────────────────────────────────────────
+// 준영님 결정: "자동 재접속 대신 재접속 버튼." 그전에는 회색 한 줄만 찍히고 끝이라
+// 다시 붙는 길이 화면에 없었다.
+
+// DROP-1★ 서버가 죽으면 그 패널에 [다시 접속] 카드가 뜬다.
+test('DROP-1★ 쓰던 중 끊기면 재접속 카드가 뜬다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-drop1' })
+  await connectNewSshProfile(page, { name: 'drop1', port: h.port, password: 'pw-drop1' })
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+
+  // `close()` 는 새 연결만 막는다 — 살아 있는 연결을 실제로 끊어야 "쓰던 중 끊김"이 된다.
+  h.dropAll()
+  const card = page.locator('.restore-err-card.over')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await expect(card).toContainText('연결이 끊겼습니다')
+  await expect(card.locator('.rec-btn.primary')).toHaveText('다시 접속')
+  // 카드는 터미널을 **덮는다** — 끊기기 직전 화면이 남아 있어야 한다.
+  await expect(page.locator('.pane .term-pane')).toHaveCount(1)
+})
+
+// DROP-2★ 이 검사가 이 기능의 핵심이다 — 못 가르면 탭을 닫을 때마다 카드가 뜬다.
+test('DROP-2★ 사용자가 닫은 세션에는 카드가 뜨지 않는다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-drop2' })
+  await connectNewSshProfile(page, { name: 'drop2', port: h.port, password: 'pw-drop2' })
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+
+  await page.locator('.term-tabbar .ttab .tx').first().click()
+  await dialogConfirm(page) // 닫기 확인(2026-08-11 규칙)
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(0)
+  // 잠시 기다려도 카드는 없다(닫은 것이지 끊긴 것이 아니다).
+  await page.waitForTimeout(1500)
+  await expect(page.locator('.restore-err-card')).toHaveCount(0)
+})
+
+// DROP-3★ 카드만 뜨고 안 붙으면 의미가 없다 — [다시 접속]이 실제로 되살리는지 본다.
+test('DROP-3★ [다시 접속]을 누르면 그 서버로 되살아난다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-drop3' })
+  await connectNewSshProfile(page, { name: 'drop3', port: h.port, password: 'pw-drop3' })
+
+  h.dropAll() // 서버는 살아 있고 연결만 끊긴다 = 되살릴 수 있는 상황
+  await expect(page.locator('.restore-err-card.over')).toBeVisible({ timeout: 30_000 })
+
+  await page.locator('.restore-err-card.over .rec-btn.primary').click()
+  // 카드가 사라지고 살아 있는 터미널이 돌아온다.
+  await expect(page.locator('.restore-err-card')).toHaveCount(0, { timeout: 30_000 })
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+  // 죽은 세션이 탭에 남아 있으면 안 된다(껍데기 탭 금지).
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(1)
+})

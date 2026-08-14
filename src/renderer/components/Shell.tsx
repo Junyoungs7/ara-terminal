@@ -307,6 +307,21 @@ export function Shell() {
         case 'ai.bootstrap':
           setBootstrapOpen(true)
           return
+        case 'panel.console':
+          setConsoleOpen((o) => !o)
+          return
+        case 'panel.ports':
+          setMonitorOpen((o) => !o)
+          return
+        case 'panel.sysmon':
+          setSysOpen((o) => !o)
+          return
+        case 'panel.aisessions':
+          setAiSessOpen((o) => !o)
+          return
+        case 'panel.log':
+          setLogOpen((o) => !o)
+          return
         case 'help.about':
           void ask({
             title: t('about.title'),
@@ -978,6 +993,7 @@ export function Shell() {
             if (text) setAiPrefill({ text, at: Date.now() })
           }}
           onSettingsOpenChange={setSettingsActive}
+          onOpenLog={() => setLogOpen(true)}
           onActivityItems={setActivityItems}
         />
         <MiniPreview
@@ -1101,7 +1117,14 @@ export function Shell() {
               setExplorerReveal({ profileId, path: '', at: Date.now() })
             } else if (id === 'log') setLogOpen(true)
             else if (id === 'port') setMonitorOpen(true)
-            else if (id === 'term') dispatchAction('session.new')
+            else if (id === 'term') {
+              // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
+              // 제목줄에 박힌 창에서 내 PC 셸이 열렸다 — 조용히 틀리는 종류라 서버에서 칠 명령을
+              // 자기 PC 에서 치게 됐다(2026-08-13 감사). 원래 스펙(F26-R3)도 이걸 지시했다.
+              const pid = activeSession?.profileId
+              if (pid) void connectProfile(pid)
+              else dispatchAction('session.new') // 로컬 세션에서 열었으면 로컬이 맞다
+            }
             setConsoleOpen(false)
           }}
         />
@@ -1122,6 +1145,7 @@ export function Shell() {
         request={modalReq}
         profiles={profiles}
         groups={groups}
+        conn={conn}
         onClose={() => setModalOpen(false)}
         onSave={save}
         onConnect={connectProfile}

@@ -127,10 +127,11 @@ describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
     expect(byId['paste'].hint).toBe('Ctrl+Shift+V')
   })
 
-  it('패널 닫기는 위험 톤, 남은 미래 기능(로그 저장)만 흐린 톤', () => {
+  it('패널 닫기는 위험 톤, 흐린(추후) 항목은 하나도 없다', () => {
     const byId = Object.fromEntries(terminalMenu().map((m) => [m.id, m]))
     expect(byId['pane.close'].danger).toBe(true)
-    expect(byId['log.save'].dim).toBe(true)
+    // 2026-08-14: log.save 가 실배선돼 흐린 항목이 사라졌다.
+    expect(terminalMenu().filter((m) => m.dim).map((m) => m.id)).toEqual([])
     expect(byId['copy'].dim).toBeUndefined()
     // W3: 아라가 실배선돼 [AI에게 질문] 은 더 이상 흐리지 않다(누르면 실제로 패널이 열린다).
     expect(byId['ai.ask'].dim).toBeUndefined()

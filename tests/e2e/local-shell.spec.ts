@@ -104,9 +104,13 @@ test('LOCAL-4 하위 세션은 숫자가 아니라 아이콘으로 표시되고 
 
   const rows = page.locator('.sess-list .sess-node')
   await expect(rows).toHaveCount(2)
-  // 숫자 배지는 사라지고 세션 아이콘(Lucide svg)이 그 자리에 있다.
+  // 맨 앞자리는 숫자(구)도 아이콘(구)도 아닌 **타입 배지**다(2026-08-14 준영님 제안).
+  // `>_` 아이콘은 모든 셸 세션이 같아 아무 말도 안 했고, 타입은 행 끝에서 따로 말하고 있었다.
   await expect(page.locator('.sess-list .sess-node .sidx')).toHaveCount(0)
-  await expect(page.locator('.sess-list .sess-node svg.sicon')).toHaveCount(2)
+  await expect(page.locator('.sess-list .sess-node svg.sicon')).toHaveCount(0)
+  await expect(page.locator('.sess-list .sess-node .sess-type')).toHaveCount(2)
+  // 로컬 셸이므로 SYS.
+  expect(await page.locator('.sess-list .sess-node .sess-type').allInnerTexts()).toEqual(['SYS', 'SYS'])
 
   // 줄기(세로선)가 실제로 그려진다 — 이게 "구분감"의 실체다.
   const guide = await page.locator('.sess-list').first().evaluate((el) => {

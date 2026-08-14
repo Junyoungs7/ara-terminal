@@ -62,6 +62,8 @@ type MainAreaProps = {
   // F16: 아라 패널 열기(+선택 텍스트 프리필). 패널 상태의 주인은 Shell 이라 handle 대신 prop 으로
   // 내려받는다(handle 은 Shell→MainArea 방향이므로 이쪽이 diff 가 작다 — 설계 §4.6).
   onAskAi?: (selection: string) => void
+  /** 우클릭 [로그 저장] — 로그 패널을 연다(패널의 [내려받기]가 실제 저장을 한다). */
+  onOpenLog?: () => void
   // FB-ui2: 설정 창의 열림 상태 주인은 이 컴포넌트다(Ctrl+, keydown 이 여기서 배선된다) — 우측
   // 액티비티 바가 "지금 열려 있나"를 표시하려면 그 값을 Shell 로 되돌려줘야 한다(미러 콜백,
   // onAskAi 와 반대 방향).
@@ -86,6 +88,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       activeCwd,
       ask,
       onAskAi,
+      onOpenLog,
       onSettingsOpenChange,
       onActivityItems
     },
@@ -337,6 +340,41 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       ;(window as unknown as { __evPersist?: () => Promise<void> }).__evPersist = persist
     }, [persist])
 
+    // 사용자가 의도적으로 닫은 세션 id. onExit 은 "닫았다"와 "끊겼다"를 구분해 주지 않으므로
+    // 닫는 쪽에서 표시를 남긴다.
+    const closedByUser = useRef<Set<string>>(new Set())
+
+    // SSH 세션이 **쓰던 중에** 끊기면 그 패널에 [재접속] 카드를 낸다(2026-08-14 준영님 결정 —
+    // 자동 재접속은 하지 않는다: 끊긴 이유가 서버 쪽이면 자동은 죽은 서버를 계속 때린다).
+    //
+    // 그전에는 TerminalPane 이 회색 한 줄("[프로세스 종료 — code 0]")만 찍고 끝이었다 — 탭은
+    // 껍데기로 남고 다시 붙는 길이 화면에 없었다. F6 부팅 복원이 쓰던 카드를 그대로 재사용한다.
+    useEffect(() => {
+      const offs = list
+        .filter((s) => s.type === 'ssh')
+        .map((s) =>
+          window.ev?.session.onExit(s.id, () => {
+            if (closedByUser.current.delete(s.id)) return // 사용자가 닫은 것 — 조용히 보낸다
+            setRestoreErrors((m) => {
+              if (m.has(s.id)) return m
+              const n = new Map(m)
+              n.set(s.id, {
+                sessionId: s.id,
+                profileId: s.profileId ?? null,
+                title: s.title,
+                serverKey: s.serverKey,
+                // 안전망이다. 지금 구조에서 type:'ssh' 세션은 늘 프로필에서 나오므로(손으로
+                // `ssh` 를 친 것은 로컬 셸이다) 여기 걸릴 일이 없지만, profileId 가 옵셔널이라
+                // 없으면 버튼 대신 사유를 말한다 — 눌러도 안 되는 버튼을 내주지 않기 위해서다.
+                reason: s.profileId ? 'dropped' : 'noProfile'
+              })
+              return n
+            })
+          })
+        )
+      return () => offs.forEach((off) => off?.())
+    }, [list])
+
     // 세션 활성화(탭 클릭·트리 클릭 공통): 이미 패널에 있으면 그 패널 포커스,
     // 없으면 포커스 패널의 세션을 교체(xterm 재마운트 없이 display 전환).
     const activateSession = useCallback(
@@ -354,6 +392,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         if (!err || !err.profileId || !sshRestore) return
         const res = await sshRestore(err.profileId)
         if (res.ok) {
+          // 끊긴 세션이면 목록(탭)에도 남아 있다 — 함께 치운다. F6 복원 placeholder 는 목록에
+          // 없으므로 이 줄이 아무 일도 하지 않는다(두 경로가 같은 코드를 쓸 수 있는 이유).
+          if (list.some((x) => x.id === errId)) close(errId)
           layout.replaceSession(errId, res.id)
           setRestoreErrors((m) => {
             const n = new Map(m)
@@ -365,7 +406,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           showToast(t('restore.retryFailed'))
         }
       },
-      [restoreErrors, sshRestore, layout, select, showToast]
+      [restoreErrors, sshRestore, layout, select, showToast, list, close]
     )
 
     // 오류 패널 닫기: 재시도 포기 — 패널 제거 + 오류 정보 삭제.
@@ -373,13 +414,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       (errId: string) => {
         const cell = layout.cells.find((c) => c.sessionId === errId)
         if (cell) layout.closePane(cell.id)
+        if (list.some((x) => x.id === errId)) close(errId)
         setRestoreErrors((m) => {
           const n = new Map(m)
           n.delete(errId)
           return n
         })
       },
-      [layout]
+      [layout, list, close]
     )
 
     // 분할(R2.0): 새 패널에는 이미 열려 있는 배경 탭(패널 미배치 세션)을 최근 사용 순으로 올린다.
@@ -453,6 +495,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           if (r !== 'confirm') return
         }
         for (const s of targets) {
+          // **사용자가 닫은 것**이라고 표시해 둔다. 아래 onExit 감시가 이 표시를 보고 재접속 카드를
+          // 띄울지 말지 정한다 — 안 가르면 탭을 닫을 때마다 "연결이 끊겼습니다"가 뜬다.
+          closedByUser.current.add(s.id)
           layout.removeSession(s.id)
           close(s.id)
         }
@@ -593,8 +638,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             onAskAi?.(sid ? getSelection(sid) : '')
             return
           case 'log.save':
-            // 미래 기능(F12 로그 저장). 비활성 — "추후 지원" 안내.
-            showToast(t('ctx.future'))
+            // 2026-08-13 감사: "추후 지원" 토스트만 내고 있었는데 로그 패널의 [내려받기]는
+            // 이미 동작했다. 그 패널을 여는 것으로 잇는다 — 없는 기능인 척하지 않는다.
+            onOpenLog?.()
             return
         }
       },

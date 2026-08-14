@@ -44,8 +44,11 @@ describe('컨텍스트 액션 단일 레지스트리', () => {
     expect(CONTEXT_ACTIONS).toHaveLength(8)
   })
 
-  it('남은 미래 기능은 로그 저장 하나다(W3 에서 ai.ask 가 실배선됐다)', () => {
-    expect(CONTEXT_ACTIONS.filter((a) => a.future).map((a) => a.id)).toEqual(['log.save'])
+  it('★ "추후 지원" 항목이 하나도 없다 — 눌렀는데 안 되는 메뉴를 두지 않는다', () => {
+    // 2026-08-14: 마지막 하나였던 log.save 가 실배선됐다(로그 패널을 연다). 그전에는
+    // "추후 지원" 토스트만 냈는데 패널의 [내려받기]는 이미 동작하고 있었다 — 있는 기능이
+    // 없는 척하고 있었다. future 플래그 자체는 남겨 두되 쓰는 곳이 없어야 한다.
+    expect(CONTEXT_ACTIONS.filter((a) => a.future).map((a) => a.id)).toEqual([])
   })
 
   it('실동작 7종(복사/붙여넣기/분할2/복제/AI 질문/닫기)은 future 아님', () => {
