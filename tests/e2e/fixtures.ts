@@ -239,7 +239,7 @@ export type SshProfileForm = {
 }
 
 // 라벨로 폼 입력칸을 찾는다(폼에 id/for 가 없다 — 라벨 텍스트가 유일한 안정 앵커).
-function field(page: Page, label: string) {
+export function field(page: Page, label: string) {
   return page.locator(`.prof-form .fld:has(> label:text-is("${label}")) input`).first()
 }
 

@@ -8,6 +8,7 @@ import {
   dialog,
   dialogConfirm,
   fillNewProfile,
+  field,
   sessionList,
   expectTermText
 } from './fixtures'
@@ -31,6 +32,35 @@ test('SSH-1 프로필 저장 → 호스트키 확인 → 접속', async ({ ara, 
 })
 
 // SSH-2 두 번째 접속은 지문 확인 없이 곧바로(knownHosts 기록됨)
+// SSH-1b★ 연결 관리자를 마우스 없이 쓴다 (#70, 2026-08-14)
+// 서버에 붙는 것이 이 앱의 첫 동작인데 그 모달만 키보드 배선이 없었다 — 열어도 첫 칸에 커서가
+// 없고, 다 입력해도 Enter 로 연결이 안 돼 [연결]을 마우스로 눌러야 했다(AI CLI 모달·확인
+// 다이얼로그·작업 프로필은 원래 됐다). ESC 닫기만 되던 반쪽 계약을 채운다.
+test('SSH-1b★ 연결 관리자가 첫 칸에 커서를 두고 Enter 로 접속한다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-kbd' })
+
+  await page.keyboard.press('Control+Shift+M')
+  await connModal(page).waitFor()
+  // ① 열자마자 [연결 이름] 칸에 커서가 있다.
+  await expect(field(page, '연결 이름')).toBeFocused()
+
+  await page.click('.modal .prof-list .pl-hd .kbd') // ＋ 새 프로필
+  await field(page, '연결 이름').fill('kbd-only')
+  await field(page, '호스트').fill('127.0.0.1')
+  await field(page, '포트').fill(String(h.port))
+  await field(page, '사용자').fill('dev')
+  await page.click('.prof-form .seg-ctl button:has-text("비밀번호")')
+  await field(page, '비밀번호').fill('pw-kbd')
+
+  // ② 마지막 칸에서 Enter → 저장하고 접속([연결] 버튼을 누르지 않는다).
+  await field(page, '비밀번호').press('Enter')
+  await dialog(page).waitFor({ timeout: 20_000 })
+  await expect(dialog(page)).toContainText('처음 보는 호스트키')
+  await dialogConfirm(page)
+  await expect.poll(async () => (await sessionList(page)).length, { timeout: 30_000 }).toBe(1)
+})
+
 test('SSH-2 이미 신뢰한 서버는 확인 없이 새 세션이 열린다', async ({ ara, ssh }) => {
   const { page } = ara
   const h = await ssh({ password: 'pw-ssh2' })

@@ -103,6 +103,17 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
   // 이번 "열림" 사이클에서 초기 선택을 이미 했는지. 이 가드가 없으면 selectedId 를 null 로 만드는
   // 신규 프로필(＋) 클릭이 곧바로 첫 프로필로 되돌려져 두 번째 프로필을 만들 수 없다(2026-08-03 발견).
   const initedRef = useRef(false)
+  // #70(2026-08-14): 열릴 때 첫 칸에 커서를 둔다. 서버에 붙는 것이 이 앱의 첫 동작인데 마우스로
+  // 칸을 찍어야 시작할 수 있었다(AI CLI 모달·확인 다이얼로그는 원래 포커스를 준다).
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  // #70: 열리면 이름 칸으로 커서를 옮긴다. 폼 초기화가 끝난 뒤여야 하므로 한 프레임 뒤에 준다
+  // (SmartPalette 가 쓰던 것과 같은 방식 — 등장 애니메이션 중 focus 는 스크롤을 튀게 한다).
+  useEffect(() => {
+    if (!open) return
+    const id = requestAnimationFrame(() => nameRef.current?.focus())
+    return () => cancelAnimationFrame(id)
+  }, [open])
 
   // 모달이 열릴 때 1회만 초기 상태 결정: 요청(수정/그룹 신규) 우선, 없으면 첫 프로필.
   useEffect(() => {
@@ -199,6 +210,18 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     secret: form.secret !== '' ? form.secret : undefined
   })
 
+  // 폼 어디서든 Enter → 저장하고 접속. 텍스트 칸만 대상이다(체크박스·버튼에서 Enter 를 가로채면
+  // 그 컨트롤의 기본 동작을 빼앗는다). 조합 중(한글 IME)일 때는 확정 Enter 이므로 보내지 않는다.
+  const onFormKeyDown = (e: React.KeyboardEvent): void => {
+    e.stopPropagation() // 터미널로 키가 새지 않게(기존 규칙)
+    if (e.key !== 'Enter' || busy) return
+    const el = e.target as HTMLElement
+    if (el.tagName !== 'INPUT' || (el as HTMLInputElement).type === 'checkbox') return
+    if ('isComposing' in e.nativeEvent && (e.nativeEvent as KeyboardEvent).isComposing) return
+    e.preventDefault()
+    void saveAndConnect()
+  }
+
   const saveAndConnect = async () => {
     if (!form.name.trim() || !form.host.trim() || !form.username.trim()) {
       setError(t('conn.err.required'))
@@ -288,7 +311,7 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
               </div>
             ))}
           </div>
-          <div className="prof-form">
+          <div className="prof-form" onKeyDown={onFormKeyDown}>
             {/* W4sat F21: SSH/RDP 타입 선택 — authType 세그먼트와 같은 톤. RDP는 인증 섹션 자체가 없다. */}
             <div className="fld" style={{ marginBottom: 10 }}>
               <label>{t('conn.field.type')}</label>
@@ -313,7 +336,12 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
             <div className="frm-grid">
               <div className="fld col-2">
                 <label>{t('conn.field.name')}</label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input
+                  ref={nameRef}
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </div>
               <div className="fld">
                 <label>{t('conn.field.host')}</label>
