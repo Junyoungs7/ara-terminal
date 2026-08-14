@@ -258,6 +258,16 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'settings'
 ] as const
 
+// 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는** 여섯. #79(2026-08-14)부터 한 번에 하나만 열린다.
+// 액티비티 바의 나머지 셋은 레일이 아니다: 탐색기·서버 콘솔은 떠 있는 창(폭을 안 뺏는다),
+// 설정은 드로어이고 주인이 MainArea 다.
+export const RAIL_IDS = ['ai', 'monitor', 'sys', 'aisess', 'log', 'preview'] as const
+export type RailId = (typeof RAIL_IDS)[number]
+
+export function isRailId(id: ActivityId): id is RailId {
+  return (RAIL_IDS as readonly string[]).includes(id)
+}
+
 // 설정 창이 한 덩어리로 저장하는 터미널 동작(ui:setPrefs). UiState 의 부분집합이지만 이쪽은
 // 기본값이 채워진 확정값만 담는다 — 화면·xterm 에 그대로 꽂을 수 있어야 하기 때문이다.
 export type UiPrefs = {

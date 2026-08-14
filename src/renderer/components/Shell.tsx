@@ -38,10 +38,12 @@ import { dispatchAction, matchBinding } from '../../shared/keymap'
 import { buildTmuxInput } from '../../shared/tmux'
 import {
   MCP_AUTO_ALLOW_MINUTES,
+  isRailId,
   type ConnectionProfile,
   type WorkProfile,
   type McpApprovalDecision,
   type McpApprovalRequest,
+  type RailId,
   type SessionType
 } from '@shared/types'
 import { t } from '../i18n'
@@ -54,12 +56,30 @@ export function Shell() {
   const [resizing, setResizing] = useState(false)
   const [version, setVersion] = useState('0.1.0')
   const [modalOpen, setModalOpen] = useState(false)
-  // F15 우측 미니 프리뷰 레일(Ctrl+Shift+P · View 메뉴). 세션 수명 동안만 사는 토글이라
-  // workspace.json 에 저장하지 않는다 — 모니터링용 임시 창이지 레이아웃 설정이 아니다.
-  const [previewOpen, setPreviewOpen] = useState(false)
-  // F16 아라 패널(Alt+A · 우클릭 메뉴 [AI에게 질문] · 타이틀바). 미니 프리뷰와 같은 규칙으로 영속하지
-  // 않는다 — 세션 수명 동안만 사는 토글이고, 상호 배타로 만들지도 않는다(둘 다 열려도 터미널이 남는다).
-  const [aiOpen, setAiOpen] = useState(false)
+  // 우측 레일 — **한 번에 하나만** 열린다(#79, 2026-08-14 준영님 결정).
+  //
+  // 왜: 여섯 개가 서로 배타적이 아니었고 전부 폭 고정(flex: 0 0)이라 터미널만 줄어들었다.
+  // 셋만 열어도 1920 화면에서 터미널이 632px — 14px 고정폭 80칸(약 672px)이 안 나오고,
+  // 여섯을 다 열면 필요 폭이 2056px 이라 터미널이 아예 사라졌다(overflow:hidden 이 조용히 잘랐다).
+  // 단일 레일이면 터미널이 뺏기는 폭이 최대 하나(360px)로 고정돼 가드 로직이 필요 없다.
+  //
+  // 닫아도 상태는 남는다 — 패널들은 `if (!open) return null` 이고 여기서 **항상 렌더**하므로
+  // 컴포넌트 인스턴스가 죽지 않는다(useState 유지). AI 대화는 더 강해서, 렌더러가 아니라
+  // main 의 AraSession.turns 에 산다. 닫히면 각 패널의 useEffect 가 폴링을 멈춘다.
+  //
+  // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다(레이아웃 설정이 아니다).
+  const [rail, setRail] = useState<RailId | null>(null)
+  const toggleRail = useCallback((id: RailId) => setRail((cur) => (cur === id ? null : id)), [])
+  const openRail = useCallback((id: RailId) => setRail(id), [])
+  // 자기 자신일 때만 닫는다 — 이미 다른 레일로 넘어간 뒤 늦게 도착한 onClose 가 그것까지 닫으면 안 된다.
+  const closeRail = useCallback((id: RailId) => setRail((cur) => (cur === id ? null : cur)), [])
+
+  const previewOpen = rail === 'preview'
+  const aiOpen = rail === 'ai'
+  const monitorOpen = rail === 'monitor'
+  const sysOpen = rail === 'sys'
+  const aiSessOpen = rail === 'aisess'
+  const logOpen = rail === 'log'
   // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
   // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
   const [aiPrefill, setAiPrefill] = useState<{ text: string; at: number; autoSend?: boolean } | null>(null)
@@ -76,15 +96,8 @@ export function Shell() {
     setAiCliPrefill(pre ? { ...pre, at: Date.now() } : null)
     setAiCliOpen(true)
   }, [])
-  // FB-ui2(FB-0007② 변경): [모니터] 우측 레일. 미니 프리뷰·아라 패널과 같은 규칙 — 세션 수명
-  // 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
-  const [monitorOpen, setMonitorOpen] = useState(false)
-  // F29 시스템 모니터(자원 그래프). monitor(포트)와 별개 패널이라 동시에 열어 둘 수 있다.
-  const [sysOpen, setSysOpen] = useState(false)
-  // F30 AI 세션 패널 + 액티비티 바 점(조용한 AI 개수).
-  const [aiSessOpen, setAiSessOpen] = useState(false)
+  // F30 AI 세션 패널의 액티비티 바 점(조용한 AI 개수). 열림 상태는 위 rail 이 갖는다.
   const [aiQuiet, setAiQuiet] = useState(0)
-  const [logOpen, setLogOpen] = useState(false)
   // 작업 프로필(서버+폴더 즐겨찾기). 트리에 행을 만들지 않고 팝업 목록으로만 보여 준다.
   const [workOpen, setWorkOpen] = useState(false)
   const work = useWorkProfiles()
@@ -233,12 +246,12 @@ export function Shell() {
         updateSidebar((s) => ({ collapsed: false, activeTab: s.activeTab === 'file' ? 'conn' : 'file' }))
       } else if (matchBinding(e, 'preview.toggle')) {
         e.preventDefault()
-        setPreviewOpen((o) => !o)
+        toggleRail('preview')
       } else if (matchBinding(e, 'ai.toggle')) {
         // 패널 열림 상태가 여기 있으므로 토글도 여기서 받는다. ai.ask(선택 프리필)는 선택 텍스트를
         // 아는 MainArea 가 받아 onAskAi 로 올려 준다 — 같은 상태를 두 곳에서 쓰기 위한 분담이다.
         e.preventDefault()
-        setAiOpen((o) => !o)
+        toggleRail('ai')
       } else if (matchBinding(e, 'explorer.toggle')) {
         e.preventDefault()
         setExplorerOpen((o) => !o)
@@ -311,16 +324,16 @@ export function Shell() {
           setConsoleOpen((o) => !o)
           return
         case 'panel.ports':
-          setMonitorOpen((o) => !o)
+          toggleRail('monitor')
           return
         case 'panel.sysmon':
-          setSysOpen((o) => !o)
+          toggleRail('sys')
           return
         case 'panel.aisessions':
-          setAiSessOpen((o) => !o)
+          toggleRail('aisess')
           return
         case 'panel.log':
-          setLogOpen((o) => !o)
+          toggleRail('log')
           return
         case 'help.about':
           void ask({
@@ -855,8 +868,9 @@ export function Shell() {
     ]
   )
 
-  // FB-ui2(FB-0006): 우측 액티비티 바 상태·토글. 항목은 서로 배타적이지 않다(기존 미니 프리뷰/
-  // 아라 패널 규칙과 같음) — 각자 자기 open 상태를 토글할 뿐이다. [설정]만 진짜 소유자가 MainArea라
+  // FB-ui2(FB-0006): 우측 액티비티 바 상태·토글. **레일 여섯은 서로 배타적이다**(#79) — 위 rail
+  // 하나가 주인이라 다른 것을 누르면 앞엣것이 닫힌다. 떠 있는 창(탐색기·콘솔)은 레일이 아니라
+  // 그대로 각자 토글한다. [설정]만 진짜 소유자가 MainArea라
   // dispatchAction 으로 같은 keydown 경로를 태운다(타이틀바 기어가 하던 것과 동일 — 새 배선 없음).
   const activityState = useMemo(
     () => ({
@@ -883,12 +897,7 @@ export function Shell() {
     ]
   )
   const onActivityToggle = useCallback((id: ActivityId) => {
-    if (id === 'ai') setAiOpen((o) => !o)
-    else if (id === 'monitor') setMonitorOpen((o) => !o)
-    else if (id === 'sys') setSysOpen((o) => !o)
-    else if (id === 'aisess') setAiSessOpen((o) => !o)
-    else if (id === 'log') setLogOpen((o) => !o)
-    else if (id === 'preview') setPreviewOpen((o) => !o)
+    if (isRailId(id)) toggleRail(id)
     else if (id === 'explorer') setExplorerOpen((o) => !o)
     else if (id === 'console') setConsoleOpen((o) => !o)
     else if (id === 'settings') dispatchAction('settings.open')
@@ -989,11 +998,11 @@ export function Shell() {
           activeCwd={activeCwd}
           ask={ask}
           onAskAi={(text) => {
-            setAiOpen(true)
+            openRail('ai')
             if (text) setAiPrefill({ text, at: Date.now() })
           }}
           onSettingsOpenChange={setSettingsActive}
-          onOpenLog={() => setLogOpen(true)}
+          onOpenLog={() => openRail('log')}
           onActivityItems={setActivityItems}
         />
         <MiniPreview
@@ -1006,7 +1015,7 @@ export function Shell() {
             구독을 그대로 쓴다(중복 폴링 없음). */}
         <MonitorPanel
           open={monitorOpen}
-          onClose={() => setMonitorOpen(false)}
+          onClose={() => closeRail('monitor')}
           ports={telemetry.ports}
           forwards={telemetry.forwards}
           sessionId={activeSession?.id ?? null}
@@ -1018,7 +1027,7 @@ export function Shell() {
             (액티비티 바 점과 OS 알림이 그 결과를 쓴다 — 닫아 두면 안 보이는 게 D안의 급소였다). */}
         <AiSessionsPanel
           open={aiSessOpen}
-          onClose={() => setAiSessOpen(false)}
+          onClose={() => closeRail('aisess')}
           onGoTo={selectSession}
           onQuietChange={setAiQuiet}
         />
@@ -1026,24 +1035,25 @@ export function Shell() {
             (새 폴러 금지). 디스크만 패널이 느린 주기로 따로 읽는다(df 는 무겁고 초 단위로 안 변한다). */}
         <SysMonitorPanel
           open={sysOpen}
-          onClose={() => setSysOpen(false)}
+          onClose={() => closeRail('sys')}
           sessionId={activeSession?.id ?? null}
           isSsh={activeSession?.type === 'ssh'}
           serverName={activeSession?.title ?? ''}
           stats={telemetry.stats}
           history={sysHistory}
         />
-        {/* 세션 CLI 내역. 모니터와 같은 우측 레일 — 둘 다 열어 둘 수 있다(서로 배타적이지 않다). */}
+        {/* 세션 CLI 내역. 모니터와 같은 우측 레일 — #79 부터 레일은 한 번에 하나만 열린다
+            (예전엔 둘 다 열 수 있었는데, 여섯이 폭 고정이라 터미널이 80칸 아래로 밀렸다). */}
         <LogPanel
           open={logOpen}
-          onClose={() => setLogOpen(false)}
+          onClose={() => closeRail('log')}
           sessionId={activeSession?.id ?? null}
           sessionTitle={activeSession?.title ?? ''}
         />
         {/* 미니 프리뷰 바깥(가장 오른쪽) 형제. 폭 고정 — 사이드바 리사이저를 복제할 이유가 없다. */}
         <AiPanel
           open={aiOpen}
-          onClose={() => setAiOpen(false)}
+          onClose={() => closeRail('ai')}
           prefill={aiPrefill}
           onOpenBootstrap={() => setBootstrapOpen(true)}
           session={
@@ -1090,7 +1100,7 @@ export function Shell() {
           onClose={() => setConsoleOpen(false)}
           ask={ask}
           onAskAi={(text) => {
-            setAiOpen(true)
+            openRail('ai')
             setAiPrefill({ text, at: Date.now() })
           }}
           // 디스크 창에서 파고든 폴더를 그대로 탐색기 창에 넘긴다 — 새 창을 만들지 않고 기존
@@ -1115,8 +1125,8 @@ export function Shell() {
               if (!profileId) return
               setExplorerOpen(true)
               setExplorerReveal({ profileId, path: '', at: Date.now() })
-            } else if (id === 'log') setLogOpen(true)
-            else if (id === 'port') setMonitorOpen(true)
+            } else if (id === 'log') openRail('log')
+            else if (id === 'port') openRail('monitor')
             else if (id === 'term') {
               // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
               // 제목줄에 박힌 창에서 내 PC 셸이 열렸다 — 조용히 틀리는 종류라 서버에서 칠 명령을
@@ -1157,7 +1167,7 @@ export function Shell() {
         hasSsh={activeSession?.type === 'ssh'}
         onClose={() => setBootstrapOpen(false)}
         onSubmit={(prompt) => {
-          setAiOpen(true)
+          openRail('ai')
           setAiPrefill({ text: prompt, at: Date.now(), autoSend: true })
         }}
       />

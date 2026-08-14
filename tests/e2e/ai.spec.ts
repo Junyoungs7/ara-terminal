@@ -229,22 +229,47 @@ test('AI-9 우클릭 메뉴의 [AI에게 질문]이 선택 텍스트를 프리�
   await expect(page.locator('.ai-panel .ai-input')).toBeFocused()
 })
 
-// AI-10 미니 프리뷰와 아라 패널을 동시에 열어도 레이아웃이 무너지지 않는다
-test('AI-10 미니 프리뷰와 아라 패널을 동시에 열어도 레이아웃이 무너지지 않는다', async ({ ara }) => {
+// AI-10★ 레일은 한 번에 하나만 열린다 (#79, 2026-08-14)
+// 이 검사는 원래 "미니 프리뷰와 아라 패널을 **동시에** 열어도 레이아웃이 안 무너진다"였다.
+// 준영님 결정으로 레일이 상호 배타가 되면서 그 상황 자체가 만들어지지 않는다 — 지키는 성질을
+// 바꾼다: ① 두 번째를 열면 첫 번째가 닫힌다 ② 그래도 **상태는 남는다**(컴포넌트가 안 죽는다)
+// ③ 레일이 열린 채로도 터미널이 살아 있다.
+//
+// 왜 배타로 바꿨나: 레일 여섯이 전부 폭 고정이라 터미널만 줄어들었다. 셋만 열어도 1920 화면에서
+// 터미널이 80칸 아래로 떨어지고, 여섯이면 아예 사라졌다.
+test('AI-10★ 레일은 하나만 열리고, 다시 열면 쓰던 내용이 남아 있다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await newLocalShell(page)
+
   await page.keyboard.press('Control+Shift+P')
   await expect(page.locator('.mini-rail')).toBeVisible()
-  await openAiPanel(page)
 
+  // ① 아라 패널을 열면 미니 프리뷰가 닫힌다.
+  await openAiPanel(page)
+  await expect(page.locator('.ai-panel')).toBeVisible()
+  await expect(page.locator('.mini-rail')).toHaveCount(0)
+
+  // ② 다른 레일에 값을 남기고 떠났다 돌아오면 그대로 있다(컴포넌트가 죽지 않는다).
+  //    아라 컴포저는 API 키가 없으면 disabled 라 여기서 못 쓴다 — 세션 로그의 검색창을 쓴다.
+  const rail = (id: string) => page.click(`.activity-bar .act-item[data-activity="${id}"]`)
+  await rail('log')
+  await expect(page.locator('.log-panel')).toBeVisible()
+  await expect(page.locator('.ai-panel')).toHaveCount(0)
+  await page.fill('.log-panel input[type="text"]', '레일_상태_유지_확인')
+  await rail('preview')
+  await expect(page.locator('.mini-rail')).toBeVisible()
+  await expect(page.locator('.log-panel')).toHaveCount(0)
+  await rail('log')
+  await expect(page.locator('.log-panel input[type="text"]')).toHaveValue('레일_상태_유지_확인')
+
+  // ③ 레일이 열려 있어도 터미널이 살아 있고 가로 스크롤이 안 생긴다.
   const dims = await page.evaluate(() => {
     const doc = document.documentElement
     const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0
-    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.mini-rail'), ai: rect('.ai-panel') }
+    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.log-panel') }
   })
   expect(dims.overflowX).toBeLessThanOrEqual(1)
   expect(dims.pane).toBeGreaterThan(50)
   expect(dims.rail).toBeGreaterThan(50)
-  expect(dims.ai).toBeGreaterThan(50)
 })
