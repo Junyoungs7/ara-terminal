@@ -117,6 +117,19 @@ export function Shell() {
   // F26 서버 콘솔(런치패드 + 프로세스 창). 탐색기와 같은 떠 있는 창이라 같은 규칙 —
   // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
   const [consoleOpen, setConsoleOpen] = useState(false)
+  // #74 후속(2026-08-14): 떠 있는 창은 닫아도 언마운트하지 않지만, **열기 전에는 만들지도 않는다.**
+  // 처음부터 마운트했더니 숨은 탐색기의 FileTree 가 DOM 에 남아 사이드바 [파일] 트리와 겹쳤다
+  // (`.sftp-wrap .ftree` 가 2개 → e2e 18건 실패). 눈에 안 보이는 트리가 붙여넣기 대상·업로더
+  // 같은 **전역 등록**을 가로챌 수 있다는 게 더 큰 문제다 — 그건 화면 없이 조용히 틀리는 종류다.
+  // 한 번 열면 그다음부터는 계속 살아 있어 탭·정렬·검색이 남는다(#74 가 노린 것).
+  const [explorerMounted, setExplorerMounted] = useState(false)
+  const [consoleMounted, setConsoleMounted] = useState(false)
+  useEffect(() => {
+    if (explorerOpen) setExplorerMounted(true)
+  }, [explorerOpen])
+  useEffect(() => {
+    if (consoleOpen) setConsoleMounted(true)
+  }, [consoleOpen])
   // F31 통합 검색(F1 · 타이틀바 돋보기). 목록은 기존 표(KEYMAP·MENUBAR·프로필)에서 만들어진다.
   const [paletteOpen, setPaletteOpen] = useState(false)
   // 연결 관리자를 어떤 상태로 열지(트리 "정보 수정" → 해당 프로필 / 그룹 "새 연결" → 그룹 기본값).
@@ -1082,20 +1095,23 @@ export function Shell() {
           표의 정렬·검색이 통째로 날아갔다(프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다).
           우측 레일이 상태를 지키는 것과 같은 이유로 여기도 열림 여부만 넘기고 창이 display:none
           으로 숨는다. 숨은 동안 원격 폴링이 돌지 않는 것은 각 창이 active 를 함께 내려서 막는다. */}
-      <ExplorerView
-        visible={explorerOpen}
-        sessions={sessions.sessions}
-        profiles={profiles}
-        workProfiles={work.list}
-        onConnect={(id) => void connectProfile(id)}
-        onClose={() => setExplorerOpen(false)}
-        ask={ask}
-        askText={askText}
-        reveal={explorerReveal}
-      />
+      {explorerMounted && (
+        <ExplorerView
+          visible={explorerOpen}
+          sessions={sessions.sessions}
+          profiles={profiles}
+          workProfiles={work.list}
+          onConnect={(id) => void connectProfile(id)}
+          onClose={() => setExplorerOpen(false)}
+          ask={ask}
+          askText={askText}
+          reveal={explorerReveal}
+        />
+      )}
       {/* F26: 탐색기와 같은 떠 있는 창. 대상은 활성 세션 하나다 — 창 안에서 서버를 고르지 않는다
           (탐색기와 달리 프로세스·서비스는 "지금 붙어 있는 서버"의 것이라야 헷갈리지 않는다). */}
-      <ServerConsoleView
+      {consoleMounted && (
+        <ServerConsoleView
           visible={consoleOpen}
           sessionId={activeSession?.id ?? null}
           isSsh={activeSession?.type === 'ssh'}
@@ -1140,6 +1156,7 @@ export function Shell() {
             }
           }}
         />
+      )}
       <StatusBar
         version={version}
         session={activeSession}

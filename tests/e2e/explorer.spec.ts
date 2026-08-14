@@ -57,7 +57,8 @@ async function openExplorer(page: Page): Promise<void> {
 
 async function closeExplorer(page: Page): Promise<void> {
   await page.keyboard.press('Control+Shift+O')
-  await expect(page.locator('.exp-win')).toHaveCount(0, { timeout: 10_000 })
+  // #74: 창은 닫아도 언마운트하지 않는다(탭·경로를 기억한다) — 사라지는 게 아니라 숨는다.
+  await expect(page.locator('.exp-win')).not.toBeVisible({ timeout: 10_000 })
 }
 
 /** 지금 보이는 탭의 파일 영역. 숨은 탭도 DOM 에 남아 있으므로(폴더를 기억하려고) :visible 로 고른다. */
