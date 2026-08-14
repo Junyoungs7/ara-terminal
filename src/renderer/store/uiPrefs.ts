@@ -13,12 +13,8 @@ import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
 // R5 터미널 동작 설정 단일 소스(useFont·useSidebar 와 같은 형태):
 // workspace.json ui → 하이드레이트 → 열린 xterm 즉시 반영 → ui.setPrefs 로 영속.
-//
-// 우클릭 메뉴 스타일도 여기 있다. R4 까지는 MainArea 가 부트 스냅샷에서 따로 읽어 자기 상태로 들고
-// 있었는데, 설정 창에서 바꾸면 두 벌을 맞춰야 한다 — 값의 주인을 이 훅 하나로 모은다.
 
 const DEFAULT_PREFS: UiPrefs = {
-  ctxMenuStyle: 'list',
   uiScale: DEFAULT_UI_SCALE,
   ...termPrefs,
   sessionLog: DEFAULT_SESSION_LOG,

@@ -44,13 +44,13 @@ describe('WorkspaceStore', () => {
   it('손상된 workspace.json은 .bak으로 롤백한다', () => {
     // 정상 .bak 준비
     const good = new WorkspaceStore(path, '0.1.0').get()
-    good.ui.ctxMenuStyle = 'palette'
+    good.ui.sidebar.width = 999 // 이 값이 살아 돌아오면 .bak 을 읽은 것이다.
     writeFileSync(path + '.bak', JSON.stringify(good), 'utf8')
     // 주 파일 손상
     writeFileSync(path, '{ 이건 깨진 JSON', 'utf8')
 
     const store = new WorkspaceStore(path, '0.1.0')
-    expect(store.get().ui.ctxMenuStyle).toBe('palette')
+    expect(store.get().ui.sidebar.width).toBe(999)
   })
 
   it('주/백업 모두 손상 시 기본 스냅샷으로 안전 부팅한다', () => {

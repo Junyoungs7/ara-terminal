@@ -5,18 +5,11 @@ import { SCHEMA_VERSION, type WorkspaceSnapshot } from '@shared/types'
 type MigrationStep = (snap: Record<string, unknown>) => Record<string, unknown>
 
 const STEPS: Record<number, MigrationStep> = {
-  // v1 → v2: 터미널 우클릭 기본값을 리스트로 전환. 기존 저장값(radial/palette)을 1회만 list 로 옮긴다.
-  // 마이그레이션으로 처리해야 이후 사용자가 다시 radial 을 골라도 부팅 때마다 되돌려지지 않는다.
-  1: (s) => {
-    const ui = (s.ui ?? {}) as Record<string, unknown>
-    return { ...s, schemaVersion: 2, ui: { ...ui, ctxMenuStyle: 'list' } }
-  },
-  // v2 → v3: 스타일 순환 토글 제거(R1.4). 토글로 radial/palette 를 골라 둔 사용자는 되돌릴 UI 가 없으므로
-  // 저장값을 list 로 내린다. 선택 UI 가 돌아오는 R5 이후의 선택은 이 스텝을 다시 타지 않는다.
-  2: (s) => {
-    const ui = (s.ui ?? {}) as Record<string, unknown>
-    return { ...s, schemaVersion: 3, ui: { ...ui, ctxMenuStyle: 'list' } }
-  },
+  // v1 → v2, v2 → v3: 둘 다 ui.ctxMenuStyle 을 'list' 로 내리는 스텝이었다. #67(2026-08-14)에서
+  // 라디얼·스마트 팔레트를 지워 그 필드 자체가 없어졌으므로 남은 일은 버전 올리기뿐이다.
+  // (스텝을 지우면 옛 파일이 마이그레이션 경로를 잃고 기본 스냅샷으로 떨어진다 — 남겨 둔다.)
+  1: (s) => ({ ...s, schemaVersion: 2 }),
+  2: (s) => ({ ...s, schemaVersion: 3 }),
   // v3 → v4: W4sat F21 — 프로필에 type 판별 필드가 생겼다. 옛 프로필은 전부 ssh였으므로 type 없는
   // 항목에만 'ssh' 를 채운다(이미 있으면 손대지 않는다 — 없을 리 없지만 재적용 안전성).
   3: (s) => {

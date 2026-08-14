@@ -23,11 +23,13 @@ describe('keymap 단일 진실 소스', () => {
     }
   })
 
-  it('계획서 §B.8 확정 키를 포함한다(팔레트=Ctrl+K, 터미널 토글=Ctrl+`)', () => {
-    const palette = KEYMAP.find((k) => k.action === 'palette.smart')
-    const toggle = KEYMAP.find((k) => k.action === 'terminal.toggle')
-    expect(palette?.win).toBe('Ctrl+K')
-    expect(toggle?.win).toBe('Ctrl+`')
+  it('계획서 §B.8 확정 키를 포함한다(터미널 토글=Ctrl+`)', () => {
+    expect(KEYMAP.find((k) => k.action === 'terminal.toggle')?.win).toBe('Ctrl+`')
+  })
+
+  it('★ Ctrl+K 를 아무도 안 쓴다 — #67 에서 셸(리드라인 라인킬)에 돌려줬다', () => {
+    expect(KEYMAP.find((k) => k.win === 'Ctrl+K')).toBeUndefined()
+    expect(isAppShortcut(ev({ ctrlKey: true, key: 'k' }))).toBe(false)
   })
 })
 
@@ -36,13 +38,11 @@ describe('keymap 단일 진실 소스', () => {
 describe('R3.8 충돌 정책', () => {
   // 셸/리드라인이 쓰는 단일 Ctrl+문자. 이 조합이 KEYMAP 에 남아 있으면 정책 위반이다.
   const SHELL_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'W', 'Y', 'Z', '\\', ']', '[']
-  // 유일한 합의 예외 — 스마트 팔레트는 Ctrl+K 를 유지한다(사용자 확정 키).
-  const ALLOWED = new Set(['palette.smart'])
-
-  it('단일 Ctrl+문자 조합을 쓰는 앱 키는 팔레트(Ctrl+K) 하나뿐이다', () => {
-    const offenders = KEYMAP.filter(
-      (b) => !ALLOWED.has(b.action) && SHELL_KEYS.some((k) => b.win === `Ctrl+${k}`)
-    ).map((b) => `${b.action}=${b.win}`)
+  // #67(2026-08-14): 유일한 예외였던 palette.smart(Ctrl+K)가 없어져 예외 목록이 비었다.
+  it('단일 Ctrl+문자 조합을 쓰는 앱 키가 하나도 없다(예외 없음)', () => {
+    const offenders = KEYMAP.filter((b) => SHELL_KEYS.some((k) => b.win === `Ctrl+${k}`)).map(
+      (b) => `${b.action}=${b.win}`
+    )
     expect(offenders).toEqual([])
   })
 

@@ -94,7 +94,6 @@ const snapshotWith = (layout: LayoutNode, sessions: Session[]): WorkspaceSnapsho
   tabGroups: [],
   ui: {
     sidebar: { collapsed: false, activeTab: 'conn', width: 264 },
-    ctxMenuStyle: 'radial',
     font: { term: 'Nanum Gothic Coding', sizePx: 13, lineHeight: 1.58 },
     locale: 'ko'
   }

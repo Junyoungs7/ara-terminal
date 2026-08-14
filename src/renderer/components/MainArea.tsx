@@ -598,7 +598,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       [applyTitle]
     )
 
-    // 라디얼/팔레트 액션 배선(단일 레지스트리 CONTEXT_ACTIONS 의 id → 실동작).
+    // 터미널 우클릭 메뉴 액션 배선(단일 레지스트리 CONTEXT_ACTIONS 의 id → 실동작).
     const onAction = useCallback(
       async (id: ActionId) => {
         const sid = focusedSessionId()
@@ -710,7 +710,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           e.preventDefault()
           toggleTerminal()
         } else if (matchBinding(e, 'ai.ask')) {
-          // Ctrl+Shift+A — 라디얼 [AI에게 질문] 과 같은 경로(선택 텍스트를 아는 쪽이 여기다).
+          // Ctrl+Shift+A — 우클릭 메뉴 [AI에게 질문] 과 같은 경로(선택 텍스트를 아는 쪽이 여기다).
           e.preventDefault()
           void onAction('ai.ask')
         } else if (matchBinding(e, 'settings.open')) {
@@ -802,7 +802,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         )}
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
-          ctxMenuStyle={prefs.ctxMenuStyle}
           onAction={onAction}
           cheatsheetOpen={cheatsheetOpen}
           onCheatsheetChange={setCheatsheetOpen}

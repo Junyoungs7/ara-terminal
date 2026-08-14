@@ -76,18 +76,8 @@ test('SET-4 커서 설정이 열린 세션에 즉시 반영된다', async ({ ara
   await expect.poll(async () => page.evaluate((sid) => window.__evTerm(sid)?.cursorBlink, id)).toBe(false)
 })
 
-// SET-5 우클릭 메뉴 스타일 전환(일반 섹션)
-test('SET-5 우클릭 메뉴 스타일을 바꾸면 터미널 우클릭 모양이 바뀐다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-  await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-row:has(.sr-label:text-is("우클릭 메뉴 스타일")) .seg-ctl button[data-value="radial"]`)
-  await page.keyboard.press('Escape')
-  await page.click('.pane-grid', { button: 'right', position: { x: 300, y: 200 } })
-  await expect(page.locator('.radial-menu.open .ri').first()).toBeVisible()
-  await expect(page.locator('.radial-menu .ri')).toHaveCount(8)
-  await page.keyboard.press('Escape')
-})
+// SET-5 는 우클릭 메뉴 스타일 전환이었다 — #67(2026-08-14)에서 라디얼·팔레트를 지우며 설정 줄
+// 자체가 없어졌다. "그 줄이 남아 있지 않은가"는 CTX-3★ 이 본다.
 
 // SET-6 [정보] 섹션 — 버전과 번들 폰트 OFL 고지
 test('SET-6 정보 섹션이 버전과 폰트 라이선스를 보여 준다', async ({ ara }) => {

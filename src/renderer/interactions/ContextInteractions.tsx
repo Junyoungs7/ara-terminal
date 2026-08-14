@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RadialMenu } from './RadialMenu'
-import { SmartPalette } from './SmartPalette'
 import { Cheatsheet } from './Cheatsheet'
 import { CommandBook } from './CommandBook'
 import { ContextMenu } from './ContextMenu'
 import { terminalMenu, type ActionId } from './actions'
-import type { CtxMenuStyle } from '@shared/types'
 import { matchBinding } from '../../shared/keymap'
 
-// 우클릭 컨텍스트 인터랙션 오케스트레이터(F4c). 라디얼/팔레트/치트시트 열림 상태와
-// 우클릭·ESC·바깥클릭·? 키를 한 곳에서 관리. 실제 액션 배선은 onAction 으로 상위(MainArea)에 위임.
+// 우클릭 컨텍스트 인터랙션 오케스트레이터(F4c). 메뉴·치트시트 열림 상태와 우클릭·ESC·? 키를
+// 한 곳에서 관리. 실제 액션 배선은 onAction 으로 상위(MainArea)에 위임.
+//
+// #67(2026-08-14): 라디얼·스마트 팔레트를 제거하고 리스트 하나만 남겼다. 라디얼은 커서가 라벨을
+// 가렸고(2026-08-03 피드백으로 이미 기본에서 내려와 있었다), 팔레트는 같은 CONTEXT_ACTIONS 8개를
+// 격자로 다시 보여 주는 중복이었다. 고를 것이 없어져 ctxMenuStyle 설정도 함께 사라졌고,
+// Ctrl+K 는 리드라인 라인킬로 셸에 돌아갔다(R3.8 충돌 정책의 유일한 예외가 없어졌다).
 //
 // gridSelector: 우클릭을 받을 영역(터미널 그리드). 그 밖(사이드바 등)에선 브라우저 기본 메뉴 유지.
 
 type Props = {
-  ctxMenuStyle: CtxMenuStyle
   onAction: (id: ActionId) => void
   cheatsheetOpen: boolean
   onCheatsheetChange: (open: boolean) => void
@@ -32,7 +33,6 @@ type Props = {
 type Anchor = { x: number; y: number }
 
 export function ContextInteractions({
-  ctxMenuStyle,
   onAction,
   cheatsheetOpen,
   onCheatsheetChange,
@@ -42,34 +42,23 @@ export function ContextInteractions({
   activeSessionId,
   gridSelector = '.pane-grid'
 }: Props) {
-  const [radial, setRadial] = useState<Anchor | null>(null)
-  const [palette, setPalette] = useState<Anchor | null>(null)
-  // 기본 스타일. 라디얼은 커서가 라벨을 가린다는 피드백(2026-08-03)으로 리스트가 기본이 됐다.
   const [list, setList] = useState<Anchor | null>(null)
 
-  const closeMenu = useCallback(() => {
-    setRadial(null)
-    setPalette(null)
-    setList(null)
-  }, [])
+  const closeMenu = useCallback(() => setList(null), [])
 
-  // 우클릭 → 커서 위치에 라디얼/팔레트 전개. gridSelector 안에서만 반응.
+  // 우클릭 → 커서 위치에 메뉴 전개. gridSelector 안에서만 반응.
   useEffect(() => {
     const onCtx = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
       if (!target || !target.closest(gridSelector)) return
       e.preventDefault()
-      closeMenu()
-      const at = { x: e.clientX, y: e.clientY }
-      if (ctxMenuStyle === 'radial') setRadial(at)
-      else if (ctxMenuStyle === 'palette') setPalette(at)
-      else setList(at)
+      setList({ x: e.clientX, y: e.clientY })
     }
     window.addEventListener('contextmenu', onCtx)
     return () => window.removeEventListener('contextmenu', onCtx)
-  }, [ctxMenuStyle, closeMenu, gridSelector])
+  }, [gridSelector])
 
-  // ESC: 메뉴/치트시트 닫기. ? : 치트시트 열기(입력 포커스가 아닐 때). Ctrl/Cmd+K: 중앙 팔레트.
+  // ESC: 메뉴/치트시트 닫기. ? : 치트시트 열기(입력 포커스가 아닐 때).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -88,13 +77,6 @@ export function ContextInteractions({
       if (matchBinding(e, 'commandBook.toggle')) {
         e.preventDefault()
         onCommandBookChange(true)
-        return
-      }
-      if (matchBinding(e, 'palette.smart')) {
-        e.preventDefault()
-        closeMenu()
-        // 화면 중앙에 팔레트(§목업 ⌘K: vw/2-140, vh/2-160).
-        setPalette({ x: window.innerWidth / 2 - 140, y: window.innerHeight / 2 - 160 })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -111,16 +93,7 @@ export function ContextInteractions({
 
   return (
     <>
-      {(radial || palette) && <div className="radial-backdrop open" onClick={closeMenu} />}
-      <RadialMenu
-        open={!!radial}
-        x={radial?.x ?? 0}
-        y={radial?.y ?? 0}
-        onAction={runAction}
-        onClose={closeMenu}
-      />
-      <SmartPalette open={!!palette} x={palette?.x ?? 0} y={palette?.y ?? 0} onAction={runAction} />
-      {/* 기본 스타일 — 트리 우클릭과 같은 ContextMenu 컴포넌트를 재사용한다(자체 backdrop 포함). */}
+      {/* 트리 우클릭과 같은 ContextMenu 컴포넌트를 재사용한다(자체 backdrop 포함). */}
       <ContextMenu
         open={!!list}
         x={list?.x ?? 0}

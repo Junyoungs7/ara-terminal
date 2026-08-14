@@ -8,7 +8,6 @@ import {
   AI_PROVIDER_HOSTS,
   AI_PROVIDER_LABELS,
   AI_PROVIDERS,
-  CTX_MENU_STYLES,
   UI_SCALES,
   CURSOR_STYLES,
   BELL_STYLES,
@@ -528,14 +527,6 @@ export function SettingsDrawer({
                     )
                   })}
                 </div>
-              </Row>
-              <Row label={t('settings.ctxStyle')} desc={t('settings.ctxStyle.desc')}>
-                <Seg
-                  value={prefs.ctxMenuStyle}
-                  options={CTX_MENU_STYLES}
-                  onChange={(ctxMenuStyle) => onPrefsChange({ ctxMenuStyle })}
-                  labelKey={(v) => 'ctx.style.' + v}
-                />
               </Row>
               <Row label={t('settings.copyOnSelect')} desc={t('settings.copyOnSelect.desc')}>
                 <Toggle

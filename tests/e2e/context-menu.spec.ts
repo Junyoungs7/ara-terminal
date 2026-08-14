@@ -1,15 +1,10 @@
-// 우클릭 인터랙션 (F4c + R1.4) — 리스트/라디얼/팔레트 3종 · 트리 메뉴 구성 · 미래 기능 안내
+// 우클릭 인터랙션 (F4c + R1.4) — 리스트 메뉴 · 트리 메뉴 구성 · 미래 기능 안내
+// #67(2026-08-14): 라디얼·스마트 팔레트를 지웠다. 모양 선택 설정도 함께 사라져 setCtxStyle 헬퍼가
+// 필요 없어졌고, CTX-3/CTX-4 는 "둘이 정말 없는가"를 보는 검사 하나로 합쳤다.
 import { test, expect, dialogConfirm, newLocalShell, sessionList } from './fixtures'
 
 const rightClickTerminal = (page: import('@playwright/test').Page) =>
   page.click('.pane-grid', { button: 'right', position: { x: 320, y: 220 } })
-
-async function setCtxStyle(page: import('@playwright/test').Page, value: 'list' | 'radial' | 'palette') {
-  await page.keyboard.press('Control+,')
-  await page.click(`.drawer .set-row:has(.sr-label:text-is("우클릭 메뉴 스타일")) .seg-ctl button[data-value="${value}"]`)
-  await page.keyboard.press('Escape')
-  await expect(page.locator('.drawer.open')).toHaveCount(0)
-}
 
 // CTX-1 기본은 리스트 메뉴(라디얼이 커서로 라벨을 가린다는 피드백 반영)
 test('CTX-1 터미널 우클릭 기본은 리스트 메뉴다', async ({ ara }) => {
@@ -44,38 +39,27 @@ test('CTX-2 리스트 메뉴의 세로 분할이 동작한다', async ({ ara }) 
   await expect(page.locator('.pane-grid .div-col')).toHaveCount(1)
 })
 
-// CTX-3 라디얼 메뉴 — 8항목이 커서 위치에 원형 배치
-test('CTX-3 라디얼 메뉴로 전환하면 8개 액션이 원형으로 뜬다', async ({ ara }) => {
+// CTX-3★ 라디얼·스마트 팔레트가 없다 + Ctrl+K 가 셸로 돌아갔다 (#67)
+// 지운 기능은 "안 보인다"로는 부족하다 — 눌러서 아무 일도 안 일어나는지, 그 키를 셸이 받는지까지 본다.
+test('CTX-3★ 라디얼·팔레트가 사라지고 Ctrl+K 가 앱을 열지 않는다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await setCtxStyle(page, 'radial')
   await rightClickTerminal(page)
-  // .radial-menu 컨테이너는 크기 0인 앵커다(항목이 절대 배치) — 항목으로 열림을 판정한다.
-  await expect(page.locator('.radial-menu.open .ri').first()).toBeVisible()
-  await expect(page.locator('.radial-menu .ri')).toHaveCount(8)
-  await expect(page.locator('.radial-menu .ri[data-action="pane.close"]')).toHaveClass(/tint-danger/)
-  await page.click('.radial-menu .ri[data-action="split.horizontal"]')
-  await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
-})
-
-// CTX-4 스마트 팔레트 — 우클릭 + Ctrl+K, 한글 검색 필터
-test('CTX-4 스마트 팔레트가 열리고 한글로 액션을 거른다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-  await setCtxStyle(page, 'palette')
-  await rightClickTerminal(page)
-  await expect(page.locator('.smart-palette.open')).toBeVisible()
-  await expect(page.locator('.smart-palette .sp-item')).toHaveCount(8)
-  await page.fill('.smart-palette .sp-search input', '분할')
-  await expect(page.locator('.smart-palette .sp-item')).toHaveCount(2)
-  await page.fill('.smart-palette .sp-search input', '없는작업')
-  await expect(page.locator('.smart-palette .sp-empty')).toHaveText('일치하는 작업이 없습니다')
+  // 우클릭은 리스트 하나만 연다(모양 선택지 자체가 없다).
+  await expect(page.locator('.ctx-menu')).toBeVisible()
+  await expect(page.locator('.radial-menu, .smart-palette')).toHaveCount(0)
   await page.keyboard.press('Escape')
-  await expect(page.locator('.smart-palette')).toHaveCount(0)
 
-  // Ctrl+K 는 스타일과 무관하게 화면 중앙 팔레트를 연다.
+  // Ctrl+K 는 이제 앱 키가 아니다 — 어떤 오버레이도 열리지 않고 xterm 이 셸로 흘려보낸다.
   await page.keyboard.press('Control+k')
-  await expect(page.locator('.smart-palette.open')).toBeVisible()
+  await expect(page.locator('.radial-menu, .smart-palette, .ctx-menu')).toHaveCount(0)
+  await expect(page.locator('.cp-drop, .cheatsheet.open, .drawer.open')).toHaveCount(0)
+
+  // 설정에도 "우클릭 메뉴 스타일" 줄이 남아 있지 않다.
+  await page.keyboard.press('Control+,')
+  await expect(page.locator('.drawer.open')).toBeVisible()
+  await expect(page.locator('.drawer .sr-label:text-is("우클릭 메뉴 스타일")')).toHaveCount(0)
+  await page.keyboard.press('Escape')
 })
 
 // CTX-5 미래 기능(로그 저장)은 흐리게 표시되고 "추후 지원" 안내만 한다.

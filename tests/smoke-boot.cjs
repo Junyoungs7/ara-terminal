@@ -196,7 +196,6 @@ function registerF3Ipc() {
 // 바꾸면 ui:setPrefs / ui:setGroups / ui:setFont / ui:setSidebar 로 좁은 갱신을 보낸다.
 // 여기선 전부 in-memory 로 받아 두었다가 workspace:load 로 돌려준다(재시작 지속 흉내).
 const UI = {
-  ctxMenuStyle: 'list',
   font: { term: 'Nanum Gothic Coding', sizePx: 13, lineHeight: 1.58 },
   sidebar: { collapsed: false, activeTab: 'conn', width: 264 },
   // R5 터미널 동작 / R6 그룹 목록.
@@ -721,7 +720,7 @@ app.whenReady().then(async () => {
   checks.push(['SFTP 브레드크럼(세그먼트) + 상위 이동 버튼', f7.crumbCount > 0 && f7.hasUp === true])
   checks.push(['R7: 파일 행 아이콘이 인라인 SVG + mtime 열', f7.svgIcons === f7.rowCount && f7.mtimes === f7.rowCount])
 
-  // ── F4c 어서션 ── 터미널 우클릭 리스트 메뉴(8항목) / ? →치트시트 / ESC 닫기 / ctxMenuStyle 영속.
+  // ── F4c 어서션 ── 터미널 우클릭 리스트 메뉴(8항목) / ? →치트시트 / ESC 닫기 / Ctrl+K 통과(#67).
   // 라디얼·팔레트는 R1.4 에서 전환 UI 가 사라져 도달 경로가 없었다 — R5 설정 창 [일반]에서 다시 노출했고
   // 아래 R5 블록이 "라디얼 선택 → 우클릭이 라디얼로 뜬다"까지 실증한다.
   const f4c = await win.webContents.executeJavaScript(`(async () => {
@@ -760,10 +759,11 @@ app.whenReady().then(async () => {
     const settingsInActivityBar = !!document.querySelector('.act-item[data-activity="settings"]')
     grid?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 400, clientY: 400 }))
     await wait(400)
-    const stillList = !!document.querySelector('.ctx-menu') && !document.querySelector('.radial-menu.open')
+    const stillList = !!document.querySelector('.ctx-menu') && !document.querySelector('.radial-menu, .smart-palette')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(300)
-    // ctxMenuStyle 영속 확인: main 에 저장된 값을 재로드(list 고정).
-    const persisted = (await window.ev.workspace.load()).ui.ctxMenuStyle
+    // #67: Ctrl+K 가 앱 키에서 빠졌다 — 아무 오버레이도 열리지 않아야 셸(리드라인 라인킬)이 받는다.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })); await wait(300)
+    const ctrlKFree = !document.querySelector('.smart-palette, .radial-menu, .cp-drop, .cheatsheet.open')
     // 치트시트: 터미널에 포커스가 있으면 ? 는 셸 입력이므로 열리면 안 된다(xterm textarea = 입력 요소).
     document.querySelector('.pane.focused .term-pane .xterm-helper-textarea')?.focus()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' })); await wait(250)
@@ -776,7 +776,7 @@ app.whenReady().then(async () => {
     const csCols = document.querySelectorAll('.cheatsheet.open .cs-grid > div').length
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(300)
     const csClosed = !document.querySelector('.cheatsheet.open')
-    return { listOpen, listItems, listIcons, listHints, listDim, listDanger, listClosed, toggleGone, tabbarToolsGone, gearGoneFromTitlebar, settingsInActivityBar, stillList, persisted, csBlockedWhileTyping, csOpen, csRows, csCols, csClosed }
+    return { listOpen, listItems, listIcons, listHints, listDim, listDanger, listClosed, toggleGone, tabbarToolsGone, gearGoneFromTitlebar, settingsInActivityBar, stillList, ctrlKFree, csBlockedWhileTyping, csOpen, csRows, csCols, csClosed }
   })()`)
 
   checks.push(['터미널 우클릭 기본 = 리스트 메뉴', f4c.listOpen === true])
@@ -798,8 +798,8 @@ app.whenReady().then(async () => {
   checks.push(['R5: 탭바 폰트·단축키 버튼 제거(설정으로 통합)', f4c.tabbarToolsGone === true])
   checks.push(['FB-ui2: 타이틀바 기어 제거', f4c.gearGoneFromTitlebar === true])
   checks.push(['FB-ui2: 우측 액티비티 바에 설정 아이콘', f4c.settingsInActivityBar === true])
-  checks.push(['R1.4: 우클릭은 스타일 순환 없이 저장된 스타일로 뜬다', f4c.stillList === true])
-  checks.push(['ctxMenuStyle 영속(기본 list)', f4c.persisted === 'list'])
+  checks.push(['#67: 우클릭은 리스트 하나뿐(라디얼·팔레트 DOM 자체가 없다)', f4c.stillList === true])
+  checks.push(['#67: Ctrl+K 는 앱 키가 아니다(셸로 통과)', f4c.ctrlKFree === true])
   checks.push(['터미널 입력 중 ? 는 셸로(치트시트 안 열림)', f4c.csBlockedWhileTyping === true])
   checks.push(['? → 치트시트 열림', f4c.csOpen === true])
   checks.push(['치트시트 4열', f4c.csCols === 4])
@@ -2188,10 +2188,9 @@ app.whenReady().then(async () => {
     await wait(350)
     const openedByHotkey = !!document.querySelector('.drawer.open')
 
-    // [일반] — 우클릭 스타일 라디얼 / 선택 자동복사 끄기 / 스크롤백 2000.
+    // [일반] — 선택 자동복사 끄기 / 스크롤백 2000. (#67: 우클릭 스타일 줄은 없어졌다.)
     nav('general'); await wait(200)
-    const styleBtns = [...(rowByLabel('우클릭')?.querySelectorAll('.seg-ctl button') || [])].map(b => b.dataset.value)
-    rowByLabel('우클릭')?.querySelector('.seg-ctl button[data-value="radial"]')?.click(); await wait(250)
+    const ctxStyleRowGone = !rowByLabel('우클릭 메뉴 스타일')
     const copyToggle = rowByLabel('자동 복사')?.querySelector('.set-toggle')
     const copyOnBefore = copyToggle?.getAttribute('aria-checked')
     copyToggle?.click(); await wait(200)
@@ -2216,23 +2215,15 @@ app.whenReady().then(async () => {
     const hasSettingsKey = [...document.querySelectorAll('.drawer.open .set-keys .cs-row')]
       .some(r => /설정/.test(r.querySelector('.cs-desc')?.textContent || ''))
 
-    // 닫고(ESC) 라디얼이 실제로 뜨는지 — R1.4 이후 도달 경로가 없던 라디얼 복원 확인.
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(300)
-    const grid = document.querySelector('.pane-grid')
-    grid?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 500, clientY: 400 }))
-    await wait(400)
-    const radialOpen = !!document.querySelector('.radial-menu.open')
-    const radialItems = document.querySelectorAll('.radial-menu.open .ri').length
-    const listGone = !document.querySelector('.ctx-menu')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(300)
 
     const persisted = (await window.ev.workspace.load()).ui
     return {
-      openedByHotkey, styleBtns, copyOnBefore, copyOnAfter, sbMin, sbMax,
+      openedByHotkey, ctxStyleRowGone, copyOnBefore, copyOnAfter, sbMin, sbMax,
       before, afterScrollback, afterCursor,
-      keyRows, keyNote, hasSettingsKey, radialOpen, radialItems, listGone,
+      keyRows, keyNote, hasSettingsKey,
       persisted: {
-        ctxMenuStyle: persisted.ctxMenuStyle, copyOnSelect: persisted.copyOnSelect,
+        copyOnSelect: persisted.copyOnSelect,
         scrollback: persisted.scrollback, cursorStyle: persisted.cursorStyle,
         cursorBlink: persisted.cursorBlink, bell: persisted.bell
       }
@@ -2240,7 +2231,7 @@ app.whenReady().then(async () => {
   })()`)
 
   checks.push(['R5: Ctrl+, 로 설정 창이 열린다', r5.openedByHotkey === true])
-  checks.push(['R5: 우클릭 스타일 3종 재노출(리스트/라디얼/팔레트)', r5.styleBtns.join(',') === 'list,radial,palette'])
+  checks.push(['#67: 설정 [일반]에서 우클릭 스타일 줄이 사라졌다', r5.ctxStyleRowGone === true])
   checks.push(['R5: 선택 자동 복사 토글 on→off', r5.copyOnBefore === 'true' && r5.copyOnAfter === 'false'])
   checks.push(['R5: 스크롤백 슬라이더 1k–100k', r5.sbMin === '1000' && r5.sbMax === '100000'])
   checks.push([
@@ -2255,11 +2246,9 @@ app.whenReady().then(async () => {
   // 문구는 2026-08-13 설명문 간결화로 바뀌었다("추후 지원" → "아직 지원하지 않습니다").
   // 검사하려는 것은 낱말이 아니라 **커스터마이즈가 아직 안 된다고 알려 주는가** 이므로 둘 다 받는다.
   checks.push(['R5: [단축키] 커스터마이즈 미지원 안내', /추후|아직/.test(r5.keyNote)])
-  checks.push(['R5: 라디얼 재선택 → 우클릭이 라디얼로 전개(R1.4 이후 복원)', r5.radialOpen === true && r5.listGone === true])
-  checks.push(['R5: 라디얼 항목 8종(CONTEXT_ACTIONS 공유)', r5.radialItems === 8])
   checks.push([
-    'R5: 신규 설정 3종 영속(우클릭 스타일·선택복사·스크롤백)',
-    r5.persisted.ctxMenuStyle === 'radial' && r5.persisted.copyOnSelect === false && r5.persisted.scrollback === 2000
+    'R5: 신규 설정 2종 영속(선택복사·스크롤백)',
+    r5.persisted.copyOnSelect === false && r5.persisted.scrollback === 2000
   ])
   checks.push([
     'R5: 커서·벨 설정 영속',
@@ -2281,19 +2270,13 @@ app.whenReady().then(async () => {
       }
       return false
     }
-    // 우클릭이 재시작 후에도 라디얼이면 부트 하이드레이트가 저장값을 읽은 것이다.
     document.querySelector('.tterm-add')?.click(); await wait(250)
     document.querySelector('.ctx-menu .ctx-item[data-action="local.new"]')?.click(); await wait(900)
     const sid = (await window.ev.session.list()).slice(-1)[0]?.id
     const t = window.__evTerm(sid)
-    document.querySelector('.pane-grid')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 500, clientY: 400 }))
-    await wait(400)
-    const radial = !!document.querySelector('.radial-menu.open')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(250)
-    return { radial, scrollback: t?.scrollback, cursorStyle: t?.cursorStyle }
+    return { scrollback: t?.scrollback, cursorStyle: t?.cursorStyle }
   })()`)
 
-  checks.push(['R5: 재시작 후 우클릭 스타일 유지(라디얼)', r5b.radial === true])
   checks.push([
     'R5: 재시작 후 새 세션이 저장된 스크롤백·커서로 열린다',
     r5b.scrollback === 2000 && r5b.cursorStyle === 'bar'
@@ -2426,7 +2409,7 @@ app.whenReady().then(async () => {
       { id: 's1', type: 'local', shell: undefined, profileId: null, cwd: 'D:/f6/one', title: 'F6-복원1', serverKey: 'localhost' },
       { id: 's2', type: 'local', shell: undefined, profileId: null, cwd: 'D:/f6/two', title: 'F6-복원2', serverKey: 'localhost' }
     ],
-    tabGroups: [], ui: { sidebar: { collapsed: false, activeTab: 'conn', width: 264 }, ctxMenuStyle: UI.ctxMenuStyle, font: UI.font, locale: 'ko' }
+    tabGroups: [], ui: { sidebar: { collapsed: false, activeTab: 'conn', width: 264 }, font: UI.font, locale: 'ko' }
   }
   await win.webContents.reload()
   await new Promise((res) => setTimeout(res, 2500)) // 부트 복원(세션 재스폰) 대기

@@ -364,7 +364,6 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
       expect(JSON.stringify(ara.getState().turns)).not.toContain(SENTINEL)
 
       store.setPrefs({
-        ctxMenuStyle: 'list',
         uiScale: 'normal',
         scrollback: 10000,
         copyOnSelect: true,

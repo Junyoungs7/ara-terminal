@@ -18,7 +18,6 @@ export function defaultSnapshot(appVersion: string): WorkspaceSnapshot {
     tabGroups: [],
     ui: {
       sidebar: { collapsed: false, activeTab: 'conn', width: 264 },
-      ctxMenuStyle: 'list',
       font: { term: 'Nanum Gothic Coding', sizePx: 14, lineHeight: 1.58 },
       locale: 'ko',
       scrollback: DEFAULT_SCROLLBACK,

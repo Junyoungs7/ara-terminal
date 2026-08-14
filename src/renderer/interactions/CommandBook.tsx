@@ -7,7 +7,8 @@ import { CATEGORY_LABEL, COMMAND_BOOK, searchCommandBook, type CommandEntry } fr
 
 // F18 명령어 북 — 검색형 치트시트 오버레이. 새 패널·새 프레임워크를 만들지 않는다:
 // 바깥 껍데기(오버레이/카드/헤더/본문/푸터)는 Cheatsheet(.cheatsheet/.cs-*)를, 검색창은
-// SmartPalette(.sp-search)를 그대로 재사용한다. 새로 만든 CSS는 목록·펼침 상세뿐이다.
+// .sp-search 규칙을 그대로 재사용한다. 새로 만든 CSS는 목록·펼침 상세뿐이다.
+// (.sp- 는 #67 에서 지운 스마트 팔레트의 접두사다 — 규칙은 여기가 쓰고 있어 이름째 남겼다.)
 //
 // 항목의 예시에 붙는 [터미널로 보내기]는 F16 과 같은 규칙 — insertText() 로 개행을 떼고
 // session.input() 에 넣기만 한다(실행은 사용자가 Enter). 이 앱의 안전 설계를 그대로 따른다.

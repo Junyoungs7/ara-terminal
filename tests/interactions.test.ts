@@ -1,46 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { radialOffset } from '../src/renderer/interactions/RadialMenu'
-import { clampToViewport } from '../src/renderer/interactions/SmartPalette'
 import { CONTEXT_ACTIONS } from '../src/renderer/interactions/actions'
 
-// F4c 순수 로직 — 라디얼 배치 공식(§9.1) + 팔레트 뷰포트 경계 보정(§9.2). (계획서 §D.1)
-
-describe('라디얼 배치 공식 (§9.1)', () => {
-  it('i=0 은 12시(-90°) — 위쪽(y=-88, x≈0)', () => {
-    const o = radialOffset(0, 8)
-    expect(Math.abs(o.x)).toBeLessThan(1e-6)
-    expect(o.y).toBeCloseTo(-88, 5)
-  })
-
-  it('n=4 에서 i=1 은 3시(오른쪽, x=88, y≈0)', () => {
-    const o = radialOffset(1, 4)
-    expect(o.x).toBeCloseTo(88, 5)
-    expect(Math.abs(o.y)).toBeLessThan(1e-6)
-  })
-
-  it('모든 항목이 반경 88 위에 놓인다', () => {
-    const n = CONTEXT_ACTIONS.length
-    for (let i = 0; i < n; i++) {
-      const o = radialOffset(i, n)
-      expect(Math.hypot(o.x, o.y)).toBeCloseTo(88, 5)
-    }
-  })
-})
-
-describe('팔레트 뷰포트 경계 보정 (§9.2)', () => {
-  it('여유가 있으면 커서 위치 그대로', () => {
-    expect(clampToViewport(100, 100, 1440, 900)).toEqual({ left: 100, top: 100 })
-  })
-
-  it('오른쪽·아래 경계를 넘으면 안쪽으로 당긴다(280×320 + 8 여백)', () => {
-    const r = clampToViewport(1400, 880, 1440, 900)
-    expect(r.left).toBe(1440 - 280 - 8)
-    expect(r.top).toBe(900 - 320 - 8)
-  })
-})
+// F4c 컨텍스트 액션 레지스트리.
+// #67(2026-08-14): 라디얼 배치 공식(§9.1)·팔레트 뷰포트 보정(§9.2) 테스트가 여기 있었다.
+// 두 컴포넌트를 지우면서 함께 지웠다 — 남은 모양은 리스트 하나뿐이라 좌표 계산이 없다.
 
 describe('컨텍스트 액션 단일 레지스트리', () => {
-  it('8개 항목(목업 라디얼/팔레트 공유)', () => {
+  it('8개 항목', () => {
     expect(CONTEXT_ACTIONS).toHaveLength(8)
   })
 

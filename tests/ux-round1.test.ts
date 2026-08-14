@@ -6,7 +6,6 @@ import { clampMenu } from '../src/renderer/interactions/ContextMenu'
 import { treeMenu, terminalMenu, CONTEXT_ACTIONS } from '../src/renderer/interactions/actions'
 import { migrate } from '../src/main/workspace/migrations'
 import { SCHEMA_VERSION } from '../src/shared/types'
-import { defaultSnapshot } from '../src/main/workspace/defaults'
 import { connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../src/renderer/store/profiles'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 
@@ -104,7 +103,7 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
 })
 
 describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
-  it('라디얼·팔레트와 같은 CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 없음)', () => {
+  it('CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 없음)', () => {
     expect(terminalMenu().map((m) => m.id)).toEqual(CONTEXT_ACTIONS.map((a) => a.id))
   })
 
@@ -138,12 +137,11 @@ describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
   })
 })
 
-describe('우클릭 스타일 기본값·마이그레이션', () => {
-  it('새 워크스페이스 기본값은 list', () => {
-    expect(defaultSnapshot('0.1.0').ui.ctxMenuStyle).toBe('list')
-  })
-
-  it('토글을 제거한 뒤에도 v2 저장값 radial/palette 는 list 로 내려온다(R1.4)', () => {
+// #67(2026-08-14): 이 describe 는 원래 ui.ctxMenuStyle 기본값·강등을 봤다. 라디얼·팔레트를 지우며
+// 그 필드가 없어졌으므로, 남은 관심사는 **그 필드를 담고 있던 옛 스냅샷이 그대로 열리는가**다 —
+// v1/v2 파일은 지금도 현장에 있고, 마이그레이션이 끊기면 사용자 프로필이 통째로 날아간다.
+describe('옛 스냅샷 마이그레이션(우클릭 스타일 제거 후)', () => {
+  it('v2 저장값(ctxMenuStyle 포함)이 최신 버전으로 올라온다', () => {
     const v2 = {
       schemaVersion: 2,
       savedAt: '2026-08-03T00:00:00Z',
@@ -156,11 +154,11 @@ describe('우클릭 스타일 기본값·마이그레이션', () => {
       ui: { sidebar: { collapsed: false, activeTab: 'conn', width: 264 }, ctxMenuStyle: 'radial', font: {}, locale: 'ko' }
     }
     const out = migrate(v2 as unknown as Record<string, unknown>)
-    expect(out!.ui.ctxMenuStyle).toBe('list')
     expect(out!.schemaVersion).toBe(SCHEMA_VERSION)
+    expect(out!.ui.sidebar.width).toBe(264)
   })
 
-  it('v1 스냅샷의 radial/palette 는 최신 버전으로 올리며 list 가 된다', () => {
+  it('v1 스냅샷도 데이터를 잃지 않고 최신 버전이 된다', () => {
     for (const old of ['radial', 'palette']) {
       const v1 = {
         schemaVersion: 1,
@@ -176,7 +174,6 @@ describe('우클릭 스타일 기본값·마이그레이션', () => {
       const out = migrate(v1 as unknown as Record<string, unknown>)
       expect(out).not.toBeNull()
       expect(out!.schemaVersion).toBe(SCHEMA_VERSION)
-      expect(out!.ui.ctxMenuStyle).toBe('list')
       // 마이그레이션이 사용자 데이터를 날리지 않는다.
       expect(out!.profiles).toHaveLength(1)
       expect(out!.ui.sidebar.width).toBe(264)

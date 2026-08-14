@@ -115,10 +115,6 @@ export type FontConfig = {
 // 창 크기·위치(F6 복원). 저장 없으면 기본 크기로 기동.
 export type WindowBounds = { x: number; y: number; width: number; height: number }
 
-// 우클릭 메뉴 스타일. 현재 선택 UI 는 없고 list 고정 — radial/palette 구현은 R5 설정 창에서 다시 노출한다.
-export const CTX_MENU_STYLES = ['list', 'radial', 'palette'] as const
-export type CtxMenuStyle = (typeof CTX_MENU_STYLES)[number]
-
 // UI 배율(UI-font5, 2026-08-11). tokens.css 의 --ui-scale 로 내려가 --fs-* 척도와 행 높이를
 // 함께 키운다. 준영님: "폰트가 작아서 살짝 가독성이 떨어진다."
 //
@@ -265,7 +261,6 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
 // 설정 창이 한 덩어리로 저장하는 터미널 동작(ui:setPrefs). UiState 의 부분집합이지만 이쪽은
 // 기본값이 채워진 확정값만 담는다 — 화면·xterm 에 그대로 꽂을 수 있어야 하기 때문이다.
 export type UiPrefs = {
-  ctxMenuStyle: CtxMenuStyle
   // UI-font5: UI 글자·행 높이 배율. 터미널 글자는 별개(F5 ui.font).
   uiScale: UiScale
   scrollback: number
@@ -297,8 +292,8 @@ export type SidebarState = { collapsed: boolean; activeTab: 'conn' | 'file'; wid
 
 export type UiState = {
   sidebar: SidebarState
-  // 터미널 우클릭 메뉴 모양. 기본은 list — 라디얼은 커서가 라벨을 가린다는 실사용 피드백(2026-08-03).
-  ctxMenuStyle: CtxMenuStyle
+  // #67(2026-08-14): ctxMenuStyle 이 여기 있었다. 라디얼·팔레트를 지워 고를 것이 없어졌다 —
+  // 옛 스냅샷에 남아 있는 키는 읽는 쪽이 없어 그대로 무시된다(마이그레이션 불필요).
   font: FontConfig
   locale: string
   // UI-font5 [일반]: UI 글자·행 높이 배율 이름. 미지정이면 normal. uiScaleOf 가 클램프한다.

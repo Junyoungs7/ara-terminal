@@ -5,8 +5,8 @@
 //   C 인터럽트 · D EOF · Z 서스펜드 · L 클리어 · R 역검색 · W 단어삭제 · U/K 라인킬 ·
 //   A/E 줄 처음·끝 · T transpose · S/Q 흐름제어 · B/F 커서 이동 · \ SIGQUIT.
 // 앱 전용 키는 Ctrl+Shift+* / Alt+* / F-키에서만 고른다.
-// 예외 하나: palette.smart 는 Ctrl+K(리드라인 라인킬)를 그대로 쓴다 — 사용자 컨센서스로 확정된
-// 키라 정책보다 우선한다. 셸에서 줄 끝을 지우려면 Ctrl+Shift+K 대신 Del 계열을 쓰거나 팔레트를 닫는다.
+// #67(2026-08-14): 유일한 예외였던 palette.smart(Ctrl+K)가 없어졌다 — 스마트 팔레트를 지우면서
+// Ctrl+K 를 리드라인 라인킬로 셸에 돌려줬다. 이제 정책에 예외가 없다.
 
 export type KeymapAction =
   | 'split.horizontal'
@@ -19,7 +19,6 @@ export type KeymapAction =
   | 'tab.byNumber'
   | 'session.new'
   | 'session.duplicate'
-  | 'palette.smart'
   | 'terminal.search'
   | 'clipboard.copy'
   | 'clipboard.paste'
@@ -36,8 +35,8 @@ export type KeymapAction =
   | 'cheatsheet'
   | 'settings.open'
   | 'commandBook.toggle'
-  // F31: 통합 검색(커맨드 팔레트). 이름이 비슷한 palette.smart 와 다르다 — 저쪽은 우클릭 자리의
-  // 8칸 격자이고, 이쪽은 앱 전체 기능·프로필을 이름으로 찾는 곳이다.
+  // F31: 통합 검색(커맨드 팔레트) — 앱 전체 기능·프로필을 이름으로 찾는 곳.
+  // (#67 이전에는 우클릭 자리의 8칸 격자 palette.smart 가 따로 있어 이름이 헷갈렸다. 지금은 하나다.)
   | 'palette.all'
 
 export type KeymapCategory =
@@ -83,7 +82,6 @@ export const KEYMAP: readonly KeyBinding[] = [
   { action: 'session.new', category: 'tab', labelKo: '새 세션', win: 'Ctrl+Shift+T', mac: 'Cmd+Shift+T', implemented: true },
   // Ctrl+D 단독은 EOF(셸 종료) 다 — R2 에서 가로챈 것을 셸에 돌려준다.
   { action: 'session.duplicate', category: 'tab', labelKo: '세션 복제', win: 'Ctrl+Shift+D', mac: 'Cmd+Shift+D', implemented: true },
-  { action: 'palette.smart', category: 'search', labelKo: '스마트 팔레트', win: 'Ctrl+K', mac: 'Cmd+K', implemented: true },
   // Ctrl+F 단독은 리드라인 커서 오른쪽 이동.
   { action: 'terminal.search', category: 'search', labelKo: '터미널 내 검색', win: 'Ctrl+Shift+F', mac: 'Cmd+Shift+F', implemented: true },
   { action: 'clipboard.copy', category: 'clipboard', labelKo: '복사', win: 'Ctrl+Shift+C', mac: 'Cmd+Shift+C', implemented: true },
@@ -237,7 +235,7 @@ export function dispatchAction(action: KeymapAction): void {
 
 // 터미널(xterm)이 셸로 흘려보내면 안 되는 앱 단축키인지 — attachCustomKeyEventHandler 용.
 // 배선된 키만 가로채고 미구현 키는 그대로 셸로 보낸다. R3.8 정책 이후 앱 키는 Ctrl+Shift+*/Alt+*
-// 뿐이라 여기서 막히는 셸 표준 키는 Ctrl+K(팔레트, 합의된 예외) 하나다 — 나머지 Ctrl+문자는 전부 통과한다.
+// 뿐이고 #67 에서 유일한 예외(Ctrl+K)마저 없어졌다 — 단일 Ctrl+문자는 이제 전부 셸로 통과한다.
 export function isAppShortcut(e: KeyboardEvent): boolean {
   return KEYMAP.some(
     (b) =>

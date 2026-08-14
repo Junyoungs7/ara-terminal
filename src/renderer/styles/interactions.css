@@ -1,166 +1,12 @@
 /* ============================================================
-   F4c 인터랙션 — 라디얼 메뉴 / 스마트 팔레트 / 치트시트
-   목업 variant-final-3.html §RADIAL/§SMART PALETTE/§CHEATSHEET 를 그대로 이식.
+   F4c 인터랙션 — 컨텍스트 메뉴 / 치트시트 / 명령어 북
+   목업 variant-final-3.html §CHEATSHEET 이식. 라디얼·스마트 팔레트는 #67 에서 제거.
    HEX 컬러는 tokens.css 변수로 치환(디자인 시스템 §9). shell.css 와 동일하게 styles/ 에 둔다.
    ============================================================ */
 
-/* ---------- 라디얼 컨텍스트 메뉴 (§9.1) ---------- */
-.radial-menu {
-  position: fixed;
-  pointer-events: none;
-  z-index: 200;
-  display: none;
-}
-.radial-menu.open {
-  display: block;
-  pointer-events: auto;
-}
-.radial-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 199;
-  display: none;
-}
-.radial-backdrop.open {
-  display: block;
-}
-.radial-center {
-  position: absolute;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--bg-overlay);
-  border: 1.5px solid var(--line-strong);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transform: translate(-50%, -50%);
-  transition:
-    background 0.14s,
-    border-color 0.14s;
-  box-shadow: var(--shadow-md);
-  color: var(--text-dim);
-  font-size: var(--fs-md);
-}
-.radial-center:hover {
-  background: var(--bg-raised);
-  border-color: var(--err);
-  color: var(--err);
-}
-.ri {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  cursor: pointer;
-  transform: translate(-50%, -50%) scale(0);
-  opacity: 0;
-  transition:
-    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.18s ease,
-    background 0.12s;
-  pointer-events: none;
-}
-.ri.shown {
-  transform: translate(-50%, -50%) scale(1);
-  opacity: 1;
-  pointer-events: auto;
-}
-.ri-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--bg-overlay);
-  border: 1.5px solid var(--line-strong);
-  display: grid;
-  place-items: center;
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition:
-    background 0.14s,
-    border-color 0.14s,
-    box-shadow 0.14s,
-    transform 0.12s;
-  color: var(--text-mid);
-}
-.ri-icon svg {
-  width: 16px;
-  height: 16px;
-}
-/* tint·hover 색은 모두 반투명 토큰이라 background 로 쓰면 디스크가 비쳐서
-   뒤의 divider·패널 헤더·터미널 글자가 아이콘을 통과해 보인다(= "아이콘 가림").
-   .ri-icon 의 불투명 --bg-overlay 를 배경색으로 남기고 tint 는 background-image 로 얹는다. */
-.ri:hover .ri-icon {
-  background-image: linear-gradient(var(--accent-glow), var(--accent-glow));
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
-  transform: scale(1.12);
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-/* AI 항목 tint(§9.1 --purple), 위험 항목 tint(--err) */
-.ri.tint-ai .ri-icon {
-  border-color: var(--purple-line);
-  background-image: linear-gradient(rgba(167, 139, 250, 0.08), rgba(167, 139, 250, 0.08));
-  color: var(--purple);
-}
-.ri.tint-danger .ri-icon {
-  border-color: var(--err-line);
-  background-image: linear-gradient(rgba(248, 113, 113, 0.06), rgba(248, 113, 113, 0.06));
-  color: var(--err);
-}
-/* 미래 기능(로그 저장 / AI 질문) — 비활성 스타일. hover glow 억제.
-   디스크 전체에 opacity 를 걸면 배경이 비치므로 글리프만 흐리게 한다. */
-.ri.future .ri-icon svg {
-  opacity: 0.5;
-}
-.ri.future:hover .ri-icon {
-  transform: none;
-  background-image: none;
-  border-color: var(--line-strong);
-}
-.ri-label {
-  font-size: var(--fs-xs);
-  font-family: var(--ui);
-  font-weight: 500;
-  color: var(--text-mid);
-  white-space: nowrap;
-  background: rgba(13, 17, 25, 0.85);
-  backdrop-filter: blur(4px);
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  opacity: 0;
-  transform: translateY(2px);
-  transition:
-    opacity 0.14s,
-    transform 0.14s;
-  pointer-events: none;
-}
-.ri:hover .ri-label {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* ---------- 스마트 팔레트 (§9.2) ---------- */
-.smart-palette {
-  position: fixed;
-  z-index: 200;
-  width: 280px;
-  background: var(--bg-surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  display: none;
-  animation: paletteIn 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.1);
-}
-.smart-palette.open {
-  display: block;
-}
+/* ---------- 검색창 딸린 오버레이 공용 조각 (§9.2 잔여) ----------
+   #67 에서 스마트 팔레트 본체는 지웠다. .sp-search/.sp-empty/paletteIn 은 치트시트·명령어 북이
+   그대로 쓰고 있어 남긴다(클래스 이름만 옛 이름 그대로다). */
 @keyframes paletteIn {
   from {
     opacity: 0;
@@ -205,20 +51,6 @@
   border-radius: 3px;
   padding: 1px 4px;
 }
-.sp-section {
-  padding: 6px 10px 4px;
-  font-size: var(--fs-md);
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.sp-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  padding: 6px 10px 8px;
-}
 .sp-empty {
   padding: 14px 10px;
   text-align: center;
@@ -226,60 +58,6 @@
   font-weight: 500;
   color: var(--text-dim);
 }
-.sp-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 7px 4px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: 0.12s;
-}
-.sp-item:hover {
-  background: var(--bg-overlay);
-}
-.sp-item:hover .sp-ic {
-  border-color: var(--accent-line);
-  background: var(--accent-glow);
-  color: var(--accent-bright);
-}
-.sp-item.future .sp-ic svg {
-  opacity: 0.55;
-}
-.sp-ic {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  display: grid;
-  place-items: center;
-  color: var(--text-mid);
-  transition: 0.12s;
-}
-.sp-item.tint-ai .sp-ic {
-  border-color: var(--purple-line);
-  background: rgba(167, 139, 250, 0.07);
-  color: var(--purple);
-}
-.sp-item.tint-danger .sp-ic {
-  border-color: var(--err-line);
-  background: rgba(248, 113, 113, 0.06);
-  color: var(--err);
-}
-.sp-ic svg {
-  width: 14px;
-  height: 14px;
-}
-.sp-lbl {
-  font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-mid);
-  text-align: center;
-  white-space: nowrap;
-}
-
 /* ---------- 치트시트 오버레이 (§9.4) ---------- */
 .cheatsheet {
   position: fixed;
@@ -360,10 +138,6 @@
 .cs-hd .x svg {
   width: 13px;
   height: 13px;
-}
-.radial-center svg {
-  width: 12px;
-  height: 12px;
 }
 .cs-hd .x {
   margin-left: auto;

@@ -57,10 +57,10 @@ export function Shell() {
   // F15 우측 미니 프리뷰 레일(Ctrl+Shift+P · View 메뉴). 세션 수명 동안만 사는 토글이라
   // workspace.json 에 저장하지 않는다 — 모니터링용 임시 창이지 레이아웃 설정이 아니다.
   const [previewOpen, setPreviewOpen] = useState(false)
-  // F16 아라 패널(Alt+A · 라디얼 [AI에게 질문] · 타이틀바). 미니 프리뷰와 같은 규칙으로 영속하지
+  // F16 아라 패널(Alt+A · 우클릭 메뉴 [AI에게 질문] · 타이틀바). 미니 프리뷰와 같은 규칙으로 영속하지
   // 않는다 — 세션 수명 동안만 사는 토글이고, 상호 배타로 만들지도 않는다(둘 다 열려도 터미널이 남는다).
   const [aiOpen, setAiOpen] = useState(false)
-  // 라디얼 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
+  // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
   // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
   const [aiPrefill, setAiPrefill] = useState<{ text: string; at: number; autoSend?: boolean } | null>(null)
   // F17 AI 부트스트랩 폼. 열림 상태만 여기 있고, 폼 값은 모달 안에만 산다(경로·이름이 렌더러
@@ -623,7 +623,7 @@ export function Shell() {
     [connect, profiles, sessions]
   )
 
-  // 세션 복제(F4c 라디얼/팔레트): ssh 세션은 같은 프로필로 새 접속(connectProfile 재사용).
+  // 세션 복제(F4c 우클릭 메뉴): ssh 세션은 같은 프로필로 새 접속(connectProfile 재사용).
   // serverKey 가 프로필명과 일치하므로 이름으로 프로필을 찾아 재접속한다.
   const duplicateSession = useCallback(
     (session: { serverKey: string }) => {

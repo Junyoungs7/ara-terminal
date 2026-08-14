@@ -4,7 +4,7 @@ import type { MenuItem } from './ContextMenu'
 import { KEYMAP, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
-// 컨텍스트 액션 단일 레지스트리 — 라디얼 메뉴와 스마트 팔레트가 이 배열 하나를 공유한다
+// 컨텍스트 액션 단일 레지스트리 — 터미널 우클릭 메뉴가 이 배열 하나에서 나온다
 // (이중 정의 금지, 계획서 §C F4c). 목업 variant-final-3 의 8항목·순서·아이콘을 그대로 이식.
 //
 // tint: 'ai' → --purple, 'danger' → --err (목업의 인라인 HEX 대신 토큰 — 매직넘버 스캔 통과).
@@ -36,7 +36,7 @@ const svg = (children: ReactNode, extra?: Record<string, string>) => (
   </svg>
 )
 
-// 순서 = 목업 라디얼 배치 순서(-90°에서 시계방향). 팔레트 그리드도 동일 순서를 쓴다.
+// 순서 = 목업 라디얼 배치 순서(-90°에서 시계방향)에서 이어받았다. 라디얼 자체는 #67 에서 없앴다.
 export const CONTEXT_ACTIONS: readonly ContextAction[] = [
   {
     id: 'copy',
@@ -118,8 +118,8 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
   }
 ]
 
-// 터미널 우클릭 기본 메뉴(리스트) 항목. 라디얼·팔레트와 같은 CONTEXT_ACTIONS 를 그대로 쓴다
-// (이중 정의 금지) — 모양만 세로 리스트로 바꾼 것이다. 단축키 힌트는 keymap 단일 소스에서 가져온다.
+// 터미널 우클릭 메뉴 항목. CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 금지) — 모양만 세로 리스트다.
+// #67 이후 이 리스트가 유일한 모양이다(라디얼·팔레트 제거). 단축키 힌트는 keymap 단일 소스에서 온다.
 // ActionId 6개(split×2/session.duplicate/log.save/ai.ask/pane.close)는 KeymapAction 과 이름이 같다.
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -154,7 +154,7 @@ export function terminalMenu(): MenuItem[] {
 }
 
 // ── 트리·탭바 컨텍스트 메뉴 액션 (F4c 레지스트리와 같은 파일 = 단일 출처) ──
-// 라디얼/팔레트가 터미널 그리드 액션을 담당하듯, 아래는 사이드바 트리·탭바 ＋ 메뉴의 액션이다.
+// 위 CONTEXT_ACTIONS 가 터미널 그리드 액션을 담당하듯, 아래는 사이드바 트리·탭바 ＋ 메뉴의 액션이다.
 // 라벨은 i18n(ko.json conn.menu.*)에 두고 여기서는 id → 라벨 키 매핑만 갖는다.
 export type TreeActionId =
   | 'server.connect'

@@ -100,7 +100,7 @@ describe('R3.3 openExternal 스킴 검증', () => {
 
 // ── R3.1/R3.4 터미널 동작 설정 + R5 커서·벨 ──
 // prefsFrom 이 옵셔널 스냅샷 필드에 기본값을 채우고, applyUiPrefs 가 그 확정값을 캐시에 싣는다.
-const uiOf = (patch: Partial<UiState> = {}) => prefsFrom({ ctxMenuStyle: 'list', ...patch } as UiState)
+const uiOf = (patch: Partial<UiState> = {}) => prefsFrom({ ...patch } as UiState)
 
 describe('터미널 설정 기본값', () => {
   it('스냅샷에 값이 없으면 스크롤백 10000 · 선택 자동복사 on · 블록 커서 깜빡임 · 벨 끄기', () => {
@@ -122,12 +122,6 @@ describe('터미널 설정 기본값', () => {
     expect(termPrefs.cursorBlink).toBe(false)
     expect(termPrefs.bell).toBe('visual')
     applyUiPrefs(uiOf()) // 다른 테스트에 새는 것 방지 — 기본값으로 되돌린다.
-  })
-
-  // R5: 우클릭 스타일도 같은 경로로 온다(R1.4 에서 UI 가 사라졌다가 설정 창에서 다시 노출).
-  it('우클릭 메뉴 스타일은 저장값 그대로 — 라디얼도 되살아난다', () => {
-    expect(uiOf({ ctxMenuStyle: 'radial' }).ctxMenuStyle).toBe('radial')
-    expect(prefsFrom({} as UiState).ctxMenuStyle).toBe('list')
   })
 
   it('스크롤백 슬라이더 범위는 1k–100k', () => {

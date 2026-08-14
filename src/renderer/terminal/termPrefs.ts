@@ -23,7 +23,6 @@ import { activityHiddenOf, activityOrderOf } from '../store/activityBar'
 // ui:setPrefs 로만 흐른다(이 캐시는 "새 xterm 이 읽어 갈 현재 값" 전용이다).
 export const termPrefs: Omit<
   UiPrefs,
-  | 'ctxMenuStyle'
   | 'uiScale'
   | 'sessionLog'
   | 'logRetentionDays'
@@ -44,7 +43,6 @@ export const termPrefs: Omit<
 export function prefsFrom(
   ui: Pick<
     UiState,
-    | 'ctxMenuStyle'
     | 'uiScale'
     | 'scrollback'
     | 'copyOnSelect'
@@ -61,7 +59,6 @@ export function prefsFrom(
   >
 ): UiPrefs {
   return {
-    ctxMenuStyle: ui.ctxMenuStyle ?? 'list',
     uiScale: uiScaleOf(ui.uiScale),
     scrollback: ui.scrollback ?? DEFAULT_SCROLLBACK,
     copyOnSelect: ui.copyOnSelect ?? DEFAULT_COPY_ON_SELECT,

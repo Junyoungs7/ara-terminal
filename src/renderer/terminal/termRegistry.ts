@@ -3,7 +3,7 @@ import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { CursorStyle } from '@shared/types'
 
-// 세션별 xterm 인스턴스 레지스트리 — 라디얼/팔레트 '복사'(F4c) + F5 폰트 실시간 적용 + R3.2 검색.
+// 세션별 xterm 인스턴스 레지스트리 — 우클릭 메뉴 '복사'(F4c) + F5 폰트 실시간 적용 + R3.2 검색.
 // TerminalPane 이 mount 시 등록, unmount 시 해제. UI 상태가 아니므로 스토어가 아닌 모듈 맵으로 관리.
 type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon }
 const terms = new Map<string, Entry>()

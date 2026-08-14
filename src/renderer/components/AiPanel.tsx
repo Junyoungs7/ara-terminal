@@ -109,7 +109,7 @@ type Props = {
   onClose: () => void
   // 활성 세션 — 컨텍스트 첨부 대상이자 [터미널로 보내기] 목적지. 없으면 둘 다 비활성.
   session: { id: string; env: AiEnv } | null
-  // 라디얼 [AI에게 질문] 이 넘긴 선택 텍스트. 값이 바뀔 때마다 컴포저에 채운다.
+  // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. 값이 바뀔 때마다 컴포저에 채운다.
   // autoSend: F17 부트스트랩 전용 — 조립된 질문을 컴포저에 채우는 대신 즉시 보낸다(사용자가 이미
   // 부트스트랩 폼의 "아라에게 물어보기"를 눌러 의도를 밝혔으므로 여기서 다시 Enter 를 요구하지 않는다.
   // 이후 나오는 명령 블록은 F16 그대로 [터미널로 보내기] 삽입만 — 자동 실행 경로는 없다).
@@ -222,7 +222,7 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
     if (sendText(draft.trim())) setDraft('')
   }, [draft, sendText])
 
-  // 라디얼 [AI에게 질문] 프리필(또는 F17 부트스트랩의 autoSend). at 이 바뀔 때만 반응한다
+  // 우클릭 메뉴 [AI에게 질문] 프리필(또는 F17 부트스트랩의 autoSend). at 이 바뀔 때만 반응한다
   // (같은 문자열을 두 번 골라도 반영되게).
   const prefillAt = prefill?.at
   useEffect(() => {
