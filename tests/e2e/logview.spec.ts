@@ -72,8 +72,10 @@ test('LOG-1 원격 로그 파일 우클릭에 [tail로 보기] 가 뜬다', asyn
   const tele = makeTelemetry()
   await openRemoteTree(ara.page, ssh, tele, 'log1')
   await openRowMenu(ara.page, 'access_20260803.log')
-  // 라벨은 i18n `conn.menu.file.tail` 에서 온다 — "tail로 보기" → "실시간 확인" 으로 바뀐 걸 못 따라갔었다.
-  await expect(ara.page.locator('.ctx-menu .ctx-item[data-action="file.tail"]')).toHaveText('실시간 확인')
+  // 라벨은 i18n `conn.menu.file.tail` 에서 온다. 두 번 바뀌었다:
+  // "tail로 보기" → "실시간 확인"(문구 정리) → **"서버 로그 보기"**(#76 — "로그"라는 이름을 쓰는
+  // 것이 둘이라, 찾는 사람이 "로그"로 찾을 수 있어야 한다).
+  await expect(ara.page.locator('.ctx-menu .ctx-item[data-action="file.tail"]')).toHaveText('서버 로그 보기')
 })
 
 // LOG-2 폴더·다중 선택에는 붙지 않는다(tail 은 파일 하나짜리 명령이다)
@@ -178,7 +180,7 @@ test('LOG-8 뷰어를 닫으면 원격 tail 채널이 닫힌다', async ({ ara, 
   await openRemoteTree(ara.page, ssh, tele, 'log8')
   await startTail(ara.page, tele, 'access_20260803.log')
   expect(tele.tails[0].closed).toBe(false)
-  await ara.page.click('.logview .lv-head .ts-btn[title="로그 뷰어 닫기"], .logview .lv-head .ts-btn[data-tip="로그 뷰어 닫기"]')
+  await ara.page.click('.logview .lv-head .ts-btn[title="서버 로그 닫기"], .logview .lv-head .ts-btn[data-tip="서버 로그 닫기"]')
   await expect(ara.page.locator('.logview')).toHaveCount(0)
   await expect.poll(() => tele.tails[0].closed, { timeout: 15_000 }).toBe(true)
 })

@@ -105,6 +105,9 @@ export function LogViewer({
           <span className={'lv-dot' + (paused ? ' paused' : '')} />
           {paused ? t('log.paused') : t('log.live')}
         </span>
+        {/* #76: "로그"라는 이름을 쓰는 것이 둘이라 어느 쪽인지 머리에서 밝힌다 —
+            여기는 **서버의 로그 파일**, 우측 레일 [세션 기록]은 내가 이 세션에서 주고받은 것. */}
+        <span className="lv-kind">{t('log.file.label')}</span>
         <span className="lv-path" title={path}>
           {path}
         </span>

@@ -3997,6 +3997,13 @@
 .lv-dot.paused {
   background: var(--warn);
 }
+/* #76: 이 뷰어가 무엇인지(서버 로그 파일) 머리에서 밝힌다 — 우측 레일 [세션 기록]과 가르기 위해. */
+.lv-kind {
+  flex: none;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-mid);
+}
 .lv-path {
   font-family: var(--mono);
   font-size: var(--fs-sm);
