@@ -31,11 +31,17 @@ test('RESTORE-1 로컬 2세션 + 분할 + cwd 가 재기동 후 복원된다', a
   await a1.page.keyboard.press('Control+Shift+\\') // 2분할(좌·우)
   await expect(a1.page.locator('.pane-grid .pane')).toHaveCount(2)
   // 두 세션 모두 cwd 가 추적됐는지 확인한 뒤 저장한다(OSC7 지연이 저장 내용을 좌우한다).
+  //
+  // 2026-08-14: 예전엔 "cwd 가 비어 있지 않다"만 봤는데, **셸의 처음 cwd 는 홈 디렉토리라
+  // 이미 비어 있지 않다** — cd 가 반영되기 전에 조건이 통과했고, 그 상태로 저장하면 홈이 저장돼
+  // 재기동 후 단언이 깨졌다(간헐적으로만 났다). 기다려야 하는 것은 "값이 있다"가 아니라
+  // **"우리가 보낸 그 폴더다"** 이므로 그대로 확인한다.
+  const want = [slash(dirA).toLowerCase(), slash(dirB).toLowerCase()].sort()
   await expect
-    .poll(async () => (await sessionList(a1.page)).filter((s) => (s.cwd ?? '').length > 0).length, {
+    .poll(async () => (await sessionList(a1.page)).map((s) => slash(s.cwd ?? '').toLowerCase()).sort(), {
       timeout: 20_000
     })
-    .toBe(2)
+    .toEqual(want)
   await persist(a1.page)
   await quitAra(a1)
 
