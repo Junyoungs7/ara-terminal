@@ -93,7 +93,7 @@ export function ServerConsoleView({
   onLaunch,
   onSendInput
 }: Props): JSX.Element {
-  const { rect, maximized, drag, toggleMax } = useFloatWindow()
+  const { rect, maximized, drag, toggleMax, z, toFront } = useFloatWindow()
   // 열려 있는 도구 탭. 런치패드('pad')는 목록에 없고 항상 맨 앞에 그린다(닫을 수 없다).
   const [tabs, setTabs] = useState<ConsoleToolId[]>([])
   const [active, setActive] = useState<'pad' | ConsoleToolId>('pad')
@@ -111,7 +111,8 @@ export function ServerConsoleView({
   return (
     <div
       className="exp-win con-win"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }}
+      onMouseDown={toFront}
       role="dialog"
       aria-label={t('console.title')}
     >

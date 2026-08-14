@@ -49,7 +49,7 @@ export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onCl
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
   // 떠 있는 창의 이동·크기·최대화(서버 콘솔 창과 공유 — store/floatWindow.ts).
-  const { rect, maximized, drag, toggleMax } = useFloatWindow()
+  const { rect, maximized, drag, toggleMax, z, toFront } = useFloatWindow()
   // 아직 접속 중인 프로필 — 세션이 뜨면 그 탭을 연다. goto 는 즐겨찾기로 들어온 시작 폴더.
   const pending = useRef<{ profileId: string; goto?: string } | null>(null)
 
@@ -123,7 +123,14 @@ export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onCl
     })()
 
   return (
-    <div className="exp-win" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} role="dialog" aria-label={t('explorer.title')}>
+    // #72: 어디를 누르든 앞으로 온다 — 제목줄만 반응하면 본문을 보고 있을 때 못 꺼낸다.
+    <div
+      className="exp-win"
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }}
+      onMouseDown={toFront}
+      role="dialog"
+      aria-label={t('explorer.title')}
+    >
       <div className="exp-title" onMouseDown={(e) => drag(e, 'move')} onDoubleClick={toggleMax}>
         <span className="exp-tico">
           <IconFolder />

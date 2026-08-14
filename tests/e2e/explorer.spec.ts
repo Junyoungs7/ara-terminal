@@ -100,6 +100,35 @@ test('EXP-2b 우측 기능 바 아이콘으로 탐색기를 연다', async ({ ar
   await expect(ara.page.locator('.exp-win')).toHaveCount(0)
 })
 
+// EXP-13★ 떠 있는 창 둘이 겹치지 않고, 누르면 앞으로 온다 (#72, 2026-08-14)
+// 예전엔 탐색기와 서버 콘솔이 **정확히 같은 좌표**에서 시작했고(둘 다 같은 initialRect) z-index 도
+// 같아서(둘 다 95) 렌더 순서상 뒤인 콘솔이 항상 위였다 — 둘 다 열면 탐색기를 꺼낼 방법이 없었다.
+test('EXP-13★ 탐색기와 콘솔이 어긋나 뜨고, 누른 창이 앞으로 온다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+
+  await page.click('.act-item[data-activity="explorer"]')
+  await expect(page.locator('.exp-win:not(.con-win)')).toBeVisible()
+  await page.click('.act-item[data-activity="console"]')
+  await expect(page.locator('.con-win')).toBeVisible()
+
+  const box = async (sel: string) => (await page.locator(sel).boundingBox())!
+  const exp = await box('.exp-win:not(.con-win)')
+  const con = await box('.con-win')
+  // ① 좌표가 겹치지 않는다(계단식) — 정확히 같은 자리면 아래 창이 있는지도 모른다.
+  expect(exp.x).not.toBe(con.x)
+  expect(exp.y).not.toBe(con.y)
+
+  const zOf = (sel: string) =>
+    page.locator(sel).evaluate((el) => Number(getComputedStyle(el as HTMLElement).zIndex) || 0)
+  // ② 나중에 연 콘솔이 위다.
+  expect(await zOf('.con-win')).toBeGreaterThan(await zOf('.exp-win:not(.con-win)'))
+
+  // ③ 탐색기를 누르면 앞으로 온다 — 제목줄이 아니라 본문을 눌러도 된다.
+  await page.locator('.exp-win:not(.con-win) .exp-tabs').click({ position: { x: 4, y: 4 } })
+  expect(await zOf('.exp-win:not(.con-win)')).toBeGreaterThan(await zOf('.con-win'))
+})
+
 // EXP-3★ 탐색기는 xterm 을 파괴하지 않는다 — 닫으면 출력·활성 탭·패널이 그대로다.
 test('EXP-3★ 탐색기를 열었다 닫아도 터미널 출력·활성 탭·패널이 그대로다', async ({ ara }) => {
   const id = await newLocalShell(ara.page)
