@@ -147,6 +147,29 @@ test('CON-34★ 런치패드 타일을 포커스·Enter 로 열 수 있다', asy
   await expect(ara.page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
 })
 
+// CON-35★ 창을 닫아도 표의 상태가 남는다 (#74, 2026-08-14)
+// 예전엔 `{consoleOpen && <ServerConsoleView/>}` 라 닫는 순간 언마운트돼 열린 탭·정렬·검색이
+// 통째로 날아갔다 — 프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다. 이제 숨기만 한다.
+test('CON-35★ 콘솔을 닫았다 열어도 탭과 검색어가 그대로다', async ({ ara, ssh }) => {
+  const ps = makePs()
+  const h = await ssh({ password: 'pw-con35', execHandler: ps.exec })
+  await openConsole(ara.page, 'con35', h.port, 'pw-con35')
+  await openProcessTab(ara.page)
+
+  await ara.page.fill('.con-ps .con-search input, .con-toolbar input[type="text"]', 'node')
+  const before = await rows(ara.page).count()
+
+  await ara.page.click('.con-win .exp-wbtn.x')
+  await expect(ara.page.locator('.con-win')).not.toBeVisible()
+  await ara.page.click('.act-item[data-activity="console"]')
+  await expect(ara.page.locator('.con-win')).toBeVisible()
+
+  // 열려 있던 탭도, 쳐 둔 검색어도 그대로다.
+  await expect(ara.page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
+  await expect(ara.page.locator('.con-ps .con-search input, .con-toolbar input[type="text"]').first()).toHaveValue('node')
+  await expect(rows(ara.page)).toHaveCount(before)
+})
+
 // CON-1b 콘솔 밖에서 열리는 칸은 셋(로그·포트·터미널)이고, 그 셋만 ↗ 를 단다.
 // 이력: R1·R2 때는 "추후 칸은 눌러도 아무 일이 없다" 였고, R3 에서 추후 칸이 없어졌으며,
 // #69(2026-08-14)에서 [파일] 이 밖에서 열리는 쪽 → **콘솔 안 탭**으로 옮겨 왔다.
@@ -182,7 +205,7 @@ test('CON-33★ [파일] 은 콘솔 안 탭으로 열리고 런치패드로 돌�
   await expect(ara.page.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
   // 콘솔이 살아 있고, 떠 있는 탐색기 창이 따로 뜨지 않았다.
   await expect(ara.page.locator('.con-win')).toBeVisible()
-  await expect(ara.page.locator('.exp-win:not(.con-win)')).toHaveCount(0)
+  await expect(ara.page.locator('.exp-win:not(.con-win)')).not.toBeVisible() // #74: 창은 남고 숨는다
   // 파일 트리가 실제로 그려졌다(툴바 켠 모드 — 탐색기 창과 같은 구성).
   await expect(ara.page.locator('.con-pane .ftree')).toHaveCount(1)
 
@@ -376,7 +399,7 @@ test('CON-9 콘솔 창을 닫으면 ps 폴링이 멈춘다', async ({ ara, ssh }
   await openProcessTab(ara.page)
 
   await ara.page.click('.act-item[data-activity="console"]') // 토글로 닫기
-  await expect(ara.page.locator('.con-win')).toHaveCount(0)
+  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
   await ara.page.waitForTimeout(1_000) // 진행 중이던 마지막 바퀴가 끝날 시간
   const after = ps.rounds()
   await ara.page.waitForTimeout(6_000) // 주기(2.5초) 두 바퀴가 넘는 시간
@@ -807,7 +830,7 @@ test('CON-23★ [터미널] 칸은 그 서버의 새 세션을 연다(로컬 셸
   await expect(ara.page.locator('.con-app[data-tool="term"] .ext-mark')).toBeVisible()
   await ara.page.click('.con-app[data-tool="term"]')
   await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
-  await expect(ara.page.locator('.con-win')).toHaveCount(0)
+  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
 
   // 늘어난 세션이 **ssh** 여야 한다 — 여기가 이 검사의 요점이다.
   const types = (await sessionList(ara.page)).map((s) => s.type)
@@ -986,7 +1009,7 @@ test('CON-31★ [접속]은 컨테이너 셸 명령을 터미널로 보내고 �
   await ctrBtn(ara.page, 'attach').click()
 
   // 콘솔은 비켜 준다(방금 보낸 터미널을 덮고 있으면 한 번 더 치워야 한다).
-  await expect(ara.page.locator('.con-win')).toHaveCount(0)
+  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
   await expect.poll(() => inputs.join(''), { timeout: 15_000 }).toContain('exec -it ' + CTR_WEB)
   // 줄이 실제로 실행되도록 CR 로 끝난다(LF 만 보내면 실행하지 않는 셸이 있다).
   expect(inputs.join('')).toContain('\r')

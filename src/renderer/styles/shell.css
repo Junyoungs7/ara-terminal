@@ -1098,10 +1098,25 @@
   width: 13px;
   height: 13px;
 }
-/* 아이콘 하나만 든 버튼 — 글자 버튼과 같은 좌우 여백을 주면 아이콘이 한쪽으로 쏠린다. */
+/* 아이콘 하나만 든 버튼 — 글자 버튼과 같은 좌우 여백을 주면 아이콘이 한쪽으로 쏠린다.
+   #74: 25×24 는 작았다(준영님: "뒤로가기 버튼이 너무 작거나 안 보인다"). 글자가 없어 눈에 안
+   띄는 것이 절반이라 크기를 올리고, 나머지 절반은 히트 영역을 넓혀 메운다 — .tb-ctl(#62)·
+   .exp-wbtn(#71) 과 같은 방식이다. */
 .con-btn.icon {
-  padding: 0 6px;
+  min-height: 28px;
+  min-width: 30px;
+  padding: 0 8px;
   justify-content: center;
+  position: relative;
+}
+.con-btn.icon::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+.con-btn.icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .con-tblwrap {

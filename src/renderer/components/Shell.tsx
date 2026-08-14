@@ -1078,22 +1078,25 @@ export function Shell() {
           badges={{ aisess: aiQuiet > 0 }}
         />
       </div>
-      {explorerOpen && (
-        <ExplorerView
-          sessions={sessions.sessions}
-          profiles={profiles}
-          workProfiles={work.list}
-          onConnect={(id) => void connectProfile(id)}
-          onClose={() => setExplorerOpen(false)}
-          ask={ask}
-          askText={askText}
-          reveal={explorerReveal}
-        />
-      )}
+      {/* #74: 떠 있는 창 둘은 **언마운트하지 않는다.** 조건부 렌더였을 때는 닫는 순간 탭·경로·
+          표의 정렬·검색이 통째로 날아갔다(프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다).
+          우측 레일이 상태를 지키는 것과 같은 이유로 여기도 열림 여부만 넘기고 창이 display:none
+          으로 숨는다. 숨은 동안 원격 폴링이 돌지 않는 것은 각 창이 active 를 함께 내려서 막는다. */}
+      <ExplorerView
+        visible={explorerOpen}
+        sessions={sessions.sessions}
+        profiles={profiles}
+        workProfiles={work.list}
+        onConnect={(id) => void connectProfile(id)}
+        onClose={() => setExplorerOpen(false)}
+        ask={ask}
+        askText={askText}
+        reveal={explorerReveal}
+      />
       {/* F26: 탐색기와 같은 떠 있는 창. 대상은 활성 세션 하나다 — 창 안에서 서버를 고르지 않는다
           (탐색기와 달리 프로세스·서비스는 "지금 붙어 있는 서버"의 것이라야 헷갈리지 않는다). */}
-      {consoleOpen && (
-        <ServerConsoleView
+      <ServerConsoleView
+          visible={consoleOpen}
           sessionId={activeSession?.id ?? null}
           isSsh={activeSession?.type === 'ssh'}
           serverName={activeSession?.serverKey ?? ''}
@@ -1137,7 +1140,6 @@ export function Shell() {
             }
           }}
         />
-      )}
       <StatusBar
         version={version}
         session={activeSession}

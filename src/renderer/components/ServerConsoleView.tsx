@@ -62,6 +62,8 @@ const TOOLS = [
 ] as const
 
 type Props = {
+  /** 창을 그릴지. 닫혀도 언마운트하지 않는다(#74) — 탭·정렬·검색이 남는다. */
+  visible: boolean
   /** 활성 세션. 원격 명령은 이 세션의 SSH 커넥션으로만 나간다. */
   sessionId: string | null
   isSsh: boolean
@@ -82,6 +84,7 @@ type Props = {
 }
 
 export function ServerConsoleView({
+  visible,
   sessionId,
   isSsh,
   serverName,
@@ -97,6 +100,8 @@ export function ServerConsoleView({
   // 열려 있는 도구 탭. 런치패드('pad')는 목록에 없고 항상 맨 앞에 그린다(닫을 수 없다).
   const [tabs, setTabs] = useState<ConsoleToolId[]>([])
   const [active, setActive] = useState<'pad' | ConsoleToolId>('pad')
+  // 창이 숨어 있으면 어떤 탭도 활성이 아니다 — 안 보이는 창이 2.5초마다 원격에 명령을 보내면 안 된다.
+  const shown = (tool: ConsoleToolId): boolean => visible && active === tool
 
   const open = (tool: ConsoleToolId): void => {
     setTabs((cur) => (cur.includes(tool) ? cur : [...cur, tool]))
@@ -109,9 +114,17 @@ export function ServerConsoleView({
   }
 
   return (
+    // #74: 닫혀도 언마운트하지 않는다 — 표의 정렬·검색·열린 탭이 남는다.
     <div
       className="exp-win con-win"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }}
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.w,
+        height: rect.h,
+        zIndex: z,
+        ...(visible ? null : { display: 'none' })
+      }}
       onMouseDown={toFront}
       role="dialog"
       aria-label={t('console.title')}
@@ -168,7 +181,7 @@ export function ServerConsoleView({
           <>
             <div className="con-pad" style={active === 'pad' ? undefined : { display: 'none' }}>
               {/* 서버의 정체(배포판·커널·가동 시간). 자원 사용량은 F29 사이드바 몫이다. */}
-              <ServerOverview sessionId={sessionId} active={active === 'pad'} />
+              <ServerOverview sessionId={sessionId} active={visible && active === 'pad'} />
               {TOOLS.map(({ id, Icon, tool, launch }) => (
                 // #71: 타일은 진짜 버튼이다 — div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도
                 // 없었다. 단축키를 이만큼 만든 앱에서 새 화면이 마우스 전용인 것은 어긋난다.
@@ -203,23 +216,23 @@ export function ServerConsoleView({
                 {tool === 'files' && (
                   <FileTree
                     session={sessionId ? { id: sessionId, type: 'ssh' } : null}
-                    active={active === tool}
+                    active={shown(tool)}
                     cwd={null}
                     ask={ask}
                     askText={askText}
                     toolbar
                   />
                 )}
-                {tool === 'ps' && <ProcessTable sessionId={sessionId} active={active === tool} ask={ask} onAskAi={onAskAi} />}
-                {tool === 'svc' && <ServiceTable sessionId={sessionId} active={active === tool} ask={ask} onAskAi={onAskAi} />}
+                {tool === 'ps' && <ProcessTable sessionId={sessionId} active={shown(tool)} ask={ask} onAskAi={onAskAi} />}
+                {tool === 'svc' && <ServiceTable sessionId={sessionId} active={shown(tool)} ask={ask} onAskAi={onAskAi} />}
                 {tool === 'disk' && (
-                  <DiskTable sessionId={sessionId} active={active === tool} onOpenExplorer={onOpenExplorer} />
+                  <DiskTable sessionId={sessionId} active={shown(tool)} onOpenExplorer={onOpenExplorer} />
                 )}
-                {tool === 'pkg' && <PkgTable sessionId={sessionId} active={active === tool} />}
+                {tool === 'pkg' && <PkgTable sessionId={sessionId} active={shown(tool)} />}
                 {tool === 'ctr' && (
                   <ContainerTable
                     sessionId={sessionId}
-                    active={active === tool}
+                    active={shown(tool)}
                     ask={ask}
                     // 컨테이너 접속은 터미널로 나간다 — 콘솔 창이 그 위를 덮고 있으면 안 보인다.
                     onSendInput={(text) => {

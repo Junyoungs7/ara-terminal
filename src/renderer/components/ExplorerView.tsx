@@ -30,6 +30,8 @@ let tabSeq = 0
 const newTabId = (): string => `et-${(tabSeq += 1)}`
 
 type Props = {
+  /** 창을 그릴지. 닫혀도 언마운트하지 않는다(#74) — 탭·경로가 남는다. */
+  visible: boolean
   sessions: Session[]
   profiles: ConnectionProfile[]
   workProfiles: WorkProfile[]
@@ -42,7 +44,7 @@ type Props = {
   reveal?: { profileId: string; path: string; at: number } | null
 }
 
-export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onClose, ask, askText, reveal }: Props): JSX.Element {
+export function ExplorerView({ visible, sessions, profiles, workProfiles, onConnect, onClose, ask, askText, reveal }: Props): JSX.Element {
   const [tabs, setTabs] = useState<ExpTab[]>(() => [{ id: newTabId(), target: LOCAL_TARGET, label: t('explorer.nav.thisPc') }])
   const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
   // 드래그 중인 탭 / 지금 위에 떠 있는 탭(놓을 자리 표시).
@@ -124,9 +126,17 @@ export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onCl
 
   return (
     // #72: 어디를 누르든 앞으로 온다 — 제목줄만 반응하면 본문을 보고 있을 때 못 꺼낸다.
+    // #74: 닫혀도 언마운트하지 않는다(탭·경로 유지) — 그리지만 않는다.
     <div
       className="exp-win"
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }}
+      style={{
+        left: rect.x,
+        top: rect.y,
+        width: rect.w,
+        height: rect.h,
+        zIndex: z,
+        ...(visible ? null : { display: 'none' })
+      }}
       onMouseDown={toFront}
       role="dialog"
       aria-label={t('explorer.title')}
@@ -260,7 +270,7 @@ export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onCl
             <div key={tab.id} className="exp-pane" style={tab.id === activeId ? undefined : { display: 'none' }}>
               <FileTree
                 session={sessionFor(tab)}
-                active={tab.id === activeId}
+                active={visible && tab.id === activeId}
                 cwd={tab.goto ?? null}
                 ask={ask}
                 askText={askText}

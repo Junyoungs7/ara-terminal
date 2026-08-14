@@ -97,7 +97,7 @@ test('EXP-2b 우측 기능 바 아이콘으로 탐색기를 연다', async ({ ar
   await ara.page.click('.act-item[data-activity="explorer"]')
   await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
   await ara.page.click('.act-item[data-activity="explorer"]')
-  await expect(ara.page.locator('.exp-win')).toHaveCount(0)
+  await expect(ara.page.locator('.exp-win')).not.toBeVisible() // #74: 창은 남고 숨는다
 })
 
 // EXP-13★ 떠 있는 창 둘이 겹치지 않고, 누르면 앞으로 온다 (#72, 2026-08-14)
