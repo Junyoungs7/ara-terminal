@@ -21,7 +21,32 @@ test('LOCAL-1 탭바 ＋ → 로컬 셸이 열리고 탭·패널·상태바가 �
   await expect(page.locator('.statusbar .sb-right .sb-seg').first().locator('.val')).toHaveText('1')
 })
 
-// LOCAL-2 는 "가운데 빈 상태 안내 버튼" 자체가 없어져 폐기됐다 — scenarios.md 에 사유 기록(UI-tabbar).
+// LOCAL-2★ 빈 화면 안내 (#66-8, 2026-08-14)
+// 이력이 두 번 뒤집힌 자리라 무엇을 지키는 검사인지 적어 둔다:
+//  · 원래 여기 [로컬 셸]/[SSH 연결] **버튼**이 있었다 → UI-tabbar(2026-08-04)에서 "탭바 ＋ 와
+//    완전히 같은 경로라 중복"으로 제거. 그때 LOCAL-2 도 함께 폐기됐다.
+//  · 2026-08-13 감사가 다시 지적했다 — 화면의 70% 가 **한 글자도 없이** 비어 있다.
+// 그래서 지금 지키는 성질은 "버튼이 있다"가 아니라 **"안내 문구가 있고, 버튼은 없다"** 이다.
+// 버튼이 다시 생기면 이 검사가 깨진다(중복 진입점 재발 방지).
+test('LOCAL-2★ 세션이 없으면 빈 화면이 다음 할 일을 안내한다(버튼은 두지 않는다)', async ({ ara }) => {
+  const { page } = ara
+  const guide = page.locator('.pane-grid .pane-empty')
+  await expect(guide).toBeVisible()
+  await expect(guide.locator('h2')).toHaveText('열린 세션이 없습니다')
+  // 진입점을 말로 가리킨다 — 실제 컨트롤은 탭바 ＋ 하나뿐이어야 한다.
+  await expect(guide).toContainText('＋')
+  await expect(guide.locator('button')).toHaveCount(0)
+  // 단축키 세 줄(새 셸·연결 관리자·통합 검색)이 함께 보인다.
+  await expect(guide.locator('.pe-keys kbd')).toHaveCount(3)
+  await expect(guide.locator('.pe-keys')).toContainText('Ctrl+Shift+T')
+
+  // 세션이 생기면 사라지고, 마지막 세션을 닫으면 다시 나온다.
+  await newLocalShell(page)
+  await expect(guide).toHaveCount(0)
+  await page.click('.term-tabbar .ttab .tx')
+  await dialogConfirm(page)
+  await expect(page.locator('.pane-grid .pane-empty')).toBeVisible()
+})
 
 // LOCAL-3 Ctrl+Shift+T 로 세션을 추가한다(탭만 늘고 패널은 교체)
 test('LOCAL-3 Ctrl+Shift+T 로 새 세션을 추가한다', async ({ ara }) => {

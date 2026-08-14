@@ -3,7 +3,13 @@ import { t } from '../i18n'
 import { IconClose } from '../components/icons'
 import { insertText } from '../components/aiBlocks'
 import { writeClipboard } from '../store/clipboardWrite'
-import { CATEGORY_LABEL, COMMAND_BOOK, searchCommandBook, type CommandEntry } from '../data/commandBook'
+import {
+  CATEGORY_LABEL,
+  COMMAND_BOOK,
+  DISTRO_LABEL,
+  searchCommandBook,
+  type CommandEntry
+} from '../data/commandBook'
 
 // F18 명령어 북 — 검색형 치트시트 오버레이. 새 패널·새 프레임워크를 만들지 않는다:
 // 바깥 껍데기(오버레이/카드/헤더/본문/푸터)는 Cheatsheet(.cheatsheet/.cs-*)를, 검색창은
@@ -51,6 +57,9 @@ function Item({ entry, open, onToggle, sessionId }: { entry: CommandEntry; open:
       <div className="cb-row" onClick={onToggle}>
         <span className="cb-cat">{CATEGORY_LABEL[entry.category]}</span>
         <code className="cb-cmd">{entry.cmd}</code>
+        {/* 계열 전용 명령은 접힌 줄에서 바로 보여야 한다 — 펼쳐야 안다면 잘못된 계열의 명령을
+            그대로 복사해 가게 된다(2026-08-14 준영님 지적). */}
+        {entry.distro && <span className={'cb-distro ' + entry.distro}>{DISTRO_LABEL[entry.distro]}</span>}
         <span className="cb-desc">{entry.desc}</span>
       </div>
       {open && (
@@ -58,6 +67,8 @@ function Item({ entry, open, onToggle, sessionId }: { entry: CommandEntry; open:
           {entry.examples.map((ex, i) => (
             <ExampleRow key={i} code={ex.cmd} note={ex.note} sessionId={sessionId} />
           ))}
+          {/* hint 는 사실 전달(배포판 차이·기본 미설치), caution 은 경고 — 톤을 섞지 않는다. */}
+          {entry.hint && <div className="cb-hint">{entry.hint}</div>}
           {entry.caution && <div className="cb-caution">⚠ {entry.caution}</div>}
         </div>
       )}

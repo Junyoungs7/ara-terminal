@@ -1206,8 +1206,13 @@ app.whenReady().then(async () => {
     await clickTab(idA)
     const splitKept = /R1버퍼A/.test(shown()) && /R1버퍼B/.test(shown())
 
-    // ② 칸 닫기(R9a: 그 칸의 세션 종료) — 마지막 하나까지 닫으면 완전히 빈 화면이 되어야 한다
-    // (안내 문구 없음, UI-tabbar). 여기 세션은 전부 로컬이라 확인 다이얼로그는 안 뜬다.
+    // ② 칸 닫기(R9a: 그 칸의 세션 종료) — 마지막 하나까지 닫으면 패널이 0 이 되고 빈 화면 안내가 뜬다.
+    // 이력(두 번 뒤집힌 자리): UI-tabbar(2026-08-04)가 여기 있던 [로컬 셸]/[SSH 연결] 버튼을
+    // "탭바 ＋ 와 같은 경로라 중복"으로 없애면서 **안내 자체가 통째로** 사라졌고, 이 검사도
+    // "안내가 없어야 한다"를 지키고 있었다. 2026-08-13 감사가 다시 지적했다 — 화면의 70% 가
+    // 한 글자도 없이 비어 있다(#66-8). 지금 지키는 것은 **안내는 있고 버튼은 없다** 이다:
+    // 중복 진입점을 만들지 않는다는 UI-tabbar 의 판단은 그대로 살린다.
+    // 여기 세션은 전부 로컬이라 확인 다이얼로그는 안 뜬다.
     const closeFocused = async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, shiftKey: true, bubbles: true }))
     await wait(200)
@@ -1218,7 +1223,12 @@ app.whenReady().then(async () => {
     const panesBeforeLast = paneCount()
     await closeFocused()
     const panesAfterLast = paneCount()
-    const emptyState = document.querySelectorAll('.pane-grid .pane').length === 0 && !document.querySelector('.pane-empty')
+    const emptyGuide = document.querySelector('.pane-grid .pane-empty')
+    const emptyState =
+      document.querySelectorAll('.pane-grid .pane').length === 0 &&
+      !!emptyGuide &&
+      emptyGuide.textContent.includes('＋') &&
+      emptyGuide.querySelectorAll('button').length === 0
 
     // ③ 서버 노드 더블클릭 → 새 세션 정확히 1개(원클릭은 선택/포커스만).
     // 카드형 트리 개편 후 세션 카드는 서버 노드 아래가 아니라 위쪽 [열린 세션] 섹션에 산다 —
@@ -1266,7 +1276,7 @@ app.whenReady().then(async () => {
   checks.push(['R1①: B 로 재전환 시 B 버퍼 보존', r1.bKept === true])
   checks.push(['R1①: 분할 상태 교차 전환에도 양쪽 버퍼 보존', r1.panesAfterSplit === 2 && r1.splitKept === true])
   checks.push(['R1②: 단일 패널 × → 패널 0', r1.panesBeforeLast === 1 && r1.panesAfterLast === 0])
-  checks.push(['R1②: 패널 0 이면 안내 없이 완전히 빈 화면(탭바 ＋ 만 진입점, UI-tabbar)', r1.emptyState === true])
+  checks.push(['#66-8: 패널 0 이면 안내가 뜨고 버튼은 없다(진입점은 탭바 ＋ 하나)', r1.emptyState === true])
   checks.push(['R1③: 서버 노드 더블클릭 → 세션 정확히 1개', r1.dblAfter - r1.dblBefore === 1])
   checks.push([
     'R1④: 사이드바 빈 영역 우클릭 → 로컬 셸/새 연결/새 그룹/작업 프로필',

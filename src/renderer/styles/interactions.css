@@ -289,6 +289,33 @@
   font-size: var(--fs-md);
   color: var(--warn);
 }
+/* 배포판 계열 배지(2026-08-14). 명령 바로 뒤에 붙어 "이건 우분투 전용"을 한눈에 알린다.
+   경고가 아니므로 --warn/--err 을 쓰지 않는다 — 중립 표면 + 계열별 테두리 색만 다르다. */
+.cb-distro {
+  flex: none;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  color: var(--text-lo);
+  white-space: nowrap;
+}
+.cb-distro.deb {
+  border-color: var(--accent-line);
+  color: var(--accent-bright);
+}
+.cb-distro.rpm {
+  border-color: var(--purple-line);
+  color: var(--purple);
+}
+/* 사실 전달(배포판 차이·기본 미설치). caution 의 --warn 과 톤을 나눈다. */
+.cb-hint {
+  font-size: var(--fs-md);
+  color: var(--text-lo);
+  word-break: keep-all;
+}
 
 /* ---------- 컴팩트 컨텍스트 메뉴 (사이드바 트리 우클릭 / 탭바 ＋ 메뉴) ---------- */
 /* 스마트 팔레트와 같은 표면·헤어라인·등장 애니메이션을 쓰되, 그리드 대신 목록 행으로 컴팩트하게. */

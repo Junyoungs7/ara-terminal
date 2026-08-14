@@ -90,6 +90,35 @@ test('CB-7 존재하지 않는 검색어는 결과 없음 안내를 보여 준�
   await expect(page.locator(`${OPEN} .cb-list`)).toHaveCount(0)
 })
 
+// CB-9★ 배포판 계열 (2026-08-14 준영님: "리눅스도 우분투·RHEL 별로 다르잖아")
+// 지키는 성질 셋: ① 계열 전용 명령은 **접힌 줄에서** 계열이 보인다(펼쳐야 안다면 잘못된 계열의
+// 명령을 그대로 복사해 간다) ② 반대 계열 대안을 알려 준다 ③ 예시·힌트에만 있는 낱말로도 찾힌다.
+test('CB-9★ 계열 전용 명령에 배지가 붙고 반대 계열 대안을 알려 준다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await openCommandBook(page)
+
+  // ③ 'dnf' 는 우분투 항목의 힌트에도, RHEL 항목의 명령에도 있다 — 둘 다 걸려야 한다.
+  await page.fill(`${OPEN} .sp-search input`, 'dnf')
+  await expect(page.locator(`${OPEN} .cb-item`).first()).toBeVisible()
+  const rows = page.locator(`${OPEN} .cb-item`)
+  expect(await rows.count()).toBeGreaterThan(1)
+
+  // ① 배지가 접힌 줄에 있다. (행은 명령으로 집는다 — 'apt install' 은 다른 항목의 설치 안내
+  //    힌트에도 들어 있어서 첫 행이 그 항목일 수 있다.)
+  await page.fill(`${OPEN} .sp-search input`, 'apt install')
+  const apt = page.locator(`${OPEN} .cb-item:has(.cb-cmd:text-is("apt install"))`)
+  await expect(apt.locator('.cb-distro')).toHaveText('우분투/데비안')
+
+  // ② 펼치면 반대 계열 대안이 힌트로 나온다.
+  await apt.locator('.cb-row').click()
+  await expect(apt.locator('.cb-hint')).toContainText('dnf')
+
+  // 공통(POSIX) 명령에는 배지가 없다 — 아무 데나 붙으면 배지의 뜻이 사라진다.
+  await page.fill(`${OPEN} .sp-search input`, 'tar -czf')
+  await expect(page.locator(`${OPEN} .cb-item:has(.cb-cmd:text-is("tar -czf")) .cb-distro`)).toHaveCount(0)
+})
+
 // CB-8 ESC · 바깥 클릭 · ✕ 세 가지 닫는 경로 모두 확인한다
 test('CB-8 ESC·바깥 클릭·✕ 세 경로 모두로 닫힌다', async ({ ara }) => {
   const { page } = ara

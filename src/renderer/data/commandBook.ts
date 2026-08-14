@@ -31,13 +31,29 @@ export const CATEGORY_LABEL: Record<CommandCategory, string> = {
 
 export type CommandExample = { cmd: string; note?: string }
 
+// 배포판 계열. 준영님 지적(2026-08-14): "리눅스도 우분투·RHEL 별로 다르잖아."
+// 계열을 가르는 것은 **패키지 관리자뿐**이다 — 파일·프로세스·텍스트·압축은 POSIX 공통이라
+// 태그를 달지 않는다. 태그가 붙은 항목은 반대 계열에 그 명령이 아예 없다.
+export type DistroFamily = 'deb' | 'rpm'
+
+export const DISTRO_LABEL: Record<DistroFamily, string> = {
+  deb: '우분투/데비안',
+  rpm: 'RHEL/CentOS'
+}
+
 export type CommandEntry = {
   id: string
   category: CommandCategory
   cmd: string
   desc: string
   examples: readonly CommandExample[]
+  // 되돌릴 수 없거나 서비스에 영향을 주는 명령의 경고(⚠ 로 표시).
   caution?: string
+  // 이 계열에만 있는 명령. 배지로 표시하고 검색어로도 걸린다.
+  distro?: DistroFamily
+  // 배포판·버전에 따라 없거나 다른 것을 쓰는 경우의 안내(경고가 아니라 사실 전달).
+  // "기본 미설치"가 대부분이다 — RHEL 최소 설치엔 htop·jq·ncdu·dig 가 없다.
+  hint?: string
 }
 
 // 50~80개 규모. 실제로 자주 쓰는 것만 — 기초부터 조합형까지.
@@ -59,7 +75,7 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
   // ── 프로세스 ──
   { id: 'ps', category: 'process', cmd: 'ps aux', desc: '실행 중인 모든 프로세스를 상세히 봅니다.', examples: [{ cmd: 'ps aux | grep node' }] },
   { id: 'top', category: 'process', cmd: 'top', desc: 'CPU·메모리 사용량을 실시간으로 봅니다.', examples: [{ cmd: 'top' }] },
-  { id: 'htop', category: 'process', cmd: 'htop', desc: 'top 보다 보기 좋은 대화형 프로세스 뷰어입니다.', examples: [{ cmd: 'htop' }] },
+  { id: 'htop', category: 'process', cmd: 'htop', desc: 'top 보다 보기 좋은 대화형 프로세스 뷰어입니다.', examples: [{ cmd: 'htop' }], hint: '기본 미설치가 흔합니다 — apt install htop / dnf install htop' },
   { id: 'kill', category: 'process', cmd: 'kill -9', desc: '프로세스를 PID 로 강제 종료합니다.', examples: [{ cmd: 'kill -9 41231' }], caution: '저장하지 않은 작업이 즉시 사라집니다.' },
   { id: 'pkill', category: 'process', cmd: 'pkill -f', desc: '명령줄 문자열로 프로세스를 찾아 종료합니다.', examples: [{ cmd: 'pkill -f "node server.js"' }], caution: '이름이 겹치는 다른 프로세스도 함께 죽을 수 있습니다.' },
   { id: 'nohup', category: 'process', cmd: 'nohup … &', desc: '터미널을 닫아도 계속 도는 백그라운드 실행입니다.', examples: [{ cmd: 'nohup ./run.sh > run.log 2>&1 &' }] },
@@ -70,22 +86,22 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
   { id: 'lsof', category: 'process', cmd: 'lsof -p', desc: '프로세스가 열고 있는 파일·소켓 목록을 봅니다.', examples: [{ cmd: 'lsof -p 41231' }] },
 
   // ── 네트워크 ──
-  { id: 'ss', category: 'network', cmd: 'ss -tlnp', desc: '리슨 중인 TCP 포트와 소유 프로세스를 봅니다.', examples: [{ cmd: 'ss -tlnp' }] },
+  { id: 'ss', category: 'network', cmd: 'ss -tlnp', desc: '리슨 중인 TCP 포트와 소유 프로세스를 봅니다.', examples: [{ cmd: 'ss -tlnp' }, { cmd: 'netstat -tlnp', note: 'ss 가 없는 구버전' }], hint: 'RHEL 6 이하에는 ss 가 없습니다 — netstat 을 쓰세요.' },
   { id: 'curl', category: 'network', cmd: 'curl -sS', desc: 'HTTP 요청을 보내고 조용히 결과만 봅니다.', examples: [{ cmd: 'curl -sS -o /dev/null -w "%{http_code}" https://example.com' }] },
   { id: 'ping', category: 'network', cmd: 'ping -c', desc: '지정한 횟수만큼 핑을 보내고 멈춥니다.', examples: [{ cmd: 'ping -c 4 8.8.8.8' }] },
-  { id: 'dig', category: 'network', cmd: 'dig', desc: 'DNS 레코드를 조회합니다.', examples: [{ cmd: 'dig example.com +short' }] },
-  { id: 'traceroute', category: 'network', cmd: 'traceroute', desc: '목적지까지 경로의 각 홉을 봅니다.', examples: [{ cmd: 'traceroute example.com' }] },
-  { id: 'nc', category: 'network', cmd: 'nc -zv', desc: '지정 포트가 열려 있는지 빠르게 확인합니다.', examples: [{ cmd: 'nc -zv example.com 443' }] },
+  { id: 'dig', category: 'network', cmd: 'dig', desc: 'DNS 레코드를 조회합니다.', examples: [{ cmd: 'dig example.com +short' }], hint: '별도 패키지입니다 — apt install dnsutils / dnf install bind-utils' },
+  { id: 'traceroute', category: 'network', cmd: 'traceroute', desc: '목적지까지 경로의 각 홉을 봅니다.', examples: [{ cmd: 'traceroute example.com' }], hint: '기본 미설치가 흔합니다 — apt install traceroute / dnf install traceroute' },
+  { id: 'nc', category: 'network', cmd: 'nc -zv', desc: '지정 포트가 열려 있는지 빠르게 확인합니다.', examples: [{ cmd: 'nc -zv example.com 443' }], hint: '기본 미설치가 흔합니다 — apt install netcat-openbsd / dnf install nmap-ncat' },
   { id: 'wget', category: 'network', cmd: 'wget', desc: 'URL 에서 파일을 내려받습니다.', examples: [{ cmd: 'wget https://example.com/file.tar.gz' }] },
   { id: 'ip-addr', category: 'network', cmd: 'ip addr', desc: '네트워크 인터페이스와 할당된 IP 를 봅니다.', examples: [{ cmd: 'ip addr show' }] },
-  { id: 'iptables-list', category: 'network', cmd: 'iptables -L -n', desc: '현재 방화벽 규칙을 봅니다.', examples: [{ cmd: 'iptables -L -n -v' }] },
+  { id: 'iptables-list', category: 'network', cmd: 'iptables -L -n', desc: '현재 방화벽 규칙을 봅니다.', examples: [{ cmd: 'iptables -L -n -v' }, { cmd: 'firewall-cmd --list-all', note: 'RHEL 7+ firewalld' }, { cmd: 'ufw status verbose', note: '우분투 ufw' }], hint: 'RHEL 7+ 는 firewalld, 우분투는 ufw 로 관리합니다 — iptables 로 직접 보면 그 규칙이 그대로 보이지 않을 수 있습니다.' },
 
   // ── 디스크 ──
   { id: 'du', category: 'disk', cmd: 'du -sh', desc: '디렉터리 용량을 사람이 읽기 쉬운 단위로 합산합니다.', examples: [{ cmd: 'du -sh /var/log/*' }, { cmd: 'du -sh /var/log/* | sort -rh | head -10', note: '용량 상위 10개' }] },
   { id: 'mount', category: 'disk', cmd: 'mount', desc: '현재 마운트된 파일시스템 목록을 봅니다.', examples: [{ cmd: 'mount | grep /data' }] },
   { id: 'lsblk', category: 'disk', cmd: 'lsblk', desc: '블록 디바이스(디스크·파티션) 트리를 봅니다.', examples: [{ cmd: 'lsblk' }] },
   { id: 'fdisk', category: 'disk', cmd: 'fdisk -l', desc: '디스크 파티션 테이블을 상세히 봅니다.', examples: [{ cmd: 'fdisk -l' }] },
-  { id: 'ncdu', category: 'disk', cmd: 'ncdu', desc: '디렉터리 용량을 대화형으로 파고들며 확인합니다.', examples: [{ cmd: 'ncdu /var/log' }] },
+  { id: 'ncdu', category: 'disk', cmd: 'ncdu', desc: '디렉터리 용량을 대화형으로 파고들며 확인합니다.', examples: [{ cmd: 'ncdu /var/log' }], hint: '기본 미설치입니다 — apt install ncdu / dnf install ncdu(EPEL 필요)' },
 
   // ── 권한 ──
   { id: 'chmod', category: 'perm', cmd: 'chmod', desc: '파일 접근 권한을 바꿉니다.', examples: [{ cmd: 'chmod 644 config.yml' }, { cmd: 'chmod +x deploy.sh' }] },
@@ -97,15 +113,17 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
   { id: 'umask', category: 'perm', cmd: 'umask', desc: '새로 만들 파일의 기본 권한 마스크를 봅니다.', examples: [{ cmd: 'umask' }] },
 
   // ── 패키지 ──
-  { id: 'apt-update', category: 'package', cmd: 'apt update && apt upgrade', desc: '패키지 목록을 갱신하고 설치된 패키지를 올립니다.', examples: [{ cmd: 'sudo apt update && sudo apt upgrade -y' }] },
-  { id: 'apt-install', category: 'package', cmd: 'apt install', desc: 'Debian/Ubuntu 계열 패키지를 설치합니다.', examples: [{ cmd: 'sudo apt install -y nginx' }] },
-  { id: 'yum-install', category: 'package', cmd: 'yum install', desc: 'RHEL/CentOS 계열 패키지를 설치합니다.', examples: [{ cmd: 'sudo yum install -y nginx' }] },
-  { id: 'dpkg-query', category: 'package', cmd: 'dpkg -l', desc: '설치된 .deb 패키지 목록을 봅니다.', examples: [{ cmd: 'dpkg -l | grep nginx' }] },
+  { id: 'apt-update', category: 'package', cmd: 'apt update && apt upgrade', desc: '패키지 목록을 갱신하고 설치된 패키지를 올립니다.', distro: 'deb', examples: [{ cmd: 'sudo apt update && sudo apt upgrade -y' }], hint: 'RHEL 계열은 dnf upgrade 하나로 끝납니다(목록 갱신이 따로 없습니다).' },
+  { id: 'dnf-upgrade', category: 'package', cmd: 'dnf upgrade', desc: '설치된 패키지를 최신으로 올립니다.', distro: 'rpm', examples: [{ cmd: 'sudo dnf upgrade -y' }, { cmd: 'sudo yum update -y', note: 'RHEL 7 이하' }], hint: '우분투 계열은 apt update && apt upgrade 입니다.' },
+  { id: 'apt-install', category: 'package', cmd: 'apt install', desc: '패키지를 설치합니다.', distro: 'deb', examples: [{ cmd: 'sudo apt install -y nginx' }], hint: 'RHEL 계열은 dnf install / yum install 입니다.' },
+  { id: 'yum-install', category: 'package', cmd: 'dnf install', desc: '패키지를 설치합니다.', distro: 'rpm', examples: [{ cmd: 'sudo dnf install -y nginx' }, { cmd: 'sudo yum install -y nginx', note: 'RHEL 7 이하' }], hint: 'RHEL 8+ 는 dnf 가 정식이고 yum 은 dnf 로 가는 링크입니다. 우분투 계열은 apt install 입니다.' },
+  { id: 'rpm-qa', category: 'package', cmd: 'rpm -qa', desc: '설치된 패키지 목록을 봅니다.', distro: 'rpm', examples: [{ cmd: 'rpm -qa | grep nginx' }], hint: '우분투 계열은 dpkg -l 입니다.' },
+  { id: 'dpkg-query', category: 'package', cmd: 'dpkg -l', desc: '설치된 패키지 목록을 봅니다.', distro: 'deb', examples: [{ cmd: 'dpkg -l | grep nginx' }], hint: 'RHEL 계열은 rpm -qa 입니다.' },
   { id: 'npm-ci', category: 'package', cmd: 'npm ci', desc: 'package-lock.json 대로 정확히 재설치합니다.', examples: [{ cmd: 'npm ci' }] },
   { id: 'pip-install', category: 'package', cmd: 'pip install -r', desc: 'requirements.txt 의 파이썬 패키지를 설치합니다.', examples: [{ cmd: 'pip install -r requirements.txt' }] },
 
   // ── systemd ──
-  { id: 'systemctl-status', category: 'systemd', cmd: 'systemctl status', desc: '서비스의 현재 상태를 봅니다.', examples: [{ cmd: 'systemctl status nginx' }] },
+  { id: 'systemctl-status', category: 'systemd', cmd: 'systemctl status', desc: '서비스의 현재 상태를 봅니다.', examples: [{ cmd: 'systemctl status nginx' }, { cmd: 'service nginx status', note: 'systemd 이전(RHEL 6 등)' }], hint: 'systemd 를 쓰는 배포판 전용입니다(우분투 16.04+ · RHEL 7+).' },
   { id: 'systemctl-restart', category: 'systemd', cmd: 'systemctl restart', desc: '서비스를 재시작합니다.', examples: [{ cmd: 'systemctl restart nginx' }], caution: '재시작 중 짧게 서비스가 끊깁니다.' },
   { id: 'systemctl-enable', category: 'systemd', cmd: 'systemctl enable', desc: '부팅 시 서비스가 자동 시작되게 등록합니다.', examples: [{ cmd: 'systemctl enable nginx' }] },
   { id: 'journalctl-u', category: 'systemd', cmd: 'journalctl -u', desc: '특정 서비스의 로그만 봅니다.', examples: [{ cmd: 'journalctl -u nginx -n 100' }, { cmd: 'journalctl -u nginx -f', note: '실시간 팔로우' }] },
@@ -125,7 +143,7 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
   { id: 'find-mtime', category: 'search', cmd: 'find -mtime', desc: '수정 시각 기준으로 파일을 찾습니다.', examples: [{ cmd: 'find /tmp -mtime +7 -type f' }] },
   { id: 'grep-r', category: 'search', cmd: 'grep -rn', desc: '디렉터리 전체에서 줄 번호와 함께 문자열을 찾습니다.', examples: [{ cmd: "grep -rn 'TODO' ./src" }] },
   { id: 'which', category: 'search', cmd: 'which', desc: '명령어의 실행 경로를 찾습니다.', examples: [{ cmd: 'which node' }] },
-  { id: 'locate', category: 'search', cmd: 'locate', desc: '미리 만들어진 색인으로 매우 빠르게 파일을 찾습니다.', examples: [{ cmd: 'locate nginx.conf' }] },
+  { id: 'locate', category: 'search', cmd: 'locate', desc: '미리 만들어진 색인으로 매우 빠르게 파일을 찾습니다.', examples: [{ cmd: 'locate nginx.conf' }], hint: '기본 미설치이고, 설치해도 updatedb 로 색인을 만들기 전에는 결과가 비어 있습니다.' },
 
   // ── 텍스트처리 ──
   { id: 'grep', category: 'text', cmd: 'grep -i', desc: '대소문자 구분 없이 패턴을 찾습니다.', examples: [{ cmd: "grep -i 'error' app.log" }] },
@@ -140,7 +158,7 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
   { id: 'less', category: 'text', cmd: 'less', desc: '큰 파일을 스크롤하며 봅니다(끝까지 읽지 않아도 빠릅니다).', examples: [{ cmd: 'less app.log' }] },
   { id: 'diff', category: 'text', cmd: 'diff -u', desc: '두 파일의 차이를 unified 형식으로 봅니다.', examples: [{ cmd: 'diff -u old.conf new.conf' }] },
   { id: 'xargs', category: 'text', cmd: 'xargs', desc: '표준입력의 각 줄을 다음 명령의 인자로 넘깁니다.', examples: [{ cmd: "find . -name '*.tmp' | xargs rm" }], caution: '삭제 명령과 조합하면 되돌릴 수 없습니다.' },
-  { id: 'jq', category: 'text', cmd: 'jq', desc: 'JSON 을 파싱하고 필드를 뽑아냅니다.', examples: [{ cmd: "curl -s https://api.example.com/status | jq '.ok'" }] },
+  { id: 'jq', category: 'text', cmd: 'jq', desc: 'JSON 을 파싱하고 필드를 뽑아냅니다.', examples: [{ cmd: "curl -s https://api.example.com/status | jq '.ok'" }], hint: '기본 미설치가 흔합니다 — apt install jq / dnf install jq' },
 
   // ── tmux (FB-monitor: FB-0004 — 사용법을 몰라 못 쓴다는 피드백) ──
   // prefix 키(기본 Ctrl+b)로 시작하는 조작에도 대응하는 명령줄이 대부분 있다 — [터미널로 보내기]로
@@ -161,5 +179,15 @@ export const COMMAND_BOOK: readonly CommandEntry[] = [
 export function searchCommandBook(entries: readonly CommandEntry[], query: string): CommandEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return [...entries]
-  return entries.filter((e) => e.cmd.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q))
+  // 명령·설명뿐 아니라 **예시·힌트·계열 라벨**까지 본다. RHEL 사용자가 'dnf'·'rhel' 로 찾을 때
+  // 그 낱말이 예시나 힌트에만 있는 경우가 많아서다(예: iptables 항목의 firewall-cmd).
+  return entries.filter((e) =>
+    [
+      e.cmd,
+      e.desc,
+      e.hint ?? '',
+      e.distro ? DISTRO_LABEL[e.distro] : '',
+      ...e.examples.map((ex) => ex.cmd + ' ' + (ex.note ?? ''))
+    ].some((field) => field.toLowerCase().includes(q))
+  )
 }

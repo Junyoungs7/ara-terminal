@@ -220,6 +220,28 @@ export function PaneGrid({
       onDragLeave={onGridDragLeave}
       onDrop={onGridDrop}
     >
+      {/* #66-8(2026-08-14): 세션이 없으면 화면의 70% 가 한 글자도 없이 비어 있었다. 사이드바의
+          260px 짜리 안내는 정확하지만 눈은 큰 빈 칸으로 간다.
+          **버튼은 두지 않는다** — 여기 있던 [로컬 셸]/[SSH 연결] 버튼은 UI-tabbar(2026-08-04)에서
+          "탭바 ＋ 와 완전히 같은 경로라 중복"이라는 이유로 일부러 없앴다(scenarios.md LOCAL-2).
+          그 판단은 그대로 두고, 빠져 있던 것(어디를 눌러야 하는지 알려 주는 문장)만 채운다. */}
+      {empty && (
+        <div className="pane-empty">
+          <h2>{t('pane.empty.title')}</h2>
+          <p>{t('pane.empty.desc')}</p>
+          <div className="pe-keys">
+            <span>
+              <kbd>Ctrl+Shift+T</kbd> {t('pane.empty.key.new')}
+            </span>
+            <span>
+              <kbd>Ctrl+Shift+M</kbd> {t('pane.empty.key.conn')}
+            </span>
+            <span>
+              <kbd>F1</kbd> {t('pane.empty.key.palette')}
+            </span>
+          </div>
+        </div>
+      )}
       {slots.map(({ key, cell, session, err }) => {
         // 패널에 없거나(배경 탭) 최대화로 가려진 세션 → 숨김. 마운트는 유지한다.
         const hidden = !cell || (maximizedId != null && maximizedId !== cell.id)

@@ -1665,6 +1665,50 @@
   background: var(--bg-terminal);
   position: relative;
 }
+/* #66-8: 세션이 없을 때의 첫 화면 안내. 그리드가 비면 이 블록 하나만 놓이고 가운데로 모인다.
+   시작 지점을 여기 두는 것이 목적이라 문구만이 아니라 실제 버튼을 둔다. */
+.pane-empty {
+  place-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  max-width: 460px;
+  user-select: none;
+}
+.pane-empty h2 {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-mid);
+}
+.pane-empty p {
+  font-size: var(--fs-base);
+  color: var(--text-lo);
+  word-break: keep-all;
+}
+.pe-keys {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+}
+.pe-keys kbd {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-lo);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+
 /* F4a 분할 그리드 — 목업 variant-final-3 .pane / .div-* 그대로. */
 .pane {
   display: flex;
