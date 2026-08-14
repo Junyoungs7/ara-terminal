@@ -15,6 +15,7 @@ import { maskSecrets } from '@shared/maskSecrets'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
+import { remoteError } from '../store/remoteState'
 
 // ── 순수 함수(단위 테스트 대상: tests/serverConsole.test.ts) ────────────────
 
@@ -89,6 +90,8 @@ const ACTIONS: SvcAction[] = ['start', 'stop', 'restart']
 
 export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
   const [rows, setRows] = useState<SvcRow[]>([])
+  // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
+  const [err, setErr] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SvcSort>(DEFAULT_SVC_SORT)
@@ -100,6 +103,7 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
     setRows([])
     setSelected(null)
     setMissing(false)
+    setErr(null)
   }, [sessionId])
 
   useEffect(() => {
@@ -110,7 +114,9 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
       // 한 줄도 못 읽었을 때만 "systemd 가 없는 서버"를 의심한다 — 설명 칸은 자유 문자열이라
       // 정상 목록에도 'not found' 같은 낱말이 섞일 수 있다.
       setMissing(parsed.length === 0 && systemdMissing(d.out))
-      setRows(parsed)
+      // 행이 하나라도 나왔으면 성공이다 — 행이 있는 채로 오류를 띄우지 않는다(remoteState 규칙).
+      setErr(remoteError(d, parsed.length))
+      if (parsed.length > 0) setRows(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'svc.list')
     return () => {
@@ -259,7 +265,8 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
               })}
             </tbody>
           </table>
-          {rows.length === 0 && <div className="con-empty">{t('console.svc.loading')}</div>}
+          {rows.length === 0 && err && <div className="con-empty bad">{err}</div>}
+          {rows.length === 0 && !err && <div className="con-empty">{t('console.svc.loading')}</div>}
           {rows.length > 0 && visible.length === 0 && <div className="con-empty">{t('console.svc.noMatch')}</div>}
         </div>
       )}

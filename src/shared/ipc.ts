@@ -29,7 +29,7 @@ import type {
 import type { AiCliRecent } from './aiCli'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
-import type { RunResult } from '../main/remote/RemoteConsoleService'
+import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
 
@@ -326,7 +326,15 @@ export type AiDelta = { turnId: string; text: string }
 // F26: watch 한 명령의 한 바퀴 결과(remote:data). 파싱은 렌더러가 shared/remoteCatalog.ts 의 파서로
 // 한다(main 은 명령을 고르고 출력을 나르기만 한다). 콘솔 창이 하나뿐이라 채널을 대상별로 쪼개지 않고
 // 페이로드에 sessionId·cmdId 를 싣는다 — ai:delta 와 같은 규칙(구독자를 나눌 이유가 없다).
-export type RemoteData = { sessionId: string; cmdId: CmdId; out: string }
+export type RemoteData = {
+  sessionId: string
+  cmdId: CmdId
+  out: string
+  /** 원격 종료코드. 파싱 결과가 비었는데 이 값이 0 이 아니면 out 이 곧 오류 메시지다(#68). */
+  code?: number
+  /** 한 바퀴가 아예 실패했을 때의 사유(exec·timeout·noSession·badArgs). 이때 out 은 빈 문자열이다. */
+  err?: RunFailReason
+}
 
 // MS-1: SSH 대량 붙여넣기 유실 방지용 write ack 이벤트 계약(옵션 준비 — 현재 소비자 없음).
 // ssh2 stream.write 콜백이 오면 session:inputAck:{id}로 푸시할 수 있도록 타입만 확정한다.

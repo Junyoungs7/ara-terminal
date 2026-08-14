@@ -11,6 +11,7 @@ import { parseDf, parseDu, type DirUsage, type DiskRow } from '@shared/remoteCat
 import { humanSize } from './filePath'
 import { IconBack, IconRefresh } from './icons'
 import { t } from '../i18n'
+import { remoteError } from '../store/remoteState'
 
 // ── 순수 함수(단위 테스트 대상: tests/serverConsole.test.ts) ────────────────
 
@@ -103,6 +104,8 @@ type Props = {
 
 export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Element {
   const [disks, setDisks] = useState<DiskRow[]>([])
+  // #68: df 읽기 실패 사유(아래 err 는 du 전용이라 이름을 나눈다).
+  const [dfErr, setDfErr] = useState<string | null>(null)
   const [showVirtual, setShowVirtual] = useState(false)
   // mount: 위 표에서 고른 파일시스템. path: 지금 파고든 위치(mount 이거나 그 아래).
   const [mount, setMount] = useState<string | null>(null)
@@ -118,6 +121,7 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
   // 서버가 바뀌면 위·아래를 함께 버린다. 남겨 두면 A 의 /data 목록을 B 의 것으로 착각한다.
   useEffect(() => {
     setDisks([])
+    setDfErr(null)
     setMount(null)
     setPath(null)
     setDirs([])
@@ -132,7 +136,11 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
   useEffect(() => {
     if (!active || !sessionId) return
     const off = window.ev?.remote.onData((d) => {
-      if (d.sessionId === sessionId && d.cmdId === 'disk.usage') setDisks(parseDf(d.out))
+      if (d.sessionId !== sessionId || d.cmdId !== 'disk.usage') return
+      const parsed = parseDf(d.out)
+      // #68: 행이 하나라도 나왔으면 성공. 아니면 사유를 그대로 띄운다(예전엔 "불러오는 중"에서 멈췄다).
+      setDfErr(remoteError(d, parsed.length))
+      if (parsed.length > 0) setDisks(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'disk.usage')
     return () => {
@@ -226,7 +234,8 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
             })}
           </tbody>
         </table>
-        {disks.length === 0 && <div className="con-empty">{t('console.disk.loading')}</div>}
+        {disks.length === 0 && dfErr && <div className="con-empty bad">{dfErr}</div>}
+        {disks.length === 0 && !dfErr && <div className="con-empty">{t('console.disk.loading')}</div>}
         {disks.length > 0 && shown.length === 0 && <div className="con-empty">{t('console.disk.none')}</div>}
       </div>
 

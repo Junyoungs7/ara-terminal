@@ -14,6 +14,7 @@ import { maskSecrets } from '@shared/maskSecrets'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
+import { remoteError } from '../store/remoteState'
 
 // ── 순수 함수(단위 테스트 대상: tests/serverConsole.test.ts) ────────────────
 
@@ -95,6 +96,8 @@ const COLS: { key: ProcSortKey; cls: string }[] = [
 
 export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
   const [rows, setRows] = useState<ProcRow[]>([])
+  // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
+  const [err, setErr] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<ProcSort>(DEFAULT_SORT)
   const [selected, setSelected] = useState<number | null>(null)
@@ -104,13 +107,18 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
   useEffect(() => {
     setRows([])
     setSelected(null)
+    setErr(null)
   }, [sessionId])
 
   // 구독 = (이 탭이 보이는 동안) 2.5초마다 한 바퀴. 탭을 닫거나 창을 닫으면 unwatch 가 나간다.
   useEffect(() => {
     if (!active || !sessionId) return
     const off = window.ev?.remote.onData((d) => {
-      if (d.sessionId === sessionId && d.cmdId === 'ps.list') setRows(parsePs(d.out))
+      if (d.sessionId !== sessionId || d.cmdId !== 'ps.list') return
+      const parsed = parsePs(d.out)
+      // 행이 하나라도 나왔으면 성공이다 — 행이 있는 채로 오류를 띄우지 않는다(remoteState 규칙).
+      setErr(remoteError(d, parsed.length))
+      if (parsed.length > 0) setRows(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'ps.list')
     return () => {
@@ -259,7 +267,8 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
             })}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="con-empty">{t('console.ps.loading')}</div>}
+        {rows.length === 0 && err && <div className="con-empty bad">{err}</div>}
+        {rows.length === 0 && !err && <div className="con-empty">{t('console.ps.loading')}</div>}
         {rows.length > 0 && visible.length === 0 && <div className="con-empty">{t('console.ps.noMatch')}</div>}
       </div>
     </div>

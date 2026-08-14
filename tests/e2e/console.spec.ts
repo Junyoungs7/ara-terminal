@@ -33,7 +33,7 @@ const PS_OUT = `     1 root      91.2  0.1    12288 Ss  1902133 /sbin/init splas
 
 type PsHarness = {
   /** 다음 바퀴부터 반영되는 ps 출력. */
-  state: { ps: string; killCode: number; killErr: string }
+  state: { ps: string; psCode: number; killCode: number; killErr: string }
   /** 원격에 실제로 나간 kill 명령. 취소했으면 비어 있어야 한다. */
   kills: string[]
   /** ps 를 원격에서 돌린 횟수(폴링이 멈췄는지 판정). */
@@ -42,13 +42,17 @@ type PsHarness = {
 }
 
 function makePs(): PsHarness {
-  const state = { ps: PS_OUT, killCode: 0, killErr: '' }
+  // psCode: ps 한 바퀴의 종료코드(#68 실패 경로 재현용). 0 이 아니고 출력이 있으면 오류로 본다.
+  const state = { ps: PS_OUT, psCode: 0, killCode: 0, killErr: '' }
   const kills: string[] = []
   let rounds = 0
   const exec = (command: string, stream: ServerChannel): void => {
     if (command.startsWith('ps -eo')) {
       rounds++
-      stream.write(state.ps)
+      if (state.ps) stream.write(state.ps)
+      stream.exit(state.psCode)
+      stream.end()
+      return
     } else if (command.startsWith('kill -')) {
       kills.push(command)
       // 카탈로그의 kill 은 `2>&1` 이라 실서버에서도 오류가 stdout 으로 온다 — 그대로 흉내 낸다.
@@ -99,6 +103,30 @@ test('CON-1 액티비티 바에서 런치패드가 열리고 9칸이 전부 살�
   // 떠 있는 창이다 — 뒤쪽 본문은 그대로 보인다(탐색기와 같은 규칙).
   await expect(ara.page.locator('.middle')).toBeVisible()
   await shot(ara.page, 'F26-R1-launchpad.png')
+})
+
+// CON-32★ 읽기 실패를 "불러오는 중"으로 감추지 않는다 (#68, 2026-08-14)
+// 예전에는 main 이 실패한 폴링 한 바퀴를 조용히 버려서 행이 0 인 채로 남았고, 화면은
+// "불러오는 중"에서 영영 멈췄다 — 권한 부족·명령 없음·연결 끊김이 전부 로딩으로 보였다.
+// #57(런치패드 [패키지]가 빈 표)이 같은 종류였다: 화면이 이유를 말했다면 훨씬 빨리 잡혔다.
+test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 보여 준다', async ({ ara, ssh }) => {
+  const ps = makePs()
+  ps.state.ps = 'ps: permission denied\n'
+  ps.state.psCode = 1
+  const h = await ssh({ password: 'pw-con24', execHandler: ps.exec })
+  await openConsole(ara.page, 'con24', h.port, 'pw-con24')
+  await ara.page.click('.con-app[data-tool="ps"]')
+
+  const empty = ara.page.locator('.con-ps .con-empty')
+  await expect(empty).toHaveText('ps: permission denied')
+  await expect(empty).toHaveClass(/bad/)
+  await expect(empty).not.toHaveText('불러오는 중…')
+
+  // 서버가 다시 정상 응답하면 오류가 걷히고 표가 그려진다(오류 상태에 갇히지 않는다).
+  ps.state.ps = PS_OUT
+  ps.state.psCode = 0
+  await expect(ara.page.locator('.con-ps tbody tr').first()).toBeVisible({ timeout: 10_000 })
+  await expect(ara.page.locator('.con-ps .con-empty')).toHaveCount(0)
 })
 
 // CON-1b (R3 에서 뜻이 바뀜) 예전엔 "추후 칸은 눌러도 아무 일이 없다" 였다. 이제 추후 칸이 없다 —

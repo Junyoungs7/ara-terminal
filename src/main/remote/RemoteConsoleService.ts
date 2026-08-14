@@ -23,9 +23,9 @@ const EXEC_TIMEOUT_MS = 10000
 
 // 성공은 종료코드와 출력을 함께 준다 — 쓰기 명령(kill·systemctl)은 "돌긴 돌았는데 권한이 없었다"를
 // 코드로만 알 수 있고, 그 사유는 출력에 있다. 선례: SftpService.copyRemote().
-export type RunResult =
-  | { ok: true; out: string; code: number }
-  | { ok: false; reason: 'badArgs' | 'noSession' | 'timeout' | 'exec' }
+export type RunFailReason = 'badArgs' | 'noSession' | 'timeout' | 'exec'
+
+export type RunResult = { ok: true; out: string; code: number } | { ok: false; reason: RunFailReason }
 
 export type RemoteConsoleService = {
   run(sessionId: string, id: CmdId, args: unknown): Promise<RunResult>
@@ -45,7 +45,7 @@ const keyOf = (sessionId: string, cmdId: CmdId): string => `${sessionId}::${cmdI
 export function createRemoteConsoleService(
   // getClient: 세션 id → ssh2 Client(로컬·종료된 세션은 null → 폴링 자동 중지).
   getClient: (sessionId: string) => Client | null,
-  emit: (e: { sessionId: string; cmdId: CmdId; out: string }) => void,
+  emit: (e: { sessionId: string; cmdId: CmdId; out: string; code?: number; err?: string }) => void,
   intervalMs: number = POLL_MS
 ): RemoteConsoleService {
   const subs = new Map<string, Sub>()
@@ -77,9 +77,18 @@ export function createRemoteConsoleService(
     sub.busy = true
     const r = await once(sub.sessionId, sub.cmdId, sub.args)
     sub.busy = false
-    // 폴링 중 구독 해지 / 명령 실패는 조용히(표는 마지막으로 성공한 내용을 그대로 들고 있는다).
-    if (!subs.has(key) || !r.ok) return
-    emit({ sessionId: sub.sessionId, cmdId: sub.cmdId, out: r.out })
+    // 폴링 중에 구독이 해지됐으면 늦게 온 결과를 흘리지 않는다.
+    if (!subs.has(key)) return
+    // #68(2026-08-14): 실패도 올려 보낸다. 예전엔 여기서 조용히 버렸고("표는 마지막 성공 내용을
+    // 그대로 들고 있는다"), 그 결과 **첫 바퀴가 실패하면 화면이 "불러오는 중"에서 영영 멈췄다** —
+    // 권한 부족·명령 없음·연결 끊김이 전부 로딩으로 보였다(#57 과 같은 종류).
+    // 표를 유지할지 오류를 띄울지는 행 수를 아는 렌더러가 정한다. 종료코드도 함께 보낸다:
+    // 카탈로그의 일부 스크립트는 정상 출력을 내면서도 0 이 아닐 수 있어 코드만으로 판정하면 안 된다.
+    if (!r.ok) {
+      emit({ sessionId: sub.sessionId, cmdId: sub.cmdId, out: '', err: r.reason })
+      return
+    }
+    emit({ sessionId: sub.sessionId, cmdId: sub.cmdId, out: r.out, code: r.code })
   }
 
   return {
