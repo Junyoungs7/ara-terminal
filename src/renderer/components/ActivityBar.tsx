@@ -2,6 +2,7 @@ import { Gauge, LayoutGrid, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
+import { KEYMAP, type KeymapAction } from '../../shared/keymap'
 
 // FB-ui2(FB-0006) 우측 액티비티 바 — 상단 아라/기어 아이콘이 "AI 버튼인지 잘 모르겠고 클릭도
 // 불편하다"는 실사용 피드백에 대한 응답. VS Code 액티비티 바처럼 우측 최외곽에 고정된 세로
@@ -24,6 +25,29 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   // lucide-react 를 재사용한다(새 라이브러리 없음).
   console: () => <LayoutGrid />,
   settings: IconGear
+}
+
+// #73(2026-08-14): 단축키를 문구에 박아 두지 않는다. 예전엔 아홉 중 둘만 "설정 (Ctrl+,)" 처럼
+// 문자열에 직접 적혀 있었는데, 실제로 단축키가 있는 것은 다섯이었다(미니 프리뷰·파일 탐색기·
+// 세션 로그가 빠져 있었다). KEYMAP 에서 끌어오면 새 단축키가 생겨도 툴팁이 따라오고, 없는 것엔
+// 안 붙는다 — 치트시트·메뉴바와 같은 방식이다.
+// 툴팁의 "라벨 (조합)" 꼬리표는 store/tooltip.ts 의 splitTip 이 뱃지로 떼어 낸다.
+const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
+  ai: 'ai.toggle',
+  log: 'log.save',
+  preview: 'preview.toggle',
+  explorer: 'explorer.toggle',
+  settings: 'settings.open'
+}
+
+const isMac = navigator.userAgent.includes('Mac')
+
+/** 액티비티 바 툴팁 — 이름 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록은 이름만 쓴다. */
+export function activityTip(id: ActivityId): string {
+  const name = t(ACTIVITY_TITLE_KEY[id])
+  const action = ACTIVITY_KEY[id]
+  const b = action ? KEYMAP.find((k) => k.action === action) : undefined
+  return b ? `${name} (${isMac ? b.mac : b.win})` : name
 }
 
 export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
@@ -63,7 +87,7 @@ export function ActivityBar({
             className={'act-item' + (active ? ' active' : '')}
             role="tab"
             aria-selected={active}
-            title={t(ACTIVITY_TITLE_KEY[id])}
+            title={activityTip(id)}
             data-activity={id}
             onClick={() => onToggle(id)}
           >
