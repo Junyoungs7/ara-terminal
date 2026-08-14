@@ -701,6 +701,10 @@
   color: var(--text-hi);
 }
 .exp-wbtn {
+  /* #71: <button> 이 됐다 — 기본 배경·테두리·글꼴 제거. */
+  border: none;
+  background: none;
+  font-family: var(--ui);
   display: grid;
   place-items: center;
   width: 28px;
@@ -709,6 +713,14 @@
   color: var(--text-dim);
   font-size: var(--fs-md);
   cursor: pointer;
+  position: relative;
+}
+/* #72: 클릭 표적을 점 밖으로 넓힌다 — 타이틀바 .tb-ctl 이 #62 에서 같은 방식으로 고쳐졌는데
+   떠 있는 창 버튼은 그때 빠져 있었다(28×22 는 창을 닫으려다 빗나가기 쉽다). */
+.exp-wbtn::before {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
 }
 .exp-wbtn:hover {
   background: var(--bg-overlay);
@@ -941,6 +953,9 @@
   padding: 16px;
 }
 .con-app {
+  /* #71: <button> 이 됐다 — 브라우저 기본 배경·테두리·글꼴을 지운다(.act-item 과 같은 방식). */
+  font-family: var(--ui);
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;

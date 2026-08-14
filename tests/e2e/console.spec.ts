@@ -129,6 +129,24 @@ test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 
   await expect(ara.page.locator('.con-ps .con-empty')).toHaveCount(0)
 })
 
+// CON-34★ 런치패드를 키보드만으로 쓴다 (#71, 2026-08-14)
+// 타일이 div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도 없었다 — 단축키를 이만큼 만든 앱에서
+// 새로 만든 화면이 마우스 전용인 것은 어긋난다. 지금 타일과 창 버튼은 진짜 <button> 이다.
+test('CON-34★ 런치패드 타일을 포커스·Enter 로 열 수 있다', async ({ ara, ssh }) => {
+  const ps = makePs()
+  const h = await ssh({ password: 'pw-con34', execHandler: ps.exec })
+  await openConsole(ara.page, 'con34', h.port, 'pw-con34')
+
+  const tile = ara.page.locator('.con-app[data-tool="ps"]')
+  await expect(tile).toHaveJSProperty('tagName', 'BUTTON')
+  await expect(ara.page.locator('.con-win .exp-wbtn').first()).toHaveJSProperty('tagName', 'BUTTON')
+
+  await tile.focus()
+  await expect(tile).toBeFocused()
+  await ara.page.keyboard.press('Enter')
+  await expect(ara.page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
+})
+
 // CON-1b 콘솔 밖에서 열리는 칸은 셋(로그·포트·터미널)이고, 그 셋만 ↗ 를 단다.
 // 이력: R1·R2 때는 "추후 칸은 눌러도 아무 일이 없다" 였고, R3 에서 추후 칸이 없어졌으며,
 // #69(2026-08-14)에서 [파일] 이 밖에서 열리는 쪽 → **콘솔 안 탭**으로 옮겨 왔다.

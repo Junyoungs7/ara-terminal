@@ -122,12 +122,17 @@ export function ServerConsoleView({
         <span className="exp-tname">{t('console.title')}</span>
         {isSsh && <span className="con-srv">{serverName}</span>}
         <span className="sb-tab-spacer" />
-        <span className="exp-wbtn" title={t(maximized ? 'explorer.restore' : 'explorer.maximize')} onClick={toggleMax}>
+        <button
+          type="button"
+          className="exp-wbtn"
+          title={t(maximized ? 'explorer.restore' : 'explorer.maximize')}
+          onClick={toggleMax}
+        >
           {maximized ? '❐' : '▢'}
-        </span>
-        <span className="exp-wbtn x" title={t('console.close')} onClick={onClose}>
+        </button>
+        <button type="button" className="exp-wbtn x" title={t('console.close')} onClick={onClose}>
           <IconClose />
-        </span>
+        </button>
       </div>
 
       <div className="exp-tabs">
@@ -164,8 +169,11 @@ export function ServerConsoleView({
               {/* 서버의 정체(배포판·커널·가동 시간). 자원 사용량은 F29 사이드바 몫이다. */}
               <ServerOverview sessionId={sessionId} active={active === 'pad'} />
               {TOOLS.map(({ id, Icon, tool, launch }) => (
-                <div
+                // #71: 타일은 진짜 버튼이다 — div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도
+                // 없었다. 단축키를 이만큼 만든 앱에서 새 화면이 마우스 전용인 것은 어긋난다.
+                <button
                   key={id}
+                  type="button"
                   className={'con-app' + (launch ? ' ext' : '')}
                   data-tool={id}
                   title={launch ? t('console.ext.hint') : undefined}
@@ -183,7 +191,7 @@ export function ServerConsoleView({
                       ↗
                     </span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
             {/* 도구 탭은 마운트를 유지한다(검색어·정렬을 잊지 않게). 숨은 탭은 active=false 라

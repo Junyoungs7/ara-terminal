@@ -130,12 +130,18 @@ export function ExplorerView({ sessions, profiles, workProfiles, onConnect, onCl
         </span>
         <span className="exp-tname">{t('explorer.title')}</span>
         <span className="sb-tab-spacer" />
-        <span className="exp-wbtn" title={t(maximized ? 'explorer.restore' : 'explorer.maximize')} onClick={toggleMax}>
+        {/* #71: div/span 이 아니라 진짜 버튼 — Tab·Enter 로 창을 닫을 수 있어야 한다. */}
+        <button
+          type="button"
+          className="exp-wbtn"
+          title={t(maximized ? 'explorer.restore' : 'explorer.maximize')}
+          onClick={toggleMax}
+        >
           {maximized ? '❐' : '▢'}
-        </span>
-        <span className="exp-wbtn x" title={t('explorer.close')} onClick={onClose}>
+        </button>
+        <button type="button" className="exp-wbtn x" title={t('explorer.close')} onClick={onClose}>
           <IconClose />
-        </span>
+        </button>
       </div>
 
       <div className="exp-tabs">
