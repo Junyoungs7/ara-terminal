@@ -6,7 +6,7 @@
 //  · SSH 는 기존 tests/ssh-harness.ts(ssh2 인메모리 서버)를 재사용한다 — 외부 서버 접속 금지(DLP).
 //  · 파일 전송은 임시 디렉토리 ↔ 루프백 하네스로만 한다.
 import { _electron as electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer, type AddressInfo, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -39,6 +39,8 @@ export type Ara = {
   app: ElectronApplication
   page: Page
   userData: string
+  /** #64: 이 인스턴스의 종료 단계 기록 파일 경로. quitAra 가 매달림을 판정할 때 읽는다. */
+  trace: string
 }
 
 export function tempDir(prefix = 'ara-e2e-'): string {
@@ -56,6 +58,9 @@ export function rmDir(path: string): void {
 // 실 main(out/main/index.js)을 임시 userData 로 기동. GPU 는 끈다(CI/원격 데스크톱에서
 // SwiftShader 로 떨어지면 WebGL 렌더러가 오히려 불안정 — 앱이 DOM 렌더러로 폴백한다).
 export async function launchAra(userData: string): Promise<Ara> {
+  // #64: 이 앱 인스턴스의 종료 단계 기록 파일. main 의 exitTrace 가 여기에 한 줄씩 append 한다
+  // (ARA_EXIT_TRACE 가 없으면 아무 일도 안 한다 — 제품에 상시 있지만 평소 무동작).
+  const trace = join(userData, 'exit-trace.log')
   const app = await electron.launch({
     args: [MAIN_JS, `--user-data-dir=${userData}`, '--disable-gpu'],
     cwd: REPO_ROOT,
@@ -64,13 +69,13 @@ export async function launchAra(userData: string): Promise<Ara> {
     // (isFakeAi()). 항상 켜 둔다 — AI 를 건드리지 않는 나머지 테스트에는 영향이 없고, 아라
     // 시나리오가 실키·네트워크 없이 돈다(DLP).
     // ARA_E2E: 창을 showInactive() 로 띄워 사용자 화면에서 포커스를 뺏지 않는다(main/index.ts).
-    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1' }
+    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_EXIT_TRACE: trace }
   })
   const page = await app.firstWindow()
   await page.waitForSelector('.app', { timeout: 30_000 })
   // 부트 복원이 끝나 화면이 확정될 때까지(빈 상태는 안내 없이 .pane-grid 만 남으므로 그 자체로 충분 — UI-tabbar).
   await page.waitForSelector('.pane-grid', { timeout: 40_000 })
-  return { app, page, userData }
+  return { app, page, userData, trace }
 }
 
 // 종료 직전 최신 스냅샷 저장을 강제한다. 렌더러 persist 는 workspace:save(30s 디바운스)까지만 가고
@@ -81,12 +86,113 @@ export async function persist(page: Page): Promise<void> {
 }
 
 // 정상 종료(app.quit → before-quit → workspace.json flush + pty 정리).
+//
+// #64(2026-08-15): 예전에는 이렇게 끝났다 —
+//   await a.app.evaluate(...).catch(() => {})   // 실패해도 조용히 삼킴
+//   await Promise.race([closed, 10초])
+//   await a.app.close().catch(() => {})          // 안 내려가면 여기서 teardown 이 120초를 먹는다
+// 그래서 매달릴 때 **왜** 매달렸는지 아무 것도 안 남았고, 스위트는 2분씩 잡아먹었다.
+//
+// 지금은 두 가지를 한다:
+//  ① **어디서 멈췄는지 기록한다.** evaluate 가 거절됐는지 · 응답 자체가 안 왔는지 ·
+//     응답은 왔는데 before-quit 이 안 찍혔는지. 이 셋이 원인을 가른다(아래 표).
+//  ② **강제로 내린다.** 진단은 기록에 남기고, 스위트가 120초를 버리지 않게 한다.
+//
+// **2026-08-15 판정: (가) 하네스 문제였다.** 워커 8개로 부하를 걸어 11건을 재현했는데 전부
+// 추적이 `... → will-quit → quit` 까지 완주했다 — **앱은 매번 정상 종료했고 Playwright 가 못
+// 알아챘을 뿐이다.** `setTimeout(0)` 이 즉시 발동해 CDP 응답이 파이프를 빠져나가기 전에 프로세스가
+// 내려가는데, 예전 코드가 그 응답을 await 해서 그대로 매달렸다.
+// (그전 조사의 "before-quit 을 한 번도 못 받았다"는 추적 파일을 인스턴스들이 **공유**해서 생긴
+//  오독이다. 지금은 인스턴스마다 자기 userData 안에 쓴다 — 귀속이 정확하다.)
+//
+// 그래서 남기는 구분:
+// | 기록 | 뜻 |
+// |---|---|
+// | `harness-missed` | 추적이 quit 까지 갔다 = 앱은 정상 종료. 우리가 놓친 것 |
+// | `PRODUCT-HANG` | 추적이 중간에 끊겼다 = **진짜 종료 실패.** 이게 뜨면 배포 블로커다 |
+const HANG_LOG = process.env['ARA_HANG_LOG']
+
+/** 추적 파일이 기록한 마지막 단계. 파일이 없거나 아직 안 썼으면 null. */
+const NL = new RegExp('\r?\n')
+
+function lastStage(trace: string): string | null {
+  try {
+    const lines = readFileSync(trace, 'utf8').trim().split(NL)
+    const stages = lines.map((l) => l.split(' ')[1]).filter(Boolean)
+    return stages[stages.length - 1] ?? null
+  } catch {
+    return null
+  }
+}
+
+function noteHang(line: string): void {
+  if (HANG_LOG) {
+    try {
+      appendFileSync(HANG_LOG, line + '\n')
+    } catch {
+      /* 기록 못 해도 종료는 계속한다 */
+    }
+  }
+  // 기록 파일을 안 켰어도 콘솔에는 남긴다 — 실패 리포트에서 바로 보이게.
+  console.warn('[#64] ' + line)
+}
+
 export async function quitAra(a: Ara): Promise<void> {
+  const t0 = Date.now()
   const closed = a.app.waitForEvent('close').catch(() => {})
-  // quit() 은 프로세스를 내리므로 evaluate 응답이 오지 않는다 — 다음 tick 으로 미뤄 호출만 하고 빠진다.
-  await a.app.evaluate(({ app }) => void setTimeout(() => app.quit(), 0)).catch(() => {})
-  await Promise.race([closed, new Promise((r) => setTimeout(r, 10_000))])
+
+  // 응답을 **기다리지 않는다.** setTimeout(0) 이 거의 즉시 발동해 프로세스가 내려가므로, CDP 응답이
+  // 파이프를 빠져나가기 전에 연결이 끊기는 것이 정상이다 — 부하가 걸리면 늘 그렇게 된다.
+  // 예전에는 이 응답을 await 해서, 안 오면 그대로 매달렸다.
+  void a.app.evaluate(({ app }) => void setTimeout(() => app.quit(), 0)).catch(() => {})
+
+  // 내려갔는지는 **둘 중 먼저 오는 쪽**으로 판정한다:
+  //  · Playwright 의 close 이벤트 — 평소엔 이게 먼저다.
+  //  · 추적 파일의 마지막 단계가 `quit` — 부하가 걸리면 이쪽이 훨씬 먼저다. CDP 알림은 늦게 오거나
+  //    아예 안 오는데(연결이 이미 끊겼다) 앱은 벌써 죽어 있다. 워커 8개 실험에서 close 를 기다리면
+  //    20~69초를 버렸다. 앱이 남긴 기록을 믿으면 1초 안에 끝난다.
+  let polling = true
+  const traceSaysDown = (async () => {
+    for (let i = 0; i < 100 && polling; i++) {
+      if (lastStage(a.trace) === 'quit') return true
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    return false
+  })()
+  const wentDown = await Promise.race([
+    closed.then(() => true),
+    traceSaysDown,
+    new Promise<boolean>((r) => setTimeout(() => r(false), 20_000))
+  ])
+  polling = false // 다른 쪽이 먼저 끝났으면 폴링 타이머를 더 걸지 않는다(워커 해체를 늦추지 않게).
   await a.app.close().catch(() => {})
+  if (wentDown) return
+
+  // close 를 못 봤다. **앱이 안 내려간 것과 우리가 못 알아챈 것은 다르다** — 추적 파일이 가른다.
+  let stages: string[] = []
+  try {
+    stages = readFileSync(a.trace, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => l.split(' ')[1])
+      .filter(Boolean)
+  } catch {
+    /* 파일이 없으면 빈 배열 */
+  }
+  const clean = stages[stages.length - 1] === 'quit'
+  noteHang(
+    `${clean ? 'harness-missed' : 'PRODUCT-HANG'} ${Date.now() - t0}ms  stages=${stages.join(' → ') || '(없음)'}`
+  )
+
+  // 남아 있으면 직접 내린다 — 이게 없으면 teardown 이 120초를 먹고 다음 테스트가 밀린다.
+  const pid = a.app.process().pid
+  if (pid) {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {
+      /* 이미 죽었으면 그만이다 */
+    }
+  }
 }
 
 type SshFactory = (opts?: Parameters<typeof startPasswordServer>[0]) => Promise<Harness>
