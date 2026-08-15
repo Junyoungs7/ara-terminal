@@ -4,6 +4,7 @@ import type { FileEntry, FileListResult, FileOpResult, SftpProgress, SftpXferRes
 import { ContextMenu } from '../interactions/ContextMenu'
 import { fileMenu, type FileActionId } from '../interactions/actions'
 import { planCrossPanelTransfer } from '../store/explorerTransfer'
+import { deletePrompt } from '../store/deletePrompt'
 import {
   IconClose,
   IconCopy,
@@ -82,9 +83,10 @@ function backendFor(session: ActiveFileSession): Backend | null {
     list: (p) => window.ev.fs.list(p),
     rename: (p, n) => window.ev.fs.rename(p, n),
     mkdir: (d, n) => window.ev.fs.mkdir(d, n),
-    remove: (paths) => window.ev.fs.remove(paths),
+    // #89: 로컬은 **휴지통**으로 간다(원격은 영구 — 서버에 휴지통이 없다). 확인 문구가 그 차이를 말한다.
+    remove: (paths) => window.ev.fs.trash(paths),
     // ponytail: 로컬 삭제는 동기에 가까워 취소 지점이 없다. 느린 네트워크 드라이브가 문제가 되면
-    // fs:remove 에도 opId 를 붙여 SFTP 와 같은 취소 토큰을 쓰면 된다.
+    // fs:trash 에도 opId 를 붙여 SFTP 와 같은 취소 토큰을 쓰면 된다.
     cancel: () => {}
   }
 }
@@ -176,6 +178,8 @@ export function FileTree({
   const [anchor, setAnchor] = useState<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [queue, setQueue] = useState<QueueItem[]>([])
+  // #92: 방금 받은 파일. 받는 곳을 묻지 않는 대신 **어디로 갔는지**를 이 줄이 말한다.
+  const [got, setGot] = useState<{ name: string; localPath: string } | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   // best-effort 안내: cwd 이벤트를 한 번도 못 받은 세션은 자동 동기 미지원 가능성(수동 새로고침 폴백, C-4).
   const [autoSynced, setAutoSynced] = useState(false)
@@ -340,12 +344,45 @@ export function FileTree({
 
   const selectedEntries = useCallback(() => entries.filter((e) => sel.includes(e.name)), [entries, sel])
 
+  // #92(2026-08-16): 받는 곳을 **묻지 않는다.** 대신 어디로 갔는지 알려 준다.
+  //
+  // 왜 바꿨나: 2026-08-09 에 "원격 → 우리는 다운로드(위치를 직접 고른다)"로 못 박은 것은
+  // 붙여넣기가 **조용히** 떨어져 어디 갔는지 몰랐기 때문이다(explorerTransfer.ts 머리주석).
+  // 막아야 했던 것은 "조용히"지 "빠른"이 아니다 — 브라우저처럼 정해진 곳에 받고 경로를 보여 주면
+  // 그 문제가 없다. 방향 규칙(붙여넣기로는 안 받는다)은 그대로다. 받는 길은 여전히 하나다.
+  //
+  // 위치를 고르고 싶으면 우클릭 [다른 위치에 받기] — 아래 askWhere=true 가 예전 경로 그대로다.
   const download = useCallback(
-    async (targets: FileEntry[]) => {
+    async (targets: FileEntry[], askWhere = false) => {
       if (!session || !backend?.remote) return
       const files = targets.filter((e) => e.type === 'file')
       if (files.length === 0) return
       const sid = session.id
+      // 묻지 않는 길: 받는 곳에 빈 이름을 잡아 바로 받는다. 덮어쓰기는 하지 않는다(freeName).
+      if (!askWhere) {
+        const dir = await window.ev.fs.downloadsDir()
+        await runQueue(
+          files.map((f) => ({
+            label: `${t('sftp.downloading')} ${f.name}`,
+            run: async (transferId: string) => {
+              const name = await window.ev.fs.freeName(dir, f.name)
+              // joinPath 는 구분자를 경로에서 추론한다 — 받는 곳이 Windows 경로면 '\' 로 붙는다.
+              const localPath = joinPath(dir, name)
+              const r = await window.ev.sftp.download({
+                sessionId: sid,
+                transferId,
+                remotePath: joinPath(path, f.name),
+                localPath,
+                size: f.size
+              })
+              // 마지막으로 받은 것을 알린다 — 여러 개면 폴더만 열어도 다 보인다.
+              if (r.ok) setGot({ name, localPath })
+              return r
+            }
+          }))
+        )
+        return
+      }
       // 여러 개면 받을 폴더를 한 번만 고른다(파일마다 저장 대화상자를 띄우지 않는다).
       if (files.length === 1) {
         const localPath = await window.ev.sftp.pickSavePath(files[0].name)
@@ -441,16 +478,17 @@ export function FileTree({
     const targets = selectedEntries()
     if (targets.length === 0) return
     const dirs = targets.filter((e) => e.type === 'dir')
+    // #89: 로컬=휴지통 / 원격=영구. 문구가 실제 동작과 어긋나면 그다음부터 확인 창을 안 읽는다.
+    const prompt = deletePrompt({ remote: backend.remote, dirCount: dirs.length })
     const r = await ask({
       title: t('file.del.title'),
-      // 폴더가 섞여 있으면 하위 내용까지 사라진다는 사실을 문구로 못 박는다(되돌릴 수 없다).
-      message: dirs.length > 0 ? t('file.del.msgDir') : t('file.del.msg'),
+      message: t(prompt.messageKey),
       detail: [
         { label: t('file.del.items'), value: targets.map((e) => e.name).join(', ') },
         { label: t('file.del.count'), value: `${targets.length}${dirs.length > 0 ? ` (${t('file.del.folders')} ${dirs.length})` : ''}` }
       ],
       tone: 'danger',
-      confirmLabel: t('file.del.btn'),
+      confirmLabel: t(prompt.confirmKey),
       cancelLabel: t('dlg.cancel')
     })
     if (r !== 'confirm') return
@@ -503,8 +541,17 @@ export function FileTree({
             void window.ev.editor.open(remote, joinPath(path, targets[0].name))
           }
           return
+        case 'file.openWith':
+          // #89: 실패(연결 프로그램 없음 등)를 삼키지 않는다 — 아무 일도 안 일어나면 고장으로 보인다.
+          if (targets[0]) {
+            void window.ev.fs.openPath(joinPath(path, targets[0].name)).then((r) => !r.ok && setError(r.message))
+          }
+          return
         case 'file.download':
           void download(targets)
+          return
+        case 'file.downloadAs':
+          void download(targets, true)
           return
         case 'file.saveWork':
           onSaveWork?.(path)
@@ -771,6 +818,21 @@ export function FileTree({
 
       {backend.remote && !autoSynced && <div className="sftp-note">{t('sftp.bestEffort')}</div>}
       {error && <div className="sftp-err">{error}</div>}
+      {/* #92: 받는 곳을 묻지 않는 대신 어디로 갔는지 여기서 말한다. 경로 전문은 title 로 —
+          한 줄에 다 넣으면 긴 경로가 트리를 밀어낸다. [폴더 열기]가 마지막 확인 수단이다. */}
+      {got && (
+        <div className="sftp-got">
+          <span className="g-txt" title={got.localPath}>
+            {t('sftp.got').replace('{n}', got.name)}
+          </span>
+          <button type="button" className="g-act" onClick={() => void window.ev.fs.reveal(got.localPath)}>
+            {t('sftp.got.reveal')}
+          </button>
+          <button type="button" className="g-x" title={t('dlg.cancel')} onClick={() => setGot(null)}>
+            <IconClose />
+          </button>
+        </div>
+      )}
 
       {/* 빈 영역 우클릭 = 새 폴더. 행 우클릭은 openMenu 가 전파를 끊는다. */}
       {/* #82: 목록이라 트리가 아니라 listbox 다 — 여기서 펼치고 접는 것이 없다(폴더는 들어간다).
@@ -881,6 +943,8 @@ export function FileTree({
             count: sel.length,
             isDir: sel.length === 1 && selectedEntries()[0]?.type === 'dir',
             canDownload: backend.remote && selFiles > 0,
+            // #89: 로컬 파일 하나일 때만. 원격은 실체가 이 PC 에 없어 OS 가 열 수 없다.
+            canOpenWith: !backend.remote && selFiles === 1 && sel.length === 1,
             canTail: backend.remote && Boolean(onTailFile),
             // 원격 폴더에만 붙는다 — 이 창은 "서버에 접속해 그 폴더에서 시작"이라 로컬에는 뜻이 없다.
             canAiCli: backend.remote && Boolean(onAiCli)

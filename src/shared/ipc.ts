@@ -175,10 +175,20 @@ export type InvokeContract = {
   'fs:list': { req: { path: string }; res: FileListResult }
   'fs:rename': { req: { path: string; name: string }; res: FileOpResult }
   'fs:mkdir': { req: { dir: string; name: string }; res: FileOpResult }
-  // 파일·폴더 삭제(폴더는 재귀). 여러 항목을 한 번에 — 하나라도 실패하면 그 지점에서 멈추고 사유 반환.
-  'fs:remove': { req: { paths: string[] }; res: FileOpResult }
-  // W4sat F20: 로컬↔로컬 패널 간 복사(재귀). 이동은 렌더러가 copy 성공 후 fs:remove 로 원본을 지운다
-  // (신규 IPC 최소화 — rename 은 같은 폴더 안에서만 통하는 계약이라 이동엔 못 쓴다).
+  // #89: 로컬 삭제는 **휴지통**(shell.trashItem)이다. 이름이 remove 가 아닌 이유 — 실제로 그렇게
+  // 동작하고, 영구 삭제 경로는 남겨 두지 않는다(있으면 언젠가 실수로 그쪽이 배선된다).
+  // 원격 삭제는 sftp:remove 로 따로 가고 그쪽은 영구다(서버에 휴지통이 없다).
+  // 여러 항목을 한 번에 — 하나라도 실패하면 그 지점에서 멈추고 사유 반환.
+  'fs:trash': { req: { paths: string[] }; res: FileOpResult }
+  // #89: OS 기본 프로그램으로 열기(이미지·PDF·xlsx). 로컬 전용 — 원격 파일은 실체가 이 PC 에 없다.
+  'fs:openPath': { req: { path: string }; res: FileOpResult }
+  // #92: 탐색기에서 그 파일을 고른 채로 폴더 열기.
+  'fs:reveal': { req: { path: string }; res: FileOpResult }
+  // #92: 원격 파일을 받는 기본 폴더(OS 다운로드 폴더).
+  'fs:downloadsDir': { req: void; res: { dir: string } }
+  // #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다.
+  'fs:freeName': { req: { dir: string; name: string }; res: { name: string } }
+  // W4sat F20: 로컬↔로컬 패널 간 복사(재귀).
   'fs:copy': { req: { paths: string[]; destDir: string }; res: FileOpResult }
   // 편집기 창(노트) — sessionId 가 있으면 원격(SFTP), 없으면 로컬. 읽기/쓰기 한 쌍뿐이다.
   // 큰 파일·바이너리는 main 이 거른다(shared/textFile.ts) — 열지 못한 이유를 문구로 돌려준다.
@@ -460,8 +470,17 @@ export type EvApi = {
     list(path: string): Promise<FileListResult>
     rename(path: string, name: string): Promise<FileOpResult>
     mkdir(dir: string, name: string): Promise<FileOpResult>
-    remove(paths: string[]): Promise<FileOpResult>
-    // W4sat F20: 탐색기 패널 간 로컬↔로컬 복사(재귀). 이동은 호출측이 성공 후 remove 로 원본을 지운다.
+    /** #89: 로컬 삭제는 **휴지통**으로. 원격(sftp.remove)은 영구 — 서버에 휴지통이 없다. */
+    trash(paths: string[]): Promise<FileOpResult>
+    /** #89: 연결 프로그램으로 열기(이미지·PDF·xlsx). 로컬 전용 — 원격은 편집기/다운로드. */
+    openPath(path: string): Promise<FileOpResult>
+    /** #92: 탐색기에서 그 파일을 선택한 채로 폴더 열기. */
+    reveal(path: string): Promise<FileOpResult>
+    /** #92: 원격 파일을 받는 기본 폴더(OS 다운로드 폴더). */
+    downloadsDir(): Promise<string>
+    /** #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다. */
+    freeName(dir: string, name: string): Promise<string>
+    // W4sat F20: 탐색기 패널 간 로컬↔로컬 복사(재귀).
     copy(paths: string[], destDir: string): Promise<FileOpResult>
     /** 원격에서 내려받은 바이트를 폴더에 저장(RDP 클립보드 파일 받기). */
     saveBytes(req: { dir: string; sub?: string; name: string; bytes: Uint8Array }): Promise<FileOpResult>

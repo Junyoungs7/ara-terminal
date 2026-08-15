@@ -575,6 +575,61 @@
   background: var(--bg-surface);
   border-bottom: 1px solid var(--line-soft);
 }
+/* #92(2026-08-16) 받은 파일 알림 — 받는 곳을 묻지 않는 대신 **어디로 갔는지**를 말하는 줄.
+   오류줄(.sftp-err)과 같은 자리·같은 규격이고 톤만 다르다(위험이 아니라 완료다).
+   경로 전문은 title 로 — 한 줄에 다 넣으면 긴 경로가 트리를 밀어낸다. */
+.sftp-got {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+.sftp-got .g-txt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sftp-got .g-act {
+  flex: none;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--accent-bright);
+  font-family: var(--ui);
+  font-size: var(--fs-sm);
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.sftp-got .g-act:hover {
+  background: var(--bg-overlay);
+}
+.sftp-got .g-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.sftp-got .g-x:hover {
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+}
+.sftp-got .g-x svg {
+  width: 12px;
+  height: 12px;
+}
 .sftp-empty {
   padding: 10px;
   font-size: var(--fs-md);

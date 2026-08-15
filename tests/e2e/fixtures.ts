@@ -75,7 +75,52 @@ export async function launchAra(userData: string): Promise<Ara> {
   await page.waitForSelector('.app', { timeout: 30_000 })
   // 부트 복원이 끝나 화면이 확정될 때까지(빈 상태는 안내 없이 .pane-grid 만 남으므로 그 자체로 충분 — UI-tabbar).
   await page.waitForSelector('.pane-grid', { timeout: 40_000 })
+  await sandboxUserPaths(app, userData)
   return { app, page, userData, trace }
+}
+
+// #89·#92(2026-08-16): 테스트가 **사용자 PC 를 건드리지 않게** 두 경로를 이 인스턴스의 userData 로 돌린다.
+//   · fs:trash  — 진짜 `shell.trashItem` 이면 실행할 때마다 준영님 휴지통에 테스트 잔여물이 쌓인다.
+//     여기서는 userData/trash 로 **옮긴다**(지우지 않는다) — "휴지통으로 갔다"를 그대로 흉내 낸다.
+//     `shell.trashItem` 을 실제로 부르는지는 단위 테스트(tests/localfs.test.ts)가 본다.
+//   · fs:downloadsDir — 받는 곳. 그대로 두면 실제 다운로드 폴더에 파일이 떨어진다.
+// 둘 다 userData 안이라 테스트가 끝나면 통째로 사라진다.
+async function sandboxUserPaths(app: ElectronApplication, userData: string): Promise<void> {
+  await app.evaluate(({ ipcMain }, ud) => {
+    // evaluate 는 vm 컨텍스트라 동적 import 가 막혀 있고(ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING)
+    // globalThis.require 도 없다(번들 모듈 스코프에만 있다). main 모듈의 require 를 빌려 쓴다.
+    const g = globalThis as unknown as { require?: NodeRequire }
+    const p = process as unknown as { mainModule?: { require?: NodeRequire }; getBuiltinModule?: (m: string) => unknown }
+    const req = g.require ?? p.mainModule?.require?.bind(p.mainModule) ?? ((m: string) => p.getBuiltinModule?.(m))
+    const { mkdirSync, renameSync, existsSync } = req('node:fs') as typeof import('node:fs')
+    const { join, basename } = req('node:path') as typeof import('node:path')
+    const bin = join(ud, 'trash')
+    const dl = join(ud, 'downloads')
+    mkdirSync(bin, { recursive: true })
+    mkdirSync(dl, { recursive: true })
+    ipcMain.removeHandler('fs:trash')
+    ipcMain.handle('fs:trash', (_e, { paths }: { paths: string[] }) => {
+      for (const p of paths) {
+        if (!existsSync(p)) return { ok: false, message: '파일을 찾을 수 없습니다.' }
+        // 같은 이름이 또 오면 뒤에 시각을 붙인다 — 옮기다 실패하면 삭제가 실패한 것처럼 보인다.
+        const dest = join(bin, basename(p))
+        renameSync(p, existsSync(dest) ? `${dest}.${process.hrtime.bigint()}` : dest)
+      }
+      return { ok: true }
+    })
+    ipcMain.removeHandler('fs:downloadsDir')
+    ipcMain.handle('fs:downloadsDir', () => ({ dir: dl }))
+  }, userData)
+}
+
+/** #92: 그 인스턴스가 원격 파일을 받는 폴더(위 샌드박스가 정한 자리). */
+export function downloadsOf(a: Ara): string {
+  return join(a.userData, 'downloads')
+}
+
+/** #89: 휴지통 대체 폴더 — 지워진 것이 "옮겨졌는지" 확인할 때 쓴다. */
+export function trashOf(a: Ara): string {
+  return join(a.userData, 'trash')
 }
 
 // 종료 직전 최신 스냅샷 저장을 강제한다. 렌더러 persist 는 workspace:save(30s 디바운스)까지만 가고

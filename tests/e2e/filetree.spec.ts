@@ -3,7 +3,18 @@ import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { test, expect, newLocalShell, runCommand, dialog, dialogConfirm, connectNewSshProfile, openConnTab, openFileTab } from './fixtures'
+import {
+  test,
+  expect,
+  newLocalShell,
+  runCommand,
+  dialog,
+  dialogConfirm,
+  connectNewSshProfile,
+  openConnTab,
+  openFileTab,
+  trashOf
+} from './fixtures'
 
 const slash = (p: string) => p.replace(/\\/g, '/')
 
@@ -185,12 +196,34 @@ test('FILE-7 여러 파일을 골라 한 번에 삭제한다', async ({ ara }) =
   await ara.page.click('.ctx-menu .ctx-item[data-action="file.delete"]')
   await expect(dialog(ara.page)).toContainText('삭제 확인')
   await expect(dialog(ara.page)).toHaveClass(/danger/)
+  // #89: 로컬은 휴지통이다. 문구가 "되돌릴 수 없습니다"라고 하면 거짓말이 된다(원격이 그쪽이다).
+  await expect(dialog(ara.page)).toContainText('휴지통으로 보냅니다')
+  await expect(dialog(ara.page)).not.toContainText('되돌릴 수 없습니다')
   await dialogConfirm(ara.page)
   await expect(row(ara.page, 'alpha.txt')).toHaveCount(0, { timeout: 15_000 })
   await expect(row(ara.page, 'beta.txt')).toHaveCount(0)
   expect(existsSync(join(dir, 'alpha.txt'))).toBe(false)
   expect(existsSync(join(dir, 'beta.txt'))).toBe(false)
   expect(existsSync(join(dir, '읽어보기.txt'))).toBe(true)
+  // 지워진 것이 **휴지통으로 갔다**(픽스처가 실제 휴지통 대신 userData/trash 로 돌려 놓았다 —
+  // 테스트가 준영님 휴지통에 잔여물을 쌓지 않는다. 진짜 shell.trashItem 호출은 단위 테스트가 본다).
+  expect(existsSync(join(trashOf(ara), 'alpha.txt'))).toBe(true)
+})
+
+// FILE-7b ★ #89 로컬 파일은 연결 프로그램으로 열 수 있다 — 텍스트가 아닌 것(이미지·PDF·xlsx)의 유일한 길
+test('FILE-7b 로컬 파일 우클릭에 [연결 프로그램으로 열기]가 있다', async ({ ara }) => {
+  const dir = makeWorkdir()
+  await openFileTabAt(ara.page, dir)
+  await row(ara.page, 'alpha.txt').click({ button: 'right' })
+  // 편집기가 먼저, 그 아래 연결 프로그램 — 텍스트는 우리 편집기가 낫고(원격과 조작이 같다)
+  // 나머지는 OS 에 맡긴다. 실제로 프로그램을 띄우지는 않는다(사용자 화면을 건드리지 않는다).
+  await expect(ara.page.locator('.ctx-menu .ctx-item[data-action="file.edit"]')).toBeVisible()
+  await expect(ara.page.locator('.ctx-menu .ctx-item[data-action="file.openWith"]')).toBeVisible()
+  await ara.page.keyboard.press('Escape')
+
+  // 폴더에는 안 붙는다 — 폴더는 더블클릭이 곧 진입이다.
+  await row(ara.page, '로그/').click({ button: 'right' })
+  await expect(ara.page.locator('.ctx-menu .ctx-item[data-action="file.openWith"]')).toHaveCount(0)
 })
 
 // FILE-8 Shift 범위 선택

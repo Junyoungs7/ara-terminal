@@ -82,8 +82,14 @@ const api: EvApi = {
     list: (path: string) => ipcRenderer.invoke('fs:list', { path }),
     rename: (path: string, name: string) => ipcRenderer.invoke('fs:rename', { path, name }),
     mkdir: (dir: string, name: string) => ipcRenderer.invoke('fs:mkdir', { dir, name }),
-    remove: (paths: string[]) => ipcRenderer.invoke('fs:remove', { paths }),
+    // #89: 로컬 삭제는 휴지통이다(원격 sftp.remove 는 영구). 이름이 그 차이를 말한다.
+    trash: (paths: string[]) => ipcRenderer.invoke('fs:trash', { paths }),
+    openPath: (path: string) => ipcRenderer.invoke('fs:openPath', { path }),
+    reveal: (path: string) => ipcRenderer.invoke('fs:reveal', { path }),
     copy: (paths: string[], destDir: string) => ipcRenderer.invoke('fs:copy', { paths, destDir }),
+    downloadsDir: () => ipcRenderer.invoke('fs:downloadsDir').then((r: { dir: string }) => r.dir),
+    freeName: (dir: string, name: string) =>
+      ipcRenderer.invoke('fs:freeName', { dir, name }).then((r: { name: string }) => r.name),
     saveBytes: (req: { dir: string; sub?: string; name: string; bytes: Uint8Array }) =>
       ipcRenderer.invoke('fs:saveBytes', req)
   },

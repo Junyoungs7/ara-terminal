@@ -181,7 +181,9 @@ function wire() {
   ipcMain.handle('fs:list', (_e, { path }) => okList(path))
   ipcMain.handle('fs:rename', () => ({ ok: true }))
   ipcMain.handle('fs:mkdir', () => ({ ok: true }))
-  ipcMain.handle('fs:remove', () => ({ ok: true }))
+  // #89·#92: 사용자 휴지통·다운로드 폴더를 건드리지 않는다.
+  ipcMain.handle('fs:trash', () => ({ ok: true }))
+  ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
 }
 
 // ── 키 입력 (Chromium 입력 파이프라인 — xterm 이 진짜 타이핑으로 받는다) ──

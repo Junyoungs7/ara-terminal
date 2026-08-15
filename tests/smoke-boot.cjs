@@ -285,7 +285,11 @@ function registerF7Stub() {
   }))
   ipcMain.handle('fs:rename', () => ({ ok: true }))
   ipcMain.handle('fs:mkdir', () => ({ ok: true }))
-  ipcMain.handle('fs:remove', () => ({ ok: true }))
+  // #89: 채널이 fs:trash 로 바뀌었다(실제로 shell.trashItem 을 탄다). 스텁을 안 갈면 스모크가
+  // 사용자 휴지통에 잔여물을 남긴다 — 하네스는 사용자 PC 를 건드리지 않는다.
+  ipcMain.handle('fs:trash', () => ({ ok: true }))
+  // #92: 받는 곳도 막는다. 안 막으면 다운로드가 실제 다운로드 폴더로 떨어진다.
+  ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
 }
 
 // GPU/샌드박스가 CI/헤드리스에서 막히는 것 방지 (검증 목적 한정)
@@ -646,8 +650,12 @@ app.whenReady().then(async () => {
       && typeof window.ev?.sftp?.upload === 'function' && typeof window.ev?.sftp?.cancel === 'function'
       && typeof window.ev?.sftp?.rename === 'function' && typeof window.ev?.sftp?.mkdir === 'function'
       && typeof window.ev?.sftp?.remove === 'function'
+    // #89·#92: remove -> trash(휴지통)로 이름이 바뀌었고 openPath/reveal/downloadsDir/freeName 이 붙었다.
     const hasFs = typeof window.ev?.fs?.list === 'function' && typeof window.ev?.fs?.rename === 'function'
-      && typeof window.ev?.fs?.mkdir === 'function' && typeof window.ev?.fs?.remove === 'function'
+      && typeof window.ev?.fs?.mkdir === 'function' && typeof window.ev?.fs?.trash === 'function'
+      && typeof window.ev?.fs?.openPath === 'function' && typeof window.ev?.fs?.reveal === 'function'
+      && typeof window.ev?.fs?.downloadsDir === 'function' && typeof window.ev?.fs?.freeName === 'function'
+      && window.ev?.fs?.remove === undefined
     const hasOnCwd = typeof window.ev?.session?.onCwd === 'function'
     // 로컬 세션을 활성화(＋ → 로컬 셸) → R7: [파일] 탭이 로컬 파일시스템(fs:list)을 그린다.
     document.querySelector('.tterm-add')?.click()
@@ -704,7 +712,7 @@ app.whenReady().then(async () => {
   })()`)
 
   checks.push(['window.ev.sftp API 존재(list/download/upload/cancel/rename/mkdir/remove)', f7.hasSftp === true])
-  checks.push(['R7: window.ev.fs API 존재(list/rename/mkdir/remove)', f7.hasFs === true])
+  checks.push(['R7: window.ev.fs API 존재(list/rename/mkdir/**trash**/openPath/reveal/downloadsDir/freeName · remove 는 사라졌다)', f7.hasFs === true])
   checks.push(['window.ev.session.onCwd 존재(cwd 이벤트)', f7.hasOnCwd === true])
   checks.push(['R7: [파일] 탭이 로컬 세션에서 로컬 트리 렌더', f7.localRowCount >= 1 && f7.localKorean === true])
   checks.push(['R7: Windows 경로 브레드크럼(드라이브가 첫 조각)', /^[A-Za-z]:$/.test(f7.localCrumbFirst)])

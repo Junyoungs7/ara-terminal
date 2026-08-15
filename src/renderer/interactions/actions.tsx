@@ -276,7 +276,11 @@ export type FileActionId =
   | 'file.aicli'
   | 'file.saveWork'
   | 'file.edit'
+  // #89 로컬 전용 — 이미지·PDF·xlsx 를 OS 기본 프로그램으로. 원격 파일은 실체가 여기 없어 못 연다.
+  | 'file.openWith'
   | 'file.download'
+  // #92 원격 전용 — 받는 곳을 직접 고른다(기본은 묻지 않고 받는다).
+  | 'file.downloadAs'
   | 'file.tail'
   | 'file.rename'
   | 'file.mkdir'
@@ -285,12 +289,15 @@ export type FileActionId =
 // canTail = 원격 파일 하나 선택(W1 F13). 로컬 파일에는 붙지 않는다 — tail 은 원격 셸에서 도는 명령이다.
 // 편집(file.edit)은 파일 하나일 때만 — 로컬·원격 모두 되고, 폴더·다중 선택에는 안 붙는다.
 // canAiCli = 원격 폴더 하나 선택(F27). 로컬 폴더에는 붙지 않는다 — 이 창은 "서버에 접속해서 시작"이다.
+// canOpenWith = 로컬 파일 하나(#89). 원격은 파일 실체가 이 PC 에 없어 OS 가 열 수 없다 —
+// 원격에서 그림을 보려면 먼저 받아야 한다(그 길이 file.download 다).
 export function fileMenu(ctx: {
   count: number
   isDir: boolean
   canDownload: boolean
   canTail?: boolean
   canAiCli?: boolean
+  canOpenWith?: boolean
 }): MenuItem[] {
   const ids: FileActionId[] = []
   if (ctx.count === 1) {
@@ -298,13 +305,15 @@ export function fileMenu(ctx: {
       ids.push('file.open')
       if (ctx.canAiCli) ids.push('file.aicli')
     } else {
+      // 편집기가 먼저다 — 원격과 같은 조작이고, 텍스트가 아니면 [연결 프로그램]이 바로 아래 있다.
       ids.push('file.edit')
-      if (ctx.canDownload) ids.push('file.download')
+      if (ctx.canOpenWith) ids.push('file.openWith')
+      if (ctx.canDownload) ids.push('file.download', 'file.downloadAs')
     }
     if (!ctx.isDir && ctx.canTail) ids.push('file.tail')
     ids.push('file.rename')
   } else if (ctx.count > 1 && ctx.canDownload) {
-    ids.push('file.download')
+    ids.push('file.download', 'file.downloadAs')
   }
   ids.push('file.mkdir')
   // 지금 보고 있는 폴더를 작업 프로필로 — 선택 여부와 무관하다(대상은 "이 폴더"다).

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { test, expect, connectNewSshProfile, dialog, dialogConfirm, openFileTab, sendInput } from './fixtures'
+import { test, expect, connectNewSshProfile, dialog, dialogConfirm, downloadsOf, openFileTab, sendInput } from './fixtures'
 
 function makeRemote(): string {
   const root = mkdtempSync(join(tmpdir(), 'ara-remote-'))
@@ -81,32 +81,52 @@ test('SFTP-3 파일을 원격으로 업로드한다', async ({ ara, ssh }) => {
   expect(readFileSync(join(remote, '업로드_확인.txt'), 'utf8')).toContain('업로드 확인 한글')
 })
 
-// SFTP-4 다운로드(파일 더블클릭 → 저장 경로 → 로컬에 기록)
-test('SFTP-4 파일을 더블클릭해 내려받는다', async ({ ara, ssh }) => {
+// SFTP-4 다운로드(파일 더블클릭 → **묻지 않고** 받는 곳으로 → 어디 갔는지 알려 준다)
+// #92(2026-08-16): 예전에는 더블클릭이 저장 위치 대화상자를 열었다. 2026-08-09 에 그렇게 정한 이유는
+// "붙여넣기가 조용히 떨어져 어디 갔는지 모른다"였는데 — 막아야 했던 것은 **조용히**지 빠른 것이 아니다.
+// 이제 정해진 곳에 받고 경로를 줄로 알려 준다. 위치를 고르는 길은 [다른 위치에 받기]로 남아 있다(SFTP-4b).
+test('SFTP-4 파일을 더블클릭하면 대화상자 없이 받고 어디 갔는지 알려 준다', async ({ ara, ssh }) => {
   const remote = makeRemote()
-  const localDir = mkdtempSync(join(tmpdir(), 'ara-local-'))
-  const savePath = join(localDir, 'DL_README.md')
   const h = await ssh({ password: 'pw-sftp4', sftpRoot: remote })
-  await stubPickers(ara.app, { savePath, saveDir: localDir, uploadPaths: [] })
   await openRemoteTree(ara.page, h.port, 'pw-sftp4')
 
   await row(ara.page, 'README_한글.md').dblclick()
   // 파일은 전송 시작과 함께 만들어진다 — 내용이 다 들어올 때까지 기다린다.
+  const got = join(downloadsOf(ara), 'README_한글.md')
   await expect
-    .poll(() => (existsSync(savePath) ? readFileSync(savePath, 'utf8') : ''), { timeout: 30_000 })
+    .poll(() => (existsSync(got) ? readFileSync(got, 'utf8') : ''), { timeout: 30_000 })
     .toContain('한글 문서')
+  // 받는 곳을 묻지 않는 대신 이 줄이 어디로 갔는지 말한다(경로 전문은 title).
+  const line = ara.page.locator('.sftp-got')
+  await expect(line).toBeVisible({ timeout: 15_000 })
+  await expect(line.locator('.g-txt')).toContainText('README_한글.md')
+  await expect(line.locator('.g-txt')).toHaveAttribute('title', got)
+})
+
+// SFTP-4b ★ 같은 파일을 또 받으면 덮어쓰지 않는다 — 조용한 덮어쓰기는 조용한 삭제와 같다.
+test('SFTP-4b 같은 파일을 두 번 받으면 (2) 가 붙는다', async ({ ara, ssh }) => {
+  const remote = makeRemote()
+  const h = await ssh({ password: 'pw-sftp4b', sftpRoot: remote })
+  await openRemoteTree(ara.page, h.port, 'pw-sftp4b')
+  const dir = downloadsOf(ara)
+
+  await row(ara.page, 'README_한글.md').dblclick()
+  await expect.poll(() => existsSync(join(dir, 'README_한글.md')), { timeout: 30_000 }).toBe(true)
+  await row(ara.page, 'README_한글.md').dblclick()
+  await expect.poll(() => existsSync(join(dir, 'README_한글 (2).md')), { timeout: 30_000 }).toBe(true)
+  // 첫 파일은 그대로 남아 있다(덮어쓰지 않았다).
+  expect(readFileSync(join(dir, 'README_한글.md'), 'utf8')).toContain('한글 문서')
 })
 
 // SFTP-5 전송 진행률 표시 + 취소 시 부분 파일 정리
 test('SFTP-5 큰 파일 전송을 취소하면 부분 파일이 정리된다', async ({ ara, ssh }) => {
   const remote = makeRemote()
-  const localDir = mkdtempSync(join(tmpdir(), 'ara-local-'))
-  const savePath = join(localDir, 'DL_big.log')
   // 취소를 누를 시간을 벌 만큼만 크게(48MB). 무해한 반복 바이트.
   writeFileSync(join(remote, 'access_big.log'), Buffer.alloc(48 * 1024 * 1024, 0x41))
   const h = await ssh({ password: 'pw-sftp5', sftpRoot: remote })
-  await stubPickers(ara.app, { savePath, saveDir: localDir, uploadPaths: [] })
   await openRemoteTree(ara.page, h.port, 'pw-sftp5')
+  // #92: 받는 곳을 묻지 않으므로 저장 경로는 받는 폴더 안 원본 이름이다.
+  const savePath = join(downloadsOf(ara), 'access_big.log')
 
   await row(ara.page, 'access_big.log').dblclick()
   const xfer = ara.page.locator('.sftp-xfer .xfer-item')

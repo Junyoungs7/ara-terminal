@@ -1,9 +1,10 @@
 // 로컬 파일시스템 — [파일] 탭이 로컬 세션에서 쓰는 백엔드(R7). SFTP(SftpService)와 같은 계약이라
 // 렌더러 FileTree 는 백엔드 함수 테이블만 갈아끼운다.
 // 실패는 예외 대신 구조화 결과로 반환(트리 영역에 표시, 크래시 금지) — SftpService 와 같은 규칙.
-import { readdir, stat, rename, mkdir, rm, cp } from 'node:fs/promises'
+import { readdir, stat, rename, mkdir, cp, access } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join, resolve, basename } from 'node:path'
+import { dirname, join, resolve, basename, extname } from 'node:path'
+import { shell } from 'electron'
 import type { FileEntry, FileListResult, FileOpResult } from '@shared/ipc'
 import { friendly } from '../util/fsError'
 
@@ -86,16 +87,51 @@ export async function copyEntries(paths: string[], destDir: string): Promise<Fil
   return { ok: true }
 }
 
-// 삭제(폴더는 재귀). 하나라도 실패하면 그 지점에서 멈추고 사유를 돌려준다 —
-// 이미 지운 것을 되돌릴 수는 없으므로 "어디까지 갔는지"를 감추지 않고 다음 목록 갱신으로 드러낸다.
-// force:false 라 없는 경로는 오류다(이미 지운 것을 성공으로 위장하지 않는다).
-export async function remove(paths: string[]): Promise<FileOpResult> {
+// #89(2026-08-16): 로컬 삭제는 **휴지통**으로 간다. 예전에는 `rm(recursive, force:false)` 로
+// 영구 삭제였고, 이 주석 자리에 "이미 지운 것을 되돌릴 수는 없으므로"라고 적혀 있었다 —
+// 탐색기처럼 생긴 화면에서 Delete 를 누른 사용자는 휴지통을 기대한다(준영님 2026-08-16 확정).
+// **원격(SFTP)은 그대로 영구 삭제다** — 서버에 휴지통이 없다. 확인 문구가 그 차이를 말한다.
+//
+// 실패하면 **영구 삭제로 넘어가지 않는다.** 네트워크 드라이브·휴지통 비활성 환경에서 조용히
+// 지워 버리면 사용자가 기대한 것과 정반대가 된다 — 실패를 그대로 보이고 사람이 고르게 한다.
+// 하나라도 실패하면 그 지점에서 멈춘다(어디까지 갔는지는 다음 목록 갱신이 드러낸다).
+export async function trash(paths: string[]): Promise<FileOpResult> {
   for (const p of paths) {
     try {
-      await rm(p, { recursive: true, force: false })
+      // 없는 경로를 trashItem 에 넘기면 플랫폼마다 반응이 달라 먼저 확인한다
+      // (rm 의 force:false 가 하던 "없으면 오류"를 여기서 유지한다).
+      await stat(p)
+      await shell.trashItem(p)
     } catch (e) {
       return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
     }
   }
   return { ok: true }
+}
+
+/**
+ * 이름 충돌 회피용 후보 이름(순수 — 단위 테스트 대상). 브라우저와 같은 규칙: `보고서 (2).xlsx`.
+ * 확장자는 **마지막 점 기준**이라 `a.tar.gz` → `a.tar (2).gz` 가 된다. 아쉽지만 basename/extname
+ * 과 같은 해석이라 앱 안에서 규칙이 하나로 유지된다(여기서만 다르게 쪼개면 그게 더 헷갈린다).
+ */
+export function nthName(name: string, n: number): string {
+  if (n <= 1) return name
+  const ext = extname(name)
+  return `${basename(name, ext)} (${n})${ext}`
+}
+
+/**
+ * `dir` 안에서 비어 있는 이름을 찾는다. 덮어쓰기는 **하지 않는다** — 조용한 덮어쓰기는 조용한
+ * 삭제와 같다. 1000 까지 찾아보고 못 찾으면 그대로 돌려준다(그 지경이면 쓰기에서 실패하는 편이 낫다).
+ */
+export async function freeName(dir: string, name: string): Promise<string> {
+  for (let n = 1; n <= 1000; n++) {
+    const candidate = nthName(name, n)
+    try {
+      await access(join(dir, candidate))
+    } catch {
+      return candidate // 접근 실패 = 없다
+    }
+  }
+  return name
 }

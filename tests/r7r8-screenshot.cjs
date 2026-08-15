@@ -172,7 +172,9 @@ function wire() {
   ipcMain.handle('fs:mkdir', (_e, { dir, name }) => {
     try { mkdirSync(join(dir, name)); return { ok: true } } catch (e) { return { ok: false, message: String(e.message) } }
   })
-  ipcMain.handle('fs:remove', (_e, { paths }) => {
+  // #89: fs:remove → fs:trash. 이 하네스는 자기 임시 폴더만 쓰므로 그대로 지운다
+  // (실제 휴지통을 부르지 않는다 — 스크린샷 한 장 찍자고 사용자 휴지통에 쌓을 이유가 없다).
+  ipcMain.handle('fs:trash', (_e, { paths }) => {
     try { for (const p of paths) rmSync(p, { recursive: true, force: false }); return { ok: true } } catch (e) { return { ok: false, message: String(e.message) } }
   })
 }
