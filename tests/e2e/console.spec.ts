@@ -810,8 +810,9 @@ test('CON-22★ [포트] 칸은 포트 모니터를 열되 콘솔을 닫지 않�
   await expect(ara.page.locator('.con-app[data-tool="port"] .ext-mark')).toBeVisible()
 
   await ara.page.click('.con-app[data-tool="port"]')
-  // 기존 포트 모니터 패널이 뜬다(콘솔 안에 같은 화면을 두 번 만들지 않는다).
-  await expect(ara.page.locator('.monitor-panel:not(.sysm)')).toBeVisible()
+  // 기존 포트 모니터가 뜬다(콘솔 안에 같은 화면을 두 번 만들지 않는다).
+  // #78 부터 우측 레일이 아니라 **하단 패널**의 [포트] 탭이다.
+  await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="monitor"]')).toBeVisible()
   // #69: 콘솔은 **살아 있다** — 예전엔 여기서 닫아 버려 런치패드로 돌아갈 길이 없었다.
   await expect(ara.page.locator('.con-win')).toBeVisible()
   // 콘솔 안에 port 탭이 생기지는 않았다.

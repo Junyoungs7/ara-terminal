@@ -258,14 +258,26 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'settings'
 ] as const
 
-// 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는** 여섯. #79(2026-08-14)부터 한 번에 하나만 열린다.
-// 액티비티 바의 나머지 셋은 레일이 아니다: 탐색기·서버 콘솔은 떠 있는 창(폭을 안 뺏는다),
-// 설정은 드로어이고 주인이 MainArea 다.
-export const RAIL_IDS = ['ai', 'monitor', 'sys', 'aisess', 'log', 'preview'] as const
+// 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는다.** #79(2026-08-14)부터 한 번에 하나만 열린다.
+//
+// #78(2026-08-15): 여섯이었는데 넷으로 줄었다. **가로가 필요한 것은 아래로 내려갔다** —
+// 포트 목록(주소·포트·프로세스 3열)과 세션 기록(로그 한 줄)을 280~340px 세로 레일에 넣은 것이
+// 애초에 안 맞았다. 남은 넷은 세로가 맞는 것들이다: 대화(ai)·카드 목록(preview·aisess)·그래프(sys).
+export const RAIL_IDS = ['ai', 'sys', 'aisess', 'preview'] as const
 export type RailId = (typeof RAIL_IDS)[number]
 
 export function isRailId(id: ActivityId): id is RailId {
   return (RAIL_IDS as readonly string[]).includes(id)
+}
+
+// 하단 패널 — 터미널 **아래**에 붙어 세로만 먹는다(터미널 80칸에 영향이 없다).
+// 액티비티 바 항목은 그대로 두고, 누르면 하단 패널이 그 탭으로 열린다 — 바를 옮기지 않는 이유는
+// 우리 바가 "무엇을 열지"를 고르는 것이지 VS Code 처럼 "사이드바 내용을 바꾸는" 것이 아니어서다.
+export const BOTTOM_IDS = ['monitor', 'log'] as const
+export type BottomId = (typeof BOTTOM_IDS)[number]
+
+export function isBottomId(id: ActivityId): id is BottomId {
+  return (BOTTOM_IDS as readonly string[]).includes(id)
 }
 
 // 설정 창이 한 덩어리로 저장하는 터미널 동작(ui:setPrefs). UiState 의 부분집합이지만 이쪽은

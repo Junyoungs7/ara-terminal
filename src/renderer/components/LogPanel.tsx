@@ -14,6 +14,8 @@ import { t } from '../i18n'
 type Props = {
   open: boolean
   onClose: () => void
+  /** #78: 하단 패널 안에 끼울 때. 제목줄·닫기·폭·리사이저를 하단 패널에 맡긴다. */
+  embedded?: boolean
   sessionId: string | null
   sessionTitle: string
 }
@@ -34,7 +36,7 @@ export function filterLogLines(text: string, query: string): string[] {
   return lines.filter((l) => l.toLowerCase().includes(q))
 }
 
-export function LogPanel({ open, onClose, sessionId, sessionTitle }: Props): JSX.Element | null {
+export function LogPanel({ open, onClose, sessionId, sessionTitle, embedded }: Props): JSX.Element | null {
   const [text, setText] = useState('')
   const [source, setSource] = useState<'file' | 'buffer'>('buffer')
   const [start, setStart] = useState(0) // 0 이면 앞이 더 없다
@@ -104,11 +106,12 @@ export function LogPanel({ open, onClose, sessionId, sessionTitle }: Props): JSX
 
   const lines = filterLogLines(text, query)
   return (
-    <div className="log-panel" style={{ width, flexBasis: width }}>
-      {/* 왼쪽 경계 = 리사이저(사이드바의 .sb-resizer 와 같은 조작감). */}
-      <div className="lp-resizer" onMouseDown={startResize} />
+    // #78: 하단 패널 안에서는 껍데기를 벗는다 — 제목줄·닫기·폭·리사이저는 하단 패널이 갖는다.
+    // 두 벌을 만들지 않고 같은 컴포넌트를 그대로 쓴다(같은 화면을 두 번 만들지 않는다).
+    <div className={embedded ? 'log-panel embedded' : 'log-panel'} style={embedded ? undefined : { width, flexBasis: width }}>
+      {!embedded && <div className="lp-resizer" onMouseDown={startResize} />}
       <div className="mon-head">
-        <span className="mon-name">{t('log.title')}</span>
+        {!embedded && <span className="mon-name">{t('log.title')}</span>}
         <span className="log-src" title={t(source === 'file' ? 'log.src.file.title' : 'log.src.buffer.title')}>
           {t(source === 'file' ? 'log.src.file' : 'log.src.buffer')}
         </span>
@@ -116,9 +119,11 @@ export function LogPanel({ open, onClose, sessionId, sessionTitle }: Props): JSX
         <span className="sb-act" title={t('sftp.refresh')} onClick={() => void reload()}>
           <IconRefresh />
         </span>
-        <span className="mon-close" title={t('mon.close')} onClick={onClose}>
-          <IconClose />
-        </span>
+        {!embedded && (
+          <span className="mon-close" title={t('mon.close')} onClick={onClose}>
+            <IconClose />
+          </span>
+        )}
       </div>
       <div className="sb-search">
         <div className="field">

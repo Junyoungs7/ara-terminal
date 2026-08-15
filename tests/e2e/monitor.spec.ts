@@ -97,12 +97,53 @@ test('MON-6 새로 열린 포트가 폴링으로 저절로 나타난다', async 
   ).toHaveText('grafana')
 })
 
+// BOTTOM-1★ 하단 패널 — 포트·세션 기록이 터미널 아래로 내려왔다 (#78, 2026-08-15)
+// 왜 옮겼나: 포트 목록은 주소·포트·프로세스 3열을, 세션 기록은 로그 한 줄을 280~340px **세로**
+// 레일에 넣고 있었다. 같은 성격의 프로세스·서비스 표는 아예 레일을 포기하고 떠 있는 창으로
+// 빠져나갔다 — 같은 문제를 두 방법으로 푼 셈이었다. 하단은 세로만 먹으니 터미널 80칸이 안 줄고,
+// 그래서 **우측 레일과 같이 열려도 된다**(레일이 하나만 열리는 #79 규칙은 우측에만 적용).
+test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 떠 있는다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+
+  await page.click('.act-item[data-activity="monitor"]')
+  const bp = page.locator('.bottom-panel')
+  await expect(bp).toBeVisible()
+  await expect(bp.locator('.bp-tab.on')).toHaveAttribute('data-bottom', 'monitor')
+
+  // 탭을 바꾸면 그 자리에서 갈린다(창이 새로 뜨지 않는다).
+  await bp.locator('.bp-tab[data-bottom="log"]').click()
+  await expect(bp.locator('.bp-tab.on')).toHaveAttribute('data-bottom', 'log')
+  await expect(bp.locator('.log-panel.embedded')).toHaveCount(1)
+  // 하단에 끼운 패널은 자기 제목줄을 안 그린다 — 그 자리는 하단 패널이 갖는다.
+  await expect(bp.locator('.mon-name')).toHaveCount(0)
+
+  // ★ 우측 레일과 **같이** 열린다 — 세로만 먹으니 터미널 폭에 영향이 없다.
+  await page.click('.act-item[data-activity="preview"]')
+  await expect(page.locator('.mini-rail')).toBeVisible()
+  await expect(bp).toBeVisible()
+
+  const dims = await page.evaluate(() => {
+    const doc = document.documentElement
+    const r = (s: string) => document.querySelector(s)?.getBoundingClientRect()
+    return { overflowX: doc.scrollWidth - doc.clientWidth, grid: r('.pane-grid')?.height ?? 0, bp: r('.bottom-panel')?.height ?? 0 }
+  })
+  expect(dims.overflowX).toBeLessThanOrEqual(1)
+  expect(dims.grid).toBeGreaterThan(50)
+  expect(dims.bp).toBeGreaterThan(50)
+
+  // 액티비티 바에서 같은 항목을 다시 누르면 닫힌다.
+  await page.click('.act-item[data-activity="log"]')
+  await expect(bp).toHaveCount(0)
+})
+
 // MON-7 로컬 세션에는 원격 포트가 없다 — 목록 대신 안내
 test('MON-7 로컬 세션에서는 안내 문구만 보인다', async ({ ara }) => {
   await newLocalShell(ara.page)
   await ara.page.click('.act-item[data-activity="monitor"]')
-  // FB-ui2: 모니터가 사이드바(.sb-panel)에서 우측 고정 레일(.monitor-panel)로 이관됐다.
-  await expect(ara.page.locator('.monitor-panel .sb-placeholder')).toHaveText(
+  // 이관 이력: 사이드바 탭(.sb-panel) → 우측 레일(.monitor-panel, FB-ui2) → **하단 패널**(#78).
+  // 마지막 이동 이유: 주소·포트·프로세스 3열을 280px 세로 레일에 넣고 있었다.
+  await expect(ara.page.locator('.bottom-panel .sb-placeholder')).toHaveText(
     'SSH 세션에서 원격 포트를 볼 수 있습니다'
   )
   await expect(portRows(ara.page)).toHaveCount(0)
@@ -174,7 +215,7 @@ test('MON-12 포트 행을 눌러도 아무 일도 일어나지 않는다', asyn
   await ara.page.waitForTimeout(500)
   // 행 수·내용 그대로 · 포워딩 배지 안 생김 · 메뉴/다이얼로그 안 뜸
   expect(await snap()).toEqual(before)
-  await expect(ara.page.locator('.monitor-panel .pmon .pfwd')).toHaveCount(0)
+  await expect(ara.page.locator('.bottom-panel .pmon .pfwd')).toHaveCount(0)
   await expect(ara.page.locator('.dlg-overlay, .ctx-menu')).toHaveCount(0)
 })
 

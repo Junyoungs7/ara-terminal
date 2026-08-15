@@ -1745,6 +1745,90 @@
   margin-right: 4px;
 }
 
+/* ── 하단 패널(#78, 2026-08-15) ──
+   터미널 **아래**. 우측 레일과 달리 **세로만** 먹으므로 터미널 80칸에 영향이 없다 —
+   그래서 레일과 같이 열려도 되고, 가로가 필요한 표(포트 3열·로그 한 줄)가 여기 산다.
+   .main 안(탭바·그리드와 형제)이라 폭 계산에 끼지 않는다. */
+.bottom-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--line);
+}
+/* 위쪽 경계를 끌어 높이 조절 — 사이드바 .sb-resizer 와 같은 조작감. */
+.bp-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 5;
+}
+.bp-resizer:hover {
+  background: var(--accent-line);
+}
+.bp-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: var(--row-tabbar);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.bp-tab {
+  border: none;
+  background: none;
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.bp-tab:hover {
+  color: var(--text-hi);
+  background: var(--bg-overlay);
+}
+.bp-tab.on {
+  color: var(--text-hi);
+  background: var(--bg-raised);
+}
+.bp-close {
+  border: none;
+  background: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.bp-close:hover {
+  background: var(--err-line);
+  color: var(--err);
+}
+.bp-close svg {
+  width: 13px;
+  height: 13px;
+}
+.bp-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* 하단에 끼운 패널은 자기 폭·테두리를 버린다 — 그 자리는 하단 패널이 갖는다. */
+.bp-body > .log-panel.embedded {
+  width: auto;
+  flex: 1;
+  border-left: none;
+}
+
 /* F4a 분할 그리드 — 목업 variant-final-3 .pane / .div-* 그대로. */
 .pane {
   display: flex;

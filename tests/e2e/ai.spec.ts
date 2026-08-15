@@ -253,21 +253,24 @@ test('AI-10★ 레일은 하나만 열리고, 다시 열면 쓰던 내용이 남
   // ② 다른 레일에 값을 남기고 떠났다 돌아오면 그대로 있다(컴포넌트가 죽지 않는다).
   //    아라 컴포저는 API 키가 없으면 disabled 라 여기서 못 쓴다 — 세션 로그의 검색창을 쓴다.
   const rail = (id: string) => page.click(`.activity-bar .act-item[data-activity="${id}"]`)
-  await rail('log')
-  await expect(page.locator('.log-panel')).toBeVisible()
+  // 상태 유지는 시스템 모니터의 탭 선택으로 본다. (#78 에서 세션 기록이 하단 패널로 내려가
+  // 그쪽 검색창을 더 못 쓴다 — 레일에 남은 것 중 사용자가 바꿀 수 있는 값이 이 탭이다.)
+  await rail('sys')
+  await expect(page.locator('.monitor-panel.sysm')).toBeVisible()
   await expect(page.locator('.ai-panel')).toHaveCount(0)
-  await page.fill('.log-panel input[type="text"]', '레일_상태_유지_확인')
+  await page.click('.sysm-tabs .sysm-tab:not(.active)')
+  const picked = await page.locator('.sysm-tabs .sysm-tab.active').textContent()
   await rail('preview')
   await expect(page.locator('.mini-rail')).toBeVisible()
-  await expect(page.locator('.log-panel')).toHaveCount(0)
-  await rail('log')
-  await expect(page.locator('.log-panel input[type="text"]')).toHaveValue('레일_상태_유지_확인')
+  await expect(page.locator('.monitor-panel.sysm')).toHaveCount(0)
+  await rail('sys')
+  await expect(page.locator('.sysm-tabs .sysm-tab.active')).toHaveText(picked ?? '')
 
   // ③ 레일이 열려 있어도 터미널이 살아 있고 가로 스크롤이 안 생긴다.
   const dims = await page.evaluate(() => {
     const doc = document.documentElement
     const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0
-    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.log-panel') }
+    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.monitor-panel.sysm') }
   })
   expect(dims.overflowX).toBeLessThanOrEqual(1)
   expect(dims.pane).toBeGreaterThan(50)

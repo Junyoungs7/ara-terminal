@@ -109,7 +109,7 @@ test('FWD-5 로컬 세션에는 포워딩 버튼이 없다', async ({ ara }) => 
   const { page } = ara
   await newLocalShell(page)
   await page.click('.act-item[data-activity="monitor"]')
-  await expect(page.locator('.monitor-panel .sb-placeholder')).toBeVisible()
+  await expect(page.locator('.bottom-panel .sb-placeholder')).toBeVisible() // #78: 포트는 하단 패널
   await expect(portRows(page)).toHaveCount(0)
   await expect(page.locator('[data-action="forward.create"], [data-action="forward.open"]')).toHaveCount(0)
 })

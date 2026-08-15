@@ -9,7 +9,8 @@ import { AiCliModal, type AiCliLaunchRequest } from './AiCliModal'
 import { cliInstalled, ensureRemoteDir, waitShellReady } from './aiCliLaunch'
 import { WorkProfileModal } from './WorkProfileModal'
 import { ActivityBar } from './ActivityBar'
-import { MonitorPanel } from './MonitorPanel'
+import { PortMonitor } from './PortMonitor'
+import { BottomPanel } from './BottomPanel'
 import { LogPanel } from './LogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
@@ -38,7 +39,9 @@ import { dispatchAction, matchBinding } from '../../shared/keymap'
 import { buildTmuxInput } from '../../shared/tmux'
 import {
   MCP_AUTO_ALLOW_MINUTES,
+  isBottomId,
   isRailId,
+  type BottomId,
   type ConnectionProfile,
   type WorkProfile,
   type McpApprovalDecision,
@@ -74,12 +77,19 @@ export function Shell() {
   // 자기 자신일 때만 닫는다 — 이미 다른 레일로 넘어간 뒤 늦게 도착한 onClose 가 그것까지 닫으면 안 된다.
   const closeRail = useCallback((id: RailId) => setRail((cur) => (cur === id ? null : cur)), [])
 
+  // #78(2026-08-15): 하단 패널 — 터미널 **아래**. 세로만 먹으니 우측 레일과 같이 열려도 된다
+  // (레일이 하나만 열리는 #79 규칙은 우측에만 적용된다). 포트·세션 기록이 여기로 내려왔다 —
+  // 가로가 필요한 표를 280~340px 세로 레일에 넣고 있던 것이 애초에 안 맞았다.
+  const [bottom, setBottom] = useState<BottomId | null>(null)
+  const toggleBottom = useCallback((id: BottomId) => setBottom((cur) => (cur === id ? null : id)), [])
+  const openBottom = useCallback((id: BottomId) => setBottom(id), [])
+
   const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
-  const monitorOpen = rail === 'monitor'
   const sysOpen = rail === 'sys'
   const aiSessOpen = rail === 'aisess'
-  const logOpen = rail === 'log'
+  const monitorOpen = bottom === 'monitor'
+  const logOpen = bottom === 'log'
   // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
   // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
   const [aiPrefill, setAiPrefill] = useState<{ text: string; at: number; autoSend?: boolean } | null>(null)
@@ -337,7 +347,7 @@ export function Shell() {
           setConsoleOpen((o) => !o)
           return
         case 'panel.ports':
-          toggleRail('monitor')
+          toggleBottom('monitor')
           return
         case 'panel.sysmon':
           toggleRail('sys')
@@ -346,7 +356,7 @@ export function Shell() {
           toggleRail('aisess')
           return
         case 'panel.log':
-          toggleRail('log')
+          toggleBottom('log')
           return
         case 'help.about':
           void ask({
@@ -911,6 +921,7 @@ export function Shell() {
   )
   const onActivityToggle = useCallback((id: ActivityId) => {
     if (isRailId(id)) toggleRail(id)
+    else if (isBottomId(id)) toggleBottom(id)
     else if (id === 'explorer') setExplorerOpen((o) => !o)
     else if (id === 'console') setConsoleOpen((o) => !o)
     else if (id === 'settings') dispatchAction('settings.open')
@@ -1003,6 +1014,31 @@ export function Shell() {
         <MainArea
           ref={mainRef}
           sessions={sessions}
+          // #78: 하단 패널. 상태는 여기 있고 화면 자리는 .main 안이라 노드로 내려보낸다.
+          bottom={
+            <BottomPanel tab={bottom} onTab={setBottom} onClose={() => setBottom(null)}>
+              {(id) =>
+                id === 'monitor' ? (
+                  <PortMonitor
+                    ports={telemetry.ports}
+                    forwards={telemetry.forwards}
+                    sessionId={activeSession?.id ?? null}
+                    isSsh={activeSession?.type === 'ssh'}
+                    onRefresh={telemetry.refresh}
+                    onForwardsChanged={telemetry.refreshForwards}
+                  />
+                ) : (
+                  <LogPanel
+                    open
+                    embedded
+                    onClose={() => setBottom(null)}
+                    sessionId={activeSession?.id ?? null}
+                    sessionTitle={activeSession?.title ?? ''}
+                  />
+                )
+              }
+            </BottomPanel>
+          }
           version={version}
           onDuplicateSession={duplicateSession}
           sshRestore={sshRestore}
@@ -1015,7 +1051,7 @@ export function Shell() {
             if (text) setAiPrefill({ text, at: Date.now() })
           }}
           onSettingsOpenChange={setSettingsActive}
-          onOpenLog={() => openRail('log')}
+          onOpenLog={() => openBottom('log')}
           onActivityItems={setActivityItems}
         />
         <MiniPreview
@@ -1023,18 +1059,6 @@ export function Shell() {
           sessions={sessions.sessions}
           activeId={sessions.activeId}
           onSelect={selectSession}
-        />
-        {/* FB-ui2(FB-0007② 변경): 좌측 사이드바 [모니터] 탭에서 이관 — 데이터·폴링은 같은 telemetry
-            구독을 그대로 쓴다(중복 폴링 없음). */}
-        <MonitorPanel
-          open={monitorOpen}
-          onClose={() => closeRail('monitor')}
-          ports={telemetry.ports}
-          forwards={telemetry.forwards}
-          sessionId={activeSession?.id ?? null}
-          isSsh={activeSession?.type === 'ssh'}
-          onRefresh={telemetry.refresh}
-          onForwardsChanged={telemetry.refreshForwards}
         />
         {/* F30 AI 세션 — 어느 AI 가 조용한가. 패널이 닫혀 있어도 안에서 계속 센다
             (액티비티 바 점과 OS 알림이 그 결과를 쓴다 — 닫아 두면 안 보이는 게 D안의 급소였다). */}
@@ -1054,14 +1078,6 @@ export function Shell() {
           serverName={activeSession?.title ?? ''}
           stats={telemetry.stats}
           history={sysHistory}
-        />
-        {/* 세션 CLI 내역. 모니터와 같은 우측 레일 — #79 부터 레일은 한 번에 하나만 열린다
-            (예전엔 둘 다 열 수 있었는데, 여섯이 폭 고정이라 터미널이 80칸 아래로 밀렸다). */}
-        <LogPanel
-          open={logOpen}
-          onClose={() => closeRail('log')}
-          sessionId={activeSession?.id ?? null}
-          sessionTitle={activeSession?.title ?? ''}
         />
         {/* 미니 프리뷰 바깥(가장 오른쪽) 형제. 폭 고정 — 사이드바 리사이저를 복제할 이유가 없다. */}
         <AiPanel
@@ -1142,8 +1158,8 @@ export function Shell() {
           onLaunch={(id) => {
             // #69: 콘솔을 닫는 것은 [터미널] 하나뿐이다(아래). [로그]·[포트]는 레일만 연다 —
             // 예전엔 셋 다 콘솔을 닫아서 런치패드로 돌아갈 길이 없었다.
-            if (id === 'log') openRail('log')
-            else if (id === 'port') openRail('monitor')
+            if (id === 'log') openBottom('log')
+            else if (id === 'port') openBottom('monitor')
             else if (id === 'term') {
               // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
               // 제목줄에 박힌 창에서 내 PC 셸이 열렸다 — 조용히 틀리는 종류라 서버에서 칠 명령을
