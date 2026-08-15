@@ -15,7 +15,7 @@ import { BOTTOM_IDS } from '../src/shared/types'
 // FB-ui2(FB-0006) 우측 액티비티 바 — 항목 정의·활성 판정의 순수 로직.
 
 describe('액티비티 바 항목 정의', () => {
-  it('열네 항목을 이 순서로 갖는다', () => {
+  it('열세 항목을 이 순서로 갖는다', () => {
     // F26: 서버 콘솔(console)은 탐색기 다음 자리 — 둘 다 서버를 마우스로 다루는 떠 있는 창이다.
     // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
     // #84: 서버 콘솔의 표 다섯(ps·svc·disk·pkg·ctr)이 하단 탭이 되면서 여기 합류했다.
@@ -36,7 +36,6 @@ describe('액티비티 바 항목 정의', () => {
       'log',
       'preview',
       'explorer',
-      'console',
       'settings'
     ])
   })
@@ -63,7 +62,6 @@ describe('활성 판정(isActivityOpen)', () => {
     log: true,
     preview: false,
     explorer: false,
-    console: false,
     settings: false
   }
 
@@ -99,18 +97,26 @@ describe('저장된 순서 읽기(activityOrderOf)', () => {
 
   it('★ 빠진 항목을 기본 순서 자리에 끼워 넣는다 — 새 기능이 영영 안 보이면 안 된다', () => {
     // 사용자가 예전에 세 개만 저장해 뒀다고 하자. 나머지가 전부 살아 있어야 한다.
-    const got = activityOrderOf(['console', 'ai', 'log'])
+    const got = activityOrderOf(['explorer', 'ai', 'log'])
     expect([...got].sort()).toEqual([...ACTIVITY_ITEMS].sort())
     // 저장해 둔 순서는 그대로 지킨다.
-    expect(got.indexOf('console')).toBeLessThan(got.indexOf('ai'))
+    expect(got.indexOf('explorer')).toBeLessThan(got.indexOf('ai'))
     expect(got.indexOf('ai')).toBeLessThan(got.indexOf('log'))
   })
 
+  // #91: 'console' 은 없어졌다(서버 콘솔 창이 [서버 작업대]에 흡수됐다). 옛 스냅샷에 남아 있어도
+  // 모르는 이름으로 버려져야 한다 — 안 그러면 눌러도 아무 일 없는 아이콘이 바에 남는다.
+  it('★ 없어진 항목(console)은 저장값에 남아 있어도 버린다', () => {
+    const got = activityOrderOf(['console', 'ai'])
+    expect(got).not.toContain('console')
+    expect([...got].sort()).toEqual([...ACTIVITY_ITEMS].sort())
+  })
+
   it('빠진 항목은 기본 순서대로 뒤에 붙는다(예측 가능하게)', () => {
-    const got = activityOrderOf(['monitor', 'console'])
-    expect(got.slice(0, 2)).toEqual(['monitor', 'console'])
+    const got = activityOrderOf(['monitor', 'explorer'])
+    expect(got.slice(0, 2)).toEqual(['monitor', 'explorer'])
     // 나머지는 기본 순서 그대로 뒤에.
-    expect(got.slice(2)).toEqual(ACTIVITY_ITEMS.filter((x) => x !== 'monitor' && x !== 'console'))
+    expect(got.slice(2)).toEqual(ACTIVITY_ITEMS.filter((x) => x !== 'monitor' && x !== 'explorer'))
   })
 })
 

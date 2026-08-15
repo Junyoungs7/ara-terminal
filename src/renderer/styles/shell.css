@@ -1853,6 +1853,14 @@
   color: var(--text-hi);
   background: var(--bg-raised);
 }
+/* #84: 하단이 어느 서버 것인지 — 탭바 오른쪽 끝. 작업대 창의 .con-srv 와 같은 규격이다. */
+.bp-srv {
+  margin-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
 .bp-close {
   border: none;
   background: none;

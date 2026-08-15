@@ -44,11 +44,13 @@ type Props = {
    * 지금 열려 있는 탭은 숨겨져 있어도 그린다 — 보고 있는 것이 갑자기 사라지면 안 된다.
    */
   ids?: readonly BottomId[]
+  /** 지금 보고 있는 서버 이름(SSH 세션일 때만). 하단이 어느 서버 것인지 늘 보이게 한다. */
+  server?: string
   /** 탭별 내용. 열려 있는 것만 그린다 — 안 보이는 탭이 원격에 명령을 보내면 안 된다. */
   children: (tab: BottomId) => ReactNode
 }
 
-export function BottomPanel({ tab, onTab, onClose, ids, children }: Props): JSX.Element | null {
+export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Props): JSX.Element | null {
   // 높이는 세션 수명 동안만 산다(우측 레일·떠 있는 창과 같은 규칙 — 레이아웃 설정이 아니다).
   const [h, setH] = useState(DEFAULT_H)
   const hRef = useRef(h)
@@ -97,6 +99,10 @@ export function BottomPanel({ tab, onTab, onClose, ids, children }: Props): JSX.
           </button>
         ))}
         <span className="sb-tab-spacer" />
+        {/* #84·#91: 하단은 **지금 세션의 서버**를 따라간다(여기에 서버 선택 UI 는 없다).
+            그러면 어느 서버 것인지가 화면에 남아야 한다 — 세션 탭을 보고 유추하게 두면
+            "이 프로세스 목록이 어느 서버였지"가 된다(작업대 창은 제목줄에 늘 찍는다). */}
+        {server && <span className="con-srv bp-srv">{server}</span>}
         <button type="button" className="bp-close" title={t('mon.close')} onClick={onClose}>
           <IconClose />
         </button>

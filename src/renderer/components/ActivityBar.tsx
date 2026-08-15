@@ -1,4 +1,4 @@
-import { Activity, Boxes, Gauge, HardDrive, LayoutGrid, Package, Server, Sparkles } from 'lucide-react'
+import { Activity, Boxes, Gauge, HardDrive, Package, Server, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
@@ -28,9 +28,6 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   log: IconLog,
   preview: IconPreview,
   explorer: IconFolder,
-  // F26 서버 콘솔 — 런치패드(아이콘 격자)를 그대로 뜻하는 글리프. ConnTree 가 이미 쓰고 있는
-  // lucide-react 를 재사용한다(새 라이브러리 없음).
-  console: () => <LayoutGrid />,
   settings: IconGear
 }
 
@@ -69,8 +66,7 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   aisess: 'aisess.title',
   log: 'log.title',
   preview: 'preview.title',
-  explorer: 'explorer.title',
-  console: 'console.title',
+  explorer: 'wb.title',
   settings: 'settings.open'
 }
 

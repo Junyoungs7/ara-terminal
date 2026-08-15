@@ -68,20 +68,39 @@ const navNode = (page: Page, name: string): Locator => page.locator(`.exp-node:h
 // 숨은 탭에도 툴바가 하나씩 있다(폴더를 기억하려고 마운트를 유지한다) — 보이는 탭으로 좁힌다.
 const toolBtn = (page: Page, label: string): Locator => pane(page).locator(`.ftool .ftb:has(span:text-is("${label}"))`)
 
-// 좌측 [서버] 목록에서 서버를 눌러 탭을 연다(접속 안 돼 있으면 그 자리에서 접속한다).
+/**
+ * #91: 위치 탭이 없어졌다 — 좌측이 **대상 하나**를 정하고 상단 탭은 **도구**다.
+ * 서버를 고른 뒤 [파일] 도구를 연다(대상을 바꾸면 열린 도구가 접히므로 매번 연다).
+ */
 async function openServerTab(page: Page, profileName: string): Promise<void> {
   await navNode(page, profileName).click()
-  await expect(page.locator(`.exp-tab.on:has(.exp-tab-nm:text-is("${profileName}"))`)).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.wb-win .con-srv')).toHaveText(profileName, { timeout: 30_000 })
+  await openFiles(page)
+}
+
+/** 지금 대상의 [파일] 도구를 연다(이미 열려 있으면 그 탭으로 간다). */
+async function openFiles(page: Page): Promise<void> {
+  const tab = page.locator('.wb-win .exp-tab[data-tab="files"]')
+  if ((await tab.count()) === 0) await page.click('.wb-pad .con-app[data-tool="files"]')
+  else await tab.click()
+  await expect(page.locator('.wb-win .exp-tab.on[data-tab="files"]')).toBeVisible({ timeout: 30_000 })
+}
+
+/** 내 PC 를 고르고 [파일] 을 연다. */
+async function openLocalFiles(page: Page): Promise<void> {
+  await navNode(page, '홈 폴더').click()
+  await openFiles(page)
 }
 
 // EXP-1 Ctrl+Shift+O 로 떠 있는 창이 열린다 — 본문(.middle)은 **가려지지 않는다**(구 전체화면 모드와 다름).
-test('EXP-1 Ctrl+Shift+O 로 탐색기 창이 열리고 터미널 본문은 그대로 보인다', async ({ ara }) => {
+test('EXP-1 Ctrl+Shift+O 로 작업대가 열리고 터미널 본문은 그대로 보인다', async ({ ara }) => {
   await newLocalShell(ara.page)
   await openExplorer(ara.page)
-  await expect(ara.page.locator('.exp-tab:not(.add)')).toHaveCount(1)
   await expect(ara.page.locator('.middle')).toBeVisible()
-  // 열자마자 로컬 탭 한 장 — 예전엔 로컬 패널이 두 개 떴다(준영님 제보).
-  await expect(ara.page.locator('.exp-tab.on .exp-tab-nm')).toHaveText('내 PC')
+  // #91: 열자마자 [홈] 격자 하나. 대상은 **내 PC** 가 기본이고 제목줄에 찍힌다.
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
+  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('내 PC')
 })
 
 // EXP-2 View 메뉴에서도 같은 진입점으로 열린다
@@ -101,33 +120,22 @@ test('EXP-2b 우측 기능 바 아이콘으로 탐색기를 연다', async ({ ar
   await expect(ara.page.locator('.exp-win')).not.toBeVisible() // #74: 창은 남고 숨는다
 })
 
-// EXP-13★ 떠 있는 창 둘이 겹치지 않고, 누르면 앞으로 온다 (#72, 2026-08-14)
-// 예전엔 탐색기와 서버 콘솔이 **정확히 같은 좌표**에서 시작했고(둘 다 같은 initialRect) z-index 도
-// 같아서(둘 다 95) 렌더 순서상 뒤인 콘솔이 항상 위였다 — 둘 다 열면 탐색기를 꺼낼 방법이 없었다.
-test('EXP-13★ 탐색기와 콘솔이 어긋나 뜨고, 누른 창이 앞으로 온다', async ({ ara }) => {
+// EXP-13★ #91: 떠 있는 창이 **하나**가 됐다 — 탐색기와 서버 콘솔이 [서버 작업대]로 합쳐졌다.
+// 원래 검사(둘이 같은 좌표에서 시작해 아래 창을 꺼낼 수 없던 문제, #72)는 창이 둘일 때의 것이다.
+// 지금 지킬 성질은 "창이 정말 하나인가" — 둘로 되돌아가면 그 겹침 문제도 같이 돌아온다.
+test('EXP-13★ 떠 있는 창은 작업대 하나뿐이다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
 
   await page.click('.act-item[data-activity="explorer"]')
-  await expect(page.locator('.exp-win:not(.con-win)')).toBeVisible()
-  await page.click('.act-item[data-activity="console"]')
-  await expect(page.locator('.con-win')).toBeVisible()
+  await expect(page.locator('.wb-win')).toBeVisible()
+  // 액티비티 바에 [서버 콘솔] 항목 자체가 없다(작업대에 흡수됐다).
+  await expect(page.locator('.act-item[data-activity="console"]')).toHaveCount(0)
+  await expect(page.locator('.exp-win')).toHaveCount(1)
 
-  const box = async (sel: string) => (await page.locator(sel).boundingBox())!
-  const exp = await box('.exp-win:not(.con-win)')
-  const con = await box('.con-win')
-  // ① 좌표가 겹치지 않는다(계단식) — 정확히 같은 자리면 아래 창이 있는지도 모른다.
-  expect(exp.x).not.toBe(con.x)
-  expect(exp.y).not.toBe(con.y)
-
-  const zOf = (sel: string) =>
-    page.locator(sel).evaluate((el) => Number(getComputedStyle(el as HTMLElement).zIndex) || 0)
-  // ② 나중에 연 콘솔이 위다.
-  expect(await zOf('.con-win')).toBeGreaterThan(await zOf('.exp-win:not(.con-win)'))
-
-  // ③ 탐색기를 누르면 앞으로 온다 — 제목줄이 아니라 본문을 눌러도 된다.
-  await page.locator('.exp-win:not(.con-win) .exp-tabs').click({ position: { x: 4, y: 4 } })
-  expect(await zOf('.exp-win:not(.con-win)')).toBeGreaterThan(await zOf('.con-win'))
+  // 창을 눌러도(본문이든 탭바든) 살아 있고 앞으로 온다 — z 는 여전히 관리된다.
+  await page.locator('.wb-win .exp-tabs').click({ position: { x: 4, y: 4 } })
+  await expect(page.locator('.wb-win')).toBeVisible()
 })
 
 // EXP-3★ 탐색기는 xterm 을 파괴하지 않는다 — 닫으면 출력·활성 탭·패널이 그대로다.
@@ -172,32 +180,45 @@ test('EXP-4★ 좌측 서버 목록에서 서버를 열면 탭이 생기고 원�
   await openExplorer(ara.page)
   await openServerTab(ara.page, 'exp4-remote')
   await expect(frow(pane(ara.page), 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
-  // 로컬 탭 + 서버 탭 = 2장.
-  await expect(ara.page.locator('.exp-tab:not(.add)')).toHaveCount(2)
+  // #91: 탭은 [홈]+[파일] 둘이고, **어느 서버인지는 제목줄**이 말한다(옛 위치 탭 대신).
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
+  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('exp4-remote')
+  await expect(ara.page.locator(`.exp-node.on:has(.nm:text-is("exp4-remote"))`)).toBeVisible()
 })
 
-// EXP-4b 같은 서버를 다시 눌러도 탭이 늘지 않는다(기존 탭으로 간다).
-test('EXP-4b 같은 서버를 다시 눌러도 탭이 중복되지 않는다', async ({ ara, ssh }) => {
-  const h = await ssh({ password: 'pw-exp4b', sftpRoot: makeRemote() })
-  await connectNewSshProfile(ara.page, { name: 'exp4b-remote', port: h.port, password: 'pw-exp4b' })
+// EXP-4b #91: 대상은 **하나**다 — 같은 서버를 다시 눌러도 아무 일이 없고(열린 도구도 그대로),
+// 다른 서버를 누르면 도구가 접히고 [홈] 으로 돌아간다(어느 서버 것인지 헷갈리지 않게).
+test('EXP-4b 같은 서버를 다시 눌러도 그대로, 다른 서버면 [홈] 으로 돌아간다', async ({ ara, ssh }) => {
+  const hA = await ssh({ password: 'pw-exp4bA', sftpRoot: makeRemote() })
+  await connectNewSshProfile(ara.page, { name: 'exp4bA', port: hA.port, password: 'pw-exp4bA' })
   await openExplorer(ara.page)
-  await openServerTab(ara.page, 'exp4b-remote')
-  await navNode(ara.page, 'exp4b-remote').click()
-  await expect(ara.page.locator('.exp-tab:not(.add)')).toHaveCount(2)
+  await openServerTab(ara.page, 'exp4bA')
+
+  // 같은 서버 다시 — [파일] 탭이 그대로 열려 있다.
+  await navNode(ara.page, 'exp4bA').click()
+  await expect(ara.page.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
+
+  // 다른 대상(내 PC)으로 — 도구가 접히고 [홈] 이 활성이 된다.
+  await navNode(ara.page, '홈 폴더').click()
+  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
+  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('내 PC')
 })
 
-// EXP-4c 탭 드래그로 순서를 바꾼다(준영님 요청 2026-08-13) — 터미널 탭바와 같은 손놀림.
-test('EXP-4c★ 탭을 끌어다 놓으면 순서가 바뀐다', async ({ ara, ssh }) => {
+// EXP-4c★ #91: 탭 드래그(위치 탭 순서 바꾸기, 2026-08-13)는 위치 탭과 함께 사라졌다.
+// 그 자리를 잇는 성질: **도구 탭을 닫으면 [홈] 으로 돌아간다** — 돌아갈 곳이 없어지면 안 된다(#69).
+test('EXP-4c★ 도구 탭을 닫으면 [홈] 으로 돌아간다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-exp4c', sftpRoot: makeRemote() })
   await connectNewSshProfile(ara.page, { name: 'exp4c-remote', port: h.port, password: 'pw-exp4c' })
   await openExplorer(ara.page)
   await openServerTab(ara.page, 'exp4c-remote')
-  const names = () => ara.page.locator('.exp-tab:not(.add) .exp-tab-nm').allInnerTexts()
-  const before = await names()
-  expect(before).toHaveLength(2)
-  // 두 번째(서버) 탭을 첫 번째 자리로.
-  await ara.page.locator('.exp-tab:not(.add)').nth(1).dragTo(ara.page.locator('.exp-tab:not(.add)').nth(0))
-  await expect.poll(names).toEqual([before[1], before[0]])
+
+  await ara.page.click('.exp-tab[data-tab="files"] .exp-tab-x')
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
+  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  // [홈] 에는 닫기 버튼이 없다 — 마지막 한 장이자 돌아갈 곳이다.
+  await expect(ara.page.locator('.exp-tab[data-tab="home"] .exp-tab-x')).toHaveCount(0)
 })
 
 // EXP-4d 경로 표시줄 — 브레드크럼을 입력으로 바꿔 경로를 직접 치면 그 폴더로 간다(준영님 요청).
@@ -208,6 +229,7 @@ test('EXP-4d★ [경로 직접 입력]으로 경로를 쳐서 이동한다', asy
     writeFileSync(join(dir, '목표폴더', 'hit.txt'), 'hit\n')
     await newLocalShell(ara.page)
     await openExplorer(ara.page)
+    await openLocalFiles(ara.page)
     const p = pane(ara.page)
     await p.locator('.sb-act[data-action="path.edit"]').click()
     const input = p.locator('.fpath-in')
@@ -231,6 +253,7 @@ test('EXP-5 로컬 탭에서 폴더를 더블클릭하면 하위로 이동한다
     writeFileSync(join(dir, '하위폴더', 'inner.txt'), 'inner\n')
     await newLocalShell(ara.page)
     await openExplorer(ara.page)
+    await openLocalFiles(ara.page)
     const p = pane(ara.page)
     await frow(p, basename(dir) + '/').dblclick()
     await expect(frow(p, '하위폴더/')).toBeVisible({ timeout: 15_000 })
@@ -254,8 +277,8 @@ test('EXP-6★ 로컬에서 파일 2개를 골라 복사하고 서버 탭에 붙
     await connectNewSshProfile(ara.page, { name: 'exp6-remote', port: h.port, password: 'pw-exp6' })
     await openExplorer(ara.page)
 
-    // 로컬 탭에서 두 개 선택 → 복사.
-    await ara.page.locator('.exp-tab:has(.exp-tab-nm:text-is("내 PC"))').click()
+    // #91: 위치 탭이 없다 — 좌측에서 [내 PC] 를 고르고 [파일] 을 연다.
+    await openLocalFiles(ara.page)
     const local = pane(ara.page)
     await frow(local, basename(dir) + '/').dblclick()
     await expect(frow(local, 'one.bin')).toBeVisible({ timeout: 15_000 })
@@ -302,6 +325,7 @@ test('EXP-8 선택이 없으면 복사·삭제 버튼이 비활성이고, 하나
     writeFileSync(join(dir, 'a.txt'), 'a\n')
     await newLocalShell(ara.page)
     await openExplorer(ara.page)
+    await openLocalFiles(ara.page)
     const p = pane(ara.page)
     await frow(p, basename(dir) + '/').dblclick()
     await expect(frow(p, 'a.txt')).toBeVisible({ timeout: 15_000 })
@@ -318,18 +342,20 @@ test('EXP-8 선택이 없으면 복사·삭제 버튼이 비활성이고, 하나
   }
 })
 
-// EXP-9 탭 닫기 — 마지막 한 장은 닫히지 않는다(빈 창은 보여 줄 게 없다).
-test('EXP-9 탭을 닫으면 이웃으로 옮겨가고, 마지막 한 장은 닫기 버튼이 없다', async ({ ara, ssh }) => {
+// EXP-9 #91: [홈] 은 닫을 수 없다 — 마지막 한 장이자 **돌아갈 곳**이다(#69).
+// 도구 탭을 닫으면 [홈] 으로 간다(옛 "이웃으로 옮겨간다"를 대신하는 규칙 — 도구는 서로 이웃이
+// 아니라 전부 [홈] 에서 갈라져 나온 것이다).
+test('EXP-9 도구 탭만 닫히고 [홈] 은 남는다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-exp9', sftpRoot: makeRemote() })
   await connectNewSshProfile(ara.page, { name: 'exp9-remote', port: h.port, password: 'pw-exp9' })
   await openExplorer(ara.page)
-  await expect(ara.page.locator('.exp-tab-x')).toHaveCount(0) // 한 장뿐이면 ✕ 자체가 없다
+  await expect(ara.page.locator('.exp-tab-x')).toHaveCount(0) // [홈] 뿐이면 ✕ 자체가 없다
   await openServerTab(ara.page, 'exp9-remote')
-  await expect(ara.page.locator('.exp-tab:not(.add)')).toHaveCount(2)
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
 
   await ara.page.locator('.exp-tab.on .exp-tab-x').click()
-  await expect(ara.page.locator('.exp-tab:not(.add)')).toHaveCount(1)
-  await expect(ara.page.locator('.exp-tab.on .exp-tab-nm')).toHaveText('내 PC')
+  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
+  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
   await expect(ara.page.locator('.exp-tab-x')).toHaveCount(0)
 })
 
@@ -337,7 +363,7 @@ test('EXP-9 탭을 닫으면 이웃으로 옮겨가고, 마지막 한 장은 닫
 test('EXP-10 최대화하면 창이 화면을 채우고, 다시 누르면 원래 크기로 돌아온다', async ({ ara }) => {
   await newLocalShell(ara.page)
   await openExplorer(ara.page)
-  const win = ara.page.locator('.exp-win')
+  const win = ara.page.locator('.wb-win')
   const before = await win.boundingBox()
   await ara.page.locator('.exp-wbtn:not(.x)').click()
   const maxed = await win.boundingBox()

@@ -235,6 +235,9 @@ export const AI_CONTEXT_LINES = 120
 // 우측 액티비티 바 항목(FB-ui2). 2026-08-13 부터 **끄고 켜고 순서를 바꿀 수 있어** 설정으로
 // 저장되므로 shared 에 둔다 — 렌더러 화면 지식이 아니라 저장되는 값의 스키마다.
 // 아래 순서가 **기본 순서**이자, 저장된 목록에 없는 새 항목이 뒤에 붙는 기준이다.
+// #91(2026-08-16): 'console' 이 사라졌다 — 서버 콘솔 창이 [서버 작업대](explorer)에 흡수됐다.
+// 저장된 activityOrder 에 남아 있어도 activityOrderOf 가 모르는 이름을 버린다(마이그레이션 불필요).
+//
 // #84(2026-08-16): 서버 콘솔의 도구 다섯(ps·svc·disk·pkg·ctr)이 여기 합류했다 — 하단 탭이
 // 되면서 액티비티 항목이 됐고, 그 덕에 **끄고 켜고 순서 바꾸기가 공짜로 따라왔다**(설정에 이미 있다).
 export type ActivityId =
@@ -250,7 +253,6 @@ export type ActivityId =
   | 'log'
   | 'preview'
   | 'explorer'
-  | 'console'
   | 'settings'
 
 export const ACTIVITY_ITEMS: readonly ActivityId[] = [
@@ -266,7 +268,6 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'log',
   'preview',
   'explorer',
-  'console',
   'settings'
 ] as const
 

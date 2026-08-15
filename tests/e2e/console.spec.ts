@@ -71,36 +71,44 @@ function makePs(): PsHarness {
 const rows = (page: Page) => page.locator('.con-row')
 const row = (page: Page, pid: number) => page.locator(`.con-row[data-pid="${pid}"]`)
 
-// SSH 접속 → 액티비티 바 [서버 콘솔] → 런치패드가 뜰 때까지.
+// SSH 접속. #91: [서버 콘솔] 창은 없어졌다 — 표는 하단 탭(#84)이고 격자는 [서버 작업대]
+// 창의 [홈] 탭이다(그쪽은 workbench.spec.ts 가 본다). 여기 CON-* 는 **표 자체의 동작**을 지킨다.
 async function openConsole(page: Page, name: string, port: number, password: string): Promise<void> {
   await connectNewSshProfile(page, { name, port, password })
-  await page.click('.act-item[data-activity="console"]')
-  await expect(page.locator('.con-win')).toBeVisible({ timeout: 10_000 })
 }
 
-// 런치패드에서 [프로세스] 를 눌러 탭으로 연다.
+/** 하단 [프로세스] 탭을 연다(액티비티 바 → 하단 패널). */
 async function openProcessTab(page: Page): Promise<void> {
-  await page.click('.con-app[data-tool="ps"]')
+  await page.click('.act-item[data-activity="ps"]')
   await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
   await expect(rows(page)).toHaveCount(4, { timeout: 30_000 })
 }
 
-// CON-1 진입 — 아이콘 격자가 뜬다. **R3 에서 8칸이 전부 살아났다**(R1·R2 때는 3칸만 활성이고
-// 5칸이 "추후" 였다). 파일·로그·포트·터미널은 콘솔 안에 탭으로 뜨지 않고 기존 창·패널을 연다(CON-22).
-test('CON-1 액티비티 바에서 런치패드가 열리고 9칸이 전부 살아 있다', async ({ ara, ssh }) => {
+/** #91: [서버 작업대] 창을 열고 그 서버를 고른다 — 격자([홈] 탭)를 보는 검사들이 쓴다. */
+async function openWorkbench(page: Page): Promise<void> {
+  await page.click('.act-item[data-activity="explorer"]')
+  await expect(page.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
+  await page.click('.exp-nav .exp-node[data-server]')
+  await expect(page.locator('.wb-win .exp-node[data-server].on')) .toBeVisible()
+}
+
+// CON-1 진입 — 격자가 뜬다. 이력: R1·R2 는 3칸만 활성 → R3 에서 전부 살아남 →
+// **#91 에서 [서버 작업대] 창의 [홈] 탭으로 옮겼다**(옛 콘솔 창은 탐색기와 합쳐졌다).
+test('CON-1 작업대 [홈] 에 아홉 칸이 전부 살아 있다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con1', execHandler: ps.exec })
   await openConsole(ara.page, 'con1', h.port, 'pw-con1')
+  await openWorkbench(ara.page)
 
-  await expect(ara.page.locator('.con-app')).toHaveCount(9)
-  for (const tool of ['files', 'ps', 'svc', 'disk', 'log', 'port', 'term', 'pkg', 'ctr']) {
-    await expect(ara.page.locator(`.con-app[data-tool="${tool}"]`)).not.toHaveClass(/soon/)
+  await expect(ara.page.locator('.wb-pad .con-app')).toHaveCount(9)
+  for (const tool of ['files', 'ps', 'svc', 'disk', 'sys', 'port', 'term', 'pkg', 'ctr']) {
+    await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${tool}"]`)).not.toHaveClass(/soon/)
   }
   // 죽은 칸이 하나도 없다 — 눌러도 아무 일 없는 칸을 남겨 두지 않는다.
   await expect(ara.page.locator('.con-app.soon')).toHaveCount(0)
-  // 제목줄에 어느 서버를 만지고 있는지가 늘 보인다.
-  await expect(ara.page.locator('.con-srv')).toHaveText('con1')
-  // 떠 있는 창이다 — 뒤쪽 본문은 그대로 보인다(탐색기와 같은 규칙).
+  // 제목줄에 어느 대상을 만지고 있는지가 늘 보인다(창 하나가 여러 서버를 오간다).
+  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('con1')
+  // 떠 있는 창이다 — 뒤쪽 본문은 그대로 보인다.
   await expect(ara.page.locator('.middle')).toBeVisible()
   await shot(ara.page, 'F26-R1-launchpad.png')
 })
@@ -115,7 +123,7 @@ test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 
   ps.state.psCode = 1
   const h = await ssh({ password: 'pw-con24', execHandler: ps.exec })
   await openConsole(ara.page, 'con24', h.port, 'pw-con24')
-  await ara.page.click('.con-app[data-tool="ps"]')
+  await ara.page.click('.act-item[data-activity="ps"]')
 
   const empty = ara.page.locator('.con-ps .con-empty')
   await expect(empty).toHaveText('ps: permission denied')
@@ -129,88 +137,91 @@ test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 
   await expect(ara.page.locator('.con-ps .con-empty')).toHaveCount(0)
 })
 
-// CON-34★ 런치패드를 키보드만으로 쓴다 (#71, 2026-08-14)
+// CON-34★ 격자를 키보드만으로 쓴다 (#71, 2026-08-14)
 // 타일이 div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도 없었다 — 단축키를 이만큼 만든 앱에서
 // 새로 만든 화면이 마우스 전용인 것은 어긋난다. 지금 타일과 창 버튼은 진짜 <button> 이다.
-test('CON-34★ 런치패드 타일을 포커스·Enter 로 열 수 있다', async ({ ara, ssh }) => {
+test('CON-34★ 격자 타일을 포커스·Enter 로 열 수 있다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con34', execHandler: ps.exec })
   await openConsole(ara.page, 'con34', h.port, 'pw-con34')
+  await openWorkbench(ara.page)
 
-  const tile = ara.page.locator('.con-app[data-tool="ps"]')
+  const tile = ara.page.locator('.wb-pad .con-app[data-tool="ps"]')
   await expect(tile).toHaveJSProperty('tagName', 'BUTTON')
-  await expect(ara.page.locator('.con-win .exp-wbtn').first()).toHaveJSProperty('tagName', 'BUTTON')
+  await expect(ara.page.locator('.wb-win .exp-wbtn').first()).toHaveJSProperty('tagName', 'BUTTON')
 
   await tile.focus()
   await expect(tile).toBeFocused()
   await ara.page.keyboard.press('Enter')
-  await expect(ara.page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
+  await expect(ara.page.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 })
 
-// CON-35★ #84(2026-08-16): 창을 닫아도 상태가 남는지 보던 검사였다(#74). 콘솔 창에는 이제
-// **지킬 상태가 없다** — 도구 탭이 하단으로 내려가고 격자만 남았다. 그래서 남는 것은 창의
-// 자리·크기뿐이고, 그걸 지킨다(#72·#74 가 세운 "닫아도 언마운트하지 않는다"의 잔여분).
-//
-// ⚠️ 대신 후퇴한 것이 있다: **하단 탭을 바꾸면 그 표의 검색어·정렬이 초기화된다.**
-//    하단 패널은 열린 탭만 그리기 때문이다(#78 계약 — 안 보이는 탭이 원격에 명령을 보내면 안 된다).
-//    떠 있는 창 시절에는 숨겨만 뒀다. 마운트를 유지하고 active 로 폴링만 끄면 되찾을 수 있다 —
-//    #87 에 항목으로 올려 뒀다.
-test('CON-35★ 콘솔을 닫았다 열어도 창 자리·크기가 그대로다', async ({ ara, ssh }) => {
+// CON-35★ 창을 닫아도 자리·크기와 열린 도구가 남는다 (#74)
+// 조건부 렌더였을 때는 닫는 순간 언마운트돼 열린 탭·정렬·검색이 통째로 날아갔다.
+// #91 작업대도 같은 규칙을 잇는다 — 숨기기만 한다.
+test('CON-35★ 작업대를 닫았다 열어도 자리·크기와 열린 도구가 그대로다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con35', execHandler: ps.exec })
   await openConsole(ara.page, 'con35', h.port, 'pw-con35')
+  await openWorkbench(ara.page)
+  await ara.page.click('.wb-pad .con-app[data-tool="ps"]')
+  await expect(ara.page.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 
-  const box = () => ara.page.locator('.con-win').evaluate((e) => JSON.stringify(e.getBoundingClientRect()))
+  const box = () => ara.page.locator('.wb-win').evaluate((e) => JSON.stringify(e.getBoundingClientRect()))
   const before = await box()
 
-  await ara.page.click('.con-win .exp-wbtn.x')
-  await expect(ara.page.locator('.con-win')).not.toBeVisible()
-  await ara.page.click('.act-item[data-activity="console"]')
-  await expect(ara.page.locator('.con-win')).toBeVisible()
+  await ara.page.click('.wb-win .exp-wbtn.x')
+  await expect(ara.page.locator('.wb-win')).not.toBeVisible()
+  await ara.page.click('.act-item[data-activity="explorer"]')
+  await expect(ara.page.locator('.wb-win')).toBeVisible()
   expect(await box()).toBe(before)
+  // 열어 뒀던 도구 탭도 그대로다.
+  await expect(ara.page.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 })
 
-// CON-1b★ #84(2026-08-16): 이제 **모든** 칸이 콘솔 밖에서 열린다 — 표 다섯이 하단 패널로
-// 내려가면서 창 안에 남은 도구가 하나도 없어졌다. 그래서 ↗ 가 아홉 칸 전부에 붙는다.
-// 이력: R1·R2 "추후 칸" → R3 전부 활성 → #69 [파일]만 창 안 탭 → #84 전부 밖.
-// #69 가 문제 삼은 "어떤 칸은 여기서, 어떤 칸은 딴 데서"라는 불일치가 이걸로 사라졌다.
-test('CON-1b★ 아홉 칸 모두 콘솔 밖에서 열리고 ↗ 로 미리 알린다', async ({ ara, ssh }) => {
+// CON-1b★ 창 밖에서 열리는 칸에만 ↗ 를 단다.
+// 이력: R3 전부 활성 → #69 [파일]만 창 안 → #84 전부 밖(콘솔에 도구가 없어져서) →
+// **#91 작업대에서 대부분 다시 창 안**(탐색기와 합쳐져 표를 그릴 자리가 생겼다).
+// 지금 밖에서 열리는 것은 셋뿐이다: 포트·시스템(활성 세션 telemetry 라 하단), 터미널(새 세션).
+test('CON-1b★ 밖에서 열리는 칸 셋에만 ↗ 가 붙는다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con1b', execHandler: ps.exec })
   await openConsole(ara.page, 'con1b', h.port, 'pw-con1b')
+  await openWorkbench(ara.page)
 
-  await expect(ara.page.locator('.con-app .ext-mark')).toHaveCount(9)
-  for (const id of ['files', 'ps', 'svc', 'disk', 'log', 'port', 'term', 'pkg', 'ctr']) {
-    await expect(ara.page.locator(`.con-app[data-tool="${id}"] .ext-mark`)).toBeVisible()
+  await expect(ara.page.locator('.wb-pad .con-app .ext-mark')).toHaveCount(3)
+  for (const id of ['port', 'sys', 'term']) {
+    await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${id}"] .ext-mark`)).toBeVisible()
   }
-  // 콘솔 창에는 도구 탭이 아예 없다(런치패드 격자 하나뿐이다).
-  await expect(ara.page.locator('.con-win .exp-tabs')).toHaveCount(0)
-  // ★ 고르면 창이 닫힌다 — 시작 메뉴와 같다. 안 닫으면 떠 있는 격자가 하단 패널을 덮어
-  //   "눌렀는데 안 보인다"가 된다(#69 가 지적한 그 증상이 다른 모양으로 되살아난다).
-  await ara.page.click('.con-app[data-tool="log"]')
-  await expect(ara.page.locator('.con-win')).not.toBeVisible()
-  await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible()
+  // 창 안에서 열리는 칸에는 표시가 없다 — 표시가 아무 데나 붙으면 뜻이 사라진다.
+  for (const id of ['files', 'ps', 'svc', 'disk', 'pkg', 'ctr']) {
+    await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${id}"] .ext-mark`)).toHaveCount(0)
+  }
+  // ↗ 칸은 하단을 연다. 작업대는 살아 있다 — 하단은 창을 가리지 않는다(#84 와 다른 점).
+  await ara.page.click('.wb-pad .con-app[data-tool="port"]')
+  await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="monitor"]')).toBeVisible()
+  await expect(ara.page.locator('.wb-win')).toBeVisible()
 })
 
-// CON-33★ [파일] 은 탐색기 창으로 열리고 런치패드는 그대로 남는다
+// CON-33★ [파일] 은 같은 창의 탭으로 열린다 (#69 → #91)
 // 준영님 지적(#69): "런처패드의 파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이
-// 켜지는것". 그때는 탐색기를 띄우면서 **콘솔을 닫아** 돌아갈 길이 없는 것이 진짜 문제였다.
-// #84 에서 파일은 다시 탐색기 창으로 갔지만 — 이번엔 **콘솔이 닫히지 않는다.**
-// (파일은 세로가 필요한 트리라 하단으로 내려보내지 않았다 — design-system.md §4.8 예외 ①.)
-test('CON-33★ [파일] 은 탐색기 창을 열고, 액티비티 바로 런치패드에 돌아온다', async ({ ara, ssh }) => {
+// 켜지는것". #91 에서 탐색기와 런치패드가 한 창이 되면서 이 요구가 구조적으로 풀렸다 —
+// 파일은 **같은 창의 탭**이고, 돌아갈 [홈] 도 그 자리에 있다.
+test('CON-33★ [파일] 은 같은 창의 탭으로 열리고 [홈] 으로 돌아온다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con33', execHandler: ps.exec })
   await openConsole(ara.page, 'con33', h.port, 'pw-con33')
+  await openWorkbench(ara.page)
 
-  await ara.page.click('.con-app[data-tool="files"]')
-  // 탐색기 창이 뜨고 런치패드는 물러난다(고르면 닫히는 시작 메뉴 모델).
-  await expect(ara.page.locator('.exp-win:not(.con-win)')).toBeVisible({ timeout: 15_000 })
-  // 탐색기는 탭마다 트리를 마운트해 두고 숨긴다(#74) — 개수가 아니라 **보이는 것**을 본다.
-  await expect(ara.page.locator('.exp-win:not(.con-win) .ftree').last()).toBeVisible()
-  await expect(ara.page.locator('.con-win')).not.toBeVisible()
-  // ★ #69 의 요점은 "돌아갈 곳" 이었다 — 액티비티 바가 언제나 다시 열어 준다.
-  await ara.page.click('.act-item[data-activity="console"]')
-  await expect(ara.page.locator('.con-pad')).toBeVisible()
+  await ara.page.click('.wb-pad .con-app[data-tool="files"]')
+  await expect(ara.page.locator('.wb-win .exp-tab.on[data-tab="files"]')).toBeVisible()
+  await expect(ara.page.locator('.wb-win .ftree')).toHaveCount(1)
+  // 창은 그대로다(새 창이 뜨지 않는다 — 창은 이제 하나뿐이다).
+  await expect(ara.page.locator('.exp-win')).toHaveCount(1)
+
+  // [홈] 으로 돌아간다 — 이 검사의 요점이다.
+  await ara.page.click('.wb-win .exp-tab[data-tab="home"]')
+  await expect(ara.page.locator('.wb-pad')).toBeVisible()
 })
 
 // CON-2 아이콘 → 같은 창의 탭. 원격 ps 출력이 표로 그려진다.
@@ -382,7 +393,8 @@ test('CON-8c★ 활성 세션을 바꾸면 이전 서버의 프로세스 목록�
   const hB = await ssh({ password: 'pw-con8cB', execHandler: psB.exec })
   await connectNewSshProfile(page, { name: 'con8cB', port: hB.port, password: 'pw-con8cB' })
 
-  await expect(page.locator('.con-srv')).toHaveText('con8cB')
+  // #84: 하단이 어느 서버 것인지 탭바 오른쪽에 늘 찍힌다(세션 탭을 보고 유추하지 않게).
+  await expect(page.locator('.bottom-panel .bp-srv')).toHaveText('con8cB')
   await expect(rows(page)).toHaveCount(1, { timeout: 30_000 })
   await expect(rows(page).locator('.cpid')).toHaveText('777')
   // 선택도 함께 버린다 — A 의 1234 를 고른 채로 [종료] 가 살아 있으면 안 된다.
@@ -407,12 +419,19 @@ test('CON-9 하단 [프로세스] 탭을 닫으면 ps 폴링이 멈춘다', asyn
   expect(ps.rounds()).toBe(after)
 })
 
-// CON-10 로컬 세션에는 원격 프로세스가 없다 — 목록 대신 안내(MON-7 과 같은 규칙).
-test('CON-10 로컬 세션에서는 안내 문구만 보인다', async ({ ara }) => {
+// CON-10 로컬 세션에는 원격 프로세스가 없다 — 하단 탭은 안내를 낸다(MON-7 과 같은 규칙).
+// #91: 작업대에서 [내 PC] 를 고르면 원격 전용 칸은 **아예 나오지 않는다** — 회색으로 남기지
+// 않는 것이 이 설계의 판단이다(대상이 다르면 할 수 있는 일이 다른 것이 자연스럽다).
+test('CON-10 로컬에서는 하단이 안내를 내고 작업대 격자에 원격 칸이 없다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await ara.page.click('.act-item[data-activity="console"]')
-  await expect(ara.page.locator('.con-win .sb-placeholder')).toHaveText('SSH 세션에서 쓸 수 있습니다')
-  await expect(ara.page.locator('.con-app')).toHaveCount(0)
+  await ara.page.click('.act-item[data-activity="ps"]')
+  await expect(ara.page.locator('.bottom-panel .sb-placeholder')).toHaveText('SSH 세션에서 쓸 수 있습니다')
+
+  await ara.page.click('.act-item[data-activity="explorer"]')
+  await expect(ara.page.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
+  // 내 PC 가 기본 대상이다 — 파일·시스템·터미널만 남는다.
+  await expect(ara.page.locator('.wb-pad .con-app')).toHaveCount(3)
+  await expect(ara.page.locator('.wb-pad .con-app[data-tool="ps"]')).toHaveCount(0)
 })
 
 // ── R2: 서비스 창 · 디스크 창 ───────────────────────────────────────────────
@@ -488,8 +507,9 @@ const dskRows = (page: Page) => page.locator('.dsk-row')
 const dirRows = (page: Page) => page.locator('.dsk-dir')
 
 // 런치패드에서 도구를 눌러 탭으로 연다.
+// #84: 도구는 하단 탭이다(콘솔 창 격자가 아니라).
 async function openTool(page: Page, tool: string): Promise<void> {
-  await page.click(`.con-app[data-tool="${tool}"]`)
+  await page.click(`.act-item[data-activity="${tool}"]`)
   await expect(page.locator(`.bp-tab.on[data-bottom="${tool}"]`)).toBeVisible()
 }
 
@@ -616,7 +636,7 @@ test('CON-14b★ 활성 세션을 바꾸면 서비스 목록과 선택이 사라
   const hB = await ssh({ password: 'pw-con14bB', execHandler: sysB.exec })
   await connectNewSshProfile(page, { name: 'con14bB', port: hB.port, password: 'pw-con14bB' })
 
-  await expect(page.locator('.con-srv')).toHaveText('con14bB')
+  await expect(page.locator('.bottom-panel .bp-srv')).toHaveText('con14bB')
   await expect(svcRows(page)).toHaveCount(1, { timeout: 30_000 })
   await expect(page.locator('.con-btn[data-action="svc.stop"]')).toBeDisabled()
   expect(sysA.acts).toEqual([])
@@ -698,10 +718,12 @@ test('CON-17 탐색기로 열기는 기존 탐색기 창을 그 서버로 연다
   await expect(dirRows(ara.page)).toHaveCount(3, { timeout: 15_000 })
   await ara.page.click('.con-btn[data-action="disk.explorer"]')
 
-  // 콘솔 창도 .exp-win 껍데기를 쓴다 — 탐색기 창은 .con-win 이 아닌 쪽이다.
-  const exp = ara.page.locator('.exp-win:not(.con-win)')
-  await expect(exp).toBeVisible({ timeout: 15_000 })
-  await expect(exp.locator('.exp-tab .exp-tab-nm', { hasText: 'con17' })).toBeVisible({ timeout: 15_000 })
+  // #91: 창은 [서버 작업대] 하나뿐이다 — 디스크에서 [탐색기로 열기]는 **같은 창의 [파일] 탭**을
+  // 그 폴더로 연다(예전엔 별도 탐색기 창을 띄웠다).
+  const wb = ara.page.locator('.wb-win')
+  await expect(wb).toBeVisible({ timeout: 15_000 })
+  await expect(wb.locator('.exp-tab.on[data-tab="files"]')).toBeVisible({ timeout: 15_000 })
+  await expect(wb.locator('.con-srv')).toHaveText('con17')
 })
 
 // ── F26 R3: 서버 개요 · 설치된 프로그램 · 나머지 칸 편입 ─────────────────────
@@ -743,7 +765,8 @@ function makeR3(): R3Harness {
 test('CON-18 런치패드에 배포판·커널·가동 시간이 한 줄로 뜬다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw18', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c18', h.port, 'pw18')
-  const ov = ara.page.locator('.con-ov')
+  await openWorkbench(ara.page)
+  const ov = ara.page.locator('.wb-pad .con-ov')
   await expect(ov).toBeVisible({ timeout: 20_000 })
   await expect(ov).toContainText('Ubuntu 22.04.4 LTS')
   await expect(ov).toContainText('커널 5.15.0-91-generic')
@@ -756,7 +779,7 @@ test('CON-18 런치패드에 배포판·커널·가동 시간이 한 줄로 뜬�
 test('CON-19 설치된 프로그램 표에 nvm 으로 깐 node 가 경로·버전·설치일과 함께 뜬다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw19', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c19', h.port, 'pw19')
-  await ara.page.click('.con-app[data-tool="pkg"]')
+  await ara.page.click('.act-item[data-activity="pkg"]')
   await expect(ara.page.locator('.bp-tab.on[data-bottom="pkg"]')).toBeVisible()
 
   const rowsPkg = ara.page.locator('.pkg-row:not(.missing)')
@@ -775,7 +798,7 @@ test('CON-20 설치된 프로그램은 폴링하지 않고 [새로고침] 때만
   const r3 = makeR3()
   const h = await ssh({ password: 'pw20', execHandler: r3.exec })
   await openConsole(ara.page, 'c20', h.port, 'pw20')
-  await ara.page.click('.con-app[data-tool="pkg"]')
+  await ara.page.click('.act-item[data-activity="pkg"]')
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(3, { timeout: 20_000 })
 
   const first = r3.probes()
@@ -790,7 +813,7 @@ test('CON-20 설치된 프로그램은 폴링하지 않고 [새로고침] 때만
 test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw21', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c21', h.port, 'pw21')
-  await ara.page.click('.con-app[data-tool="pkg"]')
+  await ara.page.click('.act-item[data-activity="pkg"]')
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(3, { timeout: 20_000 })
 
   // 기본: 못 찾은 것들은 안 보인다.
@@ -804,20 +827,20 @@ test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는
 
 // CON-22 칸은 콘솔 안에 같은 화면을 다시 그리지 않고 **기존 창·패널**을 연다.
 // #84: 그리고 고르면 창이 닫힌다 — 떠 있는 격자가 하단 패널을 덮기 때문이다(시작 메뉴 모델).
-test('CON-22★ [포트] 칸은 하단 [포트] 탭을 열고 런치패드는 물러난다', async ({ ara, ssh }) => {
+test('CON-22★ [포트] 칸은 하단 [포트] 탭을 열고 작업대는 살아 있다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw22', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c22', h.port, 'pw22')
+  await openWorkbench(ara.page)
 
-  // 누르기 전에 "여긴 밖에서 열린다"를 알려 준다 — 아홉 칸이 똑같이 생겼기 때문이다(#69).
-  await expect(ara.page.locator('.con-app[data-tool="port"] .ext-mark')).toBeVisible()
+  // 누르기 전에 "여긴 밖에서 열린다"를 알려 준다 — 칸이 똑같이 생겼기 때문이다(#69).
+  await expect(ara.page.locator('.wb-pad .con-app[data-tool="port"] .ext-mark')).toBeVisible()
 
-  await ara.page.click('.con-app[data-tool="port"]')
-  // 기존 포트 모니터가 뜬다(콘솔 안에 같은 화면을 두 번 만들지 않는다).
-  // #78 부터 우측 레일이 아니라 **하단 패널**의 [포트] 탭이다.
+  await ara.page.click('.wb-pad .con-app[data-tool="port"]')
+  // 포트는 **활성 세션** telemetry 라 창 안에 다시 구독하지 않는다 — 하단 [포트] 탭을 연다.
   await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="monitor"]')).toBeVisible()
-  // 격자는 물러난다. #69 가 걱정한 "돌아갈 곳"은 액티비티 바가 갖고 있다.
-  await expect(ara.page.locator('.con-win')).not.toBeVisible()
-  // 'port' 라는 탭은 없다 — 포트 모니터의 하단 탭 id 는 'monitor' 다(이름이 둘이면 안 된다).
+  // 하단은 창을 가리지 않으므로 작업대는 그대로 열려 있다(#84 때와 다른 점).
+  await expect(ara.page.locator('.wb-win')).toBeVisible()
+  // 'port' 라는 하단 탭은 없다 — 포트 모니터의 id 는 'monitor' 다(이름이 둘이면 안 된다).
   await expect(ara.page.locator('.bp-tab[data-bottom="port"]')).toHaveCount(0)
 })
 
@@ -827,13 +850,14 @@ test('CON-22★ [포트] 칸은 하단 [포트] 탭을 열고 런치패드는 �
 test('CON-23★ [터미널] 칸은 그 서버의 새 세션을 연다(로컬 셸이 아니다)', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw23', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c23', h.port, 'pw23')
+  await openWorkbench(ara.page)
   const before = await ara.page.locator('.term-tabbar .ttab').count()
 
-  // [터미널] 은 세션을 만드는 동작이라 **이 칸만** 콘솔을 닫는다(#69) — 터미널이 보여야 한다.
-  await expect(ara.page.locator('.con-app[data-tool="term"] .ext-mark')).toBeVisible()
-  await ara.page.click('.con-app[data-tool="term"]')
+  // [터미널] 은 세션을 만드는 동작이라 **이 칸만** 창을 닫는다 — 터미널이 보여야 한다.
+  await expect(ara.page.locator('.wb-pad .con-app[data-tool="term"] .ext-mark')).toBeVisible()
+  await ara.page.click('.wb-pad .con-app[data-tool="term"]')
   await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
-  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
+  await expect(ara.page.locator('.wb-win')).not.toBeVisible() // #74: 창은 남고 숨는다
 
   // 늘어난 세션이 **ssh** 여야 한다 — 여기가 이 검사의 요점이다.
   const types = (await sessionList(ara.page)).map((s) => s.type)
@@ -896,7 +920,7 @@ function makeCtr(out: string): CtrHarness {
 test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점이 켜진다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw24', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c24', h.port, 'pw24')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.bp-tab.on[data-bottom="ctr"]')).toBeVisible()
 
   const names = ara.page.locator('.ctr-row .ctr-name')
@@ -911,7 +935,7 @@ test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점�
 test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 뜬다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw25', execHandler: makeCtr('docker: command not found').exec })
   await openConsole(ara.page, 'c25', h.port, 'pw25')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.con-note')).toContainText('docker·podman', { timeout: 20_000 })
   await expect(ara.page.locator('.ctr-row')).toHaveCount(0)
 })
@@ -920,7 +944,7 @@ test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 
 test('CON-26 컨테이너 검색이 이름·이미지에 걸린다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw26', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c26', h.port, 'pw26')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ara.page.locator('.pkg-wrap .con-field').fill('postgres')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(1)
@@ -936,7 +960,7 @@ const ctrBtn = (page: Page, action: string) => page.locator(`.ctr-acts .con-btn[
 test('CON-28★ 컨테이너 상태에 따라 열리는 조작이 갈린다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw28', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c28', h.port, 'pw28')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
 
   // 고르기 전에는 전부 잠겨 있다.
@@ -966,7 +990,7 @@ test('CON-29★ 정지를 취소하면 원격에 아무 명령도 나가지 않�
   const ctr = makeCtr(CTR_OUT)
   const h = await ssh({ password: 'pw29', execHandler: ctr.exec })
   await openConsole(ara.page, 'c29', h.port, 'pw29')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
 
@@ -989,7 +1013,7 @@ test('CON-30 이미지 제거가 거절되면 서버가 준 이유가 그대로 
   ctr.fail = { on: 'rmi', msg: 'Error response from daemon: conflict: image is being used' }
   const h = await ssh({ password: 'pw30', execHandler: ctr.exec })
   await openConsole(ara.page, 'c30', h.port, 'pw30')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
 
@@ -1006,13 +1030,12 @@ test('CON-31★ [접속]은 컨테이너 셸 명령을 터미널로 보내고 �
   const inputs: string[] = []
   const h = await ssh({ password: 'pw31', execHandler: ctr.exec, onShellData: (d) => inputs.push(d) })
   await openConsole(ara.page, 'c31', h.port, 'pw31')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
   await ctrBtn(ara.page, 'attach').click()
 
-  // 콘솔은 비켜 준다(방금 보낸 터미널을 덮고 있으면 한 번 더 치워야 한다).
-  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
+  // #84: 컨테이너 표가 하단 탭이라 터미널을 덮지 않는다 — 비켜 줄 창이 애초에 없다.
   await expect.poll(() => inputs.join(''), { timeout: 15_000 }).toContain('exec -it ' + CTR_WEB)
   // 줄이 실제로 실행되도록 CR 로 끝난다(LF 만 보내면 실행하지 않는 셸이 있다).
   expect(inputs.join('')).toContain('\r')
@@ -1025,7 +1048,7 @@ test('CON-27 컨테이너 탭을 닫으면 폴링이 멈춘다', async ({ ara, s
   const ctr = makeCtr(CTR_OUT)
   const h = await ssh({ password: 'pw27', execHandler: ctr.exec })
   await openConsole(ara.page, 'c27', h.port, 'pw27')
-  await ara.page.click('.con-app[data-tool="ctr"]')
+  await ara.page.click('.act-item[data-activity="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
 
   // #84: 탭을 닫는 자리가 콘솔 창 → 하단 패널로 옮겼다. 닫으면 그 탭이 언마운트되고 폴링이 멎는다.

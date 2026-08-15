@@ -15,8 +15,7 @@ import { LogPanel } from './LogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
 import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
-import { ExplorerView } from './ExplorerView'
-import { ServerConsoleView } from './ServerConsoleView'
+import { WorkbenchView } from './WorkbenchView'
 import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
@@ -128,20 +127,15 @@ export function Shell() {
   const [explorerReveal, setExplorerReveal] = useState<{ profileId: string; path: string; at: number } | null>(null)
   // F26 서버 콘솔(런치패드 + 프로세스 창). 탐색기와 같은 떠 있는 창이라 같은 규칙 —
   // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
-  const [consoleOpen, setConsoleOpen] = useState(false)
   // #74 후속(2026-08-14): 떠 있는 창은 닫아도 언마운트하지 않지만, **열기 전에는 만들지도 않는다.**
   // 처음부터 마운트했더니 숨은 탐색기의 FileTree 가 DOM 에 남아 사이드바 [파일] 트리와 겹쳤다
   // (`.sftp-wrap .ftree` 가 2개 → e2e 18건 실패). 눈에 안 보이는 트리가 붙여넣기 대상·업로더
   // 같은 **전역 등록**을 가로챌 수 있다는 게 더 큰 문제다 — 그건 화면 없이 조용히 틀리는 종류다.
   // 한 번 열면 그다음부터는 계속 살아 있어 탭·정렬·검색이 남는다(#74 가 노린 것).
   const [explorerMounted, setExplorerMounted] = useState(false)
-  const [consoleMounted, setConsoleMounted] = useState(false)
   useEffect(() => {
     if (explorerOpen) setExplorerMounted(true)
   }, [explorerOpen])
-  useEffect(() => {
-    if (consoleOpen) setConsoleMounted(true)
-  }, [consoleOpen])
   // F31 통합 검색(F1 · 타이틀바 돋보기). 목록은 기존 표(KEYMAP·MENUBAR·프로필)에서 만들어진다.
   const [paletteOpen, setPaletteOpen] = useState(false)
   // 연결 관리자를 어떤 상태로 열지(트리 "정보 수정" → 해당 프로필 / 그룹 "새 연결" → 그룹 기본값).
@@ -346,7 +340,8 @@ export function Shell() {
           setBootstrapOpen(true)
           return
         case 'panel.console':
-          setConsoleOpen((o) => !o)
+          // #91: 서버 콘솔은 [서버 작업대] 창에 흡수됐다 — 같은 창을 연다.
+          setExplorerOpen((o) => !o)
           return
         case 'panel.ports':
           toggleBottom('monitor')
@@ -932,7 +927,6 @@ export function Shell() {
       log: logOpen,
       preview: previewOpen,
       explorer: explorerOpen,
-      console: consoleOpen,
       settings: settingsActive
     }),
     [
@@ -944,7 +938,6 @@ export function Shell() {
       logOpen,
       previewOpen,
       explorerOpen,
-      consoleOpen,
       settingsActive
     ]
   )
@@ -952,7 +945,6 @@ export function Shell() {
     if (isRailId(id)) toggleRail(id)
     else if (isBottomId(id)) toggleBottom(id)
     else if (id === 'explorer') setExplorerOpen((o) => !o)
-    else if (id === 'console') setConsoleOpen((o) => !o)
     else if (id === 'settings') dispatchAction('settings.open')
   }, [])
 
@@ -1052,6 +1044,7 @@ export function Shell() {
               // #84: 탭이 여덟이라 좁을 수 있다 — 액티비티 바의 순서·숨김 설정을 그대로 쓴다
               // (하단만의 새 설정을 만들지 않는다). 설정에서 끈 도구는 탭에서도 사라진다.
               ids={activityItems.filter(isBottomId)}
+              server={activeSession?.type === 'ssh' ? (activeSession?.serverKey ?? '') : ''}
             >
               {(id) =>
                 id === 'monitor' ? (
@@ -1177,8 +1170,11 @@ export function Shell() {
           표의 정렬·검색이 통째로 날아갔다(프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다).
           우측 레일이 상태를 지키는 것과 같은 이유로 여기도 열림 여부만 넘기고 창이 display:none
           으로 숨는다. 숨은 동안 원격 폴링이 돌지 않는 것은 각 창이 active 를 함께 내려서 막는다. */}
+      {/* #91: 옛 [파일 탐색기] 창과 [서버 콘솔] 런치패드가 **한 창**이 됐다(서버 작업대).
+          #74: 닫혀도 언마운트하지 않는다 — 대상·열린 도구·경로·표의 정렬이 남는다.
+          숨은 동안 원격 폴링이 돌지 않는 것은 창이 visible 을 아래로 내려서 막는다. */}
       {explorerMounted && (
-        <ExplorerView
+        <WorkbenchView
           visible={explorerOpen}
           sessions={sessions.sessions}
           profiles={profiles}
@@ -1187,41 +1183,27 @@ export function Shell() {
           onClose={() => setExplorerOpen(false)}
           ask={ask}
           askText={askText}
-          reveal={explorerReveal}
-        />
-      )}
-      {/* F26: 탐색기와 같은 떠 있는 창. 대상은 활성 세션 하나다 — 창 안에서 서버를 고르지 않는다
-          (탐색기와 달리 프로세스·서비스는 "지금 붙어 있는 서버"의 것이라야 헷갈리지 않는다). */}
-      {consoleMounted && (
-        <ServerConsoleView
-          visible={consoleOpen}
-          sessionId={activeSession?.id ?? null}
-          isSsh={activeSession?.type === 'ssh'}
-          serverName={activeSession?.serverKey ?? ''}
-          onClose={() => setConsoleOpen(false)}
-          onLaunch={(id) => {
-            // #84: 모든 칸이 창 밖에서 열리므로 **고르면 창을 닫는다** — 시작 메뉴와 같은 모델이다.
-            // 안 닫으면 떠 있는 런치패드가 하단 패널을 그대로 덮어 "눌렀는데 안 보인다"가 된다
-            // (e2e 가 실제로 이걸 잡았다: `.con-pad ... intercepts pointer events`).
-            // #69 가 걱정한 "돌아갈 곳"은 액티비티 바 [서버 콘솔]이 언제나 열어 준다 —
-            // 그때 문제는 콘솔이 닫히면서 **새 떠 있는 창**이 그 자리를 차지한 것이었다.
-            setConsoleOpen(false)
-            if (id === 'port') openBottom('monitor')
-            else if (id === 'files') {
-              // 프로필이 없는 세션(복원 중 등)은 열 곳이 없으므로 아무 일도 안 한다.
-              const profileId = activeSession?.profileId
-              if (!profileId) return
-              setExplorerOpen(true)
-              setExplorerReveal({ profileId, path: '.', at: Date.now() })
-            } else if (id === 'term') {
-              // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
-              // 제목줄에 박힌 창에서 내 PC 셸이 열렸다 — 조용히 틀리는 종류라 서버에서 칠 명령을
-              // 자기 PC 에서 치게 됐다(2026-08-13 감사). 원래 스펙(F26-R3)도 이걸 지시했다.
-              const pid = activeSession?.profileId
-              if (pid) void connectProfile(pid)
-              else dispatchAction('session.new') // 로컬 세션에서 열었으면 로컬이 맞다
-            } else openBottom(id)
+          onAskAi={(text) => {
+            openRail('ai')
+            setAiPrefill({ text, at: Date.now() })
           }}
+          onSendInput={(text) => {
+            const sid = activeSession?.id
+            if (sid) window.ev?.session.input(sid, text)
+          }}
+          onLaunch={(id, profileId) => {
+            // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번
+            // 구독하지 않는다) 하단 그 탭을 열 뿐이다. 터미널은 그 서버로 새 세션.
+            if (id === 'port') openBottom('monitor')
+            else if (id === 'sys') openBottom('sys')
+            else if (id === 'term') {
+              if (profileId) void connectProfile(profileId)
+              else dispatchAction('session.new')
+              // 세션을 만드는 동작이라 터미널이 보여야 한다 — 이 칸만 창을 닫는다.
+              setExplorerOpen(false)
+            }
+          }}
+          reveal={explorerReveal}
         />
       )}
       <StatusBar
