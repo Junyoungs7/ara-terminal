@@ -1,17 +1,19 @@
-// F29 시스템 모니터 사이드바 — 준영님 요청(2026-08-11):
+// F29 시스템 모니터 — 준영님 요청(2026-08-11):
 // "우측 버튼에 서버 정보 보기 버튼으로 클릭하면 현재 보고있는 서버, 즉 패널의 cpu, memory, gpu,
 //  디스크 용량 등 시스템 정보를 그래프와 이런걸로 사이드바 형식으로 보여주고 기본적으로는 내 로컬
 //  시스템의 정보를 보여주고. 탭으로 지금 보고있는 패널, 로컬 이렇게 2개를 선택해서 보여주는거지."
+//
+// #83(2026-08-15): 우측 레일 → **하단 패널**. 보여 주는 것이 서버 자원이라 "서버 것은 아래"
+// 원칙(design-system.md §4.8)에 걸린다. 화면 위치만 바뀌고 안쪽 규칙(기본 [내 PC] 탭·그래프·
+// 닫으면 폴링 정지)은 그대로라 아래 검사는 선택자만 옮겼다.
 import { test, expect, newLocalShell, connectNewSshProfile, makeTelemetry, type TeleHarness } from './fixtures'
 import type { Page } from '@playwright/test'
 
 type SshFactory = (opts?: { password?: string; execHandler?: TeleHarness['exec'] }) => Promise<{ port: number }>
 
-// 액티비티 바 순서: ai · monitor · **sys** · aisess · log · preview · explorer · console · settings
-// (store/activityBar.ts 의 ACTIVITY_ITEMS 가 단일 출처 — 순서가 바뀌면 그 단위 테스트가 먼저 잡는다).
 async function openSys(page: Page): Promise<void> {
-  await page.locator('.activity-bar .act-item').nth(2).click()
-  await expect(page.locator('.monitor-panel.sysm')).toBeVisible()
+  await page.click('.act-item[data-activity="sys"]')
+  await expect(page.locator('.bottom-panel .monitor-panel.sysm')).toBeVisible()
 }
 
 test('SYSM-1 액티비티 바에서 열리고 기본 탭은 [내 PC] 다', async ({ ara }) => {
@@ -20,7 +22,11 @@ test('SYSM-1 액티비티 바에서 열리고 기본 탭은 [내 PC] 다', async
   // 준영님 지시: "기본적으로는 내 로컬 시스템의 정보를 보여주고".
   await expect(page.locator('.sysm-tab.active')).toHaveText('내 PC')
   // 세션이 하나도 없어도 내 PC 는 보인다 — 세션에 매인 telemetry 와 다른 채널이라 그렇다.
+  // toBeVisible 까지 보는 이유(#83): 하단으로 내리면서 .sysm-body 를 통째로 격자로 만들었더니
+  // 말줄임(overflow:hidden)을 쓰는 이 줄이 **높이 0** 으로 접혔다. 글자는 DOM 에 있었으므로
+  // 텍스트 검사만으로는 통과했다 — 자리를 옮길 때 이 함정이 다시 나온다.
   await expect(page.locator('.sysm-who')).not.toHaveText('')
+  await expect(page.locator('.sysm-who')).toBeVisible()
 })
 
 test('SYSM-2 내 PC 탭에 CPU·메모리 그래프와 디스크가 실제 값으로 그려진다', async ({ ara }) => {
@@ -89,7 +95,8 @@ test('SYSM-6 패널을 닫으면 내 PC 폴링이 멈춘다', async ({ ara }) =>
 
   // 닫고 나서 폴링 주기를 여러 번 넘겨도 데이터가 더 오지 않아야 한다.
   // 판정: 다시 열었을 때 히스토리가 **처음부터** 다시 쌓인다(닫는 동안 쌓였다면 선이 이미 길다).
-  await page.locator('.monitor-panel.sysm .mon-close').click()
+  // #83: 닫기는 하단 패널이 갖는다 — 끼운 패널은 자기 제목줄을 안 그린다.
+  await page.locator('.bottom-panel .bp-close').click()
   await expect(page.locator('.monitor-panel.sysm')).toHaveCount(0)
   await page.waitForTimeout(6000) // 폴링 2바퀴 이상
 

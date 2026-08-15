@@ -86,9 +86,10 @@ export function Shell() {
 
   const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
-  const sysOpen = rail === 'sys'
   const aiSessOpen = rail === 'aisess'
   const monitorOpen = bottom === 'monitor'
+  // #83: 시스템 모니터는 **서버 자원**이라 아래다(§4.8 — 내용이 자리를 정한다).
+  const sysOpen = bottom === 'sys'
   const logOpen = bottom === 'log'
   // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
   // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
@@ -350,7 +351,7 @@ export function Shell() {
           toggleBottom('monitor')
           return
         case 'panel.sysmon':
-          toggleRail('sys')
+          toggleBottom('sys')
           return
         case 'panel.aisessions':
           toggleRail('aisess')
@@ -1027,6 +1028,19 @@ export function Shell() {
                     onRefresh={telemetry.refresh}
                     onForwardsChanged={telemetry.refreshForwards}
                   />
+                ) : id === 'sys' ? (
+                  // F29 시스템 모니터 — CPU·메모리·GPU 는 위 telemetry 구독을 그대로 받는다
+                  // (새 폴러 금지). 디스크만 느린 주기로 따로 읽는다(df 는 무겁고 초 단위로 안 변한다).
+                  <SysMonitorPanel
+                    open
+                    embedded
+                    onClose={() => setBottom(null)}
+                    sessionId={activeSession?.id ?? null}
+                    isSsh={activeSession?.type === 'ssh'}
+                    serverName={activeSession?.title ?? ''}
+                    stats={telemetry.stats}
+                    history={sysHistory}
+                  />
                 ) : (
                   <LogPanel
                     open
@@ -1067,17 +1081,6 @@ export function Shell() {
           onClose={() => closeRail('aisess')}
           onGoTo={selectSession}
           onQuietChange={setAiQuiet}
-        />
-        {/* F29 시스템 모니터 — 자원 그래프. CPU·메모리·GPU 는 위 telemetry 구독을 그대로 받는다
-            (새 폴러 금지). 디스크만 패널이 느린 주기로 따로 읽는다(df 는 무겁고 초 단위로 안 변한다). */}
-        <SysMonitorPanel
-          open={sysOpen}
-          onClose={() => closeRail('sys')}
-          sessionId={activeSession?.id ?? null}
-          isSsh={activeSession?.type === 'ssh'}
-          serverName={activeSession?.title ?? ''}
-          stats={telemetry.stats}
-          history={sysHistory}
         />
         {/* 미니 프리뷰 바깥(가장 오른쪽) 형제. 폭 고정 — 사이드바 리사이저를 복제할 이유가 없다. */}
         <AiPanel

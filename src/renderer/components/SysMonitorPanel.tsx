@@ -9,9 +9,12 @@ import { sparkPoints, useHostStats, useRemoteDisks, type Sample } from '../store
 //  디스크 용량 등 시스템 정보를 그래프와 이런걸로 사이드바 형식으로 보여주고 기본적으로는 내 로컬
 //  시스템의 정보를 보여주고. 탭으로 지금 보고있는 패널, 로컬 이렇게 2개를 선택해서 보여주는거지."
 //
-// 껍데기(헤더+닫기)는 MonitorPanel/.mon-head 와 같은 조합을 재사용한다 — 새 창 인프라를 만들지 않는다.
 // 그래프는 **차트 라이브러리 없이** 인라인 SVG polyline 이다. 값 60개짜리 꺾은선 하나에
 // 의존성을 얹을 이유가 없다(번들도 커진다).
+//
+// #83(2026-08-15): 우측 레일에서 **하단 패널**로 내려왔다 — 보여 주는 것이 서버 자원이라
+// "서버 것은 아래"(design-system.md §4.8)에 걸린다. 그래서 평소엔 embedded 로만 뜬다.
+// [내 PC] 탭은 그대로 안에 남는다(준영님 지시: "기본적으로는 내 로컬 시스템의 정보").
 
 type Tab = 'local' | 'panel'
 
@@ -103,30 +106,35 @@ function Body({
   const gpu = stats as RemoteStats | null
   return (
     <>
-      <Spark label={t('sysm.cpu')} values={history.map((s) => s.cpuPct)} now={stats ? Math.round(stats.cpuPct) : null} />
-      <Spark
-        label={t('sysm.mem')}
-        values={history.map((s) => s.memPct)}
-        now={history.length > 0 ? (history[history.length - 1]?.memPct ?? null) : null}
-        sub={stats ? `${kbToHuman(stats.memUsedKb)} / ${kbToHuman(stats.memTotalKb)}` : undefined}
-      />
-      {/* GPU 는 있을 때만 칸을 만든다 — 없는 칸을 "—" 로 남겨 두면 고장난 것처럼 보인다
-          (상태바 게이지 gaugesOf() 가 이미 같은 규칙이다).
-          메모리 줄은 nvidia-smi 가 그 값까지 준 서버에서만 붙는다(사용률만 오는 예전 형태도 있다). */}
-      {gpuSeen ? (
+      {/* #83: 지표 카드만 한 겹 감싼다. 하단 패널에서는 이 겹을 격자로 만들어 카드를 **옆으로** 편다
+          — .sysm-body 를 통째로 격자로 만들면 말줄임(overflow:hidden)을 쓰는 .sysm-who 가
+          그리드 안에서 자동 최소 크기 0 이 돼 호스트명 줄이 통째로 접힌다(실제로 그랬다). */}
+      <div className="sysm-metrics">
+        <Spark label={t('sysm.cpu')} values={history.map((s) => s.cpuPct)} now={stats ? Math.round(stats.cpuPct) : null} />
         <Spark
-          label={t('sysm.gpu')}
-          values={history.map((s) => s.gpuPct ?? 0)}
-          now={history[history.length - 1]?.gpuPct ?? null}
-          sub={
-            gpu?.gpuMemUsedMb !== undefined && gpu.gpuMemTotalMb !== undefined
-              ? `${mbToHuman(gpu.gpuMemUsedMb)} / ${mbToHuman(gpu.gpuMemTotalMb)}`
-              : undefined
-          }
+          label={t('sysm.mem')}
+          values={history.map((s) => s.memPct)}
+          now={history.length > 0 ? (history[history.length - 1]?.memPct ?? null) : null}
+          sub={stats ? `${kbToHuman(stats.memUsedKb)} / ${kbToHuman(stats.memTotalKb)}` : undefined}
         />
-      ) : gpuNote ? (
-        <div className="sysm-note">{gpuNote}</div>
-      ) : null}
+        {/* GPU 는 있을 때만 칸을 만든다 — 없는 칸을 "—" 로 남겨 두면 고장난 것처럼 보인다
+            (상태바 게이지 gaugesOf() 가 이미 같은 규칙이다).
+            메모리 줄은 nvidia-smi 가 그 값까지 준 서버에서만 붙는다(사용률만 오는 예전 형태도 있다). */}
+        {gpuSeen && (
+          <Spark
+            label={t('sysm.gpu')}
+            values={history.map((s) => s.gpuPct ?? 0)}
+            now={history[history.length - 1]?.gpuPct ?? null}
+            sub={
+              gpu?.gpuMemUsedMb !== undefined && gpu.gpuMemTotalMb !== undefined
+                ? `${mbToHuman(gpu.gpuMemUsedMb)} / ${mbToHuman(gpu.gpuMemTotalMb)}`
+                : undefined
+            }
+          />
+        )}
+      </div>
+      {/* GPU 가 없는 이유는 카드 격자 밖에 한 줄로 — 칸 하나 폭에 갇히면 문장이 세 줄로 접힌다. */}
+      {!gpuSeen && gpuNote ? <div className="sysm-note">{gpuNote}</div> : null}
       <div className="sysm-sec">{t('sysm.disk')}</div>
       <Disks list={disks} />
     </>
@@ -136,6 +144,7 @@ function Body({
 export function SysMonitorPanel({
   open,
   onClose,
+  embedded,
   sessionId,
   isSsh,
   serverName,
@@ -144,6 +153,8 @@ export function SysMonitorPanel({
 }: {
   open: boolean
   onClose: () => void
+  /** #83: 하단 패널 안에 끼울 때. 제목줄·닫기는 하단 패널이 갖는다(LogPanel 과 같은 방식). */
+  embedded?: boolean
   /** 현재 패널의 세션. null 이면 [현재 패널] 탭은 안내만 낸다. */
   sessionId: string | null
   isSsh: boolean
@@ -159,13 +170,15 @@ export function SysMonitorPanel({
 
   if (!open) return null
   return (
-    <div className="monitor-panel sysm">
-      <div className="mon-head">
-        <span className="mon-name">{t('sysm.title')}</span>
-        <span className="mon-close" title={t('mon.close')} onClick={onClose}>
-          <IconClose />
-        </span>
-      </div>
+    <div className={embedded ? 'monitor-panel sysm embedded' : 'monitor-panel sysm'}>
+      {!embedded && (
+        <div className="mon-head">
+          <span className="mon-name">{t('sysm.title')}</span>
+          <span className="mon-close" title={t('mon.close')} onClick={onClose}>
+            <IconClose />
+          </span>
+        </div>
+      )}
       <div className="sysm-tabs" role="tablist">
         <button
           className={'sysm-tab' + (tab === 'local' ? ' active' : '')}

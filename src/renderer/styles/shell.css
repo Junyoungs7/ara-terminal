@@ -1823,7 +1823,8 @@
   display: flex;
 }
 /* 하단에 끼운 패널은 자기 폭·테두리를 버린다 — 그 자리는 하단 패널이 갖는다. */
-.bp-body > .log-panel.embedded {
+.bp-body > .log-panel.embedded,
+.bp-body > .monitor-panel.embedded {
   width: auto;
   flex: 1;
   border-left: none;
@@ -5422,10 +5423,12 @@
   white-space: nowrap;
 }
 
-/* ── F29 시스템 모니터 사이드바 ────────────────────────────────────────────
+/* ── F29 시스템 모니터 ─────────────────────────────────────────────────────
    준영님 요청: 현재 패널(서버)과 내 PC 의 CPU·메모리·GPU·디스크를 그래프로, 탭 2개로.
    껍데기(.monitor-panel/.mon-head)는 포트 모니터 것을 그대로 쓴다 — 새 창 인프라 없음.
-   그래프는 차트 라이브러리 없이 인라인 SVG polyline 이다(값 60개에 의존성을 얹지 않는다). */
+   그래프는 차트 라이브러리 없이 인라인 SVG polyline 이다(값 60개에 의존성을 얹지 않는다).
+   #83(2026-08-15): 우측 레일 → **하단 패널**(서버 자원이니 아래 — §4.8). 아래쪽 배치는 이 블록
+   맨 끝 `.sysm.embedded` 가 덮어쓴다. */
 .sysm-tabs {
   flex: none;
   display: flex;
@@ -5580,6 +5583,34 @@
 .sysm-dsub {
   color: var(--text-dim);
   font-size: var(--fs-micro);
+}
+
+/* #83(2026-08-15) 하단 패널 안 — 세로 280px 레일에서 가로로 넓고 세로가 짧은 자리로 옮겼다.
+   레일 배치를 그대로 내리면 260px 높이에 한 줄짜리 카드가 세로로 쌓여 스크롤만 길어진다.
+   여기서는 지표 카드를 **옆으로** 늘어놓고(auto-fit) 디스크를 그 아래 깐다.
+   탭(내 PC/현재 패널)은 하단 패널 탭줄 바로 밑이라 폭을 다 먹으면 탭줄이 둘로 보인다 —
+   내용 폭에 맞춰 줄이고 왼쪽에 붙여 세그먼트 컨트롤처럼 읽히게 한다. */
+.sysm.embedded .sysm-tabs {
+  padding: 6px 12px;
+  border-bottom-color: var(--line-soft);
+}
+.sysm.embedded .sysm-tab {
+  flex: none;
+  min-width: 96px;
+}
+/* 격자는 **카드 겹에만** 건다(.sysm-body 통째로가 아니라) — body 를 격자로 만들면 말줄임을 쓰는
+   .sysm-who 가 그리드 안에서 자동 최소 크기 0 이 돼 호스트명 줄이 접힌다. 머리글·구분선은 블록
+   흐름 그대로 두는 편이 규칙도 적다.
+   auto-fit 이 아니라 auto-fill: auto-fit 은 빈 트랙을 접어 카드 두 장이 화면을 절반씩 차지한다 —
+   카드 폭이 개수에 따라 출렁이면 안 된다. */
+.sysm.embedded .sysm-metrics,
+.sysm.embedded .sysm-disks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0 14px;
+}
+.sysm.embedded .sysm-disks {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
 }
 
 /* ── F26 R3: 서버 개요 · 설치된 프로그램 ──────────────────────────────────── */

@@ -19,6 +19,7 @@ import { BOTTOM_IDS, type BottomId } from '@shared/types'
 
 const LABEL: Record<BottomId, string> = {
   monitor: 'sidebar.tab.monitor',
+  sys: 'sysm.title',
   log: 'log.title'
 }
 

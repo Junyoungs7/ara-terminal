@@ -118,6 +118,12 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   // 하단에 끼운 패널은 자기 제목줄을 안 그린다 — 그 자리는 하단 패널이 갖는다.
   await expect(bp.locator('.mon-name')).toHaveCount(0)
 
+  // #83: 셋째 탭 — 시스템 모니터. 서버 자원이라 여기로 내려왔다(§4.8).
+  await bp.locator('.bp-tab[data-bottom="sys"]').click()
+  await expect(bp.locator('.monitor-panel.sysm.embedded')).toHaveCount(1)
+  await expect(bp.locator('.mon-name')).toHaveCount(0)
+  await expect(bp.locator('.log-panel')).toHaveCount(0) // 탭을 떠난 쪽은 그리지 않는다
+
   // ★ 우측 레일과 **같이** 열린다 — 세로만 먹으니 터미널 폭에 영향이 없다.
   await page.click('.act-item[data-activity="preview"]')
   await expect(page.locator('.mini-rail')).toBeVisible()
@@ -132,7 +138,9 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   expect(dims.grid).toBeGreaterThan(50)
   expect(dims.bp).toBeGreaterThan(50)
 
-  // 액티비티 바에서 같은 항목을 다시 누르면 닫힌다.
+  // 액티비티 바에서 **지금 열린 탭**을 다시 누르면 닫힌다(다른 탭을 누르면 그 탭으로 갈린다).
+  await page.click('.act-item[data-activity="log"]')
+  await expect(bp.locator('.bp-tab.on')).toHaveAttribute('data-bottom', 'log')
   await page.click('.act-item[data-activity="log"]')
   await expect(bp).toHaveCount(0)
 })

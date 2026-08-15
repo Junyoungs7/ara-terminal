@@ -250,27 +250,26 @@ test('AI-10★ 레일은 하나만 열리고, 다시 열면 쓰던 내용이 남
   await expect(page.locator('.ai-panel')).toBeVisible()
   await expect(page.locator('.mini-rail')).toHaveCount(0)
 
-  // ② 다른 레일에 값을 남기고 떠났다 돌아오면 그대로 있다(컴포넌트가 죽지 않는다).
-  //    아라 컴포저는 API 키가 없으면 disabled 라 여기서 못 쓴다 — 세션 로그의 검색창을 쓴다.
+  // ② 레일에 값을 남기고 떠났다 돌아오면 그대로 있다(컴포넌트가 죽지 않는다).
+  //    이관 이력: 세션 로그 검색창(→ #78 하단) → 시스템 모니터 탭(→ #83 하단) → **아라 패널의
+  //    [터미널 화면 첨부] 칩**. 이제 남은 레일이 셋(ai·aisess·preview)뿐이고 그중 사용자가 바꿀
+  //    수 있는 값이 이 칩이다. 컴포저 입력칸과 달리 이 칩은 API 키 없이도 눌린다(세션만 있으면 된다).
   const rail = (id: string) => page.click(`.activity-bar .act-item[data-activity="${id}"]`)
-  // 상태 유지는 시스템 모니터의 탭 선택으로 본다. (#78 에서 세션 기록이 하단 패널로 내려가
-  // 그쪽 검색창을 더 못 쓴다 — 레일에 남은 것 중 사용자가 바꿀 수 있는 값이 이 탭이다.)
-  await rail('sys')
-  await expect(page.locator('.monitor-panel.sysm')).toBeVisible()
-  await expect(page.locator('.ai-panel')).toHaveCount(0)
-  await page.click('.sysm-tabs .sysm-tab:not(.active)')
-  const picked = await page.locator('.sysm-tabs .sysm-tab.active').textContent()
+  const ctxChip = page.locator('.ai-panel .ai-chip[data-action="ai.ctxToggle"]')
+  await expect(ctxChip).toHaveAttribute('aria-pressed', 'false')
+  await ctxChip.click()
+  await expect(ctxChip).toHaveAttribute('aria-pressed', 'true')
   await rail('preview')
   await expect(page.locator('.mini-rail')).toBeVisible()
-  await expect(page.locator('.monitor-panel.sysm')).toHaveCount(0)
-  await rail('sys')
-  await expect(page.locator('.sysm-tabs .sysm-tab.active')).toHaveText(picked ?? '')
+  await expect(page.locator('.ai-panel')).toHaveCount(0)
+  await rail('ai')
+  await expect(ctxChip).toHaveAttribute('aria-pressed', 'true')
 
   // ③ 레일이 열려 있어도 터미널이 살아 있고 가로 스크롤이 안 생긴다.
   const dims = await page.evaluate(() => {
     const doc = document.documentElement
     const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0
-    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.monitor-panel.sysm') }
+    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.ai-panel') }
   })
   expect(dims.overflowX).toBeLessThanOrEqual(1)
   expect(dims.pane).toBeGreaterThan(50)
