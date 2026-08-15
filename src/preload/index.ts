@@ -12,6 +12,7 @@ import type {
   AiDelta,
   RemoteData
 } from '@shared/ipc'
+import type { LaunchShell } from '@shared/aiCli'
 import type { CmdId } from '@shared/remoteCatalog'
 import type { HostStats } from '@shared/types'
 import type {
@@ -42,7 +43,10 @@ const api: EvApi = {
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
-    openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', { url })
+    openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', { url }),
+    // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 두 가지(셸 문법 · CLI 존재).
+    launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
+    hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found)
   },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -86,6 +90,7 @@ const api: EvApi = {
     trash: (paths: string[]) => ipcRenderer.invoke('fs:trash', { paths }),
     openPath: (path: string) => ipcRenderer.invoke('fs:openPath', { path }),
     reveal: (path: string) => ipcRenderer.invoke('fs:reveal', { path }),
+    mkdirp: (path: string) => ipcRenderer.invoke('fs:mkdirp', { path }),
     copy: (paths: string[], destDir: string) => ipcRenderer.invoke('fs:copy', { paths, destDir }),
     downloadsDir: () => ipcRenderer.invoke('fs:downloadsDir').then((r: { dir: string }) => r.dir),
     freeName: (dir: string, name: string) =>

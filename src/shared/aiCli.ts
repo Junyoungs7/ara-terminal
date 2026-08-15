@@ -84,16 +84,57 @@ export function validCliBin(v: unknown): string | null {
 }
 
 /**
- * 경로 인용. `cd '~/x'` 는 **동작하지 않는다** — 작은따옴표 안에서는 물결표가 홈으로 펼쳐지지 않아
- * "그런 폴더 없음"이 된다. 앞의 `~/` 만 따옴표 밖에 두고 나머지를 감싼다: `cd ~/'projects/새 작업'`.
+ * 어느 셸에 밀어 넣는 한 줄인가(#90, 2026-08-16).
+ *
+ * 원격은 늘 POSIX 였지만 **로컬은 Windows 라 갈린다.** `PtyBackend.ts` 가 기본 셸을
+ * pwsh → powershell → cmd 순으로 고르는데, `powershell.exe`(5.1)는 **`&&` 가 파서 오류다** —
+ * 명령이 아예 실행되지 않는다. 프롬프트(`PS C:\…>`)만으로는 5.1 인지 7 인지 알 수 없고
+ * 기존 ShellKind 도 둘을 구분하지 않으므로, **버전을 알아내려 하지 말고 양쪽에서 다 되는
+ * 문법**을 쓴다(`;` + `if ($?)`).
  */
-function quotePath(p: string): string {
+export type LaunchShell = 'posix' | 'powershell' | 'cmd'
+
+/**
+ * POSIX 경로 인용. `cd '~/x'` 는 **동작하지 않는다** — 작은따옴표 안에서는 물결표가 홈으로
+ * 펼쳐지지 않아 "그런 폴더 없음"이 된다. 앞의 `~/` 만 따옴표 밖에 두고 나머지를 감싼다.
+ */
+function quotePosix(p: string): string {
   if (p === '~') return '~'
   if (p.startsWith('~/')) {
     const rest = p.slice(2)
     return rest === '' ? '~/' : `~/'${rest}'`
   }
   return `'${p}'`
+}
+
+/**
+ * PowerShell 경로 인용. 작은따옴표 안의 작은따옴표는 `''` 로 이스케이프한다 —
+ * **POSIX 규칙(`'\''`)을 그대로 쓰면 안 된다.** 다만 validPath 가 작은따옴표를 이미 거절하므로
+ * 여기까지 오지 않는다(규칙을 아는 채로 두는 편이 다음 사람에게 안전하다).
+ */
+function quotePwsh(p: string): string {
+  return `'${p.replace(/'/g, "''")}'`
+}
+
+/** cmd 경로 인용. 큰따옴표뿐이고 이스케이프 수단이 없다 — validPath 가 걸러 준 값만 온다. */
+function quoteCmd(p: string): string {
+  return `"${p}"`
+}
+
+/**
+ * `cd` 와 CLI 를 잇는 한 줄. **폴더가 없으면 거기서 멈춰야 한다** — 이어서 실행하면 CLI 가
+ * 엉뚱한 폴더에서 뜨고 사용자는 그 사실을 모른다.
+ *   posix      : `cd '<경로>' && <명령>`
+ *   powershell : `Set-Location -LiteralPath '<경로>'; if ($?) { <명령> }`
+ *                (`if ($?)` 가 `&&` 의 의도를 그대로 지킨다 — 5.1·7 공통.
+ *                 `-LiteralPath` 는 대괄호 등 와일드카드 문자가 든 경로에서도 안전하다.)
+ *   cmd        : `cd /d "<경로>" && <명령>`
+ *                (`/d` 가 없으면 다른 드라이브로 못 넘어간다 — C: 에서 `cd D:\x` 는 아무 일도 안 한다.)
+ */
+function cdThen(shell: LaunchShell, path: string, cmd: string): string {
+  if (shell === 'powershell') return `Set-Location -LiteralPath ${quotePwsh(path)}; if ($?) { ${cmd} }`
+  if (shell === 'cmd') return `cd /d ${quoteCmd(path)} && ${cmd}`
+  return `cd ${quotePosix(path)} && ${cmd}`
 }
 
 /** 이 CLI 에서 처음에 켜져 있는 플래그. */
@@ -123,13 +164,14 @@ export type LaunchOptions = {
   /** AI_CLIS[cli].flags 의 **id** 만. 임의 인자를 실어 보낼 수 있는 문을 만들지 않는다. */
   flags: readonly string[]
   path: string
+  /** #90: 어느 셸에 보낼 한 줄인가. 원격은 늘 posix — 기본값이 그것이라 기존 호출은 그대로 돈다. */
+  shell?: LaunchShell
 }
 
 /**
- * `cd <경로> && <bin> <플래그>` 한 줄. 인자가 하나라도 틀리면 null(= 시작하지 않고 안내).
- *
- * `&&` 인 이유: `;` 로 이으면 폴더가 없어 cd 가 실패해도 CLI 가 **엉뚱한 폴더에서** 뜬다.
- * `&&` 면 거기서 멈추고 셸이 "그런 폴더 없음"을 그대로 보여 준다.
+ * 그 셸에서 실행될 한 줄. 인자가 하나라도 틀리면 null(= 시작하지 않고 안내).
+ * 화면의 "보낼 명령" 미리보기와 실제 전송 문자열은 **이 함수의 같은 반환값**이다 —
+ * 셸이 갈리면 미리보기도 갈려야 한다(PowerShell 대상인데 `cd … &&` 를 보여 주면 거짓말이다).
  */
 export function buildLaunch(o: LaunchOptions): string | null {
   const spec = AI_CLIS[o.cli]
@@ -144,7 +186,30 @@ export function buildLaunch(o: LaunchOptions): string | null {
   const groups = chosen.map((f) => f.group).filter((g): g is string => g !== undefined)
   if (new Set(groups).size !== groups.length) return null
   const args = chosen.map((f) => f.arg).join(' ')
-  return `cd ${quotePath(path)} && ${bin}${args ? ' ' + args : ''}`
+  return cdThen(o.shell ?? 'posix', path, `${bin}${args ? ' ' + args : ''}`)
+}
+
+/**
+ * #90: 로컬 대상을 가리키는 값. `AiCliRecent.profileId` 가 서버를 전제하므로 sentinel 이 필요한데,
+ * 탐색기가 이미 같은 문제를 `{ id: 'local', type: 'local' }` 로 풀어 뒀다(ExplorerView.LOCAL_SESSION).
+ * 그 규약을 따른다 — 로컬을 가리키는 표현을 앱 안에 둘 만들지 않는다.
+ */
+export const AI_CLI_LOCAL = 'local'
+
+/** 그 최근 항목이 내 PC 를 가리키는가. */
+export function isLocalTarget(profileId: string): boolean {
+  return profileId === AI_CLI_LOCAL
+}
+
+/**
+ * 로컬 셸 종류 → 조립 규칙. `PtyBackend.shellKind` 는 pwsh 와 powershell 5.1 을 둘 다
+ * 'powershell' 로 보는데 **그게 맞다** — 위 cdThen 의 PowerShell 문법이 양쪽에서 다 돈다.
+ */
+export function shellFor(kind: 'powershell' | 'bash' | 'other', platform: 'win32' | 'other'): LaunchShell {
+  if (kind === 'powershell') return 'powershell'
+  if (kind === 'bash') return 'posix'
+  // 'other' 는 Windows 면 cmd(PtyBackend 의 폴백), 그 밖에는 posix 계열 로그인 셸이다.
+  return platform === 'win32' ? 'cmd' : 'posix'
 }
 
 /** 설치 확인·실행에 쓸 실행 파일 이름. custom 이면 사용자가 적은 값(검증 통과분). */

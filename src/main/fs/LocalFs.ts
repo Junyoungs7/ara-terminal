@@ -110,6 +110,21 @@ export async function trash(paths: string[]): Promise<FileOpResult> {
 }
 
 /**
+ * #90: 없으면 중간 단계까지 만든다(`mkdir -p` 상당). AI CLI 시작 창의 [없으면 만들기]가 쓴다 —
+ * 원격은 `sftp:mkdir` 이 한 단계씩이라 렌더러가 훑지만(aiCliLaunch.ensureRemoteDir), 로컬은
+ * node 가 recursive 를 그냥 해 준다. **makeDir 과 달리 경로 구분자를 허용한다** — 여기 오는 값은
+ * 사용자가 폼에 적은 전체 경로이지 "이 폴더 안의 새 이름"이 아니다(그래서 invalidName 을 안 탄다).
+ */
+export async function makeDirP(path: string): Promise<FileOpResult> {
+  try {
+    await mkdir(resolve(path), { recursive: true })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
+  }
+}
+
+/**
  * 이름 충돌 회피용 후보 이름(순수 — 단위 테스트 대상). 브라우저와 같은 규칙: `보고서 (2).xlsx`.
  * 확장자는 **마지막 점 기준**이라 `a.tar.gz` → `a.tar (2).gz` 가 된다. 아쉽지만 basename/extname
  * 과 같은 해석이라 앱 안에서 규칙이 하나로 유지된다(여기서만 다르게 쪼개면 그게 더 헷갈린다).

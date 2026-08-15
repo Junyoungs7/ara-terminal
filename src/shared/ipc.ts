@@ -1,6 +1,7 @@
 // IPC 타입 계약 (단일 진실). main 핸들러·preload 브리지·renderer 호출부가 이 파일을 import한다.
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
+import type { LaunchShell } from './aiCli'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
@@ -115,6 +116,11 @@ export type InvokeContract = {
   // R3.3: 터미널 안 URL 을 기본 브라우저로 연다. 렌더러가 shell 모듈을 직접 쓰지 못하므로 main 경유이며,
   // main 이 http/https 만 통과시킨다(file:·custom scheme 로 임의 프로그램 실행 금지).
   'app:openExternal': { req: { url: string }; res: { ok: boolean } }
+  // #90: AI CLI 를 내 PC 에서 시작할 때 main 만 알 수 있는 두 가지.
+  //   launchShell — 기본 셸의 조립 규칙(powershell.exe 5.1 은 `&&` 가 파서 오류다).
+  //   hasCli      — 그 실행 파일이 이 PC 에 있는가(where/which, 셸을 거치지 않는다).
+  'app:launchShell': { req: void; res: { shell: LaunchShell } }
+  'app:hasCli': { req: { bin: string }; res: { found: boolean } }
   // session 도메인 (계획서 §B.2/§B.7). create/resize/destroy/list.
   'session:create': { req: SessionSpec; res: { id: string } }
   'session:resize': { req: { id: string; cols: number; rows: number }; res: { ok: true } }
@@ -189,6 +195,8 @@ export type InvokeContract = {
   // #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다.
   'fs:freeName': { req: { dir: string; name: string }; res: { name: string } }
   // W4sat F20: 로컬↔로컬 패널 간 복사(재귀).
+  // #90: 중간 단계까지 만든다(mkdir -p). AI CLI 시작 창의 [없으면 만들기] 로컬 경로.
+  'fs:mkdirp': { req: { path: string }; res: FileOpResult }
   'fs:copy': { req: { paths: string[]; destDir: string }; res: FileOpResult }
   // 편집기 창(노트) — sessionId 가 있으면 원격(SFTP), 없으면 로컬. 읽기/쓰기 한 쌍뿐이다.
   // 큰 파일·바이너리는 main 이 거른다(shared/textFile.ts) — 열지 못한 이유를 문구로 돌려준다.
@@ -368,6 +376,10 @@ export type EvApi = {
     getVersion(): Promise<string>
     // R3.3: 기본 브라우저로 URL 열기(http/https 만). 차단되면 ok:false.
     openExternal(url: string): Promise<{ ok: boolean }>
+    /** #90: 이 PC 기본 셸의 조립 규칙(`&&` 가 되는지). AI CLI 시작이 미리보기·전송에 함께 쓴다. */
+    launchShell(): Promise<LaunchShell>
+    /** #90: 그 실행 파일이 이 PC 에 있는가(where/which). 원격의 cliInstalled 에 대응한다. */
+    hasCli(bin: string): Promise<boolean>
   }
   window: {
     minimize(): Promise<{ ok: true }>
@@ -480,6 +492,8 @@ export type EvApi = {
     downloadsDir(): Promise<string>
     /** #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다. */
     freeName(dir: string, name: string): Promise<string>
+    /** #90: 중간 단계까지 만든다(mkdir -p). 원격의 ensureRemoteDir 에 대응하는 로컬 경로. */
+    mkdirp(path: string): Promise<FileOpResult>
     // W4sat F20: 탐색기 패널 간 로컬↔로컬 복사(재귀).
     copy(paths: string[], destDir: string): Promise<FileOpResult>
     /** 원격에서 내려받은 바이트를 폴더에 저장(RDP 클립보드 파일 받기). */

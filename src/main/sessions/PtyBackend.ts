@@ -4,6 +4,7 @@ import { spawn as ptySpawn, type IPty } from 'node-pty'
 import type { SessionBackend } from './SessionBackend'
 import type { SessionSpec } from './ISessionManager'
 import { SHELL_INTEGRATION } from './osc7'
+import { shellFor, type LaunchShell } from '@shared/aiCli'
 
 // OSC7 주입 방식이 셸마다 달라 종류를 판별한다(powershell=시작 인자, bash=환경변수, 그 외=stdin 폴백).
 type ShellKind = 'powershell' | 'bash' | 'other'
@@ -24,6 +25,16 @@ function resolveShell(spec: SessionSpec): { file: string; args: string[]; kind: 
     return of('powershell.exe', ['-NoLogo'])
   }
   return of(process.env['SHELL'] || '/bin/zsh')
+}
+
+/**
+ * #90: 이 PC 의 기본 셸이 어느 조립 규칙인가. AI CLI 시작이 `cd A && B` 를 보낼지
+ * `Set-Location …; if ($?) { B }` 를 보낼지 여기서 갈린다 — powershell.exe(5.1)는 `&&` 가
+ * **파서 오류**라 잘못 고르면 명령이 실행조차 되지 않는다.
+ * 셸 선택 규칙(pwsh → powershell → cmd)을 두 벌로 만들지 않으려고 위 resolveShell 을 그대로 탄다.
+ */
+export function defaultLaunchShell(): LaunchShell {
+  return shellFor(resolveShell({} as SessionSpec).kind, process.platform === 'win32' ? 'win32' : 'other')
 }
 
 // 셸 통합(F6 MS-3)을 셸 시작에 심는다 — stdin 주입과 달리 터미널에 아무것도 에코되지 않는다.

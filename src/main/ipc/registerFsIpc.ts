@@ -3,7 +3,7 @@
 // (경로 탈출 방지는 LocalFs.invalidName 이 이름 입력에서 막는다 — 경로 자체는 사용자가 트리에서 고른 것).
 import { app, shell } from 'electron'
 import { handle } from './handle'
-import { list, renameEntry, makeDir, trash, copyEntries, freeName } from '../fs/LocalFs'
+import { list, renameEntry, makeDir, makeDirP, trash, copyEntries, freeName } from '../fs/LocalFs'
 import { saveBytes } from '../fs/saveBytes'
 
 const badPath = { ok: false as const, message: '잘못된 경로입니다.' }
@@ -45,6 +45,8 @@ export function registerFsIpc(): void {
   )
   // 원격(RDP 클립보드)에서 내려온 바이트 저장. 이름·하위경로 검사는 saveBytes 가 한다.
   handle('fs:saveBytes', (req) => saveBytes(req))
+  // #90: 경로 구분자를 허용한다 — 여기 오는 값은 사용자가 폼에 적은 전체 경로다(makeDir 과 계약이 다르다).
+  handle('fs:mkdirp', ({ path }) => (typeof path === 'string' && path ? makeDirP(path) : badPath))
   handle('fs:copy', ({ paths, destDir }) =>
     Array.isArray(paths) && paths.length > 0 && paths.every((p) => typeof p === 'string' && p) && typeof destDir === 'string' && destDir
       ? copyEntries(paths, destDir)

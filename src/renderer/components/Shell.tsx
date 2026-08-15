@@ -24,7 +24,7 @@ import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailur
 import { clampSidebarWidth, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { binOf } from '../../shared/aiCli'
+import { binOf, isLocalTarget } from '../../shared/aiCli'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { registerAiRun } from '../store/aiSessions'
@@ -562,21 +562,39 @@ export function Shell() {
   const launchAiCli = useCallback(
     async (r: AiCliLaunchRequest) => {
       setAiCliOpen(false)
+      // #90: 대상이 내 PC 면 접속이 없다 — 새 로컬 셸을 열 뿐이다. cwd 는 넘기지 않는다:
+      // 명령줄의 `cd` 가 폴더 없음을 **드러내야** 하고(cwd 로 미리 가면 조용히 홈에서 시작한다),
+      // 미리보기에 보여 준 줄과 실제로 보내는 줄이 같아야 한다.
+      const local = isLocalTarget(r.profileId)
       // 늘 새 세션을 연다. CLI 가 터미널을 점유하므로 하던 작업 세션을 빼앗으면 안 된다
       // (그래서 server.connect 처럼 "열린 세션 재사용"을 하지 않는다).
       // 준비 신호는 **접속하자마자** 듣기 시작한다. 배너와 첫 cwd 는 아래 폴더 만들기·설치 확인을
       // 하는 사이에 이미 지나가 버려서, 그 뒤에 구독하면 아무것도 못 듣고 상한까지 기다리게 된다
       // (실측: 매 실행 8초 지연 — e2e 가 잡아냈다).
       const started: { id: string | null; ready: Promise<unknown> | null } = { id: null, ready: null }
-      const ok = await connectProfileRef.current?.(r.profileId, undefined, undefined, (id) => {
+      if (local) {
+        const id = await sessions.restoreLocal({
+          type: 'local',
+          title: r.cli,
+          serverKey: 'localhost',
+          cwd: undefined,
+          profileId: null,
+          shell: undefined
+        })
         started.id = id
         started.ready = waitShellReady(id)
-      })
+      } else {
+        const ok = await connectProfileRef.current?.(r.profileId, undefined, undefined, (id) => {
+          started.id = id
+          started.ready = waitShellReady(id)
+        })
+        if (!ok) return // 실패 안내는 connectProfile 이 이미 띄웠다.
+      }
       const sid = started.id
-      if (!ok || sid === null) return // 실패 안내는 connectProfile 이 이미 띄웠다.
+      if (sid === null) return
 
       if (r.mkdir) {
-        const made = await ensureRemoteDir(sid, r.path)
+        const made = local ? await window.ev.fs.mkdirp(r.path) : await ensureRemoteDir(sid, r.path)
         if (!made.ok) {
           await ask({
             title: t('aicli.err.mkdir.title'),
@@ -590,8 +608,10 @@ export function Shell() {
       }
 
       // 없는 CLI 를 실행하면 터미널에 `command not found` 한 줄만 남아 왜 안 되는지 알 수 없다.
+      // #90: 로컬은 원격 exec 채널이 없어 main 이 where/which 로 본다(app:hasCli).
       const bin = binOf(r.cli, r.bin)
-      if (bin === null || !(await cliInstalled(sid, bin))) {
+      const found = bin !== null && (local ? await window.ev.app.hasCli(bin) : await cliInstalled(sid, bin))
+      if (!found) {
         await ask({
           title: t('aicli.err.missing.title'),
           message: t('aicli.err.missing.msg'),
@@ -619,7 +639,7 @@ export function Shell() {
         flags: r.flags
       })
     },
-    [ask, aiCliRecent]
+    [ask, aiCliRecent, sessions]
   )
 
   // E2E seam 바인딩(위 안내 참고): 실 connectProfile 을 노출. 프로덕션 동작엔 영향 없음.

@@ -6,11 +6,14 @@ import { t } from '../i18n'
 import {
   AI_CLIS,
   AI_CLI_IDS,
+  AI_CLI_LOCAL,
   buildLaunch,
   defaultFlags,
+  isLocalTarget,
   toggleFlag,
   type AiCliId,
-  type AiCliRecent
+  type AiCliRecent,
+  type LaunchShell
 } from '../../shared/aiCli'
 
 // F27 AI CLI 한 번에 시작 — 접속 → 폴더 → 실행을 한 창에서 끝낸다.
@@ -25,6 +28,7 @@ import {
 // (AiBootstrapModal 이 F17 에서 세운 선례).
 
 export type AiCliLaunchRequest = {
+  /** 서버 프로필 id, 또는 내 PC 를 뜻하는 AI_CLI_LOCAL(#90). */
   profileId: string
   path: string
   /** 없으면 만들기 — 상위(Shell)가 sftp 로 상위 폴더부터 차례로 만든다. */
@@ -53,10 +57,23 @@ const emptyForm: Form = { profileId: '', path: '', mkdir: true, cli: 'claude', b
 export function AiCliModal({ open, profiles, recent, prefill, onClose, onSubmit }: Props): JSX.Element | null {
   const [form, setForm] = useState<Form>(emptyForm)
 
+  // #90: 로컬 셸의 조립 규칙. powershell.exe(5.1)는 `&&` 가 파서 오류라 미리보기부터 갈려야 한다
+  // (미리보기 = 실제 전송 문자열이 이 창의 계약이다). 원격은 늘 posix.
+  const [localShell, setLocalShell] = useState<LaunchShell>('posix')
+  useEffect(() => {
+    if (!open) return
+    void window.ev?.app.launchShell().then(setLocalShell)
+  }, [open])
+
   // RDP 프로필에는 셸이 없다. type 이 없는 구버전 프로필은 전부 SSH 다(ConnTree.typeBadge 와 같은 폴백).
+  // #90: **내 PC 가 목록 맨 위에 선다** — 서버를 하나도 저장하지 않은 사람도 이 창을 쓸 수 있다.
   const servers = useMemo(() => profiles.filter((p) => p.type !== 'rdp'), [profiles])
-  const nameOf = useMemo(() => new Map(servers.map((p) => [p.id, p.name])), [servers])
-  const idOfName = useMemo(() => new Map(servers.map((p) => [p.name, p.id])), [servers])
+  const targets = useMemo(
+    () => [{ id: AI_CLI_LOCAL, name: t('aicli.local') }, ...servers.map((p) => ({ id: p.id, name: p.name }))],
+    [servers]
+  )
+  const nameOf = useMemo(() => new Map(targets.map((x) => [x.id, x.name])), [targets])
+  const idOfName = useMemo(() => new Map(targets.map((x) => [x.name, x.id])), [targets])
 
   // 열 때 채운다: 진입점이 정해 준 값 > 마지막에 쓴 조합(최근 맨 위) > 빈 폼.
   // 이래야 "Enter 두 번"이 성립한다.
@@ -66,7 +83,10 @@ export function AiCliModal({ open, profiles, recent, prefill, onClose, onSubmit 
     const last = recent.find((r) => nameOf.has(r.profileId))
     const base: Form = last
       ? { profileId: last.profileId, path: last.path, mkdir: true, cli: last.cli, bin: last.bin ?? '', flags: last.flags }
-      : { ...emptyForm, profileId: servers[0]?.id ?? '' }
+      // #90: 서버가 하나라도 있으면 예전처럼 첫 서버가 기본이다 — 이 창은 원래 "서버에 접속해
+      // 그 폴더에서 시작"이 주된 쓰임이다. **저장된 서버가 없을 때만** 내 PC 로 떨어진다
+      // (그전에는 그 상태에서 아예 시작할 수 없었다).
+      : { ...emptyForm, profileId: servers[0]?.id ?? AI_CLI_LOCAL }
     setForm({
       ...base,
       ...(prefill?.profileId && nameOf.has(prefill.profileId) ? { profileId: prefill.profileId } : {}),
@@ -89,7 +109,14 @@ export function AiCliModal({ open, profiles, recent, prefill, onClose, onSubmit 
 
   const spec = AI_CLIS[form.cli]
   // 미리보기 = 전송 문자열. 한 번만 만들어 화면에도 쓰고 onSubmit 에도 실어 보낸다.
-  const cmd = buildLaunch({ cli: form.cli, bin: form.bin, flags: form.flags, path: form.path })
+  // #90: 대상이 내 PC 면 이 PC 셸 문법으로 조립한다 — 보여 준 줄과 다른 줄을 보내지 않는다.
+  const cmd = buildLaunch({
+    cli: form.cli,
+    bin: form.bin,
+    flags: form.flags,
+    path: form.path,
+    shell: isLocalTarget(form.profileId) ? localShell : 'posix'
+  })
   const canStart = cmd !== null && form.profileId !== ''
 
   const submit = (): void => {
@@ -143,16 +170,13 @@ export function AiCliModal({ open, profiles, recent, prefill, onClose, onSubmit 
               <div className="sr-label">{t('aicli.server')}</div>
             </div>
             <div className="sr-ctl">
-              {servers.length === 0 ? (
-                <span className="aicli-none">{t('aicli.noServer')}</span>
-              ) : (
-                <Dropdown
-                  value={nameOf.get(form.profileId) ?? ''}
-                  options={servers.map((p) => p.name)}
-                  ariaLabel={t('aicli.server')}
-                  onChange={(name) => setForm((f) => ({ ...f, profileId: idOfName.get(name) ?? f.profileId }))}
-                />
-              )}
+              {/* #90: 서버가 없어도 [내 PC] 하나는 늘 있다 — "저장된 서버 없음"으로 막지 않는다. */}
+              <Dropdown
+                value={nameOf.get(form.profileId) ?? ''}
+                options={targets.map((x) => x.name)}
+                ariaLabel={t('aicli.server')}
+                onChange={(name) => setForm((f) => ({ ...f, profileId: idOfName.get(name) ?? f.profileId }))}
+              />
             </div>
           </div>
 

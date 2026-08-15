@@ -11,7 +11,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { test, expect, connectNewSshProfile, dialog, openConnTab, openFileTab, REPO_ROOT } from './fixtures'
+import {
+  test,
+  expect,
+  connectNewSshProfile,
+  dialog,
+  openConnTab,
+  openFileTab,
+  sessionIds,
+  termText,
+  REPO_ROOT
+} from './fixtures'
 
 const shot = (page: Page, name: string): Promise<Buffer> =>
   page.screenshot({ path: join(REPO_ROOT, 'agent_talk', name) })
@@ -69,7 +79,8 @@ test('AICLI-1 탭바 ＋ 메뉴에서 창이 열린다', async ({ ara, ssh }) =>
   await ara.page.click('.ctx-menu [data-action="aicli.start"]')
   await expect(modal(ara.page)).toBeVisible()
   // 저장해 둔 것이 하나도 없어도 창은 열린다 — 저장은 전제가 아니다.
-  await expect(ara.page.locator('.aicli-none')).toBeVisible()
+  // #90: 예전에는 "저장된 서버 없음"이 떴다. 이제 **[내 PC]** 가 늘 있어서 그 자리에서 시작할 수 있다.
+  await expect(ara.page.locator('.aicli-modal .dd-val').first()).toHaveText('내 PC')
 })
 
 // AICLI-2 진입점 ② 단축키. 치트시트에도 실려 있어야 한다("구현된 것만 싣는다" 규칙).
@@ -252,4 +263,64 @@ test('AICLI-10 이어서 플래그는 서로 배타다', async ({ ara, ssh }) =>
   // 권한 확인 건너뛰기를 끄면 그 인자도 줄에서 사라진다(감추지 않는다 = 끄면 정말 없다).
   await modal(ara.page).locator('input[data-flag="skipPerms"]').uncheck()
   await expect(preview(ara.page)).toHaveText("cd '/srv/app' && claude -c")
+})
+
+// AICLI-9★ 내 PC 에서 시작 (#90, 2026-08-16)
+//
+// 이 검사의 핵심은 **PowerShell 로 가는 줄에 `&&` 가 없다**는 것이다.
+// powershell.exe(5.1)는 `&&` 가 파서 오류라 명령이 실행조차 되지 않는다 — 그런데
+// 프롬프트만으로는 5.1 인지 7 인지 알 수 없어서 양쪽에서 다 돌아가는 문법을 쓴다.
+// AICLI-5 가 원격에서 지키는 것(미리보기 = 전송 문자열)을 로컬에서 같이 지킨다.
+//
+// 실제 `claude` 를 띄우지 않는다 — custom CLI 로 `hostname` 을 쓴다(인자 없이 즉시 끝나고 무해하다.
+// `echo` 는 PowerShell 에서 Write-Output 별칭이라 인자를 물어보며 멈춘다 — 그 프롬프트가 남는다).
+test('AICLI-9★ 내 PC 에서 시작하면 이 PC 셸 문법으로 보낸다', async ({ ara }) => {
+  const { page } = ara
+  // 없는 하위 폴더를 일부러 넣는다 — [없으면 만들기](fs:mkdirp)까지 같이 본다.
+  const root = mkdtempSync(join(tmpdir(), 'ara-aicli-'))
+  // 슬래시로 통일한다 — 폼에 적는 값이자 미리보기에 그대로 보일 문자열이다.
+  const target = join(root, '새작업', 'app').split('\\').join('/')
+
+  // where/which 는 실행 환경마다 다르다 — 존재 확인만 고정한다(조립·전송이 검사 대상이다).
+  await ara.app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('app:hasCli')
+    ipcMain.handle('app:hasCli', () => ({ found: true }))
+  })
+
+  await page.keyboard.press('Control+Shift+L')
+  await expect(modal(page)).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('.aicli-modal .dd-val').first()).toHaveText('내 PC')
+
+  await page.fill('.aicli-modal .dlg-input', target)
+  // CLI 를 [직접 입력] 으로 바꾼다(드롭다운은 aria-label 로 가린다 — 위치로 세지 않는다).
+  await page.click('.aicli-modal [role="combobox"][aria-label="CLI"]')
+  await page.click('.dd-list [role="option"]:has-text("직접 입력")')
+  await page.fill('.aicli-modal .aicli-bin', 'hostname')
+
+  const preview = (await page.locator('.aicli-cmd').innerText()).trim()
+  expect(preview).not.toBe('')
+  // ★ 이 PC 가 PowerShell 이면 && 가 없어야 한다. cmd·posix 면 && 가 있을 수 있다 —
+  //   둘 중 어느 쪽이든 **그 셸의 문법**이어야 한다.
+  if (preview.includes('Set-Location')) {
+    expect(preview).not.toContain('&&')
+    expect(preview).toContain('if ($?)')
+  } else {
+    expect(preview).toContain('&&')
+  }
+
+  await page.click('.aicli-modal [data-action="aicli.start"]')
+  await expect(modal(page)).toHaveCount(0, { timeout: 15_000 })
+
+  // [없으면 만들기] 가 중간 단까지 만들었다.
+  await expect.poll(() => existsSync(target), { timeout: 15_000 }).toBe(true)
+
+  // 미리보기로 보여 준 줄이 그대로 터미널에 들어간다(새 로컬 셸 탭이 생겼다).
+  const ids = await sessionIds(page)
+  expect(ids).toHaveLength(1)
+  // **공백을 전부 지우고** 비교한다 — 좁은 터미널은 긴 줄을 접고 칸을 채우느라 공백을 끼워 넣는다
+  //   (실측: `S et-Locatio n -Literal Path`). 여기서 볼 것은 글자의 순서지 줄바꿈 자리가 아니다.
+  const bare = (x: string): string => x.replace(/\s/g, '')
+  await expect
+    .poll(async () => bare(await termText(page, ids[0])), { timeout: 25_000 })
+    .toContain(bare(preview))
 })

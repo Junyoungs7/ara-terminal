@@ -14,6 +14,7 @@ import { registerRdpIpc, stopAllRdpRelays } from './ipc/registerRdpIpc'
 import { closeAllRdpSpanWindows } from './rdp/RdpWindows'
 import { registerSftpIpc } from './ipc/registerSftpIpc'
 import { registerFsIpc } from './ipc/registerFsIpc'
+import { registerLocalCliIpc } from './ipc/registerLocalCliIpc'
 import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
 import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
@@ -131,6 +132,7 @@ app.whenReady().then(() => {
   registerRdpIpc(profiles, getWebContents)
   const sftpService = registerSftpIpc(sessions, getWebContents)
   registerFsIpc()
+  registerLocalCliIpc()
   registerEditorIpc(sftpService, sessions, () => mainWindow)
   telemetry = registerTelemetryIpc(sessions, getWebContents, sftpService)
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
