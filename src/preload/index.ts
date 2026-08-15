@@ -13,6 +13,7 @@ import type {
   RemoteData
 } from '@shared/ipc'
 import type { LaunchShell } from '@shared/aiCli'
+import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
 import type { HostStats } from '@shared/types'
 import type {
@@ -86,6 +87,10 @@ const api: EvApi = {
     list: (path: string) => ipcRenderer.invoke('fs:list', { path }),
     rename: (path: string, name: string) => ipcRenderer.invoke('fs:rename', { path, name }),
     mkdir: (dir: string, name: string) => ipcRenderer.invoke('fs:mkdir', { dir, name }),
+    newFile: (dir: string, name: string) => ipcRenderer.invoke('fs:newFile', { dir, name }),
+    move: (paths: string[], destDir: string) => ipcRenderer.invoke('fs:move', { paths, destDir }),
+    drives: () =>
+      ipcRenderer.invoke('fs:drives').then((r: { drives: { path: string; label: string }[] }) => r.drives),
     // #89: 로컬 삭제는 휴지통이다(원격 sftp.remove 는 영구). 이름이 그 차이를 말한다.
     trash: (paths: string[]) => ipcRenderer.invoke('fs:trash', { paths }),
     openPath: (path: string) => ipcRenderer.invoke('fs:openPath', { path }),
@@ -241,6 +246,8 @@ const api: EvApi = {
   },
   // W2 F12: 세션 로그 폴더 열기.
   sessionLog: {
+    list: () => ipcRenderer.invoke('sessionlog:list').then((r: { list: PastLog[] }) => r.list),
+    readFile: (file: string, before?: number) => ipcRenderer.invoke('sessionlog:readFile', { file, before }),
     reveal: () => ipcRenderer.invoke('sessionlog:reveal'),
     read: (sessionId: string, before?: number) => ipcRenderer.invoke('sessionlog:read', { sessionId, before }),
     save: (sessionId: string) => ipcRenderer.invoke('sessionlog:save', { sessionId })

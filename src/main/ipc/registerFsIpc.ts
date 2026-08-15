@@ -3,7 +3,7 @@
 // (경로 탈출 방지는 LocalFs.invalidName 이 이름 입력에서 막는다 — 경로 자체는 사용자가 트리에서 고른 것).
 import { app, shell } from 'electron'
 import { handle } from './handle'
-import { list, renameEntry, makeDir, makeDirP, trash, copyEntries, freeName } from '../fs/LocalFs'
+import { list, renameEntry, makeDir, makeFile, makeDirP, moveEntries, drives, trash, copyEntries, freeName } from '../fs/LocalFs'
 import { saveBytes } from '../fs/saveBytes'
 
 const badPath = { ok: false as const, message: '잘못된 경로입니다.' }
@@ -16,6 +16,13 @@ export function registerFsIpc(): void {
     typeof path === 'string' && path ? renameEntry(path, name) : badPath
   )
   handle('fs:mkdir', ({ dir, name }) => (typeof dir === 'string' && dir ? makeDir(dir, name) : badPath))
+  handle('fs:newFile', ({ dir, name }) => (typeof dir === 'string' && dir ? makeFile(dir, name) : badPath))
+  handle('fs:move', ({ paths, destDir }) =>
+    Array.isArray(paths) && paths.length > 0 && paths.every((p) => typeof p === 'string' && p) && typeof destDir === 'string' && destDir
+      ? moveEntries(paths, destDir)
+      : badPath
+  )
+  handle('fs:drives', async () => ({ drives: await drives() }))
   // #89: 이름이 `remove` 가 아니라 `trash` 인 이유 — 실제로 휴지통으로 간다. 영구 삭제 경로는
   // 남겨 두지 않는다(있으면 언젠가 실수로 그쪽이 배선된다). 원격 삭제는 sftp:remove 로 따로 간다.
   handle('fs:trash', ({ paths }) =>

@@ -1,9 +1,9 @@
 // 로컬 파일시스템 — [파일] 탭이 로컬 세션에서 쓰는 백엔드(R7). SFTP(SftpService)와 같은 계약이라
 // 렌더러 FileTree 는 백엔드 함수 테이블만 갈아끼운다.
 // 실패는 예외 대신 구조화 결과로 반환(트리 영역에 표시, 크래시 금지) — SftpService 와 같은 규칙.
-import { readdir, stat, rename, mkdir, cp, access } from 'node:fs/promises'
+import { readdir, stat, rename, mkdir, cp, rm, open, access } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join, resolve, basename, extname } from 'node:path'
+import { dirname, join, resolve, basename, extname, sep } from 'node:path'
 import { shell } from 'electron'
 import type { FileEntry, FileListResult, FileOpResult } from '@shared/ipc'
 import { friendly } from '../util/fsError'
@@ -72,10 +72,22 @@ export async function makeDir(dir: string, name: string): Promise<FileOpResult> 
   }
 }
 
+// #88 R2: 새 파일. `wx` 라 이미 있으면 EEXIST 로 실패한다 — 있는 파일을 0바이트로 날리지 않는다.
+export async function makeFile(dir: string, name: string): Promise<FileOpResult> {
+  const bad = invalidName(name)
+  if (bad) return { ok: false, message: bad }
+  try {
+    await (await open(join(dir, name.trim()), 'wx')).close()
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
+  }
+}
+
 // W4sat F20: 탐색기 패널 간 복사(폴더는 재귀, cp 가 기본 지원). destDir 자체는 이미 존재해야 한다
 // (없는 폴더로 통째로 옮기는 것은 "새 폴더 만들기"라 다른 조작 — 여기선 시도하지 않는다).
-// 이동은 이 함수 + remove 를 호출측(렌더러)이 순서대로 부른다 — rename 은 같은 폴더 안 이름 변경 계약이라
-// 다른 디렉토리로의 이동에는 못 쓰고, 신규 IPC 를 이동 전용으로 하나 더 만들 이유가 없다.
+// 이동은 moveEntries 가 따로 한다(#88 R2) — 복사+삭제로 흉내 내면 같은 드라이브 안 이동에도
+// 전체 복사와 휴지통 적재가 따라붙는다.
 export async function copyEntries(paths: string[], destDir: string): Promise<FileOpResult> {
   for (const p of paths) {
     try {
@@ -85,6 +97,73 @@ export async function copyEntries(paths: string[], destDir: string): Promise<Fil
     }
   }
   return { ok: true }
+}
+
+/**
+ * #88 R2 잘라내기(이동). 예전에는 이 자리에 "이동은 copyEntries + remove 를 렌더러가 순서대로
+ * 부른다"고 적혀 있었는데, #89 로 remove 가 **휴지통**이 되면서 그 조합이 성립하지 않는다 —
+ * 같은 드라이브 안에서 파일을 옮겼을 뿐인데 원본이 휴지통에 쌓인다(그리고 큰 파일을 통째로 복사한다).
+ *
+ * 같은 볼륨이면 rename 한 번. 볼륨이 다르면(EXDEV) 복사 후 원본 삭제 — 이때는 **영구 삭제**가 맞다
+ * (복사본이 이미 있으니 휴지통에 또 남길 이유가 없다).
+ * **덮어쓰기는 하지 않는다** — 조용한 덮어쓰기는 조용한 삭제와 같다(freeName 머리주석과 같은 규칙).
+ */
+export async function moveEntries(paths: string[], destDir: string): Promise<FileOpResult> {
+  const dir = resolve(destDir)
+  for (const p of paths) {
+    const src = resolve(p)
+    const dest = join(dir, basename(src))
+    if (dest === src) continue // 제자리 — 아무것도 안 한다
+    // 폴더를 자기 자신 안으로 옮기면 파일시스템이 EINVAL 을 주지만, 그 전에 걸러 말이 되는 문구를 낸다.
+    if (dir === src || dir.startsWith(src + sep)) return { ok: false, message: `폴더를 자기 안으로 옮길 수 없습니다: ${basename(src)}` }
+    try {
+      await access(dest)
+      return { ok: false, message: `이미 있습니다: ${basename(src)}` }
+    } catch {
+      /* 없다 = 옮길 수 있다 */
+    }
+    try {
+      await rename(src, dest)
+    } catch (e) {
+      const err = e as NodeJS.ErrnoException
+      if (err.code !== 'EXDEV') return { ok: false, message: friendly(err) }
+      try {
+        await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+        await rm(src, { recursive: true, force: false })
+      } catch (e2) {
+        return { ok: false, message: friendly(e2 as NodeJS.ErrnoException) }
+      }
+    }
+  }
+  return { ok: true }
+}
+
+/**
+ * #88 R2 드라이브 목록(윈도우 "내 PC"). A:·B: 는 건너뛴다 — 비어 있는 플로피/광학 드라이브를
+ * 두드리면 OS 가 몇 초씩 붙잡는 고전적인 함정이고, 요즘 PC 에 그 문자가 쓰일 일이 없다.
+ * 윈도우가 아니면 루트와 마운트(/Volumes)를 준다 — 맥에서 "내 PC" 자리에 놓을 것이 그것뿐이다.
+ */
+export async function drives(): Promise<{ path: string; label: string }[]> {
+  if (process.platform === 'win32') {
+    const out: { path: string; label: string }[] = []
+    for (let c = 'C'.charCodeAt(0); c <= 'Z'.charCodeAt(0); c++) {
+      const letter = String.fromCharCode(c)
+      try {
+        await access(`${letter}:\\`)
+        out.push({ path: `${letter}:\\`, label: `${letter}:` })
+      } catch {
+        /* 없는 드라이브 */
+      }
+    }
+    return out
+  }
+  const out = [{ path: '/', label: '/' }]
+  try {
+    for (const name of await readdir('/Volumes')) out.push({ path: `/Volumes/${name}`, label: name })
+  } catch {
+    /* /Volumes 는 맥에만 있다 */
+  }
+  return out
 }
 
 // #89(2026-08-16): 로컬 삭제는 **휴지통**으로 간다. 예전에는 `rm(recursive, force:false)` 로

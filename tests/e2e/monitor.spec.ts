@@ -275,3 +275,66 @@ test('MON-15 전체 보기로 바꾸면 시스템 포트도 보이고 숨김 안
   await expect(portRows(ara.page)).toHaveCount(3)
   await expect(ara.page.locator('.pmon-hidden')).toHaveText('3개 숨김')
 })
+
+// ── #87(2026-08-16) 하단 바 도입 후 UI/UX ────────────────────────────────────
+
+// BAR-1★ 액티비티 바가 **어디에 열리는지**를 말한다.
+// 준영님 첫 지적("이 버튼을 눌렀는데 왜 다른 창이 켜지지?")의 마지막 잔재였다 — 아이콘 열넷 중
+// 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 눌러 봐야 알았다.
+test('BAR-1★ 액티비티 항목이 자리별로 묶이고 툴팁이 어디 열리는지 말한다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+
+  // 자리 표시가 파생돼 있다(배치의 단일 출처 RAIL_IDS/BOTTOM_IDS 에서).
+  await expect(page.locator('.act-item[data-activity="ps"]')).toHaveAttribute('data-slot', 'bottom')
+  await expect(page.locator('.act-item[data-activity="ai"]')).toHaveAttribute('data-slot', 'rail')
+  await expect(page.locator('.act-item[data-activity="explorer"]')).toHaveAttribute('data-slot', 'window')
+
+  // 툴팁이 그 자리를 말한다(hover 중이면 data-tip 으로 옮겨간다 — 전역 툴팁).
+  const tip = (id: string) =>
+    page.locator(`.act-item[data-activity="${id}"]`).evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')
+  expect(await tip('ps')).toContain('아래에 열림')
+  expect(await tip('ai')).toContain('오른쪽에 열림')
+  expect(await tip('explorer')).toContain('창으로 열림')
+
+  // 묶음이 바뀌는 자리에 선이 그어진다 — 기본 순서에서는 셋(아래→오른쪽→…).
+  expect(await page.locator('.act-item.sep').count()).toBeGreaterThan(0)
+})
+
+// BAR-2★ #87 ⑤: 하단 탭을 오갔다 와도 표의 검색어가 남는다.
+// #84 에서 표가 하단으로 내려오며 잃었던 것이다(떠 있는 창은 숨기기만 했다 — #74).
+// 하단도 **연 적 있는 탭은 마운트를 유지**하고 active=false 로 폴링만 끈다.
+test('BAR-2★ 하단 탭을 오갔다 와도 검색어가 남는다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-bar2', execHandler: makeTelemetry().exec })
+  await connectNewSshProfile(page, { name: 'bar2', port: h.port, password: 'pw-bar2' })
+
+  await page.click('.act-item[data-activity="monitor"]')
+  const search = page.locator('.bottom-panel .pmon input[type="text"]').first()
+  await expect(search).toBeVisible({ timeout: 20_000 })
+  await search.fill('8080')
+
+  // 다른 탭에 갔다가 돌아온다.
+  await page.click('.act-item[data-activity="log"]')
+  await expect(page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible()
+  await page.click('.act-item[data-activity="monitor"]')
+  await expect(search).toHaveValue('8080')
+})
+
+// BAR-3 #87 ④: 하단 패널 최대화 — 표를 크게 볼 때 매번 경계를 끌지 않는다.
+test('BAR-3 하단 패널을 최대화했다 되돌린다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await page.click('.act-item[data-activity="monitor"]')
+  const bp = page.locator('.bottom-panel')
+  await expect(bp).toBeVisible()
+  const before = (await bp.boundingBox())!.height
+
+  await page.locator('.bp-tabs .bp-max').click()
+  await expect(bp).toHaveClass(/maxed/)
+  expect((await bp.boundingBox())!.height).toBeGreaterThan(before)
+
+  await page.locator('.bp-tabs .bp-max').click()
+  await expect(bp).not.toHaveClass(/maxed/)
+  await expect.poll(async () => (await bp.boundingBox())!.height, { timeout: 5_000 }).toBe(before)
+})

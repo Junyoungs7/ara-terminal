@@ -46,13 +46,22 @@ type Props = {
   ids?: readonly BottomId[]
   /** 지금 보고 있는 서버 이름(SSH 세션일 때만). 하단이 어느 서버 것인지 늘 보이게 한다. */
   server?: string
-  /** 탭별 내용. 열려 있는 것만 그린다 — 안 보이는 탭이 원격에 명령을 보내면 안 된다. */
-  children: (tab: BottomId) => ReactNode
+  /**
+   * 탭별 내용. **한 번 연 탭은 마운트를 유지**하고 숨기기만 한다(#87 ⑤, 2026-08-16) —
+   * 프로세스 표를 정렬·검색해 놓고 로그를 잠깐 봤다 오면 처음부터인 것이 실제로 거슬렸다.
+   * 떠 있는 창 시절에는 그렇게 했었다(#74). 안 보이는 탭이 원격에 명령을 보내지 않는 것은
+   * `active` 로 막는다 — 그 계약이 있어서 마운트를 유지해도 안전하다.
+   */
+  children: (tab: BottomId, active: boolean) => ReactNode
 }
 
 export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Props): JSX.Element | null {
   // 높이는 세션 수명 동안만 산다(우측 레일·떠 있는 창과 같은 규칙 — 레이아웃 설정이 아니다).
   const [h, setH] = useState(DEFAULT_H)
+  // #87 ④: 최대화 토글. 표를 크게 볼 때마다 경계를 끄는 것은 번거롭다(떠 있는 창에는 있던 것).
+  const [maxed, setMaxed] = useState(false)
+  // #87 ⑤: 한 번이라도 연 탭. 상태(검색어·정렬·경로)를 지키려고 마운트를 유지한다.
+  const openedRef = useRef<BottomId[]>([])
   const hRef = useRef(h)
   hRef.current = h
 
@@ -75,6 +84,9 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
     window.addEventListener('mouseup', up)
   }, [])
 
+  // 한 번이라도 연 탭 — 닫아도(패널을 닫아도) 목록에서 빼지 않는다. 마운트를 유지해 상태를 지킨다.
+  if (tab && !openedRef.current.includes(tab)) openedRef.current = [...openedRef.current, tab]
+
   if (!tab) return null
 
   // 설정이 없으면 전부(기본 순서). 열린 탭이 숨김 목록에 있어도 그 탭만은 남긴다.
@@ -82,8 +94,8 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
   const shownIds = base.includes(tab) ? base : [tab, ...base]
 
   return (
-    <div className="bottom-panel" style={{ height: h, flexBasis: h }}>
-      <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />
+    <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h, flexBasis: h }}>
+      {!maxed && <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />}
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>
         {shownIds.map((id) => (
           <button
@@ -103,11 +115,30 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
             그러면 어느 서버 것인지가 화면에 남아야 한다 — 세션 탭을 보고 유추하게 두면
             "이 프로세스 목록이 어느 서버였지"가 된다(작업대 창은 제목줄에 늘 찍는다). */}
         {server && <span className="con-srv bp-srv">{server}</span>}
+        {/* 최대화는 닫기와 **다른 클래스**여야 한다(bp-max). 처음에 bp-close 를 돌려 썼더니
+            `.bottom-panel .bp-close` 로 닫던 e2e 세 개가 최대화를 눌러 버렸다 — 모양이 같다고
+            이름을 같이 쓰면, 그 이름으로 무언가를 고르는 쪽이 조용히 엉뚱한 것을 집는다. */}
+        <button
+          type="button"
+          className="bp-max"
+          title={t(maxed ? 'explorer.restore' : 'explorer.maximize')}
+          onClick={() => setMaxed((v) => !v)}
+        >
+          {maxed ? '❐' : '▢'}
+        </button>
         <button type="button" className="bp-close" title={t('mon.close')} onClick={onClose}>
           <IconClose />
         </button>
       </div>
-      <div className="bp-body">{children(tab)}</div>
+      {/* #87 ⑤: 연 적 있는 탭을 전부 그리되 보이는 것 하나만 남긴다(나머지는 display:none).
+          active=false 인 탭은 폴링을 멈춘다 — 그 계약이 마운트 유지의 전제다. */}
+      <div className="bp-body">
+        {openedRef.current.map((id) => (
+          <div key={id} className="bp-pane" style={id === tab ? undefined : { display: 'none' }}>
+            {children(id, id === tab)}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

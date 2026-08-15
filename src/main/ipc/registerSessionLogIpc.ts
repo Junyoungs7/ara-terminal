@@ -29,6 +29,17 @@ export function registerSessionLogIpc(
     return { ok: true as const, text, source: 'buffer' as const, start: 0, size: Buffer.byteLength(text, 'utf8') }
   })
 
+  // #86: 지난 세션 목록. 파일 이름이 곧 색인이라(날짜-시각_서버_id8) 폴더를 읽으면 끝난다.
+  handle('sessionlog:list', () => ({ list: getLog()?.listPast() ?? [] }))
+
+  // #86: 지난 기록 읽기. sessionId 가 아니라 **파일 이름**으로 찾는다(그 세션은 이미 없다).
+  // 이름 검증·경로 확정은 pathOfFile 이 한다 — 렌더러가 보낸 값이라 신뢰 경계다.
+  handle('sessionlog:readFile', ({ file, before }) => {
+    const path = typeof file === 'string' ? getLog()?.pathOfFile(file) : null
+    if (!path) return { ok: false as const, message: '기록을 찾을 수 없습니다.' }
+    return readFileWindow(path, typeof before === 'number' ? before : undefined)
+  })
+
   handle('sessionlog:save', async ({ sessionId }) => {
     if (typeof sessionId !== 'string' || !sessionId) return { ok: false as const, message: '세션이 없습니다.' }
     const title = sessions.snapshot().find((s) => s.id === sessionId)?.title ?? 'session'

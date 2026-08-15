@@ -177,6 +177,9 @@ function wire() {
   ipcMain.handle('fs:trash', (_e, { paths }) => {
     try { for (const p of paths) rmSync(p, { recursive: true, force: false }); return { ok: true } } catch (e) { return { ok: false, message: String(e.message) } }
   })
+  // #88 R2: 이 하네스도 새 쓰기 채널을 안다고 표시해 둔다(자기 임시 폴더 밖으로 나가지 않는다).
+  ipcMain.handle('fs:move', () => ({ ok: true }))
+  ipcMain.handle('fs:newFile', () => ({ ok: true }))
 }
 
 const E = '\x1b['

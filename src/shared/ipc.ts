@@ -33,6 +33,8 @@ import type { SessionSpec } from '../main/sessions/ISessionManager'
 import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
+import type { PastLog } from '../main/log/SessionLog'
+export type { PastLog }
 
 // 디렉토리 항목(계획서 §C F7 / design-system 5.2 파일 행). 폴더 우선 정렬은 main이 담당.
 // R7: 로컬 파일시스템(fs:*)과 원격 SFTP(sftp:*)가 같은 항목·결과 타입을 쓴다 — [파일] 탭은
@@ -181,6 +183,13 @@ export type InvokeContract = {
   'fs:list': { req: { path: string }; res: FileListResult }
   'fs:rename': { req: { path: string; name: string }; res: FileOpResult }
   'fs:mkdir': { req: { dir: string; name: string }; res: FileOpResult }
+  // #88 R2: 새 파일(빈 파일). 이미 있으면 실패한다 — 있는 파일을 0바이트로 날리지 않는다.
+  'fs:newFile': { req: { dir: string; name: string }; res: FileOpResult }
+  // #88 R2: 잘라내기(이동). 같은 볼륨이면 rename, 다르면 복사 후 원본 삭제. 덮어쓰기는 하지 않는다.
+  // 로컬↔로컬 전용 — 원격이 끼면 전송이라 sftp:* 가 맡는다.
+  'fs:move': { req: { paths: string[]; destDir: string }; res: FileOpResult }
+  // #88 R2: 드라이브 목록(윈도우 "내 PC"). 맥은 루트 + /Volumes 마운트.
+  'fs:drives': { req: void; res: { drives: { path: string; label: string }[] } }
   // #89: 로컬 삭제는 **휴지통**(shell.trashItem)이다. 이름이 remove 가 아닌 이유 — 실제로 그렇게
   // 동작하고, 영구 삭제 경로는 남겨 두지 않는다(있으면 언젠가 실수로 그쪽이 배선된다).
   // 원격 삭제는 sftp:remove 로 따로 가고 그쪽은 영구다(서버에 휴지통이 없다).
@@ -202,6 +211,10 @@ export type InvokeContract = {
   // 큰 파일·바이너리는 main 이 거른다(shared/textFile.ts) — 열지 못한 이유를 문구로 돌려준다.
   // 로그 패널 — 세션의 CLI 내역. before 를 주면 그 위치 앞쪽 창을 읽는다("이전 불러오기").
   'sessionlog:read': { req: { sessionId: string; before?: number }; res: SessionLogReadResult }
+  // #86: 지난 세션 기록 목록·읽기. 그 세션은 이미 없으므로 **파일 이름**으로 다룬다
+  //  (이름 검증은 main 이 한다 — 경로 구분자가 든 이름은 거절된다).
+  'sessionlog:list': { req: void; res: { list: PastLog[] } }
+  'sessionlog:readFile': { req: { file: string; before?: number }; res: SessionLogReadResult }
   // 내려받기: 창이 아니라 전체를 저장한다. 저장 위치는 main 의 저장 대화상자가 받는다(취소 시 ok:false).
   'sessionlog:save': { req: { sessionId: string }; res: FileOpResult }
   // 창 제목에 쓸 서버 이름은 main 이 세션 메타에서 꺼낸다(렌더러가 정하지 않는다).
@@ -482,6 +495,12 @@ export type EvApi = {
     list(path: string): Promise<FileListResult>
     rename(path: string, name: string): Promise<FileOpResult>
     mkdir(dir: string, name: string): Promise<FileOpResult>
+    /** #88 R2: 빈 파일 만들기. 이미 있으면 실패한다(0바이트로 날리지 않는다). 로컬 전용. */
+    newFile(dir: string, name: string): Promise<FileOpResult>
+    /** #88 R2: 잘라내기(이동). 로컬↔로컬 전용 — 원격이 끼면 그건 전송이라 sftp:* 가 맡는다. */
+    move(paths: string[], destDir: string): Promise<FileOpResult>
+    /** #88 R2: 드라이브 목록(윈도우 "내 PC"). 맥은 루트 + /Volumes 마운트. */
+    drives(): Promise<{ path: string; label: string }[]>
     /** #89: 로컬 삭제는 **휴지통**으로. 원격(sftp.remove)은 영구 — 서버에 휴지통이 없다. */
     trash(paths: string[]): Promise<FileOpResult>
     /** #89: 연결 프로그램으로 열기(이미지·PDF·xlsx). 로컬 전용 — 원격은 편집기/다운로드. */
@@ -562,6 +581,10 @@ export type EvApi = {
     reveal(): Promise<{ ok: boolean }>
     // 로그 패널: before 를 주면 그 앞쪽 창을 읽는다(뒤에서부터 창 단위 — 긴 로그도 한 번에 안 들고 온다).
     read(sessionId: string, before?: number): Promise<SessionLogReadResult>
+    /** #86: 지난 세션 기록 목록(최근 것이 앞). */
+    list(): Promise<PastLog[]>
+    /** #86: 그 파일의 창 단위 읽기. before 를 주면 앞쪽 창. */
+    readFile(file: string, before?: number): Promise<SessionLogReadResult>
     save(sessionId: string): Promise<FileOpResult>
   }
   // W3 F16 아라. **getKey 가 없다는 것이 계약이다** — 저장한 키를 읽어 갈 창구가 표면에 존재하지 않는다.

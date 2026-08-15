@@ -3,6 +3,7 @@ import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
 import { KEYMAP, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
+import type { SortKey, SortSpec } from '../store/fileView'
 
 // 컨텍스트 액션 단일 레지스트리 — 터미널 우클릭 메뉴가 이 배열 하나에서 나온다
 // (이중 정의 금지, 계획서 §C F4c). 목업 variant-final-3 의 8항목·순서·아이콘을 그대로 이식.
@@ -274,6 +275,10 @@ export type FileActionId =
   | 'file.open'
   // F27 진입점 ③ — 이 폴더가 채워진 채로 AI CLI 시작 창이 열린다(원격 폴더 하나를 고른 때만).
   | 'file.aicli'
+  // #88 R1(2026-08-16) 아라 연결점 — 탐색기에 **없는 것**들이다. 여기가 이 앱의 파일 화면이
+  // 윈도우 탐색기와 갈리는 자리다(준영님: "차이점은 우리 아라와 연결된다는 점이지").
+  | 'file.terminal'
+  | 'file.askAi'
   | 'file.saveWork'
   | 'file.edit'
   // #89 로컬 전용 — 이미지·PDF·xlsx 를 OS 기본 프로그램으로. 원격 파일은 실체가 여기 없어 못 연다.
@@ -284,11 +289,31 @@ export type FileActionId =
   | 'file.tail'
   | 'file.rename'
   | 'file.mkdir'
+  // #88 R2(2026-08-16) 탐색기 따라잡기. 잘라내기·붙여넣기는 그전까지 Ctrl+X/V 와 툴바에만 있었다 —
+  // 우클릭에 없으면 "이 앱은 안 된다"로 읽힌다(준영님 제보로 복사·붙여넣기를 넣은 것과 같은 사유).
+  | 'file.newFile'
+  | 'file.cut'
+  | 'file.copy'
+  | 'file.paste'
+  // 보기 ▸ 정렬 4종 + 숨김 토글. 탐색기도 이것들을 빈 영역 우클릭에 둔다 — 늘 쓰는 게 아니라
+  // 한 번 정해 두는 값이라, 툴바 자리를 내주는 대신 한 단계 안으로 넣는다.
+  | 'file.view'
+  | 'file.sort.name'
+  | 'file.sort.ext'
+  | 'file.sort.size'
+  | 'file.sort.mtime'
+  | 'file.hidden'
+  // #88 R3 로컬 전용 — 압축·속성·보안 탭이 필요하면 여기서 진짜 탐색기로 넘긴다.
+  // 20년치 기능을 따라 그리는 대신 한 줄로 넘겨주는 쪽을 골랐다(준영님 확인 대상).
+  | 'file.reveal'
   | 'file.delete'
 
 // canTail = 원격 파일 하나 선택(W1 F13). 로컬 파일에는 붙지 않는다 — tail 은 원격 셸에서 도는 명령이다.
 // 편집(file.edit)은 파일 하나일 때만 — 로컬·원격 모두 되고, 폴더·다중 선택에는 안 붙는다.
-// canAiCli = 원격 폴더 하나 선택(F27). 로컬 폴더에는 붙지 않는다 — 이 창은 "서버에 접속해서 시작"이다.
+// canAiCli = 폴더 하나 선택(F27). **#90 부터 로컬에도 붙는다** — 내 PC 에서도 AI CLI 를 시작할
+//   수 있게 되면서 "이 창은 서버에 접속해서 시작"이라는 전제가 사라졌다.
+// #88 R1: [여기서 터미널]·[아라에게 묻기]가 아라 연결점이다. 탐색기에는 없는 것들이고,
+//   개발자가 파일 화면에서 실제로 다음에 하는 일이다(폴더를 찾았으면 거기서 뭔가를 친다).
 // canOpenWith = 로컬 파일 하나(#89). 원격은 파일 실체가 이 PC 에 없어 OS 가 열 수 없다 —
 // 원격에서 그림을 보려면 먼저 받아야 한다(그 길이 file.download 다).
 export function fileMenu(ctx: {
@@ -298,6 +323,15 @@ export function fileMenu(ctx: {
   canTail?: boolean
   canAiCli?: boolean
   canOpenWith?: boolean
+  /** #88 R1: 이 폴더에서 새 셸을 연다(로컬=내 PC, 원격=그 서버). */
+  canTerminal?: boolean
+  /** #88 R1: 고른 것을 아라 입력창에 얹는다. */
+  canAskAi?: boolean
+  /** #88 R2 로컬 전용 — 잘라내기(이동)·새 파일·[탐색기에서 보기]. 원격은 현행 유지다. */
+  local?: boolean
+  /** #88 R2 보기 상태. 라벨이 지금 무엇이 켜져 있는지를 말한다(체크 표시 대신 ✓·↑↓ 글리프). */
+  sort?: SortSpec
+  showHidden?: boolean
 }): MenuItem[] {
   const ids: FileActionId[] = []
   if (ctx.count === 1) {
@@ -315,11 +349,47 @@ export function fileMenu(ctx: {
   } else if (ctx.count > 1 && ctx.canDownload) {
     ids.push('file.download', 'file.downloadAs')
   }
+  // ── 클립보드(#88 R2). 잘라내기는 로컬 안에서만 — 원격이 끼면 그건 이동이 아니라 전송이고,
+  //    전송은 실패 지점이 다르다(반쯤 올라간 파일을 원본 삭제로 갚을 수 없다).
+  if (ctx.local && ctx.count > 0) ids.push('file.cut')
+  if (ctx.count > 0) ids.push('file.copy')
+  ids.push('file.paste')
   ids.push('file.mkdir')
+  if (ctx.local) ids.push('file.newFile')
+  ids.push('file.view')
+  // ── 아라 연결점(#88 R1) — 대상은 **지금 보고 있는 폴더**다(선택과 무관).
+  //    [AI CLI 시작]도 여기 합류한다: 폴더를 골랐으면 그 폴더, 아니면 보고 있는 폴더.
+  //    빈 영역 우클릭이 "여기서 시작"으로 읽히는 게 자연스럽다([여기서 터미널]과 짝이 맞는다).
+  if (ctx.canAiCli && !(ctx.count === 1 && ctx.isDir)) ids.push('file.aicli')
+  //    윈도우 탐색기를 흉내 내는 칸들 아래에 모아 둔다: 여기부터가 우리 것이다.
+  if (ctx.canTerminal) ids.push('file.terminal')
+  if (ctx.canAskAi && ctx.count > 0) ids.push('file.askAi')
   // 지금 보고 있는 폴더를 작업 프로필로 — 선택 여부와 무관하다(대상은 "이 폴더"다).
   ids.push('file.saveWork')
+  if (ctx.local) ids.push('file.reveal')
   if (ctx.count > 0) ids.push('file.delete')
-  return ids.map((id) => ({ id, label: t('conn.menu.' + id), ...(id === 'file.delete' ? { danger: true } : {}) }))
+
+  const sort = ctx.sort ?? { key: 'name' as SortKey, asc: true }
+  const sortItem = (id: FileActionId, key: SortKey): MenuItem => ({
+    id,
+    label: t('conn.menu.' + id) + (sort.key === key ? (sort.asc ? ' ↑' : ' ↓') : '')
+  })
+  return ids.map((id) => ({
+    id,
+    label: t('conn.menu.' + id),
+    ...(id === 'file.delete' ? { danger: true } : {}),
+    ...(id === 'file.view'
+      ? {
+          submenu: [
+            sortItem('file.sort.name', 'name'),
+            sortItem('file.sort.ext', 'ext'),
+            sortItem('file.sort.size', 'size'),
+            sortItem('file.sort.mtime', 'mtime'),
+            { id: 'file.hidden', label: t('conn.menu.file.hidden') + (ctx.showHidden ? ' ✓' : '') }
+          ]
+        }
+      : {})
+  }))
 }
 
 // ── 메뉴바 (R4.1) ──

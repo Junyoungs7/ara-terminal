@@ -6,21 +6,27 @@ import { fileMenu, type FileActionId } from '../interactions/actions'
 import { planCrossPanelTransfer } from '../store/explorerTransfer'
 import { deletePrompt } from '../store/deletePrompt'
 import {
+  IconBack,
   IconClose,
   IconCopy,
+  IconCut,
   IconFile,
+  IconFilePlus,
   IconFolder,
   IconFolderPlus,
+  IconForward,
   IconLinkFile,
   IconLinkFolder,
   IconPaste,
   IconPencil,
   IconRefresh,
+  IconSearch,
   IconTrash,
   IconUp,
   IconUpload
 } from './icons'
 import { crumbs, humanSize, joinPath, relTime } from './filePath'
+import { DEFAULT_SORT, EMPTY_HISTORY, nextSort, pushHistory, viewEntries, type SortSpec } from '../store/fileView'
 import { setUploader } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import type { DialogSpec, DialogResult } from './Dialog'
@@ -93,9 +99,11 @@ function backendFor(session: ActiveFileSession): Backend | null {
 
 const newId = (p: string) => p + Math.random().toString(36).slice(2)
 
-// 앱 안의 파일 클립보드(Ctrl+C). 모듈 스코프인 이유: 트리는 세션을 바꾸면 통째로 다시 그려지는데,
-// "여기서 복사해서 저기에 붙여넣기"는 그 경계를 넘어야 쓸모가 있다.
-type FileClip = { session: ActiveFileSession; dir: string; entries: FileEntry[]; at: number }
+// 앱 안의 파일 클립보드(Ctrl+C / Ctrl+X). 모듈 스코프인 이유: 트리는 세션을 바꾸면 통째로 다시
+// 그려지는데, "여기서 복사해서 저기에 붙여넣기"는 그 경계를 넘어야 쓸모가 있다.
+// mode='cut' 은 **로컬 안에서만** 담긴다(#88 R2) — 원격이 끼면 이동이 아니라 전송이고, 반쯤 올라간
+// 파일을 원본 삭제로 갚을 수 없다.
+type FileClip = { session: ActiveFileSession; dir: string; entries: FileEntry[]; mode: 'copy' | 'cut'; at: number }
 let fileClip: FileClip | null = null
 // 앱 안에서 복사할 당시의 OS 파일 클립보드 내용. 붙여넣기 때 이것과 비교해 **어느 쪽이 더 최근인지**
 // 가린다 — OS 클립보드에는 변경 시각이 없어서 이 스냅샷이 유일한 단서다.
@@ -126,13 +134,11 @@ export function FileTree({
   onTailFile,
   onSaveWork,
   onAiCli,
+  onTerminalHere,
+  onAskAiPaths,
   onReveal,
   ask,
   askText,
-  onLocate,
-  sendLabel,
-  onSend,
-  reloadToken,
   toolbar
 }: {
   session: ActiveFileSession
@@ -147,20 +153,24 @@ export function FileTree({
   onSaveWork?: (absPath: string) => void
   // F27: 원격 폴더 우클릭 [이 폴더에서 AI CLI 시작] → 그 폴더가 채워진 창을 상위(Shell)가 연다.
   onAiCli?: (absPath: string) => void
+  /** #88 R1: 지금 보고 있는 폴더에서 새 셸을 연다(로컬=내 PC, 원격=그 서버). */
+  onTerminalHere?: (absPath: string) => void
+  /** #88 R1: 고른 파일·폴더를 아라 입력창에 얹는다(경로만 — 내용은 사용자가 물으며 붙인다). */
+  onAskAiPaths?: (paths: string[]) => void
   // F14: 터미널 Ctrl+V 업로드가 시작될 때 이 탭을 펼쳐 달라고 상위에 요청(전송 큐가 여기 있다).
   onReveal?: () => void
   // 삭제 확인·새 폴더 이름 입력. Shell 의 단일 Dialog 인스턴스를 그대로 쓴다(네이티브 confirm 금지).
   ask: (spec: DialogSpec) => Promise<DialogResult>
   askText: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
-  // W4sat F20: 탐색기 2패널 모드 전용(옵션 — 사이드바 [파일] 탭에서는 안 넘어온다, 동작 불변).
-  // 현재 세션·경로가 바뀔 때마다 상위(ExplorerView)에 알린다 — 다른 패널로 보낼 때 "여기가 출발지" 를 안다.
-  onLocate?: (loc: { session: ActiveFileSession; path: string }) => void
-  // 있으면 우클릭 메뉴에 "다른 패널로 복사/이동" 두 항목이 추가된다. 라벨은 목적지 패널 설명(예: "우측 패널").
-  sendLabel?: string
-  onSend?: (targets: FileEntry[], mode: 'copy' | 'move') => void
-  // 값이 바뀌면 현재 경로를 다시 읽는다(다른 패널에서 이 패널로 들어온 전송 직후 새로고침용).
-  reloadToken?: number
-  // 탐색기 창(E1)에서만 켠다 — 툴바 한 줄(새 폴더·복사·붙여넣기·이름 바꾸기·삭제)을 덧붙인다.
+  // (#88 R2 에서 onLocate·sendLabel·onSend·reloadToken 을 지웠다 — 탐색기 2패널 모드가 #91 에서
+  //  사라지면서 넘기는 곳이 없어졌다. 죽은 소품은 다음 사람이 "쓰는 데가 있겠지" 하고 지키게 된다.
+  //  패널 사이 복사/이동은 pasteHere 의 planCrossPanelTransfer 가 그대로 맡는다.)
+  // 작업대(#91) [파일] 탭에서만 켠다 — 이 트리의 **넓은 판**이다.
+  //   · 툴바 한 줄(새 폴더·새 파일·복사·잘라내기·붙여넣기·이름·삭제)
+  //   · 경로 줄의 자리 먹는 것들(뒤로/앞으로·이름 검색·드라이브) — #88 R2
+  // 사이드바 [파일] 탭(280px)은 곁눈질용이라 이것들을 얹으면 브레드크럼이 눌리지 않을 만큼
+  // 짓눌린다(실측: FILE-4 가 "path-bar 가 클릭을 가로챈다"로 잡았다). **기능이 갈리는 게 아니라
+  // 자리가 갈린다** — 정렬·숨김·상태 표시줄처럼 폭을 안 쓰는 것은 양쪽에 그대로 있다.
   // 사이드바 [파일] 탭은 폭이 좁아 우클릭 메뉴로 충분하므로 기본 꺼짐. 동작은 우클릭 메뉴와 같은
   // 함수를 부른다 — 여기에 두 번째 구현을 만들지 않는다.
   toolbar?: boolean
@@ -186,6 +196,16 @@ export function FileTree({
   // 경로 직접 입력 중일 때의 문자열(null = 브레드크럼 표시). 경로 자체(path)와 갈라 둔다 —
   // 입력을 취소하면 원래 자리에 그대로 남아야 한다.
   const [pathEdit, setPathEdit] = useState<string | null>(null)
+  // ── #88 R2 보기 상태 ──
+  // 숨김은 **보이는 것이 기본**이다. 탐색기는 감추는 쪽이 기본이지만 여기 오는 사람은 `.git`·`.env`
+  // 를 찾으러 온다 — 기본값을 뒤집으면 지금까지 보이던 것이 갑자기 사라진다(원격도 같은 트리다).
+  const [showHidden, setShowHidden] = useState(true)
+  const [sort, setSort] = useState<SortSpec>(DEFAULT_SORT)
+  const [filter, setFilter] = useState('')
+  const [filterOn, setFilterOn] = useState(false)
+  // 방문 이력(뒤로/앞으로). 브레드크럼·[상위로]가 못 하는 것: 멀리 갔다가 **왔던 자리로** 돌아오기.
+  const [hist, setHist] = useState(EMPTY_HISTORY)
+  const [drives, setDrives] = useState<{ path: string; label: string }[]>([])
   const dropRef = useRef<HTMLDivElement>(null)
   // 큐에서 취소된 항목 id — 아직 시작하지 않은 항목은 루프가 건너뛴다.
   const canceled = useRef<Set<string>>(new Set())
@@ -204,7 +224,8 @@ export function FileTree({
   const dirty = useRef(true)
 
   const load = useCallback(
-    async (p: string) => {
+    // fromHist: 뒤로/앞으로로 온 이동. 이력에 다시 쌓지 않는다(쌓으면 뒤로가 제자리를 맴돈다).
+    async (p: string, fromHist = false) => {
       if (!backend) return
       setLoading(true)
       setError(null)
@@ -217,6 +238,10 @@ export function FileTree({
         setEntries(res.entries)
         setPath(res.path)
         setParent(res.parent)
+        // 폴더를 옮기면 검색어는 털어 낸다 — 이전 폴더의 검색어가 남으면 새 폴더가 비어 보인다.
+        setFilter('')
+        setFilterOn(false)
+        if (!fromHist) setHist((h) => pushHistory(h, res.path))
         // target 은 "지금 가리키는 디렉토리"의 단일 소스다. 브레드크럼·폴더 진입도 여기 반영해야
         // 터미널 Ctrl+V 업로드(F14)가 화면과 같은 곳으로 올라간다.
         target.current = res.path
@@ -234,10 +259,18 @@ export function FileTree({
     dirty.current = true
     setQueue([])
     setAutoSynced(false)
+    setHist(EMPTY_HISTORY)
     if (!backend) {
       setEntries([])
       setError(null)
     }
+  }, [backend])
+
+  // #88 R2 드라이브 목록(내 PC). 로컬일 때만 한 번 읽는다 — 세션 중에 드라이브가 꽂히는 일은
+  // 흔치 않고, 흔치 않은 것을 위해 폴링을 돌리지는 않는다([새로고침]이 다시 읽는 길이다).
+  useEffect(() => {
+    if (!backend || backend.remote) return setDrives([])
+    void window.ev.fs.drives().then(setDrives)
   }, [backend])
 
   // 터미널 → 트리 동기(OSC7 cwd 변경). Shell 이 활성 세션의 cwd 를 주입한다(로컬·SSH 공통).
@@ -256,19 +289,26 @@ export function FileTree({
     void load(target.current)
   }, [backend, active, cwd, load])
 
-  // W4sat F20: 탐색기 2패널 모드에서 상위가 "이 패널이 지금 어디를 보고 있는지" 알아야 다른 패널로
-  // 보내는 복사/이동의 출발지·목적지를 조립할 수 있다. 사이드바 [파일] 탭에서는 onLocate 가 없다.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => onLocate?.({ session, path }), [session?.id, session?.type, path])
-
-  const refresh = useCallback(() => void load(path), [load, path])
+  const refresh = useCallback(() => void load(path, true), [load, path])
   const goUp = useCallback(() => void load(parent), [load, parent])
+  // 뒤로/앞으로 — 이력 위치만 옮기고 그 경로를 다시 읽는다(fromHist=true 라 이력이 늘지 않는다).
+  // **setHist 의 updater 안에서 load 를 부르지 않는다**: updater 는 렌더 중에 실행되고
+  // (StrictMode 에서는 두 번), 거기서 부작용을 내면 조용히 두 번 읽거나 아예 안 읽는다
+  // (#91 CON-17 이 정확히 그 버그였다). 최신 값은 ref 로 읽는다.
+  const histRef = useRef(hist)
+  histRef.current = hist
+  const goHist = useCallback(
+    (delta: -1 | 1) => {
+      const h = histRef.current
+      const idx = h.idx + delta
+      if (idx < 0 || idx >= h.stack.length) return
+      histRef.current = { ...h, idx }
+      setHist(histRef.current)
+      void load(h.stack[idx], true)
+    },
+    [load]
+  )
 
-  // W4sat F20: 다른 패널에서 이 패널로 들어온 전송이 끝나면 상위가 reloadToken 을 올려 최신 목록을 보여준다.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (reloadToken !== undefined) refresh()
-  }, [reloadToken])
   // 폴더 진입 + 터미널에 cd 전송(트리→터미널 동기).
   const enterDir = useCallback(
     (name: string) => {
@@ -288,20 +328,24 @@ export function FileTree({
     [refresh]
   )
 
+  // #88 R2: 화면에 실제로 나가는 목록. 선택·범위 선택·전체 선택이 전부 **이것**을 기준으로 돈다 —
+  // 안 보이는 항목이 선택돼 있으면 [삭제]가 보이지 않는 파일을 지운다.
+  const shown = useMemo(() => viewEntries(entries, { showHidden, sort, filter }), [entries, showHidden, sort, filter])
+
   // ── 선택 ──
   const clickRow = useCallback(
     (e: React.MouseEvent, idx: number) => {
-      const name = entries[idx].name
+      const name = shown[idx].name
       if (e.shiftKey && anchor !== null) {
         const [a, b] = anchor <= idx ? [anchor, idx] : [idx, anchor]
-        setSel(entries.slice(a, b + 1).map((x) => x.name))
+        setSel(shown.slice(a, b + 1).map((x) => x.name))
         return
       }
       setAnchor(idx)
       if (e.ctrlKey || e.metaKey) setSel((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]))
       else setSel([name])
     },
-    [entries, anchor]
+    [shown, anchor]
   )
 
   // ── 전송 큐(SFTP 전용): 순차 실행 · 항목별 진행률 · 개별 취소 ──
@@ -342,7 +386,7 @@ export function FileTree({
     [backend]
   )
 
-  const selectedEntries = useCallback(() => entries.filter((e) => sel.includes(e.name)), [entries, sel])
+  const selectedEntries = useCallback(() => shown.filter((e) => sel.includes(e.name)), [shown, sel])
 
   // #92(2026-08-16): 받는 곳을 **묻지 않는다.** 대신 어디로 갔는지 알려 준다.
   //
@@ -473,6 +517,19 @@ export function FileTree({
     applyOp(await backend.mkdir(path, name))
   }, [backend, path, askText, applyOp])
 
+  // #88 R2 새 파일. 로컬 전용 — SFTP 쪽에는 "빈 파일 만들기" 계약이 없고, 원격은 현행 유지다.
+  const newFile = useCallback(async () => {
+    const name = await askText({
+      title: t('file.newFile.title'),
+      message: t('file.newFile.msg'),
+      input: { placeholder: t('file.newFile.ph') },
+      confirmLabel: t('file.newFile'),
+      cancelLabel: t('dlg.cancel')
+    })
+    if (!name) return
+    applyOp(await window.ev.fs.newFile(path, name))
+  }, [path, askText, applyOp])
+
   const removeSelected = useCallback(async () => {
     if (!backend) return
     const targets = selectedEntries()
@@ -501,101 +558,28 @@ export function FileTree({
     applyOp(res)
   }, [backend, selectedEntries, ask, path, applyOp])
 
-  // ── 우클릭 메뉴 ──
-  const openMenu = useCallback(
-    (e: React.MouseEvent, idx: number | null) => {
-      e.preventDefault()
-      e.stopPropagation()
-      if (idx === null) setSel([])
-      else if (!sel.includes(entries[idx].name)) {
-        // 선택 밖의 행을 우클릭하면 그 행만 선택된다(탐색기 관례).
-        setSel([entries[idx].name])
-        setAnchor(idx)
-      }
-      setMenu({ x: e.clientX, y: e.clientY })
-    },
-    [sel, entries]
-  )
-
-  // W4sat F20: 사이드바 registry(interactions/actions.tsx) 를 건드리지 않고 이 두 항목만 로컬에서
-  // 덧붙인다 — onSend 가 없는 호출측(사이드바 [파일] 탭)은 이 id 들이 존재조차 하지 않는다.
-  const SEND_COPY = 'file.sendCopy'
-  const SEND_MOVE = 'file.sendMove'
-
-  const onMenuPick = useCallback(
-    (id: string) => {
-      setMenu(null)
-      const targets = selectedEntries()
-      if (id === SEND_COPY || id === SEND_MOVE) {
-        if (targets.length > 0) onSend?.(targets, id === SEND_COPY ? 'copy' : 'move')
-        return
-      }
-      switch (id as FileActionId) {
-        case 'file.open':
-          if (targets[0]) enterDir(targets[0].name)
-          return
-        case 'file.edit':
-          // 편집기 창은 main 이 띄운다(파일당 창 하나). 원격이면 세션 id 를 넘겨 그 커넥션으로 읽는다.
-          if (targets[0]) {
-            const remote = session?.type === 'ssh' ? session.id : null
-            void window.ev.editor.open(remote, joinPath(path, targets[0].name))
-          }
-          return
-        case 'file.openWith':
-          // #89: 실패(연결 프로그램 없음 등)를 삼키지 않는다 — 아무 일도 안 일어나면 고장으로 보인다.
-          if (targets[0]) {
-            void window.ev.fs.openPath(joinPath(path, targets[0].name)).then((r) => !r.ok && setError(r.message))
-          }
-          return
-        case 'file.download':
-          void download(targets)
-          return
-        case 'file.downloadAs':
-          void download(targets, true)
-          return
-        case 'file.saveWork':
-          onSaveWork?.(path)
-          return
-        case 'file.aicli':
-          // 대상은 우클릭한 폴더다(지금 보고 있는 폴더가 아니라 — file.saveWork 와 다른 점).
-          if (targets[0]) onAiCli?.(joinPath(path, targets[0].name))
-          return
-        case 'file.tail':
-          if (targets[0]) onTailFile?.(joinPath(path, targets[0].name))
-          return
-        case 'file.rename':
-          if (targets[0]) setEditing(targets[0].name)
-          return
-        case 'file.mkdir':
-          void newFolder()
-          return
-        case 'file.delete':
-          void removeSelected()
-          return
-      }
-    },
-    [selectedEntries, enterDir, download, newFolder, removeSelected, onTailFile, onSaveWork, onAiCli, onSend, path, backend, session]
-  )
-
   // ── Ctrl+C / Ctrl+V ── (준영님 제보: 드래그&드롭은 되는데 복사·붙여넣기가 안 된다)
   // 붙여넣기 우선순위: ① OS 클립보드에 파일이 있으면 드롭과 똑같이 처리한다(사용자 기대가 그것이다)
   //                    ② 없으면 앱 안에서 Ctrl+C 한 항목을 이 폴더로 복사한다.
-  const copySelection = useCallback(() => {
-    const entries = selectedEntries()
-    if (entries.length === 0) return
-    fileClip = { session, dir: path, entries, at: Date.now() }
-    // 지금 OS 클립보드에 무엇이 있었는지 찍어 둔다 — 붙여넣기 때 "그 뒤로 바뀌었는지"를 이걸로 판단한다.
-    void window.ev.clipboard
-      .readFiles()
-      .then((r) => {
-        osClipAtCopy = r.paths
-      })
-      .catch(() => {
-        osClipAtCopy = []
-      })
-    // 붙여넣을 곳이 앱 밖일 수도 있다 — 절대경로를 텍스트로도 올려 둔다(터미널·편집기에 그대로 붙는다).
-    void navigator.clipboard?.writeText(entries.map((e) => joinPath(path, e.name)).join('\n')).catch(() => {})
-  }, [selectedEntries, session, path])
+  const copySelection = useCallback(
+    (mode: 'copy' | 'cut' = 'copy') => {
+      const entries = selectedEntries()
+      if (entries.length === 0) return
+      fileClip = { session, dir: path, entries, mode, at: Date.now() }
+      // 지금 OS 클립보드에 무엇이 있었는지 찍어 둔다 — 붙여넣기 때 "그 뒤로 바뀌었는지"를 이걸로 판단한다.
+      void window.ev.clipboard
+        .readFiles()
+        .then((r) => {
+          osClipAtCopy = r.paths
+        })
+        .catch(() => {
+          osClipAtCopy = []
+        })
+      // 붙여넣을 곳이 앱 밖일 수도 있다 — 절대경로를 텍스트로도 올려 둔다(터미널·편집기에 그대로 붙는다).
+      void navigator.clipboard?.writeText(entries.map((e) => joinPath(path, e.name)).join('\n')).catch(() => {})
+    },
+    [selectedEntries, session, path]
+  )
 
   const pasteHere = useCallback(async () => {
     const dir = target.current
@@ -610,6 +594,16 @@ export function FileTree({
     }
     // ② 앱 안에서 복사한 항목
     if (src === 'none' || !fileClip) return
+    // #88 R2 잘라내기. 로컬→로컬만 이동으로 처리한다 — 원격이 끼면 그건 전송이고, 반쯤 올라간 파일을
+    // 원본 삭제로 갚을 수 없다. 사용자에게 "복사한 뒤 원본을 지우라"고 말하는 편이 정직하다.
+    if (fileClip.mode === 'cut') {
+      const clip = fileClip
+      if (clip.session?.type === 'ssh' || backend?.remote) return setError(t('file.cut.localOnly'))
+      const r = await window.ev.fs.move(clip.entries.map((e) => joinPath(clip.dir, e.name)), dir)
+      // 붙여넣고 나면 클립보드를 비운다 — 이동은 한 번뿐이다(두 번째 붙여넣기는 원본이 없어 실패한다).
+      if (r.ok) fileClip = null
+      return applyOp(r)
+    }
     // 같은 서버 안이면 서버에서 cp 를 돌린다 — 내려받았다 올리면 같은 디스크 복사에 네트워크를 두 번 탄다.
     if (fileClip.session?.type === 'ssh' && session?.type === 'ssh' && fileClip.session.id === session.id) {
       const paths = fileClip.entries.map((e) => joinPath(fileClip!.dir, e.name))
@@ -652,18 +646,154 @@ export function FileTree({
     )
   }, [backend, uploadPaths, applyOp, session, runQueue, refresh])
 
+  // ── 우클릭 메뉴 ──
+  const openMenu = useCallback(
+    (e: React.MouseEvent, idx: number | null) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (idx === null) setSel([])
+      else if (!sel.includes(shown[idx].name)) {
+        // 선택 밖의 행을 우클릭하면 그 행만 선택된다(탐색기 관례).
+        setSel([shown[idx].name])
+        setAnchor(idx)
+      }
+      setMenu({ x: e.clientX, y: e.clientY })
+    },
+    [sel, shown]
+  )
+
+  const onMenuPick = useCallback(
+    (id: string) => {
+      setMenu(null)
+      const targets = selectedEntries()
+      switch (id as FileActionId) {
+        case 'file.open':
+          if (targets[0]) enterDir(targets[0].name)
+          return
+        case 'file.edit':
+          // 편집기 창은 main 이 띄운다(파일당 창 하나). 원격이면 세션 id 를 넘겨 그 커넥션으로 읽는다.
+          if (targets[0]) {
+            const remote = session?.type === 'ssh' ? session.id : null
+            void window.ev.editor.open(remote, joinPath(path, targets[0].name))
+          }
+          return
+        case 'file.openWith':
+          // #89: 실패(연결 프로그램 없음 등)를 삼키지 않는다 — 아무 일도 안 일어나면 고장으로 보인다.
+          if (targets[0]) {
+            void window.ev.fs.openPath(joinPath(path, targets[0].name)).then((r) => !r.ok && setError(r.message))
+          }
+          return
+        case 'file.download':
+          void download(targets)
+          return
+        case 'file.downloadAs':
+          void download(targets, true)
+          return
+        case 'file.saveWork':
+          onSaveWork?.(path)
+          return
+        case 'file.terminal':
+          onTerminalHere?.(path)
+          return
+        case 'file.askAi':
+          // 경로만 넘긴다 — 내용을 통째로 싣지 않는다(#80 예산 · 무엇이 가는지 사용자가 본다).
+          if (targets.length > 0) onAskAiPaths?.(targets.map((e) => joinPath(path, e.name)))
+          return
+        case 'file.aicli':
+          // #88 R1: 폴더를 골랐으면 그 폴더, 아니면 **지금 보고 있는 폴더**([여기서 터미널]과 같은 규칙).
+          onAiCli?.(targets[0] && targets[0].type === 'dir' ? joinPath(path, targets[0].name) : path)
+          return
+        case 'file.tail':
+          if (targets[0]) onTailFile?.(joinPath(path, targets[0].name))
+          return
+        case 'file.rename':
+          if (targets[0]) setEditing(targets[0].name)
+          return
+        case 'file.mkdir':
+          void newFolder()
+          return
+        // ── #88 R2 ──
+        case 'file.newFile':
+          void newFile()
+          return
+        case 'file.cut':
+          copySelection('cut')
+          return
+        case 'file.copy':
+          copySelection()
+          return
+        case 'file.paste':
+          void pasteHere()
+          return
+        case 'file.sort.name':
+          return setSort((s) => nextSort(s, 'name'))
+        case 'file.sort.ext':
+          return setSort((s) => nextSort(s, 'ext'))
+        case 'file.sort.size':
+          return setSort((s) => nextSort(s, 'size'))
+        case 'file.sort.mtime':
+          return setSort((s) => nextSort(s, 'mtime'))
+        case 'file.hidden':
+          return setShowHidden((v) => !v)
+        case 'file.reveal':
+          // #88 R3: 압축·속성·보안 탭은 따라 그리지 않는다. 진짜 탐색기로 넘긴다 —
+          // 고른 게 있으면 그것을, 없으면 지금 폴더를 연다.
+          void window.ev.fs.reveal(targets[0] ? joinPath(path, targets[0].name) : path)
+          return
+        case 'file.view':
+          return // 서브메뉴만 여는 항목 — 여기로 오지 않는다
+        case 'file.delete':
+          void removeSelected()
+          return
+      }
+    },
+    [
+      selectedEntries,
+      enterDir,
+      download,
+      newFolder,
+      newFile,
+      removeSelected,
+      copySelection,
+      pasteHere,
+      onTailFile,
+      onSaveWork,
+      onAiCli,
+      onTerminalHere,
+      onAskAiPaths,
+      path,
+      backend,
+      session
+    ]
+  )
+
+
   // 트리에 포커스가 있을 때만 잡는다(터미널·검색창의 Ctrl+C 를 가로채면 안 된다).
   // Ctrl+V 는 여기서 잡지 않는다 — 가로채면 브라우저 paste 이벤트가 오지 않아 Windows 에서
   // 파일이 하나만 잡힌다(A-3). 아래 registerPasteTarget 이 진짜 paste 에서 받는다.
   const onTreeKey = useCallback(
     (e: React.KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
-      if (e.key.toLowerCase() !== 'c') return
+      const k = e.key.toLowerCase()
+      // #88 R2: 잘라내기(Ctrl+X)·전체 선택(Ctrl+A). Ctrl+A 는 **보이는 것만** 고른다 —
+      // 숨김·검색으로 걸러진 항목까지 고르면 [삭제]가 화면에 없는 파일을 지운다.
+      if (k === 'x') {
+        if (backend?.remote) return // 원격 잘라내기는 없다(현행 유지) — 조용히 아무 일도 안 한다
+        e.preventDefault()
+        e.stopPropagation()
+        return copySelection('cut')
+      }
+      if (k === 'a') {
+        e.preventDefault()
+        e.stopPropagation()
+        return setSel(shown.map((x) => x.name))
+      }
+      if (k !== 'c') return
       e.preventDefault()
       e.stopPropagation()
       copySelection()
     },
-    [copySelection]
+    [copySelection, backend, shown]
   )
 
   // 붙여넣기는 전부 여기로 온다. 편집 불가 요소(트리)는 paste 이벤트가 요소가 아니라 document 로만
@@ -715,6 +845,10 @@ export function FileTree({
 
   const selFiles = selectedEntries().filter((e) => e.type === 'file').length
   const crumbList = crumbs(path)
+  // #88 R2 상태 표시줄 · 드라이브. 숨겨진 개수는 **감춘 만큼만** 센다(검색으로 걸러진 것은 별도 문구다).
+  const hiddenCount = showHidden ? 0 : entries.length - entries.filter((e) => !e.name.startsWith('.')).length
+  const selBytes = selectedEntries().reduce((n, e) => n + (e.type === 'dir' ? 0 : e.size), 0)
+  const curDrive = drives.find((d) => path.toUpperCase().startsWith(d.path.toUpperCase()))?.path ?? ''
 
   return (
     <div
@@ -728,6 +862,36 @@ export function FileTree({
       onDragLeave={onDragLeave}
     >
       <div className="sftp-path-bar">
+        {/* #88 R2 뒤로/앞으로 — 브레드크럼·[상위로]가 못 하는 것 하나를 맡는다: 멀리 갔다가
+            **왔던 자리로** 돌아오기. 갈 곳이 없으면 비활성이라 눌러 보고 알 필요가 없다.
+            **작업대에만 있다**: 이 줄에 아이콘을 더 얹었더니 사이드바(280px)에서 브레드크럼이
+            눌리지 않을 만큼 짓눌렸다(FILE-4 가 "path-bar 가 클릭을 가로챈다"로 잡았다).
+            자리를 차지하는 탐색 도구는 넓은 쪽에, 자리를 안 쓰는 규칙(정렬·숨김·상태 표시줄)은
+            양쪽에 — design-system §4.8 의 모양 기준을 그대로 적용한 것이다. */}
+        {toolbar && (
+          <>
+            <button
+              type="button"
+              className="sb-act"
+              data-action="hist.back"
+              title={t('file.back')}
+              disabled={hist.idx <= 0}
+              onClick={() => goHist(-1)}
+            >
+              <IconBack />
+            </button>
+            <button
+              type="button"
+              className="sb-act"
+              data-action="hist.fwd"
+              title={t('file.forward')}
+              disabled={hist.idx < 0 || hist.idx >= hist.stack.length - 1}
+              onClick={() => goHist(1)}
+            >
+              <IconForward />
+            </button>
+          </>
+        )}
         <div className="sb-act" title={t('sftp.up')} onClick={goUp}>
           <IconUp />
         </div>
@@ -772,6 +936,58 @@ export function FileTree({
             onBlur={() => setPathEdit(null)}
           />
         )}
+        {/* #88 R2 이름 검색 — **이 폴더 안**만 훑는다(하위 폴더까지 뒤지는 검색은 [윈도우 탐색기에서
+            보기]로 넘긴다). 아이콘을 누르면 입력이 펴지고, 폴더를 옮기면 저절로 접힌다. */}
+        {toolbar && filterOn && (
+          <input
+            className="ffil"
+            data-field="filter"
+            autoFocus
+            spellCheck={false}
+            placeholder={t('file.filter.ph')}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setFilter('')
+                setFilterOn(false)
+              }
+              e.stopPropagation()
+            }}
+          />
+        )}
+        {toolbar && (
+          <div
+            className={'sb-act' + (filterOn ? ' on' : '')}
+            data-action="file.filter"
+            title={t('file.filter')}
+            onClick={() => {
+              if (filterOn) setFilter('')
+              setFilterOn((v) => !v)
+            }}
+          >
+            <IconSearch />
+          </div>
+        )}
+        {/* 드라이브(내 PC). 로컬에만 있다 — 원격은 루트 하나뿐이라 고를 것이 없다. */}
+        {toolbar && !backend.remote && drives.length > 0 && (
+          <select
+            className="fdrv"
+            data-field="drive"
+            title={t('file.drive')}
+            value={curDrive}
+            onChange={(e) => void load(e.target.value)}
+          >
+            {/* 현재 위치가 어느 드라이브에도 안 걸리면(네트워크 경로 등) 빈 칸을 보여 준다 —
+                없는 값으로 select 를 두면 브라우저가 멋대로 첫 항목을 고른 것처럼 그린다. */}
+            {curDrive === '' && <option value="" />}
+            {drives.map((d) => (
+              <option key={d.path} value={d.path}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        )}
         {backend.remote && (
           <div className="sb-act" title={t('sftp.upload')} onClick={pickAndUpload}>
             <IconUpload />
@@ -788,11 +1004,23 @@ export function FileTree({
             <IconFolderPlus />
             <span>{t('conn.menu.file.mkdir')}</span>
           </button>
+          {!backend.remote && (
+            <button type="button" className="ftb" title={t('file.newFile')} onClick={() => void newFile()}>
+              <IconFilePlus />
+              <span>{t('file.newFile')}</span>
+            </button>
+          )}
           <span className="ftsep" />
-          <button type="button" className="ftb" disabled={sel.length === 0} title={t('file.copy')} onClick={copySelection}>
+          <button type="button" className="ftb" disabled={sel.length === 0} title={t('file.copy')} onClick={() => copySelection()}>
             <IconCopy />
             <span>{t('file.copy')}</span>
           </button>
+          {!backend.remote && (
+            <button type="button" className="ftb" disabled={sel.length === 0} title={t('file.cut')} onClick={() => copySelection('cut')}>
+              <IconCut />
+              <span>{t('file.cut')}</span>
+            </button>
+          )}
           <button type="button" className="ftb" title={t('file.paste')} onClick={() => void pasteHere()}>
             <IconPaste />
             <span>{t('file.paste')}</span>
@@ -846,9 +1074,9 @@ export function FileTree({
         onContextMenu={(e) => openMenu(e, null)}
       >
         {loading && <div className="sftp-empty">{t('sftp.loading')}</div>}
-        {!loading && entries.length === 0 && !error && <div className="sftp-empty">{t('sftp.empty')}</div>}
+        {!loading && shown.length === 0 && !error && <div className="sftp-empty">{t('sftp.empty')}</div>}
         {!loading &&
-          entries.map((entry, idx) => {
+          shown.map((entry, idx) => {
             // 링크는 대상 종류로 동작한다: 폴더 링크는 더블클릭하면 그 대상 폴더로 들어간다
             // (경로는 서버가 realpath 로 풀어 주므로 브레드크럼도 실제 경로가 된다).
             // 끊긴 링크는 들어갈 데가 없으니 안내만 한다.
@@ -915,6 +1143,18 @@ export function FileTree({
           })}
       </div>
 
+      {/* #88 R2 상태 표시줄 — 탐색기 아래줄과 같은 자리, 같은 내용. 검색·숨김으로 목록이 줄면
+          **왜 줄었는지**를 여기서 말한다(안 그러면 파일이 사라진 것으로 보인다). */}
+      <div className="fstat">
+        <span>{t('file.stat.items').replace('{n}', String(shown.length))}</span>
+        {hiddenCount > 0 && <span className="fs-dim">{t('file.stat.hidden').replace('{n}', String(hiddenCount))}</span>}
+        {filter.trim() !== '' && <span className="fs-dim">{t('file.stat.filtered').replace('{q}', filter.trim())}</span>}
+        <span className="fs-gap" />
+        {sel.length > 0 && (
+          <span>{t('file.stat.sel').replace('{n}', String(sel.length)).replace('{s}', humanSize(selBytes))}</span>
+        )}
+      </div>
+
       {queue.length > 0 && (
         <div className="sftp-xfer">
           {queue.map((item) => (
@@ -946,16 +1186,15 @@ export function FileTree({
             // #89: 로컬 파일 하나일 때만. 원격은 실체가 이 PC 에 없어 OS 가 열 수 없다.
             canOpenWith: !backend.remote && selFiles === 1 && sel.length === 1,
             canTail: backend.remote && Boolean(onTailFile),
-            // 원격 폴더에만 붙는다 — 이 창은 "서버에 접속해 그 폴더에서 시작"이라 로컬에는 뜻이 없다.
-            canAiCli: backend.remote && Boolean(onAiCli)
-          }),
-          // W4sat F20: 탐색기 2패널 모드에서만 존재(onSend 가 있을 때만) — 사이드바 [파일] 탭은 그대로.
-          ...(onSend && sel.length > 0
-            ? [
-                { id: SEND_COPY, label: `${t('file.sendCopy')} ${sendLabel ?? ''}`.trim() },
-                { id: SEND_MOVE, label: `${t('file.sendMove')} ${sendLabel ?? ''}`.trim() }
-              ]
-            : [])
+            // #90 부터 로컬에도 붙는다(내 PC 에서도 AI CLI 를 시작할 수 있다).
+            canAiCli: Boolean(onAiCli),
+            canTerminal: Boolean(onTerminalHere),
+            canAskAi: Boolean(onAskAiPaths),
+            // #88 R2·R3: 잘라내기·새 파일·[윈도우 탐색기에서 보기]는 로컬만. 원격은 현행 유지.
+            local: !backend.remote,
+            sort,
+            showHidden
+          })
         ]}
         onPick={onMenuPick}
         onClose={() => setMenu(null)}

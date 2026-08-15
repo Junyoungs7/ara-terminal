@@ -12,6 +12,7 @@ import { ActivityBar } from './ActivityBar'
 import { PortMonitor } from './PortMonitor'
 import { BottomPanel } from './BottomPanel'
 import { LogPanel } from './LogPanel'
+import { PastLogPanel } from './PastLogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
 import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
@@ -87,6 +88,8 @@ export function Shell() {
   const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
   const aiSessOpen = rail === 'aisess'
+  // #86: 지난 세션 — 우측 레일(세션 목록은 세로 카드다). 현재 기록은 하단 [세션 기록]이다.
+  const pastLogOpen = rail === 'pastlog'
   const monitorOpen = bottom === 'monitor'
   // #83: 시스템 모니터는 **서버 자원**이라 아래다(§4.8 — 내용이 자리를 정한다).
   const sysOpen = bottom === 'sys'
@@ -925,6 +928,7 @@ export function Shell() {
       ctr: bottom === 'ctr',
       aisess: aiSessOpen,
       log: logOpen,
+      pastlog: pastLogOpen,
       preview: previewOpen,
       explorer: explorerOpen,
       settings: settingsActive
@@ -936,6 +940,7 @@ export function Shell() {
       bottom,
       aiSessOpen,
       logOpen,
+      pastLogOpen,
       previewOpen,
       explorerOpen,
       settingsActive
@@ -1010,6 +1015,24 @@ export function Shell() {
           // F27 진입점 ③ — 트리에서 고른 폴더가 그대로 채워진다. 대상 서버는 지금 그 트리가 보고 있는
           // 세션의 프로필이다(SSH 세션에서만 메뉴에 뜬다 — FileTree.canAiCli).
           onAiCli={(absPath) => openAiCli({ profileId: activeSession?.profileId, path: absPath })}
+          // #88 R1: 아라 연결점 — 작업대와 같은 동작이어야 한다(같은 트리, 같은 메뉴).
+          onTerminalHere={(absPath) => {
+            const pid = activeSession?.profileId
+            if (pid) void connectProfile(pid, undefined, absPath)
+            else
+              void sessions.restoreLocal({
+                type: 'local',
+                title: absPath.split(/[\/]/).pop() || 'shell',
+                serverKey: 'localhost',
+                cwd: absPath,
+                profileId: null,
+                shell: undefined
+              })
+          }}
+          onAskAiPaths={(paths: string[]) => {
+            openRail('ai')
+            setAiPrefill({ text: paths.join('\n'), at: Date.now() })
+          }}
           onTailFile={(absPath) => {
             if (activeSession) mainRef.current?.openLogTail(activeSession.id, absPath)
           }}
@@ -1046,7 +1069,7 @@ export function Shell() {
               ids={activityItems.filter(isBottomId)}
               server={activeSession?.type === 'ssh' ? (activeSession?.serverKey ?? '') : ''}
             >
-              {(id) =>
+              {(id, active) =>
                 id === 'monitor' ? (
                   <PortMonitor
                     ports={telemetry.ports}
@@ -1060,7 +1083,7 @@ export function Shell() {
                   // F29 시스템 모니터 — CPU·메모리·GPU 는 위 telemetry 구독을 그대로 받는다
                   // (새 폴러 금지). 디스크만 느린 주기로 따로 읽는다(df 는 무겁고 초 단위로 안 변한다).
                   <SysMonitorPanel
-                    open
+                    open={active}
                     embedded
                     onClose={() => setBottom(null)}
                     sessionId={activeSession?.id ?? null}
@@ -1071,7 +1094,7 @@ export function Shell() {
                   />
                 ) : id === 'log' ? (
                   <LogPanel
-                    open
+                    open={active}
                     embedded
                     onClose={() => setBottom(null)}
                     sessionId={activeSession?.id ?? null}
@@ -1083,6 +1106,7 @@ export function Shell() {
                   // 않는다 — 세션 종류마다 탭이 나타났다 사라지면 더 헷갈린다).
                   <ServerTool
                     id={id}
+                    active={active}
                     sessionId={activeSession?.type === 'ssh' ? (activeSession?.id ?? null) : null}
                     isSsh={activeSession?.type === 'ssh'}
                     ask={ask}
@@ -1138,6 +1162,16 @@ export function Shell() {
           onGoTo={selectSession}
           onQuietChange={setAiQuiet}
         />
+        {/* #86 지난 세션 — 로그 폴더를 읽어 목록을 낸다(새 저장소 없음). 현재 세션 기록은
+            하단 [세션 기록] 탭이고, 여기서 [진행 중] 줄을 누르면 그쪽으로 보낸다. */}
+        <PastLogPanel
+          open={pastLogOpen}
+          onClose={() => closeRail('pastlog')}
+          onOpenCurrent={() => {
+            closeRail('pastlog')
+            openBottom('log')
+          }}
+        />
         {/* 미니 프리뷰 바깥(가장 오른쪽) 형제. 폭 고정 — 사이드바 리사이저를 복제할 이유가 없다. */}
         <AiPanel
           open={aiOpen}
@@ -1191,14 +1225,26 @@ export function Shell() {
             const sid = activeSession?.id
             if (sid) window.ev?.session.input(sid, text)
           }}
-          onLaunch={(id, profileId) => {
+          onAiCli={(profileId, path) => openAiCli({ ...(profileId ? { profileId } : {}), path })}
+          onLaunch={(id, profileId, cwd) => {
             // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번
             // 구독하지 않는다) 하단 그 탭을 열 뿐이다. 터미널은 그 서버로 새 세션.
             if (id === 'port') openBottom('monitor')
             else if (id === 'sys') openBottom('sys')
             else if (id === 'term') {
-              if (profileId) void connectProfile(profileId)
-              else dispatchAction('session.new')
+              // #88 R1: cwd 가 있으면 **그 폴더에서** 연다([여기서 터미널 열기]) — 탐색기에 없는
+              // 것이고, 폴더를 찾은 다음 개발자가 실제로 하는 일이다.
+              if (profileId) void connectProfile(profileId, undefined, cwd)
+              else if (cwd) {
+                void sessions.restoreLocal({
+                  type: 'local',
+                  title: cwd.split(/[\/]/).pop() || 'shell',
+                  serverKey: 'localhost',
+                  cwd,
+                  profileId: null,
+                  shell: undefined
+                })
+              } else dispatchAction('session.new')
               // 세션을 만드는 동작이라 터미널이 보여야 한다 — 이 칸만 창을 닫는다.
               setExplorerOpen(false)
             }

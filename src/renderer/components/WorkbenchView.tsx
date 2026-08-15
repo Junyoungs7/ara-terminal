@@ -78,8 +78,10 @@ type Props = {
   onAskAi: (text: string) => void
   /** 지금 세션 터미널로 한 줄(컨테이너 접속처럼 대화형인 것만). */
   onSendInput: (text: string) => void
-  /** ↗ 칸 — 하단 패널의 그 탭을 열거나 새 세션을 만든다. */
-  onLaunch: (id: WbLaunchId, profileId: string | null) => void
+  /** ↗ 칸 — 하단 패널의 그 탭을 열거나 새 세션을 만든다. cwd 는 [여기서 터미널]이 넘긴다. */
+  onLaunch: (id: WbLaunchId, profileId: string | null, cwd?: string) => void
+  /** #88 R1: 그 폴더가 채워진 AI CLI 시작 창(#90 부터 내 PC 도 대상이 된다). */
+  onAiCli: (profileId: string | null, path: string) => void
   /** 바깥에서 건네는 "이 서버의 이 폴더를 열어라". at 이 바뀔 때만 한 번 반응한다. */
   reveal?: { profileId: string; path: string; at: number } | null
 }
@@ -96,6 +98,7 @@ export function WorkbenchView({
   onAskAi,
   onSendInput,
   onLaunch,
+  onAiCli,
   reveal
 }: Props): JSX.Element {
   // 좌측이 정하는 대상 하나(B안). 옛 위치 탭을 대신한다.
@@ -359,11 +362,17 @@ export function WorkbenchView({
                   ask={ask}
                   askText={askText}
                   toolbar
+                  // #88 R1 아라 연결점 — 탐색기에 없는 것들이다(준영님: "차이점은 우리 아라와
+                  // 연결된다는 점"). 대상이 로컬이든 서버든 같은 자리에서 이어진다.
+                  onTerminalHere={(p) => onLaunch('term', isLocal ? null : target.profileId, p)}
+                  onAiCli={(p) => onAiCli(isLocal ? null : target.profileId, p)}
+                  onAskAiPaths={(paths) => onAskAi(paths.join('\n'))}
                 />
               ) : (
                 <ServerTool
                   id={id}
-                  sessionId={shown(id) ? sessionId : null}
+                  active={shown(id)}
+                  sessionId={sessionId}
                   isSsh={!isLocal && sessionId !== null}
                   ask={ask}
                   onAskAi={onAskAi}

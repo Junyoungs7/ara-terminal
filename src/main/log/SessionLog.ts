@@ -51,6 +51,40 @@ export function logFileName(meta: Session, now = new Date()): string {
   return `${stamp(now)}_${sanitizeKey(meta.serverKey)}_${meta.id.replace(/-/g, '').slice(0, 8)}.log`
 }
 
+// ── #86(2026-08-16) 지난 세션 목록 ──────────────────────────────────────────
+// 준영님: "현재 세션의 기록은 하단에서, 이전 세션 기록은 우측에서 찾을 수 있게."
+//
+// **새 저장소를 만들지 않았다.** 파일 이름이 이미 `날짜-시각_서버_id8.log` 라 그 폴더를 읽는
+// 것만으로 목록이 나온다 — 별도 색인을 두면 파일과 어긋날 때 어느 쪽이 진실인지 정해야 한다.
+
+export type PastLog = {
+  /** 폴더 안 파일 이름. 읽기 요청이 이 값을 그대로 돌려준다(경로가 아니라 이름이다 — 탈출 금지). */
+  file: string
+  /** 시작 시각(epoch ms). 파일명 stamp 를 로컬 시각으로 되읽는다. */
+  startedAt: number
+  serverKey: string
+  bytes: number
+  /** 지금도 쓰이고 있는 기록(그 세션이 살아 있다). 목록에서 [진행 중]으로 갈라 보인다. */
+  live?: boolean
+}
+
+/**
+ * 파일 이름 → 조각(순수 — 단위 테스트 대상). 우리 규칙이 아니면 null.
+ * serverKey 에 `_` 가 들어갈 수 있으므로(sanitizeKey 가 남긴다) **뒤에서부터** 가른다:
+ * 마지막 `_` 뒤가 id8, 첫 `_` 앞이 stamp, 가운데가 전부 serverKey 다.
+ */
+export function parseLogName(name: string): { startedAt: number; serverKey: string } | null {
+  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})_(.*)_[0-9a-f]{8}\.log$/.exec(name)
+  if (!m) return null
+  const [, y, mo, d, h, mi, sec, key] = m
+  // stamp 는 **로컬 시각**으로 찍었다(stamp()) — 되읽을 때도 로컬로 만들어야 시각이 안 밀린다.
+  const at = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec))
+  const ms = at.getTime()
+  // 존재하지 않는 날짜(13월 등)는 Date 가 조용히 넘겨 버린다 — 되돌려 확인한다.
+  if (!Number.isFinite(ms) || at.getMonth() !== Number(mo) - 1 || at.getDate() !== Number(d)) return null
+  return { startedAt: ms, serverKey: key }
+}
+
 // ── ANSI 스트리핑(스트리밍) ──
 // 청크가 시퀀스 중간에서 잘릴 수 있으므로 미완성 꼬리를 캐리한다.
 // 대체화면(`\x1b[?1049h` ~ `l`) 구간은 통째로 버린다 — htop·vim·less 의 초당 수십 회 전체
@@ -137,6 +171,13 @@ export type SessionLogService = {
   sweep(): number
   /** 이 세션이 지금 쓰고 있는 로그 파일 경로(기록 off·미개시면 null). 로그 패널이 읽어 간다. */
   pathOf(sessionId: string): string | null
+  /** #86: 남아 있는 지난 세션 기록. 최근 것이 앞이다. */
+  listPast(): PastLog[]
+  /**
+   * #86: 파일 **이름**을 폴더 안 경로로. 이름에 경로 구분자·상위 참조가 있으면 null —
+   * 렌더러가 보낸 값이라 신뢰 경계다(그대로 join 하면 로그 폴더 밖을 읽을 수 있다).
+   */
+  pathOfFile(file: string): string | null
   dir: string
 }
 
@@ -203,6 +244,45 @@ export function createSessionLog(dir: string, enabled: boolean, retentionDays: n
 
     pathOf(sessionId) {
       return entries.get(sessionId)?.path ?? null
+    },
+
+    listPast() {
+      const livePaths = new Set([...entries.values()].map((e) => resolve(e.path)))
+      let names: string[]
+      try {
+        names = readdirSync(dir)
+      } catch {
+        return [] // 폴더가 아직 없다(기록을 한 번도 안 켰다) — 빈 목록이 정답이다.
+      }
+      const out: PastLog[] = []
+      for (const name of names) {
+        const parsed = parseLogName(name)
+        if (!parsed) continue // 우리 규칙이 아닌 파일은 건드리지 않는다(sweep 과 같은 태도).
+        try {
+          const st = statSync(join(dir, name))
+          if (!st.isFile()) continue
+          // 살아 있는 세션이 쓰고 있는 파일인가 — main 만 알 수 있다(렌더러에는 경로가 없다).
+          const live = livePaths.has(resolve(join(dir, name)))
+          out.push({
+            file: name,
+            startedAt: parsed.startedAt,
+            serverKey: parsed.serverKey,
+            bytes: st.size,
+            ...(live ? { live: true } : {})
+          })
+        } catch {
+          /* 지워지는 중이거나 권한 없음 — 목록에서 빼면 그만이다 */
+        }
+      }
+      // 최근 것이 앞. 같은 초에 시작한 둘은 이름순으로 갈라 순서가 흔들리지 않게 한다.
+      return out.sort((a, b) => b.startedAt - a.startedAt || a.file.localeCompare(b.file))
+    },
+
+    pathOfFile(file) {
+      if (typeof file !== 'string' || !LOG_NAME_RE.test(file)) return null
+      const full = resolve(join(dir, file))
+      // 이름 검사만으로도 충분하지만(구분자가 통과 못 한다) 한 겹 더 본다 — 이 값이 곧 읽기 대상이다.
+      return full.startsWith(resolve(dir)) ? full : null
     },
 
     write(meta, chunk) {

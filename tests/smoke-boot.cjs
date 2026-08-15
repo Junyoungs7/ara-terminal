@@ -288,6 +288,10 @@ function registerF7Stub() {
   // #89: 채널이 fs:trash 로 바뀌었다(실제로 shell.trashItem 을 탄다). 스텁을 안 갈면 스모크가
   // 사용자 휴지통에 잔여물을 남긴다 — 하네스는 사용자 PC 를 건드리지 않는다.
   ipcMain.handle('fs:trash', () => ({ ok: true }))
+  // #88 R2: 새 쓰기 채널 둘도 막는다 — fs:move 는 **실제로 파일을 옮긴다**(휴지통도 안 거친다).
+  // 하네스가 사용자 PC 를 건드리지 않는다는 규칙은 채널이 늘 때마다 다시 지켜야 한다.
+  ipcMain.handle('fs:move', () => ({ ok: true }))
+  ipcMain.handle('fs:newFile', () => ({ ok: true }))
   // #92: 받는 곳도 막는다. 안 막으면 다운로드가 실제 다운로드 폴더로 떨어진다.
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
 }
@@ -655,6 +659,8 @@ app.whenReady().then(async () => {
       && typeof window.ev?.fs?.mkdir === 'function' && typeof window.ev?.fs?.trash === 'function'
       && typeof window.ev?.fs?.openPath === 'function' && typeof window.ev?.fs?.reveal === 'function'
       && typeof window.ev?.fs?.downloadsDir === 'function' && typeof window.ev?.fs?.freeName === 'function'
+      && typeof window.ev?.fs?.newFile === 'function' && typeof window.ev?.fs?.move === 'function'
+      && typeof window.ev?.fs?.drives === 'function'
       && window.ev?.fs?.remove === undefined
     const hasOnCwd = typeof window.ev?.session?.onCwd === 'function'
     // 로컬 세션을 활성화(＋ → 로컬 셸) → R7: [파일] 탭이 로컬 파일시스템(fs:list)을 그린다.
@@ -701,6 +707,8 @@ app.whenReady().then(async () => {
       localKorean: localNames.some(n => /문서|메모_한글/.test(n)),
       localCrumbFirst: localCrumbs[0] || '',
       multiSel, fileMenu,
+      // #88 R2: 상태 표시줄은 목록이 왜 줄었는지를 말하는 자리다 — 있어야 하고, 개수를 세야 한다.
+      fstat: document.querySelector('.sftp-wrap .fstat')?.textContent || '',
       rowCount: rows.length, korean: names.some(n => /배포스크립트|로그|README_한글/.test(n)),
       dirFirst: rows[0]?.classList.contains('dir') === true,
       crumbCount: crumbs.length,
@@ -712,16 +720,27 @@ app.whenReady().then(async () => {
   })()`)
 
   checks.push(['window.ev.sftp API 존재(list/download/upload/cancel/rename/mkdir/remove)', f7.hasSftp === true])
-  checks.push(['R7: window.ev.fs API 존재(list/rename/mkdir/**trash**/openPath/reveal/downloadsDir/freeName · remove 는 사라졌다)', f7.hasFs === true])
+  checks.push(['R7·#88 R2: window.ev.fs API 존재(list/rename/mkdir/**trash**/openPath/reveal/downloadsDir/freeName/newFile/move/drives · remove 는 사라졌다)', f7.hasFs === true])
   checks.push(['window.ev.session.onCwd 존재(cwd 이벤트)', f7.hasOnCwd === true])
   checks.push(['R7: [파일] 탭이 로컬 세션에서 로컬 트리 렌더', f7.localRowCount >= 1 && f7.localKorean === true])
   checks.push(['R7: Windows 경로 브레드크럼(드라이브가 첫 조각)', /^[A-Za-z]:$/.test(f7.localCrumbFirst)])
   checks.push(['R7: Ctrl 클릭 다중 선택', f7.multiSel === 2])
   // file.saveWork = 이 위치를 작업 프로필로 저장(선택 여부와 무관 — 대상은 "이 폴더"다).
+  // #88 R1(2026-08-16): 빈 영역 우클릭에 **아라 연결점**이 붙었다 — 여기서 터미널·AI CLI 시작.
+  // 준영님: "차이점은 우리 아라와 연결된다는 점이지." 순서도 뜻이 있다: 탐색기를 흉내 내는 칸
+  // (새 폴더) 다음에 우리 것이 온다.
   checks.push([
-    'R7: 파일 우클릭 메뉴(새 폴더·작업 프로필·삭제)',
-    f7.fileMenu.join(',') === 'file.mkdir,file.saveWork,file.delete'
+    'R7: 파일 우클릭 메뉴(새 폴더 · 아라 연결점 · 작업 프로필 · 삭제)',
+    // 순서를 통째로 박지 않고 **있어야 할 것**만 본다 — 아라 연결점이 더 붙어도 이 검사가
+    // 깨지지 않되, 빠지면 잡힌다(그게 이 화면이 탐색기와 갈리는 자리다).
+    ['file.mkdir', 'file.aicli', 'file.terminal', 'file.saveWork', 'file.delete'].every((x) => f7.fileMenu.includes(x))
   ])
+  // #88 R2: 탐색기 따라잡기 칸들. 로컬 세션에서 우클릭한 메뉴라 **로컬 전용 항목까지** 다 있어야 한다.
+  checks.push([
+    '#88 R2: 파일 우클릭에 잘라내기·복사·붙여넣기·새 파일·보기·[윈도우 탐색기에서 보기]',
+    ['file.cut', 'file.copy', 'file.paste', 'file.newFile', 'file.view', 'file.reveal'].every((x) => f7.fileMenu.includes(x))
+  ])
+  checks.push(['#88 R2: 상태 표시줄이 항목 수를 센다', /\d+개 항목/.test(f7.fstat)])
   checks.push(['[파일] 탭: SSH 세션 시 SFTP 트리 렌더', f7.rowCount >= 1])
   checks.push(['SFTP 트리 한글 파일/폴더명', f7.korean === true])
   checks.push(['SFTP 트리 폴더 우선 정렬', f7.dirFirst === true])

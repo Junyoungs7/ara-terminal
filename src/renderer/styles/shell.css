@@ -469,6 +469,73 @@
   width: var(--sb-icon);
   height: var(--sb-icon);
 }
+/* ── #88 R2 파일 관리자 부속 ─────────────────────────────────────────
+   경로 바에 붙는 것들(검색 입력·드라이브 선택)과 목록 아래 상태 표시줄.
+   폭은 사이드바(좁음)와 작업대(넓음)가 같은 마크업을 쓰므로 전부 축소 가능하게 둔다 —
+   좁아지면 브레드크럼이 먼저 줄고(rtl 스크롤), 이 칸들은 최소폭을 지킨다. */
+.sftp-path-bar .sb-act[disabled],
+.sftp-path-bar button.sb-act:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+.sftp-path-bar button.sb-act {
+  border: none;
+  background: none;
+  padding: 0;
+}
+.sftp-path-bar .sb-act.on {
+  color: var(--accent-bright);
+  background: var(--bg-overlay);
+}
+.ffil {
+  flex: 0 1 130px;
+  min-width: 60px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-hi);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  outline: none;
+}
+.fdrv {
+  flex: none;
+  height: 22px;
+  padding: 0 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-mid);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.fstat {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+  min-height: 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fstat .fs-dim {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fstat .fs-gap {
+  flex: 1;
+}
 .ftree {
   flex: 1;
   min-height: 0;
@@ -1804,6 +1871,11 @@
    터미널 **아래**. 우측 레일과 달리 **세로만** 먹으므로 터미널 80칸에 영향이 없다 —
    그래서 레일과 같이 열려도 되고, 가로가 필요한 표(포트 3열·로그 한 줄)가 여기 산다.
    .main 안(탭바·그리드와 형제)이라 폭 계산에 끼지 않는다. */
+/* #87 ④ 최대화 — height 를 비우고 flex:1 로 두면 터미널을 밀어내며 남은 세로를 다 쓴다. */
+.bottom-panel.maxed {
+  flex: 1;
+  min-height: 0;
+}
 .bottom-panel {
   flex: none;
   display: flex;
@@ -1861,6 +1933,9 @@
   text-overflow: ellipsis;
   max-width: 220px;
 }
+/* 최대화(.bp-max)와 닫기(.bp-close) — 모양은 같고 이름은 다르다. 같은 이름을 쓰면 그 이름으로
+   요소를 고르는 쪽(e2e·스크립트)이 둘 중 아무거나 집는다. 위험한 쪽만 붉게 물든다. */
+.bp-max,
 .bp-close {
   border: none;
   background: none;
@@ -1872,13 +1947,25 @@
   color: var(--text-dim);
   cursor: pointer;
 }
+.bp-max:hover {
+  background: var(--bg-overlay);
+  color: var(--accent-bright);
+}
 .bp-close:hover {
   background: var(--err-line);
   color: var(--err);
 }
+.bp-max svg,
 .bp-close svg {
   width: 13px;
   height: 13px;
+}
+/* #87 ⑤ 연 적 있는 탭은 마운트를 유지하고 숨기기만 한다 — 검색어·정렬을 잊지 않게. */
+.bp-pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 .bp-body {
   flex: 1;
@@ -4776,6 +4863,22 @@
   gap: 2px;
   padding: 8px 0;
 }
+/* #87 ①: 묶음 경계 — 아래에 열리는 것 / 오른쪽에 열리는 것 / 창으로 열리는 것.
+   배치 원칙(§4.8)이 바에서도 읽혀야 한다. margin 이 아니라 선인 이유: 여백만으로는
+   "떨어져 있다"가 화면 배율에 따라 사라진다. */
+.act-item.sep {
+  margin-top: 9px;
+  position: relative;
+}
+.act-item.sep::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: var(--line);
+}
 .act-item {
   width: 32px;
   min-height: 32px;
@@ -5483,6 +5586,77 @@
   color: var(--accent);
   /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이라 12px 하한 대상이 아니다 — 한글이 들어갈 자리가 없다. */
   font-size: var(--fs-micro);
+  white-space: nowrap;
+}
+
+/* ── #86 지난 세션 목록 — 우측 레일. 껍데기는 .monitor-panel/.mon-head 를 그대로 쓴다. ── */
+.pastlog .pl-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+.pl-row {
+  padding: 7px 9px;
+  margin-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+.pl-row:hover {
+  border-color: var(--accent-line);
+  background: var(--bg-overlay);
+}
+.pl-row.live {
+  border-color: var(--accent-line);
+}
+.pl-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pl-srv {
+  flex: 1;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 진행 중인 기록은 지난 것과 성격이 다르다 — 누르면 하단으로 보낸다(같은 것을 두 곳에서 다르게
+   보여 주지 않는다). 그 사실을 색이 아니라 글자로도 말한다. */
+.pl-live {
+  flex: none;
+  color: var(--accent-bright);
+  font-size: var(--fs-sm);
+}
+.pl-sub {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.pl-sub .pl-size {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+.pl-back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.pl-cur {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-hi);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

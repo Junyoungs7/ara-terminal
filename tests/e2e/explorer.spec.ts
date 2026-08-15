@@ -1,13 +1,15 @@
-// 파일 탐색기 창(E1 + 탭, src/renderer/components/ExplorerView.tsx) — 진입/종료 · 좌측 탐색 창에서
-// 서버 열기 · 탭 · 다중 선택 복사/붙여넣기(로컬→원격, 같은 서버 안).
+// 서버 작업대(#91, src/renderer/components/WorkbenchView.tsx) — 진입/종료 · 좌측에서 대상 고르기 ·
+// 도구 탭 · 다중 선택 복사/붙여넣기(로컬→원격, 같은 서버 안) · 아라 연결점(WB, #88 R1) ·
+// 탐색기 따라잡기(FM, #88 R2).
 // 2패널 모드(구 F20)는 없어졌다 — "복사 →/이동 →" 우클릭 항목 대신 클립보드가 그 자리를 대신한다.
+// (파일명이 explorer.spec.ts 인 것은 이력이다 — ExplorerView 는 #91 에서 WorkbenchView 로 흡수됐다.)
 // DLP: 전송은 전부 루프백(127.0.0.1) SSH 하네스와 OS 임시 디렉토리 사이에서만 한다(실서버·실데이터 금지).
 import { cpSync, mkdirSync, mkdtempSync, statSync, writeFileSync, existsSync, rmSync } from 'node:fs'
-import { tmpdir, homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { test, expect, newLocalShell, runCommand, termText, connectNewSshProfile } from './fixtures'
+import { test, expect, newLocalShell, runCommand, termText, connectNewSshProfile, dialogConfirm } from './fixtures'
 
 // 같은 서버 안 복사(sftp:copyRemote)는 SFTP 가 아니라 **exec 으로 `cp`** 를 돌린다 — 이 하네스엔
 // 진짜 셸이 없으므로 cp 한 줄만 흉내 낸다. 작은따옴표 인용을 실제로 풀어 보기 때문에 shQuote 조립이
@@ -43,11 +45,45 @@ function makeRemote(): string {
   return root
 }
 
-// 탐색기 탭의 FileTree 는 홈 디렉토리('.')에서 시작한다(즐겨찾기로 들어올 때만 goto 가 있다) —
-// 그래서 로컬 픽스처는 홈 바로 아래에 둔다. ponytail: 실 홈에 쓴다(임의 경로로 점프하는 입구가
-// 없다) — 각 테스트가 finally 에서 지운다.
+/**
+ * 로컬 픽스처는 **OS 임시 폴더**에 만든다. 예전에는 홈 바로 아래에 만들었는데(트리가 홈에서
+ * 시작하고 임의 경로로 점프할 입구가 없어서), 그러면 실행이 중간에 끊길 때마다 준영님 홈에
+ * `ara-wb2-…` 같은 폴더가 남는다 — 실제로 남았다. 지금은 경로 줄(#59 [경로 입력])로 어디든
+ * 갈 수 있으므로 gotoPath() 로 들어간다. 하네스는 사용자 PC 를 건드리지 않는다.
+ */
 function makeLocalFixture(prefix: string): string {
-  return mkdtempSync(join(homedir(), prefix))
+  return mkdtempSync(join(tmpdir(), prefix))
+}
+
+/** 경로 줄에 직접 쳐서 그 폴더로 간다(홈 밑이 아니어도 닿는다). */
+async function gotoPath(page: Page, dir: string): Promise<void> {
+  const p = pane(page)
+  await p.locator('[data-action="path.edit"]').click()
+  await p.locator('input[data-field="path"]').fill(dir)
+  await p.locator('input[data-field="path"]').press('Enter')
+  await expect(p.locator('.fcrumb')).toContainText(basename(dir), { timeout: 15_000 })
+}
+
+/**
+ * #88 R1: 그 폴더에서 셸을 열면 프로세스가 cwd 로 **잡고 있어** 바로 지울 수 없다(Windows EBUSY).
+ * 세션을 먼저 닫고 잠깐 재시도한다 — 홈 폴더에 테스트 잔여물을 남기지 않는다.
+ */
+async function cleanupFixture(page: Page, dir: string): Promise<void> {
+  await page
+    .evaluate(async () => {
+      for (const s of await window.ev.session.list()) await window.ev.session.destroy(s.id)
+    })
+    .catch(() => {})
+  for (let i = 0; i < 20; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch {
+      await page.waitForTimeout(250)
+    }
+  }
+  // 20번(5초)을 넘겨도 잡혀 있으면 그 사실을 드러낸다 — 조용히 남기지 않는다.
+  rmSync(dir, { recursive: true, force: true })
 }
 
 async function openExplorer(page: Page): Promise<void> {
@@ -255,7 +291,7 @@ test('EXP-5 로컬 탭에서 폴더를 더블클릭하면 하위로 이동한다
     await openExplorer(ara.page)
     await openLocalFiles(ara.page)
     const p = pane(ara.page)
-    await frow(p, basename(dir) + '/').dblclick()
+    await gotoPath(ara.page, dir)
     await expect(frow(p, '하위폴더/')).toBeVisible({ timeout: 15_000 })
     await frow(p, '하위폴더/').dblclick()
     await expect(frow(p, 'inner.txt')).toBeVisible({ timeout: 15_000 })
@@ -280,7 +316,7 @@ test('EXP-6★ 로컬에서 파일 2개를 골라 복사하고 서버 탭에 붙
     // #91: 위치 탭이 없다 — 좌측에서 [내 PC] 를 고르고 [파일] 을 연다.
     await openLocalFiles(ara.page)
     const local = pane(ara.page)
-    await frow(local, basename(dir) + '/').dblclick()
+    await gotoPath(ara.page, dir)
     await expect(frow(local, 'one.bin')).toBeVisible({ timeout: 15_000 })
     await frow(local, 'one.bin').click()
     await frow(local, 'two.bin').click({ modifiers: ['Control'] })
@@ -327,7 +363,7 @@ test('EXP-8 선택이 없으면 복사·삭제 버튼이 비활성이고, 하나
     await openExplorer(ara.page)
     await openLocalFiles(ara.page)
     const p = pane(ara.page)
-    await frow(p, basename(dir) + '/').dblclick()
+    await gotoPath(ara.page, dir)
     await expect(frow(p, 'a.txt')).toBeVisible({ timeout: 15_000 })
 
     await expect(toolBtn(ara.page, '복사')).toBeDisabled()
@@ -418,4 +454,281 @@ test('EXP-12 폴더만 골라 다른 서버에 붙여넣으면 안내가 뜬다'
   await toolBtn(ara.page, '붙여넣기').click()
   await expect(pane(ara.page).locator('.sftp-err')).toContainText('폴더는', { timeout: 15_000 })
   expect(existsSync(join(rootB, 'onlydir'))).toBe(false)
+})
+
+// ── #88 R1(2026-08-16) 아라 연결점 ────────────────────────────────────────────
+// 준영님: "차이점은 우리 아라와 연결된다는 점이지."
+// 윈도우 탐색기를 흉내 내는 것이 값어치가 아니라, **폴더를 찾은 다음 개발자가 하는 일**이
+// 그 자리에서 바로 이어지는 것이 값어치다. 그래서 이 셋은 탐색기에 없는 것들이다.
+
+test('WB-1★ 로컬 폴더 우클릭에 아라 연결점 셋이 있다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await openExplorer(page)
+  await openLocalFiles(page)
+
+  await pane(page).locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+  const menu = page.locator('.ctx-menu')
+  await expect(menu.locator('[data-action="file.terminal"]')).toBeVisible()
+  await expect(menu.locator('[data-action="file.aicli"]')).toBeVisible()
+  await expect(menu.locator('[data-action="file.saveWork"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+})
+
+// WB-2★ [여기서 터미널 열기] — 그 폴더를 cwd 로 새 셸. 탐색기에 없는 것이고 제일 자주 한다.
+test('WB-2★ [여기서 터미널 열기]가 그 폴더에서 새 셸을 연다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-wb2-')
+  try {
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+
+    const before = await page.locator('.term-tabbar .ttab').count()
+    await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+    await page.click('.ctx-menu [data-action="file.terminal"]')
+
+    // 새 세션이 생기고 창은 물러난다(터미널이 보여야 한다).
+    await expect(page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
+    await expect(page.locator('.wb-win')).not.toBeVisible()
+    // 그 폴더에서 시작했다 — 상태바 cwd 로 확인한다.
+    await expect(page.locator('.statusbar .sb-seg.cwd .val')).toContainText(basename(dir), { timeout: 25_000 })
+  } finally {
+    await cleanupFixture(page, dir)
+  }
+})
+
+// WB-3★ [아라에게 물어보기] — 고른 것의 **경로만** 아라 입력창에 얹는다.
+// 내용을 통째로 싣지 않는다: #80 예산이 있고, 무엇이 가는지 사용자가 보고 고를 수 있어야 한다.
+test('WB-3★ [아라에게 물어보기]가 경로를 아라 입력창에 얹는다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-wb3-')
+  try {
+    writeFileSync(join(dir, 'target.txt'), 'x\n')
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(frow(p, 'target.txt')).toBeVisible({ timeout: 15_000 })
+
+    await frow(p, 'target.txt').click()
+    await frow(p, 'target.txt').click({ button: 'right' })
+    await page.click('.ctx-menu [data-action="file.askAi"]')
+
+    await expect(page.locator('.ai-panel')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.ai-panel .ai-input')).toHaveValue(/target\.txt/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// WB-4★ #90 이후 [이 폴더에서 AI CLI 시작]이 **로컬에도** 붙는다.
+// 그전에는 "이 창은 서버에 접속해서 시작"이라 원격 폴더에만 있었다 — 내 PC 에서도 되면서
+// 그 전제가 사라졌다.
+test('WB-4★ 로컬 폴더에서도 AI CLI 시작 창이 그 폴더로 열린다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-wb4-')
+  try {
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+
+    await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+    await page.click('.ctx-menu [data-action="file.aicli"]')
+
+    const modal = page.locator('.aicli-modal')
+    await expect(modal).toBeVisible({ timeout: 10_000 })
+    // 대상은 내 PC, 폴더는 방금 보던 곳.
+    await expect(modal.locator('.dd-val').first()).toHaveText('내 PC')
+    await expect(modal.locator('input.dlg-input').first()).toHaveValue(new RegExp(basename(dir)))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// ── #88 R2(2026-08-16) 탐색기 따라잡기 ────────────────────────────────────────
+// 준영님: "실제 finder, 윈도우 파일 탐색기에서 제공하는 기능은 모두 제공해야하지."
+// 하나하나는 작지만, 없으면 "이건 탐색기가 아니다"가 되는 칸들이다.
+
+// 보기 서브메뉴 항목 하나를 고른다(정렬·숨김은 탐색기처럼 빈 영역 우클릭 안에 있다).
+async function pickView(page: Page, action: string): Promise<void> {
+  await pane(page).locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+  await page.locator('.ctx-menu [data-action="file.view"]').hover()
+  await page.click(`.ctx-submenu [data-action="${action}"]`)
+}
+
+// FM-1★ 숨김 토글. 기본은 **보인다** — 여기 오는 사람은 .git·.env 를 찾으러 온다.
+test('FM-1★ 숨김 항목을 감췄다 다시 본다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-fm1-')
+  try {
+    writeFileSync(join(dir, '.env'), 'X=1\n')
+    writeFileSync(join(dir, 'plain.txt'), 'x\n')
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(frow(p, '.env')).toBeVisible({ timeout: 15_000 })
+
+    await pickView(page, 'file.hidden')
+    await expect(frow(p, '.env')).toHaveCount(0)
+    await expect(frow(p, 'plain.txt')).toBeVisible()
+    // 왜 줄었는지 상태 표시줄이 말한다 — 안 그러면 파일이 사라진 것으로 보인다.
+    await expect(p.locator('.fstat')).toContainText('숨김 1')
+
+    await pickView(page, 'file.hidden')
+    await expect(frow(p, '.env')).toBeVisible()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// FM-2★ 정렬 — 같은 기준을 다시 고르면 방향이 뒤집힌다(탐색기 열 머리글과 같은 규칙).
+// 폴더는 방향과 무관하게 늘 위다.
+test('FM-2★ 크기순으로 정렬하고 방향을 뒤집는다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-fm2-')
+  try {
+    writeFileSync(join(dir, 'small.txt'), 'a')
+    writeFileSync(join(dir, 'big.txt'), 'a'.repeat(5_000))
+    mkdirSync(join(dir, 'adir'))
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(frow(p, 'big.txt')).toBeVisible({ timeout: 15_000 })
+    const order = (): Promise<string[]> => p.locator('.ftree .frow .fn').allInnerTexts()
+
+    await pickView(page, 'file.sort.size')
+    expect(await order()).toEqual(['adir/', 'small.txt', 'big.txt'])
+
+    await pickView(page, 'file.sort.size')
+    expect(await order()).toEqual(['adir/', 'big.txt', 'small.txt']) // 뒤집혀도 폴더는 위
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// FM-3★ 잘라내기 → 붙여넣기 = **이동**. 복사+휴지통이 아니다(원본이 휴지통에 쌓이면 안 된다).
+test('FM-3★ 잘라내기로 파일을 다른 폴더로 옮긴다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-fm3-')
+  try {
+    writeFileSync(join(dir, 'move_me.txt'), 'hello\n')
+    mkdirSync(join(dir, 'dest'))
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(frow(p, 'move_me.txt')).toBeVisible({ timeout: 15_000 })
+
+    await frow(p, 'move_me.txt').click()
+    await toolBtn(page, '잘라내기').click()
+    await frow(p, 'dest/').dblclick()
+    await expect(p.locator('.fcrumb')).toContainText('dest', { timeout: 15_000 })
+    await toolBtn(page, '붙여넣기').click()
+    await expect(frow(p, 'move_me.txt')).toBeVisible({ timeout: 15_000 })
+
+    expect(existsSync(join(dir, 'dest', 'move_me.txt'))).toBe(true)
+    expect(existsSync(join(dir, 'move_me.txt'))).toBe(false)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// FM-4★ 새 파일 + 상태 표시줄. 폴더만 만들 수 있는 파일 관리자는 반쪽이다.
+test('FM-4★ 새 파일을 만들고 상태 표시줄이 개수를 센다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-fm4-')
+  try {
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(p.locator('.fstat')).toContainText('0개 항목', { timeout: 15_000 })
+
+    await toolBtn(page, '새 파일').click()
+    await page.fill('.dlg-input', '메모.txt')
+    await dialogConfirm(page)
+    await expect(frow(p, '메모.txt')).toBeVisible({ timeout: 15_000 })
+    await expect(p.locator('.fstat')).toContainText('1개 항목')
+
+    await frow(p, '메모.txt').click()
+    await expect(p.locator('.fstat')).toContainText('1개 선택')
+    expect(existsSync(join(dir, '메모.txt'))).toBe(true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// FM-5★ 이름 검색(이 폴더 안) + 뒤로/앞으로. 브레드크럼·[상위로]가 못 하는 것: 왔던 자리로 돌아오기.
+test('FM-5★ 이름으로 거르고, 뒤로·앞으로 오간다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-fm5-')
+  try {
+    writeFileSync(join(dir, 'alpha.txt'), 'a')
+    writeFileSync(join(dir, 'beta.txt'), 'b')
+    mkdirSync(join(dir, 'sub'))
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+    await expect(frow(p, 'beta.txt')).toBeVisible({ timeout: 15_000 })
+
+    await p.locator('[data-action="file.filter"]').click()
+    await p.locator('input[data-field="filter"]').fill('alp')
+    await expect(frow(p, 'beta.txt')).toHaveCount(0)
+    await expect(frow(p, 'alpha.txt')).toBeVisible()
+    await expect(p.locator('.fstat')).toContainText('검색 결과')
+
+    // 폴더를 옮기면 검색어는 저절로 털린다 — 남아 있으면 새 폴더가 비어 보인다.
+    await p.locator('input[data-field="filter"]').press('Escape')
+    await frow(p, 'sub/').dblclick()
+    await expect(p.locator('.fcrumb')).toContainText('sub', { timeout: 15_000 })
+    await expect(p.locator('input[data-field="filter"]')).toHaveCount(0)
+
+    await p.locator('[data-action="hist.back"]').click()
+    await expect(frow(p, 'beta.txt')).toBeVisible({ timeout: 15_000 })
+    await p.locator('[data-action="hist.fwd"]').click()
+    await expect(p.locator('.fcrumb')).toContainText('sub', { timeout: 15_000 })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// FM-6★ 원격은 **현행 유지**다. 잘라내기·새 파일·[윈도우 탐색기에서 보기]는 로컬 전용 —
+// 원격 파일은 실체가 이 PC 에 없고, 반쯤 올라간 파일을 원본 삭제로 갚을 수 없다.
+test('FM-6★ 원격 메뉴에는 로컬 전용 항목이 없다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const remote = makeRemote()
+  try {
+    const h = await ssh({ password: 'pw-fm6', sftpRoot: remote })
+    await connectNewSshProfile(page, { name: 'fm6', port: h.port, password: 'pw-fm6' })
+    await openExplorer(page)
+    await openServerTab(page, 'fm6')
+    const p = pane(page)
+    await expect(frow(p, 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
+
+    await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+    const menu = page.locator('.ctx-menu')
+    await expect(menu.locator('[data-action="file.paste"]')).toBeVisible()
+    await expect(menu.locator('[data-action="file.cut"]')).toHaveCount(0)
+    await expect(menu.locator('[data-action="file.newFile"]')).toHaveCount(0)
+    await expect(menu.locator('[data-action="file.reveal"]')).toHaveCount(0)
+    // 보기(정렬·숨김)는 원격에도 있다 — 목록을 어떻게 볼지는 화면의 문제라 백엔드와 무관하다.
+    await expect(menu.locator('[data-action="file.view"]')).toBeVisible()
+    await page.keyboard.press('Escape')
+  } finally {
+    rmSync(remote, { recursive: true, force: true })
+  }
 })

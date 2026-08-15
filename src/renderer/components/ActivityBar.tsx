@@ -1,5 +1,6 @@
-import { Activity, Boxes, Gauge, HardDrive, Package, Server, Sparkles } from 'lucide-react'
+import { Activity, Boxes, Gauge, HardDrive, History, Package, Server, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
+import { isBottomId, isRailId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
 import { KEYMAP, type KeymapAction } from '../../shared/keymap'
@@ -26,6 +27,8 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   // F30 AI 세션 — 아라 아이콘과 헷갈리지 않게 다른 글리프를 쓴다(그쪽은 대화, 이쪽은 관측).
   aisess: () => <Sparkles />,
   log: IconLog,
+  // #86: 지난 세션 — 시계 되감기. [세션 기록](현재)과 글리프를 달리해 둘을 가른다.
+  pastlog: () => <History />,
   preview: IconPreview,
   explorer: IconFolder,
   settings: IconGear
@@ -46,12 +49,29 @@ const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
 
 const isMac = navigator.userAgent.includes('Mac')
 
-/** 액티비티 바 툴팁 — 이름 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록은 이름만 쓴다. */
+/**
+ * #87 ①(2026-08-16): 이 항목이 **어디에 열리는가**.
+ *
+ * 준영님이 처음 지적하신 "이 버튼을 눌렀는데 왜 다른 창이 켜지지?"의 마지막 잔재였다 —
+ * 아이콘 열넷 중 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 **눌러 봐야 알았다.**
+ * #83 에서 규칙(아래=서버 것 / 오른쪽=아라 것)을 정했으니 바에도 그 구획이 보여야 한다.
+ * 판정은 배치의 단일 출처(RAIL_IDS/BOTTOM_IDS)에서 파생한다 — 여기 목록을 또 만들지 않는다.
+ */
+export type ActivitySlot = 'bottom' | 'rail' | 'window'
+export function activitySlot(id: ActivityId): ActivitySlot {
+  if (isBottomId(id)) return 'bottom'
+  if (isRailId(id)) return 'rail'
+  return 'window' // 작업대 창 · 설정 드로어
+}
+
+/** 툴팁 — 이름 + 어디에 열리는지 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록은 이름만 쓴다. */
 export function activityTip(id: ActivityId): string {
   const name = t(ACTIVITY_TITLE_KEY[id])
   const action = ACTIVITY_KEY[id]
   const b = action ? KEYMAP.find((k) => k.action === action) : undefined
-  return b ? `${name} (${isMac ? b.mac : b.win})` : name
+  // 설정은 어디에 열리는지 말할 것이 없다(드로어는 그 자체가 목적지다).
+  const where = id === 'settings' ? '' : ` · ${t('activity.where.' + activitySlot(id))}`
+  return b ? `${name}${where} (${isMac ? b.mac : b.win})` : `${name}${where}`
 }
 
 export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
@@ -65,6 +85,7 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   ctr: 'console.tool.ctr',
   aisess: 'aisess.title',
   log: 'log.title',
+  pastlog: 'pastlog.title',
   preview: 'preview.title',
   explorer: 'wb.title',
   settings: 'settings.open'
@@ -85,18 +106,22 @@ export function ActivityBar({
 }) {
   return (
     <div className="activity-bar" role="tablist" aria-label={t('activity.bar.label')}>
-      {items.map((id) => {
+      {items.map((id, i) => {
         const Icon = ICONS[id]
         const active = isActivityOpen(id, state)
+        // 묶음이 바뀌는 자리에 선을 하나 긋는다 — 아이콘 열넷이 한 덩어리로 보이면 규칙이 안 읽힌다.
+        // 사용자가 순서를 바꿔 섞어 놓으면 선이 여러 개 생기는데, 그것도 정직한 표시다.
+        const sep = i > 0 && activitySlot(items[i - 1]) !== activitySlot(id)
         return (
           <button
             key={id}
             type="button"
-            className={'act-item' + (active ? ' active' : '')}
+            className={'act-item' + (active ? ' active' : '') + (sep ? ' sep' : '')}
             role="tab"
             aria-selected={active}
             title={activityTip(id)}
             data-activity={id}
+            data-slot={activitySlot(id)}
             onClick={() => onToggle(id)}
           >
             <Icon />

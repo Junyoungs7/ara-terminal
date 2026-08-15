@@ -79,6 +79,30 @@ export const IconPlus = () => line(<path d="M12 5v14M5 12h14" />)
 export const IconChevronDown = () => line(<path d="M6 9l6 6 6-6" />)
 // 되돌아가기(디스크 창 방문 이력). IconUp 은 "한 단계 위"라 뜻이 다르다 — 같이 두고 갈라 쓴다.
 export const IconBack = () => line(<path d="M15 18l-6-6 6-6" />)
+// #88 R2 파일 관리자. 앞으로는 뒤로의 거울, 나머지는 24 viewBox·stroke 2 규격 그대로.
+export const IconForward = () => line(<path d="M9 18l6-6-6-6" />)
+export const IconSearch = () =>
+  line(
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </>
+  )
+export const IconCut = () =>
+  line(
+    <>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1l2.6 2.6" />
+    </>
+  )
+export const IconFilePlus = () =>
+  line(
+    <>
+      <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" />
+      <path d="M14 3v5h5M12 12v5M9.5 14.5h5" />
+    </>
+  )
 
 // FB-ui2 우측 액티비티 바 4종. 타이틀바 기어(strokeWidth 2)·아라 마크(strokeWidth 1.7)를 그대로
 // 옮겨 왔다(기존 인라인 SVG 스타일 재사용 — 새 아이콘 라이브러리 금지).

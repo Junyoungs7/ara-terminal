@@ -183,6 +183,10 @@ function wire() {
   ipcMain.handle('fs:mkdir', () => ({ ok: true }))
   // #89·#92: 사용자 휴지통·다운로드 폴더를 건드리지 않는다.
   ipcMain.handle('fs:trash', () => ({ ok: true }))
+  // #88 R2: 새 쓰기 채널 둘도 막는다 — fs:move 는 **실제로 파일을 옮긴다**(휴지통도 안 거친다).
+  // 하네스가 사용자 PC 를 건드리지 않는다는 규칙은 채널이 늘 때마다 다시 지켜야 한다.
+  ipcMain.handle('fs:move', () => ({ ok: true }))
+  ipcMain.handle('fs:newFile', () => ({ ok: true }))
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
 }
 

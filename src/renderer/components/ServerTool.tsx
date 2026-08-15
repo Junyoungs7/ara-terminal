@@ -25,6 +25,11 @@ export type ServerToolId = Extract<BottomId, 'ps' | 'svc' | 'disk' | 'pkg' | 'ct
 
 type Props = {
   id: ServerToolId
+  /**
+   * 지금 보이는 탭인가(#87 ⑤). 하단 패널이 **연 적 있는 탭을 전부 마운트해 두고** 숨기므로
+   * 이 값이 폴링을 켜고 끈다 — 안 보이는 표가 2.5초마다 원격에 명령을 보내면 안 된다.
+   */
+  active: boolean
   /** SSH 세션일 때만 채워진다. 로컬이면 null 이고 아래 안내가 대신 뜬다. */
   sessionId: string | null
   isSsh: boolean
@@ -36,23 +41,21 @@ type Props = {
   onSendInput: (text: string) => void
 }
 
-export function ServerTool({ id, sessionId, isSsh, ask, onAskAi, onOpenExplorer, onSendInput }: Props): JSX.Element {
+export function ServerTool({ id, active, sessionId, isSsh, ask, onAskAi, onOpenExplorer, onSendInput }: Props): JSX.Element {
   // SSH 가 아니면 표 대신 안내. 탭 자체는 남긴다 — 세션 종류에 따라 탭이 나타났다 사라지면
   // "아까 있던 게 어디 갔지"가 된다(PortMonitor 가 이미 같은 규칙이다).
   if (!isSsh || sessionId === null) return <span className="sb-placeholder">{t('console.needSsh')}</span>
 
-  // active 는 늘 true 다 — 하단 패널이 **열린 탭만** 그리므로(BottomPanel 계약) 여기 온 것은
-  // 곧 보이고 있다는 뜻이다. 숨은 탭은 아예 마운트되지 않아 폴링이 시작되지 않는다.
   switch (id) {
     case 'ps':
-      return <ProcessTable sessionId={sessionId} active ask={ask} onAskAi={onAskAi} />
+      return <ProcessTable sessionId={sessionId} active={active} ask={ask} onAskAi={onAskAi} />
     case 'svc':
-      return <ServiceTable sessionId={sessionId} active ask={ask} onAskAi={onAskAi} />
+      return <ServiceTable sessionId={sessionId} active={active} ask={ask} onAskAi={onAskAi} />
     case 'disk':
-      return <DiskTable sessionId={sessionId} active onOpenExplorer={onOpenExplorer} />
+      return <DiskTable sessionId={sessionId} active={active} onOpenExplorer={onOpenExplorer} />
     case 'pkg':
-      return <PkgTable sessionId={sessionId} active />
+      return <PkgTable sessionId={sessionId} active={active} />
     case 'ctr':
-      return <ContainerTable sessionId={sessionId} active ask={ask} onSendInput={onSendInput} />
+      return <ContainerTable sessionId={sessionId} active={active} ask={ask} onSendInput={onSendInput} />
   }
 }

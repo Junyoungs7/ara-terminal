@@ -251,6 +251,8 @@ export type ActivityId =
   | 'ctr'
   | 'aisess'
   | 'log'
+  // #86: 지난 세션 기록 — **우측**이다. 세션 목록은 세로 카드라 레일에 맞고, 우리 기능이다.
+  | 'pastlog'
   | 'preview'
   | 'explorer'
   | 'settings'
@@ -266,6 +268,7 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'ctr',
   'aisess',
   'log',
+  'pastlog',
   'preview',
   'explorer',
   'settings'
@@ -276,7 +279,7 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
 //
 // 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는다.** #79(2026-08-14)부터 한 번에 하나만 열린다.
 // 여섯이었는데 셋만 남았다: 대화(ai)·AI 세션(aisess)·미니 프리뷰(preview) — 전부 우리 기능이다.
-export const RAIL_IDS = ['ai', 'aisess', 'preview'] as const
+export const RAIL_IDS = ['ai', 'aisess', 'pastlog', 'preview'] as const
 export type RailId = (typeof RAIL_IDS)[number]
 
 export function isRailId(id: ActivityId): id is RailId {

@@ -125,3 +125,67 @@ test('SLOG-5 보존 기간을 고르면 재기동 후에도 유지된다', async
     a2.page.locator(`${drawer} .set-row:has(.sr-label:text-is("세션 로그 기록")) .set-toggle`)
   ).not.toHaveClass(/\bon\b/)
 })
+
+// ── #86(2026-08-16) 지난 세션 — 우측 레일 ─────────────────────────────────────
+// 준영님: "현재 세션의 기록은 하단에서, 이전 세션 기록은 우측에서 찾을 수 있게."
+// 새 저장소는 없다 — 로그 파일 이름(`날짜-시각_서버_id8.log`)이 곧 색인이다.
+
+// SLOG-6★ 세션을 닫아도 그 기록은 [지난 세션] 목록에 남고, 눌러 내용을 다시 본다.
+test('SLOG-6★ 닫힌 세션의 기록을 [지난 세션]에서 다시 본다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-slog6' })
+  const sid = await connectNewSshProfile(page, { name: 'slog6', port: h.port, password: 'pw-slog6' })
+  await enableLog(page)
+  await sendInput(page, sid, 'echo 지난기록표식\r\n')
+  await expectTermText(page, sid, /지난기록표식/)
+
+  // 세션을 닫는다 — 그래도 파일은 남는다(이 기능의 존재 이유다).
+  await page.evaluate((id) => window.ev.session.destroy(id), sid)
+
+  await page.click('.act-item[data-activity="pastlog"]')
+  const rail = page.locator('.monitor-panel.pastlog')
+  await expect(rail).toBeVisible({ timeout: 10_000 })
+  const row = rail.locator('.pl-row').first()
+  await expect(row).toBeVisible({ timeout: 15_000 })
+  // 파일 이름에서 되읽은 서버 이름이 그대로 보인다.
+  await expect(row.locator('.pl-srv')).toHaveText('slog6')
+  // 닫힌 세션이므로 [진행 중] 이 아니다.
+  await expect(row).not.toHaveClass(/live/)
+
+  await row.click()
+  await expect(rail.locator('.log-text')).toContainText('지난기록표식', { timeout: 15_000 })
+  // 목록으로 돌아갈 수 있다.
+  await rail.locator('.pl-back .btn').click()
+  await expect(rail.locator('.pl-row')).toHaveCount(1)
+})
+
+// SLOG-7★ 진행 중인 기록은 목록에서 갈라 보이고, 누르면 **하단 [세션 기록]** 으로 보낸다.
+// 같은 것을 두 곳에서 다르게 보여 주지 않는다 — 지금 세션은 하단이 집이다(§4.8).
+test('SLOG-7★ 진행 중인 기록을 누르면 하단 [세션 기록] 으로 간다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-slog7' })
+  const sid = await connectNewSshProfile(page, { name: 'slog7', port: h.port, password: 'pw-slog7' })
+  await enableLog(page)
+  await sendInput(page, sid, 'echo 진행중표식\r\n')
+  await expectTermText(page, sid, /진행중표식/)
+
+  await page.click('.act-item[data-activity="pastlog"]')
+  const rail = page.locator('.monitor-panel.pastlog')
+  const row = rail.locator('.pl-row.live').first()
+  await expect(row).toBeVisible({ timeout: 15_000 })
+  await expect(row.locator('.pl-live')).toHaveText('진행 중')
+
+  await row.click()
+  // 레일은 닫히고 하단 [세션 기록] 이 열린다.
+  await expect(page.locator('.monitor-panel.pastlog')).toHaveCount(0)
+  await expect(page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible({ timeout: 10_000 })
+})
+
+// SLOG-8 기록이 꺼져 있으면 "없다"가 아니라 **켜는 법**을 말한다(#68 과 같은 규칙).
+test('SLOG-8 기록이 없으면 설정을 켜라고 안내한다', async ({ ara }) => {
+  const { page } = ara
+  await page.click('.act-item[data-activity="pastlog"]')
+  const rail = page.locator('.monitor-panel.pastlog')
+  await expect(rail).toBeVisible({ timeout: 10_000 })
+  await expect(rail.locator('.sftp-empty')).toContainText('설정')
+})

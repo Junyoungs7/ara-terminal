@@ -38,6 +38,8 @@ export function Sidebar({
   onTailFile,
   onSaveWork,
   onAiCli,
+  onTerminalHere,
+  onAskAiPaths,
   onRevealFiles,
   ask,
   askText
@@ -72,6 +74,10 @@ export function Sidebar({
   onSaveWork: (absPath: string) => void
   // F27: [파일] 탭 원격 폴더 우클릭 → AI CLI 시작 창(그 폴더가 채워진 채로). Shell 이 연다.
   onAiCli: (absPath: string) => void
+  // #88 R1: 아라 연결점 — 이 폴더에서 새 셸 / 고른 것을 아라 입력창에.
+  // 작업대와 **같은 동작**이어야 한다(같은 트리인데 자리마다 다르면 안 된다 — 스모크가 잡았다).
+  onTerminalHere: (absPath: string) => void
+  onAskAiPaths: (paths: string[]) => void
   // F14: 터미널 Ctrl+V 파일 업로드가 시작될 때 [파일] 탭을 펼쳐 전송 큐를 보여 준다.
   onRevealFiles: () => void
   // 파일 삭제 확인·새 폴더 이름 입력(Shell 의 단일 Dialog 인스턴스).
@@ -150,6 +156,10 @@ export function Sidebar({
           onTailFile={onTailFile}
           onSaveWork={onSaveWork}
           onAiCli={onAiCli}
+          // #88 R1: 아라 연결점은 **파일 화면 어디서나** 같아야 한다 — 작업대에만 있고 여기 없으면
+          // 같은 트리인데 자리마다 다르게 동작한다(스모크가 그 어긋남을 잡았다).
+          onTerminalHere={onTerminalHere}
+          onAskAiPaths={onAskAiPaths}
           onReveal={onRevealFiles}
           ask={ask}
           askText={askText}
