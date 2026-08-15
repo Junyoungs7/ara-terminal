@@ -123,6 +123,8 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
   const [hasKey, setHasKey] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const [usage, setUsage] = useState({ input: 0, output: 0 })
+  // #80: 입력 예산 때문에 앞에서 버린 턴 수. 조용히 버리면 모델이 왜 앞을 잊었는지 알 길이 없다.
+  const [dropped, setDropped] = useState(0)
   // W5: 무엇이 답하고 있는지 보이게(설계 W5 §UI) — 패널 마운트 시 인계, 프로바이더 전환은 보통
   // 설정 드로어에서 대화를 비우고 일어나므로 다음 재마운트/응답 종료 때 자연히 갱신된다.
   const [provider, setProvider] = useState<AiProvider>(DEFAULT_AI_PROVIDER)
@@ -147,6 +149,7 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
         setHasKey(s.hasKey)
         setStreaming(s.streaming)
         setUsage(s.usage)
+        setDropped(s.droppedTurns)
         setProvider(s.provider)
         setModel(s.model)
       })
@@ -165,7 +168,13 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
       )
       if (!e.ok && e.reason === 'noKey') setHasKey(false)
       // 사용량은 응답에 딸려 오므로 종료 때 한 번만 다시 읽는다(표시 전용 — 상한을 강제하지 않는다).
-      void window.ev?.ai.getState().then((s) => setUsage(s.usage)).catch(() => {})
+      void window.ev?.ai
+        .getState()
+        .then((s) => {
+          setUsage(s.usage)
+          setDropped(s.droppedTurns)
+        })
+        .catch(() => {})
     })
     return () => {
       alive = false
@@ -303,6 +312,10 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
           </div>
         )}
         {hasKey && turns.length === 0 && <div className="ai-empty">{t('ai.empty')}</div>}
+        {/* #80: 예산 때문에 앞을 버렸으면 말해 준다. 조용히 버리면 "아까 얘기한 걸 왜 잊었지?"가
+            되고, 사용자는 모델이 이상해진 줄 안다. 대화는 화면에 그대로 남아 있고 **보내지 않았을
+            뿐**이라 목록 맨 위에 띠로 붙인다. */}
+        {dropped > 0 && <div className="ai-dropped">{t('ai.dropped').replace('{n}', String(dropped))}</div>}
         {turns.map((turn) => (
           <Turn key={turn.id} turn={turn} sessionId={session?.id ?? null} />
         ))}

@@ -62,6 +62,8 @@ type Emit = { delta: (turnId: string, text: string) => void; end: (e: AiEnd) => 
 
 export class AraSession {
   private turns: AiTurn[] = []
+  // #80: 직전 요청에서 예산 때문에 앞에서 버린 턴 수(표시용). 요청을 보낼 때마다 갱신된다.
+  private droppedTurns = 0
   private usage: Usage = { input: 0, output: 0 }
   // 진행 중 턴. 하나뿐이다 — 대화가 하나고 사용자가 답을 기다리는 동안 다음 질문을 보내지 않는다.
   private active: { turnId: string; controller: AbortController } | null = null
@@ -84,7 +86,8 @@ export class AraSession {
       model,
       turns: this.turns,
       streaming: this.active !== null,
-      usage: this.usage
+      usage: this.usage,
+      droppedTurns: this.droppedTurns
     }
   }
 
@@ -149,6 +152,7 @@ export class AraSession {
     this.active = { turnId: turn.id, controller }
     // 답변 턴 자신은 아직 비어 있으므로 요청에 실리지 않는다(buildRequestCore 가 빈 assistant 턴을 거른다).
     const core = buildRequestCore(this.turns, model, env)
+    this.droppedTurns = core.droppedTurns
     const request: AiRequest = { ...core, provider, apiKey, ...(baseUrl ? { baseUrl } : {}) }
     const stream = isFakeAi() ? fakeSource : (this.adapterOverride ?? PROVIDERS[provider]).stream
     try {
@@ -188,6 +192,7 @@ export class AraSession {
   clear(): void {
     this.cancel()
     this.turns = []
+    this.droppedTurns = 0
   }
 }
 

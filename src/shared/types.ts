@@ -423,6 +423,9 @@ export type AiState = {
   turns: AiTurn[]
   streaming: boolean // 재마운트 시 진행 중 턴이 있으면 스피너 복원
   usage: { input: number; output: number } // 이번 실행 누적(설계 §8-2 — 표시만, 상한 미강제)
+  // #80: 입력 예산(10만 토큰) 때문에 앞에서 버린 턴 수. 0 이 아니면 패널이 "이전 대화 N개
+  // 생략됨"을 띄운다 — 조용히 버리면 모델이 왜 앞을 잊었는지 사용자가 알 길이 없다.
+  droppedTurns: number
 }
 
 // 키 저장 결과. 예외 대신 구조화 — 사유마다 화면 문구가 다르다.

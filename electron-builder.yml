@@ -10,10 +10,11 @@ files:
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:
   - node_modules/node-pty/**
-# 자동 업데이트: 사내 generic HTTP 파일 서버 (계획서 §B.6). URL은 배포 시 확정.
-publish:
-  provider: generic
-  url: https://example.invalid/ara/updates/
+# 자동 업데이트: **1차 배포에서는 쓰지 않는다**(준영님 결정 2026-08-15).
+# 여기 `https://example.invalid/ara/updates/` 가 박혀 있었는데, 실제로 이 앱은 electron-updater 를
+# 부르는 곳이 한 군데도 없다 — 설정만 남아 패키지 안에 없는 주소를 가리키는 app-update.yml 을
+# 넣고 있었다. 사내 파일 서버가 정해지면 그때 provider: generic 으로 되살린다.
+publish: null
 win:
   target: nsis
   # 아이콘: 거미 마스터 ara-icon.svg → 1024px PNG(`npm run icons:png`). electron-builder 가

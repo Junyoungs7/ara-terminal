@@ -674,6 +674,7 @@
   "ai.close": "아라 패널 닫기",
   "ai.clear": "새 대화",
   "ai.clear.title": "대화를 비웁니다 (진행 중인 답변은 중단됩니다)",
+  "ai.dropped": "대화가 길어져 이전 {n}개는 보내지 않았습니다 (화면에는 남아 있습니다)",
   "ai.empty": "무엇이든 물어보세요. 셸 명령은 코드블록으로 답하고, 실행은 직접 하셔야 합니다.",
   "ai.placeholder": "아라에게 질문 — Enter 전송 · Shift+Enter 줄바꿈",
   "ai.placeholder.noKey": "API 키를 등록하면 질문할 수 있습니다",

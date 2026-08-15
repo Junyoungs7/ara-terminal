@@ -5,6 +5,7 @@
 // 보내든 buildRequest 를 통과한 본문에는 마스킹되지 않은 비밀이 남지 않는다(설계 §3.3).
 import { maskSecrets } from '@shared/maskSecrets'
 import { AI_CONTEXT_LINES, type AiEnv, type AiTurn } from '@shared/types'
+import { estimateTokens, trimToBudget, INPUT_BUDGET_TOKENS } from './budget'
 
 // 출력 상한. 스트리밍 권장치(64K)보다 낮게 잡은 의도적 하향이다 — 사내 배포 + 개인 키 과금
 // 환경에서 채팅 한 턴이 16K 출력을 넘는 것은 정상 상황이 아니다(설계 §1).
@@ -105,6 +106,8 @@ export type AiRequestCore = {
   effort: typeof EFFORT
   system: string
   messages: { role: 'user' | 'assistant'; content: string }[]
+  /** #80: 예산 때문에 앞에서 버린 턴 수. 0 이 아니면 화면이 "이전 대화 N개 생략됨"을 알린다. */
+  droppedTurns: number
 }
 
 // 대화 전량 → 프로바이더 무관 요청 본체. 본문이 빈 assistant 턴(진행 중·취소된 빈 턴)은 싣지 않는다 —
@@ -114,14 +117,25 @@ export type AiRequestCore = {
 // ⚠️ temperature/top_p/top_k 를 넣지 않는다(Sonnet 5·Opus 5 는 비기본값을 400 으로 거부한다).
 // ⚠️ thinking 을 명시하지 않는다(생략 시 adaptive). budget_tokens 는 400 이다.
 export function buildRequestCore(turns: AiTurn[], model: string, env?: AiEnv): AiRequestCore {
-  const messages = turns
-    .filter((t) => t.role === 'user' || t.text.length > 0)
-    .map((t) => ({ role: t.role, content: t.role === 'user' ? userContent(t) : t.text }))
+  const live = turns.filter((t) => t.role === 'user' || t.text.length > 0)
+  // #80: **첨부한 터미널 출력은 마지막 사용자 턴에만 싣는다.** 예전에는 3턴 전 `ps aux` 출력을
+  // 매 요청마다 다시 보냈다 — 이 앱은 로그·exec 결과를 붙여 묻는 기능이 있어 그게 컨텍스트의
+  // 대부분을 차지한다. 사용자가 되짚어 볼 원본은 AiTurn.context 에 그대로 남아 있다(화면용).
+  const lastUser = live.map((t) => t.role).lastIndexOf('user')
+  const messages = live.map((t, i) => ({
+    role: t.role,
+    content: t.role === 'user' ? (i === lastUser ? userContent(t) : t.text) : t.text
+  }))
+
+  const system = systemPrompt(env)
+  // 시스템 프롬프트도 입력이다 — 예산에서 먼저 뺀다.
+  const { kept, dropped } = trimToBudget(messages, INPUT_BUDGET_TOKENS - estimateTokens(system))
   return {
     model,
     maxTokens: MAX_TOKENS,
     effort: EFFORT,
-    system: systemPrompt(env),
-    messages
+    system,
+    messages: kept,
+    droppedTurns: dropped
   }
 }

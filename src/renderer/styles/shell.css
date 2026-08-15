@@ -4314,6 +4314,17 @@
   flex-direction: column;
   gap: 12px;
 }
+/* #80: 예산 때문에 앞 대화를 안 보냈다는 띠. 경고가 아니라 사실 전달이라 --warn 을 쓰지 않는다. */
+.ai-dropped {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  word-break: keep-all;
+}
 .ai-empty {
   color: var(--text-dim);
   font-size: var(--fs-md);
