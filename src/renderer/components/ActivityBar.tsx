@@ -1,4 +1,4 @@
-import { Gauge, LayoutGrid, Sparkles } from 'lucide-react'
+import { Activity, Boxes, Gauge, HardDrive, LayoutGrid, Package, Server, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
@@ -16,6 +16,13 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   monitor: IconMonitor,
   // F29 시스템 모니터 — CPU·메모리·GPU·디스크 계기판. console 과 같이 lucide 를 재사용한다.
   sys: () => <Gauge />,
+  // #84: 서버 콘솔의 표 다섯이 하단 탭이 되면서 액티비티 항목이 됐다. 글리프는 런치패드
+  // 타일이 쓰던 것 그대로다 — 같은 기능을 두 모양으로 그리면 같은 것인 줄 모른다.
+  ps: () => <Activity />,
+  svc: () => <Server />,
+  disk: () => <HardDrive />,
+  pkg: () => <Package />,
+  ctr: () => <Boxes />,
   // F30 AI 세션 — 아라 아이콘과 헷갈리지 않게 다른 글리프를 쓴다(그쪽은 대화, 이쪽은 관측).
   aisess: () => <Sparkles />,
   log: IconLog,
@@ -54,6 +61,11 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   ai: 'ai.open',
   monitor: 'sidebar.tab.monitor',
   sys: 'sysm.title',
+  ps: 'console.tool.ps',
+  svc: 'console.tool.svc',
+  disk: 'console.tool.disk',
+  pkg: 'console.tool.pkg',
+  ctr: 'console.tool.ctr',
   aisess: 'aisess.title',
   log: 'log.title',
   preview: 'preview.title',

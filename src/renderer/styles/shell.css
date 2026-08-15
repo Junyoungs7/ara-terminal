@@ -1058,11 +1058,11 @@
   font-size: var(--fs-md);
 }
 
-.con-pane {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
+/* #84: 콘솔 창 안의 도구 탭(.con-pane)은 사라졌다 — 표 다섯이 하단 패널로 내려갔다.
+   하단에서는 .bp-body(flex)가 그 자리를 하고, 표 자신이 flex:1 이라 그대로 채운다.
+   SSH 가 아닐 때의 안내는 하단에서도 가운데에 둔다(콘솔 창과 같은 규칙). */
+.bp-body > .sb-placeholder {
+  margin: auto;
 }
 .con-ps,
 .con-svc,

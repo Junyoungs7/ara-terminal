@@ -81,7 +81,7 @@ async function openConsole(page: Page, name: string, port: number, password: str
 // 런치패드에서 [프로세스] 를 눌러 탭으로 연다.
 async function openProcessTab(page: Page): Promise<void> {
   await page.click('.con-app[data-tool="ps"]')
-  await expect(page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
+  await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
   await expect(rows(page)).toHaveCount(4, { timeout: 30_000 })
 }
 
@@ -144,73 +144,72 @@ test('CON-34★ 런치패드 타일을 포커스·Enter 로 열 수 있다', asy
   await tile.focus()
   await expect(tile).toBeFocused()
   await ara.page.keyboard.press('Enter')
-  await expect(ara.page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
+  await expect(ara.page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
 })
 
-// CON-35★ 창을 닫아도 표의 상태가 남는다 (#74, 2026-08-14)
-// 예전엔 `{consoleOpen && <ServerConsoleView/>}` 라 닫는 순간 언마운트돼 열린 탭·정렬·검색이
-// 통째로 날아갔다 — 프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다. 이제 숨기만 한다.
-test('CON-35★ 콘솔을 닫았다 열어도 탭과 검색어가 그대로다', async ({ ara, ssh }) => {
+// CON-35★ #84(2026-08-16): 창을 닫아도 상태가 남는지 보던 검사였다(#74). 콘솔 창에는 이제
+// **지킬 상태가 없다** — 도구 탭이 하단으로 내려가고 격자만 남았다. 그래서 남는 것은 창의
+// 자리·크기뿐이고, 그걸 지킨다(#72·#74 가 세운 "닫아도 언마운트하지 않는다"의 잔여분).
+//
+// ⚠️ 대신 후퇴한 것이 있다: **하단 탭을 바꾸면 그 표의 검색어·정렬이 초기화된다.**
+//    하단 패널은 열린 탭만 그리기 때문이다(#78 계약 — 안 보이는 탭이 원격에 명령을 보내면 안 된다).
+//    떠 있는 창 시절에는 숨겨만 뒀다. 마운트를 유지하고 active 로 폴링만 끄면 되찾을 수 있다 —
+//    #87 에 항목으로 올려 뒀다.
+test('CON-35★ 콘솔을 닫았다 열어도 창 자리·크기가 그대로다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con35', execHandler: ps.exec })
   await openConsole(ara.page, 'con35', h.port, 'pw-con35')
-  await openProcessTab(ara.page)
 
-  await ara.page.fill('.con-ps .con-search input, .con-toolbar input[type="text"]', 'node')
-  const before = await rows(ara.page).count()
+  const box = () => ara.page.locator('.con-win').evaluate((e) => JSON.stringify(e.getBoundingClientRect()))
+  const before = await box()
 
   await ara.page.click('.con-win .exp-wbtn.x')
   await expect(ara.page.locator('.con-win')).not.toBeVisible()
   await ara.page.click('.act-item[data-activity="console"]')
   await expect(ara.page.locator('.con-win')).toBeVisible()
-
-  // 열려 있던 탭도, 쳐 둔 검색어도 그대로다.
-  await expect(ara.page.locator('.exp-tab.on[data-tab="ps"]')).toBeVisible()
-  await expect(ara.page.locator('.con-ps .con-search input, .con-toolbar input[type="text"]').first()).toHaveValue('node')
-  await expect(rows(ara.page)).toHaveCount(before)
+  expect(await box()).toBe(before)
 })
 
-// CON-1b 콘솔 밖에서 열리는 칸은 셋(로그·포트·터미널)이고, 그 셋만 ↗ 를 단다.
-// 이력: R1·R2 때는 "추후 칸은 눌러도 아무 일이 없다" 였고, R3 에서 추후 칸이 없어졌으며,
-// #69(2026-08-14)에서 [파일] 이 밖에서 열리는 쪽 → **콘솔 안 탭**으로 옮겨 왔다.
-test('CON-1b★ 콘솔 밖에서 열리는 칸은 셋뿐이고 ↗ 로 미리 알린다', async ({ ara, ssh }) => {
+// CON-1b★ #84(2026-08-16): 이제 **모든** 칸이 콘솔 밖에서 열린다 — 표 다섯이 하단 패널로
+// 내려가면서 창 안에 남은 도구가 하나도 없어졌다. 그래서 ↗ 가 아홉 칸 전부에 붙는다.
+// 이력: R1·R2 "추후 칸" → R3 전부 활성 → #69 [파일]만 창 안 탭 → #84 전부 밖.
+// #69 가 문제 삼은 "어떤 칸은 여기서, 어떤 칸은 딴 데서"라는 불일치가 이걸로 사라졌다.
+test('CON-1b★ 아홉 칸 모두 콘솔 밖에서 열리고 ↗ 로 미리 알린다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con1b', execHandler: ps.exec })
   await openConsole(ara.page, 'con1b', h.port, 'pw-con1b')
 
-  await expect(ara.page.locator('.con-app .ext-mark')).toHaveCount(3)
-  for (const id of ['log', 'port', 'term']) {
+  await expect(ara.page.locator('.con-app .ext-mark')).toHaveCount(9)
+  for (const id of ['files', 'ps', 'svc', 'disk', 'log', 'port', 'term', 'pkg', 'ctr']) {
     await expect(ara.page.locator(`.con-app[data-tool="${id}"] .ext-mark`)).toBeVisible()
   }
-  // 탭으로 열리는 칸에는 표시가 없다 — 표시가 아무 데나 붙으면 뜻이 사라진다.
-  for (const id of ['files', 'ps', 'svc', 'disk', 'pkg', 'ctr']) {
-    await expect(ara.page.locator(`.con-app[data-tool="${id}"] .ext-mark`)).toHaveCount(0)
-  }
-  // 밖에서 열리는 칸은 탭을 만들지 않는다.
+  // 콘솔 창에는 도구 탭이 아예 없다(런치패드 격자 하나뿐이다).
+  await expect(ara.page.locator('.con-win .exp-tabs')).toHaveCount(0)
+  // ★ 고르면 창이 닫힌다 — 시작 메뉴와 같다. 안 닫으면 떠 있는 격자가 하단 패널을 덮어
+  //   "눌렀는데 안 보인다"가 된다(#69 가 지적한 그 증상이 다른 모양으로 되살아난다).
   await ara.page.click('.con-app[data-tool="log"]')
-  await ara.page.waitForTimeout(300)
-  await expect(ara.page.locator('.exp-tab[data-tab="log"]')).toHaveCount(0)
+  await expect(ara.page.locator('.con-win')).not.toBeVisible()
+  await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible()
 })
 
-// CON-33★ [파일] 은 콘솔 안 탭으로 열린다 (#69, 2026-08-14)
-// 준영님 지적: "런처패드의 파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이 켜지는것".
-// 예전엔 떠 있는 탐색기를 띄우고 **콘솔을 닫아** 런치패드로 돌아갈 길이 없었다.
-// 파일 UI 구현은 이 앱에 FileTree 하나뿐이라(떠 있는 탐색기도 그걸 쓴다) 새로 만든 화면이 없다.
-test('CON-33★ [파일] 은 콘솔 안 탭으로 열리고 런치패드로 돌아갈 수 있다', async ({ ara, ssh }) => {
+// CON-33★ [파일] 은 탐색기 창으로 열리고 런치패드는 그대로 남는다
+// 준영님 지적(#69): "런처패드의 파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이
+// 켜지는것". 그때는 탐색기를 띄우면서 **콘솔을 닫아** 돌아갈 길이 없는 것이 진짜 문제였다.
+// #84 에서 파일은 다시 탐색기 창으로 갔지만 — 이번엔 **콘솔이 닫히지 않는다.**
+// (파일은 세로가 필요한 트리라 하단으로 내려보내지 않았다 — design-system.md §4.8 예외 ①.)
+test('CON-33★ [파일] 은 탐색기 창을 열고, 액티비티 바로 런치패드에 돌아온다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con33', execHandler: ps.exec })
   await openConsole(ara.page, 'con33', h.port, 'pw-con33')
 
   await ara.page.click('.con-app[data-tool="files"]')
-  await expect(ara.page.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
-  // 콘솔이 살아 있고, 떠 있는 탐색기 창이 따로 뜨지 않았다.
-  await expect(ara.page.locator('.con-win')).toBeVisible()
-  await expect(ara.page.locator('.exp-win:not(.con-win)')).not.toBeVisible() // #74: 창은 남고 숨는다
-  // 파일 트리가 실제로 그려졌다(툴바 켠 모드 — 탐색기 창과 같은 구성).
-  await expect(ara.page.locator('.con-pane .ftree')).toHaveCount(1)
-
-  // 런치패드 탭으로 돌아갈 수 있다 — 이 검사의 요점이다.
-  await ara.page.click('.exp-tab[data-tab="pad"]')
+  // 탐색기 창이 뜨고 런치패드는 물러난다(고르면 닫히는 시작 메뉴 모델).
+  await expect(ara.page.locator('.exp-win:not(.con-win)')).toBeVisible({ timeout: 15_000 })
+  // 탐색기는 탭마다 트리를 마운트해 두고 숨긴다(#74) — 개수가 아니라 **보이는 것**을 본다.
+  await expect(ara.page.locator('.exp-win:not(.con-win) .ftree').last()).toBeVisible()
+  await expect(ara.page.locator('.con-win')).not.toBeVisible()
+  // ★ #69 의 요점은 "돌아갈 곳" 이었다 — 액티비티 바가 언제나 다시 열어 준다.
+  await ara.page.click('.act-item[data-activity="console"]')
   await expect(ara.page.locator('.con-pad')).toBeVisible()
 })
 
@@ -391,15 +390,17 @@ test('CON-8c★ 활성 세션을 바꾸면 이전 서버의 프로세스 목록�
   expect(psA.kills).toEqual([])
 })
 
-// CON-9 창을 닫으면 원격 폴링이 멈춘다(unwatch).
-test('CON-9 콘솔 창을 닫으면 ps 폴링이 멈춘다', async ({ ara, ssh }) => {
+// CON-9 표를 닫으면 원격 폴링이 멈춘다(unwatch).
+// #84: 닫는 자리가 콘솔 창 → **하단 패널**로 옮겼다. 하단은 열린 탭만 그리므로 닫으면
+// 표가 언마운트되고 그 useEffect 정리가 unwatch 를 부른다.
+test('CON-9 하단 [프로세스] 탭을 닫으면 ps 폴링이 멈춘다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con9', execHandler: ps.exec })
   await openConsole(ara.page, 'con9', h.port, 'pw-con9')
   await openProcessTab(ara.page)
 
-  await ara.page.click('.act-item[data-activity="console"]') // 토글로 닫기
-  await expect(ara.page.locator('.con-win')).not.toBeVisible() // #74: 창은 남고 숨는다
+  await ara.page.click('.bottom-panel .bp-close')
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
   await ara.page.waitForTimeout(1_000) // 진행 중이던 마지막 바퀴가 끝날 시간
   const after = ps.rounds()
   await ara.page.waitForTimeout(6_000) // 주기(2.5초) 두 바퀴가 넘는 시간
@@ -489,7 +490,7 @@ const dirRows = (page: Page) => page.locator('.dsk-dir')
 // 런치패드에서 도구를 눌러 탭으로 연다.
 async function openTool(page: Page, tool: string): Promise<void> {
   await page.click(`.con-app[data-tool="${tool}"]`)
-  await expect(page.locator(`.exp-tab.on[data-tab="${tool}"]`)).toBeVisible()
+  await expect(page.locator(`.bp-tab.on[data-bottom="${tool}"]`)).toBeVisible()
 }
 
 // CON-11 서비스 표가 뜨고, 죽은 유닛이 맨 위로 온다(목록을 여는 이유가 대개 그것이다).
@@ -756,7 +757,7 @@ test('CON-19 설치된 프로그램 표에 nvm 으로 깐 node 가 경로·버�
   const h = await ssh({ password: 'pw19', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c19', h.port, 'pw19')
   await ara.page.click('.con-app[data-tool="pkg"]')
-  await expect(ara.page.locator('.exp-tab.on[data-tab="pkg"]')).toBeVisible()
+  await expect(ara.page.locator('.bp-tab.on[data-bottom="pkg"]')).toBeVisible()
 
   const rowsPkg = ara.page.locator('.pkg-row:not(.missing)')
   await expect(rowsPkg).toHaveCount(3, { timeout: 20_000 })
@@ -801,8 +802,9 @@ test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(1)
 })
 
-// CON-22 나머지 칸은 콘솔 안에 다시 그리지 않고 **기존 창·패널**을 연다.
-test('CON-22★ [포트] 칸은 포트 모니터를 열되 콘솔을 닫지 않는다', async ({ ara, ssh }) => {
+// CON-22 칸은 콘솔 안에 같은 화면을 다시 그리지 않고 **기존 창·패널**을 연다.
+// #84: 그리고 고르면 창이 닫힌다 — 떠 있는 격자가 하단 패널을 덮기 때문이다(시작 메뉴 모델).
+test('CON-22★ [포트] 칸은 하단 [포트] 탭을 열고 런치패드는 물러난다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw22', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c22', h.port, 'pw22')
 
@@ -813,10 +815,10 @@ test('CON-22★ [포트] 칸은 포트 모니터를 열되 콘솔을 닫지 않�
   // 기존 포트 모니터가 뜬다(콘솔 안에 같은 화면을 두 번 만들지 않는다).
   // #78 부터 우측 레일이 아니라 **하단 패널**의 [포트] 탭이다.
   await expect(ara.page.locator('.bottom-panel .bp-tab.on[data-bottom="monitor"]')).toBeVisible()
-  // #69: 콘솔은 **살아 있다** — 예전엔 여기서 닫아 버려 런치패드로 돌아갈 길이 없었다.
-  await expect(ara.page.locator('.con-win')).toBeVisible()
-  // 콘솔 안에 port 탭이 생기지는 않았다.
-  await expect(ara.page.locator('.exp-tab[data-tab="port"]')).toHaveCount(0)
+  // 격자는 물러난다. #69 가 걱정한 "돌아갈 곳"은 액티비티 바가 갖고 있다.
+  await expect(ara.page.locator('.con-win')).not.toBeVisible()
+  // 'port' 라는 탭은 없다 — 포트 모니터의 하단 탭 id 는 'monitor' 다(이름이 둘이면 안 된다).
+  await expect(ara.page.locator('.bp-tab[data-bottom="port"]')).toHaveCount(0)
 })
 
 // CON-23★ [터미널] 칸은 **그 서버의** 새 세션을 연다.
@@ -895,7 +897,7 @@ test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점�
   const h = await ssh({ password: 'pw24', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c24', h.port, 'pw24')
   await ara.page.click('.con-app[data-tool="ctr"]')
-  await expect(ara.page.locator('.exp-tab.on[data-tab="ctr"]')).toBeVisible()
+  await expect(ara.page.locator('.bp-tab.on[data-bottom="ctr"]')).toBeVisible()
 
   const names = ara.page.locator('.ctr-row .ctr-name')
   await expect(names).toHaveCount(2, { timeout: 20_000 })
@@ -1026,7 +1028,8 @@ test('CON-27 컨테이너 탭을 닫으면 폴링이 멈춘다', async ({ ara, s
   await ara.page.click('.con-app[data-tool="ctr"]')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
 
-  await ara.page.click('.exp-tab[data-tab="ctr"] .exp-tab-x')
+  // #84: 탭을 닫는 자리가 콘솔 창 → 하단 패널로 옮겼다. 닫으면 그 탭이 언마운트되고 폴링이 멎는다.
+  await ara.page.click('.bottom-panel .bp-close')
   await ara.page.waitForTimeout(300)
   const after = ctr.calls()
   await ara.page.waitForTimeout(11_000) // 폴링 2바퀴(5초) 이상

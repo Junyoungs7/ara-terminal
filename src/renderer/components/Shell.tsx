@@ -17,6 +17,7 @@ import { McpIndicator } from './McpIndicator'
 import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
 import { ExplorerView } from './ExplorerView'
 import { ServerConsoleView } from './ServerConsoleView'
+import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
 import { useSessions } from '../store/sessions'
@@ -921,6 +922,12 @@ export function Shell() {
       ai: aiOpen,
       monitor: monitorOpen,
       sys: sysOpen,
+      // #84: 하단 탭 다섯 — 열린 것 하나만 활성이다(하단도 한 번에 하나만 그린다).
+      ps: bottom === 'ps',
+      svc: bottom === 'svc',
+      disk: bottom === 'disk',
+      pkg: bottom === 'pkg',
+      ctr: bottom === 'ctr',
       aisess: aiSessOpen,
       log: logOpen,
       preview: previewOpen,
@@ -932,6 +939,7 @@ export function Shell() {
       aiOpen,
       monitorOpen,
       sysOpen,
+      bottom,
       aiSessOpen,
       logOpen,
       previewOpen,
@@ -1037,7 +1045,14 @@ export function Shell() {
           sessions={sessions}
           // #78: 하단 패널. 상태는 여기 있고 화면 자리는 .main 안이라 노드로 내려보낸다.
           bottom={
-            <BottomPanel tab={bottom} onTab={setBottom} onClose={() => setBottom(null)}>
+            <BottomPanel
+              tab={bottom}
+              onTab={setBottom}
+              onClose={() => setBottom(null)}
+              // #84: 탭이 여덟이라 좁을 수 있다 — 액티비티 바의 순서·숨김 설정을 그대로 쓴다
+              // (하단만의 새 설정을 만들지 않는다). 설정에서 끈 도구는 탭에서도 사라진다.
+              ids={activityItems.filter(isBottomId)}
+            >
               {(id) =>
                 id === 'monitor' ? (
                   <PortMonitor
@@ -1061,13 +1076,41 @@ export function Shell() {
                     stats={telemetry.stats}
                     history={sysHistory}
                   />
-                ) : (
+                ) : id === 'log' ? (
                   <LogPanel
                     open
                     embedded
                     onClose={() => setBottom(null)}
                     sessionId={activeSession?.id ?? null}
                     sessionTitle={activeSession?.title ?? ''}
+                  />
+                ) : (
+                  // #84: 서버 콘솔에서 내려온 표 다섯. **서버는 세션 탭이 정한다** — 여기에
+                  // 서버 선택 UI 는 없다. SSH 가 아니면 각 표가 자기 안내를 낸다(탭은 감추지
+                  // 않는다 — 세션 종류마다 탭이 나타났다 사라지면 더 헷갈린다).
+                  <ServerTool
+                    id={id}
+                    sessionId={activeSession?.type === 'ssh' ? (activeSession?.id ?? null) : null}
+                    isSsh={activeSession?.type === 'ssh'}
+                    ask={ask}
+                    onAskAi={(text: string) => {
+                      openRail('ai')
+                      setAiPrefill({ text, at: Date.now() })
+                    }}
+                    // 디스크 표에서 파고든 폴더를 그대로 탐색기 창에 넘긴다 — 새 창을 만들지 않고
+                    // 기존 진입점을 쓴다. 프로필이 없는 세션(복원 중 등)은 열 곳이 없다.
+                    onOpenExplorer={(path: string) => {
+                      const profileId = activeSession?.profileId
+                      if (!profileId) return
+                      setExplorerOpen(true)
+                      setExplorerReveal({ profileId, path, at: Date.now() })
+                    }}
+                    // 컨테이너 접속(`docker exec -it`)은 대화형이라 exec 채널로 못 한다 —
+                    // AI CLI 실행과 같은 채널로 지금 세션 터미널에 보낸다.
+                    onSendInput={(text: string) => {
+                      const sid = activeSession?.id
+                      if (sid) window.ev?.session.input(sid, text)
+                    }}
                   />
                 )
               }
@@ -1155,44 +1198,29 @@ export function Shell() {
           sessionId={activeSession?.id ?? null}
           isSsh={activeSession?.type === 'ssh'}
           serverName={activeSession?.serverKey ?? ''}
-          askText={askText}
           onClose={() => setConsoleOpen(false)}
-          ask={ask}
-          onAskAi={(text) => {
-            openRail('ai')
-            setAiPrefill({ text, at: Date.now() })
-          }}
-          // 디스크 창에서 파고든 폴더를 그대로 탐색기 창에 넘긴다 — 새 창을 만들지 않고 기존
-          // 탐색기 진입점을 쓴다. 프로필이 없는 세션(복원 중 등)은 열 곳이 없으므로 아무 일도 안 한다.
-          onOpenExplorer={(path) => {
-            const profileId = activeSession?.profileId
-            if (!profileId) return
-            setExplorerOpen(true)
-            setExplorerReveal({ profileId, path, at: Date.now() })
-          }}
-          // R3: 파일·로그·포트·터미널 칸은 콘솔 안에 다시 그리지 않고 **기존 진입점**을 부른다.
-          // 부른 뒤 콘솔은 닫는다 — 방금 연 창을 콘솔이 덮고 있으면 한 번 더 치워야 한다.
-          // F28 R2 컨테이너 접속 — `docker exec -it` 는 대화형이라 exec 채널로는 못 한다.
-          // AI CLI 실행(위 launchAiCli)과 같은 채널로 지금 세션 터미널에 보낸다.
-          onSendInput={(text) => {
-            const sid = activeSession?.id
-            if (sid) window.ev?.session.input(sid, text)
-          }}
           onLaunch={(id) => {
-            // #69: 콘솔을 닫는 것은 [터미널] 하나뿐이다(아래). [로그]·[포트]는 레일만 연다 —
-            // 예전엔 셋 다 콘솔을 닫아서 런치패드로 돌아갈 길이 없었다.
-            if (id === 'log') openBottom('log')
-            else if (id === 'port') openBottom('monitor')
-            else if (id === 'term') {
+            // #84: 모든 칸이 창 밖에서 열리므로 **고르면 창을 닫는다** — 시작 메뉴와 같은 모델이다.
+            // 안 닫으면 떠 있는 런치패드가 하단 패널을 그대로 덮어 "눌렀는데 안 보인다"가 된다
+            // (e2e 가 실제로 이걸 잡았다: `.con-pad ... intercepts pointer events`).
+            // #69 가 걱정한 "돌아갈 곳"은 액티비티 바 [서버 콘솔]이 언제나 열어 준다 —
+            // 그때 문제는 콘솔이 닫히면서 **새 떠 있는 창**이 그 자리를 차지한 것이었다.
+            setConsoleOpen(false)
+            if (id === 'port') openBottom('monitor')
+            else if (id === 'files') {
+              // 프로필이 없는 세션(복원 중 등)은 열 곳이 없으므로 아무 일도 안 한다.
+              const profileId = activeSession?.profileId
+              if (!profileId) return
+              setExplorerOpen(true)
+              setExplorerReveal({ profileId, path: '.', at: Date.now() })
+            } else if (id === 'term') {
               // **그 서버의** 새 세션이다. 예전에는 `session.new`(=로컬 셸)를 불러서, 서버 이름이
               // 제목줄에 박힌 창에서 내 PC 셸이 열렸다 — 조용히 틀리는 종류라 서버에서 칠 명령을
               // 자기 PC 에서 치게 됐다(2026-08-13 감사). 원래 스펙(F26-R3)도 이걸 지시했다.
               const pid = activeSession?.profileId
               if (pid) void connectProfile(pid)
               else dispatchAction('session.new') // 로컬 세션에서 열었으면 로컬이 맞다
-              // 세션을 만드는 동작이라 터미널이 보여야 한다 — 이 칸만 콘솔을 닫는다.
-              setConsoleOpen(false)
-            }
+            } else openBottom(id)
           }}
         />
       )}

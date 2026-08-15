@@ -10,17 +10,28 @@ import {
   type ActivityId,
   type ActivityOpenState
 } from '../src/renderer/store/activityBar'
+import { BOTTOM_IDS } from '../src/shared/types'
 
 // FB-ui2(FB-0006) 우측 액티비티 바 — 항목 정의·활성 판정의 순수 로직.
 
 describe('액티비티 바 항목 정의', () => {
-  it('아라·모니터·시스템·AI세션·로그·프리뷰·탐색기·콘솔·설정 9항목을 이 순서로 갖는다', () => {
+  it('열네 항목을 이 순서로 갖는다', () => {
     // F26: 서버 콘솔(console)은 탐색기 다음 자리 — 둘 다 서버를 마우스로 다루는 떠 있는 창이다.
     // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
+    // #84: 서버 콘솔의 표 다섯(ps·svc·disk·pkg·ctr)이 하단 탭이 되면서 여기 합류했다.
+    //   sys 바로 뒤에 모아 둔다 — **하단에 열리는 것끼리** 붙어 있어야 바에서도 한 덩어리로 읽힌다
+    //   (log 는 그 아래지만 성격이 달라 aisess 뒤 자기 자리를 지킨다).
+    //   순서가 바뀌면 저장된 activityOrder 는 그대로고 **새 항목만 뒤에 붙는다**(migrateOrder) —
+    //   기존 사용자에게 안 보이는 사고는 그쪽이 막는다.
     expect(ACTIVITY_ITEMS).toEqual([
       'ai',
       'monitor',
       'sys',
+      'ps',
+      'svc',
+      'disk',
+      'pkg',
+      'ctr',
       'aisess',
       'log',
       'preview',
@@ -29,6 +40,12 @@ describe('액티비티 바 항목 정의', () => {
       'settings'
     ])
   })
+
+  // #84: 하단 탭 여덟이 전부 액티비티 항목이어야 설정에서 끄고 순서를 바꿀 수 있다
+  // (탭바가 좁을 때의 유일한 해법이고, 하단만의 새 설정을 만들지 않기로 한 근거다).
+  it('★ 하단 탭은 전부 액티비티 항목이다 — 설정의 순서·숨김이 그대로 먹는다', () => {
+    for (const id of BOTTOM_IDS) expect(ACTIVITY_ITEMS).toContain(id)
+  })
 })
 
 describe('활성 판정(isActivityOpen)', () => {
@@ -36,6 +53,12 @@ describe('활성 판정(isActivityOpen)', () => {
     ai: true,
     monitor: false,
     sys: false,
+    // #84: 서버 콘솔의 표 다섯이 하단 탭이 되면서 액티비티 항목이 됐다.
+    ps: false,
+    svc: false,
+    disk: false,
+    pkg: false,
+    ctr: false,
     aisess: false,
     log: true,
     preview: false,

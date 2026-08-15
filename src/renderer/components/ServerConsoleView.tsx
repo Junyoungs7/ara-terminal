@@ -1,21 +1,16 @@
 // F26 서버 콘솔 — 준영님이 고른 ①안(런치패드). "명령어를 외워 타이핑하지 않고 아이콘을 클릭해서
 // 서버를 다룬다"의 첫 화면이다.
 //
-// 왜 이렇게 생겼나:
-//  · 창은 파일 탐색기(ExplorerView)와 **같은 떠 있는 창**이다 — 이동·크기·최대화·탭 조작이 전부 같아
-//    새로 배울 것이 없다(창 로직은 store/floatWindow.ts 를 공유한다, 새 창 인프라 없음).
-//  · 런치패드에서 아이콘을 누르면 그 도구가 **같은 창의 탭**으로 열린다(①+③ 조합). 런치패드 탭은
-//    항상 첫 자리에 남는다 — 도구를 닫아도 돌아올 곳이 있어야 한다.
+// #84(2026-08-16): **도구 탭이 사라지고 격자만 남았다.** 프로세스·서비스·디스크·패키지·컨테이너는
+// 전부 가로가 필요한 표라 하단 패널로 내려갔다(§4.8 — 서버 것은 아래). 그래서 이 창이 하는 일은
+// 이제 하나다: **무엇을 열지 고른다.** 같은 표를 창과 하단 두 군데서 보던 상태를 없앤 것이다.
 //
-// #69(2026-08-14): 아홉 칸이 똑같이 생겼는데 넷은 **콘솔을 닫고** 다른 데로 보냈다 — 돌아올 곳이
-// 없어졌다(준영님 지적: "파일 탐색이 있는데 그거 클릭하면 바로 보여야하는데 파일 탐색창이 켜지는것").
-// 셋을 고쳤다:
-//  · [파일] 은 콘솔 안 탭이 됐다. 떠 있는 탐색기가 쓰는 FileTree 를 그대로 끼운다(새 구현 0줄) —
-//    그 컴포넌트는 원래 끼워 넣으라고 만들어졌다(active 로 숨을 때 파일시스템을 안 읽는다).
-//  · [로그]·[포트] 는 우측 레일을 열되 **콘솔을 닫지 않는다.** 대신 타일에 ↗ 를 달아
-//    "여기가 아니라 다른 곳에서 열린다"를 미리 알린다.
-//  · [터미널] 만 콘솔을 닫는다 — 세션을 만드는 동작이라 터미널이 보여야 한다.
-import { useState } from 'react'
+// 그 결과 모든 타일에 ↗ 가 붙는다 — 누르면 전부 이 창 밖(하단 패널·탐색기 창·새 세션)에서 열린다.
+// #69 가 "어떤 칸은 여기서 열리고 어떤 칸은 딴 데서 열린다"를 문제 삼았는데, 이제 **전부 딴 데서**
+// 열려서 그 불일치 자체가 없어졌다.
+//
+// 창은 파일 탐색기(ExplorerView)와 같은 떠 있는 창이다 — 이동·크기·최대화가 전부 같아 새로 배울
+// 것이 없다(창 로직은 store/floatWindow.ts 를 공유한다). #91 에서 이 창이 서버 작업대로 커진다.
 import {
   Activity,
   Boxes,
@@ -29,58 +24,43 @@ import {
   TerminalSquare
 } from 'lucide-react'
 import { useFloatWindow } from '../store/floatWindow'
-import { FileTree } from './FileTree'
-import { ProcessTable } from './ProcessTable'
-import { ServiceTable } from './ServiceTable'
-import { DiskTable } from './DiskTable'
 import { IconClose } from './icons'
-import { PkgTable } from './PkgTable'
-import { ContainerTable } from './ContainerTable'
 import { ServerOverview } from './ServerOverview'
-import type { DialogSpec, DialogResult } from './Dialog'
 import { t } from '../i18n'
 
-/** 탭으로 열 수 있는 도구. 나머지 런치패드 칸은 R3 이후다. */
-export type ConsoleToolId = 'files' | 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr'
+/**
+ * 런치패드 칸. #84 부터 **전부** 이 창 밖에서 열린다 — 어디서 열리는지는 상위(Shell)가 정한다.
+ *   files            → 탐색기 창
+ *   ps·svc·disk·pkg·ctr·log·port → 하단 패널의 그 탭
+ *   term             → 그 서버로 새 세션(이 칸만 창을 닫는다 — 터미널이 보여야 한다)
+ */
+export type ConsoleLaunchId = 'files' | 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr' | 'log' | 'port' | 'term'
 
-// 런치패드 격자 4열 × 2줄(목업 ①과 같은 배치). 아홉 칸이 전부 살아 있다 — "추후" 칸은 없다.
-/** 콘솔 안이 아니라 **기존 창·패널을 여는** 칸. 타일에 ↗ 가 붙어 미리 알린다.
-    같은 화면을 두 번 만들지 않는다 — 런치패드의 값어치는 흩어진 진입점을 한자리에 모으는 것이다. */
-export type ConsoleLaunchId = 'log' | 'port' | 'term'
-
-const TOOLS = [
-  { id: 'files', Icon: FolderOpen, tool: 'files' as ConsoleToolId, launch: null },
-  { id: 'ps', Icon: Activity, tool: 'ps' as ConsoleToolId, launch: null },
-  { id: 'svc', Icon: Server, tool: 'svc' as ConsoleToolId, launch: null },
-  { id: 'disk', Icon: HardDrive, tool: 'disk' as ConsoleToolId, launch: null },
-  { id: 'log', Icon: ScrollText, tool: null, launch: 'log' as ConsoleLaunchId },
-  { id: 'port', Icon: Network, tool: null, launch: 'port' as ConsoleLaunchId },
-  { id: 'term', Icon: TerminalSquare, tool: null, launch: 'term' as ConsoleLaunchId },
-  { id: 'pkg', Icon: Package, tool: 'pkg' as ConsoleToolId, launch: null },
+// 격자 4열 × 3줄. 순서는 쓰임새 순이다(파일·프로세스·서비스·디스크 / 로그·포트·터미널 / 패키지·컨테이너).
+const TOOLS: readonly { id: ConsoleLaunchId; Icon: typeof Activity }[] = [
+  { id: 'files', Icon: FolderOpen },
+  { id: 'ps', Icon: Activity },
+  { id: 'svc', Icon: Server },
+  { id: 'disk', Icon: HardDrive },
+  { id: 'log', Icon: ScrollText },
+  { id: 'port', Icon: Network },
+  { id: 'term', Icon: TerminalSquare },
+  { id: 'pkg', Icon: Package },
   // F28: 컨테이너(docker → podman). 깔려 있지 않은 서버에서는 표 대신 안내가 뜬다.
-  { id: 'ctr', Icon: Boxes, tool: 'ctr' as ConsoleToolId, launch: null }
-] as const
+  { id: 'ctr', Icon: Boxes }
+]
 
 type Props = {
-  /** 창을 그릴지. 닫혀도 언마운트하지 않는다(#74) — 탭·정렬·검색이 남는다. */
+  /** 창을 그릴지. 닫혀도 언마운트하지 않는다(#74) — 창 위치·크기가 남는다. */
   visible: boolean
-  /** 활성 세션. 원격 명령은 이 세션의 SSH 커넥션으로만 나간다. */
+  /** 활성 세션. 개요(ServerOverview)가 이 세션으로 읽는다. */
   sessionId: string | null
   isSsh: boolean
   /** 제목줄에 찍을 서버 이름(어느 서버를 만지고 있는지가 늘 보여야 한다). */
   serverName: string
   onClose: () => void
-  ask: (spec: DialogSpec) => Promise<DialogResult>
-  /** [파일] 탭의 새 폴더·이름 바꾸기 입력. 탐색기 창이 FileTree 에 넘기는 것과 같은 함수다. */
-  askText: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
-  onAskAi: (text: string) => void
-  /** 디스크 창의 [탐색기로 열기] — 기존 파일 탐색기 창을 그 경로로 연다(새 창 인프라 없음). */
-  onOpenExplorer: (path: string) => void
-  /** 런치패드의 파일·로그·포트·터미널 칸 — 콘솔 안에 다시 그리지 않고 기존 진입점을 부른다. */
+  /** 칸을 누르면 상위가 그 자리를 연다 — #84 부터 **전부** 이 창 밖이다. */
   onLaunch: (id: ConsoleLaunchId) => void
-  /** 지금 세션의 터미널로 한 줄 보내기(실행까지). 컨테이너 접속처럼 **대화형**이라 exec 채널로는
-      못 하는 것만 이 길을 탄다 — F27 AI CLI 실행과 같은 채널이다. */
-  onSendInput: (text: string) => void
 }
 
 export function ServerConsoleView({
@@ -89,32 +69,12 @@ export function ServerConsoleView({
   isSsh,
   serverName,
   onClose,
-  ask,
-  askText,
-  onAskAi,
-  onOpenExplorer,
-  onLaunch,
-  onSendInput
+  onLaunch
 }: Props): JSX.Element {
   const { rect, maximized, drag, toggleMax, z, toFront } = useFloatWindow()
-  // 열려 있는 도구 탭. 런치패드('pad')는 목록에 없고 항상 맨 앞에 그린다(닫을 수 없다).
-  const [tabs, setTabs] = useState<ConsoleToolId[]>([])
-  const [active, setActive] = useState<'pad' | ConsoleToolId>('pad')
-  // 창이 숨어 있으면 어떤 탭도 활성이 아니다 — 안 보이는 창이 2.5초마다 원격에 명령을 보내면 안 된다.
-  const shown = (tool: ConsoleToolId): boolean => visible && active === tool
-
-  const open = (tool: ConsoleToolId): void => {
-    setTabs((cur) => (cur.includes(tool) ? cur : [...cur, tool]))
-    setActive(tool)
-  }
-  const close = (tool: ConsoleToolId): void => {
-    setTabs((cur) => cur.filter((x) => x !== tool))
-    // 보고 있던 탭을 닫으면 런치패드로 돌아간다(도구가 하나뿐이라 이웃으로 옮길 자리가 없다).
-    setActive((cur) => (cur === tool ? 'pad' : cur))
-  }
 
   return (
-    // #74: 닫혀도 언마운트하지 않는다 — 표의 정렬·검색·열린 탭이 남는다.
+    // #74: 닫혀도 언마운트하지 않는다 — 창 위치·크기가 남는다.
     <div
       className="exp-win con-win"
       style={{
@@ -149,101 +109,36 @@ export function ServerConsoleView({
         </button>
       </div>
 
-      <div className="exp-tabs">
-        <div className={'exp-tab' + (active === 'pad' ? ' on' : '')} data-tab="pad" onClick={() => setActive('pad')}>
-          <span className="exp-tab-nm">{t('console.pad')}</span>
-        </div>
-        {tabs.map((tool) => (
-          <div
-            key={tool}
-            className={'exp-tab' + (active === tool ? ' on' : '')}
-            data-tab={tool}
-            onClick={() => setActive(tool)}
-          >
-            <span className="exp-tab-nm">{t('console.tool.' + tool)}</span>
-            <span
-              className="exp-tab-x"
-              title={t('explorer.tab.close')}
-              onClick={(e) => {
-                e.stopPropagation()
-                close(tool)
-              }}
-            >
-              <IconClose />
-            </span>
-          </div>
-        ))}
-      </div>
-
       <div className="con-body">
         {!isSsh && <span className="sb-placeholder">{t('console.needSsh')}</span>}
         {isSsh && (
-          <>
-            <div className="con-pad" style={active === 'pad' ? undefined : { display: 'none' }}>
-              {/* 서버의 정체(배포판·커널·가동 시간). 자원 사용량은 F29 사이드바 몫이다. */}
-              <ServerOverview sessionId={sessionId} active={visible && active === 'pad'} />
-              {TOOLS.map(({ id, Icon, tool, launch }) => (
-                // #71: 타일은 진짜 버튼이다 — div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도
-                // 없었다. 단축키를 이만큼 만든 앱에서 새 화면이 마우스 전용인 것은 어긋난다.
-                <button
-                  key={id}
-                  type="button"
-                  className={'con-app' + (launch ? ' ext' : '')}
-                  data-tool={id}
-                  title={launch ? t('console.ext.hint') : undefined}
-                  onClick={tool ? () => open(tool) : () => onLaunch(launch)}
-                >
-                  <span className="ic">
-                    <Icon />
-                  </span>
-                  <span className="nm">{t('console.tool.' + id)}</span>
-                  <span className="sm">{t('console.tool.' + id + '.sub')}</span>
-                  {/* 이 칸만 콘솔 밖에서 열린다 — 누르기 전에 알린다(전에는 눌러야 알았고, 그때는
-                      콘솔이 닫혀 돌아올 곳도 없었다). */}
-                  {launch && (
-                    <span className="ext-mark" aria-label={t('console.ext.hint')}>
-                      ↗
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            {/* 도구 탭은 마운트를 유지한다(검색어·정렬을 잊지 않게). 숨은 탭은 active=false 라
-                원격에 명령을 보내지 않는다 — 탐색기의 숨은 트리와 같은 규칙. */}
-            {tabs.map((tool) => (
-              <div key={tool} className="con-pane" style={active === tool ? undefined : { display: 'none' }}>
-                {/* #69: 떠 있는 탐색기와 **같은 FileTree** 다 — 파일 UI 구현은 이 앱에 하나뿐이다. */}
-                {tool === 'files' && (
-                  <FileTree
-                    session={sessionId ? { id: sessionId, type: 'ssh' } : null}
-                    active={shown(tool)}
-                    cwd={null}
-                    ask={ask}
-                    askText={askText}
-                    toolbar
-                  />
-                )}
-                {tool === 'ps' && <ProcessTable sessionId={sessionId} active={shown(tool)} ask={ask} onAskAi={onAskAi} />}
-                {tool === 'svc' && <ServiceTable sessionId={sessionId} active={shown(tool)} ask={ask} onAskAi={onAskAi} />}
-                {tool === 'disk' && (
-                  <DiskTable sessionId={sessionId} active={shown(tool)} onOpenExplorer={onOpenExplorer} />
-                )}
-                {tool === 'pkg' && <PkgTable sessionId={sessionId} active={shown(tool)} />}
-                {tool === 'ctr' && (
-                  <ContainerTable
-                    sessionId={sessionId}
-                    active={shown(tool)}
-                    ask={ask}
-                    // 컨테이너 접속은 터미널로 나간다 — 콘솔 창이 그 위를 덮고 있으면 안 보인다.
-                    onSendInput={(text) => {
-                      onSendInput(text)
-                      onClose()
-                    }}
-                  />
-                )}
-              </div>
+          <div className="con-pad">
+            {/* 서버의 정체(배포판·커널·가동 시간). 자원 사용량은 하단 [시스템 모니터] 몫이다. */}
+            <ServerOverview sessionId={sessionId} active={visible} />
+            {TOOLS.map(({ id, Icon }) => (
+              // #71: 타일은 진짜 버튼이다 — div 였을 때는 Tab 으로 갈 수도, Enter 로 누를 수도
+              // 없었다. 단축키를 이만큼 만든 앱에서 새 화면이 마우스 전용인 것은 어긋난다.
+              <button
+                key={id}
+                type="button"
+                className="con-app ext"
+                data-tool={id}
+                title={t('console.ext.hint')}
+                onClick={() => onLaunch(id)}
+              >
+                <span className="ic">
+                  <Icon />
+                </span>
+                <span className="nm">{t('console.tool.' + id)}</span>
+                <span className="sm">{t('console.tool.' + id + '.sub')}</span>
+                {/* #84: 이제 **모든** 칸이 창 밖에서 열린다(하단 패널·탐색기 창·새 세션).
+                    어떤 칸은 여기서 열리고 어떤 칸은 딴 데서 열리던 불일치가 없어졌다. */}
+                <span className="ext-mark" aria-label={t('console.ext.hint')}>
+                  ↗
+                </span>
+              </button>
             ))}
-          </>
+          </div>
         )}
       </div>
 

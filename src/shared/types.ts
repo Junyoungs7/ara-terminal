@@ -235,10 +235,17 @@ export const AI_CONTEXT_LINES = 120
 // 우측 액티비티 바 항목(FB-ui2). 2026-08-13 부터 **끄고 켜고 순서를 바꿀 수 있어** 설정으로
 // 저장되므로 shared 에 둔다 — 렌더러 화면 지식이 아니라 저장되는 값의 스키마다.
 // 아래 순서가 **기본 순서**이자, 저장된 목록에 없는 새 항목이 뒤에 붙는 기준이다.
+// #84(2026-08-16): 서버 콘솔의 도구 다섯(ps·svc·disk·pkg·ctr)이 여기 합류했다 — 하단 탭이
+// 되면서 액티비티 항목이 됐고, 그 덕에 **끄고 켜고 순서 바꾸기가 공짜로 따라왔다**(설정에 이미 있다).
 export type ActivityId =
   | 'ai'
   | 'monitor'
   | 'sys'
+  | 'ps'
+  | 'svc'
+  | 'disk'
+  | 'pkg'
+  | 'ctr'
   | 'aisess'
   | 'log'
   | 'preview'
@@ -250,6 +257,11 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'ai',
   'monitor',
   'sys',
+  'ps',
+  'svc',
+  'disk',
+  'pkg',
+  'ctr',
   'aisess',
   'log',
   'preview',
@@ -271,12 +283,20 @@ export function isRailId(id: ActivityId): id is RailId {
 }
 
 // 하단 패널 — 터미널 **아래**에 붙어 세로만 먹는다(터미널 80칸에 영향이 없다).
-// 셋 다 **서버 것**이다: 포트·시스템 자원·세션 기록.
+// 전부 **서버 것**이다(§4.8): 포트·시스템 자원·프로세스·서비스·디스크·패키지·컨테이너.
 // (세션 기록은 우리 기능이지만 로그 한 줄이 가로를 요구해 여기 산다 — §4.8 예외 ②.)
+//
+// #84(2026-08-16): 서버 콘솔의 표 다섯이 떠 있는 창에서 여기로 내려왔다. 같은 성격의 표를
+// 창과 하단 두 군데서 보던 것을 하나로 모은 것이다. **서버는 세션 탭이 정한다** — 하단에
+// 서버 선택 UI 를 두지 않는다(터미널은 A서버인데 하단은 B서버인 상태를 만들지 않는다).
+//
+// 여덟이면 탭바가 약 560px 다. 우측 레일을 열면 하단이 772px 라 여유가 200px 뿐인데,
+// **액티비티 바의 항목 숨기기·순서 바꾸기를 그대로 쓴다**(visibleActivities) — 안 쓰는 도구를
+// 설정에서 끄면 탭도 사라진다. 하단만의 새 설정을 만들지 않는다.
 //
 // 액티비티 바 항목은 그대로 두고, 누르면 하단 패널이 그 탭으로 열린다 — 바를 옮기지 않는 이유는
 // 우리 바가 "무엇을 열지"를 고르는 것이지 VS Code 처럼 "사이드바 내용을 바꾸는" 것이 아니어서다.
-export const BOTTOM_IDS = ['monitor', 'sys', 'log'] as const
+export const BOTTOM_IDS = ['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'log'] as const
 export type BottomId = (typeof BOTTOM_IDS)[number]
 
 export function isBottomId(id: ActivityId): id is BottomId {

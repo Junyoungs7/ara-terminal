@@ -20,6 +20,13 @@ import { BOTTOM_IDS, type BottomId } from '@shared/types'
 const LABEL: Record<BottomId, string> = {
   monitor: 'sidebar.tab.monitor',
   sys: 'sysm.title',
+  // #84: 서버 콘솔에서 내려온 표 다섯. 라벨은 런치패드 타일과 같은 키를 쓴다 — 같은 것을
+  // 두 이름으로 부르면 "런치패드의 그 프로세스"와 "하단의 이 프로세스"가 달라 보인다.
+  ps: 'console.tool.ps',
+  svc: 'console.tool.svc',
+  disk: 'console.tool.disk',
+  pkg: 'console.tool.pkg',
+  ctr: 'console.tool.ctr',
   log: 'log.title'
 }
 
@@ -31,11 +38,17 @@ type Props = {
   tab: BottomId | null
   onTab: (id: BottomId) => void
   onClose: () => void
+  /**
+   * #84: 보여 줄 탭과 그 순서. 액티비티 바의 항목 설정(순서·숨김)을 그대로 받는다 —
+   * 여덟 탭이 좁으면 설정에서 안 쓰는 것을 끄면 된다(하단만의 새 설정을 만들지 않는다).
+   * 지금 열려 있는 탭은 숨겨져 있어도 그린다 — 보고 있는 것이 갑자기 사라지면 안 된다.
+   */
+  ids?: readonly BottomId[]
   /** 탭별 내용. 열려 있는 것만 그린다 — 안 보이는 탭이 원격에 명령을 보내면 안 된다. */
   children: (tab: BottomId) => ReactNode
 }
 
-export function BottomPanel({ tab, onTab, onClose, children }: Props): JSX.Element | null {
+export function BottomPanel({ tab, onTab, onClose, ids, children }: Props): JSX.Element | null {
   // 높이는 세션 수명 동안만 산다(우측 레일·떠 있는 창과 같은 규칙 — 레이아웃 설정이 아니다).
   const [h, setH] = useState(DEFAULT_H)
   const hRef = useRef(h)
@@ -62,11 +75,15 @@ export function BottomPanel({ tab, onTab, onClose, children }: Props): JSX.Eleme
 
   if (!tab) return null
 
+  // 설정이 없으면 전부(기본 순서). 열린 탭이 숨김 목록에 있어도 그 탭만은 남긴다.
+  const base = ids ?? BOTTOM_IDS
+  const shownIds = base.includes(tab) ? base : [tab, ...base]
+
   return (
     <div className="bottom-panel" style={{ height: h, flexBasis: h }}>
       <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>
-        {BOTTOM_IDS.map((id) => (
+        {shownIds.map((id) => (
           <button
             key={id}
             type="button"
