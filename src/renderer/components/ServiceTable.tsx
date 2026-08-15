@@ -9,7 +9,8 @@
 //    systemdMissing(out) 이면 안내 한 줄로 갈아 끼운다(프로세스 창의 로컬 세션 안내와 같은 결).
 //  · 쓰기가 셋이다(시작·정지·재시작). 셋 다 확인 다이얼로그에 **유닛 이름을 박아서** 묻고,
 //    실패하면 서버가 준 문장을 그대로 보여 준다(sudo 는 붙이지 않는다).
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRowKeys } from '../store/rowKeys'
 import { parseSystemctl, systemdMissing, type SvcAction, type SvcRow } from '@shared/remoteCatalog'
 import { maskSecrets } from '@shared/maskSecrets'
 import type { DialogSpec, DialogResult } from './Dialog'
@@ -89,6 +90,9 @@ const COLS: { key: SvcSortKey; cls: string }[] = [
 const ACTIONS: SvcAction[] = ['start', 'stop', 'restart']
 
 export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
+  // #82: 표를 ↑↓ 로 훑고 Enter 로 고른다. 행은 버튼이 아니라 row 다.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
   const [rows, setRows] = useState<SvcRow[]>([])
   // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
   const [err, setErr] = useState<string | null>(null)
@@ -180,7 +184,7 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
   }
 
   return (
-    <div className="con-svc">
+    <div className="con-svc" ref={gridRef} role="grid" aria-label={t('console.tool.svc')} {...gridKeys}>
       <div className="con-toolbar">
         <div className="con-field">
           <input
@@ -249,6 +253,9 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
                   <tr
                     key={s.unit}
                     className={'svc-row' + (s.unit === selected ? ' sel' : '') + (tone === 'bad' ? ' bad' : '')}
+                  role="row"
+                  tabIndex={-1}
+                  aria-selected={s.unit === selected}
                     data-unit={s.unit}
                     title={s.desc}
                     onClick={() => setSelected(s.unit)}

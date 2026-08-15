@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
-import { test, expect, newLocalShell, runCommand, dialog, dialogConfirm } from './fixtures'
+import { test, expect, newLocalShell, runCommand, dialog, dialogConfirm, connectNewSshProfile, openConnTab, openFileTab } from './fixtures'
 
 const slash = (p: string) => p.replace(/\\/g, '/')
 
@@ -46,6 +46,61 @@ test('FILE-1 [파일] 탭은 세션이 있어야 트리를 보여 준다', async
   )
   await newLocalShell(page)
   await expect(page.locator('.sftp-wrap .ftree')).toBeVisible({ timeout: 25_000 })
+})
+
+// TREE-1★ 사이드바 트리와 파일 목록을 키보드로 훑는다 (#82, 2026-08-15)
+// 클릭되는 행이 앱 전체에 70곳 넘게 있었는데 전부 마우스 전용이었다 — 단축키를 이만큼 만든
+// 앱에서 어긋난다. 행은 버튼이 아니므로(트리 행=treeitem · 목록 행=option) #71 의 <button>
+// 전환과 따로 다룬다. Tab 정거장은 **컨테이너 하나**다(행마다 서면 서버 20개에 Tab 20번).
+test('TREE-1★ 사이드바 트리를 Tab·화살표·Enter 로 조작한다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-tree' })
+  await connectNewSshProfile(page, { name: 'tree-kbd', port: h.port, password: 'pw-tree' })
+  await openConnTab(page)
+
+  const tree = page.locator('.tree[role="tree"]')
+  await expect(tree).toHaveCount(1)
+  // 행은 전부 treeitem 이고 Tab 정거장이 아니다(tabindex -1).
+  const rows = page.locator('.tree [role="treeitem"]')
+  expect(await rows.count()).toBeGreaterThan(0)
+  expect(await rows.first().getAttribute('tabindex')).toBe('-1')
+
+  // 컨테이너에 포커스를 주면 행으로 넘어간다.
+  await tree.focus()
+  await expect(page.locator('.tree [role="treeitem"]:focus')).toHaveCount(1)
+
+  // ↓ 로 내려가면 포커스가 실제로 다른 행으로 옮겨간다.
+  const before = await page.evaluate(() => document.activeElement?.textContent ?? '')
+  await page.keyboard.press('ArrowDown')
+  const after = await page.evaluate(() => document.activeElement?.textContent ?? '')
+  expect(after).not.toBe(before)
+
+  // 그룹 헤더에서 ← 는 접고 → 는 다시 편다(aria-expanded 가 따라 바뀐다).
+  const grp = page.locator('.tree .srv-hd[role="treeitem"]').first()
+  await grp.focus()
+  await expect(grp).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('ArrowLeft')
+  await expect(grp).toHaveAttribute('aria-expanded', 'false')
+  await page.keyboard.press('ArrowRight')
+  await expect(grp).toHaveAttribute('aria-expanded', 'true')
+})
+
+// TREE-2★ 파일 목록도 같은 규칙(트리가 아니라 listbox — 여기엔 펼침이 없다)
+test('TREE-2★ 파일 목록을 화살표로 훑는다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await openFileTab(page)
+  const list = page.locator('.ftree[role="listbox"]')
+  await expect(list).toHaveCount(1)
+  await expect.poll(() => page.locator('.ftree [role="option"]').count(), { timeout: 25_000 }).toBeGreaterThan(1)
+
+  await list.focus()
+  const first = await page.evaluate(() => document.activeElement?.textContent ?? '')
+  await page.keyboard.press('ArrowDown')
+  const second = await page.evaluate(() => document.activeElement?.textContent ?? '')
+  expect(second).not.toBe(first)
+  // 목록에는 펼침이 없다 — → 를 눌러도 aria-expanded 가 생기지 않는다.
+  await expect(page.locator('.ftree [role="option"][aria-expanded]')).toHaveCount(0)
 })
 
 // FILE-2 터미널 cd → 트리가 따라 이동한다(OSC7)

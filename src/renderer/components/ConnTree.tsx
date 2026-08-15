@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { connDotClass, type ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
@@ -118,6 +119,9 @@ function SessRow({
   return (
     <div
       className={'sess-node' + (active ? ' active' : '')}
+      role="treeitem"
+      tabIndex={-1}
+      aria-selected={active}
       onClick={() => onSelect(s.id)}
       // FB-monitor(F19 tmux 후속): SSH 세션에만 tmux 서브메뉴가 붙는다(로컬·AI·로그엔 원격 셸이 없다).
       onContextMenu={(e) => onCtx(e, 'session', { kind: 'session', sessionId: s.id }, s.type === 'ssh' ? s.id : undefined)}
@@ -166,6 +170,10 @@ export function ConnTree({
   workProfiles,
   onOpenWork
 }: Props) {
+  // #82: 트리 키보드 조작(↑↓ 이동 · →← 펼침 · Enter 실행). 접힘 상태의 주인은 이 컴포넌트라
+  // 훅은 트위스티를 눌러 토글만 일으킨다.
+  const treeRef = useRef<HTMLDivElement>(null)
+  const treeKeys = useRowKeys(treeRef, { selector: '[role="treeitem"]', twisty: '.tw, .caret' })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [menu, setMenu] = useState<
     { x: number; y: number; kind: TreeMenuKind; target: TreeTarget; tmuxSessionId?: string } | null
@@ -246,19 +254,42 @@ export function ConnTree({
           )}
         </div>
       </div>
-      <div className="tree" onContextMenu={(e) => openCtx(e, 'sidebar', { kind: 'local' })}>
+      {/* #82: 키보드로도 훑을 수 있는 트리. 행마다 핸들러를 달지 않고 **컨테이너가 위임**받는다
+          (store/rowKeys.ts). Tab 정거장은 이 컨테이너 하나 — 행마다 서면 서버 20개짜리 트리에서
+          Tab 을 20번 눌러야 다음 영역으로 간다. */}
+      <div
+        className="tree"
+        ref={treeRef}
+        role="tree"
+        aria-label={t('conn.tab.conn')}
+        {...treeKeys}
+        onContextMenu={(e) => openCtx(e, 'sidebar', { kind: 'local' })}
+      >
       {profiles.length === 0 && <div className="empty">{t('conn.tree.empty')}</div>}
       {profiles.length > 0 && visible.length === 0 && <div className="empty">{t('conn.search.noMatch')}</div>}
       {/* 즐겨찾기(작업 프로필) — 서버+폴더를 한 번에 연다. 검색 중에는 감춘다(검색 대상은 서버다). */}
       {!searching && workProfiles && workProfiles.length > 0 && (
         <div className="srv-group" key="__fav">
-          <div className="srv-hd" onClick={() => setCollapsed((c) => ({ ...c, __fav: !c.__fav }))}>
+          <div
+            className="srv-hd"
+            role="treeitem"
+            tabIndex={-1}
+            aria-expanded={!collapsed.__fav}
+            onClick={() => setCollapsed((c) => ({ ...c, __fav: !c.__fav }))}
+          >
             <span className="caret">{collapsed.__fav ? '▸' : '▾'}</span>
             {t('explorer.nav.favorites')} <span className="g-count">{workProfiles.length}</span>
           </div>
           {!collapsed.__fav &&
             workProfiles.map((w) => (
-              <div key={w.id} className="fav-node" title={w.path} onClick={() => onOpenWork?.(w)}>
+              <div
+                key={w.id}
+                className="fav-node"
+                role="treeitem"
+                tabIndex={-1}
+                title={w.path}
+                onClick={() => onOpenWork?.(w)}
+              >
                 <span className="fav-i">★</span>
                 <span className="fav-n">{w.name}</span>
                 <span className="fav-p">{w.path}</span>
@@ -272,6 +303,9 @@ export function ConnTree({
           <div className="srv-group" key={group}>
             <div
               className="srv-hd"
+              role="treeitem"
+              tabIndex={-1}
+              aria-expanded={!isCollapsed}
               onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
               onContextMenu={(e) => openCtx(e, group === none ? 'groupNone' : 'group', { kind: 'group', group })}
             >
@@ -296,6 +330,11 @@ export function ConnTree({
                       (live ? '' : ' off') +
                       (activeHere || p.id === (selectedId ?? activeProfileId) ? ' active' : '')
                     }
+                    role="treeitem"
+                    tabIndex={-1}
+                    // 세션이 없는 서버는 펼칠 것이 없다 — aria-expanded 를 아예 안 준다(→/← 무시).
+                    {...(sess.length > 0 ? { 'aria-expanded': !nodeCollapsed } : {})}
+                    aria-selected={activeHere || p.id === (selectedId ?? activeProfileId)}
                     // 호스트는 행에서 뺐다 — 목록에서 매번 필요한 값이 아니라 툴팁으로 내린다.
                     title={`${p.username ? p.username + '@' : ''}${p.host} · ${t('conn.tree.connect')}`}
                     onClick={(e) => {

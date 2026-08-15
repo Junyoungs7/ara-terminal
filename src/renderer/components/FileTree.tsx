@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRowKeys } from '../store/rowKeys'
 import type { FileEntry, FileListResult, FileOpResult, SftpProgress, SftpXferResult } from '@shared/ipc'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { fileMenu, type FileActionId } from '../interactions/actions'
@@ -168,6 +169,9 @@ export function FileTree({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // 다중 선택(이름 목록) + Shift 범위의 기준 행.
+  // #82: 파일 목록 키보드 조작(↑↓ 이동 · Enter 선택).
+  const listRef = useRef<HTMLDivElement>(null)
+  const listKeys = useRowKeys(listRef, { selector: '[role="option"]' })
   const [sel, setSel] = useState<string[]>([])
   const [anchor, setAnchor] = useState<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
@@ -769,7 +773,16 @@ export function FileTree({
       {error && <div className="sftp-err">{error}</div>}
 
       {/* 빈 영역 우클릭 = 새 폴더. 행 우클릭은 openMenu 가 전파를 끊는다. */}
-      <div className="ftree" onContextMenu={(e) => openMenu(e, null)}>
+      {/* #82: 목록이라 트리가 아니라 listbox 다 — 여기서 펼치고 접는 것이 없다(폴더는 들어간다).
+          ↑↓ 로 옮기고 Enter 로 고른다. 들어가는 것은 기존대로 더블클릭. */}
+      <div
+        className="ftree"
+        ref={listRef}
+        role="listbox"
+        aria-label={t('sidebar.tab.file')}
+        {...listKeys}
+        onContextMenu={(e) => openMenu(e, null)}
+      >
         {loading && <div className="sftp-empty">{t('sftp.loading')}</div>}
         {!loading && entries.length === 0 && !error && <div className="sftp-empty">{t('sftp.empty')}</div>}
         {!loading &&
@@ -798,6 +811,9 @@ export function FileTree({
                 className={
                   'frow' + (isDir ? ' dir' : '') + (entry.broken ? ' broken' : '') + (sel.includes(entry.name) ? ' sel' : '')
                 }
+                role="option"
+                tabIndex={-1}
+                aria-selected={sel.includes(entry.name)}
                 title={hint}
                 onClick={(e) => clickRow(e, idx)}
                 onDoubleClick={() => {

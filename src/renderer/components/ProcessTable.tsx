@@ -8,7 +8,8 @@
 //   · 확인 다이얼로그에 **PID 와 명령을 박아서** 보여 준다(엉뚱한 행을 죽이는 사고 방지).
 //   · 실패하면 stderr 를 그대로 보여 준다 — 권한 부족을 "실패했습니다"로 뭉개지 않는다(sudo 는 붙이지 않는다).
 //   · `-KILL` 은 TERM 이 실패한 **뒤에만** 별도 버튼으로 낸다(첫 클릭에 강제 종료가 나가지 않는다).
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRowKeys } from '../store/rowKeys'
 import { parsePs, type KillSignal, type ProcRow } from '@shared/remoteCatalog'
 import { maskSecrets } from '@shared/maskSecrets'
 import type { DialogSpec, DialogResult } from './Dialog'
@@ -95,6 +96,9 @@ const COLS: { key: ProcSortKey; cls: string }[] = [
 ]
 
 export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
+  // #82: 표를 ↑↓ 로 훑고 Enter 로 고른다. 행은 버튼이 아니라 row 다.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
   const [rows, setRows] = useState<ProcRow[]>([])
   // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
   const [err, setErr] = useState<string | null>(null)
@@ -192,7 +196,7 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
   }
 
   return (
-    <div className="con-ps">
+    <div className="con-ps" ref={gridRef} role="grid" aria-label={t('console.tool.ps')} {...gridKeys}>
       <div className="con-toolbar">
         <div className="con-field">
           <input
@@ -248,6 +252,9 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
                 <tr
                   key={p.pid}
                   className={'con-row' + (p.pid === selected ? ' sel' : '') + (tone ? ' ' + tone : '')}
+                  role="row"
+                  tabIndex={-1}
+                  aria-selected={p.pid === selected}
                   data-pid={p.pid}
                   title={p.cmd}
                   onClick={() => setSelected(p.pid)}
