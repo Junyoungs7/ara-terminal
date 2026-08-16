@@ -55,7 +55,18 @@ describe('validateBaseUrl — 허용/거부 표 (설계 W5 §보안)', () => {
     ['https://openrouter.ai/api/v1', true],
     ['http://127.0.0.1:11434/v1', true], // 로컬 LLM(Ollama 등) — loopback 은 http 허용
     ['http://localhost:8080/v1', true],
-    ['http://example.com/v1', false], // 비-loopback http 거부
+    // 2026-08-16: 사내 vLLM 을 위해 **사설망**까지 평문 허용(준영님 요청). 공개 인터넷은 그대로 https 강제.
+    ['http://192.168.0.10:8000/v1', true], // 사내 추론 서버 — 이게 되라고 넓혔다
+    ['http://10.1.2.3:8000/v1', true],
+    ['http://172.16.5.9/v1', true],
+    ['http://172.31.255.254/v1', true],
+    ['http://ai-server:8000/v1', true], // 점 없는 단일 이름 = 공개 FQDN 이 될 수 없다
+    ['http://172.15.0.1/v1', false], // 172.16/12 **바깥** — 사설망이 아니다
+    ['http://172.32.0.1/v1', false],
+    ['http://11.0.0.1/v1', false], // 10/8 옆이지만 공인 대역
+    ['http://192.169.0.1/v1', false],
+    ['http://example.com/v1', false], // 점이 든 이름은 평문 거부 — 사내인지 바깥인지 알 수 없다
+    ['http://ai.example.com/v1', false],
     ['ftp://example.com', false], // 스킴 거부
     ['file:///etc/passwd', false],
     ['https://user:pass@example.com/v1', false], // 자격증명 URL 거부

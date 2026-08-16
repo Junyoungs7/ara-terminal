@@ -135,7 +135,7 @@ test('W5-9~10 baseUrl 미설정·설정 상태가 반출 고지 문구에 반영
 })
 
 // W5-11 ★ 비loopback http baseUrl 은 에러로 막힌다(https 전용 — validateBaseUrl).
-test('W5-11 ★ 비loopback http baseUrl 은 에러 표시가 뜨고 사라지지 않는다', async ({ ara }) => {
+test('W5-11 ★ 바깥 평문 http baseUrl 은 에러 표시가 뜨고 사라지지 않는다', async ({ ara }) => {
   const { page } = ara
   await openAiSettings(page)
   await providerBtn(page, 'compatible').click()
@@ -158,6 +158,26 @@ test('W5-12 loopback http baseUrl 은 에러 없이 허용된다', async ({ ara 
   await page.fill(`${drawer} input[data-field="ai.baseUrl"]`, 'http://127.0.0.1:11434/v1')
   await expect(page.locator(`${drawer} .ai-baseurl-err`)).toHaveCount(0)
   await expect(page.locator(`${drawer} .set-note[data-note="ai.export"]`)).toContainText('127.0.0.1')
+})
+
+// W5-12b★ 사내 vLLM(사설망 평문) — D-3 결정(2026-08-16 준영님: "사내에서는 사내 서버의 vLLM 에
+// 연결하여 사용할 수 있는 구조"). 그전에는 이 주소가 **저장 자체가 안 됐다**(loopback 만 예외였다).
+// 반출 고지 문구가 그 호스트를 그대로 비추는지까지 본다 — 어디로 나가는지 사용자가 봐야 한다.
+test('W5-12b★ 사내 사설망 http baseUrl 이 허용되고 반출 고지에 호스트가 뜬다', async ({ ara }) => {
+  const { page } = ara
+  await openAiSettings(page)
+  await providerBtn(page, 'compatible').click()
+  await page.fill(`${drawer} input[data-field="ai.baseUrl"]`, 'http://192.168.0.10:8000/v1')
+  await expect(page.locator(`${drawer} .ai-baseurl-err`)).toHaveCount(0)
+  await expect(page.locator(`${drawer} .set-note[data-note="ai.export"]`)).toContainText('192.168.0.10')
+
+  // 점 없는 사내 호스트명도 같은 이유로 허용된다(공개 DNS 는 TLD 를 요구한다).
+  await page.fill(`${drawer} input[data-field="ai.baseUrl"]`, 'http://ai-server:8000/v1')
+  await expect(page.locator(`${drawer} .ai-baseurl-err`)).toHaveCount(0)
+
+  // 사설망 '옆' 대역은 공인이다 — 넓힌 범위가 새지 않는지 화면에서도 확인한다.
+  await page.fill(`${drawer} input[data-field="ai.baseUrl"]`, 'http://11.0.0.1:8000/v1')
+  await expect(page.locator(`${drawer} .ai-baseurl-err`)).toBeVisible()
 })
 
 // W5-13 모델 추천 칩을 누르면 입력값이 채워지고 그 칩이 선택 표시된다.
