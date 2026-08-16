@@ -120,7 +120,8 @@ export const KEYMAP: readonly KeyBinding[] = [
   { action: 'palette.all', category: 'search', labelKo: '통합 검색', win: 'F1', mac: 'F1', implemented: true }
 ] as const
 
-const isMac = (): boolean => typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+// 렌더러 공용 — 단축키 표기(⌘)와 OS 이름이 들어가는 라벨(Finder/탐색기)이 같은 판정을 쓴다.
+export const isMac = (): boolean => typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 
 // KEYMAP 표기(사람이 읽는 쪽) → KeyboardEvent.key 표기. 'Ctrl+Up' 이 'ArrowUp' 과 안 맞아
 // 패널 최대화가 죽어 있던 원인(R2.5).

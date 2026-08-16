@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
-import { KEYMAP, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, isMac, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import type { SortKey, SortSpec } from '../store/fileView'
 
@@ -122,7 +122,9 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
 // 터미널 우클릭 메뉴 항목. CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 금지) — 모양만 세로 리스트다.
 // #67 이후 이 리스트가 유일한 모양이다(라디얼·팔레트 제거). 단축키 힌트는 keymap 단일 소스에서 온다.
 // ActionId 6개(split×2/session.duplicate/log.save/ai.ask/pane.close)는 KeymapAction 과 이름이 같다.
-const isMac = navigator.userAgent.includes('Mac')
+// (2026-08-16: 여기 `navigator.userAgent.includes('Mac')` 로 **두 번째** mac 판정이 있었다.
+//  keymap 은 `navigator.platform` 을 본다 — 두 판정이 어긋나면 단축키 동작과 표기가 갈린다.
+//  판정은 shared/keymap.ts 의 isMac() 하나만 쓴다.)
 
 // 복사/붙여넣기만 이름이 다르다(clipboard.*) — 나머지 6개는 ActionId 가 곧 KeymapAction 이다.
 const KEY_OF: Partial<Record<ActionId, KeymapAction>> = {
@@ -133,7 +135,7 @@ const KEY_OF: Partial<Record<ActionId, KeymapAction>> = {
 // KEYMAP 표기(Ctrl+Shift+W 등). 플랫폼별 표기는 여기 한 곳에서 고른다.
 function comboOf(action: KeymapAction): string | undefined {
   const b = KEYMAP.find((k) => k.action === action)
-  return b ? (isMac ? b.mac : b.win) : undefined
+  return b ? (isMac() ? b.mac : b.win) : undefined
 }
 
 function hintFor(id: ActionId): string | undefined {
@@ -374,9 +376,13 @@ export function fileMenu(ctx: {
     id,
     label: t('conn.menu.' + id) + (sort.key === key ? (sort.asc ? ' ↑' : ' ↓') : '')
   })
+  // [윈도우 탐색기에서 보기]는 맥에서 **Finder** 가 열린다 — 없는 프로그램 이름을 띄우지 않는다.
+  // (shell.showItemInFolder 는 OS 가 알아서 고른다. 틀린 건 라벨뿐이었다.)
+  const label = (id: FileActionId): string =>
+    id === 'file.reveal' && isMac() ? t('conn.menu.file.reveal.mac') : t('conn.menu.' + id)
   return ids.map((id) => ({
     id,
-    label: t('conn.menu.' + id),
+    label: label(id),
     ...(id === 'file.delete' ? { danger: true } : {}),
     ...(id === 'file.view'
       ? {

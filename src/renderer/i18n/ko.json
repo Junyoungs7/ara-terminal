@@ -548,6 +548,7 @@
   "conn.menu.file.sort.mtime": "수정한 날짜순",
   "conn.menu.file.hidden": "숨김 항목 표시",
   "conn.menu.file.reveal": "윈도우 탐색기에서 보기",
+  "conn.menu.file.reveal.mac": "Finder에서 보기",
   "conn.menu.copySuffix": "사본",
   "aicli.title": "AI CLI 시작",
   "aicli.server": "서버",
