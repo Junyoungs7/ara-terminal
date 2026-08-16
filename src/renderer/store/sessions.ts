@@ -19,8 +19,11 @@ export type Tab = Session
 // 탭바 서버 그룹(목업 .tg): 같은 serverKey 세션을 묶는다. 로컬은 단독 그룹.
 export type SessionGroup = { serverKey: string; local: boolean; color: string; sessions: Session[] }
 
-// serverKey → 그룹색(목업 팔레트에서 결정론적 선택). 로컬은 accent, 원격은 해시로 분산.
-const GROUP_COLORS = ['#38bdf8', '#f87171', '#34d399', '#a78bfa', '#e3b341', '#56d4dd']
+// serverKey → 그룹색(결정론적 선택). 로컬은 accent, 원격은 해시로 분산.
+// **토큰을 쓴다**(2026-08-16). 예전에는 여기 HEX 배열이 박혀 있었고 그중 둘이 `--err`·`--ok` 와
+// 글자 그대로 같아서, 서버 2번 dot 이 "오류" 빨강으로 3번이 "정상" 초록으로 보였다.
+// 색은 tokens.css 의 --srv-1~6 이 소유한다 — 라이트 테마·색약 모드가 오면 그 파일 하나만 고친다.
+const GROUP_COLORS = ['var(--srv-1)', 'var(--srv-2)', 'var(--srv-3)', 'var(--srv-4)', 'var(--srv-5)', 'var(--srv-6)']
 export function groupColor(serverKey: string, local: boolean): string {
   if (local) return 'var(--accent)'
   let h = 0

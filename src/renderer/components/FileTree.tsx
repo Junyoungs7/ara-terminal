@@ -39,7 +39,9 @@ import { t } from '../i18n'
 // 조작: 클릭=선택(Shift 범위 / Ctrl 개별) · 폴더 더블클릭=진입 + 터미널 cd · 파일 더블클릭=다운로드(SFTP)
 //       우클릭=열기/다운로드/이름 변경/새 폴더/삭제. 삭제는 항상 확인 다이얼로그를 거친다.
 
-export type ActiveFileSession = { id: string; type: 'local' | 'ssh' } | null
+// serverKey: 삭제 확인창이 **어느 서버인지** 찍는 데 쓴다(2026-08-16). 원격 삭제는 영구이고,
+// 하단과 작업대가 서로 다른 서버를 볼 수 있는 구조라 대상을 밝히지 않으면 안 된다.
+export type ActiveFileSession = { id: string; type: 'local' | 'ssh'; serverKey?: string } | null
 
 // 행 종류 — 아이콘·안내문구·더블클릭 동작이 전부 이걸로 갈린다(순수 함수, 단위 테스트 대상).
 // 링크는 **대상 종류**로 동작해야 한다: 폴더를 가리키는 링크가 파일로 보이면 들어갈 수가 없다.
@@ -241,6 +243,9 @@ export function FileTree({
         // 폴더를 옮기면 검색어는 털어 낸다 — 이전 폴더의 검색어가 남으면 새 폴더가 비어 보인다.
         setFilter('')
         setFilterOn(false)
+        // #92 의 "받았습니다" 줄도 함께 턴다(2026-08-16). 지우는 곳이 ✕ 버튼 하나뿐이라
+        // 다른 폴더로 가도, 다른 서버로 갈아타도 남아서 **지금 위치와 무관한 파일**을 계속 가리켰다.
+        setGot(null)
         if (!fromHist) setHist((h) => pushHistory(h, res.path))
         // target 은 "지금 가리키는 디렉토리"의 단일 소스다. 브레드크럼·폴더 진입도 여기 반영해야
         // 터미널 Ctrl+V 업로드(F14)가 화면과 같은 곳으로 올라간다.
@@ -541,6 +546,11 @@ export function FileTree({
       title: t('file.del.title'),
       message: t(prompt.messageKey),
       detail: [
+        // 2026-08-16: 대상을 먼저 밝힌다. 예전엔 파일명과 개수뿐이라 **어느 서버 어느 폴더**의
+        // 그 파일인지 알 수 없었다 — 원격은 영구 삭제이고, 하단과 작업대가 서로 다른 서버를
+        // 볼 수 있는 구조라 더 그렇다.
+        ...(backend.remote && session?.serverKey ? [{ label: t('conn.fail.server'), value: session.serverKey }] : []),
+        { label: t('sftp.path.edit'), value: path },
         { label: t('file.del.items'), value: targets.map((e) => e.name).join(', ') },
         { label: t('file.del.count'), value: `${targets.length}${dirs.length > 0 ? ` (${t('file.del.folders')} ${dirs.length})` : ''}` }
       ],

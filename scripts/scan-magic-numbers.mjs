@@ -54,6 +54,14 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
       if (STYLES_FS.test(line)) {
         violations.push(`${file}:${i + 1}  font-size px 리터럴(tokens.css 의 --fs-* 를 쓸 것)  → ${line.trim()}`)
       }
+      // 2026-08-16: **HEX 는 styles/ 도 본다.** 그전까지 HEX 검사는 ROOTS(components·interactions)
+      // 에만 걸려 있었는데 그 두 디렉터리에는 .css 파일이 **0개**다 — "HEX 리터럴 금지"가 색이
+      // 실제로 사는 6,800줄에 한 줄도 안 걸려 있었다. px 는 여전히 font-size 만 본다(§D.3 별건).
+      // 주석 줄은 건너뛴다 — "왜 이 값을 쓰면 안 되는가"를 적으려면 그 값을 인용해야 한다.
+      const bare = line.trim()
+      if (HEX.test(line) && !bare.startsWith('/*') && !bare.startsWith('*') && !bare.startsWith('//')) {
+        violations.push(`${file}:${i + 1}  HEX 리터럴(tokens.css 의 색 토큰을 쓸 것)  → ${bare}`)
+      }
     })
 }
 

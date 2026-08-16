@@ -197,7 +197,7 @@ export function WorkbenchView({
     ? LOCAL_SESSION
     : // 세션이 닫혔으면 백엔드 없음 — FileTree 가 안내를 띄운다(대상은 남겨 둔다).
       session
-      ? { id: session.id, type: 'ssh' as const }
+      ? { id: session.id, type: 'ssh' as const, serverKey: session.serverKey }
       : null
   const targetName = isLocal
     ? t('explorer.nav.thisPc')
@@ -374,6 +374,7 @@ export function WorkbenchView({
                   active={shown(id)}
                   sessionId={sessionId}
                   isSsh={!isLocal && sessionId !== null}
+                  server={session?.serverKey}
                   ask={ask}
                   onAskAi={onAskAi}
                   onOpenExplorer={(path) => pick(target, path)}

@@ -74,6 +74,8 @@ export function svcContext(row: SvcRow): string {
 
 type Props = {
   sessionId: string | null
+  /** 확인창이 찍을 서버 이름(2026-08-16) — 두 서버를 동시에 볼 수 있는 구조라 대상을 밝혀야 한다. */
+  server?: string
   /** 숨은 탭은 원격에 명령을 보내지 않는다(active=false → unwatch). */
   active: boolean
   ask: (spec: DialogSpec) => Promise<DialogResult>
@@ -89,7 +91,7 @@ const COLS: { key: SvcSortKey; cls: string }[] = [
 
 const ACTIONS: SvcAction[] = ['start', 'stop', 'restart']
 
-export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
+export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props): JSX.Element {
   // #82: 표를 ↑↓ 로 훑고 Enter 로 고른다. 행은 버튼이 아니라 row 다.
   const gridRef = useRef<HTMLDivElement>(null)
   const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
@@ -143,6 +145,7 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
       title: t('console.svc.act.title.' + action),
       message: t('console.svc.act.msg.' + action),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.svc.col.unit'), value: row.unit },
         { label: t('console.svc.act.state'), value: `${row.active} / ${row.sub}` }
       ],
@@ -161,6 +164,7 @@ export function ServiceTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
       title: t('console.svc.act.failTitle'),
       message: t('console.svc.act.failMsg'),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.svc.col.unit'), value: row.unit },
         { label: t('console.svc.act.reason'), value: why || t('console.svc.act.noReason') }
       ],

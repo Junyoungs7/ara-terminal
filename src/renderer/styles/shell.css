@@ -3,6 +3,17 @@
    px 값은 DS 명시 수치(§3.2 스페이싱·§4 레이아웃) 또는 var() 토큰만 사용.
    ============================================================ */
 
+/* 전역 키보드 포커스 링(2026-08-16). `outline: none` 만 있고 대체가 없는 자리가 있었다 —
+   대표적으로 사이드바 [연결]/[파일] 탭(.sb-tab). #71·#82 로 클릭 요소 38곳에 키보드 접근을
+   넣어 놓고 **그 키보드가 지금 어디 있는지는 안 보였다.**
+   `:focus-visible` 이라 마우스 클릭에는 안 뜬다. 개별 규칙(.dd-btn·.modal .btn 등)이 뒤에 있어
+   그쪽이 이긴다 — 이건 바닥값이다. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+
 .app {
   display: grid;
   grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar);
@@ -318,15 +329,17 @@
   cursor: pointer;
   border: none;
   border-bottom: 2px solid transparent;
-  outline: none;
   transition: 0.14s;
   white-space: nowrap;
   background: none;
   font-family: var(--ui);
 }
 /* 세션이 없을 때의 [파일] 탭 — 누를 수는 없지만 자리는 지킨다(탭이 사라지면 레이아웃이 튄다). */
+/* §1.3 이중 감쇠 금지 — 토큰 위에 opacity 를 또 곱하지 않는다. 더 약하게 보이려면 한 단계
+   아래 토큰을 쓴다. 2026-08-16 실측: 아래 자리들이 대비 1.82~2.96 까지 내려가 있었다(하한 3.5).
+   "추후 지원"·"비활성"·"화면에 없음"은 전부 **읽혀야 뜻이 있는** 라벨이다. */
 .sb-tab:disabled {
-  opacity: 0.4;
+  color: var(--text-dim);
   cursor: default;
 }
 .sb-tab svg {
@@ -1740,7 +1753,10 @@
    클릭하면 포커스 패널에 다시 표시된다(store/layout.ts showSession, 이미 되는 동작) — 라벨·dot 만
    은은하게 흐려 "이 탭은 지금 화면에 없다"만 암시한다(border 트릭은 .active::before/::after 와
    충돌하므로 건드리지 않는다 — active+detached 조합에서도 상단 그룹색 바는 그대로 보인다). */
-.ttab.offscreen .tlabel,
+.ttab.offscreen .tlabel {
+  color: var(--text-dim);
+}
+/* dot 은 글리프라 opacity 를 남긴다 — §1.3 이 금지한 것은 **텍스트** 위의 이중 감쇠다. */
 .ttab.offscreen .tdot {
   opacity: 0.55;
 }
@@ -1871,10 +1887,19 @@
    터미널 **아래**. 우측 레일과 달리 **세로만** 먹으므로 터미널 80칸에 영향이 없다 —
    그래서 레일과 같이 열려도 되고, 가로가 필요한 표(포트 3열·로그 한 줄)가 여기 산다.
    .main 안(탭바·그리드와 형제)이라 폭 계산에 끼지 않는다. */
-/* #87 ④ 최대화 — height 를 비우고 flex:1 로 두면 터미널을 밀어내며 남은 세로를 다 쓴다. */
+/* #87 ④ 최대화. **2026-08-16 정정** — `flex:1` 하나로는 "남은 세로를 다 쓴다"가 되지 않는다:
+   형제 `.pane-grid` 도 `flex:1` 이라 정확히 반씩 나눈다. 패널을 600px 로 끌어 뒀다면 [최대화]가
+   오히려 420px 로 **줄인다**(라벨이 약속한 것의 반대). 형제를 눌러야 최대화가 최대화가 된다.
+
+   **최대화의 정의(§4.8)**: *형제를 한 행만 남기고 자리를 다 가져간다.* 0 으로 만들지 않는 이유 —
+   완전히 사라지면 무엇이 밀려났는지, 어디를 눌러 되돌리는지가 화면에서 없어진다. 한 행이 그 앵커다.
+   떠 있는 창(작업대)은 형제가 없으므로 같은 정의에서 전체 화면이 된다 — 그쪽은 손댈 것이 없다. */
 .bottom-panel.maxed {
   flex: 1;
   min-height: 0;
+}
+.main:has(.bottom-panel.maxed) .pane-grid {
+  flex: 0 0 var(--row-tabbar);
 }
 .bottom-panel {
   flex: none;
@@ -1907,6 +1932,25 @@
   padding: 0 8px;
   border-bottom: 1px solid var(--line-soft);
 }
+/* 탭만 스크롤한다 — 서버명·최대화·닫기는 이 밖에 있어 항상 닿는다. */
+.bp-tabscroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bp-tabscroll::-webkit-scrollbar {
+  display: none;
+}
+/* `white-space: nowrap` 과 `flex: none` 은 **서로를 대신하지 못한다**(2026-08-16 실측):
+   <button> 기본이 `white-space: normal` 이라 좁아지면 **찌그러지기 전에 라벨이 두 줄로 접히고**,
+   `.bp-tabs` 는 `--row-tabbar` 고정 높이라 그 두 번째 줄이 행 밖으로 잘린다. nowrap 이 접힘을,
+   flex:none 이 찌그러짐을, 위 overflow-x 가 넘침을 각각 막는다 — 셋 다 필요하다.
+   깨지는 조건: 1440 창 + 아라 패널(360px) → .main 772px < 탭 여덟이 요구하는 폭. 배율
+   [아주 크게]면 레일 없이도 걸린다. */
 .bp-tab {
   border: none;
   background: none;
@@ -1916,17 +1960,31 @@
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  white-space: nowrap;
+  flex: none;
 }
 .bp-tab:hover {
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
+/* 활성 탭. `--bg-raised`(#1e2532)는 hover 의 `--bg-overlay`(#252e3e)보다 **어둡다** — 명시도가
+   같고 이 규칙이 뒤에 오므로, 이대로 두면 비활성 탭을 호버했을 때 활성 탭보다 밝아진다.
+   탭 여덟에서 "지금 뭐가 열려 있나"가 마우스 위치에 따라 뒤집히는 자리였다(2026-08-16).
+   그래서 활성은 호버해도 한 단계 위로 가고, 액센트 글자로 한 번 더 갈라 준다 —
+   하단만 유일하게 액센트 없는 탭 띠였다. */
 .bp-tab.on {
-  color: var(--text-hi);
+  color: var(--accent-bright);
   background: var(--bg-raised);
+}
+.bp-tab.on:hover {
+  background: var(--bg-overlay);
 }
 /* #84: 하단이 어느 서버 것인지 — 탭바 오른쪽 끝. 작업대 창의 .con-srv 와 같은 규격이다. */
 .bp-srv {
+  /* 탭보다 **먼저** 죽던 자리(2026-08-16). ellipsis·max-width 는 있었지만 flex-shrink 기본이 1 이라
+     탭이 접히기도 전에 0 으로 눌렸다 — #84 가 넣고 §4.8 이 "하단이 어느 서버 것인지 늘 보인다"로
+     적어 둔 보장이 아라 패널을 켜는 순간 조용히 사라졌다. */
+  flex: none;
   margin-right: 8px;
   white-space: nowrap;
   overflow: hidden;
@@ -2631,6 +2689,16 @@
 .st.warn {
   background: var(--warn);
 }
+/* 2026-08-16: 붙는 중 / 실패를 가른다. 예전엔 둘 다 노란 점이라 "다시 눌러야 하나 기다려야 하나"를
+   화면이 말해 주지 않았다. 진행은 액센트 + 맥동(움직이면 "하는 중"이 읽힌다), 실패는 오류색 —
+   맥동은 AI 세션 패널이 쓰는 것을 그대로 빌린다(새 키프레임을 만들지 않는다). */
+.st.connecting {
+  background: var(--accent);
+  animation: aisess-breathe 1.6s ease-in-out infinite;
+}
+.st.error {
+  background: var(--err);
+}
 .srv-node .sname {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3180,7 +3248,7 @@
 }
 .btn.pri {
   background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-  color: #04121c;
+  color: var(--on-accent);
   box-shadow:
     var(--shadow-sm),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
@@ -4942,7 +5010,7 @@
 }
 .rdp-canvas {
   display: none;
-  background: #000;
+  background: var(--void);
 }
 .rdp-overlay {
   position: absolute;
@@ -5480,7 +5548,7 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #000;
+  background: var(--void);
 }
 .rdp-span .rdp-view {
   position: relative;

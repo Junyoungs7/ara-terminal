@@ -51,13 +51,15 @@ const DESTRUCTIVE = new Set<CtrAction>(['stop', 'restart', 'rm'])
 
 type Props = {
   sessionId: string | null
+  /** 확인창이 찍을 서버 이름(2026-08-16) — 두 서버를 동시에 볼 수 있는 구조라 대상을 밝혀야 한다. */
+  server?: string
   active: boolean
   ask: (spec: DialogSpec) => Promise<DialogResult>
   /** 터미널로 한 줄 보내기(실행까지). [접속]만 이 길을 탄다 — 위 머리주석 참고. */
   onSendInput: (text: string) => void
 }
 
-export function ContainerTable({ sessionId, active, ask, onSendInput }: Props) {
+export function ContainerTable({ sessionId, active, server, ask, onSendInput }: Props) {
   const [rows, setRows] = useState<CtrRow[]>([])
   const [q, setQ] = useState('')
   const [note, setNote] = useState<string | null>(null)
@@ -104,6 +106,7 @@ export function ContainerTable({ sessionId, active, ask, onSendInput }: Props) {
       title,
       message: t('console.ctr.act.failMsg'),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.ctr.col.name'), value: name },
         { label: t('console.ctr.act.reason'), value: why || t('console.ctr.act.noReason') }
       ],
@@ -119,6 +122,7 @@ export function ContainerTable({ sessionId, active, ask, onSendInput }: Props) {
       title: t('console.ctr.act.title.' + action),
       message: t('console.ctr.act.msg.' + action),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.ctr.col.name'), value: row.name },
         { label: t('console.ctr.col.image'), value: row.image },
         { label: t('console.ctr.act.state'), value: row.status }

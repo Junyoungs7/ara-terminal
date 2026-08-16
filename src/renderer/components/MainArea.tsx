@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
+import { setUploadNotifier } from '../store/uploadBus'
 import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
 import { PaneGrid, type RestoreError } from './PaneGrid'
@@ -146,6 +147,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // 다중 모니터 RDP 안내(모니터 한 장·이미 열림·죽은 영역)를 여기 토스트로 보낸다 —
     // PaneGrid 는 다이얼로그도 토스트도 갖고 있지 않다.
     useEffect(() => setSpanNotifier(showToast), [showToast])
+    // 터미널 Ctrl+V 가 업로드로 못 넘어가 텍스트 붙여넣기로 떨어졌을 때 — 2026-08-16.
+    useEffect(() => setUploadNotifier(showToast), [showToast])
     // 클립보드 쓰기·읽기가 거부되면(창 비활성 등) 조용히 삼키지 않고 여기로 낸다 — 2026-08-13.
     useEffect(() => setClipboardNotifier(showToast), [showToast])
 

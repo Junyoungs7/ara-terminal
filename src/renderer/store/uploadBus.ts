@@ -16,6 +16,24 @@ export function setUploader(u: Uploader | null): void {
   current = u
 }
 
+/**
+ * 폴백이 일어났다고 알릴 곳(2026-08-16). 슬롯이 **하나**뿐이라 원격 트리가 둘 이상 뜨면
+ * 나중에 마운트된 쪽이 가져간다 — 작업대는 한 번 열면 안 죽으므로(#74) 그 뒤로 터미널 Ctrl+V 가
+ * 사이드바 트리 대신 작업대 세션을 겨누고, 세션이 다르면 조용히 텍스트 붙여넣기로 떨어졌다.
+ * **말없이 다르게 동작한 것**이 문제의 본체다. 근본 수리(세션별 Map)는 따로 잡고, 우선 말하게 한다.
+ * setSpanNotifier·setClipboardNotifier 와 같은 패턴 — MainArea 의 토스트로 나간다.
+ */
+let notify: ((msg: string) => void) | null = null
+
+export function setUploadNotifier(fn: ((msg: string) => void) | null): void {
+  notify = fn
+}
+
+/** 업로드로 넘기지 못해 텍스트 붙여넣기로 떨어졌다 — 그 사실을 화면에 낸다. */
+export function notifyPasteFallback(msg: string): void {
+  notify?.(msg)
+}
+
 // 업로드를 넘겼으면 true. false 면 호출측이 기존 동작(텍스트 붙여넣기)으로 폴백한다.
 export function uploadFiles(sessionId: string, paths: string[]): boolean {
   if (!current || current.sessionId !== sessionId || paths.length === 0) return false

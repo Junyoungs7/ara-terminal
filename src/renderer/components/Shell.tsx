@@ -358,6 +358,24 @@ export function Shell() {
         case 'panel.log':
           toggleBottom('log')
           return
+        case 'panel.ps':
+          toggleBottom('ps')
+          return
+        case 'panel.svc':
+          toggleBottom('svc')
+          return
+        case 'panel.disk':
+          toggleBottom('disk')
+          return
+        case 'panel.pkg':
+          toggleBottom('pkg')
+          return
+        case 'panel.ctr':
+          toggleBottom('ctr')
+          return
+        case 'panel.pastlog':
+          toggleRail('pastlog')
+          return
         case 'help.about':
           void ask({
             title: t('about.title'),
@@ -1007,7 +1025,7 @@ export function Shell() {
           // F25: rdp 세션에는 파일 트리를 붙이지 않는다(SFTP·로컬 fs 대상이 아니다).
           fileSession={
             activeSession && activeSession.type !== 'rdp'
-              ? { id: activeSession.id, type: activeSession.type }
+              ? { id: activeSession.id, type: activeSession.type, serverKey: activeSession.serverKey }
               : null
           }
           fileCwd={activeCwd}
@@ -1109,6 +1127,7 @@ export function Shell() {
                     active={active}
                     sessionId={activeSession?.type === 'ssh' ? (activeSession?.id ?? null) : null}
                     isSsh={activeSession?.type === 'ssh'}
+                    server={activeSession?.type === 'ssh' ? activeSession.serverKey : undefined}
                     ask={ask}
                     onAskAi={(text: string) => {
                       openRail('ai')

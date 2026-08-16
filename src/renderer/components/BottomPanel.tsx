@@ -97,20 +97,24 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
     <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h, flexBasis: h }}>
       {!maxed && <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />}
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>
-        {shownIds.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={'bp-tab' + (id === tab ? ' on' : '')}
-            role="tab"
-            aria-selected={id === tab}
-            data-bottom={id}
-            onClick={() => onTab(id)}
-          >
-            {t(LABEL[id])}
-          </button>
-        ))}
-        <span className="sb-tab-spacer" />
+        {/* 탭만 스크롤한다(2026-08-16). `.bp-tabs` 통째로 overflow 를 걸면 **닫기 버튼까지**
+            스크롤 밖으로 밀려나 탭이 많을 때 패널을 못 닫는다 — 서버명·최대화·닫기는 밖에 남긴다.
+            이 div 가 flex:1 이라 옛 .sb-tab-spacer 역할도 겸한다. */}
+        <div className="bp-tabscroll">
+          {shownIds.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={'bp-tab' + (id === tab ? ' on' : '')}
+              role="tab"
+              aria-selected={id === tab}
+              data-bottom={id}
+              onClick={() => onTab(id)}
+            >
+              {t(LABEL[id])}
+            </button>
+          ))}
+        </div>
         {/* #84·#91: 하단은 **지금 세션의 서버**를 따라간다(여기에 서버 선택 UI 는 없다).
             그러면 어느 서버 것인지가 화면에 남아야 한다 — 세션 탭을 보고 유추하게 두면
             "이 프로세스 목록이 어느 서버였지"가 된다(작업대 창은 제목줄에 늘 찍는다). */}

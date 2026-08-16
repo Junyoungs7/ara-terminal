@@ -33,8 +33,10 @@ describe('groupSessions (탭바 서버 그룹핑)', () => {
   it('로컬 그룹색은 accent, 원격은 결정론적(같은 키 → 같은 색)', () => {
     expect(groupColor('localhost', true)).toBe('var(--accent)')
     expect(groupColor('web-prod-01', false)).toBe(groupColor('web-prod-01', false))
-    // HEX 팔레트에서 선택(디자인 토큰 팔레트).
-    expect(groupColor('web-prod-01', false)).toMatch(/^#[0-9a-f]{6}$/)
+    // **토큰**에서 선택한다(2026-08-16). 예전에는 HEX 배열이었고 그중 둘이 `--err`·`--ok` 와
+    // 값이 글자 그대로 같아, 서버 2번 dot 이 "오류" 빨강으로 3번이 "정상" 초록으로 찍혔다.
+    // 색 소유권이 tokens.css 로 넘어갔으므로 여기서는 `var(--srv-N)` 형태만 확인한다.
+    expect(groupColor('web-prod-01', false)).toMatch(/^var\(--srv-[1-6]\)$/)
   })
 
   it('빈 세션 목록은 빈 그룹 배열', () => {

@@ -9,7 +9,7 @@ import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { termPrefs } from './termPrefs'
 import { writeClipboard } from '../store/clipboardWrite'
 import { appendHistory, cachedHistory, feedInput, ghostFor, loadHistory, shouldRecord } from '../store/history'
-import { uploadFiles } from '../store/uploadBus'
+import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { pastePaths } from '../components/filePath'
 import { isAppShortcut } from '../../shared/keymap'
@@ -314,6 +314,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
         // 원격이라도 [파일] 탭이 그 세션에 붙어 있지 않으면 큐가 없다 → 경로 붙여넣기로 폴백.
         if (!local && uploadFiles(sessionId, paths)) return true
         window.ev.session.input(sessionId, pastePaths(paths))
+        // 원격인데 업로드로 못 넘어갔다면 **기대와 다르게 동작한 것**이다 — 조용히 넘기지 않는다
+        // (2026-08-16). 업로더 슬롯이 하나뿐이라 작업대를 열면 이쪽이 밀려나 "됐다 안 됐다" 한다.
+        if (!local) notifyPasteFallback(t('paste.noQueue'))
         return true
       }
     })

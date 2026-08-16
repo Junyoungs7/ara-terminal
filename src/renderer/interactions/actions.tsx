@@ -420,6 +420,12 @@ export type MenuCommandId =
   | 'panel.sysmon'
   | 'panel.aisessions'
   | 'panel.log'
+  | 'panel.ps'
+  | 'panel.svc'
+  | 'panel.disk'
+  | 'panel.pkg'
+  | 'panel.ctr'
+  | 'panel.pastlog'
   // F17: 단축키 없는 진입점(패널 상단 버튼이 또 하나 있다 — AiPanel.onOpenBootstrap).
   | 'ai.bootstrap'
 
@@ -465,10 +471,19 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     title: 'View',
     items: [
       { command: 'panel.console' },
+      // 하단에 열리는 것들. #84·#86 으로 들어온 여섯이 여기 없어서 F1 검색에도 안 잡혔고,
+      // 우측 아이콘을 끄면 되찾을 길이 아예 없었다(2026-08-16).
       { command: 'panel.ports' },
       { command: 'panel.sysmon' },
-      { command: 'panel.aisessions' },
+      { command: 'panel.ps' },
+      { command: 'panel.svc' },
+      { command: 'panel.disk' },
+      { command: 'panel.pkg' },
+      { command: 'panel.ctr' },
       { command: 'panel.log' },
+      // 우측 레일.
+      { command: 'panel.aisessions' },
+      { command: 'panel.pastlog' },
       { action: 'sidebar.collapse' },
       { action: 'fileTree.toggle' },
       { action: 'explorer.toggle' },

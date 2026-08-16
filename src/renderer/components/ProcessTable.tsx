@@ -80,6 +80,8 @@ export function procContext(row: ProcRow): string {
 
 type Props = {
   sessionId: string | null
+  /** 확인창이 찍을 서버 이름(2026-08-16) — 두 서버를 동시에 볼 수 있는 구조라 대상을 밝혀야 한다. */
+  server?: string
   /** 숨은 탭은 원격에 명령을 보내지 않는다(탐색기의 숨은 트리가 파일시스템을 읽지 않는 것과 같은 규칙). */
   active: boolean
   ask: (spec: DialogSpec) => Promise<DialogResult>
@@ -95,7 +97,7 @@ const COLS: { key: ProcSortKey; cls: string }[] = [
   { key: 'cmd', cls: 'ccmd' }
 ]
 
-export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.Element {
+export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props): JSX.Element {
   // #82: 표를 ↑↓ 로 훑고 Enter 로 고른다. 행은 버튼이 아니라 row 다.
   const gridRef = useRef<HTMLDivElement>(null)
   const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
@@ -152,6 +154,7 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
       title: t('console.ps.kill.failTitle'),
       message: t('console.ps.kill.failMsg'),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.ps.col.pid'), value: String(target.pid) },
         { label: t('console.ps.kill.reason'), value: why || t('console.ps.kill.noReason') }
       ],
@@ -170,6 +173,7 @@ export function ProcessTable({ sessionId, active, ask, onAskAi }: Props): JSX.El
       title: t('console.ps.kill.title'),
       message: t('console.ps.kill.msg'),
       detail: [
+        ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
         { label: t('console.ps.col.pid'), value: String(row.pid) },
         { label: t('console.ps.col.user'), value: row.user },
         { label: t('console.ps.col.cmd'), value: row.cmd }

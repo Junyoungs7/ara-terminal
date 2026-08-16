@@ -33,6 +33,12 @@ type Props = {
   /** SSH 세션일 때만 채워진다. 로컬이면 null 이고 아래 안내가 대신 뜬다. */
   sessionId: string | null
   isSsh: boolean
+  /**
+   * 이 표가 보고 있는 서버 이름. **파괴적 확인창이 이걸 찍는다**(2026-08-16) — 하단은 세션의
+   * 서버를, 작업대는 좌측에서 고른 서버를 보고 둘은 서로 다를 수 있게 설계돼 있다(§4.8).
+   * 그런데 정작 `systemctl stop`·kill·컨테이너 제거 확인창이 대상을 안 밝히고 있었다.
+   */
+  server?: string
   ask: (spec: DialogSpec) => Promise<DialogResult>
   onAskAi: (text: string) => void
   /** 디스크 표의 [탐색기로 열기]. */
@@ -41,21 +47,21 @@ type Props = {
   onSendInput: (text: string) => void
 }
 
-export function ServerTool({ id, active, sessionId, isSsh, ask, onAskAi, onOpenExplorer, onSendInput }: Props): JSX.Element {
+export function ServerTool({ id, active, sessionId, isSsh, server, ask, onAskAi, onOpenExplorer, onSendInput }: Props): JSX.Element {
   // SSH 가 아니면 표 대신 안내. 탭 자체는 남긴다 — 세션 종류에 따라 탭이 나타났다 사라지면
   // "아까 있던 게 어디 갔지"가 된다(PortMonitor 가 이미 같은 규칙이다).
   if (!isSsh || sessionId === null) return <span className="sb-placeholder">{t('console.needSsh')}</span>
 
   switch (id) {
     case 'ps':
-      return <ProcessTable sessionId={sessionId} active={active} ask={ask} onAskAi={onAskAi} />
+      return <ProcessTable sessionId={sessionId} active={active} server={server} ask={ask} onAskAi={onAskAi} />
     case 'svc':
-      return <ServiceTable sessionId={sessionId} active={active} ask={ask} onAskAi={onAskAi} />
+      return <ServiceTable sessionId={sessionId} active={active} server={server} ask={ask} onAskAi={onAskAi} />
     case 'disk':
       return <DiskTable sessionId={sessionId} active={active} onOpenExplorer={onOpenExplorer} />
     case 'pkg':
       return <PkgTable sessionId={sessionId} active={active} />
     case 'ctr':
-      return <ContainerTable sessionId={sessionId} active={active} ask={ask} onSendInput={onSendInput} />
+      return <ContainerTable sessionId={sessionId} active={active} server={server} ask={ask} onSendInput={onSendInput} />
   }
 }

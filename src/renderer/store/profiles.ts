@@ -25,7 +25,11 @@ export type ConnState = Record<string, 'idle' | 'connecting' | 'connected' | 'er
  */
 export function connDotClass(state: ConnState[string] | undefined): string {
   if (state === 'connected') return 'on'
-  if (state === 'error' || state === 'connecting') return 'warn'
+  // 2026-08-16: 예전에는 connecting 과 error 를 'warn' 하나로 접었다. 그러면 **붙는 중인지 아까
+  // 실패한 채인지** 구분이 안 된다 — 실패 창을 닫아도 점은 그대로 노랗고, 다시 눌러야 하는지
+  // 기다려야 하는지 화면이 말해 주지 않았다. 접속은 이 앱의 첫 동작이라 그 몇 초가 중요하다.
+  if (state === 'connecting') return 'connecting'
+  if (state === 'error') return 'error'
   return 'off'
 }
 
