@@ -9,7 +9,7 @@
 // 입력은 반대 방향이다: 자식 창에는 세션이 없으므로, 자식에서 누른 마우스·키를 **원격 좌표로
 // 환산해서** 부모의 입력 통로(RdpInputBridge)로 넘긴다.
 
-import type { SpanMonitor } from '@shared/rdpSpan'
+import { MIRROR_FRAME_PREFIX, type SpanMonitor } from '@shared/rdpSpan'
 import type { RdpInputBridge } from '../components/RdpView'
 
 /** 자식 창 캔버스의 로컬 좌표 → 원격 프레임버퍼 좌표. */
@@ -63,7 +63,13 @@ export function openMirror(
   bridge: { current: RdpInputBridge | null }
 ): MirrorHandle | null {
   const { slice, window: box } = monitor
-  const win = window.open('', `ara-rdp-mon-${monitor.id}`, `width=${box.width},height=${box.height},left=${box.x},top=${box.y}`)
+  // 크기·자리는 features 로도 보내지만 **main 이 실제로 쓰는 값은 계획 쪽**이다
+  // (setWindowOpenHandler → monitorWindowBox). 여기 문자열은 브라우저 관례를 지키는 용도다.
+  const win = window.open(
+    '',
+    `${MIRROR_FRAME_PREFIX}${monitor.id}`,
+    `width=${box.width},height=${box.height},left=${box.x},top=${box.y}`
+  )
   if (!win) return null
 
   win.document.open()

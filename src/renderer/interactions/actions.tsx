@@ -182,6 +182,12 @@ export type TreeActionId =
   // 작업 프로필(서버+폴더 즐겨찾기): 팝업 열기 / 지금 위치를 그 목록에 저장.
   | 'work.open'
   | 'work.save'
+  // 2026-08-17 준영님 제보 ①: **즐겨찾기를 지울 길이 없었다.** 스토어에는 remove·rename 이
+  // 처음부터 있었는데(store/workProfiles.ts) 그것을 부르는 UI 가 어디에도 없었다 —
+  // 목록에 올리기만 하고 되돌리는 자리를 안 만든 것이다. 행 우클릭이 그 자리다.
+  | 'work.goto'
+  | 'work.rename'
+  | 'work.delete'
   // FB-ui2 추가 지시(2026-08-05): 연결 관리자 좌측 프로필 목록 우클릭. "정보 수정"/"복제"/"삭제"는
   // 트리의 server.edit/server.duplicate/server.delete 를 그대로 재사용한다(같은 동작이라 새 id 를
   // 만들지 않는다) — profile.new 만 새로 추가한다(빈 폼으로 리셋, ConnectionModal.newProfile).
@@ -208,7 +214,12 @@ const TREE_MENUS = {
   ],
   // W4sat F21: RDP는 세션·호스트키 개념이 없다(외부 앱 실행뿐) — 그 항목들을 뺀 축소판.
   serverRdp: ['server.connect', 'server.edit', 'server.duplicate', 'server.delete'],
-  session: ['session.focus', 'session.rename', 'session.close'],
+  // 제보 ①: 세션 행 메뉴가 서버 행(일곱)에 비해 셋뿐이라 "여기서 할 수 있는 게 없다"였다.
+  // 세션에는 **서버에 없는 것**이 있다 — 지금 그 세션이 서 있는 폴더다. 즐겨찾기 저장·AI CLI
+  // 시작이 그 폴더를 그대로 쓴다(서버 행에서 열면 폴더를 다시 골라야 한다).
+  session: ['session.focus', 'session.duplicate', 'aicli.start', 'work.save', 'session.rename', 'session.close'],
+  // 즐겨찾기 행(사이드바 트리 · 작업대 창 — 같은 목록이라 같은 메뉴를 쓴다).
+  fav: ['work.goto', 'work.rename', 'work.delete'],
   // 탭 우클릭(R2.2). 트리 세션 메뉴와 같은 액션 id 를 공유한다 — 이름만 다른 중복 정의 금지.
   tab: ['session.rename', 'session.duplicate', 'session.close', 'session.closeOthers'],
   // R6: 그룹 이름 변경(그룹 내 프로필 일괄 갱신) / 삭제(프로필은 "기타"로 이동).
@@ -234,7 +245,8 @@ export type TreeMenuKind = keyof typeof TREE_MENUS
 const DANGER: ReadonlySet<TreeActionId> = new Set<TreeActionId>([
   'server.delete',
   'session.closeOthers',
-  'group.delete'
+  'group.delete',
+  'work.delete'
 ])
 
 // 메뉴 종류 → ContextMenu 항목. 라벨은 호출 시점에 t() 로 해석한다(로케일 전환 반영).

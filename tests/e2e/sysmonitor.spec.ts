@@ -6,13 +6,13 @@
 // #83(2026-08-15): 우측 레일 → **하단 패널**. 보여 주는 것이 서버 자원이라 "서버 것은 아래"
 // 원칙(design-system.md §4.8)에 걸린다. 화면 위치만 바뀌고 안쪽 규칙(기본 [내 PC] 탭·그래프·
 // 닫으면 폴링 정지)은 그대로라 아래 검사는 선택자만 옮겼다.
-import { test, expect, newLocalShell, connectNewSshProfile, makeTelemetry, type TeleHarness } from './fixtures'
+import { test, expect, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, type TeleHarness } from './fixtures'
 import type { Page } from '@playwright/test'
 
 type SshFactory = (opts?: { password?: string; execHandler?: TeleHarness['exec'] }) => Promise<{ port: number }>
 
 async function openSys(page: Page): Promise<void> {
-  await page.click('.act-item[data-activity="sys"]')
+  await openBottomTool(page, 'sys')
   await expect(page.locator('.bottom-panel .monitor-panel.sysm')).toBeVisible()
 }
 

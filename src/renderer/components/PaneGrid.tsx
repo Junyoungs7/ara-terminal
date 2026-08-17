@@ -88,7 +88,8 @@ export function PaneGrid({
     setRowRatio,
     canSplit,
     replaceSession,
-    showSession
+    showSession,
+    toggleMaximize
   } = layout
   const gridRef = useRef<HTMLDivElement>(null)
   // FB-0002: 탭 드래그 → 패널 드롭 미리보기(점선 오버레이). null = 드래그 중이 아니거나 그리드 밖.
@@ -280,6 +281,22 @@ export function PaneGrid({
               <span className="ptitle">
                 <b>{err ? err.title : (session?.title ?? key)}</b>
               </span>
+              {/* 2026-08-17 제보 ⑦: 칸마다 [최대화]. 분할해 놓고 하나를 잠깐 크게 볼 때
+                  Ctrl+Shift+Enter 를 몰라도 손이 닿아야 한다. 칸이 하나뿐이면 최대화할 것이
+                  없으므로 버튼도 없다(누르면 아무 일도 안 일어나는 버튼을 두지 않는다). */}
+              {cell && cells.length > 1 && (
+                <span
+                  className="pmax"
+                  title={t(maximizedId === cell.id ? 'explorer.restore' : 'explorer.maximize')}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleMaximize(cell.id)
+                  }}
+                >
+                  {maximizedId === cell.id ? '❐' : '▢'}
+                </span>
+              )}
               {cell && (
                 <span
                   className="px"

@@ -1,16 +1,7 @@
 // W1 F10 상태바 리소스 게이지 — 활성 SSH 세션의 CPU/MEM(/GPU).
 // 값의 출처는 F9 와 같은 폴링 한 벌이다(원격 응답은 ssh2 루프백 하네스의 exec 채널).
 import type { Page } from '@playwright/test'
-import {
-  test,
-  expect,
-  connectNewSshProfile,
-  makeTelemetry,
-  newLocalShell,
-  portRows,
-  showAllPorts,
-  type TeleHarness
-} from './fixtures'
+import { test, expect, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, portRows, showAllPorts, type TeleHarness } from './fixtures'
 
 type SshFactory = (opts?: { password?: string; execHandler?: TeleHarness['exec'] }) => Promise<{ port: number }>
 
@@ -93,7 +84,7 @@ test('GAUGE-6 로컬 세션에도 CPU·MEM 게이지가 뜬다(GPU 는 없다)',
 test('GAUGE-7 /proc 이 없어도 포트 목록은 살아 있다', async ({ ara, ssh }) => {
   const tele = makeTelemetry({ proc: false })
   await connectWithTelemetry(ara.page, ssh, tele, 'g7')
-  await ara.page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(ara.page, 'monitor')
   // FB-monitor(FB-0003): 기본값이 "사용자 포트만" — 6개 전체를 보려면 명시적으로 전체 보기.
   await showAllPorts(ara.page)
   await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })

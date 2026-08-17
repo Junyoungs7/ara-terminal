@@ -3,7 +3,13 @@
 // 왜 순수 함수로 뺐나: 틀리면 창이 화면 밖에 뜨거나(다시 잡을 수 없다) 원격 해상도가 어긋나
 // 접속 뒤에야 알게 된다. RDP 는 접속 시점 해상도가 세션 해상도라 되돌리려면 재접속이다.
 import { describe, it, expect } from 'vitest'
-import { planSpan, planSpanAll, type SpanDisplay } from '../src/shared/rdpSpan'
+import {
+  MIRROR_FRAME_PREFIX,
+  monitorWindowBox,
+  planSpan,
+  planSpanAll,
+  type SpanDisplay
+} from '../src/shared/rdpSpan'
 
 const d = (id: number, x: number, y: number, w: number, h: number, scaleFactor = 1): SpanDisplay => ({
   id,
@@ -154,5 +160,42 @@ describe('원격에 알릴 배열', () => {
 
   it('한 장짜리도 정상 — 주 모니터 하나로 나간다', () => {
     expect(monitorLayoutArgs(planSpanAll([d(1, 0, 0, 1920, 1080)])!)).toEqual([0, 0, 1919, 1079, 1])
+  })
+})
+
+// ── 자식 창 자리 (2026-08-17 제보 ⑨) ──────────────────────────────────────────
+//
+// 여기 있던 버그: main 이 `window.open` 의 features 문자열에서 좌표를 정규식으로 뽑았는데,
+// 템플릿 리터럴 안의 `\d` 가 `d` 로 죽어 **한 번도 매치되지 않았다**. 넷 다 undefined 가 되니
+// 자식 창이 기본 크기로 주 모니터에 떠 부모 창 뒤에 가려졌다 — "두 번째 모니터에 아무것도
+// 안 뜬다"로 보였고, 창은 사실 열려 있었다. 이제 좌표를 계획에서 직접 꺼낸다.
+describe('다른 모니터 창 자리', () => {
+  it('프레임 이름의 모니터 id 로 그 모니터의 창 자리를 찾는다', () => {
+    const plan = planSpanAll(twoWide)!
+    expect(monitorWindowBox(plan, MIRROR_FRAME_PREFIX + '2')).toEqual({ x: 1920, y: 0, width: 1920, height: 1080 })
+  })
+
+  it('★ 두 모니터가 서로 다른 자리를 받는다 — 같으면 한 장이 다른 장을 덮는다', () => {
+    const plan = planSpanAll(twoWide)!
+    const a = monitorWindowBox(plan, MIRROR_FRAME_PREFIX + '1')!
+    const b = monitorWindowBox(plan, MIRROR_FRAME_PREFIX + '2')!
+    expect(a.x).not.toBe(b.x)
+  })
+
+  it('왼쪽에 붙은 모니터의 음수 좌표도 그대로 나온다', () => {
+    const plan = planSpanAll([d(1, 0, 0, 1920, 1080), d(2, -1920, 0, 1920, 1080)])!
+    expect(monitorWindowBox(plan, MIRROR_FRAME_PREFIX + '2')?.x).toBe(-1920)
+  })
+
+  it('★ 우리 이름이 아니면 null — 원격 화면 창에서 임의 창이 열리는 길을 남기지 않는다', () => {
+    const plan = planSpanAll(twoWide)!
+    expect(monitorWindowBox(plan, 'evil-popup')).toBeNull()
+    expect(monitorWindowBox(plan, '')).toBeNull()
+  })
+
+  it('★ 계획에 없는 모니터 id 면 null', () => {
+    const plan = planSpanAll(twoWide)!
+    expect(monitorWindowBox(plan, MIRROR_FRAME_PREFIX + '99')).toBeNull()
+    expect(monitorWindowBox(plan, MIRROR_FRAME_PREFIX + 'abc')).toBeNull()
   })
 })

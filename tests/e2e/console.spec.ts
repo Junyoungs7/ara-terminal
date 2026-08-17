@@ -6,17 +6,7 @@
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import {
-  test,
-  expect,
-  connectNewSshProfile,
-  dialog,
-  dialogCancel,
-  dialogConfirm,
-  newLocalShell,
-  sessionList,
-  REPO_ROOT
-} from './fixtures'
+import { test, expect, REPO_ROOT, connectNewSshProfile, dialog, dialogCancel, dialogConfirm, newLocalShell, openBottomTool, sessionList } from './fixtures'
 
 // 실기동 캡처 — 가짜 IPC 하네스가 아니라 이 스위트가 쓰는 **실제 main 프로세스·실제 remote:* 경로**를
 // 지나온 화면이다(원격만 ssh2 루프백). 캡처가 곧 그 경로가 살아 있다는 증거다.
@@ -79,7 +69,7 @@ async function openConsole(page: Page, name: string, port: number, password: str
 
 /** 하단 [프로세스] 탭을 연다(액티비티 바 → 하단 패널). */
 async function openProcessTab(page: Page): Promise<void> {
-  await page.click('.act-item[data-activity="ps"]')
+  await openBottomTool(page, 'ps')
   await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
   await expect(rows(page)).toHaveCount(4, { timeout: 30_000 })
 }
@@ -123,7 +113,7 @@ test('CON-32★ ps 가 실패하면 로딩이 아니라 서버가 준 이유를 
   ps.state.psCode = 1
   const h = await ssh({ password: 'pw-con24', execHandler: ps.exec })
   await openConsole(ara.page, 'con24', h.port, 'pw-con24')
-  await ara.page.click('.act-item[data-activity="ps"]')
+  await openBottomTool(ara.page, 'ps')
 
   const empty = ara.page.locator('.con-ps .con-empty')
   await expect(empty).toHaveText('ps: permission denied')
@@ -424,8 +414,12 @@ test('CON-9 하단 [프로세스] 탭을 닫으면 ps 폴링이 멈춘다', asyn
 // 않는 것이 이 설계의 판단이다(대상이 다르면 할 수 있는 일이 다른 것이 자연스럽다).
 test('CON-10 로컬에서는 하단이 안내를 내고 작업대 격자에 원격 칸이 없다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await ara.page.click('.act-item[data-activity="ps"]')
-  await expect(ara.page.locator('.bottom-panel .sb-placeholder')).toHaveText('SSH 세션에서 쓸 수 있습니다')
+  await openBottomTool(ara.page, 'ps')
+  // 하단바를 켜면 보던 탭(기본 [포트])이 먼저 열리고, 연 적 있는 탭은 마운트를 유지한다(#87 ⑤).
+  // 그래서 안내 문구가 DOM 에 둘 남는다 — **보이는 칸**의 것만 본다.
+  await expect(ara.page.locator('.bottom-panel .bp-pane:visible .sb-placeholder')).toHaveText(
+    'SSH 세션에서 쓸 수 있습니다'
+  )
 
   await ara.page.click('.act-item[data-activity="explorer"]')
   await expect(ara.page.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
@@ -509,7 +503,8 @@ const dirRows = (page: Page) => page.locator('.dsk-dir')
 // 런치패드에서 도구를 눌러 탭으로 연다.
 // #84: 도구는 하단 탭이다(콘솔 창 격자가 아니라).
 async function openTool(page: Page, tool: string): Promise<void> {
-  await page.click(`.act-item[data-activity="${tool}"]`)
+  // 2026-08-17: 하단 도구를 여는 버튼은 상태바 도크로 옮겨졌다(제보 ③ — design-system §4.8).
+  await openBottomTool(page, tool)
   await expect(page.locator(`.bp-tab.on[data-bottom="${tool}"]`)).toBeVisible()
 }
 
@@ -779,7 +774,7 @@ test('CON-18 런치패드에 배포판·커널·가동 시간이 한 줄로 뜬�
 test('CON-19 설치된 프로그램 표에 nvm 으로 깐 node 가 경로·버전·설치일과 함께 뜬다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw19', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c19', h.port, 'pw19')
-  await ara.page.click('.act-item[data-activity="pkg"]')
+  await openBottomTool(ara.page, 'pkg')
   await expect(ara.page.locator('.bp-tab.on[data-bottom="pkg"]')).toBeVisible()
 
   const rowsPkg = ara.page.locator('.pkg-row:not(.missing)')
@@ -798,7 +793,7 @@ test('CON-20 설치된 프로그램은 폴링하지 않고 [새로고침] 때만
   const r3 = makeR3()
   const h = await ssh({ password: 'pw20', execHandler: r3.exec })
   await openConsole(ara.page, 'c20', h.port, 'pw20')
-  await ara.page.click('.act-item[data-activity="pkg"]')
+  await openBottomTool(ara.page, 'pkg')
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(3, { timeout: 20_000 })
 
   const first = r3.probes()
@@ -813,7 +808,7 @@ test('CON-20 설치된 프로그램은 폴링하지 않고 [새로고침] 때만
 test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw21', execHandler: makeR3().exec })
   await openConsole(ara.page, 'c21', h.port, 'pw21')
-  await ara.page.click('.act-item[data-activity="pkg"]')
+  await openBottomTool(ara.page, 'pkg')
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(3, { timeout: 20_000 })
 
   // 기본: 못 찾은 것들은 안 보인다.
@@ -920,7 +915,7 @@ function makeCtr(out: string): CtrHarness {
 test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점이 켜진다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw24', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c24', h.port, 'pw24')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.bp-tab.on[data-bottom="ctr"]')).toBeVisible()
 
   const names = ara.page.locator('.ctr-row .ctr-name')
@@ -935,7 +930,7 @@ test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점�
 test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 뜬다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw25', execHandler: makeCtr('docker: command not found').exec })
   await openConsole(ara.page, 'c25', h.port, 'pw25')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.con-note')).toContainText('docker·podman', { timeout: 20_000 })
   await expect(ara.page.locator('.ctr-row')).toHaveCount(0)
 })
@@ -944,7 +939,7 @@ test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 
 test('CON-26 컨테이너 검색이 이름·이미지에 걸린다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw26', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c26', h.port, 'pw26')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ara.page.locator('.pkg-wrap .con-field').fill('postgres')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(1)
@@ -960,7 +955,7 @@ const ctrBtn = (page: Page, action: string) => page.locator(`.ctr-acts .con-btn[
 test('CON-28★ 컨테이너 상태에 따라 열리는 조작이 갈린다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw28', execHandler: makeCtr(CTR_OUT).exec })
   await openConsole(ara.page, 'c28', h.port, 'pw28')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
 
   // 고르기 전에는 전부 잠겨 있다.
@@ -990,7 +985,7 @@ test('CON-29★ 정지를 취소하면 원격에 아무 명령도 나가지 않�
   const ctr = makeCtr(CTR_OUT)
   const h = await ssh({ password: 'pw29', execHandler: ctr.exec })
   await openConsole(ara.page, 'c29', h.port, 'pw29')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
 
@@ -1013,7 +1008,7 @@ test('CON-30 이미지 제거가 거절되면 서버가 준 이유가 그대로 
   ctr.fail = { on: 'rmi', msg: 'Error response from daemon: conflict: image is being used' }
   const h = await ssh({ password: 'pw30', execHandler: ctr.exec })
   await openConsole(ara.page, 'c30', h.port, 'pw30')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
 
@@ -1030,7 +1025,7 @@ test('CON-31★ [접속]은 컨테이너 셸 명령을 터미널로 보내고 �
   const inputs: string[] = []
   const h = await ssh({ password: 'pw31', execHandler: ctr.exec, onShellData: (d) => inputs.push(d) })
   await openConsole(ara.page, 'c31', h.port, 'pw31')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
   await ctrRow(ara.page, 'web').click()
   await ctrBtn(ara.page, 'attach').click()
@@ -1048,7 +1043,7 @@ test('CON-27 컨테이너 탭을 닫으면 폴링이 멈춘다', async ({ ara, s
   const ctr = makeCtr(CTR_OUT)
   const h = await ssh({ password: 'pw27', execHandler: ctr.exec })
   await openConsole(ara.page, 'c27', h.port, 'pw27')
-  await ara.page.click('.act-item[data-activity="ctr"]')
+  await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
 
   // #84: 탭을 닫는 자리가 콘솔 창 → 하단 패널로 옮겼다. 닫으면 그 탭이 언마운트되고 폴링이 멎는다.

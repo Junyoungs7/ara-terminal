@@ -13,9 +13,19 @@ import { BOTTOM_IDS, type BottomId } from '@shared/types'
 // 하단은 **세로만 먹는다.** 터미널 80칸에 영향이 없어서 우측 레일과 같이 열어도 된다
 // (레일이 하나만 열리는 #79 규칙은 우측에만 적용된다).
 //
-// 액티비티 바는 옮기지 않았다. VS Code 는 바가 **사이드바 내용을 바꾸는** 구조라 왼쪽이 맞지만,
-// 우리 바는 "무엇을 열지"를 고른다 — 왼쪽으로 옮기면 바는 왼쪽인데 열리는 것은 오른쪽·아래가 돼
-// 지금보다 나빠진다. 대신 바의 [포트]·[세션 기록]을 누르면 하단 패널이 **그 탭으로** 열린다.
+// **IntelliJ 툴윈도우 방식(2026-08-17 준영님 정정).**
+//   "우측 사이드바 하단에 하단바 아이콘을 만들어주고, 그걸 클릭하면 하단바를 사용하고
+//    그 하단바에 이 기능 버튼들을 탭으로 만들어달라는거였어."
+//
+// 하루 동안 두 번 잘못 짚었다. 처음엔 도구 여덟을 상태바 아이콘으로 흩었고(→ 같은 목록이
+// 화면에 두 번), 그다음엔 탭줄을 아예 상주시켰다(→ 하단바를 끌 수 없게 됐다).
+// 원하신 구조는 **토글 하나 + 그 안의 탭**이다:
+//
+//   · 액티비티 바 맨 아래 [하단바] 아이콘 = 하단바를 켜고 끈다.
+//   · 켜면 이 패널이 뜨고, 도구 여덟이 그 안에서 **탭**으로 갈린다.
+//   · 끄면 탭줄까지 통째로 사라진다 — 안 쓰는 사람의 화면에는 아무것도 없다.
+//
+// 탭은 **내용을 바꾼다**(끄지 않는다). 끄는 자리는 그 아이콘과 이 패널의 [×] 둘이다.
 
 const LABEL: Record<BottomId, string> = {
   monitor: 'sidebar.tab.monitor',
@@ -34,8 +44,9 @@ const MIN_H = 120
 const DEFAULT_H = 260
 
 type Props = {
-  /** 열린 탭. null 이면 패널이 없다. */
+  /** 열린 탭. null 이면 하단바 자체가 꺼져 있다(이 컴포넌트가 아무것도 그리지 않는다). */
   tab: BottomId | null
+  /** 탭 클릭 = 그 도구로 갈아탄다(끄는 것은 액티비티 바의 [하단바] 토글과 이 패널의 [×]). */
   onTab: (id: BottomId) => void
   onClose: () => void
   /**
@@ -84,7 +95,7 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
     window.addEventListener('mouseup', up)
   }, [])
 
-  // 한 번이라도 연 탭 — 닫아도(패널을 닫아도) 목록에서 빼지 않는다. 마운트를 유지해 상태를 지킨다.
+  // 한 번이라도 연 탭 — 접어도 목록에서 빼지 않는다. 마운트를 유지해 상태(검색어·정렬·경로)를 지킨다.
   if (tab && !openedRef.current.includes(tab)) openedRef.current = [...openedRef.current, tab]
 
   if (!tab) return null
@@ -94,8 +105,9 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
   const shownIds = base.includes(tab) ? base : [tab, ...base]
 
   return (
-    <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h, flexBasis: h }}>
-      {!maxed && <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />}
+    // 하단바 전체가 **터미널 위에 뜬다**(제보 ④ — 열고 닫아도 분할 칸 크기가 안 변한다).
+    <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h }}>
+      <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>
         {/* 탭만 스크롤한다(2026-08-16). `.bp-tabs` 통째로 overflow 를 걸면 **닫기 버튼까지**
             스크롤 밖으로 밀려나 탭이 많을 때 패널을 못 닫는다 — 서버명·최대화·닫기는 밖에 남긴다.
@@ -135,7 +147,8 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
         </button>
       </div>
       {/* #87 ⑤: 연 적 있는 탭을 전부 그리되 보이는 것 하나만 남긴다(나머지는 display:none).
-          active=false 인 탭은 폴링을 멈춘다 — 그 계약이 마운트 유지의 전제다. */}
+          active=false 인 탭은 폴링을 멈춘다 — 그 계약이 마운트 유지의 전제다.
+          접혀 있으면 본문 자체를 안 그린다 — 그때는 모든 탭이 active=false 라 폴링도 없다. */}
       <div className="bp-body">
         {openedRef.current.map((id) => (
           <div key={id} className="bp-pane" style={id === tab ? undefined : { display: 'none' }}>

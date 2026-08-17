@@ -155,3 +155,24 @@ export function planSpanAll(displays: readonly SpanDisplay[]): SpanPlan | null {
     displays.map((d) => d.id)
   )
 }
+
+/**
+ * "다른 모니터" 창의 `window.open` 이름. 렌더러가 붙이고(store/rdpMirror.ts) main 이 이 이름으로
+ * 창을 알아본다(rdp/RdpWindows.ts) — **두 프로세스가 맞춰야 하는 문자열이라 여기 한 번만 적는다.**
+ */
+export const MIRROR_FRAME_PREFIX = 'ara-rdp-mon-'
+
+/**
+ * `window.open` 프레임 이름 → 그 모니터를 덮을 창 자리. 우리 이름이 아니거나 계획에 없는
+ * 모니터면 null(= 창을 열지 않는다).
+ *
+ * 좌표를 **계획에서** 꺼내는 이유: 그 값을 만든 곳이 여기다. 렌더러가 features 문자열에 실어
+ * 되돌려준 것을 다시 파싱하던 코드는 정규식이 죽어 있어 한 번도 동작하지 않았다(2026-08-17).
+ * 순수 함수 — tests/rdpSpan.test.ts 가 검증한다.
+ */
+export function monitorWindowBox(plan: SpanPlan, frameName: string): SpanMonitor['window'] | null {
+  if (!frameName.startsWith(MIRROR_FRAME_PREFIX)) return null
+  const id = Number(frameName.slice(MIRROR_FRAME_PREFIX.length))
+  if (!Number.isFinite(id)) return null
+  return plan.monitors.find((m) => m.id === id)?.window ?? null
+}

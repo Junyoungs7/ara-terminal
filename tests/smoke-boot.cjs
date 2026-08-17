@@ -1131,7 +1131,13 @@ app.whenReady().then(async () => {
   checks.push(['컨텍스트 메뉴 키보드 이동(↑↓)', ux.kbdCursor === 1])
   checks.push(['바깥 클릭으로 메뉴 닫힘', ux.menuClosedByBackdrop === true])
   // R2.1: 트리 세션 메뉴에 "이름 변경"이 추가됐다(탭 더블클릭과 같은 인라인 편집을 연다).
-  checks.push(['세션 행 우클릭 → 전환/이름 변경/종료/tmux 4항목', ux.sessionMenu.join(',') === 'session.focus,session.rename,session.close,session.tmux'])
+  // 2026-08-17 제보 ①: 셋뿐이라 "여기서 할 게 없다"였다 — **그 세션이 서 있는 폴더**를 쓰는
+  // 셋을 더했다(복제·AI CLI 시작·즐겨찾기 저장). 서버 행에서 열면 폴더를 다시 골라야 한다.
+  checks.push([
+    '세션 행 우클릭 → 전환/복제/AI CLI/즐겨찾기/이름 변경/종료/tmux 7항목',
+    ux.sessionMenu.join(',') ===
+      'session.focus,session.duplicate,aicli.start,work.save,session.rename,session.close,session.tmux'
+  ])
   // R6: 그룹 헤더 메뉴에 이름 변경·삭제가 붙었다(smoke 프로필은 전부 '개발' 그룹이라 실그룹 메뉴가 뜬다).
   checks.push([
     'R6: 그룹 헤더 우클릭 → 새 연결 / 이름 변경 / 삭제',

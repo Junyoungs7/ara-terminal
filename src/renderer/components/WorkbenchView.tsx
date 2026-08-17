@@ -35,6 +35,8 @@ import type { DialogSpec, DialogResult } from './Dialog'
 import { LOCAL_TARGET, sameTarget, type ExpTarget } from '../store/explorerTabs'
 import { useFloatWindow } from '../store/floatWindow'
 import { t } from '../i18n'
+import { ContextMenu } from '../interactions/ContextMenu'
+import { treeMenu, type TreeActionId } from '../interactions/actions'
 
 // FileTree 계약상 session:null 은 "백엔드 없음"(플레이스홀더)이지 로컬을 뜻하지 않는다 — 로컬을
 // 보려면 항상 이 sentinel 을 넘긴다(backendFor 가 type 으로만 분기한다).
@@ -84,6 +86,12 @@ type Props = {
   onAiCli: (profileId: string | null, path: string) => void
   /** 바깥에서 건네는 "이 서버의 이 폴더를 열어라". at 이 바뀔 때만 한 번 반응한다. */
   reveal?: { profileId: string; path: string; at: number } | null
+  /**
+   * 2026-08-17 제보 ①: 즐겨찾기 행 우클릭(이름 변경·삭제). 목록의 주인은 Shell 이라 여기서
+   * 고치지 않고 올려보낸다 — 사이드바 트리의 같은 메뉴와 **같은 함수**에 도착해야 한다.
+   * ([열기]는 올리지 않는다. 이 창에서 연 것은 이 창 안에서 열려야 한다.)
+   */
+  onWorkAction?: (id: TreeActionId, workId: string) => void
 }
 
 export function WorkbenchView({
@@ -99,7 +107,8 @@ export function WorkbenchView({
   onSendInput,
   onLaunch,
   onAiCli,
-  reveal
+  reveal,
+  onWorkAction
 }: Props): JSX.Element {
   // 좌측이 정하는 대상 하나(B안). 옛 위치 탭을 대신한다.
   const [target, setTarget] = useState<ExpTarget>(LOCAL_TARGET)
@@ -109,6 +118,8 @@ export function WorkbenchView({
   // 즐겨찾기·reveal 이 준 시작 폴더. 한 번 쓰고 나면 FileTree 가 자기 경로를 갖는다.
   const [goto, setGoto] = useState<string | null>(null)
   const { rect, maximized, drag, toggleMax, z, toFront } = useFloatWindow()
+  // 즐겨찾기 행 우클릭 위치(제보 ①). 사이드바 트리와 **같은 메뉴 정의**를 쓴다.
+  const [favMenu, setFavMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   // 아직 접속 중인 프로필 — 세션이 뜨면 그 대상으로 넘어간다.
   const pending = useRef<{ profileId: string; goto?: string } | null>(null)
 
@@ -288,7 +299,16 @@ export function WorkbenchView({
         <div className="exp-nav">
           {workProfiles.length > 0 && <div className="exp-grp">{t('explorer.nav.favorites')}</div>}
           {workProfiles.map((w) => (
-            <div key={w.id} className="exp-node" title={w.path} onClick={() => openWork(w)}>
+            <div
+              key={w.id}
+              className="exp-node"
+              title={w.path}
+              onClick={() => openWork(w)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setFavMenu({ x: e.clientX, y: e.clientY, id: w.id })
+              }}
+            >
               <span className="ic">★</span>
               <span className="nm">{w.name}</span>
             </div>
@@ -387,6 +407,26 @@ export function WorkbenchView({
       </div>
 
       <div className="exp-grip" title={t('explorer.resize')} onMouseDown={(e) => drag(e, 'resize')} />
+
+      {/* 제보 ①: 즐겨찾기 우클릭. [열기]는 여기서, 이름 변경·삭제는 목록 주인(Shell)에게. */}
+      <ContextMenu
+        open={favMenu !== null}
+        x={favMenu?.x ?? 0}
+        y={favMenu?.y ?? 0}
+        items={treeMenu('fav')}
+        onPick={(id) => {
+          const m = favMenu
+          setFavMenu(null)
+          if (!m) return
+          const w = workProfiles.find((x) => x.id === m.id)
+          if (id === 'work.goto') {
+            if (w) openWork(w)
+            return
+          }
+          onWorkAction?.(id as TreeActionId, m.id)
+        }}
+        onClose={() => setFavMenu(null)}
+      />
     </div>
   )
 }

@@ -366,6 +366,22 @@ export async function expectTermText(
     .toMatch(re)
 }
 
+/**
+ * 하단바를 켜고 그 도구 탭을 고른다 — 2026-08-17(IntelliJ 툴윈도우 방식).
+ *
+ * 하단바는 액티비티 바 맨 아래의 **토글 하나**로 켜고 끈다. 꺼져 있으면 탭줄도 없으므로
+ * 탭을 바로 누를 수 없다 — 그래서 "없으면 켜고, 그다음 탭을 고른다"를 한 자리에 둔다.
+ * (토글을 무조건 누르면 이미 켜져 있을 때 꺼져 버린다 — 테스트마다 그 분기를 쓰지 않게 한다.)
+ */
+export async function openBottomTool(page: Page, id: string): Promise<void> {
+  if ((await page.locator('.bottom-panel').count()) === 0) {
+    await page.click('.act-bottombar')
+    await page.locator('.bottom-panel').waitFor({ state: 'visible' })
+  }
+  await page.click(`.bp-tab[data-bottom="${id}"]`)
+  await page.locator(`.bp-tab.on[data-bottom="${id}"]`).waitFor({ state: 'visible' })
+}
+
 // 로컬 셸 하나를 탭바 ＋ 클릭으로 연다(실사용 경로 — 원클릭, UI-tabbar). 새로 생긴 세션 id 반환.
 export async function newLocalShell(page: Page): Promise<string> {
   const before = await sessionIds(page)
@@ -543,7 +559,7 @@ export function makeTelemetry(init?: Partial<TeleHarness['state']>): TeleHarness
 
 // 포트 목록이 그려질 때까지 기다렸다가 [모니터]를 연다(FB-ui2: 우측 액티비티 바로 이관).
 export async function openMonitorTab(page: Page): Promise<void> {
-  await page.click('.act-item[data-activity="monitor"]')
+  await page.click('.bp-tab[data-bottom="monitor"]')
 }
 
 export function portRows(page: Page) {

@@ -118,3 +118,41 @@ test('SPLIT-8 divider 를 끌어 분할 비율을 바꾼다', async ({ ara }) =>
   await page.mouse.up()
   await expect.poll(gridCols).not.toBe(before)
 })
+
+// SPLIT-9★ 칸 헤더의 [최대화] — 2026-08-17 준영님 제보 ⑦
+// ("각각의 세션창에 전체화면 버튼을 주고 누르면 전체화면이 가능했으면 좋겠어")
+//
+// 버튼을 달았다는 것만으로는 부족하다: **그 버튼이 이름대로 동작하는지**를 본다.
+// 같은 라벨(explorer.maximize)을 쓰는 자리가 이미 둘 있고(하단 패널·작업대 창), 그중 하나는
+// 예전에 라벨과 반대로 동작한 이력이 있다. 여기서는 폭으로 판정한다 — 최대화하면 남은 칸이
+// 사라지고 이 칸이 그리드를 다 쓴다.
+test('SPLIT-9★ 칸 헤더 [최대화] 를 누르면 그 칸이 그리드를 다 쓴다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await newLocalShell(page)
+  await page.keyboard.press('Control+Shift+\\')
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
+
+  const focused = page.locator('.pane-grid .pane.focused')
+  const before = (await focused.boundingBox())!.width
+  const gridWidth = (await page.locator('.pane-grid').boundingBox())!.width
+  expect(before).toBeLessThan(gridWidth * 0.75) // 분할 상태 = 그리드의 절반쯤
+
+  await focused.locator('.pane-hd .pmax').click()
+  // 최대화 = 형제가 숨고 이 칸이 전부(§4.8 의 정의를 폭으로 확인한다).
+  await expect(page.locator('.pane-grid .pane:visible')).toHaveCount(1)
+  await expect.poll(async () => (await focused.boundingBox())!.width).toBeGreaterThan(gridWidth * 0.9)
+
+  // 되돌리면 원래 폭으로. 버튼 하나가 토글이다(누를 자리를 새로 찾지 않는다).
+  await focused.locator('.pane-hd .pmax').click()
+  await expect(page.locator('.pane-grid .pane:visible')).toHaveCount(2)
+  await expect.poll(async () => (await focused.boundingBox())!.width).toBeLessThan(gridWidth * 0.75)
+})
+
+// SPLIT-10 칸이 하나면 [최대화] 버튼이 없다 — 눌러도 아무 일도 없는 버튼을 두지 않는다.
+test('SPLIT-10 칸이 하나뿐이면 [최대화] 버튼이 없다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+  await expect(page.locator('.pane-grid .pane-hd .pmax')).toHaveCount(0)
+})

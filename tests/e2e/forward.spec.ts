@@ -1,21 +1,6 @@
 // W2 F8 자동 포트포워딩 — [모니터] 탭 행에서 터널을 만들고, 배지로 끄고, [열기]로 내장 브라우저까지.
 // 원격은 ssh2 루프백 하네스다(exec = 포트 목록, direct-tcpip = 터널 목적지) — 실서버 접속 없음(DLP).
-import {
-  test,
-  expect,
-  browserWindows,
-  connectNewSshProfile,
-  dialogConfirm,
-  reservedPort,
-  makeTcpip,
-  makeTelemetry,
-  newLocalShell,
-  portsListing,
-  portRows,
-  windowInfos,
-  type TcpipHarness,
-  type TeleHarness
-} from './fixtures'
+import { test, expect, browserWindows, connectNewSshProfile, dialogConfirm, makeTcpip, makeTelemetry, newLocalShell, openBottomTool, portRows, portsListing, reservedPort, type TcpipHarness, type TeleHarness, windowInfos } from './fixtures'
 import type { Locator, Page } from '@playwright/test'
 
 // 이 파일이 쓰는 ssh 팩토리 옵션만(전체 opts 타입을 끌고 오지 않는다 — monitor.spec.ts 와 같은 방식).
@@ -41,7 +26,7 @@ async function monitorRow(
   const tele = makeTelemetry({ ports: portsListing(remotePort) })
   const h = await ssh({ password, execHandler: tele.exec, tcpipHandler: tcpip?.handler })
   const sessionId = await connectNewSshProfile(page, { name, port: h.port, password })
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   const row = rowFor(page, remotePort)
   await expect(row).toHaveCount(1, { timeout: 30_000 })
   return { sessionId, row }
@@ -108,7 +93,7 @@ test('FWD-4 세션을 종료하면 포워딩이 정리된다', async ({ ara, ssh
 test('FWD-5 로컬 세션에는 포워딩 버튼이 없다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   await expect(page.locator('.bottom-panel .sb-placeholder')).toBeVisible() // #78: 포트는 하단 패널
   await expect(portRows(page)).toHaveCount(0)
   await expect(page.locator('[data-action="forward.create"], [data-action="forward.open"]')).toHaveCount(0)

@@ -97,7 +97,15 @@ test('CTX-6 사이드바 우클릭 메뉴가 상황별로 구성된다', async (
 
   // 세션 행
   await page.locator('.tree .sess-node').first().click({ button: 'right' })
-  expect(await actions()).toEqual(['session.focus', 'session.rename', 'session.close'])
+  // 2026-08-17 제보 ①: 셋뿐이라 "여기서 할 게 없다"였다 — 그 세션이 서 있는 폴더를 쓰는 셋을 더했다.
+  expect(await actions()).toEqual([
+    'session.focus',
+    'session.duplicate',
+    'aicli.start',
+    'work.save',
+    'session.rename',
+    'session.close'
+  ])
   await page.click('.ctx-menu .ctx-item[data-action="session.close"]')
   await dialogConfirm(page) // 로컬 셸도 확인을 묻는다(2026-08-11)
   await expect.poll(async () => (await sessionList(page)).length).toBe(0)

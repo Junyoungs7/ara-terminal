@@ -186,7 +186,13 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
   }
 
   return (
+    // **2026-08-17 제보 ⑤·⑥ — 위아래에서 좌우로.**
+    // 위(파일시스템)·아래(폴더)를 세로로 쌓았던 것은 이 화면이 **떠 있는 창**이던 시절의 배치다
+    // (창은 세로가 넉넉했다). 하단 패널은 반대다 — 가로가 남고 세로가 귀하다. 쌓아 두면 표
+    // 하나에 두세 행씩만 보인다. 두 목록이 **같은 색이라 경계도 안 보였다**(제보 ⑤): 이제
+    // 자리로도 갈리고(왼쪽/오른쪽), 색으로도 갈린다(오른쪽이 한 단 어둡다).
     <div className="con-disk">
+      <div className="dsk-col">
       <div className="con-toolbar">
         <span className="con-sect">{t('console.disk.fsTitle')}</span>
         <span className="sb-tab-spacer" />
@@ -238,7 +244,9 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
         {disks.length === 0 && !dfErr && <div className="con-empty">{t('console.disk.loading')}</div>}
         {disks.length > 0 && shown.length === 0 && <div className="con-empty">{t('console.disk.none')}</div>}
       </div>
+      </div>
 
+      <div className="dsk-col dsk-dive">
       <div className="con-toolbar dsk-bar">
         {/* [뒤로]는 경로 **왼쪽**이다 — 브라우저·탐색기 관례이고, 준영님이 짚으신 자리다. */}
         <button
@@ -253,7 +261,9 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
           <IconBack />
         </button>
         <span className="dsk-path">{path ?? ''}</span>
-        <span className="con-sect">{t(path ? 'console.disk.du.head' : 'console.disk.du.pick')}</span>
+        {/* 아직 안 골랐을 때는 여기서 말하지 않는다 — 아래 빈 자리 가운데가 같은 말을 한다
+            (2026-08-17: 둘 다 켜 놓으니 한 화면에 같은 문장이 두 번 떴다). */}
+        {path && <span className="con-sect">{t('console.disk.du.head')}</span>}
         <span className="sb-tab-spacer" />
         <button
           type="button"
@@ -286,6 +296,10 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
         {busy && <div className="con-empty">{t('console.disk.du.busy')}</div>}
         {!busy && err && <div className="con-empty bad">{err}</div>}
         {!busy && !err && path && dirs.length === 0 && <div className="con-empty">{t('console.disk.du.empty')}</div>}
+        {/* 아직 마운트를 안 골랐을 때 — 오른쪽 열이 통째로 비어 있으면 고장으로 읽힌다.
+            제보 ⑥: "세션이 없을 때나 비었을 때 해당 창 가운데에 텍스트가 뜨게 해줘." */}
+        {!busy && !err && !path && <div className="con-empty">{t('console.disk.du.pick')}</div>}
+      </div>
       </div>
     </div>
   )

@@ -251,11 +251,15 @@ export function useLayout(initialSessionId: string | null) {
   }, [])
 
   // 최대화 토글(Ctrl+Up): 포커스 패널만 표시 / 다시 누르면 전체.
-  const toggleMaximize = useCallback(() => {
+  // id 를 주면 **그 패널**을, 안 주면 지금까지대로 포커스 패널을 최대화한다. 패널 헤더의
+  // [최대화] 버튼(2026-08-17 제보 ⑦)이 id 를 준다 — 클릭이 포커스도 옮기지만 그 순서에
+  // 기대지 않는다. 이미 최대화 중이면 무엇을 눌러도 원래대로 돌아온다(토글 하나로 족하다).
+  const toggleMaximize = useCallback((id?: string) => {
     setState((s) => {
       if (s.maximizedId) return { ...s, maximizedId: null }
-      if (!s.focusedId) return s
-      return { ...s, maximizedId: s.focusedId }
+      const target = id ?? s.focusedId
+      if (!target) return s
+      return { ...s, maximizedId: target }
     })
   }, [])
 

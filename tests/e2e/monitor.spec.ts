@@ -1,13 +1,13 @@
 // W1 F9 원격 포트 모니터 — 사이드바 [모니터] 탭의 리슨 포트 목록(2.5초 폴링 + 수동 새로고침).
 // 원격 응답은 ssh2 루프백 하네스의 exec 채널이 만든다(실서버 접속 없음 — DLP).
-import { test, expect, connectNewSshProfile, makeTelemetry, newLocalShell, portRows, showAllPorts, NETSTAT_OUT } from './fixtures'
+import { test, expect, NETSTAT_OUT, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, portRows, showAllPorts } from './fixtures'
 import type { Page } from '@playwright/test'
 import type { TeleHarness } from './fixtures'
 
 // SSH 접속 → [모니터] 아이콘(우측 액티비티 바, FB-ui2 이관) → 목록이 그려질 때까지.
 async function openMonitor(page: Page, port: number, password: string, name: string): Promise<string> {
   const id = await connectNewSshProfile(page, { name, port, password })
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   return id
 }
 
@@ -106,7 +106,7 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   const { page } = ara
   await newLocalShell(page)
 
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   const bp = page.locator('.bottom-panel')
   await expect(bp).toBeVisible()
   await expect(bp.locator('.bp-tab.on')).toHaveAttribute('data-bottom', 'monitor')
@@ -138,17 +138,19 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   expect(dims.grid).toBeGreaterThan(50)
   expect(dims.bp).toBeGreaterThan(50)
 
-  // 액티비티 바에서 **지금 열린 탭**을 다시 누르면 닫힌다(다른 탭을 누르면 그 탭으로 갈린다).
-  await page.click('.act-item[data-activity="log"]')
-  await expect(bp.locator('.bp-tab.on')).toHaveAttribute('data-bottom', 'log')
-  await page.click('.act-item[data-activity="log"]')
-  await expect(bp).toHaveCount(0)
+  // 하단바는 **덮는다** — 터미널 그리드 높이가 열기 전후로 같다(제보 ④).
+  // (전에는 형제로 자리를 나눠 열 때마다 분할 칸이 찌그러졌다.)
+  await expect(bp).toBeVisible()
+
+  // 끄는 자리는 액티비티 바 맨 아래 토글 — 누르면 탭줄까지 통째로 사라진다.
+  await page.click('.act-bottombar')
+  await expect(page.locator('.bottom-panel')).toHaveCount(0)
 })
 
 // MON-7 로컬 세션에는 원격 포트가 없다 — 목록 대신 안내
 test('MON-7 로컬 세션에서는 안내 문구만 보인다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await ara.page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(ara.page, 'monitor')
   // 이관 이력: 사이드바 탭(.sb-panel) → 우측 레일(.monitor-panel, FB-ui2) → **하단 패널**(#78).
   // 마지막 이동 이유: 주소·포트·프로세스 3열을 280px 세로 레일에 넣고 있었다.
   await expect(ara.page.locator('.bottom-panel .sb-placeholder')).toHaveText(
@@ -278,27 +280,58 @@ test('MON-15 전체 보기로 바꾸면 시스템 포트도 보이고 숨김 안
 
 // ── #87(2026-08-16) 하단 바 도입 후 UI/UX ────────────────────────────────────
 
-// BAR-1★ 액티비티 바가 **어디에 열리는지**를 말한다.
-// 준영님 첫 지적("이 버튼을 눌렀는데 왜 다른 창이 켜지지?")의 마지막 잔재였다 — 아이콘 열넷 중
-// 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 눌러 봐야 알았다.
-test('BAR-1★ 액티비티 항목이 자리별로 묶이고 툴팁이 어디 열리는지 말한다', async ({ ara }) => {
+// BAR-1★ **하단바는 토글 하나로 켜고, 그 안에서 탭으로 갈린다** (IntelliJ 툴윈도우 방식).
+//
+// 이 테스트는 원래 "툴팁이 어디에 열리는지 말한다"를 봤다(#87). 준영님 첫 지적("이 버튼을
+// 눌렀는데 왜 다른 창이 켜지지?")을 **문구로** 메운 것이었다. 2026-08-17 실사용 뒤 세 번에 걸쳐
+// 배치가 그 문구를 대신하게 됐다 — 마지막이 준영님 정정이다:
+//   "우측 사이드바 하단에 하단바 아이콘을 만들어주고, 그걸 클릭하면 하단바를 사용하고
+//    그 하단바에 이 기능 버튼들을 탭으로 만들어달라는거였어."
+//
+// 그래서 규칙은 셋이다: ① 하단 도구는 우측 바 **항목**이 아니다 ② 하단바를 켜는 자리는 바 맨
+// 아래 토글 **하나** ③ 도구는 그 안에서 탭으로 갈린다(탭은 갈아타기지 끄기가 아니다).
+test('BAR-1★ 하단바는 토글 하나로 켜고 그 안에서 탭으로 갈린다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
 
-  // 자리 표시가 파생돼 있다(배치의 단일 출처 RAIL_IDS/BOTTOM_IDS 에서).
-  await expect(page.locator('.act-item[data-activity="ps"]')).toHaveAttribute('data-slot', 'bottom')
+  // ① 하단 도구는 액티비티 **항목**으로 그려지지 않는다(같은 도구를 두 자리에서 켜지 않는다).
+  await expect(page.locator('.activity-bar .act-item[data-activity="ps"]')).toHaveCount(0)
+  await expect(page.locator('.activity-bar .act-item[data-activity="monitor"]')).toHaveCount(0)
+  await expect(page.locator('.statusbar .bd-item')).toHaveCount(0)
+
+  // ② 꺼져 있으면 하단바 자체가 없다 — 켜는 자리는 바 맨 아래 토글 하나뿐이다.
+  await expect(page.locator('.bottom-panel')).toHaveCount(0)
+  const toggle = page.locator('.activity-bar .act-bottombar')
+  await expect(toggle).toBeVisible()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+  // 오른쪽·창에 열리는 것은 그대로 바에 있고, 자리 표시도 배치의 단일 출처에서 파생된다.
   await expect(page.locator('.act-item[data-activity="ai"]')).toHaveAttribute('data-slot', 'rail')
   await expect(page.locator('.act-item[data-activity="explorer"]')).toHaveAttribute('data-slot', 'window')
 
-  // 툴팁이 그 자리를 말한다(hover 중이면 data-tip 으로 옮겨간다 — 전역 툴팁).
+  // 툴팁은 남은 둘에 대해 여전히 자리를 말한다(hover 중이면 data-tip 으로 옮겨간다).
   const tip = (id: string) =>
     page.locator(`.act-item[data-activity="${id}"]`).evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')
-  expect(await tip('ps')).toContain('아래에 열림')
   expect(await tip('ai')).toContain('오른쪽에 열림')
   expect(await tip('explorer')).toContain('창으로 열림')
 
-  // 묶음이 바뀌는 자리에 선이 그어진다 — 기본 순서에서는 셋(아래→오른쪽→…).
-  expect(await page.locator('.act-item.sep').count()).toBeGreaterThan(0)
+  // 토글을 누르면 하단바가 뜨고 탭 여덟이 그 안에 있다.
+  await toggle.click()
+  await expect(page.locator('.bottom-panel')).toBeVisible()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.bottom-panel .bp-tab')).toHaveCount(8)
+
+  // ③ 탭은 **갈아타기**다 — 같은 탭을 다시 눌러도 하단바는 그대로 있다.
+  await page.click('.bp-tab[data-bottom="ps"]')
+  await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
+  await page.click('.bp-tab[data-bottom="ps"]')
+  await expect(page.locator('.bottom-panel')).toBeVisible()
+
+  // 끄는 자리는 그 토글(과 패널의 ×). 다시 켜면 **보던 탭으로** 돌아온다.
+  await toggle.click()
+  await expect(page.locator('.bottom-panel')).toHaveCount(0)
+  await toggle.click()
+  await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
 })
 
 // BAR-2★ #87 ⑤: 하단 탭을 오갔다 와도 표의 검색어가 남는다.
@@ -309,15 +342,15 @@ test('BAR-2★ 하단 탭을 오갔다 와도 검색어가 남는다', async ({ 
   const h = await ssh({ password: 'pw-bar2', execHandler: makeTelemetry().exec })
   await connectNewSshProfile(page, { name: 'bar2', port: h.port, password: 'pw-bar2' })
 
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   const search = page.locator('.bottom-panel .pmon input[type="text"]').first()
   await expect(search).toBeVisible({ timeout: 20_000 })
   await search.fill('8080')
 
   // 다른 탭에 갔다가 돌아온다.
-  await page.click('.act-item[data-activity="log"]')
+  await openBottomTool(page, 'log')
   await expect(page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible()
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   await expect(search).toHaveValue('8080')
 })
 
@@ -325,7 +358,7 @@ test('BAR-2★ 하단 탭을 오갔다 와도 검색어가 남는다', async ({ 
 test('BAR-3 하단 패널을 최대화했다 되돌린다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await page.click('.act-item[data-activity="monitor"]')
+  await openBottomTool(page, 'monitor')
   const bp = page.locator('.bottom-panel')
   await expect(bp).toBeVisible()
   const before = (await bp.boundingBox())!.height

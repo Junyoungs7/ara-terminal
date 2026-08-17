@@ -33,6 +33,9 @@ export type TreeTarget =
   | { kind: 'session'; sessionId: string }
   | { kind: 'group'; group: string }
   | { kind: 'local' }
+  // 2026-08-17 제보 ①: 즐겨찾기 행. 사이드바 트리와 작업대 창이 **같은 목록**을 그리므로
+  // 대상 표현도 하나만 둔다(작업대 쪽도 이 타입으로 상위에 올린다).
+  | { kind: 'work'; workId: string }
 
 type Props = {
   profiles: ConnectionProfile[]
@@ -289,6 +292,7 @@ export function ConnTree({
                 tabIndex={-1}
                 title={w.path}
                 onClick={() => onOpenWork?.(w)}
+                onContextMenu={(e) => openCtx(e, 'fav', { kind: 'work', workId: w.id })}
               >
                 <span className="fav-i">★</span>
                 <span className="fav-n">{w.name}</span>
@@ -375,18 +379,11 @@ export function ConnTree({
                     <span className={live ? 'st on' : stDot(conn[p.id])} />
                     <span className={'tbadge ' + badge.cls}>{badge.label}</span>
                     <span className="sname">{p.name}</span>
-                    {/* 호버 인라인 버튼 — 우클릭 메뉴를 몰라도 접속할 수 있어야 한다(VS Code 트리 규칙). */}
+                    {/* 호버 인라인 버튼 — 우클릭 메뉴를 몰라도 손이 닿아야 한다(VS Code 트리 규칙).
+                        2026-08-17 준영님 제보 ②: 여기 있던 [▸ 접속]을 뺐다. 접속하는 길이 이미
+                        셋이고(더블클릭 · ⋯ 메뉴 · 즐겨찾기) 이 자리는 **바로 왼쪽 트위스티(▾)와
+                        모양이 닮아** 펼치려다 새 세션을 여는 자리였다. 남기는 것은 ⋯ 하나. */}
                     <span className="rowact">
-                      <span
-                        className="cc-b"
-                        title={t('conn.tree.connect')}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onConnect(p.id)
-                        }}
-                      >
-                        ▸
-                      </span>
                       <span
                         className="cc-b"
                         title={t('conn.tree.more')}

@@ -141,15 +141,14 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
   }
 
   return (
+    // **2026-08-17 제보 ⑥ — 컨트롤을 한 줄로.**
+    // 이 화면은 우측 레일(폭 264px) 시절 모양을 그대로 갖고 있었다: 제목줄·검색줄·필터줄·필터줄
+    // 넷이 각각 한 층씩 쌓여, 세로 260px 짜리 하단 패널에서 **목록에 남는 높이가 70px**(행 두 개)
+    // 이었다. 아래는 세로가 귀하고 가로가 남는다 — 쌓여 있던 것을 옆으로 편다.
     <div className="pmon">
-      <div className="sftp-path-bar">
+      <div className="pmon-bar">
         <span className="pmon-title">{t('mon.title')}</span>
         <span className="pmon-count">{visible.length}</span>
-        <div className="sb-tab-spacer" />
-        <div className="sb-act" title={t('sftp.refresh')} onClick={onRefresh}>
-          <IconRefresh />
-        </div>
-      </div>
       {/* FB-0003: 사이드바 [연결] 탭 검색 필드와 같은 패턴(.sb-search .field) 재사용 — 새 컴포넌트 없음. */}
       <div className="sb-search">
         <div className="field">
@@ -175,7 +174,6 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
           )}
         </div>
       </div>
-      <div className="pmon-filter-row">
         <div className="seg-ctl pmon-range">
           <button type="button" className={range === 'user' ? 'on' : ''} data-value="user" onClick={() => setRange('user')}>
             {t('mon.range.user')}
@@ -190,9 +188,7 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
             {t('mon.range.hiddenSuffix')}
           </span>
         )}
-      </div>
-      {/* 번호 구간 + 포워딩 상태. 둘 다 비워 두면 아무 것도 안 거른다(기본값 = 지금까지와 같은 화면). */}
-      <div className="pmon-filter-row">
+        {/* 번호 구간 + 포워딩 상태. 둘 다 비워 두면 아무 것도 안 거른다(기본값 = 지금까지와 같은 화면). */}
         <span className="pmon-span">
           <input
             type="text"
@@ -229,6 +225,10 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
               {t('mon.use.' + v)}
             </button>
           ))}
+        </div>
+        <div className="sb-tab-spacer" />
+        <div className="sb-act" title={t('sftp.refresh')} onClick={onRefresh}>
+          <IconRefresh />
         </div>
       </div>
       {/* 빈 포트 — 방화벽이 특정 구간만 열어 준 서버에서 "어디를 쓸 수 있지"를 바로 답한다.

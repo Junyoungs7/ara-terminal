@@ -80,6 +80,9 @@ export function StatusBar({
   // W4 F23: MCP "AI 조종 중" 인디케이터. 다른 세그먼트 앞(sb-right 맨 앞)에 얹는다 — 자체 상태를
   // 들고 있는 컴포넌트라 여기서는 슬롯만 내준다(다른 게이지처럼 props 로 값을 받지 않는다).
   children?: React.ReactNode
+  // 2026-08-17 준영님 제보 ③: 하단 도구 여덟을 여는 아이콘 줄(BottomDock). **맨 오른쪽 끝**이라
+  // children(McpIndicator)과 같은 슬롯에 넣을 수 없어 자리를 따로 둔다.
+  dock?: React.ReactNode
 }) {
   const m = statusModel(session, profile, conn, cwd, stats)
   const label = m.idle ? t('statusbar.state') : session?.type === 'ssh' ? t('statusbar.host') : t('statusbar.shell')
@@ -114,11 +117,13 @@ export function StatusBar({
           <span className="lbl">{t('statusbar.sessions')}</span>
           <span className="val">{sessionCount}</span>
         </div>
-        <div className="sb-seg">
+        {/* 좁아지면 접히는 두 칸(2026-08-17). 늘 참인 값이라 급할 때 볼 이유가 없다 —
+            자리를 두고 다투면 도구 버튼에 양보한다. */}
+        <div className="sb-seg enc">
           <span className="lbl">{t('statusbar.encoding')}</span>
           <span className="val">UTF-8</span>
         </div>
-        <div className="sb-seg">
+        <div className="sb-seg ver">
           <span className="lbl">{t('app.name')}</span>
           <span className="val">v{version}</span>
         </div>

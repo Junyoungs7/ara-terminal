@@ -11,7 +11,7 @@
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'node:path'
 import { pushSend } from '../util/windowPush'
-import { planSpan, type SpanDisplay, type SpanPlan } from '@shared/rdpSpan'
+import { monitorWindowBox, planSpan, type SpanDisplay, type SpanPlan } from '@shared/rdpSpan'
 
 const BACKGROUND = '#000000'
 
@@ -95,22 +95,25 @@ export function openRdpSpanWindow(
   // 렌더러가 나머지 모니터를 window.open 으로 연다. 기본대로 두면 테두리 있는 보통 창이 떠
   // 모니터를 다 못 덮는다 — 여기서 테두리를 걷고 자리를 잡아 준다. 이름이 우리 것이 아니면 막는다
   // (원격 화면 창에서 임의 창이 열리는 길을 남기지 않는다).
-  win.webContents.setWindowOpenHandler(({ frameName, features }) => {
-    if (!frameName.startsWith('ara-rdp-mon-')) return { action: 'deny' }
-    const num = (key: string): number | undefined => {
-      const m = new RegExp(`(?:^|,)${key}=(-?\d+)`).exec(features)
-      return m ? Number(m[1]) : undefined
-    }
+  //
+  // **좌표는 features 문자열에서 읽지 않는다**(2026-08-17). 그렇게 짜여 있었는데 정규식이
+  // 템플릿 리터럴 안에서 `\d` → `d` 로 죽어 **한 번도 매치된 적이 없었다** — 넷 다 undefined 라
+  // 자식 창이 기본 크기(800×600)로 주 모니터에 떠, 이 창 뒤에 가려졌다. 준영님 눈에는
+  // "다른 모니터에 새 창이 안 생긴다"로 보였다(제보 ⑨).
+  //
+  // 고치는 김에 경로를 짧게 했다: 좌표의 출처는 **우리가 방금 만든 plan** 이다. 렌더러가 그 값을
+  // 문자열로 되돌려주는 것을 다시 파싱할 이유가 없다 — frameName 의 모니터 id 로 plan 에서 꺼낸다.
+  // 그러면 파싱 자체가 사라지고, 모르는 id 는 열리지 않는다.
+  win.webContents.setWindowOpenHandler(({ frameName }) => {
+    const box = monitorWindowBox(plan, frameName)
+    if (!box) return { action: 'deny' }
     return {
       action: 'allow',
       overrideBrowserWindowOptions: {
         frame: false,
         hasShadow: false,
         backgroundColor: BACKGROUND,
-        x: num('left'),
-        y: num('top'),
-        width: num('width'),
-        height: num('height'),
+        ...box,
         webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true }
       }
     }

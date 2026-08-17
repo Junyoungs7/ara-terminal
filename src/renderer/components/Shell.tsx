@@ -84,6 +84,11 @@ export function Shell() {
   const [bottom, setBottom] = useState<BottomId | null>(null)
   const toggleBottom = useCallback((id: BottomId) => setBottom((cur) => (cur === id ? null : id)), [])
   const openBottom = useCallback((id: BottomId) => setBottom(id), [])
+  // 2026-08-17(준영님 정정, IntelliJ 툴윈도우 방식): 하단바 전체를 켜고 끄는 토글.
+  // 다시 켤 때 **보던 탭으로 돌아온다** — 늘 [포트]로 되돌아가면 매번 다시 고르게 된다.
+  const lastBottom = useRef<BottomId>('monitor')
+  if (bottom) lastBottom.current = bottom
+  const toggleBottomBar = useCallback(() => setBottom((cur) => (cur ? null : lastBottom.current)), [])
 
   const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
@@ -800,8 +805,32 @@ export function Shell() {
         if (name && !groups.includes(name)) saveGroups([...storedGroups, name])
         return
       }
+      // 2026-08-17 제보 ①: 즐겨찾기 행. 열기·이름 변경·삭제는 **작업 프로필 팝업이 쓰던 함수
+      // 그대로**다 — 그 팝업에만 있어서 트리에서는 지울 길이 없었을 뿐, 동작은 처음부터 있었다.
+      if (target.kind === 'work') {
+        const w = work.list.find((x) => x.id === target.workId)
+        if (!w) return
+        if (id === 'work.goto') await openWorkProfile(w)
+        else if (id === 'work.rename') await renameWorkProfile(w.id)
+        else if (id === 'work.delete') await deleteWorkProfile(w.id)
+        return
+      }
       if (target.kind === 'session') {
         if (id === 'session.focus') selectSession(target.sessionId)
+        // 제보 ①: 세션 메뉴 보강. 셋 다 **그 세션의 폴더**를 쓴다 — 서버 행에서 열면 폴더를
+        // 다시 골라야 하는데, 세션은 이미 거기 서 있다.
+        else if (id === 'session.duplicate') {
+          const sess = sessions.sessions.find((x) => x.id === target.sessionId)
+          if (sess) duplicateSession(sess)
+        } else if (id === 'aicli.start') {
+          const sess = sessions.sessions.find((x) => x.id === target.sessionId)
+          const path = cwdBy[target.sessionId]
+          openAiCli({ ...(sess?.profileId ? { profileId: sess.profileId } : {}), ...(path ? { path } : {}) })
+        } else if (id === 'work.save') {
+          const path = cwdBy[target.sessionId]
+          // 폴더를 아직 모르는 세션(막 뜬 셸·RDP)은 저장할 위치가 없다 — 조용히 넘긴다.
+          if (path) await saveWorkProfile(path)
+        }
         else if (id === 'session.rename') mainRef.current?.beginRename(target.sessionId)
         else if (id === 'session.close') mainRef.current?.closeSession(target.sessionId)
         // FB-monitor(F19 tmux 후속): [모니터] 탭 TmuxBar 가 하던 일 그대로(session.input 매크로) —
@@ -1080,6 +1109,8 @@ export function Shell() {
           bottom={
             <BottomPanel
               tab={bottom}
+              // 탭은 **갈아타기**다(끄지 않는다) — 끄는 자리는 액티비티 바의 [하단바] 토글과
+              // 이 패널의 [×] 둘이다(IntelliJ 툴윈도우와 같은 규칙).
               onTab={setBottom}
               onClose={() => setBottom(null)}
               // #84: 탭이 여덟이라 좁을 수 있다 — 액티비티 바의 순서·숨김 설정을 그대로 쓴다
@@ -1217,6 +1248,8 @@ export function Shell() {
           state={activityState}
           onToggle={onActivityToggle}
           badges={{ aisess: aiQuiet > 0 }}
+          bottomOpen={bottom !== null}
+          onToggleBottomBar={toggleBottomBar}
         />
       </div>
       {/* #74: 떠 있는 창 둘은 **언마운트하지 않는다.** 조건부 렌더였을 때는 닫는 순간 탭·경로·
@@ -1269,6 +1302,8 @@ export function Shell() {
             }
           }}
           reveal={explorerReveal}
+          // 제보 ①: 작업대의 즐겨찾기도 사이드바와 같은 곳에 도착한다(두 자리, 한 동작).
+          onWorkAction={(id, workId) => void onTreeAction(id, { kind: 'work', workId })}
         />
       )}
       <StatusBar

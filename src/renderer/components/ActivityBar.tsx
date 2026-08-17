@@ -1,4 +1,4 @@
-import { Activity, Boxes, Gauge, HardDrive, History, Package, Server, Sparkles } from 'lucide-react'
+import { Activity, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { isBottomId, isRailId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
@@ -95,7 +95,9 @@ export function ActivityBar({
   items,
   state,
   onToggle,
-  badges
+  badges,
+  bottomOpen,
+  onToggleBottomBar
 }: {
   /** 그릴 항목과 그 순서. 설정에서 끄고 켜고 옮길 수 있어(2026-08-13) 더 이상 고정 배열이 아니다. */
   items: readonly ActivityId[]
@@ -103,15 +105,24 @@ export function ActivityBar({
   onToggle: (id: ActivityId) => void
   /** F30: 항목 위에 찍을 점. 패널을 닫아 둬도 "볼 것이 있다"를 알리는 유일한 자리다. */
   badges?: Partial<Record<ActivityId, boolean>>
+  /** 하단바가 떠 있나(맨 아래 토글의 눌림 상태). */
+  bottomOpen: boolean
+  onToggleBottomBar: () => void
 }) {
+  // 2026-08-17 준영님 제보 ③: **하단에 열리는 것은 이 바에 없다.** 우측 아이콘을 눌렀는데 아래가
+  // 열리는 불일치가 #87 에서 툴팁("· 아래에 열림")으로 덮여 있었는데, 실제로 쓰시고는 "우측에서는
+  // 버튼들을 제거하고 하단 바 버튼을 우측 하단에 두라"로 정리하셨다. 그래서 바에는 **오른쪽에
+  // 열리는 것과 창으로 열리는 것**만 남고, 여덟은 상태바의 BottomDock 으로 간다.
+  // 판정은 여기서도 배치의 단일 출처(BOTTOM_IDS)에서 파생한다 — 목록을 또 만들지 않는다.
+  const railItems = items.filter((id) => !isBottomId(id))
   return (
     <div className="activity-bar" role="tablist" aria-label={t('activity.bar.label')}>
-      {items.map((id, i) => {
+      {railItems.map((id, i) => {
         const Icon = ICONS[id]
         const active = isActivityOpen(id, state)
         // 묶음이 바뀌는 자리에 선을 하나 긋는다 — 아이콘 열넷이 한 덩어리로 보이면 규칙이 안 읽힌다.
         // 사용자가 순서를 바꿔 섞어 놓으면 선이 여러 개 생기는데, 그것도 정직한 표시다.
-        const sep = i > 0 && activitySlot(items[i - 1]) !== activitySlot(id)
+        const sep = i > 0 && activitySlot(railItems[i - 1]) !== activitySlot(id)
         return (
           <button
             key={id}
@@ -129,6 +140,20 @@ export function ActivityBar({
           </button>
         )
       })}
+      {/* **하단바 토글 — 바 맨 아래에 고정**(2026-08-17 준영님 정정, IntelliJ 툴윈도우 방식).
+          위 항목들과 성격이 다르다: 저것들은 "무엇을 열지"를 고르고, 이것은 "**하단바를 쓸지**"를
+          정한다. 그래서 순서·숨김 설정(ActivityId)에 넣지 않는다 — 끌 수 있게 두면 그것을 끈
+          순간 하단바를 여는 길이 사라진다(도구 여덟은 꺼도 탭이 하나 줄 뿐이라 괜찮다). */}
+      <button
+        type="button"
+        className={'act-item act-bottombar' + (bottomOpen ? ' active' : '')}
+        aria-pressed={bottomOpen}
+        title={t('bottom.bar.toggle')}
+        data-activity="bottombar"
+        onClick={onToggleBottomBar}
+      >
+        <PanelBottom />
+      </button>
     </div>
   )
 }

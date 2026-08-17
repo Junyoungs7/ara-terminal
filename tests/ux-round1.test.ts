@@ -56,11 +56,19 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
 
   it('세션 행은 전환·이름 변경·종료, 그룹 헤더는 새 연결', () => {
     // R2.1: 트리 세션에도 이름 변경을 붙였다(탭 더블클릭과 같은 편집을 연다).
+    // 2026-08-17 제보 ①: 셋뿐이라 "여기서 할 게 없다"였다 — 세션에만 있는 것(지금 그 세션이
+    // 서 있는 폴더)을 쓰는 셋을 더 넣었다. 복제·AI CLI·즐겨찾기 저장 전부 그 폴더를 쓴다.
     expect(treeMenu('session').map((m) => m.id)).toEqual([
       'session.focus',
+      'session.duplicate',
+      'aicli.start',
+      'work.save',
       'session.rename',
       'session.close'
     ])
+    // 즐겨찾기 행(제보 ①) — 지울 길이 없던 자리. 사이드바와 작업대가 같은 메뉴를 쓴다.
+    expect(treeMenu('fav').map((m) => m.id)).toEqual(['work.goto', 'work.rename', 'work.delete'])
+    expect(treeMenu('fav').filter((m) => m.danger).map((m) => m.id)).toEqual(['work.delete'])
     // R6: 그룹 헤더에 이름 변경·삭제가 붙었다. "기타"(그룹 미지정 자리)는 바꿀 대상이 없어 새 연결만.
     expect(treeMenu('group').map((m) => m.id)).toEqual(['group.newConn', 'group.rename', 'group.delete'])
     expect(treeMenu('groupNone').map((m) => m.id)).toEqual(['group.newConn'])
