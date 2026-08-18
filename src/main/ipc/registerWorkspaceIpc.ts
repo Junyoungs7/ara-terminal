@@ -2,6 +2,7 @@
 // F11 명령어 히스토리도 여기서 받는다 — userData 에 JSON 을 얹는 같은 영속 도메인이라
 // registrar 를 하나 더 만들 이유가 없다(저장 파일만 다르다: workspace.json / history.json).
 import { app } from 'electron'
+import { detachedWindowStates } from '../windows/SessionWindows'
 import { handle } from './handle'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { HistoryStore } from '../history/HistoryStore'
@@ -16,6 +17,11 @@ export function registerWorkspaceIpc(
   handle('workspace:load', () => store.get())
   handle('workspace:save', (snapshot) => {
     store.update(snapshot)
+    // F32 R2: 창 자리는 **여기서 main 이 붙인다.** 렌더러는 자기 창 크기는 알아도 다른 창 것은
+    // 모르고, 애초에 신뢰 경계 밖 입력으로 창 좌표를 정하지 않는다(update 의 세 필드 화이트리스트와
+    // 같은 원칙). 저장 시점마다 지금 떠 있는 창을 그대로 찍는다 — 창을 다 닫았으면 빈 배열이 가서
+    // 옛 자리가 지워진다.
+    store.setDetachedWindows(detachedWindowStates())
     return { ok: true } as const
   })
   handle('ui:setPrefs', (prefs) => {

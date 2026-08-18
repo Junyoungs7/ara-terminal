@@ -71,4 +71,26 @@ export function registerSessionWindowIpc(
     announce(sessionId, undefined)
     return { ok: true as const }
   })
+
+  /**
+   * F32 R2 복원. 본창이 세션을 **다 되살린 뒤** 한 번 부른다.
+   *
+   * 순서가 이 핸들러의 전부다: ① 소유를 붙이고 ② 그다음 창을 연다. 뒤집으면 창이 먼저 떠서
+   * 자기 세션을 못 찾고 빈 채로 남는다(그 창의 useSessions 는 뜨는 순간 한 번 훑는다).
+   *
+   * **세션이 하나도 안 붙은 창은 열지 않는다** — 저장된 창인데 그 안의 세션이 전부 복원에
+   * 실패했을 수 있다(SSH 재접속 실패). 빈 창을 띄우고 "닫으세요" 하는 것보다 안 띄우는 게 낫다.
+   */
+  handle('win:restore', ({ assign, windows }) => {
+    for (const a of assign) sessions.moveToWindow(a.sessionId, a.winId)
+    let opened = 0
+    for (const w of windows) {
+      const ids = sessions.sessionsOfWindow(w.winId)
+      if (ids.length === 0) continue
+      const first = sessions.snapshot().find((x) => x.id === ids[0])
+      openSessionWindow(w.winId, first?.title ?? '', { bounds: w.bounds, onClosed: reclaim })
+      opened += 1
+    }
+    return { opened }
+  })
 }

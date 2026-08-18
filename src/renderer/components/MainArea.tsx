@@ -284,6 +284,23 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         // 활성 탭은 첫 패널의 세션 — 이제 생성 순서가 탭 순서라 "먼저 만든 것"과 다를 수 있다.
         const focusId = paneIds.find((id) => !errs.has(id)) ?? firstReal
         if (focusId) select(focusId)
+
+        /**
+         * F32 R2: 떼어냈던 창을 되살린다 — **세션을 다 만든 뒤에** 해야 한다.
+         *
+         * 복원은 세션을 새로 만들므로 id 가 전부 바뀐다(pty 는 재시작을 못 넘는다). 그래서
+         * 스냅샷의 `winId` 를 **새 id 에 다시 붙여** main 에 넘긴다. 창을 여는 것도 main 이
+         * 그 직후에 한다(win:restore 한 호출로 묶인 이유 — 순서가 뒤집히면 빈 창이 뜬다).
+         *
+         * 오류 패널 자리는 넘기지 않는다: 그 세션은 되살아나지 못했고, 그 창에 남은 것이
+         * 하나도 없으면 main 이 창 자체를 열지 않는다(빈 창을 띄우지 않는다).
+         */
+        const assign = plan.items
+          .map((item) => ({ sessionId: idMap.get(item.oldId) ?? '', winId: item.session.winId ?? '' }))
+          .filter((a) => a.sessionId && a.winId && !errs.has(a.sessionId))
+        if (assign.length > 0 && snap.windows && snap.windows.length > 0) {
+          await window.ev?.window.restoreWindows(assign, snap.windows).catch(() => null)
+        }
       })()
       return () => {
         cancelled = true

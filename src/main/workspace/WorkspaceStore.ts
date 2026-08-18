@@ -1,7 +1,8 @@
 // WorkspaceStore — 사람이 읽는 JSON 스냅샷 영속화 (계획서 §B.3/§B.7).
 // 로드: path → .bak → 마이그레이션 → 실패 시 기본 스냅샷(안전 부팅).
 // 저장: 30초 디바운스 주기 flush + before-quit 동기 flush 이중화. atomic + .bak.
-import type { WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile, AiCliRecent } from '@shared/types'
+import type {
+  DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile, AiCliRecent } from '@shared/types'
 import { SCHEMA_VERSION } from '@shared/types'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
@@ -42,6 +43,18 @@ export class WorkspaceStore {
     const { sessions, layout, tabGroups } = state ?? {}
     if (!layout || !Array.isArray(sessions) || !Array.isArray(tabGroups)) return
     this.snapshot = { ...this.snapshot, sessions, layout, tabGroups }
+    if (this.timer) return
+    this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
+  }
+
+  /**
+   * F32 R2: 떼어낸 창들의 자리. **main 이 소유한다** — 렌더러가 보낸 페이로드에 섞어 받지 않는다
+   * (update() 가 세 필드만 골라 쓰는 것과 같은 이유: 신뢰 경계 밖 입력으로 창 좌표를 정하지 않는다).
+   * 빈 배열이면 필드를 지운다 — 창을 다 닫았는데 옛 자리가 남아 다음 부팅에 되살아나면 안 된다.
+   */
+  setDetachedWindows(windows: DetachedWindowState[]): void {
+    if (windows.length === 0) delete this.snapshot.windows
+    else this.snapshot.windows = windows
     if (this.timer) return
     this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
   }

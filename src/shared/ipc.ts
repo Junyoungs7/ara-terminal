@@ -5,6 +5,7 @@ import type { LaunchShell } from './aiCli'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
+  DetachedWindowState,
   Session,
   ConnectionProfile,
   ProfileInput,
@@ -147,6 +148,17 @@ export type InvokeContract = {
   // 이 두 채널은 **소유 표시만** 바꾼다(재접속·화면 재생이 없다).
   'win:detach': { req: { sessionId: string }; res: { ok: boolean; winId?: string } }
   'win:reattach': { req: { sessionId: string }; res: { ok: boolean } }
+  /**
+   * F32 R2 복원 — 본창이 세션을 **다 되살린 뒤** 한 번 부른다.
+   *
+   * 복원은 세션을 새로 만들므로(pty 는 재시작을 못 넘는다) id 가 전부 바뀐다. 그래서 소유를
+   * 다시 붙여 줘야 하고, 그 일이 끝난 **다음에** 창을 열어야 그 창이 자기 세션을 찾는다 —
+   * 순서가 뒤집히면 빈 창이 뜬다. 두 가지를 한 호출로 묶은 이유가 그 순서다.
+   */
+  'win:restore': {
+    req: { assign: { sessionId: string; winId: string }[]; windows: DetachedWindowState[] }
+    res: { opened: number }
+  }
   // profile 도메인 (계획서 §B.2/§C F3). 비밀은 vault로, workspace.json엔 secretRef만.
   'profile:list': { req: void; res: ConnectionProfile[] }
   'profile:save': { req: ProfileInput; res: { profile: ConnectionProfile } }
@@ -408,6 +420,11 @@ export type EvApi = {
     reattachSession(sessionId: string): Promise<{ ok: boolean }>
     /** 세션 소유 창이 바뀌었다 — 양쪽 창이 자기 탭바를 다시 그린다. */
     onSessionMoved(cb: (e: { sessionId: string; winId?: string }) => void): () => void
+    /** F32 R2: 복원을 마친 본창이 소유를 다시 붙이고 저장된 창들을 연다(순서가 중요하다). */
+    restoreWindows(
+      assign: { sessionId: string; winId: string }[],
+      windows: DetachedWindowState[]
+    ): Promise<{ opened: number }>
   }
   profile: {
     list(): Promise<ConnectionProfile[]>

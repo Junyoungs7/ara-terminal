@@ -58,6 +58,8 @@ const api: EvApi = {
     /** 본창으로 되돌린다(떼어낸 창의 [본창으로] · 그 창이 닫힐 때 main 이 자동으로도 부른다). */
     reattachSession: (sessionId: string) => ipcRenderer.invoke('win:reattach', { sessionId }),
     /** 세션 소유 창이 바뀌었다 — 양쪽 창이 탭바를 다시 그린다. */
+    restoreWindows: (assign: { sessionId: string; winId: string }[], windows: unknown[]) =>
+      ipcRenderer.invoke('win:restore', { assign, windows }),
     onSessionMoved: (cb: (e: { sessionId: string; winId?: string }) => void) => {
       const listener = (_: unknown, e: { sessionId: string; winId?: string }) => cb(e)
       ipcRenderer.on('session:moved', listener)

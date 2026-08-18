@@ -495,6 +495,18 @@ export type AiEnd =
     }
 
 // 사람이 읽는 영속 스냅샷 루트 (비밀 제외 — 비밀은 secrets.vault).
+/**
+ * F32 R2: 떼어낸 창의 **자리**. 어느 세션이 어느 창인지는 `sessions[].winId` 가 이미 들고 있으므로
+ * 여기 필요한 것은 좌표뿐이다(준영님 확정: "창과 자리까지 복원").
+ *
+ * **main 이 소유한다** — 렌더러는 자기 창 크기를 알아도 다른 창 것은 모르고, BrowserWindow 의
+ * bounds 가 유일하게 정확한 값이다. 그래서 WorkspaceSaveInput 에 넣지 않는다.
+ */
+export type DetachedWindowState = {
+  winId: string
+  bounds: { x: number; y: number; width: number; height: number }
+}
+
 export type WorkspaceSnapshot = {
   schemaVersion: number
   savedAt: string
@@ -505,6 +517,8 @@ export type WorkspaceSnapshot = {
   sessions: Session[]
   tabGroups: TabGroup[]
   ui: UiState
+  /** F32 R2. 없으면 떼어낸 창이 없었다는 뜻(구버전 스냅샷 포함) — 마이그레이션이 필요 없다. */
+  windows?: DetachedWindowState[]
 }
 
 // 렌더러가 소유한 부분만 = workspace:save 페이로드. profiles·knownHosts·ui 의 주인은 main 이고

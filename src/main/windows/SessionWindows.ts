@@ -36,15 +36,22 @@ export function sessionWindowIds(): string[] {
 }
 
 /**
- * 창을 놓을 자리. 저장된 값이 있으면 쓰되 **화면 안에 있는지 확인**한다 — 듀얼 모니터에서 떼어
- * 놓고 노트북만 들고 나가면 그 좌표가 화면 밖이라 창을 다시 찾을 수 없다(F32 R2 복원의 전제).
+ * 창을 놓을 자리 — **화면 안에 있는지 확인한다.**
+ *
+ * 왜 필요한가: 듀얼 모니터에서 오른쪽 화면에 떼어 놓고 저장한 뒤, 노트북만 들고 나가서 켜면
+ * 그 좌표(예: x=2560)가 **아무 디스플레이에도 없다**. 창은 열리지만 화면 밖이라 찾을 수도,
+ * 끌어올 수도 없다 — 사용자에게는 "창이 안 뜬다"로 보인다. 그때는 저장된 자리를 버리고
+ * 기본 크기로 연다(기본 자리는 OS 가 주 모니터에 잡아 준다).
+ *
+ * 판정은 **좌상단 한 점**으로 한다: 일부만 걸쳐 있어도 제목줄이 보이면 잡아 옮길 수 있다.
+ * 순수 함수 — tests/sessionWin.test.ts 가 검증한다(실제 모니터 구성 없이).
  */
-export function usableBounds(saved: SessionWinBounds | undefined): SessionWinBounds | null {
+export function usableBounds(
+  saved: SessionWinBounds | undefined,
+  displays: readonly { bounds: SessionWinBounds }[]
+): SessionWinBounds | null {
   if (!saved) return null
-  const displays = screen.getAllDisplays()
-  const onScreen = displays.some((d) => {
-    const b = d.bounds
-    // 창 좌상단이 어느 디스플레이 안에 들어오면 "찾을 수 있다"로 본다(일부만 걸쳐도 잡아 옮길 수 있다).
+  const onScreen = displays.some(({ bounds: b }) => {
     return saved.x >= b.x && saved.x < b.x + b.width && saved.y >= b.y && saved.y < b.y + b.height
   })
   return onScreen ? saved : null
@@ -62,7 +69,7 @@ export function openSessionWindow(
     return existing
   }
 
-  const box = usableBounds(opts.bounds)
+  const box = usableBounds(opts.bounds, screen.getAllDisplays())
   const win = new BrowserWindow({
     ...(box ?? { width: WIDTH, height: HEIGHT }),
     title,
@@ -91,6 +98,24 @@ export function openSessionWindow(
   if (devUrl) void win.loadURL(devUrl + hash)
   else void win.loadFile(join(__dirname, '../renderer/index.html'), { hash: hash.slice(1) })
   return win
+}
+
+/**
+ * F32 R2 저장용 — 지금 떠 있는 창들의 자리. **main 만 이 값을 정확히 안다**(렌더러는 자기 창
+ * 크기는 알아도 다른 창 것은 모른다). 최대화 중이면 복원 크기를 쓴다 — 최대화 상태로 껐다고
+ * 다음에 화면만 한 창이 뜨면 그 창을 옮기기 어렵다(본창 F6 이 같은 판단을 한다).
+ */
+export function detachedWindowStates(): { winId: string; bounds: SessionWinBounds }[] {
+  const out: { winId: string; bounds: SessionWinBounds }[] = []
+  for (const [winId, w] of windows) {
+    try {
+      if (w.isDestroyed()) continue
+      out.push({ winId, bounds: w.isMaximized() ? w.getNormalBounds() : w.getBounds() })
+    } catch {
+      // 파괴 레이스 — 이 창의 자리는 이번 저장에서 빠진다(다음 저장 때 어차피 없다).
+    }
+  }
+  return out
 }
 
 export function closeSessionWindow(winId: string): void {
