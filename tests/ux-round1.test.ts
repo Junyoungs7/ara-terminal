@@ -36,12 +36,13 @@ describe('컨텍스트 메뉴 뷰포트 보정', () => {
 describe('트리 컨텍스트 메뉴 레지스트리', () => {
   // F27 에서 'aicli.start'(AI CLI 시작) 가 새 세션 바로 아래로 들어왔다 — 접속 계열끼리 모으고
   // 프로필 편집·삭제는 그대로 뒤에 남긴다(위험 항목은 여전히 맨 마지막).
-  it('서버 노드는 연결·새 세션·AI CLI·정보 수정·복제·호스트키 재설정·삭제 7종', () => {
+  it('서버 노드는 연결·새 세션·정보 수정·복제·호스트키 재설정·삭제 6종', () => {
     const ids = treeMenu('server').map((m) => m.id)
     expect(ids).toEqual([
       'server.connect',
       'server.newSession',
-      'aicli.start',
+      // 2026-08-18: AI CLI 창을 없애면서 여기서도 뺐다 — 서버 우클릭은 **폴더도 세션도 없다**.
+      // 창이 있어야만 성립하던 자리라, 창이 사라지면 물어볼 곳이 없다(붙은 뒤 터미널에서 한다).
       'server.edit',
       'server.duplicate',
       'server.forgetHostKey',
@@ -90,8 +91,8 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
     expect(items.filter((m) => m.danger).map((m) => m.id)).toEqual(['session.closeOthers'])
   })
 
-  it('탭바 ＋ 메뉴는 로컬 셸 / SSH 연결 / AI CLI 시작 3종(F27 진입점 ①)', () => {
-    expect(treeMenu('add').map((m) => m.id)).toEqual(['local.new', 'ssh.open', 'aicli.start'])
+  it('탭바 ＋ 메뉴는 로컬 셸 / SSH 연결 2종 — 세션을 **만드는** 자리다(2026-08-18)', () => {
+    expect(treeMenu('add').map((m) => m.id)).toEqual(['local.new', 'ssh.open'])
   })
 
   it('사이드바 빈 영역은 로컬 셸·새 연결·새 그룹·작업 프로필 4종', () => {

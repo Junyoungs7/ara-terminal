@@ -258,8 +258,6 @@ const TREE_MENUS = {
   server: [
     'server.connect',
     'server.newSession',
-    // F27 진입점 ④ — 서버가 이미 정해진 채로 창이 열린다.
-    'aicli.start',
     'server.edit',
     'server.duplicate',
     'server.forgetHostKey',
@@ -286,7 +284,9 @@ const TREE_MENUS = {
   // (＋ 새 로컬 셸 행을 대체). group.new 는 R6 에서 실제로 배선됐다.
   sidebar: ['local.new', 'ssh.open', 'group.new', 'work.open'],
   // 탭바 ＋ 버튼: 로컬 셸 / SSH 연결 / AI CLI 시작(F27 진입점 ①).
-  add: ['local.new', 'ssh.open', 'aicli.start'],
+  // 탭바 ＋ 는 세션을 **만드는** 자리다. AI CLI 는 이미 붙어 있는 세션에서 그 폴더로 띄우는
+  // 것이라 여기 있을 이유가 없었다(2026-08-18 창 제거와 함께 뺐다 — 터미널 우클릭이 그 자리다).
+  add: ['local.new', 'ssh.open'],
   // FB-ui2: 연결 관리자 좌측 프로필 목록 우클릭(프로필 행). "정보 수정"·"복제"·"삭제"는 트리의
   // server.* 액션을 그대로 쓴다 — RDP 프로필에도 4항목 다 그대로 뜬다(SSH 전용 항목인
   // server.forgetHostKey 는 이 메뉴엔 처음부터 없어 serverRdp 처럼 따로 뺄 게 없다).

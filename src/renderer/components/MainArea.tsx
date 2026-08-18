@@ -41,6 +41,11 @@ export type MainAreaHandle = {
   zoomFont: (delta: number) => void
   // W1 F13: [파일] 탭에서 고른 원격 로그를 메인 영역 하단 뷰어로 연다(새 창 금지).
   openLogTail: (sessionId: string, path: string) => void
+  /**
+   * 2026-08-18: Shell 도 한 줄 안내가 필요해졌다(AI CLI 창을 없애면서 — 폴더를 모르는 세션에서
+   * 그냥 넘어가면 "눌렀는데 아무 일도 안 남"이 된다). 토스트 구현을 Shell 에 또 만들지 않는다.
+   */
+  toast: (msg: string) => void
 }
 
 type MainAreaProps = {
@@ -637,9 +642,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         },
         openCheatsheet: () => setCheatsheetOpen(true),
         zoomFont,
-        openLogTail: (sessionId: string, path: string) => setLogTail({ sessionId, path })
+        openLogTail: (sessionId: string, path: string) => setLogTail({ sessionId, path }),
+        toast: showToast
       }),
-      [activateSession, closeTab, openLocal, startEdit, zoomFont]
+      [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast]
     )
 
     // FB-ui2(FB-0005): 지금 어떤 패널에도 배치되지 않은(detach) 세션 id 집합 — 탭바가 그 탭을

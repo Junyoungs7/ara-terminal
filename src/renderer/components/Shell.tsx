@@ -5,8 +5,6 @@ import { MainArea, type MainAreaHandle } from './MainArea'
 import { MiniPreview } from './MiniPreview'
 import { AiPanel } from './AiPanel'
 import { AiBootstrapModal } from './AiBootstrapModal'
-import { AiCliModal, type AiCliLaunchRequest } from './AiCliModal'
-import { cliInstalled, ensureRemoteDir, waitShellReady } from './aiCliLaunch'
 import { WorkProfileModal } from './WorkProfileModal'
 import { ActivityBar } from './ActivityBar'
 import { PortMonitor } from './PortMonitor'
@@ -25,7 +23,7 @@ import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailur
 import { clampSidebarWidth, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { AI_CLI_LOCAL, binOf, buildLaunch, isLocalTarget, shellFor } from '../../shared/aiCli'
+import { AI_CLI_LOCAL, buildLaunch, shellFor } from '../../shared/aiCli'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { registerAiRun } from '../store/aiSessions'
@@ -105,16 +103,16 @@ export function Shell() {
   // F17 AI 부트스트랩 폼. 열림 상태만 여기 있고, 폼 값은 모달 안에만 산다(경로·이름이 렌더러
   // 상태 트리 위로 올라오지 않는다 — F16 이 API 키를 다루는 것과 같은 절제).
   const [bootstrapOpen, setBootstrapOpen] = useState(false)
-  // F27 AI CLI 시작 창. 진입점이 넷이라(탭바 ＋ · Ctrl+Shift+L · 폴더 우클릭 · 서버 우클릭) 열기만
-  // 여기 모으고, 미리 채울 값은 prefill 하나로 받는다(at 은 같은 값으로 두 번 열어도 반영되게 하는
-  // 표식 — aiPrefill·explorerReveal 과 같은 모양).
-  const [aiCliOpen, setAiCliOpen] = useState(false)
-  const [aiCliPrefill, setAiCliPrefill] = useState<{ profileId?: string; path?: string; at: number } | null>(null)
+  // F27 AI CLI. **창은 2026-08-18 에 없앴다**(준영님 확정) — 창이 묻던 넷 중 서버·폴더는
+  // 화면이 이미 알고, CLI 는 우클릭 [AI 실행 ▸] 이 고르며, 플래그는 마지막 값을 재사용한다.
+  // 최근 목록은 남는다: 그게 "마지막에 쓴 CLI·플래그"의 유일한 기억이다.
   const aiCliRecent = useAiCliRecent()
-  const openAiCli = useCallback((pre?: { profileId?: string; path?: string }) => {
-    setAiCliPrefill(pre ? { ...pre, at: Date.now() } : null)
-    setAiCliOpen(true)
-  }, [])
+  // 단축키 핸들러가 이 함수보다 위에서 선언돼 ref 로 잇는다(connectProfileRef 와 같은 이유 —
+  // 선언 순서 때문이지 다른 이유는 없다).
+  const runAiCliRef = useRef<((cli?: 'claude' | 'codex' | 'gemini', atPath?: string, forSessionId?: string) => void) | null>(
+    null
+  )
+
   // F30 AI 세션 패널의 액티비티 바 점(조용한 AI 개수). 열림 상태는 위 rail 이 갖는다.
   const [aiQuiet, setAiQuiet] = useState(0)
   // 작업 프로필(서버+폴더 즐겨찾기). 트리에 행을 만들지 않고 팝업 목록으로만 보여 준다.
@@ -288,7 +286,7 @@ export function Shell() {
       } else if (matchBinding(e, 'ai.cli')) {
         // F27 진입점 ② — 아무것도 정해지지 않은 빈 창(마지막에 쓴 조합이 채워진다).
         e.preventDefault()
-        openAiCli()
+        runAiCliRef.current?.()
       } else if (matchBinding(e, 'palette.all')) {
         // F31 통합 검색. 여기서 받는 이유는 프로필·즐겨찾기 목록이 이 컴포넌트에 있어서다.
         e.preventDefault()
@@ -297,7 +295,7 @@ export function Shell() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar, openAiCli])
+  }, [openConnManager, updateSidebar])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -487,15 +485,18 @@ export function Shell() {
    * 골라 주시면 그 뒤로는 기억한다 — 창은 **다르게 하고 싶을 때**만 필요하다.
    */
   const runAiCliNow = useCallback(
-    (cli: 'claude' | 'codex' | 'gemini') => {
-      const sess = activeSession
+    (cli?: 'claude' | 'codex' | 'gemini', atPath?: string, forSessionId?: string) => {
+      const sess = forSessionId ? sessions.sessions.find((x) => x.id === forSessionId) : activeSession
       const sid = sess?.id
-      const path = sid ? cwdBy[sid] : undefined
+      const path = atPath ?? (sid ? cwdBy[sid] : undefined)
       if (!sid || !path) {
-        // 폴더를 아직 모르는 세션(막 뜬 셸)이라면 창으로 넘긴다 — 조용히 아무 일도 안 하지 않는다.
-        openAiCli(sess?.profileId ? { profileId: sess.profileId } : undefined)
+        // 폴더를 모르는 세션(막 뜬 셸)에서는 아무 데서나 띄우지 않는다 — 어디서 도는지 모르는
+        // AI 를 만드느니 안내하고 만다(창이 있던 시절에는 여기서 물었다).
+        mainRef.current?.toast(t('aicli.noCwd'))
         return
       }
+      // CLI 를 안 주면 마지막에 쓴 것. 그것도 없으면 claude(사내 기본).
+      cli = cli ?? ((aiCliRecent.list[0]?.cli as 'claude' | 'codex' | 'gemini' | undefined) ?? 'claude')
       const target = sess?.type === 'ssh' ? (sess.profileId ?? AI_CLI_LOCAL) : AI_CLI_LOCAL
       const last = aiCliRecent.list.find((r) => r.cli === cli && r.profileId === target)
       const line = buildLaunch({
@@ -508,9 +509,13 @@ export function Shell() {
       if (!line) return
       window.ev?.session.input(sid, line + '\n')
       aiCliRecent.record({ profileId: target, path, cli, flags: last?.flags ?? [] })
+      // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널의 "조용한 AI" 판정이 이 등록에
+      // 걸려 있다. 창이 하던 일인데, 창을 없애면서 같이 사라질 뻔했다(타입 검사가 잡았다).
+      registerAiRun({ sessionId: sid, cli, path, startedAt: Date.now() })
     },
-    [activeSession, cwdBy, aiCliRecent, openAiCli]
+    [activeSession, cwdBy, aiCliRecent, sessions]
   )
+  runAiCliRef.current = runAiCliNow
 
   // 지금 보고 있는 위치를 작업 프로필로 저장 — 이름만 물어본다(대상 서버·경로는 화면이 이미 안다).
   const saveWorkProfile = useCallback(
@@ -618,90 +623,11 @@ export function Shell() {
   const connectProfileRef = useRef<typeof connectProfile | null>(null)
   connectProfileRef.current = connectProfile
 
-  // F27: 접속 → (없으면 폴더 만들기) → CLI 확인 → 셸이 준비되면 그 한 줄. 어느 단계에서 멈추든
-  // **왜 멈췄는지 말한다** — 이 흐름의 실패는 전부 "아무 일도 안 일어남"으로 보이기 때문이다.
-  const launchAiCli = useCallback(
-    async (r: AiCliLaunchRequest) => {
-      setAiCliOpen(false)
-      // #90: 대상이 내 PC 면 접속이 없다 — 새 로컬 셸을 열 뿐이다. cwd 는 넘기지 않는다:
-      // 명령줄의 `cd` 가 폴더 없음을 **드러내야** 하고(cwd 로 미리 가면 조용히 홈에서 시작한다),
-      // 미리보기에 보여 준 줄과 실제로 보내는 줄이 같아야 한다.
-      const local = isLocalTarget(r.profileId)
-      // 늘 새 세션을 연다. CLI 가 터미널을 점유하므로 하던 작업 세션을 빼앗으면 안 된다
-      // (그래서 server.connect 처럼 "열린 세션 재사용"을 하지 않는다).
-      // 준비 신호는 **접속하자마자** 듣기 시작한다. 배너와 첫 cwd 는 아래 폴더 만들기·설치 확인을
-      // 하는 사이에 이미 지나가 버려서, 그 뒤에 구독하면 아무것도 못 듣고 상한까지 기다리게 된다
-      // (실측: 매 실행 8초 지연 — e2e 가 잡아냈다).
-      const started: { id: string | null; ready: Promise<unknown> | null } = { id: null, ready: null }
-      if (local) {
-        const id = await sessions.restoreLocal({
-          type: 'local',
-          title: r.cli,
-          serverKey: 'localhost',
-          cwd: undefined,
-          profileId: null,
-          shell: undefined
-        })
-        started.id = id
-        started.ready = waitShellReady(id)
-      } else {
-        const ok = await connectProfileRef.current?.(r.profileId, undefined, undefined, (id) => {
-          started.id = id
-          started.ready = waitShellReady(id)
-        })
-        if (!ok) return // 실패 안내는 connectProfile 이 이미 띄웠다.
-      }
-      const sid = started.id
-      if (sid === null) return
-
-      if (r.mkdir) {
-        const made = local ? await window.ev.fs.mkdirp(r.path) : await ensureRemoteDir(sid, r.path)
-        if (!made.ok) {
-          await ask({
-            title: t('aicli.err.mkdir.title'),
-            message: made.message,
-            detail: [{ label: t('aicli.path'), value: r.path }],
-            confirmLabel: t('dlg.ok'),
-            cancelLabel: null
-          })
-          return
-        }
-      }
-
-      // 없는 CLI 를 실행하면 터미널에 `command not found` 한 줄만 남아 왜 안 되는지 알 수 없다.
-      // #90: 로컬은 원격 exec 채널이 없어 main 이 where/which 로 본다(app:hasCli).
-      const bin = binOf(r.cli, r.bin)
-      const found = bin !== null && (local ? await window.ev.app.hasCli(bin) : await cliInstalled(sid, bin))
-      if (!found) {
-        await ask({
-          title: t('aicli.err.missing.title'),
-          message: t('aicli.err.missing.msg'),
-          detail: [{ label: t('aicli.cli'), value: bin ?? r.bin ?? '' }],
-          confirmLabel: t('dlg.ok'),
-          cancelLabel: null
-        })
-        return
-      }
-
-      // 프롬프트가 그려지기 전에 밀어 넣으면 삼켜진다(aiCliLaunch.waitShellReady 주석 참고).
-      // 대개 여기 올 때쯤 이미 끝나 있다 — 위 왕복이 그 시간을 벌어 준다.
-      await started.ready
-      // CR 로 끝낸다 — cdCommand 와 같은 규칙(LF 만 보내면 conpty·일부 셸이 줄을 실행하지 않는다).
-      window.ev.session.input(sid, r.cmd + '\r')
-      // F30: 이 세션에서 어떤 AI 가 도는지 기록한다 — AI 세션 패널이 "조용한지"를 판정할 대상이다.
-      // 성공한 실행만 등록한다(위에서 전부 return 으로 빠져나갔다).
-      registerAiRun({ sessionId: sid, cli: r.cli, path: r.path, startedAt: Date.now() })
-      // 최근 목록은 **성공한 조합만** 쌓는다.
-      aiCliRecent.record({
-        profileId: r.profileId,
-        path: r.path,
-        cli: r.cli,
-        ...(r.bin ? { bin: r.bin } : {}),
-        flags: r.flags
-      })
-    },
-    [ask, aiCliRecent, sessions]
-  )
+  // F27 launchAiCli 는 2026-08-18 에 사라졌다(창과 함께). 그 함수가 하던 접속·폴더 만들기·
+  // CLI 설치 확인은 **창이 있어야만 성립하던 절차**다 — 이제는 이미 붙어 있는 세션의 그 폴더에
+  // 한 줄 보낼 뿐이라(runAiCliNow) 접속도 이동도 필요 없다. 잃은 것은 "없는 폴더 만들기"와
+  // "CLI 설치 여부 확인" 둘 — 전자는 mkdir 를 직접 치면 되고, 후자는 command not found 가
+  // 터미널에 그대로 보인다(우리가 미리 확인해 주던 것을 셸이 말해 준다).
 
   // E2E seam 바인딩(위 안내 참고): 실 connectProfile 을 노출. 프로덕션 동작엔 영향 없음.
   useEffect(() => {
@@ -862,9 +788,8 @@ export function Shell() {
           const sess = sessions.sessions.find((x) => x.id === target.sessionId)
           if (sess) duplicateSession(sess)
         } else if (id === 'aicli.start') {
-          const sess = sessions.sessions.find((x) => x.id === target.sessionId)
-          const path = cwdBy[target.sessionId]
-          openAiCli({ ...(sess?.profileId ? { profileId: sess.profileId } : {}), ...(path ? { path } : {}) })
+          // 창이 없어졌다(2026-08-18) — 그 세션의 폴더에서 마지막에 쓴 CLI 로 바로 띄운다.
+          runAiCliNow(undefined, cwdBy[target.sessionId], target.sessionId)
         } else if (id === 'work.save') {
           const path = cwdBy[target.sessionId]
           // 폴더를 아직 모르는 세션(막 뜬 셸·RDP)은 저장할 위치가 없다 — 조용히 넘긴다.
@@ -950,10 +875,6 @@ export function Shell() {
         case 'server.newSession':
           void connectProfile(p.id) // 무조건 새 세션
           return
-        case 'aicli.start':
-          // F27 진입점 ④ — 서버만 정해진 채로 연다(폴더는 최근 조합이 채워 준다).
-          openAiCli({ profileId: p.id })
-          return
         case 'server.edit':
           openConnManager({ mode: 'select', profileId: p.id })
           return
@@ -993,7 +914,7 @@ export function Shell() {
       storedGroups,
       saveGroups,
       moveGroup,
-      openAiCli
+      runAiCliNow
     ]
   )
 
@@ -1100,7 +1021,7 @@ export function Shell() {
           onSaveWork={(absPath: string) => void saveWorkProfile(absPath)}
           // F27 진입점 ③ — 트리에서 고른 폴더가 그대로 채워진다. 대상 서버는 지금 그 트리가 보고 있는
           // 세션의 프로필이다(SSH 세션에서만 메뉴에 뜬다 — FileTree.canAiCli).
-          onAiCli={(absPath) => openAiCli({ profileId: activeSession?.profileId, path: absPath })}
+          onAiCli={(absPath) => runAiCliNow(undefined, absPath)}
           // #88 R1: 아라 연결점 — 작업대와 같은 동작이어야 한다(같은 트리, 같은 메뉴).
           onTerminalHere={(absPath) => {
             const pid = activeSession?.profileId
@@ -1226,7 +1147,7 @@ export function Shell() {
           onDuplicateSession={duplicateSession}
           sshRestore={sshRestore}
           onOpenConnManager={() => openConnManager(null)}
-          onOpenAiCli={() => openAiCli()}
+          onOpenAiCli={() => runAiCliNow()}
           onRunAiCli={runAiCliNow}
           activeCwd={activeCwd}
           ask={ask}
@@ -1317,7 +1238,7 @@ export function Shell() {
             const sid = activeSession?.id
             if (sid) window.ev?.session.input(sid, text)
           }}
-          onAiCli={(profileId, path) => openAiCli({ ...(profileId ? { profileId } : {}), path })}
+          onAiCli={(_profileId, path) => runAiCliNow(undefined, path)}
           onLaunch={(id, profileId, cwd) => {
             // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번
             // 구독하지 않는다) 하단 그 탭을 열 뿐이다. 터미널은 그 서버로 새 세션.
@@ -1377,14 +1298,6 @@ export function Shell() {
           openRail('ai')
           setAiPrefill({ text: prompt, at: Date.now(), autoSend: true })
         }}
-      />
-      <AiCliModal
-        open={aiCliOpen}
-        profiles={profiles}
-        recent={aiCliRecent.list}
-        prefill={aiCliPrefill}
-        onClose={() => setAiCliOpen(false)}
-        onSubmit={(r) => void launchAiCli(r)}
       />
       <WorkProfileModal
         open={workOpen}
