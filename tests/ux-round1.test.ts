@@ -114,27 +114,56 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
 })
 
 describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
-  it('CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 없음)', () => {
-    expect(terminalMenu().map((m) => m.id)).toEqual(CONTEXT_ACTIONS.map((a) => a.id))
+  // 2026-08-18(준영님 제보): 평면 여덟 줄이던 것을 묶었다 — 분할 둘은 [분할 ▸], CLI 셋은
+  // [AI 실행 ▸] 서브메뉴로. 그래서 메뉴 목록은 CONTEXT_ACTIONS 와 **더 이상 1:1 이 아니다.**
+  // 대신 지켜야 할 것은 "레지스트리에 있는 항목이 하나도 빠지지 않는가"다.
+  it('CONTEXT_ACTIONS 가 하나도 빠짐없이 메뉴에 오른다(이중 정의 없음)', () => {
+    const flat = terminalMenu().flatMap((m) => [m.id, ...(m.submenu?.map((x) => x.id) ?? [])])
+    for (const a of CONTEXT_ACTIONS) expect(flat).toContain(a.id)
   })
 
+  it('★ 묶음 둘이 서브메뉴로 있다 — 같은 일의 변형은 펼치지 않는다', () => {
+    const menu = terminalMenu()
+    const split = menu.find((m) => m.id === 'split')
+    expect(split?.submenu?.map((m) => m.id)).toEqual(['split.horizontal', 'split.vertical'])
+    const ai = menu.find((m) => m.id === 'aicli.run')
+    expect(ai?.submenu?.map((m) => m.id)).toEqual([
+      'aicli.run.claude',
+      'aicli.run.codex',
+      'aicli.run.gemini'
+    ])
+  })
+
+  it('★ 이름이 짧다 — 이 메뉴는 터미널 위에서 열리므로 대상을 설명할 필요가 없다', () => {
+    const labels = terminalMenu().map((m) => m.label)
+    expect(labels).toContain('닫기') // 예전엔 "이 칸 닫기(세션 종료)"
+    expect(labels).toContain('복제') // 예전엔 "세션 복제"
+    for (const l of labels) expect(l.length).toBeLessThanOrEqual(8)
+  })
+
+  // 아이콘은 **첫 단계 줄에만** 필요하다(서브메뉴 안은 글자만 — 부모 아이콘이 이미 맥락을 준다).
+  // 묶음 부모의 아이콘을 참조로 끌어오면 그 항목이 목록에서 빠지는 순간 조용히 빈칸이 된다 —
+  // 2026-08-18 에 실제로 그랬다(분할을 서브메뉴로 옮기자 부모 아이콘이 undefined 가 됐다).
   it('모든 항목이 아이콘 + 라벨을 갖는다', () => {
     for (const m of terminalMenu()) {
-      expect(m.icon).toBeTruthy()
+      expect(m.icon, `아이콘 없음: ${m.id}`).toBeTruthy()
       expect(m.label.length).toBeGreaterThan(0)
     }
   })
 
-  it('keymap 에 있는 액션은 단축키 힌트를 단다', () => {
-    const byId = Object.fromEntries(terminalMenu().map((m) => [m.id, m]))
-    // R3.8 충돌 정책으로 전부 Ctrl+Shift 계열로 옮겼다 — 힌트도 keymap 단일 소스에서 따라온다.
-    expect(byId['split.horizontal'].hint).toBe('Ctrl+Shift+-')
-    expect(byId['split.vertical'].hint).toBe('Ctrl+Shift+\\')
+  it('단축키 힌트는 **실제로 손이 가는 조합**을 적는다', () => {
+    const menu = terminalMenu()
+    const byId = Object.fromEntries(menu.map((m) => [m.id, m]))
+    const sub = Object.fromEntries((byId['split'].submenu ?? []).map((m) => [m.id, m]))
+    expect(sub['split.horizontal'].hint).toBe('Ctrl+Shift+-')
+    expect(sub['split.vertical'].hint).toBe('Ctrl+Shift+\\')
     expect(byId['pane.close'].hint).toBe('Ctrl+Shift+W')
     expect(byId['session.duplicate'].hint).toBe('Ctrl+Shift+D')
-    // R3.1: 복사/붙여넣기도 이제 keymap 항목(clipboard.*)이 있어 힌트가 붙는다.
-    expect(byId['copy'].hint).toBe('Ctrl+Shift+C')
-    expect(byId['paste'].hint).toBe('Ctrl+Shift+V')
+    // 2026-08-18(준영님 지적): 클립보드는 KEYMAP 상 Ctrl+Shift+C/V 지만 터미널에서 사람이
+    // 누르는 건 Ctrl+C/V 다(선택이 있으면 복사, 없으면 SIGINT — R3.1). 메뉴가 **안 쓰는
+    // 조합을 가르치고 있었다.** 대신 그 키가 먹으면 토스트로 알린다(TerminalPane).
+    expect(byId['copy'].hint).toBe('Ctrl+C')
+    expect(byId['paste'].hint).toBe('Ctrl+V')
   })
 
   it('패널 닫기는 위험 톤, 흐린(추후) 항목은 하나도 없다', () => {

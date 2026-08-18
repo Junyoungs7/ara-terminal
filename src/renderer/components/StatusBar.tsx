@@ -2,6 +2,7 @@ import type { ConnectionProfile, RemoteStats } from '@shared/types'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { t } from '../i18n'
+import { sparkPoints, type Sample } from '../store/sysMonitor'
 
 // 하단 상태바 (design-system §4.1).
 //
@@ -10,8 +11,14 @@ import { t } from '../i18n'
 // 로컬은 세션 이름 + OSC7 cwd(F7 에서 이미 추적 중인 값)를 그대로 표시만 한다.
 // 클릭 동작은 넣지 않는다(범위 밖) — 표시 전용 바다.
 
-// W1 F10: 원격 리소스 게이지 한 칸. pct 는 막대 길이, text 는 옆에 찍는 값.
-export type Gauge = { key: 'cpu' | 'mem' | 'gpu'; pct: number; text: string }
+/**
+ * W1 F10: 원격 리소스 게이지 한 칸.
+ *
+ * 2026-08-18(제보 ③): `series` 가 붙었다 — 막대 하나로는 "지금 40%"만 알고 **올라가는 중인지
+ * 내려가는 중인지**를 모른다. 서버를 보는 사람이 실제로 알고 싶은 건 그 방향이다.
+ * 값은 하단 [시스템 모니터]와 **같은 이력**을 나눠 쓴다(폴러도 이력도 두 벌이 아니다).
+ */
+export type Gauge = { key: 'cpu' | 'mem' | 'gpu'; pct: number; text: string; series: number[] }
 
 export type StatusModel = {
   // 좌측 첫 칸. dot 은 SSH 연결 상태(로컬·유휴는 없음).
@@ -23,21 +30,42 @@ export type StatusModel = {
   gauges: Gauge[]
 }
 
+// 스파크라인 뷰박스(상태바 한 줄 안에 들어가는 크기 — CSS 가 실제 px 을 정한다).
+const SPARK_W = 60
+const SPARK_H = 14
+
 const KB_PER_GIB = 1024 * 1024
 const gib = (kb: number): string => (kb / KB_PER_GIB).toFixed(1)
 
-// 원격 리소스 → 게이지 목록(순수). GPU 는 nvidia-smi 가 있는 서버에서만 온다.
-export function gaugesOf(stats: RemoteStats | null): Gauge[] {
+/**
+ * 원격 리소스 → 게이지 목록(순수). GPU 는 nvidia-smi 가 있는 서버에서만 온다.
+ *
+ * `history` 는 하단 [시스템 모니터]가 쓰는 그 시계열이다. 없으면(아직 한 바퀴도 안 돌았으면)
+ * 현재 값 하나로 채운다 — 선이 한 점이라도 있어야 자리가 안 흔들린다.
+ */
+export function gaugesOf(stats: RemoteStats | null, history: readonly Sample[] = []): Gauge[] {
   if (!stats) return []
-  const out: Gauge[] = [{ key: 'cpu', pct: stats.cpuPct, text: `${stats.cpuPct}%` }]
+  const series = (pick: (s: Sample) => number | undefined, now: number): number[] => {
+    const vs = history.map(pick).filter((v): v is number => typeof v === 'number')
+    return vs.length > 0 ? vs : [now]
+  }
+  const cpu = stats.cpuPct
+  const out: Gauge[] = [
+    { key: 'cpu', pct: cpu, text: `${cpu}%`, series: series((x) => x.cpuPct, cpu) }
+  ]
   if (stats.memTotalKb > 0) {
+    const pct = Math.round((stats.memUsedKb / stats.memTotalKb) * 100)
     out.push({
       key: 'mem',
-      pct: Math.round((stats.memUsedKb / stats.memTotalKb) * 100),
-      text: `${gib(stats.memUsedKb)}/${gib(stats.memTotalKb)}G`
+      pct,
+      text: `${gib(stats.memUsedKb)}/${gib(stats.memTotalKb)}G`,
+      series: series((x) => x.memPct, pct)
     })
   }
-  if (stats.gpuPct !== undefined) out.push({ key: 'gpu', pct: stats.gpuPct, text: `${stats.gpuPct}%` })
+  if (stats.gpuPct !== undefined) {
+    const gpu = stats.gpuPct
+    out.push({ key: 'gpu', pct: gpu, text: `${gpu}%`, series: series((x) => x.gpuPct, gpu) })
+  }
   return out
 }
 
@@ -47,16 +75,17 @@ export function statusModel(
   profile: ConnectionProfile | undefined,
   conn: ConnState,
   cwd: string | null,
-  stats: RemoteStats | null = null
+  stats: RemoteStats | null = null,
+  history: readonly Sample[] = []
 ): StatusModel {
   if (!session) return { primary: t('statusbar.idle'), dot: null, cwd: null, idle: true, gauges: [] }
   if (session.type === 'ssh') {
     // 프로필을 못 찾는 경우(삭제된 프로필의 살아 있는 세션)는 서버 그룹 키로 폴백한다.
     const primary = profile ? `${profile.username}@${profile.host}:${profile.port}` : session.serverKey
-    return { primary, dot: (profile && conn[profile.id]) || 'connected', cwd, idle: false, gauges: gaugesOf(stats) }
+    return { primary, dot: (profile && conn[profile.id]) || 'connected', cwd, idle: false, gauges: gaugesOf(stats, history) }
   }
   // FB-0008: 로컬 세션도 게이지를 받는다(내 PC의 CPU/메모리) — gaugesOf 는 stats 가 없으면 그냥 빈 배열.
-  return { primary: session.title, dot: null, cwd, idle: false, gauges: gaugesOf(stats) }
+  return { primary: session.title, dot: null, cwd, idle: false, gauges: gaugesOf(stats, history) }
 }
 
 export function StatusBar({
@@ -67,6 +96,7 @@ export function StatusBar({
   cwd,
   sessionCount,
   stats = null,
+  history = [],
   children
 }: {
   version: string
@@ -77,6 +107,8 @@ export function StatusBar({
   sessionCount: number
   // W1 F10 / FB-0008: 활성 세션의 리소스(SSH=원격 폴링, 로컬=내 PC 폴링). 없으면 게이지 칸이 통째로 빠진다.
   stats?: RemoteStats | null
+  /** 제보 ③: 게이지를 그래프로 그리는 데 쓰는 시계열(하단 [시스템 모니터]와 같은 이력). */
+  history?: readonly Sample[]
   // W4 F23: MCP "AI 조종 중" 인디케이터. 다른 세그먼트 앞(sb-right 맨 앞)에 얹는다 — 자체 상태를
   // 들고 있는 컴포넌트라 여기서는 슬롯만 내준다(다른 게이지처럼 props 로 값을 받지 않는다).
   children?: React.ReactNode
@@ -84,7 +116,7 @@ export function StatusBar({
   // children(McpIndicator)과 같은 슬롯에 넣을 수 없어 자리를 따로 둔다.
   dock?: React.ReactNode
 }) {
-  const m = statusModel(session, profile, conn, cwd, stats)
+  const m = statusModel(session, profile, conn, cwd, stats, history)
   const label = m.idle ? t('statusbar.state') : session?.type === 'ssh' ? t('statusbar.host') : t('statusbar.shell')
   return (
     <div className="statusbar">
@@ -104,9 +136,11 @@ export function StatusBar({
         <div key={g.key} className="sb-seg gauge-seg">
           <span className="lbl">{g.key.toUpperCase()}</span>
           <div className="gauge">
-            <div className={'bar ' + g.key}>
-              <i style={{ width: `${g.pct}%` }} />
-            </div>
+            {/* 폴링이 한 바퀴 돌 때마다 점이 하나 늘고 왼쪽으로 흐른다 — 값이 어디로 가는
+                중인지가 보인다. 그리는 함수는 하단 [시스템 모니터]와 같은 것을 쓴다. */}
+            <svg className={'sb-spark ' + g.key} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden>
+              <polyline points={sparkPoints(g.series, SPARK_W, SPARK_H)} />
+            </svg>
             <span className="val">{g.text}</span>
           </div>
         </div>

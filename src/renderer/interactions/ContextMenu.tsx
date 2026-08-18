@@ -31,7 +31,9 @@ export function clampMenu(
   vw: number,
   vh: number
 ): { left: number; top: number } {
-  const h = count * ROW_H + MENU_PAD
+  // 화면보다 긴 메뉴는 위치로 못 구한다(파일 메뉴는 항목이 열넷이다) — 그때는 위에 붙이고
+  // 나머지는 CSS 의 max-height + 스크롤이 받는다. 여기서는 **넘치지 않는 경우**만 정확히 잡는다.
+  const h = Math.min(count * ROW_H + MENU_PAD, vh - EDGE * 2)
   return {
     left: Math.max(EDGE, Math.min(x, vw - MENU_W - EDGE)),
     top: Math.max(EDGE, Math.min(y, vh - h - EDGE))

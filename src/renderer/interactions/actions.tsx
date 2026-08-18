@@ -18,6 +18,11 @@ export type ActionId =
   | 'paste'
   | 'split.horizontal'
   | 'split.vertical'
+  // 2026-08-18: 우클릭에서 **바로** 실행하는 AI CLI. 창을 띄우지 않는다 — 서버도 폴더도
+  // 화면이 이미 안다(지금 세션·지금 cwd). 다르게 하고 싶을 때만 [AI CLI 시작…] 창으로 간다.
+  | 'aicli.run.claude'
+  | 'aicli.run.codex'
+  | 'aicli.run.gemini'
   | 'session.duplicate'
   | 'log.save'
   | 'ai.ask'
@@ -60,30 +65,8 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
     )
   },
   {
-    id: 'split.horizontal',
-    labelKo: '가로 분할',
-    icon: svg(
-      <>
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <line x1="3" y1="12" x2="21" y2="12" />
-      </>,
-      { strokeLinecap: 'butt' }
-    )
-  },
-  {
-    id: 'split.vertical',
-    labelKo: '세로 분할',
-    icon: svg(
-      <>
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <line x1="12" y1="3" x2="12" y2="21" />
-      </>,
-      { strokeLinecap: 'butt' }
-    )
-  },
-  {
     id: 'session.duplicate',
-    labelKo: '세션 복제',
+    labelKo: '복제',
     icon: svg(
       <>
         <rect x="3" y="3" width="13" height="13" rx="2" />
@@ -93,12 +76,12 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
   },
   {
     id: 'log.save',
-    labelKo: '로그 저장',
+    labelKo: '로그',
     icon: svg(<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />)
   },
   {
     id: 'ai.ask',
-    labelKo: 'AI에게 질문',
+    labelKo: '아라에게 묻기',
     tint: 'ai',
     icon: svg(
       <>
@@ -113,7 +96,7 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
     // 꺼지고 해당 창도 꺼져야 한다. 다시 붙는 건 없다"). 지금은 정말로 세션을 죽이므로 라벨도 그렇게
     // 말한다. 함수·id 는 그대로(pane.close). 자세한 경위는 shared/keymap.ts 의 같은 항목 주석.
     id: 'pane.close',
-    labelKo: '이 칸 닫기(세션 종료)',
+    labelKo: '닫기',
     tint: 'danger',
     icon: svg(<path d="M6 6l12 12M18 6L6 18" />)
   }
@@ -127,9 +110,19 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
 //  판정은 shared/keymap.ts 의 isMac() 하나만 쓴다.)
 
 // 복사/붙여넣기만 이름이 다르다(clipboard.*) — 나머지 6개는 ActionId 가 곧 KeymapAction 이다.
-const KEY_OF: Partial<Record<ActionId, KeymapAction>> = {
-  copy: 'clipboard.copy',
-  paste: 'clipboard.paste'
+/**
+ * 메뉴에 찍을 단축키. **손이 실제로 가는 조합을 적는다.**
+ *
+ * `clipboard.copy` 는 KEYMAP 상 Ctrl+Shift+C 지만, 터미널에서 사람이 누르는 건 Ctrl+C 다
+ * (선택이 있으면 복사, 없으면 SIGINT — R3.1 정책, TerminalPane 이 직접 처리한다).
+ * 메뉴가 안 쓰는 조합을 가르치고 있었다(2026-08-18 준영님 지적) — 쓰는 쪽을 적는다.
+ * 대신 Ctrl+C/V 가 먹으면 토스트로 알린다(TerminalPane) — 특히 붙여넣기는 비밀번호
+ * 프롬프트처럼 **화면에 안 보이는** 자리가 있어 됐는지 아닌지가 유일한 단서다.
+ */
+const KEY_OF: Partial<Record<ActionId, KeymapAction>> = {}
+const LITERAL_HINT: Partial<Record<ActionId, string>> = {
+  copy: 'Ctrl+C',
+  paste: 'Ctrl+V'
 }
 
 // KEYMAP 표기(Ctrl+Shift+W 등). 플랫폼별 표기는 여기 한 곳에서 고른다.
@@ -139,11 +132,23 @@ function comboOf(action: KeymapAction): string | undefined {
 }
 
 function hintFor(id: ActionId): string | undefined {
+  const mac = isMac()
+  const lit = LITERAL_HINT[id]
+  if (lit) return mac ? lit.replace('Ctrl', 'Cmd') : lit
   return comboOf(KEY_OF[id] ?? (id as string as KeymapAction))
 }
 
+/**
+ * 터미널 우클릭 메뉴. **평면 여덟 줄이던 것을 묶었다**(2026-08-18 준영님 제보).
+ *
+ * 묶는 기준은 "같은 일의 변형인가"다: 가로·세로 분할은 한 가지 일의 두 방향이고, CLI 셋도
+ * 마찬가지다. 그런 것을 나란히 펼쳐 두면 목록만 길어지고 **고를 것이 늘어난 것처럼** 보인다.
+ *
+ * 이름은 짧게. 이 메뉴는 **터미널 위에서** 열리므로 "이 칸 닫기(세션 종료)" 처럼 무엇을 닫는지
+ * 설명할 필요가 없다 — 누른 자리가 곧 대상이다.
+ */
 export function terminalMenu(): MenuItem[] {
-  return CONTEXT_ACTIONS.map((a) => {
+  const plain = (a: ContextAction): MenuItem => {
     const hint = hintFor(a.id)
     return {
       id: a.id,
@@ -153,8 +158,54 @@ export function terminalMenu(): MenuItem[] {
       ...(a.tint === 'danger' ? { danger: true } : {}),
       ...(a.future ? { dim: true } : {})
     }
-  })
+  }
+  const out: MenuItem[] = []
+  for (const a of CONTEXT_ACTIONS) {
+    out.push(plain(a))
+    // 붙여넣기 다음에 묶음 둘을 끼운다 — 클립보드(늘 쓰는 것)를 맨 위에 남기려는 순서다.
+    if (a.id === 'paste') {
+      out.push({
+        id: 'split',
+        label: '분할',
+        icon: ICON_SPLIT,
+        submenu: [
+          { id: 'split.horizontal', label: '가로', hint: hintFor('split.horizontal') },
+          { id: 'split.vertical', label: '세로', hint: hintFor('split.vertical') }
+        ]
+      })
+      out.push({
+        id: 'aicli.run',
+        label: 'AI 실행',
+        icon: ICON_AI,
+        submenu: AI_CLIS.map((c) => ({ id: `aicli.run.${c.id}`, label: c.label }))
+      })
+    }
+  }
+  return out
 }
+
+// 묶음 부모의 아이콘. 분할은 CONTEXT_ACTIONS 에서 빠졌으므로(서브메뉴로 갔다) 여기서 따로 든다 —
+// 참조로 끌어오면 그 항목이 사라지는 순간 조용히 아이콘 없는 줄이 된다(2026-08-18 실측).
+const ICON_SPLIT = svg(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="12" y1="3" x2="12" y2="21" />
+  </>,
+  { strokeLinecap: 'butt' }
+)
+const ICON_AI = svg(
+  <>
+    <path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4L12 3z" />
+    <path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15z" />
+  </>
+)
+
+/** 우클릭에서 바로 띄울 CLI. 목록의 주인은 shared/aiCli.ts 다 — 여기는 표시 순서만 정한다. */
+const AI_CLIS: readonly { id: 'claude' | 'codex' | 'gemini'; label: string }[] = [
+  { id: 'claude', label: 'Claude Code' },
+  { id: 'codex', label: 'Codex' },
+  { id: 'gemini', label: 'Gemini' }
+]
 
 // ── 트리·탭바 컨텍스트 메뉴 액션 (F4c 레지스트리와 같은 파일 = 단일 출처) ──
 // 위 CONTEXT_ACTIONS 가 터미널 그리드 액션을 담당하듯, 아래는 사이드바 트리·탭바 ＋ 메뉴의 액션이다.

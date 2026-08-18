@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { MENUBAR, menuBarItems, type MenuEntry } from '../src/renderer/interactions/actions'
 import { KEYMAP } from '../src/shared/keymap'
 import { clampSidebarWidth, DEFAULT_SIDEBAR, SIDEBAR_MAX, SIDEBAR_MIN } from '../src/renderer/store/sidebar'
-import { statusModel } from '../src/renderer/components/StatusBar'
+import { gaugesOf, statusModel } from '../src/renderer/components/StatusBar'
 import type { ConnectionProfile } from '../src/shared/types'
 import type { Session } from '../src/renderer/store/sessions'
 
@@ -137,5 +137,38 @@ describe('R4.2 상태바 표시 모델', () => {
 
   it('cwd 를 아직 못 받았으면 경로 칸을 비운다', () => {
     expect(statusModel(local, undefined, {}, null).cwd).toBeNull()
+  })
+})
+
+// 2026-08-18 제보 ③: 상태바 게이지가 **그래프**가 됐다.
+// 막대 하나로는 "지금 40%"만 알고 올라가는 중인지 내려가는 중인지를 모른다 — 서버를 보는
+// 사람이 실제로 알고 싶은 건 그 방향이다. 값은 하단 [시스템 모니터]와 같은 이력을 나눠 쓴다.
+describe('상태바 리소스 그래프', () => {
+  const stats = { cpuPct: 40, memUsedKb: 4 * 1024 * 1024, memTotalKb: 8 * 1024 * 1024 }
+  const hist = [
+    { cpuPct: 10, memPct: 20 },
+    { cpuPct: 30, memPct: 40 },
+    { cpuPct: 40, memPct: 50 }
+  ]
+
+  it('이력이 있으면 그 시계열을 싣는다', () => {
+    const g = gaugesOf(stats as never, hist)
+    expect(g.find((x) => x.key === 'cpu')?.series).toEqual([10, 30, 40])
+    expect(g.find((x) => x.key === 'mem')?.series).toEqual([20, 40, 50])
+  })
+
+  it('★ 이력이 아직 없으면 현재 값 하나로 채운다 — 선이 비면 자리가 흔들린다', () => {
+    const g = gaugesOf(stats as never, [])
+    expect(g.find((x) => x.key === 'cpu')?.series).toEqual([40])
+  })
+
+  it('GPU 는 값이 오는 서버에서만 칸이 생긴다(빈 칸을 "—" 로 남기지 않는다)', () => {
+    expect(gaugesOf(stats as never, hist).some((x) => x.key === 'gpu')).toBe(false)
+    const withGpu = gaugesOf({ ...stats, gpuPct: 7 } as never, hist)
+    expect(withGpu.find((x) => x.key === 'gpu')?.series).toEqual([7]) // 이력에 gpuPct 가 없다
+  })
+
+  it('세션이 없으면 게이지도 없다', () => {
+    expect(gaugesOf(null, hist)).toEqual([])
   })
 })

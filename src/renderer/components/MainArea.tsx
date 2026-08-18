@@ -53,6 +53,11 @@ type MainAreaProps = {
   onOpenConnManager?: () => void
   // F27: 탭바 ＋ 메뉴의 "AI CLI 시작…" → 그 창 열기(창 상태도 Shell 소유 — onAskAi 와 같은 이유).
   onOpenAiCli?: () => void
+  /**
+   * 2026-08-18: 우클릭 [AI 실행 ▸ …] — **창 없이** 지금 세션·지금 폴더에서 바로 띄운다.
+   * 플래그는 그 CLI 로 마지막에 시작할 때 쓴 값을 재사용한다(Shell 이 최근 목록을 갖고 있다).
+   */
+  onRunAiCli?: (cli: 'claude' | 'codex' | 'gemini') => void
   // R5 설정 창 [정보] 섹션에 찍을 앱 버전(Shell 이 app.getVersion 으로 이미 들고 있다).
   version: string
   // 활성 세션의 OSC7 cwd(Shell 이 구독). 저장 트리거로만 쓴다 — cwd 가 바뀌면 스냅샷의 세션 cwd 도
@@ -99,6 +104,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       sshRestore,
       onOpenConnManager,
       onOpenAiCli,
+      onRunAiCli,
       version,
       activeCwd,
       ask,
@@ -696,6 +702,15 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 선택 영역이 있으면 그 텍스트를 컴포저에 프리필한다('copy' 가 쓰는 같은 함수).
             onAskAi?.(sid ? getSelection(sid) : '')
             return
+          case 'aicli.run.claude':
+            onRunAiCli?.('claude')
+            return
+          case 'aicli.run.codex':
+            onRunAiCli?.('codex')
+            return
+          case 'aicli.run.gemini':
+            onRunAiCli?.('gemini')
+            return
           case 'log.save':
             // 2026-08-13 감사: "추후 지원" 토스트만 내고 있었는데 로그 패널의 [내려받기]는
             // 이미 동작했다. 그 패널을 여는 것으로 잇는다 — 없는 기능인 척하지 않는다.
@@ -703,7 +718,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             return
         }
       },
-      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi]
+      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi, onRunAiCli, onOpenLog]
     )
 
     // 탭 순환(Ctrl+] / Ctrl+[) — 탭바에 보이는 순서(= sessions 배열)를 따른다.

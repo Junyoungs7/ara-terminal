@@ -43,7 +43,8 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   // telemetry:data 를 이 창으로 보내 준다(getWebContents(sessionId)).
   const telemetry = useTelemetry(activeSession?.id ?? null, activeSession?.type === 'ssh')
   // 그래프 이력은 [시스템 모니터] 탭이 열려 있을 때만 쌓는다(본창과 같은 규칙).
-  const sysHistory = useStatsHistory(telemetry.stats, activeSession?.id ?? null, bottom === 'sys')
+  // 상태바 그래프가 늘 그려지므로 이력도 늘 쌓는다(본창과 같은 규칙 — 제보 ③).
+  const sysHistory = useStatsHistory(telemetry.stats, activeSession?.id ?? null, true)
 
   // 창 제목 = 보고 있는 세션. 작업표시줄에서 어느 서버 창인지 구분되는 유일한 단서다.
   useEffect(() => {
@@ -153,6 +154,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
         cwd={null}
         sessionCount={sessions.sessions.length}
         stats={telemetry.stats}
+        history={sysHistory}
       />
       {dialogNode}
     </div>

@@ -1590,10 +1590,16 @@
 }
 
 /* 사이드바 접기 토글 (§4.5) */
+/* 2026-08-18 준영님 제보 ①: 하단바와 겹쳤다.
+   손잡이는 `.middle` 기준 absolute 인데 `left: 사이드바폭 - 1px` 이라 **폭 14px 이 통째로
+   `.main` 안으로 튀어나와 있었다.** 하단바는 그 `.main` 안에서 z-index 6 으로 떠 있으니
+   세로 가운데(top:50%)까지 올라오면 손잡이를 덮는다 — 창이 낮거나 패널을 키우면 바로 겹친다.
+   z-index 를 올려 위로 빼는 대신 **자리를 안쪽으로 당겼다**: 겹침을 가리는 것보다 없애는 게 낫다.
+   접힌 상태(left:0)는 사이드바가 없으니 그대로 둔다. */
 .sb-toggle {
   position: absolute;
   top: 50%;
-  left: calc(var(--sidebar-w) - 1px);
+  left: calc(var(--sidebar-w) - 14px);
   transform: translateY(-50%);
   width: 14px;
   height: 36px;
@@ -2356,12 +2362,20 @@
 /* F11 인라인 고스트 자동완성 — 히스토리에서 찾은 나머지를 커서 뒤에 흐리게 겹쳐 보여 준다.
    xterm 데코레이션 요소라 위치·크기(px)는 xterm 이 인라인으로 정한다. 여기서는 색과 클리핑만.
    실제 입력이 아니므로 클릭·선택 대상이 되면 안 된다(pointer-events:none). */
+/* 2026-08-18 준영님 제보 ⑥: **끝 글자가 안 보이고, 왼쪽 글자와 크기가 달랐다.**
+   두 증상이 같은 원인이다 — `font: inherit` 는 xterm 데코레이션 컨테이너의 폰트를 물려받는데
+   그 컨테이너는 `.xterm-rows`(실제 글자가 사는 곳) 밖이라 터미널 폰트가 아니다. 글자가 셀보다
+   넓게 그려지고, 폭은 **셀 수**로 잡혀 있어(registerDecoration 의 width) 넘친 끝이
+   `overflow:hidden` 에 잘렸다. 터미널과 같은 폰트를 명시하면 둘 다 사라진다.
+   `--tt`·`--tl` 은 설정 [폰트]가 즉시 바꾸는 그 값이다 — 배율을 바꿔도 따라온다. */
 .term-ghost {
   color: var(--text-dim);
-  font: inherit;
-  line-height: inherit;
+  font-family: var(--term);
+  font-size: var(--tt);
+  line-height: var(--tl);
   white-space: pre;
-  overflow: hidden;
+  /* 셀 계산이 반올림으로 한 칸 모자랄 때가 있다 — 한 줄짜리라 넘쳐도 다른 행을 건드리지 않는다. */
+  overflow: visible;
   pointer-events: none;
 }
 /* R5 시각 벨 — BEL 수신 시 짧게 번쩍인다(설정 [터미널] > 벨 = 시각). */
@@ -2578,6 +2592,27 @@
   display: flex;
   align-items: center;
   gap: 5px;
+}
+/* 2026-08-18 제보 ③: 막대를 스파크라인으로 바꿨다. `.bar` 규칙은 남겨 둔다 —
+   설정 미리보기 등 다른 자리에서 같은 클래스를 쓴다. */
+.sb-spark {
+  width: 46px;
+  height: 14px;
+  flex: none;
+  display: block;
+}
+.sb-spark polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.sb-spark.mem polyline {
+  stroke: var(--purple);
+}
+.sb-spark.gpu polyline {
+  stroke: var(--ok);
 }
 .gauge .bar {
   width: 40px;

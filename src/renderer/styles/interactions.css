@@ -324,6 +324,11 @@
   inset: 0;
   z-index: 199;
 }
+/* 2026-08-18 준영님 제보 ④: 파일 우클릭 메뉴가 **화면 아래를 뚫었다.**
+   clampMenu 는 위치만 보정한다 — 메뉴가 화면보다 **길면** 어디에 놓든 넘친다(파일 메뉴는
+   항목이 열넷이고 구분선까지 있어 실제로 화면 낮은 자리에서 넘쳤다). 게다가 그 계산은
+   `항목수 × 행높이` 라 구분선을 세지 않아 늘 조금씩 과소평가한다.
+   높이 상한과 스크롤을 주면 **두 문제가 함께 사라진다** — 넘치면 잘리는 대신 스크롤된다. */
 .ctx-menu {
   position: fixed;
   z-index: 200;
@@ -333,7 +338,10 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: 5px;
-  overflow: hidden;
+  max-height: calc(100vh - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   animation: paletteIn 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 .ctx-item {

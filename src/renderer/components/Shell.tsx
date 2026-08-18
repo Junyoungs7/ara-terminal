@@ -25,7 +25,7 @@ import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailur
 import { clampSidebarWidth, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { binOf, isLocalTarget } from '../../shared/aiCli'
+import { AI_CLI_LOCAL, binOf, buildLaunch, isLocalTarget, shellFor } from '../../shared/aiCli'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { registerAiRun } from '../store/aiSessions'
@@ -245,7 +245,10 @@ export function Shell() {
   // W1 F9/F10: 활성 SSH 세션의 포트·리소스 폴링. [모니터] 탭과 상태바 게이지가 이 구독 하나를 나눠 쓴다.
   const telemetry = useTelemetry(activeId, activeSession?.type === 'ssh')
   // F29: 이미 흐르는 stats 를 시계열로 쌓는다(패널이 열려 있는 동안만 — 닫으면 버린다).
-  const sysHistory = useStatsHistory(telemetry.stats, activeId, sysOpen)
+  // 2026-08-18 제보 ③: 상태바 게이지가 그래프가 되면서 이력이 **늘** 필요해졌다.
+  // 하단 [시스템 모니터]가 열렸을 때만 쌓던 것을 항상 쌓는다 — 대신 **이력은 하나뿐이고**
+  // 둘이 나눠 쓴다(폴러는 원래부터 활성 세션 하나다). 값 60개짜리라 비용은 없다.
+  const sysHistory = useStatsHistory(telemetry.stats, activeId, true)
 
   // R4.2: 상태바가 SSH 세션의 user@host:port 를 찍으려면 프로필이 필요하다. serverKey 가 프로필명이므로
   // (연결·복제 경로가 이미 그 규약을 쓴다) 새 조회 없이 목록에서 찾는다.
@@ -471,6 +474,42 @@ export function Shell() {
       await connectProfileRef.current?.(w.profileId, undefined, w.path)
     },
     [sessions]
+  )
+
+  /**
+   * 2026-08-18 제보 ⑤: 우클릭 [AI 실행 ▸ Claude] — **창을 띄우지 않는다.**
+   *
+   * 창이 묻던 넷 중 서버·폴더는 화면이 이미 안다(지금 세션·지금 cwd). 나머지 둘(CLI·플래그)에서
+   * CLI 는 누른 항목이고, 플래그는 **그 CLI 로 마지막에 시작할 때 쓴 값**을 재사용한다 —
+   * 준영님은 늘 같은 조합을 쓰시는데 매번 고르게 하고 있었다.
+   *
+   * 최근 값이 없으면 플래그 없이 맨몸으로 띄운다(`claude` 한 줄). 그게 싫으면 창에서 한 번
+   * 골라 주시면 그 뒤로는 기억한다 — 창은 **다르게 하고 싶을 때**만 필요하다.
+   */
+  const runAiCliNow = useCallback(
+    (cli: 'claude' | 'codex' | 'gemini') => {
+      const sess = activeSession
+      const sid = sess?.id
+      const path = sid ? cwdBy[sid] : undefined
+      if (!sid || !path) {
+        // 폴더를 아직 모르는 세션(막 뜬 셸)이라면 창으로 넘긴다 — 조용히 아무 일도 안 하지 않는다.
+        openAiCli(sess?.profileId ? { profileId: sess.profileId } : undefined)
+        return
+      }
+      const target = sess?.type === 'ssh' ? (sess.profileId ?? AI_CLI_LOCAL) : AI_CLI_LOCAL
+      const last = aiCliRecent.list.find((r) => r.cli === cli && r.profileId === target)
+      const line = buildLaunch({
+        cli,
+        flags: last?.flags ?? [],
+        path,
+        // 원격은 늘 posix. 로컬은 그 세션이 실제로 무슨 셸인지에 달렸다(#90 과 같은 판정).
+        shell: sess?.type === 'ssh' ? 'posix' : shellFor('powershell', 'win32')
+      })
+      if (!line) return
+      window.ev?.session.input(sid, line + '\n')
+      aiCliRecent.record({ profileId: target, path, cli, flags: last?.flags ?? [] })
+    },
+    [activeSession, cwdBy, aiCliRecent, openAiCli]
   )
 
   // 지금 보고 있는 위치를 작업 프로필로 저장 — 이름만 물어본다(대상 서버·경로는 화면이 이미 안다).
@@ -1188,6 +1227,7 @@ export function Shell() {
           sshRestore={sshRestore}
           onOpenConnManager={() => openConnManager(null)}
           onOpenAiCli={() => openAiCli()}
+          onRunAiCli={runAiCliNow}
           activeCwd={activeCwd}
           ask={ask}
           onAskAi={(text) => {

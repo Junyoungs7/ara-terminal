@@ -20,8 +20,6 @@ import { t } from '../i18n'
 // 범위(시스템 포트 <1024 숨김/전체) 필터를 추가한다. 기본값은 사용자 포트만(개발 서버 위주) —
 // 실사용 서버는 sshd·nginx 등 시스템 포트가 늘 켜져 있어 그게 먼저 보이면 원하는 포트를 못 찾는다.
 
-export type PortRange = 'user' | 'all'
-const USER_PORT_MIN = 1024
 
 // 포워딩 상태 필터. 'free' = 아직 내 PC 로 안 연결한 포트(= 지금 쓰고 있지 않은 것)만 — 서버에
 // 뭐가 떠 있는지가 아니라 "내가 아직 안 쓴 게 뭐지"를 찾을 때 쓴다.
@@ -30,27 +28,26 @@ export type PortUse = 'any' | 'fwd' | 'free'
 /** 사용자가 입력한 범위(비워 두면 제한 없음). */
 export type PortSpan = { min: number | null; max: number | null }
 
-export type PortFilterResult = {
-  visible: RemotePort[]
-  // range='user' 필터로 감춘 개수(검색어 적용 전 기준 — 검색과 무관하게 "감춘 게 있다"를 알려준다).
-  hiddenByRange: number
-}
+export type PortFilterResult = { visible: RemotePort[] }
 
 // 순수 함수(단위 테스트 대상). 정렬은 이미 parsePorts(main)가 포트 번호 오름차순으로 끝냈다 — 여기선 거르기만.
 // 조건은 전부 AND — 좁히는 도구지 넓히는 도구가 아니다.
+/**
+ * 2026-08-18(제보 ②): **범위 세그([사용자 포트|전체])를 걷었다.**
+ * 1024 라는 경계를 앱이 정해 놓고 그 아래를 기본으로 감췄는데, 정작 사람이 자주 찾는 포트
+ * (22·443)가 거기 있었다. 감출지 말지는 사용자가 **범위 입력**으로 직접 정한다 — 같은 일을
+ * 더 정확히 하는 컨트롤이 이미 옆에 있었다.
+ */
 export function filterPorts(
   ports: readonly RemotePort[],
-  range: PortRange,
   query: string,
   span: PortSpan = { min: null, max: null },
   use: PortUse = 'any',
   forwardedPorts: readonly number[] = []
 ): PortFilterResult {
-  const inRange = range === 'user' ? ports.filter((p) => p.port >= USER_PORT_MIN) : ports
-  const hiddenByRange = ports.length - inRange.length
   const q = query.trim().toLowerCase()
   const fwd = new Set(forwardedPorts)
-  const visible = inRange.filter((p) => {
+  const visible = ports.filter((p) => {
     if (q && !(String(p.port).includes(q) || (p.process ?? '').toLowerCase().includes(q))) return false
     if (span.min !== null && p.port < span.min) return false
     if (span.max !== null && p.port > span.max) return false
@@ -58,32 +55,7 @@ export function filterPorts(
     if (use === 'free' && fwd.has(p.port)) return false
     return true
   })
-  return { visible: [...visible], hiddenByRange }
-}
-
-/**
- * 구간 안에서 **아무도 리슨하지 않는** 포트(= 지금 쓸 수 있는 번호). 순수 함수.
- * "8000~9000 만 방화벽에 열려 있는데 어디가 비었는지 모르겠다"에 대한 답이다 — 목록은 이미 폴링해
- * 갖고 있으니 원격에 뭘 더 묻지 않는다. 표시용이라 앞에서 limit 개만 돌려주고 총 개수를 함께 준다.
- *
- * 한계: 판단 근거는 `ss -tln`(TCP 리슨)이다. UDP 로만 잡힌 포트, 또는 지금 이 순간 다른 프로세스가
- * 집어 가는 경우까지는 알 수 없다 — "확실히 비어 있다"가 아니라 "리슨 중이 아니다"로 읽어야 한다.
- */
-export function freePorts(
-  ports: readonly RemotePort[],
-  span: PortSpan,
-  limit = 12
-): { list: number[]; total: number } {
-  if (span.min === null || span.max === null || span.max < span.min) return { list: [], total: 0 }
-  const used = new Set(ports.map((p) => p.port))
-  const list: number[] = []
-  let total = 0
-  for (let p = span.min; p <= span.max; p++) {
-    if (used.has(p)) continue
-    total++
-    if (list.length < limit) list.push(p)
-  }
-  return { list, total }
+  return { visible: [...visible] }
 }
 
 /** 입력칸 문자열 → 포트 번호(빈 값·숫자 아님·범위 밖이면 null = 제한 없음). */
@@ -105,7 +77,6 @@ type PortMonitorProps = {
 
 export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onForwardsChanged }: PortMonitorProps) {
   // FB-0003: 세션을 바꿔도 사용자가 고른 필터는 유지한다 — 서버마다 매번 다시 고르게 하지 않는다.
-  const [range, setRange] = useState<PortRange>('user')
   const [query, setQuery] = useState('')
   const [minStr, setMinStr] = useState('')
   const [maxStr, setMaxStr] = useState('')
@@ -114,10 +85,7 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
   if (!isSsh) return <span className="sb-placeholder">{t('mon.needSsh')}</span>
 
   const span = { min: parsePortInput(minStr), max: parsePortInput(maxStr) }
-  const { visible, hiddenByRange } = filterPorts(ports, range, query, span, use, forwards.map((f) => f.remotePort))
-  // 구간을 양쪽 다 적었을 때만 빈 포트를 센다 — 한쪽만 적으면 6만 개를 세게 된다.
-  // range='user' 로 1024 미만이 가려져 있어도 계산은 **전체 목록**으로 한다(가려진 포트도 쓰이는 중이다).
-  const free = freePorts(ports, span)
+  const { visible } = filterPorts(ports, query, span, use, forwards.map((f) => f.remotePort))
   const fwdOf = (port: number): PortForward | undefined => forwards.find((f) => f.remotePort === port)
 
   // [열기] 한 번으로 끝낸다. 포워딩이 없으면 만들고 나서 그 로컬 포트를 연다 —
@@ -174,20 +142,6 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
           )}
         </div>
       </div>
-        <div className="seg-ctl pmon-range">
-          <button type="button" className={range === 'user' ? 'on' : ''} data-value="user" onClick={() => setRange('user')}>
-            {t('mon.range.user')}
-          </button>
-          <button type="button" className={range === 'all' ? 'on' : ''} data-value="all" onClick={() => setRange('all')}>
-            {t('mon.range.all')}
-          </button>
-        </div>
-        {range === 'user' && hiddenByRange > 0 && (
-          <span className="pmon-hidden">
-            {hiddenByRange}
-            {t('mon.range.hiddenSuffix')}
-          </span>
-        )}
         {/* 번호 구간 + 포워딩 상태. 둘 다 비워 두면 아무 것도 안 거른다(기본값 = 지금까지와 같은 화면). */}
         <span className="pmon-span">
           <input
@@ -231,26 +185,6 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
           <IconRefresh />
         </div>
       </div>
-      {/* 빈 포트 — 방화벽이 특정 구간만 열어 준 서버에서 "어디를 쓸 수 있지"를 바로 답한다.
-          클릭하면 번호가 클립보드로 간다(그대로 명령에 붙여 쓰라고). */}
-      {span.min !== null && span.max !== null && (
-        <div className="pmon-free">
-          <span className="pfree-sum">
-            {t('mon.free.count').replace('{n}', String(free.total))}
-          </span>
-          {free.list.map((p) => (
-            <span
-              key={p}
-              className="pfree-chip"
-              title={t('mon.free.copy')}
-              onClick={() => void navigator.clipboard?.writeText(String(p)).catch(() => {})}
-            >
-              {p}
-            </span>
-          ))}
-          {free.total > free.list.length && <span className="pfree-more">…</span>}
-        </div>
-      )}
       <div className="pmon-list">
         {ports.length === 0 && <div className="sftp-empty">{t('mon.empty')}</div>}
         {ports.length > 0 && visible.length === 0 && <div className="sftp-empty">{t('mon.noMatch')}</div>}

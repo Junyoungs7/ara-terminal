@@ -7,7 +7,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { termPrefs } from './termPrefs'
-import { writeClipboard } from '../store/clipboardWrite'
+import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
 import { appendHistory, cachedHistory, feedInput, ghostFor, loadHistory, shouldRecord } from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
@@ -245,7 +245,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       if (!plainCtrl) return true
       const key = e.key.toLowerCase()
       if (key === 'c' && term.hasSelection()) {
-        void writeClipboard(term.getSelection())
+        // 2026-08-18 제보: 단축키로 복사하면 화면에 아무 일도 안 일어나 **됐는지 알 수 없었다**
+        // (우클릭 메뉴 쪽에만 토스트가 있었다). 사람이 키를 누른 경로라 알린다.
+        void writeClipboard(term.getSelection(), true)
         term.clearSelection()
         return false
       }
@@ -255,6 +257,17 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
         //  · 텍스트면 xterm 이 자기 textarea 로 받아 붙여넣는다(bracketed paste 처리까지 그쪽이 맞다).
         // 여기서 preventDefault 하면 paste 이벤트 자체가 안 와서 예전엔 파일 하나만 올라갔다.
         // false 만 돌려 터미널이 ^V 를 셸로 보내지 않게 막는다(리드라인 literal-next 방지).
+        //
+        // 2026-08-18 제보: 붙여넣기도 알린다. **비밀번호 프롬프트처럼 화면에 안 보이는 자리**가
+        // 있어서, 붙었는지 아닌지가 이 안내 말고는 단서가 없다. 실제 붙여넣기는 위 paste 이벤트가
+        // 하므로 여기서는 "보냈다"가 아니라 한 박자 뒤에 알린다 — 파일 붙여넣기(업로드)는
+        // 그쪽이 자기 안내를 내므로 겹치지 않게 텍스트일 때만.
+        void navigator.clipboard
+          .readText()
+          .then((t2) => {
+            if (t2) notifyPasted()
+          })
+          .catch(() => {})
         return false
       }
       return true
