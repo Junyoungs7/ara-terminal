@@ -75,11 +75,14 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
     expect(treeMenu('group').filter((m) => m.danger).map((m) => m.id)).toEqual(['group.delete'])
   })
 
-  it('탭 우클릭은 이름 변경·복제·닫기·다른 탭 모두 닫기 (R2.2)', () => {
+  it('탭 우클릭은 이름 변경·복제·새 창으로·닫기·다른 탭 모두 닫기 (R2.2 + F32)', () => {
     const items = treeMenu('tab')
     expect(items.map((m) => m.id)).toEqual([
       'session.rename',
       'session.duplicate',
+      // F32: 탭을 별도 OS 창으로 떼어낸다(다른 모니터에 놓으려고). 창을 떼는 조작은 탭을 잡고
+      // 하는 것이 자연스러워 트리 세션 행이 아니라 여기에만 붙였다.
+      'session.detach',
       'session.close',
       'session.closeOthers'
     ])

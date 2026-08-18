@@ -76,6 +76,16 @@ type MainAreaProps = {
       — 타이틀바가 통합 검색(omni)을 받는 것과 같은 방식이다. .main 안에 있어야 폭이 아니라
       세로를 먹는다(레일과 달리 터미널 80칸에 영향이 없다). */
   bottom?: React.ReactNode
+  /**
+   * F32: **떼어낸 창**인가. 본창이면 undefined.
+   *
+   * 이 플래그가 끄는 것 둘 — 둘 다 켜 두면 조용히 데이터를 망친다:
+   *  ① **부트 복원**: 보조 창에서 또 돌면 저장된 세션이 **두 벌** 생긴다(main.tsx 머리주석이
+   *     편집기·RDP 창에 대해 같은 경고를 남겨 뒀다 — 그때는 Shell 자체를 안 그려서 피했다).
+   *  ② **스냅샷 저장**: 이 창은 세션 일부만 본다. 그대로 저장하면 본창이 가진 나머지 세션이
+   *     스냅샷에서 사라진다(창별 저장은 R2 의 workspace v6 에서 붙인다).
+   */
+  detachedWinId?: string
 }
 
 let errSeq = 0
@@ -96,7 +106,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onOpenLog,
       onSettingsOpenChange,
       onActivityItems,
-      bottom
+      bottom,
+      detachedWinId
     },
     ref
   ) {
@@ -203,6 +214,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // 부분 복원(C-4): 로컬은 cwd 로 재스폰, SSH 는 프로필로 재접속. SSH 실패 패널만 오류 카드(재시도),
     // 나머지 세션·분할·활성 탭은 정상 복원. 복원 직후 스냅샷을 재저장해 새 세션 id 로 정합을 맞춘다.
     useEffect(() => {
+      // F32: 떼어낸 창은 복원하지 않는다 — 여기서 또 돌면 저장된 세션이 두 벌 생긴다.
+      // (그 창의 세션은 본창에서 떼어져 온 것이라 이미 main 에 살아 있다.)
+      if (detachedWinId) return
       if (restoredRef.current) return
       restoredRef.current = true
       let cancelled = false
@@ -305,12 +319,32 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       layout.showSession(id)
     }, [open, layout])
 
+    /**
+     * F32: 떼어낸 창에는 **세션을 패널에 올려 주는 사람이 없다.**
+     *
+     * 본창에서는 두 경로가 그 일을 한다 — 새 셸을 열면 openLocal 이 `showSession` 을 부르고,
+     * 부팅 때는 F6 복원이 레이아웃을 통째로 세운다. 떼어낸 창은 세션을 **받아만** 오므로
+     * (본창에서 떼어져 왔다) 탭은 있는데 그리는 칸이 없다 — DETACH-3 이 그 상태를 잡았다.
+     * 칸이 하나도 없을 때만 첫 세션을 올린다(그 뒤로는 사용자의 분할·닫기를 건드리지 않는다).
+     */
+    const paneCount = layout.cells.length
+    const firstId = list[0]?.id
+    useEffect(() => {
+      if (!detachedWinId || paneCount > 0 || !firstId) return
+      layout.showSession(firstId)
+      // layout 은 매 렌더 새 객체라 deps 에 넣으면 이펙트가 매 렌더 돈다(위 openLocal 주석과 같은 함정).
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [detachedWinId, paneCount, firstId])
+
     // F6 지속: 세션/레이아웃/활성 탭 변경 시 스냅샷을 저장한다(기존 30s 디바운스 flush 경로 재사용).
     // 세션 메타(cwd/profileId/type)의 진실은 main(session.list) — 렌더러가 중복 보관하지 않는다.
     // 오류 패널(placeholder)은 실제 세션이 아니므로 layout 에서 빼고 저장한다.
     // 보내는 것은 렌더러 소유 필드뿐이다(WorkspaceSaveInput) — profiles·knownHosts·ui 는 main 이 지킨다.
     const { cells, focusedId, colRatio, rowRatio, maximizedId, pairAxis } = layout
     const persist = useCallback(async () => {
+      // F32: 떼어낸 창은 저장하지 않는다. 이 창은 세션 **일부만** 보므로, 그대로 저장하면
+      // 본창이 가진 나머지가 스냅샷에서 사라진다(창별 저장은 R2 workspace v6).
+      if (detachedWinId) return
       if (!uiRef.current) return // 아직 로드 전 — 저장하지 않음(빈 스냅샷 덮어쓰기 방지).
       const mainSessions = await window.ev.session.list()
       // 오류 패널 자리는 저장하지 않는다(실 세션 아님). F25: rdp 세션도 제외한다 — main 에 세션이
@@ -333,7 +367,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         layout: layoutNode,
         tabGroups: groups.map((g) => ({ serverKey: g.serverKey, color: g.color, collapsed: false }))
       })
-    }, [cells, focusedId, colRatio, rowRatio, maximizedId, pairAxis, restoreErrors, groups, list])
+    }, [cells, focusedId, colRatio, rowRatio, maximizedId, pairAxis, restoreErrors, groups, list, detachedWinId])
 
     // 저장 트리거: persist 가 읽는 값이 실제로 바뀔 때만(deps 는 전부 안정 — 매 렌더 재실행 금지, M-1).
     // activeCwd 는 페이로드에 직접 들어가지 않지만 cwd 가 바뀌면 session.list 결과가 달라진다 —

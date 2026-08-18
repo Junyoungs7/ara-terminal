@@ -272,6 +272,9 @@ export function TermTabbar({
           else if (action === 'session.duplicate') onDuplicate(target)
           else if (action === 'session.close') onClose(target)
           else if (action === 'session.closeOthers') onCloseOthers(target)
+          // F32: 별도 창으로 떼어낸다. 여기서 탭을 지우지 않는다 — main 이 소유를 바꾸고
+          // `session:moved` 를 보내면 useSessions 가 두 창의 목록을 함께 맞춘다(한쪽만 고치면 갈린다).
+          else if (action === 'session.detach') void window.ev?.window.detachSession(target)
         }}
         onClose={() => setTabMenu(null)}
       />

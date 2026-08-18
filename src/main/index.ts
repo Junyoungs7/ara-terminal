@@ -8,10 +8,12 @@ import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
 import { ProfileStore } from './secrets/ProfileStore'
 import { registerWorkspaceIpc } from './ipc/registerWorkspaceIpc'
 import { registerSessionIpc } from './ipc/registerSessionIpc'
+import { registerSessionWindowIpc } from './ipc/registerSessionWindowIpc'
 import { registerProfileIpc } from './ipc/registerProfileIpc'
 import { registerSshIpc } from './ipc/registerSshIpc'
 import { registerRdpIpc, stopAllRdpRelays } from './ipc/registerRdpIpc'
 import { closeAllRdpSpanWindows } from './rdp/RdpWindows'
+import { closeAllSessionWindows, sessionWindowOf } from './windows/SessionWindows'
 import { registerSftpIpc } from './ipc/registerSftpIpc'
 import { registerFsIpc } from './ipc/registerFsIpc'
 import { registerLocalCliIpc } from './ipc/registerLocalCliIpc'
@@ -103,12 +105,37 @@ app.whenReady().then(() => {
 
   // 현재 창의 webContents 접근자(세션·SFTP·AI·MCP 이벤트 공용). 반환값이 이미 destroyed 일 수도
   // 있다(창 close()~'closed' 구간) — 실제 파괴 가드는 util/windowPush.ts 하나로 모았다(FIX-destroyed).
-  const getWebContents = () => {
+  const mainWc = () => {
     try {
       return mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
     } catch {
       return null
     }
+  }
+
+  /**
+   * F32: **세션 출력은 그 세션을 가진 창으로 간다.**
+   *
+   * 인자를 안 주면 지금까지대로 본창이다 — 아라·MCP·RDP 처럼 창을 떼어낼 수 없는 것들이 그렇다.
+   * sessionId 를 주면 소유 창(Session.winId)을 찾아 그쪽으로 보낸다. 소유 창이 이미 닫혔으면
+   * 본창으로 떨어진다 — 창이 사라지는 순간에 도착한 출력을 버리지 않으려는 폴백이다
+   * (세션은 창보다 오래 산다. 그게 이 기능이 성립하는 이유이기도 하다).
+   */
+  const getWebContents = (sessionId?: string) => {
+    if (sessionId) {
+      const winId = sessions?.winIdOf(sessionId)
+      if (winId) {
+        const w = sessionWindowOf(winId)
+        if (w) {
+          try {
+            return w.webContents
+          } catch {
+            return mainWc()
+          }
+        }
+      }
+    }
+    return mainWc()
   }
 
   const logDir = join(userData, 'logs')
@@ -127,6 +154,8 @@ app.whenReady().then(() => {
     },
     (id) => mcp?.approval.onHumanInput(id)
   )
+  // F32: 탭을 별도 창으로 떼어내기 / 본창으로 되돌리기(세션은 main 에 있어 죽지 않는다).
+  registerSessionWindowIpc(sessions, () => mainWindow)
   registerProfileIpc(profiles)
   registerSshIpc(profiles, store, sessions)
   registerRdpIpc(profiles, getWebContents)
@@ -237,6 +266,7 @@ app.on('before-quit', (e) => {
   // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).
   closeAllRdpSpanWindows()
+  closeAllSessionWindows()
   stopAllRdpRelays()
   exitTrace('services-stopped')
   // 정리는 여기까지 전부 끝났다. 남은 건 죽인 pty 의 exit 콜백이 메인 루프에 도착하기를 기다리는 것뿐

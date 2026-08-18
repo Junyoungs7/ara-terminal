@@ -14,18 +14,21 @@ import { pushSend } from '../util/windowPush'
 // 반환값은 종료 정리용(before-quit) — 원격에 tail 이 남지 않게 한다.
 export function registerTelemetryIpc(
   sessions: MainSessionManager,
-  getWebContents: () => WebContents | null,
+  // F32: sessionId 를 주면 그 세션을 가진 창으로 보낸다(하단바가 창마다 따로 있으므로).
+  getWebContents: (sessionId?: string) => WebContents | null,
   // 로그 뷰어 [이전 불러오기] 는 tail 이 아니라 SFTP 로 파일을 거슬러 읽는다 — 같은 커넥션을 재사용한다.
   sftp: SftpService
 ): { stopAll: () => void } {
-  const send = (channel: string, payload: unknown): void => pushSend(getWebContents(), channel, payload)
+  // sessionId 를 주면 그 세션의 창으로, 안 주면 본창으로(내 PC 자원처럼 창에 안 매인 것).
+  const send = (channel: string, payload: unknown, sessionId?: string): void =>
+    pushSend(getWebContents(sessionId), channel, payload)
   const client = (sessionId: string) => sessions.sshClient(sessionId)
 
-  const telemetry = createTelemetryService(client, (d) => send(`telemetry:data:${d.sessionId}`, d))
+  const telemetry = createTelemetryService(client, (d) => send(`telemetry:data:${d.sessionId}`, d, d.sessionId))
   // FB-0008: 로컬 세션엔 ports(ss/netstat) 가 없다 — 빈 배열로 채워 TelemetryData 계약은 그대로 둔다
   // (상태바 게이지는 stats 만 본다, [모니터] 탭은 로컬 세션에서 안 뜬다).
   const localTelemetry = createLocalTelemetryService((sessionId, stats) =>
-    send(`telemetry:data:${sessionId}`, { sessionId, ports: [], stats })
+    send(`telemetry:data:${sessionId}`, { sessionId, ports: [], stats }, sessionId)
   )
   // F29: 세션과 무관한 내 PC 통계(sys:data). 위 localTelemetry 와 계산은 같지만 구독 단위가 다르다.
   const host = createHostStatsService((s) => send('sys:data', s))

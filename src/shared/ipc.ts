@@ -143,6 +143,10 @@ export type InvokeContract = {
   'window:minimize': { req: void; res: { ok: true } }
   'window:toggleMaximize': { req: void; res: { maximized: boolean } }
   'window:close': { req: void; res: { ok: true } }
+  // F32 세션 창 — 탭을 별도 OS 창으로 떼어내고 되돌린다. 세션은 main 에 살아 있으므로
+  // 이 두 채널은 **소유 표시만** 바꾼다(재접속·화면 재생이 없다).
+  'win:detach': { req: { sessionId: string }; res: { ok: boolean; winId?: string } }
+  'win:reattach': { req: { sessionId: string }; res: { ok: boolean } }
   // profile 도메인 (계획서 §B.2/§C F3). 비밀은 vault로, workspace.json엔 secretRef만.
   'profile:list': { req: void; res: ConnectionProfile[] }
   'profile:save': { req: ProfileInput; res: { profile: ConnectionProfile } }
@@ -398,6 +402,12 @@ export type EvApi = {
     minimize(): Promise<{ ok: true }>
     toggleMaximize(): Promise<{ maximized: boolean }>
     close(): Promise<{ ok: true }>
+    /** F32: 세션을 별도 창으로 떼어낸다. 세션은 main 에 살아 있어 죽지 않고 소유 창만 바뀐다. */
+    detachSession(sessionId: string): Promise<{ ok: boolean; winId?: string }>
+    /** 본창으로 되돌린다. 떼어낸 창이 닫힐 때는 main 이 남은 세션에 대해 자동으로도 부른다. */
+    reattachSession(sessionId: string): Promise<{ ok: boolean }>
+    /** 세션 소유 창이 바뀌었다 — 양쪽 창이 자기 탭바를 다시 그린다. */
+    onSessionMoved(cb: (e: { sessionId: string; winId?: string }) => void): () => void
   }
   profile: {
     list(): Promise<ConnectionProfile[]>

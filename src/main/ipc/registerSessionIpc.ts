@@ -22,23 +22,24 @@ function on<C extends SendChannel>(channel: C, fn: (payload: unknown) => void): 
 //   같은 늦은 바인딩 패턴(forwards 와 동일 — MCP 런타임도 이 함수가 돌려주는 세션 매니저 위에 만들어진다).
 // concrete MainSessionManager를 반환 — SSH 핸들러가 adopt()로 백엔드를 편입하려면 구체 타입이 필요.
 export function registerSessionIpc(
-  getWebContents: () => WebContents | null,
+  // F32: sessionId 를 주면 **그 세션을 가진 창**으로 보낸다(main/index.ts 의 라우터).
+  getWebContents: (sessionId?: string) => WebContents | null,
   onExit?: (id: string) => void,
   onHumanInput?: (id: string) => void
 ): MainSessionManager {
   const mgr = new MainSessionManager({
     data(id, chunk) {
       // Uint8Array를 message 인자로 전달(백프레셔 메커니즘 3, 단일 복사).
-      pushMessage(getWebContents(), `session:data:${id}`, chunk)
+      pushMessage(getWebContents(id), `session:data:${id}`, chunk)
     },
     exit(id, exitCode, signal) {
       // F8: 창이 이미 죽었어도 포워딩 리스너는 반드시 접어야 한다 — 알림 전에 정리한다.
       onExit?.(id)
-      pushSend(getWebContents(), `session:exit:${id}`, { id, exitCode, signal })
+      pushSend(getWebContents(id), `session:exit:${id}`, { id, exitCode, signal })
     },
     // F7: OSC7 cwd 변경 → SFTP 트리 자동 이동(터미널→트리 동기).
     cwd(id, cwd) {
-      pushSend(getWebContents(), `session:cwd:${id}`, { id, cwd })
+      pushSend(getWebContents(id), `session:cwd:${id}`, { id, cwd })
     }
   })
 

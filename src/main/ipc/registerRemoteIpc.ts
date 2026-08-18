@@ -12,11 +12,11 @@ import { pushSend } from '../util/windowPush'
 // 반환값은 종료 정리용(before-quit) — 앱을 닫은 뒤 폴러가 남지 않게 한다.
 export function registerRemoteIpc(
   sessions: MainSessionManager,
-  getWebContents: () => WebContents | null
+  getWebContents: (sessionId?: string) => WebContents | null
 ): { stopAll: () => void } {
   const svc = createRemoteConsoleService(
     (sessionId) => sessions.sshClient(sessionId),
-    (e) => pushSend(getWebContents(), 'remote:data', e)
+    (e) => pushSend(getWebContents(e.sessionId), 'remote:data', e)
   )
 
   handle('remote:run', ({ sessionId, cmdId, args }) => svc.run(sessionId, cmdId, args))

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SessionSpec } from '../../main/sessions/ISessionManager'
 import type { SessionType } from '@shared/types'
 
@@ -12,6 +12,8 @@ export type Session = {
   /** 어느 연결 프로필로 붙었는지. rdp 는 RdpView 가 릴레이를 열 때, ssh 는 파일 탐색기가
    *  "이 서버 탭이 쓸 세션"을 찾을 때 본다. 로컬 세션에는 없다. */
   profileId?: string
+  /** F32: 이 세션을 가진 창(없으면 본창). 소유의 단일 출처는 main 이고 여기는 사본이다. */
+  winId?: string
 }
 // 하위호환 별칭(기존 import 유지).
 export type Tab = Session
@@ -81,7 +83,14 @@ export function pickBackgroundSession(
 
 let seq = 0
 
-export function useSessions() {
+/**
+ * @param winId 이 창의 id. undefined 면 **본창** — winId 가 없는 세션만 본다.
+ *
+ * 왜 창마다 목록이 다른가: 세션은 한 창에만 있다(두 창에서 같은 세션을 그리면 xterm 인스턴스가
+ * 둘이라 스크롤백이 갈라진다 — 같은 터미널인데 위로 올려 본 내용이 창마다 다르면 하자다).
+ * **소유는 main 이 정한다**(Session.winId) — 이 훅은 `session:moved` 를 받아 사본을 맞출 뿐이다.
+ */
+export function useSessions(winId?: string) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   // 최근 사용 순(앞이 최신). 분할이 배경 세션을 고를 때 쓴다(R2.0).
@@ -183,6 +192,47 @@ export function useSessions() {
 
   // 매 렌더 새 배열을 만들면 이걸 deps 로 쓰는 이펙트가 매 렌더 돈다(persist 가 그랬다 — 백로그 M-1).
   const groups = useMemo(() => groupSessions(sessions), [sessions])
+
+  /**
+   * F32: 이 창이 가진 세션을 main 에서 다시 읽는다.
+   *
+   * 떼어낸 창은 세션을 **자기가 만들지 않았다**(본창에서 떼어져 왔다) — 그래서 여느 창처럼
+   * "내가 연 것을 기억"하는 방식으로는 목록이 영영 비어 있다. main 의 스냅샷이 유일한 출처다.
+   */
+  const refreshFromMain = useCallback(async () => {
+    const all = await window.ev?.session.list().catch(() => null)
+    if (!all) return
+    const mine = all
+      .filter((m) => (m.winId ?? undefined) === winId)
+      .map<Session>((m) => ({
+        id: m.id,
+        title: m.title,
+        serverKey: m.serverKey,
+        type: m.type,
+        ...(m.profileId ? { profileId: m.profileId } : {}),
+        ...(m.winId ? { winId: m.winId } : {})
+      }))
+    setSessions(mine)
+    setActiveId((cur) => (cur && mine.some((x) => x.id === cur) ? cur : (mine[0]?.id ?? null)))
+  }, [winId])
+
+  // 떼어낸 창은 뜨자마자 자기 세션을 받아 온다(본창은 F6 복원이 그 일을 한다 — 두 번 하지 않는다).
+  useEffect(() => {
+    if (winId) void refreshFromMain()
+  }, [winId, refreshFromMain])
+
+  // 소유 창이 바뀌면(떼어내기·되돌리기·그 창이 닫힘) 사본을 맞춘다. 본창은 "돌아온 세션"을
+  // 여기서 처음 알고, 떼어낸 창은 "내 세션이 아니게 됐다"를 안다.
+  useEffect(() => {
+    const off = window.ev?.window.onSessionMoved?.(({ sessionId, winId: to }) => {
+      if ((to ?? undefined) === winId) {
+        void refreshFromMain() // 내 창으로 왔다 — 메타를 main 에서 받아 온다
+        return
+      }
+      setSessions((cur) => cur.filter((x) => x.id !== sessionId)) // 떠났다(세션은 살아 있다)
+    })
+    return () => off?.()
+  }, [winId, refreshFromMain])
 
   return {
     sessions,

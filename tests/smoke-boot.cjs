@@ -1535,9 +1535,11 @@ app.whenReady().then(async () => {
     'R2.1: 바뀐 이름이 스냅샷에 저장된다(재시작 유지)',
     !!SNAP.saved && SNAP.saved.sessions.some((s) => s.title === '결제 배포')
   ])
+  // F32(2026-08-17): [새 창으로 떼어내기]가 붙었다 — 탭을 별도 OS 창으로 빼서 다른 모니터에 놓는다.
   checks.push([
-    'R2.2: 탭 우클릭 → 이름 변경/복제/닫기/다른 탭 모두 닫기',
-    r2.tabMenu.join(',') === 'session.rename,session.duplicate,session.close,session.closeOthers'
+    'R2.2: 탭 우클릭 → 이름 변경/복제/새 창으로/닫기/다른 탭 모두 닫기',
+    r2.tabMenu.join(',') ===
+      'session.rename,session.duplicate,session.detach,session.close,session.closeOthers'
   ])
   checks.push(['R2.2: "다른 탭 모두 닫기"만 위험 톤', r2.tabMenuDanger === 1])
   checks.push(['R2.3: 드래그로 탭 순서 교체', r2.reordered === true])

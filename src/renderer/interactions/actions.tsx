@@ -171,6 +171,8 @@ export type TreeActionId =
   | 'session.duplicate'
   | 'session.close'
   | 'session.closeOthers'
+  // F32: 이 탭을 별도 OS 창으로 떼어낸다(다른 모니터에 놓으려고). 세션은 안 죽는다.
+  | 'session.detach'
   | 'group.newConn'
   | 'group.new'
   | 'group.rename'
@@ -221,7 +223,9 @@ const TREE_MENUS = {
   // 즐겨찾기 행(사이드바 트리 · 작업대 창 — 같은 목록이라 같은 메뉴를 쓴다).
   fav: ['work.goto', 'work.rename', 'work.delete'],
   // 탭 우클릭(R2.2). 트리 세션 메뉴와 같은 액션 id 를 공유한다 — 이름만 다른 중복 정의 금지.
-  tab: ['session.rename', 'session.duplicate', 'session.close', 'session.closeOthers'],
+  // F32: [새 창으로] 는 탭에서만 연다 — 트리 세션 행에도 붙일 수 있지만, 창을 떼는 조작은
+  // 탭을 잡고 하는 것이 자연스럽다(브라우저·IDE 가 다 그렇다).
+  tab: ['session.rename', 'session.duplicate', 'session.detach', 'session.close', 'session.closeOthers'],
   // R6: 그룹 이름 변경(그룹 내 프로필 일괄 갱신) / 삭제(프로필은 "기타"로 이동).
   group: ['group.newConn', 'group.rename', 'group.delete'],
   // "기타"는 그룹이 아니라 그룹 미지정 프로필이 모이는 자리다 — 이름을 바꾸거나 지울 대상이 없다.

@@ -271,6 +271,29 @@ export class MainSessionManager implements ISessionManager {
   }
 
   /**
+   * F32: 이 세션을 가진 창. undefined = 본창.
+   * 출력 push 의 목적지를 정하는 값이라 **소유의 단일 출처는 여기**다(렌더러가 각자 기억하면
+   * 두 창의 기억이 갈리는 순간 출력이 엉뚱한 창으로 간다).
+   */
+  winIdOf(id: string): string | undefined {
+    return this.handles.get(id)?.meta.winId
+  }
+
+  /** 세션을 다른 창으로 옮긴다(떼어내기/되돌리기). undefined 를 주면 본창으로 돌아온다. */
+  moveToWindow(id: string, winId: string | undefined): boolean {
+    const h = this.handles.get(id)
+    if (!h) return false
+    if (winId === undefined) delete h.meta.winId
+    else h.meta.winId = winId
+    return true
+  }
+
+  /** 그 창의 세션들 — 창이 닫힐 때 본창으로 되돌리려면 목록이 필요하다. */
+  sessionsOfWindow(winId: string): string[] {
+    return [...this.handles.values()].filter((h) => h.meta.winId === winId).map((h) => h.meta.id)
+  }
+
+  /**
    * F30: 세션별 마지막 출력 시각. **snapshot() 에 얹지 않는 이유** — 그쪽은 workspace.json 으로
    * 영속되는 타입이라, 매 출력마다 바뀌는 값을 넣으면 스냅샷이 늘 더럽고 복원 때 낡은 시각이 딸려온다.
    */

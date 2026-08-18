@@ -52,7 +52,17 @@ const api: EvApi = {
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
-    close: () => ipcRenderer.invoke('window:close')
+    close: () => ipcRenderer.invoke('window:close'),
+    // F32: 세션을 **별도 창으로 떼어낸다**. 세션은 main 에 살아 있으므로 죽지 않고 소유 창만 바뀐다.
+    detachSession: (sessionId: string) => ipcRenderer.invoke('win:detach', { sessionId }),
+    /** 본창으로 되돌린다(떼어낸 창의 [본창으로] · 그 창이 닫힐 때 main 이 자동으로도 부른다). */
+    reattachSession: (sessionId: string) => ipcRenderer.invoke('win:reattach', { sessionId }),
+    /** 세션 소유 창이 바뀌었다 — 양쪽 창이 탭바를 다시 그린다. */
+    onSessionMoved: (cb: (e: { sessionId: string; winId?: string }) => void) => {
+      const listener = (_: unknown, e: { sessionId: string; winId?: string }) => cb(e)
+      ipcRenderer.on('session:moved', listener)
+      return () => ipcRenderer.removeListener('session:moved', listener)
+    }
   },
   profile: {
     list: () => ipcRenderer.invoke('profile:list'),

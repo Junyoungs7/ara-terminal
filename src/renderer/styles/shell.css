@@ -19,6 +19,12 @@
   grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar);
   height: 100vh;
 }
+/* F32 떼어낸 세션 창 — **타이틀바가 없다**(네이티브 프레임을 쓴다: 창 제목이 보여야 작업표시줄에서
+   어느 서버 창인지 구분된다). 그래서 행이 둘이다. 이 한 줄이 없으면 본문이 타이틀바 높이(36px)
+   자리에 눌려 화면이 통째로 비어 보인다(실측 — 첫 캡처가 그랬다). */
+.app.sessionwin {
+  grid-template-rows: 1fr var(--row-statusbar);
+}
 
 /* ── 타이틀바 (§4.1) ── */
 .titlebar {

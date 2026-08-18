@@ -506,6 +506,7 @@
   "conn.menu.session.rename": "이름 변경",
   "conn.menu.session.duplicate": "세션 복제 (Ctrl+Shift+D)",
   "conn.menu.session.close": "세션 종료",
+  "conn.menu.session.detach": "새 창으로 떼어내기",
   "conn.menu.session.closeOthers": "다른 탭 모두 닫기",
   "conn.menu.session.tmux": "tmux",
   "conn.menu.group.newConn": "새 연결",
