@@ -16,6 +16,30 @@ export const DEFAULT_SIDEBAR: SidebarState = { collapsed: false, activeTab: 'con
 export const clampSidebarWidth = (w: number): number =>
   Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)))
 
+/**
+ * 왼쪽 아이콘 레일을 눌렀을 때의 다음 상태 — IntelliJ 툴윈도우 규칙(2026-08-19 준영님 확정).
+ *
+ * **같은 아이콘을 다시 누르면 닫는다.** 그래서 여는 자리와 닫는 자리가 같아지고, 예전 `.sb-toggle`
+ * (경계에 붙어 있던 `‹`/`›` 손잡이)이 필요 없어진다 — 그 손잡이는 하단바와 겹쳐 잘 안 보였다.
+ * 다른 아이콘은 갈아타며 연다(접혀 있었으면 펴면서).
+ */
+export function nextSidebar(prev: SidebarState, tab: SidebarState['activeTab']): Partial<SidebarState> {
+  if (!prev.collapsed && prev.activeTab === tab) return { collapsed: true }
+  return { collapsed: false, activeTab: tab }
+}
+
+/**
+ * **화면에 실제로 보이는 탭.** 저장된 activeTab 과 다를 수 있다: 파일 트리는 활성 세션의
+ * 파일시스템을 읽으므로 세션이 없으면 보여 줄 것이 없어 [연결] 로 떨어진다(저장값은 건드리지
+ * 않는다 — 접속하면 원래 보던 탭으로 돌아온다).
+ *
+ * 이 규칙은 예전에 `Sidebar.tsx` 안에만 있었다. 레일이 생기자 **레일은 [파일] 이 눌린 채인데
+ * 패널은 연결 트리를 그리는** 어긋남이 났다(2026-08-19 스모크가 잡았다) — 둘이 같은 값을 봐야 한다.
+ */
+export function shownTab(activeTab: SidebarState['activeTab'], fileEnabled: boolean): SidebarState['activeTab'] {
+  return fileEnabled ? activeTab : 'conn'
+}
+
 export function useSidebar() {
   const [sidebar, setSidebar] = useState<SidebarState>(DEFAULT_SIDEBAR)
 

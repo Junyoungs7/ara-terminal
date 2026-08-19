@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { MENUBAR, menuBarItems, type MenuEntry } from '../src/renderer/interactions/actions'
 import { KEYMAP } from '../src/shared/keymap'
-import { clampSidebarWidth, DEFAULT_SIDEBAR, SIDEBAR_MAX, SIDEBAR_MIN } from '../src/renderer/store/sidebar'
+import {
+  clampSidebarWidth,
+  DEFAULT_SIDEBAR,
+  nextSidebar,
+  shownTab,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN
+} from '../src/renderer/store/sidebar'
 import { gaugesOf, statusModel } from '../src/renderer/components/StatusBar'
 import type { ConnectionProfile } from '../src/shared/types'
 import type { Session } from '../src/renderer/store/sessions'
@@ -88,6 +95,40 @@ describe('R4.3 사이드바 폭 클램프', () => {
 
   it('기본 폭은 범위 안이다', () => {
     expect(clampSidebarWidth(DEFAULT_SIDEBAR.width)).toBe(DEFAULT_SIDEBAR.width)
+  })
+})
+
+// 2026-08-19 준영님 확정: 좌측 사이드바도 우측 액티비티 바처럼 아이콘을 눌러 여닫는다
+// (IntelliJ 툴윈도우). 경계에 붙어 있던 `‹`/`›` 손잡이는 하단바에 가려 잘 안 보였고 닫는
+// 자리도 애매했다 — 여는 자리와 닫는 자리를 하나로 합친 것이 이 함수다.
+describe('좌측 레일 여닫이 규칙(nextSidebar)', () => {
+  const open = (activeTab: 'conn' | 'file') => ({ collapsed: false, activeTab, width: 264 })
+  const shut = (activeTab: 'conn' | 'file') => ({ collapsed: true, activeTab, width: 264 })
+
+  it('★ 열려 있는 것을 다시 누르면 닫는다 — 여는 자리가 닫는 자리다', () => {
+    expect(nextSidebar(open('conn'), 'conn')).toEqual({ collapsed: true })
+  })
+
+  it('다른 것을 누르면 갈아탄다(닫지 않는다)', () => {
+    expect(nextSidebar(open('conn'), 'file')).toEqual({ collapsed: false, activeTab: 'file' })
+  })
+
+  it('접혀 있으면 무엇을 눌러도 펴면서 그것을 연다', () => {
+    // 접힌 채 activeTab 만 바꾸면 "눌렀는데 아무 일도 안 남"이 된다.
+    expect(nextSidebar(shut('conn'), 'conn')).toEqual({ collapsed: false, activeTab: 'conn' })
+    expect(nextSidebar(shut('file'), 'conn')).toEqual({ collapsed: false, activeTab: 'conn' })
+  })
+
+  it('닫을 때 activeTab 을 건드리지 않는다 — 다시 열면 보던 것이 나온다', () => {
+    expect(nextSidebar(open('file'), 'file')).not.toHaveProperty('activeTab')
+  })
+
+  // 2026-08-19 스모크가 잡은 어긋남: 세션이 없으면 패널은 [연결] 을 그리는데 레일은 [파일] 이
+  // 눌린 채였다. 규칙이 Sidebar.tsx 안에만 있어서다 — 이제 둘이 이 함수를 함께 본다.
+  it('★ 세션이 없으면 표시는 [연결] 로 떨어진다 — 레일과 패널이 같은 말을 한다', () => {
+    expect(shownTab('file', false)).toBe('conn')
+    expect(shownTab('file', true)).toBe('file')
+    expect(shownTab('conn', false)).toBe('conn')
   })
 })
 

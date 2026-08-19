@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
-import { Sidebar } from './Sidebar'
+import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle } from './MainArea'
 import { MiniPreview } from './MiniPreview'
 import { AiPanel } from './AiPanel'
@@ -20,7 +20,7 @@ import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
 import { useSessions } from '../store/sessions'
 import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
-import { clampSidebarWidth, useSidebar } from '../store/sidebar'
+import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
 import { AI_CLI_LOCAL, buildLaunch, shellFor } from '../../shared/aiCli'
@@ -268,10 +268,10 @@ export function Shell() {
         e.preventDefault()
         updateSidebar((s) => ({ collapsed: !s.collapsed }))
       } else if (matchBinding(e, 'fileTree.toggle')) {
-        // [파일] 탭으로 전환(이미 파일 탭이면 [연결] 로 되돌림). 접혀 있으면 함께 펼친다 —
-        // 접힌 채 탭만 바꾸면 눌러도 아무 일도 안 일어난 것처럼 보인다.
+        // 레일의 [파일] 아이콘을 누른 것과 **같다**(2026-08-19). 예전엔 이미 파일이면 [연결] 로
+        // 넘겼는데, 그러면 같은 패널을 여닫는 규칙이 자리마다 달라진다 — 규칙은 하나여야 한다.
         e.preventDefault()
-        updateSidebar((s) => ({ collapsed: false, activeTab: s.activeTab === 'file' ? 'conn' : 'file' }))
+        updateSidebar((s) => nextSidebar(s, 'file'))
       } else if (matchBinding(e, 'preview.toggle')) {
         e.preventDefault()
         toggleRail('preview')
@@ -985,16 +985,23 @@ export function Shell() {
           />
         }
       />
-      {/* --sidebar-w 를 여기서 덮어써 .sidebar 와 .sb-toggle(접기 손잡이) 위치가 함께 따라온다. */}
+      {/* --sidebar-w 를 여기서 덮어써 .sidebar 와 폭 손잡이(.sb-resizer) 위치가 함께 따라온다. */}
       <div
         className={'middle' + (resizing ? ' resizing' : '')}
         // 탐색기는 이제 떠 있는 창이라 본문을 가리지 않는다 — 터미널을 보면서 파일을 만질 수 있다
         // (예전 전체화면 모드는 여기서 display:none 으로 본문을 통째로 숨겼다).
         style={{ ['--sidebar-w' as string]: `${sidebar.width}px` }}
       >
+        {/* 좌측 아이콘 레일 — 사이드바 자체의 여닫이(2026-08-19). 사이드바가 접혀도 남아 있어야
+            한다: 여기가 다시 여는 유일한 자리다(옛 `‹`/`›` 손잡이를 없앤 이유가 그것과 겹쳤다). */}
+        <SidebarRail
+          active={sidebar.activeTab}
+          collapsed={sidebar.collapsed}
+          fileEnabled={!!activeSession && activeSession.type !== 'rdp'}
+          onPick={(tab) => updateSidebar((s) => nextSidebar(s, tab))}
+        />
         <Sidebar
           active={sidebar.activeTab}
-          onSwitch={(activeTab) => updateSidebar({ activeTab })}
           collapsed={sidebar.collapsed}
           profiles={profiles}
           groups={groups}
@@ -1055,13 +1062,6 @@ export function Shell() {
         {!sidebar.collapsed && (
           <div className="sb-resizer" role="separator" title={t('sidebar.resize')} onMouseDown={startResize} />
         )}
-        <div
-          className={'sb-toggle' + (sidebar.collapsed ? ' collapsed' : '')}
-          title={t('sidebar.toggle')}
-          onClick={() => updateSidebar((s) => ({ collapsed: !s.collapsed }))}
-        >
-          {sidebar.collapsed ? '›' : '‹'}
-        </div>
         <MainArea
           ref={mainRef}
           sessions={sessions}

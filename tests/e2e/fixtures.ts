@@ -317,7 +317,7 @@ export { expect }
  * 두 패널은 항상 렌더돼 있고 CSS 로만 감춰지므로, 이 단계를 빼면 "요소는 찾았는데 안 보인다"로 실패한다.
  */
 export async function openConnTab(page: Page): Promise<void> {
-  const tab = page.locator('button.sb-tab').filter({ hasText: '연결' })
+  const tab = page.locator('.lrail-item[data-tab="conn"]')
   if (!(await tab.evaluate((el) => el.classList.contains('active')).catch(() => true))) await tab.click()
   await expect(page.locator('.sb-panel.active .tree')).toBeVisible({ timeout: 10_000 })
 }
@@ -327,7 +327,7 @@ export async function openConnTab(page: Page): Promise<void> {
  * 열려 있으면 오히려 닫아 버린다(그래서 "요소는 찾았는데 안 보인다"로 죽는다). 상태를 보고 맞춘다.
  */
 export async function openFileTab(page: Page): Promise<void> {
-  const tab = page.locator('button.sb-tab').filter({ hasText: '파일' })
+  const tab = page.locator('.lrail-item[data-tab="file"]')
   const active = await tab.evaluate((el) => el.classList.contains('active')).catch(() => false)
   if (!active) await tab.click()
   await expect(page.locator('.sb-panel.active .sftp-wrap')).toBeVisible({ timeout: 10_000 })

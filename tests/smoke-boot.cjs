@@ -383,7 +383,7 @@ app.whenReady().then(async () => {
     hasSidebar: !!document.querySelector('.sidebar'),
     hasTabbar: !!document.querySelector('.term-tabbar'),
     hasStatusbar: !!document.querySelector('.statusbar'),
-    sbTabs: document.querySelectorAll('.sb-tab').length,
+    sbTabs: document.querySelectorAll('.lrail-item').length,
     brandName: document.querySelector('.tb-name')?.textContent || '',
     gridRows: getComputedStyle(document.querySelector('.app')).gridTemplateRows
   }))()`)
@@ -397,7 +397,7 @@ app.whenReady().then(async () => {
   checks.push(['.term-tabbar 렌더', r.hasTabbar])
   checks.push(['.statusbar 렌더', r.hasStatusbar])
   // FB-ui2: [모니터] 탭이 우측 액티비티 바로 이관되며 사이드바는 다시 2개(연결·파일)가 됐다.
-  checks.push(['사이드바 탭 2개(연결·파일)', r.sbTabs === 2])
+  checks.push(['좌측 레일 아이콘 2개(연결·파일)', r.sbTabs === 2])
   checks.push(['브랜드=A.R.A', r.brandName.includes('A.R.A')])
   checks.push(['3행 그리드', /px .+ px/.test(r.gridRows) || r.gridRows.split(' ').length === 3])
 
@@ -668,7 +668,7 @@ app.whenReady().then(async () => {
     await wait(200)
     document.querySelector('.ctx-menu .ctx-item[data-action="local.new"]')?.click()
     await wait(500)
-    const fileTab = [...document.querySelectorAll('.sb-tab')].find(b => /파일/.test(b.textContent))
+    const fileTab = document.querySelector('.lrail-item[data-tab="file"]')
     if (fileTab) fileTab.click()
     await wait(400)
     const localRows = [...document.querySelectorAll('.ftree .frow')]
@@ -807,16 +807,21 @@ app.whenReady().then(async () => {
   })()`)
 
   checks.push(['터미널 우클릭 기본 = 리스트 메뉴', f4c.listOpen === true])
-  checks.push(['리스트 메뉴가 CONTEXT_ACTIONS 8종 그대로', f4c.listItems.join(',') === 'copy,paste,split.horizontal,split.vertical,session.duplicate,log.save,ai.ask,pane.close'])
+  // 2026-08-18: 평면 여덟 줄에서 **묶음 둘**(분할 ▸ 가로/세로 · AI 실행 ▸ CLI 셋)로 바뀌었다.
+  // 첫 단계는 여전히 여덟 줄인데 그중 둘이 서브메뉴 부모다(자식은 호버해야 그려진다).
+  checks.push(['리스트 첫 단계 = 실동작 6 + 묶음 2', f4c.listItems.join(',') === 'copy,paste,split,aicli.run,session.duplicate,log.save,ai.ask,pane.close'])
   checks.push(['리스트 항목마다 아이콘', f4c.listIcons === 8])
   // R3.8 재배치 반영 — 힌트도 keymap 단일 소스에서 나오므로 자동으로 Ctrl+Shift 계열이 된다.
+  // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
     '리스트에 단축키 힌트 표시(R3.8 재배치 반영)',
-    f4c.listHints.includes('Ctrl+Shift+W') && f4c.listHints.includes('Ctrl+Shift+-')
+    f4c.listHints.includes('Ctrl+Shift+W') && f4c.listHints.includes('Ctrl+Shift+D')
   ])
+  // 2026-08-18(준영님 지적): 터미널에서 사람이 실제로 누르는 건 Ctrl+C/V 다. 메뉴가 **안 쓰는
+  // 조합을 가르치고 있었다** — KEYMAP 의 Ctrl+Shift 계열은 그대로 살아 있고 표기만 바꿨다.
   checks.push([
-    'R3.1: 우클릭 복사/붙여넣기에 Ctrl+Shift+C/V 힌트',
-    f4c.listHints.includes('Ctrl+Shift+C') && f4c.listHints.includes('Ctrl+Shift+V')
+    'R3.1: 우클릭 복사/붙여넣기에 Ctrl+C/V 힌트',
+    f4c.listHints.includes('Ctrl+C') && f4c.listHints.includes('Ctrl+V')
   ])
   // 2026-08-14: 마지막 흐린 항목(로그 저장)이 실배선돼 이제 흐린 항목이 하나도 없다.
   checks.push(['흐린(추후) 항목 0 + 패널 닫기 위험 톤', f4c.listDim === 0 && f4c.listDanger === 1])
@@ -1124,9 +1129,10 @@ app.whenReady().then(async () => {
 
   // FB-monitor(F19 tmux 후속): 이 서버 밑에 연결된 SSH 세션이 있어(첫 프로필은 ssh:connect 가 성공시킨다)
   // 서버·세션 메뉴 둘 다 끝에 tmux 서브메뉴 항목(session.tmux)이 하나씩 더 붙는다(6→7 / 3→4).
-  // F27: 'aicli.start'(AI CLI 시작) 가 새 세션 바로 아래로 들어와 8항목이 됐다.
-  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 8항목(AI CLI·tmux 포함)', ux.serverMenu.length === 8])
-  checks.push(['서버 메뉴 항목 구성(연결/새세션/AI CLI/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,aicli.start,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
+  // 2026-08-18: 'aicli.start' 를 **뺐다**(창을 없애면서 — 서버 행에는 폴더도 세션도 없어
+  // 물어볼 곳이 사라졌다. 붙은 뒤 터미널 우클릭이 그 자리다) → 8 → 7항목.
+  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 7항목(tmux 포함)', ux.serverMenu.length === 7])
+  checks.push(['서버 메뉴 항목 구성(연결/새세션/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
   checks.push(['삭제 항목만 위험 톤', ux.dangerCount === 1])
   checks.push(['컨텍스트 메뉴 키보드 이동(↑↓)', ux.kbdCursor === 1])
   checks.push(['바깥 클릭으로 메뉴 닫힘', ux.menuClosedByBackdrop === true])
@@ -1146,7 +1152,9 @@ app.whenReady().then(async () => {
   checks.push(['R1.3: 트리 "＋ 새 로컬 셸" 행 제거(빈 영역 우클릭으로 이동)', ux.newLocalRow === false])
   checks.push(['로컬 그룹 상시 표시(세션 없어도)', ux.localGroupAlways === true])
   checks.push(['탭바 ＋ 좌클릭 → 메뉴 없이 로컬 셸 1개 생성', ux.addClickNoMenu && ux.tabsAfterAddClick === ux.tabsBeforeAdd + 1])
-  checks.push(['탭바 ＋ 우클릭 → 로컬 셸/SSH 연결/AI CLI 보조 메뉴', ux.addMenu.join(',') === 'local.new,ssh.open,aicli.start'])
+  // ＋ 는 세션을 **만드는** 자리다. AI CLI 는 이미 붙어 있는 세션의 폴더에서 띄우는 것이라
+  // 여기 있을 이유가 없었다(2026-08-18 창 제거와 함께 뺐다).
+  checks.push(['탭바 ＋ 우클릭 → 로컬 셸/SSH 연결 보조 메뉴', ux.addMenu.join(',') === 'local.new,ssh.open'])
   checks.push(['＋ 보조 메뉴에 로컬 셸 진입점 문구', /로컬 셸/.test(ux.addMenuLabels) && /SSH/.test(ux.addMenuLabels)])
   checks.push(['앱 전체에 네이티브 <select> 없음', ux.nativeSelects === 0])
   checks.push(['R6: 그룹 필드가 콤보 입력(타이핑 가능)', ux.ddEditable === true])
@@ -1613,16 +1621,23 @@ app.whenReady().then(async () => {
     // 아래 블록들(클립보드·검색·URL·제목)은 살아 있는 검증용 세션이 있어야 하므로 필요하면 새로 만든다.
     if (!(await window.ev.session.list()).some((s) => s.id === sid)) sid = await newLocal()
 
-    // Ctrl+Shift+E → [파일] 탭 전환 (R3.8 실배선).
-    // R4.3 이후 활성 탭이 스냅샷에 저장되므로 시작 탭이 [연결] 이라고 가정할 수 없다(앞 블록이 [파일] 을
-    // 켜 둔 채 재로드될 수 있다) — 두 탭 사이를 오갔다가 제자리로 돌아오는지를 본다.
-    const activeTab = () => document.querySelector('.sb-tab.active')?.textContent || ''
-    const tabBefore = activeTab()
+    // Ctrl+Shift+E → [파일] **열기/닫기** (2026-08-19: 레일과 같은 규칙. 예전엔 [연결] 로 넘겼다).
+    // 시작 상태를 가정할 수 없으므로(활성 탭은 스냅샷에 저장된다) 먼저 [파일] 을 확실히 열어 둔다.
+    const railTab = () => document.querySelector('.lrail-item.active')?.dataset.tab || ''
+    const sbShut = () => document.querySelector('.sidebar').classList.contains('collapsed')
+    const railBefore = railTab()
+    const shutBefore = sbShut()
+    if (railTab() !== 'file') { key({ key: 'e', ctrlKey: true, shiftKey: true }); await wait(300) }
+    const fileTabActive = railTab() === 'file'
     key({ key: 'e', ctrlKey: true, shiftKey: true }); await wait(300)
-    const tabToggled = activeTab()
-    key({ key: 'e', ctrlKey: true, shiftKey: true }); await wait(300)
-    const fileTabActive = tabToggled !== tabBefore && /파일|연결/.test(tabToggled)
-    const fileTabToggledBack = activeTab() === tabBefore
+    // 같은 것을 다시 누르면 접힌다 — 눌림도 함께 풀린다(닫혔는데 눌린 채면 거짓말이 된다).
+    const fileTabToggledBack = sbShut() && railTab() === ''
+    // **들어올 때의 모양으로 돌려놓는다.** 사이드바 상태는 스냅샷에 남아 재로드에도 따라오므로
+    // 닫은 채 끝내면 뒤 블록(View 메뉴 토글·폭 드래그·재시작 복원)이 전부 흔들린다.
+    if (!shutBefore) {
+      document.querySelector('.lrail-item[data-tab="' + (railBefore || 'conn') + '"]')?.click()
+      await wait(300)
+    }
     // Ctrl+Shift+M → 연결 관리자(Ctrl+Shift+C 는 복사로 넘겼다).
     key({ key: 'm', ctrlKey: true, shiftKey: true }); await wait(400)
     const connManagerOpen = !!document.querySelector('.overlay.open .modal')
@@ -2162,9 +2177,11 @@ app.whenReady().then(async () => {
     const clampedMin = (await drag(clampedMax, -4000)).after
     await drag(clampedMin, 400)
     // 활성 탭을 [파일] 로, 접힘은 펼침 상태로 두고 저장 상태를 굳힌다.
-    const fileTab = [...document.querySelectorAll('.sb-tab')].find(b => /파일/.test(b.textContent))
-    fileTab?.click()
-    await wait(300)
+    // **이미 [파일] 이면 누르지 않는다** — 2026-08-19 부터 같은 아이콘을 다시 누르면 접힌다.
+    if (document.querySelector('.lrail-item.active')?.dataset.tab !== 'file') {
+      document.querySelector('.lrail-item[data-tab="file"]')?.click()
+      await wait(300)
+    }
     const persisted = (await window.ev.workspace.load()).ui.sidebar
     return { hasHandle, before, midDrag, dragged, clampedMax, clampedMin, persisted }
   })()`)
@@ -2181,9 +2198,9 @@ app.whenReady().then(async () => {
   await new Promise((res) => setTimeout(res, 2500))
   const r4d = await win.webContents.executeJavaScript(`(async () => ({
     width: Math.round(parseFloat(getComputedStyle(document.querySelector('.sidebar')).width)),
-    activeTabLabel: document.querySelector('.sb-tab.active')?.textContent || '',
+    activeTab: document.querySelector('.lrail-item.active')?.dataset.tab || '',
     // 세션이 없을 때 [파일] 탭은 누를 수 없어야 한다(눌러도 아무 일이 없으면 "무반응"으로 읽힌다).
-    fileTabDisabled: [...document.querySelectorAll('.sb-tab')].find(b => /파일/.test(b.textContent))?.disabled === true,
+    fileTabDisabled: document.querySelector('.lrail-item[data-tab="file"]')?.disabled === true,
     savedTab: (await window.ev.workspace.load()).ui.sidebar.activeTab,
     collapsed: document.querySelector('.sidebar').classList.contains('collapsed'),
     title: document.title
@@ -2192,7 +2209,7 @@ app.whenReady().then(async () => {
   checks.push(['R4.3: 재시작 후 사이드바 폭 유지(400)', r4d.width === 400])
   // 세션이 하나도 없는 상태다(바로 아래 R4.4 가 그걸 확인한다) — 파일 트리는 활성 세션의 파일시스템을
   // 읽으므로 보여 줄 게 없다. 표시는 [연결] 로 떨어지되 저장값은 'file' 그대로여야 한다(접속하면 복귀).
-  checks.push(['세션이 없으면 표시는 [연결] 로 떨어진다', /연결/.test(r4d.activeTabLabel)])
+  checks.push(['세션이 없으면 표시는 [연결] 로 떨어진다', r4d.activeTab === 'conn'])
   checks.push(['세션이 없으면 [파일] 탭은 비활성', r4d.fileTabDisabled === true])
   checks.push(['R4.3: 저장된 활성 탭은 그대로(file) — 접속하면 돌아온다', r4d.savedTab === 'file'])
   checks.push(['R4.3: 재시작 후 접힘 상태 유지(펼침)', r4d.collapsed === false])
@@ -2346,7 +2363,7 @@ app.whenReady().then(async () => {
       el.dispatchEvent(new Event('input', { bubbles: true }))
     }
     // R4.3 에서 활성 탭을 [파일] 로 두고 저장했다 — 트리를 보려면 [연결] 로 되돌린다.
-    ;[...document.querySelectorAll('.sb-tab')].find(b => /연결/.test(b.textContent))?.click()
+    ;document.querySelector('.lrail-item[data-tab="conn"]')?.click()
     await wait(300)
     // .srv-hd = [caret span][그룹명 텍스트][카운트 span]. 로컬 그룹은 연결 그룹이 아니라 제외.
     const groupNames = () => [...document.querySelectorAll('.tree .srv-hd')]

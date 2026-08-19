@@ -64,17 +64,21 @@ test('CHROME-6 사이드바를 접고 펴고 탭을 전환한다', async ({ ara 
   const { page } = ara
   const sidebar = page.locator('.sidebar')
   await expect(sidebar).not.toHaveClass(/collapsed/)
-  await page.click('.sb-toggle')
+  // 2026-08-19: 접기 손잡이(`.sb-toggle`)를 없앴다 — **열려 있는 레일 아이콘을 다시 누르면 닫힌다**
+  // (IntelliJ 툴윈도우). 여는 자리와 닫는 자리가 같아진 것이 이 변경의 알맹이다.
+  await page.click('.lrail-item[data-tab="conn"]')
   await expect(sidebar).toHaveClass(/collapsed/)
+  await expect(page.locator('.lrail-item.active')).toHaveCount(0) // 닫히면 눌림도 풀린다
   await page.keyboard.press('Control+Shift+B')
   await expect(sidebar).not.toHaveClass(/collapsed/)
   // Ctrl+Shift+E = [파일] 탭 토글. 세션이 있어야 한다 — 세션이 0개면 [파일] 탭은 disabled 이고
   // 사이드바가 [연결] 로 고정된다(Sidebar.tsx: `const tab = fileSession ? active : 'conn'`).
   await newLocalShell(page)
   await page.keyboard.press('Control+Shift+E')
-  await expect(page.locator('.sb-tab.active')).toHaveText(/파일/)
+  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
+  // 같은 것을 다시 누르면 닫는다 — 단축키도 레일과 같은 규칙이다(예전엔 [연결] 로 넘어갔다).
   await page.keyboard.press('Control+Shift+E')
-  await expect(page.locator('.sb-tab.active')).toHaveText(/연결/)
+  await expect(sidebar).toHaveClass(/collapsed/)
 })
 
 // CHROME-7 사이드바 폭 드래그 + 재기동 후 폭 유지(R4.3)

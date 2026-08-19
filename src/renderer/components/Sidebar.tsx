@@ -6,16 +6,82 @@ import { FileTree, type ActiveFileSession } from './FileTree'
 import type { DialogSpec, DialogResult } from './Dialog'
 import type { TreeActionId } from '../interactions/actions'
 import type { TmuxListResult } from '../../shared/tmuxList'
+import { shownTab } from '../store/sidebar'
 import { t } from '../i18n'
 
 export type SidebarTab = 'conn' | 'file'
 
-// 풀하이트 사이드바 — [연결|파일] 탭 전환 (design-system §4.2). 동시 스택 금지.
+// 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(우측 액티비티 바와 같은
+// IntelliJ 툴윈도우 방식 — 누르면 열리고 다시 누르면 닫힌다). 글리프는 옛 탭 것을 그대로 쓴다:
+// 자리를 옮겼다고 모양까지 바꾸면 같은 것인 줄 모른다.
+const TAB_ICON: Record<SidebarTab, () => JSX.Element> = {
+  conn: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="7" rx="1.5" />
+      <rect x="3" y="13" width="18" height="7" rx="1.5" />
+      <path d="M7 7.5h.01M7 16.5h.01" />
+    </svg>
+  ),
+  file: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+    </svg>
+  )
+}
+
+const TAB_LABEL: Record<SidebarTab, string> = { conn: 'sidebar.tab.conn', file: 'sidebar.tab.file' }
+
+/**
+ * 좌측 아이콘 레일 — 사이드바의 여닫이. 우측 `ActivityBar` 와 **같은 규칙**이고, 클래스만 다르다
+ * (같은 클래스를 돌려 쓰면 e2e 가 엉뚱한 버튼을 누른다 — 그 사고를 이미 한 번 냈다).
+ *
+ * 접혀 있으면 어떤 아이콘도 눌린 상태가 아니다: 눌림은 "그 패널이 지금 화면에 있다"는 뜻이어야 한다.
+ */
+export function SidebarRail({
+  active,
+  collapsed,
+  fileEnabled,
+  onPick
+}: {
+  active: SidebarTab
+  collapsed: boolean
+  /** 세션이 없으면 파일 트리가 읽을 파일시스템이 없다 — 못 누르게 막고 이유를 툴팁에 적는다. */
+  fileEnabled: boolean
+  onPick: (tab: SidebarTab) => void
+}) {
+  // 패널이 실제로 무엇을 그리는지와 같은 값을 봐야 한다 — 아래 Sidebar 도 이 함수를 쓴다.
+  const shown = shownTab(active, fileEnabled)
+  return (
+    <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
+      {(['conn', 'file'] as const).map((id) => {
+        const Icon = TAB_ICON[id]
+        const on = !collapsed && shown === id
+        const disabled = id === 'file' && !fileEnabled
+        return (
+          <button
+            key={id}
+            type="button"
+            className={'lrail-item' + (on ? ' active' : '')}
+            role="tab"
+            aria-selected={on}
+            data-tab={id}
+            disabled={disabled}
+            title={disabled ? t('sidebar.tab.fileNeedsSession') : t(TAB_LABEL[id])}
+            onClick={() => onPick(id)}
+          >
+            <Icon />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// 풀하이트 사이드바 — 레일이 고른 패널 하나 (design-system §4.2). 동시 스택 금지.
 // F4b: 연결 탭에 서버→세션 트리(서버 노드 하위 열린 세션 자식 행) + ＋버튼으로 연결 관리자.
 // FB-ui2: [모니터] 탭은 우측 액티비티 바(ActivityBar)로 이관했다 — 이 컴포넌트엔 더 남아 있지 않다.
 export function Sidebar({
   active,
-  onSwitch,
   collapsed,
   profiles,
   groups,
@@ -45,7 +111,6 @@ export function Sidebar({
   askText
 }: {
   active: SidebarTab
-  onSwitch: (tab: SidebarTab) => void
   collapsed: boolean
   profiles: ConnectionProfile[]
   groups: string[]
@@ -85,47 +150,24 @@ export function Sidebar({
   askText: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
 }) {
   // 파일 트리는 활성 세션의 파일시스템을 읽는다 — 세션이 없으면 보여 줄 게 없으니 [연결] 을 띄운다.
-  // 저장된 activeTab 값은 건드리지 않는다(접속하면 원래 보던 탭으로 돌아온다 · F6 복원과 충돌 없음).
-  const tab: SidebarTab = fileSession ? active : 'conn'
+  // 판정은 레일과 **같은 함수**를 쓴다(store/sidebar.ts): 여기만 떨어뜨리면 레일은 [파일] 이 눌린
+  // 채로 남아 서로 다른 말을 한다.
+  const tab: SidebarTab = shownTab(active, !!fileSession)
   return (
     <div className={'sidebar' + (collapsed ? ' collapsed' : '')}>
-      <div className="sb-tabs" role="tablist">
-        <button
-          type="button"
-          className={'sb-tab' + (tab === 'conn' ? ' active' : '')}
-          role="tab"
-          aria-selected={tab === 'conn'}
-          onClick={() => onSwitch('conn')}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="4" width="18" height="7" rx="1.5" />
-            <rect x="3" y="13" width="18" height="7" rx="1.5" />
-            <path d="M7 7.5h.01M7 16.5h.01" />
-          </svg>
-          {t('sidebar.tab.conn')}
-        </button>
-        <button
-          type="button"
-          className={'sb-tab' + (tab === 'file' ? ' active' : '')}
-          role="tab"
-          aria-selected={tab === 'file'}
-          // 세션이 없을 때 눌러도 아무 일이 안 일어나면 "무반응"으로 읽힌다 — 아예 못 누르게 한다.
-          disabled={!fileSession}
-          title={fileSession ? undefined : t('sidebar.tab.fileNeedsSession')}
-          onClick={() => onSwitch('file')}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-          </svg>
-          {t('sidebar.tab.file')}
-        </button>
+      {/* 옛 [연결|파일] 탭이 있던 자리. 탭은 레일로 나갔고(2026-08-19) 지금 보고 있는 패널의
+          **이름**과 그 패널의 동작만 남는다 — IntelliJ 툴윈도우 머리와 같은 모양이다. */}
+      <div className="sb-tabs">
+        <span className="sb-head">{t(TAB_LABEL[tab])}</span>
         <div className="sb-tab-spacer" />
-        {/* 새 연결 — 연결 관리자 모달 열기 */}
-        <div className="sb-act" title={t('sidebar.act.newConn')} onClick={onNewConn}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </div>
+        {/* 새 연결 — 연결 관리자 모달 열기. [파일] 을 보고 있을 때는 뜻이 없어 내린다. */}
+        {tab === 'conn' && (
+          <button type="button" className="sb-act" title={t('sidebar.act.newConn')} onClick={onNewConn}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
         {/* 새로고침 버튼은 제거했다(R1.5): 트리는 profiles/sessions 스토어에서 파생되는 상태라
             다시 읽어올 원격 소스가 없고, 실제 배선도 ＋(연결 관리자 열기)와 같아 중복 버튼이었다. */}
       </div>
