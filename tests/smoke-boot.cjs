@@ -1064,7 +1064,7 @@ app.whenReady().then(async () => {
     // 두 번째 프로필을 만들 수 없었다(2026-08-03 회귀 방지).
     const nameInput = () => document.querySelector('.prof-form .fld input')
     const nameBeforeNew = nameInput()?.value || ''
-    document.querySelector('.prof-list .pl-hd .kbd')?.click()
+    document.querySelector('.prof-list .pl-add')?.click()
     await wait(300)
     const nameAfterNew = nameInput()?.value || ''
     const noProfileSelected = document.querySelectorAll('.prof-list .prof.sel').length === 0

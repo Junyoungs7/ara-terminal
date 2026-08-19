@@ -45,7 +45,7 @@ test('SSH-1b★ 연결 관리자가 첫 칸에 커서를 두고 Enter 로 접속
   // ① 열자마자 [연결 이름] 칸에 커서가 있다.
   await expect(field(page, '연결 이름')).toBeFocused()
 
-  await page.click('.modal .prof-list .pl-hd .kbd') // ＋ 새 프로필
+  await page.click('.modal .prof-list .pl-add') // ＋ 새 프로필(2026-08-19 목록 아래로 옮겼다)
   await field(page, '연결 이름').fill('kbd-only')
   await field(page, '호스트').fill('127.0.0.1')
   await field(page, '포트').fill(String(h.port))

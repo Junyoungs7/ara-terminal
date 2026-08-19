@@ -34,7 +34,7 @@ async function createRdpProfile(
 ): Promise<void> {
   await page.keyboard.press('Control+Shift+M')
   await connModal(page).waitFor()
-  await page.click('.modal .prof-list .pl-hd .kbd') // ＋ 새 프로필
+  await page.click('.modal .prof-list .pl-add') // ＋ 새 프로필(2026-08-19 목록 아래로 옮겼다)
   await page.click('.prof-form .seg-ctl button:has-text("RDP")')
   await field(page, '연결 이름').fill(f.name)
   await field(page, '호스트').fill(f.host ?? '127.0.0.1')

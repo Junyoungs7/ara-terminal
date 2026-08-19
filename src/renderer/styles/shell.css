@@ -3167,9 +3167,29 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.pl-hd .kbd {
-  font-family: var(--mono);
+/* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
+   `.prof-list` 가 통째로 스크롤되는 칸이라 sticky 로 바닥에 붙인다 — 배경을 깔아 두지 않으면
+   아래로 지나가는 행이 글자에 겹쳐 읽힌다. */
+.pl-add {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 4px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-mid);
+  font-family: var(--ui);
+  font-size: var(--fs-md);
   cursor: pointer;
+  transition: 0.12s;
+}
+.pl-add:hover {
+  border-style: solid;
+  border-color: var(--accent-line);
+  color: var(--accent-bright);
+  background: var(--bg-raised);
 }
 .prof {
   display: flex;

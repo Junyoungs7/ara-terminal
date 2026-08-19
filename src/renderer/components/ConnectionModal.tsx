@@ -262,12 +262,13 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
         </div>
         <div className="modal-body">
           <div className="prof-list" onContextMenu={(e) => openRowMenu(e, null)}>
+            {/* 2026-08-19: 헤더의 맨 `＋` 글리프를 목록 아래 **라벨 있는 버튼**으로 옮겼다.
+                준영님이 "추가 버튼을 만들어 달라"고 하신 것 — 라벨 없는 한 글자는 눌러 보기 전에
+                무엇인지 알 수 없었다. 두 자리에 다 두지 않는다(같은 일을 하는 버튼이 290px 칸에
+                둘이면 어느 것을 눌러야 하는지가 새 질문이 된다). */}
             <div className="pl-hd">
               <span>
                 {t('conn.profiles')} · {profiles.length}
-              </span>
-              <span className="kbd" title={t('conn.new')} onClick={newProfile}>
-                ＋
               </span>
             </div>
             <div className="sb-search">
@@ -310,6 +311,11 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                 <span className={'pf-st ' + connDotClass(conn?.[p.id])} />
               </div>
             ))}
+            {/* 목록 맨 아래. 칸 전체가 스크롤되므로 sticky 로 바닥에 붙여 둔다 — 서버가 스무 개면
+                "아래"가 화면 밖이라 버튼을 찾으러 스크롤해야 한다. */}
+            <button type="button" className="pl-add" onClick={newProfile}>
+              ＋ {t('conn.new')}
+            </button>
           </div>
           <div className="prof-form" onKeyDown={onFormKeyDown}>
             {/* W4sat F21: SSH/RDP 타입 선택 — authType 세그먼트와 같은 톤. RDP는 인증 섹션 자체가 없다. */}
@@ -459,7 +465,9 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
           </div>
         </div>
         <div className="modal-ft">
-          {error ? <span className="err">{error}</span> : <span className="hint">⏎ {t('conn.saveConnect')}</span>}
+          {/* 2026-08-19 준영님: "⏎ 저장 후 접속" 힌트를 뺐다 — 바로 옆 버튼이 같은 말을 하고 있었다.
+              Enter 로 제출되는 동작(#70)은 그대로다. 오류는 계속 이 자리에 뜬다. */}
+          {error ? <span className="err">{error}</span> : null}
           <span className="sp" />
           <button className="btn sec" onClick={onClose}>
             {t('conn.cancel')}

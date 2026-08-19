@@ -412,7 +412,7 @@ export function field(page: Page, label: string) {
 
 // 연결 관리자에서 프로필을 새로 만들고 [저장 후 접속] 까지 누른다(TOFU 확인은 호출측 몫).
 export async function fillNewProfile(page: Page, f: SshProfileForm): Promise<void> {
-  await page.click('.modal .prof-list .pl-hd .kbd') // ＋ 새 프로필
+  await page.click('.modal .prof-list .pl-add') // ＋ 새 프로필(2026-08-19 목록 아래로 옮겼다)
   await field(page, '연결 이름').fill(f.name)
   await field(page, '호스트').fill(f.host ?? '127.0.0.1')
   await field(page, '포트').fill(String(f.port))
