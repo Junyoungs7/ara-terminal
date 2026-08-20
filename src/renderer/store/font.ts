@@ -13,13 +13,19 @@ const DEFAULT_FONT: FontConfig = { term: 'Nanum Gothic Coding', sizePx: 14, line
 // CSS 변수 바인딩 — TerminalPane 이 mount 시 --term/--tt/--tl 을 읽으므로,
 // 새 탭도 현재 폰트로 열린다(하이드레이트/변경 양쪽에서 호출).
 //
-// UI-font: --mono(사이드바·상태바·탭·설정 등 UI 라벨)를 --term과 같은 스택으로 맞춘다 — 준영님 확정 요구.
-// 이전엔 --mono 1순위가 JetBrains Mono(한글 미지원)라 UI 한글은 항상 2순위 폴백으로 렌더링됐다.
-// 그 자체가 버그였고(선택하지도 않은 폰트가 화면에 나온다) 이번에 함께 고친다.
+// --mono 는 **터미널이 고른 글꼴을 따라간다.** 여기까지는 UI-font(2026-08-04) 때와 같다.
+//
+// 달라진 것(2026-08-21 · G 채택): `--mono` 가 더 이상 **크롬 전체**를 칠하지 않는다.
+// 그때는 "UI 라벨도 터미널과 같은 폰트"가 확정 요구였고 shell.css 70곳이 --mono 였는데,
+// 그 결과가 준영님이 지적하신 "개발용 티"의 8할이었다(사이드바 이름·설정 항목·드롭다운까지
+// 코딩용 고정폭). 지금은 크롬이 --ui(Pretendard)를 쓰고, --mono 는 **22곳**에만 남는다:
+// 경로 · 명령줄 · 로그 본문 · 에디터 · 키 표기 · API 키 — *격자에 맞아야 뜻이 사는* 자리들.
+// 그 22곳이 터미널 글꼴 선택을 따라가는 것은 여전히 맞다(같은 성격의 글자다).
+//
 // 상단 잘림 증상의 실제 원인은 별개로 확인됨 — 나눔고딕코딩이 11.5px 같은 소수 픽셀 크기에서
 // 상단 획 안티에일리어싱이 뭉개지는 래스터화 한계였다(스택 순서와는 무관 — 실측: agent_talk/UI-font-done.md).
-// 그래서 크기 쪽은 CSS(design-system §2.2, 12px 하한)에서 별도로 올렸고, 여기서는 폰트 패밀리만 맞춘다.
-// 크기(--tt/--tl)는 터미널 전용이라 UI 크기 체계는 그대로 — font-family만 통일.
+// 그래서 크기 쪽은 CSS(design-system §2.2, 12px 하한)에서 별도로 올렸다.
+// 크기(--tt/--tl)는 터미널 전용이라 UI 크기 체계는 그대로 — font-family만 맞춘다.
 export function bindCssVars(font: FontConfig): void {
   const root = document.documentElement.style
   const stack = stackFor(font.term, font.krSystemFallback ?? true)
