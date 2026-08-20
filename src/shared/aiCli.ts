@@ -143,6 +143,36 @@ export function defaultFlags(cli: AiCliId): string[] {
 }
 
 /**
+ * 설정 [AI] 의 **기본 플래그** — 최근 목록에 아무것도 없을 때 쓸 값 (2026-08-20).
+ *
+ * 왜 필요한가: 시작 창을 없애면서(2026-08-18) 플래그를 고르는 화면이 사라졌다. 준영님 PC 는
+ * 최근 목록에 조합이 남아 있어 티가 안 났지만, **새로 설치한 동료는 맨몸 `claude`** 로 떴다.
+ *
+ * 저장된 값은 신뢰 경계 밖이다(workspace.json 은 손으로 고칠 수 있다) — 표에 없는 id 는 버린다.
+ * `arg` 가 아니라 **id 만** 담는 이유도 같다: 명령줄에 실릴 문자열의 주인은 끝까지 이 표다.
+ *
+ * **키가 없는 것과 빈 배열은 다르다.** 없으면 카탈로그 기본값(claude 는 skipPerms+resume),
+ * 빈 배열이면 "사용자가 전부 껐다"로 읽는다 — 껐는데 다음 실행에 되살아나면 설정이 아니다.
+ */
+export function aiCliFlagsOf(saved: unknown): Record<AiCliId, string[]> {
+  const src = (saved ?? {}) as Partial<Record<string, unknown>>
+  const out = {} as Record<AiCliId, string[]>
+  for (const cli of AI_CLI_IDS) {
+    const v = src[cli]
+    if (!Array.isArray(v)) {
+      out[cli] = defaultFlags(cli)
+      continue
+    }
+    const known = AI_CLIS[cli].flags.map((f) => f.id)
+    // 배타 그룹은 toggleFlag 로 다시 쌓아 한 번 더 거른다 — 손으로 `-r` 과 `-c` 를 같이 적어 둘 수 있다.
+    out[cli] = v
+      .filter((x): x is string => typeof x === 'string' && known.includes(x))
+      .reduce<string[]>((acc, id) => toggleFlag(cli, acc, id), [])
+  }
+  return out
+}
+
+/**
  * 플래그 켜기·끄기. 배타 그룹(-r/-c)은 여기서 한 번만 처리한다 — 화면이 같은 표를 두 번 해석하면
  * 미리보기와 실제 명령이 갈릴 수 있다.
  */

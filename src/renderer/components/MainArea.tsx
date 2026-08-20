@@ -82,6 +82,11 @@ type MainAreaProps = {
   /** 우측 액티비티 바에 그릴 항목·순서. prefs 의 주인이 여기라 Shell 로 올려 준다
       (useUiPrefs 를 두 곳에서 부르면 사본이 갈려 설정 변경이 바에 안 비친다). */
   onActivityItems?: (items: ActivityId[]) => void
+  /**
+   * 2026-08-20: AI CLI 기본 플래그(설정 [AI]). `onActivityItems` 와 같은 미러 —
+   * prefs 의 주인이 여기라, 실행하는 쪽(Shell.runAiCliNow)에 값을 올려 준다.
+   */
+  onAiCliFlags?: (flags: Record<string, string[]>) => void
   /** #78: 터미널 **아래** 패널(포트·세션 기록). 상태의 주인은 Shell 이라 다 만들어진 노드를 받는다
       — 타이틀바가 통합 검색(omni)을 받는 것과 같은 방식이다. .main 안에 있어야 폭이 아니라
       세로를 먹는다(레일과 달리 터미널 80칸에 영향이 없다). */
@@ -117,6 +122,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onOpenLog,
       onSettingsOpenChange,
       onActivityItems,
+      onAiCliFlags,
       bottom,
       detachedWinId
     },
@@ -338,6 +344,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onActivityItems?.(visibleActivities(prefs.activityOrder, prefs.activityHidden))
     }, [prefs.activityOrder, prefs.activityHidden, onActivityItems])
+
+    useEffect(() => {
+      onAiCliFlags?.(prefs.aiCliFlags)
+    }, [prefs.aiCliFlags, onAiCliFlags])
 
     // 새 로컬 셸: 세션 생성 → 포커스 패널에 표시(패널이 없으면 첫 패널 생성).
     // "activeId 가 있으면 패널을 만든다"는 이펙트로 처리하면 layout 이 매 렌더 새 객체라 이펙트가 매 렌더 돌고,

@@ -5139,6 +5139,27 @@
   color: var(--err);
   font-size: var(--fs-md);
 }
+/* 설정 [AI] — CLI 기본 플래그 체크박스(2026-08-20). 실제로 붙는 인자를 라벨 옆에 그대로 적는다:
+   `--dangerously-skip-permissions` 는 확인을 끄는 플래그라 무엇이 실행되는지 감추면 안 된다
+   (shared/aiCli.ts 의 "미리보기 = 전송 문자열" 계약과 같은 이유). */
+.cliflags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cliflag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+}
+.cliflag code {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
 /* 아라 패널 상단 — 현재 프로바이더·모델(무엇이 답하고 있는지). */
 .ai-active-badge {
   flex: none;

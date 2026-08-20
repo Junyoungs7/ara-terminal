@@ -14,6 +14,7 @@ import {
   type UiState
 } from '@shared/types'
 import { activityHiddenOf, activityOrderOf } from '../store/activityBar'
+import { aiCliFlagsOf } from '../../shared/aiCli'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -29,6 +30,8 @@ export const termPrefs: Omit<
   | 'aiProvider'
   | 'aiModels'
   | 'aiCompatibleBaseUrl'
+  // AI CLI 기본 플래그도 xterm 이 읽어 갈 값이 아니다(터미널에 밀어 넣을 한 줄을 만들 때만 쓴다).
+  | 'aiCliFlags'
   | 'activityOrder'
   | 'activityHidden'
 > = {
@@ -56,6 +59,7 @@ export function prefsFrom(
     | 'aiCompatibleBaseUrl'
     | 'activityOrder'
     | 'activityHidden'
+    | 'aiCliFlags'
   >
 ): UiPrefs {
   return {
@@ -73,6 +77,7 @@ export function prefsFrom(
     aiModels: aiModelsOf(ui.aiModels),
     // 액티비티 바 순서·숨김. 저장값은 신뢰 경계 밖이라 여기서 클램프하고, 새로 생긴 항목은
     // activityOrderOf 가 기본 자리에 끼워 넣는다(안 그러면 새 기능이 영영 안 보인다).
+    aiCliFlags: aiCliFlagsOf(ui.aiCliFlags),
     activityOrder: activityOrderOf(ui.activityOrder),
     activityHidden: activityHiddenOf(ui.activityHidden),
     aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : ''

@@ -22,6 +22,7 @@ import {
   type UiPrefs
 } from '@shared/types'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
+import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
@@ -309,6 +310,7 @@ function AiSection({
           {usage.output.toLocaleString('ko-KR')}
         </span>
       </Row>
+      <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       {/* 이 문장은 장식이 아니다 — 사내 배포에서 데이터 반출 고지가 화면에 없으면 안 된다(설계 §4.7).
           W5: 선택된 프로바이더 이름·호스트가 들어가게 갱신 — "Anthropic API로 전송됩니다" 고정 문구는
           이제 거짓이 될 수 있다(설계 W5 §보안). */}
@@ -316,6 +318,54 @@ function AiSection({
         {t('settings.ai.note.prefix')}
         {AI_PROVIDER_LABELS[provider]} API({host}){t('settings.ai.note.suffix')}
       </div>
+    </>
+  )
+}
+
+/**
+ * AI CLI 기본 플래그 (2026-08-20 · A-79).
+ *
+ * 우클릭 [AI 실행 ▸] 이 **최근에 쓴 조합이 없을 때** 붙일 플래그다. 시작 창을 없애면서
+ * (2026-08-18) 플래그를 고르는 화면이 통째로 사라졌는데, 준영님 PC 는 최근 목록에 조합이 남아
+ * 있어 티가 안 났다 — **새로 설치한 동료는 맨몸 `claude`** 로 떴다.
+ *
+ * 플래그가 있는 CLI 만 줄이 뜬다(지금은 claude 하나). 표에 플래그를 더하면 줄이 저절로 생긴다 —
+ * 여기에 CLI 이름을 다시 적지 않는다.
+ *
+ * `--dangerously-skip-permissions` 를 기본으로 켜 두는 것은 가벼운 결정이 아니다. 카탈로그가
+ * 그렇게 정해 뒀고 준영님이 늘 쓰시는 조합이지만, **끌 자리가 있어야 켜 둘 수 있다** — 이 줄이
+ * 그 자리다. 설명 문구에 무엇을 끄는 플래그인지 적어 둔다.
+ */
+function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange: (p: Partial<UiPrefs>) => void }) {
+  const set = (cli: AiCliId, flags: string[]) =>
+    onPrefsChange({ aiCliFlags: { ...prefs.aiCliFlags, [cli]: flags } })
+  return (
+    <>
+      {AI_CLI_IDS.filter((cli) => AI_CLIS[cli].flags.length > 0).map((cli) => {
+        const on = prefs.aiCliFlags[cli] ?? []
+        return (
+          <Row
+            key={cli}
+            label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`}
+            desc={t('settings.ai.cliFlags.desc')}
+          >
+            <div className="cliflags">
+              {AI_CLIS[cli].flags.map((f) => (
+                <label key={f.id} className="cliflag" data-flag={`${cli}.${f.id}`}>
+                  <input
+                    type="checkbox"
+                    checked={on.includes(f.id)}
+                    // 배타 그룹(-r/-c)은 toggleFlag 가 처리한다 — 여기서 또 해석하지 않는다.
+                    onChange={() => set(cli, toggleFlag(cli, on, f.id))}
+                  />
+                  <span>{t(f.labelKey)}</span>
+                  <code>{f.arg}</code>
+                </label>
+              ))}
+            </div>
+          </Row>
+        )
+      })}
     </>
   )
 }

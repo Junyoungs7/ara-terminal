@@ -1,5 +1,5 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
-import type { AiCliRecent } from './aiCli'
+import type { AiCliId, AiCliRecent } from './aiCli'
 export type { AiCliRecent }
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
@@ -342,6 +342,8 @@ export type UiPrefs = {
   // 안 보이는 것만 담는다 — 껐다 켜도 원래 자리로 돌아오게 하려면 순서를 잃지 말아야 한다.
   activityOrder: ActivityId[]
   activityHidden: ActivityId[]
+  // 2026-08-20 [AI]: CLI 별 기본 플래그. 하이드레이트가 끝난 값이라 네 CLI 가 모두 들어 있다.
+  aiCliFlags: Record<AiCliId, string[]>
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -389,6 +391,10 @@ export type UiState = {
   // 아니다** — 시작하면 저절로 쌓이고, 상한(AI_CLI_RECENT_MAX)을 넘으면 오래된 것부터 버린다.
   // 비밀은 없다(서버는 profileId 로만 참조).
   aiCliRecent?: AiCliRecent[]
+  // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
+  // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
+  // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.
+  aiCliFlags?: Partial<Record<string, string[]>>
   window?: WindowBounds // F6: 복원 대상. 최초 실행 시 없음.
 }
 

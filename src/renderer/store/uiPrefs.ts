@@ -9,6 +9,7 @@ import {
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
 import { activityHiddenOf, activityOrderOf } from './activityBar'
+import { aiCliFlagsOf } from '../../shared/aiCli'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
 // R5 터미널 동작 설정 단일 소스(useFont·useSidebar 와 같은 형태):
@@ -22,6 +23,7 @@ const DEFAULT_PREFS: UiPrefs = {
   aiProvider: DEFAULT_AI_PROVIDER,
   aiModels: aiModelsOf(undefined),
   aiCompatibleBaseUrl: '',
+  aiCliFlags: aiCliFlagsOf(undefined),
   activityOrder: activityOrderOf(undefined),
   activityHidden: activityHiddenOf(undefined)
 }

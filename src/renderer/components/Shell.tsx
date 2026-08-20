@@ -23,7 +23,7 @@ import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailur
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { AI_CLI_LOCAL, buildLaunch, shellFor } from '../../shared/aiCli'
+import { AI_CLI_LOCAL, aiCliFlagsOf, buildLaunch, shellFor } from '../../shared/aiCli'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { registerAiRun } from '../store/aiSessions'
@@ -124,6 +124,8 @@ export function Shell() {
   // 우측 액티비티 바에 그릴 항목(설정에서 끄고 켜고 옮긴 결과). prefs 의 주인은 MainArea 라
   // 거기서 올려 준다 — settingsActive 미러와 같은 방식.
   const [activityItems, setActivityItems] = useState<ActivityId[]>(() => [...ACTIVITY_ITEMS])
+  // 설정 [AI] 의 CLI 기본 플래그. 같은 미러다 — 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
+  const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
   // W4sat F20: 탐색기 전체화면 모드. .middle 은 언마운트하지 않는다(display:none 만) — 터미널
   // 세션·레이아웃이 살아 있어야 나갈 때 보존된다(스펙 요구사항). 미니 프리뷰·아라 패널과 같은 규칙으로
   // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
@@ -499,21 +501,25 @@ export function Shell() {
       cli = cli ?? ((aiCliRecent.list[0]?.cli as 'claude' | 'codex' | 'gemini' | undefined) ?? 'claude')
       const target = sess?.type === 'ssh' ? (sess.profileId ?? AI_CLI_LOCAL) : AI_CLI_LOCAL
       const last = aiCliRecent.list.find((r) => r.cli === cli && r.profileId === target)
+      // 최근에 쓴 조합이 있으면 그대로, 없으면 **설정 [AI] 의 기본 플래그**(2026-08-20 · A-79).
+      // 예전엔 여기가 `?? []` 라 처음 쓰는 사람에게 맨몸 `claude` 가 떴다 — 창을 없애면서
+      // 플래그를 고를 자리가 사라진 것을 못 메운 자리였다.
+      const flags = last?.flags ?? aiCliFlags[cli] ?? []
       const line = buildLaunch({
         cli,
-        flags: last?.flags ?? [],
+        flags,
         path,
         // 원격은 늘 posix. 로컬은 그 세션이 실제로 무슨 셸인지에 달렸다(#90 과 같은 판정).
         shell: sess?.type === 'ssh' ? 'posix' : shellFor('powershell', 'win32')
       })
       if (!line) return
       window.ev?.session.input(sid, line + '\n')
-      aiCliRecent.record({ profileId: target, path, cli, flags: last?.flags ?? [] })
+      aiCliRecent.record({ profileId: target, path, cli, flags })
       // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널의 "조용한 AI" 판정이 이 등록에
       // 걸려 있다. 창이 하던 일인데, 창을 없애면서 같이 사라질 뻔했다(타입 검사가 잡았다).
       registerAiRun({ sessionId: sid, cli, path, startedAt: Date.now() })
     },
-    [activeSession, cwdBy, aiCliRecent, sessions]
+    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags]
   )
   runAiCliRef.current = runAiCliNow
 
@@ -1158,6 +1164,7 @@ export function Shell() {
           onSettingsOpenChange={setSettingsActive}
           onOpenLog={() => openBottom('log')}
           onActivityItems={setActivityItems}
+          onAiCliFlags={setAiCliFlags}
         />
         <MiniPreview
           open={previewOpen}
