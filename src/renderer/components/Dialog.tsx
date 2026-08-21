@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
+import { PasswordInput } from './PasswordInput'
 
 // 커스텀 확인/경고 다이얼로그 — window.confirm/alert 전면 대체 (네이티브 창 제목의 "ev" 노출 제거).
 // 앱 전체에서 이 컴포넌트 하나만 쓴다. 호출측은 useDialog().ask(spec) 로 await 하고,
@@ -20,7 +21,9 @@ export type DialogSpec = {
   // 세 번째 선택지(예: 인증 실패 시 "비밀번호 다시 입력"). 선택 시 'alt' 반환.
   altLabel?: string
   // R6: 한 줄 텍스트 입력(그룹 만들기·이름 변경). window.prompt 대체 — askText 로 값을 받는다.
-  input?: { value?: string; placeholder?: string }
+  // password: 접속 시 비밀번호를 받는 용도(2026-08-21). 가려진 칸 + 눈 토글로 그린다 —
+  // 서버 비밀번호는 길고 특수문자가 섞여 있어 확인 없이 한 번에 맞게 넣기 어렵다(준영님 제보 18번).
+  input?: { value?: string; placeholder?: string; password?: boolean }
 }
 
 // 다이얼로그 상태 + ask()/askText() 를 소유하는 훅. node 를 트리 한 곳에 렌더하면 앱 전역에서 재사용된다.
@@ -77,6 +80,13 @@ function Dialog({
   onClose: (r: DialogResult) => void
   onText: (v: string) => void
 }) {
+  // 비밀번호 칸만 제어 컴포넌트다(PasswordInput 이 type 을 바꿔 그리므로 defaultValue 로는 안 된다).
+  // 다이얼로그가 닫히면 값도 버린다 — 다음에 열 때 앞 비밀번호가 남아 있으면 안 된다.
+  const [pw, setPw] = useState('')
+  useEffect(() => {
+    if (!spec) setPw('')
+  }, [spec])
+
   // ESC=취소 / Enter=확인. 다이얼로그가 열려 있는 동안만 바인딩하고, 뒤쪽 핸들러로 새지 않게 캡처 단계에서 멈춘다.
   useEffect(() => {
     if (!spec) return
@@ -121,16 +131,29 @@ function Dialog({
         </div>
         <div className="dlg-body">
           <p className="dlg-msg">{spec.message}</p>
-          {spec.input && (
-            <input
-              className="dlg-input"
-              type="text"
+          {spec.input?.password ? (
+            <PasswordInput
+              value={pw}
               autoFocus
-              defaultValue={spec.input.value ?? ''}
               placeholder={spec.input.placeholder}
-              onFocus={(e) => e.currentTarget.select()}
-              onChange={(e) => onText(e.target.value)}
+              ariaLabel={spec.input.placeholder ?? spec.title}
+              onChange={(v) => {
+                setPw(v)
+                onText(v)
+              }}
             />
+          ) : (
+            spec.input && (
+              <input
+                className="dlg-input"
+                type="text"
+                autoFocus
+                defaultValue={spec.input.value ?? ''}
+                placeholder={spec.input.placeholder}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => onText(e.target.value)}
+              />
+            )
           )}
           {spec.detail && spec.detail.length > 0 && (
             <div className="dlg-detail">

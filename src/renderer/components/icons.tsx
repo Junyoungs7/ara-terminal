@@ -74,6 +74,21 @@ export const IconFolderPlus = () =>
   )
 // 닫기 — 모달·드로어·탭·전송 항목이 쓰던 ✕/× 텍스트 글리프를 대체한다(폰트 폴백 편차 제거).
 export const IconClose = () => line(<path d="M6 6l12 12M18 6L6 18" />)
+// 비밀번호 표시/숨김 (2026-08-21 준영님 요청 — "입력창에 눈 표시를 둬서 실제 값 보여주게").
+export const IconEye = () =>
+  line(
+    <>
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z" />
+      <circle cx="12" cy="12" r="2.6" />
+    </>
+  )
+export const IconEyeOff = () =>
+  line(
+    <>
+      <path d="M2 12s3.6-6 10-6c1.4 0 2.6.3 3.7.7M22 12s-3.6 6-10 6c-1.4 0-2.6-.3-3.7-.7" />
+      <path d="M9.6 9.6a3.4 3.4 0 004.8 4.8M3 3l18 18" />
+    </>
+  )
 export const IconPlus = () => line(<path d="M12 5v14M5 12h14" />)
 // 탭바 오버플로 드롭다운 버튼(FB-tabs).
 export const IconChevronDown = () => line(<path d="M6 9l6 6 6-6" />)

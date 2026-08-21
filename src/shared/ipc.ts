@@ -95,6 +95,20 @@ export type SshConnectResult =
   | { ok: false; reason: 'auth'; message: string }
   | { ok: false; reason: 'network'; message: string }
 
+/**
+ * [접속 테스트] 결과 (2026-08-21 준영님 요청 — 저장 후 접속 하나였던 버튼을 셋으로 갈랐다).
+ *
+ * 세션을 만들지 않는다: SSH 는 붙어 보고 **바로 끊는다**, RDP 는 서버에 닿는지까지만 본다
+ * (RDP 비밀번호 검증은 wasm 클라이언트 전 경로가 필요해 실제 접속과 다를 게 없다 — 그 한계를
+ * note 로 말한다. 조용히 "성공"이라고 하지 않는다).
+ *
+ * 처음 보는 서버는 hostKeyNew 로 떨어진다. 테스트가 지문을 대신 수락하면 TOFU 가 무의미해지므로
+ * knownHosts 를 건드리지 않고, 화면이 "[저장 후 접속]에서 지문을 확인해 주세요"로 안내한다.
+ */
+export type ConnTestResult =
+  | { ok: true; note?: 'rdpReachOnly' }
+  | { ok: false; reason: 'hostKeyNew' | 'hostKeyMismatch' | 'orphanSecret' | 'auth' | 'network'; message?: string }
+
 // invoke(요청→응답) 채널의 요청/응답 타입.
 export type InvokeContract = {
   'workspace:load': { req: void; res: WorkspaceSnapshot }
@@ -165,10 +179,17 @@ export type InvokeContract = {
   'profile:save': { req: ProfileInput; res: { profile: ConnectionProfile } }
   'profile:delete': { req: { id: string }; res: { ok: true } }
   // ssh 연결(호스트키 TOFU + vault 비밀 복호). acceptHostKey는 최초 접속 확인 후 재호출용.
-  'ssh:connect': { req: { profileId: string; acceptHostKey?: boolean }; res: SshConnectResult }
+  // password: 이번 접속에만 쓰는 비밀번호(2026-08-21 준영님 제보 18번 — "따로 저장하지 않고 연결 후
+  // 입력"). 저장돼 있는 비밀보다 우선하고 **vault 에 쓰지 않는다**. RDP 는 예전부터 이 흐름이었고
+  // (rdp-creds 화면) SSH 에는 없어서, 비밀번호를 저장하지 않으면 접속할 길이 아예 없었다.
+  'ssh:connect': { req: { profileId: string; acceptHostKey?: boolean; password?: string }; res: SshConnectResult }
   // 호스트키 재설정: 프로필의 knownHosts 항목 삭제 → 다음 접속이 다시 TOFU 확인이 된다.
   // 서버 재설치로 지문이 바뀐 경우 mismatch 차단을 푸는 유일한 경로(사용자 확인 후 호출).
   'ssh:forgetHostKey': { req: { profileId: string }; res: { ok: true; removed: boolean } }
+  // [접속 테스트] — 세션을 만들지 않고 붙는지만 본다. **저장하기 전의 폼 값**으로 시험하므로
+  // profileId 가 아니라 ProfileInput 을 받는다(그게 이 버튼을 [저장]과 가르는 점이다).
+  // 비밀이 비어 있고 id 가 있으면 vault 의 기존 비밀을 쓴다(폼의 "비우면 기존 유지"와 같은 규칙).
+  'conn:test': { req: { input: ProfileInput }; res: ConnTestResult }
   // (2026-08-09 제거) W4sat F21 의 `rdp:launch` — OS 클라이언트 외부 실행. F25 이후 진입점이 없었고
   // 준영님이 A-40 을 "안 쓴다"로 닫았다. 앱은 이제 RDP 를 내장 뷰로만 연다.
   // 앱 내장 RDP(F25): main 이 loopback 릴레이를 띄우고 그 주소를 돌려준다. 접속 대상(host:port)은
@@ -444,8 +465,11 @@ export type EvApi = {
     delete(id: string): Promise<{ ok: true }>
   }
   ssh: {
-    connect(profileId: string, acceptHostKey?: boolean): Promise<SshConnectResult>
+    /** password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용). */
+    connect(profileId: string, acceptHostKey?: boolean, password?: string): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
+    /** [접속 테스트] — 저장하지 않고 폼 값으로 붙어 본다(ssh=인증까지, rdp=도달까지). */
+    test(input: ProfileInput): Promise<ConnTestResult>
   }
   // F25: 앱 내장 RDP 는 relay 로만 연다(OS 클라이언트 외부 실행은 2026-08-09 제거 — A-40).
   rdp: {

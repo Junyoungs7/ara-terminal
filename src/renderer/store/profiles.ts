@@ -77,10 +77,11 @@ export function useProfiles() {
   )
 
   // 연결. 호스트키 최초 접속(hostKeyNew) 시 상위에서 확인 다이얼로그 후 acceptHostKey로 재호출.
+  // password: 저장해 두지 않은 비밀번호를 그 자리에서 받아 넘길 때만 실린다(저장되지 않는다).
   const connect = useCallback(
-    async (profileId: string, acceptHostKey?: boolean): Promise<SshConnectResult> => {
+    async (profileId: string, acceptHostKey?: boolean, password?: string): Promise<SshConnectResult> => {
       setConn((c) => ({ ...c, [profileId]: 'connecting' }))
-      const res = await window.ev.ssh.connect(profileId, acceptHostKey)
+      const res = await window.ev.ssh.connect(profileId, acceptHostKey, password)
       setConn((c) => ({ ...c, [profileId]: res.ok ? 'connected' : 'error' }))
       return res
     },

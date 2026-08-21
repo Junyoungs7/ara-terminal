@@ -582,12 +582,14 @@ export function Shell() {
       profileId: string,
       acceptHostKey?: boolean,
       startPath?: string,
-      onSession?: (sessionId: string) => void
+      onSession?: (sessionId: string) => void,
+      /** 그 자리에서 받은 비밀번호(저장하지 않는다 — 아래 orphanSecret 분기에서만 채워진다). */
+      password?: string
     ): Promise<boolean> => {
       const target = await lookup(profileId)
       if (target?.type === 'rdp') return openRdpProfile(profileId)
       setActiveProfileId(profileId)
-      const res = await connect(profileId, acceptHostKey)
+      const res = await connect(profileId, acceptHostKey, password)
       if (res.ok) {
         const p = await lookup(profileId)
         const name = p?.name ?? 'ssh'
@@ -615,13 +617,31 @@ export function Shell() {
           confirmLabel: t('conn.hostkey.trustBtn'),
           cancelLabel: t('dlg.cancel')
         })
-        if (r === 'confirm') return await connectProfile(profileId, true, startPath, onSession)
+        if (r === 'confirm') return await connectProfile(profileId, true, startPath, onSession, password)
         return false
+      }
+      // 저장해 둔 비밀번호가 없다(또는 vault 에서 사라졌다). 예전엔 여기서 "연결 관리자에서 다시
+      // 입력하세요"로 끝났는데, 그러면 **비밀번호를 저장하지 않고 쓰는 길이 아예 없다** — RDP 는
+      // 접속할 때 물어보는 화면(rdp-creds)이 있는데 SSH 에는 없었다(준영님 제보 18번).
+      // 여기서 받아 이번 접속에만 쓴다. 저장은 하지 않는다 — 저장하려면 연결 관리자의 [저장]이다.
+      // password 를 이미 들고 온 재시도라면 이 분기로 다시 오지 않는다(main 이 그 값을 우선한다).
+      if (res.reason === 'orphanSecret') {
+        const p = await lookup(profileId)
+        const pw = await askText({
+          title: t('conn.pw.title'),
+          message: t('conn.pw.msg'),
+          detail: p ? [{ label: t('conn.fail.server'), value: `${p.username}@${p.host}:${p.port}` }] : [],
+          input: { placeholder: t('conn.pw.placeholder'), password: true },
+          confirmLabel: t('conn.pw.connect'),
+          cancelLabel: t('dlg.cancel')
+        })
+        if (!pw) return false
+        return await connectProfile(profileId, acceptHostKey, startPath, onSession, pw)
       }
       await showConnectFailure(profileId, res)
       return false
     },
-    [connect, lookup, sessions, selectSession, ask, showConnectFailure, revealFiles]
+    [connect, lookup, sessions, selectSession, ask, askText, showConnectFailure, revealFiles]
   )
 
   // openWorkProfile 이 connectProfile 보다 위에 선언돼 있어 ref 로 잇는다(선언 순서 때문이지

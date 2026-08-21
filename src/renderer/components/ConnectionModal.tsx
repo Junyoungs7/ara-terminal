@@ -5,6 +5,7 @@ import { Dropdown } from './Dropdown'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
 import { IconClose } from './icons'
+import { PasswordInput } from './PasswordInput'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { treeMenu } from '../interactions/actions'
 
@@ -29,13 +30,18 @@ type Form = {
   secret: string
 }
 
-const emptyForm: Form = {
+export const emptyForm: Form = {
   type: 'ssh',
   name: '',
   host: '',
   port: '22',
   username: '',
-  authType: 'key',
+  // **2026-08-21: 기본을 비밀번호로 바꿨다.** 준영님 제보 30번("신규 서버 등록시 비밀번호가 전부
+  // 틀리대")의 원인이 이 한 줄이었다. 기본이 'key' 라 신규 프로필의 인증 섹션은 [개인키] + 그 아래
+  // **패스프레이즈** 칸으로 열렸고, 거기에 서버 비밀번호를 넣으면 없는 키 파일(~/.ssh/id_ed25519)로
+  // 인증을 시도하며 그 값은 cfg.passphrase 로 들어간다 → 항상 실패. "다른 툴로는 되는데"가 그래서다.
+  // 사내 서버는 대부분 비밀번호 인증이고, 키를 쓰는 사람은 방식을 바꿀 줄 안다.
+  authType: 'password',
   keyPath: '~/.ssh/id_ed25519',
   // R6: 그룹 기본값은 없음(빈 값 = "기타"). 개발/운영 두 이름을 앱이 정해 주던 자리다.
   group: '',
@@ -96,6 +102,9 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string>('')
   const [busy, setBusy] = useState(false)
+  // [접속 테스트]·[저장] 결과 한 줄. error 와 자리를 나눠 쓰지 않는다 — 성공을 빨간 오류 자리에
+  // 띄우면 실패로 읽힌다.
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null)
   // R6: 프로필 리스트 필터(트리 검색과 같은 규칙 — 이름·호스트·그룹).
   const [query, setQuery] = useState('')
   // FB-ui2: 프로필 행 우클릭 메뉴 좌표 + 대상(null = 빈 영역 → [새 프로필]만).
@@ -124,6 +133,7 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     if (initedRef.current) return
     initedRef.current = true
     setError('')
+    setResult(null)
     setQuery('')
     if (request?.mode === 'new') {
       setSelectedId(null)
@@ -153,16 +163,19 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
 
   if (!open) return null
 
+  // 다른 프로필로 옮기면 앞 프로필의 테스트 결과는 무효다 — 남겨 두면 이 서버의 결과로 읽힌다.
   const selectProfile = (p: ConnectionProfile) => {
     setSelectedId(p.id)
     setForm(formFrom(p))
     setError('')
+    setResult(null)
   }
 
   const newProfile = () => {
     setSelectedId(null)
     setForm(emptyForm)
     setError('')
+    setResult(null)
   }
 
   // FB-ui2: 프로필 행 우클릭 — 빈 영역은 profileId=null([새 프로필]만 뜬다).
@@ -222,11 +235,15 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     void saveAndConnect()
   }
 
+  // 필수 칸 검사 — 세 버튼이 모두 이 문을 지난다.
+  const missingRequired = (): boolean => {
+    if (form.name.trim() && form.host.trim() && form.username.trim()) return false
+    setError(t('conn.err.required'))
+    return true
+  }
+
   const saveAndConnect = async () => {
-    if (!form.name.trim() || !form.host.trim() || !form.username.trim()) {
-      setError(t('conn.err.required'))
-      return
-    }
+    if (missingRequired()) return
     setBusy(true)
     setError('')
     try {
@@ -236,6 +253,39 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
       // 호스트키 확인·실패 사유 표시는 Shell 의 커스텀 다이얼로그가 담당한다.
       if (await onConnect(saved.id)) onClose()
       else setError(t('conn.connectFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // [저장] — 접속하지 않고 저장만. 창은 열어 둔다(연달아 여러 서버를 등록하는 흐름이라
+  // 저장할 때마다 창이 닫히면 다시 열어야 한다). 저장된 프로필이 폼에 그대로 남는다.
+  const saveOnly = async () => {
+    if (missingRequired()) return
+    setBusy(true)
+    setError('')
+    try {
+      const saved = await onSave(toInput())
+      setSelectedId(saved.id)
+      setForm((f) => ({ ...f, id: saved.id, secret: '' }))
+      setResult({ ok: true, msg: t('conn.saved') })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // [접속 테스트] — **저장하지 않고** 폼 값으로 붙어 본다. SSH 는 인증까지 확인하고 바로 끊고,
+  // RDP 는 서버에 닿는지까지만 본다(비밀번호 검증은 실제 접속과 같은 경로라서 — 그 한계를 문구로 말한다).
+  const testConn = async () => {
+    if (missingRequired()) return
+    setBusy(true)
+    setError('')
+    setResult(null)
+    try {
+      const r = await window.ev?.ssh.test(toInput())
+      if (!r) return
+      if (r.ok) setResult({ ok: true, msg: t(r.note === 'rdpReachOnly' ? 'conn.test.reachOnly' : 'conn.test.ok') })
+      else setResult({ ok: false, msg: t('conn.test.fail.' + r.reason) + (r.message ? ` — ${r.message}` : '') })
     } finally {
       setBusy(false)
     }
@@ -386,11 +436,11 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                 </div>
                 <div className="fld col-2">
                   <label>{t('conn.field.password')}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={form.secret}
                     placeholder={form.id ? t('conn.secret.keep') : t('conn.rdp.secret.optional')}
-                    onChange={(e) => setForm({ ...form, secret: e.target.value })}
+                    ariaLabel={t('conn.field.password')}
+                    onChange={(v) => setForm({ ...form, secret: v })}
                   />
                 </div>
                 <div className="pf-hint">{t('conn.rdp.secret.hint')}</div>
@@ -441,22 +491,26 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                     </div>
                     <div className="fld col-2" style={{ marginTop: 10 }}>
                       <label>{t('conn.field.passphrase')}</label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={form.secret}
-                        placeholder={form.id ? t('conn.secret.keep') : ''}
-                        onChange={(e) => setForm({ ...form, secret: e.target.value })}
+                        placeholder={form.id ? t('conn.secret.keep') : t('conn.passphrase.placeholder')}
+                        ariaLabel={t('conn.field.passphrase')}
+                        onChange={(v) => setForm({ ...form, secret: v })}
                       />
                     </div>
+                    {/* 2026-08-21: 준영님이 이 칸을 "비밀번호"로 바꿔 달라고 하셨는데, 그러면 제보 30번이
+                        영구화된다 — 패스프레이즈는 **키 파일을 푸는 암호**이고 서버 비밀번호가 아니다.
+                        이름을 감추는 대신 무엇인지 적었다. 서버 비밀번호는 위 [비밀번호] 방식으로 간다. */}
+                    <div className="pf-hint">{t('conn.passphrase.hint')}</div>
                   </>
                 ) : (
                   <div className="fld col-2">
                     <label>{t('conn.field.password')}</label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={form.secret}
                       placeholder={form.id ? t('conn.secret.keep') : ''}
-                      onChange={(e) => setForm({ ...form, secret: e.target.value })}
+                      ariaLabel={t('conn.field.password')}
+                      onChange={(v) => setForm({ ...form, secret: v })}
                     />
                   </div>
                 )}
@@ -464,13 +518,22 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
             )}
           </div>
         </div>
+        {/* 2026-08-19 준영님: "⏎ 저장 후 접속" 힌트를 뺐다 — 바로 옆 버튼이 같은 말을 하고 있었다.
+            Enter 로 제출되는 동작(#70)은 그대로다.
+            2026-08-21 준영님: 버튼 하나를 셋으로 갈랐다 — [접속 테스트](저장 안 함) · [저장](접속 안 함) ·
+            [저장 후 접속]. 셋을 한 줄에 두면 주된 동작이 안 읽히므로 강조는 마지막 하나만 준다. */}
         <div className="modal-ft">
-          {/* 2026-08-19 준영님: "⏎ 저장 후 접속" 힌트를 뺐다 — 바로 옆 버튼이 같은 말을 하고 있었다.
-              Enter 로 제출되는 동작(#70)은 그대로다. 오류는 계속 이 자리에 뜬다. */}
           {error ? <span className="err">{error}</span> : null}
+          {!error && result ? <span className={result.ok ? 'okmsg' : 'err'}>{result.msg}</span> : null}
           <span className="sp" />
           <button className="btn sec" onClick={onClose}>
             {t('conn.cancel')}
+          </button>
+          <button className="btn sec" disabled={busy} onClick={() => void testConn()}>
+            {t('conn.test')}
+          </button>
+          <button className="btn sec" disabled={busy} onClick={() => void saveOnly()}>
+            {t('conn.save')}
           </button>
           <button className="btn pri" disabled={busy} onClick={() => void saveAndConnect()}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

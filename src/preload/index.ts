@@ -73,9 +73,10 @@ const api: EvApi = {
     delete: (id: string) => ipcRenderer.invoke('profile:delete', { id })
   },
   ssh: {
-    connect: (profileId: string, acceptHostKey?: boolean) =>
-      ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey }),
-    forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId })
+    connect: (profileId: string, acceptHostKey?: boolean, password?: string) =>
+      ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password }),
+    forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
+    test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },
   rdp: {
     relay: (profileId: string) => ipcRenderer.invoke('rdp:relay', { profileId }),

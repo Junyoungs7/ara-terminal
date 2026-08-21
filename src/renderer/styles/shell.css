@@ -3725,6 +3725,54 @@
 .fld input::placeholder {
   color: var(--text-dim);
 }
+/* 비밀번호 칸 + 눈 토글(PasswordInput). 껍데기가 테두리를 갖고 안쪽 input 은 투명하다 —
+   그렇게 해야 눈 버튼이 테두리 **안**에 앉는다(콤보와 같은 구조, 같은 이유로 링도 껍데기가 그린다). */
+.pw-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding-right: 4px;
+  transition: 0.14s;
+}
+.pw-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.fld .pw-wrap input,
+.fld .pw-wrap input:focus {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+}
+.pw-eye {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.pw-eye:hover {
+  background: var(--bg-raised);
+  color: var(--text-mid);
+}
+.pw-wrap.shown .pw-eye {
+  color: var(--accent);
+}
+.pw-eye svg {
+  width: 15px;
+  height: 15px;
+}
 .fld select {
   appearance: none;
   cursor: pointer;
@@ -3809,6 +3857,24 @@
   font-size: var(--fs-md);
   color: var(--err);
   font-family: var(--ui);
+}
+/* [접속 테스트]·[저장] 성공 한 줄. 오류와 같은 자리를 쓰되 색으로 갈린다 —
+   성공을 빨간 자리에 띄우면 실패로 읽힌다. 긴 문구가 버튼을 밀지 않게 줄인다. */
+.modal-ft .okmsg {
+  font-size: var(--fs-md);
+  color: var(--ok);
+  font-family: var(--ui);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 오류 문구도 같은 이유로 잘린다(테스트 실패에는 서버가 준 메시지가 붙어 길다). */
+.modal-ft .err {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .btn {
   border: none;
@@ -4459,6 +4525,16 @@
 }
 .dd-btn .dd-input::placeholder {
   color: var(--text-dim);
+}
+/* 2026-08-21 준영님 제보 16번("그룹 클릭하면 인풋 라운드 라인이 이상하게 잡힌다").
+   `.fld input:focus`(특이도 0,2,1)가 콤보 **내부** 입력칸(.dd-btn .dd-input = 0,2,0)까지 잡아
+   포커스 링이 두 겹 그려졌다: 껍데기(.dd.open .dd-btn)에 하나, 안쪽 입력 박스에 또 하나.
+   안쪽 것은 패딩 박스(0 10px 안쪽)에 맞춰 그려져 라운드가 어긋나 보인다. 링은 껍데기만 그린다. */
+.dd-btn .dd-input,
+.dd-btn .dd-input:focus {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 .dd-btn .dd-caret {
   display: grid;
@@ -5598,6 +5674,19 @@
   border-radius: var(--radius-sm);
   color: var(--text-hi);
   font-size: var(--fs-md);
+}
+/* 눈 토글이 붙으면 테두리는 껍데기(.pw-wrap)가 갖는다 — 안쪽 input 이 자기 테두리를 또 그리면
+   칸 안에 칸이 생긴다(연결 관리자 .fld 쪽과 같은 규칙). */
+.rdp-creds .pw-wrap {
+  border-radius: var(--radius-sm);
+}
+.rdp-creds .pw-wrap input,
+.rdp-creds .pw-wrap input:focus,
+.rdp-creds .pw-wrap input:focus-visible {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  outline: none;
 }
 .rdp-go {
   padding: 8px 12px;

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { registerPasteTarget } from '../store/pasteFiles'
 import { t } from '../i18n'
 import { Dropdown } from './Dropdown'
+import { PasswordInput } from './PasswordInput'
 import {
   KEY_COMBOS,
   RDP_DEFAULT,
@@ -148,6 +149,25 @@ function cursorStyleCallback(canvas: HTMLCanvasElement) {
       canvas.style.cursor = 'default'
     }
   }
+}
+
+/**
+ * wasm 클라이언트 로딩(동적 import + wasm 인스턴스화)만 따로 뗀다.
+ *
+ * 2026-08-21 준영님 제보 20번("rdp에서 비밀번호 입력해도 Failed to fetch"): 이 단계가 접속 본문과
+ * 같은 try 안에 있어서, 실패해도 화면에는 브라우저가 던진 "Failed to fetch" 한 줄만 남았다. 그건
+ * **서버 문제가 아니라 앱이 클라이언트를 못 불러온 것**이고(패키지가 wasm 을 base64 data: URL 로
+ * 내장하고 fetch 로 읽는다 — index.html 의 CSP connect-src data: 가 그 통로다), 그 구분이 화면에
+ * 없으면 원인을 좁힐 수가 없다. 저장된 비밀번호가 없으면 첫 자동 시도는 이 줄에 닿기 전에 입력
+ * 화면으로 빠지므로, 준영님이 본 오류는 **입력한 직후 이 단계를 처음 지날 때** 난 것이다.
+ */
+async function loadRdpClient() {
+  // wasm 이 base64 로 내장된 6MB 청크라 필요할 때만 불러온다(앱 첫 로딩을 무겁게 하지 않는다).
+  const mod = await import('@devolutions/iron-remote-desktop-rdp')
+  // init 이 wasm 인스턴스화까지 한다 — 경로 인자가 없다(내장 data: URL 을 스스로 쓴다).
+  // 로그 수준은 error: 접속 실패 원인은 봐야 하고, info 이상은 프레임마다 콘솔을 채운다.
+  await mod.init('error')
+  return mod
 }
 
 function describeRdpError(e: unknown): string {
@@ -298,12 +318,15 @@ export function RdpView({
         setPhase('creds')
         return
       }
+      // 클라이언트 로딩 실패는 접속 실패와 구분해서 말한다(제보 20번 — loadRdpClient 주석 참고).
+      const mod = await loadRdpClient().catch((e: unknown) => {
+        cleanup()
+        setError(`${t('rdp.err.client')}\n${describeRdpError(e)}`)
+        setPhase('error')
+        return null
+      })
+      if (!mod) return
       try {
-        // wasm 이 base64 로 내장된 6MB 청크라 필요할 때만 불러온다(앱 첫 로딩을 무겁게 하지 않는다).
-        const mod = await import('@devolutions/iron-remote-desktop-rdp')
-        // init 이 wasm 인스턴스화까지 한다 — 경로 인자가 없다(내장 data: URL 을 스스로 쓴다).
-        // 로그 수준은 error: 접속 실패 원인은 봐야 하고, info 이상은 프레임마다 콘솔을 채운다.
-        await mod.init('error')
         const builder = new mod.Backend.SessionBuilder()
         // 파일 전송 provider — 확장은 connect() **전에** 등록해야 CLIPRDR 채널이 열린다.
         const provider = new mod.RdpFileTransferProvider({ chunkSize: 64 * 1024 }) as unknown as RdpProvider
@@ -761,12 +784,13 @@ export function RdpView({
                 }}
               >
                 <div className="rdp-msg">{t('rdp.creds.msg')}</div>
-                <input
-                  type="password"
-                  autoFocus
+                {/* 2026-08-21 준영님: 눈 표시로 실제 값을 확인할 수 있어야 한다(연결 관리자와 같은 칸). */}
+                <PasswordInput
                   value={password}
+                  autoFocus
                   placeholder={t('rdp.creds.password')}
-                  onChange={(e) => setPassword(e.target.value)}
+                  ariaLabel={t('rdp.creds.password')}
+                  onChange={setPassword}
                 />
                 <button type="submit" className="rdp-go">
                   {t('rdp.creds.connect')}
