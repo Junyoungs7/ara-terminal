@@ -7,6 +7,7 @@ import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { createForwardService, type ForwardService } from '../forward/PortForward'
 import {
   closeTab,
+  closeTabByOrigin,
   createBrowserService,
   goBackActive,
   reloadActive,
@@ -44,6 +45,8 @@ export function registerForwardIpc(
     closeTab(id)
     return { ok: true } as const
   })
+  // 포트 표의 [닫기] — 탭 id 대신 주소로 닫는다(그쪽은 id 를 모른다).
+  handle('browser:closeOrigin', ({ origin }) => ({ ok: closeTabByOrigin(origin) }))
   handle('browser:reload', () => {
     reloadActive()
     return { ok: true } as const

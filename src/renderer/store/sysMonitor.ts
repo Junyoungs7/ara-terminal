@@ -35,14 +35,28 @@ export function sampleOf(s: RemoteStats | HostStats): Sample {
 }
 
 /**
+ * 세로 스케일 최솟값. 이보다 낮은 구간은 이 값으로 늘려 본다 — 0~2% 사이를 오가는 유휴 서버도
+ * 선이 움직이는 게 보여야 한다. 너무 작게 잡으면(예: 1) 측정 노이즈가 산맥처럼 그려진다.
+ */
+export const SPARK_MIN_SCALE = 10
+
+/**
  * 표본 목록 → SVG polyline 의 points 문자열. 값은 0~100, 왼쪽이 과거.
  * 표본이 하나뿐이면 선이 안 그려지므로 같은 값을 양 끝에 둔다(빈 그래프보다 낫다).
+ *
+ * **세로 스케일은 그 창의 최댓값에 맞춘다** (2026-08-22 준영님 제보 27번 — "그래프가 그냥
+ * 일직선임"). 0~100 고정으로 그리면 유휴 서버의 1~3% 변동이 14px 높이에서 0.4px 도 못 움직여
+ * 눈에는 직선이다. 10 단위로 올려 잡아 표본 하나마다 스케일이 흔들리지 않게 하고, 절대값은
+ * 옆의 숫자가 말한다(그래서 스케일이 변해도 오해가 생기지 않는다).
  */
 export function sparkPoints(values: readonly number[], w: number, h: number): string {
   if (values.length === 0) return ''
   const vs = values.length === 1 ? [values[0]!, values[0]!] : values
-  const step = w / (vs.length - 1)
-  return vs.map((v, i) => `${(i * step).toFixed(1)},${(h - (Math.max(0, Math.min(100, v)) / 100) * h).toFixed(1)}`).join(' ')
+  const clamped = vs.map((v) => Math.max(0, Math.min(100, v)))
+  const peak = Math.max(...clamped)
+  const scale = Math.min(100, Math.max(SPARK_MIN_SCALE, Math.ceil(peak / SPARK_MIN_SCALE) * SPARK_MIN_SCALE))
+  const step = w / (clamped.length - 1)
+  return clamped.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / scale) * h).toFixed(1)}`).join(' ')
 }
 
 /** 가상 파일시스템은 숨긴다 — F26 디스크 창과 같은 규칙(파서는 안 걸러 주고 화면이 정한다). */

@@ -1913,6 +1913,15 @@
 .dsk-dir:hover {
   background: var(--bg-raised);
 }
+/* 폴더 아이콘 — 이 목록이 전부 폴더임을 모양으로 말한다(제보 28번). 파일 트리와 같은 규격. */
+.dsk-dir .dfi {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--sb-icon);
+  height: var(--sb-icon);
+  color: var(--text-dim);
+}
 .dsk-dir .sz {
   flex: none;
   width: 62px;
@@ -5129,8 +5138,12 @@
   line-height: 1.32;
   color: var(--text-mid);
   white-space: pre;
+  /* 가로만 자른다. 세로 상한은 **줄 수로** 잡는다 — 예전엔 72px 고정이라 여섯 줄(약 87px)의
+     마지막 줄이 잘려 나갔다(2026-08-22 준영님 제보 7번: "창 제일 하단에 글자까지 보이지 않음").
+     이 화면이 보여 주려는 것이 바로 그 마지막 줄이다. 6 은 MiniPreview.CARD_LINES 와 같은 값. */
   overflow: hidden;
-  max-height: 72px;
+  max-height: calc(6 * 1.32em + 9px);
+  min-height: calc(6 * 1.32em + 9px);
   margin: 0;
   /* 터미널 축소판답게 — 카드 배경이 아니라 **터미널 배경**을 깐다. 글자만 떠 있으면 메모지처럼 보인다. */
   background: var(--bg-abyss);
@@ -5181,7 +5194,10 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   z-index: 120;
-  pointer-events: none;
+  /* 2026-08-22 준영님 제보 7번: "여기에 마우스를 올려도 이 창이 사라지지 않게 하며 …
+     상단으로 스크롤도 가능해야 함." pointer-events:none 이면 둘 다 불가능하다 — 마우스가
+     이 창을 통과해 버려서 올릴 수도, 휠을 굴릴 수도 없었다. 닫히는 시점은 이제 JS 가 잡는다
+     (MiniPreview 의 유예 타이머 — 카드와 이 창 사이 빈 자리를 지나는 동안 닫히지 않는다). */
   display: flex;
   flex-direction: column;
 }
@@ -5203,7 +5219,10 @@
   line-height: 1.45;
   color: var(--t-fg);
   white-space: pre;
-  overflow: hidden;
+  /* 하단이 기본이고 위로 거슬러 볼 수 있다(제보 7번). 가로는 그대로 자른다 — 확대 프리뷰는
+     읽는 화면이지 편집하는 화면이 아니라 좌우로까지 끌게 하면 산만해진다. */
+  overflow-x: hidden;
+  overflow-y: auto;
   /* 확대 프리뷰도 터미널 화면 그대로 — 카드와 같은 배경을 쓰면 "글자 목록"으로 보인다. */
   background: var(--t-bg, var(--bg-abyss));
 }

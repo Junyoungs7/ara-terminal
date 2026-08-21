@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PortForward, RemotePort } from '@shared/types'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
@@ -117,6 +117,14 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
   const [minStr, setMinStr] = useState('')
   const [maxStr, setMaxStr] = useState('')
   const [use, setUse] = useState<PortUse>('any')
+  // 지금 내장 브라우저에 떠 있는 오리진들. **버튼 라벨의 진실은 브라우저 쪽에 있다**
+  // (2026-08-22 준영님 제보 1번: "브라우저창 또는 탭 닫으면 열기가 닫기로 변경").
+  // 포워딩 유무로 라벨을 정하던 예전 방식은 브라우저를 닫아도 그대로였다 — 포워딩은 살아 있으니까.
+  const [openOrigins, setOpenOrigins] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    const off = window.ev?.browserTabs.onTabs((e) => setOpenOrigins(new Set(e.tabs.map((x) => x.origin))))
+    return () => off?.()
+  }, [])
 
   if (!isSsh) return <span className="sb-placeholder">{t('mon.needSsh')}</span>
 
@@ -124,18 +132,30 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
   const { visible } = filterPorts(ports, query, span, use, forwards.map((f) => f.remotePort))
   const fwdOf = (port: number): PortForward | undefined => forwards.find((f) => f.remotePort === port)
 
+  /** 그 포워딩을 브라우저에서 여는 주소. 오리진 비교에도 이 값을 쓴다(같은 규칙 한 곳). */
+  const urlOf = (f: PortForward): string => `http://localhost:${f.localPort}`
+  /** 이 행이 지금 브라우저에 떠 있는가 — 포워딩이 있고 그 주소의 탭이 살아 있을 때만. */
+  const isOpen = (fwd: PortForward | undefined): boolean => Boolean(fwd && openOrigins.has(urlOf(fwd)))
+
   // [열기] 한 번으로 끝낸다. 포워딩이 없으면 만들고 나서 그 로컬 포트를 연다 —
   // 예전엔 ↗(만들기)를 누른 **다음** [열기]를 눌러야 해서 두 번 클릭이었다(준영님 제보).
   const openPort = async (port: number): Promise<void> => {
     const existing = fwdOf(port)
     if (existing) {
-      void window.ev?.browser.open(`http://localhost:${existing.localPort}`)
+      void window.ev?.browser.open(urlOf(existing))
       return
     }
     if (!sessionId) return
     const res = await window.ev?.forward.create(sessionId, port).catch(() => null)
     onForwardsChanged()
-    if (res && res.ok) void window.ev?.browser.open(`http://localhost:${res.forward.localPort}`)
+    if (res && res.ok) void window.ev?.browser.open(urlOf(res.forward))
+  }
+
+  // [닫기] — **브라우저만** 닫는다. 포워딩은 남겨 둔다: 다시 [열기]를 누르면 바로 열리고,
+  // 터널을 끊는 것은 별개 동작이다(행 왼쪽 초록 표시가 터널이 살아 있음을 말한다).
+  // 탭이 하나뿐이면 창까지 닫히는 것은 브라우저 쪽 기존 규칙이다(closeTabByOrigin 주석).
+  const closePort = (fwd: PortForward): void => {
+    void window.ev?.browserTabs.closeOrigin(urlOf(fwd)).catch(() => null)
   }
   const stopForward = (id: string): void => {
     void window.ev?.forward
@@ -289,17 +309,34 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
                       )}
                     </td>
                     <td className="pt-act">
-                      {/* 열기 하나가 "터널 만들기 + 브라우저 열기" 둘을 하던 것을 가른다 —
-                          라벨이 무슨 일이 일어나는지 말해야 한다. */}
-                      <button
-                        type="button"
-                        className={'pbtn' + (fwd ? ' pri' : '')}
-                        data-action={fwd ? 'forward.open' : 'forward.create'}
-                        title={t(fwd ? 'fwd.open.title' : 'fwd.create.title')}
-                        onClick={() => void openPort(p.port)}
-                      >
-                        {t(fwd ? 'fwd.browse' : 'fwd.open')}
-                      </button>
+                      {/* 2026-08-22 준영님 제보 1번: 버튼은 **하나**이고 브라우저 상태를 따라 뒤집힌다.
+                          [열기] → 필요하면 터널을 만들고 내장 브라우저로. 떠 있으면 [닫기].
+                          예전엔 라벨이 포워딩 유무로 갈려서, 브라우저를 닫아도 [브라우저]인 채였다
+                          (터널은 살아 있으니까) — 사용자가 보는 것은 창이지 터널이 아니다. */}
+                      {isOpen(fwd) && fwd ? (
+                        <button
+                          type="button"
+                          className="pbtn pri"
+                          data-action="browser.close"
+                          data-local-port={fwd.localPort}
+                          title={t('fwd.close.title')}
+                          onClick={() => closePort(fwd)}
+                        >
+                          {t('fwd.close')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pbtn"
+                          data-action={fwd ? 'forward.open' : 'forward.create'}
+                          title={t(fwd ? 'fwd.open.title' : 'fwd.create.title')}
+                          onClick={() => void openPort(p.port)}
+                        >
+                          {t('fwd.open')}
+                        </button>
+                      )}
+                      {/* 터널 해제는 남겨 둔다 — [닫기]는 창을 닫을 뿐이라 터널을 끊을 자리가 따로
+                          있어야 한다. 주된 동작이 아니므로 톤만 낮춘다. */}
                       {fwd && (
                         <button
                           type="button"

@@ -34,6 +34,13 @@ let win: BrowserWindow | null = null
 let seq = 0
 const tabs: { id: string; view: WebContentsView; url: string }[] = []
 let activeId: string | null = null
+/**
+ * 본창을 찾는 길. **탭 상태를 본창에도 알리려고** 들고 있다 (2026-08-22 준영님 제보 1번:
+ * 포트 모니터의 [열기]가 브라우저에 그 포트가 떠 있으면 [닫기]로 바뀌어야 한다). 그러려면
+ * 포트 표가 "지금 무엇이 열려 있는지"를 알아야 하는데, 그 사실은 여기에만 있다.
+ * openTab 이 처음 불릴 때 채워진다(창을 만들기 전에도 알림이 필요할 일은 없다).
+ */
+let getMain: (() => BrowserWindow | null) | null = null
 
 const originOf = (url: string): string => {
   try {
@@ -43,17 +50,27 @@ const originOf = (url: string): string => {
   }
 }
 
-/** 렌더러(탭 줄)에 지금 상태를 알린다. 라벨은 **오리진만** — 페이지 제목은 쓰지 않는다. */
+/**
+ * 렌더러(탭 줄)에 지금 상태를 알린다. 라벨은 **오리진만** — 페이지 제목은 쓰지 않는다.
+ *
+ * 본창에도 같은 것을 보낸다: 포트 표의 [열기]/[닫기]가 이 목록을 보고 라벨을 정한다.
+ * 창이 닫혀 목록이 비었을 때도 보내야 한다 — 그래야 [닫기]가 [열기]로 돌아온다.
+ */
 function publish(): void {
-  if (!win || win.isDestroyed()) return
-  const list: BrowserTab[] = tabs.map((t) => ({
-    id: t.id,
-    origin: originOf(t.url) || t.url,
-    url: t.url,
-    loading: !t.view.webContents.isDestroyed() && t.view.webContents.isLoading()
-  }))
+  const alive = win !== null && !win.isDestroyed()
+  const list: BrowserTab[] = alive
+    ? tabs.map((t) => ({
+        id: t.id,
+        origin: originOf(t.url) || t.url,
+        url: t.url,
+        loading: !t.view.webContents.isDestroyed() && t.view.webContents.isLoading()
+      }))
+    : []
+  const payload = { tabs: list, activeId: alive ? activeId : null }
   // 이 push 도 단일 지점을 거친다(scan:push).
-  pushSend(win.webContents, 'browser:tabs', { tabs: list, activeId })
+  if (alive && win) pushSend(win.webContents, 'browser:tabs', payload)
+  const main = getMain?.() ?? null
+  if (main && !main.isDestroyed()) pushSend(main.webContents, 'browser:tabs', payload)
 }
 
 /** 활성 탭만 보이게 한다. 숨김은 bounds 0 이 아니라 visible 로 — 0 크기 뷰는 리사이즈가 튄다. */
@@ -107,6 +124,8 @@ function ensureWindow(getParent: () => BrowserWindow | null): BrowserWindow {
     tabs.length = 0
     activeId = null
     if (win === w) win = null
+    // 창을 통째로 닫아도 포트 표의 [닫기]가 [열기]로 돌아와야 한다 — 빈 목록을 알린다.
+    publish()
   })
   return w
 }
@@ -114,6 +133,7 @@ function ensureWindow(getParent: () => BrowserWindow | null): BrowserWindow {
 /** 새 탭을 만든다(같은 오리진이 이미 있으면 그 탭을 재사용 — 미리보기는 오리진 단위로 본다). */
 export function openTab(url: string, getParent: () => BrowserWindow | null): boolean {
   if (!isSafeExternal(url)) return false
+  getMain = getParent // 본창에도 탭 상태를 알리기 위해(publish 주석 참고)
   const w = ensureWindow(getParent)
 
   const same = tabs.find((t) => originOf(t.url) === originOf(url) && originOf(url) !== '')
@@ -181,6 +201,20 @@ export function closeTab(id: string): void {
   }
   layout()
   publish()
+}
+
+/**
+ * 그 오리진의 탭을 닫는다 (2026-08-22 준영님 제보 1번 — 포트 표의 [닫기]).
+ *
+ * "브라우저 창에서 단일로 있을 경우 브라우저 닫기, 탭으로 있을 경우 탭 닫기"는 closeTab 이 이미
+ * 그렇게 한다(마지막 탭이면 창을 닫는다) — 여기서 두 번째 규칙을 만들지 않는다.
+ * 열려 있지 않으면 false: 호출측이 "이미 닫혔다"를 알 수 있다.
+ */
+export function closeTabByOrigin(origin: string): boolean {
+  const hit = tabs.find((t) => originOf(t.url) === origin)
+  if (!hit) return false
+  closeTab(hit.id)
+  return true
 }
 
 export function reloadActive(): void {

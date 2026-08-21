@@ -72,6 +72,8 @@
   "mon.state.closed": "닫힘",
   "mon.dest.inexact": "(요청 포트가 사용 중이었습니다)",
   "fwd.browse": "브라우저로",
+  "fwd.close": "닫기",
+  "fwd.close.title": "내장 브라우저에서 이 주소 닫기 (탭이 하나뿐이면 창까지)",
   "fwd.stop": "해제",
   "fwd.stop.title": "이 포워딩을 끊습니다. 내 PC 의 리슨 포트가 닫힙니다",
   "fwd.badge.title": "클릭하면 포워딩을 해제합니다",

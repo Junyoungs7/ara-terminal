@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { parseDf, parseDu, type DirUsage, type DiskRow } from '@shared/remoteCatalog'
 import { humanSize } from './filePath'
-import { IconBack, IconRefresh } from './icons'
+import { IconBack, IconFolder, IconRefresh } from './icons'
 import { t } from '../i18n'
 import { remoteError } from '../store/remoteState'
 
@@ -287,8 +287,14 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
       </div>
 
       <div className="con-tblwrap dsk-dirs">
+        {/* 2026-08-22 준영님 제보 28번: "어디까지가 폴더고 파일인지 모르겠음."
+            답은 **전부 폴더**다 — `du -x -d1` 은 한 단계 아래 폴더 합계만 준다(파일은 안 나온다).
+            그 사실을 글로 적는 대신 아이콘으로 말한다. 파일 트리와 같은 폴더 아이콘을 쓴다. */}
         {dirs.map((d) => (
           <div key={d.path} className="dsk-dir" data-path={d.path} title={d.path} onClick={() => mount && go(mount, d.path)}>
+            <span className="dfi">
+              <IconFolder />
+            </span>
             <span className="sz">{kb(d.kb)}</span>
             <span className="pt">{d.path}</span>
           </div>

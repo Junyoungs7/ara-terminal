@@ -155,6 +155,7 @@ const api: EvApi = {
   browserTabs: {
     select: (id: string) => ipcRenderer.invoke('browser:select', { id }),
     closeTab: (id: string) => ipcRenderer.invoke('browser:closeTab', { id }),
+    closeOrigin: (origin: string) => ipcRenderer.invoke('browser:closeOrigin', { origin }),
     reload: () => ipcRenderer.invoke('browser:reload', {}),
     back: () => ipcRenderer.invoke('browser:back', {}),
     onTabs: (cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void) => {

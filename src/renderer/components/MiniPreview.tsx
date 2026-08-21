@@ -19,6 +19,12 @@ const REFRESH_MS = 1500
 // 여기서 top 을 클램프한다). 값이 갈라지면 아래쪽 카드에서 프리뷰가 잘린다.
 const ZOOM_MAX_H = 340
 const EDGE_GAP = 8
+/**
+ * 카드에서 확대 창으로 마우스를 옮기는 동안 그 **사이 빈 자리**를 지난다. 즉시 닫으면 확대 창에
+ * 닿을 방법이 없다(2026-08-22 준영님 제보 7번: "여기에 마우스를 올려도 이 창이 사라지지 않게").
+ * 짧게 잡는다 — 길면 다른 카드로 옮길 때 옛 프리뷰가 남아 따라다니는 것처럼 보인다.
+ */
+const HOVER_GRACE_MS = 160
 
 export function MiniPreview({
   open,
@@ -58,10 +64,36 @@ export function MiniPreview({
     return () => clearInterval(timer)
   }, [open, sessions])
 
-  const enter = useCallback((id: string, el: HTMLElement) => {
-    const top = el.getBoundingClientRect().top
-    setHover({ id, top: Math.max(EDGE_GAP, Math.min(top, window.innerHeight - ZOOM_MAX_H - EDGE_GAP)) })
+  // 닫힘은 **유예를 두고** 일어난다 — 카드와 확대 창 사이 빈 자리를 지나는 동안 닫히면 안 된다.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const keepOpen = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = null
   }, [])
+  const scheduleClose = useCallback(() => {
+    keepOpen()
+    closeTimer.current = setTimeout(() => setHover(null), HOVER_GRACE_MS)
+  }, [keepOpen])
+  useEffect(() => () => keepOpen(), [keepOpen]) // 언마운트 때 타이머를 남기지 않는다
+
+  const enter = useCallback(
+    (id: string, el: HTMLElement) => {
+      keepOpen()
+      const top = el.getBoundingClientRect().top
+      setHover({ id, top: Math.max(EDGE_GAP, Math.min(top, window.innerHeight - ZOOM_MAX_H - EDGE_GAP)) })
+    },
+    [keepOpen]
+  )
+
+  // 확대 프리뷰는 **맨 아래가 기본**이다(준영님 확정: "미니 프리뷰 디폴트는 제일 하단을 고정").
+  // 열릴 때·내용이 바뀔 때 바닥으로 붙이고, 그 뒤로 사용자가 위로 굴리는 것은 막지 않는다.
+  const zoomRef = useRef<HTMLPreElement>(null)
+  const zoomId = hover?.id ?? null
+  const zoomText = zoomId ? (snaps[zoomId] ?? []).join('\n') : ''
+  useEffect(() => {
+    const el = zoomRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [zoomId, zoomText])
 
   if (!open) return null
   const hovered = hover ? sessions.find((s) => s.id === hover.id) : undefined
@@ -79,7 +111,7 @@ export function MiniPreview({
             title={s.title}
             onClick={() => onSelect(s.id)}
             onMouseEnter={(e) => enter(s.id, e.currentTarget)}
-            onMouseLeave={() => setHover((h) => (h?.id === s.id ? null : h))}
+            onMouseLeave={scheduleClose}
           >
             <div className="mini-title">
               <span className="mini-dot" style={{ background: groupColor(s.serverKey, s.type === 'local') }} />
@@ -94,10 +126,11 @@ export function MiniPreview({
         ))}
       </div>
       {hover && hovered && (
-        <div className="mini-zoom" style={{ top: hover.top }}>
+        // 마우스를 여기 올리면 유지된다 — 위로 굴려 앞 내용을 볼 수 있어야 하기 때문이다(제보 7번).
+        <div className="mini-zoom" style={{ top: hover.top }} onMouseEnter={keepOpen} onMouseLeave={scheduleClose}>
           <div className="mini-zoom-title">{hovered.title}</div>
-          <pre className="mini-zoom-body">
-            {(snaps[hover.id] ?? []).join('\n')}
+          <pre className="mini-zoom-body" ref={zoomRef}>
+            {zoomText}
             <span className="mini-cursor" />
           </pre>
         </div>

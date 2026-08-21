@@ -42,6 +42,13 @@ const LABEL: Record<BottomId, string> = {
 
 const MIN_H = 120
 const DEFAULT_H = 260
+/**
+ * 끌어 올릴 때 **위에 남길 여백**. 2026-08-22 준영님 제보 5번("하단바를 내리면 탭 아래까지
+ * 내릴 수 있도록"): 예전 값이 200px 이라 터미널이 늘 그만큼 남아, 표를 크게 보려면 [최대화]를
+ * 눌러 전부 덮는 수밖에 없었다(그 사이 크기가 없었다).
+ * 타이틀바(36) + 탭바(32) + 여유 — 탭이 가려지지 않을 만큼만 남긴다. 그 아래로는 사용자가 정한다.
+ */
+const MIN_ABOVE = 76
 
 type Props = {
   /** 열린 탭. null 이면 하단바 자체가 꺼져 있다(이 컴포넌트가 아무것도 그리지 않는다). */
@@ -85,7 +92,7 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
     const move = (ev: MouseEvent): void => {
       // 위로 끌면 커진다. 터미널이 아주 얇아지지 않게 위쪽 여백을 남긴다.
       const next = h0 + (y0 - ev.clientY)
-      setH(Math.max(MIN_H, Math.min(window.innerHeight - 200, next)))
+      setH(Math.max(MIN_H, Math.min(window.innerHeight - MIN_ABOVE, next)))
     }
     const up = (): void => {
       window.removeEventListener('mousemove', move)

@@ -301,6 +301,9 @@ export type InvokeContract = {
   // 이 채널들은 **우리 탭 줄에서만** 불린다(원격 페이지엔 preload 가 없다).
   'browser:select': { req: { id: string }; res: { ok: true } }
   'browser:closeTab': { req: { id: string }; res: { ok: true } }
+  // 오리진으로 닫기 — 포트 표의 [닫기]가 쓴다(그쪽은 탭 id 를 모르고 주소만 안다).
+  // 마지막 탭이면 창까지 닫히는 것은 closeTab 의 기존 규칙 그대로다.
+  'browser:closeOrigin': { req: { origin: string }; res: { ok: boolean } }
   'browser:reload': { req: Record<string, never>; res: { ok: true } }
   'browser:back': { req: Record<string, never>; res: { ok: true } }
   // F29 시스템 모니터 [로컬] 탭 — **세션과 무관한** 내 PC 통계. telemetry:* 와 달리 sessionId 가 없다:
@@ -523,8 +526,11 @@ export type EvApi = {
   browserTabs: {
     select(id: string): Promise<{ ok: true }>
     closeTab(id: string): Promise<{ ok: true }>
+    /** 오리진으로 닫기 — 포트 표의 [닫기]. 열려 있지 않았으면 ok:false. */
+    closeOrigin(origin: string): Promise<{ ok: boolean }>
     reload(): Promise<{ ok: true }>
     back(): Promise<{ ok: true }>
+    /** 탭 목록 변경 — 브라우저 창의 탭 줄과 **본창**(포트 표)이 함께 받는다. */
     onTabs(cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void): () => void
   }
   telemetry: {
