@@ -260,7 +260,7 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
                           라벨이 무슨 일이 일어나는지 말해야 한다. */}
                       <button
                         type="button"
-                        className={'btn xs' + (fwd ? ' pri' : '')}
+                        className={'pbtn' + (fwd ? ' pri' : '')}
                         data-action={fwd ? 'forward.open' : 'forward.create'}
                         title={t(fwd ? 'fwd.open.title' : 'fwd.create.title')}
                         onClick={() => void openPort(p.port)}
@@ -270,7 +270,7 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
                       {fwd && (
                         <button
                           type="button"
-                          className="btn xs dgr"
+                          className="pbtn dgr"
                           data-action="forward.stop"
                           data-local-port={fwd.localPort}
                           title={t('fwd.stop.title')}

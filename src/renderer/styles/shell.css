@@ -1308,20 +1308,23 @@
 .ptbl tr.fwd:hover td {
   background: var(--ok-tint-2);
 }
+/* 열 폭(2026-08-21 제보): 프로세스에 `width:100%` 를 줬더니 남는 폭을 전부 먹어
+   **프로세스 이름과 PID 사이가 휑하게** 벌어졌다. 목업처럼 앞 열들을 고정하고 **남는 폭은
+   맨 끝 동작 열**이 먹는다 — 버튼은 오른쪽 정렬이라 늘어난 만큼이 눈에 안 띈다. */
 .ptbl .pt-st {
-  width: 88px;
+  width: 92px;
 }
 .ptbl .pt-port {
-  width: 86px;
+  width: 96px;
   color: var(--text-hi);
 }
 .ptbl .pt-proto {
-  width: 62px;
+  width: 66px;
   color: var(--text-lo);
 }
 .ptbl .pt-proc {
-  max-width: 0;
-  width: 100%;
+  width: 210px;
+  max-width: 210px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1329,14 +1332,13 @@
   color: var(--text-dim);
 }
 .ptbl .pt-pid {
-  width: 68px;
+  width: 74px;
   color: var(--text-lo);
 }
 .ptbl .pt-dest {
-  width: 250px;
+  width: 236px;
 }
 .ptbl .pt-act {
-  width: 150px;
   text-align: right;
 }
 /* 상태 — 세션 트리 dot 과 같은 문법(같은 뜻은 같은 모양으로). */
@@ -1372,29 +1374,63 @@
 .pwarn {
   color: var(--warn);
 }
-/* 번호 옆 web 꼬리표 — 브라우저로 열어 볼 만한 포트라는 힌트. 열을 하나 더 만들 값어치는 없다. */
+/* 포트 칸 — 숫자는 **오른쪽 끝에 고정**, 꼬리표는 왼쪽에 붙는다. 2026-08-21 제보:
+   꼬리표를 숫자 뒤에 뒀더니 붙은 행만 숫자가 왼쪽으로 밀려 **자릿수 정렬이 깨졌다**
+   (숫자 열의 존재 이유가 그 정렬이다). */
+.ptbl td.pt-port {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+/* web 꼬리표 — 브라우저로 열어 볼 만한 포트라는 힌트. 열을 하나 더 만들 값어치는 없다. */
 .pweb {
-  margin-left: 5px;
+  order: -1;
   padding: 0 5px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   font-size: var(--fs-nano);
+  line-height: 1.5;
   color: var(--text-dim);
 }
-/* 표 안의 작은 버튼 — 행 높이 26px 안에 들어가야 한다. */
-.ptbl .btn.xs {
+/* 표 안 동작 버튼. **`.btn` 을 물려받지 않는다** — 그건 모달용이라 패딩 8/16 · 굵기 600 ·
+   그라디언트라서 26px 행에 들어가면 표가 아니라 폼처럼 보인다(2026-08-21 제보).
+   G 의 조용한 외곽선 버튼: 면은 표면색, 테두리 한 줄, 호버에만 밝아진다. */
+.pbtn {
   height: 20px;
   padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-mid);
+  font-family: var(--ui);
   font-size: var(--fs-micro);
+  font-weight: 400;
+  cursor: pointer;
+  transition: 0.12s;
 }
-.ptbl .pt-act .btn + .btn {
+.pbtn:hover {
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+/* 열려 있는 포트의 주 동작 — 액센트는 **테두리와 글자에만**. 면을 칠하면 26px 행에서 너무 세다. */
+.pbtn.pri {
+  border-color: var(--accent-line);
+  color: var(--accent-bright);
+}
+.pbtn.pri:hover {
+  background: var(--accent-glow);
+}
+/* 해제는 되돌릴 수 있는 동작이라(다시 [열기]) 평소엔 조용하고 호버에만 위험 톤이 든다. */
+.pbtn.dgr:hover {
+  border-color: var(--err-line);
+  color: var(--err);
+  background: var(--err-tint);
+}
+.ptbl .pt-act .pbtn + .pbtn {
   margin-left: 5px;
 }
 
-.pmon-list {
-  display: flex;
-  flex-direction: column;
-}
 .con-ps,
 .con-svc {
   display: flex;
@@ -4630,116 +4666,27 @@
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+/* 2026-08-21: padding-top 을 걷었다. sticky 헤더는 **패딩 박스 위**에 붙어서, 위쪽 패딩이
+   있으면 그만큼의 띠가 헤더보다 위에 남고 **행이 그 틈으로 지나가 보인다**(준영님 제보).
+   아래 여백은 마지막 행이 바닥에 붙지 않게 남긴다 — 그쪽은 sticky 와 무관하다. */
 .pmon-list {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-.prow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 2.5px 10px;
-  font-size: var(--fs-md);
-  color: var(--text-mid);
-  cursor: default;
-  white-space: nowrap;
-}
-.prow:hover {
-  background: var(--bg-raised);
-  color: var(--text-hi);
+  overflow: auto;
+  padding: 0 0 4px;
 }
 /* 포트 번호가 이 목록의 주인공이다 — 고정폭 숫자로 세로 정렬을 맞춘다. */
-.prow .pport {
-  font-family: var(--ui);
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--accent);
-  min-width: 44px;
-  font-variant-numeric: tabular-nums;
-}
-.prow .pproto {
-  font-family: var(--ui);
-  font-size: var(--fs-micro);
-  color: var(--text-dim);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0 4px;
-}
-.prow .pproto.v6 {
-  color: var(--purple);
-  border-color: var(--purple-line);
-}
 /* 2026-08-17 제보 ⑥: `flex:1` 은 폭 280px 레일에서 정해진 값이다. 하단(1130px)에서는 이 칸
    하나가 800px 로 늘어나 **프로세스명과 pid 사이가 통째로 빈칸**이 됐다 — 한 행을 읽는데
    눈이 화면 끝까지 갔다 온다. 읽는 데 필요한 만큼만 주고 남는 폭은 행 끝의 여백으로 흘린다
    (표처럼 왼쪽에 모인다). 좁아지면 여전히 이 칸이 먼저 줄어든다. */
-.prow .pproc {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 340px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 /* pid 를 오른쪽 끝으로 밀던 것도 같은 이유로 거둔다 — 이제 프로세스명 바로 뒤에 붙는다.
    대신 자기 폭을 지켜 자릿수가 달라도 세로줄이 맞는다. */
-.prow .ppid {
-  min-width: 52px;
-}
 /* 남는 폭은 여기서 먹는다(행 끝의 [열기]는 오른쪽 끝에 그대로 둔다 — 손이 늘 같은 자리로 간다). */
-.prow .pact {
-  margin-left: auto;
-}
-.prow .ppid {
-  flex: none;
-  font-family: var(--ui);
-  font-size: var(--fs-nano);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
 /* ── W2 F8: 포워딩 배지 + 행 액션 ──
    배지는 "이 포트가 지금 내 PC 로 열려 있다"는 상태 표시이자 해제 버튼이다(클릭 = 해제).
    요청한 번호와 다른 포트로 열렸으면 경고 톤 — OAuth 콜백은 번호가 달라지면 성립하지 않는다. */
-.prow .pfwd {
-  flex: none;
-  font-family: var(--ui);
-  font-size: var(--fs-micro);
-  color: var(--accent-bright);
-  background: var(--accent-glow);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  padding: 0 5px;
-  cursor: pointer;
-}
-.prow .pfwd.warn {
-  color: var(--warn);
-  border-color: var(--t-yellow-line);
-  background: transparent;
-}
-.prow .pact {
-  flex: none;
-  font-family: inherit;
-  font-size: var(--fs-micro);
-  color: var(--text-hi);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
-  cursor: pointer;
-}
-.prow .pact:hover {
-  color: var(--accent-bright);
-  border-color: var(--accent-line);
-}
 /* 아직 포워딩되지 않은 행의 ↗ 는 호버 전엔 숨긴다 — 행마다 버튼이 늘 떠 있으면 목록이 시끄럽다. */
-.prow .pact.ghost {
-  opacity: 0;
-  color: var(--accent);
-}
-.prow:hover .pact.ghost {
-  opacity: 1;
-}
 
 /* ── FB-ui2(FB-0007②): [모니터] 우측 레일 — 좌측 사이드바에서 이관. 껍데기는 .ai-panel/.ai-head 와
    같은 조합(폭만 다르게), 안쪽은 위 .pmon 을 그대로 붙인다(다시 만들지 않는다). ── */
