@@ -228,7 +228,7 @@
   justify-content: space-between;
   font-size: var(--fs-md);
   color: var(--text-dim);
-  font-family: var(--mono);
+  font-family: var(--ui);
 }
 
 /* 탭바 도구 버튼(.tterm-tools/.cs-open-btn)은 R5 에서 제거했다 — 설정은 타이틀바 기어·Ctrl+,·
