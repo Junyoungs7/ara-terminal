@@ -29,6 +29,7 @@ import type {
   WorkProfile
 } from './types'
 import type { AiCliRecent } from './aiCli'
+import type { BrowserTabView } from './browserWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
 import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
@@ -275,6 +276,12 @@ export type InvokeContract = {
   'telemetry:refresh': { req: { sessionId: string }; res: { ok: true } }
   // 포트 모니터 독립 창 열기(없으면 만들고, 있으면 앞으로). 창은 하나 · 서버는 그 안의 탭.
   'portwin:open': { req: Record<string, never>; res: { ok: true } }
+  // 내장 브라우저 탭(2026-08-21). 탭 줄 렌더러 → main. 페이지 본문은 WebContentsView 라
+  // 이 채널들은 **우리 탭 줄에서만** 불린다(원격 페이지엔 preload 가 없다).
+  'browser:select': { req: { id: string }; res: { ok: true } }
+  'browser:closeTab': { req: { id: string }; res: { ok: true } }
+  'browser:reload': { req: Record<string, never>; res: { ok: true } }
+  'browser:back': { req: Record<string, never>; res: { ok: true } }
   // F29 시스템 모니터 [로컬] 탭 — **세션과 무관한** 내 PC 통계. telemetry:* 와 달리 sessionId 가 없다:
   // 로컬 셸을 하나도 안 열어 둔 상태(SSH 만 쓰는 중)에서도 내 PC 를 보여 줘야 하기 때문이다.
   // 패널이 열려 있는 동안만 돈다 — 닫으면 stop 이 폴러를 끈다(원격 텔레메트리와 같은 규칙).
@@ -489,6 +496,13 @@ export type EvApi = {
   }
   // W1 F9/F10 원격 텔레메트리. 활성 SSH 세션 하나만 구독한다(세션 전환 시 stop→start).
   portwin: { open(): Promise<{ ok: true }> }
+  browserTabs: {
+    select(id: string): Promise<{ ok: true }>
+    closeTab(id: string): Promise<{ ok: true }>
+    reload(): Promise<{ ok: true }>
+    back(): Promise<{ ok: true }>
+    onTabs(cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void): () => void
+  }
   telemetry: {
     // 이미 구독 중인 세션에 다시 호출하면 즉시 한 바퀴 돈다 = [모니터] 탭 새로고침 버튼.
     start(sessionId: string): Promise<{ ok: true }>

@@ -5,7 +5,14 @@ import { shell, type BrowserWindow } from 'electron'
 import { handle } from './handle'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { createForwardService, type ForwardService } from '../forward/PortForward'
-import { createBrowserService, type BrowserService } from '../browser/BrowserService'
+import {
+  closeTab,
+  createBrowserService,
+  goBackActive,
+  reloadActive,
+  selectTab,
+  type BrowserService
+} from '../browser/BrowserTabs'
 
 // 반환값은 세션 종료 훅(stopSession)과 앱 종료 정리(stopAll)용.
 export function registerForwardIpc(
@@ -27,6 +34,24 @@ export function registerForwardIpc(
   handle('forward:list', () => forwards.list())
   // 진입점 스킴 검증(BrowserService 안의 will-navigate 게이트와 이중). 렌더러가 보낸 값은 신뢰하지 않는다.
   handle('browser:open', ({ url }) => ({ ok: typeof url === 'string' && browser.open(url) }))
+  // 탭 조작(2026-08-21). 부르는 쪽은 우리 탭 줄뿐이지만, id 는 신뢰하지 않는다 —
+  // 목록에 없는 id 면 BrowserTabs 가 조용히 무시한다.
+  handle('browser:select', ({ id }) => {
+    selectTab(id)
+    return { ok: true } as const
+  })
+  handle('browser:closeTab', ({ id }) => {
+    closeTab(id)
+    return { ok: true } as const
+  })
+  handle('browser:reload', () => {
+    reloadActive()
+    return { ok: true } as const
+  })
+  handle('browser:back', () => {
+    goBackActive()
+    return { ok: true } as const
+  })
   // F12: 로그 폴더를 탐색기로 연다. 경로 인자를 받지 않는다 — 렌더러가 임의 폴더를 열 수 없다.
   handle('sessionlog:reveal', async () => ({ ok: (await shell.openPath(logDir)) === '' }))
 

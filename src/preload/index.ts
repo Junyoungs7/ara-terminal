@@ -13,6 +13,7 @@ import type {
   RemoteData
 } from '@shared/ipc'
 import type { LaunchShell } from '@shared/aiCli'
+import type { BrowserTabView } from '@shared/browserWin'
 import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
 import type { HostStats } from '@shared/types'
@@ -148,6 +149,19 @@ const api: EvApi = {
   },
   // 포트 모니터 독립 창 — 열기 하나뿐이다(닫기·복원은 OS 와 main 이 쥔다).
   portwin: { open: () => ipcRenderer.invoke('portwin:open', {}) },
+  // 내장 브라우저 탭 줄 전용. 이 API 는 **#browserwin 창의 최상위 프레임**만 본다 —
+  // 페이지 본문은 preload 없는 WebContentsView 라 여기 닿을 수 없다.
+  browserTabs: {
+    select: (id: string) => ipcRenderer.invoke('browser:select', { id }),
+    closeTab: (id: string) => ipcRenderer.invoke('browser:closeTab', { id }),
+    reload: () => ipcRenderer.invoke('browser:reload', {}),
+    back: () => ipcRenderer.invoke('browser:back', {}),
+    onTabs: (cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void) => {
+      const listener = (_e: IpcRendererEvent, d: { tabs: BrowserTabView[]; activeId: string | null }) => cb(d)
+      ipcRenderer.on('browser:tabs', listener)
+      return () => ipcRenderer.removeListener('browser:tabs', listener)
+    }
+  },
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),
     stop: (sessionId: string) => ipcRenderer.invoke('telemetry:stop', { sessionId }),

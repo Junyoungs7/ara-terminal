@@ -6,6 +6,8 @@ import { RdpSpanWindow, parseRdpWinHash } from './components/RdpSpanWindow'
 import { SessionWindow, parseSessionWinHash } from './components/SessionWindow'
 import { PortWindow } from './components/PortWindow'
 import { isPortWinHash } from '@shared/portWin'
+import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
+import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
 import './styles/fonts.css'
 import './styles/tokens.css'
@@ -22,6 +24,10 @@ const rdpWinTarget = editorTarget ? null : parseRdpWinHash(window.location.hash)
 const sessionWinTarget = editorTarget || rdpWinTarget ? null : parseSessionWinHash(window.location.hash)
 // 포트 모니터 독립 창. 매개변수가 없다 — 어느 서버를 볼지는 창 안 탭이 정한다.
 const portWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && isPortWinHash(window.location.hash)
+// 내장 브라우저 탭 줄. 이 창의 본문(원격 페이지)은 main 이 WebContentsView 로 붙인다 —
+// 여기서 그리는 것은 줄 하나뿐이다.
+const browserWin =
+  !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && isBrowserWinHash(window.location.hash)
 
 // OS 기본 툴팁 대신 우리 것을 쓴다. 창마다(본체·편집기·다중 모니터) 각자 자기 document 에 건다 —
 // 전역 위임이라 `title` 을 쓰는 89곳을 하나도 고치지 않는다(store/tooltip.ts).
@@ -37,6 +43,8 @@ createRoot(document.getElementById('root')!).render(
       <SessionWindow target={sessionWinTarget} />
     ) : portWin ? (
       <PortWindow />
+    ) : browserWin ? (
+      <BrowserTabStrip />
     ) : (
       <Shell />
     )}

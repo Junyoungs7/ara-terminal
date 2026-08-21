@@ -14,7 +14,7 @@
 //   ⑧ certificate-error 핸들러 미등록(기본 거부)
 //
 // 원격은 없다: 127.0.0.1 임시 http 서버 한 대만 띄운다(DLP — 루프백·temp 한정).
-const { app, BrowserWindow, session } = require('electron')
+const { app, BrowserWindow, session, webContents } = require('electron')
 require('./_harnessGuard.cjs')
 const { join } = require('node:path')
 const { createServer } = require('node:http')
@@ -82,8 +82,23 @@ app.whenReady().then(async () => {
   if (!bw) return finish('브라우저 창이 열리지 않음')
   if (bw.webContents.isLoading()) await new Promise((r) => bw.webContents.once('did-finish-load', r))
 
-  // ── ② webPreferences 불변식 ──
-  const wp = bw.webContents.getLastWebPreferences() || {}
+  // ── ②' 경계가 어디 있나 (2026-08-21 탭 도입) ──
+  // 창의 최상위 contents 는 우리 탭 줄이라 preload 가 **있어야** 한다. 원격 페이지는
+  // 그 아래 WebContentsView 에 산다 — 아래 불변식은 전부 그쪽에 건다.
+  // preload 경로는 getLastWebPreferences 에 안 실린다 — **기능으로** 증명한다.
+  // 탭 줄은 window.ev 를 봐야 하고(탭 조작을 그쪽이 한다), 탭은 못 봐야 한다(아래 ①).
+  const stripHasEv = await bw.webContents
+    .executeJavaScript(`typeof window.ev`)
+    .catch(() => 'error')
+  check('탭 줄은 window.ev 를 본다(우리 UI)', stripHasEv === 'object')
+  const tabWc = webContents
+    .getAllWebContents()
+    .find((w) => w !== main.webContents && w !== bw.webContents && w.getURL().startsWith(origin))
+  if (!tabWc) return finish('탭 webContents 를 못 찾음')
+  if (tabWc.isLoading()) await new Promise((r) => tabWc.once('did-finish-load', r))
+
+  // ── ② webPreferences 불변식 (탭 = 원격 페이지가 사는 곳) ──
+  const wp = tabWc.getLastWebPreferences() || {}
   check('preload 미주입', wp.preload === undefined || wp.preload === null || wp.preload === '')
   check('sandbox: true', wp.sandbox === true)
   check('contextIsolation: true', wp.contextIsolation === true)
@@ -97,11 +112,11 @@ app.whenReady().then(async () => {
   // ── ③ 전용 파티션 ──
   const appSession = main.webContents.session
   const braSession = session.fromPartition('persist:ara-browser')
-  check('전용 파티션 persist:ara-browser 사용', bw.webContents.session === braSession)
-  check('앱 default 세션과 분리', bw.webContents.session !== appSession)
+  check('전용 파티션 persist:ara-browser 사용', tabWc.session === braSession)
+  check('앱 default 세션과 분리', tabWc.session !== appSession)
 
   // ── ① window.ev 부재 + node 부재 ──
-  const inPage = await bw.webContents
+  const inPage = await tabWc
     .executeJavaScript(
       `(async () => ({
         ev: typeof window.ev,
@@ -125,23 +140,28 @@ app.whenReady().then(async () => {
   check('페이지가 정한 제목으로 위장 불가', !bw.getTitle().includes('위장 시도'))
 
   // ── ④ 페이지 안에서의 file:// 이동 차단 ──
-  const navBefore = bw.webContents.getURL()
-  await bw.webContents.executeJavaScript(`location.href = 'file:///C:/Windows/win.ini'`).catch(() => {})
+  const navBefore = tabWc.getURL()
+  await tabWc.executeJavaScript(`location.href = 'file:///C:/Windows/win.ini'`).catch(() => {})
   await wait(600)
-  check('페이지 내 file:// 이동 차단(URL 유지)', bw.webContents.getURL() === navBefore)
+  check('페이지 내 file:// 이동 차단(URL 유지)', tabWc.getURL() === navBefore)
 
-  // ── ⑤ 창 재사용 ──
+  // ── ⑤ 창 재사용 + 탭 (2026-08-21) ──
+  // 계약이 바뀌었다: **같은 오리진이면 그 탭을 재사용**하고 **다른 오리진이면 탭이 는다.**
+  // 예전엔 무조건 loadURL 이라 앞의 페이지가 사라졌다(준영님 제보 — "그전에가 사라지는데").
   const countBefore = BrowserWindow.getAllWindows().length
   await main.webContents.executeJavaScript(`window.ev.browser.open('${origin}/?second')`)
   await wait(600)
   check('두 번째 open 은 같은 창을 재사용', BrowserWindow.getAllWindows().length === countBefore)
-  check('재사용 창이 새 URL 로 이동', bw.webContents.getURL().includes('second'))
+  const tabsNow = () =>
+    webContents.getAllWebContents().filter((w) => w.getURL().startsWith('http://127.0.0.1'))
+  check('같은 오리진은 탭을 늘리지 않는다', tabsNow().length === 1)
+  check('재사용 탭이 새 URL 로 이동', tabWc.getURL().includes('second'))
 
   // ── ⑧ certificate-error 를 가로채는 코드가 우리 쪽에 없다(Electron 기본 = 거부) ──
   // app 레벨 listenerCount 는 Electron 이 webContents 로 넘겨 주는 내부 포워더 1개가 기본이라 세지 않는다.
   // 대신 ㉠ 창 webContents 에 우리 핸들러가 없고 ㉡ 번들 소스에 가로채기·무시 스위치가 없음을 본다.
   const mainBundle = require('node:fs').readFileSync(join(__dirname, '..', 'out', 'main', 'index.js'), 'utf8')
-  check('브라우저 창 certificate-error 핸들러 미등록', bw.webContents.listenerCount('certificate-error') === 0)
+  check('브라우저 탭 certificate-error 핸들러 미등록', tabWc.listenerCount('certificate-error') === 0)
   check('소스에 certificate-error 가로채기 없음', !mainBundle.includes('certificate-error'))
   check('소스에 ignore-certificate-errors 스위치 없음', !mainBundle.includes('ignore-certificate-errors'))
   check('실행 중 스위치에도 없음', !app.commandLine.hasSwitch('ignore-certificate-errors'))
