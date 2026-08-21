@@ -15,6 +15,15 @@ import {
   IconFolder,
   IconFolderPlus,
   IconForward,
+  IconFileAudio,
+  IconFileCode,
+  IconFileDoc,
+  IconFileImage,
+  IconFilePdf,
+  IconFileSheet,
+  IconFileSlide,
+  IconFileVideo,
+  IconFileZip,
   IconLinkFile,
   IconLinkFolder,
   IconPaste,
@@ -57,6 +66,56 @@ const ROW_ICON: Record<RowKind, JSX.Element> = {
   linkDir: <IconLinkFolder />,
   linkFile: <IconLinkFile />,
   broken: <IconLinkFile />
+}
+
+/**
+ * 확장자 → 아이콘 종류 (2026-08-22 준영님 제보 25번 — "파일 아이콘을 실제 엑셀·mp4·ppt 등
+ * 다양한 확장자에 맞게"). **순수 함수 — 단위 테스트 대상.**
+ *
+ * 확장자를 다 적지 않는다: 목록에서 한눈에 갈려야 하는 것은 "이게 무슨 종류인가"이지 "무슨
+ * 프로그램이 여는가"가 아니다. 여덟 갈래로 묶고 나머지는 기본 종이로 둔다 — 갈래가 늘수록
+ * 각 아이콘이 뜻하는 바가 흐려진다.
+ */
+export type FileIconKind = 'sheet' | 'doc' | 'slide' | 'pdf' | 'image' | 'video' | 'audio' | 'zip' | 'code' | 'plain'
+
+const EXT_KIND: Record<string, FileIconKind> = {
+  xlsx: 'sheet', xls: 'sheet', xlsm: 'sheet', csv: 'sheet', tsv: 'sheet', ods: 'sheet',
+  docx: 'doc', doc: 'doc', hwp: 'doc', hwpx: 'doc', rtf: 'doc', odt: 'doc', txt: 'doc', md: 'doc', log: 'doc',
+  pptx: 'slide', ppt: 'slide', odp: 'slide', key: 'slide',
+  pdf: 'pdf',
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', bmp: 'image', webp: 'image', svg: 'image', ico: 'image', tif: 'image', tiff: 'image', psd: 'image',
+  mp4: 'video', avi: 'video', mkv: 'video', mov: 'video', wmv: 'video', flv: 'video', webm: 'video', m4v: 'video',
+  mp3: 'audio', wav: 'audio', flac: 'audio', aac: 'audio', ogg: 'audio', m4a: 'audio', wma: 'audio',
+  zip: 'zip', tar: 'zip', gz: 'zip', tgz: 'zip', bz2: 'zip', xz: 'zip', rar: 'zip', '7z': 'zip', jar: 'zip',
+  js: 'code', ts: 'code', tsx: 'code', jsx: 'code', mjs: 'code', cjs: 'code', json: 'code', xml: 'code',
+  html: 'code', htm: 'code', css: 'code', scss: 'code', py: 'code', java: 'code', kt: 'code', go: 'code',
+  rs: 'code', rb: 'code', php: 'code', c: 'code', h: 'code', cpp: 'code', cs: 'code', sh: 'code', bash: 'code',
+  zsh: 'code', ps1: 'code', bat: 'code', sql: 'code', yml: 'code', yaml: 'code', toml: 'code', ini: 'code', conf: 'code'
+}
+
+export function fileIconKind(name: string): FileIconKind {
+  // 숨김 파일(.gitignore)은 앞의 점이 확장자 구분자가 아니다 — 1번 위치부터 찾는다.
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return 'plain'
+  return EXT_KIND[name.slice(dot + 1).toLowerCase()] ?? 'plain'
+}
+
+const KIND_ICON: Record<FileIconKind, JSX.Element> = {
+  sheet: <IconFileSheet />,
+  doc: <IconFileDoc />,
+  slide: <IconFileSlide />,
+  pdf: <IconFilePdf />,
+  image: <IconFileImage />,
+  video: <IconFileVideo />,
+  audio: <IconFileAudio />,
+  zip: <IconFileZip />,
+  code: <IconFileCode />,
+  plain: <IconFile />
+}
+
+/** 행 아이콘 — 폴더·링크는 종류가 정하고, 보통 파일만 확장자를 본다. */
+function rowIcon(kind: RowKind, name: string): JSX.Element {
+  return kind === 'file' ? KIND_ICON[fileIconKind(name)] : ROW_ICON[kind]
 }
 
 // 전송·삭제 큐 항목. pct=null 은 진행률을 알 수 없는 작업(재귀 삭제).
@@ -406,8 +465,10 @@ export function FileTree({
   // 그 문제가 없다. 방향 규칙(붙여넣기로는 안 받는다)은 그대로다. 받는 길은 여전히 하나다.
   //
   // 위치를 고르고 싶으면 우클릭 [다른 위치에 받기] — 아래 askWhere=true 가 예전 경로 그대로다.
+  // andOpen: 받고 나서 **연결 프로그램으로 연다**(2026-08-22 준영님 제보 25번 — 원격 파일도
+  // 로컬과 같은 손이 되게. "다운로드 경로에 다운로드되며 열리게" 하자는 준영님 안 그대로다).
   const download = useCallback(
-    async (targets: FileEntry[], askWhere = false) => {
+    async (targets: FileEntry[], askWhere = false, andOpen = false) => {
       if (!session || !backend?.remote) return
       const files = targets.filter((e) => e.type === 'file')
       if (files.length === 0) return
@@ -430,7 +491,12 @@ export function FileTree({
                 size: f.size
               })
               // 마지막으로 받은 것을 알린다 — 여러 개면 폴더만 열어도 다 보인다.
-              if (r.ok) setGot({ name, localPath })
+              if (r.ok) {
+                setGot({ name, localPath })
+                // 더블클릭으로 온 길이면 여기서 연다. 실패(연결 프로그램 없음)는 삼키지 않는다 —
+                // 받기는 됐는데 안 열린 것과 아무 일도 안 일어난 것은 다른 상황이다.
+                if (andOpen) void window.ev.fs.openPath(localPath).then((o) => !o.ok && setError(o.message))
+              }
               return r
             }
           }))
@@ -598,6 +664,9 @@ export function FileTree({
 
   const pasteHere = useCallback(async () => {
     const dir = target.current
+    // 지난 결과를 먼저 지운다 — 같은 오류가 남아 있으면 다시 눌러도 화면이 안 바뀌어
+    // "아무 반응 없다"로 읽힌다(2026-08-22 준영님 제보 26번).
+    setError(null)
     const os = await window.ev.clipboard.readFiles().catch(() => ({ paths: [] as string[] }))
     const src = pasteSource(os.paths, osClipAtCopy, fileClip !== null)
 
@@ -607,8 +676,9 @@ export function FileTree({
       const r = await window.ev.fs.copy(os.paths, dir)
       return applyOp(r)
     }
-    // ② 앱 안에서 복사한 항목
-    if (src === 'none' || !fileClip) return
+    // ② 앱 안에서 복사한 항목. 붙여넣을 것이 없으면 **그렇다고 말한다** — 예전엔 조용히 끝나
+    // 눌렀는지도 알 수 없었다(제보 26번).
+    if (src === 'none' || !fileClip) return setError(t('file.paste.empty'))
     // #88 R2 잘라내기. 로컬→로컬만 이동으로 처리한다 — 원격이 끼면 그건 전송이고, 반쯤 올라간 파일을
     // 원본 삭제로 갚을 수 없다. 사용자에게 "복사한 뒤 원본을 지우라"고 말하는 편이 정직하다.
     if (fileClip.mode === 'cut') {
@@ -910,47 +980,6 @@ export function FileTree({
         <div className="sb-act" title={t('sftp.up')} onClick={goUp}>
           <IconUp />
         </div>
-        <div className="sb-act" data-action="path.edit" title={t('sftp.path.edit')} onClick={() => setPathEdit(path)}>
-          <IconPencil />
-        </div>
-        {/* 경로 줄. 평소에는 브레드크럼(세그먼트 클릭 = 그 상위로 한 번에), [경로 입력]을 누르면
-            경로를 통째로 치거나 붙여넣는 입력이 된다(준영님 요청 2026-08-13).
-            빈 자리 클릭으로 바꾸는 윈도우 관습은 쓰지 않았다 — 이 줄은 direction:rtl 이라
-            남는 자리가 왼쪽에 생겨서, 누를 곳이 어디인지가 눈에 안 보인다. */}
-        {pathEdit === null ? (
-          <div className="fcrumb" title={path}>
-            {crumbList.map((c, i) => (
-              <span key={c.path}>
-                {i > 0 && <span className="sepr">/</span>}
-                <span className="seg" onClick={() => void load(c.path)}>
-                  {c.label}
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <input
-            className="fpath-in"
-            data-field="path"
-            autoFocus
-            spellCheck={false}
-            value={pathEdit}
-            onChange={(e) => setPathEdit(e.target.value)}
-            onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const p = pathEdit.trim()
-                setPathEdit(null)
-                if (p && p !== path) void load(p)
-              } else if (e.key === 'Escape') {
-                setPathEdit(null)
-              }
-              // 트리 단축키(삭제·복사 등)가 입력 중에 발동하지 않게 여기서 끊는다.
-              e.stopPropagation()
-            }}
-            onBlur={() => setPathEdit(null)}
-          />
-        )}
         {/* #88 R2 이름 검색 — **이 폴더 안**만 훑는다(하위 폴더까지 뒤지는 검색은 [윈도우 탐색기에서
             보기]로 넘긴다). 아이콘을 누르면 입력이 펴지고, 폴더를 옮기면 저절로 접힌다. */}
         {toolbar && filterOn && (
@@ -1011,6 +1040,73 @@ export function FileTree({
         <div className="sb-act" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
         </div>
+      </div>
+
+      {/* 경로는 **자기 줄**을 갖는다 (2026-08-22 준영님 제보 12번 — "하나의 바에 뒤로가기·경로 수정·
+          경로·파일올리기·새로고침 등 많은 기능이 한 줄에 있음. 경로만 하단에 새로운 바에 넣어주고
+          클릭하면 수정할 수 있는 줄 알게 인풋창 형식처럼 보여줘야 함. 그래서 경로 수정 버튼 제거").
+
+          [경로 수정] 연필 버튼이 사라진 자리를 **줄 자체**가 대신한다: 칸처럼 생겼으니 눌러서 고치는
+          것임이 보이고, 빈 자리 아무 데나 눌러도 편집이 된다. 예전엔 이 줄이 아이콘들과 한 칸을
+          나눠 쓰느라 direction:rtl 이었고 "남는 자리가 왼쪽에 생겨 누를 곳이 안 보인다"는 이유로
+          빈자리 클릭을 못 썼는데, 줄을 나누면서 그 제약이 사라졌다.
+          세그먼트 클릭(상위로 한 번에)은 그대로다 — 클릭이 겹치지 않게 세그먼트가 먼저 먹는다. */}
+      <div className="fpath-row">
+        {pathEdit === null ? (
+          <div
+            className="fpath-box"
+            data-action="path.edit"
+            title={t('sftp.path.edit')}
+            role="button"
+            tabIndex={0}
+            onClick={() => setPathEdit(path)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setPathEdit(path)
+              }
+            }}
+          >
+            <div className="fcrumb" title={path}>
+              {crumbList.map((c, i) => (
+                <span key={c.path}>
+                  {i > 0 && <span className="sepr">/</span>}
+                  <span
+                    className="seg"
+                    onClick={(e) => {
+                      e.stopPropagation() // 세그먼트는 "이동"이다 — 줄의 "편집"으로 새지 않게
+                      void load(c.path)
+                    }}
+                  >
+                    {c.label}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <input
+            className="fpath-in"
+            data-field="path"
+            autoFocus
+            spellCheck={false}
+            value={pathEdit}
+            onChange={(e) => setPathEdit(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const p = pathEdit.trim()
+                setPathEdit(null)
+                if (p && p !== path) void load(p)
+              } else if (e.key === 'Escape') {
+                setPathEdit(null)
+              }
+              // 트리 단축키(삭제·복사 등)가 입력 중에 발동하지 않게 여기서 끊는다.
+              e.stopPropagation()
+            }}
+            onBlur={() => setPathEdit(null)}
+          />
+        )}
       </div>
 
       {toolbar && (
@@ -1097,7 +1193,7 @@ export function FileTree({
             // 끊긴 링크는 들어갈 데가 없으니 안내만 한다.
             const kind = rowKind(entry)
             const isDir = kind === 'dir' || kind === 'linkDir'
-            const icon = ROW_ICON[kind]
+            const icon = rowIcon(kind, entry.name)
             const hint =
               kind === 'broken'
                 ? t('file.brokenLink')
@@ -1121,10 +1217,15 @@ export function FileTree({
                 aria-selected={sel.includes(entry.name)}
                 title={hint}
                 onClick={(e) => clickRow(e, idx)}
+                // 더블클릭 = **연다**(2026-08-22 준영님 제보 25번). 로컬은 연결 프로그램으로 바로,
+                // 원격은 다운로드 폴더에 받은 뒤 같은 방식으로 연다(준영님이 통일성을 이유로 고른 안).
+                // 그전에 로컬 더블클릭은 `download()` 를 불렀는데 그 함수는 원격 전용이라 첫 줄에서
+                // 되돌아왔다 — **로컬에서는 더블클릭이 아무 일도 안 했다.**
                 onDoubleClick={() => {
                   if (kind === 'broken') return setError(t('file.brokenLink'))
-                  if (isDir) enterDir(entry.name)
-                  else void download([entry])
+                  if (isDir) return enterDir(entry.name)
+                  if (backend.remote) return void download([entry], false, true)
+                  void window.ev.fs.openPath(joinPath(path, entry.name)).then((r) => !r.ok && setError(r.message))
                 }}
                 onContextMenu={(e) => openMenu(e, idx)}
               >

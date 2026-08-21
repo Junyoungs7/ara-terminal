@@ -21,7 +21,11 @@ export type MenuItem = {
 const MENU_W = 224
 const ROW_H = 29
 const MENU_PAD = 10
-const EDGE = 8
+// 화면 가장자리에서 띄울 거리. 2026-08-22 준영님 제보 24번("가장 마지막 파일 우클릭했을 때 나오는
+// 리스트가 하단에 딱 붙어있음")으로 8 → 14 로 키웠다. 파일 메뉴는 항목이 스무 개가 넘어(높이 600px
+// 남짓) 목록 아래쪽에서 열면 늘 상한에 걸리는데, 그때 남는 8px 은 붙은 것으로 보인다.
+export const MENU_EDGE = 14
+const EDGE = MENU_EDGE
 
 // 뷰포트 경계 안으로 보정한 좌표(순수 — 단위 테스트 대상). 높이는 항목 수로 산출한다.
 export function clampMenu(

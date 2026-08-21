@@ -338,7 +338,8 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: 5px;
-  max-height: calc(100vh - 16px);
+  /* ContextMenu.tsx 의 EDGE(14) 두 배 — 좌표 계산과 이 상한이 어긋나면 한쪽이 가장자리에 붙는다. */
+  max-height: calc(100vh - 28px);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;

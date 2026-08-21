@@ -73,6 +73,37 @@ export const IconFolderPlus = () =>
     </>
   )
 // 닫기 — 모달·드로어·탭·전송 항목이 쓰던 ✕/× 텍스트 글리프를 대체한다(폰트 폴백 편차 제거).
+// ── 확장자별 파일 아이콘 (2026-08-22 준영님 제보 25번) ──────────────────────
+// 종이 모양은 그대로 두고 **안쪽 글리프만** 바꾼다: 목록에서 한 줄씩 훑을 때 눈에 걸리는 것은
+// 윤곽이 아니라 안쪽이고, 윤곽이 같아야 "파일"이라는 것이 먼저 읽힌다.
+// 색은 쓰지 않는다 — 디자인 시스템이 라인 아이콘 한 규격이고, 색을 열두 개 들이면 목록이 소란해진다.
+const sheet = (inner: JSX.Element) =>
+  line(
+    <>
+      <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" />
+      <path d="M14 3v5h5" />
+      {inner}
+    </>
+  )
+/** 표(엑셀·csv) — 안쪽에 격자. */
+export const IconFileSheet = () => sheet(<path d="M8 12h8M8 16h8M12 12v4" />)
+/** 문서(워드·hwp·txt·md) — 안쪽에 글줄. */
+export const IconFileDoc = () => sheet(<path d="M8 13h8M8 16h5" />)
+/** 슬라이드(ppt) — 안쪽에 화면. */
+export const IconFileSlide = () => sheet(<rect x="8" y="12" width="8" height="5" rx="1" />)
+/** PDF — 안쪽에 책갈피. */
+export const IconFilePdf = () => sheet(<path d="M10 12v6l2-1.6 2 1.6v-6z" />)
+/** 그림 — 안쪽에 산·해. */
+export const IconFileImage = () => sheet(<path d="M8 17l2.5-3 2 2.2L15 13l1 4H8zM9.5 11.5h.01" />)
+/** 영상 — 안쪽에 재생 삼각형. */
+export const IconFileVideo = () => sheet(<path d="M10.5 12.5l4.5 2.5-4.5 2.5z" />)
+/** 소리 — 안쪽에 음표. */
+export const IconFileAudio = () => sheet(<path d="M11 17.2V12l4-.8v4.6M11 17.2a1.2 1.2 0 11-2.4 0 1.2 1.2 0 012.4 0zM15 15.8a1.2 1.2 0 11-2.4 0 1.2 1.2 0 012.4 0z" />)
+/** 압축 — 안쪽에 지퍼. */
+export const IconFileZip = () => sheet(<path d="M12 11v1M12 13.5v1M12 16v1M12 18.5v1" />)
+/** 코드 — 안쪽에 꺾쇠. */
+export const IconFileCode = () => sheet(<path d="M10.5 13l-2 2 2 2M13.5 13l2 2-2 2" />)
+
 export const IconClose = () => line(<path d="M6 6l12 12M18 6L6 18" />)
 // 비밀번호 표시/숨김 (2026-08-21 준영님 요청 — "입력창에 눈 표시를 둬서 실제 값 보여주게").
 export const IconEye = () =>

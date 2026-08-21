@@ -139,10 +139,11 @@ test('EXP-1 Ctrl+Shift+O 로 작업대가 열리고 터미널 본문은 그대�
   await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('내 PC')
 })
 
-// EXP-2 View 메뉴에서도 같은 진입점으로 열린다
-test('EXP-2 View 메뉴에서 탐색기를 연다', async ({ ara }) => {
+// EXP-2 [보기] 메뉴에서도 같은 진입점으로 열린다
+// (2026-08-21 메뉴바를 한글로 바꾸면서 "View" → "보기" — actions.tsx MENUBAR 참고)
+test('EXP-2 [보기] 메뉴에서 탐색기를 연다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await ara.page.click('.tb-menu span:text-is("View")')
+  await ara.page.click('.tb-menu span:text-is("보기")')
   await ara.page.click('.ctx-menu .ctx-item[data-action="explorer.toggle"]')
   await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
 })
@@ -267,7 +268,7 @@ test('EXP-4d★ [경로 직접 입력]으로 경로를 쳐서 이동한다', asy
     await openExplorer(ara.page)
     await openLocalFiles(ara.page)
     const p = pane(ara.page)
-    await p.locator('.sb-act[data-action="path.edit"]').click()
+    await p.locator('[data-action="path.edit"]').click()
     const input = p.locator('.fpath-in')
     await expect(input).toBeVisible()
     await input.fill(join(dir, '목표폴더'))

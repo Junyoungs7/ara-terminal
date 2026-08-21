@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { clampMenu } from '../src/renderer/interactions/ContextMenu'
+import { clampMenu, MENU_EDGE } from '../src/renderer/interactions/ContextMenu'
 import { treeMenu, terminalMenu, CONTEXT_ACTIONS } from '../src/renderer/interactions/actions'
 import { migrate } from '../src/main/workspace/migrations'
 import { SCHEMA_VERSION } from '../src/shared/types'
@@ -17,13 +17,15 @@ describe('컨텍스트 메뉴 뷰포트 보정', () => {
     expect(clampMenu(100, 100, 6, 1440, 900)).toEqual({ left: 100, top: 100 })
   })
 
-  it('오른쪽 경계를 넘으면 안쪽으로 당긴다(224 + 8 여백)', () => {
-    expect(clampMenu(1400, 100, 6, 1440, 900).left).toBe(1440 - 224 - 8)
+  // 여백은 MENU_EDGE 를 그대로 쓴다 — 값을 베껴 두면 가장자리 여백을 조정할 때마다 여기가 깨진다
+  // (2026-08-22 제보 24번으로 8 → 14 로 키우며 실제로 깨졌다).
+  it('오른쪽 경계를 넘으면 안쪽으로 당긴다(메뉴 폭 224 + 가장자리 여백)', () => {
+    expect(clampMenu(1400, 100, 6, 1440, 900).left).toBe(1440 - 224 - MENU_EDGE)
   })
 
   it('아래 경계를 넘으면 항목 수만큼의 높이를 빼고 올린다', () => {
-    // 6항목 = 6*29 + 10 = 184 → top = 900 - 184 - 8
-    expect(clampMenu(100, 880, 6, 1440, 900).top).toBe(900 - 184 - 8)
+    // 6항목 = 6*29 + 10 = 184 → top = 900 - 184 - 여백
+    expect(clampMenu(100, 880, 6, 1440, 900).top).toBe(900 - 184 - MENU_EDGE)
   })
 
   it('항목이 많을수록 더 위로 올라간다', () => {

@@ -451,6 +451,36 @@
   font-size: var(--fs-sm);
   color: var(--text-dim);
 }
+/* 경로 전용 줄 (2026-08-22 제보 12번). 아이콘 줄 아래에 따로 앉는다 — 사이드바(280px)에서
+   브레드크럼이 아이콘들과 한 칸을 나눠 쓰다 눌리지 않을 만큼 짓눌리던 것을 자리로 푼다. */
+.fpath-row {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 5px;
+  flex: none;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--line);
+}
+/* **칸처럼 보인다** — 누르면 고칠 수 있다는 걸 모양이 말해야 한다(연필 버튼을 없앤 자리). */
+.fpath-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  cursor: text;
+}
+.fpath-box:hover {
+  border-color: var(--line-strong);
+}
+.fpath-box:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
 /* R7 브레드크럼 — 세그먼트 클릭으로 상위 이동. 길면 왼쪽부터 잘리게 스크롤(끝=현재 폴더가 보여야 한다). */
 .fcrumb {
   flex: 1;
@@ -484,11 +514,11 @@
   color: var(--text-dim);
   opacity: 0.7;
 }
-/* 경로 직접 입력 — 브레드크럼과 같은 자리를 쓴다(줄이 늘었다 줄었다 하지 않게 폭·높이를 맞춘다). */
+/* 경로 직접 입력 — .fpath-box 와 같은 자리를 쓴다(줄이 늘었다 줄었다 하지 않게 높이를 맞춘다). */
 .fpath-in {
   flex: 1;
   min-width: 0;
-  height: 22px;
+  height: 24px;
   padding: 0 6px;
   border: 1px solid var(--accent-line);
   border-radius: var(--radius-sm);
@@ -604,7 +634,16 @@
   background: var(--bg-raised);
   color: var(--text-hi);
 }
+/* 2026-08-22 준영님 제보 26번: "좌측 사이드바를 클릭해도 클릭한 줄 모르겠어. 세션 창들처럼."
+   --accent-glow(알파 0.15) 하나로는 hover 배경과 구분이 거의 안 됐다. 프로필 목록·레일이 쓰는
+   **왼쪽 선택 바**(inset 2px)를 같이 준다 — 앱 안에서 "고른 것"의 표시는 한 가지 문법이어야 한다. */
 .frow.sel {
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* 마우스를 올려도 선택은 선택으로 남아야 한다(hover 가 배경을 덮어써 표시가 흐려지던 것). */
+.frow.sel:hover {
   background: var(--accent-glow);
   color: var(--accent-bright);
 }

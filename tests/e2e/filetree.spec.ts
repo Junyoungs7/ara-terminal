@@ -124,7 +124,7 @@ test('FILE-2 터미널에서 cd 하면 트리가 그 폴더로 이동한다', as
   // hover 중이면 title 이 data-tip 으로 옮겨가 있다(전역 툴팁) — 둘 중 하나에 있으면 된다.
   await expect
     .poll(() =>
-      ara.page.locator('.sftp-path-bar .fcrumb').evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')
+      ara.page.locator('.fcrumb').evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')
     )
     .toMatch(/ara-files-/)
 })
@@ -151,7 +151,7 @@ test('FILE-4 상위 폴더·브레드크럼으로 이동한다', async ({ ara })
   await ara.page.click('.sftp-path-bar .sb-act[title="상위 폴더"], .sftp-path-bar .sb-act[data-tip="상위 폴더"]')
   await expect(row(ara.page, '문서/')).toBeVisible()
   // 브레드크럼 마지막 세그먼트 = 현재 폴더. 하나 앞 세그먼트를 누르면 상위로 간다.
-  const segs = ara.page.locator('.sftp-path-bar .fcrumb .seg')
+  const segs = ara.page.locator('.fcrumb .seg')
   const count = await segs.count()
   expect(count).toBeGreaterThan(1)
   await segs.nth(count - 2).click()
