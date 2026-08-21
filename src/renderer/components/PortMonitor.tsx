@@ -33,6 +33,37 @@ export type PortSpan = { min: number | null; max: number | null }
 
 export type PortFilterResult = { visible: RemotePort[] }
 
+/** 표에 그릴 한 줄. protos 가 둘이면 tcp·tcp6 를 합친 줄이다. */
+export type PortRow = { port: number; protos: RemotePort['proto'][]; pid?: number; process?: string }
+
+/**
+ * tcp/tcp6 병합(순수 함수 · 단위 테스트 대상).
+ *
+ * **같은 프로세스일 때만 합친다.** 포트가 같아도 pid·프로세스가 다르면 서로 다른 둘이고,
+ * 합치면 표가 거짓말을 한다. 입력 순서(포트 오름차순)는 그대로 유지한다.
+ */
+export function mergeProtos(ports: readonly RemotePort[]): PortRow[] {
+  const out: PortRow[] = []
+  const at = new Map<string, PortRow>()
+  for (const p of ports) {
+    const k = `${p.port} ${p.pid ?? ''} ${p.process ?? ''}`
+    const hit = at.get(k)
+    if (hit) {
+      if (!hit.protos.includes(p.proto)) hit.protos.push(p.proto)
+      continue
+    }
+    const row: PortRow = {
+      port: p.port,
+      protos: [p.proto],
+      ...(p.pid !== undefined ? { pid: p.pid } : {}),
+      ...(p.process !== undefined ? { process: p.process } : {})
+    }
+    at.set(k, row)
+    out.push(row)
+  }
+  return out
+}
+
 // 순수 함수(단위 테스트 대상). 정렬은 이미 parsePorts(main)가 포트 번호 오름차순으로 끝냈다 — 여기선 거르기만.
 // 조건은 전부 AND — 좁히는 도구지 넓히는 도구가 아니다.
 /**
@@ -226,10 +257,10 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
               </tr>
             </thead>
             <tbody>
-              {visible.map((p) => {
+              {mergeProtos(visible).map((p) => {
                 const fwd = fwdOf(p.port)
                 return (
-                  <tr key={`${p.proto}:${p.port}`} className={fwd ? 'fwd' : ''}>
+                  <tr key={`${p.port}:${p.pid ?? ''}:${p.process ?? ''}`} className={fwd ? 'fwd' : ''}>
                     {/* 준영님 요청: 세션 트리와 **같은 문법**의 초록 점 — 열려 있다는 것을
                         행 맨 왼쪽에서 훑어 잡을 수 있게. */}
                     <td className="pt-st">
@@ -242,7 +273,9 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
                       {p.port}
                       {WEB_PORTS.has(p.port) && <span className="pweb">web</span>}
                     </td>
-                    <td className={'pt-proto' + (p.proto === 'tcp6' ? ' v6' : '')}>{p.proto}</td>
+                    {/* 합쳐진 줄은 `tcp · tcp6`. 어느 스택으로 뜬 것인지가 사라지면 안 된다 —
+                        방화벽·바인드 주소를 볼 때 그게 답인 경우가 있다. */}
+                    <td className="pt-proto">{p.protos.join(' · ')}</td>
                     <td className={'pt-proc' + (p.process ? '' : ' unk')}>{p.process ?? t('mon.unknownProc')}</td>
                     <td className="pt-pid r">{p.pid ?? '—'}</td>
                     <td className="pt-dest">

@@ -1,7 +1,7 @@
 // FB-monitor(FB-0003) — [모니터] 탭 검색·범위 필터 순수 함수. 실제 파싱(parsePorts)은
 // tests/telemetry.test.ts 가 이미 본다 — 여기는 그 결과를 걸러내는 filterPorts 만 본다.
 import { describe, it, expect } from 'vitest'
-import { filterPorts, parsePortInput } from '../src/renderer/components/PortMonitor'
+import { filterPorts, mergeProtos, parsePortInput } from '../src/renderer/components/PortMonitor'
 import type { RemotePort } from '../src/shared/types'
 
 const PORTS: RemotePort[] = [
@@ -93,5 +93,45 @@ describe('포트 구간·포워딩 상태 필터', () => {
     expect(parsePortInput('abc')).toBeNull()
     expect(parsePortInput('70000')).toBeNull()
     expect(parsePortInput('-1')).toBeNull()
+  })
+})
+
+// 2026-08-21 준영님 제보: "중복된 포트번호가 있더라고 근데 tcp, tcp6 로 구분되는데
+// 이걸 하나의 행으로 보여주는게 맞아보이고". 한 프로세스가 IPv4·IPv6 를 함께 리슨하면
+// `ss` 가 두 줄로 준다 — 사람이 보기엔 포트 하나고, 포워딩도 번호 하나로 걸린다.
+describe('mergeProtos — tcp/tcp6 한 줄로', () => {
+  const p = (port: number, proto: 'tcp' | 'tcp6', pid?: number, process?: string) => ({
+    port,
+    proto,
+    ...(pid !== undefined ? { pid } : {}),
+    ...(process !== undefined ? { process } : {})
+  })
+
+  it('같은 포트·같은 프로세스면 한 줄로 합치고 프로토콜을 모은다', () => {
+    const r = mergeProtos([p(8080, 'tcp', 1284, 'java'), p(8080, 'tcp6', 1284, 'java')])
+    expect(r).toHaveLength(1)
+    expect(r[0].protos).toEqual(['tcp', 'tcp6'])
+    expect(r[0].pid).toBe(1284)
+  })
+
+  it('★ 포트가 같아도 프로세스가 다르면 합치지 않는다 — 합치면 표가 거짓말을 한다', () => {
+    const r = mergeProtos([p(8080, 'tcp', 1284, 'java'), p(8080, 'tcp6', 9001, 'node')])
+    expect(r).toHaveLength(2)
+  })
+
+  it('프로세스를 모르는 줄끼리도 포트가 같으면 합친다(둘 다 "권한 없음"이면 같은 줄로 읽힌다)', () => {
+    const r = mergeProtos([p(443, 'tcp'), p(443, 'tcp6')])
+    expect(r).toHaveLength(1)
+    expect(r[0].protos).toEqual(['tcp', 'tcp6'])
+  })
+
+  it('같은 프로토콜이 두 번 와도 중복으로 쌓지 않는다', () => {
+    const r = mergeProtos([p(22, 'tcp', 1102, 'sshd'), p(22, 'tcp', 1102, 'sshd')])
+    expect(r[0].protos).toEqual(['tcp'])
+  })
+
+  it('입력 순서(포트 오름차순)를 그대로 지킨다', () => {
+    const r = mergeProtos([p(22, 'tcp'), p(80, 'tcp'), p(80, 'tcp6'), p(8080, 'tcp')])
+    expect(r.map((x) => x.port)).toEqual([22, 80, 8080])
   })
 })
