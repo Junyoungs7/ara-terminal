@@ -74,6 +74,17 @@ export function planLink(url: string, isSsh: boolean): LinkPlan {
     const port = loopbackPort(raw)
     if (port !== null) return { kind: 'oauth', port, url }
   }
+  // 이름을 모르는 콜백 파라미터 — **값 전체를 훑는다**(2026-08-22 준영님 제보 6번: 원격 gemini
+  // 로그인 링크가 내장 브라우저로 안 갔다). CLI 마다 이름이 다르고(redirect_uri·callback·
+  // return_to·continue…) 그 목록을 다 맞힐 수는 없다. 판단 기준은 이름이 아니라 **값이 loopback
+  // URL 인가**여야 한다.
+  //
+  // 표면이 넓어지지 않는다: oauth 분기는 확인 다이얼로그(포트·오리진을 보여 준다)를 거치고,
+  // 포워딩 목적지는 어차피 **원격의 127.0.0.1 고정**이다 — 이 값으로 임의 호스트에 갈 수 없다.
+  for (const [, raw] of u.searchParams) {
+    const port = loopbackPort(raw)
+    if (port !== null) return { kind: 'oauth', port, url }
+  }
   return { kind: 'external', url }
 }
 

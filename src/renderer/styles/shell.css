@@ -2792,7 +2792,15 @@
   color: var(--text-dim);
   font-family: var(--term);
   font-size: var(--tt);
-  line-height: var(--tl);
+  /* 2026-08-22 준영님 제보 3번: "자동완성이 터미널 텍스트보다 살짝 아래에 위치함."
+     `line-height: var(--tl)` 은 **배수**(기본 1.58)라 14px 글꼴에서 22.12px 이 되는데, xterm 은
+     셀 높이를 정수로 올림해 23px 을 쓴다. 그 어긋남만큼 글자가 셀 안에서 내려앉았다.
+     xterm 이 이 요소에 셀 높이를 직접 주므로 **그 박스에 맞춰 중앙에 놓는다** — 글꼴·크기·행간을
+     사용자가 바꿔도 따라간다(px 을 다시 계산하지 않는다). */
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
   white-space: pre;
   /* 셀 계산이 반올림으로 한 칸 모자랄 때가 있다 — 한 줄짜리라 넘쳐도 다른 행을 건드리지 않는다. */
   overflow: visible;

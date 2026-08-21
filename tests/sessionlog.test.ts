@@ -187,6 +187,36 @@ describe('ANSI 스트립', () => {
     expect(b).toBe('뒤')
   })
 
+  // 2026-08-22 준영님 제보 10번 — 기록에 같은 명령이 이어붙어 남았다:
+  //   `jun@kvt:…$ jun@kvt:…$ cp -r ./src ./backup     cp -r ./src ./backup      su`
+  // readline 이 히스토리를 부르거나 붙여넣을 때 줄을 지우고 다시 그리는데, 그 시퀀스를 버리고
+  // 글자만 이어 붙이면 지워졌어야 할 옛 글자가 남는다.
+  it('줄 전체 지우기(CSI 2K)는 그 줄에 쌓인 것을 버린다', () => {
+    const st = newStripState()
+    expect(stripAnsi('$ cp -r ./src ./backup\x1b[2K$ su\n', st)).toBe('$ su\n')
+  })
+
+  it('줄 지우기는 그 줄만 지운다 — 앞 줄은 남는다', () => {
+    const st = newStripState()
+    expect(stripAnsi('첫 줄\n둘째 옛것\x1b[2K둘째 새것\n', st)).toBe('첫 줄\n둘째 새것\n')
+  })
+
+  it('CSI 0K(커서~끝)는 순차 출력에서 지울 것이 없다', () => {
+    expect(stripAnsi('진행 중\x1b[K\n', newStripState())).toBe('진행 중\n')
+    expect(stripAnsi('진행 중\x1b[0K\n', newStripState())).toBe('진행 중\n')
+  })
+
+  it('줄 첫 칸으로 이동(CSI G)은 CR 로 남겨 normalizeCr 이 덮어쓰기로 정리한다', () => {
+    const out = stripAnsi('옛 명령\x1b[1G새 명령\n', newStripState())
+    expect(out).toBe('옛 명령\r새 명령\n')
+    expect(normalizeCr(out)).toBe('새 명령\n')
+  })
+
+  it('대체화면 안에서는 줄 지우기도 기록에 영향을 주지 않는다', () => {
+    const st = newStripState()
+    expect(stripAnsi('전\x1b[?1049h재그리기\x1b[2K또 재그리기\x1b[?1049l후\n', st)).toBe('전후\n')
+  })
+
   it('대체화면(1049h~l) 구간은 기록하지 않는다', () => {
     const st = newStripState()
     const out = stripAnsi('전\x1b[?1049hhtop 화면 재그리기\x1b[?1049l후\n', st)

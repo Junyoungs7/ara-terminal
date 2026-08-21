@@ -49,6 +49,22 @@ describe('planLink — OAuth 콜백', () => {
     expect(planLink('https://a.example/x?callback=http://localhost:1234/', true).kind).toBe('oauth')
   })
 
+  // 2026-08-22 준영님 제보 6번: 원격 gemini 로그인 링크가 내장 브라우저로 안 갔다.
+  // 판단 기준은 파라미터 **이름**이 아니라 **값이 loopback URL 인가**다 — CLI 마다 이름이 다르다.
+  it('이름을 모르는 파라미터라도 값이 loopback 이면 OAuth 다', () => {
+    expect(planLink('https://accounts.google.com/o/oauth2/v2/auth?continue=http://localhost:45289/cb', true)).toEqual({
+      kind: 'oauth',
+      port: 45289,
+      url: 'https://accounts.google.com/o/oauth2/v2/auth?continue=http://localhost:45289/cb'
+    })
+    expect(planLink('https://a.example/x?return_to=http%3A%2F%2F127.0.0.1%3A7777%2Fdone', true).kind).toBe('oauth')
+  })
+
+  it('이름 있는 콜백이 먼저다 — 여러 개면 redirect_uri 의 포트를 쓴다', () => {
+    const url = 'https://a.example/x?state=http://localhost:1111/&redirect_uri=http://localhost:2222/cb'
+    expect(planLink(url, true)).toEqual({ kind: 'oauth', port: 2222, url })
+  })
+
   it('콜백이 loopback 이 아니면 OAuth 가 아니다(외부 리다이렉트는 우리 일이 아니다)', () => {
     expect(planLink('https://a.example/x?redirect_uri=https://app.example.com/cb', true).kind).toBe('external')
   })

@@ -102,15 +102,35 @@ const OSC = /^\x1b\][\s\S]{0,4096}?(?:\x07|\x1b\\)/
 const ALT_ON = /^\x1b\[\?(?:1049|1047|47)h$/
 const ALT_OFF = /^\x1b\[\?(?:1049|1047|47)l$/
 
+/**
+ * 줄 지우기·줄 안 커서 이동 — **셸이 명령행을 다시 그릴 때 쓰는 것들**.
+ *
+ * 2026-08-22 준영님 제보 10번: 기록에 같은 명령이 두세 번 이어붙어 남았다
+ * (`… cp -r ./src ./backup     cp -r ./src ./backup      su`).
+ * 원인은 이 시퀀스들을 **그냥 지웠기** 때문이다. readline 은 히스토리를 부르거나 붙여넣기를 하면
+ * `CSI 2K`(줄 전체 지우기)나 `CSI G`(줄 첫 칸으로) 를 보내고 같은 자리에 다시 쓴다 — 화면에서는
+ * 덮어써지지만, 시퀀스를 버리고 글자만 이어 붙이면 지워졌어야 할 옛 글자가 그대로 남는다.
+ *
+ * 완전한 재현은 아니다(그러려면 터미널 에뮬레이터를 돌려야 한다). 커서 **열 위치**는 추적하지
+ * 않고 "지금 쓰고 있는 줄"만 본다 — 그 하나로 재그리기 중복의 대부분이 사라진다.
+ */
+const EL = /^\x1b\[([0-2]?)K$/ // Erase in Line: 0=커서~끝, 1=처음~커서, 2=줄 전체
+const CHA = /^\x1b\[[0-9]*G$/ // Cursor Horizontal Absolute — 줄 안에서 열 이동(\r 과 같은 뜻으로 쓰인다)
+
 export function stripAnsi(text: string, st: StripState): string {
   const s = st.carry + text
   st.carry = ''
   let out = ''
   let i = 0
+  /** out 에서 지금 쓰고 있는 줄이 시작하는 자리. 줄 지우기·줄 앞 이동이 이 지점을 기준으로 자른다. */
+  let lineStart = 0
   while (i < s.length) {
     const c = s[i]
     if (c !== '\x1b') {
-      if (!st.alt) out += c
+      if (!st.alt) {
+        out += c
+        if (c === '\n') lineStart = out.length
+      }
       i++
       continue
     }
@@ -119,6 +139,19 @@ export function stripAnsi(text: string, st: StripState): string {
     if (csi) {
       if (ALT_ON.test(csi[0])) st.alt = st.entered = true
       else if (ALT_OFF.test(csi[0])) st.alt = false
+      else if (!st.alt) {
+        const el = EL.exec(csi[0])
+        // 줄 전체 지우기(2) · 처음~커서 지우기(1) → 지금 줄에 쌓아 둔 것을 버린다.
+        // 0(커서~끝)은 순차 출력에서 커서가 곧 줄 끝이라 지울 것이 없다.
+        if (el && el[1] !== '0' && el[1] !== '') out = out.slice(0, lineStart)
+        else if (el && (el[1] === '' || el[1] === '0')) {
+          /* no-op — 커서 뒤에는 아직 아무것도 없다 */
+        } else if (CHA.test(csi[0])) {
+          // 줄 첫 칸으로 돌아간 뒤 다시 쓴다 = 덮어쓰기다. \r 과 같은 자리에서 처리되게
+          // 표식을 남겨 두면 normalizeCr 이 "마지막 것만" 규칙으로 정리한다.
+          out += '\r'
+        }
+      }
       i += csi[0].length
       continue
     }
