@@ -78,7 +78,13 @@ describe('UI-font4: 한글 시스템 폴백(KR System) — Tabby 재현 (agent_t
   })
 })
 
-describe('UI-font: --mono는 --term과 항상 같은 스택(사이드바·상태바·탭도 터미널 폰트를 따라간다)', () => {
+describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사용자 설정 (2026-08-21)', () => {
+  // 2026-08-04 에는 정반대였다: `--mono === --term` 이 확정 요구였고, 사용자가 터미널 폰트를
+  // 바꾸면 앱 화면 전체가 따라 바뀌었다. 그 결과가 "개발용 티"였고 준영님이 뒤집으셨다.
+  //   --ui   Pretendard   크롬 전부.            고정 · 설정에 없다
+  //   --mono 나눔고딕코딩  경로·명령·로그·에디터. 고정 · 설정에 없다
+  //   --term 사용자 선택   터미널 본문 전용
+  //
   // bindCssVars는 document.documentElement 에 직접 쓴다 — jsdom 없이도 실측 가능하게
   // setProperty 만 흉내 낸 최소 스텁을 주입한다(새 의존성 없음).
   let props: Record<string, string>
@@ -92,32 +98,41 @@ describe('UI-font: --mono는 --term과 항상 같은 스택(사이드바·상태
     delete (globalThis as unknown as { document?: unknown }).document
   })
 
-  it('bindCssVars는 선택된 모든 터미널 폰트에서 --mono === --term 을 세팅한다(기본 krSystemFallback=true)', async () => {
+  it('★ bindCssVars 는 --term 만 건드린다 — 화면 글꼴은 설정을 타지 않는다', async () => {
     const { bindCssVars } = await import('../src/renderer/store/font')
     for (const o of FONT_OPTIONS) {
       bindCssVars({ term: o.key, sizePx: 14, lineHeight: 1.58 })
-      expect(props['--mono'], `${o.key}: --mono 가 --term과 달라짐`).toBe(props['--term'])
-      expect(props['--mono']).toBe(`'KR System', ${o.stack}`)
+      expect(props['--term']).toBe(`'KR System', ${o.stack}`)
+      expect(props['--mono'], `${o.key}: --mono 가 설정을 따라갔다`).toBeUndefined()
+      expect(props['--ui'], `${o.key}: --ui 가 설정을 따라갔다`).toBeUndefined()
     }
   })
 
-  it('krSystemFallback:false 면 --mono/--term 에서 KR System 이 빠진다(설정 되돌리기)', async () => {
+  it('krSystemFallback:false 면 --term 에서 KR System 이 빠진다(설정 되돌리기)', async () => {
     const { bindCssVars } = await import('../src/renderer/store/font')
     bindCssVars({ term: 'Nanum Gothic Coding', sizePx: 14, lineHeight: 1.58, krSystemFallback: false })
-    expect(props['--mono']).toBe(FONT_OPTIONS[0].stack)
-    expect(props['--mono']).not.toContain('KR System')
+    expect(props['--term']).toBe(FONT_OPTIONS[0].stack)
+    expect(props['--term']).not.toContain('KR System')
   })
 
-  it('tokens.css 정적 기본값도 --mono === --term 이다(하이드레이트 전 첫 페인트가 어긋나지 않도록)', () => {
+  it('★ --mono 에는 KR System 을 넣지 않는다 — 로그·에디터 본문에서 열이 밀린다', () => {
+    // 'KR System' 은 한글을 맑은 고딕(비례 폰트)으로 그린다. UI 라벨에서는 그게 이득이었지만
+    // (UI-font4) 지금 UI 는 Pretendard 다. --mono 가 남은 자리는 경로·로그·에디터라
+    // **한글도 고정폭이어야** 열이 맞는다.
     const css = readFileSync(join(__dirname, '../src/renderer/styles/tokens.css'), 'utf8')
     const mono = /--mono:\s*([^;]+);/.exec(css)?.[1]?.trim()
-    const term = /--term:\s*([^;]+);/.exec(css)?.[1]?.trim()
     expect(mono).toBeTruthy()
-    expect(mono).toBe(term)
-    // 1순위가 한글 지원 폰트여야 한다 — 라틴 전용 폰트가 1순위면 기본 화면의 한글 UI가
-    // 선택하지도 않은 폰트로 렌더링된다(이번에 고친 버그의 원형). UI-font4: 'KR System' 도
-    // 한글 unicode-range 로 국한된 한글 폰트이므로 이 요구를 그대로 만족한다(기본 켜짐).
-    expect(mono).toMatch(/^'KR System'|^'Nanum Gothic Coding'|^'D2Coding'/)
+    expect(mono).not.toContain('KR System')
+    expect(mono).toMatch(/^'Nanum Gothic Coding'/)
+    expect(mono!.endsWith('monospace')).toBe(true)
+  })
+
+  it('--ui 는 비례 폰트다 — 크롬에 고정폭이 다시 새어 들어오지 않게', () => {
+    const css = readFileSync(join(__dirname, '../src/renderer/styles/tokens.css'), 'utf8')
+    const ui = /--ui:\s*([^;]+);/.exec(css)?.[1]?.trim()
+    expect(ui).toMatch(/^'Pretendard'/)
+    expect(ui).not.toContain('monospace')
+    expect(ui).not.toContain('Coding')
   })
 })
 

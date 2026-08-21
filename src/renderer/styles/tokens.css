@@ -111,15 +111,15 @@
 
   /* 폰트 (§2.1) — 전부 resources/fonts/ 번들(@font-face, styles/fonts.css). CDN 금지. */
   --ui: 'Pretendard', -apple-system, 'Segoe UI', sans-serif;
-  /* UI-font(2026-08-04): --mono는 --term과 항상 같은 스택이다(store/font.ts bindCssVars가
-     설정에서 고른 터미널 폰트로 두 변수를 함께 갱신) — 사이드바·상태바·탭·설정 등 UI 라벨도
-     터미널과 같은 폰트를 쓴다는 확정 요구. 여기 정적값은 하이드레이트 전 첫 페인트용 기본값이라
-     기본 터미널 폰트(나눔고딕코딩)와 반드시 맞춰 둔다 — 1순위가 한글 미지원 폰트(JetBrains Mono
-     등)면 줄 상자 메트릭이 실제 렌더 폰트와 어긋나 한글 상단이 잘린다(실측: agent_talk/UI-font-done.md).
-     UI-font4(2026-08-05): 1순위 'KR System' 은 한글 음절/자모에만 국한된 @font-face(unicode-range,
-     styles/fonts.css) — 라틴은 그대로 다음 순위로 폴백해 이 규칙 자체는 안 바뀐다. 기본 켜짐
-     (FontConfig.krSystemFallback, 설정에서 되돌릴 수 있음). 근거: agent_talk/UI-font4-done.md. */
-  --mono: 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
+  /* --mono — **고정.** 크롬 안에서 고정폭이어야 하는 27곳이 쓴다(경로·명령줄·로그 본문·
+     에디터·키 표기·API 키). 2026-08-21 부터 터미널 선택을 따라가지 않는다: 그 자리들은
+     터미널이 아니라 **앱 화면**이고, 화면 글꼴이 설정에 따라 흔들리면 레이아웃도 흔들린다.
+     'KR System'(한글만 OS 폰트로 그리는 unicode-range face)을 **여기엔 넣지 않는다** —
+     맑은 고딕은 비례 폰트라 로그·에디터 본문에서 한글이 섞이면 열이 밀린다. 그 장치는
+     터미널(--term)에서 설정 토글로 계속 살아 있다.
+     --term — 터미널 본문 전용. 설정 [폰트]가 실시간으로 덮어쓴다(store/font.ts bindCssVars).
+     여기 정적값은 하이드레이트 전 첫 페인트용 기본값이라 기본 선택과 맞춰 둔다. */
+  --mono: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
   --term: 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
 
   /* 터미널 본문 크기·행간 (§2.2, 10–20px 슬라이더) + 셸 치수 (§4.1) */

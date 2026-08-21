@@ -659,7 +659,8 @@ export function SettingsDrawer({
                 />
               </Row>
 
-              {/* 터미널 폰트 선택(라디오) — UI-font: 선택은 --term뿐 아니라 --mono(UI 전체)에도 적용된다. */}
+              {/* 터미널 폰트 선택(라디오) — 2026-08-21 부터 **--term 하나만** 바꾼다.
+                  앱 화면 글꼴(--ui Pretendard · --mono 나눔고딕코딩)은 고정이고 설정에 없다. */}
               <div className="set-sec-t">{t('settings.pick.title')}</div>
               <div className="set-sec-d">{t('settings.pick.desc')}</div>
               <div className="font-list">
