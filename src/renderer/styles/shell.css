@@ -165,7 +165,7 @@
 .tb-omni-key {
   flex: none;
   font-family: var(--mono);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   color: var(--text-lo);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -598,7 +598,7 @@
   flex: none;
   min-width: 34px;
   text-align: right;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   font-weight: 500;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -781,7 +781,7 @@
 .sftp-xfer .xfer-pct {
   display: block;
   margin-top: 3px;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   font-weight: 500;
   color: var(--text-dim);
   font-family: var(--ui);
@@ -1931,7 +1931,7 @@
 }
 .pe-keys kbd {
   font-family: var(--mono);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   font-weight: 600;
   color: var(--text-lo);
   background: var(--bg-raised);
@@ -2830,7 +2830,7 @@
 .srv-hd .g-count {
   margin-left: auto;
   font-family: var(--ui);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   font-weight: 500;
   opacity: 0.75;
 }
@@ -4326,7 +4326,7 @@
 }
 .pmon-count {
   font-family: var(--ui);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   color: var(--accent-bright);
   background: var(--accent-glow);
   border-radius: var(--radius-sm);
@@ -4438,7 +4438,7 @@
 .prow .ppid {
   flex: none;
   font-family: var(--ui);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -6343,7 +6343,7 @@
 .aisess-cnt {
   margin-left: auto;
   margin-right: 8px;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-nano);
   color: var(--warn);
 }
 .aisess-body {
