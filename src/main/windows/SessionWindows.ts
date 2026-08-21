@@ -19,7 +19,9 @@ import { sessionWinHash } from '@shared/sessionWin'
 
 const WIDTH = 1100
 const HEIGHT = 720
-const BACKGROUND = '#0d1119'
+// G(Fleet) 팔레트의 --bg-canvas. 첫 페인트 전 잠깐 보이는 색이라 앱 배경과 같아야 깜빡임이 없다
+// (2026-08-22: 리브랜딩·팔레트 교체 때 빠져 옛 남색 #0d1119 가 남아 있었다).
+const BACKGROUND = '#1e1e20'
 
 /** winId → 창. 창이 닫히면 지워진다(닫힘 정리는 여는 쪽이 콜백으로 받는다). */
 const windows = new Map<string, BrowserWindow>()
@@ -91,7 +93,13 @@ export function openSessionWindow(
     if (windows.get(winId) === win) windows.delete(winId)
     opts.onClosed(winId)
   })
-  win.once('ready-to-show', () => win.show())
+  // show() 만으로는 본창 뒤에 열릴 수 있다(특히 본창이 최대화돼 있을 때) — 그러면 사용자에게는
+  // "떼어냈는데 창이 안 뜬다"로 보인다(2026-08-22 준영님 제보 31번). 앞으로 가져온다:
+  // 내장 브라우저 창이 이미 같은 규칙이다(BrowserTabs.ts 의 show()+focus()).
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
+  })
 
   const hash = sessionWinHash(winId)
   const devUrl = process.env['ELECTRON_RENDERER_URL']

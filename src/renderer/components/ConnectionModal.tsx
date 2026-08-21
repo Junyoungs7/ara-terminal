@@ -282,10 +282,14 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     setError('')
     setResult(null)
     try {
-      const r = await window.ev?.ssh.test(toInput())
-      if (!r) return
+      const r = await window.ev.ssh.test(toInput())
       if (r.ok) setResult({ ok: true, msg: t(r.note === 'rdpReachOnly' ? 'conn.test.reachOnly' : 'conn.test.ok') })
       else setResult({ ok: false, msg: t('conn.test.fail.' + r.reason) + (r.message ? ` — ${r.message}` : '') })
+    } catch (e) {
+      // 조용히 넘어가지 않는다. 2026-08-22 준영님 제보 "접속 테스트 버튼 클릭시 아무 반응 없음" 이
+      // 이 자리였다 — 옵셔널 체이닝으로 감싸 두면 preload 가 낡아 test 가 없을 때(앱을 재시작하기
+      // 전) 예외가 나고도 화면에는 아무 일도 안 일어난다. 버튼을 눌렀으면 무엇이든 답해야 한다.
+      setResult({ ok: false, msg: t('conn.test.fail.network') + ` — ${e instanceof Error ? e.message : String(e)}` })
     } finally {
       setBusy(false)
     }
@@ -453,17 +457,9 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                 </div>
                 <div className="fld" style={{ marginBottom: 10 }}>
                   <label>{t('conn.field.authMethod')}</label>
+                  {/* 2026-08-22 준영님: [비밀번호]를 앞으로. 기본이 비밀번호가 됐으니(제보 30)
+                      켜져 있는 쪽이 왼쪽에 오는 게 맞다 — 세그먼트는 첫 칸을 기본으로 읽는다. */}
                   <div className="seg-ctl">
-                    <button
-                      type="button"
-                      className={form.authType === 'key' ? 'on' : ''}
-                      onClick={() => setForm({ ...form, authType: 'key' })}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M15 7a4 4 0 11-5.6 3.6L4 16v3h3l1-1h2v-2h2l1.5-1.5A4 4 0 0115 7z" />
-                      </svg>
-                      {t('conn.auth.key')}
-                    </button>
                     <button
                       type="button"
                       className={form.authType === 'password' ? 'on' : ''}
@@ -474,6 +470,16 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                         <path d="M8 10V7a4 4 0 018 0v3" />
                       </svg>
                       {t('conn.auth.password')}
+                    </button>
+                    <button
+                      type="button"
+                      className={form.authType === 'key' ? 'on' : ''}
+                      onClick={() => setForm({ ...form, authType: 'key' })}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M15 7a4 4 0 11-5.6 3.6L4 16v3h3l1-1h2v-2h2l1.5-1.5A4 4 0 0115 7z" />
+                      </svg>
+                      {t('conn.auth.key')}
                     </button>
                   </div>
                 </div>
@@ -523,14 +529,16 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
             2026-08-21 준영님: 버튼 하나를 셋으로 갈랐다 — [접속 테스트](저장 안 함) · [저장](접속 안 함) ·
             [저장 후 접속]. 셋을 한 줄에 두면 주된 동작이 안 읽히므로 강조는 마지막 하나만 준다. */}
         <div className="modal-ft">
+          {/* [접속 테스트]는 **왼쪽 끝**이다(2026-08-22 준영님). 저장·접속과 성격이 다르다 —
+              아무것도 바꾸지 않고 확인만 하는 동작이라 저장하는 버튼들과 섞여 있으면 안 된다. */}
+          <button className="btn sec" disabled={busy} onClick={() => void testConn()}>
+            {t('conn.test')}
+          </button>
           {error ? <span className="err">{error}</span> : null}
           {!error && result ? <span className={result.ok ? 'okmsg' : 'err'}>{result.msg}</span> : null}
           <span className="sp" />
           <button className="btn sec" onClick={onClose}>
             {t('conn.cancel')}
-          </button>
-          <button className="btn sec" disabled={busy} onClick={() => void testConn()}>
-            {t('conn.test')}
           </button>
           <button className="btn sec" disabled={busy} onClick={() => void saveOnly()}>
             {t('conn.save')}

@@ -27,6 +27,10 @@ export function PasswordInput({
   return (
     <div className={'pw-wrap' + (show ? ' shown' : '')}>
       <input
+        // 전용 클래스를 단다 — 이 컴포넌트는 .fld·.rdp-creds·.dlg 세 곳에 들어가는데 각 자리에
+        // `<곳> input` 규칙이 이미 있어서, 태그 선택자만으로는 자리마다 다르게 그려진다
+        // (실제로 RDP 입력 화면에서 flex 가 안 걸려 눈이 칸 가운데에 붙었다 — 2026-08-22 제보).
+        className="pw-input"
         type={show ? 'text' : 'password'}
         value={value}
         placeholder={placeholder}

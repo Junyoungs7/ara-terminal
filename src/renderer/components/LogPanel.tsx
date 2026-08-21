@@ -82,6 +82,16 @@ export function LogPanel({ open, onClose, sessionId, sessionTitle, embedded }: P
     })
   }, [sessionId])
 
+  // 세션이 바뀌거나 사라지면 앞 세션의 내용을 먼저 버린다. reload() 는 `if (!sessionId) return`
+  // 이라 세션을 다 닫아도 마지막 기록이 화면에 그대로 남아 있었다 — 다른 탭들은 "세션 없음"으로
+  // 비는데 여기만 지난 내용을 보여 주니 **지금 무언가 돌고 있는 것처럼** 읽힌다
+  // (2026-08-22 준영님 제보 13번). 이 이펙트가 아래 reload 보다 위에 있어야 비운 뒤 채운다.
+  useEffect(() => {
+    setText('')
+    setStart(0)
+    setError(null)
+  }, [sessionId])
+
   useEffect(() => {
     if (open) void reload()
   }, [open, reload])

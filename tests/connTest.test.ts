@@ -60,7 +60,7 @@ describe('[접속 테스트] (제보 19)', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'ara-conntest-'))
-    ws = new WorkspaceStore(join(dir, 'workspace.json'))
+    ws = new WorkspaceStore(join(dir, 'workspace.json'), '0.1.0')
     vault = new MemVault()
     profiles = new ProfileStore(ws, vault)
   })

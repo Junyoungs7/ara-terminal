@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { connDotClass, type ConnState } from '../store/profiles'
@@ -185,6 +185,9 @@ export function ConnTree({
   const [tmux, setTmux] = useState<{ sessionId: string; result: TmuxListResult | 'loading' } | null>(null)
   // 원클릭 선택 상태(접속과 분리). 접속하면 activeProfileId 가 따라오므로 그때는 그 값으로 표시한다.
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 활성 세션이 바뀌면 클릭 선택은 수명을 다한다. 안 그러면 탭을 옮기거나 로컬 셸을 열어도 트리에는
+  // 아까 클릭한 서버가 계속 켜져 있다(2026-08-22 준영님 제보 — 로컬 셸 쪽은 제보 22번).
+  useEffect(() => setSelectedId(null), [activeSessionId])
   // R6 트리 검색어. 서버가 수십 개가 되면 스크롤보다 타이핑이 빠르다.
   const [query, setQuery] = useState('')
 
@@ -327,18 +330,19 @@ export function ConnTree({
                 const activeHere = sess.some((x) => x.id === activeSessionId) || rdpSession?.id === activeSessionId
                 const live = Boolean(rdpSession) || sess.length > 0
                 const badge = typeBadge(p.type)
+                // 선택 표시는 **하나**다(2026-08-22 준영님: "클릭 한 번 하면 사이드바에 2개의 서버가
+                // 선택된 것처럼 보여"). 예전엔 activeHere 와 클릭 선택을 OR 로 묶어서, 접속돼 있는 A 를
+                // 보면서 B 를 클릭하면 A(활성 세션)와 B(클릭)가 함께 켜졌다. 클릭이 있으면 그것만 켠다 —
+                // 접속이 끝나 activeSessionId 가 바뀌면 위 effect 가 클릭을 버려 다시 세션 기준으로 돌아온다.
+                const picked = selectedId !== null ? p.id === selectedId : activeHere || p.id === activeProfileId
                 const card = (
                   <div
-                    className={
-                      'srv-node' +
-                      (live ? '' : ' off') +
-                      (activeHere || p.id === (selectedId ?? activeProfileId) ? ' active' : '')
-                    }
+                    className={'srv-node' + (live ? '' : ' off') + (picked ? ' active' : '')}
                     role="treeitem"
                     tabIndex={-1}
                     // 세션이 없는 서버는 펼칠 것이 없다 — aria-expanded 를 아예 안 준다(→/← 무시).
                     {...(sess.length > 0 ? { 'aria-expanded': !nodeCollapsed } : {})}
-                    aria-selected={activeHere || p.id === (selectedId ?? activeProfileId)}
+                    aria-selected={picked}
                     // 호스트는 행에서 뺐다 — 목록에서 매번 필요한 값이 아니라 툴팁으로 내린다.
                     title={`${p.username ? p.username + '@' : ''}${p.host} · ${t('conn.tree.connect')}`}
                     onClick={(e) => {

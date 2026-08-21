@@ -358,21 +358,29 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     }, [open, layout])
 
     /**
-     * F32: 떼어낸 창에는 **세션을 패널에 올려 주는 사람이 없다.**
+     * **칸이 하나도 없는데 세션은 남아 있으면** 활성 세션을 올린다. 두 자리에서 필요하다:
      *
-     * 본창에서는 두 경로가 그 일을 한다 — 새 셸을 열면 openLocal 이 `showSession` 을 부르고,
-     * 부팅 때는 F6 복원이 레이아웃을 통째로 세운다. 떼어낸 창은 세션을 **받아만** 오므로
-     * (본창에서 떼어져 왔다) 탭은 있는데 그리는 칸이 없다 — DETACH-3 이 그 상태를 잡았다.
-     * 칸이 하나도 없을 때만 첫 세션을 올린다(그 뒤로는 사용자의 분할·닫기를 건드리지 않는다).
+     * ① F32 떼어낸 창 — 세션을 **받아만** 오므로(본창에서 떼어져 왔다) 올려 줄 사람이 없다.
+     *    본창에는 그 일을 하는 경로가 둘 있다: 새 셸은 openLocal 이 showSession 을 부르고,
+     *    부팅은 F6 복원이 레이아웃을 통째로 세운다. DETACH-3 이 이 상태를 잡았다.
+     *
+     * ② **본창** (2026-08-22 준영님 제보 2번 — "그 창을 닫으면 빈창으로 보임").
+     *    칸에 올라와 있던 세션을 닫으면 close() 가 activeId 를 옆 탭으로 옮기는데, 그 탭을
+     *    그릴 칸은 아무도 안 만든다 — 탭은 있고 화면은 비는 상태가 된다. 예전엔 이 이펙트가
+     *    `!detachedWinId` 로 본창을 아예 빼고 있었다.
+     *
+     * 마지막 세션까지 닫으면 list 가 비어 showId 가 없다 → 이펙트가 돌지 않는다. 그래서 위
+     * openLocal 주석이 경고한 함정(× 를 눌러도 칸이 곧바로 되살아나 무반응으로 보이는 것)에
+     * 빠지지 않는다 — 되살릴 세션이 있을 때만 되살린다.
      */
     const paneCount = layout.cells.length
-    const firstId = list[0]?.id
+    const showId = activeId ?? list[0]?.id
     useEffect(() => {
-      if (!detachedWinId || paneCount > 0 || !firstId) return
-      layout.showSession(firstId)
+      if (paneCount > 0 || !showId) return
+      layout.showSession(showId)
       // layout 은 매 렌더 새 객체라 deps 에 넣으면 이펙트가 매 렌더 돈다(위 openLocal 주석과 같은 함정).
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [detachedWinId, paneCount, firstId])
+    }, [paneCount, showId])
 
     // F6 지속: 세션/레이아웃/활성 탭 변경 시 스냅샷을 저장한다(기존 30s 디바운스 flush 경로 재사용).
     // 세션 메타(cwd/profileId/type)의 진실은 main(session.list) — 렌더러가 중복 보관하지 않는다.

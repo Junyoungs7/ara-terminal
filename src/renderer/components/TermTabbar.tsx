@@ -274,7 +274,15 @@ export function TermTabbar({
           else if (action === 'session.closeOthers') onCloseOthers(target)
           // F32: 별도 창으로 떼어낸다. 여기서 탭을 지우지 않는다 — main 이 소유를 바꾸고
           // `session:moved` 를 보내면 useSessions 가 두 창의 목록을 함께 맞춘다(한쪽만 고치면 갈린다).
-          else if (action === 'session.detach') void window.ev?.window.detachSession(target)
+          // 2026-08-22: 결과를 버리지 않는다. 실패해도 아무 일이 없으면 "눌렀는데 안 된다"가 되고
+          // (준영님 제보 31번) 원인을 좁힐 단서도 남지 않는다.
+          else if (action === 'session.detach')
+            void window.ev?.window
+              .detachSession(target)
+              .then((r) => {
+                if (!r?.ok) console.error('[detach] main 이 거절했습니다 — sessionId=', target)
+              })
+              .catch((e: unknown) => console.error('[detach] 실패:', e))
         }}
         onClose={() => setTabMenu(null)}
       />
