@@ -46,7 +46,8 @@ export function TitleBar({
           <b>{t('app.name')}</b>
         </span>
       </div>
-      <div className="tb-menu">
+      {/* 열려 있을 때만 backdrop 위로 올라간다 — 항상 올려 두면 모달을 뚫는다(shell.css 주석). */}
+      <div className={'tb-menu' + (open ? ' on' : '')}>
         {MENUBAR.map((m, i) => (
           <span
             key={m.title}

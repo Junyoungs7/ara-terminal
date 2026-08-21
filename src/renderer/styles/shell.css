@@ -81,8 +81,14 @@
   margin-left: 4px;
   -webkit-app-region: no-drag;
   /* 드롭다운 backdrop(.ctx-backdrop, z-index 199) 위에 남아야 메뉴가 열린 채로 옆 메뉴로
-     넘어갈 수 있다(R4.1) — 아래에 깔리면 hover/click 이 전부 backdrop 에 먹힌다. */
+     넘어갈 수 있다(R4.1) — 아래에 깔리면 hover/click 이 전부 backdrop 에 먹힌다.
+     **다만 열려 있을 때만이다**(2026-08-21 준영님 제보). 항상 201 이면 모달 오버레이(100)를
+     뚫고 올라와, 연결 관리자·설정이 떠 있는데 File 메뉴가 눌린다. 닫혀 있으면 일반 흐름으로
+     내려와 오버레이 밑에 깔린다 — 모달 중에는 드롭다운을 열 수 없으니 두 상태는 안 겹친다. */
   position: relative;
+}
+/* 드롭다운이 열려 있는 동안만 backdrop 위로. */
+.tb-menu.on {
   z-index: 201;
 }
 .tb-menu span {
