@@ -21,7 +21,8 @@ const actionsOf = (e: MenuEntry[]) => e.flatMap((x) => ('action' in x ? [x.actio
 
 describe('R4.1 메뉴바 = keymap 파생', () => {
   it('최상위 메뉴 6종이 모두 항목을 갖는다(빈 메뉴 = 눌러도 반응 없음)', () => {
-    expect(MENUBAR.map((m) => m.title)).toEqual(['File', 'Edit', 'Session', 'Split', 'View', 'Help'])
+    // 2026-08-21: 최상위 이름을 한글로 바꿨다(앱의 다른 라벨과 결을 맞춘다).
+    expect(MENUBAR.map((m) => m.title)).toEqual(['파일', '편집', '세션', '분할', '보기', '도움말'])
     for (const m of MENUBAR) expect(m.items.length).toBeGreaterThan(0)
   })
 
@@ -34,7 +35,7 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
   })
 
   it('라벨·단축키 힌트를 KEYMAP 에서 그대로 가져온다(메뉴 전용 문구 없음)', () => {
-    const split = menuBarItems(MENUBAR.findIndex((m) => m.title === 'Split'))
+    const split = menuBarItems(MENUBAR.findIndex((m) => m.title === '분할'))
     const byId = Object.fromEntries(split.map((i) => [i.id, i]))
     expect(byId['split.horizontal'].label).toBe('가로 분할')
     expect(byId['split.horizontal'].hint).toBe('Ctrl+Shift+-')
@@ -45,7 +46,7 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
   })
 
   it('단축키 없는 명령 항목은 i18n 라벨을 쓰고 힌트가 없다', () => {
-    const help = menuBarItems(MENUBAR.findIndex((m) => m.title === 'Help'))
+    const help = menuBarItems(MENUBAR.findIndex((m) => m.title === '도움말'))
     // W3sat F18: commandBook.toggle 은 action 항목(단축키 있음, KEYMAP 파생 라벨) — 나머지는
     // 단축키 없는 command 항목(i18n 라벨, 힌트 없음)이라는 이 테스트의 취지는 그대로 유지한다.
     expect(help.map((i) => i.id)).toEqual(['help.cheatsheet', 'commandBook.toggle', 'help.about'])
@@ -67,7 +68,7 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
   })
 
   it('Session 첫 항목은 연결 관리자(R3 까지의 Session 클릭 동작을 지킨다)', () => {
-    expect(menuBarItems(MENUBAR.findIndex((m) => m.title === 'Session'))[0].id).toBe('connection.manager')
+    expect(menuBarItems(MENUBAR.findIndex((m) => m.title === '세션'))[0].id).toBe('connection.manager')
   })
 
   it('방향·번호 범위 키는 메뉴에 싣지 않는다(단일 항목으로 뜻이 없다)', () => {

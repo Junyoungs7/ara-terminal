@@ -451,7 +451,7 @@ app.whenReady().then(async () => {
   const f3b = await win.webContents.executeJavaScript(`(async () => {
     // 연결 관리자 열기 → 모달 + 폼 + 프로필 리스트 행 렌더.
     // R4.1 이후 Session 은 드롭다운이라 첫 항목(연결 관리자)까지 골라야 한다.
-    const sessionMenu = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === 'Session')
+    const sessionMenu = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '세션')
     if (sessionMenu) sessionMenu.click()
     await new Promise(r => setTimeout(r, 200))
     document.querySelector('.ctx-menu .ctx-item[data-action="connection.manager"]')?.click()
@@ -1033,7 +1033,7 @@ app.whenReady().then(async () => {
 
     // 4) 네이티브 <select> 전멸 + 커스텀 콤보 동작(연결 관리자 그룹 필드 — R6 부터 타이핑 가능).
     // R4.1: Session 드롭다운 → 연결 관리자 항목.
-    const sessionMenuBtn = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === 'Session')
+    const sessionMenuBtn = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '세션')
     if (sessionMenuBtn) sessionMenuBtn.click()
     await wait(200)
     document.querySelector('.ctx-menu .ctx-item[data-action="connection.manager"]')?.click()
@@ -2020,7 +2020,7 @@ app.whenReady().then(async () => {
       await closeMenu()
     }
     // R4.1 ② 힌트가 keymap 단일 소스에서 온다.
-    await openTop('Split')
+    await openTop('분할')
     const splitHints = [...document.querySelectorAll('.ctx-menu .ctx-item .ci-kbd')].map(k => k.textContent)
     await closeMenu()
 
@@ -2030,39 +2030,39 @@ app.whenReady().then(async () => {
 
     // R4.1 ③ 메뉴 항목이 실제로 동작한다 — Split → 가로 분할로 패널이 늘어난다.
     const panesBefore = document.querySelectorAll('.pane-grid .pane').length
-    await openTop('Split'); await pick('split.horizontal')
+    await openTop('분할'); await pick('split.horizontal')
     const panesAfterMenu = document.querySelectorAll('.pane-grid .pane').length
     // 되돌리기: 칸 닫기(R9a — 그 칸의 세션도 함께 끝난다. 여기선 로컬이라 확인 없음).
-    await openTop('Split'); await pick('pane.close')
+    await openTop('분할'); await pick('pane.close')
     await wait(200); await okDialog()
     const panesAfterClose = document.querySelectorAll('.pane-grid .pane').length
 
     // R4.1 ④ View → 사이드바 접기(단축키가 아니라 메뉴로).
     const collapsedBefore = document.querySelector('.sidebar').classList.contains('collapsed')
-    await openTop('View'); await pick('sidebar.collapse')
+    await openTop('보기'); await pick('sidebar.collapse')
     const collapsedAfter = document.querySelector('.sidebar').classList.contains('collapsed')
-    await openTop('View'); await pick('sidebar.collapse')
+    await openTop('보기'); await pick('sidebar.collapse')
     const collapsedBack = document.querySelector('.sidebar').classList.contains('collapsed')
 
     // R4.1 ⑤ File → 설정 / Help → 치트시트 / Help → 정보.
     // R5: 설정에 Ctrl+, 가 생겨 command 가 아니라 action 항목이 됐다(메뉴가 그 키를 눌러 준다).
-    await openTop('File'); await pick('settings.open')
+    await openTop('파일'); await pick('settings.open')
     const drawerOpen = !!document.querySelector('.drawer.open')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(250)
     await closeMenu()
-    await openTop('Help'); await pick('help.cheatsheet')
+    await openTop('도움말'); await pick('help.cheatsheet')
     const cheatsheetOpen = !!document.querySelector('.cheatsheet.open')
     await closeMenu()
-    await openTop('Help'); await pick('help.about')
+    await openTop('도움말'); await pick('help.about')
     const aboutOpen = (document.querySelector('.dlg-overlay .modal h2')?.textContent || '').includes('A.R.A')
     document.querySelector('.dlg-overlay .modal-ft .btn.pri')?.click(); await wait(250)
     const aboutClosed = !document.querySelector('.dlg-overlay')
 
     // R4.1 ⑥ View → 글자 크게/작게가 --tt(터미널 글자 크기)를 움직인다.
     const ttBefore = getComputedStyle(document.documentElement).getPropertyValue('--tt').trim()
-    await openTop('View'); await pick('font.zoomIn')
+    await openTop('보기'); await pick('font.zoomIn')
     const ttUp = getComputedStyle(document.documentElement).getPropertyValue('--tt').trim()
-    await openTop('View'); await pick('font.zoomOut')
+    await openTop('보기'); await pick('font.zoomOut')
     const ttBack = getComputedStyle(document.documentElement).getPropertyValue('--tt').trim()
 
     return {
@@ -2073,9 +2073,9 @@ app.whenReady().then(async () => {
     }
   })()`)
 
-  checks.push(['R4.1: 메뉴바 최상위 6종(Tools 제거 — 넣을 기능이 없었다)', r4a.titles.join(',') === 'File,Edit,Session,Split,View,Help'])
+  checks.push(['R4.1: 메뉴바 최상위 6종(Tools 제거 — 넣을 기능이 없었다)', r4a.titles.join(',') === '파일,편집,세션,분할,보기,도움말'])
   checks.push(['R4.1: 모든 최상위 메뉴가 열리고 항목이 있다(빈 메뉴 없음)', r4a.opened.every((m) => m.count > 0)])
-  checks.push(['R4.1: Session 첫 항목은 연결 관리자(기존 손버릇 유지)', r4a.opened.find((m) => m.title === 'Session').ids[0] === 'connection.manager'])
+  checks.push(['R4.1: Session 첫 항목은 연결 관리자(기존 손버릇 유지)', r4a.opened.find((m) => m.title === '세션').ids[0] === 'connection.manager'])
   checks.push(['R4.1: 항목에 keymap 단축키 힌트 표기', r4a.splitHints.includes('Ctrl+Shift+-') && r4a.splitHints.includes('Ctrl+Shift+W')])
   checks.push(['R4.1: Split→가로 분할이 실제로 패널을 늘린다', r4a.panesAfterMenu === r4a.panesBefore + 1])
   checks.push(['R4.1: Split→패널 닫기가 실제로 패널을 줄인다', r4a.panesAfterClose === r4a.panesBefore])

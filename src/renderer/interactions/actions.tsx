@@ -498,11 +498,14 @@ export type MenuCommandId =
 
 export type MenuEntry = { action: KeymapAction } | { command: MenuCommandId }
 
+// 최상위 이름은 **한글**이다(2026-08-21 준영님). 앱의 다른 라벨이 전부 한글인데 여기만
+// File/Edit/Help 라 그 줄만 남의 앱처럼 보였다. 이 표의 항목 라벨은 KEYMAP.labelKo·i18n 에서
+// 오므로, 최상위 이름도 같은 결로 직기입한다(CONTEXT_ACTIONS.labelKo 와 같은 방식).
 export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
   {
     // 설정은 R5 에서 단축키(Ctrl+,)가 생겨 command → action 으로 옮겼다. 메뉴에 힌트가 붙고
     // 실행 경로도 keydown 핸들러 하나로 합쳐진다("메뉴에서만 되는 기능" 금지).
-    title: 'File',
+    title: '파일',
     items: [
       { action: 'session.new' },
       { action: 'settings.open' },
@@ -511,12 +514,12 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     ]
   },
   {
-    title: 'Edit',
+    title: '편집',
     items: [{ action: 'clipboard.copy' }, { action: 'clipboard.paste' }, { action: 'terminal.search' }]
   },
   {
     // 첫 항목은 계속 연결 관리자다(R3 까지 Session 클릭 = 연결 관리자였다 — 그 손버릇을 깨지 않는다).
-    title: 'Session',
+    title: '세션',
     items: [
       { action: 'connection.manager' },
       { action: 'session.duplicate' },
@@ -526,7 +529,7 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     ]
   },
   {
-    title: 'Split',
+    title: '분할',
     items: [
       { action: 'split.horizontal' },
       { action: 'split.vertical' },
@@ -535,7 +538,7 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     ]
   },
   {
-    title: 'View',
+    title: '보기',
     items: [
       { command: 'panel.console' },
       // 하단에 열리는 것들. #84·#86 으로 들어온 여섯이 여기 없어서 F1 검색에도 안 잡혔고,
@@ -561,7 +564,7 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     ]
   },
   {
-    title: 'Help',
+    title: '도움말',
     // 치트시트를 설정처럼 command → action 으로 옮기려다 되돌렸다(2026-08-13, 스모크가 잡았다).
     // `?` 는 **입력 중에는 일부러 안 먹는 키**다(KEY-2). 메뉴 항목을 dispatchAction 으로 돌리면
     // 터미널에 포커스가 있는 보통 상황에서 눌러도 아무 일이 안 일어난다 — 그래서 command 로 둔다.
