@@ -2,6 +2,7 @@
 // 창은 재생성될 수 있으므로 getter 로 지연 평가하고, 파괴된 창은 조용히 무시한다
 // (FIX-window-destroyed 패턴 — isDestroyed 접근 자체도 try 로 감싼다).
 import { clipboard, shell, type BrowserWindow } from 'electron'
+import { openPortWindow } from '../windows/PortWindow'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
 import { clipboardFilePaths } from '../util/clipboardFiles'
@@ -16,6 +17,11 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     }
   }
 
+  // 포트 모니터 독립 창(2026-08-21). 창은 하나 — 두 번째 호출은 있는 창을 앞으로 가져온다.
+  handle('portwin:open', () => {
+    openPortWindow(getWindow)
+    return { ok: true } as const
+  })
   handle('window:minimize', () => {
     live()?.minimize()
     return { ok: true } as const

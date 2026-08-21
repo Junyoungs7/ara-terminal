@@ -270,6 +270,11 @@ export type InvokeContract = {
   // 구독 단위는 세션이라 start 를 두 번 불러도 폴러는 하나다.
   'telemetry:start': { req: { sessionId: string }; res: { ok: true } }
   'telemetry:stop': { req: { sessionId: string }; res: { ok: true } }
+  // 수동 새로고침 — **구독을 늘리지 않고** 지금 한 바퀴만 돈다. 예전엔 start 를 다시 불렀는데,
+  // 창이 둘이 되면서 start 에 참조 계수가 생겨 그 방식으로는 참조가 샌다(2026-08-21).
+  'telemetry:refresh': { req: { sessionId: string }; res: { ok: true } }
+  // 포트 모니터 독립 창 열기(없으면 만들고, 있으면 앞으로). 창은 하나 · 서버는 그 안의 탭.
+  'portwin:open': { req: Record<string, never>; res: { ok: true } }
   // F29 시스템 모니터 [로컬] 탭 — **세션과 무관한** 내 PC 통계. telemetry:* 와 달리 sessionId 가 없다:
   // 로컬 셸을 하나도 안 열어 둔 상태(SSH 만 쓰는 중)에서도 내 PC 를 보여 줘야 하기 때문이다.
   // 패널이 열려 있는 동안만 돈다 — 닫으면 stop 이 폴러를 끈다(원격 텔레메트리와 같은 규칙).
@@ -483,9 +488,11 @@ export type EvApi = {
     onProgress(transferId: string, cb: (p: SftpProgress) => void): () => void
   }
   // W1 F9/F10 원격 텔레메트리. 활성 SSH 세션 하나만 구독한다(세션 전환 시 stop→start).
+  portwin: { open(): Promise<{ ok: true }> }
   telemetry: {
     // 이미 구독 중인 세션에 다시 호출하면 즉시 한 바퀴 돈다 = [모니터] 탭 새로고침 버튼.
     start(sessionId: string): Promise<{ ok: true }>
+    refresh(sessionId: string): Promise<{ ok: true }>
     stop(sessionId: string): Promise<{ ok: true }>
     // telemetry:data:{sessionId} 구독. 해지 함수 반환.
     onData(sessionId: string, cb: (d: TelemetryData) => void): () => void

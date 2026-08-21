@@ -4,6 +4,8 @@ import { Shell } from './components/Shell'
 import { EditorWindow, parseEditorHash } from './components/EditorWindow'
 import { RdpSpanWindow, parseRdpWinHash } from './components/RdpSpanWindow'
 import { SessionWindow, parseSessionWinHash } from './components/SessionWindow'
+import { PortWindow } from './components/PortWindow'
+import { isPortWinHash } from '@shared/portWin'
 import { installTooltips } from './store/tooltip'
 import './styles/fonts.css'
 import './styles/tokens.css'
@@ -18,6 +20,8 @@ const rdpWinTarget = editorTarget ? null : parseRdpWinHash(window.location.hash)
 // F32: 떼어낸 세션 창. 위 둘과 같은 이유로 **Shell 보다 먼저** 갈라야 한다 — 여기서 Shell 이
 // 그려지면 그 안의 F6 복원이 또 돌아 세션이 두 벌 생긴다(MainArea 의 detachedWinId 가 2차 방어).
 const sessionWinTarget = editorTarget || rdpWinTarget ? null : parseSessionWinHash(window.location.hash)
+// 포트 모니터 독립 창. 매개변수가 없다 — 어느 서버를 볼지는 창 안 탭이 정한다.
+const portWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && isPortWinHash(window.location.hash)
 
 // OS 기본 툴팁 대신 우리 것을 쓴다. 창마다(본체·편집기·다중 모니터) 각자 자기 document 에 건다 —
 // 전역 위임이라 `title` 을 쓰는 89곳을 하나도 고치지 않는다(store/tooltip.ts).
@@ -31,6 +35,8 @@ createRoot(document.getElementById('root')!).render(
       <RdpSpanWindow target={rdpWinTarget} />
     ) : sessionWinTarget ? (
       <SessionWindow target={sessionWinTarget} />
+    ) : portWin ? (
+      <PortWindow />
     ) : (
       <Shell />
     )}

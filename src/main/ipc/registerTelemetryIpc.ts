@@ -17,11 +17,19 @@ export function registerTelemetryIpc(
   // F32: sessionId 를 주면 그 세션을 가진 창으로 보낸다(하단바가 창마다 따로 있으므로).
   getWebContents: (sessionId?: string) => WebContents | null,
   // 로그 뷰어 [이전 불러오기] 는 tail 이 아니라 SFTP 로 파일을 거슬러 읽는다 — 같은 커넥션을 재사용한다.
-  sftp: SftpService
+  sftp: SftpService,
+  // 2026-08-21: 세션을 **함께 보고 있는** 창들(포트 모니터 독립 창). 소유 창이 아니라서
+  // getWebContents 로는 안 잡히는데, 포트 목록은 읽기 화면이라 같이 받아야 한다.
+  // 목록으로 받는 이유: 창이 늘면 여기만 늘린다(호출부가 판단을 갖는다).
+  alsoTo: () => WebContents[] = () => []
 ): { stopAll: () => void } {
   // sessionId 를 주면 그 세션의 창으로, 안 주면 본창으로(내 PC 자원처럼 창에 안 매인 것).
-  const send = (channel: string, payload: unknown, sessionId?: string): void =>
-    pushSend(getWebContents(sessionId), channel, payload)
+  // + 함께 보고 있는 창들. 같은 wc 가 두 번 들어가지 않게 거른다.
+  const send = (channel: string, payload: unknown, sessionId?: string): void => {
+    const owner = getWebContents(sessionId)
+    pushSend(owner, channel, payload)
+    for (const wc of alsoTo()) if (wc !== owner) pushSend(wc, channel, payload)
+  }
   const client = (sessionId: string) => sessions.sshClient(sessionId)
 
   const telemetry = createTelemetryService(client, (d) => send(`telemetry:data:${d.sessionId}`, d, d.sessionId))
@@ -47,6 +55,11 @@ export function registerTelemetryIpc(
       telemetry.stop(sessionId)
       localTelemetry.start(sessionId)
     }
+    return { ok: true } as const
+  })
+  // 수동 새로고침 — 구독 계수를 건드리지 않는다(start 를 다시 부르던 옛 방식의 대체).
+  handle('telemetry:refresh', ({ sessionId }) => {
+    if (sessions.sshClient(sessionId)) telemetry.tickNow(sessionId)
     return { ok: true } as const
   })
   handle('telemetry:stop', ({ sessionId }) => {

@@ -25,6 +25,9 @@ import { t } from '../i18n'
 // 뭐가 떠 있는지가 아니라 "내가 아직 안 쓴 게 뭐지"를 찾을 때 쓴다.
 export type PortUse = 'any' | 'fwd' | 'free'
 
+/** 브라우저로 열어 볼 만한 포트. 힌트일 뿐이라 목록을 늘리지 않는다(넓히면 힌트가 아니게 된다). */
+const WEB_PORTS = new Set([80, 443, 3000, 3001, 4200, 5000, 5173, 8000, 8080, 8081, 8443, 9000])
+
 /** 사용자가 입력한 범위(비워 두면 제한 없음). */
 export type PortSpan = { min: number | null; max: number | null }
 
@@ -73,9 +76,11 @@ type PortMonitorProps = {
   onRefresh: () => void
   // 생성·해제 직후 목록을 즉시 다시 읽게 한다(폴링 한 바퀴를 기다리지 않는다).
   onForwardsChanged: () => void
+  /** 독립 창 안에서 그리는 중인가 — [창으로 빼기] 를 그 창에 또 두지 않는다. */
+  inWindow?: boolean
 }
 
-export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onForwardsChanged }: PortMonitorProps) {
+export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onForwardsChanged, inWindow }: PortMonitorProps) {
   // FB-0003: 세션을 바꿔도 사용자가 고른 필터는 유지한다 — 서버마다 매번 다시 고르게 하지 않는다.
   const [query, setQuery] = useState('')
   const [minStr, setMinStr] = useState('')
@@ -181,54 +186,106 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
           ))}
         </div>
         <div className="sb-tab-spacer" />
-        <div className="sb-act" title={t('sftp.refresh')} onClick={onRefresh}>
+        {/* 독립 창으로 빼기(2026-08-21). **그 창 안에서는 안 보인다** — 이미 거기다.
+            창은 하나뿐이라 두 번 눌러도 새 창이 생기지 않고 있는 창이 앞으로 온다. */}
+        {!inWindow && (
+          <button
+            type="button"
+            className="tw-tool"
+            data-action="portwin.open"
+            title={t('portwin.open.title')}
+            onClick={() => void window.ev?.portwin.open().catch(() => {})}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M14 4h6v6M20 4l-8 8" />
+              <path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" />
+            </svg>
+          </button>
+        )}
+        <button type="button" className="tw-tool" title={t('sftp.refresh')} onClick={onRefresh}>
           <IconRefresh />
-        </div>
+        </button>
       </div>
+      {/* 2026-08-21: 목록 → **표**. 다른 하단 도구(프로세스·서비스·디스크)는 전부 표라
+          가로를 쓰는데 여기만 좁은 판 절충안이 남아 있었다. 열이 생기면서 그동안 숨겨 뒀던
+          셋이 도로 나온다: 포워딩 중 접히던 PID · ⇄ 툴팁에만 있던 목적지 · 글리프였던 해제. */}
       <div className="pmon-list">
         {ports.length === 0 && <div className="sftp-empty">{t('mon.empty')}</div>}
         {ports.length > 0 && visible.length === 0 && <div className="sftp-empty">{t('mon.noMatch')}</div>}
-        {visible.map((p) => {
-          const fwd = fwdOf(p.port)
-          // 사이드바는 좁다(기본 264px). 포워딩이 붙으면 pid 는 접고 배지도 짧게 쓴다 —
-          // 대신 행 툴팁이 프로세스·pid·목적지를 전부 들고 있다.
-          const rowTitle =
-            `${p.proto} ${p.port}` +
-            (p.process ? ` · ${p.process}` : ` · ${t('mon.unknownProc.title')}`) +
-            (p.pid ? ` · pid ${p.pid}` : '') +
-            (fwd ? ` · → localhost:${fwd.localPort}` : '')
-          return (
-            <div key={`${p.proto}:${p.port}`} className="prow" title={rowTitle}>
-              <span className="pport">{p.port}</span>
-              <span className={'pproto' + (p.proto === 'tcp6' ? ' v6' : '')}>{p.proto}</span>
-              <span className="pproc">{p.process ?? t('mon.unknownProc')}</span>
-              {!fwd && <span className="ppid">{p.pid ?? ''}</span>}
-              {fwd && (
-                // 배지 클릭 = 해제. 확인 다이얼로그는 없다 — 되돌리기가 1클릭이다.
-                // 요청한 번호 그대로면 글리프만 띄운다(포트는 행 왼쪽에 이미 있고, 사이드바가 좁아
-                // 배지가 길면 프로세스 이름이 통째로 잘린다). 번호가 달라졌을 때만 그 번호를 적는다.
-                <span
-                  className={'pfwd' + (fwd.exact ? '' : ' warn')}
-                  data-local-port={fwd.localPort}
-                  title={`localhost:${fwd.localPort} — ${fwd.exact ? t('fwd.badge.title') : t('fwd.badge.inexact')}`}
-                  onClick={() => stopForward(fwd.id)}
-                >
-                  {fwd.exact ? '⇄' : `⇄ :${fwd.localPort}`}
-                </span>
-              )}
-              {/* 포워딩 유무와 무관하게 [열기] 하나 — 없으면 만들고 곧바로 연다. */}
-              <button
-                type="button"
-                className={'pact' + (fwd ? '' : ' ghost')}
-                data-action={fwd ? 'forward.open' : 'forward.create'}
-                title={t(fwd ? 'fwd.open.title' : 'fwd.create.title')}
-                onClick={() => void openPort(p.port)}
-              >
-                {t('fwd.open')}
-              </button>
-            </div>
-          )
-        })}
+        {visible.length > 0 && (
+          <table className="ptbl">
+            <thead>
+              <tr>
+                <th className="pt-st">{t('mon.col.state')}</th>
+                <th className="pt-port r">{t('mon.col.port')}</th>
+                <th className="pt-proto">{t('mon.col.proto')}</th>
+                <th className="pt-proc">{t('mon.col.proc')}</th>
+                <th className="pt-pid r">PID</th>
+                <th className="pt-dest">{t('mon.col.dest')}</th>
+                <th className="pt-act" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((p) => {
+                const fwd = fwdOf(p.port)
+                return (
+                  <tr key={`${p.proto}:${p.port}`} className={fwd ? 'fwd' : ''}>
+                    {/* 준영님 요청: 세션 트리와 **같은 문법**의 초록 점 — 열려 있다는 것을
+                        행 맨 왼쪽에서 훑어 잡을 수 있게. */}
+                    <td className="pt-st">
+                      <span className={'pstate' + (fwd ? ' on' : '')}>
+                        <i />
+                        {t(fwd ? 'mon.state.open' : 'mon.state.closed')}
+                      </span>
+                    </td>
+                    <td className="pt-port r">
+                      {p.port}
+                      {WEB_PORTS.has(p.port) && <span className="pweb">web</span>}
+                    </td>
+                    <td className={'pt-proto' + (p.proto === 'tcp6' ? ' v6' : '')}>{p.proto}</td>
+                    <td className={'pt-proc' + (p.process ? '' : ' unk')}>{p.process ?? t('mon.unknownProc')}</td>
+                    <td className="pt-pid r">{p.pid ?? '—'}</td>
+                    <td className="pt-dest">
+                      {fwd ? (
+                        <span className="pdest">
+                          localhost:{fwd.localPort}
+                          {!fwd.exact && <span className="pwarn"> {t('mon.dest.inexact')}</span>}
+                        </span>
+                      ) : (
+                        <span className="pdest none">—</span>
+                      )}
+                    </td>
+                    <td className="pt-act">
+                      {/* 열기 하나가 "터널 만들기 + 브라우저 열기" 둘을 하던 것을 가른다 —
+                          라벨이 무슨 일이 일어나는지 말해야 한다. */}
+                      <button
+                        type="button"
+                        className={'btn xs' + (fwd ? ' pri' : '')}
+                        data-action={fwd ? 'forward.open' : 'forward.create'}
+                        title={t(fwd ? 'fwd.open.title' : 'fwd.create.title')}
+                        onClick={() => void openPort(p.port)}
+                      >
+                        {t(fwd ? 'fwd.browse' : 'fwd.open')}
+                      </button>
+                      {fwd && (
+                        <button
+                          type="button"
+                          className="btn xs dgr"
+                          data-action="forward.stop"
+                          data-local-port={fwd.localPort}
+                          title={t('fwd.stop.title')}
+                          onClick={() => stopForward(fwd.id)}
+                        >
+                          {t('fwd.stop')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

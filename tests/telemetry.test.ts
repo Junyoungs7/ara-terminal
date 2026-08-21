@@ -188,12 +188,42 @@ describe('폴링 수명', () => {
     expect(svc.activeCount()).toBe(0)
   })
 
-  it('같은 세션에 start 를 두 번 불러도 폴러는 하나다(= 새로고침)', async () => {
+  it('같은 세션에 start 를 두 번 불러도 폴러는 하나다', async () => {
     const svc = createTelemetryService(() => fakeClient(() => {}), () => {}, 50)
     svc.start('s1')
     svc.start('s1')
     expect(svc.activeCount()).toBe(1)
     svc.stopAll()
+    expect(svc.activeCount()).toBe(0)
+  })
+
+  // 2026-08-21: 포트 모니터 독립 창이 생기면서 **한 세션을 두 창이 함께 본다.**
+  // 계수가 없으면 한쪽이 닫힐 때 다른 쪽 폴링까지 멎는다(본창 게이지가 죽는다).
+  it('★ 두 창이 같은 세션을 보면 한쪽이 stop 해도 폴러는 살아 있다', () => {
+    const svc = createTelemetryService(() => fakeClient(() => {}), () => {}, 50)
+    svc.start('s1') // 본창
+    svc.start('s1') // 포트 창
+    svc.stop('s1') // 포트 창을 닫았다
+    expect(svc.activeCount()).toBe(1)
+    svc.stop('s1') // 본창도 세션을 떠났다
+    expect(svc.activeCount()).toBe(0)
+  })
+
+  it('★ stopAll 은 계수를 무시하고 전부 끈다 — 종료 경로에 폴러가 남으면 안 된다', () => {
+    const svc = createTelemetryService(() => fakeClient(() => {}), () => {}, 50)
+    svc.start('s1')
+    svc.start('s1')
+    svc.start('s2')
+    svc.stopAll()
+    expect(svc.activeCount()).toBe(0)
+  })
+
+  it('tickNow 는 구독을 늘리지 않는다 — 새로고침이 참조를 흘리면 폴러가 안 멎는다', () => {
+    const svc = createTelemetryService(() => fakeClient(() => {}), () => {}, 50)
+    svc.start('s1')
+    svc.tickNow('s1')
+    svc.tickNow('s1')
+    svc.stop('s1')
     expect(svc.activeCount()).toBe(0)
   })
 })

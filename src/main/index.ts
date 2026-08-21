@@ -19,6 +19,7 @@ import { registerFsIpc } from './ipc/registerFsIpc'
 import { registerLocalCliIpc } from './ipc/registerLocalCliIpc'
 import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
+import { closePortWindow, portWindowContents } from './windows/PortWindow'
 import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
 import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
 import { registerRemoteIpc } from './ipc/registerRemoteIpc'
@@ -163,7 +164,12 @@ app.whenReady().then(() => {
   registerFsIpc()
   registerLocalCliIpc()
   registerEditorIpc(sftpService, sessions, () => mainWindow)
-  telemetry = registerTelemetryIpc(sessions, getWebContents, sftpService)
+  // 포트 모니터 독립 창은 세션을 **소유하지 않는다** — 그래서 getWebContents 로는 안 잡힌다.
+  // 포트 목록은 읽기 화면이라 소유 창과 **함께** 받으면 된다(채널명이 이미 세션별로 갈려 있다).
+  telemetry = registerTelemetryIpc(sessions, getWebContents, sftpService, () => {
+    const wc = portWindowContents()
+    return wc ? [wc] : []
+  })
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
   remoteConsole = registerRemoteIpc(sessions, getWebContents)
@@ -251,6 +257,7 @@ app.on('before-quit', (e) => {
   store?.flush()
   history?.flush()
   telemetry?.stopAll()
+  closePortWindow()
   remoteConsole?.stopAll()
   forwards?.stopAll()
   exitTrace('flushed')

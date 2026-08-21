@@ -162,6 +162,8 @@ function splitOnce(s: string, mark: string): [string, string] {
 export type TelemetryService = {
   // 구독 시작(이미 구독 중이면 즉시 한 바퀴 = 수동 새로고침).
   start(sessionId: string): void
+  /** 구독을 늘리지 않고 즉시 한 바퀴(수동 새로고침). */
+  tickNow(sessionId: string): void
   // 구독 해지 → 그 세션 폴링 중지.
   stop(sessionId: string): void
   stopAll(): void
@@ -169,7 +171,9 @@ export type TelemetryService = {
   activeCount(): number
 }
 
-type Sub = { timer: NodeJS.Timeout; busy: boolean; prev: CpuSample | null }
+// refs: **몇 창이 이 세션을 보고 있나.** 2026-08-21 포트 모니터 독립 창이 생기면서 한 세션을
+// 두 창이 함께 볼 수 있게 됐다 — 계수가 없으면 한쪽이 닫힐 때 다른 쪽 폴링까지 멎는다.
+type Sub = { timer: NodeJS.Timeout; busy: boolean; prev: CpuSample | null; refs: number }
 
 // getClient: 세션 id → ssh2 Client(로컬·종료된 세션은 null → 폴링 자동 중지).
 export function createTelemetryService(
@@ -199,24 +203,36 @@ export function createTelemetryService(
   function stop(sessionId: string): void {
     const sub = subs.get(sessionId)
     if (!sub) return
+    sub.refs--
+    if (sub.refs > 0) return // 아직 보고 있는 창이 남았다
     clearInterval(sub.timer)
     subs.delete(sessionId)
   }
 
   return {
     start(sessionId) {
-      if (!subs.has(sessionId)) {
+      const sub = subs.get(sessionId)
+      if (sub) sub.refs++
+      else
         subs.set(sessionId, {
           timer: setInterval(() => void tick(sessionId), intervalMs),
           busy: false,
-          prev: null
+          prev: null,
+          refs: 1
         })
-      }
-      void tick(sessionId) // 첫 화면을 주기만큼 기다리지 않게 + 새로고침 버튼 경로
+      void tick(sessionId) // 첫 화면을 주기만큼 기다리지 않게
+    },
+    // 수동 새로고침 — **구독을 늘리지 않고** 지금 한 바퀴만 돈다. 예전엔 이것도 start 였는데
+    // 참조 계수가 생기면서 두 뜻을 가르지 않으면 새로고침마다 참조가 샌다.
+    tickNow(sessionId) {
+      void tick(sessionId)
     },
     stop,
+    // 앱 종료 정리 — 여기서는 **참조 계수를 보지 않는다.** 계수를 통과시키면 두 창이 보던
+    // 세션은 폴러가 남아 프로세스가 안 죽는다(2026-08-21 단위 테스트가 잡았다).
     stopAll() {
-      for (const id of [...subs.keys()]) stop(id)
+      for (const sub of subs.values()) clearInterval(sub.timer)
+      subs.clear()
     },
     activeCount: () => subs.size
   }

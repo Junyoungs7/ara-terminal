@@ -47,9 +47,11 @@ export function useTelemetry(sessionId: string | null, isSsh: boolean) {
     }
   }, [sessionId, isSsh, refreshForwards])
 
-  // 수동 새로고침 — 구독 중인 세션에 start 를 다시 부르면 main 이 즉시 한 바퀴 돈다(폴러는 그대로 하나).
+  // 수동 새로고침 — 전용 채널로 "지금 한 바퀴"만 부른다. 예전엔 start 를 다시 불렀는데,
+  // 2026-08-21 에 start 가 **참조 계수**를 갖게 되면서(창 둘이 한 세션을 함께 본다) 그 방식은
+  // 새로고침할 때마다 참조를 하나씩 흘린다 — 그러면 창을 다 닫아도 폴러가 안 멎는다.
   const refresh = useCallback(() => {
-    if (sessionId) void window.ev?.telemetry.start(sessionId).catch(() => {})
+    if (sessionId) void window.ev?.telemetry.refresh(sessionId).catch(() => {})
     if (isSsh) refreshForwards()
   }, [sessionId, isSsh, refreshForwards])
 

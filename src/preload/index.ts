@@ -146,9 +146,12 @@ const api: EvApi = {
       return () => ipcRenderer.removeListener(ch, listener)
     }
   },
+  // 포트 모니터 독립 창 — 열기 하나뿐이다(닫기·복원은 OS 와 main 이 쥔다).
+  portwin: { open: () => ipcRenderer.invoke('portwin:open', {}) },
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),
     stop: (sessionId: string) => ipcRenderer.invoke('telemetry:stop', { sessionId }),
+    refresh: (sessionId: string) => ipcRenderer.invoke('telemetry:refresh', { sessionId }),
     onData: (sessionId: string, cb: (d: TelemetryData) => void) => {
       const ch = `telemetry:data:${sessionId}`
       const listener = (_e: IpcRendererEvent, d: TelemetryData) => cb(d)

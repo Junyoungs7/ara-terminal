@@ -1187,7 +1187,211 @@
 }
 /* 표를 감싸는 상자는 안내를 가운데 두려면 자기도 세로 흐름이어야 한다. */
 .bp-pane .con-tblwrap,
-.bp-pane .pmon-list {
+.bp-pane /* ── 포트 모니터 독립 창 (2026-08-21) ──
+   진짜 OS 창이라 타이틀바가 없다(네이티브 프레임을 쓴다) — 탭 줄이 곧 창의 머리다.
+   탭 문법은 본체와 같다: 각진 사각 + 하단 2px 인디케이터(G). */
+.app.portwin {
+  display: grid;
+  grid-template-rows: var(--row-tabbar) 1fr;
+  height: 100vh;
+  background: var(--bg-canvas);
+}
+.pw-tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pw-tabs::-webkit-scrollbar {
+  display: none;
+}
+.pw-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: none;
+  font-family: var(--ui);
+  font-size: var(--fs-sm);
+  color: var(--text-lo);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pw-tab .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+.pw-tab:hover {
+  color: var(--text-mid);
+  background: var(--bg-raised);
+}
+.pw-tab.on {
+  color: var(--text-hi);
+  font-weight: 500;
+  background: var(--bg-canvas);
+}
+.pw-tab.on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.pw-none {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.pw-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pw-body .pmon {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── 포트 표 (2026-08-21) ──
+   목록이던 것을 표로 바꿨다. 규격은 하단 다른 표(.con-tbl)와 같다 — 헤더는 한 단계 밝은 면,
+   행 26px, zebra 없이 얇은 구분선. 열 폭만 이 표의 것이다.
+   포워딩된 행은 배경에 아주 옅은 초록을 깐다: 준영님 요청("세션처럼 초록색으로 열려있다를")의
+   행 단위 표현이다. 점 하나로는 열이 많은 표에서 훑기 어렵다. */
+.ptbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.ptbl th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  padding: 5px 10px;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-lo);
+  white-space: nowrap;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--line-strong);
+}
+.ptbl th.r,
+.ptbl td.r {
+  text-align: right;
+}
+.ptbl td {
+  padding: 0 10px;
+  height: 26px;
+  color: var(--text-mid);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.ptbl tr:hover td {
+  background: var(--accent-glow);
+}
+/* 열려 있는 행 — 옅은 초록 면. 호버가 그 위를 덮지 않게 한 단 진하게 둔다. */
+.ptbl tr.fwd td {
+  background: var(--ok-tint);
+}
+.ptbl tr.fwd:hover td {
+  background: var(--ok-tint-2);
+}
+.ptbl .pt-st {
+  width: 88px;
+}
+.ptbl .pt-port {
+  width: 86px;
+  color: var(--text-hi);
+}
+.ptbl .pt-proto {
+  width: 62px;
+  color: var(--text-lo);
+}
+.ptbl .pt-proc {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ptbl .pt-proc.unk {
+  color: var(--text-dim);
+}
+.ptbl .pt-pid {
+  width: 68px;
+  color: var(--text-lo);
+}
+.ptbl .pt-dest {
+  width: 250px;
+}
+.ptbl .pt-act {
+  width: 150px;
+  text-align: right;
+}
+/* 상태 — 세션 트리 dot 과 같은 문법(같은 뜻은 같은 모양으로). */
+.pstate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+}
+.pstate i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex: none;
+}
+.pstate.on {
+  color: var(--ok);
+}
+.pstate.on i {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-tint-2);
+}
+.pdest {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--ok);
+}
+.pdest.none {
+  color: var(--text-dim);
+}
+.pwarn {
+  color: var(--warn);
+}
+/* 번호 옆 web 꼬리표 — 브라우저로 열어 볼 만한 포트라는 힌트. 열을 하나 더 만들 값어치는 없다. */
+.pweb {
+  margin-left: 5px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: var(--fs-nano);
+  color: var(--text-dim);
+}
+/* 표 안의 작은 버튼 — 행 높이 26px 안에 들어가야 한다. */
+.ptbl .btn.xs {
+  height: 20px;
+  padding: 0 9px;
+  font-size: var(--fs-micro);
+}
+.ptbl .pt-act .btn + .btn {
+  margin-left: 5px;
+}
+
+.pmon-list {
   display: flex;
   flex-direction: column;
 }
