@@ -28,9 +28,11 @@ describe('배치 슬롯 — 모든 항목이 정확히 한 자리에 속한다',
     }
   })
 
-  it('★ 창으로 여는 것은 둘뿐이다 — 작업대와 설정(#91 로 창이 하나가 됐다)', () => {
+  // 레일도 하단도 아닌 것들 — 떠 있는 창(작업대)이거나 화면을 덮는 오버레이(설정·명령어 북)다.
+  // 2026-08-22 제보 9번으로 명령어 북이 합류했다.
+  it('★ 레일·하단이 아닌 것은 셋 — 작업대·설정·명령어 북', () => {
     const windows = ACTIVITY_ITEMS.filter((id) => slotOf(id) === 'window')
-    expect([...windows].sort()).toEqual(['explorer', 'settings'])
+    expect([...windows].sort()).toEqual(['cmdbook', 'explorer', 'settings'])
   })
 
   it('배치 원칙(§4.8) 그대로 — 서버 것은 아래, 아라 것은 오른쪽', () => {

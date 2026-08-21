@@ -121,6 +121,8 @@ export function Shell() {
   // FB-ui2: 설정 창 열림 상태의 실제 주인은 MainArea(Ctrl+, keydown 이 거기 배선돼 있다) — 액티비티
   // 바의 활성 표시만을 위한 미러(MainArea.onSettingsOpenChange 가 채운다).
   const [settingsActive, setSettingsActive] = useState(false)
+  // 명령어 북도 같은 미러다(2026-08-22 제보 9번으로 액티비티 바 항목이 됐다).
+  const [cmdbookActive, setCmdbookActive] = useState(false)
   // 우측 액티비티 바에 그릴 항목(설정에서 끄고 켜고 옮긴 결과). prefs 의 주인은 MainArea 라
   // 거기서 올려 준다 — settingsActive 미러와 같은 방식.
   const [activityItems, setActivityItems] = useState<ActivityId[]>(() => [...ACTIVITY_ITEMS])
@@ -973,6 +975,7 @@ export function Shell() {
       pastlog: pastLogOpen,
       preview: previewOpen,
       explorer: explorerOpen,
+      cmdbook: cmdbookActive,
       settings: settingsActive
     }),
     [
@@ -985,6 +988,7 @@ export function Shell() {
       pastLogOpen,
       previewOpen,
       explorerOpen,
+      cmdbookActive,
       settingsActive
     ]
   )
@@ -992,7 +996,9 @@ export function Shell() {
     if (isRailId(id)) toggleRail(id)
     else if (isBottomId(id)) toggleBottom(id)
     else if (id === 'explorer') setExplorerOpen((o) => !o)
+    // 설정·명령어 북은 오버레이다 — 단축키와 **같은 길**로 보낸다(바 전용 배선을 만들지 않는다).
     else if (id === 'settings') dispatchAction('settings.open')
+    else if (id === 'cmdbook') dispatchAction('commandBook.toggle')
   }, [])
 
   return (
@@ -1191,6 +1197,7 @@ export function Shell() {
             if (text) setAiPrefill({ text, at: Date.now() })
           }}
           onSettingsOpenChange={setSettingsActive}
+          onCommandBookOpenChange={setCmdbookActive}
           onOpenLog={() => openBottom('log')}
           onActivityItems={setActivityItems}
           onAiCliFlags={setAiCliFlags}

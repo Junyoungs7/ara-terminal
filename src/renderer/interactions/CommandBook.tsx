@@ -19,7 +19,18 @@ import {
 // 항목의 예시에 붙는 [터미널로 보내기]는 F16 과 같은 규칙 — insertText() 로 개행을 떼고
 // session.input() 에 넣기만 한다(실행은 사용자가 Enter). 이 앱의 안전 설계를 그대로 따른다.
 
-function ExampleRow({ code, note, sessionId }: { code: string; note?: string; sessionId: string | null }) {
+function ExampleRow({
+  code,
+  note,
+  sessionId,
+  onSent
+}: {
+  code: string
+  note?: string
+  sessionId: string | null
+  /** 보내고 나면 북을 닫는다 — 넣은 명령이 보여야 하기 때문이다(아래 onClick 주석). */
+  onSent: () => void
+}) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="ai-code cb-ex">
@@ -41,7 +52,14 @@ function ExampleRow({ code, note, sessionId }: { code: string; note?: string; se
           className="ai-code-btn send"
           disabled={!sessionId}
           title={sessionId ? t('ai.code.insert.title') : t('ai.noSession')}
-          onClick={() => sessionId && window.ev?.session.input(sessionId, insertText(code))}
+          // 2026-08-22 준영님 제보 9번: "터미널로 보내기 버튼 클릭하면 명령어 북 꺼지면서 해당
+          // 창이 보여야 함." 넣기만 하고 북이 덮고 있으면 **무엇이 들어갔는지 보이지 않는다** —
+          // 실행(Enter)은 사용자가 하는데 그 대상을 못 보는 상태가 된다.
+          onClick={() => {
+            if (!sessionId) return
+            window.ev?.session.input(sessionId, insertText(code))
+            onSent()
+          }}
         >
           {t('ai.code.insert')}
         </button>
@@ -51,7 +69,19 @@ function ExampleRow({ code, note, sessionId }: { code: string; note?: string; se
   )
 }
 
-function Item({ entry, open, onToggle, sessionId }: { entry: CommandEntry; open: boolean; onToggle: () => void; sessionId: string | null }) {
+function Item({
+  entry,
+  open,
+  onToggle,
+  sessionId,
+  onSent
+}: {
+  entry: CommandEntry
+  open: boolean
+  onToggle: () => void
+  sessionId: string | null
+  onSent: () => void
+}) {
   return (
     <div className="cb-item">
       <div className="cb-row" onClick={onToggle}>
@@ -65,7 +95,7 @@ function Item({ entry, open, onToggle, sessionId }: { entry: CommandEntry; open:
       {open && (
         <div className="cb-detail">
           {entry.examples.map((ex, i) => (
-            <ExampleRow key={i} code={ex.cmd} note={ex.note} sessionId={sessionId} />
+            <ExampleRow key={i} code={ex.cmd} note={ex.note} sessionId={sessionId} onSent={onSent} />
           ))}
           {/* hint 는 사실 전달(배포판 차이·기본 미설치), caution 은 경고 — 톤을 섞지 않는다. */}
           {entry.hint && <div className="cb-hint">{entry.hint}</div>}
@@ -144,6 +174,7 @@ export function CommandBook({ open, onClose, sessionId, initialQuery }: Props) {
                   open={expanded === entry.id}
                   onToggle={() => setExpanded((v) => (v === entry.id ? null : entry.id))}
                   sessionId={sessionId}
+                  onSent={onClose}
                 />
               ))}
             </div>

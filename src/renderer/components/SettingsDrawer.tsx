@@ -486,6 +486,28 @@ export function SettingsDrawer({
 }: Props) {
   const [section, setSection] = useState<SettingsSection>('general')
 
+  /**
+   * **AI 키가 아직 없으면 [AI] 섹션으로 열린다** (2026-08-22 준영님 제보 8번).
+   *
+   * 이 드로어는 언마운트되지 않고 `open` 클래스만 토글되므로 마지막에 보던 섹션이 그대로 남는다 —
+   * 평소엔 그게 맞지만, 키를 아직 안 넣은 사람에게는 **첫 할 일이 그것**이라 그 자리를 스스로
+   * 찾아가게 두지 않는다. 키가 한 번이라도 저장되면 이 분기는 다시는 타지 않는다(기존 동작 복귀).
+   * 열릴 때 한 번만 묻는다 — 드로어가 떠 있는 동안 사용자가 고른 섹션을 빼앗지 않기 위해서다.
+   */
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    void window.ev?.ai
+      .getState()
+      .then((s) => {
+        if (alive && !s.hasKey) setSection('ai')
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [open])
+
   return (
     <div className={'drawer' + (open ? ' open' : '')} role="dialog" aria-label={t('settings.title')}>
       <div className="drawer-hd">

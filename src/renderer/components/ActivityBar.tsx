@@ -1,4 +1,4 @@
-import { Activity, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { isBottomId, isRailId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
@@ -31,6 +31,8 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   pastlog: () => <History />,
   preview: IconPreview,
   explorer: IconFolder,
+  // 2026-08-22 준영님 제보 9번 — "책 아이콘을 사용하여". 명령어 북은 읽는 자료라 책이 맞다.
+  cmdbook: () => <BookOpen />,
   settings: IconGear
 }
 
@@ -44,6 +46,7 @@ const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
   log: 'log.save',
   preview: 'preview.toggle',
   explorer: 'explorer.toggle',
+  cmdbook: 'commandBook.toggle',
   settings: 'settings.open'
 }
 
@@ -70,7 +73,8 @@ export function activityTip(id: ActivityId): string {
   const action = ACTIVITY_KEY[id]
   const b = action ? KEYMAP.find((k) => k.action === action) : undefined
   // 설정은 어디에 열리는지 말할 것이 없다(드로어는 그 자체가 목적지다).
-  const where = id === 'settings' ? '' : ` · ${t('activity.where.' + activitySlot(id))}`
+  // 설정·명령어 북은 어디에 열리는지 말할 것이 없다(오버레이 그 자체가 목적지다).
+  const where = id === 'settings' || id === 'cmdbook' ? '' : ` · ${t('activity.where.' + activitySlot(id))}`
   return b ? `${name}${where} (${isMac ? b.mac : b.win})` : `${name}${where}`
 }
 
@@ -88,6 +92,7 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   pastlog: 'pastlog.title',
   preview: 'preview.title',
   explorer: 'wb.title',
+  cmdbook: 'cmdbook.title',
   settings: 'settings.open'
 }
 

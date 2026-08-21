@@ -76,12 +76,15 @@ export function ContextInteractions({
       }
       if (matchBinding(e, 'commandBook.toggle')) {
         e.preventDefault()
-        onCommandBookChange(true)
+        // 이름 그대로 **토글**이다. 예전엔 늘 true 라 같은 키를 다시 눌러도 안 닫혔다 —
+        // 우측 아이콘 바에 들어오면서(2026-08-22 제보 9번) 그 차이가 드러난다: 아이콘은
+        // 눌러서 열고 다시 눌러서 닫는 물건이고, 그 클릭이 이 액션으로 온다.
+        onCommandBookChange(!commandBookOpen)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [closeMenu, onCheatsheetChange, onCommandBookChange])
+  }, [closeMenu, onCheatsheetChange, onCommandBookChange, commandBookOpen])
 
   const runAction = useCallback(
     (id: ActionId) => {

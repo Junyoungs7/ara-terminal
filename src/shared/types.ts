@@ -267,6 +267,9 @@ export type ActivityId =
   | 'pastlog'
   | 'preview'
   | 'explorer'
+  // 2026-08-22 준영님 제보 9번: "명령어 북 기능을 책 아이콘을 사용하여 우측 사이드바 기능에 추가."
+  // 레일도 하단도 아니다 — 설정(settings)처럼 **오버레이를 여는 버튼**이다(isRailId·isBottomId 둘 다 false).
+  | 'cmdbook'
   | 'settings'
 
 export const ACTIVITY_ITEMS: readonly ActivityId[] = [
@@ -283,6 +286,7 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'pastlog',
   'preview',
   'explorer',
+  'cmdbook',
   'settings'
 ] as const
 
