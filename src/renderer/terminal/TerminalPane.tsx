@@ -32,7 +32,7 @@ function ansiTheme(): ITheme {
     cursor: v('--accent-bright', '#7dd3fc'),
     // 커서 위 글자색 — 배경과 같게 둬야 블록 커서 안 글자가 읽힌다.
     cursorAccent: v('--bg-terminal', '#0e1219'),
-    selectionBackground: v('--sel-bg', 'rgba(56,189,248,0.28)'),
+    selectionBackground: v('--sel-bg', 'rgba(201,162,109,0.3)'),
     selectionForeground: v('--text-hi', '#e8edf5'),
     black: v('--t-black', '#3b4653'),
     red: v('--t-red', '#ff7b72'),

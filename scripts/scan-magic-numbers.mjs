@@ -7,6 +7,7 @@ import { join, extname } from 'node:path'
 const ROOTS = ['src/renderer/components', 'src/renderer/interactions']
 const EXCLUDE = ['tokens.css']
 const HEX = /#[0-9a-fA-F]{3,8}\b/
+const RGBA = /rgba?\(\s*\d/
 // px 리터럴이 시각 속성(§D.3 b)에 붙은 경우.
 const PX_PROP = /(font-size|width|height|padding|margin|gap|border-radius)\s*:\s*[^;]*\b\d+px/i
 
@@ -59,8 +60,16 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
       // 실제로 사는 6,800줄에 한 줄도 안 걸려 있었다. px 는 여전히 font-size 만 본다(§D.3 별건).
       // 주석 줄은 건너뛴다 — "왜 이 값을 쓰면 안 되는가"를 적으려면 그 값을 인용해야 한다.
       const bare = line.trim()
-      if (HEX.test(line) && !bare.startsWith('/*') && !bare.startsWith('*') && !bare.startsWith('//')) {
+      const isComment = bare.startsWith('/*') || bare.startsWith('*') || bare.startsWith('//')
+      if (HEX.test(line) && !isComment) {
         violations.push(`${file}:${i + 1}  HEX 리터럴(tokens.css 의 색 토큰을 쓸 것)  → ${bare}`)
+      }
+      // 2026-08-21: **rgba() 도 본다.** HEX 만 보고 있어서 G 팔레트로 갈아탄 뒤에도 옛 남색·
+      // 시안·빨강이 `rgba(4,6,11,.65)` 같은 모양으로 다섯 곳에 남아 있었다(모달 뒷막·위험 틴트·
+      // 터미널 선택색). 색을 바꿔도 **혼자 따라오지 않는 값**이라 화면에서 그 자리만 색조가 달랐다.
+      // 알파가 필요한 색은 tokens.css 에 토큰으로 두면 된다(--scrim · --err-tint · --accent-glow).
+      if (RGBA.test(line) && !isComment) {
+        violations.push(`${file}:${i + 1}  rgba 리터럴(tokens.css 에 알파 토큰을 둘 것)  → ${bare}`)
       }
     })
 }

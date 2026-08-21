@@ -275,7 +275,7 @@
   width: var(--tb-dot);
   height: var(--tb-dot);
   opacity: 0;
-  color: rgba(0, 0, 0, 0.62);
+  color: var(--on-dot);
   transition: opacity 0.12s;
   pointer-events: none;
 }
@@ -800,7 +800,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 .exp-title {
@@ -1875,7 +1875,7 @@
 }
 .drop-preview.blocked {
   border-color: var(--err);
-  background: rgba(248, 113, 113, 0.12);
+  background: var(--err-tint);
 }
 .drop-preview-msg {
   font-family: var(--ui);
@@ -2265,7 +2265,7 @@
   position: absolute;
   inset: 0;
   z-index: 4;
-  background: rgba(13, 17, 25, 0.82);
+  background: var(--scrim-deep);
 }
 .restore-err-card .rec-icon svg {
   width: 34px;
@@ -3082,7 +3082,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 11, 0.65);
+  background: var(--scrim);
   backdrop-filter: blur(7px);
   display: none;
   align-items: center;
@@ -3455,7 +3455,7 @@
   color: var(--on-accent);
   box-shadow:
     var(--shadow-sm),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    inset 0 1px 0 var(--edge-hi);
 }
 .btn.pri:hover {
   filter: brightness(1.08);
@@ -3478,7 +3478,7 @@
   max-width: 94vw;
   background: var(--bg-surface);
   border-left: 1px solid var(--line-strong);
-  box-shadow: -30px 0 80px -30px rgba(0, 0, 0, 0.8);
+  box-shadow: var(--shadow-lg);
   transform: translateX(100%);
   transition: transform 0.26s cubic-bezier(0.3, 0.9, 0.3, 1);
   z-index: 90;
@@ -3920,7 +3920,7 @@
   background: var(--accent);
   box-shadow:
     0 0 0 3px var(--accent-glow),
-    0 1px 4px rgba(0, 0, 0, 0.4);
+    var(--shadow-knob);
   cursor: pointer;
 }
 
@@ -4129,7 +4129,7 @@
   display: block;
 }
 .modal.danger .mh-ico {
-  background: rgba(248, 113, 113, 0.1);
+  background: var(--err-tint);
   color: var(--err);
 }
 /* F17 부트스트랩 폼 — .modal.sm 을 재사용하되 행 5개(세그먼트 2 + 입력 3)가 들어가 조금 더 넓게. */

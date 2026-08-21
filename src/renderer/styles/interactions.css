@@ -63,7 +63,7 @@
   position: fixed;
   inset: 0;
   z-index: 300;
-  background: rgba(4, 6, 11, 0.78);
+  background: var(--scrim-deep);
   backdrop-filter: blur(8px);
   display: none;
   align-items: center;
@@ -406,7 +406,7 @@
   color: var(--err);
 }
 .ctx-item.danger.cur {
-  background: rgba(248, 113, 113, 0.1);
+  background: var(--err-tint);
   color: var(--err);
 }
 /* FB-monitor(F19 tmux): 정보 전용 행(로딩·미설치·세션 없음 안내) — 클릭·호버 하이라이트 없음. */
