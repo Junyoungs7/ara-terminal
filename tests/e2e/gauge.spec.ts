@@ -1,7 +1,7 @@
 // W1 F10 상태바 리소스 게이지 — 활성 SSH 세션의 CPU/MEM(/GPU).
 // 값의 출처는 F9 와 같은 폴링 한 벌이다(원격 응답은 ssh2 루프백 하네스의 exec 채널).
 import type { Page } from '@playwright/test'
-import { test, expect, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, portRows, showAllPorts, type TeleHarness } from './fixtures'
+import { test, expect, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, portRows, type TeleHarness } from './fixtures'
 
 type SshFactory = (opts?: { password?: string; execHandler?: TeleHarness['exec'] }) => Promise<{ port: number }>
 
@@ -24,20 +24,21 @@ test('GAUGE-1 SSH 세션 상태바에 CPU·MEM·GPU 게이지가 뜬다', async 
   await expect(gauge(ara.page, 'GPU').locator('.val')).toHaveText('61%')
 })
 
-// GAUGE-2 막대 채움 폭(%)이 표시된 값과 같다
-test('GAUGE-2 막대 채움 폭이 표시 값과 일치한다', async ({ ara, ssh }) => {
+// GAUGE-2 게이지는 **꺾은선**이다 — 2026-08-17(제보 ③)에 채움 막대를 걷고 시계열 그래프로 바꿨다.
+// "지금 몇 %인가"는 옆 숫자가 말하고, 그래프는 **어디로 가는 중인가**를 말한다. 폭 대신 그것을 본다.
+// (2026-08-22 제보 18번: 선 아래를 면으로 채웠다 — 그 면도 함께 그려지는지 여기서 지킨다.)
+test('GAUGE-2 게이지마다 시계열 그래프가 면과 함께 그려진다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'g2')
   await expect(gauge(ara.page, 'GPU').locator('.val')).toHaveText('61%', { timeout: 30_000 })
-  const fill = (key: 'CPU' | 'MEM' | 'GPU') =>
-    gauge(ara.page, key)
-      .locator('.bar i')
-      .evaluate((el) => (el as HTMLElement).style.width)
-  expect(await fill('GPU')).toBe('61%')
-  // MEM 은 사용/총량 표기라 퍼센트는 막대에만 있다(12388156/32869180 → 38%).
-  expect(await fill('MEM')).toBe('38%')
-  // CPU 는 표시 값과 채움 폭이 같은 수여야 한다.
-  expect(await fill('CPU')).toBe((await gauge(ara.page, 'CPU').locator('.val').textContent()) ?? '')
+
+  for (const key of ['CPU', 'MEM', 'GPU'] as const) {
+    const spark = gauge(ara.page, key).locator('svg.sb-spark')
+    await expect(spark).toHaveCount(1)
+    // 점이 실려 있어야 선이다(빈 문자열이면 화면엔 아무것도 없다).
+    await expect.poll(async () => (await spark.locator('polyline').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
+    await expect.poll(async () => (await spark.locator('polygon').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
+  }
 })
 
 // GAUGE-3 CPU 는 두 샘플의 차이 — 첫 바퀴는 0%, 부하가 생기면 실값
@@ -85,8 +86,7 @@ test('GAUGE-7 /proc 이 없어도 포트 목록은 살아 있다', async ({ ara,
   const tele = makeTelemetry({ proc: false })
   await connectWithTelemetry(ara.page, ssh, tele, 'g7')
   await openBottomTool(ara.page, 'monitor')
-  // FB-monitor(FB-0003): 기본값이 "사용자 포트만" — 6개 전체를 보려면 명시적으로 전체 보기.
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
+  // 22 는 tcp·tcp6 가 한 행으로 합쳐져 다섯 줄이다(mergeProtos).
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
   await expect(gauges(ara.page)).toHaveCount(0)
 })

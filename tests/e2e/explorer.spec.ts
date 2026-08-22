@@ -529,11 +529,15 @@ test('WB-3★ [아라에게 물어보기]가 경로를 아라 입력창에 얹�
 // WB-4★ #90 이후 [이 폴더에서 AI CLI 시작]이 **로컬에도** 붙는다.
 // 그전에는 "이 창은 서버에 접속해서 시작"이라 원격 폴더에만 있었다 — 내 PC 에서도 되면서
 // 그 전제가 사라졌다.
-test('WB-4★ 로컬 폴더에서도 AI CLI 시작 창이 그 폴더로 열린다', async ({ ara }) => {
+//
+// 2026-08-18(cc72bcb): **시작 창을 없앴다.** 창이 묻던 넷 중 서버·폴더는 화면이 이미 알고
+// (지금 세션·지금 폴더), CLI·플래그는 거의 안 바뀐다 — 이제 누르면 **바로 터미널로 나간다**.
+// 그래서 확인할 것도 창이 아니라 "그 폴더로 가는 줄이 셸에 들어갔는가"다.
+test('WB-4★ 로컬 폴더에서 AI CLI 를 시작하면 그 폴더로 가는 줄이 셸에 들어간다', async ({ ara }) => {
   const { page } = ara
   const dir = makeLocalFixture('ara-wb4-')
   try {
-    await newLocalShell(page)
+    const sessionId = await newLocalShell(page)
     await openExplorer(page)
     await openLocalFiles(page)
     const p = pane(page)
@@ -542,11 +546,11 @@ test('WB-4★ 로컬 폴더에서도 AI CLI 시작 창이 그 폴더로 열린�
     await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
     await page.click('.ctx-menu [data-action="file.aicli"]')
 
-    const modal = page.locator('.aicli-modal')
-    await expect(modal).toBeVisible({ timeout: 10_000 })
-    // 대상은 내 PC, 폴더는 방금 보던 곳.
-    await expect(modal.locator('.dd-val').first()).toHaveText('내 PC')
-    await expect(modal.locator('input.dlg-input').first()).toHaveValue(new RegExp(basename(dir)))
+    // 창은 뜨지 않는다.
+    await expect(page.locator('.aicli-modal')).toHaveCount(0)
+    // 셸에 들어간 줄에 그 폴더와 CLI 이름이 함께 있다(기본 CLI = claude).
+    await expect.poll(() => termText(page, sessionId), { timeout: 20_000 }).toContain(basename(dir))
+    expect(await termText(page, sessionId)).toContain('claude')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

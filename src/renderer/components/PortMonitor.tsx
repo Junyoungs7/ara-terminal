@@ -324,7 +324,7 @@ export function PortMonitor({
             </svg>
           </button>
         )}
-        <button type="button" className="tw-tool" title={t('sftp.refresh')} onClick={onRefresh}>
+        <button type="button" className="tw-tool" data-action="mon.refresh" title={t('sftp.refresh')} onClick={onRefresh}>
           <IconRefresh />
         </button>
       </div>

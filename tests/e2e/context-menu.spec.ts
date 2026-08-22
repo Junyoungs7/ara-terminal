@@ -15,17 +15,20 @@ test('CTX-1 터미널 우클릭 기본은 리스트 메뉴다', async ({ ara }) 
   const actions = await page.locator('.ctx-menu .ctx-item').evaluateAll((els) =>
     els.map((e) => (e as HTMLElement).dataset.action)
   )
+  // 2026-08-18(ff5f462): 평면 여덟 줄을 **묶었다**. 가로·세로 분할은 한 일의 두 방향이고 CLI 셋도
+  // 그렇다 — 펼쳐 두면 고를 것이 늘어난 것처럼 보인다. 그래서 [분할]·[AI 실행]은 서브메뉴 부모다.
   expect(actions).toEqual([
     'copy',
     'paste',
-    'split.horizontal',
-    'split.vertical',
+    'split',
+    'aicli.run',
     'session.duplicate',
     'log.save',
     'ai.ask',
     'pane.close'
   ])
-  // 단축키 힌트는 keymap 단일 소스에서 온다.
+  // 단축키 힌트는 keymap 단일 소스에서 온다 — 묶여 들어간 뒤에도 서브메뉴 안에 그대로 있다.
+  await page.hover('.ctx-menu .ctx-item[data-action="split"]')
   await expect(page.locator('.ctx-menu .ctx-item[data-action="split.horizontal"] .ci-kbd')).toHaveText('Ctrl+Shift+-')
 })
 
@@ -34,6 +37,7 @@ test('CTX-2 리스트 메뉴의 세로 분할이 동작한다', async ({ ara }) 
   const { page } = ara
   await newLocalShell(page)
   await rightClickTerminal(page)
+  await page.hover('.ctx-menu .ctx-item[data-action="split"]') // 호버하면 서브메뉴가 열린다
   await page.click('.ctx-menu .ctx-item[data-action="split.vertical"]')
   await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
   await expect(page.locator('.pane-grid .div-col')).toHaveCount(1)
@@ -89,6 +93,10 @@ test('CTX-6 사이드바 우클릭 메뉴가 상황별로 구성된다', async (
   // 로컬 셸을 여는 길은 이 빈 영역 메뉴에도 있다 — [로컬] 그룹이 없어도 막히지 않는다(2026-08-13).
   await page.click('.ctx-menu .ctx-item[data-action="local.new"]')
   await expect.poll(async () => (await sessionList(page)).length, { timeout: 20_000 }).toBe(1)
+
+  // 셸을 열면 사이드바가 **[파일] 탭으로 넘어간다**(2026-08-22 준영님 제보 6번 — 연 셸의 폴더를
+  // 바로 보여 준다). 트리를 다시 보려면 [연결] 로 돌아온다.
+  await page.click('.lrail-item[data-tab="conn"]')
 
   // 로컬 그룹 헤더 — 세션이 생긴 뒤에야 나온다(그전에는 트리에 아무것도 없다).
   await page.locator('.tree .srv-group:has(.srv-hd:has-text("로컬")) > .srv-hd').click({ button: 'right' })

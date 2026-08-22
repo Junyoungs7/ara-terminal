@@ -568,15 +568,24 @@ export async function openMonitorTab(page: Page): Promise<void> {
   await page.click('.bp-tab[data-bottom="monitor"]')
 }
 
+// 포트 표의 행. **표(.ptbl)로 바뀐 지 오래인데** 셀렉터가 옛 `.prow` 카드에 머물러 있었다
+// (2026-08-22 #106: MON-* 11건이 전부 여기서 0개를 세고 있었다). 열 셀렉터도 함께 둔다 —
+// 화면이 또 바뀌면 이 세 줄만 고치면 되게.
 export function portRows(page: Page) {
-  return page.locator('.pmon-list .prow')
+  return page.locator('.pmon-list .ptbl tbody tr')
 }
 
-// FB-monitor(FB-0003): 기본값이 "사용자 포트만"이라 <1024 시스템 포트를 숨긴다 — 원본 파싱 결과
-// 전체를 보고 싶은 테스트(MON-1/2/4/8/10/11 등)는 이걸로 "전체 보기"로 바꾼 뒤 확인한다.
-export async function showAllPorts(page: Page): Promise<void> {
-  await page.click('.pmon-range button[data-value="all"]')
+/** 그 포트 번호의 행 하나. 번호 칸에는 `web` 배지가 붙을 수 있어 정확일치 대신 첫 텍스트로 찾는다. */
+export function portRow(page: Page, port: number) {
+  return portRows(page).filter({ has: page.locator(`td.pt-port:has-text("${port}")`) })
 }
+
+/** 지금 보이는 포트 번호들(배지 글자는 떼고 숫자만). */
+export async function portNumbers(page: Page): Promise<number[]> {
+  const cells = await page.locator('.pmon-list .ptbl tbody td.pt-port').allTextContents()
+  return cells.map((c) => Number(c.replace(/[^0-9]/g, '')))
+}
+
 
 // ── W2 F8 포워딩 · 내장 브라우저 하네스 ────────────────────────────────────
 

@@ -1,6 +1,17 @@
 // W1 F9 원격 포트 모니터 — 사이드바 [모니터] 탭의 리슨 포트 목록(2.5초 폴링 + 수동 새로고침).
 // 원격 응답은 ssh2 루프백 하네스의 exec 채널이 만든다(실서버 접속 없음 — DLP).
-import { test, expect, NETSTAT_OUT, connectNewSshProfile, makeTelemetry, newLocalShell, openBottomTool, portRows, showAllPorts } from './fixtures'
+import {
+  test,
+  expect,
+  NETSTAT_OUT,
+  connectNewSshProfile,
+  makeTelemetry,
+  newLocalShell,
+  openBottomTool,
+  portNumbers,
+  portRow,
+  portRows
+} from './fixtures'
 import type { Page } from '@playwright/test'
 import type { TeleHarness } from './fixtures'
 
@@ -29,72 +40,66 @@ async function connectWithTelemetry(
 test('MON-1 [모니터] 탭이 원격 리슨 포트를 보여 준다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon1')
-  await showAllPorts(ara.page) // FB-0003: 기본은 "사용자 포트만" — 전체 파싱 결과를 보려면 전체 보기로.
   const rows = portRows(ara.page)
-  await expect(rows).toHaveCount(6, { timeout: 30_000 })
-  const first = rows.filter({ has: ara.page.locator('.pport:text-is("8080")') })
-  await expect(first.locator('.pproto')).toHaveText('tcp')
-  await expect(first.locator('.pproc')).toHaveText('node')
-  await expect(first.locator('.ppid')).toHaveText('2451')
+  await expect(rows).toHaveCount(5, { timeout: 30_000 })
+  const first = rows.filter({ has: ara.page.locator('td.pt-port:text-is("8080")') })
+  await expect(first.locator('td.pt-proto')).toHaveText('tcp')
+  await expect(first.locator('td.pt-proc')).toHaveText('node')
+  await expect(first.locator('td.pt-pid')).toHaveText('2451')
 })
 
 // MON-2 포트 번호 오름차순(사람이 포트를 찾는 순서)
 test('MON-2 목록이 포트 번호 오름차순으로 정렬된다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon2')
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
-  const ports = (await ara.page.locator('.pmon-list .prow .pport').allTextContents()).map(Number)
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
+  const ports = await portNumbers(ara.page)
   expect(ports).toEqual([...ports].sort((a, b) => a - b))
-  expect(ports).toEqual([22, 22, 443, 5432, 8080, 33060])
+  // 22 는 tcp·tcp6 두 소켓이지만 **같은 프로세스라 한 행**이다(mergeProtos).
+  expect(ports).toEqual([22, 443, 5432, 8080, 33060])
 })
 
 // MON-3 프로세스를 읽을 권한이 없어도 포트 행은 남는다
 test('MON-3 권한 없는 소켓은 "권한 없음"으로 표시하고 행은 남긴다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon3')
-  const row = portRows(ara.page).filter({ has: ara.page.locator('.pport:text-is("33060")') })
+  const row = portRows(ara.page).filter({ has: ara.page.locator('td.pt-port:text-is("33060")') })
   await expect(row).toHaveCount(1, { timeout: 30_000 })
-  await expect(row.locator('.pproc')).toHaveText('권한 없음')
-  await expect(row.locator('.ppid')).toHaveText('')
+  await expect(row.locator('td.pt-proc')).toHaveText('권한 없음')
+  await expect(row.locator('td.pt-pid')).toHaveText('—') // 없는 값은 빈칸이 아니라 대시로 그린다
 })
 
 // MON-4 IPv6 소켓은 tcp6 배지로 구분된다
 test('MON-4 IPv6 리슨은 tcp6 배지로 구분된다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon4')
-  await showAllPorts(ara.page) // tcp6 포트(22)는 시스템 포트라 기본값에서는 숨는다.
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
-  const v6 = ara.page.locator('.pmon-list .prow .pproto.v6')
-  await expect(v6).toHaveCount(1)
-  await expect(v6).toHaveText('tcp6')
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
+  // tcp6 는 이제 배지가 아니라 프로토콜 칸의 글자다 — 같은 포트의 두 소켓이 한 행으로 합쳐지면서
+  // "어느 스택으로 떴는가"를 `tcp · tcp6` 로 함께 적는다(방화벽·바인드를 볼 때 그게 답이다).
+  await expect(portRow(ara.page, 22).locator('td.pt-proto')).toHaveText('tcp · tcp6')
 })
 
 // MON-5 수동 새로고침 — 폴링 주기(2.5초)를 기다리지 않고 즉시 한 바퀴
 test('MON-5 새로고침 버튼이 폴링 주기를 기다리지 않고 갱신한다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon5')
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
   const before = tele.rounds()
-  await ara.page.click('.pmon .sb-act')
+  await ara.page.click('.pmon [data-action="mon.refresh"]')
   // 폴링 주기보다 짧은 창 안에 한 바퀴가 더 나가야 "즉시"다.
   await expect.poll(() => tele.rounds(), { timeout: 1_500, intervals: [100] }).toBeGreaterThan(before)
-  await expect(portRows(ara.page)).toHaveCount(6)
+  await expect(portRows(ara.page)).toHaveCount(5)
 })
 
 // MON-6 사용자 조작 없이 폴링만으로 새 포트가 나타난다
 test('MON-6 새로 열린 포트가 폴링으로 저절로 나타난다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon6')
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
   tele.state.ports +=
     'LISTEN 0      128          0.0.0.0:9090       0.0.0.0:*     users:(("grafana",pid=3300,fd=9))\n'
-  await expect(portRows(ara.page)).toHaveCount(7, { timeout: 20_000 })
-  await expect(
-    portRows(ara.page).filter({ has: ara.page.locator('.pport:text-is("9090")') }).locator('.pproc')
-  ).toHaveText('grafana')
+  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 20_000 })
+  await expect(portRow(ara.page, 9090).locator('td.pt-proc')).toHaveText('grafana')
 })
 
 // BOTTOM-1★ 하단 패널 — 포트·세션 기록이 터미널 아래로 내려왔다 (#78, 2026-08-15)
@@ -164,8 +169,7 @@ test('MON-8 세션을 전환하면 그 서버의 포트로 바뀐다', async ({ 
   const { page } = ara
   const teleA = makeTelemetry()
   const idA = await connectWithTelemetry(page, ssh, teleA, 'monA')
-  await showAllPorts(page) // PortMonitor 는 세션과 무관한 단일 인스턴스라 이 토글이 B→A 전환에도 유지된다.
-  await expect(portRows(page)).toHaveCount(6, { timeout: 30_000 })
+  await expect(portRows(page)).toHaveCount(5, { timeout: 30_000 })
 
   // B 서버는 포트가 하나뿐이다.
   const teleB = makeTelemetry({
@@ -175,11 +179,11 @@ test('MON-8 세션을 전환하면 그 서버의 포트로 바뀐다', async ({ 
   const idB = await connectNewSshProfile(page, { name: 'monB', port: hB.port, password: 'pw-monB' })
 
   await expect(portRows(page)).toHaveCount(1, { timeout: 30_000 })
-  await expect(portRows(page).locator('.pport')).toHaveText('6379')
+  await expect(portRows(page).locator('td.pt-port')).toHaveText('6379')
 
   // A 로 되돌아오면 A 의 목록. (B 폴링 중지는 tests/telemetry.test.ts '폴링 수명' 이 본다.)
   await page.locator(`.term-tabbar .ttab[data-session-id="${idA}"]`).click()
-  await expect(portRows(page)).toHaveCount(6, { timeout: 20_000 })
+  await expect(portRows(page)).toHaveCount(5, { timeout: 20_000 })
   expect(idA).not.toBe(idB)
 })
 
@@ -187,12 +191,9 @@ test('MON-8 세션을 전환하면 그 서버의 포트로 바뀐다', async ({ 
 test('MON-10 netstat 폴백 형식도 같은 목록으로 그려진다', async ({ ara, ssh }) => {
   const tele = makeTelemetry({ ports: NETSTAT_OUT })
   await connectWithTelemetry(ara.page, ssh, tele, 'mon10')
-  await showAllPorts(ara.page) // 22·443 은 시스템 포트라 기본값에서는 5432 하나만 보인다.
   await expect(portRows(ara.page)).toHaveCount(3, { timeout: 30_000 })
-  expect(await ara.page.locator('.pmon-list .prow .pport').allTextContents()).toEqual(['22', '443', '5432'])
-  await expect(
-    portRows(ara.page).filter({ has: ara.page.locator('.pport:text-is("443")') }).locator('.pproto')
-  ).toHaveClass(/v6/)
+  expect(await portNumbers(ara.page)).toEqual([22, 443, 5432])
+  await expect(portRow(ara.page, 443).locator('td.pt-proto')).toHaveText('tcp6')
 })
 
 // MON-11 파싱할 수 없는 응답이 와도 앱은 멀쩡하다(빈 목록 + 안내)
@@ -217,157 +218,76 @@ test('MON-11 쓰레기 응답에도 앱이 죽지 않고 빈 목록을 보여 �
 test('MON-12 포트 행을 눌러도 아무 일도 일어나지 않는다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon12')
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6, { timeout: 30_000 })
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
   const snap = (): Promise<string[]> => portRows(ara.page).allInnerTexts()
   const before = await snap()
   await portRows(ara.page).first().click()
   await ara.page.waitForTimeout(500)
   // 행 수·내용 그대로 · 포워딩 배지 안 생김 · 메뉴/다이얼로그 안 뜸
   expect(await snap()).toEqual(before)
-  await expect(ara.page.locator('.bottom-panel .pmon .pfwd')).toHaveCount(0)
+  // 포워딩이 생기면 목적지 칸에 localhost:NNNN 이 뜬다 — 눌렀다고 생기면 안 된다.
+  await expect(ara.page.locator('.bottom-panel .pmon .pdest:not(.none)')).toHaveCount(0)
   await expect(ara.page.locator('.dlg-overlay, .ctx-menu')).toHaveCount(0)
 })
 
-// MON-13 FB-0003: 기본값은 "사용자 포트만" — 시스템 포트(22·22·443)는 숨고 감춘 개수가 보인다.
-test('MON-13 기본값은 사용자 포트만 보여주고 감춘 개수를 알려준다', async ({ ara, ssh }) => {
+// MON-13 범위 입력 — 2026-08-18 에 [사용자 포트|전체] 세그를 **걷고** min–max 입력으로 바꿨다.
+// 앱이 1024 라는 경계를 정해 놓고 그 아래를 기본으로 감췄는데, 정작 자주 찾는 22·443 이 거기
+// 있었다. 이제 기본은 **전부 보여 주고**, 좁힐지는 사용자가 숫자로 정한다.
+test('MON-13 기본은 전부 보여 주고, 범위를 입력하면 그만큼만 남는다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon13')
-  await expect(portRows(ara.page)).toHaveCount(3, { timeout: 30_000 })
-  expect(await ara.page.locator('.pmon-list .prow .pport').allTextContents()).toEqual(['5432', '8080', '33060'])
-  await expect(ara.page.locator('.pmon-hidden')).toHaveText('3개 숨김')
-  await expect(ara.page.locator('.pmon-range button[data-value="user"]')).toHaveClass(/on/)
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
+
+  const spans = ara.page.locator('.pmon .pspan')
+  await spans.first().fill('1024')
+  await expect(portRows(ara.page)).toHaveCount(3)
+  expect(await portNumbers(ara.page)).toEqual([5432, 8080, 33060])
+
+  await spans.last().fill('9000')
+  await expect(portRows(ara.page)).toHaveCount(2)
+  expect(await portNumbers(ara.page)).toEqual([5432, 8080])
+
+  // 비우면 제한이 풀린다(0 이 아니라 "제한 없음"이다).
+  await spans.first().fill('')
+  await spans.last().fill('')
+  await expect(portRows(ara.page)).toHaveCount(5)
 })
 
-// MON-14 검색 — 포트 번호·프로세스명 부분일치, 필터가 이미 걸러낸 것 안에서만 찾는다.
+// MON-14 검색 — 포트 번호·프로세스명 부분일치.
 test('MON-14 검색어로 포트 번호·프로세스명을 찾는다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon14')
-  await expect(portRows(ara.page)).toHaveCount(3, { timeout: 30_000 })
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
 
   await ara.page.fill('.pmon .sb-search input', '80')
   await expect(portRows(ara.page)).toHaveCount(1)
-  await expect(portRows(ara.page).locator('.pport')).toHaveText('8080')
+  // 번호 칸에는 `web` 배지가 함께 산다(8080·443 처럼 브라우저로 열어 볼 만한 포트) — 숫자만 본다.
+  expect(await portNumbers(ara.page)).toEqual([8080])
 
   await ara.page.fill('.pmon .sb-search input', 'postgres')
   await expect(portRows(ara.page)).toHaveCount(1)
-  await expect(portRows(ara.page).locator('.pport')).toHaveText('5432')
+  expect(await portNumbers(ara.page)).toEqual([5432])
 
-  // 시스템 포트(sshd·22)는 기본 범위 필터가 이미 걸러냈다 — 검색해도 나오지 않는다.
+  // 시스템 포트도 이제 목록에 있다 — 검색으로 찾을 수 있어야 한다(그게 세그를 걷은 이유다).
   await ara.page.fill('.pmon .sb-search input', 'sshd')
+  await expect(portRows(ara.page)).toHaveCount(1) // 22 tcp·tcp6 는 한 행이다
+
+  await ara.page.fill('.pmon .sb-search input', '없는프로세스')
   await expect(portRows(ara.page)).toHaveCount(0)
   await expect(ara.page.locator('.pmon-list .sftp-empty')).toHaveText('검색·필터 결과가 없습니다')
 
   await ara.page.fill('.pmon .sb-search input', '')
-  await expect(portRows(ara.page)).toHaveCount(3)
+  await expect(portRows(ara.page)).toHaveCount(5)
 })
 
-// MON-15 범위 토글 — 전체 보기로 바꾸면 감춘 개수 안내가 사라지고 전부 보인다.
-test('MON-15 전체 보기로 바꾸면 시스템 포트도 보이고 숨김 안내가 사라진다', async ({ ara, ssh }) => {
+// MON-15 검색과 범위는 **함께** 좁힌다(AND) — 좁히는 도구지 넓히는 도구가 아니다.
+test('MON-15 검색과 범위가 함께 걸린다', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'mon15')
-  await expect(portRows(ara.page)).toHaveCount(3, { timeout: 30_000 })
+  await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
 
-  await showAllPorts(ara.page)
-  await expect(portRows(ara.page)).toHaveCount(6)
-  await expect(ara.page.locator('.pmon-hidden')).toHaveCount(0)
-  await expect(ara.page.locator('.pmon-range button[data-value="all"]')).toHaveClass(/on/)
-
-  await ara.page.click('.pmon-range button[data-value="user"]')
-  await expect(portRows(ara.page)).toHaveCount(3)
-  await expect(ara.page.locator('.pmon-hidden')).toHaveText('3개 숨김')
-})
-
-// ── #87(2026-08-16) 하단 바 도입 후 UI/UX ────────────────────────────────────
-
-// BAR-1★ **하단바는 토글 하나로 켜고, 그 안에서 탭으로 갈린다** (IntelliJ 툴윈도우 방식).
-//
-// 이 테스트는 원래 "툴팁이 어디에 열리는지 말한다"를 봤다(#87). 준영님 첫 지적("이 버튼을
-// 눌렀는데 왜 다른 창이 켜지지?")을 **문구로** 메운 것이었다. 2026-08-17 실사용 뒤 세 번에 걸쳐
-// 배치가 그 문구를 대신하게 됐다 — 마지막이 준영님 정정이다:
-//   "우측 사이드바 하단에 하단바 아이콘을 만들어주고, 그걸 클릭하면 하단바를 사용하고
-//    그 하단바에 이 기능 버튼들을 탭으로 만들어달라는거였어."
-//
-// 그래서 규칙은 셋이다: ① 하단 도구는 우측 바 **항목**이 아니다 ② 하단바를 켜는 자리는 바 맨
-// 아래 토글 **하나** ③ 도구는 그 안에서 탭으로 갈린다(탭은 갈아타기지 끄기가 아니다).
-test('BAR-1★ 하단바는 토글 하나로 켜고 그 안에서 탭으로 갈린다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-
-  // ① 하단 도구는 액티비티 **항목**으로 그려지지 않는다(같은 도구를 두 자리에서 켜지 않는다).
-  await expect(page.locator('.activity-bar .act-item[data-activity="ps"]')).toHaveCount(0)
-  await expect(page.locator('.activity-bar .act-item[data-activity="monitor"]')).toHaveCount(0)
-  await expect(page.locator('.statusbar .bd-item')).toHaveCount(0)
-
-  // ② 꺼져 있으면 하단바 자체가 없다 — 켜는 자리는 바 맨 아래 토글 하나뿐이다.
-  await expect(page.locator('.bottom-panel')).toHaveCount(0)
-  const toggle = page.locator('.activity-bar .act-bottombar')
-  await expect(toggle).toBeVisible()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
-
-  // 오른쪽·창에 열리는 것은 그대로 바에 있고, 자리 표시도 배치의 단일 출처에서 파생된다.
-  await expect(page.locator('.act-item[data-activity="ai"]')).toHaveAttribute('data-slot', 'rail')
-  await expect(page.locator('.act-item[data-activity="explorer"]')).toHaveAttribute('data-slot', 'window')
-
-  // 툴팁은 남은 둘에 대해 여전히 자리를 말한다(hover 중이면 data-tip 으로 옮겨간다).
-  const tip = (id: string) =>
-    page.locator(`.act-item[data-activity="${id}"]`).evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')
-  expect(await tip('ai')).toContain('오른쪽에 열림')
-  expect(await tip('explorer')).toContain('창으로 열림')
-
-  // 토글을 누르면 하단바가 뜨고 탭 여덟이 그 안에 있다.
-  await toggle.click()
-  await expect(page.locator('.bottom-panel')).toBeVisible()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.bottom-panel .bp-tab')).toHaveCount(8)
-
-  // ③ 탭은 **갈아타기**다 — 같은 탭을 다시 눌러도 하단바는 그대로 있다.
-  await page.click('.bp-tab[data-bottom="ps"]')
-  await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
-  await page.click('.bp-tab[data-bottom="ps"]')
-  await expect(page.locator('.bottom-panel')).toBeVisible()
-
-  // 끄는 자리는 그 토글(과 패널의 ×). 다시 켜면 **보던 탭으로** 돌아온다.
-  await toggle.click()
-  await expect(page.locator('.bottom-panel')).toHaveCount(0)
-  await toggle.click()
-  await expect(page.locator('.bp-tab.on[data-bottom="ps"]')).toBeVisible()
-})
-
-// BAR-2★ #87 ⑤: 하단 탭을 오갔다 와도 표의 검색어가 남는다.
-// #84 에서 표가 하단으로 내려오며 잃었던 것이다(떠 있는 창은 숨기기만 했다 — #74).
-// 하단도 **연 적 있는 탭은 마운트를 유지**하고 active=false 로 폴링만 끈다.
-test('BAR-2★ 하단 탭을 오갔다 와도 검색어가 남는다', async ({ ara, ssh }) => {
-  const { page } = ara
-  const h = await ssh({ password: 'pw-bar2', execHandler: makeTelemetry().exec })
-  await connectNewSshProfile(page, { name: 'bar2', port: h.port, password: 'pw-bar2' })
-
-  await openBottomTool(page, 'monitor')
-  const search = page.locator('.bottom-panel .pmon input[type="text"]').first()
-  await expect(search).toBeVisible({ timeout: 20_000 })
-  await search.fill('8080')
-
-  // 다른 탭에 갔다가 돌아온다.
-  await openBottomTool(page, 'log')
-  await expect(page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible()
-  await openBottomTool(page, 'monitor')
-  await expect(search).toHaveValue('8080')
-})
-
-// BAR-3 #87 ④: 하단 패널 최대화 — 표를 크게 볼 때 매번 경계를 끌지 않는다.
-test('BAR-3 하단 패널을 최대화했다 되돌린다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-  await openBottomTool(page, 'monitor')
-  const bp = page.locator('.bottom-panel')
-  await expect(bp).toBeVisible()
-  const before = (await bp.boundingBox())!.height
-
-  await page.locator('.bp-tabs .bp-max').click()
-  await expect(bp).toHaveClass(/maxed/)
-  expect((await bp.boundingBox())!.height).toBeGreaterThan(before)
-
-  await page.locator('.bp-tabs .bp-max').click()
-  await expect(bp).not.toHaveClass(/maxed/)
-  await expect.poll(async () => (await bp.boundingBox())!.height, { timeout: 5_000 }).toBe(before)
+  await ara.page.locator('.pmon .pspan').first().fill('1024')
+  await ara.page.fill('.pmon .sb-search input', '2')
+  // 1024 이상 **그리고** '2' 포함 → 5432 하나. 22 도 '2' 지만 범위 밖이라 빠진다(둘은 AND 다).
+  expect(await portNumbers(ara.page)).toEqual([5432])
 })
