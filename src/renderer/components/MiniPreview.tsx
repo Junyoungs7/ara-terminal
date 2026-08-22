@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { groupColor, type Session } from '../store/sessions'
-import { tailLines } from '../terminal/termRegistry'
+import { tailSegs, type TailSeg } from '../terminal/termRegistry'
 import { t } from '../i18n'
 
 // F15 모니터링 미니 프리뷰 — 우측 미니 사이드바(토글).
@@ -26,6 +26,63 @@ const EDGE_GAP = 8
  */
 const HOVER_GRACE_MS = 160
 
+/**
+ * ANSI 팔레트 인덱스(0~15) → 터미널이 쓰는 그 CSS 변수 (2026-08-22 준영님 제보 20번).
+ *
+ * **같은 토큰을 본다**: TerminalPane.ansiTheme() 이 xterm 에 넘기는 것과 한 벌이라, 프리뷰의 초록이
+ * 터미널의 초록과 다를 수 없다. 두 번째 팔레트를 만들면 언젠가 갈린다.
+ * 16~255(P256)와 24bit RGB 는 표를 두지 않는다 — 미리보기는 "무슨 색 계열인가"만 보면 되고,
+ * 256색 표를 들이면 이 파일이 팔레트 사본이 된다. 그 경우는 기본 글자색으로 떨어뜨린다.
+ */
+const ANSI_VAR = [
+  '--t-black',
+  '--t-red',
+  '--t-green',
+  '--t-yellow',
+  '--t-blue',
+  '--t-purple',
+  '--t-cyan',
+  '--t-fg',
+  '--t-gray',
+  '--t-red-b',
+  '--t-green-b',
+  '--t-yellow-b',
+  '--t-blue-b',
+  '--t-purple-b',
+  '--t-cyan-b',
+  '--text-hi'
+] as const
+
+/** 한 구간의 색. 모르는 색(P256·RGB·기본)은 undefined → 부모의 글자색을 그대로 쓴다. */
+function segColor(s: TailSeg): string | undefined {
+  if (s.fg === undefined || s.rgb) return undefined
+  const name = ANSI_VAR[s.fg]
+  return name ? `var(${name})` : undefined
+}
+
+/** 색 구간들을 span 으로. 색이 없는 구간은 span 도 만들지 않는다(노드 수를 줄인다). */
+function Segs({ rows }: { rows: TailSeg[][] }) {
+  return (
+    <>
+      {rows.map((segs, y) => (
+        <span key={y}>
+          {segs.map((s, i) => {
+            const color = segColor(s)
+            return color || s.bold ? (
+              <span key={i} style={{ color, fontWeight: s.bold ? 600 : undefined }}>
+                {s.text}
+              </span>
+            ) : (
+              s.text
+            )
+          })}
+          {y < rows.length - 1 ? '\n' : ''}
+        </span>
+      ))}
+    </>
+  )
+}
+
 export function MiniPreview({
   open,
   sessions,
@@ -37,7 +94,7 @@ export function MiniPreview({
   activeId: string | null
   onSelect: (sessionId: string) => void
 }) {
-  const [snaps, setSnaps] = useState<Record<string, string[]>>({})
+  const [snaps, setSnaps] = useState<Record<string, TailSeg[][]>>({})
   // 직전 틱 대비 출력이 바뀐 세션 — 카드가 잠깐 반짝인다("지금 뭔가 돌고 있다"를 한눈에).
   const [live, setLive] = useState<Record<string, boolean>>({})
   const [hover, setHover] = useState<{ id: string; top: number } | null>(null)
@@ -47,12 +104,13 @@ export function MiniPreview({
   useEffect(() => {
     if (!open) return
     const tick = () => {
-      const next: Record<string, string[]> = {}
+      const next: Record<string, TailSeg[][]> = {}
       const changed: Record<string, boolean> = {}
       for (const s of sessions) {
-        const lines = tailLines(s.id, ZOOM_LINES)
+        const lines = tailSegs(s.id, ZOOM_LINES)
         next[s.id] = lines
-        const joined = lines.join('\n')
+        // 바뀜 판정은 **글자만** 본다 — 색까지 넣으면 커서 깜박임 같은 것으로도 "살아 있음"이 켜진다.
+        const joined = lines.map((r) => r.map((g) => g.text).join('')).join('\n')
         changed[s.id] = prev.current[s.id] !== undefined && prev.current[s.id] !== joined
         prev.current[s.id] = joined
       }
@@ -89,7 +147,10 @@ export function MiniPreview({
   // 열릴 때·내용이 바뀔 때 바닥으로 붙이고, 그 뒤로 사용자가 위로 굴리는 것은 막지 않는다.
   const zoomRef = useRef<HTMLPreElement>(null)
   const zoomId = hover?.id ?? null
-  const zoomText = zoomId ? (snaps[zoomId] ?? []).join('\n') : ''
+  const zoomRows = zoomId ? (snaps[zoomId] ?? []) : []
+  // 스크롤을 바닥에 붙이는 판단은 **글자가 바뀌었을 때**만 — 색만 달라졌다고 아래로 끌어내리면
+  // 위를 읽는 중에 화면이 튄다.
+  const zoomText = zoomRows.map((r) => r.map((g) => g.text).join('')).join('\n')
   useEffect(() => {
     const el = zoomRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -119,7 +180,7 @@ export function MiniPreview({
             </div>
             {/* 터미널 축소판처럼 보이게: 어두운 화면 + 마지막 줄 끝의 깜박이는 커서. */}
             <pre className="mini-body">
-              {(snaps[s.id] ?? []).slice(-CARD_LINES).join('\n')}
+              <Segs rows={(snaps[s.id] ?? []).slice(-CARD_LINES)} />
               <span className="mini-cursor" />
             </pre>
           </div>
@@ -130,7 +191,7 @@ export function MiniPreview({
         <div className="mini-zoom" style={{ top: hover.top }} onMouseEnter={keepOpen} onMouseLeave={scheduleClose}>
           <div className="mini-zoom-title">{hovered.title}</div>
           <pre className="mini-zoom-body" ref={zoomRef}>
-            {zoomText}
+            <Segs rows={zoomRows} />
             <span className="mini-cursor" />
           </pre>
         </div>
