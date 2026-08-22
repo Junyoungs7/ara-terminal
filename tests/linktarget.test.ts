@@ -65,19 +65,37 @@ describe('planLink — OAuth 콜백', () => {
     expect(planLink(url, true)).toEqual({ kind: 'oauth', port: 2222, url })
   })
 
-  it('콜백이 loopback 이 아니면 OAuth 가 아니다(외부 리다이렉트는 우리 일이 아니다)', () => {
-    expect(planLink('https://a.example/x?redirect_uri=https://app.example.com/cb', true).kind).toBe('external')
+  // 2026-08-22: 포워딩이 **필요 없다**는 판정일 뿐, OS 브라우저로 나가라는 뜻이 아니다.
+  // SSH 세션의 링크는 내장 브라우저로 간다(아래 'SSH 세션의 보통 링크' 묶음 참고).
+  it('콜백이 loopback 이 아니면 OAuth 가 아니다 — 터널 없이 내장 브라우저로', () => {
+    expect(planLink('https://a.example/x?redirect_uri=https://app.example.com/cb', true).kind).toBe('inApp')
   })
 
   it('콜백 값이 URL 이 아니면 무시한다', () => {
-    expect(planLink('https://a.example/x?redirect_uri=not-a-url', true).kind).toBe('external')
+    expect(planLink('https://a.example/x?redirect_uri=not-a-url', true).kind).toBe('inApp')
+  })
+})
+
+// 2026-08-22 준영님 제보 16번: "gemini 로그인 시 Ctrl+클릭하면 내 로컬 브라우저에서 뜨는데
+// 아라 브라우저에서 떠야 한다. 그래야 이 세션이랑 바로 연결되게."
+describe('planLink — SSH 세션의 보통 링크는 내장 브라우저', () => {
+  it('포워딩이 필요 없는 https 도 내장 브라우저로 간다', () => {
+    expect(planLink('https://github.com/anthropics', true).kind).toBe('inApp')
+    expect(planLink('https://accounts.google.com/signin', true).kind).toBe('inApp')
+  })
+
+  it('로컬 셸의 링크는 그대로 OS 브라우저 — 진짜 내 PC 맥락이다', () => {
+    expect(planLink('https://github.com/anthropics', false).kind).toBe('external')
+    expect(planLink('http://localhost:3000', false).kind).toBe('external')
+  })
+
+  it('http/https 가 아니면 판단하지 않는다(스킴 게이트가 최종 판정)', () => {
+    expect(planLink('mailto:a@b.c', true).kind).toBe('external')
+    expect(planLink('file:///etc/passwd', true).kind).toBe('external')
   })
 })
 
 describe('planLink — 그 외', () => {
-  it('비-loopback https 는 OS 브라우저로 간다', () => {
-    expect(planLink('https://github.com/anthropics', true).kind).toBe('external')
-  })
 
   it('http/https 가 아닌 스킴은 판단하지 않는다(스킴 게이트가 최종 판정)', () => {
     expect(planLink('file:///C:/Windows/win.ini', true).kind).toBe('external')

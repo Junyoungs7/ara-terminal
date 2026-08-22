@@ -81,6 +81,8 @@ type MainAreaProps = {
   onSettingsOpenChange?: (open: boolean) => void
   /** 액티비티 바 [명령어 북] 아이콘 활성 표시용 미러(설정과 같은 방식 — 상태 주인은 여기다). */
   onCommandBookOpenChange?: (open: boolean) => void
+  /** 새 로컬 셸을 열면 사이드바를 [파일] 탭으로 — 사이드바 상태의 주인은 Shell 이라 요청만 한다. */
+  onRevealFiles?: () => void
   /** 우측 액티비티 바에 그릴 항목·순서. prefs 의 주인이 여기라 Shell 로 올려 준다
       (useUiPrefs 를 두 곳에서 부르면 사본이 갈려 설정 변경이 바에 안 비친다). */
   onActivityItems?: (items: ActivityId[]) => void
@@ -124,6 +126,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onOpenLog,
       onSettingsOpenChange,
       onCommandBookOpenChange,
+      onRevealFiles,
       onActivityItems,
       onAiCliFlags,
       bottom,
@@ -191,6 +194,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         const plan = planLink(url, isSsh)
         if (plan.kind === 'external') {
           void window.ev?.app.openExternal(plan.url)
+          return
+        }
+        // 포워딩이 필요 없는 원격 링크 — 터널을 만들지 않고 내장 브라우저로만 보낸다(제보 16번).
+        if (plan.kind === 'inApp') {
+          void window.ev?.browser.open(plan.url)
           return
         }
         // OAuth 링크는 터널을 여는 포트가 바깥쪽 URL 의 쿼리(redirect_uri)에 묻혀 있다 — 사용자가 보는
@@ -363,7 +371,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     const openLocal = useCallback(async () => {
       const id = await open()
       layout.showSession(id)
-    }, [open, layout])
+      // 2026-08-22 준영님 재제보(6번): 로컬 셸을 열어도 [파일] 탭으로 안 넘어간다.
+      // 앞선 시도는 Shell 의 newLocal 한 곳만 고쳤는데, 셸을 여는 길은 **여기로 모이는 셋**이다
+      // (탭바 ＋ · Ctrl+` 터미널 토글 · 세션 복제). 갈래마다 붙이는 대신 합류 지점에 한 번 둔다.
+      onRevealFiles?.()
+    }, [open, layout, onRevealFiles])
 
     /**
      * **칸이 하나도 없는데 세션은 남아 있으면** 활성 세션을 올린다. 두 자리에서 필요하다:

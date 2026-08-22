@@ -10,7 +10,9 @@ export type LinkPlan =
   | { kind: 'loopback'; port: number; url: string }
   // 외부 https + loopback 콜백(OAuth) → 콜백 포트를 그 번호 그대로 포워딩한 뒤 원본 URL 을 연다
   | { kind: 'oauth'; port: number; url: string }
-  // 그 외 → 기존 app:openExternal (OS 기본 브라우저)
+  // SSH 세션의 보통 http/https → 포워딩 없이 **내장 브라우저**로(2026-08-22, 아래 주석 참고)
+  | { kind: 'inApp'; url: string }
+  // 그 외(로컬 셸·비 http 스킴) → 기존 app:openExternal (OS 기본 브라우저)
   | { kind: 'external'; url: string }
 
 // URL.hostname 이 돌려주는 형태 그대로 비교한다(IPv6 는 대괄호가 붙어 온다).
@@ -85,7 +87,20 @@ export function planLink(url: string, isSsh: boolean): LinkPlan {
     const port = loopbackPort(raw)
     if (port !== null) return { kind: 'oauth', port, url }
   }
-  return { kind: 'external', url }
+  /**
+   * **SSH 세션의 http/https 링크는 내장 브라우저로 연다** (2026-08-22 준영님 재제보 16번:
+   * "gemini 로그인 시 Ctrl+클릭하면 내 로컬 브라우저에서 뜨는데 아라 브라우저에서 떠야 한다.
+   * 그래야 이 세션이랑 바로 연결되게").
+   *
+   * 앞의 두 규칙(loopback·콜백 파라미터)은 **포워딩이 필요한** 경우를 골라낸다. 여기까지 왔다는
+   * 것은 포워딩 없이 그냥 열면 되는 주소라는 뜻인데, 그렇다고 OS 브라우저로 보낼 이유는 없다 —
+   * 원격 세션에서 나온 링크는 그 세션의 맥락이고, 로그인 왕복이 끼면 **같은 브라우저 프로필**에서
+   * 이어져야 쿠키·세션이 붙는다. OS 브라우저로 나가면 그 연결이 끊긴다.
+   *
+   * 보안은 오히려 좁아진다: 내장 브라우저는 preload 없음 · 전용 파티션 · 스킴 게이트를 이미 거친다.
+   * 로컬 셸의 링크는 위(!isSsh)에서 갈라져 그대로 OS 브라우저로 간다 — 그건 진짜 내 PC 맥락이다.
+   */
+  return { kind: 'inApp', url }
 }
 
 // 포워딩이 열린 뒤 내장 브라우저에 넘길 실제 주소.

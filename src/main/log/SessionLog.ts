@@ -128,8 +128,21 @@ export function stripAnsi(text: string, st: StripState): string {
     const c = s[i]
     if (c !== '\x1b') {
       if (!st.alt) {
+        // 백스페이스(0x08) — **셸이 글자를 지운 것**이다. 2026-08-22 준영님 재제보(12·13번):
+        //   `jun@kvt:~/data$ cl lsll`   ← `cl` 을 지우고 `ls` 를 쳤는데 둘 다 남았다
+        // readline 은 지울 때 `\b \b`(뒤로·공백·뒤로)를 보낸다. 그 셋을 글자로 취급해 흘려보내면
+        // 지워진 글자가 화면에서만 사라지고 기록에는 남아 서로 겹쳐 보인다.
+        // 줄 시작(lineStart) 아래로는 지우지 않는다 — 프롬프트까지 갉아먹으면 안 된다.
+        if (c === '\b') {
+          if (out.length > lineStart) out = out.slice(0, -1)
+          i++
+          continue
+        }
         out += c
         if (c === '\n') lineStart = out.length
+        // CR 은 커서를 줄 앞으로 보낸다. 뒤이어 오는 글자는 **덮어쓰기**이므로 normalizeCr 이
+        // 나중에 "마지막 것만" 규칙으로 정리한다 — 여기서는 지우기 기준점만 옮긴다.
+        if (c === '\r') lineStart = out.length
       }
       i++
       continue

@@ -254,9 +254,18 @@ export function FileTree({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   // best-effort 안내: cwd 이벤트를 한 번도 못 받은 세션은 자동 동기 미지원 가능성(수동 새로고침 폴백, C-4).
   const [autoSynced, setAutoSynced] = useState(false)
+  // 경로가 칸보다 길면 **끝**(현재 폴더)이 보여야 한다. 왼쪽 정렬로 바꾸면서(제보 5번) direction:rtl
+  // 이 하던 일을 여기서 대신한다 — 경로가 바뀔 때마다 오른쪽 끝으로 민다.
+  // **훅은 전부 여기 위쪽에 모은다**: 아래에 `if (!backend) return` 이 있어서 그 뒤에 훅을 두면
+  // 렌더마다 훅 개수가 달라져 React 가 통째로 죽는다(2026-08-22 실측 — 스모크가 부팅에서 멎었다).
+  const crumbRef = useRef<HTMLDivElement>(null)
   // 경로 직접 입력 중일 때의 문자열(null = 브레드크럼 표시). 경로 자체(path)와 갈라 둔다 —
   // 입력을 취소하면 원래 자리에 그대로 남아야 한다.
   const [pathEdit, setPathEdit] = useState<string | null>(null)
+  useEffect(() => {
+    const el = crumbRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [path, pathEdit])
   // ── #88 R2 보기 상태 ──
   // 숨김은 **보이는 것이 기본**이다. 탐색기는 감추는 쪽이 기본이지만 여기 오는 사람은 `.git`·`.env`
   // 를 찾으러 온다 — 기본값을 뒤집으면 지금까지 보이던 것이 갑자기 사라진다(원격도 같은 트리다).
@@ -917,6 +926,11 @@ export function FileTree({
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
       if (!backend?.remote) return
+      // **파일 드래그만 받는다** (2026-08-22 준영님 제보 19번: "탭 드래그하여 좌측 사이드바에
+      // 가져가면 왜 영역이 잡혀?"). 탭 드래그는 `text/plain` 에 세션 id 를 싣는데, 여기서
+      // preventDefault 를 무조건 부르면 그것도 "여기에 놓을 수 있다"로 보인다.
+      // OS 파일 드롭은 `Files` 타입이 붙는다 — 그것만 받으면 탭은 지나간다.
+      if (!e.dataTransfer.types.includes('Files')) return
       e.preventDefault()
       dropRef.current?.classList.add('drag-over')
     },
@@ -1067,7 +1081,9 @@ export function FileTree({
               }
             }}
           >
-            <div className="fcrumb" title={path}>
+            {/* 넘치면 끝(현재 폴더)이 보이게 스크롤을 오른쪽 끝으로 — direction:rtl 로 하던 일을
+                여기서 한다(제보 5번: 짧은 경로가 오른쪽에 붙어 보이던 것). */}
+            <div className="fcrumb" title={path} ref={crumbRef}>
               {crumbList.map((c, i) => (
                 <span key={c.path}>
                   {i > 0 && <span className="sepr">/</span>}
@@ -1176,12 +1192,21 @@ export function FileTree({
       {/* 빈 영역 우클릭 = 새 폴더. 행 우클릭은 openMenu 가 전파를 끊는다. */}
       {/* #82: 목록이라 트리가 아니라 listbox 다 — 여기서 펼치고 접는 것이 없다(폴더는 들어간다).
           ↑↓ 로 옮기고 Enter 로 고른다. 들어가는 것은 기존대로 더블클릭. */}
+      {/* 2026-08-22 준영님 제보 9번: "좌측 사이드바도 클릭하면 뭔가 시각적으로 선택됬다는 걸
+          보여줘야 해." 붙여넣기 대상은 사실 **지금 보고 있는 폴더**라 빈 공간을 고를 필요가
+          없는데, 그게 보이지 않아 빈자리를 찾아 클릭하고 계셨다(파일이 많으면 빈자리도 없다).
+          클릭하면 포커스가 여기로 오고 테두리가 서서 "이 목록이 지금 대상"임을 말한다.
+          빈 자리를 눌렀을 때만 선택을 비운다 — 행 클릭은 그 행이 처리한다. */}
       <div
         className="ftree"
         ref={listRef}
         role="listbox"
         aria-label={t('sidebar.tab.file')}
         {...listKeys}
+        onMouseDown={(e) => {
+          e.currentTarget.focus()
+          if (e.target === e.currentTarget) setSel([])
+        }}
         onContextMenu={(e) => openMenu(e, null)}
       >
         {loading && <div className="sftp-empty">{t('sftp.loading')}</div>}

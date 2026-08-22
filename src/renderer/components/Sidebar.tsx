@@ -86,7 +86,6 @@ export function Sidebar({
   profiles,
   groups,
   conn,
-  activeProfileId,
   sessions,
   activeSessionId,
   onNewConn,
@@ -115,7 +114,6 @@ export function Sidebar({
   profiles: ConnectionProfile[]
   groups: string[]
   conn: ConnState
-  activeProfileId: string | null
   sessions: Session[]
   activeSessionId: string | null
   onNewConn: () => void
@@ -176,7 +174,6 @@ export function Sidebar({
           profiles={profiles}
           groups={groups}
           conn={conn}
-          activeProfileId={activeProfileId}
           sessions={sessions}
           activeSessionId={activeSessionId}
           onConnect={onConnect}

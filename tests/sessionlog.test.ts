@@ -212,6 +212,26 @@ describe('ANSI 스트립', () => {
     expect(normalizeCr(out)).toBe('새 명령\n')
   })
 
+  // 2026-08-22 준영님 재제보(12·13번) — 실제로 남은 기록:
+  //   `jun@kvt:~/data$ cl lsll`  ← `cl` 을 지우고 `ls`, 다시 고쳐 `ll` 을 친 흔적이 전부 남았다
+  it('백스페이스는 앞 글자를 지운다 — 셸이 지운 것은 기록에도 없어야 한다', () => {
+    expect(stripAnsi('cl\b\bls\n', newStripState())).toBe('ls\n')
+    // readline 이 실제로 보내는 형태: 뒤로·공백·뒤로
+    expect(stripAnsi('cl\b \b\b \bls\n', newStripState())).toBe('ls\n')
+  })
+
+  it('백스페이스가 줄 시작을 넘어 프롬프트를 갉아먹지 않는다', () => {
+    expect(stripAnsi('$ \b\b\b\b\bls\n', newStripState())).toBe('ls\n')
+    // 앞 줄은 안전하다 — 지우기는 지금 줄 안에서만 일어난다.
+    expect(stripAnsi('첫 줄\nab\b\b\bcd\n', newStripState())).toBe('첫 줄\ncd\n')
+  })
+
+  it('CR 뒤의 백스페이스는 그 뒤에 쓴 것만 지운다', () => {
+    // CR 로 커서가 줄 앞에 갔고, 거기서 다시 쓰다 한 글자를 지웠다.
+    expect(stripAnsi('옛것\rabc\b\n', newStripState())).toBe('옛것\rab\n')
+    expect(normalizeCr(stripAnsi('옛것\rabc\b\n', newStripState()))).toBe('ab\n')
+  })
+
   it('대체화면 안에서는 줄 지우기도 기록에 영향을 주지 않는다', () => {
     const st = newStripState()
     expect(stripAnsi('전\x1b[?1049h재그리기\x1b[2K또 재그리기\x1b[?1049l후\n', st)).toBe('전후\n')

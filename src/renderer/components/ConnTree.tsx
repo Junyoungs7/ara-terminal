@@ -43,7 +43,6 @@ type Props = {
   // 트리가 프로필에서 다시 파생하면 방금 만든 빈 그룹이 사라진다.
   groups: string[]
   conn: ConnState
-  activeProfileId: string | null
   sessions: Session[]
   activeSessionId: string | null
   // 새 세션 접속(서버 노드 더블클릭 / 메뉴).
@@ -161,7 +160,6 @@ export function ConnTree({
   profiles,
   groups,
   conn,
-  activeProfileId,
   sessions,
   activeSessionId,
   onConnect,
@@ -327,14 +325,21 @@ export function ConnTree({
                 // 이 서버에서 열린 세션 — 서버 카드 **아래 자식 카드**로 붙는다(준영님 확정: 기존 계층 유지).
                 const sess = p.type === 'rdp' ? [] : (byServer.get(p.name) ?? [])
                 const nodeCollapsed = collapsed['node:' + p.id]
-                const activeHere = sess.some((x) => x.id === activeSessionId) || rdpSession?.id === activeSessionId
+                // **세션 노드가 있으면 그쪽이 지금 자리를 말한다** (2026-08-22 준영님 제보 2번).
+                // SSH 서버는 접속하면 자식으로 세션 카드가 붙는데, 서버 카드까지 켜면 한 서버에
+                // 선택 색이 둘이 된다. RDP 는 자식이 없으므로(서버당 세션 하나) 카드가 그 역할을 한다.
+                const activeHere = rdpSession?.id === activeSessionId
                 const live = Boolean(rdpSession) || sess.length > 0
                 const badge = typeBadge(p.type)
                 // 선택 표시는 **하나**다(2026-08-22 준영님: "클릭 한 번 하면 사이드바에 2개의 서버가
                 // 선택된 것처럼 보여"). 예전엔 activeHere 와 클릭 선택을 OR 로 묶어서, 접속돼 있는 A 를
                 // 보면서 B 를 클릭하면 A(활성 세션)와 B(클릭)가 함께 켜졌다. 클릭이 있으면 그것만 켠다 —
                 // 접속이 끝나 activeSessionId 가 바뀌면 위 effect 가 클릭을 버려 다시 세션 기준으로 돌아온다.
-                const picked = selectedId !== null ? p.id === selectedId : activeHere || p.id === activeProfileId
+                // activeProfileId 는 더 이상 표시에 쓰지 않는다 (2026-08-22 준영님 제보 3번:
+                // "rdp 서버 탭 닫으면 해당 rdp 서버에 선택색이 계속 선택되어 있음"). 그 값은
+                // **마지막으로 접속을 시도한 프로필**이라 탭을 닫아도 남는다 — 지금 무엇을 보고
+                // 있는지와는 다른 이야기다. 클릭 선택(selectedId)이 그 자리를 이미 채운다.
+                const picked = selectedId !== null ? p.id === selectedId : activeHere
                 const card = (
                   <div
                     className={'srv-node' + (live ? '' : ' off') + (picked ? ' active' : '')}

@@ -213,15 +213,9 @@ export function Shell() {
   const mainRef = useRef<MainAreaHandle>(null)
   const selectSession = useCallback((id: string) => mainRef.current?.activateSession(id), [])
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
-  // 로컬 셸도 열면 [파일] 탭으로 넘긴다 — SSH 접속(connectProfile)이 하는 것과 같다.
-  // 2026-08-22 준영님 제보 23번: "로컬 셸 열면 좌측 사이드바가 자동으로 파일 탭으로 가지 않음."
-  // 로컬 셸도 파일 탭을 쓰므로(R7) 서버와 다르게 대할 이유가 없다.
-  // revealFilesRef: revealFiles 가 아래에 선언돼 있어 ref 로 잇는다(선언 순서 때문이지 다른 이유는 없다).
-  const revealFilesRef = useRef<(() => void) | null>(null)
-  const newLocal = useCallback(() => {
-    mainRef.current?.newLocal()
-    revealFilesRef.current?.()
-  }, [])
+  // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다
+  // (탭바 ＋ · Ctrl+` · 복제). 여기서 또 부르면 두 번 부르는 것일 뿐이다.
+  const newLocal = useCallback(() => mainRef.current?.newLocal(), [])
 
   const openConnManager = useCallback((req: ConnModalRequest = null) => {
     setModalReq(req)
@@ -315,7 +309,6 @@ export function Shell() {
     () => updateSidebar({ collapsed: false, activeTab: 'file' }),
     [updateSidebar]
   )
-  revealFilesRef.current = revealFiles
 
   // R4.3 사이드바 폭 드래그. 라이브러리 없이 mousemove/mouseup 한 쌍만 쓴다. 끄는 동안은 preview 로
   // 화면만 바꾸고(저장 없음), 놓을 때 한 번만 영속한다 — 드래그마다 디스크를 때리지 않기 위해서다.
@@ -1047,7 +1040,6 @@ export function Shell() {
           profiles={profiles}
           groups={groups}
           conn={conn}
-          activeProfileId={activeProfileId}
           sessions={sessions.sessions}
           activeSessionId={sessions.activeId}
           onNewConn={() => openConnManager({ mode: 'new' })}
@@ -1198,6 +1190,7 @@ export function Shell() {
           }}
           onSettingsOpenChange={setSettingsActive}
           onCommandBookOpenChange={setCmdbookActive}
+          onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
           onActivityItems={setActivityItems}
           onAiCliFlags={setAiCliFlags}

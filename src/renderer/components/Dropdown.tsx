@@ -13,6 +13,13 @@ import { useEffect, useRef, useState } from 'react'
 // position:fixed 로 좌표를 직접 계산해 붙인다(포털 없이 — .dd-list 는 DOM 은 그대로, CSS/좌표만
 // 바뀐다. overflow:hidden/auto 조상은 fixed 자손을 클리핑하지 않음을 실측 확인함).
 const DD_LIST_MAX_H = 240 // styles/shell.css .dd-list max-height 와 맞춘다
+/**
+ * 아래로 열 때 최소한 이만큼은 보여야 한다. 이보다도 좁으면 그때만 위로 뒤집는다.
+ * 2026-08-22 준영님 제보 1번("그룹칸의 리스트가 위로 뜨는데 아래로 뜨게"): 예전엔 240px 이
+ * 안 나오면 무조건 위로 뒤집었는데, 연결 관리자의 그룹 칸은 폼 아래쪽이라 **늘** 그 조건에
+ * 걸렸다. 목록은 스크롤되므로 240 이 다 필요하지 않다 — 세 줄쯤 보이면 고를 수 있다.
+ */
+const DD_MIN_H = 96
 
 // 뷰포트 기준 목록 배치(순수 — 단위 테스트 대상). vh: 뷰포트 높이(bottom 앵커링 계산용, position:fixed
 // 는 뷰포트 기준). belowBoundary: 아래쪽 "시각적" 경계 — 기본은 뷰포트 자체지만, 스크롤 부모가 있으면
@@ -23,13 +30,18 @@ export function placeDropdown(
   anchor: { left: number; right: number; top: number; bottom: number },
   vh: number,
   belowBoundary: number = vh
-): { left: number; width: number; top?: number; bottom?: number } {
-  const spaceBelow = belowBoundary - anchor.bottom
-  const spaceAbove = anchor.top
-  const openUp = spaceBelow < DD_LIST_MAX_H && spaceAbove > spaceBelow
+): { left: number; width: number; top?: number; bottom?: number; maxHeight: number } {
+  const spaceBelow = belowBoundary - anchor.bottom - 4
+  const spaceAbove = anchor.top - 4
+  // **아래가 기본이다.** 아래가 최소치(DD_MIN_H)도 안 되고 위가 더 넓을 때만 뒤집는다.
+  // 넘치는 만큼은 목록 높이를 줄여 흡수한다(스크롤) — 그래야 모달 푸터 버튼을 덮지 않으면서도
+  // 아래로 열린다. 예전엔 이 자리에서 바로 위로 뒤집어 그룹 칸이 늘 위로 떴다(제보 1번).
+  const openUp = spaceBelow < DD_MIN_H && spaceAbove > spaceBelow
+  const room = openUp ? spaceAbove : spaceBelow
   return {
     left: anchor.left,
     width: anchor.right - anchor.left,
+    maxHeight: Math.min(DD_LIST_MAX_H, Math.max(DD_MIN_H, room)),
     ...(openUp ? { bottom: vh - anchor.top + 4 } : { top: anchor.bottom + 4 })
   }
 }
@@ -55,7 +67,7 @@ type Props = {
   placeholder?: string
 }
 
-type Pos = { left: number; width: number; top?: number; bottom?: number }
+type Pos = { left: number; width: number; top?: number; bottom?: number; maxHeight: number }
 
 export function Dropdown({ value, options, onChange, ariaLabel, editable, placeholder }: Props) {
   const [open, setOpen] = useState(false)
@@ -185,7 +197,7 @@ export function Dropdown({ value, options, onChange, ariaLabel, editable, placeh
         <div
           className="dd-list"
           role="listbox"
-          style={{ position: 'fixed', left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom }}
+          style={{ position: 'fixed', left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
         >
           {shown.map((o, i) => (
             <div
