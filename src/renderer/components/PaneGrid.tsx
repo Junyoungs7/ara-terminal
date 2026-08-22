@@ -136,6 +136,10 @@ export function PaneGrid({
       setPreview(null)
       const sessionId = e.dataTransfer.getData('text/plain')
       if (!sessionId || !info) return
+      // **이 창의 세션만 받는다.** 창이 둘 이상이면 탭을 다른 창으로 끌어다 놓을 수 있는데
+      // (HTML5 드래그는 창 경계를 넘는다), 그 세션은 여기 목록에 없으므로 칸에 올려 봐야
+      // 아무것도 안 그려진 빈 칸이 남는다. 창을 옮기는 일은 탭바가 한다(win:detach).
+      if (!sessions.some((s) => s.id === sessionId)) return
       const { zone, blocked, targetSessionId } = info
       if (zone === 'center') {
         // 중앙 = 그 패널로 이동/교체. 같은 세션 위에 놓으면 그냥 포커스만(showSession 이 처리).
@@ -146,7 +150,7 @@ export function PaneGrid({
       if (blocked) return // 4분할 초과 — 미리보기대로 아무 것도 하지 않는다.
       onSplitDrop?.(sessionId, zone)
     },
-    [preview, replaceSession, showSession, onSplitDrop]
+    [preview, replaceSession, showSession, onSplitDrop, sessions]
   )
 
   // divider 드래그 — 그리드 전체 폭/높이에 대한 포인터 위치로 비율 재계산(6px 패딩 감안은 근사).

@@ -518,6 +518,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     // xterm 리사이즈 → pty resize (창 크기 변경 시 cols/rows 재계산).
     const onResizeDisp = term.onResize(({ cols, rows }) => {
       void window.ev.session.resize(sessionId, cols, rows)
+      // 후보 목록은 화면 좌표에 고정돼 있다(fixed) — 셀 크기가 바뀌면 커서와 어긋난 자리에 남는다.
+      // 다시 재는 대신 걷는다: 리사이즈 중에 뜬 목록을 쫓아다니게 만들 값어치가 없다.
+      clearGhost()
     })
 
     // 초기 fit + pty에 초기 크기 전달.

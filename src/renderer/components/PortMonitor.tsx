@@ -219,7 +219,9 @@ export function PortMonitor({
     const res = await window.ev?.forward.create(sessionId, port, exact).catch(() => null)
     onForwardsChanged()
     if (res && res.ok) void window.ev?.browser.open(urlOf(res.forward))
-    else if (res && !res.ok) await ask?.({ title: t('fwd.fail.title'), message: res.message, cancelLabel: null })
+    // 실패는 말한다 — 예전엔 아무 일도 안 일어나 "눌렀는데 안 되네"로 끝났다.
+    // res 가 null 인 경우(호출 자체가 거절)까지 덮는다: 사유를 모를 때도 침묵하지 않는다.
+    else await ask?.({ title: t('fwd.fail.title'), message: res?.message ?? t('fwd.fail.generic'), cancelLabel: null })
   }
 
   // [닫기] — **브라우저만** 닫는다. 포워딩은 남겨 둔다: 다시 [열기]를 누르면 바로 열리고,
