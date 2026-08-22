@@ -1,8 +1,8 @@
 // FB-monitor(FB-0003) — [모니터] 탭 검색·범위 필터 순수 함수. 실제 파싱(parsePorts)은
 // tests/telemetry.test.ts 가 이미 본다 — 여기는 그 결과를 걸러내는 filterPorts 만 본다.
 import { describe, it, expect } from 'vitest'
-import { filterPorts, mergeProtos, parsePortInput } from '../src/renderer/components/PortMonitor'
-import type { RemotePort } from '../src/shared/types'
+import { filterPorts, mergeProtos, ownForward, parsePortInput, portConflict } from '../src/renderer/components/PortMonitor'
+import type { PortForward, RemotePort } from '../src/shared/types'
 
 const PORTS: RemotePort[] = [
   { proto: 'tcp', port: 22, pid: 812, process: 'sshd' },
@@ -133,5 +133,48 @@ describe('mergeProtos — tcp/tcp6 한 줄로', () => {
   it('입력 순서(포트 오름차순)를 그대로 지킨다', () => {
     const r = mergeProtos([p(22, 'tcp'), p(80, 'tcp'), p(80, 'tcp6'), p(8080, 'tcp')])
     expect(r.map((x) => x.port)).toEqual([22, 80, 8080])
+  })
+})
+
+// 2026-08-22 준영님 제보 17번 — 포트 충돌. `forward.list()` 는 **모든 세션**의 포워딩을 준다.
+const fwd = (sessionId: string, remotePort: number, localPort: number, title?: string): PortForward => ({
+  id: `${sessionId}:${remotePort}`,
+  sessionId,
+  remotePort,
+  localPort,
+  exact: remotePort === localPort,
+  conns: 0,
+  ...(title ? { sessionTitle: title } : {})
+})
+
+describe('ownForward — 이 표의 행에 붙일 포워딩', () => {
+  const list = [fwd('A', 8000, 8000, 'A 서버'), fwd('B', 3000, 3000, 'B 서버')]
+
+  it('★ 세션이 다르면 포트가 같아도 내 것이 아니다 — 예전엔 B 서버 8000 행에 A 의 터널이 붙었다', () => {
+    expect(ownForward(list, 'B', 8000)).toBeUndefined()
+    expect(ownForward(list, 'A', 8000)?.sessionId).toBe('A')
+  })
+
+  it('세션이 없으면(로컬 셸 등) 아무것도 붙지 않는다', () => {
+    expect(ownForward(list, null, 8000)).toBeUndefined()
+  })
+})
+
+describe('portConflict — 내 PC 의 그 포트를 누가 쥐고 있나', () => {
+  const list = [fwd('A', 8000, 8000, 'A 서버')]
+
+  it('★ 남이 그 로컬 포트를 쓰고 있으면 누구인지 돌려준다(이름까지)', () => {
+    expect(portConflict(list, 'B', 8000)?.sessionTitle).toBe('A 서버')
+  })
+
+  it('내 포워딩은 충돌이 아니다 — 같은 세션이 다시 누르면 그냥 그 터널을 연다', () => {
+    expect(portConflict(list, 'A', 8000)).toBeUndefined()
+  })
+
+  it('임의 포트로 물러난 포워딩은 **로컬 포트**로 본다(원격 번호가 아니라)', () => {
+    // A 의 원격 3000 이 로컬 54321 로 열렸다 → 3000 은 비어 있고 54321 이 막혀 있다.
+    const moved = [fwd('A', 3000, 54321, 'A 서버')]
+    expect(portConflict(moved, 'B', 3000)).toBeUndefined()
+    expect(portConflict(moved, 'B', 54321)?.sessionId).toBe('A')
   })
 })

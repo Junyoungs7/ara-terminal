@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal, type IDecoration, type IMarker, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -9,7 +9,7 @@ import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
 import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
-import { appendHistory, cachedHistory, feedInput, ghostFor, loadHistory, shouldRecord } from '../store/history'
+import { appendHistory, cachedHistory, feedInput, ghostList, loadHistory, shouldRecord } from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { pastePaths } from '../components/filePath'
@@ -66,7 +66,18 @@ const GHOST_DELAY_MS = 45
 // 에코를 기다리는 최대 횟수. 원격 SSH·conpty 가 밀릴 때 한두 번으로는 못 따라잡는다
 // (실측: 백스페이스를 연달아 보낸 뒤 첫 글자 에코가 100ms 넘게 늦는다). 총 대기 ≈ 0.4초.
 const GHOST_RETRIES = 8
+/**
+ * 목록에 보여 줄 후보 수(2026-08-22 준영님 제보 10번 "자동완성을 IDE 처럼 목록으로").
+ * 여섯이면 터미널을 크게 가리지 않으면서 "고를 것이 있다"가 보인다 — 더 늘리면 화면을 덮는다.
+ */
+const COMP_MAX = 6
+/** 후보 한 줄의 높이(px). 목록을 **위로 열지** 정할 때 필요한데, 그리기 전에는 잴 수가 없다.
+ *  shell.css `.term-comp .ci` 와 같은 값이어야 한다(어긋나면 화면 끝에서 몇 px 잘린다). */
+const COMP_ROW_H = 22
 const UTF8 = new TextDecoder('utf-8', { fatal: false })
+
+/** 커서 옆에 뜨는 후보 목록의 자리·내용. null 이면 목록이 없다(고스트만 있거나 그것도 없다). */
+type Comp = { items: string[]; index: number; left: number; y: number; up: boolean }
 
 // 로컬 셸은 Windows 에서 conpty 를 통해 붙는다. conpty 는 출력 줄을 터미널 폭까지 공백으로
 // 채워 보내는데, 창을 좁히면 xterm 이 그 padding 까지 리플로우해 한 줄을 여러 줄로 쪼갠다
@@ -128,6 +139,12 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
   titleRef.current = onTitle
   const linkRef = useRef(onLink)
   linkRef.current = onLink
+  // F11 R2 후보 목록(제보 10). 화면에 그릴 것만 state 로 두고, 키 핸들러가 읽는 선택 상태는
+  // ref 로 둔다 — xterm 배선은 effect 안의 명령형 코드라 state 를 읽으면 낡은 값을 본다.
+  const [comp, setComp] = useState<Comp | null>(null)
+  // 목록은 position:fixed 라 **패널이 숨어도 화면에 남는다**(고스트 데코레이션은 패널과 함께
+  // 사라진다). 탭을 옮기거나 터미널에서 포커스가 빠지면 지워야 한다 — 그 두 자리에서 부를 손잡이.
+  const clearGhostRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const host = hostRef.current
@@ -155,6 +172,10 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     let ghostMarker: IMarker | null = null
     let ghostTimer: ReturnType<typeof setTimeout> | null = null
 
+    // 지금 목록에 떠 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
+    let compItems: string[] = []
+    let compIndex = 0
+
     const clearGhost = () => {
       if (ghostTimer) {
         clearTimeout(ghostTimer)
@@ -165,19 +186,23 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       ghostDeco = null
       ghostMarker?.dispose()
       ghostMarker = null
+      if (compItems.length > 0) {
+        compItems = []
+        compIndex = 0
+        setComp(null)
+      }
     }
 
-    const renderGhost = (retry: number) => {
-      ghostTimer = null
-      if (!lineBuf) return
-      // 에코가 아직 안 왔으면 커서가 한 칸 뒤처져 고스트가 어긋난다 — 한 번 더 기다린다.
-      if (!lineBeforeCursor(sessionId).endsWith(lineBuf)) {
-        if (retry > 0) ghostTimer = setTimeout(() => renderGhost(retry - 1), GHOST_DELAY_MS)
-        return
-      }
-      const match = ghostFor(cachedHistory(scope), lineBuf)
-      if (!match) return
-      const suffix = match.slice(lineBuf.length)
+    clearGhostRef.current = clearGhost
+
+    /** 커서 뒤에 흐린 나머지를 얹는다(데코레이션 하나). 이미 있으면 지우고 다시 그린다. */
+    const drawGhost = (suffix: string) => {
+      ghostDeco?.dispose()
+      ghostDeco = null
+      ghostMarker?.dispose()
+      ghostMarker = null
+      ghostSuffix = ''
+      if (!suffix) return
       const x = term.buffer.active.cursorX
       const marker = term.registerMarker(0)
       if (!marker) return
@@ -198,6 +223,56 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       ghostDeco = deco
       ghostMarker = marker
       ghostSuffix = suffix
+    }
+
+    /**
+     * 후보 목록을 커서 아래(자리가 없으면 위)에 놓는다 — 제보 10번.
+     * 셀 크기는 xterm 내부값을 훔치지 않고 **화면 요소를 재서** 얻는다(`.xterm-screen` 의 폭은
+     * 정확히 cols × 셀 폭이다). 좌표는 화면 기준(position:fixed) — 우클릭 메뉴와 같은 방식이라
+     * 패널의 overflow 에 잘리지 않는다.
+     */
+    const placeComp = (items: string[]) => {
+      const screen = host.querySelector('.xterm-screen') as HTMLElement | null
+      if (!screen) return
+      const r = screen.getBoundingClientRect()
+      const cellW = r.width / Math.max(1, term.cols)
+      const cellH = r.height / Math.max(1, term.rows)
+      const lineTop = r.top + term.buffer.active.cursorY * cellH
+      // 아래로 열면 화면 밖으로 나가는가 — 그러면 커서 줄 위로 띄운다.
+      const up = lineTop + cellH + items.length * COMP_ROW_H > window.innerHeight
+      setComp({
+        items,
+        index: 0,
+        left: Math.round(r.left + term.buffer.active.cursorX * cellW),
+        y: Math.round(up ? window.innerHeight - lineTop : lineTop + cellH),
+        up
+      })
+    }
+
+    const renderGhost = (retry: number) => {
+      ghostTimer = null
+      if (!lineBuf) return
+      // 에코가 아직 안 왔으면 커서가 한 칸 뒤처져 고스트가 어긋난다 — 한 번 더 기다린다.
+      if (!lineBeforeCursor(sessionId).endsWith(lineBuf)) {
+        if (retry > 0) ghostTimer = setTimeout(() => renderGhost(retry - 1), GHOST_DELAY_MS)
+        return
+      }
+      const items = ghostList(cachedHistory(scope), lineBuf, COMP_MAX)
+      if (items.length === 0) return
+      compItems = items
+      compIndex = 0
+      drawGhost(items[0].slice(lineBuf.length))
+      // 하나뿐이면 목록을 띄우지 않는다 — 고스트가 곧 그 하나라서 목록은 같은 말을 두 번 한다.
+      if (items.length > 1) placeComp(items)
+    }
+
+    /** ↓/↑ 로 후보를 옮긴다. 고스트도 함께 바뀐다 — 지금 Tab 을 누르면 무엇이 들어올지가 그것이다. */
+    const moveComp = (delta: number) => {
+      const n = compItems.length
+      if (n === 0) return
+      compIndex = (compIndex + delta + n) % n
+      drawGhost(compItems[compIndex].slice(lineBuf.length))
+      setComp((c) => (c ? { ...c, index: compIndex } : c))
     }
 
     const scheduleGhost = () => {
@@ -229,6 +304,13 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       // F11: 고스트가 떠 있을 때만 Tab=채택 / ESC=해제. 없으면 셸의 자동완성·인터럽트를 그대로
       // 통과시킨다(R3.8 정책 — 앱이 셸 기능을 뺏지 않는다).
       if (ghostSuffix && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        // 제보 10: 목록이 떠 있는 동안만 ↓/↑ 가 후보를 고른다. 목록이 없으면(후보 하나이거나
+        // ESC 로 닫았으면) 방향키는 그대로 셸로 가 히스토리 탐색이 된다 — 앱이 셸을 뺏지 않는다.
+        if (compItems.length > 1 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault()
+          moveComp(e.key === 'ArrowDown' ? 1 : -1)
+          return false
+        }
         if (e.key === 'Tab') {
           // false 만 돌려주면 xterm 이 손을 떼면서 브라우저 기본 동작(Tab = 포커스 이동)이 살아나
           // 터미널이 포커스를 잃는다 — 채택 직후 타이핑이 먹통이 된다.
@@ -315,6 +397,11 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       }
     }
     termRef.current = term
+    // 포커스가 터미널을 떠나면 후보 목록을 걷는다(제보 10). 목록은 fixed 라 스스로 사라지지
+    // 않는다 — 사이드바를 누르러 간 사이 화면에 떠 있으면 그냥 쓰레기다.
+    const textarea = term.textarea
+    const onBlur = () => clearGhost()
+    textarea?.addEventListener('blur', onBlur)
 
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
     // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
@@ -459,6 +546,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       onBellDisp.dispose()
       if (bellTimer) clearTimeout(bellTimer)
       clearGhost()
+      textarea?.removeEventListener('blur', onBlur)
       offPaste()
       unregisterTerm(sessionId)
       try {
@@ -479,7 +567,29 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       fitRef.current.fit()
       termRef.current?.focus()
     }
+    // 이 패널이 숨으면 후보 목록도 걷는다 — 안 그러면 다른 패널 위에 남는다(fixed 라서).
+    if (!active) clearGhostRef.current()
   }, [active])
 
-  return <div className="term-pane" ref={hostRef} />
+  return (
+    <div className="term-pane" ref={hostRef}>
+      {/* F11 R2 후보 목록(제보 10) — 커서 옆에 뜨는 IDE 식 목록. 클릭 대상이 아니다:
+          손이 키보드에 있는 자리라 ↓↑ 로 고르고 Tab 으로 넣는다(마우스로 집으려면 터미널
+          포커스가 빠져 다음 글자를 놓친다). xterm 이 이 div 를 건드리지 않도록 형제로 둔다. */}
+      {comp && (
+        <div
+          className="term-comp"
+          style={comp.up ? { left: comp.left, bottom: comp.y } : { left: comp.left, top: comp.y }}
+          aria-hidden
+        >
+          {comp.items.map((it, i) => (
+            <div key={it} className={'ci' + (i === comp.index ? ' on' : '')}>
+              {it}
+            </div>
+          ))}
+          <div className="ci-hint">{t('term.comp.hint')}</div>
+        </div>
+      )}
+    </div>
+  )
 }

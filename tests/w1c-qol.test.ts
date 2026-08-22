@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import {
   feedInput,
   ghostFor,
+  ghostList,
   shouldRecord,
   promptPrefix,
   isPasswordPrompt,
@@ -131,6 +132,37 @@ describe('F11 인라인 고스트(ghostFor)', () => {
 
   it('이미 다 친 명령에는 고스트를 띄우지 않는다(더 보여 줄 것이 없다)', () => {
     expect(ghostFor(hist, 'git status')).toBeNull()
+  })
+})
+
+// ── F11 R2: 후보 목록 (2026-08-22 준영님 제보 10번 — "IDE 처럼 목록으로") ──
+describe('F11 후보 목록(ghostList)', () => {
+  const hist = ['npm run build', 'git status', 'npm run test', 'npm run build', 'npm start']
+
+  it('★ 최근 것부터 준다 — 목록의 첫 줄이 곧 고스트다', () => {
+    const list = ghostList(hist, 'npm')
+    expect(list[0]).toBe('npm start')
+    expect(list[0]).toBe(ghostFor(hist, 'npm'))
+  })
+
+  it('★ 같은 명령은 한 번만 — 어제도 오늘도 친 명령이 목록을 채우면 고를 것이 없다', () => {
+    // 'npm run build' 는 두 번 있지만 한 줄이고, 자리는 **최근에 친 쪽**(뒤쪽)이다.
+    expect(ghostList(hist, 'npm')).toEqual(['npm start', 'npm run build', 'npm run test'])
+  })
+
+  it('개수를 넘기지 않는다(화면을 덮지 않게)', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `cmd ${i}`)
+    expect(ghostList(many, 'cmd', 6)).toHaveLength(6)
+    expect(ghostList(many, 'cmd', 6)[0]).toBe('cmd 29')
+  })
+
+  it('입력이 없거나 일치가 없으면 빈 목록', () => {
+    expect(ghostList(hist, '')).toEqual([])
+    expect(ghostList(hist, 'docker')).toEqual([])
+  })
+
+  it('다 친 명령은 후보가 아니다(고스트와 같은 규칙)', () => {
+    expect(ghostList(hist, 'git status')).toEqual([])
   })
 })
 

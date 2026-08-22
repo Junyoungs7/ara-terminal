@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PortForward, RemotePort } from '@shared/types'
+import type { DialogResult, DialogSpec } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
 
@@ -98,6 +99,36 @@ export function parsePortInput(v: string): number | null {
   return Number.isInteger(n) && n >= 0 && n <= 65535 && v.trim() !== '' ? n : null
 }
 
+/**
+ * 이 표의 행에 붙일 포워딩 — **이 세션 것만**(2026-08-22 준영님 제보 17번 "포트 충돌").
+ *
+ * `forward.list()` 는 **모든 세션**의 포워딩을 준다(main 이 하나의 목록으로 갖고 있다). 그걸
+ * 세션으로 안 거르고 remotePort 로만 맞추고 있었다 — A 서버의 8000 을 포워딩해 두면 **B 서버의
+ * 8000 행에도** "→ localhost:8000" 배지가 뜨고, [열기]를 누르면 A 서버 화면이 열렸다.
+ * 포트 번호는 서버마다 겹치는 게 정상이라(3000·8080…) 흔히 걸린다.
+ */
+export function ownForward(
+  forwards: readonly PortForward[],
+  sessionId: string | null,
+  remotePort: number
+): PortForward | undefined {
+  return forwards.find((f) => f.sessionId === sessionId && f.remotePort === remotePort)
+}
+
+/**
+ * 그 **로컬** 포트를 이미 차지하고 있는 남의 포워딩(없으면 undefined).
+ * 내 PC 의 포트는 하나뿐이라 A 서버가 8000 을 쓰고 있으면 B 서버의 8000 은 그 번호로 못 연다.
+ * 이걸 미리 찾아 **누가 쓰는지 이름과 함께** 묻는다 — 조용히 임의 포트로 넘어가면 사용자는
+ * "왜 주소가 54321 이지"만 보게 된다.
+ */
+export function portConflict(
+  forwards: readonly PortForward[],
+  sessionId: string | null,
+  localPort: number
+): PortForward | undefined {
+  return forwards.find((f) => f.sessionId !== sessionId && f.localPort === localPort)
+}
+
 type PortMonitorProps = {
   ports: RemotePort[]
   // 이 세션의 활성 포워딩(main 이 진실). 행과는 remotePort 로 맞춘다.
@@ -109,9 +140,20 @@ type PortMonitorProps = {
   onForwardsChanged: () => void
   /** 독립 창 안에서 그리는 중인가 — [창으로 빼기] 를 그 창에 또 두지 않는다. */
   inWindow?: boolean
+  /** 포트 충돌을 물을 때 쓴다(제보 17). 없으면 묻지 않고 예전처럼 임의 포트로 넘어간다. */
+  ask?: (spec: DialogSpec) => Promise<DialogResult>
 }
 
-export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onForwardsChanged, inWindow }: PortMonitorProps) {
+export function PortMonitor({
+  ports,
+  forwards,
+  sessionId,
+  isSsh,
+  onRefresh,
+  onForwardsChanged,
+  inWindow,
+  ask
+}: PortMonitorProps) {
   // FB-0003: 세션을 바꿔도 사용자가 고른 필터는 유지한다 — 서버마다 매번 다시 고르게 하지 않는다.
   const [query, setQuery] = useState('')
   const [minStr, setMinStr] = useState('')
@@ -129,8 +171,10 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
   if (!isSsh) return <span className="sb-placeholder">{t('mon.needSsh')}</span>
 
   const span = { min: parsePortInput(minStr), max: parsePortInput(maxStr) }
-  const { visible } = filterPorts(ports, query, span, use, forwards.map((f) => f.remotePort))
-  const fwdOf = (port: number): PortForward | undefined => forwards.find((f) => f.remotePort === port)
+  // 필터도 **이 세션의** 포워딩만 센다 — 남의 포워딩 때문에 이 서버의 포트가 "이미 쓴 것"으로 접히면 안 된다.
+  const mine = forwards.filter((f) => f.sessionId === sessionId)
+  const { visible } = filterPorts(ports, query, span, use, mine.map((f) => f.remotePort))
+  const fwdOf = (port: number): PortForward | undefined => ownForward(forwards, sessionId, port)
 
   /** 그 포워딩을 브라우저에서 여는 주소. 오리진 비교에도 이 값을 쓴다(같은 규칙 한 곳). */
   const urlOf = (f: PortForward): string => `http://localhost:${f.localPort}`
@@ -146,9 +190,36 @@ export function PortMonitor({ ports, forwards, sessionId, isSsh, onRefresh, onFo
       return
     }
     if (!sessionId) return
-    const res = await window.ev?.forward.create(sessionId, port).catch(() => null)
+    /**
+     * 2026-08-22 준영님 제보 17번 — **포트 충돌은 물어본다.**
+     * 내 PC 의 8000 은 하나뿐이라 다른 서버가 이미 쓰고 있으면 그 번호로 못 연다. 예전엔 조용히
+     * 임의 포트(54321 같은)로 넘어가서, 사용자는 왜 주소가 이상한지 알 수 없었다. 누가 쓰는지
+     * 이름을 대고 세 갈래를 준다: 뺏기 / 다른 포트로 / 그만두기.
+     */
+    const clash = portConflict(forwards, sessionId, port)
+    let exact = false
+    if (clash) {
+      const who = clash.sessionTitle || t('mon.clash.other')
+      const r = await ask?.({
+        title: t('mon.clash.title'),
+        message: t('mon.clash.msg'),
+        detail: [
+          { label: t('mon.clash.port'), value: String(port) },
+          { label: t('mon.clash.owner'), value: `${who} (${clash.remotePort})` }
+        ],
+        confirmLabel: t('mon.clash.take'),
+        altLabel: t('mon.clash.other.port')
+      })
+      if (!r || r === 'cancel') return
+      if (r === 'confirm') {
+        await window.ev?.forward.stop(clash.id).catch(() => null)
+        exact = true // 뺏기로 했으면 그 번호여야 한다 — 또 임의 포트로 새면 뺏은 뜻이 없다
+      }
+    }
+    const res = await window.ev?.forward.create(sessionId, port, exact).catch(() => null)
     onForwardsChanged()
     if (res && res.ok) void window.ev?.browser.open(urlOf(res.forward))
+    else if (res && !res.ok) await ask?.({ title: t('fwd.fail.title'), message: res.message, cancelLabel: null })
   }
 
   // [닫기] — **브라우저만** 닫는다. 포워딩은 남겨 둔다: 다시 [열기]를 누르면 바로 열리고,

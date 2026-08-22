@@ -242,3 +242,47 @@ test('HIST-11 재기동 후에도 고스트가 그대로 뜬다', async ({ userD
   await a2.page.keyboard.type('echo restart-', { delay: 25 })
   await expect(a2.page.locator('.term-ghost')).toHaveText('ghost-source', { timeout: 20_000 })
 })
+
+// HIST-16 후보가 둘 이상이면 **목록**이 뜬다 (2026-08-22 준영님 제보 10번 — "IDE 처럼").
+// 고스트 하나만으로는 "다른 후보가 있다"는 사실 자체가 안 보였다.
+test('HIST-16 후보 목록이 뜨고 ↓ 로 고른다', async ({ ara }) => {
+  const { page } = ara
+  const id = await newLocalShell(page)
+  await focusTerminal(page)
+  await typeCommand(page, 'echo list-alpha')
+  await typeCommand(page, 'echo list-beta')
+  await expect.poll(() => termText(page, id), { timeout: 20_000 }).toContain('list-beta')
+
+  await page.keyboard.type('echo list-', { delay: 25 })
+  const comp = page.locator('.term-comp')
+  await expect(comp).toHaveCount(1, { timeout: 15_000 })
+  await expect(comp.locator('.ci')).toHaveCount(2)
+  // 첫 줄 = 가장 최근 = beta. 고스트도 같은 것을 가리킨다(둘이 갈리면 Tab 이 딴 걸 넣는다).
+  await expect(comp.locator('.ci.on')).toHaveText('echo list-beta')
+  await expect(ghost(page)).toHaveText('beta')
+
+  await page.keyboard.press('ArrowDown')
+  await expect(comp.locator('.ci.on')).toHaveText('echo list-alpha')
+  await expect(ghost(page)).toHaveText('alpha')
+
+  // Tab 은 **고른 것**을 넣는다.
+  await page.keyboard.press('Tab')
+  await expect(comp).toHaveCount(0)
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(async () => (await termText(page, id)).split('list-alpha').length, { timeout: 20_000 })
+    .toBeGreaterThan(3)
+})
+
+// HIST-17 후보가 하나뿐이면 목록은 안 뜬다 — 고스트가 이미 그 하나라 같은 말을 두 번 한다.
+test('HIST-17 후보가 하나면 목록 없이 고스트만', async ({ ara }) => {
+  const { page } = ara
+  const id = await newLocalShell(page)
+  await focusTerminal(page)
+  await typeCommand(page, 'echo only-one-cand')
+  await expect.poll(() => termText(page, id), { timeout: 20_000 }).toContain('only-one-cand')
+
+  await page.keyboard.type('echo only-', { delay: 25 })
+  await expect(ghost(page)).toHaveText('one-cand', { timeout: 15_000 })
+  await expect(page.locator('.term-comp')).toHaveCount(0)
+})

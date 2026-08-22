@@ -109,6 +109,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
                     isSsh={activeSession?.type === 'ssh'}
                     onRefresh={telemetry.refresh}
                     onForwardsChanged={telemetry.refreshForwards}
+                    ask={ask}
                   />
                 ) : id === 'sys' ? (
                   <SysMonitorPanel

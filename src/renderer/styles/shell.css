@@ -2830,6 +2830,45 @@
   overflow: visible;
   pointer-events: none;
 }
+/* F11 R2 후보 목록(2026-08-22 준영님 제보 10번 — "자동완성이 IDE 처럼 목록으로 떴으면").
+   커서 옆에 뜬다. position:fixed 는 우클릭 메뉴와 같은 방식 — 패널 경계에 잘리지 않는다.
+   글자는 터미널 폰트로: 목록의 줄과 터미널의 줄이 같은 명령이라 모양이 같아야 눈이 잇는다. */
+.term-comp {
+  position: fixed;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 60vw;
+  padding: 3px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  box-shadow: var(--shadow-md);
+  font-family: var(--term);
+  font-size: var(--tt);
+  pointer-events: none;
+}
+.term-comp .ci {
+  /* 높이는 TerminalPane 의 COMP_ROW_H 와 같아야 한다(위로 열지 정하는 계산이 이 값을 쓴다). */
+  height: 22px;
+  line-height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  color: var(--text-dim);
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-comp .ci.on {
+  background: var(--accent-glow);
+  color: var(--text-hi);
+}
+.term-comp .ci-hint {
+  padding: 2px 8px 1px;
+  color: var(--text-dim);
+  font-family: var(--ui);
+  font-size: var(--fs-sm);
+  opacity: 0.75;
+}
 /* R5 시각 벨 — BEL 수신 시 짧게 번쩍인다(설정 [터미널] > 벨 = 시각). */
 .term-pane.bell {
   box-shadow: inset 0 0 0 2px var(--accent-line);
@@ -3060,11 +3099,22 @@
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
+/* 제보 18: 선 아래를 채운다. 채움은 지표색의 옅은 판이고, 테두리는 선이 이미 그린다. */
+.sb-spark polygon {
+  fill: var(--graph-fill-cpu);
+  stroke: none;
+}
 .sb-spark.mem polyline {
   stroke: var(--purple);
 }
+.sb-spark.mem polygon {
+  fill: var(--graph-fill-mem);
+}
 .sb-spark.gpu polyline {
   stroke: var(--ok);
+}
+.sb-spark.gpu polygon {
+  fill: var(--graph-fill-gpu);
 }
 .gauge .bar {
   width: 40px;
@@ -6519,10 +6569,13 @@
 .sysm-mnow.bad {
   color: var(--err);
 }
+/* 제보 18(2026-08-22) "그래프를 iterm 처럼": 34 → 54 로 키우고 아래를 면으로 채운다.
+   지표마다 색이 다르다 — 상태바 게이지(.sb-spark.mem 등)와 **같은 배정**이라 두 자리에서
+   같은 지표가 같은 색이다. */
 .sysm-spark {
   display: block;
   width: 100%;
-  height: 34px;
+  height: 54px;
   margin-top: 3px;
 }
 .sysm-spark polyline {
@@ -6530,6 +6583,22 @@
   stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+.sysm-spark polygon {
+  fill: var(--graph-fill-cpu);
+  stroke: none;
+}
+.sysm-spark.mem polyline {
+  stroke: var(--purple);
+}
+.sysm-spark.mem polygon {
+  fill: var(--graph-fill-mem);
+}
+.sysm-spark.gpu polyline {
+  stroke: var(--ok);
+}
+.sysm-spark.gpu polygon {
+  fill: var(--graph-fill-gpu);
 }
 .sysm-sub,
 .sysm-note,

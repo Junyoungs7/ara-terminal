@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { diskOf, mountsFor } from '../src/main/telemetry/HostStats'
-import { HISTORY_MAX, memPctOf, pushSample, realDisks, sampleOf, sparkPoints } from '../src/renderer/store/sysMonitor'
+import {
+  HISTORY_MAX,
+  memPctOf,
+  pushSample,
+  realDisks,
+  sampleOf,
+  sparkArea,
+  sparkPoints
+} from '../src/renderer/store/sysMonitor'
 import type { DiskUsage } from '../src/shared/types'
 
 // F29 시스템 모니터 — 순수 로직. 그래프·표는 이 함수들이 만든 숫자를 그대로 그리므로,
@@ -93,6 +101,18 @@ describe('스파크라인 좌표', () => {
   it('스케일 하한이 있어 측정 노이즈가 산맥이 되지 않는다', () => {
     // 전부 0 이어도 스케일 10 — 바닥에 붙은 평평한 선이다(0 으로 나누지 않는다).
     expect(sparkPoints([0, 0, 0], 100, 10)).toBe('0.0,10.0 50.0,10.0 100.0,10.0')
+  })
+})
+
+// 2026-08-22 준영님 제보 18번 — "그래프를 iterm 처럼"(선 아래를 채운다).
+describe('sparkArea — 채우는 면', () => {
+  it('★ 선을 그대로 쓰고 바닥 두 점만 붙인다 — 스케일이 갈라지면 면과 선이 어긋난다', () => {
+    const line = sparkPoints([0, 100], 100, 10)
+    expect(sparkArea([0, 100], 100, 10)).toBe(`0,10 ${line} 100,10`)
+  })
+
+  it('표본이 없으면 면도 없다(바닥 선만 그려 놓지 않는다)', () => {
+    expect(sparkArea([], 100, 10)).toBe('')
   })
 })
 

@@ -41,7 +41,12 @@ export function isValidPort(port: unknown): port is number {
 }
 
 // getClient: 세션 id → ssh2 Client(로컬·종료된 세션은 null). RemoteTelemetry 와 같은 주입 형태.
-export function createForwardService(getClient: (sessionId: string) => Client | null): ForwardService {
+// getTitle: 세션 id → 탭 이름. 목록에 실어 보낸다 — 포트 충돌을 "누가 쓰는지"로 말하려면 이름이
+// 필요한데, 충돌 상대가 **다른 창의 세션**이면 렌더러는 그 이름을 모른다(자기 창 것만 안다).
+export function createForwardService(
+  getClient: (sessionId: string) => Client | null,
+  getTitle?: (sessionId: string) => string | undefined
+): ForwardService {
   const entries = new Map<string, Entry>()
   // 생성 중인 키(await 사이에 같은 요청이 또 오면 리스너가 두 개 열린다 — 행 더블클릭이 그 경로다).
   const pending = new Map<string, Promise<ForwardResult>>()
@@ -171,7 +176,12 @@ export function createForwardService(getClient: (sessionId: string) => Client | 
       return p
     },
     stop,
-    list: () => [...entries.values()].map((e) => e.info),
+    // 이름은 **읽을 때** 붙인다(만들 때가 아니라) — 탭 이름을 바꾸면 목록도 따라가야 한다.
+    list: () =>
+      [...entries.values()].map((e) => {
+        const title = getTitle?.(e.info.sessionId)
+        return title ? { ...e.info, sessionTitle: title } : e.info
+      }),
     stopSession(sessionId) {
       for (const e of [...entries.values()]) {
         if (e.info.sessionId === sessionId) stop(e.info.id)

@@ -2,7 +2,7 @@ import type { ConnectionProfile, RemoteStats } from '@shared/types'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { t } from '../i18n'
-import { sparkPoints, type Sample } from '../store/sysMonitor'
+import { sparkArea, sparkPoints, type Sample } from '../store/sysMonitor'
 
 // 하단 상태바 (design-system §4.1).
 //
@@ -139,6 +139,8 @@ export function StatusBar({
             {/* 폴링이 한 바퀴 돌 때마다 점이 하나 늘고 왼쪽으로 흐른다 — 값이 어디로 가는
                 중인지가 보인다. 그리는 함수는 하단 [시스템 모니터]와 같은 것을 쓴다. */}
             <svg className={'sb-spark ' + g.key} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden>
+              {/* 아래를 채운다(제보 18) — 14px 높이에서는 선 하나보다 면이 훨씬 빨리 읽힌다. */}
+              <polygon points={sparkArea(g.series, SPARK_W, SPARK_H)} />
               <polyline points={sparkPoints(g.series, SPARK_W, SPARK_H)} />
             </svg>
             <span className="val">{g.text}</span>

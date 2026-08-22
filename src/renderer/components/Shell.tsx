@@ -1120,6 +1120,7 @@ export function Shell() {
                     isSsh={activeSession?.type === 'ssh'}
                     onRefresh={telemetry.refresh}
                     onForwardsChanged={telemetry.refreshForwards}
+                    ask={ask}
                   />
                 ) : id === 'sys' ? (
                   // F29 시스템 모니터 — CPU·메모리·GPU 는 위 telemetry 구독을 그대로 받는다

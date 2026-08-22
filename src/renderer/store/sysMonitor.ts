@@ -59,6 +59,19 @@ export function sparkPoints(values: readonly number[], w: number, h: number): st
   return clamped.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / scale) * h).toFixed(1)}`).join(' ')
 }
 
+/**
+ * 같은 선 아래를 채운 **면**(2026-08-22 준영님 제보 18번 — "그래프를 iterm 처럼").
+ * 선만 있으면 14~34px 높이에서 값의 크기가 안 읽힌다. 면적이 그걸 대신 말한다.
+ *
+ * sparkPoints 를 그대로 쓰고 **바닥 두 점만 붙인다** — 스케일 계산을 두 벌 두면 언젠가 갈라져
+ * 채움과 선이 어긋난다(면은 60%인데 선은 40% 높이에 있는 그림).
+ */
+export function sparkArea(values: readonly number[], w: number, h: number): string {
+  const line = sparkPoints(values, w, h)
+  if (!line) return ''
+  return `0,${h} ${line} ${w},${h}`
+}
+
 /** 가상 파일시스템은 숨긴다 — F26 디스크 창과 같은 규칙(파서는 안 걸러 주고 화면이 정한다). */
 const VIRTUAL_FS = /^(tmpfs|devtmpfs|squashfs|overlay|proc|sysfs|devpts|cgroup)/i
 export function realDisks(list: readonly DiskUsage[], types?: readonly (string | undefined)[]): DiskUsage[] {

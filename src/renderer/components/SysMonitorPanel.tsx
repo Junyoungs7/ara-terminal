@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { DiskUsage, HostStats, RemoteStats } from '@shared/types'
 import { IconClose } from './icons'
 import { t } from '../i18n'
-import { sparkPoints, useHostStats, useRemoteDisks, type Sample } from '../store/sysMonitor'
+import { sparkArea, sparkPoints, useHostStats, useRemoteDisks, type Sample } from '../store/sysMonitor'
 
 // F29 시스템 모니터 — 준영님 요청(2026-08-11):
 // "우측 버튼에 서버 정보 보기 버튼으로 클릭하면 현재 보고있는 서버, 즉 패널의 cpu, memory, gpu,
@@ -39,12 +39,15 @@ function toneOf(pct: number): string {
 
 function Spark({
   label,
+  kind,
   values,
   now,
   sub,
   unit = '%'
 }: {
   label: string
+  /** 지표 종류 — 선·채움 색을 가른다. 상태바 게이지(.sb-spark.mem 등)와 **같은 색 배정**이다. */
+  kind: 'cpu' | 'mem' | 'gpu'
   values: number[]
   now: number | null
   /** 그래프 밑 한 줄(예: `12.4G / 31.9G`). 지표 카드 **안**에 들어간다 — 밖에 두면 어느 지표의 값인지 흐려진다. */
@@ -52,14 +55,17 @@ function Spark({
   unit?: string
 }) {
   const W = 200
-  const H = 34
+  // 2026-08-22 준영님 제보 18번("그래프를 iterm 처럼"): 34 → 54. 세로가 낮으면 스케일을 맞춰도
+  // 변동이 몇 px 안에서 일어나 여전히 평평해 보인다. 아래는 면으로 채운다.
+  const H = 54
   return (
     <div className="sysm-metric">
       <div className="sysm-mhead">
         <span className="sysm-mlabel">{label}</span>
         <span className={'sysm-mnow' + toneOf(now ?? 0)}>{now === null ? '—' : `${now}${unit}`}</span>
       </div>
-      <svg className="sysm-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      <svg className={'sysm-spark ' + kind} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+        <polygon points={sparkArea(values, W, H)} />
         <polyline points={sparkPoints(values, W, H)} />
       </svg>
       {sub ? <div className="sysm-sub">{sub}</div> : null}
@@ -110,9 +116,15 @@ function Body({
           — .sysm-body 를 통째로 격자로 만들면 말줄임(overflow:hidden)을 쓰는 .sysm-who 가
           그리드 안에서 자동 최소 크기 0 이 돼 호스트명 줄이 통째로 접힌다(실제로 그랬다). */}
       <div className="sysm-metrics">
-        <Spark label={t('sysm.cpu')} values={history.map((s) => s.cpuPct)} now={stats ? Math.round(stats.cpuPct) : null} />
+        <Spark
+          label={t('sysm.cpu')}
+          kind="cpu"
+          values={history.map((s) => s.cpuPct)}
+          now={stats ? Math.round(stats.cpuPct) : null}
+        />
         <Spark
           label={t('sysm.mem')}
+          kind="mem"
           values={history.map((s) => s.memPct)}
           now={history.length > 0 ? (history[history.length - 1]?.memPct ?? null) : null}
           sub={stats ? `${kbToHuman(stats.memUsedKb)} / ${kbToHuman(stats.memTotalKb)}` : undefined}
@@ -123,6 +135,7 @@ function Body({
         {gpuSeen && (
           <Spark
             label={t('sysm.gpu')}
+            kind="gpu"
             values={history.map((s) => s.gpuPct ?? 0)}
             now={history[history.length - 1]?.gpuPct ?? null}
             sub={

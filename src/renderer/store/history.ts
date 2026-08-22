@@ -63,14 +63,30 @@ export function feedInput(buf: string, data: string): Feed {
   return { buf, commands }
 }
 
-// 접두 일치하는 가장 최근 항목(entries 는 오래된→최신 순). 입력과 길이가 같으면 보여 줄 것이 없다.
-export function ghostFor(entries: readonly string[], input: string): string | null {
-  if (!input) return null
-  for (let i = entries.length - 1; i >= 0; i--) {
+/**
+ * 접두 일치 후보 — **최근 것부터**, 중복 없이, 최대 max 개
+ * (2026-08-22 준영님 제보 10번: "자동완성이 IDE 처럼 목록으로 떴으면 좋겠어").
+ *
+ * 중복 제거가 핵심이다: 같은 명령을 어제도 오늘도 쳤으면 히스토리엔 여러 번 있는데, 목록에
+ * 같은 줄이 세 개 뜨면 고를 것이 없는 목록이 된다(연속 중복만 appendHistory 가 막는다).
+ */
+export function ghostList(entries: readonly string[], input: string, max = 6): string[] {
+  if (!input) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (let i = entries.length - 1; i >= 0 && out.length < max; i--) {
     const e = entries[i]
-    if (e.length > input.length && e.startsWith(input)) return e
+    if (e.length <= input.length || !e.startsWith(input) || seen.has(e)) continue
+    seen.add(e)
+    out.push(e)
   }
-  return null
+  return out
+}
+
+// 인라인 고스트로 보여 줄 하나 = 목록의 첫 줄. 규칙을 두 벌 두지 않는다(갈라지면 고스트와
+// 목록의 첫 줄이 서로 다른 명령을 가리킨다).
+export function ghostFor(entries: readonly string[], input: string): string | null {
+  return ghostList(entries, input, 1)[0] ?? null
 }
 
 // ── scope 별 캐시 ──

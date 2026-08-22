@@ -22,7 +22,10 @@ export function registerForwardIpc(
   // F12 로그 폴더(userData/logs). 경로는 main 이 정하고 렌더러는 "열어 달라"만 말할 수 있다.
   logDir: string
 ): { forwards: ForwardService; browser: BrowserService } {
-  const forwards = createForwardService((id) => sessions.sshClient(id))
+  const forwards = createForwardService(
+    (id) => sessions.sshClient(id),
+    (id) => sessions.snapshot().find((s) => s.id === id)?.title
+  )
   const browser = createBrowserService(getMainWindow)
 
   handle('forward:create', ({ sessionId, remotePort, exactPort }) =>

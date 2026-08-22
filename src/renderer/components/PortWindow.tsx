@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSessions } from '../store/sessions'
 import { useTelemetry } from '../store/telemetry'
 import { PortMonitor } from './PortMonitor'
+import { useDialog } from './Dialog'
 import { t } from '../i18n'
 
 // 포트 모니터 독립 창 (2026-08-21 준영님 요청).
@@ -17,6 +18,8 @@ import { t } from '../i18n'
 // (registerTelemetryIpc 의 alsoTo) — 그래서 본창과 같은 값을 같은 순간에 본다.
 export function PortWindow() {
   const sessions = useSessions()
+  // 포트 충돌을 물을 자리(제보 17). 이 창에도 다이얼로그가 필요해졌다 — 본창의 것을 빌려올 수 없다.
+  const { ask, node: dialogNode } = useDialog()
   // SSH 세션만 대상이다 — 포트 목록은 원격 `ss` 출력이고 로컬 셸에는 그 개념이 없다.
   const sshSessions = useMemo(() => sessions.sessions.filter((s) => s.type === 'ssh'), [sessions.sessions])
 
@@ -67,6 +70,7 @@ export function PortWindow() {
             inWindow
             onRefresh={telemetry.refresh}
             onForwardsChanged={telemetry.refreshForwards}
+            ask={ask}
           />
         ) : (
           // 접속한 SSH 세션이 없으면 보여 줄 것이 없다. 창을 닫으라고 하지 않는다 —
@@ -74,6 +78,7 @@ export function PortWindow() {
           <div className="sftp-empty">{t('portwin.empty')}</div>
         )}
       </div>
+      {dialogNode}
     </div>
   )
 }
