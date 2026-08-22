@@ -88,4 +88,19 @@ describe('pickBackgroundSession (분할이 올릴 세션 선택)', () => {
     expect(pickBackgroundSession(list, new Set(['a', 'b', 'c']), ['a'])).toBeNull()
     expect(pickBackgroundSession([], new Set(), [])).toBeNull()
   })
+
+  /**
+   * 2026-08-22 준영님 제보 21번의 회귀 가드.
+   *
+   * 드래그로 세션을 옮길 때 호출측(MainArea.splitDrop)은 "그 세션이 비우고 갈 칸"을 채울 후보를
+   * 찾는다. 그때 **옮기는 세션 자신을 후보에서 빼지 않으면** mru 맨 앞(= 방금 만진 그 세션)이
+   * 뽑혀 같은 세션이 두 칸에 앉는다 — 렌더는 첫 칸에만 붙어 새 칸이 통째로 빈다.
+   * 이 함수는 "제외 집합"을 그대로 믿으므로, 호출측이 자신을 넣어 주는 계약을 여기서 못 박는다.
+   */
+  it('★ 제외 집합에 든 세션은 절대 고르지 않는다 — 옮기는 세션 자신도 거기 들어온다', () => {
+    // b 를 옮기는 중: 이미 배치된 {b} + 옮기는 자신 {b} → 남는 후보는 a·c 다.
+    expect(pickBackgroundSession(list, new Set(['b']), ['b', 'a', 'c'])).toBe('a')
+    // mru 맨 앞이 자기 자신이어도 제외 집합이 이기는지(이 순서가 실제 사고 상황이었다).
+    expect(pickBackgroundSession(list, new Set(['b', 'c']), ['b', 'c', 'a'])).toBe('a')
+  })
 })

@@ -566,8 +566,20 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           layout.split(sessionId, axis, before)
           return
         }
-        placed.delete(sessionId) // 이 세션이 비우고 갈 칸은 "채울 곳"이지 "이미 배치됨"이 아니다
-        const filler = pickBackgroundSession(list, placed, mru) ?? (await open())
+        /**
+         * 2026-08-22 준영님 제보 21번 — 재현: 세션 1·2 를 열고 2번 탭을 오른쪽에 드롭하면
+         * **왼쪽에 2번이 그대로 있고 오른쪽이 빈다**(1번 탭을 눌러야 그제야 옮겨진다).
+         *
+         * 원인이 이 두 줄이었다. `placed.delete(sessionId)` 는 "이 세션이 비우고 갈 칸은 채울
+         * 곳"이라는 뜻으로 넣은 것인데, 그 바람에 **옮기는 세션 자신이 filler 후보**가 됐다.
+         * mru 의 맨 앞은 방금 만진 그 세션이라 거의 항상 자기가 뽑혔고, 결과는 같은 세션이 두 칸에
+         * 앉는 상태다 — 렌더는 첫 칸에만 붙으므로 새 칸이 통째로 빈다(바로 위 주석이 경고한 그것).
+         *
+         * 후보에서 빼야 할 것은 둘이다: **이미 배치된 세션** + **지금 옮기는 세션**.
+         */
+        const fillerPool = new Set(placed)
+        fillerPool.add(sessionId)
+        const filler = pickBackgroundSession(list, fillerPool, mru) ?? (await open())
         layout.split(sessionId, axis, before, filler)
       },
       [layout, list, mru, open, showToast]
