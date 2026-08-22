@@ -45,6 +45,30 @@ describe('tmuxMenuItem — 서브메뉴 항목 조립(순수 변환)', () => {
     expect(items.find((i) => i.id === 'tmux.status')?.disabled).toBe(true)
   })
 
+  // 2026-08-22 준영님 제보 32번 — "쓸 때 설치 확인".
+  it('★ tmux 가 없는 서버에서는 실행 항목이 **눌리지 않는다** — 안내해 놓고 실행시키면 안내가 아니다', () => {
+    const items = tmuxMenuItem({ status: 'notInstalled', sessions: [] }).submenu!
+    for (const id of ['session.tmux.new', 'session.tmux.detach', 'session.tmux.prevWindow', 'session.tmux.nextWindow']) {
+      expect(items.find((i) => i.id === id)?.disabled).toBe(true)
+    }
+  })
+
+  it('조회 중에는 막지 않는다 — 느린 서버에서 메뉴가 죽은 것처럼 보인다', () => {
+    const items = tmuxMenuItem('loading').submenu!
+    expect(items.find((i) => i.id === 'session.tmux.new')?.disabled).toBeFalsy()
+  })
+
+  it('세션이 없을 뿐(noServer)이면 새로 만들 수는 있어야 한다', () => {
+    const items = tmuxMenuItem({ status: 'noServer', sessions: [] }).submenu!
+    expect(items.find((i) => i.id === 'session.tmux.new')?.disabled).toBeFalsy()
+  })
+
+  it('분리·창 이동에는 실제 키가 힌트로 붙는다(제보 11번 — "사용법"을 메뉴가 가르친다)', () => {
+    const items = tmuxMenuItem({ status: 'ok', sessions: ['work'] }).submenu!
+    expect(items.find((i) => i.id === 'session.tmux.detach')?.hint).toBe('Ctrl+B D')
+    expect(items.find((i) => i.id === 'session.tmux.nextWindow')?.hint).toBe('Ctrl+B N')
+  })
+
   it('세션이 있으면 각 이름이 클릭 가능한 붙기 항목으로 들어간다', () => {
     const items = tmuxMenuItem({ status: 'ok', sessions: ['work', 'deploy'] }).submenu!
     const attach = items.filter((i) => i.id.startsWith('session.tmux.attach:'))

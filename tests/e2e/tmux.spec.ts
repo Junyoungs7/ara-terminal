@@ -22,6 +22,8 @@ async function openTmuxSubmenu(page: Page): Promise<void> {
 test('TMUX-1 로컬 세션 우클릭 메뉴에는 tmux 항목이 없다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
+  // 셸을 열면 사이드바가 [파일] 로 넘어간다(2026-08-22 제보 6번) — 트리를 보려면 돌아온다.
+  await openConnTab(page)
   await page.locator('.tree .sess-node').first().click({ button: 'right' })
   await expect(page.locator('.ctx-menu')).toBeVisible()
   await expect(page.locator('.ctx-menu .ctx-item[data-action="session.tmux"]')).toHaveCount(0)
@@ -195,4 +197,69 @@ test('TMUX-8 SSH 세션을 닫으면 트리에서 세션 행이 사라진다', a
   await dialogConfirm(page)
   await expect.poll(async () => (await sessionList(page)).length).toBe(0)
   await expect(page.locator('.tree .sess-node')).toHaveCount(0)
+})
+
+// ── 2026-08-22 준영님 제보 11·32 — tmux 를 **터미널 우클릭**에도 (#108) ────────────────
+// 트리 세션 행에만 있던 것을 터미널 위에도 뒀다. tmux 를 쓰는 순간은 터미널을 보고 있을 때이고,
+// 그때 손이 가는 우클릭에 없어서 기능이 있는 줄도 몰랐다("tmux 사용법"부터 물어보신 이유).
+
+/** 터미널 우클릭 → [tmux] 호버 → 서브메뉴. 트리 쪽 openTmuxSubmenu 와 여는 자리만 다르다. */
+async function openTermTmuxSubmenu(page: Page): Promise<void> {
+  await page.click('.pane-grid', { button: 'right', position: { x: 320, y: 220 } })
+  await expect(page.locator('.ctx-menu .ctx-item[data-action="session.tmux"]')).toBeVisible({ timeout: 10_000 })
+  await page.hover('.ctx-menu .ctx-item[data-action="session.tmux"]')
+  await expect(page.locator('.ctx-submenu')).toBeVisible()
+}
+
+// TMUX-9★ SSH 터미널 우클릭에 tmux 가 있고, 붙기가 그 터미널로 나간다.
+test('TMUX-9★ 터미널 우클릭에서 tmux 세션에 붙는다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({
+    password: 'pw-tmux9',
+    execHandler: (cmd, stream: ServerChannel) => {
+      if (cmd === TMUX_LS_CMD) stream.write('work: 1 windows (created Mon Aug 22 10:00:00 2026) [220x50]\n')
+      stream.exit(0)
+      stream.end()
+    }
+  })
+  const id = await connectNewSshProfile(page, { name: 'tmux9', port: h.port, password: 'pw-tmux9' })
+  await expect.poll(() => termText(page, id), { timeout: 25_000 }).toContain('원격 셸 준비 완료')
+
+  await openTermTmuxSubmenu(page)
+  await page.click('.ctx-submenu .ctx-item[data-action="session.tmux.attach:work"]')
+  // 하네스 셸은 받은 것을 그대로 되쏜다 — 매크로가 그 세션으로 갔다는 증거.
+  await expect.poll(() => termText(page, id), { timeout: 15_000 }).toContain("tmux a -t 'work'")
+})
+
+// TMUX-10 로컬 셸 터미널에는 tmux 항목이 없다(원격 셸이 없다 — 트리 쪽 TMUX-1 과 같은 규칙).
+test('TMUX-10 로컬 터미널 우클릭에는 tmux 가 없다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await page.click('.pane-grid', { button: 'right', position: { x: 320, y: 220 } })
+  await expect(page.locator('.ctx-menu')).toBeVisible()
+  await expect(page.locator('.ctx-menu .ctx-item[data-action="session.tmux"]')).toHaveCount(0)
+})
+
+// TMUX-11★ 제보 32번 — tmux 가 **없는** 서버에서는 실행 항목이 눌리지 않는다.
+// 안내만 띄우고 실행은 그대로 시키면(= 터미널에 `command not found`) 안내가 아니다.
+test('TMUX-11★ tmux 가 없는 서버에서는 항목이 잠긴다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({
+    password: 'pw-tmux11',
+    execHandler: (_cmd, stream: ServerChannel) => {
+      stream.write('bash: tmux: command not found\n')
+      stream.exit(127)
+      stream.end()
+    }
+  })
+  const id = await connectNewSshProfile(page, { name: 'tmux11', port: h.port, password: 'pw-tmux11' })
+  await expect.poll(() => termText(page, id), { timeout: 25_000 }).toContain('원격 셸 준비 완료')
+
+  await openTermTmuxSubmenu(page)
+  await expect(page.locator('.ctx-submenu .ctx-item[data-action="tmux.status"]')).toHaveText(
+    'tmux가 설치되어 있지 않습니다'
+  )
+  for (const action of ['session.tmux.new', 'session.tmux.detach', 'session.tmux.nextWindow']) {
+    await expect(page.locator(`.ctx-submenu .ctx-item[data-action="${action}"]`)).toHaveClass(/disabled/)
+  }
 })

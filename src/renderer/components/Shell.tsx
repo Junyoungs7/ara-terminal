@@ -1195,6 +1195,8 @@ export function Shell() {
           onOpenLog={() => openBottom('log')}
           onActivityItems={setActivityItems}
           onAiCliFlags={setAiCliFlags}
+          // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
+          askText={askText}
         />
         <MiniPreview
           open={previewOpen}

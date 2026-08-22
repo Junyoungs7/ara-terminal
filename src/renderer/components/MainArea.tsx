@@ -20,6 +20,7 @@ import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/cl
 import { planRestore } from '../store/restore'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
+import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
 import type { UiState } from '@shared/types'
 
@@ -70,6 +71,8 @@ type MainAreaProps = {
   activeCwd?: string | null
   // F8: 링크 라우팅 실패(로컬 포트 점유)를 알릴 다이얼로그. Shell 의 단일 인스턴스를 받는다.
   ask?: (spec: DialogSpec) => Promise<DialogResult>
+  /** 한 줄 입력이 필요한 액션(tmux 새 세션 이름). 트리 메뉴와 같은 다이얼로그를 쓴다. */
+  askText?: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
   // F16: 아라 패널 열기(+선택 텍스트 프리필). 패널 상태의 주인은 Shell 이라 handle 대신 prop 으로
   // 내려받는다(handle 은 Shell→MainArea 방향이므로 이쪽이 diff 가 작다 — 설계 §4.6).
   onAskAi?: (selection: string) => void
@@ -122,6 +125,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       version,
       activeCwd,
       ask,
+      askText,
       onAskAi,
       onOpenLog,
       onSettingsOpenChange,
@@ -773,8 +777,36 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             onOpenLog?.()
             return
         }
+        /**
+         * tmux (2026-08-22 제보 11·32). 트리 세션 행이 하던 것과 **같은 매크로**를 같은 방식으로
+         * 보낸다 — `session.input` 이라 사람이 타이핑한 것과 구분되지 않는다. 그래서 `su` 로
+         * 계정을 바꾼 뒤에도, sudo 셸 안에서도 그대로 동작한다(exec 채널이었으면 다른 셸이라 안 된다).
+         */
+        if (!sid) return
+        if (id === 'session.tmux.new') {
+          const name = await askText?.({
+            title: t('tmux.name.title'),
+            message: t('tmux.name.new.msg'),
+            input: { placeholder: t('tmux.name.placeholder') },
+            confirmLabel: t('tmux.name.btn'),
+            cancelLabel: t('dlg.cancel')
+          })
+          const input = name ? buildTmuxInput({ kind: 'new', name }) : null
+          if (input) window.ev.session.input(sid, input)
+          return
+        }
+        if (id === 'session.tmux.detach' || id === 'session.tmux.prevWindow' || id === 'session.tmux.nextWindow') {
+          const kind = id === 'session.tmux.detach' ? 'detach' : id === 'session.tmux.prevWindow' ? 'prevWindow' : 'nextWindow'
+          const input = buildTmuxInput({ kind })
+          if (input) window.ev.session.input(sid, input)
+          return
+        }
+        if (id.startsWith('session.tmux.attach:')) {
+          const input = buildTmuxInput({ kind: 'attach', name: id.slice('session.tmux.attach:'.length) })
+          if (input) window.ev.session.input(sid, input)
+        }
       },
-      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi, onRunAiCli, onOpenLog]
+      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi, onRunAiCli, onOpenLog, askText]
     )
 
     // 탭 순환(Ctrl+] / Ctrl+[) — 탭바에 보이는 순서(= sessions 배열)를 따른다.
@@ -934,6 +966,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
           onAction={onAction}
+          // 제보 11·32: SSH 세션일 때만 tmux 항목이 붙는다(조회도 그때만 나간다).
+          activeIsSsh={list.find((s2) => s2.id === focusedSessionId())?.type === 'ssh'}
           cheatsheetOpen={cheatsheetOpen}
           onCheatsheetChange={setCheatsheetOpen}
           commandBookOpen={commandBookOpen}

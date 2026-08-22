@@ -29,7 +29,7 @@ export { parseSessionWinHash, type SessionWinTarget } from '@shared/sessionWin'
 export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Element {
   const sessions = useSessions(target.winId)
   const mainRef = useRef<MainAreaHandle>(null)
-  const { ask, node: dialogNode } = useDialog()
+  const { ask, askText, node: dialogNode } = useDialog()
   const [bottom, setBottom] = useState<BottomId | null>(null)
   const lastBottom = useRef<BottomId>('monitor')
   if (bottom) lastBottom.current = bottom
@@ -92,6 +92,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
           detachedWinId={target.winId}
           version=""
           ask={ask}
+          askText={askText}
           bottom={
             <BottomPanel
               tab={bottom}

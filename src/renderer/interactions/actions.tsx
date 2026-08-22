@@ -27,6 +27,13 @@ export type ActionId =
   | 'log.save'
   | 'ai.ask'
   | 'pane.close'
+  // 2026-08-22(제보 11·32): tmux 를 터미널 우클릭에도 붙였다. **트리 메뉴와 같은 id** 를 쓴다 —
+  // 두 자리가 같은 일을 하므로 이름이 갈리면 처리도 두 벌이 된다(TreeActionId 쪽이 원본).
+  | 'session.tmux.new'
+  | 'session.tmux.detach'
+  | 'session.tmux.prevWindow'
+  | 'session.tmux.nextWindow'
+  | `session.tmux.attach:${string}`
 
 export type ContextAction = {
   id: ActionId
@@ -147,7 +154,7 @@ function hintFor(id: ActionId): string | undefined {
  * 이름은 짧게. 이 메뉴는 **터미널 위에서** 열리므로 "이 칸 닫기(세션 종료)" 처럼 무엇을 닫는지
  * 설명할 필요가 없다 — 누른 자리가 곧 대상이다.
  */
-export function terminalMenu(): MenuItem[] {
+export function terminalMenu(tmux?: TmuxListResult | 'loading'): MenuItem[] {
   const plain = (a: ContextAction): MenuItem => {
     const hint = hintFor(a.id)
     return {
@@ -179,6 +186,14 @@ export function terminalMenu(): MenuItem[] {
         icon: ICON_AI,
         submenu: AI_CLIS.map((c) => ({ id: `aicli.run.${c.id}`, label: c.label }))
       })
+      /**
+       * tmux (2026-08-22 준영님 제보 11·32 — "tmux 를 GUI 기능으로").
+       *
+       * 트리 세션 행 우클릭에만 있던 것을 **터미널 위에도** 둔다. tmux 를 쓰는 순간은 터미널을
+       * 보고 있을 때인데, 그때 손이 가는 우클릭에 없어서 기능이 있는 줄도 몰랐다(준영님이
+       * "사용법"부터 물으신 이유). SSH 세션일 때만 붙는다 — 로컬 셸엔 원격 tmux 가 없다.
+       */
+      if (tmux) out.push(tmuxMenuItem(tmux))
     }
   }
   return out
@@ -324,15 +339,31 @@ export function tmuxMenuItem(query: TmuxListResult | 'loading'): MenuItem {
         ? query.sessions.map((name) => ({ id: `session.tmux.attach:${name}`, label: name }))
         : [{ id: 'tmux.status', label: t(`tmux.status.${query.status}`), disabled: true }]
 
+  /**
+   * tmux 가 **없는 서버에서는 누를 수 없게** 한다(2026-08-22 준영님 제보 32번 — "쓸 때 설치 확인").
+   * 그전에는 "설치되어 있지 않습니다" 한 줄을 목록 자리에만 띄우고 [새 세션]·[분리]는 그대로
+   * 눌렸다 — 누르면 터미널에 `command not found` 가 찍혔다. 안내를 해 놓고 그대로 실행시키면
+   * 안내가 아니다. 조회 중(loading)에는 막지 않는다: 느린 서버에서 메뉴가 잠깐 죽은 것처럼 보인다.
+   */
+  const off = query !== 'loading' && query.status === 'notInstalled'
+  const item = (id: TreeActionId, label: string, hint?: string): MenuItem => ({
+    id,
+    label,
+    ...(hint ? { hint } : {}),
+    ...(off ? { disabled: true } : {})
+  })
+
   return {
     id: 'session.tmux',
     label: t('conn.menu.session.tmux'),
     submenu: [
-      { id: 'session.tmux.new', label: t('tmux.new') },
+      item('session.tmux.new', t('tmux.new')),
       ...listItems,
-      { id: 'session.tmux.detach', label: t('tmux.detach') },
-      { id: 'session.tmux.prevWindow', label: t('tmux.prevWin') },
-      { id: 'session.tmux.nextWindow', label: t('tmux.nextWin') }
+      // 힌트에 실제 키를 적는다 — 준영님이 "tmux 사용법"부터 물으셨다(제보 11번). 메뉴를 한 번
+      // 열어 보면 prefix 가 Ctrl+b 라는 것과 그 뒤 글자를 함께 배운다.
+      item('session.tmux.detach', t('tmux.detach'), 'Ctrl+B D'),
+      item('session.tmux.prevWindow', t('tmux.prevWin'), 'Ctrl+B P'),
+      item('session.tmux.nextWindow', t('tmux.nextWin'), 'Ctrl+B N')
     ]
   }
 }

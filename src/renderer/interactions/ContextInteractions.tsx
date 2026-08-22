@@ -4,6 +4,7 @@ import { CommandBook } from './CommandBook'
 import { ContextMenu } from './ContextMenu'
 import { terminalMenu, type ActionId } from './actions'
 import { matchBinding } from '../../shared/keymap'
+import type { TmuxListResult } from '../../shared/tmuxList'
 
 // 우클릭 컨텍스트 인터랙션 오케스트레이터(F4c). 메뉴·치트시트 열림 상태와 우클릭·ESC·? 키를
 // 한 곳에서 관리. 실제 액션 배선은 onAction 으로 상위(MainArea)에 위임.
@@ -27,6 +28,8 @@ type Props = {
   commandBookQuery?: string
   // [터미널로 보내기] 목적지 — 포커스 패널의 세션(MainArea 가 안다).
   activeSessionId: string | null
+  /** 그 세션이 SSH 인가 — tmux 항목을 붙일지 정한다(로컬 셸엔 원격 tmux 가 없다). */
+  activeIsSsh?: boolean
   gridSelector?: string
 }
 
@@ -40,9 +43,15 @@ export function ContextInteractions({
   onCommandBookChange,
   commandBookQuery,
   activeSessionId,
+  activeIsSsh,
   gridSelector = '.pane-grid'
 }: Props) {
   const [list, setList] = useState<Anchor | null>(null)
+  /**
+   * tmux 조회 결과(제보 11·32). 메뉴를 **열 때 한 번** 묻는다 — 폴링이 아니다.
+   * 트리 세션 행이 하던 것과 같은 조회이고(ConnTree), 같은 순수 변환(tmuxMenuItem)으로 그린다.
+   */
+  const [tmux, setTmux] = useState<TmuxListResult | 'loading' | null>(null)
 
   const closeMenu = useCallback(() => setList(null), [])
 
@@ -53,10 +62,22 @@ export function ContextInteractions({
       if (!target || !target.closest(gridSelector)) return
       e.preventDefault()
       setList({ x: e.clientX, y: e.clientY })
+      if (!activeIsSsh || !activeSessionId) {
+        setTmux(null)
+        return
+      }
+      // 결과가 오기 전에도 항목은 뜬다("확인 중…") — 서버가 느리다고 메뉴가 늦게 뜨면 안 된다.
+      setTmux('loading')
+      void window.ev?.tmux
+        ?.list(activeSessionId)
+        .then((r) => setTmux(r))
+        // 조회 자체가 실패하면 "확인할 수 없습니다"로 떨어뜨린다(항목을 지우지 않는다 —
+        // 있는 기능이 사라진 것처럼 보이면 그게 더 헷갈린다).
+        .catch(() => setTmux({ status: 'error', sessions: [] }))
     }
     window.addEventListener('contextmenu', onCtx)
     return () => window.removeEventListener('contextmenu', onCtx)
-  }, [gridSelector])
+  }, [gridSelector, activeIsSsh, activeSessionId])
 
   // ESC: 메뉴/치트시트 닫기. ? : 치트시트 열기(입력 포커스가 아닐 때).
   useEffect(() => {
@@ -101,7 +122,7 @@ export function ContextInteractions({
         open={!!list}
         x={list?.x ?? 0}
         y={list?.y ?? 0}
-        items={terminalMenu()}
+        items={terminalMenu(tmux ?? undefined)}
         onPick={(id) => runAction(id as ActionId)}
         onClose={closeMenu}
       />
