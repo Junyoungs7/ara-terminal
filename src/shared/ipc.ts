@@ -161,8 +161,18 @@ export type InvokeContract = {
   'window:close': { req: void; res: { ok: true } }
   // F32 세션 창 — 탭을 별도 OS 창으로 떼어내고 되돌린다. 세션은 main 에 살아 있으므로
   // 이 두 채널은 **소유 표시만** 바꾼다(재접속·화면 재생이 없다).
-  'win:detach': { req: { sessionId: string }; res: { ok: boolean; winId?: string } }
+  // at: 탭을 창 밖으로 끌어다 놓은 **화면 좌표**(2026-08-22 준영님 제보 4·31 — "탭 드래그로 새 창").
+  // 그 자리에 창을 띄운다: 다른 모니터로 끌어냈는데 창이 주 모니터에 뜨면 끌어낸 의미가 없다.
+  'win:detach': { req: { sessionId: string; at?: { x: number; y: number } }; res: { ok: boolean; winId?: string } }
   'win:reattach': { req: { sessionId: string }; res: { ok: boolean } }
+  /**
+   * 떼어낸 창을 닫을 때의 답(2026-08-22 준영님 결정 "물어보고 세션 종료").
+   * main 이 창 닫기를 **막고** `win:closeAsk` 를 보내면, 그 창이 목록을 보여 주고 여기로 답한다.
+   *   kill=true  → 이 창의 세션을 종료하고 닫는다
+   *   kill=false → 본창으로 되돌리고 닫는다(실수로 닫았을 때의 탈출구)
+   * 취소는 아무것도 부르지 않는다 — 창은 그대로 열려 있다.
+   */
+  'win:closeConfirm': { req: { winId: string; kill: boolean }; res: { ok: true } }
   /**
    * F32 R2 복원 — 본창이 세션을 **다 되살린 뒤** 한 번 부른다.
    *
@@ -450,10 +460,17 @@ export type EvApi = {
     minimize(): Promise<{ ok: true }>
     toggleMaximize(): Promise<{ maximized: boolean }>
     close(): Promise<{ ok: true }>
-    /** F32: 세션을 별도 창으로 떼어낸다. 세션은 main 에 살아 있어 죽지 않고 소유 창만 바뀐다. */
-    detachSession(sessionId: string): Promise<{ ok: boolean; winId?: string }>
+    /**
+     * F32: 세션을 별도 창으로 떼어낸다. 세션은 main 에 살아 있어 죽지 않고 소유 창만 바뀐다.
+     * at 은 탭을 놓은 화면 좌표 — 주면 그 자리에 창이 뜬다(탭 드래그로 떼어낼 때).
+     */
+    detachSession(sessionId: string, at?: { x: number; y: number }): Promise<{ ok: boolean; winId?: string }>
     /** 본창으로 되돌린다. 떼어낸 창이 닫힐 때는 main 이 남은 세션에 대해 자동으로도 부른다. */
     reattachSession(sessionId: string): Promise<{ ok: boolean }>
+    /** 떼어낸 창의 닫기를 main 이 막고 물어 온다 — 그 창만 구독한다(본창에는 오지 않는다). */
+    onCloseAsk(cb: () => void): () => void
+    /** 물어본 것에 답한다(kill=true 종료 / false 본창으로). 취소면 부르지 않는다. */
+    confirmClose(winId: string, kill: boolean): Promise<{ ok: true }>
     /** 세션 소유 창이 바뀌었다 — 양쪽 창이 자기 탭바를 다시 그린다. */
     onSessionMoved(cb: (e: { sessionId: string; winId?: string }) => void): () => void
     /** F32 R2: 복원을 마친 본창이 소유를 다시 붙이고 저장된 창들을 연다(순서가 중요하다). */

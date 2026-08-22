@@ -13,7 +13,17 @@ async function html5Drag(page: Page, fromIndex: number, toIndex: number): Promis
     src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }))
     dst.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
     dst.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
-    src.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }))
+    // 끝난 자리(화면 좌표)를 **놓은 탭 위**로 준다. 안 주면 0,0 이고, 그건 창 밖이라
+    // "창 밖에 놓았다 = 새 창으로 떼어내기"(제보 4·31)로 읽힌다 — 재정렬이 아니라 창이 하나 뜬다.
+    const r = dst.getBoundingClientRect()
+    src.dispatchEvent(
+      new DragEvent('dragend', {
+        bubbles: true,
+        dataTransfer: dt,
+        screenX: Math.round(window.screenX + r.left + r.width / 2),
+        screenY: Math.round(window.screenY + r.top + r.height / 2)
+      })
+    )
   }, [fromIndex, toIndex])
 }
 

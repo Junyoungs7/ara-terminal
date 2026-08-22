@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { groupColor, type Session } from '../store/sessions'
 import { isTabOverflowing } from '../store/tabOverflow'
+import { shouldDetach } from '../store/tabDetach'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, type TreeActionId } from '../interactions/actions'
 import { t } from '../i18n'
@@ -167,9 +168,13 @@ export function TermTabbar({
         e.dataTransfer.effectAllowed = 'move'
         e.dataTransfer.setData('text/plain', s.id)
       },
-      onDragEnd: () => {
+      onDragEnd: (e) => {
         setDragId(null)
         setOverId(null)
+        // 창 밖에 놓았으면 새 창으로 떼어낸다(판정 규칙은 store/tabDetach.ts — 그 주석이 근거다).
+        const at = { x: e.screenX, y: e.screenY }
+        const box = { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight }
+        if (shouldDetach(e.dataTransfer.dropEffect, at, box)) detach(s.id, at)
       },
       onDragOver: (e) => {
         // 탭바 위 드롭 = 재정렬(터미널 영역 드롭 = 분할은 PaneGrid 가 별도로 받는다 — FB-0002).
@@ -188,6 +193,22 @@ export function TermTabbar({
       }
     }
   })
+
+  /**
+   * F32: 별도 창으로 떼어낸다 — 우클릭 메뉴와 **창 밖 드롭**이 같이 쓴다.
+   * 여기서 탭을 지우지 않는다: main 이 소유를 바꾸고 `session:moved` 를 보내면 useSessions 가
+   * 두 창의 목록을 함께 맞춘다(한쪽만 고치면 갈린다).
+   * 2026-08-22: 결과를 버리지 않는다. 실패해도 아무 일이 없으면 "눌렀는데 안 된다"가 되고
+   * (준영님 제보 31번) 원인을 좁힐 단서도 남지 않는다.
+   */
+  const detach = (id: string, at?: { x: number; y: number }) => {
+    void window.ev?.window
+      .detachSession(id, at)
+      .then((r) => {
+        if (!r?.ok) console.error('[detach] main 이 거절했습니다 — sessionId=', id)
+      })
+      .catch((e: unknown) => console.error('[detach] 실패:', e))
+  }
 
   const openTabMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -272,17 +293,7 @@ export function TermTabbar({
           else if (action === 'session.duplicate') onDuplicate(target)
           else if (action === 'session.close') onClose(target)
           else if (action === 'session.closeOthers') onCloseOthers(target)
-          // F32: 별도 창으로 떼어낸다. 여기서 탭을 지우지 않는다 — main 이 소유를 바꾸고
-          // `session:moved` 를 보내면 useSessions 가 두 창의 목록을 함께 맞춘다(한쪽만 고치면 갈린다).
-          // 2026-08-22: 결과를 버리지 않는다. 실패해도 아무 일이 없으면 "눌렀는데 안 된다"가 되고
-          // (준영님 제보 31번) 원인을 좁힐 단서도 남지 않는다.
-          else if (action === 'session.detach')
-            void window.ev?.window
-              .detachSession(target)
-              .then((r) => {
-                if (!r?.ok) console.error('[detach] main 이 거절했습니다 — sessionId=', target)
-              })
-              .catch((e: unknown) => console.error('[detach] 실패:', e))
+          else if (action === 'session.detach') detach(target)
         }}
         onClose={() => setTabMenu(null)}
       />

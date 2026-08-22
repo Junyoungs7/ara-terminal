@@ -5,7 +5,7 @@
 //
 // 이 파일이 **창 두 개**를 다루는 첫 e2e 다. Electron 앱의 두 번째 창은 `app.waitForEvent('window')`
 // 로 잡는다(Playwright 가 BrowserWindow 하나를 Page 하나로 준다).
-import { test, expect, newLocalShell, sessionList } from './fixtures'
+import { test, expect, newLocalShell, sessionList, dialogAlt, dialogCancel, dialogConfirm } from './fixtures'
 import type { Page, ElectronApplication } from '@playwright/test'
 
 /** 탭 우클릭 → [새 창으로 떼어내기]. 새로 뜬 창의 Page 를 돌려준다. */
@@ -66,16 +66,138 @@ test('DETACH-3★ 떼어낸 창에서 분할한다', async ({ ara }) => {
   await expect(win.locator('.pane-grid .pane')).toHaveCount(2)
 })
 
-// DETACH-4★ 창을 닫으면 세션은 **본창으로 돌아온다**(죽이지 않는다).
-// 창 닫기는 실수로도 일어난다 — 그때 원격 작업이 통째로 끊기면 되돌릴 방법이 없다.
-test('DETACH-4★ 떼어낸 창을 닫으면 세션이 본창으로 돌아온다', async ({ ara }) => {
+/**
+ * 창 닫기를 사람이 누른 것처럼 시작한다 — 창 버튼(네이티브 X)은 Playwright 가 못 누르므로
+ * 같은 자리로 들어가는 `window:close` 를 부른다. **그 창이 닫히는지**가 이 호출의 첫 시험이다
+ * (예전엔 이 채널이 무조건 본창을 닫았다 — 떼어낸 창이 스스로 닫으려다 앱을 끝내던 결함).
+ */
+async function askClose(win: Page): Promise<void> {
+  await win.evaluate(() => void window.ev?.window.close())
+}
+
+// DETACH-4★ 창을 닫으면 **무엇이 사라지는지 먼저 보여 주고 묻는다**(2026-08-22 준영님 결정).
+// [본창으로 보내기] = 예전 기본값. 창 닫기는 실수로도 일어나므로 이 탈출구는 남겨 둔다.
+test('DETACH-4★ 떼어낸 창을 닫으면 물어보고, [본창으로 보내기]면 세션이 돌아온다', async ({ ara }) => {
   const { page } = ara
   const a = await newLocalShell(page)
   const win = await detachTab(ara, a)
   await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
 
-  await win.close()
+  await askClose(win)
+  // 목록이 보인다 — "세션 1개"가 아니라 그 세션의 이름이 있어야 무엇을 잃는지 안다.
+  await expect(win.locator('.dlg-overlay .dlg-detail .dlg-row')).toHaveCount(1)
+  await dialogAlt(win) // [본창으로 보내기]
+
   await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  expect((await sessionList(page)).length).toBe(1)
+})
+
+// DETACH-6★ [종료하고 닫기] 는 실제로 **세션을 죽인다** — 본창에 되돌아오지 않는다.
+test('DETACH-6★ 확인하면 그 창의 세션이 종료된다', async ({ ara }) => {
+  const { page } = ara
+  const keep = await newLocalShell(page)
+  const gone = await newLocalShell(page)
+  const win = await detachTab(ara, gone)
+  await expect(win.locator(`.ttab[data-session-id="${gone}"]`)).toHaveCount(1, { timeout: 15_000 })
+
+  await askClose(win)
+  await dialogConfirm(win) // [종료하고 닫기]
+
+  // 본창에는 남긴 세션 하나뿐 — 죽은 세션은 탭으로도 main 목록으로도 돌아오지 않는다.
+  await expect(page.locator(`.ttab[data-session-id="${gone}"]`)).toHaveCount(0, { timeout: 15_000 })
+  await expect(page.locator(`.ttab[data-session-id="${keep}"]`)).toHaveCount(1)
+  await expect.poll(async () => (await sessionList(page)).length, { timeout: 15_000 }).toBe(1)
+})
+
+// DETACH-7 취소하면 아무 일도 없다 — 창도 세션도 그대로다.
+test('DETACH-7 닫기를 취소하면 창이 그대로 남는다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const win = await detachTab(ara, a)
+  await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+
+  await askClose(win)
+  await dialogCancel(win)
+  await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1)
+  expect((await sessionList(page)).length).toBe(1)
+})
+
+// DETACH-8★ 탭을 **창 밖에** 끌어다 놓으면 새 창이 뜬다(2026-08-22 준영님 제보 4·31).
+// 진짜 OS 드래그는 자동화로 못 한다 — 브라우저가 드래그 끝에 원본 탭으로 보내는 그 이벤트를
+// 그대로 만든다: 아무도 받지 않았고(dropEffect 'none'), 커서는 창 밖(화면 좌표).
+// 그 두 값을 읽는 규칙 자체는 tests/tabDetach.test.ts 가 따로 본다.
+test('DETACH-8★ 탭을 창 밖에 놓으면 새 창으로 떼어낸다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const opened = ara.app.waitForEvent('window')
+
+  await page.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
+    el.dispatchEvent(
+      new DragEvent('dragend', {
+        bubbles: true,
+        dataTransfer: new DataTransfer(), // dropEffect 기본값이 'none' — 아무도 안 받은 상태 그대로다
+        screenX: window.screenX + window.outerWidth + 20,
+        screenY: window.screenY + 200
+      })
+    )
+  })
+
+  const win = await opened
+  await win.waitForLoadState('domcontentloaded')
+  await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(0)
+  expect((await sessionList(page)).length).toBe(1) // 세션은 죽지 않았다
+})
+
+// DETACH-9 창 **안**에서 끝난 드래그는 떼어내지 않는다 — 사이드바에 놓았다고 창이 튀어나오면
+// 재정렬하다가 창이 생긴다. (제보 19: "탭 드래그 시 사이드바에 영역이 잡힌다"와 같은 자리다.)
+test('DETACH-9 창 안에서 끝난 드래그는 새 창을 만들지 않는다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const before = ara.app.windows().length
+
+  await page.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
+    el.dispatchEvent(
+      new DragEvent('dragend', {
+        bubbles: true,
+        dataTransfer: new DataTransfer(),
+        screenX: window.screenX + 40,
+        screenY: window.screenY + Math.floor(window.outerHeight / 2)
+      })
+    )
+  })
+
+  await page.waitForTimeout(700)
+  expect(ara.app.windows().length).toBe(before)
+  await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1)
+})
+
+// DETACH-10 떼어낸 창에서 **또** 밖으로 끌어내면 세 번째 창으로 간다.
+// 메뉴로 "떼어내기"를 다시 누르면 그 창을 앞으로 가져올 뿐이지만(같은 뜻이라), 끌어다 놓은 것은
+// "저기에 두겠다"는 다른 뜻이다. 옛 창에 껍데기 탭이 남지 않는 것까지 본다.
+test('DETACH-10 떼어낸 창에서 다시 끌어내면 또 다른 창으로 간다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const first = await detachTab(ara, a)
+  await expect(first.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+
+  const opened = ara.app.waitForEvent('window')
+  await first.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
+    el.dispatchEvent(
+      new DragEvent('dragend', {
+        bubbles: true,
+        dataTransfer: new DataTransfer(),
+        screenX: window.screenX + window.outerWidth + 20,
+        screenY: window.screenY + 150
+      })
+    )
+  })
+
+  const second = await opened
+  await second.waitForLoadState('domcontentloaded')
+  await expect(second.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  // 첫 창은 빈 창이 되어 스스로 닫힌다 — 남아 있더라도 그 탭은 없어야 한다.
+  if (!first.isClosed()) await expect(first.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(0)
   expect((await sessionList(page)).length).toBe(1)
 })
 

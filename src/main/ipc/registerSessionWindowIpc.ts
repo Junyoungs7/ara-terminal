@@ -5,13 +5,14 @@
 // (renderer 는 새 창에서 xterm 을 만들고 `session:attach` 로 백로그를 한 번에 받아 간다 —
 //  MainSessionManager 의 attached/backlog 계약이 이미 그 용도로 있다.)
 //
-// 창이 닫히면 그 창의 세션을 **본창으로 되돌린다**. 세션을 죽이지 않는 쪽을 기본값으로 삼은
-// 이유: 창 닫기는 실수로도 일어나고, 그때 원격 작업이 통째로 끊기면 되돌릴 방법이 없다.
-// (R2 에서 "닫을 때 물어보기"를 얹는다 — 그때도 기본은 되돌리기다.)
+// 창을 닫을 때는 **묻는다**(2026-08-22 준영님 결정 — 제보 4번 "창 닫을 때 세션 목록·확인 팝업").
+// 그 창의 세션 목록을 보여 주고: 확인하면 종료, [본창으로 보내기]면 되돌리기, 취소면 그대로.
+// 묻기 전의 기본값은 되돌리기였다 — 창 닫기는 실수로도 일어나고 그때 원격 작업이 통째로 끊기면
+// 되돌릴 방법이 없어서다. 그 탈출구는 지금도 버튼으로 남아 있다.
 import type { BrowserWindow } from 'electron'
 import { handle } from './handle'
 import { pushSend } from '../util/windowPush'
-import { openSessionWindow, sessionWindowOf } from '../windows/SessionWindows'
+import { forceCloseSessionWindow, openSessionWindow, sessionWindowOf } from '../windows/SessionWindows'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 
 /** 창 이름 — 사람이 볼 일은 없지만 로그·저장값에 남으므로 짧고 유일하게. */
@@ -32,12 +33,17 @@ export function registerSessionWindowIpc(
     }
   }
 
-  /** 양쪽 창에 알린다 — 보낸 창은 탭을 지우고, 받은 창은 탭을 그린다. */
-  const announce = (sessionId: string, winId: string | undefined): void => {
+  /**
+   * 양쪽 창에 알린다 — 보낸 창은 탭을 지우고, 받은 창은 탭을 그린다.
+   * from 은 **떼어낸 창에서 다시 떼어낼 때**의 옛 주인이다(본창은 늘 받으므로 따로 셀 필요가 없다).
+   * 안 보내면 그 창에 탭이 남는다 — 세션은 이미 떠났는데 껍데기만 남은 탭이다.
+   */
+  const announce = (sessionId: string, winId: string | undefined, from?: string): void => {
     const payload = winId === undefined ? { sessionId } : { sessionId, winId }
     pushSend(mainWc(), 'session:moved', payload)
-    if (winId) {
-      const w = sessionWindowOf(winId)
+    for (const id of [winId, from]) {
+      if (!id) continue
+      const w = sessionWindowOf(id)
       pushSend(w ? w.webContents : null, 'session:moved', payload)
     }
   }
@@ -50,20 +56,47 @@ export function registerSessionWindowIpc(
     }
   }
 
-  handle('win:detach', ({ sessionId }) => {
+  /**
+   * 닫기 전에 그 창에 물어본다. **세션이 없으면 묻지 않는다**(빈 창을 닫는 데 확인은 방해다).
+   * true = 닫기를 막았다 — 답은 win:closeConfirm 으로 온다.
+   */
+  const askClose = (winId: string): boolean => {
+    if (sessions.sessionsOfWindow(winId).length === 0) return false
+    const w = sessionWindowOf(winId)
+    if (!w) return false
+    pushSend(w.webContents, 'win:closeAsk', {})
+    return true
+  }
+
+  /** 창 하나를 여는 데 늘 함께 가는 두 콜백 — 세 곳(떼어내기·앞으로·복원)이 같아야 한다. */
+  const winOpts = { onClosed: reclaim, onCloseAsk: askClose }
+
+  handle('win:detach', ({ sessionId, at }) => {
     const meta = sessions.snapshot().find((s) => s.id === sessionId)
     if (!meta) return { ok: false as const }
-    // 이미 떼어낸 세션이면 그 창을 앞으로 가져오는 것으로 족하다(창을 또 만들지 않는다).
+    // 이미 떼어낸 세션을 **메뉴로** 또 떼어내라 하면 그 창을 앞으로 가져오는 것으로 족하다.
+    // 끌어다 놓은 것(at)은 다르다 — "저기에 두겠다"는 뜻이라 새 창을 만든다.
     const already = meta.winId
-    if (already && sessionWindowOf(already)) {
-      openSessionWindow(already, meta.title, { onClosed: reclaim })
+    if (already && sessionWindowOf(already) && !at) {
+      openSessionWindow(already, meta.title, winOpts)
       return { ok: true as const, winId: already }
     }
     const winId = newWinId()
     sessions.moveToWindow(sessionId, winId)
-    openSessionWindow(winId, meta.title, { onClosed: reclaim })
-    announce(sessionId, winId)
+    openSessionWindow(winId, meta.title, { ...winOpts, ...(at ? { at } : {}) })
+    announce(sessionId, winId, already)
     return { ok: true as const, winId }
+  })
+
+  /**
+   * 물어본 것에 대한 답. 어느 쪽이든 **창은 닫힌다** — 취소는 아예 여기까지 오지 않는다.
+   * kill 은 세션을 죽인다: 그 뒤 sessionsOfWindow 가 비므로 'closed' 의 reclaim 은 할 일이 없다.
+   */
+  handle('win:closeConfirm', ({ winId, kill }) => {
+    if (kill) for (const id of sessions.sessionsOfWindow(winId)) sessions.destroy(id)
+    else reclaim(winId)
+    forceCloseSessionWindow(winId)
+    return { ok: true as const }
   })
 
   handle('win:reattach', ({ sessionId }) => {
@@ -88,7 +121,7 @@ export function registerSessionWindowIpc(
       const ids = sessions.sessionsOfWindow(w.winId)
       if (ids.length === 0) continue
       const first = sessions.snapshot().find((x) => x.id === ids[0])
-      openSessionWindow(w.winId, first?.title ?? '', { bounds: w.bounds, onClosed: reclaim })
+      openSessionWindow(w.winId, first?.title ?? '', { ...winOpts, bounds: w.bounds })
       opened += 1
     }
     return { opened }

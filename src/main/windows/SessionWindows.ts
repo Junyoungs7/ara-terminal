@@ -25,6 +25,13 @@ const BACKGROUND = '#1e1e20'
 
 /** winId → 창. 창이 닫히면 지워진다(닫힘 정리는 여는 쪽이 콜백으로 받는다). */
 const windows = new Map<string, BrowserWindow>()
+/** 닫아도 된다고 답을 받은 창 — 다음 close 는 묻지 않고 통과시킨다(아래 forceClose 가 넣는다). */
+const cleared = new Set<string>()
+
+// 끌어다 놓은 자리에 창을 놓을 때 커서를 창의 어디에 두는가. 탭바가 커서 밑에 오도록 —
+// 제목줄(약 30) 아래가 탭바다. 크롬이 탭을 떼어낼 때와 같은 감각.
+const GRAB_X = 120
+const GRAB_Y = 40
 
 export type SessionWinBounds = { x: number; y: number; width: number; height: number }
 
@@ -59,10 +66,26 @@ export function usableBounds(
   return onScreen ? saved : null
 }
 
+/** 놓은 점 → 창 자리. 화면 밖 판정은 usableBounds 가 마저 한다(끝에 놓으면 기본 자리로). */
+function droppedAt(at: { x: number; y: number } | undefined): SessionWinBounds | undefined {
+  if (!at) return undefined
+  return { x: Math.round(at.x - GRAB_X), y: Math.round(at.y - GRAB_Y), width: WIDTH, height: HEIGHT }
+}
+
 export function openSessionWindow(
   winId: string,
   title: string,
-  opts: { bounds?: SessionWinBounds; onClosed: (winId: string) => void }
+  opts: {
+    bounds?: SessionWinBounds
+    /** 탭을 놓은 화면 좌표(드래그로 떼어낼 때). bounds 가 있으면 그쪽이 이긴다 — 복원은 저장한 자리로. */
+    at?: { x: number; y: number }
+    onClosed: (winId: string) => void
+    /**
+     * 창을 닫으려 할 때 — true 를 돌려주면 **닫기를 막는다**(물어보는 중이라는 뜻).
+     * 답은 forceCloseSessionWindow 로 온다. 없으면 예전처럼 그냥 닫힌다.
+     */
+    onCloseAsk?: (winId: string) => boolean
+  }
 ): BrowserWindow {
   const existing = sessionWindowOf(winId)
   if (existing) {
@@ -71,7 +94,7 @@ export function openSessionWindow(
     return existing
   }
 
-  const box = usableBounds(opts.bounds, screen.getAllDisplays())
+  const box = usableBounds(opts.bounds ?? droppedAt(opts.at), screen.getAllDisplays())
   const win = new BrowserWindow({
     ...(box ?? { width: WIDTH, height: HEIGHT }),
     title,
@@ -89,7 +112,19 @@ export function openSessionWindow(
     }
   })
   windows.set(winId, win)
+  // 2026-08-22 준영님 결정("물어보고 세션 종료"): 이 창의 세션이 어떻게 될지 **먼저 보여 준다.**
+  // 렌더러가 죽어 있으면 묻지 않는다 — 답할 사람이 없는데 막으면 못 닫는 창이 된다.
+  win.on('close', (e) => {
+    if (cleared.has(winId) || !opts.onCloseAsk) return
+    try {
+      if (win.webContents.isDestroyed() || win.webContents.isCrashed()) return
+    } catch {
+      return
+    }
+    if (opts.onCloseAsk(winId)) e.preventDefault()
+  })
   win.on('closed', () => {
+    cleared.delete(winId)
     if (windows.get(winId) === win) windows.delete(winId)
     opts.onClosed(winId)
   })
@@ -129,6 +164,12 @@ export function detachedWindowStates(): { winId: string; bounds: SessionWinBound
 export function closeSessionWindow(winId: string): void {
   const w = sessionWindowOf(winId)
   if (w) w.close()
+}
+
+/** 확인이 끝난 창을 닫는다 — 다시 묻지 않는다(답을 들은 뒤에 부른다). */
+export function forceCloseSessionWindow(winId: string): void {
+  cleared.add(winId)
+  closeSessionWindow(winId)
 }
 
 /** 앱을 끝낼 때 남은 창을 정리한다(본창 종료 경로가 부른다 — #44 의 종료 실패를 되풀이하지 않게). */

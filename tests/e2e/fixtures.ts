@@ -441,6 +441,12 @@ export async function dialogCancel(page: Page): Promise<void> {
   await expect(dialog(page)).toHaveCount(0)
 }
 
+// 세 번째 선택지(DialogSpec.altLabel). 취소보다 **앞에** 그려지므로 first 다 —
+// alt 가 없는 다이얼로그에서 부르면 취소를 누르게 되니, alt 를 준 자리에서만 쓴다.
+export async function dialogAlt(page: Page): Promise<void> {
+  await dialog(page).locator('.modal-ft .btn.sec').first().click()
+}
+
 // 프로필 저장 → 접속 → (최초 접속이면) 호스트키 신뢰 → 세션 생성까지. 새 SSH 세션 id 반환.
 // 터미널 패널에 포커스를 준다(단축키가 xterm 커스텀 키 핸들러를 거치려면 필요).
 // 포커스가 helper textarea 로 옮겨간 뒤, xterm 이 파서 큐를 비울 때까지 잠깐 둔다:

@@ -52,11 +52,36 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   }, [activeSession])
 
   // 마지막 세션이 이 창을 떠나면(되돌리기·종료) 빈 창이 남는다 — 스스로 닫는다.
+  // (window:close 는 **부른 창**을 닫는다. 예전엔 무조건 본창을 닫아서 이 한 줄이 앱을 끝냈다.)
   const had = useRef(false)
   useEffect(() => {
     if (sessions.sessions.length > 0) had.current = true
     else if (had.current) void window.ev?.window.close()
   }, [sessions.sessions.length])
+
+  /**
+   * 창을 닫으려 하면 main 이 **막고** 물어 온다(준영님 제보 4번: "창 닫을 때 세션 목록·확인 팝업").
+   * 무엇이 사라지는지 이름으로 보여 준다 — "세션 3개"만으로는 그게 지금 배포 돌리는 창인지 알 수 없다.
+   * 취소는 아무 답도 보내지 않는다: main 은 이미 닫기를 막아 뒀으므로 창이 그대로 열려 있다.
+   */
+  const listRef = useRef(sessions.sessions)
+  listRef.current = sessions.sessions
+  useEffect(() => {
+    return window.ev?.window.onCloseAsk?.(() => {
+      void (async () => {
+        const r = await ask({
+          title: t('sessionwin.close.title'),
+          message: t('sessionwin.close.msg'),
+          detail: listRef.current.map((s) => ({ label: s.serverKey || t('sessionwin.close.local'), value: s.title })),
+          tone: 'danger',
+          confirmLabel: t('sessionwin.close.kill'),
+          altLabel: t('sessionwin.close.toMain')
+        })
+        if (r === 'cancel') return
+        await window.ev?.window.confirmClose(target.winId, r === 'confirm')
+      })()
+    })
+  }, [ask, target.winId])
 
   return (
     <div className="app sessionwin">
