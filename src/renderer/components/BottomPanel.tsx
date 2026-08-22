@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { BOTTOM_IDS, type BottomId } from '@shared/types'
+import { holdTermResize } from '../terminal/resizeGate'
 
 // #78(2026-08-15) — 터미널 **아래** 패널.
 //
@@ -40,7 +41,13 @@ const LABEL: Record<BottomId, string> = {
   log: 'log.title'
 }
 
-const MIN_H = 120
+/**
+ * 가장 낮췄을 때 남는 높이 = **탭 줄만**. 2026-08-22 준영님 제보 14번: "하단 바를 아래로 쭉
+ * 내리면 포트 모니터·시스템 모니터 등 해당 탭바만 보이게까지 내릴 수 있게." 예전 120px 은
+ * 표 두어 줄이 억지로 남는 어정쩡한 높이였다 — 접을 거면 탭만 남기고 접는 게 낫다.
+ * (--row-tabbar 32 + 아래 테두리 1 + 여유 1)
+ */
+const MIN_H = 34
 const DEFAULT_H = 260
 /**
  * 끌어 올릴 때 **위에 남길 여백**. 2026-08-22 준영님 제보 5번("하단바를 내리면 탭 아래까지
@@ -89,12 +96,16 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
     e.preventDefault()
     const y0 = e.clientY
     const h0 = hRef.current
+    // 하단바가 터미널을 **밀어내므로**(2026-08-22) 끄는 동안 터미널 높이가 매 프레임 바뀐다.
+    // 그때마다 xterm 을 다시 맞추면 분할 칸 수만큼 곱해진다 — 놓을 때 한 번만 흘린다.
+    const release = holdTermResize()
     const move = (ev: MouseEvent): void => {
       // 위로 끌면 커진다. 터미널이 아주 얇아지지 않게 위쪽 여백을 남긴다.
       const next = h0 + (y0 - ev.clientY)
       setH(Math.max(MIN_H, Math.min(window.innerHeight - MIN_ABOVE, next)))
     }
     const up = (): void => {
+      release()
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', up)
     }
@@ -112,7 +123,8 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
   const shownIds = base.includes(tab) ? base : [tab, ...base]
 
   return (
-    // 하단바 전체가 **터미널 위에 뜬다**(제보 ④ — 열고 닫아도 분할 칸 크기가 안 변한다).
+    // 2026-08-22: 하단바가 터미널을 **밀어낸다**(덮지 않는다 — 가려서 프롬프트가 안 보였다).
+    // 경계를 끄는 동안의 리플로우는 resizeGate 가 막는다(startResize 참고).
     <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h }}>
       <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>

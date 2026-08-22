@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
+import { whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
 import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
 import { appendHistory, cachedHistory, feedInput, ghostFor, loadHistory, shouldRecord } from '../store/history'
@@ -437,9 +438,13 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     void window.ev.session.resize(sessionId, term.cols, term.rows)
 
     // 컨테이너 리사이즈 관찰 → fit.
-    const ro = new ResizeObserver(() => {
+    // 하단바 경계를 끄는 동안은 미룬다(resizeGate) — 안 그러면 프레임마다 fit → term.resize →
+    // pty resize IPC 가 나가고, 분할해 둔 칸 수만큼 곱해진다. 놓으면 한 번에 따라잡는다.
+    // doFit 은 이 effect 안에서 한 번만 만들어지므로 게이트의 대기 Set 에 중복으로 쌓이지 않는다.
+    const doFit = (): void => {
       if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit()
-    })
+    }
+    const ro = new ResizeObserver(() => whenResizeAllowed(doFit))
     ro.observe(host)
 
     return () => {
