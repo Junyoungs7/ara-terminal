@@ -15,15 +15,6 @@ import {
   IconFolder,
   IconFolderPlus,
   IconForward,
-  IconFileAudio,
-  IconFileCode,
-  IconFileDoc,
-  IconFileImage,
-  IconFilePdf,
-  IconFileSheet,
-  IconFileSlide,
-  IconFileVideo,
-  IconFileZip,
   IconLinkFile,
   IconLinkFolder,
   IconPaste,
@@ -34,6 +25,20 @@ import {
   IconUp,
   IconUpload
 } from './icons'
+import {
+  IconAud,
+  IconCode,
+  IconExcel,
+  IconExe,
+  IconImg,
+  IconPdf,
+  IconPpt,
+  IconTxt,
+  IconVid,
+  IconWord,
+  IconZip,
+  type FileIconKind
+} from './fileIcons'
 import { crumbs, humanSize, joinPath, relTime } from './filePath'
 import { DEFAULT_SORT, EMPTY_HISTORY, nextSort, pushHistory, viewEntries, type SortSpec } from '../store/fileView'
 import { setUploader } from '../store/uploadBus'
@@ -69,24 +74,28 @@ const ROW_ICON: Record<RowKind, JSX.Element> = {
 }
 
 /**
- * 확장자 → 아이콘 종류 (2026-08-22 준영님 제보 25번 — "파일 아이콘을 실제 엑셀·mp4·ppt 등
- * 다양한 확장자에 맞게"). **순수 함수 — 단위 테스트 대상.**
+ * 확장자 → 아이콘 종류. **순수 함수 — 단위 테스트 대상.**
  *
- * 확장자를 다 적지 않는다: 목록에서 한눈에 갈려야 하는 것은 "이게 무슨 종류인가"이지 "무슨
- * 프로그램이 여는가"가 아니다. 여덟 갈래로 묶고 나머지는 기본 종이로 둔다 — 갈래가 늘수록
- * 각 아이콘이 뜻하는 바가 흐려진다.
+ * 2026-08-22 준영님 제보 25번("실제 엑셀·mp4·ppt 등 다양한 확장자에 맞게") → 7·8번("색상이 없는
+ * 아이콘이다 보니 구분이 잘 안 감")으로 이어졌다. 이제 갈래마다 **색 있는 실제 아이콘**이 붙는다
+ * (components/fileIcons.tsx — material-icon-theme 에서 쓸 것만 인라인).
+ *
+ * 확장자를 다 적지 않는다: 한눈에 갈려야 하는 것은 "무슨 종류인가"이지 "무슨 프로그램이 여는가"가
+ * 아니다. 열한 갈래로 묶고 나머지는 기본 종이로 둔다 — 갈래가 늘수록 각 아이콘의 뜻이 흐려진다.
+ * 코드는 언어별로 쪼개지 않았다(js·py·go 를 눈으로 가릴 일보다 "이건 코드다"가 먼저다).
  */
-export type FileIconKind = 'sheet' | 'doc' | 'slide' | 'pdf' | 'image' | 'video' | 'audio' | 'zip' | 'code' | 'plain'
-
 const EXT_KIND: Record<string, FileIconKind> = {
   xlsx: 'sheet', xls: 'sheet', xlsm: 'sheet', csv: 'sheet', tsv: 'sheet', ods: 'sheet',
-  docx: 'doc', doc: 'doc', hwp: 'doc', hwpx: 'doc', rtf: 'doc', odt: 'doc', txt: 'doc', md: 'doc', log: 'doc',
+  // 워드 계열과 그냥 글 파일을 가른다 — 아이콘이 실제로 다르고, 여는 프로그램도 다르다.
+  docx: 'word', doc: 'word', hwp: 'word', hwpx: 'word', rtf: 'word', odt: 'word',
+  txt: 'text', md: 'text', log: 'text', readme: 'text',
   pptx: 'slide', ppt: 'slide', odp: 'slide', key: 'slide',
   pdf: 'pdf',
   png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', bmp: 'image', webp: 'image', svg: 'image', ico: 'image', tif: 'image', tiff: 'image', psd: 'image',
   mp4: 'video', avi: 'video', mkv: 'video', mov: 'video', wmv: 'video', flv: 'video', webm: 'video', m4v: 'video',
   mp3: 'audio', wav: 'audio', flac: 'audio', aac: 'audio', ogg: 'audio', m4a: 'audio', wma: 'audio',
   zip: 'zip', tar: 'zip', gz: 'zip', tgz: 'zip', bz2: 'zip', xz: 'zip', rar: 'zip', '7z': 'zip', jar: 'zip',
+  exe: 'exe', msi: 'exe', appx: 'exe', dmg: 'exe', deb: 'exe', rpm: 'exe',
   js: 'code', ts: 'code', tsx: 'code', jsx: 'code', mjs: 'code', cjs: 'code', json: 'code', xml: 'code',
   html: 'code', htm: 'code', css: 'code', scss: 'code', py: 'code', java: 'code', kt: 'code', go: 'code',
   rs: 'code', rb: 'code', php: 'code', c: 'code', h: 'code', cpp: 'code', cs: 'code', sh: 'code', bash: 'code',
@@ -101,15 +110,18 @@ export function fileIconKind(name: string): FileIconKind {
 }
 
 const KIND_ICON: Record<FileIconKind, JSX.Element> = {
-  sheet: <IconFileSheet />,
-  doc: <IconFileDoc />,
-  slide: <IconFileSlide />,
-  pdf: <IconFilePdf />,
-  image: <IconFileImage />,
-  video: <IconFileVideo />,
-  audio: <IconFileAudio />,
-  zip: <IconFileZip />,
-  code: <IconFileCode />,
+  sheet: <IconExcel />,
+  word: <IconWord />,
+  text: <IconTxt />,
+  slide: <IconPpt />,
+  pdf: <IconPdf />,
+  image: <IconImg />,
+  video: <IconVid />,
+  audio: <IconAud />,
+  zip: <IconZip />,
+  code: <IconCode />,
+  exe: <IconExe />,
+  // 모르는 확장자에는 색을 쓰지 않는다 — 색은 "무슨 종류인지 안다"는 말이다.
   plain: <IconFile />
 }
 

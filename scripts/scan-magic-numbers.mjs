@@ -5,7 +5,14 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 
 const ROOTS = ['src/renderer/components', 'src/renderer/interactions']
-const EXCLUDE = ['tokens.css']
+/**
+ * 색 리터럴이 허용되는 파일.
+ *  · tokens.css   — 토큰을 정의하는 자리다(여기 없으면 어디에도 색이 없다).
+ *  · fileIcons.tsx — 확장자별 파일 아이콘(2026-08-22). 그 색은 **디자인 토큰이 아니라 외부 규약**이다:
+ *    엑셀은 초록, 워드는 파랑, PDF 는 빨강 — 우리 팔레트로 갈아 끼우면 "실제 그 아이콘"이라는
+ *    성질 자체가 사라진다. 대신 다른 곳으로 새지 않게 **한 파일에 가두고** 여기 이름을 적는다.
+ */
+const EXCLUDE = ['tokens.css', 'fileIcons.tsx']
 const HEX = /#[0-9a-fA-F]{3,8}\b/
 const RGBA = /rgba?\(\s*\d/
 // px 리터럴이 시각 속성(§D.3 b)에 붙은 경우.

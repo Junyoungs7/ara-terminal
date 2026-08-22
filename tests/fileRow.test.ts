@@ -32,10 +32,14 @@ describe('파일 트리 행 종류', () => {
 describe('fileIconKind', () => {
   it('대표 확장자를 갈래로 묶는다', () => {
     expect(fileIconKind('매출.xlsx')).toBe('sheet')
-    expect(fileIconKind('보고서.docx')).toBe('doc')
+    expect(fileIconKind('보고서.docx')).toBe('word')
     expect(fileIconKind('제안.pptx')).toBe('slide')
     expect(fileIconKind('계약.pdf')).toBe('pdf')
-    expect(fileIconKind('회의록.hwp')).toBe('doc')
+    expect(fileIconKind('회의록.hwp')).toBe('word')
+    // 2026-08-22(제보 7·8): 워드 계열과 그냥 글 파일을 갈랐다 — 아이콘이 실제로 다르다.
+    expect(fileIconKind('메모.txt')).toBe('text')
+    expect(fileIconKind('README.md')).toBe('text')
+    expect(fileIconKind('setup.exe')).toBe('exe')
     expect(fileIconKind('clip.mp4')).toBe('video')
     expect(fileIconKind('bgm.mp3')).toBe('audio')
     expect(fileIconKind('shot.PNG')).toBe('image') // 대소문자 무시
