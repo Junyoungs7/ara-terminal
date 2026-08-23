@@ -39,6 +39,7 @@
     "screenshot:w2": "electron-vite build && npm run w2:bundle && electron tests/w2-screenshot.cjs",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
     "site:stage": "node scripts/stage-release.mjs",
+    "site:deploy": "node scripts/deploy-site.mjs",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "screenshot:ux1": "electron-vite build && electron tests/fix-ux1-screenshot.cjs",
     "screenshot:r1": "electron-vite build && electron tests/r1-screenshot.cjs",

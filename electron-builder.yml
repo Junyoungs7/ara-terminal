@@ -14,12 +14,14 @@ asarUnpack:
 # `site/` 를 사내 웹 루트에 올리면 설치본·blockmap·latest.yml 이 전부 `downloads/` 에 함께 있다
 # (`npm run site:stage` 가 거기로 복사한다). 그래서 다운로드 페이지와 업데이트 채널이 한 자리다.
 #
-# ⚠️ 아래 주소는 **사내 서버가 정해지기 전의 자리표시자**다(.local 은 예약 도메인이라 밖으로 새지
-# 않는다). 서버가 정해지면 이 줄을 고쳐 다시 빌드하거나, 다시 빌드하지 않고
-# `ARA_UPDATE_URL` 환경변수로 덮어쓴다(src/main/ipc/registerUpdateIpc.ts).
+# 2026-08-23 준영님이 정한 자리: **192.168.100.56 의 /data/jun/ARA** 를 caddy 컨테이너가
+# 8899 포트로 서빙한다(`npm run site:deploy` 가 올리고 띄운다). 다운로드 페이지가
+# `http://192.168.100.56:8899/`, 업데이트 채널이 그 아래 `downloads/` 다.
+# 서버가 옮겨 가면 이 줄을 고쳐 다시 빌드하거나, 다시 빌드하지 않고 `ARA_UPDATE_URL`
+# 환경변수로 덮어쓴다(src/main/ipc/registerUpdateIpc.ts).
 publish:
   provider: generic
-  url: http://ara.local/downloads/
+  url: http://192.168.100.56:8899/downloads/
   channel: latest
 win:
   target: nsis
