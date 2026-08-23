@@ -8,6 +8,7 @@
 //   · 확인 다이얼로그에 **PID 와 명령을 박아서** 보여 준다(엉뚱한 행을 죽이는 사고 방지).
 //   · 실패하면 stderr 를 그대로 보여 준다 — 권한 부족을 "실패했습니다"로 뭉개지 않는다(sudo 는 붙이지 않는다).
 //   · `-KILL` 은 TERM 이 실패한 **뒤에만** 별도 버튼으로 낸다(첫 클릭에 강제 종료가 나가지 않는다).
+import { AI_CHAT } from '@shared/features'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRowKeys } from '../store/rowKeys'
 import { parsePs, type KillSignal, type ProcRow } from '@shared/remoteCatalog'
@@ -224,9 +225,12 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
         <button type="button" className="con-btn" data-action="ps.refresh" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
         </button>
-        <button type="button" className="con-btn" data-action="ps.ask" disabled={!row} onClick={() => void askAra()}>
-          {t('console.ps.ask.btn')}
-        </button>
+        {/* 아라 대화가 숨겨진 판에서는 이 버튼도 없다 — 눌러도 갈 곳이 없다(features.AI_CHAT). */}
+        {AI_CHAT && (
+          <button type="button" className="con-btn" data-action="ps.ask" disabled={!row} onClick={() => void askAra()}>
+            {t('console.ps.ask.btn')}
+          </button>
+        )}
         <button type="button" className="con-btn danger" data-action="ps.kill" disabled={!row} onClick={() => void confirmKill()}>
           {t('console.ps.kill.btn')}
         </button>

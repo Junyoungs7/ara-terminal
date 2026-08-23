@@ -1,3 +1,4 @@
+import { AI_CHAT } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
@@ -72,8 +73,17 @@ export function Shell() {
   //
   // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다(레이아웃 설정이 아니다).
   const [rail, setRail] = useState<RailId | null>(null)
-  const toggleRail = useCallback((id: RailId) => setRail((cur) => (cur === id ? null : id)), [])
-  const openRail = useCallback((id: RailId) => setRail(id), [])
+  /**
+   * 숨긴 기능의 레일은 열리지 않는다 — 부르는 자리마다 조건을 다는 대신 **여는 문 하나**를 막는다
+   * (features.AI_CHAT: 0.1.0 에서 아라 대화 숨김). 표·탐색기의 [아라에게 묻기]처럼 여기로 오는
+   * 길이 여럿이라, 문에서 막는 편이 빠뜨릴 자리가 없다.
+   */
+  const railAllowed = useCallback((id: RailId) => AI_CHAT || id !== 'ai', [])
+  const toggleRail = useCallback(
+    (id: RailId) => setRail((cur) => (railAllowed(id) ? (cur === id ? null : id) : cur)),
+    [railAllowed]
+  )
+  const openRail = useCallback((id: RailId) => railAllowed(id) && setRail(id), [railAllowed])
   // 자기 자신일 때만 닫는다 — 이미 다른 레일로 넘어간 뒤 늦게 도착한 onClose 가 그것까지 닫으면 안 된다.
   const closeRail = useCallback((id: RailId) => setRail((cur) => (cur === id ? null : cur)), [])
 
@@ -353,6 +363,7 @@ export function Shell() {
           mainRef.current?.openCheatsheet()
           return
         case 'ai.bootstrap':
+          if (!AI_CHAT) return // 0.1.0: 아라 대화 숨김(features.ts)
           setBootstrapOpen(true)
           return
         case 'panel.console':

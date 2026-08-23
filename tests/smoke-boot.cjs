@@ -367,7 +367,15 @@ app.whenReady().then(async () => {
 
   // 보안 옵션 (계획서 완료조건)
   const wp = win.webContents.getLastWebPreferences()
-  const checks = []
+  /**
+ * 숨긴 기능(src/shared/features.ts)의 검사는 건너뛴다. 값을 여기 또 적으면 둘이 어긋나므로
+ * **정의부를 그대로 읽는다** — 상수를 되돌리면 이 검사들도 저절로 살아난다.
+ */
+const AI_CHAT = /AI_CHAT\s*=\s*true/.test(
+  require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'shared', 'features.ts'), 'utf8')
+)
+
+const checks = []
   checks.push(['contextIsolation', wp.contextIsolation === true])
   checks.push(['nodeIntegration', wp.nodeIntegration === false || wp.nodeIntegration === undefined])
   checks.push(['sandbox', wp.sandbox === true])
@@ -809,8 +817,11 @@ app.whenReady().then(async () => {
   checks.push(['터미널 우클릭 기본 = 리스트 메뉴', f4c.listOpen === true])
   // 2026-08-18: 평면 여덟 줄에서 **묶음 둘**(분할 ▸ 가로/세로 · AI 실행 ▸ CLI 셋)로 바뀌었다.
   // 첫 단계는 여전히 여덟 줄인데 그중 둘이 서브메뉴 부모다(자식은 호버해야 그려진다).
-  checks.push(['리스트 첫 단계 = 실동작 6 + 묶음 2', f4c.listItems.join(',') === 'copy,paste,split,aicli.run,session.duplicate,log.save,ai.ask,pane.close'])
-  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === 8])
+  const ctxWanted = AI_CHAT
+    ? 'copy,paste,split,aicli.run,session.duplicate,log.save,ai.ask,pane.close'
+    : 'copy,paste,split,aicli.run,session.duplicate,log.save,pane.close'
+  checks.push([`리스트 첫 단계 = 실동작 ${AI_CHAT ? 6 : 5} + 묶음 2`, f4c.listItems.join(',') === ctxWanted])
+  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_CHAT ? 8 : 7)])
   // R3.8 재배치 반영 — 힌트도 keymap 단일 소스에서 나오므로 자동으로 Ctrl+Shift 계열이 된다.
   // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
@@ -938,13 +949,17 @@ app.whenReady().then(async () => {
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
+  if (AI_CHAT)
   checks.push(['F16→W5: 설정 [AI] 데이터 반출 고지에 현재 프로바이더·호스트가 들어간다', /Anthropic Claude API\(api\.anthropic\.com\)\s*로 전송/.test(f5.aiNote)])
+  if (AI_CHAT)
   checks.push(['F16: API 키 입력이 password 이고 저장된 키를 되읽지 않음', f5.aiKeyEmpty === true])
+  if (AI_CHAT)
   checks.push(['W5: 프로바이더 세그먼트 4종(anthropic/openai/google/compatible)', f5.aiProviders.join(',') === 'anthropic,openai,google,compatible'])
-  checks.push([
-    'W5: 기본 프로바이더(anthropic) 모델 추천 칩 3종(sonnet-5/opus-5/haiku-4.5) — 자유 입력도 항상 허용',
-    f5.aiModels.join(',') === 'claude-sonnet-5,claude-opus-5,claude-haiku-4-5'
-  ])
+  if (AI_CHAT)
+    checks.push([
+      'W5: 기본 프로바이더(anthropic) 모델 추천 칩 3종(sonnet-5/opus-5/haiku-4.5) — 자유 입력도 항상 허용',
+      f5.aiModels.join(',') === 'claude-sonnet-5,claude-opus-5,claude-haiku-4-5'
+    ])
   checks.push([
     'F16 ★: window.ev.ai 표면에 getKey 부재 (키를 읽어 갈 창구 없음)',
     f5.aiSurface.join(',') === 'cancel,clear,getState,onDelta,onEnd,send,setKey'
@@ -1560,6 +1575,7 @@ app.whenReady().then(async () => {
     SNAP.wideSave.size === 0
   ])
   checks.push(['R2.5: 치트시트에 미구현 항목 0', r2.csDead === 0])
+  if (AI_CHAT)
   checks.push(['F16: 배선된 AI 단축키 2종이 치트시트에 올라온다', r2.csHasAi === true])
   checks.push(['R3.8: 치트시트가 새로 배선된 검색·클립보드·파일 트리를 싣는다', r2.csHasR3 === true])
   checks.push(['R2.5: 치트시트가 되살린 단축키를 싣는다', r2.csHasRevived === true])

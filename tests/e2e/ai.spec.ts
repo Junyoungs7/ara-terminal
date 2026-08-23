@@ -6,6 +6,7 @@
 // 결정적인 캔드 스트림(FAKE_ANSWER, ~150자 · 100ms 간격 7청크)을 쓴다. 실키·실과금·네트워크가 없다.
 // AraSession 은 렌더러가 아니라 main 이 소유하므로(설계 §5), 델타 순서·부분 취소 판정은
 // window.ev.ai.getState() 로 main 상태를 직접 읽는다(DOM 문자열 파싱보다 강한 증거).
+import { AI_CHAT } from '../../src/shared/features'
 import type { Page } from '@playwright/test'
 import { test, expect, newLocalShell, runCommand, expectTermText, termText, focusTerminal } from './fixtures'
 
@@ -39,6 +40,15 @@ async function lastAnswer(page: Page): Promise<string> {
 }
 
 // AI-1 키 없음 상태로 패널을 열면 안내 카드와 비활성 입력만 보인다
+/**
+ * 2026-08-23: **아라 대화는 0.1.0 에서 숨겼다**(src/shared/features.ts 의 AI_CHAT).
+ * 기능은 코드에 그대로 살아 있으므로 이 파일도 지우지 않는다 — 상수를 되돌리면 그날로 다시 돈다.
+ * 지금은 진입점(레일·단축키·메뉴)이 없어 첫 줄부터 실패하므로 스스로 건너뛴다.
+ */
+test.beforeEach(() => {
+  test.skip(!AI_CHAT, '아라 대화 숨김 — src/shared/features.ts 의 AI_CHAT 을 켜면 다시 돈다')
+})
+
 test('AI-1 키 없음 상태로 패널을 열면 안내 카드와 비활성 입력만 보인다', async ({ ara }) => {
   const { page } = ara
   // FB-ui2: 아라 진입점이 타이틀바(.tb-ai, 제거됨)에서 우측 액티비티 바로 이관됐다.

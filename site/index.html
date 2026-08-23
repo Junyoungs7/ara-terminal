@@ -6,7 +6,7 @@
     <title>A.R.A — 접속 다음을 바꾸는 터미널</title>
     <meta
       name="description"
-      content="A.R.A(아라)는 SSH 접속 다음을 바꿉니다. 서버에 아무것도 설치하지 않고 프로세스·서비스·디스크를 마우스로, 화면의 출력을 그대로 AI에게, 창은 크롬처럼."
+      content="A.R.A(아라)는 SSH 접속 다음을 바꿉니다. 서버에 아무것도 설치하지 않고 프로세스·서비스·디스크를 마우스로, 파일은 끌어다 놓기로, 창은 크롬처럼."
     />
     <link rel="icon" href="assets/ara-icon.svg" />
     <link rel="stylesheet" href="assets/site.css" />
@@ -38,8 +38,8 @@
           <h1 class="reveal">접속은 어디서나 됩니다.<br /><span class="accent">그 다음</span>이 다릅니다.</h1>
           <p class="lead reveal">
             지금 쓰시는 터미널이 하는 일은 아라도 다 합니다. 아라는 <b>접속한 다음</b>을 바꿉니다 —
-            서버 상태를 <b>마우스로</b> 보고, 화면에 찍힌 출력을 <b>그대로 AI에게</b> 묻고, 창을
-            <b>크롬처럼</b> 다룹니다. 원격 리눅스에는 <b>아무것도 설치하지 않습니다.</b>
+            서버 상태를 <b>마우스로</b> 보고, 파일을 <b>끌어다 옮기고</b>, 창을 <b>크롬처럼</b> 다룹니다.
+            원격 리눅스에는 <b>아무것도 설치하지 않습니다.</b>
           </p>
           <div class="hero-cta reveal">
             <a class="btn btn-primary" data-dl href="downloads/" download>
@@ -121,7 +121,7 @@
       <div class="stats reveal">
         <div><b>0</b><span>서버에 설치할 것</span></div>
         <div><b>8</b><span>마우스로 여는 서버 도구</span></div>
-        <div><b>1</b><span>창 — 터미널·파일·AI</span></div>
+        <div><b>1</b><span>창 — 터미널·파일·서버 도구</span></div>
         <div><b>100%</b><span>한국어 화면</span></div>
       </div>
 
@@ -154,17 +154,7 @@
                 <td>창을 하나 더 띄우거나 <code>scp</code> 명령을 조립. 터미널에서 <code>cd</code> 한 곳과 파일 창이 따로 논다</td>
                 <td class="ours">왼쪽 트리가 <b><code>cd</code> 를 따라옵니다.</b> 끌어다 놓으면 업로드, <b>서버 ↔ 서버도 바로 복사.</b> 원격 파일은 더블클릭해 고치고 저장하면 그대로 올라갑니다.</td>
               </tr>
-              <tr>
-                <td class="k">모르는 오류를 만났을 때</td>
-                <td>출력을 긁어 브라우저 AI에 붙여넣기. 사내 서버 이름·토큰이 섞여 나가도 모른다</td>
-                <td class="ours">우클릭 <b>[AI에게 질문]</b> — 화면의 출력이 그대로 첨부되고, <b>비밀번호·토큰처럼 보이는 값은 가려서</b> 보냅니다. 무엇을 보냈는지 그 자리에서 볼 수 있습니다.</td>
-              </tr>
-              <tr>
-                <td class="k">AI가 알려 준 명령을 쓸 때</td>
-                <td>복사 → 창 전환 → 붙여넣기</td>
-                <td class="ours"><b>[터미널로 보내기]</b> 한 번. 명령은 <b>넣기만</b> 하고 <b>실행은 사람이</b> 누릅니다.</td>
-              </tr>
-              <tr>
+                                          <tr>
                 <td class="k">원격 CLI 로그인(claude·gemini)</td>
                 <td>콜백 포트를 손으로 포워딩하고, 링크를 복사해 브라우저에 옮겨 붙인다</td>
                 <td class="ours">링크를 <b>Ctrl+클릭</b>. 콜백 포트를 <b>그 번호 그대로 터널링</b>하고 내장 브라우저로 엽니다. 로그인이 그 자리에서 끝납니다.</td>
@@ -279,43 +269,35 @@
 
           <div class="feat">
             <div class="feat-txt reveal">
-              <h3>AI는 화면을 알고,<br />손은 대지 않습니다.</h3>
+              <h3>지나간 것도<br />남습니다.</h3>
               <p>
-                따로 붙여넣지 않아도 됩니다. 선택한 출력 · 현재 폴더 · 세션 기록을 <b>칩으로 골라</b>
-                함께 보냅니다. 나가기 전에 <b>비밀번호·토큰처럼 보이는 값은 가려집니다.</b>
+                세션마다 주고받은 내용이 파일로 남습니다. <b>비밀번호·토큰으로 보이는 값은 가려서</b>
+                기록하고, <code>vim</code>·<code>htop</code> 같은 전체 화면 프로그램의 화면 갱신은
+                남기지 않습니다 — 그래야 나중에 읽을 수 있는 기록이 됩니다.
               </p>
-              <p style="margin-top: 14px">
-                답에 담긴 명령은 <b>[터미널로 보내기]</b> 로 프롬프트에 <b>들어가기만</b> 합니다.
-                무엇을 실행할지는 언제나 사람이 정합니다. 사내 vLLM(호환 엔드포인트)도 그대로 씁니다.
-              </p>
+              <ul>
+                <li>지금 세션의 명령과 결과를 <b>하단 [세션 기록]</b>에서 바로 봅니다</li>
+                <li>지난 세션은 <b>[이전 기록]</b>에서 찾습니다</li>
+                <li>보관 기간(7·30·90일·무제한)과 쌓이는 폴더를 설정에서 정합니다</li>
+              </ul>
             </div>
             <div class="reveal">
               <div class="card">
-                <div class="card-hd"><span>아라에게 묻기</span><span class="g">Alt+A</span></div>
-                <div class="card-bd">
-                  <div style="display: flex; gap: 6px; margin-bottom: 12px">
-                    <span class="chip on">선택한 출력</span><span class="chip on">현재 폴더</span><span class="chip">세션 기록</span>
-                  </div>
-                  <div class="chat">
-                    <div class="me">디스크가 꽉 찼대. 뭐가 먹고 있는지 볼 명령 알려줘</div>
-                    <div class="ai">
-                      큰 폴더부터 확인해 보세요.
-                      <pre>du -x -d1 -h /var | sort -h | tail</pre>
-                      <div style="margin-top: 10px; display: flex; gap: 6px; align-items: center">
-                        <span class="btn btn-ghost btn-sm" style="pointer-events: none">터미널로 보내기</span>
-                        <span class="small muted">넣기만 하고 실행하지 않습니다</span>
-                      </div>
-                    </div>
-                    <div class="ai small">
-                      첨부에 포함된 값 <span class="mask">PGPASSWORD=••••••</span> 는 가려서 보냈습니다.
-                    </div>
-                  </div>
+                <div class="card-hd"><span>세션 기록</span><span class="g">dev-server · 오늘</span></div>
+                <div class="card-bd" style="padding: 0">
+                  <table class="tbl">
+                    <thead><tr><th>시각</th><th>명령</th><th>결과</th></tr></thead>
+                    <tbody>
+                      <tr class="hot"><td class="num">14:02</td><td>systemctl restart nginx</td><td>정상</td></tr>
+                      <tr><td class="num">13:58</td><td>git pull --rebase</td><td>정상</td></tr>
+                      <tr><td class="num">13:41</td><td>PGPASSWORD=•••••• psql -h db</td><td>가려서 기록</td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       <!-- ── 나머지 기능 ─────────────────────────────────────────────── -->
       <section class="section">

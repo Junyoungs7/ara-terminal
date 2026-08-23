@@ -54,7 +54,9 @@ const total = (c: Chapter, withTitle: boolean): number =>
   (withTitle ? TITLE_FRAMES : 0) + c.scenes.reduce((n, s) => n + dur(s.id), 0)
 
 const CHAPTERS: [string, Chapter][] = (
-  ['install', 'connect', 'files', 'tools', 'ai', 'windows'] as const
+  // 2026-08-23: 'ai'(아라에게 묻기) 챕터는 대화 기능을 숨기면서 뺐다 — narration.json 의
+  // `_ai_보류` 에 대본이 그대로 있다(기능이 돌아오면 키를 'ai' 로 되돌리고 여기 한 단어만 더한다).
+  ['install', 'connect', 'files', 'tools', 'windows'] as const
 ).map((k) => [k, (narration as unknown as Record<string, Chapter>)[k]])
 
 export const RemotionRoot: React.FC = () => {

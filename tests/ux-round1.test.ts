@@ -1,3 +1,4 @@
+import { AI_CHAT } from '../src/shared/features'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -176,7 +177,8 @@ describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
     expect(terminalMenu().filter((m) => m.dim).map((m) => m.id)).toEqual([])
     expect(byId['copy'].dim).toBeUndefined()
     // W3: 아라가 실배선돼 [AI에게 질문] 은 더 이상 흐리지 않다(누르면 실제로 패널이 열린다).
-    expect(byId['ai.ask'].dim).toBeUndefined()
+    // 아라 대화를 숨긴 판에는 이 항목 자체가 없다(features.AI_CHAT).
+    if (AI_CHAT) expect(byId['ai.ask'].dim).toBeUndefined()
   })
 })
 

@@ -315,16 +315,16 @@ export const SCENES: Record<string, React.ReactNode> = {
           <>
             <div style={{ color: C.lo, fontSize: 15, marginBottom: 14 }}>아라에게 묻기</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-              {['선택한 출력', '현재 폴더', '세션 기록'].map((c, i) => (
+              {['터미널 출력 첨부', '첨부 내용 보기'].map((c, i) => (
                 <span
                   key={c}
                   style={{
                     padding: '5px 12px',
                     borderRadius: 999,
                     fontSize: 14,
-                    border: `1px solid ${i < 2 ? C.accentLine : C.line}`,
-                    color: i < 2 ? C.accentBright : C.lo,
-                    background: i < 2 ? C.glow : C.overlay
+                    border: `1px solid ${i === 0 ? C.accentLine : C.line}`,
+                    color: i === 0 ? C.accentBright : C.lo,
+                    background: i === 0 ? C.glow : C.overlay
                   }}
                 >
                   {c}

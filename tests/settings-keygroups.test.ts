@@ -5,6 +5,7 @@
 // 추가할 때도 같은 부류의 누락을 여기서 구조적으로 잡는다.
 import { describe, it, expect } from 'vitest'
 import { KEYMAP } from '../src/shared/keymap'
+import { AI_CHAT } from '../src/shared/features'
 import { KEY_GROUPS } from '../src/renderer/components/SettingsDrawer'
 
 describe('설정 [단축키] 그룹이 KEYMAP 카테고리를 빠짐없이 덮는다', () => {
@@ -16,10 +17,13 @@ describe('설정 [단축키] 그룹이 KEYMAP 카테고리를 빠짐없이 덮�
     expect(missing).toEqual([])
   })
 
-  it('AI 단축키(ai.ask · ai.toggle)가 설정 창 [단축키]에 뜬다', () => {
+  it('AI 단축키가 설정 창 [단축키]에 뜬다', () => {
     const aiGroup = KEY_GROUPS.find((g) => g.cats.includes('ai'))
     expect(aiGroup).toBeTruthy()
     const rows = KEYMAP.filter((b) => b.implemented && aiGroup!.cats.includes(b.category)).map((b) => b.action)
-    expect(rows).toEqual(expect.arrayContaining(['ai.ask', 'ai.toggle']))
+    // 2026-08-23: 아라 대화를 숨기면 대화용 두 키는 KEYMAP 에서 빠지고 **AI CLI 시작만 남는다**
+    // (features.AI_CHAT). 그래도 이 그룹은 비면 안 된다 — 비면 설정 [단축키]에 빈 제목이 뜬다.
+    expect(rows).toEqual(expect.arrayContaining(AI_CHAT ? ['ai.ask', 'ai.toggle', 'ai.cli'] : ['ai.cli']))
+    expect(rows.length).toBeGreaterThan(0)
   })
 })

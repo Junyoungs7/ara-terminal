@@ -1,3 +1,4 @@
+import { AI_CHAT } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
@@ -50,7 +51,7 @@ const svg = (children: ReactNode, extra?: Record<string, string>) => (
 )
 
 // 순서 = 목업 라디얼 배치 순서(-90°에서 시계방향)에서 이어받았다. 라디얼 자체는 #67 에서 없앴다.
-export const CONTEXT_ACTIONS: readonly ContextAction[] = [
+const ALL_CONTEXT_ACTIONS: readonly ContextAction[] = [
   {
     id: 'copy',
     labelKo: '복사',
@@ -108,6 +109,15 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = [
     icon: svg(<path d="M6 6l12 12M18 6L6 18" />)
   }
 ]
+/**
+ * 실제로 메뉴에 뜨는 항목. 숨긴 기능은 **여기서 빠진다**(features.AI_CHAT — 0.1.0 에서 아라 대화
+ * 숨김). 이 배열 하나가 터미널 우클릭·파일 트리 메뉴의 단일 출처라, 여기서 빠지면 모든 메뉴에서
+ * 함께 사라진다. 되살리면 저절로 돌아온다.
+ */
+export const CONTEXT_ACTIONS: readonly ContextAction[] = ALL_CONTEXT_ACTIONS.filter(
+  (a) => AI_CHAT || a.id !== 'ai.ask'
+)
+
 
 // 터미널 우클릭 메뉴 항목. CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 금지) — 모양만 세로 리스트다.
 // #67 이후 이 리스트가 유일한 모양이다(라디얼·팔레트 제거). 단축키 힌트는 keymap 단일 소스에서 온다.
@@ -532,7 +542,7 @@ export type MenuEntry = { action: KeymapAction } | { command: MenuCommandId }
 // 최상위 이름은 **한글**이다(2026-08-21 준영님). 앱의 다른 라벨이 전부 한글인데 여기만
 // File/Edit/Help 라 그 줄만 남의 앱처럼 보였다. 이 표의 항목 라벨은 KEYMAP.labelKo·i18n 에서
 // 오므로, 최상위 이름도 같은 결로 직기입한다(CONTEXT_ACTIONS.labelKo 와 같은 방식).
-export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
+const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
   {
     // 설정은 R5 에서 단축키(Ctrl+,)가 생겨 command → action 으로 옮겼다. 메뉴에 힌트가 붙고
     // 실행 경로도 keydown 핸들러 하나로 합쳐진다("메뉴에서만 되는 기능" 금지).
@@ -607,6 +617,18 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
     ]
   }
 ] as const
+
+/**
+ * 화면에 그려지는 메뉴바. 숨긴 기능의 항목은 **여기서 빠진다**(features.AI_CHAT — 0.1.0 에서
+ * 아라 대화 숨김). KEYMAP 에서 빠진 액션이 메뉴에 남아 있으면 단축키 힌트가 빈 채로 뜨고,
+ * 통합 검색(F1)에도 죽은 항목이 잡힌다 — 목록을 만드는 자리 하나에서 함께 거른다.
+ */
+const HIDDEN_MENU = new Set<string>(AI_CHAT ? [] : ['ai.bootstrap', 'ai.toggle', 'ai.ask'])
+export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = ALL_MENUBAR.map((m) => ({
+  ...m,
+  items: m.items.filter((it) => !HIDDEN_MENU.has('action' in it ? it.action : it.command))
+})).filter((m) => m.items.length > 0)
+
 
 // 되돌리기 어려운 항목만 위험 톤(터미널 메뉴·트리 메뉴와 같은 규칙).
 const MENU_DANGER: ReadonlySet<string> = new Set(['app.quit', 'pane.close'])

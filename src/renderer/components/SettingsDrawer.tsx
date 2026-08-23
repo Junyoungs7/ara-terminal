@@ -1,3 +1,4 @@
+import { AI_CHAT } from '@shared/features'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
@@ -351,6 +352,26 @@ function AiSection({
           : t('settings.ai.baseUrl.unset')
       : AI_PROVIDER_HOSTS[provider]
 
+  /**
+   * 0.1.0: **아라 대화는 숨긴다**(features.AI_CHAT). 이 섹션에서 프로바이더·키·모델·사용량은
+   * 대화 기능의 설정이라 함께 사라지고, **AI CLI 시작**(원격 claude·codex·gemini)의 플래그만 남는다 —
+   * 그쪽은 대화가 아니라 터미널 기능이라 계속 쓰인다.
+   */
+  if (!AI_CHAT) {
+    return (
+      <>
+        <div className="set-note" data-note="ai.hidden">
+          {t('settings.ai.hidden')}
+        </div>
+        <div className="set-sec-t" data-sec="ai.cli">
+          {t('settings.ai.cliSec')}
+        </div>
+        <div className="set-sec-d">{t('settings.ai.cliSec.desc')}</div>
+        <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
+      </>
+    )
+  }
+
   return (
     <>
       <Row label={t('settings.ai.provider')} desc={t('settings.ai.provider.desc')}>
@@ -616,7 +637,7 @@ export function SettingsDrawer({
     void window.ev?.ai
       .getState()
       .then((s) => {
-        if (alive && !s.hasKey) setSection('ai')
+        if (alive && AI_CHAT && !s.hasKey) setSection('ai')
       })
       .catch(() => {})
     return () => {

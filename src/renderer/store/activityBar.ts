@@ -1,3 +1,4 @@
+import { AI_CHAT } from '@shared/features'
 import { ACTIVITY_ITEMS, type ActivityId } from '@shared/types'
 
 // FB-ui2(FB-0006): 우측 액티비티 바(VS Code 스타일 세로 아이콘 바) 항목 — 순수 로직.
@@ -17,7 +18,14 @@ export function isActivityOpen(id: ActivityId, state: ActivityOpenState): boolea
   return state[id]
 }
 
-const known = (v: unknown): v is ActivityId => ACTIVITY_ITEMS.includes(v as ActivityId)
+const known = (v: unknown): v is ActivityId => ACTIVITY_ITEMS.includes(v as ActivityId) && shown(v as ActivityId)
+
+/**
+ * 숨긴 기능의 항목은 아예 목록에 넣지 않는다(features.AI_CHAT — 0.1.0 에서 아라 대화 숨김).
+ * 저장된 순서에 남아 있어도 여기서 걸러진다. 되살리면 "빠진 항목은 뒤에 붙인다" 규칙이
+ * 알아서 다시 꽂는다.
+ */
+const shown = (id: ActivityId): boolean => AI_CHAT || id !== 'ai'
 
 /**
  * 저장된 순서 → 쓸 수 있는 순서. 저장값은 신뢰 경계 밖이라 세 가지를 손본다:
@@ -35,8 +43,8 @@ export function activityOrderOf(raw: unknown): ActivityId[] {
   const saved = Array.isArray(raw) ? raw.filter(known) : []
   const out: ActivityId[] = []
   for (const id of saved) if (!out.includes(id)) out.push(id)
-  if (out.length === 0) return [...ACTIVITY_ITEMS]
-  for (const id of ACTIVITY_ITEMS) if (!out.includes(id)) out.push(id)
+  if (out.length === 0) return ACTIVITY_ITEMS.filter(shown)
+  for (const id of ACTIVITY_ITEMS) if (shown(id) && !out.includes(id)) out.push(id)
   return out
 }
 

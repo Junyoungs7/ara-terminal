@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { AI_CHAT } from '../src/shared/features'
 import { KEYMAP, matchBinding, matchArrow, matchNumber, isAppShortcut } from '../src/shared/keymap'
 
 const ev = (init: Partial<KeyboardEvent>): KeyboardEvent =>
@@ -151,8 +152,10 @@ describe('isAppShortcut (터미널이 셸로 흘리면 안 되는 키)', () => {
     expect(isAppShortcut(ev({ ctrlKey: true, shiftKey: true, key: 'c' }))).toBe(true) // 복사
     expect(isAppShortcut(ev({ ctrlKey: true, shiftKey: true, key: 'f' }))).toBe(true) // 검색
     // W3: 아라가 배선되면서 두 조합이 앱 키가 됐다 — 이제 셸로 흘리지 않는다.
-    expect(isAppShortcut(ev({ ctrlKey: true, shiftKey: true, key: 'a' }))).toBe(true) // ai.ask
-    expect(isAppShortcut(ev({ altKey: true, key: 'a' }))).toBe(true) // ai.toggle
+    // 2026-08-23: 아라 대화를 숨기면 그 둘은 **다시 셸의 것**이 된다(features.AI_CHAT).
+    // 앱이 안 쓰는 키를 가로채면 셸에서 Alt+A 가 죽는다 — 숨김은 "안 보이게"가 아니라 "안 잡게"다.
+    expect(isAppShortcut(ev({ ctrlKey: true, shiftKey: true, key: 'a' }))).toBe(AI_CHAT) // ai.ask
+    expect(isAppShortcut(ev({ altKey: true, key: 'a' }))).toBe(AI_CHAT) // ai.toggle
   })
 
   it('평범한 타이핑은 셸로 그대로 보낸다', () => {

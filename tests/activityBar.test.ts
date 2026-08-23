@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { AI_CHAT } from '../src/shared/features'
 import {
   ACTIVITY_ITEMS,
   activityHiddenOf,
@@ -87,42 +88,50 @@ describe('활성 판정(isActivityOpen)', () => {
 
 // 2026-08-13 준영님 요청: 우측 바 항목을 껐다 켜고 순서도 바꾼다. 저장값은 신뢰 경계 밖이라
 // 읽는 쪽에서 손보는 규칙이 이 블록의 검증 대상이다.
+/**
+ * 지금 판에서 **실제로 보이는** 기본 순서. features.AI_CHAT 이 꺼져 있으면 'ai' 가 빠진다 —
+ * 기대값에 그 사실을 한 번만 적어 두고, 되살리면 이 상수가 알아서 다시 늘어난다.
+ */
+const VISIBLE = ACTIVITY_ITEMS.filter((x) => AI_CHAT || x !== 'ai')
+
 describe('저장된 순서 읽기(activityOrderOf)', () => {
   it('저장된 것이 없으면 기본 순서 그대로', () => {
-    expect(activityOrderOf(undefined)).toEqual([...ACTIVITY_ITEMS])
-    expect(activityOrderOf([])).toEqual([...ACTIVITY_ITEMS])
-    expect(activityOrderOf('쓰레기')).toEqual([...ACTIVITY_ITEMS])
+    expect(activityOrderOf(undefined)).toEqual([...VISIBLE])
+    expect(activityOrderOf([])).toEqual([...VISIBLE])
+    expect(activityOrderOf('쓰레기')).toEqual([...VISIBLE])
   })
 
   it('모르는 이름은 버리고 중복은 하나만 남긴다', () => {
-    const got = activityOrderOf(['log', '없는항목', 'log', 'ai'])
+    const got = activityOrderOf(['log', '없는항목', 'log', 'pastlog'])
     expect(got.filter((x) => x === 'log')).toHaveLength(1)
     expect(got).not.toContain('없는항목')
-    expect(got.slice(0, 2)).toEqual(['log', 'ai']) // 저장해 둔 순서가 앞에 그대로
+    expect(got.slice(0, 2)).toEqual(['log', 'pastlog']) // 저장해 둔 순서가 앞에 그대로
   })
 
   it('★ 빠진 항목을 기본 순서 자리에 끼워 넣는다 — 새 기능이 영영 안 보이면 안 된다', () => {
     // 사용자가 예전에 세 개만 저장해 뒀다고 하자. 나머지가 전부 살아 있어야 한다.
-    const got = activityOrderOf(['explorer', 'ai', 'log'])
-    expect([...got].sort()).toEqual([...ACTIVITY_ITEMS].sort())
+    const got = activityOrderOf(['explorer', 'pastlog', 'log'])
+    expect([...got].sort()).toEqual([...VISIBLE].sort())
     // 저장해 둔 순서는 그대로 지킨다.
-    expect(got.indexOf('explorer')).toBeLessThan(got.indexOf('ai'))
-    expect(got.indexOf('ai')).toBeLessThan(got.indexOf('log'))
+    expect(got.indexOf('explorer')).toBeLessThan(got.indexOf('pastlog'))
+    expect(got.indexOf('pastlog')).toBeLessThan(got.indexOf('log'))
   })
 
   // #91: 'console' 은 없어졌다(서버 콘솔 창이 [서버 작업대]에 흡수됐다). 옛 스냅샷에 남아 있어도
   // 모르는 이름으로 버려져야 한다 — 안 그러면 눌러도 아무 일 없는 아이콘이 바에 남는다.
   it('★ 없어진 항목(console)은 저장값에 남아 있어도 버린다', () => {
-    const got = activityOrderOf(['console', 'ai'])
+    const got = activityOrderOf(['console', 'pastlog'])
     expect(got).not.toContain('console')
-    expect([...got].sort()).toEqual([...ACTIVITY_ITEMS].sort())
+    expect([...got].sort()).toEqual([...VISIBLE].sort())
+    // 숨긴 기능도 같은 취급이다 — 저장값에 남아 있어도 목록에 안 들어온다(features.AI_CHAT).
+    if (!AI_CHAT) expect(activityOrderOf(['ai', 'log'])).not.toContain('ai')
   })
 
   it('빠진 항목은 기본 순서대로 뒤에 붙는다(예측 가능하게)', () => {
     const got = activityOrderOf(['monitor', 'explorer'])
     expect(got.slice(0, 2)).toEqual(['monitor', 'explorer'])
     // 나머지는 기본 순서 그대로 뒤에.
-    expect(got.slice(2)).toEqual(ACTIVITY_ITEMS.filter((x) => x !== 'monitor' && x !== 'explorer'))
+    expect(got.slice(2)).toEqual(VISIBLE.filter((x) => x !== 'monitor' && x !== 'explorer'))
   })
 })
 
