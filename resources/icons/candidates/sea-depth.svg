@@ -1,0 +1,17 @@
+<!-- 바다 4 — 수심. 선이 아니라 **면**으로 채운 세 층이라 아주 작을 때 가장 또렷하다.
+     아래로 갈수록 어두워지는 것이 '깊은 바다'를 만든다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
+  <defs>
+    <linearGradient id="bgD2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2a2f"/><stop offset="100%" stop-color="#171618"/>
+    </linearGradient>
+    <clipPath id="cardD2"><rect x="16" y="16" width="480" height="480" rx="112"/></clipPath>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgD2)"/>
+  <g clip-path="url(#cardD2)">
+    <path d="M0 214 q64 -50 128 0 q64 50 128 0 q64 -50 128 0 q64 50 128 0 L512 512 L0 512 Z" fill="#e8d3b0"/>
+    <path d="M0 300 q64 -50 128 0 q64 50 128 0 q64 -50 128 0 q64 50 128 0 L512 512 L0 512 Z" fill="#c9a26d"/>
+    <path d="M0 386 q64 -50 128 0 q64 50 128 0 q64 -50 128 0 q64 50 128 0 L512 512 L0 512 Z" fill="#8a6a3f"/>
+  </g>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="111.25" fill="none" stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+</svg>

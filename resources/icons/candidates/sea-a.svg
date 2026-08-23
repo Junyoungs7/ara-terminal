@@ -1,0 +1,16 @@
+<!-- 바다 3 — A 의 가로획이 파도. 이름(A.R.A)과 뜻(바다)이 한 글자 안에서 만난다.
+     넷 중 가장 '우리 것'인 형태 — 다른 앱에서 볼 일이 없다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
+  <defs>
+    <linearGradient id="bgA2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2a2f"/><stop offset="100%" stop-color="#171618"/>
+    </linearGradient>
+    <linearGradient id="legA2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c79f"/><stop offset="100%" stop-color="#c9a26d"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgA2)"/>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="111.25" fill="none" stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+  <path d="M142 378 L256 152 L370 378" fill="none" stroke="url(#legA2)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M186 302 q35 -30 70 0 q35 30 70 0" fill="none" stroke="#f0e0c6" stroke-width="26" stroke-linecap="round"/>
+</svg>
