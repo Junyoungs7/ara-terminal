@@ -10,9 +10,9 @@
  *   · `…exe.blockmap`           — 업데이트가 **바뀐 조각만** 받게 해 주는 색인(없으면 통째로 받는다)
  *   · `latest.yml`              — electron-updater 가 "새 버전이 있나"를 판단하는 파일
  *
- * latest.yml 은 publish 설정이 있어야 만들어진다. 없으면 여기서 멈추고 이유를 알려 준다 —
- * 조용히 넘어가면 사이트는 새 버전인데 아무도 업데이트를 못 받는 상태가 된다.
+ * latest.yml 은 electron-builder 가 남기면 그것을 쓰고, 없으면 **여기서 만든다**(아래 주석 참고).
  */
+import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -24,17 +24,49 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = pkg.version
 const exe = `${pkg.productName} Setup ${version}.exe`
 
-const need = [exe, `${exe}.blockmap`, 'latest.yml']
+const need = [exe, `${exe}.blockmap`]
 const missing = need.filter((f) => !existsSync(join(dist, f)))
 if (missing.length) {
   console.error(`dist/ 에 없는 파일: ${missing.join(', ')}`)
-  console.error('먼저 `npm run dist:win` 을 돌리세요. latest.yml 이 없다면 electron-builder.yml 의')
-  console.error('publish 설정이 빠진 것입니다(publish: null 이면 안 만들어집니다).')
+  console.error('먼저 `npm run dist:win` 을 돌리세요.')
   process.exit(1)
 }
 
 mkdirSync(out, { recursive: true })
 for (const f of need) copyFileSync(join(dist, f), join(out, f))
+
+/**
+ * latest.yml — 없으면 **여기서 만든다.**
+ *
+ * 원래는 electron-builder 가 써 준다. 그런데 이 PC 에서는 마지막 정리 단계(중간 산출물
+ * `*.nsis.7z` 삭제)가 `EBUSY` 로 죽는다 — 방금 쓴 95MB 파일을 백신·DLP 가 잡고 있는 동안 지우려다
+ * 나는 것으로, 설치본과 blockmap 은 **그 전에 이미 다 만들어진다.** 그 한 줄 때문에 배포 전체를
+ * 멈추느니, electron-updater 가 실제로 읽는 값(버전·파일명·크기·sha512)을 직접 계산해 쓴다.
+ * 형식은 electron-builder 의 generic provider 출력과 같다.
+ */
+const sha512 = (file) => createHash('sha512').update(readFileSync(file)).digest('base64')
+if (existsSync(join(dist, 'latest.yml'))) {
+  copyFileSync(join(dist, 'latest.yml'), join(out, 'latest.yml'))
+} else {
+  const target = join(out, exe)
+  const hash = sha512(target)
+  writeFileSync(
+    join(out, 'latest.yml'),
+    [
+      `version: ${version}`,
+      'files:',
+      `  - url: ${exe}`,
+      `    sha512: ${hash}`,
+      `    size: ${statSync(target).size}`,
+      `path: ${exe}`,
+      `sha512: ${hash}`,
+      `releaseDate: '${new Date().toISOString()}'`,
+      ''
+    ].join('\n'),
+    'utf8'
+  )
+  console.log('latest.yml 을 직접 만들었습니다(electron-builder 가 남기지 않았습니다).')
+}
 
 const bytes = statSync(join(out, exe)).size
 const size = `${(bytes / 1024 / 1024).toFixed(1)} MB`
