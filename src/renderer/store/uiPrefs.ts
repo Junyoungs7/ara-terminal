@@ -20,6 +20,8 @@ const DEFAULT_PREFS: UiPrefs = {
   ...termPrefs,
   sessionLog: DEFAULT_SESSION_LOG,
   logRetentionDays: DEFAULT_LOG_RETENTION_DAYS,
+  sessionLogDir: '',
+  appLogDir: '',
   aiProvider: DEFAULT_AI_PROVIDER,
   aiModels: aiModelsOf(undefined),
   aiCompatibleBaseUrl: '',

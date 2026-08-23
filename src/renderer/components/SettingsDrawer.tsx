@@ -122,6 +122,54 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 // 항목 하나 = 제목 → 설명 → 컨트롤(위에서 아래로). 준영님 피드백(2026-08-13)으로 배치를 통일했다 —
 // 그전엔 컨트롤이 오른쪽 끝에 붙어 있어, 설명이 길면 제목과 짝이 안 읽혔다.
 // 예전 `stack` 예외(넓은 컨트롤만 아래로)는 이제 전부가 그 배치라 사라졌다.
+/**
+ * 폴더 하나를 고르는 줄(2026-08-23 설정 [기록 폴더]).
+ *
+ * **경로를 직접 타이핑하게 두지 않는다** — 오타 난 경로는 "안 써지는데 이유를 모르는" 상태가
+ * 된다. OS 폴더 선택 창으로만 정하고(fs.pickDir), 지금 어디로 가는지는 늘 보여 준다.
+ * 빈 값 = 기본 자리라 그 경로는 main 에게 물어 온다(그 자리는 main 만 안다).
+ */
+function DirRow({
+  label,
+  desc,
+  value,
+  onChange
+}: {
+  label: string
+  desc: string
+  value: string
+  onChange: (next: string) => void
+}) {
+  const [effective, setEffective] = useState('')
+  useEffect(() => {
+    void window.ev?.app
+      ?.logPaths?.()
+      .then((p) => setEffective(label === t('settings.dir.session') ? p.sessionLogDir : p.appLogDir))
+      .catch(() => {})
+  }, [value, label])
+  return (
+    <Row label={label} desc={desc}>
+      <div className="set-dir">
+        <span className="set-dir-path" title={effective}>
+          {effective || t('settings.dir.loading')}
+          {!value && <span className="set-dir-tag">{t('settings.dir.default')}</span>}
+        </span>
+        <button
+          type="button"
+          className="btn sec"
+          data-action="dir.pick"
+          onClick={() => void window.ev?.fs?.pickDir?.().then((d) => d && onChange(d))}
+        >
+          {t('settings.dir.pick')}
+        </button>
+        <button type="button" className="btn sec" data-action="dir.reset" disabled={!value} onClick={() => onChange('')}>
+          {t('settings.dir.reset')}
+        </button>
+      </div>
+    </Row>
+  )
+}
+
 function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className="set-row">
@@ -792,6 +840,20 @@ export function SettingsDrawer({
                   {t('settings.logFolder.btn')}
                 </button>
               </Row>
+              {/* 2026-08-23 준영님 요청 — 어디에 쌓을지 고른다. 둘로 나눈 이유는 성격이 달라서다:
+                  세션 기록은 크고 사람이 열어 보는 것, 앱 로그는 문제 생겼을 때만 보는 진단용. */}
+              <DirRow
+                label={t('settings.dir.session')}
+                desc={t('settings.dir.session.desc')}
+                value={prefs.sessionLogDir}
+                onChange={(sessionLogDir) => onPrefsChange({ sessionLogDir })}
+              />
+              <DirRow
+                label={t('settings.dir.app')}
+                desc={t('settings.dir.app.desc')}
+                value={prefs.appLogDir}
+                onChange={(appLogDir) => onPrefsChange({ appLogDir })}
+              />
               <div className="set-note">{t('settings.log.note')}</div>
             </>
           )}

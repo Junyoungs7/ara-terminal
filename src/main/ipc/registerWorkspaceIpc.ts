@@ -1,6 +1,7 @@
 // workspace 도메인 IPC 핸들러 (계획서 §B.2). 채널명은 shared/ipc.ts 계약과 일치.
 // F11 명령어 히스토리도 여기서 받는다 — userData 에 JSON 을 얹는 같은 영속 도메인이라
 // registrar 를 하나 더 만들 이유가 없다(저장 파일만 다르다: workspace.json / history.json).
+import { join, isAbsolute } from 'node:path'
 import { app } from 'electron'
 import { detachedWindowStates } from '../windows/SessionWindows'
 import { handle } from './handle'
@@ -50,6 +51,16 @@ export function registerWorkspaceIpc(
     return { ok: true } as const
   })
   handle('app:getVersion', () => app.getVersion())
+  /**
+   * 지금 **실제로 쓰이는** 기록 폴더(2026-08-23 설정). 저장값이 비어 있으면 기본 자리를 쓰는데,
+   * 그 기본이 어디인지는 main 만 안다 — 화면이 "(기본) …\logs" 라고 보여 줄 수 있게 셋을 준다.
+   */
+  handle('app:logPaths', () => {
+    const defaultDir = join(app.getPath('userData'), 'logs')
+    const ui = store.get().ui
+    const pick = (v: string | undefined): string => (v && isAbsolute(v) ? v : defaultDir)
+    return { sessionLogDir: pick(ui.sessionLogDir), appLogDir: pick(ui.appLogDir), defaultDir }
+  })
 
   // F11 명령어 히스토리. 렌더러가 보내는 값은 신뢰 경계 밖이라 HistoryStore 가 형을 확인하고
   // scope 당 상한을 강제한다. 비밀 마스킹도 HistoryStore 가 한다 — 렌더러의 프롬프트 판정(shouldRecord)은

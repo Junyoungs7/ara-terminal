@@ -48,7 +48,8 @@ const api: EvApi = {
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', { url }),
     // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 두 가지(셸 문법 · CLI 존재).
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
-    hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found)
+    hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found),
+    logPaths: () => ipcRenderer.invoke('app:logPaths')
   },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -112,6 +113,7 @@ const api: EvApi = {
     move: (paths: string[], destDir: string) => ipcRenderer.invoke('fs:move', { paths, destDir }),
     drives: () =>
       ipcRenderer.invoke('fs:drives').then((r: { drives: { path: string; label: string }[] }) => r.drives),
+    pickDir: () => ipcRenderer.invoke('fs:pickDir').then((r: { dir: string | null }) => r.dir),
     // #89: 로컬 삭제는 휴지통이다(원격 sftp.remove 는 영구). 이름이 그 차이를 말한다.
     trash: (paths: string[]) => ipcRenderer.invoke('fs:trash', { paths }),
     openPath: (path: string) => ipcRenderer.invoke('fs:openPath', { path }),

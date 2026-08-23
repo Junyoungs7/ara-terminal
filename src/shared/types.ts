@@ -336,6 +336,15 @@ export type UiPrefs = {
   // F12: 세션 로그 기록 여부·보존 기간. 전용 설정 채널을 만들지 않고 이 묶음에 얹는다.
   sessionLog: boolean
   logRetentionDays: number
+  /**
+   * 2026-08-23 준영님 요청 — 기록을 **어디에 쌓을지** 고를 수 있게. 빈 문자열이면 기본 자리
+   * (userData/logs). 둘로 나눈 이유는 성격이 다르기 때문이다:
+   *  · sessionLogDir — **세션 기록**(내가 친 명령과 그 출력). 용량이 크고, 사람이 열어 본다.
+   *  · appLogDir — **앱 로그**(main-error.log 등 진단용). 문제 생겼을 때만 본다.
+   * 값은 렌더러가 보낸 것이라 신뢰 경계 밖이다 — main 이 절대경로만 받아들인다.
+   */
+  sessionLogDir: string
+  appLogDir: string
   // W5: 아라가 쓸 프로바이더 + 프로바이더별 모델(4개 전부 확정값 — aiModelsOf 가 채운다).
   // API 키는 여기 없다 — 키는 프로바이더별로 vault 에만 있고(`ai.apiKey.<provider>`) 이 묶음은
   // workspace.json 으로 간다. baseUrl 은 compatible 전용, 비밀이 아니라(사용자가 직접 보는 값) vault 대상이 아니다.
@@ -375,6 +384,9 @@ export type UiState = {
   // F12 [로그]: 세션 로그 기록·보존 기간. 미지정이면 꺼짐 / 30일.
   sessionLog?: boolean
   logRetentionDays?: number
+  // 2026-08-23: 기록을 쌓을 폴더(빈 값 = 기본 자리). UiPrefs 의 같은 이름 주석 참고.
+  sessionLogDir?: string
+  appLogDir?: string
   // W5 [AI]: 아라가 쓸 프로바이더 + 프로바이더별 모델. 미지정 필드는 aiProviderOf/aiModelsOf 가
   // 기본값으로 채운다. 키는 여기 없다(vault 전용, 프로바이더별로 분리 저장).
   aiProvider?: AiProvider

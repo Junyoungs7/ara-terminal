@@ -138,6 +138,11 @@ export type InvokeContract = {
   //   launchShell — 기본 셸의 조립 규칙(powershell.exe 5.1 은 `&&` 가 파서 오류다).
   //   hasCli      — 그 실행 파일이 이 PC 에 있는가(where/which, 셸을 거치지 않는다).
   'app:launchShell': { req: void; res: { shell: LaunchShell } }
+  /**
+   * 2026-08-23 설정 [기록 폴더] — 지금 **실제로 쓰이는** 두 폴더와 기본 자리.
+   * 화면이 저장된 설정값만 보면 "빈 값 = 기본"이 어디인지 못 보여 준다(그 값은 main 만 안다).
+   */
+  'app:logPaths': { req: void; res: { sessionLogDir: string; appLogDir: string; defaultDir: string } }
   'app:hasCli': { req: { bin: string }; res: { found: boolean } }
   // session 도메인 (계획서 §B.2/§B.7). create/resize/destroy/list.
   'session:create': { req: SessionSpec; res: { id: string } }
@@ -244,6 +249,8 @@ export type InvokeContract = {
   // 로컬↔로컬 전용 — 원격이 끼면 전송이라 sftp:* 가 맡는다.
   'fs:move': { req: { paths: string[]; destDir: string }; res: FileOpResult }
   // #88 R2: 드라이브 목록(윈도우 "내 PC"). 맥은 루트 + /Volumes 마운트.
+  /** 폴더 하나 고르기(설정의 기록 폴더). 취소하면 null — 경로를 렌더러가 지어내지 못한다. */
+  'fs:pickDir': { req: void; res: { dir: string | null } }
   'fs:drives': { req: void; res: { drives: { path: string; label: string }[] } }
   // #89: 로컬 삭제는 **휴지통**(shell.trashItem)이다. 이름이 remove 가 아닌 이유 — 실제로 그렇게
   // 동작하고, 영구 삭제 경로는 남겨 두지 않는다(있으면 언젠가 실수로 그쪽이 배선된다).
@@ -462,6 +469,8 @@ export type EvApi = {
     launchShell(): Promise<LaunchShell>
     /** #90: 그 실행 파일이 이 PC 에 있는가(where/which). 원격의 cliInstalled 에 대응한다. */
     hasCli(bin: string): Promise<boolean>
+    /** 지금 쓰이는 기록 폴더 두 곳 + 기본 자리(설정 화면이 보여 준다). */
+    logPaths(): Promise<{ sessionLogDir: string; appLogDir: string; defaultDir: string }>
   }
   window: {
     minimize(): Promise<{ ok: true }>
@@ -606,6 +615,8 @@ export type EvApi = {
     move(paths: string[], destDir: string): Promise<FileOpResult>
     /** #88 R2: 드라이브 목록(윈도우 "내 PC"). 맥은 루트 + /Volumes 마운트. */
     drives(): Promise<{ path: string; label: string }[]>
+    /** 폴더 고르기(설정의 기록 폴더). 취소면 null. */
+    pickDir(): Promise<string | null>
     /** #89: 로컬 삭제는 **휴지통**으로. 원격(sftp.remove)은 영구 — 서버에 휴지통이 없다. */
     trash(paths: string[]): Promise<FileOpResult>
     /** #89: 연결 프로그램으로 열기(이미지·PDF·xlsx). 로컬 전용 — 원격은 편집기/다운로드. */

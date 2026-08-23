@@ -104,6 +104,10 @@ export function tailSegs(sessionId: string, n: number): TailSeg[][] {
     for (let x = 0; x < line.length; x++) {
       const cell = line.getCell(x)
       if (!cell) continue
+      // **넓은 글자(한글·CJK·이모지)는 셀 두 칸을 차지한다.** 뒤쪽 칸은 폭 0 이고 글자가 비어 있다 —
+      // 그걸 공백으로 채우면 `카 드 A_표 식` 처럼 글자 사이가 벌어진다(2026-08-23 PREV-4 가 잡았다.
+      // 색을 입히면서 translateToString 대신 셀을 직접 훑기 시작한 그 순간 생긴 결함이다).
+      if (cell.getWidth() === 0) continue
       const ch = cell.getChars() || ' '
       const mode = cell.getFgColorMode()
       // mode: 0=기본 · 1=P16 · 2=P256 · 3=RGB(xterm 내부 상수와 같은 순서).

@@ -134,7 +134,13 @@ test('CLIP-6 선택 시 자동 복사는 기본 켜짐이고 설정에서 끌 �
 
   // 기본값 확인 + 실제 동작(선택 후 mouseup 시점에 복사).
   const toggle = page.locator('.drawer .set-row:has(.sr-label:text-is("선택 시 자동 복사")) .set-toggle')
-  await page.keyboard.press('Control+,')
+  // 이 설정은 [일반] 섹션에 있다(터미널 동작이지만 화면 전체 습관이라 그쪽에 뒀다) — 열린 섹션을
+  // 가정하지 않고 눌러서 간다.
+  const openTerminalSection = async (): Promise<void> => {
+    await page.keyboard.press('Control+,')
+    await page.click('.drawer .set-nav [data-section="general"]')
+  }
+  await openTerminalSection()
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await page.keyboard.press('Escape')
 
@@ -146,7 +152,7 @@ test('CLIP-6 선택 시 자동 복사는 기본 켜짐이고 설정에서 끌 �
   await expect.poll(() => readClipboard(app), { timeout: 10_000 }).toContain('자동복사_대상')
 
   // 끄면 같은 선택으로도 클립보드가 바뀌지 않는다.
-  await page.keyboard.press('Control+,')
+  await openTerminalSection()
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-checked', 'false')
   await page.keyboard.press('Escape')

@@ -1,6 +1,6 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
 import { app, BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 import { appendFileSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
@@ -28,6 +28,7 @@ import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
+import { setMainErrorLogDir } from './log/MainErrorLog'
 import { logMainError } from './log/MainErrorLog'
 import { aiModelsOf, aiProviderOf, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
 import type { MainSessionManager } from './sessions/MainSessionManager'
@@ -140,8 +141,21 @@ app.whenReady().then(() => {
   }
 
   const logDir = join(userData, 'logs')
+  /**
+   * 2026-08-23 준영님 요청 — 기록 폴더를 설정에서 고른다. 빈 값이면 기본 자리.
+   * **절대경로만 받는다**: 렌더러가 보낸 값이라 신뢰 경계 밖이고, 상대경로는 main 의 cwd(설치
+   * 폴더)를 기준으로 풀려 엉뚱한 데 쓰게 된다.
+   */
+  const dirPref = (v: string | undefined): string => (v && isAbsolute(v) ? v : logDir)
+  const savedDirs = store.get().ui
+  const sessionDir = dirPref(savedDirs.sessionLogDir)
+  setMainErrorLogDir(dirPref(savedDirs.appLogDir))
   // ui:setPrefs 가 도착하면 로거에 즉시 반영한다(전용 설정 채널을 만들지 않는다).
-  registerWorkspaceIpc(store, history, (prefs) => sessionLog?.setPrefs(prefs.sessionLog, prefs.logRetentionDays))
+  registerWorkspaceIpc(store, history, (prefs) => {
+    sessionLog?.setPrefs(prefs.sessionLog, prefs.logRetentionDays)
+    sessionLog?.setDir(dirPref(prefs.sessionLogDir))
+    setMainErrorLogDir(dirPref(prefs.appLogDir))
+  })
   // F8/F23: 세션이 끝나면 그 세션의 포워딩도 접는다. 사람이 타이핑하면(session:input) MCP 승인
   // 매니저가 그 세션의 autoAllow 를 해제한다(설계 §3.3). forwards·mcp 는 아래에서 대입되지만 화살표가
   // 변수를 캡처하므로 실행 시점엔 채워져 있다(늦은 바인딩 — forwards 와 같은 최소 diff 경로).
@@ -173,11 +187,11 @@ app.whenReady().then(() => {
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
   remoteConsole = registerRemoteIpc(sessions, getWebContents)
-  forwards = registerForwardIpc(sessions, () => mainWindow, logDir).forwards
+  forwards = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir).forwards
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(
-    logDir,
+    sessionDir,
     savedUi.sessionLog ?? DEFAULT_SESSION_LOG,
     savedUi.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS
   )

@@ -5,7 +5,8 @@ import { test, expect, newLocalShell, persist, quitAra, sessionList } from './fi
 test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ ara }) => {
   const { page } = ara
   const titles = await page.locator('.tb-menu span').allTextContents()
-  expect(titles).toEqual(['File', 'Edit', 'Session', 'Split', 'View', 'Help'])
+  // 2026-08-21(b7dd258)에 메뉴바가 한글이 됐다 — 라벨은 MENUBAR 단일 출처에서 온다.
+  expect(titles).toEqual(['파일', '편집', '세션', '분할', '보기', '도움말'])
   for (const title of titles) {
     await page.click(`.tb-menu span:text-is("${title}")`)
     await expect(page.locator('.ctx-menu')).toBeVisible()
@@ -19,7 +20,7 @@ test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ 
 test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await page.click('.tb-menu span:text-is("Split")')
+  await page.click('.tb-menu span:text-is("분할")')
   await page.click('.ctx-menu .ctx-item[data-action="split.horizontal"]')
   await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
   await expect(page.locator('.pane-grid .div-row')).toHaveCount(1)
@@ -28,7 +29,7 @@ test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async (
 // CHROME-3 Help > A.R.A 정보
 test('CHROME-3 Help 메뉴에서 앱 정보를 연다', async ({ ara }) => {
   const { page } = ara
-  await page.click('.tb-menu span:text-is("Help")')
+  await page.click('.tb-menu span:text-is("도움말")')
   await page.click('.ctx-menu .ctx-item[data-action="help.about"]')
   await expect(page.locator('.dlg-overlay .modal.sm')).toContainText('A.R.A 정보')
   await expect(page.locator('.dlg-overlay .dlg-detail')).toContainText('버전')
@@ -73,12 +74,16 @@ test('CHROME-6 사이드바를 접고 펴고 탭을 전환한다', async ({ ara 
   await expect(sidebar).not.toHaveClass(/collapsed/)
   // Ctrl+Shift+E = [파일] 탭 토글. 세션이 있어야 한다 — 세션이 0개면 [파일] 탭은 disabled 이고
   // 사이드바가 [연결] 로 고정된다(Sidebar.tsx: `const tab = fileSession ? active : 'conn'`).
+  //
+  // 2026-08-22(준영님 제보 6번): 셸을 열면 앱이 **스스로 [파일] 로 넘어간다**(연 폴더를 바로
+  // 보여 준다). 그래서 여기서 Ctrl+Shift+E 는 여는 키가 아니라 **닫는 키**다 — 그게 같은 규칙이다.
   await newLocalShell(page)
-  await page.keyboard.press('Control+Shift+E')
   await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
-  // 같은 것을 다시 누르면 닫는다 — 단축키도 레일과 같은 규칙이다(예전엔 [연결] 로 넘어갔다).
   await page.keyboard.press('Control+Shift+E')
   await expect(sidebar).toHaveClass(/collapsed/)
+  // 다시 누르면 [파일] 로 돌아온다.
+  await page.keyboard.press('Control+Shift+E')
+  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
 })
 
 // CHROME-7 사이드바 폭 드래그 + 재기동 후 폭 유지(R4.3)

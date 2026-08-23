@@ -1,7 +1,7 @@
 // fs 도메인 IPC 핸들러 (R7). 로컬 세션의 [파일] 탭 — sftp:* 와 같은 계약 형태(sessionId 만 없다).
 // 실제 파일시스템 조작이므로 렌더러가 보낸 값은 여기서 형만 확인하고 통과시킨다
 // (경로 탈출 방지는 LocalFs.invalidName 이 이름 입력에서 막는다 — 경로 자체는 사용자가 트리에서 고른 것).
-import { app, shell } from 'electron'
+import { dialog, app, shell } from 'electron'
 import { handle } from './handle'
 import { list, renameEntry, makeDir, makeFile, makeDirP, moveEntries, drives, trash, copyEntries, freeName } from '../fs/LocalFs'
 import { saveBytes } from '../fs/saveBytes'
@@ -9,6 +9,12 @@ import { saveBytes } from '../fs/saveBytes'
 const badPath = { ok: false as const, message: '잘못된 경로입니다.' }
 
 export function registerFsIpc(): void {
+  // 설정의 기록 폴더 고르기. **경로를 렌더러가 지어낼 수 없다** — 사용자가 고른 것만 돌려준다.
+  handle('fs:pickDir', async () => {
+    const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    return { dir: res.canceled ? null : (res.filePaths[0] ?? null) }
+  })
+
   handle('fs:list', ({ path }) =>
     typeof path === 'string' ? list(path) : Promise.resolve({ ok: false as const, message: badPath.message })
   )

@@ -242,6 +242,13 @@ export type SessionLogService = {
   sweep(): number
   /** 이 세션이 지금 쓰고 있는 로그 파일 경로(기록 off·미개시면 null). 로그 패널이 읽어 간다. */
   pathOf(sessionId: string): string | null
+  /**
+   * 기록을 쌓을 폴더를 바꾼다(2026-08-23 설정 [세션 기록 폴더]).
+   * 열려 있던 파일은 **닫고** 새 폴더로 간다 — 한 세션의 기록이 두 폴더에 쪼개지지만, 그 편이
+   * 옛 폴더에 계속 쓰는 것보다 정직하다(사용자는 "지금부터 여기"를 기대한다).
+   * 지난 기록 목록(listPast)도 새 폴더를 본다 — 옛 폴더의 파일은 그대로 남는다(지우지 않는다).
+   */
+  setDir(next: string): void
   /** #86: 남아 있는 지난 세션 기록. 최근 것이 앞이다. */
   listPast(): PastLog[]
   /**
@@ -259,7 +266,8 @@ export type SessionLogService = {
   dir: string
 }
 
-export function createSessionLog(dir: string, enabled: boolean, retentionDays: number): SessionLogService {
+export function createSessionLog(dir0: string, enabled: boolean, retentionDays: number): SessionLogService {
+  let dir = dir0 // setDir 로 바뀐다(설정 [세션 기록 폴더])
   const entries = new Map<string, Entry>()
   let on = enabled
   let keepDays = clampRetention(retentionDays)
@@ -326,6 +334,14 @@ export function createSessionLog(dir: string, enabled: boolean, retentionDays: n
 
     pathOf(sessionId) {
       return entries.get(sessionId)?.path ?? null
+    },
+
+    setDir(next) {
+      if (!next || next === dir) return
+      this.closeAll()
+      dir = next
+      // `dir` 은 인터페이스에도 노출된 값이라(로그 패널·[폴더 열기]가 읽는다) 함께 갱신한다.
+      ;(this as { dir: string }).dir = next
     },
 
     // 테스트 seam(위 타입 주석 참고) — 아직 줄이 안 끝나 파일로 못 나간 꼬리의 합.

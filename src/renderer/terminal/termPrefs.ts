@@ -27,6 +27,8 @@ export const termPrefs: Omit<
   | 'uiScale'
   | 'sessionLog'
   | 'logRetentionDays'
+  | 'sessionLogDir'
+  | 'appLogDir'
   | 'aiProvider'
   | 'aiModels'
   | 'aiCompatibleBaseUrl'
@@ -54,6 +56,8 @@ export function prefsFrom(
     | 'bell'
     | 'sessionLog'
     | 'logRetentionDays'
+    | 'sessionLogDir'
+    | 'appLogDir'
     | 'aiProvider'
     | 'aiModels'
     | 'aiCompatibleBaseUrl'
@@ -72,6 +76,9 @@ export function prefsFrom(
     // 기본 off — 사용자가 켜지 않으면 파일이 생기지 않는다(설계 §5.5 / 보안 체크리스트).
     sessionLog: ui.sessionLog ?? DEFAULT_SESSION_LOG,
     logRetentionDays: ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
+    // 빈 문자열 = 기본 자리(userData/logs). main 이 그 뜻으로 읽는다.
+    sessionLogDir: ui.sessionLogDir ?? '',
+    appLogDir: ui.appLogDir ?? '',
     // 손상·구버전 스냅샷은 aiProviderOf/aiModelsOf 가 기본값으로 내린다(main 이 같은 함수로 다시 클램프한다).
     aiProvider: aiProviderOf(ui.aiProvider),
     aiModels: aiModelsOf(ui.aiModels),

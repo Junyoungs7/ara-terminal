@@ -5,12 +5,13 @@ import { registerTerm, tailSegs, unregisterTerm } from '../src/renderer/terminal
 // 색을 살리되 **같은 색이 이어지는 구간으로 묶는 것**이 이 함수의 전부다 — 셀마다 span 을 만들면
 // 카드 하나에 수백 개가 되고, 1.5초마다 세션 수만큼 돌아 프리뷰가 무거워진다.
 
-/** xterm 셀 흉내. mode: 0=기본 · 1=P16 · 2=P256 · 3=RGB. */
-const cell = (ch: string, mode = 0, fg = 0, bold = 0) => ({
+/** xterm 셀 흉내. mode: 0=기본 · 1=P16 · 2=P256 · 3=RGB. width 0 = 넓은 글자의 **뒤쪽** 칸. */
+const cell = (ch: string, mode = 0, fg = 0, bold = 0, width = 1) => ({
   getChars: () => ch,
   getFgColorMode: () => mode,
   getFgColor: () => fg,
-  isBold: () => bold
+  isBold: () => bold,
+  getWidth: () => width
 })
 
 /** 셀 배열 → 줄. */
@@ -82,6 +83,18 @@ describe('tailSegs — 미니 프리뷰 색 구간', () => {
     mount('s1', [line(plain('1')), line(plain('2')), line(plain('3'))])
     const rows = tailSegs('s1', 2)
     expect(rows.map((r) => r.map((s) => s.text).join(''))).toEqual(['2', '3'])
+  })
+
+  /**
+   * ★ 2026-08-23 — 미니 프리뷰에 `카 드 A_표 식` 처럼 한글 사이가 벌어졌다(e2e PREV-4 가 잡았다).
+   * 넓은 글자는 셀 **두 칸**을 차지하고 뒤쪽 칸은 폭 0 · 글자 없음이다. 그 칸을 공백으로 메우면
+   * 글자마다 공백이 하나씩 끼어든다. 색을 입히려고 translateToString 대신 셀을 직접 훑기
+   * 시작하면서 생긴 결함이다.
+   */
+  it('★ 넓은 글자(한글)의 뒤쪽 칸을 공백으로 만들지 않는다', () => {
+    // `가나` = 앞칸(글자, 폭 2) + 뒷칸(빈 글자, 폭 0) 두 쌍.
+    mount('s1', [line([cell('가', 0, 0, 0, 2), cell('', 0, 0, 0, 0), cell('나', 0, 0, 0, 2), cell('', 0, 0, 0, 0)])])
+    expect(tailSegs('s1', 3)[0].map((s) => s.text).join('')).toBe('가나')
   })
 
   it('세션마다 자기 화면을 본다', () => {

@@ -32,11 +32,20 @@ function makeWorkdir(): string {
 const row = (page: Page, name: string) => page.locator(`.ftree .frow:has(.fn:text-is("${name}"))`)
 const names = (page: Page) => page.locator('.ftree .frow .fn').allTextContents()
 
-// 로컬 셸을 열고 작업 폴더로 이동한 뒤 [파일] 탭을 연다(터미널→트리 동기가 진입 경로다).
+/**
+ * 로컬 셸을 열고 작업 폴더로 이동한 뒤 [파일] 탭이 그 폴더를 보게 한다(터미널→트리 동기가 진입 경로다).
+ *
+ * 2026-08-22(준영님 제보 6번)부터 셸을 열면 **앱이 스스로 [파일] 로 넘어간다**. 그전 코드처럼
+ * Ctrl+Shift+E 를 누르면 그건 **닫는** 동작이 된다(같은 것을 다시 누르면 닫힌다 — 레일 규칙).
+ * 그래서 지금은 "열려 있으면 그대로, 아니면 연다"로 맞춘다.
+ */
 async function openFileTabAt(page: Page, dir: string): Promise<void> {
   const id = await newLocalShell(page)
   await runCommand(page, id, `cd "${slash(dir)}"`)
-  await page.keyboard.press('Control+Shift+E')
+  const rail = page.locator('.lrail-item[data-tab="file"]')
+  if (!(await rail.evaluate((el) => el.classList.contains('active')).catch(() => false))) {
+    await page.keyboard.press('Control+Shift+E')
+  }
   await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
   await expect(row(page, '문서/')).toBeVisible({ timeout: 25_000 })
 }
@@ -80,11 +89,20 @@ test('TREE-1★ 사이드바 트리를 Tab·화살표·Enter 로 조작한다', 
   await tree.focus()
   await expect(page.locator('.tree [role="treeitem"]:focus')).toHaveCount(1)
 
-  // ↓ 로 내려가면 포커스가 실제로 다른 행으로 옮겨간다.
-  const before = await page.evaluate(() => document.activeElement?.textContent ?? '')
-  await page.keyboard.press('ArrowDown')
-  const after = await page.evaluate(() => document.activeElement?.textContent ?? '')
-  expect(after).not.toBe(before)
+  // 화살표로 포커스가 실제로 다른 행으로 옮겨간다.
+  //
+  // 두 가지를 가정하지 않는다:
+  //  · **글자로 비교하지 않는다** — 서버 행과 그 아래 세션 행은 이름이 같다(`SSH<프로필명>`).
+  //  · **시작 위치를 정해 두지 않는다** — 컨테이너에 포커스를 주면 트리는 **지금 쓰는 세션**으로
+  //    간다(그게 맞는 동작이다). 그 행이 마지막이면 ↓ 는 갈 곳이 없다.
+  const focused = () => page.evaluate(() => `${document.activeElement?.className}|${document.activeElement?.textContent}`)
+  const before = await focused()
+  const atTop = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.tree [role="treeitem"]')]
+    return rows.indexOf(document.activeElement as Element) <= 0
+  })
+  await page.keyboard.press(atTop ? 'ArrowDown' : 'ArrowUp')
+  expect(await focused()).not.toBe(before)
 
   // 그룹 헤더에서 ← 는 접고 → 는 다시 편다(aria-expanded 가 따라 바뀐다).
   const grp = page.locator('.tree .srv-hd[role="treeitem"]').first()

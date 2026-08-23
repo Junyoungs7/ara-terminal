@@ -1,5 +1,5 @@
 // 설정 창 8섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP) — 즉시 적용 · 영속 · 라이선스 고지
-import { test, expect, newLocalShell, persist, quitAra } from './fixtures'
+import { test, expect, newLocalShell, persist, quitAra, openConnTab } from './fixtures'
 
 const drawer = '.drawer.open'
 
@@ -17,7 +17,7 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 8개 섹션을 �
   await expect(page.locator(drawer)).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await page.click('.tb-menu span:text-is("File")')
+  await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await expect(page.locator(drawer)).toBeVisible()
 
@@ -122,12 +122,22 @@ test('SET-8 [단축키]의 tmux 사용법 보기가 명령어 북을 tmux 카테
 })
 
 // SET-9 (UI-font) 폰트를 바꾸면 UI(사이드바 세션명)도 터미널과 같은 폰트로 즉시 바뀐다
-test('SET-9 폰트를 바꾸면 사이드바 세션명도 같은 폰트로 즉시 바뀐다', async ({ ara }) => {
+// SET-9 (G, 2026-08-21) 폰트 설정은 **터미널만** 바꾼다 — 사이드바·설정 같은 크롬 글꼴은 그대로다.
+//
+// 규칙이 뒤집힌 자리다. UI-font 시절에는 `--mono === --term` 이라 사이드바 세션명까지 코딩용
+// 고정폭으로 바뀌었고, 이 검사도 그것을 확인했다. G 에서 **크롬 글꼴을 분리**했다(design-system §2:
+// "그게 개발용 티의 8할이었다") — 이제 `--ui`(Pretendard) 고정이고 사용자가 고르는 것은 `--term` 뿐이다.
+test('SET-9★ 폰트 설정은 터미널만 바꾸고 사이드바 글꼴은 그대로다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
+  // 셸을 열면 사이드바가 [파일] 로 넘어간다(2026-08-22 제보 6번) — 트리를 보려면 돌아온다.
+  await openConnTab(page)
   const sessName = page.locator('.sess-node .sess-name').first()
   await expect(sessName).toBeVisible()
-  const before = await sessName.evaluate((el) => getComputedStyle(el).fontFamily)
+  const chromeFont = await sessName.evaluate((el) => getComputedStyle(el).fontFamily)
+  const termBefore = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--term').trim()
+  )
 
   await page.keyboard.press('Control+,')
   await page.click(`${drawer} .set-nav [data-section="font"]`)
@@ -135,19 +145,18 @@ test('SET-9 폰트를 바꾸면 사이드바 세션명도 같은 폰트로 즉�
   expect(await items.count()).toBeGreaterThan(1)
   // 현재 선택과 다른 항목을 고른다(0 이 이미 선택돼 있으면 1을, 아니면 0을 고른다).
   const alreadySel = (await items.nth(0).getAttribute('class'))?.includes('sel') ?? false
-  const pick = items.nth(alreadySel ? 1 : 0)
-  await pick.click()
+  await items.nth(alreadySel ? 1 : 0).click()
   await page.keyboard.press('Escape')
 
+  // 터미널 글꼴은 바뀐다.
   await expect
-    .poll(async () => sessName.evaluate((el) => getComputedStyle(el).fontFamily))
-    .not.toBe(before)
-  const afterSidebar = await sessName.evaluate((el) => getComputedStyle(el).fontFamily)
-  const mono = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--mono'))
-  // --mono 는 store/font.ts 의 bindCssVars 가 --term 과 항상 같게 세팅한다(UI-font) — 사이드바가 그 값을 그대로
-  // 따르는지 확인한다(브라우저가 홑/겹 인용부호를 폰트명 공백 유무에 따라 다르게 정규화하므로 인용부호를 떼고 비교).
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--term').trim()))
+    .not.toBe(termBefore)
+  // 사이드바는 그대로다 — 크롬은 --ui 를 쓴다.
+  expect(await sessName.evaluate((el) => getComputedStyle(el).fontFamily)).toBe(chromeFont)
+  const ui = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ui'))
   const strip = (s: string) => s.replace(/["']/g, '')
-  expect(strip(afterSidebar)).toBe(strip(mono.trim()))
+  expect(strip(chromeFont)).toBe(strip(ui.trim()))
 })
 
 // SET-8 설정이 재기동 후에도 유지된다

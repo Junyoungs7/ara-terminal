@@ -89,10 +89,11 @@ test('RDP-5 RDP 트리 메뉴는 새 세션·호스트키 재설정이 빠진 �
   await srvNode(ara.page, 'ssh-menu').click({ button: 'right' })
   const sshActions = await ara.page.locator('.ctx-menu .ctx-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-action')))
   // FB-monitor: 활성 SSH 세션이 있는 행에는 tmux 서브메뉴가 항목 맨 끝에 덧붙는다(RDP엔 안 붙는다 — 아래).
+  // 2026-08-17(#95): [AI CLI 시작]이 **세션 행**으로 옮겨갔다 — 서버 행에서 열면 폴더를 다시
+  // 골라야 하지만 세션 행에는 그 세션이 서 있는 폴더가 이미 있다(TREE_MENUS 주석).
   expect(sshActions).toEqual([
     'server.connect',
     'server.newSession',
-    'aicli.start', // F27 — SSH 행에만 붙는다(RDP 는 아래 기대값 그대로)
     'server.edit',
     'server.duplicate',
     'server.forgetHostKey',

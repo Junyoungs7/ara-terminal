@@ -57,26 +57,59 @@ async function fontSizesOf(page: Page, selector: string): Promise<number[]> {
   )
 }
 
-test('SCALE-1 UI 글자에 9~10px 짜리가 남아 있지 않다(하한 11px)', async ({ ara }) => {
+/**
+ * SCALE-1 하한 규칙. **G(2026-08-21)에서 개정됐다** — tokens.css 의 그 주석이 근거다:
+ * "한글이 들어가는 자리는 11px 미만으로 내리지 않는다. --fs-nano(10.5)는 G 가 그 크기를
+ *  **숫자·라틴에만** 썼기 때문에 남긴 것이다(IP `10.9.9.9` · 카운트 `2` · 키 `F1`)."
+ * 그래서 "전부 11 이상"이 아니라 **"11 미만이면 한글이 없어야 한다"** 를 본다. 옛 규칙 그대로
+ * 두면 규칙을 지킨 화면이 검사에서 떨어진다(실제로 그랬다 — 상태바 카운트가 10.5 다).
+ */
+test('SCALE-1★ 11px 미만은 숫자·라틴 전용 — 한글은 그 아래로 안 내려간다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await openConnTab(page)
 
-  // 사이드바·탭바·상태바 — 준영님이 늘 보시는 세 곳.
-  const sizes = [
-    ...(await fontSizesOf(page, '.sidebar *')),
-    ...(await fontSizesOf(page, '.term-tabbar *')),
-    ...(await fontSizesOf(page, '.statusbar *'))
-  ]
+  const sel = '.sidebar *, .term-tabbar *, .statusbar *' // 준영님이 늘 보시는 세 곳
+  const sizes = await fontSizesOf(page, sel)
   expect(sizes.length).toBeGreaterThan(5) // 아무것도 못 찾고 통과하는 일 방지
-  // 옛 9 · 9.5 · 10px 이 30곳 있었다 — 그게 "가독성이 떨어진다"의 실체였다.
-  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11)
+  // 옛 9 · 9.5px 은 완전히 사라졌다(그게 "가독성이 떨어진다"의 실체였다). nano(10.5)가 하한이다.
+  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10.5)
+
+  const smallHangul = await page.$$eval(sel, (els) =>
+    els
+      .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 11)
+      // 자식이 또 있으면 그 자식이 자기 크기로 그린다 — 글자를 **직접** 가진 요소만 본다.
+      .map((el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent ?? '').join(''))
+      .filter((text) => /[가-힣]/.test(text))
+  )
+  expect(smallHangul, '10.5px 자리에 한글이 들어갔다 — nano 는 숫자·라틴 전용이다').toEqual([])
 })
 
-test('SCALE-2 본문 기준 크기가 예전(13.5px)보다 커졌다', async ({ ara }) => {
+/**
+ * SCALE-2 도 G 에서 뒤집혔다. UI-font 시절에는 "13.5 보다 커졌는가"였는데, G 는 본문을 **12.5** 로
+ * 잡았다(design-system §2 척도표 — 실측 용례에서 가져온 값이다). 크기의 절대값을 다시 못 박는
+ * 대신, **토큰이 실제로 화면에 닿는지**를 본다: body 는 --fs-base 를 그대로 쓰고, 그 값은
+ * --ui-scale 을 탄다. 이게 "척도를 한 곳에서 움직인다"는 성질이다.
+ */
+test('SCALE-2★ 본문 크기는 --fs-base 를 그대로 따르고 배율을 탄다', async ({ ara }) => {
   const { page } = ara
-  const bodyPx = await page.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize))
-  expect(bodyPx).toBeGreaterThan(13.5)
+  // 토큰 값은 `calc(12.5px * 1)` 문자열로 읽힌다 — 숫자로 보려면 **실제로 그 값을 쓰는 요소**를
+  // 만들어 계산된 px 를 재야 한다(parseFloat('calc(…') 은 NaN 이다).
+  const read = () =>
+    page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.cssText = 'position:absolute;visibility:hidden;font-size:var(--fs-base)'
+      document.body.appendChild(probe)
+      const base = parseFloat(getComputedStyle(probe).fontSize)
+      probe.remove()
+      return { body: parseFloat(getComputedStyle(document.body).fontSize), base }
+    })
+  const at1 = await read()
+  expect(at1.body).toBeCloseTo(at1.base, 1)
+
+  await page.evaluate(() => document.documentElement.style.setProperty('--ui-scale', '1.25'))
+  const at125 = await read()
+  expect(at125.body).toBeCloseTo(at1.body * 1.25, 1)
 })
 
 test('SCALE-3★ 배율을 아주 크게 올려도 잘리는 요소가 없다', async ({ ara }) => {
@@ -157,6 +190,8 @@ test('SCALE-4 설정 [일반]에서 배율을 바꾸면 글자가 즉시 커지�
 
   await a1.page.keyboard.press('Control+Comma')
   await expect(a1.page.locator('.drawer')).toBeVisible()
+  // 배율은 [일반] 섹션에 있다 — 열린 섹션을 가정하지 않고 눌러서 간다(기본 섹션이 바뀌어도 안 깨진다).
+  await a1.page.click('.drawer .set-nav [data-section="general"]')
   // Seg 컨트롤: 화면에 보이는 라벨로 고른다(저장값은 'xlarge').
   await a1.page.getByText('아주 크게', { exact: true }).click()
 

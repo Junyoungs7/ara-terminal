@@ -19,8 +19,10 @@ import {
 export function registerForwardIpc(
   sessions: MainSessionManager,
   getMainWindow: () => BrowserWindow | null,
-  // F12 로그 폴더(userData/logs). 경로는 main 이 정하고 렌더러는 "열어 달라"만 말할 수 있다.
-  logDir: string
+  // F12 로그 폴더. 경로는 main 이 정하고 렌더러는 "열어 달라"만 말할 수 있다.
+  // 2026-08-23: 설정에서 바꿀 수 있게 되면서 **함수**가 됐다 — 부팅 때 고정하면 폴더를 바꾼 뒤에도
+  // 옛 폴더가 열린다.
+  logDir: () => string
 ): { forwards: ForwardService; browser: BrowserService } {
   const forwards = createForwardService(
     (id) => sessions.sshClient(id),
@@ -59,7 +61,7 @@ export function registerForwardIpc(
     return { ok: true } as const
   })
   // F12: 로그 폴더를 탐색기로 연다. 경로 인자를 받지 않는다 — 렌더러가 임의 폴더를 열 수 없다.
-  handle('sessionlog:reveal', async () => ({ ok: (await shell.openPath(logDir)) === '' }))
+  handle('sessionlog:reveal', async () => ({ ok: (await shell.openPath(logDir())) === '' }))
 
   return { forwards, browser }
 }

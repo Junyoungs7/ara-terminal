@@ -1,5 +1,5 @@
 // 세션 전환 · 버퍼 보존 (R1.1 검은 화면 회귀 / R2.4 · F4b 양방향 동기)
-import { test, expect, newLocalShell, runCommand, termText, expectTermText, sessionList } from './fixtures'
+import { test, expect, newLocalShell, runCommand, termText, expectTermText, sessionList, openConnTab } from './fixtures'
 
 // SWITCH-1 탭을 오가도 각 세션의 스크롤백이 살아 있다(패널은 세션 단위로 마운트 유지)
 test('SWITCH-1 탭을 전환해도 이전 세션 출력이 남아 있다', async ({ ara }) => {
@@ -26,6 +26,8 @@ test('SWITCH-2 사이드바 트리에서 세션을 고르면 탭·패널이 함�
   const { page } = ara
   const a = await newLocalShell(page)
   await newLocalShell(page)
+  // 셸을 열면 사이드바가 [파일] 로 넘어간다(2026-08-22 제보 6번) — 트리를 누르려면 돌아온다.
+  await openConnTab(page)
   const rows = page.locator('.tree .srv-group .sess-list .sess-node')
   await expect(rows).toHaveCount(2)
   await rows.first().click()

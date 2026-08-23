@@ -35,6 +35,34 @@
 .app.sessionwin {
   grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar);
 }
+/* 설정 [기록 폴더] 한 줄 — 지금 경로 + 고르기 + 기본값. 경로가 길어도 줄을 밀지 않게 줄인다. */
+.set-dir {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.set-dir-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl; /* 경로는 **끝**(폴더 이름)이 중요하다 — 잘릴 때 앞을 자른다 */
+  text-align: left;
+}
+.set-dir-tag {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-overlay);
+  color: var(--text-lo);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+}
 /* 세션 창 제목 — 본창의 통합 검색창이 있던 자리. 창이 무엇을 보고 있는지 한 줄로 말한다. */
 .tb-title {
   font-size: var(--fs-md);
@@ -3518,7 +3546,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-lo);
-  /* 터미널 폰트를 따라간다(UI-font) — 설정에서 폰트를 바꾸면 사이드바 세션명도 같이 바뀐다. */
+  /* **크롬 글꼴**이다(G §2). UI-font 시절에는 터미널 폰트를 따라갔는데, 그게 사이드바까지
+     코딩용 고정폭으로 만들어 "개발용 티"의 8할이었다. 사용자가 고르는 폰트는 터미널에만 간다. */
   font-family: var(--ui);
   font-size: var(--fs-md);
 }

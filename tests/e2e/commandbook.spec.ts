@@ -22,7 +22,7 @@ test('CB-1 Ctrl+Shift+K 로 명령어 북이 열리고 목록이 채워진다', 
 test('CB-2 Help 메뉴의 [명령어 북] 항목을 클릭해도 열린다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await page.click('.titlebar .tb-menu span:text-is("Help")')
+  await page.click('.titlebar .tb-menu span:text-is("도움말")')
   await page.click('.ctx-menu .ctx-item[data-action="commandBook.toggle"]')
   await expect(page.locator(OPEN)).toBeVisible()
   expect(await page.locator(`${OPEN} .cb-list .cb-item`).count()).toBeGreaterThan(0)

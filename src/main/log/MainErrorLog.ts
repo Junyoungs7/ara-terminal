@@ -14,8 +14,15 @@ export const MAIN_ERROR_LOG_NAME = 'main-error.log'
 export const MAIN_ERROR_LOG_MAX_BYTES = 1024 * 1024
 export const TRUNCATED_NOTICE = '(상한 도달 — 이전 기록을 잘라 냈습니다)'
 
+/** 설정 [앱 로그 폴더]. 비어 있으면 기본 자리(userData/logs)를 쓴다. */
+let overrideDir = ''
+
+export function setMainErrorLogDir(next: string): void {
+  overrideDir = next
+}
+
 export function mainErrorLogPath(): string {
-  return join(app.getPath('userData'), 'logs', MAIN_ERROR_LOG_NAME)
+  return join(overrideDir || join(app.getPath('userData'), 'logs'), MAIN_ERROR_LOG_NAME)
 }
 
 // 한 항목 = 타임스탬프 + 발생 지점 + 스택. 뒤에 빈 줄을 둬 항목 경계를 눈으로 가를 수 있게 한다.

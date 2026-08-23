@@ -32,7 +32,7 @@ test('PREV-1 Ctrl+Shift+P 로 미니 프리뷰 레일을 연다', async ({ ara }
 test('PREV-2 View 메뉴에서도 같은 레일이 열린다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await page.click('.tb-menu span:text-is("View")')
+  await page.click('.tb-menu span:text-is("보기")')
   await page.click('.ctx-menu .ctx-item[data-action="preview.toggle"]')
   await expect(rail(page)).toBeVisible()
 })
