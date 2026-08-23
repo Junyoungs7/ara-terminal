@@ -8,6 +8,18 @@
 import { test, expect, newLocalShell, sessionList, dialogAlt, dialogCancel, dialogConfirm } from './fixtures'
 import type { Page, ElectronApplication } from '@playwright/test'
 
+/**
+ * **어느 아라 창 위도 아닌** 화면 좌표. 2026-08-23(제보 5)부터 main 이 "다른 아라 창 위에 놓았나"를
+ * 좌표로 가르기 때문에, 새 창을 기대하는 검사는 그 판정에 걸리지 않는 점을 골라야 한다
+ * (창이 둘 이상 떠 있으면 옆 창 위에 떨어지기 쉽다).
+ */
+async function pointOutsideWindows(app: ElectronApplication): Promise<{ x: number; y: number }> {
+  const boxes = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => w.getBounds()))
+  const right = Math.max(...boxes.map((b) => b.x + b.width))
+  const top = Math.min(...boxes.map((b) => b.y))
+  return { x: right + 60, y: top + 40 }
+}
+
 /** 탭 우클릭 → [새 창으로 떼어내기]. 새로 뜬 창의 Page 를 돌려준다. */
 async function detachTab(ara: { app: ElectronApplication; page: Page }, sessionId: string): Promise<Page> {
   const opened = ara.app.waitForEvent('window')
@@ -130,17 +142,18 @@ test('DETACH-8★ 탭을 창 밖에 놓으면 새 창으로 떼어낸다', async
   const { page } = ara
   const a = await newLocalShell(page)
   const opened = ara.app.waitForEvent('window')
+  const at = await pointOutsideWindows(ara.app)
 
-  await page.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
+  await page.locator(`.ttab[data-session-id="${a}"]`).evaluate((el, p) => {
     el.dispatchEvent(
       new DragEvent('dragend', {
         bubbles: true,
         dataTransfer: new DataTransfer(), // dropEffect 기본값이 'none' — 아무도 안 받은 상태 그대로다
-        screenX: window.screenX + window.outerWidth + 20,
-        screenY: window.screenY + 200
+        screenX: p.x,
+        screenY: p.y
       })
     )
-  })
+  }, at)
 
   const win = await opened
   await win.waitForLoadState('domcontentloaded')
@@ -149,27 +162,55 @@ test('DETACH-8★ 탭을 창 밖에 놓으면 새 창으로 떼어낸다', async
   expect((await sessionList(page)).length).toBe(1) // 세션은 죽지 않았다
 })
 
-// DETACH-9 창 **안**에서 끝난 드래그는 떼어내지 않는다 — 사이드바에 놓았다고 창이 튀어나오면
-// 재정렬하다가 창이 생긴다. (제보 19: "탭 드래그 시 사이드바에 영역이 잡힌다"와 같은 자리다.)
-test('DETACH-9 창 안에서 끝난 드래그는 새 창을 만들지 않는다', async ({ ara }) => {
+// DETACH-9★ **받는 자리가 아니면 전부 새 창**(2026-08-23 준영님 제보 5 — 규칙이 뒤집혔다).
+// 크롬과 같다: 탭 줄과 페이지(우리는 터미널 칸)만 받고, 사이드바·하단바·상태바·다른 앱 위·
+// 바탕화면은 전부 창이 된다. 그전에는 "창 밖 좌표 + 아무도 안 받음"으로 쟀는데, 다른 앱이 텍스트
+// 드롭을 받아 버려서 **바탕화면에서만** 창이 떴다.
+test('DETACH-9★ 사이드바에 놓아도 새 창이 뜬다', async ({ ara }) => {
   const { page } = ara
   const a = await newLocalShell(page)
-  const before = ara.app.windows().length
+  const opened = ara.app.waitForEvent('window')
 
+  // 창 **안**(사이드바 자리)에 놓는다 — 받는 자리가 아니므로 새 창이 맞다.
   await page.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
     el.dispatchEvent(
       new DragEvent('dragend', {
         bubbles: true,
-        dataTransfer: new DataTransfer(),
+        // 다른 앱이 받아 준 경우까지 흉내 낸다: dropEffect 가 'none' 이 아니어도 새 창이어야 한다.
+        dataTransfer: Object.assign(new DataTransfer(), { dropEffect: 'move' }),
         screenX: window.screenX + 40,
         screenY: window.screenY + Math.floor(window.outerHeight / 2)
       })
     )
   })
 
+  const win = await opened
+  await win.waitForLoadState('domcontentloaded')
+  await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(0)
+})
+
+// DETACH-9b 탭바·터미널 칸에 놓은 것은 그 자리가 처리한다 — 새 창이 뜨면 안 된다.
+test('DETACH-9b 탭바에 놓으면 새 창이 뜨지 않는다(순서 바꾸기)', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  const b = await newLocalShell(page)
+  const before = ara.app.windows().length
+
+  // 탭바가 drop 을 처리하면 그 표시가 남고, 뒤이은 dragend 는 새 창을 만들지 않는다.
+  await page.locator('.term-tabbar .tt-scroll').evaluate((el, id) => {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', id)
+    el.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    document.querySelector(`.ttab[data-session-id="${id}"]`)!.dispatchEvent(
+      new DragEvent('dragend', { bubbles: true, dataTransfer: dt, screenX: 0, screenY: 0 })
+    )
+  }, b)
+
   await page.waitForTimeout(700)
   expect(ara.app.windows().length).toBe(before)
-  await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1)
+  await expect(page.locator('.ttab')).toHaveCount(2)
 })
 
 // DETACH-10 떼어낸 창에서 **또** 밖으로 끌어내면 세 번째 창으로 간다.
@@ -182,16 +223,12 @@ test('DETACH-10 떼어낸 창에서 다시 끌어내면 또 다른 창으로 간
   await expect(first.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
 
   const opened = ara.app.waitForEvent('window')
-  await first.locator(`.ttab[data-session-id="${a}"]`).evaluate((el) => {
+  const at = await pointOutsideWindows(ara.app)
+  await first.locator(`.ttab[data-session-id="${a}"]`).evaluate((el, p) => {
     el.dispatchEvent(
-      new DragEvent('dragend', {
-        bubbles: true,
-        dataTransfer: new DataTransfer(),
-        screenX: window.screenX + window.outerWidth + 20,
-        screenY: window.screenY + 150
-      })
+      new DragEvent('dragend', { bubbles: true, dataTransfer: new DataTransfer(), screenX: p.x, screenY: p.y })
     )
-  })
+  }, at)
 
   const second = await opened
   await second.waitForLoadState('domcontentloaded')

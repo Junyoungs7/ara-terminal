@@ -45,6 +45,29 @@ export function sessionWindowIds(): string[] {
 }
 
 /**
+ * 그 화면 좌표에 **우리 창**이 있는가(2026-08-23 제보 5).
+ *
+ * 탭을 놓은 자리가 다른 아라 창이면 새 창을 만들지 않는다 — 그쪽 창이 이미 자기 방식대로
+ * 처리했거나(탭바 = 합치기), 처리하지 않기로 한 자리다. 렌더러는 **자기 창의 좌표만** 알아서
+ * 이 판단을 못 한다(다른 창은 다른 프로세스의 화면이다). main 만 전부의 자리를 안다.
+ *
+ * `exclude` 는 드래그를 시작한 창 — 자기 자신 위에 놓은 것은 "다른 창"이 아니다(그 경우는
+ * 사이드바·하단바에 놓은 것이라 새 창이 맞다).
+ */
+export function araWindowAt(x: number, y: number, exclude: BrowserWindow | null, extra: readonly (BrowserWindow | null)[] = []): boolean {
+  const inside = (w: BrowserWindow | null): boolean => {
+    try {
+      if (!w || w.isDestroyed() || w === exclude || w.isMinimized()) return false
+      const b = w.getBounds()
+      return x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height
+    } catch {
+      return false // 파괴 레이스 — 그 창은 없는 것으로 친다
+    }
+  }
+  return [...extra, ...windows.values()].some(inside)
+}
+
+/**
  * 창을 놓을 자리 — **화면 안에 있는지 확인한다.**
  *
  * 왜 필요한가: 듀얼 모니터에서 오른쪽 화면에 떼어 놓고 저장한 뒤, 노트북만 들고 나가서 켜면
@@ -100,9 +123,12 @@ export function openSessionWindow(
     title,
     backgroundColor: BACKGROUND,
     show: false,
-    // 네이티브 프레임 — 창 제목이 보여야 어느 서버 창인지 작업표시줄에서 구분된다.
-    // (본창은 커스텀 타이틀바지만 이 창은 그 바를 안 그린다 — 메뉴·검색이 없으니 그릴 것이 없다.)
-    frame: true,
+    /**
+     * 2026-08-23 준영님: "새창 상단 닫기 내리기 전체 디자인도 우리 아라 디자인과 동일해야해."
+     * 프레임을 끄고 본창과 **같은 타이틀바 컴포넌트**를 그린다(TitleBar) — 신호등·드래그 영역까지
+     * 같은 CSS 를 쓴다. 창 제목은 그 바 안에 있고, 작업표시줄용 제목은 document.title 이 맡는다.
+     */
+    frame: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

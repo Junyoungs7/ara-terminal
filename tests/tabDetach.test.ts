@@ -1,33 +1,29 @@
-import { describe, it, expect } from 'vitest'
-import { shouldDetach } from '../src/renderer/store/tabDetach'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { DROP_HANDLED_MS, markTabDropHandled, resetTabDrop, tabDropHandled } from '../src/renderer/store/tabDetach'
 
-// 2026-08-22 준영님 제보 4·31: 탭을 창 밖으로 끌어다 놓으면 새 창이 떠야 한다.
-// 판정을 순수 함수로 뽑아 둔 이유가 이 파일이다 — 진짜 드래그 없이 규칙만 시험한다.
+// 탭을 놓은 자리가 새 창을 만드는지 가르는 규칙.
+//
+// 2026-08-22 에는 "아무도 안 받았다(dropEffect 'none') + 창 밖 좌표"로 쟀는데 준영님 화면에서
+// **바탕화면에서만** 창이 떴다(제보 5). 다른 앱은 텍스트 드롭을 받아 dropEffect 가 'none' 이
+// 아니었고, 우리 창 안의 사이드바·하단바는 좌표 조건에 걸렸다. 그래서 규칙을 뒤집었다:
+// **우리가 받았는가**만 본다. 그 하나로 "탭바·터미널 칸이면 처리, 나머지는 전부 새 창"이 된다.
 
-const win = { x: 100, y: 100, w: 800, h: 600 } // 화면 (100,100)~(900,700)
+describe('탭 드롭 — 우리가 받았는가', () => {
+  beforeEach(() => resetTabDrop())
 
-describe('shouldDetach — 창 밖에 놓았는가', () => {
-  it('★ 창 밖 + 아무도 안 받음 → 떼어낸다', () => {
-    expect(shouldDetach('none', { x: 1500, y: 400 }, win)).toBe(true) // 오른쪽 모니터
-    expect(shouldDetach('none', { x: 400, y: 900 }, win)).toBe(true) // 아래
-    expect(shouldDetach('none', { x: 50, y: 400 }, win)).toBe(true) // 왼쪽
-    expect(shouldDetach('none', { x: 400, y: 20 }, win)).toBe(true) // 위
+  it('아무것도 안 받았으면 우리가 처리한 것이 아니다(= 새 창)', () => {
+    expect(tabDropHandled()).toBe(false)
   })
 
-  it('★ 누군가 받았으면 창 밖이어도 떼어내지 않는다 — 재정렬·분할이 처리한 드롭이다', () => {
-    expect(shouldDetach('move', { x: 1500, y: 400 }, win)).toBe(false)
-    expect(shouldDetach('copy', { x: 1500, y: 400 }, win)).toBe(false)
+  it('★ 탭바·터미널 칸이 받으면 그 직후 dragEnd 는 새 창을 만들지 않는다', () => {
+    markTabDropHandled(1000)
+    expect(tabDropHandled(1000)).toBe(true)
+    expect(tabDropHandled(1000 + DROP_HANDLED_MS - 1)).toBe(true)
   })
 
-  it('★ 창 안에서 아무 데나 놓은 것은 떼어내기가 아니다 — 사이드바·상태바에 놓아도 창이 튀어나오면 안 된다', () => {
-    expect(shouldDetach('none', { x: 120, y: 400 }, win)).toBe(false) // 사이드바쯤
-    expect(shouldDetach('none', { x: 500, y: 690 }, win)).toBe(false) // 상태바쯤
-  })
-
-  it('경계: 왼쪽·위 모서리는 안, 오른쪽·아래 끝은 밖(창 좌표계와 같은 규칙)', () => {
-    expect(shouldDetach('none', { x: 100, y: 100 }, win)).toBe(false)
-    expect(shouldDetach('none', { x: 899, y: 699 }, win)).toBe(false)
-    expect(shouldDetach('none', { x: 900, y: 400 }, win)).toBe(true)
-    expect(shouldDetach('none', { x: 400, y: 700 }, win)).toBe(true)
+  it('★ 흔적은 곧 만료된다 — 직전 드롭 때문에 다음 드래그가 새 창을 못 만들면 안 된다', () => {
+    markTabDropHandled(1000)
+    expect(tabDropHandled(1000 + DROP_HANDLED_MS)).toBe(false)
+    expect(tabDropHandled(9999)).toBe(false)
   })
 })

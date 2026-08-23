@@ -1,7 +1,7 @@
 // window 도메인 IPC 핸들러 (R2.6). 프레임리스 타이틀바의 신호등 버튼이 여기로 온다.
 // 창은 재생성될 수 있으므로 getter 로 지연 평가하고, 파괴된 창은 조용히 무시한다
 // (FIX-window-destroyed 패턴 — isDestroyed 접근 자체도 try 로 감싼다).
-import { BrowserWindow, clipboard, shell } from 'electron'
+import { BrowserWindow, clipboard, shell, type IpcMainInvokeEvent } from 'electron'
 import { openPortWindow } from '../windows/PortWindow'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
@@ -22,15 +22,28 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     openPortWindow(getWindow)
     return { ok: true } as const
   })
-  handle('window:minimize', () => {
-    live()?.minimize()
+  /**
+   * 보낸 창을 대상으로 한다(window:close 와 같은 이유 — 2026-08-23 에 세션 창이 프레임리스가
+   * 되면서 **그 창에도 신호등이 생겼다**. 본창만 조작하면 떼어낸 창의 최소화 버튼이 본창을 내린다).
+   */
+  const sender = (e: IpcMainInvokeEvent): BrowserWindow | null => {
+    try {
+      const w = BrowserWindow.fromWebContents(e.sender)
+      return w && !w.isDestroyed() ? w : live()
+    } catch {
+      return live()
+    }
+  }
+
+  handle('window:minimize', (_req, e) => {
+    sender(e)?.minimize()
     return { ok: true } as const
   })
 
   // 최대화 토글 — 현재 상태에 따라 복원/최대화. 창 크기 저장(F6)은 최대화 중엔 건너뛰므로
   // 최대화 상태로 종료해도 복원용 bounds 는 마지막 일반 크기가 남는다.
-  handle('window:toggleMaximize', () => {
-    const w = live()
+  handle('window:toggleMaximize', (_req, e) => {
+    const w = sender(e)
     if (!w) return { maximized: false }
     if (w.isMaximized()) w.unmaximize()
     else w.maximize()
@@ -44,14 +57,7 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
    * 보낸 쪽을 못 찾을 때만 본창으로 떨어뜨린다(계약을 바꾸지 않는 폴백).
    */
   handle('window:close', (_req, e) => {
-    let sender: BrowserWindow | null = null
-    try {
-      const w = BrowserWindow.fromWebContents(e.sender)
-      sender = w && !w.isDestroyed() ? w : null
-    } catch {
-      sender = null // 파괴 레이스 — 본창 폴백으로 간다
-    }
-    ;(sender ?? live())?.close()
+    sender(e)?.close()
     return { ok: true } as const
   })
 

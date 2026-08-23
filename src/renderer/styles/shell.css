@@ -29,11 +29,20 @@
   grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar);
   height: 100vh;
 }
-/* F32 떼어낸 세션 창 — **타이틀바가 없다**(네이티브 프레임을 쓴다: 창 제목이 보여야 작업표시줄에서
-   어느 서버 창인지 구분된다). 그래서 행이 둘이다. 이 한 줄이 없으면 본문이 타이틀바 높이(36px)
-   자리에 눌려 화면이 통째로 비어 보인다(실측 — 첫 캡처가 그랬다). */
+/* F32 떼어낸 세션 창 — 2026-08-23(제보 5)부터 **본창과 같은 타이틀바**를 쓴다(프레임리스).
+   그전에는 네이티브 프레임이었고, 그 프레임에 Electron 기본 메뉴(File/Edit…)까지 붙어 있었다.
+   행 구성이 본창과 같아졌으므로 여기서 따로 정할 것이 없다 — 이 규칙은 남겨 두되 비운다. */
 .app.sessionwin {
-  grid-template-rows: 1fr var(--row-statusbar);
+  grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar);
+}
+/* 세션 창 제목 — 본창의 통합 검색창이 있던 자리. 창이 무엇을 보고 있는지 한 줄로 말한다. */
+.tb-title {
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
 }
 
 /* ── 타이틀바 (§4.1) ── */

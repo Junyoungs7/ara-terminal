@@ -9,10 +9,10 @@
 // 그 창의 세션 목록을 보여 주고: 확인하면 종료, [본창으로 보내기]면 되돌리기, 취소면 그대로.
 // 묻기 전의 기본값은 되돌리기였다 — 창 닫기는 실수로도 일어나고 그때 원격 작업이 통째로 끊기면
 // 되돌릴 방법이 없어서다. 그 탈출구는 지금도 버튼으로 남아 있다.
-import type { BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { handle } from './handle'
 import { pushSend } from '../util/windowPush'
-import { forceCloseSessionWindow, openSessionWindow, sessionWindowOf } from '../windows/SessionWindows'
+import { araWindowAt, forceCloseSessionWindow, openSessionWindow, sessionWindowOf } from '../windows/SessionWindows'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 
 /** 창 이름 — 사람이 볼 일은 없지만 로그·저장값에 남으므로 짧고 유일하게. */
@@ -71,9 +71,25 @@ export function registerSessionWindowIpc(
   /** 창 하나를 여는 데 늘 함께 가는 두 콜백 — 세 곳(떼어내기·앞으로·복원)이 같아야 한다. */
   const winOpts = { onClosed: reclaim, onCloseAsk: askClose }
 
-  handle('win:detach', ({ sessionId, at }) => {
+  handle('win:detach', ({ sessionId, at }, e) => {
     const meta = sessions.snapshot().find((s) => s.id === sessionId)
     if (!meta) return { ok: false as const }
+    /**
+     * 2026-08-23 제보 5: 놓은 자리가 **다른 아라 창** 위면 새 창을 만들지 않는다.
+     * 그쪽 창이 이미 처리했거나(탭바에 놓으면 합쳐진다) 처리하지 않기로 한 자리다 — 여기서 또
+     * 창을 만들면 합친 세션이 곧바로 세 번째 창으로 튀어나간다. 자기 창 위(사이드바·하단바)는
+     * 해당 없다: 그건 "받는 자리가 아닌 곳"이라 새 창이 맞다.
+     */
+    if (at) {
+      const from = (() => {
+        try {
+          return BrowserWindow.fromWebContents(e.sender)
+        } catch {
+          return null
+        }
+      })()
+      if (araWindowAt(at.x, at.y, from, [getMainWindow()])) return { ok: false as const }
+    }
     // 이미 떼어낸 세션을 **메뉴로** 또 떼어내라 하면 그 창을 앞으로 가져오는 것으로 족하다.
     // 끌어다 놓은 것(at)은 다르다 — "저기에 두겠다"는 뜻이라 새 창을 만든다.
     const already = meta.winId

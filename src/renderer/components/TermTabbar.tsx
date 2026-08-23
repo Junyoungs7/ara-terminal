@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { groupColor, type Session } from '../store/sessions'
 import { isTabOverflowing } from '../store/tabOverflow'
-import { shouldDetach } from '../store/tabDetach'
+import { markTabDropHandled, tabDropHandled } from '../store/tabDetach'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, type TreeActionId } from '../interactions/actions'
 import { t } from '../i18n'
@@ -179,10 +179,11 @@ export function TermTabbar({
       onDragEnd: (e) => {
         setDragId(null)
         setOverId(null)
-        // 창 밖에 놓았으면 새 창으로 떼어낸다(판정 규칙은 store/tabDetach.ts — 그 주석이 근거다).
-        const at = { x: e.screenX, y: e.screenY }
-        const box = { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight }
-        if (shouldDetach(e.dataTransfer.dropEffect, at, box)) detach(s.id, at)
+        setAdopting(false)
+        // **우리가 안 받았으면 새 창**(크롬 규칙 — store/tabDetach.ts 주석이 근거다).
+        // 사이드바·하단바·다른 앱 위·바탕화면이 전부 여기로 온다. 다른 아라 창 위인지는
+        // main 이 좌표로 가른다(그 창의 자리는 이 창이 알 수 없다).
+        if (!tabDropHandled()) detach(s.id, { x: e.screenX, y: e.screenY })
       },
       onDragOver: (e) => {
         // 탭바 위 드롭 = 재정렬(터미널 영역 드롭 = 분할은 PaneGrid 가 별도로 받는다 — FB-0002).
@@ -202,6 +203,7 @@ export function TermTabbar({
         const from = dragId ?? e.dataTransfer.getData('text/plain')
         setDragId(null)
         setOverId(null)
+        markTabDropHandled() // 이 드롭은 탭바가 처리했다 — dragEnd 가 새 창을 만들지 않게
         if (from) drop(from, s.id)
       }
     }
@@ -289,6 +291,7 @@ export function TermTabbar({
         onDrop={(e) => {
           e.preventDefault()
           setAdopting(false)
+          markTabDropHandled() // 탭바 빈 자리도 탭바가 받은 것이다
           const from = dragId ?? e.dataTransfer.getData('text/plain')
           if (from) drop(from)
         }}

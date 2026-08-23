@@ -7,6 +7,7 @@ import type { PaneCell, useLayout } from '../store/layout'
 import type { Session } from '../store/sessions'
 import { paneDropZone, zoneRect, type DropZone, type Rect } from '../store/dropZone'
 import { spanRdp } from '../store/rdpSpanOpen'
+import { markTabDropHandled } from '../store/tabDetach'
 
 // F4a 분할 그리드 — 목업 variant-final-3 의 .pane-grid / .pane / .pane-hd / .div-* 를 그대로 재현하되
 // 패널 개수(1~4)에 따라 grid-template 과 셀 배치를 동적으로 만든다.
@@ -137,6 +138,7 @@ export function PaneGrid({
       e.preventDefault()
       const info = preview
       setPreview(null)
+      markTabDropHandled() // 터미널 칸이 받았다 — 탭 dragEnd 가 새 창을 만들지 않게(제보 5)
       const sessionId = e.dataTransfer.getData('text/plain')
       if (!sessionId || !info) return
       // 다른 창에서 온 탭이면 **먼저 이 창으로 가져온다**(2026-08-23 크롬식 창 관리).

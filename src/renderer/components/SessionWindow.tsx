@@ -16,6 +16,7 @@ import { SysMonitorPanel } from './SysMonitorPanel'
 import { ServerTool } from './ServerTool'
 import { useDialog } from './Dialog'
 import { StatusBar } from './StatusBar'
+import { TitleBar } from './TitleBar'
 import { useSessions } from '../store/sessions'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
@@ -83,8 +84,14 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
     })
   }, [ask, target.winId])
 
+  const winTitle = activeSession ? `${activeSession.serverKey} — ${activeSession.title}` : t('app.name')
+
   return (
     <div className="app sessionwin">
+      {/* 2026-08-23 준영님 제보 5 — 이 창의 상단도 아라다(그전엔 OS 기본 프레임 + Electron 기본
+          메뉴였다). 본창과 **같은 컴포넌트**를 쓰되 메뉴바·통합 검색은 넘기지 않는다: 이 창은
+          "이 서버를 보는 화면"이라 그 둘이 할 일이 없다(F32 확정 구성). */}
+      <TitleBar title={winTitle} />
       <div className="middle">
         <MainArea
           ref={mainRef}
