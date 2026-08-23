@@ -53,3 +53,8 @@ agent_talk/
 
 # 남기는 것: src/ tests/ scripts/ resources/(번들 폰트·아이콘) vendor/(패치한 RDP 라이브러리)
 #            assets/(브랜드 원본) docs/(코드 주석이 가리키는 디자인 시스템) + 루트 설정 파일
+
+# 배포 사이트에 올려 둔 설치본·업데이트 색인(빌드 산출물 — `npm run site:stage` 가 채운다)
+site/downloads/*.exe
+site/downloads/*.blockmap
+site/downloads/*.yml

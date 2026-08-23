@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A.R.A 사용 설명서</title>
+    <meta name="description" content="A.R.A(아라) 사용 설명서 — 설치부터 서버 연결, 파일 전송, 서버 도구, AI, 단축키까지." />
+    <link rel="icon" href="assets/ara-icon.svg" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script src="assets/release.js"></script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/ara-icon.svg" alt="" /><span>A.R.A</span></a>
+        <nav class="nav-links">
+          <a href="index.html#features">기능</a>
+          <a href="index.html#tools">서버 도구</a>
+          <a href="manual.html" class="on">사용 설명서</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+        <a class="btn btn-primary btn-sm" data-dl href="downloads/" download>내려받기</a>
+      </div>
+    </header>
+
+    <div class="wrap doc">
+      <!-- ── 목차 ─────────────────────────────────────────────────────── -->
+      <aside class="toc">
+        <div class="t">사용 설명서</div>
+        <a href="#start">1. 시작하기</a>
+        <a href="#screen">2. 화면 보는 법</a>
+        <a href="#session">3. 세션 · 탭 · 창</a>
+        <a href="#ssh">4. 서버에 연결하기</a>
+        <a href="#files">5. 파일 다루기</a>
+        <a href="#tools">6. 서버를 마우스로</a>
+        <a href="#ai">7. AI에게 묻기</a>
+        <a href="#links">8. 링크 · 포트 · 브라우저</a>
+        <a href="#record">9. 세션 기록</a>
+        <a href="#settings">10. 설정</a>
+        <a href="#keys">11. 단축키</a>
+        <a href="#update">12. 업데이트</a>
+        <a href="#trouble">13. 문제 해결</a>
+      </aside>
+
+      <!-- ── 본문 ─────────────────────────────────────────────────────── -->
+      <main>
+        <div class="doc-hd">
+          <h1>A.R.A 사용 설명서</h1>
+          <p class="lead">
+            아라를 처음 켜는 순간부터 서버를 마우스로 다루기까지. 버전
+            <b data-rel="version">0.1.0</b> 기준입니다.
+          </p>
+        </div>
+
+        <!-- 1 -->
+        <section id="start">
+          <h2>1. 시작하기</h2>
+          <h3>설치</h3>
+          <ol>
+            <li><a class="link" href="index.html#download">다운로드</a>에서 설치 파일을 받습니다.</li>
+            <li>실행하면 <strong>설치 경로를 고르는 화면</strong>이 나옵니다. 기본값 그대로 두어도 됩니다.</li>
+            <li>설치가 끝나면 바탕화면과 시작 메뉴에 <strong>거미 아이콘</strong>이 생깁니다.</li>
+          </ol>
+          <div class="note warn">
+            <span>⚠️</span>
+            <span>
+              <b>"알 수 없는 게시자" 경고</b>가 뜨면 [추가 정보] → [실행]으로 진행하세요. 아직 코드 서명 전
+              단계라 나오는 경고입니다. <b>보안 프로그램이 설치를 막을 때는 다시 시도하지 말고</b> 그 화면을
+              캡처해 담당자에게 알려 주세요.
+            </span>
+          </div>
+
+          <h3>첫 실행</h3>
+          <p>
+            처음 켜면 빈 화면에 탭 줄만 있습니다. 탭 줄의 <strong>＋</strong> 를 누르면 로컬 셸(PowerShell)이
+            열립니다. 서버에 붙으려면 <a class="link" href="#ssh">4. 서버에 연결하기</a>로 가세요.
+          </p>
+          <p>
+            앱을 껐다 켜면 <strong>열려 있던 세션과 분할 배치, 작업 폴더가 그대로 복원</strong>됩니다. SSH
+            세션은 비밀번호를 저장해 둔 서버만 자동으로 다시 붙고, 나머지는 [다시 연결] 버튼으로 남습니다.
+          </p>
+        </section>
+
+        <!-- 2 -->
+        <section id="screen">
+          <h2>2. 화면 보는 법</h2>
+          <p>화면은 다섯 자리로 나뉩니다. <strong>어디에 열리는지가 그 기능이 누구 것인지를 말합니다.</strong></p>
+          <ul>
+            <li><strong>맨 위 — 타이틀바</strong>: 메뉴(파일·편집·세션·분할·보기·도움말), 가운데 통합 검색, 오른쪽 창 버튼.</li>
+            <li><strong>왼쪽 — 사이드바</strong>: [연결] 탭은 서버 목록, [파일] 탭은 지금 세션의 폴더 트리.</li>
+            <li><strong>가운데 — 터미널</strong>: 탭과 분할이 여기서 일어납니다.</li>
+            <li><strong>아래 — 하단 패널</strong>: <b>서버의 것</b>(프로세스·서비스·디스크·패키지·컨테이너·포트·시스템·세션 기록).</li>
+            <li><strong>오른쪽 — 아이콘 바</strong>: <b>아라의 것</b>(AI 대화·AI 세션·지난 기록·미니 프리뷰). 한 번에 하나만 열립니다.</li>
+          </ul>
+          <p>
+            맨 아래 상태 표시줄에는 지금 붙어 있는 호스트, 작업 폴더, 세션 개수, 인코딩, 버전이 있습니다.
+          </p>
+          <div class="note">
+            <span>💡</span>
+            <span>같은 아이콘을 다시 누르면 닫힙니다. 사이드바는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> 로도 접힙니다.</span>
+          </div>
+        </section>
+
+        <!-- 3 -->
+        <section id="session">
+          <h2>3. 세션 · 탭 · 창</h2>
+          <h3>새 세션</h3>
+          <p>
+            탭 줄의 <strong>＋</strong> 또는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>. ＋ 옆 화살표를
+            누르면 로컬 셸·저장해 둔 서버·AI CLI 시작을 골라 열 수 있습니다.
+          </p>
+
+          <h3>분할</h3>
+          <p>
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>\</kbd> 로 세로 분할,
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>-</kbd> 로 가로 분할합니다. 칸 사이는
+            <kbd>Alt</kbd>+방향키로 옮겨 다니고, <kbd>Ctrl</kbd>+<kbd>↑</kbd> 로 지금 칸을 잠깐 최대화합니다.
+            칸을 클릭하면 <strong>탭과 왼쪽 파일 트리도 그 세션 것으로 따라옵니다.</strong>
+          </p>
+
+          <h3>탭을 창 밖으로</h3>
+          <p>
+            탭을 잡아 <strong>아라 창 바깥 어디로든 끌어다 놓으면 새 창</strong>이 됩니다(크롬과 같습니다).
+            반대로 새 창의 탭을 본창 탭 줄에 끌어다 놓으면 돌아옵니다. 세션은 끊기지 않고 그대로 옮겨집니다.
+          </p>
+          <p>
+            세션이 살아 있는 창을 닫으려 하면 <strong>[본창으로 보내기]와 [세션 종료]</strong>를 묻습니다.
+            실수로 작업을 날리지 않게 하는 자리입니다.
+          </p>
+
+          <h3>tmux</h3>
+          <p>
+            SSH 세션에서 탭이나 터미널을 우클릭하면 <strong>tmux</strong> 항목이 나옵니다. 실행 중인 세션
+            목록에서 골라 붙거나 이름을 정해 새로 만듭니다. tmux 가 없는 서버에서는 항목이 잠기고 설치 안내가
+            나옵니다.
+          </p>
+        </section>
+
+        <!-- 4 -->
+        <section id="ssh">
+          <h2>4. 서버에 연결하기</h2>
+          <h3>연결 프로필 만들기</h3>
+          <ol>
+            <li>왼쪽 사이드바 [연결] 탭에서 <strong>＋</strong> 를 누릅니다(또는 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> 연결 관리자).</li>
+            <li><strong>연결 이름 · 호스트 · 포트 · 사용자</strong>를 넣습니다. 그룹을 정하면 트리에서 묶여 보입니다.</li>
+            <li>인증은 <strong>비밀번호</strong>나 <strong>공개키</strong>를 고릅니다.</li>
+            <li>[접속 테스트]로 확인한 뒤 [저장 후 접속].</li>
+          </ol>
+          <p>
+            저장한 서버는 트리에서 <strong>더블클릭하면 새 세션으로 접속</strong>합니다. 한 번 클릭은 선택,
+            펼치면 그 서버에 열려 있는 세션이 보입니다.
+          </p>
+
+          <h3>호스트 키 확인</h3>
+          <p>
+            처음 붙는 서버는 <strong>지문(SHA256)</strong>을 보여 주고 확인을 받습니다. 예상과 같은지 보고
+            신뢰하면 다음부터 묻지 않습니다. 나중에 지문이 <strong>달라지면 접속을 멈춥니다</strong> — 서버를
+            새로 설치한 게 아니라면 관리자에게 확인하세요.
+          </p>
+
+          <h3>비밀번호는 어디에 저장되나</h3>
+          <p>
+            비밀번호와 개인키 암구호는 <strong>Windows 자격 증명</strong>에 들어갑니다. 설정 파일
+            (<code>workspace.json</code>)에는 저장되지 않습니다. 저장해 두지 않은 서버는 접속할 때마다
+            물어보고, 그 값은 <strong>그 접속에만</strong> 씁니다.
+          </p>
+        </section>
+
+        <!-- 5 -->
+        <section id="files">
+          <h2>5. 파일 다루기</h2>
+          <h3>왼쪽 파일 트리</h3>
+          <p>
+            셸을 열면 사이드바가 [파일] 탭으로 넘어가면서 지금 폴더를 보여 줍니다. 터미널에서
+            <code>cd</code> 하면 <strong>트리도 따라 움직입니다</strong>(원격도 마찬가지).
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> 로 열고 닫습니다.
+          </p>
+
+          <h3>서버 작업대 (탐색기 창)</h3>
+          <p>
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> 를 누르면 폭이 넓은 <strong>작업대 창</strong>이 뜹니다.
+            왼쪽 트리보다 할 수 있는 일이 많습니다.
+          </p>
+          <ul>
+            <li>탭 여러 개로 서버·폴더를 나란히 열기</li>
+            <li>업로드 · 다운로드 · <strong>서버 ↔ 서버 복사</strong>(끌어다 놓기)</li>
+            <li>새 폴더 · 이름 바꾸기 · 복사 · 잘라내기 · 삭제(확인을 거칩니다)</li>
+            <li>이름으로 거르기, 뒤로 · 앞으로</li>
+          </ul>
+          <p>
+            텍스트 파일은 더블클릭하면 열립니다. 고쳐서 저장하면 그대로 서버에 올라갑니다. 큰 파일이나
+            바이너리는 열지 않고 안내합니다.
+          </p>
+          <div class="note">
+            <span>💡</span>
+            <span>전송은 진행률이 보이고, 끊긴 전송은 <b>이어받기</b>를 시도합니다. 창을 닫아도 전송은 계속됩니다.</span>
+          </div>
+        </section>
+
+        <!-- 6 -->
+        <section id="tools">
+          <h2>6. 서버를 마우스로</h2>
+          <p>
+            SSH 세션에서 오른쪽 아이콘 바의 도구를 누르면 <strong>화면 아래</strong>에 표가 펼쳐집니다.
+            표 오른쪽 위에 <strong>어느 서버 것인지</strong>가 항상 찍혀 있습니다. 세션 탭을 다른 서버로 바꾸면
+            표도 그 서버 것으로 따라옵니다.
+          </p>
+          <table class="keys">
+            <caption>하단 패널의 도구</caption>
+            <tr><td><strong>프로세스</strong></td><td>PID · 사용자 · CPU · 메모리 · 명령. 정렬 · 검색 · 종료(확인 후).</td></tr>
+            <tr><td><strong>서비스</strong></td><td>systemd 유닛과 상태. 시작 · 정지 · 재시작. systemd 가 없으면 안내가 나옵니다.</td></tr>
+            <tr><td><strong>디스크</strong></td><td>파일시스템 사용량 → 폴더로 파고들기 → [뒤로]. 큰 폴더 찾기에 씁니다.</td></tr>
+            <tr><td><strong>패키지</strong></td><td>설치된 패키지 목록(배포판별 도구를 알아서 고릅니다).</td></tr>
+            <tr><td><strong>컨테이너</strong></td><td>도커 컨테이너 목록. 런타임이 없으면 그렇게 알려 줍니다.</td></tr>
+            <tr><td><strong>포트 모니터</strong></td><td>열린 포트와 프로세스. 원격 포트를 내 PC로 당겨오는 포워딩도 여기서.</td></tr>
+            <tr><td><strong>시스템 모니터</strong></td><td>CPU · 메모리 · GPU · 네트워크 실시간 그래프.</td></tr>
+            <tr><td><strong>세션 기록</strong></td><td>지금 세션에서 실행한 명령과 그 결과.</td></tr>
+          </table>
+          <div class="note danger">
+            <span>🛑</span>
+            <span>
+              <b>바꾸는 작업은 반드시 확인을 거칩니다.</b> 종료할 프로세스나 다룰 서비스의 <b>이름을 문구에
+              박아</b> 보여 주고, 실패하면 서버가 준 이유(권한 부족 등)를 그대로 보여 줍니다.
+              <code>sudo</code> 는 붙이지 않습니다.
+            </span>
+          </div>
+        </section>
+
+        <!-- 7 -->
+        <section id="ai">
+          <h2>7. AI에게 묻기</h2>
+          <h3>준비</h3>
+          <p>
+            <kbd>Ctrl</kbd>+<kbd>,</kbd> → [AI] 에서 프로바이더를 고르고 <strong>API 키</strong>를 넣습니다.
+            사내 vLLM 처럼 자체 서버를 쓸 때는 [호환 엔드포인트]를 골라 주소와 모델 이름을 넣습니다.
+          </p>
+          <div class="note danger">
+            <span>🔑</span>
+            <span><b>API 키는 앱의 입력창에만 넣으세요.</b> 채팅·문서·코드에 붙여넣지 마세요. 키는 Windows 자격 증명에 저장되고 설정 파일에는 남지 않습니다.</span>
+          </div>
+
+          <h3>대화</h3>
+          <p>
+            <kbd>Alt</kbd>+<kbd>A</kbd> 로 오른쪽 대화창을 엽니다. 터미널에서 글자를 선택하고 우클릭 →
+            [AI에게 질문]을 고르면 그 내용이 질문에 담깁니다(<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>).
+          </p>
+          <ul>
+            <li><strong>컨텍스트 칩</strong>으로 무엇을 함께 보낼지 고릅니다(선택한 출력 · 현재 폴더 · 세션 기록 등).</li>
+            <li>보내기 전에 <strong>비밀번호·토큰처럼 보이는 값은 <span class="mask">••••</span> 로 가립니다.</strong> 첨부 배지를 누르면 실제로 보낸 내용을 볼 수 있습니다.</li>
+            <li>답이 길어지면 <strong>[중지]</strong>로 끊을 수 있고, 아래에 <strong>사용한 토큰</strong>이 표시됩니다.</li>
+            <li>대화가 길어지면 오래된 부분을 빼고 보낸 뒤 그 사실을 알려 줍니다.</li>
+          </ul>
+
+          <h3>명령은 넣기만 합니다</h3>
+          <p>
+            답에 들어 있는 명령 상자에는 <strong>[터미널로 보내기]</strong> 버튼이 있습니다. 누르면 명령이
+            프롬프트에 <strong>들어가기만</strong> 합니다. <strong>실행은 사람이 <kbd>Enter</kbd> 를 눌러야</strong>
+            일어납니다.
+          </p>
+
+          <h3>AI CLI 한 번에 시작</h3>
+          <p>
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> 로 서버 · 폴더 · CLI(<code>claude</code> ·
+            <code>codex</code> · <code>gemini</code>)와 옵션을 한 화면에서 고르고 시작합니다. 폴더가 없으면
+            만들어 주고, 실제로 보낼 명령을 미리 보여 줍니다. 한 번 쓴 조합은 <strong>최근 목록</strong>에
+            남아 다음부터는 한 번에 시작됩니다.
+          </p>
+        </section>
+
+        <!-- 8 -->
+        <section id="links">
+          <h2>8. 링크 · 포트 · 브라우저</h2>
+          <p>터미널에 찍힌 주소는 <strong><kbd>Ctrl</kbd>+클릭</strong>으로만 열립니다(그냥 클릭으로는 열리지 않습니다).</p>
+          <table class="keys">
+            <tr><td><kbd>Ctrl</kbd>+클릭</td><td>원격 세션의 주소면 <strong>아라 브라우저</strong>로 엽니다. <code>localhost</code> 주소는 <strong>터널을 자동으로 뚫어</strong> 내 PC에서 볼 수 있게 합니다.</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+클릭</td><td>내 PC의 <strong>기본 브라우저</strong>(크롬 등)로 보냅니다. 즐겨찾기나 로그인 세션이 있는 쪽에서 열고 싶을 때.</td></tr>
+          </table>
+          <p>
+            원격 CLI 로그인처럼 <strong>콜백 포트가 필요한 주소</strong>는 어떤 포트를 여는지 먼저 보여 주고
+            확인을 받은 뒤에 터널을 만듭니다. 아라 브라우저는 앱과 <strong>분리된 저장 공간</strong>에서 돌고
+            파일 다운로드와 새 창 띄우기를 막아 둡니다.
+          </p>
+        </section>
+
+        <!-- 9 -->
+        <section id="record">
+          <h2>9. 세션 기록</h2>
+          <p>
+            세션마다 주고받은 내용이 파일로 남습니다. <strong>비밀번호·토큰으로 보이는 값은 가려서</strong>
+            기록하고, <code>vim</code>·<code>htop</code> 같은 전체 화면 프로그램의 화면 갱신은 남기지 않습니다.
+          </p>
+          <ul>
+            <li><strong>하단 [세션 기록]</strong> — 지금 세션의 명령과 결과</li>
+            <li><strong>오른쪽 [지난 기록]</strong> — 지난 세션 목록. 진행 중인 것을 누르면 하단으로 보냅니다</li>
+            <li>보존 기간(7 · 30 · 90일 · 무제한)과 <strong>기록이 쌓이는 폴더</strong>는 설정 → [로그]에서 정합니다</li>
+          </ul>
+        </section>
+
+        <!-- 10 -->
+        <section id="settings">
+          <h2>10. 설정</h2>
+          <p><kbd>Ctrl</kbd>+<kbd>,</kbd> 로 엽니다.</p>
+          <table class="keys">
+            <tr><td><strong>일반</strong></td><td>UI 글자 크기, 오른쪽 아이콘 바(무엇을 어떤 순서로 둘지), 선택하면 자동 복사, 스크롤백 줄 수, <strong>업데이트</strong>.</td></tr>
+            <tr><td><strong>터미널</strong></td><td>커서 모양 · 깜빡임, 벨(BEL) 동작.</td></tr>
+            <tr><td><strong>폰트</strong></td><td>터미널 글꼴과 크기·행 간격. 한글 폰트 후보를 <strong>같은 문장으로 비교</strong>해 고릅니다.</td></tr>
+            <tr><td><strong>로그</strong></td><td>세션 기록 사용 여부, 보존 기간, <strong>세션 기록 폴더</strong>와 <strong>앱 로그 폴더</strong>.</td></tr>
+            <tr><td><strong>AI</strong></td><td>프로바이더 · 모델 · API 키 · 사내 엔드포인트.</td></tr>
+            <tr><td><strong>MCP</strong></td><td>MCP 서버 연결.</td></tr>
+            <tr><td><strong>단축키</strong></td><td>전체 단축키 표(치트시트와 같은 내용).</td></tr>
+            <tr><td><strong>정보</strong></td><td>버전과 번들 폰트 라이선스.</td></tr>
+          </table>
+          <div class="note">
+            <span>📁</span>
+            <span>
+              폴더를 바꾸면 <b>그때부터 새 폴더에 씁니다.</b> 옛 기록은 원래 자리에 그대로 남습니다(지우지
+              않습니다).
+            </span>
+          </div>
+        </section>
+
+        <!-- 11 -->
+        <section id="keys">
+          <h2>11. 단축키</h2>
+          <p>앱 안에서는 <kbd>?</kbd> 또는 타이틀바의 <kbd>?</kbd> 버튼으로 같은 표를 볼 수 있습니다.</p>
+
+          <table class="keys">
+            <caption>세션 · 탭</caption>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>새 세션</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td><td>세션 복제</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>다음 / 이전 탭</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>9</kbd></td><td>번호로 탭 이동</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td><td>연결 관리자</td></tr>
+          </table>
+
+          <table class="keys">
+            <caption>분할 · 칸</caption>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>\</kbd></td><td>세로 분할</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>-</kbd></td><td>가로 분할</td></tr>
+            <tr><td><kbd>Alt</kbd>+방향키</td><td>칸 사이 이동</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>↑</kbd></td><td>이 칸 최대화 / 되돌리기</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></td><td>이 칸 닫기(세션 종료)</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>`</kbd></td><td>터미널 영역 토글</td></tr>
+          </table>
+
+          <table class="keys">
+            <caption>찾기 · 복사</caption>
+            <tr><td><kbd>F1</kbd></td><td>통합 검색(기능 · 서버 · 명령을 한 곳에서)</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>터미널 안에서 찾기</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> / <kbd>V</kbd></td><td>복사 / 붙여넣기</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td>명령어 북(자주 쓰는 명령 모음)</td></tr>
+          </table>
+
+          <table class="keys">
+            <caption>보기</caption>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>파일 트리</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td><td>사이드바 접기 / 펴기</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>서버 작업대(탐색기 창)</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>미니 프리뷰(모든 세션 한눈에)</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td><td>설정</td></tr>
+            <tr><td><kbd>?</kbd></td><td>단축키 치트시트</td></tr>
+          </table>
+
+          <table class="keys">
+            <caption>AI</caption>
+            <tr><td><kbd>Alt</kbd>+<kbd>A</kbd></td><td>AI 대화창 토글</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>선택한 내용으로 AI에게 질문</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td>AI CLI 시작</td></tr>
+          </table>
+        </section>
+
+        <!-- 12 -->
+        <section id="update">
+          <h2>12. 업데이트</h2>
+          <p>
+            아라는 실행 중에 사내 배포 서버를 조용히 확인합니다. 새 버전이 있으면
+            <strong>뒤에서 받아 두고</strong>, 앱을 껐다 켤 때 적용합니다. 쓰던 작업이 끊기지 않습니다.
+          </p>
+          <ul>
+            <li><strong>설정 → [일반] → 업데이트</strong>에서 지금 버전과 상태를 봅니다.</li>
+            <li>[업데이트 확인]으로 즉시 확인할 수 있습니다.</li>
+            <li>내려받기가 끝나면 <strong>[다시 시작하여 설치]</strong> 버튼이 생깁니다. 눌러도 되고, 그냥 두었다가 다음에 켤 때 적용해도 됩니다.</li>
+          </ul>
+          <div class="note">
+            <span>🌐</span>
+            <span>사내망 밖(집·외부 테더링)에서는 확인이 실패할 수 있습니다. 앱 사용에는 지장이 없습니다.</span>
+          </div>
+        </section>
+
+        <!-- 13 -->
+        <section id="trouble">
+          <h2>13. 문제 해결</h2>
+
+          <h3>접속이 안 됩니다</h3>
+          <ul>
+            <li>실패하면 <strong>서버가 준 응답을 그대로</strong> 보여 줍니다. 그 문구를 먼저 보세요.</li>
+            <li>비밀번호가 바뀐 서버는 [비밀번호 다시 입력]으로 갱신합니다.</li>
+            <li>호스트 키 경고가 뜨면 <strong>접속을 강행하지 말고</strong> 관리자에게 확인하세요.</li>
+          </ul>
+
+          <h3>한글이 깨집니다</h3>
+          <p>
+            아라는 한글 고정폭 폰트를 함께 담고 있어 서버에 폰트가 없어도 깨지지 않습니다. 그래도 어긋나면
+            설정 → [폰트]에서 다른 후보를 골라 <strong>같은 문장으로 비교</strong>해 보세요. 서버 쪽
+            로캘(<code>LANG</code>)이 UTF-8 인지도 확인하세요.
+          </p>
+
+          <h3>화면 글자가 작습니다</h3>
+          <p>설정 → [일반] → <strong>UI 글자 크기</strong>. 터미널 글자 크기는 [폰트]에서 따로 정합니다.</p>
+
+          <h3>파일 트리가 안 따라옵니다</h3>
+          <p>
+            서버에 <code>/proc</code> 이 없거나 셸이 특수한 경우 현재 폴더를 자동으로 읽지 못합니다. 그럴
+            때는 안내가 뜨고, 트리의 <strong>새로고침</strong>으로 맞출 수 있습니다.
+          </p>
+
+          <h3>기록을 확인하고 싶습니다</h3>
+          <p>
+            설정 → [로그] → [폴더 열기]. 문제가 생겼을 때 담당자에게 보낼 진단 기록은 같은 화면의
+            <strong>앱 로그 폴더</strong>에 있는 <code>main-error.log</code> 입니다.
+          </p>
+
+          <div class="note danger">
+            <span>🛡️</span>
+            <span>
+              <b>사내 보안 프로그램에 막히면 재시도하지 마세요.</b> 설치·실행·전송이 차단되면 화면을 캡처해
+              담당자에게 알려 주세요. 반복 시도는 계정 잠금으로 이어질 수 있습니다.
+            </span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <div class="wrap">
+        <span class="brand"><img src="assets/ara-icon.svg" alt="" style="width: 20px; height: 20px" />A.R.A</span>
+        <span class="muted">사내 배포용 · 베리굿투어</span>
+        <nav>
+          <a href="index.html">홈</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="assets/site.js"></script>
+  </body>
+</html>

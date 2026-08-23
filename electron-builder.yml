@@ -10,11 +10,17 @@ files:
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:
   - node_modules/node-pty/**
-# 자동 업데이트: **1차 배포에서는 쓰지 않는다**(준영님 결정 2026-08-15).
-# 여기 `https://example.invalid/ara/updates/` 가 박혀 있었는데, 실제로 이 앱은 electron-updater 를
-# 부르는 곳이 한 군데도 없다 — 설정만 남아 패키지 안에 없는 주소를 가리키는 app-update.yml 을
-# 넣고 있었다. 사내 파일 서버가 정해지면 그때 provider: generic 으로 되살린다.
-publish: null
+# 자동 업데이트 (#98, 2026-08-23) — **배포 사이트와 같은 폴더**를 본다.
+# `site/` 를 사내 웹 루트에 올리면 설치본·blockmap·latest.yml 이 전부 `downloads/` 에 함께 있다
+# (`npm run site:stage` 가 거기로 복사한다). 그래서 다운로드 페이지와 업데이트 채널이 한 자리다.
+#
+# ⚠️ 아래 주소는 **사내 서버가 정해지기 전의 자리표시자**다(.local 은 예약 도메인이라 밖으로 새지
+# 않는다). 서버가 정해지면 이 줄을 고쳐 다시 빌드하거나, 다시 빌드하지 않고
+# `ARA_UPDATE_URL` 환경변수로 덮어쓴다(src/main/ipc/registerUpdateIpc.ts).
+publish:
+  provider: generic
+  url: http://ara.local/downloads/
+  channel: latest
 win:
   target: nsis
   # 아이콘: 거미 마스터 ara-icon.svg → 1024px PNG(`npm run icons:png`). electron-builder 가

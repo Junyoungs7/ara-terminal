@@ -10,7 +10,8 @@ import type {
   LogTailData,
   LogTailExit,
   AiDelta,
-  RemoteData
+  RemoteData,
+  UpdateState
 } from '@shared/ipc'
 import type { LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
@@ -49,7 +50,16 @@ const api: EvApi = {
     // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 두 가지(셸 문법 · CLI 존재).
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
     hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found),
-    logPaths: () => ipcRenderer.invoke('app:logPaths')
+    logPaths: () => ipcRenderer.invoke('app:logPaths'),
+    // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
+    updateState: () => ipcRenderer.invoke('update:get'),
+    updateCheck: () => ipcRenderer.invoke('update:check'),
+    updateInstall: () => ipcRenderer.invoke('update:install'),
+    onUpdateState: (cb: (s: UpdateState) => void) => {
+      const listener = (_e: IpcRendererEvent, s: UpdateState): void => cb(s)
+      ipcRenderer.on('update:state', listener)
+      return () => ipcRenderer.removeListener('update:state', listener)
+    }
   },
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),

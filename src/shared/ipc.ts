@@ -144,6 +144,13 @@ export type InvokeContract = {
    */
   'app:logPaths': { req: void; res: { sessionLogDir: string; appLogDir: string; defaultDir: string } }
   'app:hasCli': { req: { bin: string }; res: { found: boolean } }
+  /**
+   * 자동 업데이트 (#98). 상태는 push(`update:state`)로도 오지만, 창이 늦게 뜨면 그 사이의 변화를
+   * 놓치므로 **열릴 때 한 번 물어보는** 채널을 함께 둔다(AI·MCP 패널과 같은 규칙).
+   */
+  'update:get': { req: void; res: UpdateState }
+  'update:check': { req: void; res: { ok: true } }
+  'update:install': { req: void; res: { ok: true } }
   // session 도메인 (계획서 §B.2/§B.7). create/resize/destroy/list.
   'session:create': { req: SessionSpec; res: { id: string } }
   'session:resize': { req: { id: string; cols: number; rows: number }; res: { ok: true } }
@@ -404,6 +411,20 @@ export type InvokeContract = {
   // F12 로그 폴더 열기와 같은 shell.openPath 패턴.
 }
 
+/**
+ * 업데이트 상태 (#98).
+ *  · off — 개발 모드이거나 배포 주소가 없다(화면에서 이 줄을 숨긴다)
+ *  · idle — 확인 전이거나 최신
+ *  · checking / downloading(percent) / ready(받아 뒀다 — 재시작하면 적용)
+ *  · error — 사유를 그대로 보여 준다(사내망 밖이면 흔히 여기로 온다)
+ */
+export type UpdateState = {
+  status: 'off' | 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+  version?: string
+  percent?: number
+  message?: string
+}
+
 export type InvokeChannel = keyof InvokeContract
 export type InvokeReq<C extends InvokeChannel> = InvokeContract[C]['req']
 export type InvokeRes<C extends InvokeChannel> = InvokeContract[C]['res']
@@ -467,6 +488,11 @@ export type EvApi = {
     openExternal(url: string): Promise<{ ok: boolean }>
     /** #90: 이 PC 기본 셸의 조립 규칙(`&&` 가 되는지). AI CLI 시작이 미리보기·전송에 함께 쓴다. */
     launchShell(): Promise<LaunchShell>
+    /** #98 자동 업데이트 — 상태 조회 · 즉시 확인 · 받아 둔 버전으로 재시작. */
+    updateState(): Promise<UpdateState>
+    updateCheck(): Promise<{ ok: true }>
+    updateInstall(): Promise<{ ok: true }>
+    onUpdateState(cb: (s: UpdateState) => void): () => void
     /** #90: 그 실행 파일이 이 PC 에 있는가(where/which). 원격의 cliInstalled 에 대응한다. */
     hasCli(bin: string): Promise<boolean>
     /** 지금 쓰이는 기록 폴더 두 곳 + 기본 자리(설정 화면이 보여 준다). */

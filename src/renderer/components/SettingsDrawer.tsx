@@ -21,6 +21,7 @@ import {
   type McpState,
   type UiPrefs
 } from '@shared/types'
+import type { UpdateState } from '@shared/ipc'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
@@ -129,6 +130,64 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
  * 된다. OS 폴더 선택 창으로만 정하고(fs.pickDir), 지금 어디로 가는지는 늘 보여 준다.
  * 빈 값 = 기본 자리라 그 경로는 main 에게 물어 온다(그 자리는 main 만 안다).
  */
+/**
+ * #98 업데이트 — 설정 [일반]의 마지막 줄.
+ *
+ * 여기서만 보여 준다(배너·모달 없음). 업데이트는 **뒤에서 받아 두고 다음 실행 때** 적용되므로
+ * 하던 일을 끊고 알릴 이유가 없다. 개발 모드(status: 'off')에서는 줄 자체를 숨긴다 — 있어 봐야
+ * 늘 "확인 불가"만 뜬다.
+ */
+function UpdateRow() {
+  const [st, setSt] = useState<UpdateState>({ status: 'off' })
+  useEffect(() => {
+    void window.ev?.app
+      ?.updateState?.()
+      .then(setSt)
+      .catch(() => {})
+    return window.ev?.app?.onUpdateState?.(setSt)
+  }, [])
+  if (st.status === 'off') return null
+  const busy = st.status === 'checking' || st.status === 'downloading'
+  const detail =
+    st.status === 'downloading'
+      ? t('settings.update.downloading').replace('{v}', st.version ?? '').replace('{p}', String(st.percent ?? 0))
+      : st.status === 'ready'
+        ? t('settings.update.ready').replace('{v}', st.version ?? '')
+        : st.status === 'checking'
+          ? t('settings.update.checking')
+          : st.status === 'error'
+            ? t('settings.update.error') + ' — ' + (st.message ?? '')
+            : t('settings.update.idle')
+  return (
+    <Row label={t('settings.update')} desc={t('settings.update.desc')}>
+      <div className="set-dir">
+        <span className="set-dir-path" data-update-status={st.status} title={detail}>
+          {detail}
+        </span>
+        <button
+          type="button"
+          className="btn sec"
+          data-action="update.check"
+          disabled={busy}
+          onClick={() => void window.ev?.app?.updateCheck?.()}
+        >
+          {t('settings.update.check')}
+        </button>
+        {st.status === 'ready' && (
+          <button
+            type="button"
+            className="btn"
+            data-action="update.install"
+            onClick={() => void window.ev?.app?.updateInstall?.()}
+          >
+            {t('settings.update.install')}
+          </button>
+        )}
+      </div>
+    </Row>
+  )
+}
+
 function DirRow({
   label,
   desc,
@@ -669,6 +728,7 @@ export function SettingsDrawer({
                   <span className="v">{prefs.scrollback.toLocaleString('ko-KR')}</span>
                 </div>
               </Row>
+              <UpdateRow />
             </>
           )}
 

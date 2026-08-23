@@ -1,0 +1,99 @@
+<!-- A.R.A Icon — 512 master. Original "constellation-node spider" mark. -->
+<!-- 100% original vector. NO Marvel/Spider-Man IP: no filled hero silhouette, -->
+<!-- no red/blue duotone, no radial comic webbing. Body/legs are built from -->
+<!-- connected nodes + circuit/star-map traces (AI Remote Agent = network motif). -->
+<!-- Design tokens: deep-dark bg + cyan accents (#38bdf8 / #7dd3fc). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
+  <defs>
+    <linearGradient id="araLeg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <radialGradient id="araBody" cx="50%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </radialGradient>
+    <radialGradient id="araBg" cx="50%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#0e2233" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#070910" stop-opacity="1"/>
+    </radialGradient>
+    <radialGradient id="araCore" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="araGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded-square plate (matches app icon system) -->
+  <rect width="512" height="512" rx="112" fill="url(#araBg)"/>
+
+  <!-- Sparse constellation scatter (NOT radial webbing): faint node graph -->
+  <g stroke="#38bdf8" stroke-width="1.1" fill="none" opacity=".16">
+    <path d="M92 132 L168 96 L214 168"/>
+    <path d="M420 148 L344 104 L300 172"/>
+    <path d="M78 348 L150 386 L206 340"/>
+    <path d="M436 356 L360 392 L306 344"/>
+    <path d="M256 60 L256 96"/>
+  </g>
+  <g fill="#38bdf8" opacity=".28">
+    <circle cx="92" cy="132" r="3.2"/><circle cx="168" cy="96" r="2.6"/>
+    <circle cx="420" cy="148" r="3.2"/><circle cx="344" cy="104" r="2.6"/>
+    <circle cx="78" cy="348" r="3.2"/><circle cx="150" cy="386" r="2.6"/>
+    <circle cx="436" cy="356" r="3.2"/><circle cx="360" cy="392" r="2.6"/>
+  </g>
+
+  <!-- ============ SPIDER: constellation-node construction ============ -->
+  <!-- Legs: 4 symmetric pairs as angular circuit polylines from the thorax,
+       each ending in a node dot. Bent (knee) joints = star-map segments. -->
+  <g fill="none" stroke="url(#araLeg)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <!-- LEFT legs (thorax anchor ~ x232,y230) -->
+    <path d="M232 214 L150 150 L96 176"/>
+    <path d="M230 234 L132 214 L86 246"/>
+    <path d="M231 256 L138 286 L96 330"/>
+    <path d="M234 276 L156 330 L128 386"/>
+    <!-- RIGHT legs (mirror, thorax anchor ~ x280,y230) -->
+    <path d="M280 214 L362 150 L416 176"/>
+    <path d="M282 234 L380 214 L426 246"/>
+    <path d="M281 256 L374 286 L416 330"/>
+    <path d="M278 276 L356 330 L384 386"/>
+  </g>
+  <!-- Leg terminal + knee nodes (constellation dots) -->
+  <g fill="#7dd3fc">
+    <circle cx="96" cy="176" r="7"/><circle cx="86" cy="246" r="7"/>
+    <circle cx="96" cy="330" r="7"/><circle cx="128" cy="386" r="7"/>
+    <circle cx="416" cy="176" r="7"/><circle cx="426" cy="246" r="7"/>
+    <circle cx="416" cy="330" r="7"/><circle cx="384" cy="386" r="7"/>
+  </g>
+  <g fill="#38bdf8" opacity=".85">
+    <circle cx="150" cy="150" r="5"/><circle cx="132" cy="214" r="5"/>
+    <circle cx="138" cy="286" r="5"/><circle cx="156" cy="330" r="5"/>
+    <circle cx="362" cy="150" r="5"/><circle cx="380" cy="214" r="5"/>
+    <circle cx="374" cy="286" r="5"/><circle cx="356" cy="330" r="5"/>
+  </g>
+
+  <!-- Cephalothorax (front node) — small rounded ellipse -->
+  <ellipse cx="256" cy="222" rx="30" ry="26" fill="url(#araBody)"/>
+  <!-- Two forward pedipalp/eye nodes (distinct from hero head, reads as sensor) -->
+  <circle cx="244" cy="200" r="4.5" fill="#070910"/>
+  <circle cx="268" cy="200" r="4.5" fill="#070910"/>
+
+  <!-- Abdomen (rear node) — larger rounded body, longer axis -->
+  <path d="M256 254
+           C296 258 314 300 314 342
+           C314 392 288 430 256 430
+           C224 430 198 392 198 342
+           C198 300 216 258 256 254 Z"
+        fill="url(#araBody)"/>
+  <!-- Abdomen inner glow core = AI "sensor" mark -->
+  <circle cx="256" cy="338" r="60" fill="url(#araCore)" opacity=".5"/>
+  <circle cx="256" cy="338" r="13" fill="#eaf8ff" filter="url(#araGlow)"/>
+  <!-- Body-link segment connecting the two nodes (network edge) -->
+  <line x1="256" y1="248" x2="256" y2="256" stroke="#7dd3fc" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- Thin cyan rim -->
+  <rect x="3" y="3" width="506" height="506" rx="110" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-opacity=".22"/>
+</svg>
