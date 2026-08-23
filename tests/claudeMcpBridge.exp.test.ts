@@ -65,7 +65,7 @@ describe('실증 — 로컬 Claude Code(구독 로그인)가 아라 MCP 도구�
         uploadsDir: join(dir, 'up')
       }
       // 진짜 로컬 셸 하나를 띄워 둔다 — 도구가 "무엇을" 봤는지로 호출 여부를 판정하기 위해서다.
-      const sid = await sessions.create({ type: 'local', cwd: dir })
+      const sid = await sessions.create({ type: 'local', cwd: dir, title: '실증', serverKey: 'local' })
       const vault = memTokenVault()
       const token = issueRawToken()
       vault.set(MCP_TOKEN_VAULT_KEY, hashToken(token))
