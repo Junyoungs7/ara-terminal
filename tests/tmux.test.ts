@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildTmuxInput, isValidTmuxName, quoteShellArg } from '../src/shared/tmux'
+import { CLEAR_LINE } from '../src/shared/shellInput'
 
 describe('quoteShellArg — POSIX 셸 단일 인용', () => {
   it('평범한 이름은 그대로 감싼다', () => {
@@ -37,13 +38,24 @@ describe('isValidTmuxName', () => {
 })
 
 describe('buildTmuxInput — 명령 조립', () => {
+  // 2026-08-23 준영님 제보 7번 — 치다 만 줄에 그대로 이어붙었다(`nvcc --versiontmux new -s 'test'`).
+  it('★ 명령은 줄을 비우고 나간다 — 키 조합은 그대로다', () => {
+    expect(buildTmuxInput({ kind: 'new', name: 'x' })!.startsWith(CLEAR_LINE)).toBe(true)
+    expect(buildTmuxInput({ kind: 'list' })!.startsWith(CLEAR_LINE)).toBe(true)
+    expect(buildTmuxInput({ kind: 'attach', name: 'x' })!.startsWith(CLEAR_LINE)).toBe(true)
+    // 분리·창 이동은 tmux prefix 키다 — 줄과 무관하고, 지우면 쓰던 입력만 잃는다.
+    for (const kind of ['detach', 'nextWindow', 'prevWindow'] as const) {
+      expect(buildTmuxInput({ kind })!.startsWith(CLEAR_LINE)).toBe(false)
+    }
+  })
+
   it('new: 이름을 인용해 즉시 실행(\\r)한다', () => {
-    expect(buildTmuxInput({ kind: 'new', name: 'work' })).toBe("tmux new -s 'work'\r")
+    expect(buildTmuxInput({ kind: 'new', name: 'work' })).toBe(CLEAR_LINE + "tmux new -s 'work'\r")
   })
 
   it('new: 셸 특수문자가 든 이름도 안전하게 인용된다', () => {
     const input = buildTmuxInput({ kind: 'new', name: 'a; rm -rf /' })
-    expect(input).toBe("tmux new -s 'a; rm -rf /'\r")
+    expect(input).toBe(CLEAR_LINE + "tmux new -s 'a; rm -rf /'\r")
   })
 
   it('new/attach: 무효한 이름은 null(취소)이다', () => {
@@ -52,11 +64,11 @@ describe('buildTmuxInput — 명령 조립', () => {
   })
 
   it('list: 이름 없이 즉시 실행된다', () => {
-    expect(buildTmuxInput({ kind: 'list' })).toBe('tmux ls\r')
+    expect(buildTmuxInput({ kind: 'list' })).toBe(CLEAR_LINE + 'tmux ls\r')
   })
 
   it('attach: 이름을 인용해 즉시 실행한다', () => {
-    expect(buildTmuxInput({ kind: 'attach', name: 'deploy' })).toBe("tmux a -t 'deploy'\r")
+    expect(buildTmuxInput({ kind: 'attach', name: 'deploy' })).toBe(CLEAR_LINE + "tmux a -t 'deploy'\r")
   })
 
   it('detach/창 전환: prefix(Ctrl+b) + 키 하나, 개행이 없다(명령이 아니라 키 조합)', () => {

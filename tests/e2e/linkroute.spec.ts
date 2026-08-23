@@ -77,6 +77,25 @@ test('LINK-2 로컬 셸의 localhost 링크는 OS 기본 브라우저로 간다'
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0)
 })
 
+// LINK-4★ 2026-08-23 준영님 제보 6번 — **Ctrl+Alt+클릭은 OS 기본 브라우저로.**
+// Ctrl+클릭(LINK-1)은 원격 링크를 아라 브라우저로 연다. 즐겨찾기·로그인 세션이 있는 크롬으로
+// 열고 싶을 때가 있어서 수식자 하나로 그 선택을 준다 — 터널도 안 판다(OS 브라우저는 내 PC 의
+// loopback 을 볼 이유가 없다).
+test('LINK-4★ Ctrl+Alt+클릭이면 원격 링크도 OS 기본 브라우저로 간다', async ({ ara, ssh }) => {
+  const { page, app } = ara
+  await spyShell(app)
+  const h = await ssh({ password: 'pw-link4' })
+  const sid = await connectNewSshProfile(page, { name: 'link4', port: h.port, password: 'pw-link4' })
+
+  const url = `http://localhost:${await reservedPort(14)}/preview`
+  await printRemote(page, sid, url)
+  await ctrlClickLink(page, url, true)
+
+  await expect.poll(async () => (await spyCalls(app)).external, { timeout: 20_000 }).toEqual([url])
+  expect(await browserWindows(app)).toHaveLength(0)
+  expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널을 만들지 않았다
+})
+
 // LINK-3 loopback 이 아닌 주소는 SSH 세션에서도 OS 브라우저로 간다(터널을 팔 이유가 없다)
 test('LINK-3 외부 https 링크는 OS 기본 브라우저로 간다', async ({ ara, ssh }) => {
   const { page, app } = ara

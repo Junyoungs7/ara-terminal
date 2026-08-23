@@ -8,6 +8,8 @@
 // 무관하다 — 그건 AI 가 지어낸 명령을 사용자 확인 없이 실행하지 못하게 막는 규칙이고, 여기 다섯
 // 액션은 전부 이 파일이 고정한 것들이라 사용자가 버튼을 누르는 제스처 자체가 확인이다).
 
+import { commandLine } from './shellInput'
+
 export type TmuxAction =
   | { kind: 'new'; name: string }
   | { kind: 'list' }
@@ -35,12 +37,15 @@ const PREFIX = '\x02' // Ctrl+b
 // 액션 → 터미널에 보낼 문자열. 이름이 필요한 액션에 빈/줄바꿈 이름이 오면 null(호출측이 취소로 처리).
 export function buildTmuxInput(action: TmuxAction): string | null {
   switch (action.kind) {
+    // 명령 셋은 **줄을 비우고** 나간다(commandLine — 2026-08-23 제보 7번: 치던 줄에 이어붙었다).
+    // 아래 키 조합 셋에는 안 붙인다: 그것들은 명령이 아니라 tmux prefix 키라 줄과 무관하고,
+    // 오히려 줄을 지우면 쓰던 입력만 잃는다.
     case 'new':
-      return isValidTmuxName(action.name) ? `tmux new -s ${quoteShellArg(action.name.trim())}\r` : null
+      return isValidTmuxName(action.name) ? commandLine(`tmux new -s ${quoteShellArg(action.name.trim())}`) : null
     case 'list':
-      return 'tmux ls\r'
+      return commandLine('tmux ls')
     case 'attach':
-      return isValidTmuxName(action.name) ? `tmux a -t ${quoteShellArg(action.name.trim())}\r` : null
+      return isValidTmuxName(action.name) ? commandLine(`tmux a -t ${quoteShellArg(action.name.trim())}`) : null
     case 'detach':
       return `${PREFIX}d`
     case 'nextWindow':

@@ -194,7 +194,13 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     //   external → OS 기본 브라우저(기존 동작) / loopback·oauth → 포워딩 후 내장 브라우저.
     // 포워딩 생성은 이 클릭(명시적 사용자 제스처)에서만 출발한다 — 텔레메트리 감지만으로는 만들지 않는다.
     const openLink = useCallback(
-      async (sessionId: string, url: string, isSsh: boolean) => {
+      async (sessionId: string, url: string, isSsh: boolean, external?: boolean) => {
+        // Ctrl+Alt+클릭 — 판단할 것이 없다. 사용자가 "저쪽으로"라고 말한 것이다(제보 6번).
+        // 터널도 열지 않는다: OS 브라우저는 내 PC 의 loopback 을 볼 이유가 없다.
+        if (external) {
+          void window.ev?.app.openExternal(url)
+          return
+        }
         const plan = planLink(url, isSsh)
         if (plan.kind === 'external') {
           void window.ev?.app.openExternal(plan.url)
@@ -930,6 +936,19 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onAction
     ])
 
+    /**
+     * 2026-08-23 준영님 제보 1번: **칸을 클릭하면 그 세션이 활성이 된다.**
+     *
+     * 그전에는 칸 포커스(layout.focusedId)와 활성 세션(activeId)이 따로 놀았다 — 우클릭 메뉴·
+     * 복사 같은 것은 포커스 칸을 따라갔지만, **탭바의 활성 탭과 사이드바 [파일] 은 activeId** 를
+     * 본다. 그래서 분할해 놓고 왼쪽 칸을 눌러도 파일 트리는 마지막에 분할한 세션에 머물렀다.
+     * 포커스가 바뀌는 길은 여럿이라(클릭·분할·Ctrl+Alt+방향키) 각 자리에 심지 않고 여기서 잇는다.
+     */
+    useEffect(() => {
+      const sid = layout.cells.find((c) => c.id === layout.focusedId)?.sessionId
+      if (sid && sid !== activeId) select(sid)
+    }, [layout.focusedId, layout.cells, activeId, select])
+
     // R3.7 Ctrl+휠 → 터미널 글자 크기 ±1. 브라우저 기본 페이지 줌을 막아야 하므로 passive:false.
     useEffect(() => {
       const onWheel = (e: WheelEvent) => {
@@ -972,7 +991,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onSplitDrop={(sessionId, zone) => void splitDrop(sessionId, zone)}
           onAdopt={(sessionId) => void adoptSession(sessionId)}
           onTitle={onAutoTitle}
-          onLink={(sessionId, url, isSsh) => void openLink(sessionId, url, isSsh)}
+          onLink={(sessionId, url, isSsh, external) => void openLink(sessionId, url, isSsh, external)}
         />
         {bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />

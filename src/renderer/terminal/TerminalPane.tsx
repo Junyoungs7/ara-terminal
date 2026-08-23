@@ -74,6 +74,8 @@ const COMP_MAX = 6
 /** 후보 한 줄의 높이(px). 목록을 **위로 열지** 정할 때 필요한데, 그리기 전에는 잴 수가 없다.
  *  shell.css `.term-comp .ci` 와 같은 값이어야 한다(어긋나면 화면 끝에서 몇 px 잘린다). */
 const COMP_ROW_H = 22
+/** 목록 맨 아래 안내 줄(↑↓ 고르기…) + 테두리·여백. 위 값과 같은 이유로 여기 있다. */
+const COMP_CHROME_H = 26
 const UTF8 = new TextDecoder('utf-8', { fatal: false })
 
 /** 커서 옆에 뜨는 후보 목록의 자리·내용. null 이면 목록이 없다(고스트만 있거나 그것도 없다). */
@@ -123,7 +125,8 @@ type Props = {
   onTitle?: (sessionId: string, title: string) => void
   // F8: Ctrl+클릭한 URL. 라우팅(포워딩·내장 브라우저·OS 브라우저)은 MainArea 가 한다 —
   // 실패를 알릴 다이얼로그가 거기 있고, 여기(xterm 배선)에 IPC 흐름을 두면 두 관심사가 섞인다.
-  onLink?: (sessionId: string, url: string, isSsh: boolean) => void
+  /** external=true 면 OS 기본 브라우저로(Ctrl+Alt+클릭) — 라우팅 판단은 MainArea 가 한다. */
+  onLink?: (sessionId: string, url: string, isSsh: boolean, external?: boolean) => void
 }
 
 // 단일 세션 xterm 페인. 인스턴스 수명 = 세션 수명이다: PaneGrid 가 세션마다 이 컴포넌트를 하나씩
@@ -238,8 +241,14 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       const cellW = r.width / Math.max(1, term.cols)
       const cellH = r.height / Math.max(1, term.rows)
       const lineTop = r.top + term.buffer.active.cursorY * cellH
-      // 아래로 열면 화면 밖으로 나가는가 — 그러면 커서 줄 위로 띄운다.
-      const up = lineTop + cellH + items.length * COMP_ROW_H > window.innerHeight
+      /**
+       * 아래로 열 자리가 있는가 — 기준은 **터미널 화면의 아래 끝**이지 창 아래 끝이 아니다
+       * (2026-08-23 준영님 제보 2번). 창 높이로 재면 하단바가 열려 있을 때 목록이 그 위를 덮는다:
+       * 그림 순서상 위에 그려지긴 하지만, 남의 패널을 침범한 목록은 "가려졌다"로 읽힌다(실측:
+       * 목록 591~663 · 하단바 614~874). 터미널 밖으로 나갈 것 같으면 커서 줄 **위로** 띄운다.
+       */
+      const listH = items.length * COMP_ROW_H + COMP_CHROME_H
+      const up = lineTop + cellH + listH > r.bottom
       setComp({
         items,
         index: 0,
@@ -368,7 +377,12 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     term.loadAddon(
       new WebLinksAddon(
         (e, uri) => {
-          if (e.ctrlKey || e.metaKey) linkRef.current?.(sessionId, uri, !local)
+          if (!e.ctrlKey && !e.metaKey) return
+          // 2026-08-23 준영님 제보 6번: **Alt 를 같이 누르면 OS 기본 브라우저로.**
+          // Ctrl+클릭(현행)은 원격 링크를 아라 브라우저로 연다 — 사내 서버 인증처럼 그 편이 맞는
+          // 경우가 대부분이라 기본으로 뒀지만, 즐겨찾기·로그인 세션이 있는 크롬으로 열고 싶을 때가
+          // 있다. 그 선택을 수식자 하나로 준다(링크마다 묻지 않는다).
+          linkRef.current?.(sessionId, uri, !local, e.altKey)
         },
         {
           hover: (_e, uri) => {

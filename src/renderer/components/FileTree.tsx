@@ -1216,7 +1216,10 @@ export function FileTree({
         aria-label={t('sidebar.tab.file')}
         {...listKeys}
         onMouseDown={(e) => {
-          e.currentTarget.focus()
+          // preventScroll 이 없으면 **목록이 맨 위로 튄다**(2026-08-23 준영님 제보 3번).
+          // 스크롤되는 요소에 focus() 를 걸면 브라우저가 "포커스 대상을 보이게" 하려고 스크롤을
+          // 그 요소의 시작(=맨 위)으로 되돌린다 — 정작 눌린 행은 이미 화면 안에 있었다.
+          e.currentTarget.focus({ preventScroll: true })
           if (e.target === e.currentTarget) setSel([])
         }}
         onContextMenu={(e) => openMenu(e, null)}

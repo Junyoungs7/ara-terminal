@@ -24,6 +24,7 @@ import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
 import { AI_CLI_LOCAL, aiCliFlagsOf, buildLaunch, shellFor } from '../../shared/aiCli'
+import { CLEAR_LINE } from '../../shared/shellInput'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { registerAiRun } from '../store/aiSessions'
@@ -517,7 +518,9 @@ export function Shell() {
         shell: sess?.type === 'ssh' ? 'posix' : shellFor('powershell', 'win32')
       })
       if (!line) return
-      window.ev?.session.input(sid, line + '\n')
+      // 치던 줄을 비우고 보낸다 — 제보 7번(tmux)과 같은 사고가 여기서도 난다: 반쯤 친 명령 뒤에
+      // `cd '…' && claude …` 가 이어붙으면 엉뚱한 한 줄이 실행된다.
+      window.ev?.session.input(sid, CLEAR_LINE + line + '\n')
       aiCliRecent.record({ profileId: target, path, cli, flags })
       // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널의 "조용한 AI" 판정이 이 등록에
       // 걸려 있다. 창이 하던 일인데, 창을 없애면서 같이 사라질 뻔했다(타입 검사가 잡았다).

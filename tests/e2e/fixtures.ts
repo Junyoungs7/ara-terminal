@@ -718,14 +718,17 @@ async function linkPoint(page: Page, text: string): Promise<{ x: number; y: numb
 }
 
 // 터미널에 찍힌 URL 을 Ctrl+클릭한다(그냥 클릭으로는 열리지 않는다 — R3.3).
-export async function ctrlClickLink(page: Page, url: string): Promise<void> {
+export async function ctrlClickLink(page: Page, url: string, alt = false): Promise<void> {
   await expect.poll(() => linkPoint(page, url), { timeout: 20_000 }).not.toBeNull()
   const pt = (await linkPoint(page, url))!
   await page.mouse.move(pt.x, pt.y)
   // xterm 은 hover 로 링크를 확정한 뒤에야 click 을 그 링크로 넘긴다.
   await page.waitForTimeout(200)
   await page.keyboard.down('Control')
+  // alt=true → OS 기본 브라우저로 보내는 조합(2026-08-23 제보 6번).
+  if (alt) await page.keyboard.down('Alt')
   await page.mouse.down()
   await page.mouse.up()
+  if (alt) await page.keyboard.up('Alt')
   await page.keyboard.up('Control')
 }

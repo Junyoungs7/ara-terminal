@@ -44,7 +44,7 @@ type Props = {
   // R3.6: 셸이 보낸 OSC 0/2 제목을 상위(MainArea)로 올린다.
   onTitle?: (sessionId: string, title: string) => void
   // F8: 터미널 안 URL Ctrl+클릭. 라우팅 판단은 MainArea 가 한다(그쪽에 다이얼로그가 있다).
-  onLink?: (sessionId: string, url: string, isSsh: boolean) => void
+  onLink?: (sessionId: string, url: string, isSsh: boolean, external?: boolean) => void
 }
 
 // 그리드 트랙: 사용 열/행 수 + divider(5px) 삽입. 단일 열/행이면 divider 없음.
