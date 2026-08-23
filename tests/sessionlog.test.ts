@@ -13,6 +13,7 @@ import {
   MAX_BYTES,
   MAX_LINE,
   newStripState,
+  pendingLine,
   normalizeCr,
   sanitizeKey,
   stripAnsi
@@ -180,12 +181,14 @@ describe('ANSI 스트립', () => {
     expect(out).toBe('✔ 배포 완료\n')
   })
 
+  // 2026-08-23: stripAnsi 는 **완성된 줄**만 돌려준다(그리는 중인 줄은 상태에 남는다) —
+  // 그래야 뒤늦게 오는 덮어쓰기를 반영할 수 있다. 청크 경계 이어 붙이기는 그대로다.
   it('시퀀스가 청크 경계에서 잘려도 이어 붙인다', () => {
     const st = newStripState()
-    const a = stripAnsi('앞\x1b[3', st)
-    const b = stripAnsi('2m뒤', st)
-    expect(a).toBe('앞')
-    expect(b).toBe('뒤')
+    expect(stripAnsi('앞\x1b[3', st)).toBe('') // 아직 줄이 안 끝났다
+    expect(stripAnsi('2m뒤', st)).toBe('')
+    expect(pendingLine(st)).toBe('앞뒤') // 색 시퀀스만 빠지고 글자는 이어졌다
+    expect(stripAnsi('\n', st)).toBe('앞뒤\n')
   })
 
   // 2026-08-22 준영님 제보 10번 — 기록에 같은 명령이 이어붙어 남았다:
@@ -194,12 +197,13 @@ describe('ANSI 스트립', () => {
   // 글자만 이어 붙이면 지워졌어야 할 옛 글자가 남는다.
   it('줄 전체 지우기(CSI 2K)는 그 줄에 쌓인 것을 버린다', () => {
     const st = newStripState()
-    expect(stripAnsi('$ cp -r ./src ./backup\x1b[2K$ su\n', st)).toBe('$ su\n')
+    // 2K 는 줄을 비우지만 **커서는 그 자리**다(터미널이 그렇다) — 셸은 보통 \r 로 앞에 간 뒤 다시 쓴다.
+    expect(stripAnsi('$ cp -r ./src ./backup\x1b[2K\r$ su\n', st)).toBe('$ su\n')
   })
 
   it('줄 지우기는 그 줄만 지운다 — 앞 줄은 남는다', () => {
     const st = newStripState()
-    expect(stripAnsi('첫 줄\n둘째 옛것\x1b[2K둘째 새것\n', st)).toBe('첫 줄\n둘째 새것\n')
+    expect(stripAnsi('첫 줄\n둘째 옛것\x1b[2K\r둘째 새것\n', st)).toBe('첫 줄\n둘째 새것\n')
   })
 
   it('CSI 0K(커서~끝)는 순차 출력에서 지울 것이 없다', () => {
@@ -207,10 +211,40 @@ describe('ANSI 스트립', () => {
     expect(stripAnsi('진행 중\x1b[0K\n', newStripState())).toBe('진행 중\n')
   })
 
-  it('줄 첫 칸으로 이동(CSI G)은 CR 로 남겨 normalizeCr 이 덮어쓰기로 정리한다', () => {
-    const out = stripAnsi('옛 명령\x1b[1G새 명령\n', newStripState())
-    expect(out).toBe('옛 명령\r새 명령\n')
-    expect(normalizeCr(out)).toBe('새 명령\n')
+  /**
+   * ★ 2026-08-23 준영님 제보 4번 — 실제로 남은 기록:
+   * ```
+   * jun@kvt:~/data$ ls - cd data/omo
+   * ```
+   * 서로 다른 두 명령이 한 줄에 섞였다. 셸이 줄을 다시 그릴 때 하는 일은 "이어 붙이기"가 아니라
+   * **커서를 앞으로 보내고 덮어쓰기**다. 열을 추적하지 않으면 그 덮어쓰기가 전부 뒤에 붙는다.
+   */
+  it('★ \r 뒤에 다시 쓰면 앞 글자를 덮는다 — 두 명령이 한 줄에 섞이지 않는다', () => {
+    const st = newStripState()
+    // `$ ls -al` 을 치다가 줄을 다시 그려 `$ cd data/omo` 로 바뀐 경우(CSI 0K 가 남은 꼬리를 지운다).
+    expect(stripAnsi('$ ls -al\r$ cd data/omo\x1b[K\n', st)).toBe('$ cd data/omo\n')
+  })
+
+  it('★ 새로 쓴 줄이 더 짧으면 남은 꼬리는 EL(0)이 지운다', () => {
+    // 지우기 없이 덮어쓰기만 하면 옛 꼬리가 남는 것이 **맞다**(화면도 그렇다).
+    expect(stripAnsi('$ ls -al\r$ cd\n', newStripState())).toBe('$ cd -al\n')
+    // 셸은 그래서 EL 을 함께 보낸다.
+    expect(stripAnsi('$ ls -al\r$ cd\x1b[0K\n', newStripState())).toBe('$ cd\n')
+  })
+
+  it('커서 이동(CSI C/D)도 열로 반영한다 — 가운데 글자만 고쳐 쓴다', () => {
+    // `abcd` 에서 왼쪽으로 두 칸 가서 `XY` 를 쓰면 `abXY` 가 된다.
+    expect(stripAnsi('abcd\x1b[2DXY\n', newStripState())).toBe('abXY\n')
+    // 오른쪽으로 두 칸 건너뛰면 그 사이는 공백이다(터미널이 그렇게 그린다).
+    expect(stripAnsi('ab\x1b[2CZ\n', newStripState())).toBe('ab  Z\n')
+  })
+
+  it('줄 첫 칸으로 이동(CSI G)은 그 자리부터 덮어쓴다', () => {
+    // 예전에는 이 시퀀스를 \r 로 바꿔 두고 normalizeCr 이 "마지막 것만" 규칙으로 정리했다.
+    // 이제 열을 알고 있으므로 그 자리에서 바로 덮어쓴다 — 새 명령이 더 짧으면 꼬리가 남는 것까지
+    // 화면과 같다(셸은 그때 EL 을 함께 보낸다).
+    expect(stripAnsi('옛 명령\x1b[1G새 명령\n', newStripState())).toBe('새 명령\n')
+    expect(stripAnsi('긴 옛 명령\x1b[1G짧은\x1b[0K\n', newStripState())).toBe('짧은\n')
   })
 
   // 2026-08-22 준영님 재제보(12·13번) — 실제로 남은 기록:
@@ -227,10 +261,11 @@ describe('ANSI 스트립', () => {
     expect(stripAnsi('첫 줄\nab\b\b\bcd\n', newStripState())).toBe('첫 줄\ncd\n')
   })
 
-  it('CR 뒤의 백스페이스는 그 뒤에 쓴 것만 지운다', () => {
-    // CR 로 커서가 줄 앞에 갔고, 거기서 다시 쓰다 한 글자를 지웠다.
-    expect(stripAnsi('옛것\rabc\b\n', newStripState())).toBe('옛것\rab\n')
-    expect(normalizeCr(stripAnsi('옛것\rabc\b\n', newStripState()))).toBe('ab\n')
+  it('CR 뒤의 백스페이스는 커서만 되돌린다 — 화면과 같다', () => {
+    // `옛것` 위에 `abc` 를 덮어쓰다 한 글자를 지웠다(커서만 왼쪽으로) → 그 자리는 아직 c 다.
+    // 셸이 실제로 지울 때는 `\b \b`(뒤로·공백·뒤로)를 보내고, 그러면 공백으로 덮인다.
+    expect(stripAnsi('옛것\rabc\b\n', newStripState())).toBe('abc\n')
+    expect(stripAnsi('옛것\rabc\b \b\n', newStripState())).toBe('ab \n')
   })
 
   it('대체화면 안에서는 줄 지우기도 기록에 영향을 주지 않는다', () => {
@@ -248,7 +283,8 @@ describe('ANSI 스트립', () => {
     const st = newStripState()
     expect(stripAnsi('\x1b[?1049hvim 안', st)).toBe('')
     expect(stripAnsi('여전히 vim', st)).toBe('')
-    expect(stripAnsi('\x1b[?1049l복귀', st)).toBe('복귀')
+    expect(stripAnsi('\x1b[?1049l복귀', st)).toBe('') // 줄이 아직 안 끝났다
+    expect(pendingLine(st)).toBe('복귀')
   })
 
   it('진행률 덮어쓰기(\\r)는 마지막 상태만 남긴다', () => {

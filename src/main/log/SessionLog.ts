@@ -92,8 +92,15 @@ export function parseLogName(name: string): { startedAt: number; serverKey: stri
 // entered: 이 청크에서 대체화면 진입 시퀀스를 봤다(기록자가 누락 표식을 남기고 소비한다).
 // 진입/종료가 한 청크 안에서 끝나도 서야 한다 — 안 그러면 `\e[?1049h…\e[?1049l` 를 한 번에 써서
 // 표식 없이 활동을 숨길 수 있다.
-export type StripState = { carry: string; alt: boolean; entered: boolean }
-export const newStripState = (): StripState => ({ carry: '', alt: false, entered: false })
+/**
+ * 스트립 상태. `line`·`col` 이 **지금 그려지고 있는 한 줄**이다 — 2026-08-23 에 들어왔다.
+ * (그전에는 글자를 그냥 이어 붙였다. 왜 그것으로 부족했는지는 stripAnsi 머리주석 참고.)
+ */
+export type StripState = { carry: string; alt: boolean; entered: boolean; line: string[]; col: number }
+export const newStripState = (): StripState => ({ carry: '', alt: false, entered: false, line: [], col: 0 })
+
+/** 아직 개행이 안 온 줄 — 세션을 닫을 때 이것도 흘려보내야 마지막 줄이 안 사라진다. */
+export const pendingLine = (st: StripState): string => st.line.join('')
 
 // 반복 상한을 둔다: 원격 출력은 신뢰 경계 밖이라 종료 문자 없는 `\x1b]` 를 잔뜩 보내면
 // 무제한 lazy 스캔이 매 위치마다 버퍼 끝까지 훑어 O(n²) 가 된다. 정상 시퀀스는 이 상한보다 훨씬 짧다.
@@ -104,45 +111,61 @@ const ALT_OFF = /^\x1b\[\?(?:1049|1047|47)l$/
 
 /**
  * 줄 지우기·줄 안 커서 이동 — **셸이 명령행을 다시 그릴 때 쓰는 것들**.
- *
- * 2026-08-22 준영님 제보 10번: 기록에 같은 명령이 두세 번 이어붙어 남았다
- * (`… cp -r ./src ./backup     cp -r ./src ./backup      su`).
- * 원인은 이 시퀀스들을 **그냥 지웠기** 때문이다. readline 은 히스토리를 부르거나 붙여넣기를 하면
- * `CSI 2K`(줄 전체 지우기)나 `CSI G`(줄 첫 칸으로) 를 보내고 같은 자리에 다시 쓴다 — 화면에서는
- * 덮어써지지만, 시퀀스를 버리고 글자만 이어 붙이면 지워졌어야 할 옛 글자가 그대로 남는다.
- *
- * 완전한 재현은 아니다(그러려면 터미널 에뮬레이터를 돌려야 한다). 커서 **열 위치**는 추적하지
- * 않고 "지금 쓰고 있는 줄"만 본다 — 그 하나로 재그리기 중복의 대부분이 사라진다.
  */
 const EL = /^\x1b\[([0-2]?)K$/ // Erase in Line: 0=커서~끝, 1=처음~커서, 2=줄 전체
-const CHA = /^\x1b\[[0-9]*G$/ // Cursor Horizontal Absolute — 줄 안에서 열 이동(\r 과 같은 뜻으로 쓰인다)
+const CHA = /^\x1b\[([0-9]*)G$/ // Cursor Horizontal Absolute — 줄 안 절대 열 이동
+const CUF = /^\x1b\[([0-9]*)C$/ // 커서 오른쪽
+const CUB = /^\x1b\[([0-9]*)D$/ // 커서 왼쪽
 
+/** 한 줄이 이만큼 길어지면 개행 없는 덤프로 보고 흘려보낸다(힙 상한 — MAX_LINE 과 같은 뜻). */
+const LINE_CELLS = MAX_LINE
+
+/**
+ * 터미널 출력 → 기록할 텍스트.
+ *
+ * **한 줄을 셀 배열로 들고 커서 열을 추적한다.** 2026-08-23 준영님 제보 4번이 이 구조를 요구했다:
+ * ```
+ * jun@kvt:~/data$ ls - cd data/omo
+ * ```
+ * 서로 다른 두 명령이 한 줄에 섞였다. 그전 방식은 글자를 **이어 붙이고** 몇몇 시퀀스만 특별
+ * 취급했는데(백스페이스·EL·CHA), 셸이 줄을 다시 그릴 때 하는 일은 이어 붙이기가 아니라
+ * **덮어쓰기**다 — 커서를 앞으로 보내고 그 자리부터 다시 쓴다. 열을 모르면 그 덮어쓰기가 전부
+ * 뒤에 붙어 두 명령이 한 줄에 남는다. 8/22 에 백스페이스만 고쳤을 때 제보가 다시 온 이유가 그것이다.
+ *
+ * 그래서 이제 화면이 하는 그대로 한다: 셀에 쓰고, 커서를 움직이고, 지우라면 지운다. 완전한
+ * 에뮬레이터는 아니다(줄 넘김·스크롤·탭 정지는 안 본다) — **한 줄 안에서** 벌어지는 재그리기만
+ * 정확히 재현하면 이 문제는 사라진다.
+ *
+ * 돌려주는 것은 **완성된 줄들**(개행 포함)이고, 아직 안 끝난 줄은 상태에 남는다(pendingLine).
+ */
 export function stripAnsi(text: string, st: StripState): string {
   const s = st.carry + text
   st.carry = ''
   let out = ''
   let i = 0
-  /** out 에서 지금 쓰고 있는 줄이 시작하는 자리. 줄 지우기·줄 앞 이동이 이 지점을 기준으로 자른다. */
-  let lineStart = 0
+
+  const write = (ch: string): void => {
+    // 커서가 줄 끝보다 뒤면 그 사이를 공백으로 채운다(터미널이 하는 그대로).
+    while (st.line.length < st.col) st.line.push(' ')
+    st.line[st.col] = ch
+    st.col += 1
+  }
+  const endLine = (): void => {
+    out += st.line.join('') + '\n'
+    st.line = []
+    st.col = 0
+  }
+
   while (i < s.length) {
     const c = s[i]
     if (c !== '\x1b') {
       if (!st.alt) {
-        // 백스페이스(0x08) — **셸이 글자를 지운 것**이다. 2026-08-22 준영님 재제보(12·13번):
-        //   `jun@kvt:~/data$ cl lsll`   ← `cl` 을 지우고 `ls` 를 쳤는데 둘 다 남았다
-        // readline 은 지울 때 `\b \b`(뒤로·공백·뒤로)를 보낸다. 그 셋을 글자로 취급해 흘려보내면
-        // 지워진 글자가 화면에서만 사라지고 기록에는 남아 서로 겹쳐 보인다.
-        // 줄 시작(lineStart) 아래로는 지우지 않는다 — 프롬프트까지 갉아먹으면 안 된다.
-        if (c === '\b') {
-          if (out.length > lineStart) out = out.slice(0, -1)
-          i++
-          continue
-        }
-        out += c
-        if (c === '\n') lineStart = out.length
-        // CR 은 커서를 줄 앞으로 보낸다. 뒤이어 오는 글자는 **덮어쓰기**이므로 normalizeCr 이
-        // 나중에 "마지막 것만" 규칙으로 정리한다 — 여기서는 지우기 기준점만 옮긴다.
-        if (c === '\r') lineStart = out.length
+        if (c === '\n') endLine()
+        else if (c === '\r') st.col = 0
+        else if (c === '\b') st.col = Math.max(0, st.col - 1)
+        else write(c)
+        // 개행 없이 한 줄이 무한정 길어지는 출력(미니파이 JS·base64)도 여기서 끊는다.
+        if (st.line.length > LINE_CELLS) endLine()
       }
       i++
       continue
@@ -154,16 +177,18 @@ export function stripAnsi(text: string, st: StripState): string {
       else if (ALT_OFF.test(csi[0])) st.alt = false
       else if (!st.alt) {
         const el = EL.exec(csi[0])
-        // 줄 전체 지우기(2) · 처음~커서 지우기(1) → 지금 줄에 쌓아 둔 것을 버린다.
-        // 0(커서~끝)은 순차 출력에서 커서가 곧 줄 끝이라 지울 것이 없다.
-        if (el && el[1] !== '0' && el[1] !== '') out = out.slice(0, lineStart)
-        else if (el && (el[1] === '' || el[1] === '0')) {
-          /* no-op — 커서 뒤에는 아직 아무것도 없다 */
-        } else if (CHA.test(csi[0])) {
-          // 줄 첫 칸으로 돌아간 뒤 다시 쓴다 = 덮어쓰기다. \r 과 같은 자리에서 처리되게
-          // 표식을 남겨 두면 normalizeCr 이 "마지막 것만" 규칙으로 정리한다.
-          out += '\r'
-        }
+        const cha = CHA.exec(csi[0])
+        const cuf = CUF.exec(csi[0])
+        const cub = CUB.exec(csi[0])
+        if (el) {
+          // 0(기본) = 커서부터 끝까지. **이것이 8/22 까지 no-op 이었다** — 순차 출력만 생각하면
+          // 커서 뒤에 아무것도 없지만, \r 로 앞에 돌아간 뒤라면 옛 글자가 그대로 남아 있다.
+          if (el[1] === '' || el[1] === '0') st.line.length = Math.min(st.line.length, st.col)
+          else if (el[1] === '1') for (let k = 0; k < st.col; k++) st.line[k] = ' '
+          else st.line = []
+        } else if (cha) st.col = Math.max(0, (parseInt(cha[1] || '1', 10) || 1) - 1)
+        else if (cuf) st.col += parseInt(cuf[1] || '1', 10) || 1
+        else if (cub) st.col = Math.max(0, st.col - (parseInt(cub[1] || '1', 10) || 1))
       }
       i += csi[0].length
       continue
@@ -285,7 +310,11 @@ export function createSessionLog(dir: string, enabled: boolean, retentionDays: n
     entries.delete(id)
     try {
       // 줄이 끝나지 않은 꼬리도 마스킹해서 흘려보낸다(세션이 프롬프트에서 끝나는 것이 보통이다).
-      if (e.buf && !e.stopped) put(e, e.masker.mask(e.buf) + '\n')
+      // 꼬리는 **두 군데**에 있다: 아직 개행이 안 온 줄(strip 상태의 셀 배열)과 그 앞의 버퍼.
+      // 2026-08-23 에 stripAnsi 가 완성된 줄만 돌려주게 되면서 전자가 생겼다 — 안 흘려보내면
+      // 세션의 **마지막 줄이 통째로 사라진다**(보통 그 줄이 마지막 프롬프트다).
+      const tail = e.buf + pendingLine(e.strip)
+      if (tail && !e.stopped) put(e, e.masker.mask(tail) + '\n')
       closeSync(e.fd)
     } catch {
       /* 이미 닫힌 fd — 무시 */
@@ -302,7 +331,8 @@ export function createSessionLog(dir: string, enabled: boolean, retentionDays: n
     // 테스트 seam(위 타입 주석 참고) — 아직 줄이 안 끝나 파일로 못 나간 꼬리의 합.
     bufferedBytes() {
       let n = 0
-      for (const e of entries.values()) n += e.buf.length
+      // 그리는 중인 줄(strip 상태)까지 센다 — 개행 없는 출력은 그쪽에 쌓인다.
+      for (const e of entries.values()) n += e.buf.length + e.strip.line.length
       return n
     },
 
