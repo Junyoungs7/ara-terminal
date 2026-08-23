@@ -1,0 +1,17 @@
+<!-- S6 — 같은 배인데 꺾쇠를 **세워 돛**으로 삼았다. 배로는 더 또렷하지만
+     프롬프트라는 성격은 옅어진다. S5 와 비교용. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
+  <defs>
+    <linearGradient id="bgB2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2a2f"/><stop offset="100%" stop-color="#171618"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgB2)"/>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="111.25" fill="none" stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+  <path d="M196 262 L256 166 L316 262" fill="none" stroke="#f0e0c6" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M148 292 q108 54 216 0" fill="none" stroke="#e0c79f" stroke-width="34" stroke-linecap="round"/>
+  <g fill="none" stroke-width="28" stroke-linecap="round">
+    <path d="M104 366 q38 -32 76 0 q38 32 76 0 q38 -32 76 0 q38 32 76 0" stroke="#c9a26d"/>
+    <path d="M104 430 q38 -32 76 0 q38 32 76 0 q38 -32 76 0 q38 32 76 0" stroke="#8a6a3f"/>
+  </g>
+</svg>
