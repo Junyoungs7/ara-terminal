@@ -1173,3 +1173,74 @@ kbd {
     width: auto;
   }
 }
+
+/* ── 비교표 (index.html — "일반 SSH 클라이언트와 무엇이 다른가") ────────────
+   경쟁 제품 이름을 적지 않는다. 우리가 그 제품들을 다 재보지 않았고, 사내 문서에 남는
+   비교는 틀리면 그대로 흠이 된다. 대신 **누구나 아는 기본 동작**과 우리를 나란히 둔다. */
+.cmp {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 44px;
+  font-size: 15.5px;
+}
+.cmp thead th {
+  text-align: left;
+  padding: 0 20px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line-strong);
+}
+.cmp thead th.ours {
+  color: var(--accent);
+}
+.cmp td {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+  line-height: 1.65;
+  color: var(--text-lo);
+}
+.cmp td.k {
+  width: 190px;
+  color: var(--text-hi);
+  font-weight: 700;
+}
+.cmp td.ours {
+  color: var(--text-mid);
+  background: linear-gradient(90deg, var(--accent-glow), transparent 85%);
+  border-left: 2px solid var(--accent-line);
+}
+.cmp td.ours b {
+  color: var(--text-hi);
+}
+@media (max-width: 820px) {
+  .cmp,
+  .cmp tbody,
+  .cmp tr,
+  .cmp td {
+    display: block;
+    width: auto;
+  }
+  .cmp thead {
+    display: none;
+  }
+  .cmp tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .cmp td {
+    border: 0;
+    padding: 4px 0;
+  }
+  .cmp td.k {
+    font-size: 17px;
+  }
+  .cmp td.ours {
+    border-left: 2px solid var(--accent-line);
+    padding-left: 14px;
+    margin-top: 6px;
+  }
+}

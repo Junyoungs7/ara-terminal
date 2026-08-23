@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A.R.A — 서버가 손에 잡히는 터미널</title>
+    <title>A.R.A — 접속 다음을 바꾸는 터미널</title>
     <meta
       name="description"
-      content="A.R.A(아라)는 SSH 터미널에 파일 탐색기·서버 도구·AI 대화를 한 창에 담은 사내 개발자용 터미널입니다. 원격 리눅스에 아무것도 설치하지 않고 마우스로 다룹니다."
+      content="A.R.A(아라)는 SSH 접속 다음을 바꿉니다. 서버에 아무것도 설치하지 않고 프로세스·서비스·디스크를 마우스로, 화면의 출력을 그대로 AI에게, 창은 크롬처럼."
     />
     <link rel="icon" href="assets/ara-icon.svg" />
     <link rel="stylesheet" href="assets/site.css" />
@@ -21,8 +21,9 @@
           <span>A.R.A</span>
         </a>
         <nav class="nav-links">
-          <a href="#features">기능</a>
-          <a href="#tools">서버 도구</a>
+          <a href="#diff">무엇이 다른가</a>
+          <a href="video.html">영상</a>
+          <a href="#only">아라에만 있는 것</a>
           <a href="manual.html">사용 설명서</a>
           <a href="#download">다운로드</a>
         </nav>
@@ -34,10 +35,11 @@
       <!-- ── 히어로 ──────────────────────────────────────────────────── -->
       <section class="hero">
         <div class="wrap">
-          <h1 class="reveal">명령을 외우지 않아도<br />서버가 <span class="accent">손에 잡힌다</span></h1>
+          <h1 class="reveal">접속은 어디서나 됩니다.<br /><span class="accent">그 다음</span>이 다릅니다.</h1>
           <p class="lead reveal">
-            A.R.A(아라)는 SSH 터미널에 <b>파일 탐색기 · 서버 도구 · AI 대화</b>를 한 창에 담은 사내 개발자용
-            터미널입니다. 원격 리눅스에는 <b>아무것도 설치하지 않습니다.</b>
+            지금 쓰시는 터미널이 하는 일은 아라도 다 합니다. 아라는 <b>접속한 다음</b>을 바꿉니다 —
+            서버 상태를 <b>마우스로</b> 보고, 화면에 찍힌 출력을 <b>그대로 AI에게</b> 묻고, 창을
+            <b>크롬처럼</b> 다룹니다. 원격 리눅스에는 <b>아무것도 설치하지 않습니다.</b>
           </p>
           <div class="hero-cta reveal">
             <a class="btn btn-primary" data-dl href="downloads/" download>
@@ -46,10 +48,10 @@
               </svg>
               Windows용 다운로드
             </a>
-            <a class="btn btn-ghost" href="manual.html">사용 설명서</a>
+            <a class="btn btn-ghost" href="#diff">무엇이 다른지 보기</a>
           </div>
           <p class="hero-meta reveal">
-            버전 <b data-rel="version">0.1.0</b> · <b data-rel="size">91.7 MB</b> ·
+            버전 <b data-rel="version">0.1.0</b> · <b data-rel="size">92.1 MB</b> ·
             <b data-rel="os">Windows 10 / 11 (64비트)</b> · <b data-rel="date">2026-08-23</b>
           </p>
 
@@ -81,12 +83,10 @@
                     <span class="plus">＋</span>
                   </div>
                   <div class="term">
-<span class="u">jun@dev-server</span>:<span class="p">~/vgt-erp</span>$ git pull --rebase
-<span class="d">Successfully rebased and updated refs/heads/main.</span>
 <span class="u">jun@dev-server</span>:<span class="p">~/vgt-erp</span>$ npm run build
 <span class="d">&gt; vgt-erp@1.4.2 build</span>
 <span class="a">✓ built in 8.42s</span>  <span class="d">— http://localhost:3000 에서 미리보기</span>
-<span class="w">⌃</span><span class="d">클릭하면 터널을 뚫고 아라 브라우저로 엽니다</span>
+<span class="w">⌃</span><span class="d">클릭 → 터널을 뚫고 아라 브라우저로 엽니다(포워딩을 손으로 안 걸어도 됩니다)</span>
 <span class="u">jun@dev-server</span>:<span class="p">~/vgt-erp</span>$ <span class="cur"></span>
                   </div>
                   <div class="win-bottom">
@@ -121,49 +121,120 @@
       <div class="stats reveal">
         <div><b>0</b><span>서버에 설치할 것</span></div>
         <div><b>8</b><span>마우스로 여는 서버 도구</span></div>
-        <div><b>30+</b><span>단축키</span></div>
+        <div><b>1</b><span>창 — 터미널·파일·AI</span></div>
         <div><b>100%</b><span>한국어 화면</span></div>
       </div>
 
-      <!-- ── 기능 ────────────────────────────────────────────────────── -->
-      <section class="section" id="features">
+      <!-- ── 비교 ────────────────────────────────────────────────────── -->
+      <section class="section" id="diff">
         <div class="wrap">
-          <p class="eyebrow reveal">한 창에서</p>
-          <h2 class="h-sect reveal">터미널을 켜 두고<br />하던 일을 계속합니다.</h2>
+          <p class="eyebrow reveal">무엇이 다른가</p>
+          <h2 class="h-sect reveal">같은 일을 하는 데<br />드는 손이 다릅니다.</h2>
+          <p class="lead reveal" style="margin-top: 20px">
+            아래 왼쪽은 <b>SSH 클라이언트로 서버를 다룰 때 보통 하는 일</b>입니다. 오른쪽이 아라에서
+            같은 일을 하는 방법입니다.
+          </p>
+
+          <table class="cmp reveal">
+            <thead>
+              <tr>
+                <th></th>
+                <th>보통의 SSH 클라이언트</th>
+                <th class="ours">A.R.A</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="k">서버가 왜 느린지 볼 때</td>
+                <td><code>top</code> · <code>ps -eo</code> · <code>systemctl</code> · <code>df</code> 를 외워서 타이핑, 결과는 글자 더미</td>
+                <td class="ours"><b>표로 봅니다.</b> 프로세스·서비스·디스크·패키지·컨테이너·포트·시스템 그래프를 클릭으로 열고 <b>정렬·검색·종료까지 마우스</b>로. 서버에는 <b>아무것도 설치하지 않습니다.</b></td>
+              </tr>
+              <tr>
+                <td class="k">파일을 옮길 때</td>
+                <td>창을 하나 더 띄우거나 <code>scp</code> 명령을 조립. 터미널에서 <code>cd</code> 한 곳과 파일 창이 따로 논다</td>
+                <td class="ours">왼쪽 트리가 <b><code>cd</code> 를 따라옵니다.</b> 끌어다 놓으면 업로드, <b>서버 ↔ 서버도 바로 복사.</b> 원격 파일은 더블클릭해 고치고 저장하면 그대로 올라갑니다.</td>
+              </tr>
+              <tr>
+                <td class="k">모르는 오류를 만났을 때</td>
+                <td>출력을 긁어 브라우저 AI에 붙여넣기. 사내 서버 이름·토큰이 섞여 나가도 모른다</td>
+                <td class="ours">우클릭 <b>[AI에게 질문]</b> — 화면의 출력이 그대로 첨부되고, <b>비밀번호·토큰처럼 보이는 값은 가려서</b> 보냅니다. 무엇을 보냈는지 그 자리에서 볼 수 있습니다.</td>
+              </tr>
+              <tr>
+                <td class="k">AI가 알려 준 명령을 쓸 때</td>
+                <td>복사 → 창 전환 → 붙여넣기</td>
+                <td class="ours"><b>[터미널로 보내기]</b> 한 번. 명령은 <b>넣기만</b> 하고 <b>실행은 사람이</b> 누릅니다.</td>
+              </tr>
+              <tr>
+                <td class="k">원격 CLI 로그인(claude·gemini)</td>
+                <td>콜백 포트를 손으로 포워딩하고, 링크를 복사해 브라우저에 옮겨 붙인다</td>
+                <td class="ours">링크를 <b>Ctrl+클릭</b>. 콜백 포트를 <b>그 번호 그대로 터널링</b>하고 내장 브라우저로 엽니다. 로그인이 그 자리에서 끝납니다.</td>
+              </tr>
+              <tr>
+                <td class="k">서버가 띄운 웹을 볼 때</td>
+                <td><code>-L 3000:localhost:3000</code> 을 기억해 다시 접속</td>
+                <td class="ours">터미널에 찍힌 <code>localhost:3000</code> 을 <b>Ctrl+클릭</b>하면 터널이 생기고 창이 열립니다.</td>
+              </tr>
+              <tr>
+                <td class="k">창을 늘려 쓸 때</td>
+                <td>탭은 그 창에 갇혀 있다. 모니터를 옮기려면 새로 접속</td>
+                <td class="ours"><b>크롬처럼</b> 탭을 끌어내면 새 창, 끌어다 놓으면 합쳐집니다. <b>세션은 끊기지 않습니다.</b></td>
+              </tr>
+              <tr>
+                <td class="k">다시 켰을 때</td>
+                <td>처음부터 접속하고 폴더로 다시 이동</td>
+                <td class="ours">세션 · 분할 배치 · <b>작업 폴더까지</b> 복원됩니다.</td>
+              </tr>
+              <tr>
+                <td class="k">기록이 필요할 때</td>
+                <td>직접 켜고, 파일을 직접 관리</td>
+                <td class="ours">자동으로 남습니다. <b>비밀값은 가려서</b>, 보관 기간과 폴더는 설정에서.</td>
+              </tr>
+              <tr>
+                <td class="k">한글</td>
+                <td>영문 화면. 서버에 폰트가 없으면 표·박스가 어긋난다</td>
+                <td class="ours">화면·메뉴·안내가 <b>한국어</b>. <b>한글 고정폭 폰트를 담아</b> 배포해 서버 사정과 무관하게 정렬이 맞습니다.</td>
+              </tr>
+              <tr>
+                <td class="k">새 버전</td>
+                <td>공지를 찾아 설치본을 내려받아 다시 설치</td>
+                <td class="ours">사내 서버에서 <b>알아서 받아 두고</b> 다음에 켤 때 적용합니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── 아라에만 있는 것 ────────────────────────────────────────── -->
+      <section class="section" id="only">
+        <div class="wrap">
+          <p class="eyebrow reveal">아라에만 있는 것</p>
+          <h2 class="h-sect reveal">다른 데서 못 보셨을<br />세 가지입니다.</h2>
 
           <div class="feat" style="margin-top: 64px">
             <div class="feat-txt reveal">
-              <h3>세션을 나누고, 떼어내고, 되돌립니다.</h3>
+              <h3>원격 AI CLI 로그인이<br />클릭 한 번에 끝납니다.</h3>
               <p>
-                한 창을 가로·세로로 쪼개 여러 서버를 나란히 봅니다. 탭을 창 밖으로 끌면 크롬처럼 새 창이 되고,
-                다시 끌어다 놓으면 원래 창으로 돌아옵니다.
+                헤드리스 서버에서 <code>claude</code> 나 <code>gemini</code> 에 로그인해 보셨다면 아실
+                겁니다 — 인증 링크는 <b>서버의 localhost</b> 로 돌아옵니다. 그래서 보통은 포워딩을 손으로
+                걸고, 링크를 복사해 옮기고, 포트가 다르면 처음부터 다시 합니다.
               </p>
-              <ul>
-                <li>가로/세로 분할 · 칸 최대화 · <kbd>Alt</kbd>+방향키로 칸 이동</li>
-                <li>탭을 바깥으로 끌면 새 창 — 창끼리 탭을 주고받습니다</li>
-                <li>앱을 껐다 켜면 세션 · 분할 배치 · 작업 폴더가 그대로 복원됩니다</li>
-              </ul>
+              <p style="margin-top: 14px">
+                아라는 링크 안에 박힌 <b>콜백 포트를 읽어 그 번호 그대로</b> 터널을 뚫고, 내장 브라우저로
+                엽니다. 무엇이 열리는지 먼저 보여 주고 동의를 받습니다.
+              </p>
             </div>
             <div class="reveal">
               <div class="card">
-                <div class="card-hd">
-                  <span>분할 · 탭</span><span class="g">Ctrl+Shift+\ · Ctrl+Shift+-</span>
-                </div>
-                <div class="card-bd" style="padding: 0">
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line)">
-                    <div class="term" style="min-height: 120px">
-<span class="u">jun@dev</span>:<span class="p">~</span>$ tail -f app.log
-<span class="d">14:02:11 GET /api/tour 200</span>
-<span class="d">14:02:12 GET /api/city 200</span>
-<span class="w">14:02:13 WARN slow query 812ms</span>
-<span class="cur"></span>
-                    </div>
-                    <div class="term" style="min-height: 120px">
-<span class="u">jun@kvt</span>:<span class="p">~/vllm</span>$ nvidia-smi
-<span class="d">GPU 0  A100  62°C  71%</span>
-<span class="d">Mem 38.2 / 80.0 GiB</span>
-<span class="a">✓ 서비스 정상</span>
-                    </div>
+                <div class="card-hd"><span>확인</span><span class="g">Ctrl+클릭</span></div>
+                <div class="card-bd">
+                  <p style="color: var(--text-hi); font-weight: 700; margin-bottom: 10px">이 링크는 원격 포트를 내 PC 로 엽니다</p>
+                  <div class="spec" style="margin-top: 0">
+                    <div><span class="k">열릴 포트</span><span class="v">45871</span></div>
+                    <div><span class="k">브라우저로 열 주소</span><span class="v">https://accounts.google.com</span></div>
+                  </div>
+                  <div style="display: flex; gap: 8px; margin-top: 16px">
+                    <span class="btn btn-primary btn-sm" style="pointer-events: none">열기</span>
+                    <span class="btn btn-ghost btn-sm" style="pointer-events: none">취소</span>
                   </div>
                 </div>
               </div>
@@ -172,35 +243,35 @@
 
           <div class="feat rev">
             <div class="feat-txt reveal">
-              <h3>파일은 끌어다 놓으면 갑니다.</h3>
+              <h3>서버에 에이전트를<br />설치하지 않습니다.</h3>
               <p>
-                왼쪽 트리에 원격 폴더가 그대로 펼쳐집니다. 탐색기에서 파일을 끌어다 놓으면 업로드하고, 서버와
-                서버 사이도 바로 복사합니다. <code>scp</code> 명령을 쓸 일이 없습니다.
+                서버 관리 웹 도구는 보통 서버에 무언가를 깔아야 합니다. 운영 서버에 그 승인을 받는 일이
+                더 오래 걸립니다.
+              </p>
+              <p style="margin-top: 14px">
+                아라는 <b>이미 열려 있는 SSH 연결로 표준 명령을 대신 실행</b>하고 결과를 표로 그립니다.
+                서버에 남는 것이 없고, 접속할 수 있는 서버면 <b>어디든 됩니다.</b> 배포판이 달라도
+                같은 화면으로 보이도록 명령을 골라 씁니다.
               </p>
               <ul>
-                <li>업로드 · 다운로드 · 서버 ↔ 서버 복사, 진행률과 이어받기</li>
-                <li>터미널에서 <code>cd</code> 하면 트리도 따라 움직입니다</li>
-                <li>원격 파일을 더블클릭하면 열어 보고 고쳐서 바로 저장합니다</li>
+                <li>프로세스 · 서비스 · 디스크 · 패키지 · 컨테이너 · 포트 · 시스템 그래프 · 세션 기록</li>
+                <li>바꾸는 작업(종료 · 서비스 정지)은 <b>대상 이름을 보여 주고</b> 확인을 받습니다</li>
+                <li>실패하면 서버가 준 이유를 <b>그대로</b> 보여 줍니다(권한 부족을 숨기지 않습니다)</li>
               </ul>
             </div>
             <div class="reveal">
               <div class="card">
-                <div class="card-hd"><span>전송</span><span class="g">dev-server ← 내 PC</span></div>
-                <div class="card-bd">
-                  <div class="xfer">
-                    <div class="r">
-                      <span style="color: var(--text-hi)">vgt-erp-1.4.2.tar.gz</span><span class="muted">42.6 / 68.0 MB</span>
-                      <span class="bar"><i style="width: 63%"></i></span>
-                    </div>
-                    <div class="r">
-                      <span style="color: var(--text-hi)">application-prod.yml</span><span class="muted">완료</span>
-                      <span class="bar"><i style="width: 100%"></i></span>
-                    </div>
-                    <div class="r">
-                      <span style="color: var(--text-hi)">logs/2026-08-23.log</span><span class="muted">대기</span>
-                      <span class="bar"><i style="width: 0"></i></span>
-                    </div>
-                  </div>
+                <div class="card-hd"><span>서비스</span><span class="g">dev-server</span></div>
+                <div class="card-bd" style="padding: 0">
+                  <table class="tbl">
+                    <thead><tr><th>유닛</th><th>상태</th><th>부팅 시</th></tr></thead>
+                    <tbody>
+                      <tr class="hot"><td>nginx.service</td><td>running</td><td>enabled</td></tr>
+                      <tr><td>postgresql.service</td><td>running</td><td>enabled</td></tr>
+                      <tr><td>vgt-erp.service</td><td>running</td><td>enabled</td></tr>
+                      <tr><td>backup.timer</td><td>waiting</td><td>enabled</td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -208,23 +279,19 @@
 
           <div class="feat">
             <div class="feat-txt reveal">
-              <h3>AI는 옆자리에 앉아 있습니다.<br />손은 제 것이 아닙니다.</h3>
+              <h3>AI는 화면을 알고,<br />손은 대지 않습니다.</h3>
               <p>
-                화면에 있는 출력·로그를 그대로 붙여 물어봅니다. 답에 담긴 명령은 <b>터미널에 넣어 주기만</b>
-                합니다 — <b>실행은 사람이 누릅니다.</b> 첨부하는 내용에서 비밀번호처럼 보이는 값은 보내기 전에
-                가려집니다.
+                따로 붙여넣지 않아도 됩니다. 선택한 출력 · 현재 폴더 · 세션 기록을 <b>칩으로 골라</b>
+                함께 보냅니다. 나가기 전에 <b>비밀번호·토큰처럼 보이는 값은 가려집니다.</b>
               </p>
-              <ul>
-                <li>사내 vLLM(호환 엔드포인트)과 상용 API 모두 사용 가능</li>
-                <li>API 키는 Windows 자격 증명에 저장 — 설정 파일에 남지 않습니다</li>
-                <li>원격 <code>claude</code> · <code>codex</code> · <code>gemini</code> CLI 를 한 번에 시작</li>
-              </ul>
+              <p style="margin-top: 14px">
+                답에 담긴 명령은 <b>[터미널로 보내기]</b> 로 프롬프트에 <b>들어가기만</b> 합니다.
+                무엇을 실행할지는 언제나 사람이 정합니다. 사내 vLLM(호환 엔드포인트)도 그대로 씁니다.
+              </p>
             </div>
             <div class="reveal">
               <div class="card">
-                <div class="card-hd">
-                  <span>아라에게 묻기</span><span class="g">Alt+A</span>
-                </div>
+                <div class="card-hd"><span>아라에게 묻기</span><span class="g">Alt+A</span></div>
                 <div class="card-bd">
                   <div style="display: flex; gap: 6px; margin-bottom: 12px">
                     <span class="chip on">선택한 출력</span><span class="chip on">현재 폴더</span><span class="chip">세션 기록</span>
@@ -250,93 +317,36 @@
         </div>
       </section>
 
-      <!-- ── 서버 도구 ───────────────────────────────────────────────── -->
-      <section class="section" id="tools">
-        <div class="wrap">
-          <p class="eyebrow reveal">서버를 마우스로</p>
-          <h2 class="h-sect reveal">원격 리눅스에<br />설치할 것은 없습니다.</h2>
-          <p class="lead reveal" style="margin-top: 20px">
-            데스크톱 환경도, 에이전트도 필요 없습니다. A.R.A가 이미 열려 있는 SSH 연결로 표준 명령을 대신
-            실행하고 결과를 표로 보여 줍니다. 정렬 · 검색 · 종료가 전부 마우스입니다.
-          </p>
-
-          <div class="grid3">
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
-              </div>
-              <h4>프로세스</h4>
-              <p>PID · 사용자 · CPU · 메모리 · 명령. 정렬하고 걸러서 찾고, 확인을 거쳐 종료합니다.</p>
-            </div>
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/></svg>
-              </div>
-              <h4>서비스</h4>
-              <p>systemd 유닛 상태와 부팅 시 활성 여부. 시작·정지·재시작은 이름을 확인한 뒤에 나갑니다.</p>
-            </div>
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
-              </div>
-              <h4>디스크</h4>
-              <p>파일시스템 사용량에서 시작해 큰 폴더로 파고듭니다. 찾은 폴더는 탐색기로 바로 엽니다.</p>
-            </div>
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="m3 16 9 5 9-5"/><path d="m3 12 9 5 9-5"/></svg>
-              </div>
-              <h4>패키지 · 컨테이너</h4>
-              <p>설치된 패키지와 도커 컨테이너 목록. 배포판이 달라도 같은 화면으로 봅니다.</p>
-            </div>
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M7 9h4M7 13h8"/></svg>
-              </div>
-              <h4>포트 모니터</h4>
-              <p>열린 포트와 그 주인을 봅니다. 원격 포트는 클릭 한 번으로 내 PC로 당겨 옵니다.</p>
-            </div>
-            <div class="tile reveal">
-              <div class="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
-              </div>
-              <h4>시스템 모니터</h4>
-              <p>CPU · 메모리 · GPU · 네트워크를 실시간 그래프로. 보이지 않는 탭은 조회를 멈춥니다.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── 그 외 ───────────────────────────────────────────────────── -->
+      <!-- ── 나머지 기능 ─────────────────────────────────────────────── -->
       <section class="section">
         <div class="wrap">
-          <p class="eyebrow reveal">기본으로 안전하게</p>
-          <h2 class="h-sect reveal">회사 자산이<br />조용히 새어 나가지 않게.</h2>
+          <p class="eyebrow reveal">그리고 매일 쓰는 것들</p>
+          <h2 class="h-sect reveal">기본기도<br />밀리지 않습니다.</h2>
 
           <div class="grid3">
             <div class="tile reveal">
+              <h4>분할 · 탭 · 창</h4>
+              <p>가로·세로 분할, <b>Alt</b>+방향키로 칸 이동, 칸 최대화. 탭을 끌어내면 새 창, 끌어다 놓으면 합쳐집니다.</p>
+            </div>
+            <div class="tile reveal">
+              <h4>tmux 를 마우스로</h4>
+              <p>SSH 세션 우클릭에서 실행 중인 tmux 세션을 골라 붙습니다. 없는 서버면 항목이 잠기고 설치 안내가 나옵니다.</p>
+            </div>
+            <div class="tile reveal">
+              <h4>통합 검색 · 명령어 북</h4>
+              <p><b>F1</b> 하나로 기능·서버·명령을 한 곳에서 찾습니다. 자주 쓰는 명령 80여 개는 골라 담아 두었습니다.</p>
+            </div>
+            <div class="tile reveal">
               <h4>호스트 키를 기억합니다</h4>
-              <p>처음 붙는 서버는 지문을 보여 주고 확인을 받습니다. 다음부터 지문이 달라지면 접속을 멈춥니다.</p>
+              <p>처음 붙는 서버는 지문을 보여 주고 확인을 받습니다. 다음에 지문이 달라지면 접속을 멈춥니다.</p>
             </div>
             <div class="tile reveal">
               <h4>비밀은 파일에 안 둡니다</h4>
-              <p>비밀번호 · 개인키 암구호 · API 키는 Windows 자격 증명에 들어갑니다. 설정 파일에는 없습니다.</p>
+              <p>비밀번호 · 개인키 암구호 · API 키는 <b>Windows 자격 증명</b>에. 설정 파일에는 없습니다.</p>
             </div>
             <div class="tile reveal">
-              <h4>보낼 내용을 먼저 가립니다</h4>
-              <p>AI에 첨부하는 텍스트에서 토큰 · 비밀번호로 보이는 값을 가리고, 무엇을 보냈는지 보여 줍니다.</p>
-            </div>
-            <div class="tile reveal">
-              <h4>로그인은 아라 브라우저에서</h4>
-              <p>원격 CLI의 OAuth 링크를 터널로 이어 내장 브라우저에서 마칩니다. 앱 데이터와 분리된 공간입니다.</p>
-            </div>
-            <div class="tile reveal">
-              <h4>지나간 것도 남습니다</h4>
-              <p>세션마다 입력과 출력을 파일로 남깁니다. 보관 기간과 폴더는 설정에서 정합니다.</p>
-            </div>
-            <div class="tile reveal">
-              <h4>한국어가 먼저입니다</h4>
-              <p>화면 · 메뉴 · 안내가 한국어입니다. 한글 폰트를 함께 담아 서버 글꼴이 없어도 깨지지 않습니다.</p>
+              <h4>글자 크기와 폰트</h4>
+              <p>앱 화면 배율과 터미널 글꼴을 따로 정합니다. 한글 폰트 후보를 <b>같은 문장으로 비교</b>해 고릅니다.</p>
             </div>
           </div>
         </div>
@@ -362,7 +372,7 @@
               </div>
               <div class="spec">
                 <div><span class="k">버전</span><span class="v" data-rel="version">0.1.0</span></div>
-                <div><span class="k">파일 크기</span><span class="v" data-rel="size">91.7 MB</span></div>
+                <div><span class="k">파일 크기</span><span class="v" data-rel="size">92.1 MB</span></div>
                 <div><span class="k">공개일</span><span class="v" data-rel="date">2026-08-23</span></div>
                 <div><span class="k">필요 환경</span><span class="v" data-rel="os">Windows 10 / 11 (64비트)</span></div>
               </div>
@@ -370,8 +380,8 @@
             <div>
               <ol class="steps">
                 <li><b>설치 파일을 실행합니다.</b> 설치 경로를 고를 수 있습니다. 기본값 그대로 두어도 됩니다.</li>
-                <li><b>바탕화면의 거미 아이콘</b>으로 실행합니다. 첫 화면에서 <b>＋</b> 를 눌러 로컬 셸이나 서버를 추가합니다.</li>
-                <li><b>업데이트는 알아서</b> 받습니다. 새 버전이 준비되면 알려 드리고, 다시 켤 때 적용됩니다.</li>
+                <li><b>실행 후 ＋ 버튼</b>으로 로컬 셸이나 서버를 추가합니다. 서버는 이름·호스트·사용자만 있으면 됩니다.</li>
+                <li><b>업데이트는 알아서</b> 받습니다. 새 버전이 준비되면 다음에 켤 때 적용됩니다.</li>
               </ol>
               <div style="margin-top: 24px">
                 <div class="note warn">
@@ -394,25 +404,16 @@
 
           <div class="grid3" style="margin-top: 40px">
             <div class="tile reveal">
+              <h4>처음이신가요</h4>
+              <p><a class="link" href="manual.html#start">사용 설명서의 [시작하기]</a>가 첫 서버 연결까지 5분 안에 안내합니다.</p>
+            </div>
+            <div class="tile reveal">
               <h4>자동 업데이트</h4>
-              <p>
-                실행 중에 사내 서버를 조용히 확인합니다. 새 버전이 있으면 뒤에서 받아 두고, 다음에 앱을 껐다
-                켤 때 적용합니다. 지금 바로 적용하려면 <b>설정 → 일반 → 업데이트</b>에서 [다시 시작]을 누르세요.
-              </p>
+              <p>실행 중에 사내 서버를 조용히 확인해 뒤에서 받아 둡니다. 쓰던 터미널을 끊고 재시작하지 않습니다.</p>
             </div>
             <div class="tile reveal">
               <h4>설치가 막힌다면</h4>
-              <p>
-                설치 파일이 지워지거나 실행이 차단되면 사내 보안 정책 때문일 수 있습니다. 재시도 대신 화면을
-                캡처해 담당자에게 알려 주세요.
-              </p>
-            </div>
-            <div class="tile reveal">
-              <h4>처음이신가요</h4>
-              <p>
-                <a class="link" href="manual.html#start">사용 설명서의 [시작하기]</a>가 첫 서버 연결까지 5분
-                안에 안내합니다.
-              </p>
+              <p>보안 정책으로 차단될 수 있습니다. 재시도 대신 화면을 캡처해 담당자에게 알려 주세요.</p>
             </div>
           </div>
         </div>

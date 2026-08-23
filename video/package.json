@@ -1,0 +1,25 @@
+{
+  "name": "ara-video",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A.R.A 소개·사용법 영상 (Remotion). 앱 저장소와 의존성을 섞지 않으려고 하위 프로젝트로 뒀다.",
+  "type": "module",
+  "scripts": {
+    "tts": "powershell -NoProfile -ExecutionPolicy Bypass -File ./tts.ps1",
+    "measure": "node measure.mjs",
+    "studio": "remotion studio src/index.ts",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.402",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.402"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "^4.0.402",
+    "@remotion/renderer": "^4.0.402",
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}

@@ -1,0 +1,20 @@
+<!-- 후보 C — 이어진 노드가 A 를 이룬다. AI Remote Agent 의 말 그대로:
+     내 PC · 원격 · 에이전트 셋이 한 삼각형으로 묶인다. 위 꼭짓점(에이전트)만 밝다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
+  <defs>
+    <linearGradient id="bgC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2a2f"/>
+      <stop offset="100%" stop-color="#171618"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgC)"/>
+  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="111.25" fill="none" stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
+  <g fill="none" stroke="#b68543" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 152 L148 366"/>
+    <path d="M256 152 L364 366"/>
+    <path d="M196 300 L316 300"/>
+  </g>
+  <circle cx="148" cy="366" r="34" fill="#c9a26d"/>
+  <circle cx="364" cy="366" r="34" fill="#c9a26d"/>
+  <circle cx="256" cy="152" r="40" fill="#e8d3b0"/>
+</svg>

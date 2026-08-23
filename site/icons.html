@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A.R.A 아이콘 후보 — 하나 골라 주세요</title>
+    <link rel="icon" href="assets/ara-icon.svg" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <style>
+      /* 이 페이지만의 조판 — 고르는 데 필요한 것만. 선택이 끝나면 이 파일은 지운다. */
+      .cand {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        gap: 40px;
+        align-items: start;
+        padding: 40px 0;
+        border-top: 1px solid var(--line);
+      }
+      .cand:first-of-type {
+        border-top: 0;
+      }
+      .big {
+        width: 168px;
+        height: 168px;
+        border-radius: 38px;
+      }
+      .sizes {
+        display: flex;
+        align-items: flex-end;
+        gap: 22px;
+        margin-top: 18px;
+      }
+      .sizes figure {
+        margin: 0;
+        text-align: center;
+      }
+      .sizes figcaption {
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      /* 실제로 보이는 자리 흉내: 작업표시줄(어두움) · 바탕화면 타일(밝음) */
+      .ctx {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 22px;
+      }
+      .taskbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 18px;
+        border-radius: 12px;
+        background: #101014;
+        border: 1px solid var(--line);
+      }
+      .taskbar .ph {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        background: #2f3238;
+      }
+      .light {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-radius: 12px;
+        background: #e9e7e4;
+        color: #2b2a2f;
+        font-size: 13px;
+      }
+      .name {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .name h3 {
+        font-size: 21px;
+      }
+      .tag {
+        font-size: 12px;
+        color: var(--accent);
+        border: 1px solid var(--accent-line);
+        border-radius: 999px;
+        padding: 2px 10px;
+      }
+      .why {
+        margin-top: 10px;
+        color: var(--text-mid);
+        font-size: 15px;
+        line-height: 1.75;
+        max-width: 62ch;
+      }
+      .why b {
+        color: var(--text-hi);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/ara-icon.svg" alt="" /><span>A.R.A</span></a>
+        <nav class="nav-links"><a href="index.html">홈</a><a href="manual.html">사용 설명서</a></nav>
+      </div>
+    </header>
+
+    <main class="wrap" style="padding-top: calc(var(--nav-h) + 56px); padding-bottom: 100px">
+      <p class="eyebrow">아이콘 후보</p>
+      <h1 style="font-size: clamp(30px, 4vw, 46px)">거미를 대신할 넷입니다.</h1>
+      <p class="lead" style="margin-top: 16px">
+        지금 아이콘(파란 거미)은 앱이 앰버·따뜻한 회색으로 바뀌기 전에 만든 것이라 화면과 따로 놉니다.
+        넷 다 <b>같은 팔레트</b>로 그렸고, 작게 줄였을 때 뭉개지지 않는 것만 남겼습니다.
+        <b>번호로 알려 주시면</b> 앱·설치본·사이트·영상에 한 번에 반영합니다.
+      </p>
+
+      <section class="cand">
+        <div>
+          <img class="big" src="icons/a-prompt.svg" alt="후보 A" />
+        </div>
+        <div>
+          <div class="name"><h3>A. 프롬프트 A</h3><span class="tag">이니셜 + 터미널</span></div>
+          <p class="why">
+            <b>A</b> 의 가로획을 <b>커서 블록</b>으로 바꿨습니다. 이름 첫 글자와 "터미널"이 한 글자
+            안에서 만납니다. 넷 중 <b>가장 앱 아이콘답고</b> 16px 에서도 삼각 골격이 남습니다.
+          </p>
+          <div class="sizes">
+            <figure><img src="icons/a-prompt.svg" width="64" height="64" alt="" /><figcaption>64</figcaption></figure>
+            <figure><img src="icons/a-prompt.svg" width="32" height="32" alt="" /><figcaption>32</figcaption></figure>
+            <figure><img src="icons/a-prompt.svg" width="16" height="16" alt="" /><figcaption>16</figcaption></figure>
+          </div>
+          <div class="ctx">
+            <div class="taskbar"><span class="ph"></span><img src="icons/a-prompt.svg" width="24" height="24" alt="" /><span class="ph"></span><span class="ph"></span></div>
+            <div class="light"><img src="icons/a-prompt.svg" width="28" height="28" alt="" /> 밝은 바탕에서</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cand">
+        <div>
+          <img class="big" src="icons/b-ripple.svg" alt="후보 B" />
+        </div>
+        <div>
+          <div class="name"><h3>B. 파문</h3><span class="tag">이름의 뜻</span></div>
+          <p class="why">
+            <b>아라</b>는 바다를 뜻하는 우리말입니다. 세 겹의 물결은 <b>A.R.A 세 글자</b>이자
+            <b>원격까지 닿는 신호</b>입니다. 넷 중 가장 단순해서 아주 작을 때 제일 잘 버팁니다.
+            대신 "터미널"이라는 성격은 그림만으로 읽히지 않습니다.
+          </p>
+          <div class="sizes">
+            <figure><img src="icons/b-ripple.svg" width="64" height="64" alt="" /><figcaption>64</figcaption></figure>
+            <figure><img src="icons/b-ripple.svg" width="32" height="32" alt="" /><figcaption>32</figcaption></figure>
+            <figure><img src="icons/b-ripple.svg" width="16" height="16" alt="" /><figcaption>16</figcaption></figure>
+          </div>
+          <div class="ctx">
+            <div class="taskbar"><span class="ph"></span><img src="icons/b-ripple.svg" width="24" height="24" alt="" /><span class="ph"></span><span class="ph"></span></div>
+            <div class="light"><img src="icons/b-ripple.svg" width="28" height="28" alt="" /> 밝은 바탕에서</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cand">
+        <div>
+          <img class="big" src="icons/c-nodes.svg" alt="후보 C" />
+        </div>
+        <div>
+          <div class="name"><h3>C. 이어진 노드</h3><span class="tag">AI Remote Agent</span></div>
+          <p class="why">
+            내 PC · 원격 · 에이전트 <b>셋이 한 삼각형</b>으로 묶이고, 그 삼각형이 <b>A</b> 를 이룹니다.
+            위 꼭짓점(에이전트)만 밝습니다. 지금 거미가 갖고 있던 "연결된 점" 아이디어를
+            <b>거미 없이</b> 이어받은 안입니다.
+          </p>
+          <div class="sizes">
+            <figure><img src="icons/c-nodes.svg" width="64" height="64" alt="" /><figcaption>64</figcaption></figure>
+            <figure><img src="icons/c-nodes.svg" width="32" height="32" alt="" /><figcaption>32</figcaption></figure>
+            <figure><img src="icons/c-nodes.svg" width="16" height="16" alt="" /><figcaption>16</figcaption></figure>
+          </div>
+          <div class="ctx">
+            <div class="taskbar"><span class="ph"></span><img src="icons/c-nodes.svg" width="24" height="24" alt="" /><span class="ph"></span><span class="ph"></span></div>
+            <div class="light"><img src="icons/c-nodes.svg" width="28" height="28" alt="" /> 밝은 바탕에서</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cand">
+        <div>
+          <img class="big" src="icons/d-workspace.svg" alt="후보 D" />
+        </div>
+        <div>
+          <div class="name"><h3>D. 한 창</h3><span class="tag">제품이 하는 일</span></div>
+          <p class="why">
+            왼쪽 좁은 칸(파일 트리)과 오른쪽 프롬프트. <b>"한 창에 다 있다"</b>는 제품의 성격을
+            이니셜 없이 그림 하나로 말합니다. 넷 중 <b>가장 설명적</b>이지만, 선이 많아 16px 에서는
+            디테일이 뭉갭니다.
+          </p>
+          <div class="sizes">
+            <figure><img src="icons/d-workspace.svg" width="64" height="64" alt="" /><figcaption>64</figcaption></figure>
+            <figure><img src="icons/d-workspace.svg" width="32" height="32" alt="" /><figcaption>32</figcaption></figure>
+            <figure><img src="icons/d-workspace.svg" width="16" height="16" alt="" /><figcaption>16</figcaption></figure>
+          </div>
+          <div class="ctx">
+            <div class="taskbar"><span class="ph"></span><img src="icons/d-workspace.svg" width="24" height="24" alt="" /><span class="ph"></span><span class="ph"></span></div>
+            <div class="light"><img src="icons/d-workspace.svg" width="28" height="28" alt="" /> 밝은 바탕에서</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="note" style="margin-top: 40px">
+        <span>🕷️</span>
+        <span>
+          <b>지금 아이콘(거미)도 그대로 두는 선택지가 있습니다.</b> 넷 다 아니면 "거미 유지" 또는
+          원하시는 방향(예: 글자 없이 도형만, 더 밝게, 사각 대신 원형)을 알려 주세요.
+        </span>
+      </div>
+    </main>
+
+    <script src="assets/site.js"></script>
+  </body>
+</html>
