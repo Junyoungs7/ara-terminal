@@ -52,11 +52,35 @@ function retryDelayMs(res: Response, attempt: number): number {
   return RETRY_BASE_MS * 2 ** attempt
 }
 
-function classifyStatus(status: number): ProviderError {
-  if (status === 401 || status === 403) return new ProviderError('auth', 'API 키가 유효하지 않습니다')
+/**
+  * 서버가 준 오류 본문에서 **사람이 읽을 한 줄**을 꺼낸다.
+  *
+  * 예전에는 본문을 통째로 버리고 `요청이 거부되었습니다 (400)` 만 보여 줬다. 그 문장으로는
+  * 아무도 원인을 알 수 없다 — 실제로 2026-08-23 에 준영님이 400 을 받고 이유를 알 수 없었고,
+  * 서버가 보낸 진짜 이유는 "max_tokens 는 이 모델에서 못 쓴다"였다. **서버가 말해 준 것을
+  * 그대로 전한다.**
+  */
+const ERR_MAX = 300
+function errorDetail(body: string): string {
+  const trimmed = body.trim()
+  if (!trimmed) return ''
+  try {
+    const j = JSON.parse(trimmed) as { error?: { message?: string } | string; message?: string }
+    const e = j.error
+    const msg = (typeof e === 'string' ? e : e?.message) ?? j.message
+    if (typeof msg === 'string' && msg.trim()) return msg.trim().slice(0, ERR_MAX)
+  } catch {
+    // JSON 이 아니면(게이트웨이의 HTML 오류 페이지 등) 본문 앞부분을 그대로 보여 준다.
+  }
+  return trimmed.replace(/\s+/g, ' ').slice(0, ERR_MAX)
+}
+
+function classifyStatus(status: number, detail = ''): ProviderError {
+  const tail = detail ? ` — ${detail}` : ''
+  if (status === 401 || status === 403) return new ProviderError('auth', 'API 키가 유효하지 않습니다' + tail)
   if (status === 429) return new ProviderError('rateLimit', '요청이 많습니다. 잠시 후 다시 시도하세요.')
-  if (status >= 500) return new ProviderError('api', '일시적인 서버 오류입니다')
-  return new ProviderError('api', `요청이 거부되었습니다 (${status})`)
+  if (status >= 500) return new ProviderError('api', `일시적인 서버 오류입니다 (${status})${tail}`)
+  return new ProviderError('api', `요청이 거부되었습니다 (${status})${tail}`)
 }
 
 // SSE 이벤트 payload("data: ..." 줄의 값) 을 순서대로 낸다. "[DONE]"(OpenAI 관례)은 건너뛴다.
@@ -88,8 +112,9 @@ export async function* fetchSse(
       await sleep(retryDelayMs(res, attempt), signal)
       continue
     }
-    void res.body?.cancel().catch(() => {})
-    throw classifyStatus(res.status)
+    // 본문을 읽고 나서 던진다 — 읽지 않고 cancel 하면 서버가 알려 준 이유가 사라진다.
+    const body = await res.text().catch(() => '')
+    throw classifyStatus(res.status, errorDetail(body))
   }
   if (!res.body) return
   const reader = res.body.getReader()

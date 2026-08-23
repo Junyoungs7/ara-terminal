@@ -48,8 +48,35 @@ export const AI_CLIS: Record<AiCliId, AiCliSpec> = {
       { id: 'continue', arg: '-c', labelKey: 'aicli.flag.continue', default: false, group: 'session' }
     ]
   },
-  codex: { bin: 'codex', flags: [] },
-  gemini: { bin: 'gemini', flags: [] },
+  /**
+   * codex·gemini 도 자기 플래그를 갖는다 (2026-08-23 준영님 제보 — "claude 것만 뜬다").
+   *
+   * **기본값은 전부 꺼 둔다.** claude 의 `--dangerously-skip-permissions` 는 준영님이 늘 쓰시는
+   * 조합이라 켜 뒀지만, 이 둘은 이 저장소에서 실사용으로 확인한 적이 없다. 승인 절차를 건너뛰는
+   * 플래그를 **우리가 먼저 켜 두는** 것은 하면 안 되는 일이다 — 한 번 체크하면 그 뒤로 기억한다.
+   */
+  codex: {
+    bin: 'codex',
+    flags: [
+      // 샌드박스 안에서 스스로 실행. 승인 절차를 완전히 끄는 아래 것과는 배타다.
+      { id: 'fullAuto', arg: '--full-auto', labelKey: 'aicli.flag.fullAuto', default: false, group: 'approval' },
+      {
+        id: 'bypass',
+        arg: '--dangerously-bypass-approvals-and-sandbox',
+        labelKey: 'aicli.flag.bypass',
+        default: false,
+        group: 'approval'
+      }
+    ]
+  },
+  gemini: {
+    bin: 'gemini',
+    flags: [
+      { id: 'yolo', arg: '--yolo', labelKey: 'aicli.flag.yolo', default: false },
+      { id: 'sandbox', arg: '--sandbox', labelKey: 'aicli.flag.sandbox', default: false },
+      { id: 'checkpoint', arg: '--checkpointing', labelKey: 'aicli.flag.checkpoint', default: false }
+    ]
+  },
   // bin 은 사용자가 직접 적는다 — 아래 validCliBin 을 통과한 것만.
   custom: { bin: '', flags: [] }
 }

@@ -399,13 +399,18 @@ function AiSection({
           </button>
         </div>
       </Row>
-      <div className="ai-key-state" data-state={hasKey ? 'has' : 'none'}>
-        <span>{hasKey ? t('settings.ai.key.saved') : t('settings.ai.key.none')}</span>
-        {result && (
+      {/* 2026-08-23 준영님 제보: "키를 저장했는데 연결됐는지 아무것도 안 뜬다."
+          검증은 늘 하고 있었지만 **확인하는 동안 화면이 조용했다** — 사내망에서 프로바이더까지
+          왕복이 몇 초 걸리면 사용자는 아무 일도 안 일어난 것으로 읽는다. 진행 중을 먼저 말한다. */}
+      <div className="ai-key-state" data-state={busy ? 'checking' : hasKey ? 'has' : 'none'}>
+        <span>{busy ? t('settings.ai.key.checking') : hasKey ? t('settings.ai.key.saved') : t('settings.ai.key.none')}</span>
+        {busy && <span className="ai-key-spin" aria-hidden="true" />}
+        {!busy && result && (
           <span className={'ai-key-badge' + (result.ok ? ' ok' : ' err')}>
             {result.ok ? t('settings.ai.key.ok') : t('settings.ai.key.fail.' + result.reason)}
           </span>
         )}
+        {!busy && !result && !hasKey && <span className="ai-key-hint">{t('settings.ai.key.hint')}</span>}
       </div>
 
       <Row label={t('settings.ai.model')} desc={t('settings.ai.model.desc')}>
@@ -417,6 +422,10 @@ function AiSection({
           {usage.output.toLocaleString('ko-KR')}
         </span>
       </Row>
+      <div className="set-sec-t" data-sec="ai.cli" style={{ marginTop: 18 }}>
+        {t('settings.ai.cliSec')}
+      </div>
+      <div className="set-sec-d">{t('settings.ai.cliSec.desc')}</div>
       <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       {/* 이 문장은 장식이 아니다 — 사내 배포에서 데이터 반출 고지가 화면에 없으면 안 된다(설계 §4.7).
           W5: 선택된 프로바이더 이름·호스트가 들어가게 갱신 — "Anthropic API로 전송됩니다" 고정 문구는
@@ -436,8 +445,8 @@ function AiSection({
  * (2026-08-18) 플래그를 고르는 화면이 통째로 사라졌는데, 준영님 PC 는 최근 목록에 조합이 남아
  * 있어 티가 안 났다 — **새로 설치한 동료는 맨몸 `claude`** 로 떴다.
  *
- * 플래그가 있는 CLI 만 줄이 뜬다(지금은 claude 하나). 표에 플래그를 더하면 줄이 저절로 생긴다 —
- * 여기에 CLI 이름을 다시 적지 않는다.
+ * 플래그가 있는 CLI 만 줄이 뜬다(2026-08-23 부터 claude·codex·gemini 셋). 표에 플래그를 더하면
+ * 줄이 저절로 생긴다 — 여기에 CLI 이름을 다시 적지 않는다.
  *
  * `--dangerously-skip-permissions` 를 기본으로 켜 두는 것은 가벼운 결정이 아니다. 카탈로그가
  * 그렇게 정해 뒀고 준영님이 늘 쓰시는 조합이지만, **끌 자리가 있어야 켜 둘 수 있다** — 이 줄이

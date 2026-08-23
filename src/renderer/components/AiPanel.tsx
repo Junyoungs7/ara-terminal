@@ -303,9 +303,20 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
               type="button"
               className="btn sec"
               data-action="ai.openSettings"
-              // 설정 창은 MainArea 소유다. 새 배선을 만들지 않고 keymap 단일 소스가 아는
-              // 그 단축키(Ctrl+,)를 그대로 쏜다 — "여기서만 되는 경로"가 생기지 않는다.
-              onClick={() => dispatchAction('settings.open')}
+              /**
+               * 설정 창은 MainArea 소유다. 새 배선을 만들지 않고 keymap 단일 소스가 아는
+               * 그 단축키(Ctrl+,)를 그대로 쏜다 — "여기서만 되는 경로"가 생기지 않는다.
+               *
+               * 2026-08-23 준영님 제보: 설정에서 키를 넣고 돌아와도 이 안내가 그대로 남아 있었다.
+               * 이 패널은 열릴 때 한 번만 상태를 읽기 때문이다(마운트 시 getState). 준영님 제안대로
+               * **여기서 패널을 닫는다** — 다시 열면 그때 새로 읽으니 안내가 저절로 사라진다.
+               * 상태를 밀어 넣는 새 채널을 만드는 것보다 이쪽이 작고, 화면 흐름과도 맞는다
+               * (설정을 보러 가는 순간 이 카드는 볼 일이 없다).
+               */
+              onClick={() => {
+                dispatchAction('settings.open')
+                onClose()
+              }}
             >
               {t('ai.noKey.btn')}
             </button>
@@ -319,6 +330,15 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
         {turns.map((turn) => (
           <Turn key={turn.id} turn={turn} sessionId={session?.id ?? null} />
         ))}
+        {/* 2026-08-23 제보: "응답이 오기 전까지 아무 애니메이션도 없다."
+            첫 글자가 오면 그 글자가 곧 신호이므로, **아직 한 글자도 안 온 동안**만 보여 준다. */}
+        {streaming && (turns[turns.length - 1]?.text ?? '') === '' && (
+          <div className="ai-think" role="status" aria-label={t('ai.thinking')}>
+            <i />
+            <i />
+            <i />
+          </div>
+        )}
       </div>
 
       <div className="ai-composer">

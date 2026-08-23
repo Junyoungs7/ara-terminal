@@ -39,27 +39,72 @@ async function validate(key: string, model: string, baseUrl?: string): Promise<A
   }
 }
 
-function chatBody(req: AiRequest): Record<string, unknown> {
+/**
+ * 출력 길이 상한을 어느 이름으로 보낼 것인가 — **여기가 2026-08-23 400 오류의 자리다.**
+ *
+ * OpenAI 는 새 모델(gpt-5 계열·o 시리즈)에서 `max_tokens` 를 **거부한다**:
+ * "Unsupported parameter: 'max_tokens' … Use 'max_completion_tokens' instead" → HTTP 400.
+ * 반대로 사내 vLLM·Ollama·구형 게이트웨이는 `max_completion_tokens` 를 모른다.
+ *
+ * 그래서 **처음 시도는 프로바이더로 고르고**(openai → 새 이름, compatible → 옛 이름),
+ * 그 이름 때문에 400 이 나면 **반대 이름으로 딱 한 번 다시 보낸다**(아래 stream).
+ * 서버의 나이를 우리가 알 방법이 없으니, 물어보는 대신 한 번 더 두드린다.
+ */
+export function chatBody(req: AiRequest, newParamName: boolean): Record<string, unknown> {
   return {
     model: req.model,
     stream: true,
-    max_tokens: req.maxTokens,
+    [newParamName ? 'max_completion_tokens' : 'max_tokens']: req.maxTokens,
     messages: [{ role: 'system', content: req.system }, ...req.messages]
   }
+}
+
+/** 400 의 사유가 "그 이름을 못 쓴다"인가. 이때만 반대 이름으로 다시 보낸다. */
+export function isTokenParamComplaint(message: string): boolean {
+  return /max_tokens|max_completion_tokens/i.test(message)
 }
 
 async function* stream(req: AiRequest, signal: AbortSignal): AsyncGenerator<StreamChunk> {
   const base = resolveBase(req)
   let usage: { input: number; output: number } | null = null
-  for await (const data of fetchSse(
-    joinUrl(base, 'chat/completions'),
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${req.apiKey}` },
-      body: JSON.stringify(chatBody(req))
-    },
-    signal
-  )) {
+  // openai 는 새 이름부터, 그 밖(사내 게이트웨이 등)은 옛 이름부터.
+  const newParam = req.provider === 'openai'
+  const open = (useNew: boolean): AsyncGenerator<string> =>
+    fetchSse(
+      joinUrl(base, 'chat/completions'),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${req.apiKey}` },
+        body: JSON.stringify(chatBody(req, useNew))
+      },
+      signal
+    )
+
+  /**
+   * 첫 프레임까지 당겨 본 스트림을 돌려준다. 400 이 오면 이름을 바꿔 딱 한 번 다시 연다.
+   *
+   * ⚠️ 앞서 여기서 한 번 자빠졌다: 이어 붙이는 제너레이터 안에서 **바깥 변수**를 `yield*` 했더니
+   * 그 변수가 이미 자기 자신을 가리켜 무한 위임으로 멈췄다(테스트 넷이 5초 타임아웃).
+   * 원본은 반드시 **따로 잡아 둔 const** 로 넘긴다.
+   */
+  const openWithFallback = async (): Promise<AsyncGenerator<string>> => {
+    const join = (src: AsyncGenerator<string>, head: IteratorResult<string>): AsyncGenerator<string> =>
+      (async function* () {
+        if (!head.done) yield head.value
+        yield* src
+      })()
+    const first = open(newParam)
+    try {
+      return join(first, await first.next())
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!isTokenParamComplaint(msg) || signal.aborted) throw err
+      const second = open(!newParam)
+      return join(second, await second.next())
+    }
+  }
+
+  for await (const data of await openWithFallback()) {
     let json: Record<string, unknown>
     try {
       json = JSON.parse(data)
