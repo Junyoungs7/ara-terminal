@@ -653,9 +653,23 @@ export async function windowInfos(app: ElectronApplication): Promise<{ title: st
   )
 }
 
-// 메인 창은 file:// 을 로드한다 — 그 외 창이 내장 브라우저다.
+/**
+ * 내장 브라우저가 **지금 보고 있는 주소들**.
+ *
+ * 2026-08-21 탭 도입 전에는 창 하나가 곧 페이지였고 `창.webContents.getURL()` 이 그 주소였다.
+ * 지금은 창의 최상위 contents 가 **우리 탭 줄**(file://index.html#browser)이고 원격 페이지는
+ * 그 아래 WebContentsView 에 산다 — 창만 훑으면 언제나 빈 문자열이 나온다(LINK-1·OAUTH-1 이
+ * 그래서 실패했다). 그래서 창이 아니라 **전용 파티션에 붙은 contents** 를 센다: 그 파티션에
+ * 사는 것은 하드닝된 브라우저 탭뿐이다(BrowserService.BROWSER_PARTITION).
+ */
 export async function browserWindows(app: ElectronApplication): Promise<{ title: string; url: string }[]> {
-  return (await windowInfos(app)).filter((w) => !w.url.startsWith('file:'))
+  return app.evaluate(({ webContents, session }) => {
+    const ses = session.fromPartition('persist:ara-browser')
+    return webContents
+      .getAllWebContents()
+      .filter((wc) => !wc.isDestroyed() && wc.session === ses)
+      .map((wc) => ({ title: wc.getTitle(), url: wc.getURL() }))
+  })
 }
 
 type ShellSpy = { external: string[]; paths: string[] }
@@ -722,8 +736,26 @@ export async function ctrlClickLink(page: Page, url: string, alt = false): Promi
   await expect.poll(() => linkPoint(page, url), { timeout: 20_000 }).not.toBeNull()
   const pt = (await linkPoint(page, url))!
   await page.mouse.move(pt.x, pt.y)
-  // xterm 은 hover 로 링크를 확정한 뒤에야 click 을 그 링크로 넘긴다.
-  await page.waitForTimeout(200)
+  /**
+   * xterm 은 hover 로 링크를 확정한 뒤에야 click 을 그 링크로 넘긴다. 예전에는 200ms 를 그냥
+   * 기다렸는데, 워커 둘이 함께 도는 전체 실행에서는 그 사이에 확정이 안 끝나 클릭이 **맨 클릭**
+   * 으로 떨어졌다(LINK-1·3·OAUTH-1 이 전체 실행에서만 실패했다). 시간을 늘리는 대신 **확정됐다는
+   * 신호**를 기다린다: 우리 hover 콜백이 그 칸의 title 에 URL 을 넣는다(TerminalPane).
+   */
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            [...document.querySelectorAll('.term-pane')]
+              // 전역 툴팁(store/tooltip.ts)이 hover 450ms 뒤 title 을 data-tip 으로 **옮긴다** —
+              // 둘 다 봐야 한다(한쪽만 보면 타이밍에 따라 못 찾는다).
+              .map((el) => `${el.getAttribute('title') ?? ''}${el.getAttribute('data-tip') ?? ''}`)
+              .join(' | ')
+        ),
+      { timeout: 15_000 }
+    )
+    .toContain(url)
   await page.keyboard.down('Control')
   // alt=true → OS 기본 브라우저로 보내는 조합(2026-08-23 제보 6번).
   if (alt) await page.keyboard.down('Alt')

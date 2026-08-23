@@ -944,7 +944,16 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      * 본다. 그래서 분할해 놓고 왼쪽 칸을 눌러도 파일 트리는 마지막에 분할한 세션에 머물렀다.
      * 포커스가 바뀌는 길은 여럿이라(클릭·분할·Ctrl+Alt+방향키) 각 자리에 심지 않고 여기서 잇는다.
      */
+    const lastFocused = useRef<string | null>(null)
     useEffect(() => {
+      /**
+       * **포커스가 바뀐 순간에만** 따라간다. 그냥 "다르면 맞춘다"로 두면 반대 방향을 덮어쓴다:
+       * 새 세션을 열면 activeId 가 먼저 새 세션이 되고 배치는 한 박자 뒤에 오는데, 그 사이에
+       * 이 이펙트가 **옛 칸의 세션으로 되돌린다**(e2e WB-2 가 잡았다 — [여기서 터미널 열기]로
+       * 연 셸 대신 옛 세션의 경로가 상태바에 남았다).
+       */
+      if (layout.focusedId === lastFocused.current) return
+      lastFocused.current = layout.focusedId
       const sid = layout.cells.find((c) => c.id === layout.focusedId)?.sessionId
       if (sid && sid !== activeId) select(sid)
     }, [layout.focusedId, layout.cells, activeId, select])

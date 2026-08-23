@@ -96,20 +96,24 @@ test('LINK-4★ Ctrl+Alt+클릭이면 원격 링크도 OS 기본 브라우저로
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널을 만들지 않았다
 })
 
-// LINK-3 loopback 이 아닌 주소는 SSH 세션에서도 OS 브라우저로 간다(터널을 팔 이유가 없다)
-test('LINK-3 외부 https 링크는 OS 기본 브라우저로 간다', async ({ ara, ssh }) => {
+// LINK-3 loopback 이 아닌 주소는 **터널 없이 아라 브라우저로** 간다.
+// 2026-08-22 제보 16 이후의 규칙이다(linkTarget.ts): 원격 세션이 찍은 링크는 그 세션의 맥락이라
+// 로그인 왕복이 같은 브라우저 프로필에서 이어져야 한다. OS 브라우저로 보내고 싶으면 Ctrl+Alt(LINK-4).
+// 호스트는 `.invalid`(RFC 2606 예약 — DNS 가 반드시 실패한다) — 검증이 바깥으로 요청을 내지 않는다.
+// 주소는 그대로 커밋되므로(오류 페이지) 어디를 열려 했는지는 그대로 보인다.
+test('LINK-3 loopback 아닌 https 도 터널 없이 아라 브라우저로 간다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
   const h = await ssh({ password: 'pw-link3' })
   const sid = await connectNewSshProfile(page, { name: 'link3', port: h.port, password: 'pw-link3' })
 
-  const url = 'https://docs.example.com/guide'
+  const url = 'https://docs.example.invalid/guide'
   await printRemote(page, sid, url)
   await ctrlClickLink(page, url)
 
-  await expect.poll(async () => (await spyCalls(app)).external, { timeout: 20_000 }).toEqual([url])
-  expect(await browserWindows(app)).toHaveLength(0)
-  expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0)
+  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe(url)
+  expect((await spyCalls(app)).external).toEqual([]) // OS 브라우저로는 새지 않았다
+  expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널도 안 팠다
 })
 
 // OAUTH-1 인증 URL 안에 박힌 redirect_uri 의 콜백 포트를 **그 번호 그대로** 뚫고 원본 URL 을 연다.

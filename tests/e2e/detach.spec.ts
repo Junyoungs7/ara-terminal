@@ -97,7 +97,8 @@ test('DETACH-4★ 떼어낸 창을 닫으면 물어보고, [본창으로 보내�
 
   await askClose(win)
   // 목록이 보인다 — "세션 1개"가 아니라 그 세션의 이름이 있어야 무엇을 잃는지 안다.
-  await expect(win.locator('.dlg-overlay .dlg-detail .dlg-row')).toHaveCount(1)
+  // 부하가 걸린 전체 실행에서는 창 사이 왕복(close → 물음 → 렌더)이 기본 타임아웃을 넘긴다.
+  await expect(win.locator('.dlg-overlay .dlg-detail .dlg-row')).toHaveCount(1, { timeout: 15_000 })
   await dialogAlt(win) // [본창으로 보내기]
 
   await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
