@@ -51,6 +51,9 @@ export function openPortWindow(getParent: () => BrowserWindow | null): void {
       webSecurity: true
     }
   })
+  // Electron 기본 메뉴(File/Edit/View/Window/Help)를 뗀다 — 우리 메뉴바는 본창 타이틀바의 HTML 이고
+  // 이 창에는 그릴 메뉴가 없다. 프레임이 있는 창에만 그려져서 여기서만 튀어나온다(2026-08-23).
+  win.removeMenu()
   const w = win
   w.on('closed', () => {
     if (win === w) win = null

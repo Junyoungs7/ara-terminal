@@ -34,6 +34,11 @@ type Props = {
   onCloseOthers: (id: string) => void
   // R2.3 드래그 재정렬. FB-tabs: 그룹 래퍼가 없어져 서버가 달라도 자유롭게 옮길 수 있다.
   onReorder: (dragId: string, overId: string) => void
+  /**
+   * 2026-08-23 크롬식 창 관리 — **다른 창의 탭을 이 창으로** 가져온다(탭바에 놓았을 때).
+   * overId 는 놓인 자리의 탭(있으면 그 옆에 끼운다). 실제 이동은 main 이 소유 창을 바꿔서 한다.
+   */
+  onAdopt?: (sessionId: string, overId?: string) => void
 }
 
 type TabDnd = {
@@ -133,7 +138,8 @@ export function TermTabbar({
   onCommitEdit,
   onDuplicate,
   onCloseOthers,
-  onReorder
+  onReorder,
+  onAdopt
 }: Props) {
   // ＋ 버튼 우클릭 보조 메뉴 좌표(로컬 셸 / SSH 연결) — 좌클릭은 onNew() 로 바로 로컬 셸을 연다(UI-tabbar).
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
@@ -142,6 +148,8 @@ export function TermTabbar({
   // FB-tabs: 오버플로 드롭다운 좌표(열려 있으면 non-null).
   const [overflowMenu, setOverflowMenu] = useState<{ x: number; y: number } | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
+  // 남의 창에서 온 탭이 이 탭바 위에 있다 — 받는다는 표시(크롬의 삽입 그림자 자리).
+  const [adopting, setAdopting] = useState(false)
   const [overId, setOverId] = useState<string | null>(null)
   const [overflowing, setOverflowing] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -178,7 +186,12 @@ export function TermTabbar({
       },
       onDragOver: (e) => {
         // 탭바 위 드롭 = 재정렬(터미널 영역 드롭 = 분할은 PaneGrid 가 별도로 받는다 — FB-0002).
-        if (!dragId || dragId === s.id) return
+        //
+        // 2026-08-23(크롬식 창 관리): **남의 창에서 온 드래그도 받는다.** dragId 는 이 창의 상태라
+        // 다른 창에서 시작한 드래그에는 null 이다 — 그걸로 거절하면 창 사이 이동이 영영 안 된다.
+        // 무엇이 오는지는 dragover 때 못 읽는다(브라우저가 데이터를 잠근다) — 받아 두고 drop 에서 가른다.
+        if (dragId === s.id) return
+        if (!dragId && !e.dataTransfer.types.includes('text/plain')) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
         setOverId(s.id)
@@ -189,10 +202,25 @@ export function TermTabbar({
         const from = dragId ?? e.dataTransfer.getData('text/plain')
         setDragId(null)
         setOverId(null)
-        if (from) onReorder(from, s.id)
+        if (from) drop(from, s.id)
       }
     }
   })
+
+  /**
+   * 놓인 탭을 어떻게 할지 가른다(2026-08-23 크롬식 창 관리).
+   *  · 내 창의 탭이면 → **순서 바꾸기**(예전 그대로)
+   *  · 남의 창의 탭이면 → **이 창으로 가져온다**(크롬에서 탭을 다른 창에 떨어뜨리는 그 동작)
+   * 세션 id 가 아닌 텍스트가 떨어질 수도 있다(터미널에서 끌어온 선택 등) — 그때는 목록에 없으니
+   * 가져오기로 가고, main 이 "그런 세션 없음"으로 거절한다. 화면에는 아무 일도 안 일어난다.
+   */
+  const drop = (from: string, overId?: string) => {
+    if (sessions.some((x) => x.id === from)) {
+      if (overId && overId !== from) onReorder(from, overId)
+      return
+    }
+    onAdopt?.(from, overId)
+  }
 
   /**
    * F32: 별도 창으로 떼어낸다 — 우클릭 메뉴와 **창 밖 드롭**이 같이 쓴다.
@@ -243,7 +271,28 @@ export function TermTabbar({
 
   return (
     <div className="term-tabbar">
-      <div className="tt-scroll" ref={scrollRef}>
+      <div
+        className={'tt-scroll' + (adopting ? ' adopting' : '')}
+        ref={scrollRef}
+        // 탭 사이가 아니라 **빈 자리**에 놓는 경우(크롬도 여기서 받는다). 내 창 드래그는 위 탭들이
+        // 이미 처리하므로 여기서는 남의 창에서 온 것만 본다.
+        onDragOver={(e) => {
+          if (dragId || !e.dataTransfer.types.includes('text/plain')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          setAdopting(true)
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+          setAdopting(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setAdopting(false)
+          const from = dragId ?? e.dataTransfer.getData('text/plain')
+          if (from) drop(from)
+        }}
+      >
         {sessions.map(tab)}
         <div
           className="tterm-add"

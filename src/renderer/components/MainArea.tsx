@@ -557,6 +557,26 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     //  · 방향을 그대로 반영한다(왼쪽에 놓으면 왼쪽에 생긴다).
     //  · 이미 배치된 세션을 옮기는 경우, 원래 칸에는 다른 세션을 채운다 — 같은 세션이 두 칸을
     //    차지하면 렌더는 첫 칸에만 붙고 나머지 칸이 통째로 빈다(준영님이 본 "우측이 비어 있음").
+    /**
+     * 크롬식 탭 병합(2026-08-23 준영님 요청). **다른 창의 탭**을 이 창으로 가져온다.
+     *
+     * 세션은 main 에 살아 있고 창은 화면일 뿐이라(F32 의 전제) 옮기는 일은 소유 표시 한 줄이다.
+     * 목록·탭바는 `session:moved` 를 받은 두 창이 각자 맞춘다 — 여기서 직접 넣지 않는다.
+     *
+     * 성공하면 **그 탭을 띄운다**: 크롬도 끌어다 놓은 탭을 활성으로 만든다. 목록이 아직 안
+     * 왔어도 괜찮다 — activeId 는 문자열일 뿐이고, 뒤이어 오는 새로고침이 그 id 를 유지한다.
+     */
+    const adoptSession = useCallback(
+      async (sessionId: string, overId?: string) => {
+        const r = await window.ev?.window.moveSession(sessionId, detachedWinId).catch(() => null)
+        if (!r?.ok) return
+        select(sessionId)
+        layout.showSession(sessionId)
+        if (overId) reorder(sessionId, overId)
+      },
+      [detachedWinId, select, layout, reorder]
+    )
+
     const splitDrop = useCallback(
       async (sessionId: string, zone: 'left' | 'right' | 'top' | 'bottom') => {
         if (!layout.canSplit) {
@@ -940,6 +960,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onDuplicate={duplicateSession}
           onCloseOthers={closeOtherTabs}
           onReorder={reorder}
+          onAdopt={(sessionId, overId) => void adoptSession(sessionId, overId)}
         />
         <PaneGrid
           layout={layout}
@@ -949,6 +970,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onDismissError={dismissError}
           onCloseSession={closeTab}
           onSplitDrop={(sessionId, zone) => void splitDrop(sessionId, zone)}
+          onAdopt={(sessionId) => void adoptSession(sessionId)}
           onTitle={onAutoTitle}
           onLink={(sessionId, url, isSsh) => void openLink(sessionId, url, isSsh)}
         />

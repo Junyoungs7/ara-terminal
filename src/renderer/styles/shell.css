@@ -2109,6 +2109,13 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
+/* 크롬식 창 관리(2026-08-23) — **다른 창의 탭**이 이 탭바 위에 있다. "여기 놓으면 받는다"를
+   말한다. 탭 하나 위에 있을 때는 그 탭이 .drop 으로 이미 자리를 표시하므로, 이 표시는 빈 자리에
+   왔을 때만 켠다(둘이 겹쳐 뜨면 어디에 들어갈지가 오히려 흐려진다). */
+.tt-scroll.adopting {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  background: var(--accent-glow);
+}
 /* 터미널 탭 (목업 .ttab/.tterm-add — 플랫 탭. FB-tabs: 서버 그룹 래퍼 제거, 어느 서버인지는
    .tdot 색으로 최소 단서만 남긴다) */
 .ttab {

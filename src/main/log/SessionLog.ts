@@ -220,6 +220,13 @@ export type SessionLogService = {
   /** #86: 남아 있는 지난 세션 기록. 최근 것이 앞이다. */
   listPast(): PastLog[]
   /**
+   * 아직 파일로 안 나간 꼬리(줄이 안 끝난 부분)의 합. **테스트 seam** 이다 — 개행 없는 출력이
+   * 상한 없이 쌓이던 결함(M-8)을 재발 검사할 때 힙 사용량 대신 이 값을 본다. 힙은 GC 타이밍에
+   * 흔들려 부하 걸린 머신에서 간헐 실패했고, 재는 대상도 실제로는 이 버퍼였다.
+   * 프로덕션에서는 아무도 부르지 않는다.
+   */
+  bufferedBytes(): number
+  /**
    * #86: 파일 **이름**을 폴더 안 경로로. 이름에 경로 구분자·상위 참조가 있으면 null —
    * 렌더러가 보낸 값이라 신뢰 경계다(그대로 join 하면 로그 폴더 밖을 읽을 수 있다).
    */
@@ -290,6 +297,13 @@ export function createSessionLog(dir: string, enabled: boolean, retentionDays: n
 
     pathOf(sessionId) {
       return entries.get(sessionId)?.path ?? null
+    },
+
+    // 테스트 seam(위 타입 주석 참고) — 아직 줄이 안 끝나 파일로 못 나간 꼬리의 합.
+    bufferedBytes() {
+      let n = 0
+      for (const e of entries.values()) n += e.buf.length
+      return n
     },
 
     listPast() {

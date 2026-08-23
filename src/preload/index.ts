@@ -56,8 +56,8 @@ const api: EvApi = {
     close: () => ipcRenderer.invoke('window:close'),
     // F32: 세션을 **별도 창으로 떼어낸다**. 세션은 main 에 살아 있으므로 죽지 않고 소유 창만 바뀐다.
     detachSession: (sessionId: string, at?: { x: number; y: number }) => ipcRenderer.invoke('win:detach', { sessionId, at }),
-    /** 본창으로 되돌린다(떼어낸 창의 [본창으로] · 그 창이 닫힐 때 main 이 자동으로도 부른다). */
-    reattachSession: (sessionId: string) => ipcRenderer.invoke('win:reattach', { sessionId }),
+    /** 세션을 그 창으로 옮긴다(winId 없으면 본창) — 크롬식 탭 병합. */
+    moveSession: (sessionId: string, winId?: string) => ipcRenderer.invoke('win:moveTo', { sessionId, winId }),
     /** 세션 소유 창이 바뀌었다 — 양쪽 창이 탭바를 다시 그린다. */
     restoreWindows: (assign: { sessionId: string; winId: string }[], windows: unknown[]) =>
       ipcRenderer.invoke('win:restore', { assign, windows }),

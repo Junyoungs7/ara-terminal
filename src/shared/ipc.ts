@@ -164,7 +164,14 @@ export type InvokeContract = {
   // at: 탭을 창 밖으로 끌어다 놓은 **화면 좌표**(2026-08-22 준영님 제보 4·31 — "탭 드래그로 새 창").
   // 그 자리에 창을 띄운다: 다른 모니터로 끌어냈는데 창이 주 모니터에 뜨면 끌어낸 의미가 없다.
   'win:detach': { req: { sessionId: string; at?: { x: number; y: number } }; res: { ok: boolean; winId?: string } }
-  'win:reattach': { req: { sessionId: string }; res: { ok: boolean } }
+  /**
+   * 세션의 **소유 창을 바꾼다**. winId 를 주면 그 창으로, 안 주면 본창으로.
+   *
+   * 2026-08-23: `win:reattach`(본창으로만) 를 여기로 일반화했다 — 크롬처럼 **탭을 다른 창의
+   * 탭바에 끌어다 놓으면 그 창으로 합쳐지기** 때문에 목적지가 본창 하나가 아니게 됐다.
+   * 없는 창을 목적지로 주면 거절한다(ok:false) — 세션이 아무 창도 못 그리는 곳에 갇히면 안 된다.
+   */
+  'win:moveTo': { req: { sessionId: string; winId?: string }; res: { ok: boolean } }
   /**
    * 떼어낸 창을 닫을 때의 답(2026-08-22 준영님 결정 "물어보고 세션 종료").
    * main 이 창 닫기를 **막고** `win:closeAsk` 를 보내면, 그 창이 목록을 보여 주고 여기로 답한다.
@@ -465,8 +472,11 @@ export type EvApi = {
      * at 은 탭을 놓은 화면 좌표 — 주면 그 자리에 창이 뜬다(탭 드래그로 떼어낼 때).
      */
     detachSession(sessionId: string, at?: { x: number; y: number }): Promise<{ ok: boolean; winId?: string }>
-    /** 본창으로 되돌린다. 떼어낸 창이 닫힐 때는 main 이 남은 세션에 대해 자동으로도 부른다. */
-    reattachSession(sessionId: string): Promise<{ ok: boolean }>
+    /**
+     * 세션을 그 창으로 옮긴다(winId 없으면 본창). 크롬식 탭 병합·되돌리기가 같은 창구를 쓴다.
+     * 떼어낸 창이 닫힐 때 남은 세션을 본창으로 되돌리는 일은 main 이 알아서 한다.
+     */
+    moveSession(sessionId: string, winId?: string): Promise<{ ok: boolean }>
     /** 떼어낸 창의 닫기를 main 이 막고 물어 온다 — 그 창만 구독한다(본창에는 오지 않는다). */
     onCloseAsk(cb: () => void): () => void
     /** 물어본 것에 답한다(kill=true 종료 / false 본창으로). 취소면 부르지 않는다. */

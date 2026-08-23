@@ -99,9 +99,19 @@ export function registerSessionWindowIpc(
     return { ok: true as const }
   })
 
-  handle('win:reattach', ({ sessionId }) => {
-    if (!sessions.moveToWindow(sessionId, undefined)) return { ok: false as const }
-    announce(sessionId, undefined)
+  /**
+   * 크롬식 탭 병합(2026-08-23 준영님 요청 "크롬처럼 창 관리"). 탭을 **다른 창의 탭바**에 놓으면
+   * 그 창으로 옮긴다 — 새 창을 만드는 win:detach 와 같은 일이고 목적지만 다르다.
+   *
+   * **없는 창은 거절한다.** 아무 창도 그리지 않는 winId 를 붙이면 그 세션은 화면에서 사라진 채
+   * main 에만 살아 있게 된다(탭도 없고 되돌릴 자리도 없다). 본창(winId 없음)은 늘 유효하다.
+   */
+  handle('win:moveTo', ({ sessionId, winId }) => {
+    if (winId && !sessionWindowOf(winId)) return { ok: false as const }
+    const from = sessions.winIdOf(sessionId)
+    if (from === winId) return { ok: true as const } // 이미 그 창 것 — 조용히 성공(멱등)
+    if (!sessions.moveToWindow(sessionId, winId)) return { ok: false as const }
+    announce(sessionId, winId, from)
     return { ok: true as const }
   })
 

@@ -11,6 +11,7 @@ import {
   LOG_NAME_RE,
   logFileName,
   MAX_BYTES,
+  MAX_LINE,
   newStripState,
   normalizeCr,
   sanitizeKey,
@@ -342,19 +343,19 @@ describe('세션 로그 기록', () => {
   // 상한 검사가 put() 안에만 있었다 — put() 은 '\n' 이 있을 때만 불린다. 개행 없는 출력(미니파이 JS·
   // base64 블롭)은 상한 없는 e.buf 에 그대로 쌓여 main 힙을 먹고 파일은 0 바이트로 남았다.
   //
-  // M-8: 상한은 64MB 로 두면 공유 머신에서 GC 타이밍이 밀릴 때 간헐 FAIL 했다(실측 93.5MB, 단독
-  // 실행·저부하에서는 항상 PASS). 결함 시점 실측(+317MB, 상한 미발동으로 무제한 증가)과 지금 값 사이에
-  // 충분한 여유(200MB)를 둬 "무제한 증가 차단"이라는 회귀 목적은 그대로 지키면서 부하 의존 flaky 를 없앤다.
-  it('개행이 없는 대용량 출력도 상한에 걸린다 — main 힙이 무제한으로 늘지 않는다', () => {
+  // M-8 은 **힙 사용량**으로 쟀다. 그게 두 번 흔들렸다(64MB → 실측 93.5MB, 200MB → 실측 210MB —
+  // 둘 다 부하 걸린 머신, 단독 실행에서는 늘 통과). 숫자를 또 올리면 결함 시점 실측(+317MB)과의
+  // 간격만 좁아진다. 2026-08-23: **재는 대상을 바꿨다** — 문제였던 것은 힙이 아니라 파일로 못
+  // 나간 꼬리(e.buf)가 상한 없이 쌓이는 것이었다. 그 값을 직접 본다. GC 타이밍과 무관하다.
+  it('개행이 없는 대용량 출력도 상한에 걸린다 — 꼬리 버퍼가 무제한으로 늘지 않는다', () => {
     const dir = tmpDir()
     const log = createSessionLog(dir, true, 30)
     const chunk = bytes('x'.repeat(1024 * 1024)) // 개행 없음
-    const before = process.memoryUsage().heapUsed
     for (let i = 0; i < 60; i++) log.write(meta(), chunk)
-    const grew = process.memoryUsage().heapUsed - before
+    // 60MB 를 개행 없이 넣었다. 결함 시점에는 이 값이 그대로 60MB 였다(상한이 put() 안에만 있었다).
+    expect(log.bufferedBytes()).toBeLessThan(2 * MAX_LINE)
     log.closeAll()
     const body = readFileSync(join(dir, onlyLog(dir)[0]), 'utf8')
-    expect(grew).toBeLessThan(200 * 1024 * 1024) // 결함 시점 실측: +317MB(무제한) — 부하 의존 여유는 두되 폭발과는 구분되는 값
     expect(body.length).toBeGreaterThan(0) // 결함 시점: 0 바이트
     expect(body).toContain(CAP_NOTICE.trim()) // 60MB 투입 → 20MB 상한 도달
   })

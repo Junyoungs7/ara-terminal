@@ -39,6 +39,8 @@ type Props = {
    * 그 판단(배경 세션 고르기·없으면 새 셸)은 세션 목록을 아는 MainArea 가 한다.
    */
   onSplitDrop?: (sessionId: string, zone: Exclude<DropZone, 'center'>) => void
+  /** 다른 창에서 끌어온 탭 — 이 창으로 가져온다(크롬식 창 관리, 2026-08-23). */
+  onAdopt?: (sessionId: string) => void
   // R3.6: 셸이 보낸 OSC 0/2 제목을 상위(MainArea)로 올린다.
   onTitle?: (sessionId: string, title: string) => void
   // F8: 터미널 안 URL Ctrl+클릭. 라우팅 판단은 MainArea 가 한다(그쪽에 다이얼로그가 있다).
@@ -73,6 +75,7 @@ export function PaneGrid({
   onDismissError,
   onCloseSession,
   onSplitDrop,
+  onAdopt,
   onTitle,
   onLink
 }: Props) {
@@ -136,10 +139,14 @@ export function PaneGrid({
       setPreview(null)
       const sessionId = e.dataTransfer.getData('text/plain')
       if (!sessionId || !info) return
-      // **이 창의 세션만 받는다.** 창이 둘 이상이면 탭을 다른 창으로 끌어다 놓을 수 있는데
-      // (HTML5 드래그는 창 경계를 넘는다), 그 세션은 여기 목록에 없으므로 칸에 올려 봐야
-      // 아무것도 안 그려진 빈 칸이 남는다. 창을 옮기는 일은 탭바가 한다(win:detach).
-      if (!sessions.some((s) => s.id === sessionId)) return
+      // 다른 창에서 온 탭이면 **먼저 이 창으로 가져온다**(2026-08-23 크롬식 창 관리).
+      // 여기서 바로 칸에 올릴 수는 없다 — 그 세션은 아직 이 창 목록에 없어서 아무것도 안 그려진
+      // 빈 칸이 된다. 가져오기가 끝나면 그쪽이 띄운다(방향(zone)은 버린다 — 창을 옮기는 조작에
+      // 분할까지 겹쳐 읽지 않는다. 분할은 이 창 안에서 다시 끌면 된다).
+      if (!sessions.some((s) => s.id === sessionId)) {
+        onAdopt?.(sessionId)
+        return
+      }
       const { zone, blocked, targetSessionId } = info
       if (zone === 'center') {
         // 중앙 = 그 패널로 이동/교체. 같은 세션 위에 놓으면 그냥 포커스만(showSession 이 처리).
@@ -150,7 +157,7 @@ export function PaneGrid({
       if (blocked) return // 4분할 초과 — 미리보기대로 아무 것도 하지 않는다.
       onSplitDrop?.(sessionId, zone)
     },
-    [preview, replaceSession, showSession, onSplitDrop, sessions]
+    [preview, replaceSession, showSession, onSplitDrop, sessions, onAdopt]
   )
 
   // divider 드래그 — 그리드 전체 폭/높이에 대한 포인터 위치로 비율 재계산(6px 패딩 감안은 근사).

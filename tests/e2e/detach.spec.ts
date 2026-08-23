@@ -201,6 +201,87 @@ test('DETACH-10 떼어낸 창에서 다시 끌어내면 또 다른 창으로 간
   expect((await sessionList(page)).length).toBe(1)
 })
 
+// ── 2026-08-23 크롬식 창 관리 — 탭을 **다른 창으로** 옮긴다 ─────────────────────────────
+// 준영님: "크롬처럼 창 관리를 하게 해줘." 창 밖에 놓으면 새 창(DETACH-8), **다른 창의 탭바에
+// 놓으면 그 창으로 합쳐진다** — 이게 나머지 절반이다.
+
+/** 그 창의 탭바 위로 세션 하나를 끌고 간다(놓지는 않는다) — 받아 줄 것인지 표시가 뜨는 자리. */
+async function dragTabOver(win: Page, sessionId: string): Promise<void> {
+  await win.locator('.term-tabbar .tt-scroll').evaluate((el, id) => {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', id)
+    el.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
+  }, sessionId)
+}
+
+/** 그 창의 탭바에 세션 하나를 떨어뜨린다(진짜 창 사이 드래그는 자동화로 못 한다 — 받는 쪽이
+ *  실제로 보는 것은 text/plain 하나뿐이라 그것만 만들어 준다). */
+async function dropTabOn(win: Page, sessionId: string): Promise<void> {
+  await dragTabOver(win, sessionId)
+  await win.locator('.term-tabbar .tt-scroll').evaluate((el, id) => {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', id)
+    el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+  }, sessionId)
+}
+
+// DETACH-11★ 떼어낸 창의 탭을 **본창 탭바**에 놓으면 본창으로 돌아온다(그리고 빈 창은 닫힌다).
+test('DETACH-11★ 다른 창의 탭바에 놓으면 그 창으로 합쳐진다', async ({ ara }) => {
+  const { page } = ara
+  const keep = await newLocalShell(page)
+  const moved = await newLocalShell(page)
+  const win = await detachTab(ara, moved)
+  await expect(win.locator(`.ttab[data-session-id="${moved}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator('.ttab')).toHaveCount(1) // 본창엔 keep 하나만 남아 있다
+
+  // 끌고 오는 동안 "여기 놓으면 받는다"가 보인다(놓기 전 표시 — 크롬의 삽입 자리에 해당).
+  await dragTabOver(page, moved)
+  await expect(page.locator('.term-tabbar .tt-scroll.adopting')).toHaveCount(1)
+
+  await dropTabOn(page, moved)
+  await expect(page.locator('.term-tabbar .tt-scroll.adopting')).toHaveCount(0) // 놓으면 걷힌다
+
+  // 본창이 받았다 — 탭이 둘, 받은 탭이 활성(크롬도 끌어다 놓은 탭을 띄운다).
+  await expect(page.locator(`.ttab[data-session-id="${moved}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.locator('.ttab.active')).toHaveAttribute('data-session-id', moved)
+  await expect(page.locator('.ttab')).toHaveCount(2)
+  // 빈 창은 스스로 닫힌다(마지막 탭이 떠났다).
+  await expect.poll(() => win.isClosed(), { timeout: 15_000 }).toBe(true)
+  // 세션은 둘 다 살아 있다 — 옮긴 것이지 다시 만든 것이 아니다.
+  expect((await sessionList(page)).length).toBe(2)
+  expect(keep).not.toBe(moved)
+})
+
+// DETACH-12 본창 → 떼어낸 창 방향도 같다. 창을 두 개 띄워 놓고 오가는 것이 목적이니 한쪽만
+// 되면 반쪽이다.
+test('DETACH-12 본창 탭을 떼어낸 창으로 보낸다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const b = await newLocalShell(page)
+  const win = await detachTab(ara, a)
+  await expect(win.locator('.ttab')).toHaveCount(1, { timeout: 15_000 })
+
+  await dropTabOn(win, b)
+
+  await expect(win.locator(`.ttab[data-session-id="${b}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(win.locator('.ttab')).toHaveCount(2)
+  await expect(page.locator('.ttab')).toHaveCount(0) // 본창은 비었다(창은 남는다 — 본창이니까)
+  expect((await sessionList(page)).length).toBe(2)
+})
+
+// DETACH-13 자기 창 탭바에 자기 탭을 놓는 것은 **순서 바꾸기**다 — 병합 경로로 새지 않는다.
+test('DETACH-13 자기 탭을 자기 탭바에 놓으면 순서만 바뀐다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  const b = await newLocalShell(page)
+  await expect(page.locator('.ttab')).toHaveCount(2)
+
+  await dropTabOn(page, a) // 이미 이 창 것 → 가져올 것이 없다
+  await expect(page.locator('.ttab')).toHaveCount(2)
+  expect((await sessionList(page)).length).toBe(2)
+  expect(a).not.toBe(b)
+})
+
 // DETACH-5 떼어낸 창에는 **연결 트리·설정이 없다**(준영님 확정 구성 "작업 창").
 // 설정 드로어가 두 창에 동시에 뜨는 상태를 만들지 않는 것이 이 선택의 이유다.
 test('DETACH-5 떼어낸 창은 작업 창이다 — 트리·설정이 없다', async ({ ara }) => {
