@@ -58,3 +58,8 @@ agent_talk/
 site/downloads/*.exe
 site/downloads/*.blockmap
 site/downloads/*.yml
+
+# 영상 산출물 — 대본(narration.json)과 코드가 원본이다. mp4·wav 는 언제든 다시 만든다.
+#   npm --prefix video run tts && npm --prefix video run measure && npm --prefix video run render
+site/video/*.mp4
+video/public/vo/
