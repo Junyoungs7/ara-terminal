@@ -1,20 +1,23 @@
-<!-- 후보 A — 프롬프트 A. 이니셜 A 의 가로획을 **커서 블록**으로 바꿨다.
-     터미널이라는 정체와 이름 첫 글자가 한 글자 안에서 만난다. 16px 로 줄여도 삼각 골격이 남는다. -->
+<!-- S5 — 프롬프트가 배가 된다(준영님 안). `_` 를 **아래로 굽은 선체**로, `>` 를 그 위에 얹어
+     뱃머리로 읽는다. 터미널 프롬프트 `>_` 그대로이면서 바다 위의 배다.
+     선체를 직선(_)이 아니라 곡선으로 둔 이유: 직선이면 밑줄로만 읽히고 배가 안 된다.
+     ⚠️ 배와 바다의 **무게 차이**가 이 안의 생명이다. 처음엔 물결이 선체만큼 굵어 작은 크기에서
+     배가 바다에 묻혔다 — 배는 굵고 밝게, 바다는 가늘고 어둡게, 사이를 벌렸다. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A.R.A">
   <defs>
-    <linearGradient id="bgA" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#2b2a2f"/>
-      <stop offset="100%" stop-color="#171618"/>
-    </linearGradient>
-    <linearGradient id="fgA" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c79f"/>
-      <stop offset="100%" stop-color="#c9a26d"/>
+    <linearGradient id="bgB1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2a2f"/><stop offset="100%" stop-color="#171618"/>
     </linearGradient>
   </defs>
-  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgA)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgB1)"/>
   <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="111.25" fill="none" stroke="#ffffff" stroke-opacity=".09" stroke-width="1.5"/>
-  <g fill="none" stroke="url(#fgA)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M140 376 L256 148 L372 376"/>
+  <!-- 뱃머리 = 프롬프트 꺾쇠. 오른쪽으로 나아가는 방향이 된다 -->
+  <path d="M206 158 L272 214 L206 270" fill="none" stroke="#f4e6cf" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 선체 = 밑줄이 굽은 것 -->
+  <path d="M140 296 q116 60 232 0" fill="none" stroke="#f4e6cf" stroke-width="38" stroke-linecap="round"/>
+  <!-- 바다 — 배보다 가늘고 어둡게. 그래야 배가 주인공으로 남는다 -->
+  <g fill="none" stroke-width="22" stroke-linecap="round">
+    <path d="M112 388 q36 -30 72 0 q36 30 72 0 q36 -30 72 0 q36 30 72 0" stroke="#b68543"/>
+    <path d="M112 444 q36 -30 72 0 q36 30 72 0 q36 -30 72 0 q36 30 72 0" stroke="#7d6033"/>
   </g>
-  <rect x="188" y="276" width="136" height="56" rx="12" fill="#f0e0c6"/>
 </svg>

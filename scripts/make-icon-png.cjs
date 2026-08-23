@@ -39,13 +39,37 @@ app.whenReady().then(async () => {
   // 폰트·필터가 자리를 잡을 시간(첫 페인트만으로는 필터가 덜 그려지는 경우가 있다).
   await new Promise((r) => setTimeout(r, 400))
 
-  const img = await win.webContents.capturePage()
-  const png = img.toPNG()
+  /**
+   * **화면 크기와 무관하게** 1024×1024 를 뽑는다.
+   *
+   * 예전엔 `capturePage()` 였는데, 그건 창이 실제로 차지한 만큼만 찍는다 — 이 PC 처럼 화면
+   * 높이가 1024 보다 작으면 창이 잘려 `1024×901` 같은 **비정사각** PNG 가 나오고,
+   * electron-builder 는 그걸 아이콘으로 못 쓴다(2026-08-23 실제로 이렇게 났다).
+   * 그래서 DevTools 프로토콜로 **뷰포트를 강제**하고 그 밖까지 찍는다.
+   */
+  const dbg = win.webContents.debugger
+  dbg.attach('1.3')
+  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: SIZE,
+    height: SIZE,
+    deviceScaleFactor: 1,
+    mobile: false
+  })
+  const shot = await dbg.sendCommand('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: true,
+    clip: { x: 0, y: 0, width: SIZE, height: SIZE, scale: 1 }
+  })
+  dbg.detach()
+  const png = Buffer.from(shot.data, 'base64')
   writeFileSync(OUT, png)
-  const { width, height } = img.getSize()
+
+  // 정말 정사각 1024 인지 PNG 헤더(IHDR)에서 직접 읽어 확인한다 — 크기를 믿지 않고 잰다.
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
   console.log(`icon: ${OUT} ${width}x${height} ${(png.length / 1024).toFixed(1)}KB`)
-  if (width < 512 || height < 512) {
-    console.error(`FAIL: electron-builder 는 512px 이상을 요구한다 (${width}x${height})`)
+  if (width !== SIZE || height !== SIZE) {
+    console.error(`FAIL: ${SIZE}x${SIZE} 가 아니다 (${width}x${height})`)
     app.exit(1)
     return
   }
