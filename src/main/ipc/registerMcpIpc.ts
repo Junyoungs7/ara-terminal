@@ -6,17 +6,19 @@ import { handle } from './handle'
 import type { McpState } from '@shared/types'
 import { McpApprovalManager, type ApprovalEmit } from '../mcp/approval'
 import { createAuditLog } from '../mcp/auditLog'
+import { createAskUser, type AskRequest, type AskUserManager } from '../mcp/askUser'
 import { createMcpServer, issueRawToken, hashToken, MCP_TOKEN_VAULT_KEY, type TokenVault, type McpServerHandle } from '../mcp/McpServer'
 import type { ToolCtx } from '../mcp/tools'
 import { pushSend } from '../util/windowPush'
 
-export type McpRuntime = { server: McpServerHandle; approval: McpApprovalManager }
+export type McpRuntime = { server: McpServerHandle; approval: McpApprovalManager; ask: AskUserManager }
 
 // deps: MCP 툴이 직접 호출할 기존 서비스 객체들(approval 은 여기서 만들어 채운다).
 // vault: 토큰 해시 저장(SafeStorageSecretStore 재사용 — 새 vault 를 만들지 않는다).
 // retentionDays: F12 와 같은 보존 설정 공유(설계 §4.1 — MCP 전용 정책을 새로 만들지 않는다).
 export function registerMcpIpc(
-  deps: Omit<ToolCtx, 'approval'>,
+  // ask 도 여기서 만든다(#125) — 화면으로 올리는 길이 이 파일에 있으니 주인도 여기가 맞다.
+  deps: Omit<ToolCtx, 'approval' | 'ask'>,
   vault: TokenVault,
   logDir: string,
   retentionDays: () => number,
@@ -42,7 +44,12 @@ export function registerMcpIpc(
     stateChanged: () => push('mcp:stateChanged', state())
   }
   const approval = new McpApprovalManager(emit, audit)
-  const ctx: ToolCtx = { ...deps, approval }
+  // AI 가 사람에게 되묻는 길. 헤드리스 Claude Code 에는 그 도구가 없어서 우리가 만든다(설계 §3.4c).
+  const ask = createAskUser({
+    ask: (r: AskRequest) => push('mcp:ask', r),
+    askDone: (askId: string) => push('mcp:askDone', { askId })
+  })
+  const ctx: ToolCtx = { ...deps, approval, ask }
   const server = createMcpServer(ctx, vault)
 
   handle('mcp:getState', () => state())
@@ -75,6 +82,12 @@ export function registerMcpIpc(
     approval.respond(d)
     return { ok: true } as const
   })
+  // 되묻기 답. 없는 id 는 매니저가 조용히 버린다(늦게 온 답).
+  handle('mcp:askAnswer', ({ askId, text }) => {
+    ask.answer(askId, text)
+    return { ok: true } as const
+  })
+  handle('mcp:askPending', () => ({ items: ask.pending() }))
 
-  return { server, approval }
+  return { server, approval, ask }
 }

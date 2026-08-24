@@ -6,17 +6,29 @@
 import { type WebContents } from 'electron'
 import { handle } from './handle'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
+import type { ProfileStore } from '../secrets/ProfileStore'
 import { createRemoteConsoleService } from '../remote/RemoteConsoleService'
 import { pushSend } from '../util/windowPush'
 
 // 반환값은 종료 정리용(before-quit) — 앱을 닫은 뒤 폴러가 남지 않게 한다.
 export function registerRemoteIpc(
   sessions: MainSessionManager,
-  getWebContents: (sessionId?: string) => WebContents | null
+  getWebContents: (sessionId?: string) => WebContents | null,
+  profiles: ProfileStore
 ): { stopAll: () => void } {
   const svc = createRemoteConsoleService(
     (sessionId) => sessions.sshClient(sessionId),
-    (e) => pushSend(getWebContents(e.sessionId), 'remote:data', e)
+    (e) => pushSend(getWebContents(e.sessionId), 'remote:data', e),
+    undefined,
+    // 권한 올리기용 비밀번호 — **그 세션이 붙을 때 쓴 그 비밀번호**다(새로 받지 않는다).
+    // 여기서만 vault 를 읽고 stdin 으로 넘긴다. 렌더러는 이 값을 볼 수 없고 보낼 수도 없다.
+    (sessionId) => {
+      const meta = sessions.snapshot().find((s) => s.id === sessionId)
+      const profile = meta?.profileId ? profiles.get(meta.profileId) : undefined
+      if (!profile) return null
+      const look = profiles.lookupSecret(profile)
+      return look.ok ? look.secret : null
+    }
   )
 
   handle('remote:run', ({ sessionId, cmdId, args }) => svc.run(sessionId, cmdId, args))

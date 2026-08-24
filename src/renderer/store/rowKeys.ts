@@ -71,10 +71,23 @@ function visibleRows(root: HTMLElement, selector: string): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(selector)].filter((el) => el.offsetParent !== null)
 }
 
-function focusRow(rows: HTMLElement[], i: number): void {
+/**
+ * 그 행으로 포커스를 옮긴다.
+ *
+ * `scroll` 을 나눈 이유(2026-08-24 준영님 제보 — "스크롤 잡고 내리면 갑자기 제일 상단으로 튄다"):
+ * **스크롤바를 누르면 브라우저가 포커스를 스크롤 되는 요소의 포커스 가능한 조상**(= tabIndex=0 인
+ * 이 컨테이너)**으로 보낸다.** 그 길로도 아래 onFocus 가 돌아 첫 행을 잡고 scrollIntoView 를
+ * 불렀고, 끌어 내리던 표가 통째로 위로 튀었다. 스크롤바 클릭은 DOM 에 mousedown 을 주지 않고
+ * `:focus-visible` 도 프로그램 포커스와 구분되지 않아, **누가 왜 포커스를 줬는지로는 가릴 수 없다.**
+ *
+ * 그래서 원인이 아니라 **결과**를 나눈다: 화살표·Home/End 는 스크롤해야 맞고(안 보이는 행으로
+ * 가는 것이니), 컨테이너에 포커스가 들어온 것만으로는 **스크롤을 건드리지 않는다.**
+ * 포커스는 그대로 옮겨 가므로 Tab 경로(TREE-1)는 그대로 돈다.
+ */
+function focusRow(rows: HTMLElement[], i: number, scroll = true): void {
   const el = rows[Math.max(0, Math.min(rows.length - 1, i))]
-  el?.focus()
-  el?.scrollIntoView({ block: 'nearest' })
+  el?.focus({ preventScroll: !scroll })
+  if (scroll) el?.scrollIntoView({ block: 'nearest' })
 }
 
 export type RowKeysOptions = {
@@ -121,7 +134,8 @@ export function useRowKeys(
       if (!root || e.target !== root) return
       const rows = visibleRows(root, selector)
       const active = rows.findIndex((r) => r.classList.contains('active') || r.getAttribute('aria-selected') === 'true')
-      focusRow(rows, active >= 0 ? active : 0)
+      // 스크롤은 건드리지 않는다(위 focusRow 주석 — 스크롤바 클릭도 이 자리를 지난다).
+      focusRow(rows, active >= 0 ? active : 0, false)
     },
     [ref, selector]
   )

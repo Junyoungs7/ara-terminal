@@ -28,6 +28,7 @@ import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
+import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setMainErrorLogDir } from './log/MainErrorLog'
 import { logMainError } from './log/MainErrorLog'
@@ -52,6 +53,7 @@ let sessionLog: SessionLogService | null = null
 let ara: AraSession | null = null
 // W4 F23: MCP 서버 + 승인 매니저. 기본 꺼짐 — 설정 [MCP]에서 켜야 리스너가 생긴다.
 let mcp: McpRuntime | null = null
+let araChat: AraRuntime | null = null
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
@@ -189,7 +191,7 @@ app.whenReady().then(() => {
   })
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
-  remoteConsole = registerRemoteIpc(sessions, getWebContents)
+  remoteConsole = registerRemoteIpc(sessions, getWebContents, profiles)
   forwards = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir).forwards
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
@@ -240,6 +242,19 @@ app.whenReady().then(() => {
     () => store.get().ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
     getWebContents
   )
+  // #125 아라 대화 — 엔진(로컬 Claude Code 상주)·MCP 물리기·되묻기의 화면 쪽 통로.
+  // 작업 폴더는 **지금 보고 있는 세션**을 따라간다(설계 §3.3): 로컬 셸이면 그 폴더, 원격만
+  // 보고 있으면 마지막 로컬 폴더, 그것도 없으면 화면이 사용자에게 묻는다.
+  araChat = registerAraIpc(
+    {
+      server: mcp.server,
+      vault: secrets,
+      // 활성 세션은 화면이 open() 에 실어 보낸다(main 원장에는 "어느 탭을 보고 있나"가 없다).
+      activeSession: () => null,
+      lastLocalCwd: () => sessions.snapshot().find((x) => x.type === 'local' && x.cwd)?.cwd ?? null
+    },
+    getWebContents
+  )
   registerWindowIpc(() => mainWindow)
   createWindow()
 
@@ -283,6 +298,8 @@ app.on('before-quit', (e) => {
   exitTrace('sessions-destroyed')
   // F16: 진행 중 스트림 abort — 종료 후에도 살아 있는 좀비 HTTP 요청을 남기지 않는다.
   ara?.cancel()
+  // #123 규율: claude 상주 프로세스를 반드시 내린다(고아 금지 — #64 와 같은 선).
+  araChat?.chat.close()
   // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
   // 가능해야 한다(좀비 리스너 없음).
   void mcp?.server.stop()

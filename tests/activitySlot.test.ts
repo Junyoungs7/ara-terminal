@@ -37,7 +37,7 @@ describe('배치 슬롯 — 모든 항목이 정확히 한 자리에 속한다',
 
   it('배치 원칙(§4.8) 그대로 — 서버 것은 아래, 아라 것은 오른쪽', () => {
     // 아래: 서버 상태·기록. 오른쪽: 아라 대화·AI 세션·지난 세션·미니 프리뷰.
-    expect([...BOTTOM_IDS].sort()).toEqual(['ctr', 'disk', 'log', 'monitor', 'pkg', 'ps', 'svc', 'sys'])
+    expect([...BOTTOM_IDS].sort()).toEqual(['ctr', 'disk', 'k8s', 'log', 'monitor', 'pkg', 'ps', 'svc', 'sys'])
     expect([...RAIL_IDS].sort()).toEqual(['ai', 'aisess', 'pastlog', 'preview'])
   })
 })

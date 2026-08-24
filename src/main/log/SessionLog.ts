@@ -163,7 +163,16 @@ export function stripAnsi(text: string, st: StripState): string {
         if (c === '\n') endLine()
         else if (c === '\r') st.col = 0
         else if (c === '\b') st.col = Math.max(0, st.col - 1)
-        else write(c)
+        // **화면에 글자를 내지 않는 제어문자는 기록에도 내지 않는다.**
+        // 2026-08-24 준영님 제보: 세션 기록의 `ls -al` 앞이 비어 보였다. 실제 파일에는
+        // `secadmin@vgtt001:~$ \a\a\a\a\als -al` — 탭 완성이 울린 **벨(\a) 다섯 개**였다.
+        // 터미널은 소리만 내고 지나가지만 우리는 셀에 넣어 두었고, 그것이 패널에서 폭 없는
+        // 유령 글자 다섯 칸으로 보였다(공백처럼). 탭(\t)만 남기고 나머지 C0·DEL 은 버린다.
+        else if (c < ' ' && c !== '\t') {
+          /* 벨·NUL 같은 비출력 제어문자 — 화면에 없으니 기록에도 없다 */
+        } else if (c === '\x7f') {
+          /* DEL — 역시 글자를 내지 않는다 */
+        } else write(c)
         // 개행 없이 한 줄이 무한정 길어지는 출력(미니파이 JS·base64)도 여기서 끊는다.
         if (st.line.length > LINE_CELLS) endLine()
       }

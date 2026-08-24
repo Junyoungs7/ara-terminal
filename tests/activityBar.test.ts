@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AI_CHAT } from '../src/shared/features'
+import { AI_CHAT, ARA_CHAT } from '../src/shared/features'
 import {
   ACTIVITY_ITEMS,
   activityHiddenOf,
@@ -33,6 +33,7 @@ describe('액티비티 바 항목 정의', () => {
       'disk',
       'pkg',
       'ctr',
+      'k8s',
       'aisess',
       'log',
       'pastlog',
@@ -62,6 +63,7 @@ describe('활성 판정(isActivityOpen)', () => {
     disk: false,
     pkg: false,
     ctr: false,
+    k8s: false,
     aisess: false,
     log: true,
     pastlog: false,
@@ -92,7 +94,7 @@ describe('활성 판정(isActivityOpen)', () => {
  * 지금 판에서 **실제로 보이는** 기본 순서. features.AI_CHAT 이 꺼져 있으면 'ai' 가 빠진다 —
  * 기대값에 그 사실을 한 번만 적어 두고, 되살리면 이 상수가 알아서 다시 늘어난다.
  */
-const VISIBLE = ACTIVITY_ITEMS.filter((x) => AI_CHAT || x !== 'ai')
+const VISIBLE = ACTIVITY_ITEMS.filter((x) => AI_CHAT || ARA_CHAT || x !== 'ai')
 
 describe('저장된 순서 읽기(activityOrderOf)', () => {
   it('저장된 것이 없으면 기본 순서 그대로', () => {
@@ -124,7 +126,7 @@ describe('저장된 순서 읽기(activityOrderOf)', () => {
     expect(got).not.toContain('console')
     expect([...got].sort()).toEqual([...VISIBLE].sort())
     // 숨긴 기능도 같은 취급이다 — 저장값에 남아 있어도 목록에 안 들어온다(features.AI_CHAT).
-    if (!AI_CHAT) expect(activityOrderOf(['ai', 'log'])).not.toContain('ai')
+    if (!AI_CHAT && !ARA_CHAT) expect(activityOrderOf(['ai', 'log'])).not.toContain('ai')
   })
 
   it('빠진 항목은 기본 순서대로 뒤에 붙는다(예측 가능하게)', () => {

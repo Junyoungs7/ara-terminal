@@ -16,12 +16,13 @@ import { ServiceTable } from './ServiceTable'
 import { DiskTable } from './DiskTable'
 import { PkgTable } from './PkgTable'
 import { ContainerTable } from './ContainerTable'
+import { K8sPanel } from './K8sPanel'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { t } from '../i18n'
 import type { BottomId } from '@shared/types'
 
 /** 이 컴포넌트가 그리는 탭. 나머지 하단 탭(포트·시스템·세션 기록)은 각자 컴포넌트가 있다. */
-export type ServerToolId = Extract<BottomId, 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr'>
+export type ServerToolId = Extract<BottomId, 'ps' | 'svc' | 'disk' | 'pkg' | 'ctr' | 'k8s'>
 
 type Props = {
   id: ServerToolId
@@ -63,5 +64,8 @@ export function ServerTool({ id, active, sessionId, isSsh, server, ask, onAskAi,
       return <PkgTable sessionId={sessionId} active={active} />
     case 'ctr':
       return <ContainerTable sessionId={sessionId} active={active} server={server} ask={ask} onSendInput={onSendInput} />
+    // 쿠버는 조작이 없다 — ask·onSendInput 을 넘기지 않는 것이 그 사실을 타입으로 못박는다.
+    case 'k8s':
+      return <K8sPanel sessionId={sessionId} active={active} server={server} />
   }
 }

@@ -5,6 +5,7 @@ import { ContextMenu } from '../interactions/ContextMenu'
 import { fileMenu, type FileActionId } from '../interactions/actions'
 import { planCrossPanelTransfer } from '../store/explorerTransfer'
 import { deletePrompt } from '../store/deletePrompt'
+import { HelpTip } from './ctrShared'
 import {
   IconBack,
   IconClose,
@@ -1063,6 +1064,10 @@ export function FileTree({
             <IconUpload />
           </div>
         )}
+        {/* 2026-08-24 준영님: 자동 동기 안내가 **줄 하나를 상주로 잡아먹고** 있었다.
+            한 번 읽으면 그만인 글이라 새로고침 옆 물음표 뒤로 넣는다(하단 표들과 같은 방식).
+            안내가 필요한 상태(cwd 이벤트를 한 번도 못 받은 원격 셸)에서만 나타난다. */}
+        {backend.remote && !autoSynced && <HelpTip text={t('sftp.bestEffort')} />}
         <div className="sb-act" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
         </div>
@@ -1183,7 +1188,6 @@ export function FileTree({
         </div>
       )}
 
-      {backend.remote && !autoSynced && <div className="sftp-note">{t('sftp.bestEffort')}</div>}
       {error && <div className="sftp-err">{error}</div>}
       {/* #92: 받는 곳을 묻지 않는 대신 어디로 갔는지 여기서 말한다. 경로 전문은 title 로 —
           한 줄에 다 넣으면 긴 경로가 트리를 밀어낸다. [폴더 열기]가 마지막 확인 수단이다. */}

@@ -6,6 +6,7 @@
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
+import { AI_CHAT } from '../../src/shared/features'
 import { test, expect, REPO_ROOT, connectNewSshProfile, dialog, dialogCancel, dialogConfirm, newLocalShell, openBottomTool, sessionList } from './fixtures'
 
 // 실기동 캡처 — 가짜 IPC 하네스가 아니라 이 스위트가 쓰는 **실제 main 프로세스·실제 remote:* 경로**를
@@ -84,14 +85,14 @@ async function openWorkbench(page: Page): Promise<void> {
 
 // CON-1 진입 — 격자가 뜬다. 이력: R1·R2 는 3칸만 활성 → R3 에서 전부 살아남 →
 // **#91 에서 [서버 작업대] 창의 [홈] 탭으로 옮겼다**(옛 콘솔 창은 탐색기와 합쳐졌다).
-test('CON-1 작업대 [홈] 에 아홉 칸이 전부 살아 있다', async ({ ara, ssh }) => {
+test('CON-1 작업대 [홈] 에 열 칸이 전부 살아 있다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con1', execHandler: ps.exec })
   await openConsole(ara.page, 'con1', h.port, 'pw-con1')
   await openWorkbench(ara.page)
 
-  await expect(ara.page.locator('.wb-pad .con-app')).toHaveCount(9)
-  for (const tool of ['files', 'ps', 'svc', 'disk', 'sys', 'port', 'term', 'pkg', 'ctr']) {
+  await expect(ara.page.locator('.wb-pad .con-app')).toHaveCount(10)
+  for (const tool of ['files', 'ps', 'svc', 'disk', 'sys', 'port', 'term', 'pkg', 'ctr', 'k8s']) {
     await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${tool}"]`)).not.toHaveClass(/soon/)
   }
   // 죽은 칸이 하나도 없다 — 눌러도 아무 일 없는 칸을 남겨 두지 않는다.
@@ -184,7 +185,7 @@ test('CON-1b★ 밖에서 열리는 칸 셋에만 ↗ 가 붙는다', async ({ a
     await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${id}"] .ext-mark`)).toBeVisible()
   }
   // 창 안에서 열리는 칸에는 표시가 없다 — 표시가 아무 데나 붙으면 뜻이 사라진다.
-  for (const id of ['files', 'ps', 'svc', 'disk', 'pkg', 'ctr']) {
+  for (const id of ['files', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s']) {
     await expect(ara.page.locator(`.wb-pad .con-app[data-tool="${id}"] .ext-mark`)).toHaveCount(0)
   }
   // ↗ 칸은 하단을 연다. 작업대는 살아 있다 — 하단은 창을 가리지 않는다(#84 와 다른 점).
@@ -342,7 +343,10 @@ test('CON-8★ 권한이 없으면 stderr 를 그대로 보여 주고 강제 종
 })
 
 // CON-8b★ [아라에게 물어보기] — 누를 때만, 고른 행 하나만 보낸다(§5 준영님 요청).
+// 2026-08-23 에 아라 대화를 숨기면서 이 버튼도 사라졌다(features.AI_CHAT). 그 뒤로 이 검사가
+// 계속 빨갛게 남아 있었다 — ai.spec.ts 와 같은 방식으로 **상수를 보고 스스로 건너뛴다**.
 test('CON-8b★ 아라에게 물어보기는 고른 행 하나만 미리 보여 주고 확인해야 보낸다', async ({ ara, ssh }) => {
+  test.skip(!AI_CHAT, '아라 대화 숨김 — src/shared/features.ts 의 AI_CHAT 을 켜면 다시 돈다')
   const ps = makePs()
   const h = await ssh({ password: 'pw-con8b', execHandler: ps.exec })
   await openConsole(ara.page, 'con8b', h.port, 'pw-con8b')
@@ -800,7 +804,7 @@ test('CON-20 설치된 프로그램은 폴링하지 않고 [새로고침] 때만
   await ara.page.waitForTimeout(6000) // 프로세스 폴링(2.5초) 두 바퀴 이상
   expect(r3.probes()).toBe(first) // 늘지 않았다
 
-  await ara.page.locator('.pkg-wrap .con-btn').click()
+  await ara.page.locator('.con-pkg .con-btn[data-action="pkg.refresh"]').click()
   await expect.poll(() => r3.probes(), { timeout: 15_000 }).toBe(first + 1)
 })
 
@@ -816,7 +820,7 @@ test('CON-21 프로그램 검색이 걸리고, 없는 것은 기본으로 숨는
   await ara.page.locator('.con-check input[type="checkbox"]').check()
   await expect(ara.page.locator('.pkg-row.missing').first()).toBeVisible()
 
-  await ara.page.locator('.pkg-wrap .con-field').fill('ngin')
+  await ara.page.locator('.con-pkg .con-field input').fill('ngin')
   await expect(ara.page.locator('.pkg-row:not(.missing)')).toHaveCount(1)
 })
 
@@ -923,7 +927,7 @@ test('CON-24 컨테이너 표에 멈춘 것이 위로 오고 실행 중은 점�
   await expect(names.first()).toHaveText('db') // 멈춘 것이 위
   await expect(ara.page.locator('.ctr-row').first()).toHaveClass(/down/)
   await expect(ara.page.locator('.ctr-row').nth(1).locator('.ctr-dot')).toHaveClass(/on/)
-  await expect(ara.page.locator('.ctr-row').nth(1).locator('.ctr-ports')).toHaveText('0.0.0.0:80->80/tcp')
+  await expect(ara.page.locator('.ctr-row').nth(1).locator('.cports')).toHaveText('0.0.0.0:80->80/tcp')
 })
 
 // CON-25 도커가 없는 서버는 **빈 표가 아니라 안내**다(systemd 없는 서버 처리와 같은 결).
@@ -931,8 +935,229 @@ test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 
   const h = await ssh({ password: 'pw25', execHandler: makeCtr('docker: command not found').exec })
   await openConsole(ara.page, 'c25', h.port, 'pw25')
   await openBottomTool(ara.page, 'ctr')
-  await expect(ara.page.locator('.con-note')).toContainText('docker·podman', { timeout: 20_000 })
+  await expect(ara.page.locator('.ctr-block .cb-why')).toHaveText('도커 또는 포드먼이 이 서버에 없습니다.', { timeout: 20_000 })
   await expect(ara.page.locator('.ctr-row')).toHaveCount(0)
+})
+
+// CON-25b 쿠버네티스 워커 노드(2026-08-24 준영님 제보 — "아코디언 워커 노드에서 아무것도 안 뜬다").
+// k8s 1.24+ 에는 docker 가 없다: containerd + crictl 이고, 출력이 JSON 이며 포트 대신 파드가 있다.
+/** ctr.list 출력의 런타임 표시 줄(shared/remoteCatalog.ts 의 CTR_MARK 와 같은 글자). */
+const MARK = 'ARA-CTR '
+const K8S_CTR = 'ab12cd'.repeat(10) + 'eeee'
+const K8S_SIDE = 'ff99aa'.repeat(10) + 'dddd'
+const K8S_SICK = '11bb22'.repeat(10) + 'cccc'
+const kctr = (id: string, name: string, pod: string, ns: string, state: string, restarts: number) => ({
+  id,
+  metadata: { name, attempt: restarts },
+  image: { image: `reg.local/${name}:1.0` },
+  state,
+  createdAt: '1723900000000000000',
+  labels: { 'io.kubernetes.pod.name': pod, 'io.kubernetes.pod.namespace': ns },
+  annotations: { 'io.kubernetes.container.restartCount': String(restarts) }
+})
+const K8S_JSON = JSON.stringify({
+  containers: [
+    kctr(K8S_CTR, 'coredns', 'coredns-5d78c9869d-4x2qp', 'kube-system', 'CONTAINER_RUNNING', 0),
+    kctr(K8S_SIDE, 'istio-proxy', 'coredns-5d78c9869d-4x2qp', 'kube-system', 'CONTAINER_RUNNING', 0),
+    kctr(K8S_SICK, 'api', 'api-7d9f6b8c4-h2k9l', 'prod', 'CONTAINER_EXITED', 7)
+  ]
+})
+const K8S_PODS = JSON.stringify({
+  items: [
+    { metadata: { name: 'coredns-5d78c9869d-4x2qp', namespace: 'kube-system' }, state: 'SANDBOX_READY', createdAt: '1723900000000000000' },
+    { metadata: { name: 'api-7d9f6b8c4-h2k9l', namespace: 'prod' }, state: 'SANDBOX_READY', createdAt: '1723990000000000000' }
+  ]
+})
+const K8S_STATS = JSON.stringify({
+  stats: [
+    { attributes: { id: K8S_CTR }, cpu: { usageCoreNanoSeconds: { value: '5000000000' } }, memory: { workingSetBytes: { value: '44040192' } } },
+    { attributes: { id: K8S_SIDE }, cpu: { usageCoreNanoSeconds: { value: '1000000000' } }, memory: { workingSetBytes: { value: '18874368' } } }
+  ]
+})
+
+test('CON-25b★ 쿠버 탭은 파드로 묶여 뜨고 아픈 파드가 위로 · 조작 줄이 없다', async ({ ara, ssh }) => {
+  const h = await ssh({
+    password: 'pw25b',
+    execHandler: (command: string, stream) => {
+      // docker·podman 이 없는 서버 — 셸이 crictl 가지로 떨어져 목록·파드·자원을 잇달아 내는 모양.
+      if (command.includes('ps -a')) {
+        stream.write(
+          `ARA-CTR crictl
+WARN[0000] runtime connect using default endpoints
+${K8S_JSON}
+` +
+            `ARA-CTR pods
+${K8S_PODS}
+ARA-CTR stats
+${K8S_STATS}`
+        )
+      }
+      stream.exit(0)
+      stream.end()
+    }
+  })
+  await openConsole(ara.page, 'c25b', h.port, 'pw25b')
+  await openBottomTool(ara.page, 'k8s')
+
+  // 파드 두 개로 묶인다(사이드카가 별도 줄로 늘어서지 않는다).
+  const podRows = ara.page.locator('.pod-row')
+  await expect(podRows).toHaveCount(2, { timeout: 20_000 })
+  // 아픈 파드(컨테이너가 죽었고 재시작 7회)가 맨 위.
+  await expect(podRows.first()).toHaveAttribute('data-pod', 'prod/api-7d9f6b8c4-h2k9l')
+  await expect(podRows.first()).toHaveClass(/bad/)
+  await expect(podRows.first().locator('.cready')).toHaveText('0/1 준비')
+  await expect(podRows.first().locator('.crst')).toHaveText('7')
+  // 성한 파드는 접혀 있고, 아픈 파드는 펼쳐져 있다.
+  await expect(ara.page.locator('.ctr-row.k8s')).toHaveCount(1)
+  await podRows.nth(1).click()
+  await expect(ara.page.locator('.ctr-row.k8s')).toHaveCount(3)
+  await expect(ara.page.locator('.pod-row').nth(1).locator('.cmem2')).toHaveText('60M')
+
+  // 2026-08-24 준영님: "쿠버는 모니터링이니까 하단 컨테이너 컨트롤하는 한줄은 제거해줘."
+  // 잠긴 버튼을 놓는 대신 **줄 자체를 만들지 않는다** — 컨테이너를 멈춰도 kubelet 이 되살린다.
+  await expect(ara.page.locator('.con-ctr .ctr-acts')).toHaveCount(0)
+  await shot(ara.page, 'F28-k8s-pods.png')
+})
+
+// CON-25d 런타임은 있는데 막혔을 때 — **서버가 준 이유를 그대로** 보여 준다(2026-08-24 후속).
+// 일반 안내로 덮으면 "왜 안 되는지"를 알 방법이 화면에 없다(권한인지 소켓인지 데몬인지).
+test('CON-25d 컨테이너 목록이 막히면 서버가 준 이유가 그대로 뜬다', async ({ ara, ssh }) => {
+  const fata = 'FATA[0000] validate service connection: permission denied'
+  const h = await ssh({
+    password: 'pw25d',
+    execHandler: (command: string, stream) => {
+      if (command.includes('ps -a')) stream.write(`ARA-CTR crictl\n${fata}`)
+      stream.exit(0)
+      stream.end()
+    }
+  })
+  await openConsole(ara.page, 'c25d', h.port, 'pw25d')
+  await openBottomTool(ara.page, 'k8s')
+  // **사람 말 한 줄로 끝난다**(2026-08-24 준영님) — 런타임 속사정은 화면에 안 쌓이고 title 에만.
+  const why = ara.page.locator('.ctr-block .cb-why')
+  await expect(why).toHaveText('이 계정은 권한이 없습니다.', { timeout: 20_000 })
+  await expect(why).not.toContainText('level=fatal')
+  await expect(why).not.toContainText('permission denied') // 원문은 화면 밖
+  await expect(why).toHaveAttribute('title', fata)
+  await expect(ara.page.locator('.ctr-row')).toHaveCount(0)
+})
+
+// CON-25e★ 권한 올리기(2026-08-24 준영님) — 서버 설정을 바꾸지 않고, 접속에 쓴 비밀번호를 sudo 에.
+// 여기서 지키는 것: 버튼을 누르기 전에는 sudo 가 안 나가고, 누르면 목록이 열리고,
+// **거절당하면 즉시 꺼진다**(5초마다 다시 보내면 계정이 잠긴다).
+test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고, 거절당하면 스스로 끈다', async ({ ara, ssh }) => {
+  const cmds: string[] = []
+  let allow = false
+  const h = await ssh({
+    password: 'pw25e',
+    execHandler: (command: string, stream) => {
+      if (command.includes('ps -a')) {
+        cmds.push(command)
+        const sudo = command.startsWith('sudo -S')
+        if (sudo && !allow) stream.write('Sorry, try again.')
+        else if (sudo) stream.write([`${MARK}crictl`, K8S_JSON, `${MARK}pods`, K8S_PODS].join('\n'))
+        else stream.write([`${MARK}crictl`, 'level=fatal msg="connect: permission denied"'].join('\n'))
+      }
+      stream.exit(0)
+      stream.end()
+    }
+  })
+  await openConsole(ara.page, 'c25e', h.port, 'pw25e')
+  await openBottomTool(ara.page, 'k8s')
+
+  // 처음에는 권한 벽 + 버튼. sudo 는 아직 한 번도 안 나갔다.
+  const btn = ara.page.locator('.con-btn[data-action="ctr.elevate"]')
+  await expect(btn).toBeVisible({ timeout: 20_000 })
+  expect(cmds.every((c) => !c.startsWith('sudo -S'))).toBe(true)
+  await shot(ara.page, 'F28-ctr-blocked.png')
+
+  // 눌렀는데 거절 → 안내가 바뀌고 **버튼이 다시 나온다**(자동 재시도는 없다).
+  await btn.click()
+  await expect(ara.page.locator('.ctr-block .cb-why')).toContainText('sudo', { timeout: 20_000 })
+  const after = cmds.filter((c) => c.startsWith('sudo -S')).length
+  await ara.page.waitForTimeout(6000) // 폴링 한 바퀴 이상
+  expect(cmds.filter((c) => c.startsWith('sudo -S')).length).toBe(after)
+
+  // 이번엔 통과 → 파드 목록이 뜬다.
+  allow = true
+  await btn.click()
+  await expect(ara.page.locator('.pod-row')).toHaveCount(2, { timeout: 20_000 })
+})
+
+// CON-34★ 첫 세션이 생기면 하단바가 **스스로 열린다**(2026-08-24 준영님).
+// 두 번째 세션부터는 열지 않는다 — 방금 닫은 사람 앞에서 탭 하나 열 때마다 도로 올라오면 안 된다.
+test('CON-34★ 첫 세션에서 하단바가 자동으로 열리고, 닫은 뒤 새 세션이 생겨도 다시 열지 않는다', async ({ ara }) => {
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
+  await newLocalShell(ara.page)
+  await expect(ara.page.locator('.bottom-panel')).toBeVisible({ timeout: 15_000 })
+  // 화면 맨 아래에 붙어 있다(상태바 위) — 떠 있거나 중간에 걸리지 않는다.
+  const gap = await ara.page.locator('.bottom-panel').evaluate((el) => {
+    const bar = document.querySelector('.statusbar')
+    return bar ? Math.abs(el.getBoundingClientRect().bottom - bar.getBoundingClientRect().top) : 999
+  })
+  expect(gap).toBeLessThanOrEqual(1)
+
+  await ara.page.click('.bottom-panel .bp-close')
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
+  await newLocalShell(ara.page)
+  await ara.page.waitForTimeout(500)
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
+})
+
+// CON-25q★ 하단 패널의 표는 **스크롤된다**(2026-08-24 준영님 제보: "그리드는 생겼는데 스크롤이 없어").
+// 원인은 CSS 한 줄이었다 — `.bp-pane .con-tblwrap` 선택자가 브라우저 창 규칙과 붙어 버려
+// `height:100vh; overflow:hidden` 을 물려받고 있었다(하단 패널의 **모든 표**가 같이 당했다).
+// 그래서 여기서는 모양이 아니라 **실제 스크롤 수치**를 잰다.
+test('CON-25q★ 행이 많으면 하단 표가 스크롤된다(잘려 나가지 않는다)', async ({ ara, ssh }) => {
+  const many = Array.from({ length: 40 }, (_, i) => {
+    const id = String(i).padStart(2, '0').repeat(32).slice(0, 64)
+    return `${id}	app-${i}	nginx:1.24	running	Up 3 days	`
+  }).join('\n')
+  const h = await ssh({ password: 'pw25q', execHandler: makeCtr(many).exec })
+  await openConsole(ara.page, 'c25q', h.port, 'pw25q')
+  await openBottomTool(ara.page, 'ctr')
+  await expect(ara.page.locator('.ctr-row')).toHaveCount(40, { timeout: 20_000 })
+
+  const box = ara.page.locator('.con-ctr .con-tblwrap')
+  const m = await box.evaluate((el) => ({
+    scroll: el.scrollHeight,
+    client: el.clientHeight,
+    overflowY: getComputedStyle(el).overflowY,
+    // 하단 패널 안에 갇혀 있어야 한다 — 창 높이만큼 자라면 아래가 잘린다.
+    fitsWindow: el.getBoundingClientRect().bottom <= window.innerHeight + 1
+  }))
+  expect(m.overflowY).toBe('auto')
+  expect(m.scroll).toBeGreaterThan(m.client) // 넘치는 내용이 있다
+  expect(m.fitsWindow).toBe(true)
+
+  // 실제로 굴러가는지 — 끝까지 내리면 마지막 행이 보인다.
+  await box.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  await expect(ara.page.locator('.ctr-row').last()).toBeInViewport()
+})
+
+// CON-36★ 스크롤바를 잡아도 맨 위로 튀지 않는다(2026-08-24 준영님 제보).
+// 원인은 공용 훅이었다: 컨테이너(tabIndex=0)에 포커스가 들어오면 첫 행으로 포커스를 옮기며
+// scrollIntoView 를 부른다 — Tab 으로 들어왔을 때는 맞는 동작이지만, **스크롤바를 누른 것도
+// 그 컨테이너로 포커스를 보낸다.** 그래서 끌어 내리던 표가 통째로 위로 튀었다.
+test('CON-36★ 프로세스 표의 스크롤바를 눌러도 맨 위로 튀지 않는다', async ({ ara, ssh }) => {
+  const rows = Array.from({ length: 60 }, (_, i) => `  ${1000 + i} jun  0.1  0.1  1000 S  10 proc-${i} --flag`)
+  const ps = makePs()
+  ps.state.ps = rows.join('\n') + '\n'
+  const h = await ssh({ password: 'pw36', execHandler: ps.exec })
+  await openConsole(ara.page, 'c36', h.port, 'pw36')
+  await openBottomTool(ara.page, 'ps')
+  await expect(ara.page.locator('.con-row')).toHaveCount(60, { timeout: 20_000 })
+
+  const wrap = ara.page.locator('.con-ps .con-tblwrap')
+  await wrap.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  const before = await wrap.evaluate((el) => el.scrollTop)
+  expect(before).toBeGreaterThan(0)
+
+  // 스크롤바 자리를 누른다 — 오른쪽 끝, 세로 가운데.
+  const box = (await wrap.boundingBox())!
+  await ara.page.mouse.click(box.x + box.width - 5, box.y + box.height / 2)
+  await ara.page.waitForTimeout(300)
+  expect(await wrap.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 })
 
 // CON-26 검색은 이름·이미지·상태에 걸린다.
@@ -941,7 +1166,7 @@ test('CON-26 컨테이너 검색이 이름·이미지에 걸린다', async ({ ar
   await openConsole(ara.page, 'c26', h.port, 'pw26')
   await openBottomTool(ara.page, 'ctr')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(2, { timeout: 20_000 })
-  await ara.page.locator('.pkg-wrap .con-field').fill('postgres')
+  await ara.page.locator('.con-ctr .con-field input').fill('postgres')
   await expect(ara.page.locator('.ctr-row')).toHaveCount(1)
   await expect(ara.page.locator('.ctr-name')).toHaveText('db')
 })

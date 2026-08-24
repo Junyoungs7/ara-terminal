@@ -38,6 +38,7 @@ const LABEL: Record<BottomId, string> = {
   disk: 'console.tool.disk',
   pkg: 'console.tool.pkg',
   ctr: 'console.tool.ctr',
+  k8s: 'console.tool.k8s',
   log: 'log.title'
 }
 

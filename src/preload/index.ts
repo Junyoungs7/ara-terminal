@@ -1,6 +1,8 @@
 // preload — 좁은 도메인 API를 contextBridge로 노출 (계획서 §B.1/§B.2).
 // 채널명은 이 파일 안에만 존재; renderer는 window.ev만 본다. ipcRenderer 직접 노출 금지.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { AskRequest } from '../main/mcp/askUser'
+import type { AraChatEvent } from '../main/ai/AraChat'
 import type {
   EvApi,
   SessionExit,
@@ -322,6 +324,20 @@ const api: EvApi = {
     }
   },
   // W4 F23 MCP 조종 모드. getToken 이 없다 — 발급 응답에만 원문이 존재한다.
+  // #125 아라 대화 — 채널 이름은 이 파일 안에만 있다(렌더러는 window.ev.ara 만 본다).
+  ara: {
+    open: (o: { cwd?: string; resumeId?: string; active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null } = {}) =>
+      ipcRenderer.invoke('ara:open', o),
+    send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
+    interrupt: () => ipcRenderer.invoke('ara:interrupt'),
+    close: () => ipcRenderer.invoke('ara:close'),
+    state: () => ipcRenderer.invoke('ara:state'),
+    onEvent: (cb: (e: AraChatEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, ev: AraChatEvent) => cb(ev)
+      ipcRenderer.on('ara:event', listener)
+      return () => ipcRenderer.removeListener('ara:event', listener)
+    }
+  },
   mcp: {
     getState: () => ipcRenderer.invoke('mcp:getState'),
     setEnabled: (enabled: boolean) => ipcRenderer.invoke('mcp:setEnabled', { enabled }),
@@ -332,6 +348,19 @@ const api: EvApi = {
     handback: (kill: boolean) => ipcRenderer.invoke('mcp:handback', { kill }),
     resumeControl: () => ipcRenderer.invoke('mcp:resumeControl'),
     respondApproval: (d: McpApprovalDecision) => ipcRenderer.invoke('mcp:approvalRespond', d),
+    // #125 되묻기 — AI 가 사람에게 물은 것에 답한다(헤드리스에는 되묻는 도구가 없어 우리가 만든다).
+    answerAsk: (askId: string, text: string) => ipcRenderer.invoke('mcp:askAnswer', { askId, text }),
+    askPending: () => ipcRenderer.invoke('mcp:askPending'),
+    onAsk: (cb: (r: AskRequest) => void) => {
+      const listener = (_e: IpcRendererEvent, r: AskRequest) => cb(r)
+      ipcRenderer.on('mcp:ask', listener)
+      return () => ipcRenderer.removeListener('mcp:ask', listener)
+    },
+    onAskDone: (cb: (d: { askId: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, d: { askId: string }) => cb(d)
+      ipcRenderer.on('mcp:askDone', listener)
+      return () => ipcRenderer.removeListener('mcp:askDone', listener)
+    },
     onApprovalRequest: (cb: (r: McpApprovalRequest) => void) => {
       const listener = (_e: IpcRendererEvent, r: McpApprovalRequest) => cb(r)
       ipcRenderer.on('mcp:approvalRequest', listener)

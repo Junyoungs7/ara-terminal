@@ -1,10 +1,11 @@
-import { AI_CHAT } from '@shared/features'
+import { AI_CHAT, ARA_CHAT } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle } from './MainArea'
 import { MiniPreview } from './MiniPreview'
 import { AiPanel } from './AiPanel'
+import { AraChatPanel } from './AraChatPanel'
 import { AiBootstrapModal } from './AiBootstrapModal'
 import { WorkProfileModal } from './WorkProfileModal'
 import { ActivityBar } from './ActivityBar'
@@ -78,7 +79,7 @@ export function Shell() {
    * (features.AI_CHAT: 0.1.0 에서 아라 대화 숨김). 표·탐색기의 [아라에게 묻기]처럼 여기로 오는
    * 길이 여럿이라, 문에서 막는 편이 빠뜨릴 자리가 없다.
    */
-  const railAllowed = useCallback((id: RailId) => AI_CHAT || id !== 'ai', [])
+  const railAllowed = useCallback((id: RailId) => AI_CHAT || ARA_CHAT || id !== 'ai', [])
   const toggleRail = useCallback(
     (id: RailId) => setRail((cur) => (railAllowed(id) ? (cur === id ? null : id) : cur)),
     [railAllowed]
@@ -101,6 +102,9 @@ export function Shell() {
 
   const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
+  // #125: 아라 대화를 **한 번이라도 열었나**. 아래 렌더 참고 — 첫 열림 전까지는 붙이지 않는다.
+  const araEver = useRef(false)
+  if (aiOpen) araEver.current = true
   const aiSessOpen = rail === 'aisess'
   // #86: 지난 세션 — 우측 레일(세션 목록은 세로 카드다). 현재 기록은 하단 [세션 기록]이다.
   const pastLogOpen = rail === 'pastlog'
@@ -168,6 +172,16 @@ export function Shell() {
   const askText = dialog.askText
 
   const sessions = useSessions()
+
+  // 2026-08-24 준영님: "세션창 생기면 자동으로 하단바가 열리고 하단에 딱 붙어있게."
+  // **첫 세션이 생길 때 한 번만** 연다(0개 → 1개). 세션을 열 때마다 열면, 방금 닫은 사람 앞에서
+  // 탭 하나 열 때마다 도로 올라온다 — 사용자가 끈 것을 앱이 되돌리면 안 된다.
+  const hadSession = useRef(false)
+  useEffect(() => {
+    const has = sessions.sessions.length > 0
+    if (has && !hadSession.current) setBottom((cur) => cur ?? lastBottom.current)
+    hadSession.current = has
+  }, [sessions.sessions.length])
 
   // F23: MCP 승인 다이얼로그. mcp:approvalRequest 는 사용자 액션과 무관하게 아무 때나 도착하므로
   // 공유 dialog 슬롯(useDialog 는 한 번에 하나만 보여준다)을 두고 겹치면 앞 요청이 조용히 밀려나
@@ -977,6 +991,7 @@ export function Shell() {
       disk: bottom === 'disk',
       pkg: bottom === 'pkg',
       ctr: bottom === 'ctr',
+      k8s: bottom === 'k8s',
       aisess: aiSessOpen,
       log: logOpen,
       pastlog: pastLogOpen,
@@ -1236,9 +1251,21 @@ export function Shell() {
             openBottom('log')
           }}
         />
-        {/* 미니 프리뷰 바깥(가장 오른쪽) 형제. 폭 고정 — 사이드바 리사이저를 복제할 이유가 없다. */}
-        <AiPanel
-          open={aiOpen}
+        {/* #125 아라 대화 v2 — 같은 자리(ai 레일). **처음 열 때까지 붙이지 않는다**: 마운트하는
+            순간 claude 프로세스가 뜨는데(≈20초) 앱 부팅마다 그걸 띄울 이유가 없다. 한 번 열면
+            그 뒤로는 계속 렌더한다(닫혀도 `open=false` 로 null 만 반환) — 언마운트하면 대화 목록이
+            날아가고 다시 열 때 엔진까지 새로 뜬다. lastBottom.current 와 같은 손버릇이다. */}
+        {ARA_CHAT ? (
+          (araEver.current || aiOpen) && (
+            <AraChatPanel
+              open={aiOpen}
+              onClose={() => closeRail('ai')}
+              active={activeSession ? { type: activeSession.type, cwd: activeCwd } : null}
+            />
+          )
+        ) : (
+          <AiPanel
+            open={aiOpen}
           onClose={() => closeRail('ai')}
           prefill={aiPrefill}
           onOpenBootstrap={() => setBootstrapOpen(true)}
@@ -1253,9 +1280,10 @@ export function Shell() {
                     ...(activeCwd ? { cwd: activeCwd } : {})
                   }
                 }
-              : null
-          }
-        />
+                : null
+            }
+          />
+        )}
         {/* FB-ui2(FB-0006): 우측 최외곽 고정 — 위 우측 레일들 바깥. */}
         <ActivityBar
           items={activityItems}

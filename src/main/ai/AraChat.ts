@@ -1,0 +1,152 @@
+/**
+ * 아라 대화 한 벌(#124) — **엔진·MCP 설정·권한 대기열의 주인.**
+ *
+ * 화면(#125)은 이 객체와만 이야기한다: 열고, 보내고, 권한에 답하고, 멈추고, 닫는다.
+ * 엔진이 A(로컬 Claude Code)든 B(API 키)든 이 층은 그대로다 — 그게 #123 에서 사건 모양을
+ * 하나로 맞춘 이유다.
+ *
+ * 이 파일이 지키는 것:
+ *  ① **하나만 산다.** 관제실은 여럿일 이유가 없다(설계 §8). 다시 열면 앞의 것을 내린다.
+ *  ② **권한은 사람이 답한다.** 여기서 대신 승인하는 자리는 없다 — 대기열에 담아 화면에 올리고,
+ *     사람의 답을 그대로 프로세스에 돌려준다(§3.4).
+ *  ③ **닫으면 흔적이 없다.** 프로세스를 내리고 토큰이 든 임시 설정 파일을 지운다.
+ */
+import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
+import type { McpServerHandle, TokenVault } from '../mcp/McpServer'
+import { createClaudeEngine } from './engine/ClaudeCliEngine'
+import { createFakeEngine } from './engine/FakeEngine'
+import { isFakeAi } from './AraSession'
+import { pickEngineCwd, prepareAraMcp, type AraMcpHandoff } from './engine/araMcp'
+
+/** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
+export type ClaudeEngineArgs = { cwd: string; mcpConfigPath?: string; resumeId?: string }
+
+export type AraChatDeps = {
+  server: McpServerHandle
+  vault: TokenVault
+  /**
+   * 지금 보고 있는 세션(작업 폴더를 여기서 고른다 — §3.3).
+   * **활성 세션을 아는 것은 렌더러다**(main 의 세션 원장에는 "어느 탭을 보고 있나"가 없다) —
+   * 그래서 화면이 open() 에 실어 보내고, 이 함수는 그게 없을 때의 대비다.
+   */
+  activeSession: () => { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+  /** 마지막으로 쓴 로컬 폴더(없으면 null → 사용자에게 묻는다). */
+  lastLocalCwd: () => string | null
+  /** 화면으로 올리는 길. */
+  emit: (e: AraChatEvent) => void
+  /** 테스트 주입 — 없으면 진짜 claude 를 띄운다. */
+  makeEngine?: (o: ClaudeEngineArgs) => AiEngine
+}
+
+/** 화면이 받는 것 = 엔진 사건 + 이 층이 아는 것 몇 개. */
+export type AraChatEvent =
+  | AiEngineEvent
+  /** 열렸다 — 어느 폴더에서 도는지, MCP 도구가 물렸는지. */
+  | { t: 'opened'; cwd: string; withMcp: boolean }
+  /** 폴더를 골라 달라(원격 세션만 보고 있거나 처음 쓸 때). */
+  | { t: 'needCwd' }
+  /** 닫혔다. */
+  | { t: 'closed' }
+
+export type AraChat = {
+  /** 대화를 연다. cwd 를 주면 그것을 쓰고(사용자가 고른 폴더), 없으면 §3.3 규칙으로 고른다. */
+  open(o?: {
+    cwd?: string
+    resumeId?: string
+    /** 화면이 알려 주는 지금 세션. 없으면 deps.activeSession() 을 본다. */
+    active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+  }): Promise<{ ok: boolean; needCwd?: boolean }>
+  send(text: string): void
+  /** 권한 요청에 답한다. 대기열에 없는 id 는 조용히 버린다(늦게 온 답). */
+  respond(requestId: string, allow: boolean): void
+  interrupt(): void
+  close(): void
+  /** 지금 답을 기다리는 권한 요청들 — 화면이 다시 그릴 때 쓴다. */
+  pending(): { requestId: string; tool: string; brief: string }[]
+  isOpen(): boolean
+  /** 이어서 열 때 쓸 세션 id(엔진이 알려 준 것). */
+  resumeId(): string | null
+}
+
+export function createAraChat(deps: AraChatDeps): AraChat {
+  let engine: AiEngine | null = null
+  let handoff: AraMcpHandoff | null = null
+  let offEvent: (() => void) | null = null
+  let sessionId: string | null = null
+  const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
+
+  const teardown = (): void => {
+    offEvent?.()
+    offEvent = null
+    engine?.dispose()
+    engine = null
+    handoff?.cleanup()
+    handoff = null
+    waiting.clear()
+  }
+
+  return {
+    async open(o = {}) {
+      // 다시 열면 앞의 것을 내린다 — 두 프로세스가 같은 대화를 물면 답이 섞인다.
+      if (engine) teardown()
+
+      const active = o.active !== undefined ? o.active : deps.activeSession()
+      const pick = o.cwd
+        ? ({ kind: 'use', cwd: o.cwd } as const)
+        : pickEngineCwd({
+            sessionType: active?.type ?? null,
+            sessionCwd: active?.cwd ?? null,
+            lastLocal: deps.lastLocalCwd()
+          })
+      if (pick.kind === 'ask') {
+        deps.emit({ t: 'needCwd' })
+        return { ok: false, needCwd: true }
+      }
+
+      // MCP 를 못 물려도 대화는 시작한다 — Claude Code 기본 기능은 그대로 산다(§3.2).
+      handoff = await prepareAraMcp(deps.server, deps.vault)
+
+      // ARA_AI_FAKE=1 이면 캔드 엔진(F16 관행). 주입(makeEngine)이 있으면 그게 먼저다.
+      const make = deps.makeEngine ?? (isFakeAi() ? () => createFakeEngine() : (x: ClaudeEngineArgs) => createClaudeEngine(x))
+      engine = make({
+        cwd: pick.cwd,
+        ...(handoff ? { mcpConfigPath: handoff.configPath } : {}),
+        ...(o.resumeId ? { resumeId: o.resumeId } : {})
+      })
+      offEvent = engine.onEvent((e) => {
+        if (e.t === 'ready' && e.sessionId) sessionId = e.sessionId
+        // 권한 요청은 대기열에 담는다 — 화면이 늦게 붙어도 잃지 않는다.
+        if (e.t === 'permission') waiting.set(e.requestId, { requestId: e.requestId, tool: e.tool, brief: e.brief })
+        // 프로세스가 죽었으면 이 층도 함께 정리한다(고아·유령 대기열 금지).
+        if (e.t === 'exit') {
+          deps.emit(e)
+          teardown()
+          deps.emit({ t: 'closed' })
+          return
+        }
+        deps.emit(e)
+      })
+      deps.emit({ t: 'opened', cwd: pick.cwd, withMcp: handoff !== null })
+      return { ok: true }
+    },
+
+    send: (text) => engine?.send(text),
+
+    respond: (requestId, allow) => {
+      if (!waiting.delete(requestId)) return
+      engine?.respondPermission(requestId, allow)
+    },
+
+    interrupt: () => engine?.interrupt(),
+
+    close: () => {
+      if (!engine) return
+      teardown()
+      deps.emit({ t: 'closed' })
+    },
+
+    pending: () => [...waiting.values()],
+    isOpen: () => engine !== null,
+    resumeId: () => sessionId
+  }
+}

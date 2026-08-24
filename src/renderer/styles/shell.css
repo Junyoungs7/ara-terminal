@@ -348,8 +348,19 @@
   position: relative;
 }
 
+/* 사이드바 안에서도 **글을 다루는 칸**은 선택이 살아 있어야 한다(이름 바꾸기·검색). */
+.sidebar input,
+.sidebar textarea {
+  user-select: text;
+}
+
 /* ── 사이드바 (§4.1/§4.2) ── */
+/* 2026-08-24 준영님: "더블클릭하면 텍스트에 드래그가 되는데 이거 막아줘."
+   트리는 **누르는 곳**이지 읽어서 복사하는 곳이 아니다 — 더블클릭(=열기)마다 이름이 파랗게
+   선택되면 다음 클릭이 드래그로 이어져 항목이 끌려간다. 입력칸(이름 바꾸기·검색)은 아래에서
+   되돌린다: 거기서는 선택이 곧 기능이다. */
 .sidebar {
+  user-select: none;
   width: var(--sidebar-w);
   flex: 0 0 var(--sidebar-w);
   background: var(--bg-surface);
@@ -759,13 +770,12 @@
   padding: 1px 4px;
   outline: none;
 }
-.sftp-note {
-  flex: none;
-  padding: 5px 10px;
-  font-size: var(--fs-md);
-  color: var(--warn);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--line-soft);
+/* 2026-08-24: 자동 동기 안내가 쓰던 줄(.sftp-note)은 사라졌다 — 새로고침 옆 물음표로 옮겼다.
+   사이드바 안에서는 물음표를 아이콘 버튼 높이에 맞춘다. */
+.sidebar .con-help {
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
 }
 .sftp-err {
   flex: none;
@@ -1278,9 +1288,17 @@
   text-align: center;
   min-height: 64px;
 }
-/* 표를 감싸는 상자는 안내를 가운데 두려면 자기도 세로 흐름이어야 한다. */
-.bp-pane .con-tblwrap,
-.bp-pane /* ── 내장 브라우저 탭 줄 (2026-08-21) ──
+/* 표를 감싸는 상자는 안내를 가운데 두려면 자기도 세로 흐름이어야 한다.
+   ⚠ 2026-08-24: 이 규칙의 선택자가 **아래 브라우저 창 규칙과 붙어 있었다.** 편집 사고로 둘째
+   선택자와 중괄호가 통째로 사라져, `.bp-pane .con-tblwrap` 이 브라우저 창의 `height:100vh;
+   overflow:hidden` 을 물려받고 있었다 — 그래서 **하단 패널의 모든 표에 스크롤이 없었다**
+   (준영님 제보: "그리드는 생겼는데 스크롤이 없어"). 표가 화면 밖으로 자라고 잘려 나갔다. */
+.bp-pane .con-tblwrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 내장 브라우저 탭 줄 (2026-08-21) ──
    높이는 **BrowserTabs.ts 의 TAB_STRIP_H(34) 와 같아야 한다** — 그 값으로 main 이 페이지 뷰를
    이 줄 아래에 앉힌다. 어긋나면 페이지가 줄을 덮거나 그 사이가 빈다. */
 .app.browserwin {
@@ -6784,83 +6802,201 @@
   font-size: var(--fs-sm);
   padding: 8px 2px;
   line-height: 1.5;
+  /* 안내 + 서버가 준 이유를 두 줄로 싣는다(컨테이너 표) — 줄바꿈을 살리되 들여쓰기는 접는다. */
+  white-space: pre-line;
 }
 .con-note.sm {
   font-size: var(--fs-micro);
   border-top: 1px solid var(--line);
   margin-top: 6px;
 }
-.pkg-wrap {
+/* ── 설치된 프로그램 표 ──
+   2026-08-24 준영님 요청으로 목록에서 표(.con-tbl)로 옮겼다 — 열 폭만 이 표의 것이고,
+   머리·행 높이·정렬 캐럿은 프로세스·서비스 표와 공유한다. */
+.con-pkg {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-.pkg-list {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
 }
-.pkg-row {
-  display: grid;
-  grid-template-columns: 110px 150px 1fr 96px;
-  gap: 8px;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-sm);
+.con-tbl th.pkg-bin {
+  width: 132px;
 }
-.pkg-row.missing {
+.con-tbl th.pkg-ver {
+  width: 220px;
+}
+.con-tbl th.pkg-date {
+  width: 104px;
+}
+.pkg-row.missing td {
   opacity: 0.45;
 }
-.pkg-bin {
+.con-tbl td.pkg-bin {
   color: var(--text-hi);
 }
-.pkg-ver {
+.con-tbl td.pkg-ver {
   color: var(--accent-bright);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.pkg-path,
-.pkg-date {
+.con-tbl td.pkg-path,
+.con-tbl td.pkg-date {
   color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.pkg-date {
+.con-tbl td.pkg-date {
   text-align: right;
+  font-family: var(--ui);
 }
 
 /* ── F28 컨테이너 표 ─────────────────────────────────────────────────────── */
-/* 멈춘 컨테이너를 위로 올리고 흐리게 — 이 화면을 여는 이유의 절반이 "왜 안 떠 있지"다. */
-.ctr-row {
-  display: grid;
-  grid-template-columns: 10px 1fr 1fr 1fr 1fr;
-  gap: 8px;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 4px;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-sm);
-}
+/* 2026-08-24: div 격자에서 .con-tbl 로 옮겼다 — **행은 이제 <tr> 이라 grid 를 씌우면 안 된다**
+   (씌웠더니 머리와 몸통의 열이 어긋나 표가 통째로 무너졌다). 색·선택 표시만 남긴다. */
 .ctr-row.down .ctr-name,
-.ctr-row.down .ctr-image {
+.ctr-row.down .cimg {
   color: var(--text-dim);
 }
 /* 조작 대상 고르기 — 프로세스·서비스 표와 같은 선택 표시(.dsk-row.sel 과 같은 결). */
 .ctr-row {
   cursor: pointer;
 }
-.ctr-row:hover {
+.ctr-row:hover,
+.pod-row:hover {
   background: var(--bg-raised);
 }
 .ctr-row.sel {
   background: var(--bg-overlay);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* ── 컨테이너 표 — 다른 하단 탭과 같은 규격(.con-tbl) ──
+   2026-08-24 준영님 요청으로 목록(div)에서 표로 옮겼다. 열 폭만 이 표의 것이고 머리·행 높이·
+   정렬 캐럿은 프로세스·서비스·패키지 표와 공유한다. 쿠버는 열 구성이 다르다(포트가 없고
+   준비·재시작·자원이 있다) — 같은 표 뼈대에 열만 갈아 끼운다. */
+.con-ctr {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.con-tbl th.crun {
+  width: 46px;
+}
+.con-tbl th.cstat {
+  width: 22%;
+}
+/* 툴바 끝의 물음표 — 긴 안내가 목록 한 줄을 잡아먹지 않게(2026-08-24 준영님). */
+.con-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  cursor: help;
+  flex: none;
+}
+.con-help:hover {
+  color: var(--text-hi);
+  border-color: var(--accent);
+}
+
+/* 정렬하지 않는 열은 손 모양도 강조도 주지 않는다 — 눌러도 아무 일 없는 머리는 거짓 신호다. */
+.con-tbl th.fixed {
+  cursor: default;
+}
+.con-tbl th.fixed:hover {
+  color: var(--text-dim);
+}
+.con-tbl th.cports {
+  width: 24%;
+}
+.con-tbl th.cready {
+  width: 84px;
+}
+.con-tbl th.crst,
+.con-tbl th.ccpu2 {
+  width: 72px;
+}
+.con-tbl th.cage {
+  width: 76px;
+}
+.con-tbl th.cmem2 {
+  width: 84px;
+}
+.con-tbl .cready,
+.con-tbl .crst,
+.con-tbl .cage,
+.con-tbl .ccpu2,
+.con-tbl .cmem2 {
+  font-family: var(--ui);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* [실행] 칸은 점 하나짜리다 — 가운데에 놓는다. */
+.con-tbl .crun {
+  text-align: center;
+}
+.con-tbl .crun .ctr-dot {
+  display: inline-block;
+  vertical-align: middle;
+}
+/* 파드 줄 — 누르면 접힌다. 아픈 파드는 줄 전체로 티가 나야 한다(점 하나로는 60줄에서 안 보인다). */
+.pod-row {
+  cursor: pointer;
+}
+.pod-caret {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-mid);
+  font-size: var(--fs-sm);
+}
+.pod-row:hover .pod-caret {
+  color: var(--accent);
+}
+.pod-ns {
+  color: var(--text-dim);
+}
+.pod-name {
+  color: var(--text-hi);
+}
+.pod-row.bad .pod-name,
+.pod-row.bad .cready {
+  color: var(--err);
+}
+.pod-row.warn .crst {
+  color: var(--warn);
+}
+.con-tbl .crst.warn {
+  color: var(--warn);
+}
+/* 자식 컨테이너 줄 — 파드 아래로 들여쓴다(트리의 깊이는 들여쓰기로만 말한다). */
+.con-tbl .cpod.child {
+  padding-left: 34px;
+}
+
+/* 막혔을 때: 표 가운데에 한 줄 + 버튼 하나. 로그를 쏟지 않는다(원문은 title 에). */
+.ctr-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 12px;
+}
+.cb-why {
+  color: var(--text-mid);
+  max-width: 560px;
+}
+.cb-detail {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
 /* 조작 줄은 목록 아래에 고정한다 — 표가 길어져도 버튼이 화면 밖으로 밀려나지 않게. */
 .ctr-acts {
   flex: none;
@@ -7070,4 +7206,292 @@
     animation: none;
     opacity: 0.7;
   }
+}
+
+/* ── #125 아라 대화 v2 — 준영님이 고른 **B+C 혼합**(agent_talk/MOCKUP-ara-chat.html, 2026-08-24).
+   도구는 접히는 묶음(B), 되묻기는 알약 버튼(C). 색은 --accent(금) 계열이다 — F16 의 .ai-panel 이
+   쓰던 보라와 다른데, 목업이 그 색으로 승인됐고 이 패널이 그 자리를 이어받기 때문이다. */
+.ara-panel {
+  width: 360px;
+  flex: 0 0 360px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ara-hd {
+  height: var(--row-tabbar);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--line);
+}
+.ara-hd .t {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  flex: none;
+}
+/* 작업 폴더는 늘 보인다 — 아라가 어디서 일하는지 모르면 안 된다(목업 각주). 길면 앞을 자른다. */
+.ara-hd .cwd {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+.ara-ic {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  padding: 3px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.ara-ic:hover {
+  color: var(--text-hi);
+}
+.ara-ic svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ara-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ara-me {
+  align-self: flex-end;
+  max-width: 86%;
+  background: var(--bg-overlay);
+  border-radius: var(--radius) var(--radius) 2px var(--radius);
+  padding: 6px 9px;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ara-ai {
+  color: var(--text-mid);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  padding: 0 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ara-note {
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+  padding: 0 2px;
+  word-break: break-all;
+}
+.ara-note.bad {
+  color: var(--err);
+}
+
+/* B: 도구 묶음 — 접혀 있는 것이 기본. 머리 한 줄만 보인다. */
+.ara-fold {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.ara-fold .hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.ara-fold .hd .caret {
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  width: 8px;
+}
+.ara-fold .hd .n {
+  color: var(--text-mid);
+}
+.ara-fold .hd .st {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+}
+.ara-fold .in {
+  border-top: 1px solid var(--line);
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ara-fold .in .l {
+  display: flex;
+  gap: 6px;
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+  min-width: 0;
+}
+.ara-fold .in .l .k {
+  color: var(--ok);
+  width: 8px;
+  flex: none;
+}
+.ara-fold .in .l .k.bad {
+  color: var(--err);
+}
+.ara-fold .in .l .nm {
+  color: var(--text-mid);
+  flex: none;
+}
+.ara-fold .in .l .v {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* C: 되묻기 — 세로선 + 알약 버튼. 좁은 레일에서 세로를 덜 먹는다. */
+.ara-ask {
+  border-left: 2px solid var(--accent);
+  padding-left: 9px;
+}
+/* 카드는 키 입력을 받으려고 포커스를 갖는다(숫자 선택). 테두리를 그리지는 않는다 — 왼쪽
+   금색 세로선이 이미 "여기가 답할 자리"라고 말하고 있다. */
+.ara-ask:focus {
+  outline: none;
+}
+.ara-ask .q {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  white-space: pre-wrap;
+}
+.ara-ask .opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.ara-ask .pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: var(--fs-sm) var(--ui);
+  color: var(--text-hi);
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+.ara-ask .pill:hover {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+.ara-ask .pill .num {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.ara-ask .meta {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+}
+
+.ara-empty {
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+  padding: 16px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  word-break: keep-all;
+}
+
+.ara-compose {
+  flex: none;
+  border-top: 1px solid var(--line);
+  padding: 8px;
+}
+.ara-input {
+  width: 100%;
+  resize: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  color: var(--text-hi);
+  font: var(--fs-sm) / 1.5 var(--ui);
+}
+.ara-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ara-input:disabled {
+  color: var(--text-dim);
+}
+.ara-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.ara-bar .sp {
+  margin-left: auto;
+}
+.ara-bar .c {
+  font-family: var(--mono);
+}
+.ara-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+}
+.ara-dot.run {
+  background: var(--accent);
+}
+.ara-dot.off {
+  background: var(--text-dim);
+}
+.ara-btn {
+  border: 1px solid var(--line-strong);
+  background: var(--bg-surface);
+  color: var(--text-hi);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font: var(--fs-sm) var(--ui);
+  cursor: pointer;
+}
+.ara-btn.p {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+.ara-btn:hover:not(:disabled) {
+  background: var(--bg-overlay);
+}
+.ara-btn:disabled {
+  color: var(--text-dim);
+  cursor: default;
 }

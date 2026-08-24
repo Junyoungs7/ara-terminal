@@ -32,6 +32,9 @@ import type { AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
+// 되묻기 요청의 모양(#125). main 이 주인이고 렌더러는 그리기만 한다 — SessionSpec 과 같은 선례.
+import type { AskRequest } from '../main/mcp/askUser'
+import type { AraChatEvent } from '../main/ai/AraChat'
 import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
@@ -404,7 +407,22 @@ export type InvokeContract = {
   'mcp:handback': { req: { kill: boolean }; res: { ok: true } }
   // D2: 인계 해제 — session_create/ssh_connect 즉시거부를 푼다. 사용자가 UI에서 명시적으로만 호출.
   'mcp:resumeControl': { req: void; res: { ok: true } }
+  // ── #125 아라 대화(로컬 Claude Code 브릿지) ──
+  // 대화 한 벌의 규칙은 main 의 AraChat 이 갖는다. 렌더러는 열고·보내고·멈추고·닫을 뿐이다.
+  'ara:open': {
+    req: { cwd?: string; resumeId?: string; active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null }
+    res: { ok: boolean; needCwd?: boolean }
+  }
+  'ara:send': { req: { text: string }; res: { ok: true } }
+  'ara:interrupt': { req: void; res: { ok: true } }
+  'ara:close': { req: void; res: { ok: true } }
+  'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
   'mcp:approvalRespond': { req: McpApprovalDecision; res: { ok: true } }
+  // #125 되묻기 — AI 가 사람에게 물은 것에 답한다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서
+  // 우리 MCP 도구(`ask_user`)로 그 자리를 만든다(설계 §3.4c). 없는 askId 는 main 이 조용히 버린다.
+  'mcp:askAnswer': { req: { askId: string; text: string }; res: { ok: true } }
+  /** 화면이 다시 그릴 때 — 지금 답을 기다리는 질문들. */
+  'mcp:askPending': { req: void; res: { items: AskRequest[] } }
   // ── F24 앱 내 피드백 수집 ──
   // 항목 저장(캡처 데이터 포함 — attachCapture=true면 main이 이 호출 시점에 창을 캡처한다).
   // 읽기 채널은 없다: 앱이 목록을 보여주지 않으므로(파일을 열면 되는 것이 목적) 불필요하다.
@@ -706,9 +724,27 @@ export type EvApi = {
     handback(kill: boolean): Promise<{ ok: true }>
     resumeControl(): Promise<{ ok: true }>
     respondApproval(d: McpApprovalDecision): Promise<{ ok: true }>
+    // #125 되묻기(`ask_user`) — 헤드리스 Claude Code 에는 사람에게 되묻는 도구가 없어서 우리가 만든다.
+    answerAsk(askId: string, text: string): Promise<{ ok: true }>
+    askPending(): Promise<{ items: AskRequest[] }>
+    onAsk(cb: (r: AskRequest) => void): () => void
+    onAskDone(cb: (d: { askId: string }) => void): () => void
     onApprovalRequest(cb: (r: McpApprovalRequest) => void): () => void
     onActivity(cb: (a: McpActivity) => void): () => void
     onStateChanged(cb: (s: McpState) => void): () => void
+  }
+  // #125 아라 대화. 사건은 onEvent 로 흘러온다(엔진이 A 든 B 든 같은 모양 — shared/aiEngine.ts).
+  ara: {
+    open(o?: {
+      cwd?: string
+      resumeId?: string
+      active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+    }): Promise<{ ok: boolean; needCwd?: boolean }>
+    send(text: string): Promise<{ ok: true }>
+    interrupt(): Promise<{ ok: true }>
+    close(): Promise<{ ok: true }>
+    state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>
+    onEvent(cb: (e: AraChatEvent) => void): () => void
   }
   // W2 F8 포트 포워딩. 포트 번호 외에는 아무것도 넘길 수 없다(호스트·바인드 주소는 main 하드코딩).
   forward: {

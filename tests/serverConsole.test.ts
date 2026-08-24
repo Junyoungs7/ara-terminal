@@ -4,7 +4,18 @@
 // 폴링 수명(busy 가드·세션 정리)은 tests/telemetry.test.ts 의 같은 이름 블록을 본떴다.
 import { describe, it, expect } from 'vitest'
 import type { Client } from 'ssh2'
-import type { ProcRow, SvcRow, CmdId } from '../src/shared/remoteCatalog'
+import type { ProcRow, SvcRow, CmdId, CtrRow, PkgRow } from '../src/shared/remoteCatalog'
+import { ctrActions, sortCtrs, nextCtrSort, DEFAULT_CTR_SORT } from '../src/renderer/components/ContainerTable'
+import {
+  groupPods,
+  podRank,
+  sortPodGroups,
+  nextPodSort,
+  DEFAULT_POD_SORT,
+  type CtrPodGroup
+} from '../src/renderer/components/K8sPanel'
+import { tidyReason } from '../src/renderer/components/ctrShared'
+import { DEFAULT_PKG_SORT, filterPkgs, nextPkgSort, sortPkgs } from '../src/renderer/components/PkgTable'
 import { parseDf, parseDu, parsePs, parseSystemctl } from '../src/shared/remoteCatalog'
 import { createRemoteConsoleService } from '../src/main/remote/RemoteConsoleService'
 import {
@@ -283,7 +294,7 @@ describe('디스크 표 — 폴더 파고들기', () => {
 // hang: 응답하지 않는 서버 — busy 가드 검증용.
 function fakeClient(
   log: string[],
-  opts: { hang?: boolean; out?: string; err?: string; code?: number } = {}
+  opts: { hang?: boolean; out?: string; err?: string; code?: number; stdinLog?: string[] } = {}
 ): Client {
   return {
     exec(cmd: string, cb: (err: Error | null, stream: unknown) => void) {
@@ -296,7 +307,15 @@ function fakeClient(
       const fire = (ev: string, ...a: unknown[]): void => {
         for (const fn of handlers.get(ev) ?? []) fn(...a)
       }
-      cb(null, { on, stderr: { on: (ev: string, fn: (...a: unknown[]) => void) => on('stderr:' + ev, fn) }, close: () => {} })
+      cb(null, {
+        on,
+        stderr: { on: (ev: string, fn: (...a: unknown[]) => void) => on('stderr:' + ev, fn) },
+        close: () => {},
+        // 권한 올리기(sudo -S)는 비밀번호를 **stdin 으로만** 보낸다 — 명령줄에 실렸는지
+        // 여기서 갈라 본다(log 에는 명령만, stdinLog 에는 stdin 만 쌓인다).
+        write: (d: string) => opts.stdinLog?.push(String(d)),
+        end: () => {}
+      })
       if (opts.hang) return
       setImmediate(() => {
         if (opts.out) fire('data', Buffer.from(opts.out))
@@ -426,5 +445,225 @@ describe('RemoteConsoleService — 폴링 수명', () => {
     expect(svc.activeCount()).toBe(3)
     svc.stopAll()
     expect(svc.activeCount()).toBe(0)
+  })
+})
+
+// 2026-08-24 제보(쿠버네티스 워커 노드) 후속 — crictl 로 읽은 목록에서는 CRI 에 **없는 명령**을
+// 내주면 안 된다. 눌러 봐야 `unknown command "pause"` 로 떨어진다.
+describe('컨테이너 버튼 — 런타임이 없는 명령은 내주지 않는다', () => {
+  const row = (state: string): CtrRow => ({ id: 'a'.repeat(64), name: 'app', image: 'busybox', state, status: '', ports: '' })
+
+  it('docker 는 그대로 — 돌면 정지·일시정지·재시작, 멈췄으면 시작·제거', () => {
+    expect(ctrActions(row('running'))).toEqual(['stop', 'pause', 'restart'])
+    expect(ctrActions(row('exited'))).toEqual(['start', 'rm'])
+    expect(ctrActions(null)).toEqual([])
+  })
+
+  // 2026-08-24: crictl 분기는 사라졌다 — 쿠버는 탭이 갈렸고 **그 탭에는 조작 줄이 없다**
+  // (컨테이너를 멈춰도 kubelet 이 되살린다). 버튼을 잠그는 대신 아예 만들지 않는다.
+  it('★ 쿠버 탭에는 조작이 없다 — 이 함수는 도커·포드먼 전용이다', () => {
+    expect(ctrActions(row('paused'))).toEqual(['unpause', 'stop'])
+  })
+})
+
+// 2026-08-24 준영님 요청 — 패키지 탭도 다른 탭처럼 표(.con-tbl)로. 열 머리를 눌러 정렬한다.
+describe('설치된 프로그램 표 — 정렬', () => {
+  const rows: PkgRow[] = [
+    { bin: 'nginx', path: '/usr/sbin/nginx', version: '1.24.0', installedAt: 1_700_000_000_000 },
+    { bin: 'node', path: '/home/jun/.nvm/versions/node/v20.11.1/bin/node', version: 'v20.11.1', installedAt: 1_710_374_400_000 },
+    { bin: 'jq', path: '/usr/bin/jq', version: '1.6', installedAt: null }
+  ]
+
+  it('기본은 이름순 — 찾는 프로그램이 어디 있는지 아는 정렬이다', () => {
+    expect(sortPkgs(rows, DEFAULT_PKG_SORT).map((r) => r.bin)).toEqual(['jq', 'nginx', 'node'])
+  })
+
+  it('★ 설치일을 모르는 행은 어느 방향으로 정렬해도 맨 아래 — 빈 값이 최신인 척하면 안 된다', () => {
+    expect(sortPkgs(rows, { key: 'date', desc: false }).map((r) => r.bin)).toEqual(['nginx', 'node', 'jq'])
+    expect(sortPkgs(rows, { key: 'date', desc: true }).map((r) => r.bin)).toEqual(['node', 'nginx', 'jq'])
+  })
+
+  it('같은 열을 다시 누르면 방향만 뒤집고, 다른 열은 오름차순으로 시작한다', () => {
+    expect(nextPkgSort(DEFAULT_PKG_SORT, 'bin')).toEqual({ key: 'bin', desc: true })
+    expect(nextPkgSort({ key: 'bin', desc: true }, 'date')).toEqual({ key: 'date', desc: false })
+  })
+
+  it('검색은 이름·버전에 걸린다(정렬과 섞이지 않는다)', () => {
+    expect(filterPkgs(rows, 'ngin').map((r) => r.bin)).toEqual(['nginx'])
+    expect(filterPkgs(rows, 'v20').map((r) => r.bin)).toEqual(['node'])
+  })
+})
+
+// 2026-08-24 — 쿠버 노드 목록을 파드로 묶어서 본다(준영님 선택). 묶기·순위는 순수 함수다.
+describe('쿠버 파드 묶기', () => {
+  const c = (over: Partial<CtrRow>): CtrRow => ({
+    id: over.id ?? 'x',
+    name: 'app',
+    image: 'img',
+    state: 'running',
+    status: '',
+    ports: '',
+    ns: 'prod',
+    pod: 'api-7d9',
+    restarts: 0,
+    ...over
+  })
+
+  it('같은 파드의 컨테이너가 한 묶음이 되고 재시작·메모리는 합계다', () => {
+    const g = groupPods([c({ id: '1', restarts: 3, memBytes: 100 }), c({ id: '2', name: 'istio', memBytes: 20 })], [])
+    expect(g).toHaveLength(1)
+    expect(g[0].key).toBe('prod/api-7d9')
+    expect(g[0].total).toBe(2)
+    expect(g[0].readyN).toBe(2)
+    expect(g[0].restarts).toBe(3)
+    expect(g[0].memBytes).toBe(120)
+  })
+
+  it('★ 자료가 아예 없으면 합계는 0 이 아니라 null — "안 쓴다"와 "모른다"는 다르다', () => {
+    expect(groupPods([c({ id: '1' })], []).at(0)?.memBytes).toBeNull()
+    expect(groupPods([c({ id: '1' })], []).at(0)?.cpuNs).toBeNull()
+  })
+
+  it('★ 아픈 파드가 위로 — ① 준비 안 됨 ② 재시작 있음 ③ 정상', () => {
+    const rows = [
+      c({ id: '1', pod: 'healthy' }),
+      c({ id: '2', pod: 'restarted', restarts: 5 }),
+      c({ id: '3', pod: 'down', state: 'exited' })
+    ]
+    expect(groupPods(rows, []).map((g) => g.name)).toEqual(['down', 'restarted', 'healthy'])
+    expect(groupPods(rows, []).map(podRank)).toEqual([0, 1, 2])
+  })
+
+  it('파드 목록이 준비 안 됨이라고 하면 컨테이너가 다 떠 있어도 아픈 것으로 본다', () => {
+    const pods = [{ key: 'prod/api-7d9', ns: 'prod', name: 'api-7d9', state: 'notready' }]
+    expect(podRank(groupPods([c({ id: '1' })], pods)[0])).toBe(0)
+  })
+
+  it('파드 목록을 못 받아도(권한·구버전) 라벨만으로 묶인다 — 화면이 비지 않는다', () => {
+    const g = groupPods([c({ id: '1' })], [])
+    expect(g[0].ready).toBe(true) // 모르는 것을 고장으로 몰지 않는다
+    expect(g[0].rows).toHaveLength(1)
+  })
+})
+
+// 2026-08-24 준영님 요청 — 서버 설정을 바꾸지 않고 권한을 올린다(sudo + 접속에 쓴 비밀번호).
+// 이 블록이 지키는 것 셋: **비밀번호는 명령줄에 없다** · 요청하지 않은 명령에는 안 보낸다 ·
+// 거절당하면 화면이 즉시 끈다(반복 전송 = 계정 잠김).
+describe('컨테이너 권한 올리기 — 비밀번호는 stdin 으로만', () => {
+  it('★ sudo 를 요청하면 stdin 으로 가고, 명령줄에는 한 글자도 안 남는다', async () => {
+    const log: string[] = []
+    const stdinLog: string[] = []
+    const svc = createRemoteConsoleService(
+      () => fakeClient(log, { out: '', stdinLog }),
+      () => {},
+      50,
+      () => 'hunter2'
+    )
+    await svc.run('s1', 'ctr.list', { sudo: true })
+    expect(log[0]).toContain('sudo -S -p ')
+    expect(log[0]).not.toContain('hunter2') // 명령줄에 실리면 원격 `ps` 와 감사 로그에 찍힌다
+    expect(stdinLog.join('')).toBe('hunter2\n')
+  })
+
+  it('★ 권한을 요청하지 않은 명령에는 비밀번호를 보내지 않는다', async () => {
+    const log: string[] = []
+    const stdinLog: string[] = []
+    const svc = createRemoteConsoleService(() => fakeClient(log, { out: '', stdinLog }), () => {}, 50, () => 'hunter2')
+    await svc.run('s1', 'ctr.list')
+    await svc.run('s1', 'ps.list')
+    expect(stdinLog).toEqual([])
+    expect(log.every((c) => !c.includes('sudo -S'))).toBe(true)
+  })
+
+  it('저장된 비밀번호가 없으면(키 인증·미저장) 아무것도 안 보낸다 — sudo 가 스스로 실패한다', async () => {
+    const log: string[] = []
+    const stdinLog: string[] = []
+    const svc = createRemoteConsoleService(() => fakeClient(log, { out: '', stdinLog }), () => {}, 50)
+    await svc.run('s1', 'ctr.list', { sudo: true })
+    expect(stdinLog).toEqual([])
+  })
+})
+
+// 2026-08-24 — 표를 다른 하단 탭 규격으로 옮기면서 열 머리 정렬이 붙었다(순수 함수).
+describe('컨테이너 표 정렬', () => {
+  const c = (over: Partial<CtrRow>): CtrRow => ({
+    id: over.id ?? 'x',
+    name: 'a',
+    image: 'img',
+    state: 'running',
+    status: '',
+    ports: '',
+    ...over
+  })
+
+  it('기본은 멈춘 것부터 — "왜 안 떠 있지"가 이 화면을 여는 이유다', () => {
+    const rows = [c({ id: '1', name: 'web' }), c({ id: '2', name: 'db', state: 'exited' })]
+    expect(sortCtrs(rows, DEFAULT_CTR_SORT).map((r) => r.name)).toEqual(['db', 'web'])
+    expect(sortCtrs(rows, { key: 'name', desc: false }).map((r) => r.name)).toEqual(['db', 'web'])
+    expect(sortCtrs(rows, { key: 'name', desc: true }).map((r) => r.name)).toEqual(['web', 'db'])
+  })
+
+  it('열 머리를 다시 누르면 방향만 뒤집는다', () => {
+    expect(nextCtrSort({ key: 'name', desc: false }, 'name')).toEqual({ key: 'name', desc: true })
+    expect(nextCtrSort({ key: 'name', desc: true }, 'image')).toEqual({ key: 'image', desc: false })
+  })
+})
+
+describe('파드 표 정렬', () => {
+  const g = (name: string, over: Partial<CtrPodGroup> = {}): CtrPodGroup => ({
+    key: 'ns/' + name,
+    ns: 'ns',
+    name,
+    readyN: 1,
+    total: 1,
+    ready: true,
+    restarts: 0,
+    createdAt: null,
+    cpuNs: null,
+    memBytes: null,
+    rows: [],
+    ...over
+  })
+
+  it('기본은 아픈 파드부터(health)', () => {
+    const gs = [g('ok'), g('sick', { readyN: 0 }), g('restarted', { restarts: 4 })]
+    expect(sortPodGroups(gs, DEFAULT_POD_SORT).map((x) => x.name)).toEqual(['sick', 'restarted', 'ok'])
+  })
+
+  it('숫자 열은 큰 것부터 시작한다 — 열 머리를 처음 누를 때 보고 싶은 쪽', () => {
+    expect(nextPodSort(DEFAULT_POD_SORT, 'mem')).toEqual({ key: 'mem', desc: true })
+    expect(nextPodSort(DEFAULT_POD_SORT, 'pod')).toEqual({ key: 'pod', desc: false })
+  })
+
+  it('★ 값이 없는 파드는 어느 방향이든 아래로 — 모른다는 0 이 아니다', () => {
+    const gs = [g('none'), g('big', { memBytes: 900 }), g('small', { memBytes: 10 })]
+    expect(sortPodGroups(gs, { key: 'mem', desc: true }).map((x) => x.name)).toEqual(['big', 'small', 'none'])
+    expect(sortPodGroups(gs, { key: 'mem', desc: false }).map((x) => x.name)).toEqual(['small', 'big', 'none'])
+  })
+
+  it('★ CPU 는 화면이 계산한 사용률로 정렬한다(누적 나노초로 하면 오래 산 파드가 이긴다)', () => {
+    const a = g('a', { cpuNs: 999_999 })
+    const b = g('b', { cpuNs: 1 })
+    const pct = new Map([['ns/a', 0.1], ['ns/b', 42]])
+    expect(sortPodGroups([a, b], { key: 'cpu', desc: true }, (x) => pct.get(x.key) ?? null).map((x) => x.name)).toEqual([
+      'b',
+      'a'
+    ])
+  })
+})
+
+describe('막힌 이유 다듬기', () => {
+  it('★ time=/level=/msg= 껍데기를 벗기고 알맹이만 남긴다', () => {
+    const raw =
+      'time="2026-08-24T10:50:03+09:00" level=fatal msg="validate service connection: validate CRI v1 runtime API for endpoint \\"unix:///run/containerd/containerd.sock\\": rpc error: code = Unavailable desc = connection error: desc = \\"transport: Error while dialing: dial unix /run/containerd/containerd.sock: connect: permission denied\\""'
+    const out = tidyReason(raw)
+    expect(out).not.toContain('level=fatal')
+    expect(out).not.toContain('time=')
+    expect(out).toContain('permission denied')
+    expect(out.length).toBeLessThan(90)
+  })
+
+  it('짧은 문장은 그대로 둔다(억지로 자르지 않는다)', () => {
+    expect(tidyReason('docker: command not found')).toBe('docker: command not found')
   })
 })

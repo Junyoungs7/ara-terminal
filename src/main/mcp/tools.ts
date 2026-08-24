@@ -25,6 +25,7 @@ import type { ForwardService } from '../forward/PortForward'
 import type { SftpService } from '../sftp/SftpService'
 import { connectByProfile } from '../ipc/registerSshIpc'
 import { McpApprovalManager, type ToolClass } from './approval'
+import type { AskUserManager } from './askUser'
 
 export type ToolCtx = {
   sessions: MainSessionManager
@@ -35,6 +36,8 @@ export type ToolCtx = {
   approval: McpApprovalManager
   downloadsDir: string // userData/mcp-downloads — AI는 이 밖에 저장할 수 없다(설계 §7 오케 확정 7).
   uploadsDir: string // userData/mcp-uploads — 업로드 소스도 여기 안으로 한정.
+  /** AI 가 사람에게 되묻는 길(#125). 헤드리스에는 그 도구가 없어서 우리가 만든다 — askUser.ts 참고. */
+  ask: AskUserManager
 }
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -91,6 +94,34 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
     args: Record<string, unknown>,
     exec: () => Promise<ToolResult>
   ) => gated(ctx.approval, sessionId, tool, cls, args, exec)
+
+  // ── 사람에게 되묻기 ────────────────────────────────────────────────────────
+  // 설명문이 곧 사용 설명서다: 모델은 이 글을 읽고 "언제 이 도구를 쓸지"를 정한다.
+  // 그래서 **언제 써야 하는지**를 또박또박 적는다(추측하지 말고 물어라).
+  server.registerTool(
+    'ask_user',
+    {
+      description:
+        '사람에게 직접 물어봅니다. **추측하면 안 되는 갈림길에서 이 도구를 쓰세요** — 예: 어느 서버/폴더를 쓸지, ' +
+        '되돌리기 어려운 일을 진행할지, 여러 방법 중 무엇을 고를지, 계획을 이대로 실행할지. ' +
+        'options 를 주면 사람이 그중에서 고르고(화면이 버튼으로 그립니다), 안 주면 자유롭게 씁니다. ' +
+        '사람이 답할 때까지 이 호출은 기다리며, 시간이 지나면 답을 못 받았다고 알려 줍니다. ' +
+        '이 도구가 없다고 가정해 임의로 결정하지 마세요.',
+      inputSchema: {
+        question: z.string(),
+        options: z.array(z.string()).optional(),
+        multi: z.boolean().optional()
+      }
+    },
+    async ({ question, options, multi }) =>
+      // readOnly 로 둔다 — 이건 파괴적 조작이 아니라 사람과의 대화다. 승인 다이얼로그를 또 띄우면
+      // "물어보려고 물어보는" 두 겹이 된다. 대신 감사 로그에는 활동으로 남는다.
+      g(null, 'ask_user', 'readOnly', { question, options, multi }, async () => {
+        const answer = await ctx.ask.ask({ question, ...(options ? { options } : {}), ...(multi === undefined ? {} : { multi }) })
+        if (answer === null) return fail('사람이 답하지 않았습니다(시간 초과 또는 대기 중인 질문이 너무 많음).')
+        return ok(answer)
+      })
+  )
 
   server.registerTool(
     'session_list',

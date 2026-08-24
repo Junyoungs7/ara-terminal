@@ -33,6 +33,8 @@ export type CmdId =
   | 'pkg.probe'
   // F28: 컨테이너 목록(docker → 없으면 podman).
   | 'ctr.list'
+  // 2026-08-24: 쿠버 노드는 **탭이 따로다** — crictl 로 목록·파드·자원을 한 왕복에 받는다.
+  | 'k8s.list'
   // F28 R2: 컨테이너 상태 바꾸기·지우기 / 이미지 지우기. 전부 확인 다이얼로그를 거친다.
   | 'ctr.action'
   | 'ctr.rmi'
@@ -145,15 +147,69 @@ export function validImageRef(v: unknown): string | null {
 }
 
 /**
- * 컨테이너 런타임 고르기 — docker 가 있으면 docker, 없으면 podman. CLI 가 호환이라 인자는 그대로 통한다.
- * 목록과 조작이 **같은 런타임**을 타야 한다(목록은 podman 인데 조작은 docker 로 나가면 "없는 컨테이너"가 된다).
+ * 컨테이너 런타임.
+ *
+ * 2026-08-24 준영님 제보로 crictl(쿠버 노드의 containerd CLI)이 들어왔다가, 같은 날 **탭이 갈렸다**:
+ * 목록과 조작은 **같은 런타임**을 타야 하는데(목록은 podman 인데 조작은 docker 로 나가면 "없는
+ * 컨테이너"가 된다) 쿠버는 애초에 조작할 물건이 아니라 모니터링이라, 한 표에 둘을 섞을 이유가 없었다.
+ * nerdctl 은 넣지 않았다: k8s 노드에서는 `--namespace k8s.io` 가 필요한데 그러면 일반 containerd
+ * 호스트에서 빈 목록이 된다 — 한 명령으로 둘 다 맞출 수 없다.
+ *
+ * 준영님: **쿠버는 탭을 따로 낸다.** 한 서버에 도커와 쿠버가 같이 깔린 경우가 있고, 그때 "먼저
+ * 찾은 하나"를 고르면 나머지가 통째로 안 보인다. 컨테이너 탭은 docker·podman 만, 쿠버네티스 탭은
+ * crictl 만 본다 — 둘 다 있으면 둘 다 각자의 탭에 뜬다.
  */
+const CTR_BINS = ['docker', 'podman'] as const
+const ALL_RUNTIMES = ['docker', 'podman', 'crictl'] as const
+export type CtrRuntime = (typeof ALL_RUNTIMES)[number] | 'none'
+
 function ctrCmd(args: string): string {
   return (
-    `if command -v docker >/dev/null 2>&1; then docker ${args} 2>&1; ` +
-    `elif command -v podman >/dev/null 2>&1; then podman ${args} 2>&1; fi`
+    CTR_BINS.map((b, i) => `${i === 0 ? 'if' : 'elif'} command -v ${b} >/dev/null 2>&1; then ${b} ${args} 2>&1; `).join(
+      ''
+    ) + 'fi'
   )
 }
+
+/**
+ * 목록 첫 줄에 박는 표시 — **어느 런타임으로 읽었는지**와 "하나도 없다"를 출력만 보고 알 수 있어야 한다.
+ * 이게 없으면 런타임이 없는 서버가 빈 출력으로 와서 "컨테이너가 0개"와 구분되지 않는다(제보의 절반).
+ */
+export const CTR_MARK = 'ARA-CTR '
+
+// ── 권한 올리기 조각(ctr.list · k8s.list 공용) ────────────────────────────────
+// 렌더러가 줄 수 있는 것은 **불리언 하나**다. 비밀번호는 명령 문자열에 절대 들어가지 않는다 —
+// main 이 exec 의 stdin 으로 따로 넣는다(`sudo -S`). 명령줄에 실었다면 원격의 `ps` 목록과
+// 감사 로그에 그대로 찍힌다.
+const ctrSudo = (args: unknown): boolean => (args as { sudo?: unknown } | null)?.sudo === true
+
+/** 실패로 볼 출력 — 빈 목록과 구분해야 한다(빈 목록은 정상 응답이다). */
+const BAD_OUT = `*ermission*|*"command not found"*|*"Cannot connect"*|*"connection refused"*|*"rpc error"*|*"must be root"*|*sudo:*`
+
+/**
+ * 한 명령을 돌리고 결과를 `$o` 에 담아 출력한다.
+ *
+ * 이미 sudo 로 감싼 상태면 그냥 돌린다. 아니면 **비밀번호를 물을 수 없는 sudo**(`-n`)로 한 번만
+ * 더 시도한다 — 프롬프트가 뜰 수 없으니 exec 채널이 매달릴 일이 없고, NOPASSWD 가 없으면 즉시
+ * 실패한다. 그 실패로 원래 이유를 덮지 않는다: "sudo: a password is required" 보다
+ * "소켓 permission denied" 가 진짜 원인이다(sudo 는 우리가 해 본 시도일 뿐).
+ * keep 은 성공한 손을 변수에 남기는 자리다(crictl 이 뒤따르는 pods·stats 에 같은 손을 쓴다).
+ */
+function elevatable(cmd: string, sudo: boolean, keep = ''): string {
+  if (sudo) return `o=$(${cmd} 2>&1); printf '%s\\n' "$o"; `
+  return (
+    `o=$(${cmd} 2>&1); case "$o" in ${BAD_OUT}) if command -v sudo >/dev/null 2>&1; then s=$(sudo -n ${cmd} 2>&1); ` +
+    `case "$s" in ${BAD_OUT}) ;; *) o=$s${keep} ;; esac; fi ;; esac; printf '%s\\n' "$o"; `
+  )
+}
+
+/**
+ * **스크립트 전체를 한 번의 sudo 로 감싼다.** 명령마다 sudo 를 부르면 stdin 의 비밀번호를 그
+ * 횟수만큼 넣어야 하고(한 줄만 넣으면 두 번째부터 조용히 실패한다), `-p ''` 로 프롬프트 글자가
+ * 출력에 섞이는 것도 막는다.
+ */
+const wrapSudo = (script: string, sudo: boolean): string =>
+  sudo ? `sudo -S -p '' sh -c '${sqEscape(script)}'` : script
 
 /**
  * 컨테이너 안으로 들어가는 명령 — **이것만 exec 채널이 아니라 터미널로 간다**(`session.input`).
@@ -166,7 +222,8 @@ function ctrCmd(args: string): string {
 export function buildCtrExec(id: unknown): string | null {
   const cid = validCtrId(id)
   if (cid === null) return null
-  return `$(command -v docker || command -v podman) exec -it ${cid} sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'`
+  const pick = CTR_BINS.map((b) => `command -v ${b}`).join(' || ')
+  return `$(${pick}) exec -it ${cid} sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'`
 }
 
 const q = (path: string): string => `'${path}'`
@@ -336,12 +393,18 @@ export function parsePkgProbe(out: string): PkgRow[] {
 function cleanVersion(bin: string, raw: string): string {
   const v = raw.trim()
   if (v === '') return ''
+  // 숫자가 없으면 버전이 아니다 — `error: unknown flag: --version` 같은 오류 문구다(2026-08-24
+  // kubectl 제보). 셸이 이미 한 번 거르지만, 여기서도 막아야 옛 서버·다른 경로로 새어 들어오지
+  // 않는다. 버전 칸은 비우고 화면이 `—` 로 그린다("모른다"가 오류 문구보다 정직하다).
+  if (!/[0-9]/.test(v)) return ''
   // 이름은 정규식으로 들어가므로 이스케이프한다 — `c++` 같은 이름이 `Nothing to repeat` 로 던졌다.
   const esc = bin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   // 접두어는 이름·`version`·구두점이 어떤 조합으로 와도 걷어 낸다. 콜론 형태를 빠뜨렸다가
   // `nginx version: nginx/1.24.0` 이 `version: nginx/1.24.0` 으로 남았다(CON-19 가 잡았다).
+  // `Client Version:` 은 kubectl 이 `version` 하위 명령으로 답할 때의 머리다.
   const stripped = v
     .replace(new RegExp(`^${esc}[\\s:]+`, 'i'), '')
+    .replace(/^client[\s]+version[\s:]+/i, '')
     .replace(/^version[\s:]+/i, '')
     .trim()
   return stripped || v
@@ -356,11 +419,40 @@ export type CtrRow = {
   /** "Up 3 days" · "Exited (0) 2 hours ago" — 사람이 읽는 문구 그대로 싣는다. */
   status: string
   ports: string
+  // ── 아래는 쿠버 노드(crictl)에서만 채워진다. docker·podman 에는 없는 개념이다. ──
+  /** 이 컨테이너를 담고 있는 파드 이름. */
+  pod?: string
+  ns?: string
+  /** 재시작 횟수 — 쿠버에서 "뭐가 아픈가"를 알려 주는 첫 번째 숫자다. */
+  restarts?: number
+  /** 만들어진 시각(epoch ms). 나이를 세는 데 쓴다. */
+  createdAt?: number
+  /** 누적 CPU 나노초. **두 번 재야 %가 나온다**(순간값이 아니다 — cpuPercent 참고). */
+  cpuNs?: number
+  /** 지금 쓰는 메모리(working set, 바이트). */
+  memBytes?: number
 }
 
-/** 컨테이너 런타임이 아예 없거나 데몬에 못 붙는 경우 — 빈 목록과 구분해서 안내해야 한다. */
+/** 파드 한 덩어리 — 컨테이너의 부모. crictl 의 `pods` 가 주는 것만 담는다. */
+export type CtrPodInfo = {
+  /** `네임스페이스/이름` — 컨테이너 쪽 라벨과 맞추는 열쇠다. */
+  key: string
+  ns: string
+  name: string
+  /** ready / notready — 샌드박스가 떠 있는가. */
+  state: string
+  createdAt?: number
+}
+
+/**
+ * 컨테이너 런타임이 아예 없거나 데몬에 못 붙는 경우 — 빈 목록과 구분해서 안내해야 한다.
+ * crictl 은 대개 root 여야 소켓에 붙는다: `FATA[…] connect: permission denied` · 소켓 없음 ·
+ * `rpc error` 가 그 얼굴이다(docker 의 "Cannot connect to the Docker daemon" 자리).
+ */
 export function ctrUnavailable(out: string): boolean {
-  return /command not found|Cannot connect to the Docker daemon|permission denied|docker\.sock/i.test(out)
+  return /command not found|Cannot connect to the Docker daemon|permission denied|docker\.sock|containerd\.sock|crio\.sock|FATA\[|rpc error|connection refused/i.test(
+    out
+  )
 }
 
 /**
@@ -381,6 +473,292 @@ export function parseContainers(out: string): CtrRow[] {
     rows.push({ id, name, image, state: state.toLowerCase(), status, ports })
   }
   return rows
+}
+
+/**
+ * crictl(`crictl ps -a -o json`) 출력. CRI 는 docker 와 정보가 다르다 —
+ * **포트가 없고**(포트는 컨테이너가 아니라 파드 샌드박스의 것), 대신 **어느 파드의 것인지**가 있다.
+ * 워커 노드에서 `istio-proxy` 가 스무 개 보이는 화면은 파드 이름이 없으면 아무 쓸모가 없으므로,
+ * 표의 셋째 칸(docker 라면 "Up 3 days")에 `네임스페이스/파드` 를 싣는다.
+ *
+ * crictl 은 경고를 stderr 로 먼저 뱉는 일이 잦은데(`WARN[0000] runtime connect using default endpoints`)
+ * 우리는 `2>&1` 로 합쳐 받으므로 **JSON 앞뒤의 잡소리를 걷어내고** 파싱한다.
+ */
+export function parseCrictl(out: string): CtrRow[] {
+  const s = out.indexOf('{')
+  const e = out.lastIndexOf('}')
+  if (s < 0 || e <= s) return []
+  let data: unknown
+  try {
+    data = JSON.parse(out.slice(s, e + 1))
+  } catch {
+    return []
+  }
+  const list = (data as { containers?: unknown } | null)?.containers
+  if (!Array.isArray(list)) return []
+  const rows: CtrRow[] = []
+  for (const raw of list) {
+    const c = raw as {
+      id?: unknown
+      metadata?: { name?: unknown; attempt?: unknown }
+      image?: { image?: unknown; userSpecifiedImage?: unknown }
+      imageRef?: unknown
+      state?: unknown
+      createdAt?: unknown
+      labels?: Record<string, unknown>
+      annotations?: Record<string, unknown>
+    }
+    const id = typeof c?.id === 'string' ? c.id : ''
+    const labels = c?.labels ?? {}
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+    const name = str(c?.metadata?.name) || str(labels['io.kubernetes.container.name'])
+    if (id === '' || name === '') continue
+    const ns = str(labels['io.kubernetes.pod.namespace'])
+    const pod = str(labels['io.kubernetes.pod.name'])
+    // 재시작 횟수는 어노테이션에 있고, 없으면 metadata.attempt 가 같은 수를 센다.
+    const ann = c?.annotations ?? {}
+    const restarts = num(ann['io.kubernetes.container.restartCount']) ?? num(c?.metadata?.attempt) ?? 0
+    rows.push({
+      id,
+      name,
+      image: str(c?.image?.userSpecifiedImage) || str(c?.image?.image) || str(c?.imageRef),
+      // CONTAINER_RUNNING → running. docker 와 같은 낱말로 맞춰야 정렬·버튼 규칙이 하나로 돈다.
+      state: str(c?.state).replace(/^CONTAINER_/, '').toLowerCase(),
+      status: pod ? (ns ? `${ns}/${pod}` : pod) : str(c?.state).replace(/^CONTAINER_/, '').toLowerCase(),
+      ports: '',
+      ...(pod ? { pod } : {}),
+      ...(ns ? { ns } : {}),
+      restarts,
+      ...(nanoToMs(c?.createdAt) !== null ? { createdAt: nanoToMs(c?.createdAt)! } : {})
+    })
+  }
+  return rows
+}
+
+/** CRI 의 시각은 **나노초 문자열**이다(`"1724000000000000000"`). ms 로 내린다. */
+function nanoToMs(v: unknown): number | null {
+  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
+  return Number.isFinite(n) && n > 0 ? Math.floor(n / 1e6) : null
+}
+
+/** CRI 는 숫자를 문자열로 준다(`"3"`) — 둘 다 받는다. */
+function num(v: unknown): number | null {
+  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
+  return Number.isFinite(n) ? n : null
+}
+
+/** `crictl pods -o json` — 파드(샌드박스) 목록. 준비 상태와 나이를 여기서만 알 수 있다. */
+export function parseCrictlPods(out: string): CtrPodInfo[] {
+  const data = jsonOf(out)
+  const items = (data as { items?: unknown } | null)?.items
+  if (!Array.isArray(items)) return []
+  const pods: CtrPodInfo[] = []
+  for (const raw of items) {
+    const p = raw as { metadata?: { name?: unknown; namespace?: unknown }; state?: unknown; createdAt?: unknown }
+    const name = typeof p?.metadata?.name === 'string' ? p.metadata.name : ''
+    const ns = typeof p?.metadata?.namespace === 'string' ? p.metadata.namespace : ''
+    if (name === '') continue
+    const ms = nanoToMs(p?.createdAt)
+    pods.push({
+      key: ns ? `${ns}/${name}` : name,
+      ns,
+      name,
+      // SANDBOX_READY → ready. 준비되지 않은 파드가 이 화면을 여는 이유다.
+      state: (typeof p?.state === 'string' ? p.state : '').replace(/^SANDBOX_/, '').toLowerCase(),
+      ...(ms !== null ? { createdAt: ms } : {})
+    })
+  }
+  return pods
+}
+
+/** `crictl stats -o json` — 컨테이너별 CPU 누적·메모리. 없으면 빈 표(자원 칸만 비고 목록은 산다). */
+export function parseCrictlStats(out: string): Map<string, { cpuNs: number; memBytes: number }> {
+  const m = new Map<string, { cpuNs: number; memBytes: number }>()
+  const data = jsonOf(out)
+  const stats = (data as { stats?: unknown } | null)?.stats
+  if (!Array.isArray(stats)) return m
+  for (const raw of stats) {
+    const s = raw as {
+      attributes?: { id?: unknown }
+      cpu?: { usageCoreNanoSeconds?: { value?: unknown } }
+      memory?: { workingSetBytes?: { value?: unknown } }
+    }
+    const id = typeof s?.attributes?.id === 'string' ? s.attributes.id : ''
+    if (id === '') continue
+    m.set(id, {
+      cpuNs: num(s?.cpu?.usageCoreNanoSeconds?.value) ?? 0,
+      memBytes: num(s?.memory?.workingSetBytes?.value) ?? 0
+    })
+  }
+  return m
+}
+
+/** 잡소리(crictl 의 `WARN[…]`)를 걷어내고 JSON 만 꺼낸다 — 세 파서가 같은 함정을 밟는다. */
+function jsonOf(out: string): unknown {
+  const s = out.indexOf('{')
+  const e = out.lastIndexOf('}')
+  if (s < 0 || e <= s) return null
+  try {
+    return JSON.parse(out.slice(s, e + 1))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 누적 CPU 나노초 두 번 → 코어 대비 사용률(%). CRI 는 순간값을 주지 않으므로 **직접 미분**한다.
+ * 첫 표본(이전 값이 없거나 시간이 안 흘렀거나 카운터가 되감김)에는 null 을 준다 — 0% 라고
+ * 말하면 "안 쓰는 중"이라는 거짓말이 된다.
+ */
+export function cpuPercent(prevNs: number | undefined, curNs: number, elapsedMs: number): number | null {
+  if (prevNs === undefined || elapsedMs <= 0 || curNs < prevNs) return null
+  return ((curNs - prevNs) / (elapsedMs * 1e6)) * 100
+}
+
+export type CtrList = {
+  runtime: CtrRuntime
+  rows: CtrRow[]
+  /** 런타임이 없거나 데몬·소켓에 못 붙었다 — "컨테이너가 0개"와 다른 이야기다. */
+  unavailable: boolean
+  /**
+   * 런타임이 **있는데** 실패했을 때 서버가 준 첫 줄. 다른 표(서비스·이미지 제거)는 전부 서버 문장을
+   * 그대로 보여 주는데 이 표만 일반 안내로 덮고 있었다 — 2026-08-24 준영님이 "워커 노드에서 여전히
+   * 안 나온다"고 했을 때 **왜인지 알 방법이 화면에 없었다.** 그 구멍을 막는 값이다.
+   */
+  reason: string | null
+  /** 쿠버 노드에서만 — 파드 목록(준비 상태·나이). docker·podman 이면 빈 배열이다. */
+  pods: CtrPodInfo[]
+}
+
+/**
+ * ctr.list 출력 → 화면이 쓰는 형태.
+ *
+ * 출력은 `ARA-CTR <런타임>` 으로 시작하는 **토막 여럿**이다. 왜 여럿인가 — 2026-08-24 준영님의
+ * 쿠버네티스 워커 노드가 정확한 반례였다: 그 노드에는 **podman 도 깔려 있고** crictl 도 있는데,
+ * 우리는 "먼저 발견된 하나"(podman)에서 멈췄다. 루트리스 podman 은 컨테이너가 없어 조용히 빈
+ * 목록을 돌려주고, 화면은 "컨테이너가 없습니다"라고 말했다 — 정작 컨테이너는 containerd 에 있었다.
+ *
+ * 그래서 **있는 것을 고르지 않고, 답을 준 것을 고른다**:
+ *  ① 행이 나온 첫 토막 → 그게 이 서버의 런타임이다
+ *  ② 없으면, 진짜로 실패한 첫 토막 → 이유를 그대로 보여 준다(대개 crictl 권한)
+ *  ③ 둘 다 아니면 첫 토막으로 "0개"를 말한다 · 토막이 없으면(none) 런타임 자체가 없는 것이다
+ */
+export function parseCtrList(out: string): CtrList {
+  const all = ctrSections(out)
+  // `pods`·`stats` 는 런타임이 아니라 **곁들여 온 자료**다 — 고르기에 끼워 넣으면 "행 0개짜리
+  // 실패한 런타임"으로 오해받는다.
+  const pods = parseCrictlPods(all.find((s) => s.runtime === ('pods' as CtrRuntime))?.body ?? '')
+  const stats = parseCrictlStats(all.find((s) => s.runtime === ('stats' as CtrRuntime))?.body ?? '')
+  const parsed = all
+    .filter((s) => s.runtime === 'none' || (ALL_RUNTIMES as readonly string[]).includes(s.runtime))
+    .map((s) => {
+    const rows = s.runtime === 'crictl' ? parseCrictl(s.body) : parseContainers(s.body)
+    // 행이 0 인데 출력은 있다 = **우리가 못 읽은 것**이다. 오류 문구든, 경고든, 처음 보는 형식이든
+    // 화면에 그대로 올린다 — 조용히 "0개"로 뭉개면 무엇이 잘못됐는지 알 길이 사라진다(이 표가
+    // 세 라운드나 "컨테이너가 없습니다"만 보여 준 이유가 정확히 이것이다).
+    const bad = s.runtime !== 'none' && rows.length === 0 && !ctrLooksEmpty(s.runtime, s.body)
+    // `command not found` 는 "있는데 실패"가 아니라 **없다**. 그 줄을 이유로 달면 "docker 는 있는데
+    // 읽지 못했습니다: docker: command not found" 라는 자가당착이 된다 — 일반 안내로 보낸다.
+    const missing = /command not found/i.test(s.body)
+    return {
+      runtime: s.runtime,
+      rows,
+      unavailable: bad || s.runtime === 'none',
+      reason: bad && !missing ? firstLine(s.body) : null,
+      // 우리가 아는 실패(권한·소켓·데몬)인가, 그냥 못 읽은 출력인가. 둘 다 보여 주지만
+      // **아는 실패가 더 쓸모 있다** — podman 의 경고보다 crictl 의 permission denied 가 답이다.
+      known: ctrUnavailable(s.body)
+    }
+  })
+  if (parsed.length === 0) return { runtime: 'none', rows: [], unavailable: true, reason: null, pods: [] }
+  const pick =
+    parsed.find((p) => p.rows.length > 0) ??
+    parsed.find((p) => p.unavailable && p.known) ??
+    parsed.find((p) => p.unavailable) ??
+    parsed[0]
+  // 자원은 컨테이너 행에 얹는다 — 화면이 표 두 개를 들고 맞춰 보지 않게.
+  const rows = pick.rows.map((r) => {
+    const s = stats.get(r.id)
+    return s ? { ...r, cpuNs: s.cpuNs, memBytes: s.memBytes } : r
+  })
+  return { runtime: pick.runtime, rows, unavailable: pick.unavailable, reason: pick.reason, pods }
+}
+
+/**
+ * "컨테이너가 진짜 0개"인 출력인가. 여기 해당하지 않는데 행이 없으면 우리가 못 읽은 것이다.
+ * docker·podman 은 빈 출력, crictl 은 `{"containers":[]}` 가 정상적인 0개다.
+ */
+function ctrLooksEmpty(runtime: CtrRuntime, body: string): boolean {
+  const t = body.trim()
+  if (t === '') return true
+  if (runtime !== 'crictl') return false
+  const s = t.indexOf('{')
+  const e = t.lastIndexOf('}')
+  if (s < 0 || e <= s) return false
+  try {
+    const d = JSON.parse(t.slice(s, e + 1)) as { containers?: unknown }
+    return Array.isArray(d.containers) && d.containers.length === 0
+  } catch {
+    return false
+  }
+}
+
+/** `ARA-CTR <런타임>` 줄로 토막 낸다. 표시가 아예 없으면 통째로 docker 로 본다(하네스·옛 출력). */
+function ctrSections(out: string): { runtime: CtrRuntime; body: string }[] {
+  const sections: { runtime: CtrRuntime; body: string[] }[] = []
+  for (const raw of out.split('\n')) {
+    const line = raw.replace(/\r$/, '')
+    if (line.startsWith(CTR_MARK)) {
+      sections.push({ runtime: line.slice(CTR_MARK.length).trim() as CtrRuntime, body: [] })
+      continue
+    }
+    if (sections.length === 0) {
+      if (line.trim() === '') continue
+      sections.push({ runtime: 'docker', body: [] })
+    }
+    sections[sections.length - 1].body.push(line)
+  }
+  return sections.map((s) => ({ runtime: s.runtime, body: s.body.join('\n') }))
+}
+
+/**
+ * 서버 출력의 첫 **의미 있는** 줄(빈 줄·JSON 여는 괄호는 건너뛴다).
+ *
+ * 앞을 300자에서 자르던 것을 늘렸다 — crictl 의 오류는 `time=… level=fatal msg="validate service
+ * connection: … rpc error: … connect: permission denied"` 처럼 **정작 원인이 맨 끝**에 있어서,
+ * 앞만 남기면 제일 중요한 낱말이 잘려 나갔다(2026-08-24 준영님 화면 실물).
+ */
+function firstLine(out: string): string | null {
+  for (const raw of out.split('\n')) {
+    const line = raw.replace(/\r$/, '').trim()
+    if (line === '' || line === '{' || line === '}') continue
+    return line.length > 1000 ? line.slice(0, 1000) + '…' : line
+  }
+  return null
+}
+
+/** 이 실패가 **권한 벽**인가. 맞으면 화면이 "root 가 필요하다"는 다음 수를 함께 알려 준다. */
+export function ctrNeedsRoot(reason: string | null): boolean {
+  return reason !== null && /permission denied|must be root|operation not permitted/i.test(reason)
+}
+
+/**
+ * sudo 자체가 거절한 것인가(비밀번호 틀림 · sudoer 아님 · tty 요구).
+ * **이걸 구분하지 못하면 5초마다 틀린 비밀번호를 다시 보낸다** — 서버의 실패 카운터가 쌓이고
+ * 계정이 잠길 수 있다. 화면은 이 값을 보고 권한 올리기를 즉시 끈다.
+ */
+export function ctrSudoFailed(out: string): boolean {
+  return /Sorry, try again|incorrect password|is not in the sudoers|no tty present|a password is required|a terminal is required/i.test(
+    out
+  )
+}
+
+/**
+ * 작은따옴표로 감싼 셸 문자열 안에 넣기. `'` → `'\''`(닫고·이스케이프하고·다시 연다) —
+ * POSIX 셸에서 작은따옴표 안을 탈출하는 유일한 방법이다.
+ */
+export function sqEscape(s: string): string {
+  return s.replace(/'/g, `'\\''`)
 }
 
 /** 멈춘 것을 위로 올린다 — 컨테이너 목록을 여는 이유가 대개 "뭐가 죽었나"다(서비스 표와 같은 규칙). */
@@ -493,13 +871,26 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
   // 실행되는 자리라, 렌더러가 목록을 정할 수 있으면 그게 곧 임의 실행이다.
   'pkg.probe': {
     build: () =>
+      // 프로그램마다 상한을 건다: --version 이 입력을 기다리며 멈추는 프로그램이 있는데,
+      // 한 개가 매달리면 왕복 전체가 타임아웃 나 표가 통째로 빈다.
+      // timeout(1) 이 없는 서버도 있어 없으면 그냥 실행한다(T 가 빈 문자열이 된다).
+      `T=''; command -v timeout >/dev/null 2>&1 && T='timeout 2' ; ` +
       PROBE_BINS.map(
         (b) =>
-          // 프로그램마다 상한을 건다: --version 이 입력을 기다리며 멈추는 프로그램이 있는데,
-          // 한 개가 매달리면 왕복 전체가 타임아웃 나 표가 통째로 빈다.
-          // timeout(1) 이 없는 서버도 있어 없으면 그냥 실행한다.
           `b=${b}; p=$(command -v $b 2>/dev/null) && ` +
-          `{ v=$(if command -v timeout >/dev/null 2>&1; then timeout 2 $b --version 2>&1; else $b --version 2>&1; fi | head -1); ` +
+          // **모두가 --version 을 아는 것은 아니다**(2026-08-24 준영님 제보: kubectl 이
+          // `error: unknown flag: --version` 만 보였다). go·helm·kubectl 은 `version` 이 하위
+          // 명령이고, 자바 8 은 `-version`, nginx·httpd·구형 tmux 는 `-V` 다. 그래서 차례로
+          // 물어보고 **숫자가 든 첫 줄**을 답으로 삼는다 — 오류 문구에는 숫자가 없다.
+          // (`version --client` 를 앞에 두는 이유: kubectl 이 API 서버를 찾아 나서지 않게.)
+          // 소문자 `-v` 는 넣지 않는다 — vim·mysql 등에서 버전이 아니라 다른 동작이다.
+          `{ v=''; for f in --version 'version --client' version -version -V; do ` +
+          `o=$($T $b $f 2>&1 | head -1); ` +
+          // 오류 문구에도 숫자가 든다 — 실제로 python 이 `version` 을 스크립트 이름으로 알아듣고
+          // `can't open file '…/version': [Errno 2]` 를 뱉었다(로컬 실측). 숫자만 보고 받으면
+          // 그 줄이 버전 칸에 박힌다. 그래서 **오류로 보이는 줄을 먼저 버리고** 숫자를 본다.
+          `case "$o" in *nknown*|*nrecognized*|*nvalid*|*llegal*|*rror*|*sage:*|*"o such file"*|*"not defined"*) continue ;; esac; ` +
+          `case "$o" in *[0-9]*) v=$o; break ;; esac; done; ` +
           // printf 여야 한다. **bash 의 내장 echo 는 `\t` 를 탭으로 바꾸지 않는다**(dash 는 바꾼다) —
           // 그래서 로그인 셸이 bash 인 서버에서는 줄이 통째로 `a\tb\tc` 로 나가고 파서가 한 줄도
           // 못 읽어 표가 빈다(2026-08-13 준영님 실사용 제보). printf 는 POSIX 라 셸에 무관하다.
@@ -507,14 +898,49 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
       ).join(' ; ') + ' ; true'
   },
 
-  // F28 컨테이너 목록. docker 가 있으면 docker, 없으면 podman — 둘 다 없으면 빈 출력이고 화면이
-  // 안내를 낸다(systemd 없는 서버 처리와 같은 결). CLI 가 호환이라 --format 문자열은 그대로 통한다.
+  // F28 컨테이너 목록. 런타임 이름을 첫 줄에 박고(CTR_MARK) 그 런타임의 목록을 잇는다 — 셋 다
+  // 없으면 `none` 이 온다. crictl 은 Go 템플릿이 없어 JSON 으로 받는다(형태가 아예 다르다).
   //
   // `-a` 로 멈춘 것까지 보여 준다: 컨테이너 화면을 여는 이유의 절반이 "왜 안 떠 있지"다.
   'ctr.list': {
-    // 권한이 없으면(docker 그룹 밖) stderr 가 그대로 올라온다 — 숨기지 않는다(sudo 안 붙이는 원칙).
-    // 여기 `\t` 는 셸이 아니라 **docker 의 Go 템플릿**이 푼다 — pkg.probe 의 echo 문제와 다른 자리다.
-    build: () => ctrCmd(`ps -a --no-trunc --format '{{.ID}}\\t{{.Names}}\\t{{.Image}}\\t{{.State}}\\t{{.Status}}\\t{{.Ports}}'`)
+    // 권한이 없으면(docker 그룹 밖) stderr 가 그대로 올라온다 — 숨기지 않는다. 여기 `\t` 는
+    // 셸이 아니라 **docker 의 Go 템플릿**이 푼다 — pkg.probe 의 echo 문제와 다른 자리다.
+    build: (args) => {
+      const ps = `ps -a --no-trunc --format '{{.ID}}\\t{{.Names}}\\t{{.Image}}\\t{{.State}}\\t{{.Status}}\\t{{.Ports}}'`
+      // "답을 받았다"의 판정은 **행이 있느냐**로 한다. 출력이 비지 않았다는 것만으로 멈추면
+      // 경고 한 줄(루트리스 podman 의 `WARN[0000] …` 같은)에 걸려 다음 런타임을 묻지 않는다.
+      const script =
+        `f=''; d=''; ` +
+        CTR_BINS.map(
+          (b) =>
+            `if [ -z "$d" ] && command -v ${b} >/dev/null 2>&1; then f=1; printf '${CTR_MARK}${b}\\n'; ` +
+            elevatable(`${b} ${ps}`, ctrSudo(args)) +
+            `case "$o" in *'\t'*) d=1 ;; esac; fi; `
+        ).join('') + `[ -z "$f" ] && printf '${CTR_MARK}none\\n' ; true`
+      return wrapSudo(script, ctrSudo(args))
+    }
+  },
+
+  /**
+   * 2026-08-24 준영님: **쿠버는 탭이 따로다.** 한 서버에 도커와 쿠버가 같이 깔려 있으면 "먼저 찾은
+   * 하나"를 고르는 방식은 나머지를 통째로 감춘다 — 각자의 탭에서 각자 뜬다.
+   *
+   * 모니터링이 목적이라 한 왕복에 **셋**을 묻는다: 목록(ps) · 파드(pods, 준비 상태·나이) ·
+   * 자원(stats, CPU 누적·메모리). 목록이 막혔으면 나머지를 물어도 같은 벽이라 건너뛴다.
+   * 조작은 없다 — 이 탭에는 정지·제거 버튼 자체가 없다(kubelet 이 되살리므로 의미도 없다).
+   */
+  'k8s.list': {
+    build: (args) => {
+      const sudo = ctrSudo(args)
+      const script =
+        `if command -v crictl >/dev/null 2>&1; then printf '${CTR_MARK}crictl\\n'; C=crictl; ` +
+        elevatable('crictl ps -a -o json', sudo, "; C='sudo -n crictl'") +
+        `case "$o" in *'"id"'*) ` +
+        `printf '${CTR_MARK}pods\\n'; $C pods -o json 2>&1; ` +
+        `printf '${CTR_MARK}stats\\n'; $C stats -o json 2>&1 ;; esac; ` +
+        `else printf '${CTR_MARK}none\\n'; fi ; true`
+      return wrapSudo(script, sudo)
+    }
   },
 
   // F28 R2 컨테이너 조작(준영님 요청 2026-08-13 — "도커 데스크톱처럼"). 전부 확인 다이얼로그를 거치고,

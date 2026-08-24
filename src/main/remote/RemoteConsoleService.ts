@@ -11,8 +11,11 @@
 // 무너지면 SSH 세션이 임의 원격 실행 채널이 된다(F23 이 MCP session_create 의 shell 자유 문자열을
 // 보안 결함으로 판정해 들어낸 것과 같은 규칙).
 //
-// sudo 는 붙이지 않는다 — exec 채널에는 tty 가 없어 비밀번호 프롬프트가 막히고 조용히 실패한다.
-// 권한이 없으면 stderr 를 그대로 올려 보내는 편이 정직하다(아래 exec 이 stderr 를 버리지 않는 이유).
+// sudo 는 **사람이 요청한 읽기 명령에만** 붙는다(2026-08-24 준영님 — 쿠버 노드의 컨테이너 목록).
+// tty 가 없어 프롬프트를 띄울 수 없으므로 `sudo -S` 로 **stdin 한 줄**을 먹인다. 그 비밀번호는
+// getSudoPw 로 main 이 vault 에서 꺼내며 **명령 문자열에는 절대 들어가지 않는다**(원격의 `ps` 목록과
+// 감사 로그에 찍힌다). 쓰기 명령(kill·systemctl·컨테이너 정지)에는 붙이지 않는다 — 권한을 조용히
+// 올려 파괴적인 일을 하지는 않는다. 권한이 없으면 stderr 를 그대로 올려 보내는 편이 정직하다.
 import type { Client } from 'ssh2'
 import { buildCommand, type CmdId } from '@shared/remoteCatalog'
 
@@ -28,7 +31,7 @@ export type RunFailReason = 'badArgs' | 'noSession' | 'timeout' | 'exec'
 export type RunResult = { ok: true; out: string; code: number } | { ok: false; reason: RunFailReason }
 
 export type RemoteConsoleService = {
-  run(sessionId: string, id: CmdId, args: unknown): Promise<RunResult>
+  run(sessionId: string, id: CmdId, args?: unknown): Promise<RunResult>
   /** 주기 실행 → emit. 읽기 전용 명령만 받는다(아래 watch 주석 참고). */
   watch(sessionId: string, id: CmdId, args: unknown): void
   unwatch(sessionId: string, id: CmdId): void
@@ -46,17 +49,25 @@ export function createRemoteConsoleService(
   // getClient: 세션 id → ssh2 Client(로컬·종료된 세션은 null → 폴링 자동 중지).
   getClient: (sessionId: string) => Client | null,
   emit: (e: { sessionId: string; cmdId: CmdId; out: string; code?: number; err?: string }) => void,
-  intervalMs: number = POLL_MS
+  intervalMs: number = POLL_MS,
+  /**
+   * 세션 id → 그 서버에 저장해 둔 비밀번호(권한 올리기 전용). 2026-08-24 준영님 요청.
+   * **명령줄이 아니라 stdin 으로만** 나간다 — 명령줄에 실으면 원격의 `ps` 와 감사 로그에 찍힌다.
+   * 없으면(키 인증·미저장) null 이고, 그때 `sudo -S` 는 즉시 실패해 화면이 이유를 보여 준다.
+   */
+  getSudoPw: (sessionId: string) => string | null = () => null
 ): RemoteConsoleService {
   const subs = new Map<string, Sub>()
 
   // 실행 경로는 이 함수 하나다 — run 도 watch 의 한 바퀴도 여기를 지난다(검증을 두 번 적지 않는다).
-  async function once(sessionId: string, id: CmdId, args: unknown): Promise<RunResult> {
+  async function once(sessionId: string, id: CmdId, args?: unknown): Promise<RunResult> {
     const built = buildCommand(id, args)
     if (!built) return { ok: false, reason: 'badArgs' }
     const client = getClient(sessionId)
     if (!client) return { ok: false, reason: 'noSession' }
-    return exec(client, built.cmd)
+    // 권한을 올려 달라고 한 명령에만 비밀번호를 흘린다(카탈로그가 `sudo -S` 를 붙인 그 명령).
+    const pw = (args as { sudo?: unknown } | null)?.sudo === true ? getSudoPw(sessionId) : null
+    return exec(client, built.cmd, pw)
   }
 
   function unwatch(sessionId: string, id: CmdId): void {
@@ -124,12 +135,18 @@ export function createRemoteConsoleService(
 
 // 명령 한 번. stdout 과 stderr 를 **한 버퍼에** 모은다 — 카탈로그의 쓰기 명령은 이미 `2>&1` 로 합쳐
 // 오지만, 합치지 않는 명령이 나중에 늘어도 "권한이 없습니다"가 화면에서 사라지지 않게 한다.
-function exec(client: Client, cmd: string): Promise<RunResult> {
+function exec(client: Client, cmd: string, stdin: string | null = null): Promise<RunResult> {
   return new Promise((resolve) => {
     client.exec(cmd, (err, stream) => {
       if (err || !stream) {
         resolve({ ok: false, reason: 'exec' })
         return
+      }
+      // `sudo -S` 는 비밀번호를 **stdin 한 줄**로 읽는다. 다 쓰면 바로 닫아야 뒤따르는 명령이
+      // 남은 입력을 기다리지 않는다(닫지 않으면 exec 이 타임아웃까지 매달린다).
+      if (stdin !== null) {
+        stream.write(stdin + '\n')
+        stream.end()
       }
       let out = ''
       let timer: NodeJS.Timeout | null = null

@@ -30,7 +30,7 @@ import {
   remapKeyCode,
   shouldAnnounceClipboard,
   resLabel,
-  round4,
+  resolveSize,
   scancodeOf,
   type RdpKeyMode
 } from './rdpInput'
@@ -213,7 +213,8 @@ export function RdpView({
   const [phase, setPhase] = useState<Phase>('connecting')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [res, setRes] = useState(resLabel(RDP_DEFAULT))
+  // 기본은 "창 크기에 맞춤" — 열자마자 칸을 꽉 채운다(고정 해상도는 고르는 사람만 쓴다).
+  const [res, setRes] = useState(t('rdp.res.fit'))
   // Mac 호스트면 자동으로 켠다 — 준영님 요구는 "맥북으로 접속하면 알아서 Windows 배열이 되는 것"이다.
   const [keyMode, setKeyMode] = useState<RdpKeyMode>(() => defaultRdpKeyMode(navigator.userAgent))
   // 전송 상태 한 줄(받기·보내기 공통). null 이면 진행 중인 것이 없다.
@@ -228,16 +229,9 @@ export function RdpView({
   const announcedRef = useRef<string | null>(null)
   const fromRemoteRef = useRef<string | null>(null)
 
-  // 고른 항목 → 실제 픽셀. "창 크기에 맞춤"은 고르는 순간의 칸 크기를 잰다(그 뒤로 따라가지는 않는다).
-  // 다중 모니터 창에서는 모니터 배치가 크기를 정하므로 라벨을 무시한다.
+  // 고른 항목 → 실제 픽셀. 다중 모니터 창에서는 모니터 배치가 크기를 정하므로 라벨을 무시한다.
   const sizeOf = useCallback(
-    (label: string): [number, number] => {
-      if (fixedSize) return fixedSize
-      const fixed = fixedResolution(label)
-      if (fixed) return fixed
-      const host = bodyRef.current
-      return host ? [round4(host.clientWidth), round4(host.clientHeight)] : RDP_DEFAULT
-    },
+    (label: string): [number, number] => fixedSize ?? resolveSize(label, bodyRef.current),
     [fixedSize]
   )
 
@@ -452,6 +446,37 @@ export function RdpView({
     },
     [phase, sizeOf]
   )
+
+  // 창 맞춤은 **이름 그대로 창을 따라간다.** 접속 시점 크기로 굳으면(RDP 는 접속 시 해상도가 세션
+  // 해상도다) 창을 키워도 저해상도가 늘어나 보이는데, 기본값이 된 이상 그대로 둘 수 없다.
+  // 숨은 칸(display:none → 0px)에서 붙은 세션이 보이는 순간 제 크기를 찾는 길이기도 하다.
+  // 고정 해상도를 고른 사람은 창을 줄여도 그 해상도를 원한 것이므로 건드리지 않는다.
+  useEffect(() => {
+    const host = bodyRef.current
+    if (!host || fixedSize || phase !== 'connected' || fixedResolution(res)) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const ro = new ResizeObserver(() => {
+      // 창을 끄는 동안 매 프레임 이벤트가 온다 — 손을 놓은 뒤 한 번만 서버에 요청한다.
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        const [w, h] = resolveSize(res, bodyRef.current)
+        // 실제 원격 해상도(=캔버스)와 같으면 보낼 것이 없다. 구형 서버가 요청을 무시하면 캔버스가
+        // 그대로라 다음 크기 변화 때 다시 시도하게 되는데, 그게 맞다(포기하지 않는다).
+        const canvas = canvasRef.current
+        if (!canvas || (canvas.width === w && canvas.height === h)) return
+        try {
+          sessionRef.current?.resize?.(w, h)
+        } catch {
+          /* 세션 종료 중 */
+        }
+      }, 400)
+    })
+    ro.observe(host)
+    return () => {
+      clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [phase, res, fixedSize])
 
   // 로컬 텍스트를 원격에 올린다(조건 없이). 원격이 붙여넣기를 하려고 우리에게 내용을 요구할 때
   // (forceClipboardUpdate) 쓰는 경로 — 그때는 원격이 이미 우리를 주인으로 알고 묻는 것이다.

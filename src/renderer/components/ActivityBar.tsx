@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Ship, Sparkles } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { isBottomId, isRailId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
@@ -24,6 +24,7 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   disk: () => <HardDrive />,
   pkg: () => <Package />,
   ctr: () => <Boxes />,
+  k8s: () => <Ship />,
   // F30 AI 세션 — 아라 아이콘과 헷갈리지 않게 다른 글리프를 쓴다(그쪽은 대화, 이쪽은 관측).
   aisess: () => <Sparkles />,
   log: IconLog,
@@ -87,6 +88,7 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   disk: 'console.tool.disk',
   pkg: 'console.tool.pkg',
   ctr: 'console.tool.ctr',
+  k8s: 'console.tool.k8s',
   aisess: 'aisess.title',
   log: 'log.title',
   pastlog: 'pastlog.title',

@@ -19,6 +19,15 @@ export const BIND_HOST = '127.0.0.1'
 // vault 키(해시만 저장). SafeStorageSecretStore 가 이 문자열을 다시 암호화해서 저장한다(이중 방어).
 export const MCP_TOKEN_VAULT_KEY = 'mcp.tokenHash'
 
+/**
+ * **아라 자신이 쓰는 토큰**(#124). 사용자에게 보여 주는 토큰과 **별개 키**다.
+ *
+ * 왜 나눴나: 아라 대화를 열 때마다 우리 토큰을 새로 발급하는데(§3.2 — 그 순간 발급한 토큰),
+ * 키가 하나면 그 발급이 **사용자가 외부 클라이언트에 넣어 둔 토큰을 무효로 만든다**
+ * (Claude Desktop 에 등록해 둔 것이 조용히 끊긴다). 저장하는 것은 여전히 해시뿐이다.
+ */
+export const MCP_SELF_TOKEN_VAULT_KEY = 'mcp.tokenHash.self'
+
 export function hashToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex')
 }
@@ -95,12 +104,19 @@ export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: numbe
   let boundPort = bindPort
 
   function authOk(req: IncomingMessage): boolean {
-    const expected = vault.has(MCP_TOKEN_VAULT_KEY) ? vault.get(MCP_TOKEN_VAULT_KEY) : null
-    if (!expected) return false
+    // 받아 주는 토큰은 둘이다: 사용자 것과 아라 것(위 MCP_SELF_TOKEN_VAULT_KEY 참고).
+    // 둘 다 없으면 아무도 못 들어온다 — 인증 없는 경로는 만들지 않는다.
+    const expected = [MCP_TOKEN_VAULT_KEY, MCP_SELF_TOKEN_VAULT_KEY]
+      .map((k) => (vault.has(k) ? vault.get(k) : null))
+      .filter((h): h is string => typeof h === 'string' && h.length > 0)
+    if (expected.length === 0) return false
     const header = req.headers['authorization']
     if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false
     const token = header.slice('Bearer '.length).trim()
-    return token.length > 0 && safeEqualHex(hashToken(token), expected)
+    if (token.length === 0) return false
+    const got = hashToken(token)
+    // 비교는 각 해시마다 상수시간이다. 어느 쪽과 맞았는지만 갈리고 비밀은 새지 않는다.
+    return expected.some((h) => safeEqualHex(got, h))
   }
 
   async function onRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

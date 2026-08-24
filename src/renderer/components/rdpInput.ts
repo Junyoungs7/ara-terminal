@@ -145,9 +145,11 @@ export const KEY_COMBOS: Record<string, string[]> = {
   ctrlEsc: ['ControlLeft', 'Escape']
 }
 
-// 원격 해상도 선택지. 창 크기를 자동으로 따라가게 했더니 작은 창에서 접속한 해상도가 그대로 굳어
-// 창을 키워도 저해상도로 늘어나 보였다(RDP 는 접속 시점 해상도가 세션 해상도다) — 기본은 고정,
-// 창 맞춤은 사용자가 고르는 선택지 중 하나로만 둔다.
+// 원격 해상도 선택지. **기본은 "창 크기에 맞춤"** 이다(2026-08-24 준영님 결정 — 접속마다 고르지
+// 않게 통일). 예전에 창 맞춤을 기본에서 뺐던 이유는 접속 시점 크기가 그대로 굳어(RDP 는 접속 시
+// 해상도가 세션 해상도다) 창을 키워도 저해상도가 늘어나 보였기 때문인데, 이제 RdpView 가 창 크기를
+// 계속 따라가며 Display Control 로 다시 요청한다 — 그 이유가 사라졌다.
+// 아래 값은 목록의 한 항목이자 **칸을 잴 수 없을 때의 최후 값**이다(고를 수 있는 기본값이 아니다).
 export const RDP_DEFAULT: [number, number] = [1920, 1080]
 export const RDP_RESOLUTIONS: [number, number][] = [
   [1280, 720],
@@ -166,6 +168,14 @@ export function round4(n: number): number {
 // 고른 라벨 → 고정 해상도. 목록에 없으면 null("창 크기에 맞춤" — 호출부가 칸 크기를 잰다).
 export function fixedResolution(label: string): [number, number] | null {
   return RDP_RESOLUTIONS.find((r) => resLabel(r) === label) ?? null
+}
+
+// 라벨 + 칸 → 실제 픽셀. 고정 해상도는 창이 어떻게 바뀌든 그대로고, 창 맞춤일 때만 칸을 잰다.
+// 칸이 없거나(마운트 전) 숨어 있으면 round4 가 640 으로 받치고, 아예 못 재면 RDP_DEFAULT 로 간다.
+export function resolveSize(label: string, host: { clientWidth: number; clientHeight: number } | null): [number, number] {
+  const fixed = fixedResolution(label)
+  if (fixed) return fixed
+  return host ? [round4(host.clientWidth), round4(host.clientHeight)] : RDP_DEFAULT
 }
 
 // 캔버스 표시 크기와 실제 해상도가 다를 수 있다(CSS 스케일) — 원격 좌표계로 환산한다.

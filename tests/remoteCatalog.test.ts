@@ -25,8 +25,14 @@ import {
   parseOverview,
   parsePkgProbe,
   parseContainers,
+  parseCtrList,
   sortContainers,
   ctrUnavailable,
+  ctrNeedsRoot,
+  ctrSudoFailed,
+  sqEscape,
+  cpuPercent,
+  CTR_MARK,
   validCtrId,
   validCtrAction,
   validImageRef,
@@ -370,6 +376,31 @@ describe('설치된 프로그램 파싱(pkg.probe)', () => {
     expect(parsePkgProbe('')).toEqual([])
     expect(parsePkgProbe('쓰레기\n\n\tpath만있음\t\t')).toEqual([])
   })
+
+  // 2026-08-24 준영님 제보 — kubectl 칸에 `error: unknown flag: --ver…` 만 보였다.
+  // 모두가 `--version` 을 아는 것은 아니다(kubectl·go·helm 은 `version` 하위 명령, 자바 8 은
+  // `-version`, nginx·httpd 는 `-V`). 셸이 차례로 물어보고, 파서가 오류 문구를 한 번 더 거른다.
+  it('★ 오류 문구는 버전이 아니다 — 칸을 비운다(화면이 `—` 로 그린다)', () => {
+    expect(parsePkgProbe('kubectl\t/usr/bin/kubectl\terror: unknown flag: --version\t1').at(0)?.version).toBe('')
+    expect(parsePkgProbe('go\t/usr/bin/go\tflag provided but not defined: -version\t1').at(0)?.version).toBe('')
+  })
+
+  it('★ kubectl 이 `version` 으로 답한 머리(`Client Version:`)를 걷어 낸다', () => {
+    expect(parsePkgProbe('kubectl\t/usr/bin/kubectl\tClient Version: v1.29.0\t1').at(0)?.version).toBe('v1.29.0')
+  })
+
+  it('자바 8 의 `-version` 형태도 그대로 읽는다', () => {
+    expect(parsePkgProbe('java\t/usr/bin/java\tjava version "1.8.0_382"\t1').at(0)?.version).toBe('"1.8.0_382"')
+  })
+
+  it('명령은 여러 후보를 차례로 물어보고 숫자가 든 줄만 받는다', () => {
+    const cmd = buildCommand('pkg.probe', null)!.cmd
+    expect(cmd).toContain("for f in --version 'version --client' version -version -V")
+    expect(cmd).toContain('*[0-9]*') // 숫자 없는 줄 = 오류 문구
+    expect(cmd).toContain('*nknown*') // 숫자가 든 오류 문구도 버린다(python 실측)
+    // 소문자 -v 는 후보에 없다 — vim·mysql 에서 버전이 아니라 다른 동작이다.
+    expect(cmd).not.toContain(" -v;")
+  })
 })
 
 // 명령 하나가 아니라 **표 전체**가 지켜야 하는 규칙이다. pkg.probe 한 곳만 고치면 다음에 새 명령을
@@ -473,6 +504,177 @@ describe('컨테이너 목록 파싱(ctr.list)', () => {
   })
 })
 
+// ── 2026-08-24 준영님 제보: 쿠버네티스 워커 노드에서 아무것도 안 뜬다 ─────────────────
+// k8s 1.24+ 워커에는 docker 가 없다(dockershim 제거) — containerd + crictl 이다. 게다가 셋 다
+// 없을 때 출력이 **빈 문자열**이라 "런타임 없음"과 "컨테이너 0개"가 구분되지 않았다.
+describe('쿠버네티스 노드(crictl)', () => {
+  const CRICTL_JSON = JSON.stringify({
+    containers: [
+      {
+        id: 'a'.repeat(64),
+        metadata: { name: 'coredns', attempt: 0 },
+        image: { image: 'registry.k8s.io/coredns/coredns:v1.11.1' },
+        imageRef: 'sha256:' + 'b'.repeat(64),
+        state: 'CONTAINER_RUNNING',
+        labels: {
+          'io.kubernetes.container.name': 'coredns',
+          'io.kubernetes.pod.name': 'coredns-5d78c9869d-4x2qp',
+          'io.kubernetes.pod.namespace': 'kube-system'
+        }
+      },
+      {
+        id: 'c'.repeat(64),
+        metadata: { name: 'app', attempt: 3 },
+        image: { image: 'reg.local:5000/team/app:1.2.3' },
+        state: 'CONTAINER_EXITED',
+        labels: { 'io.kubernetes.pod.name': 'app-7d9', 'io.kubernetes.pod.namespace': 'prod' }
+      }
+    ]
+  })
+
+  it('★ crictl 표시가 붙으면 JSON 으로 읽는다 — 워커 노드에서 목록이 뜬다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n${CRICTL_JSON}`)
+    expect(list.runtime).toBe('crictl')
+    expect(list.unavailable).toBe(false)
+    expect(list.rows.map((r) => r.name)).toEqual(['coredns', 'app'])
+    expect(list.rows[0].state).toBe('running')
+    expect(list.rows[1].state).toBe('exited')
+  })
+
+  it('★ 셋째 칸에 네임스페이스/파드를 싣는다 — 같은 이름의 컨테이너를 구분하는 유일한 단서다', () => {
+    const rows = parseCtrList(`${CTR_MARK}crictl\n${CRICTL_JSON}`).rows
+    expect(rows[0].status).toBe('kube-system/coredns-5d78c9869d-4x2qp')
+    expect(rows[1].status).toBe('prod/app-7d9')
+    expect(rows[0].ports).toBe('') // CRI 는 포트를 컨테이너가 아니라 파드가 들고 있다
+  })
+
+  it('crictl 이 앞에 뱉는 WARN 줄이 섞여도 읽는다(2>&1 로 합쳐 받는다)', () => {
+    const noisy = `${CTR_MARK}crictl\nWARN[0000] runtime connect using default endpoints\n${CRICTL_JSON}`
+    expect(parseCtrList(noisy).rows).toHaveLength(2)
+  })
+
+  it('★ 런타임이 하나도 없으면 "컨테이너 0개"가 아니라 안내로 간다(제보의 절반)', () => {
+    const list = parseCtrList(`${CTR_MARK}none\n`)
+    expect(list.runtime).toBe('none')
+    expect(list.rows).toEqual([])
+    expect(list.unavailable).toBe(true)
+  })
+
+  it('권한이 없어 소켓에 못 붙는 것도 안내로 간다(crictl 은 대개 root)', () => {
+    const out = `${CTR_MARK}crictl\nFATA[0000] connect: connect endpoint 'unix:///run/containerd/containerd.sock', make sure you are running as root: permission denied`
+    expect(parseCtrList(out).unavailable).toBe(true)
+  })
+
+  // 2026-08-24 후속 제보 — "워커 노드에서 여전히 안 나온다". 그때 화면에 **왜인지가 없었다**:
+  // 런타임이 없는 것과 있는데 실패한 것을 같은 문장으로 덮고 서버가 준 줄을 버렸다.
+  it('★ 런타임은 있는데 실패하면 서버가 준 첫 줄을 그대로 들고 온다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\nFATA[0000] validate service connection: permission denied`)
+    expect(list.runtime).toBe('crictl')
+    expect(list.reason).toBe('FATA[0000] validate service connection: permission denied')
+  })
+
+  it('아무것도 못 찾았을 때는 이유가 없다 — 서버가 아무 말도 하지 않았다', () => {
+    expect(parseCtrList(`${CTR_MARK}none\n`).reason).toBeNull()
+  })
+
+  it('정상 목록에는 이유가 붙지 않는다', () => {
+    expect(parseCtrList(`${CTR_MARK}docker\na1b2c3\tweb\tnginx\trunning\tUp 1 day\t`).reason).toBeNull()
+  })
+
+  // 2026-08-24 세 번째 라운드 — 준영님 실측으로 원인이 잡혔다. 그 워커 노드에는 **podman 도** 깔려
+  // 있었고(루트리스, 컨테이너 0개), 우리는 "먼저 발견된 하나"에서 멈춰 podman 의 빈 목록을 답으로
+  // 삼았다. 정작 컨테이너는 containerd 에 있었다 → "있는 것"이 아니라 "답을 준 것"을 고른다.
+  it('★ podman 이 빈 목록을 줘도 crictl 이 답하면 crictl 을 쓴다(제보의 진짜 원인)', () => {
+    const out = `${CTR_MARK}podman\n\n${CTR_MARK}crictl\n${CRICTL_JSON}`
+    const list = parseCtrList(out)
+    expect(list.runtime).toBe('crictl')
+    expect(list.rows.map((r) => r.name)).toEqual(['coredns', 'app'])
+  })
+
+  it('★ 아무도 행을 못 주면 진짜 실패한 토막의 이유를 보여 준다(빈 podman 이 아니라 crictl 권한)', () => {
+    const fata = 'level=fatal msg="validate service connection: … connect: permission denied"'
+    const list = parseCtrList(`${CTR_MARK}podman\n\n${CTR_MARK}crictl\n${fata}`)
+    expect(list.runtime).toBe('crictl')
+    expect(list.unavailable).toBe(true)
+    expect(list.reason).toBe(fata)
+  })
+
+  // 세 번째에도 "컨테이너가 없습니다"만 떴다 — 루트리스 podman 이 **경고 한 줄**을 뱉으면 우리는
+  // "답을 받았다"고 보고 거기서 멈췄고, 그 한 줄은 행이 아니라서 0개가 됐다. 두 곳을 고쳤다:
+  // 셸은 **행이 있을 때만** 멈추고, 파서는 **못 읽은 출력을 그대로 올린다**.
+  it('★ podman 이 경고 한 줄만 뱉어도 멈추지 않고, 화면에는 crictl 의 진짜 이유가 간다', () => {
+    const warn = 'WARN[0000] "/" is not a shared mount, this could cause issues'
+    const fata = 'level=fatal msg="… connect: permission denied"'
+    const list = parseCtrList(`${CTR_MARK}podman\n${warn}\n${CTR_MARK}crictl\n${fata}`)
+    expect(list.runtime).toBe('crictl') // 아는 실패가 못 읽은 출력을 이긴다
+    expect(list.reason).toBe(fata)
+  })
+
+  it('★ 못 읽은 출력은 조용히 "0개"가 되지 않는다 — 그대로 보여 준다', () => {
+    const odd = 'Emulate Docker CLI using podman. Create /etc/containers/nodocker to quiet msg'
+    const list = parseCtrList(`${CTR_MARK}podman\n${odd}`)
+    expect(list.unavailable).toBe(true)
+    expect(list.reason).toBe(odd)
+  })
+
+  it('crictl 의 정상적인 0개(`{"containers":[]}`)는 안내가 아니라 빈 표다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n{"containers":[]}`)
+    expect(list.unavailable).toBe(false)
+    expect(list.rows).toEqual([])
+  })
+
+  it('셸은 행 표식(탭 · "id")을 봤을 때만 다음 런타임을 건너뛴다', () => {
+    const cmd = buildCommand('ctr.list', null)!.cmd
+    expect(cmd).toContain(`*'\t'*) d=1`) // docker·podman 은 우리 형식의 탭
+    // crictl 은 쿠버 탭의 것이고, 거기서는 JSON 의 id 가 표식이다(2026-08-24 탭 분리).
+    expect(buildCommand('k8s.list', null)!.cmd).toContain(`*'"id"'*`)
+  })
+
+  it('전부 성공했는데 비어 있으면 첫 런타임으로 "0개"라고 말한다(안내가 아니다)', () => {
+    const list = parseCtrList(`${CTR_MARK}docker\n\n${CTR_MARK}podman\n`)
+    expect(list.runtime).toBe('docker')
+    expect(list.unavailable).toBe(false)
+    expect(list.rows).toEqual([])
+  })
+
+  it('★ 소켓 권한에 막히면 프롬프트가 뜰 수 없는 sudo -n 으로 한 번만 더 시도한다', () => {
+    const cmd = buildCommand('k8s.list', null)!.cmd
+    expect(cmd).toContain('sudo -n crictl ps -a -o json')
+    expect(cmd).toContain('*ermission*')
+    // sudo 도 실패하면 원래 이유를 지킨다 — "a password is required" 는 원인이 아니라 우리 시도다.
+    expect(cmd).toContain('*sudo:*')
+    // 쓰기까지 권한을 올리지는 않는다 — 정지·제거는 사람이 권한을 갖춘 계정으로 해야 한다.
+    expect(buildCommand('ctr.action', { id: 'a'.repeat(12), action: 'stop' })!.cmd).not.toContain('sudo')
+    expect(buildCommand('ctr.rmi', { image: 'nginx' })!.cmd).not.toContain('sudo')
+  })
+
+  it('표시가 붙어도 docker 목록은 그대로 읽고, 표시가 없으면 예전처럼 docker 로 본다', () => {
+    const rows = 'a1b2c3\tweb\tnginx:1.24\trunning\tUp 3 days\t0.0.0.0:80->80/tcp'
+    expect(parseCtrList(`${CTR_MARK}docker\n${rows}`).rows).toHaveLength(1)
+    expect(parseCtrList(rows).runtime).toBe('docker')
+    expect(parseCtrList(rows).rows).toHaveLength(1)
+  })
+
+  it('★ 목록이 나왔으면 오류 문구를 담은 이름이 있어도 화면을 안내로 덮지 않는다', () => {
+    const rows = `${CTR_MARK}docker\naa11bb\tpermission denied\tbusybox\trunning\tUp 1 minute\t`
+    expect(parseCtrList(rows).unavailable).toBe(false)
+  })
+
+  it('★ 쿠버 탭은 crictl 만, 컨테이너 탭은 docker·podman 만 본다(둘 다 깔린 서버에서 하나를 감추지 않는다)', () => {
+    const k8s = buildCommand('k8s.list', null)!.cmd
+    expect(k8s).toContain('command -v crictl')
+    expect(k8s).toContain('crictl ps -a -o json')
+    expect(k8s).toContain(`${CTR_MARK}none`)
+    expect(k8s).not.toContain('docker')
+    const ctr = buildCommand('ctr.list', null)!.cmd
+    expect(ctr).toContain('command -v docker')
+    expect(ctr).toContain('command -v podman')
+    // 조작·접속은 도커 쪽 사슬만 탄다 — 쿠버 탭에는 조작 자체가 없다.
+    expect(buildCommand('ctr.action', { id: 'a'.repeat(12), action: 'stop' })!.cmd).not.toContain('crictl')
+    expect(buildCtrExec('a'.repeat(12))!).not.toContain('crictl')
+  })
+})
+
 describe('컨테이너 조작 — 인자 검증(F28 R2)', () => {
   it('컨테이너 id 는 16진수만 받는다 — 이름·메타문자는 거절', () => {
     expect(validCtrId('a1b2c3d4e5f6')).toBe('a1b2c3d4e5f6')
@@ -523,5 +725,160 @@ describe('컨테이너 조작 — 인자 검증(F28 R2)', () => {
     expect(cmd).toContain('exec bash || exec sh') // bash 가 없는 이미지 대비
     expect(buildCtrExec('web')).toBeNull()
     expect(buildCtrExec('a1b2c3d4e5f6; reboot')).toBeNull()
+  })
+})
+
+// 2026-08-24 준영님 화면 실물 — 이유는 떴는데 **정작 원인이 잘렸다**. crictl 의 오류는
+// `time=… level=fatal msg="… rpc error: … connect: permission denied"` 처럼 맨 끝이 답이다.
+describe('컨테이너 실패 이유 — 끝까지 보여 주고, 다음 수를 알려 준다', () => {
+  const FATA =
+    'time="2026-08-24T10:50:03+09:00" level=fatal msg="validate service connection: validate CRI v1 runtime API for endpoint \\"unix:///run/containerd/containerd.sock\\": rpc error: code = Unavailable desc = connection error: desc = \\"transport: Error while dialing: dial unix /run/containerd/containerd.sock: connect: permission denied\\""'
+
+  it('★ 300자에서 자르지 않는다 — permission denied 가 살아 있어야 한다', () => {
+    const reason = parseCtrList(`${CTR_MARK}crictl\n${FATA}`).reason!
+    expect(reason).toContain('permission denied')
+    expect(reason.endsWith('…')).toBe(false)
+  })
+
+  it('★ 권한 벽이면 다음 수(root 필요)를 함께 안내한다', () => {
+    expect(ctrNeedsRoot(FATA)).toBe(true)
+    expect(ctrNeedsRoot('Error: no such container')).toBe(false)
+    expect(ctrNeedsRoot(null)).toBe(false)
+  })
+})
+
+// 2026-08-24 준영님: "쿠버는 주 목적이 모니터링이라 목록을 좀 자세하게". crictl 이 주는데 우리가
+// 버리던 것들 — 재시작 횟수·나이·파드 준비 상태·CPU·메모리를 읽는다.
+describe('쿠버 노드 모니터링 자료', () => {
+  const PS = JSON.stringify({
+    containers: [
+      {
+        id: 'a'.repeat(64),
+        metadata: { name: 'api', attempt: 3 },
+        image: { image: 'reg.local:5000/team/api:1.2.3' },
+        state: 'CONTAINER_RUNNING',
+        createdAt: '1724000000000000000',
+        labels: { 'io.kubernetes.pod.name': 'api-7d9', 'io.kubernetes.pod.namespace': 'prod' },
+        annotations: { 'io.kubernetes.container.restartCount': '3' }
+      },
+      {
+        id: 'b'.repeat(64),
+        metadata: { name: 'istio-proxy', attempt: 0 },
+        image: { image: 'docker.io/istio/proxyv2:1.20' },
+        state: 'CONTAINER_RUNNING',
+        labels: { 'io.kubernetes.pod.name': 'api-7d9', 'io.kubernetes.pod.namespace': 'prod' }
+      }
+    ]
+  })
+  const PODS = JSON.stringify({
+    items: [
+      {
+        id: 'p1',
+        metadata: { name: 'api-7d9', namespace: 'prod', uid: 'x' },
+        state: 'SANDBOX_READY',
+        createdAt: '1723900000000000000'
+      }
+    ]
+  })
+  const STATS = JSON.stringify({
+    stats: [
+      {
+        attributes: { id: 'a'.repeat(64) },
+        cpu: { usageCoreNanoSeconds: { value: '5000000000' } },
+        memory: { workingSetBytes: { value: '536870912' } }
+      }
+    ]
+  })
+
+  it('★ 재시작 횟수를 읽는다 — 쿠버에서 "뭐가 아픈가"의 첫 번째 숫자다', () => {
+    const rows = parseCtrList(`${CTR_MARK}crictl\n${PS}`).rows
+    expect(rows[0].restarts).toBe(3)
+    expect(rows[1].restarts).toBe(0)
+  })
+
+  it('만들어진 시각을 나노초에서 ms 로 내린다 · 없으면 칸이 없다', () => {
+    const rows = parseCtrList(`${CTR_MARK}crictl\n${PS}`).rows
+    expect(rows[0].createdAt).toBe(1_724_000_000_000)
+    expect(rows[1].createdAt).toBeUndefined()
+  })
+
+  it('★ 자원(CPU 누적·메모리)이 컨테이너 행에 얹힌다 — 화면이 표 두 개를 맞춰 보지 않게', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n${PS}\n${CTR_MARK}stats\n${STATS}`)
+    expect(list.rows[0].memBytes).toBe(536_870_912)
+    expect(list.rows[0].cpuNs).toBe(5_000_000_000)
+    expect(list.rows[1].memBytes).toBeUndefined() // 자료가 없는 것과 0 은 다르다
+  })
+
+  it('파드 목록에서 준비 상태와 나이를 받는다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n${PS}\n${CTR_MARK}pods\n${PODS}`)
+    expect(list.pods).toEqual([
+      { key: 'prod/api-7d9', ns: 'prod', name: 'api-7d9', state: 'ready', createdAt: 1_723_900_000_000 }
+    ])
+  })
+
+  it('★ pods·stats 토막은 "행 0개짜리 실패한 런타임"으로 오해받지 않는다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n${PS}\n${CTR_MARK}pods\n${PODS}\n${CTR_MARK}stats\n${STATS}`)
+    expect(list.runtime).toBe('crictl')
+    expect(list.unavailable).toBe(false)
+    expect(list.rows).toHaveLength(2)
+  })
+
+  it('자원·파드를 못 받아도(권한·구버전) 목록은 산다', () => {
+    const list = parseCtrList(`${CTR_MARK}crictl\n${PS}\n${CTR_MARK}pods\n\n${CTR_MARK}stats\nFATA[0000] nope`)
+    expect(list.rows).toHaveLength(2)
+    expect(list.pods).toEqual([])
+    expect(list.unavailable).toBe(false)
+  })
+
+  it('★ CPU 는 두 표본을 빼서 낸다 — 첫 표본·되감김·시간 0 은 null(0% 라고 하지 않는다)', () => {
+    // 5초 동안 1초어치 CPU 를 썼다 = 코어의 20%.
+    expect(cpuPercent(4_000_000_000, 5_000_000_000, 5000)).toBeCloseTo(20, 5)
+    expect(cpuPercent(undefined, 5_000_000_000, 5000)).toBeNull()
+    expect(cpuPercent(9_000_000_000, 1_000_000_000, 5000)).toBeNull() // 컨테이너가 재시작해 되감김
+    expect(cpuPercent(1, 2, 0)).toBeNull()
+  })
+
+  it('목록·파드·자원을 한 왕복으로 가져온다(목록이 열렸을 때만)', () => {
+    const cmd = buildCommand('k8s.list', null)!.cmd
+    expect(cmd).toContain('$C pods -o json')
+    expect(cmd).toContain('$C stats -o json')
+    // 성공한 손(맨손이냐 sudo 냐)을 이어서 쓴다 — 목록만 sudo 로 열리고 나머지가 막히면 안 된다.
+    expect(cmd).toContain("C='sudo -n crictl'")
+  })
+})
+
+describe('컨테이너 권한 올리기 — 명령 조립', () => {
+  it('★ 렌더러가 줄 수 있는 것은 불리언 하나다 — 문자열은 명령에 닿지 않는다', () => {
+    const a = buildCommand('ctr.list', { sudo: true })!.cmd
+    const b = buildCommand('ctr.list', { sudo: 'yes; rm -rf /' })!.cmd
+    const plain = buildCommand('ctr.list', null)!.cmd
+    expect(a).toContain("sudo -S -p '' sh -c '")
+    expect(b).toBe(plain) // true 가 아니면 그냥 평범한 명령이다
+    expect(b).not.toContain('rm -rf')
+  })
+
+  it('★ 스크립트 전체를 한 번의 sudo 로 감싼다 — 비밀번호를 stdin 에 한 줄만 넣으면 되도록', () => {
+    for (const id of ['ctr.list', 'k8s.list'] as const) {
+      const cmd = buildCommand(id, { sudo: true })!.cmd
+      expect(cmd.startsWith("sudo -S -p '' sh -c '")).toBe(true)
+      // 안쪽에는 sudo 가 없다(명령마다 부르면 비밀번호도 그만큼 필요하다).
+      expect(cmd.slice("sudo -S -p '' sh -c '".length)).not.toContain('sudo ')
+    }
+    expect(buildCommand('k8s.list', { sudo: true })!.cmd).toContain('crictl ps -a -o json')
+  })
+
+  it('작은따옴표 탈출이 정확하다 — 셸이 스크립트를 통째로 한 인자로 받는다', () => {
+    expect(sqEscape("a'b")).toBe("a'\\''b")
+    expect(sqEscape('no quotes')).toBe('no quotes')
+  })
+
+  it('★ sudo 가 거절한 것을 알아본다 — 못 알아보면 5초마다 다시 보내 계정이 잠긴다', () => {
+    expect(ctrSudoFailed('Sorry, try again.')).toBe(true)
+    expect(ctrSudoFailed('sudo: a password is required')).toBe(true)
+    expect(ctrSudoFailed('secadmin is not in the sudoers file.')).toBe(true)
+    expect(ctrSudoFailed('sudo: no tty present and no askpass program specified')).toBe(true)
+    // 컨테이너 목록이 정상으로 온 것을 실패로 읽으면 안 된다.
+    expect(ctrSudoFailed('{"containers":[]}')).toBe(false)
+    expect(ctrSudoFailed('level=fatal msg="connect: permission denied"')).toBe(false)
   })
 })

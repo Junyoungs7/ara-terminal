@@ -41,7 +41,12 @@ for (const root of ROOTS) {
     lines.forEach((line, i) => {
       // 인라인 SVG viewBox 등 비시각 좌표는 예외 (§D.3 b)
       if (/viewBox|stroke-width|strokeWidth|cx=|cy=|\br=|points=/.test(line)) return
-      if (HEX.test(line)) violations.push(`${file}:${i + 1}  HEX 리터럴  → ${line.trim()}`)
+      // 2026-08-25(#125): 주석 줄은 HEX 검사에서 뺀다 — styles/ 쪽이 이미 그렇게 한다(아래).
+      // 여기서 처음 걸린 것은 색이 아니라 **과제 번호 `#125`**였다(3자리부터 HEX 모양이 된다).
+      // 두 자리 시절(`#79`)에는 안 걸리던 것이라 규칙이 아니라 우연히 조용했던 것이다.
+      const bare = line.trim()
+      const isComment = bare.startsWith('/*') || bare.startsWith('*') || bare.startsWith('//') || bare.startsWith('{/*')
+      if (HEX.test(line) && !isComment) violations.push(`${file}:${i + 1}  HEX 리터럴  → ${line.trim()}`)
       else if (PX_PROP.test(line)) violations.push(`${file}:${i + 1}  px 리터럴  → ${line.trim()}`)
     })
   }

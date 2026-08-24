@@ -24,7 +24,7 @@
 // 다만 포트·시스템은 활성 세션 telemetry 구독에 매여 있어 여기서 다시 구독하지 않는다 —
 // 그 둘과 [터미널] 은 ↗ 를 달아 밖에서 열린다고 미리 알린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Boxes, FolderOpen, Gauge, HardDrive, Network, Package, Server, TerminalSquare } from 'lucide-react'
+import { Activity, Boxes, Ship, FolderOpen, Gauge, HardDrive, Network, Package, Server, TerminalSquare } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import type { Session } from '../store/sessions'
 import { FileTree, type ActiveFileSession } from './FileTree'
@@ -59,6 +59,8 @@ const CARDS: readonly Card[] = [
   { id: 'disk', Icon: HardDrive, ext: false, localToo: false },
   { id: 'pkg', Icon: Package, ext: false, localToo: false },
   { id: 'ctr', Icon: Boxes, ext: false, localToo: false },
+  // 2026-08-24: 쿠버는 컨테이너와 다른 칸이다(한 서버에 둘 다 깔릴 수 있다).
+  { id: 'k8s', Icon: Ship, ext: false, localToo: false },
   { id: 'port', Icon: Network, ext: true, localToo: false },
   { id: 'sys', Icon: Gauge, ext: true, localToo: true },
   { id: 'term', Icon: TerminalSquare, ext: true, localToo: true }

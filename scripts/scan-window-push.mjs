@@ -13,7 +13,8 @@ const SEND_LIKE = /\.(send|postMessage)\(/
 // 이름만 같고 webContents 가 아닌 호출들(false positive):
 //  - AraSession.send()      : 대화 턴을 시작하는 퍼블릭 API
 //  - ws.send() / sock.write : F25 RDP 릴레이의 WebSocket·TLS 소켓(창이 아니라 원격으로 나간다)
-const KNOWN_NON_PUSH = /\bara\.send\(|\bws\.send\(/
+//  - engine.send()          : #123 아라 엔진 — claude 프로세스의 **stdin** 으로 나간다(창이 아니다)
+const KNOWN_NON_PUSH = /\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(/
 
 function walk(dir) {
   let out = []

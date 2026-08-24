@@ -520,3 +520,29 @@ describe('history.json 평문 비밀 차단', () => {
     expect(h.load('개발서버')).toContain('ls -al')
   })
 })
+
+// 2026-08-24 준영님 제보 — 세션 기록에서 `ls -al` 앞에 공백이 들어간 것처럼 보였다.
+// 실제 파일을 열어 보니 공백이 아니라 **벨(\a) 다섯 개**였다(탭 완성이 울린 소리).
+// 터미널은 소리만 내고 지나가는데 우리는 셀에 담아 뒀고, 패널에서 유령 다섯 칸이 됐다.
+describe('안 보이는 제어문자는 기록에도 안 남는다', () => {
+  it('★ 벨(\a)은 글자가 아니다 — 실제 기록 파일의 그 줄 그대로', () => {
+    const st = newStripState()
+    const out = stripAnsi('secadmin@vgtt001:~$ \x07\x07\x07\x07\x07ls -al\n', st)
+    expect(out).toBe('secadmin@vgtt001:~$ ls -al\n')
+  })
+
+  it('NUL·DEL 같은 비출력 문자도 버린다', () => {
+    const st = newStripState()
+    expect(stripAnsi('a\x00b\x7fc\x0bd\n', st)).toBe('abcd\n')
+  })
+
+  it('탭은 남긴다 — 표처럼 정렬한 출력이 무너지면 안 된다', () => {
+    const st = newStripState()
+    expect(stripAnsi('a\tb\n', st)).toBe('a\tb\n')
+  })
+
+  it('OSC 종료자로 쓰인 \a 는 예전처럼 시퀀스와 함께 사라진다(회귀 확인)', () => {
+    const st = newStripState()
+    expect(stripAnsi('\x1b]0;제목\x07끝\n', st)).toBe('끝\n')
+  })
+})

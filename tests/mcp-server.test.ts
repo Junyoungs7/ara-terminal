@@ -12,6 +12,7 @@ import { request as httpRequest } from 'node:http'
 import { createMcpServer, hashToken, MCP_TOKEN_VAULT_KEY, BIND_HOST, MCP_MAX_BODY_BYTES, type TokenVault, type McpServerHandle } from '../src/main/mcp/McpServer'
 import { McpApprovalManager, type ApprovalEmit } from '../src/main/mcp/approval'
 import { createAuditLog } from '../src/main/mcp/auditLog'
+import { createAskUser } from '../src/main/mcp/askUser'
 import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
 import { ProfileStore } from '../src/main/secrets/ProfileStore'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
@@ -82,6 +83,7 @@ async function makeRig(): Promise<Rig> {
     ws,
     forwards,
     sftp,
+    ask: createAskUser({ ask: () => {}, askDone: () => {} }),
     approval,
     downloadsDir: join(dir, 'mcp-downloads'),
     uploadsDir: join(dir, 'mcp-uploads')
@@ -216,6 +218,7 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
       profiles: new ProfileStore(ws, memSecretStore()),
       ws,
       forwards: createForwardService(() => null),
+      ask: createAskUser({ ask: () => {}, askDone: () => {} }),
       sftp: new SftpService(() => null, () => {}),
       approval: new McpApprovalManager({ approvalRequest() {}, activity() {}, stateChanged() {} }, createAuditLog(join(dir, 'logs'))),
       downloadsDir: join(dir, 'mcp-downloads'),
@@ -280,6 +283,10 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     const names = tools.map((t) => t.name).sort()
     expect(names).toEqual(
       [
+        // 2026-08-24 추가(#125): AI 가 **사람에게 되묻는** 도구. 파괴적 조작이 아니고 인자는
+        // 질문·선택지 문자열뿐이다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서(실측) 이 자리를
+        // 우리가 만든다 — 이게 없으면 AI 가 갈림길에서 **혼자 결정한다.**
+        'ask_user',
         'forward_create',
         'forward_list',
         'forward_stop',

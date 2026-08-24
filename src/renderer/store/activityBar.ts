@@ -1,4 +1,4 @@
-import { AI_CHAT } from '@shared/features'
+import { AI_CHAT, ARA_CHAT } from '@shared/features'
 import { ACTIVITY_ITEMS, type ActivityId } from '@shared/types'
 
 // FB-ui2(FB-0006): 우측 액티비티 바(VS Code 스타일 세로 아이콘 바) 항목 — 순수 로직.
@@ -22,10 +22,11 @@ const known = (v: unknown): v is ActivityId => ACTIVITY_ITEMS.includes(v as Acti
 
 /**
  * 숨긴 기능의 항목은 아예 목록에 넣지 않는다(features.AI_CHAT — 0.1.0 에서 아라 대화 숨김).
+ * #125 부터는 features.ARA_CHAT(로컬 Claude Code 브릿지)이 켜져도 이 자리가 열린다.
  * 저장된 순서에 남아 있어도 여기서 걸러진다. 되살리면 "빠진 항목은 뒤에 붙인다" 규칙이
  * 알아서 다시 꽂는다.
  */
-const shown = (id: ActivityId): boolean => AI_CHAT || id !== 'ai'
+const shown = (id: ActivityId): boolean => AI_CHAT || ARA_CHAT || id !== 'ai'
 
 /**
  * 저장된 순서 → 쓸 수 있는 순서. 저장값은 신뢰 경계 밖이라 세 가지를 손본다:
