@@ -9,6 +9,7 @@ import { type WebContents } from 'electron'
 import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
+import { araModelOf } from '@shared/aiModels'
 
 export type AraRuntime = { chat: AraChat }
 
@@ -39,6 +40,10 @@ export function registerAraIpc(
   })
   handle('ara:approvePlan', () => {
     chat.approvePlan()
+    return { ok: true } as const
+  })
+  handle('ara:model', ({ model }) => {
+    chat.setModel(araModelOf(model))
     return { ok: true } as const
   })
   handle('ara:interrupt', () => {

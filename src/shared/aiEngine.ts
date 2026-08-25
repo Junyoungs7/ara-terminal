@@ -42,6 +42,8 @@ export type AiEngine = {
   interrupt(): void
   /** 권한 모드를 도는 중에 바꾼다(#136 계획 승인). 못 하는 엔진은 아무 일도 안 한다. */
   setMode(mode: string): void
+  /** 모델을 도는 중에 바꾼다(#137). 못 하는 엔진은 아무 일도 안 한다. */
+  setModel(model: string): void
   /** 프로세스를 내린다. 앱을 끌 때 반드시 부른다 — 고아 프로세스를 남기지 않는다(#64 규율). */
   dispose(): void
   onEvent(fn: (e: AiEngineEvent) => void): () => void
@@ -212,6 +214,16 @@ export function permissionModeLine(requestId: string, mode: string): string {
   )
 }
 
+/**
+ * 모델을 **도는 중에** 바꾼다(#137). 실측(2026-08-25): `success` 를 주고 곧바로 `init` 이 새
+ * 모델로 다시 온다 — 재기동도 `--resume` 도 필요 없다(권한 모드와 같은 성질이다).
+ */
+export function modelLine(requestId: string, model: string): string {
+  return (
+    JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'set_model', model } }) + '\n'
+  )
+}
+
 /** 권한 요청에 대한 답(#124 에서 쓴다). */
 export function permissionReplyLine(requestId: string, allow: boolean): string {
   return (
@@ -235,6 +247,8 @@ export type ClaudeArgsOpts = {
   sessionId?: string
   /** 사용자의 권한 설정을 따른다 — 우리가 기본값을 바꾸지 않는다. */
   permissionMode?: string
+  /** 쓸 모델(#137). 비어 있으면 붙이지 않는다 = 사용자의 `~/.claude` 기본값. */
+  model?: string
 }
 
 /**
@@ -264,5 +278,6 @@ export function buildClaudeArgs(o: ClaudeArgsOpts = {}): string[] {
   if (o.resumeId) a.push('--resume', o.resumeId)
   else if (o.sessionId) a.push('--session-id', o.sessionId)
   if (o.permissionMode) a.push('--permission-mode', o.permissionMode)
+  if (o.model) a.push('--model', o.model)
   return a
 }

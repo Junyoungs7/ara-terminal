@@ -437,6 +437,8 @@ export type InvokeContract = {
   /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
   'ara:planMode': { req: { on: boolean }; res: { ok: true } }
   'ara:approvePlan': { req: void; res: { ok: true } }
+  /** #137 모델 고르기. 도는 중에 바뀐다(실측) — 재기동 없다. */
+  'ara:model': { req: { model: string }; res: { ok: true } }
   'ara:interrupt': { req: void; res: { ok: true } }
   'ara:close': { req: void; res: { ok: true } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
@@ -773,6 +775,7 @@ export type EvApi = {
     worktreeRemove(path: string, dest: string): Promise<WorktreeResult>
     isRepo(path: string): Promise<{ repo: boolean }>
     approvePlan(): Promise<{ ok: true }>
+    model(model: string): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>

@@ -48,6 +48,7 @@ export function createApiEngine(opts: { vault: KeyVault; getPrefs: () => AiPrefs
     // 권한 왕복이 없는 판이다 — 도구가 없으니 승인할 것도 없고 모드도 없다.
     respondPermission: () => {},
     setMode: () => {},
+    setModel: () => {},
     interrupt: () => session.cancel(),
     dispose() {
       alive = false

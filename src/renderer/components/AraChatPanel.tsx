@@ -12,6 +12,8 @@ import {
   type ChatItem
 } from '../store/araChatItems'
 import { IconClose, IconRefresh } from './icons'
+import { Markdown } from './md'
+import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { t } from '../i18n'
 
 // #125 아라 대화 v2 — **관제실**(설계 §9). 우측 레일의 그 자리에 산다.
@@ -48,12 +50,19 @@ export function AraChatPanel({
   const [items, setItems] = useState<ChatItem[]>([])
   const [phase, setPhase] = useState<Phase>('closed')
   const [cwd, setCwd] = useState<string | null>(null)
+  const [home, setHome] = useState(false)
   // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
   const [engine, setEngine] = useState<'cli' | 'api'>('cli')
   const [cost, setCost] = useState<{ usd: number; turns: number } | null>(null)
   // #136 계획 먼저 — 켜면 아라가 **아무것도 건드리지 않고** 계획만 낸다(실측으로 확인한 모드).
   // planReady = 그 계획이 나왔다(턴이 끝났다) → 승인 줄을 세운다.
   const [planOn, setPlanOn] = useState(false)
+  // #137 고른 모델. 빈 문자열 = 사용자의 ~/.claude 기본값.
+  const [model, setModel] = useState('')
+  const [modelOpen, setModelOpen] = useState(false)
+  // #137 폭. 고정 360px 이 좁다는 제보 — 왼쪽 가장자리를 끌어 넓힌다(세션 동안 유지).
+  const [width, setWidth] = useState(360)
+  const drag = useRef<{ x: number; w: number } | null>(null)
   const [planReady, setPlanReady] = useState(false)
   // 사건 처리기는 한 번만 붙으므로(deps []) 최신 값을 ref 로 본다.
   const planOnRef = useRef(false)
@@ -72,6 +81,10 @@ export function AraChatPanel({
     const off = window.ev?.ara.onEvent((e: AraChatEvent) => {
       if (e.t === 'opened') {
         setCwd(e.cwd)
+        // 아라 폴더(고를 것이 없어 떨어진 자리)는 **경로를 감춘다** — `%APPDATA%/ara/ara-home` 은
+        // 사람에게 아무것도 알려 주지 않는다(2026-08-25 준영님). 대신 버튼은 남긴다:
+        // 감추면서 누를 자리까지 없애면 폴더를 바꿀 길이 사라진다.
+        setHome(e.home === true)
         setEngine(e.engine)
         setPhase('idle')
         return
@@ -84,6 +97,10 @@ export function AraChatPanel({
       }
       if (e.t === 'closed') {
         setPhase('closed')
+        return
+      }
+      if (e.t === 'model') {
+        setModel(e.model)
         return
       }
       if (e.t === 'planMode') {
@@ -210,18 +227,43 @@ export function AraChatPanel({
       return next
     })
 
+  // 끄는 동안 창 전체가 텍스트를 잡지 않게 window 에 붙인다(패널 밖으로 나가도 따라온다).
+  const onDragDown = (e: React.MouseEvent): void => {
+    drag.current = { x: e.clientX, w: width }
+    const move = (ev: MouseEvent): void => {
+      const d = drag.current
+      if (!d) return
+      // 왼쪽으로 끌면 넓어진다. 320 아래로는 글이 읽히지 않고, 화면의 3/4 를 넘으면 터미널이 죽는다.
+      setWidth(Math.max(320, Math.min(Math.round(window.innerWidth * 0.75), d.w + (d.x - ev.clientX))))
+    }
+    const up = (): void => {
+      drag.current = null
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
   // 닫혀도 **컴포넌트는 살아 있다**(대화 목록·엔진 유지). 훅 뒤에서 그리기만 접는다.
   if (!open) return null
 
   return (
-    <div className="ara-panel" onKeyDown={onKey}>
+    <div className="ara-panel" onKeyDown={onKey} style={{ width, flexBasis: width }}>
+      {/* 폭 조절 손잡이 — 왼쪽 가장자리. 사이드바 리사이저와 같은 자리·같은 동작이다. */}
+      <div className="ara-grip" onMouseDown={onDragDown} title={t('ara.width')} />
       <div className="ara-hd">
         <span className="t">{t('ara.title')}</span>
         {/* 폴더는 **묻지 않는다**(2026-08-25) — 늘 어딘가에서 돌고, 여기를 누르면 바꾼다.
             아라를 특정 폴더에 매어 두는 물건으로 만들지 않기 위해서다. */}
         {cwd && (
-          <button type="button" className="cwd" title={`${t('ara.cwd.change')}\n${cwd}`} onClick={() => void pickFolder()}>
-            {cwd}
+          <button
+            type="button"
+            className={'cwd' + (home ? ' home' : '')}
+            title={home ? t('ara.cwd.change') : `${t('ara.cwd.change')}\n${cwd}`}
+            onClick={() => void pickFolder()}
+          >
+            {home ? t('ara.cwd.pick') : cwd}
           </button>
         )}
         <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
@@ -240,7 +282,7 @@ export function AraChatPanel({
             </div>
           ) : it.k === 'ai' ? (
             <div className="ara-ai" key={it.id}>
-              {it.text}
+              <Markdown text={it.text} />
             </div>
           ) : it.k === 'note' ? (
             <div className={'ara-note' + (it.tone === 'bad' ? ' bad' : '')} key={it.id}>
@@ -309,27 +351,10 @@ export function AraChatPanel({
       )}
 
       <div className="ara-compose">
-        <textarea
-          ref={inputRef}
-          className="ara-input"
-          rows={2}
-          value={draft}
-          placeholder={ask ? t('ara.answerFirst') : t('ara.placeholder')}
-          disabled={!CAN_TYPE.has(phase)}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation() // 터미널 단축키가 가로채지 않게
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              // 되묻기가 열려 있으면 그 답으로 보낸다(자유 입력 선택지).
-              if (ask) answer(ask.askId, draft.trim() || '(빈 답)')
-              else send(draft)
-            }
-          }}
-        />
+        {/* 메타 줄 — 무엇으로 도는지·무슨 모델인지·계획 먼저인지, 그리고 비용.
+            **입력칸 위**다: ChatGPT·Claude 가 모델 고르기를 입력 근처에 두는 것과 같은 자리다. */}
         <div className="ara-bar">
-          {/* 엔진 스위치(2026-08-25 준영님) — 무엇으로 도는지 고르고, 지금 무엇으로 도는지 본다.
-              claude 가 없으면 main 이 알아서 API 로 넘기고 이 스위치가 그쪽으로 옮겨져 있다. */}
+          {/* 엔진 스위치 — claude 가 없으면 main 이 알아서 API 로 넘기고 여기가 그쪽으로 옮겨져 있다. */}
           <button
             type="button"
             className={'ara-chip eng' + (engine === 'api' ? ' on' : '')}
@@ -339,7 +364,42 @@ export function AraChatPanel({
           >
             {t(engine === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}
           </button>
-          {/* 계획 먼저는 **대화의 성격**을 바꾸는 스위치라 늘 보이는 자리에 둔다. */}
+
+          {/* #137 모델 고르기 — **도는 중에 바뀐다**(실측: set_model 이 먹는다). API 키 모드에는
+              이 스위치가 없다: 그쪽 모델은 설정 [AI] 에서 고르고, 여기서 또 고르면 두 자리가 된다. */}
+          {engine === 'cli' && (
+            <div className="ara-model">
+              <button
+                type="button"
+                className={'ara-chip' + (model ? ' on' : '')}
+                aria-expanded={modelOpen}
+                title={t('ara.model.tip')}
+                onClick={() => setModelOpen((v) => !v)}
+              >
+                {araModelLabel(model)}
+              </button>
+              {modelOpen && (
+                <div className="ara-menu" role="menu">
+                  {ARA_MODELS.map((m) => (
+                    <button
+                      type="button"
+                      key={m.id || 'default'}
+                      className={m.id === model ? 'on' : ''}
+                      data-model={m.id || 'default'}
+                      onClick={() => {
+                        setModelOpen(false)
+                        void window.ev?.ara.model(m.id)
+                      }}
+                    >
+                      <span className="l">{m.label}</span>
+                      <span className="h">{m.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             className={'ara-chip plan' + (planOn ? ' on' : '')}
@@ -349,22 +409,62 @@ export function AraChatPanel({
           >
             {t('ara.plan')}
           </button>
-          <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />
-          <span className="s">{t('ara.phase.' + phase)}</span>
           <span className="sp" />
           {cost && (
             <span className="c">
               ${cost.usd.toFixed(3)} · {t('ara.turns').replace('{n}', String(cost.turns))}
             </span>
           )}
+        </div>
+
+        {/* 입력칸 — **보내기·중지 버튼이 같은 줄 안**에 있다(2026-08-25 준영님, 상용 서비스 배치).
+            도는 중에는 같은 버튼이 [중지]가 된다: 자리를 옮기면 눈이 그때마다 버튼을 다시 찾는다. */}
+        <div className={'ara-box' + (CAN_TYPE.has(phase) ? '' : ' off')}>
+          <textarea
+            ref={inputRef}
+            className="ara-input"
+            rows={1}
+            value={draft}
+            placeholder={ask ? t('ara.answerFirst') : t('ara.placeholder')}
+            disabled={!CAN_TYPE.has(phase)}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation() // 터미널 단축키가 가로채지 않게
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                // 되묻기가 열려 있으면 그 답으로 보낸다(자유 입력 선택지).
+                if (ask) answer(ask.askId, draft.trim() || '(빈 답)')
+                else send(draft)
+              }
+            }}
+          />
           <button
             type="button"
-            className="ara-btn"
-            disabled={phase !== 'working'}
-            onClick={() => void window.ev?.ara.interrupt()}
+            className={'ara-send' + (phase === 'working' ? ' stop' : '')}
+            disabled={phase === 'working' ? false : draft.trim() === '' || !CAN_TYPE.has(phase)}
+            title={t(phase === 'working' ? 'ara.stop' : 'ara.send')}
+            aria-label={t(phase === 'working' ? 'ara.stop' : 'ara.send')}
+            onClick={() => {
+              if (phase === 'working') void window.ev?.ara.interrupt()
+              else if (ask) answer(ask.askId, draft.trim() || '(빈 답)')
+              else send(draft)
+            }}
           >
-            {t('ara.stop')}
+            {phase === 'working' ? (
+              <svg viewBox="0 0 16 16" aria-hidden>
+                <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" aria-hidden>
+                <path d="M8 13V3M8 3L4 7M8 3l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
           </button>
+        </div>
+        {/* 상태는 입력칸 아래 아주 얇게 — 늘 보이되 자리를 거의 안 먹는다. */}
+        <div className="ara-st">
+          <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />
+          {t('ara.phase.' + phase)}
         </div>
       </div>
     </div>

@@ -46,6 +46,7 @@ function fakeEngine(): AiEngine & {
   sent: string[]
   replies: [string, boolean][]
   modes: string[]
+  models: string[]
   interrupts: number
   disposed: number
   fire(e: AiEngineEvent): void
@@ -55,11 +56,13 @@ function fakeEngine(): AiEngine & {
     sent: [] as string[],
     replies: [] as [string, boolean][],
     modes: [] as string[],
+    models: [] as string[],
     interrupts: 0,
     disposed: 0,
     send: (t: string) => self.sent.push(t),
     respondPermission: (id: string, ok: boolean) => self.replies.push([id, ok]),
     setMode: (m: string) => self.modes.push(m),
+    setModel: (m: string) => self.models.push(m),
     interrupt: () => (self.interrupts += 1),
     dispose: () => (self.disposed += 1),
     onEvent: (fn: (e: AiEngineEvent) => void) => {
@@ -177,7 +180,8 @@ describe('아라 대화 한 벌', () => {
   it('★ 원격만 보고 있어도 **연다** — 아라 폴더에서 시작하고 원격은 세션 도구로 만진다', async () => {
     const { chat, seen } = setup({ session: { type: 'ssh', cwd: '/srv' } })
     expect(await chat.open()).toEqual({ ok: true })
-    expect(seen).toEqual([{ t: 'opened', cwd: araHome, withMcp: true, engine: 'cli' }])
+    // home: true 가 붙는다 — 화면은 이 경로를 감춘다(#137, 아래 '작업 폴더 표시' 참고).
+    expect(seen).toEqual([{ t: 'opened', cwd: araHome, withMcp: true, engine: 'cli', home: true }])
     expect(chat.isOpen()).toBe(true)
   })
 
@@ -377,5 +381,79 @@ describe('계획 먼저 (#136)', () => {
     const { chat, seen } = setup()
     expect(() => chat.approvePlan()).not.toThrow()
     expect(seen).toEqual([])
+  })
+})
+
+// ── #137 모델 고르기 ─────────────────────────────────────────────────────────
+// 실측(2026-08-25): `set_model` 이 control 채널로 먹는다 — success 뒤 init 이 새 모델로 다시 온다.
+// 그래서 이 고르기는 **재기동 없이** 즉시 반영되고 대화가 끊기지 않는다.
+describe('모델 고르기 (#137)', () => {
+  const local = process.platform === 'win32' ? 'D:/work' : '/work'
+  const setup = () => {
+    const seen: AraChatEvent[] = []
+    const engines: { args: { model?: string }; eng: ReturnType<typeof fakeEngine> }[] = []
+    const chat = createAraChat({
+      server: fakeServer({ enabled: true }),
+      vault: memVault(),
+      activeSession: () => ({ type: 'local', cwd: local }),
+      lastLocalCwd: () => local,
+      araCwd: () => local,
+      emit: (e) => seen.push(e),
+      makeEngine: (args) => {
+        const eng = fakeEngine()
+        engines.push({ args, eng })
+        return eng
+      }
+    })
+    return { chat, seen, engines }
+  }
+
+  it('기본은 안 고른 상태 — 사용자의 ~/.claude 기본값을 그대로 쓴다', async () => {
+    const { chat, engines } = setup()
+    await chat.open()
+    expect(engines[0]!.args.model).toBeUndefined()
+  })
+
+  it('★ 도는 중에 바꾼다 — 프로세스를 다시 띄우지 않는다', async () => {
+    const { chat, seen, engines } = setup()
+    await chat.open()
+    chat.setModel('claude-haiku-4-5-20251001')
+    expect(engines[0]!.eng.models).toEqual(['claude-haiku-4-5-20251001'])
+    expect(engines).toHaveLength(1)
+    expect(seen.at(-1)).toEqual({ t: 'model', model: 'claude-haiku-4-5-20251001' })
+    // 같은 값을 두 번 고르면 아무 일도 없다.
+    chat.setModel('claude-haiku-4-5-20251001')
+    expect(engines[0]!.eng.models).toHaveLength(1)
+  })
+
+  it('고른 뒤 다시 열면 인자로 나간다 · 닫으면 기본으로 돌아간다', async () => {
+    const { chat, engines } = setup()
+    await chat.open()
+    chat.setModel('claude-opus-5')
+    await chat.open()
+    expect(engines[1]!.args.model).toBe('claude-opus-5')
+    chat.close()
+    await chat.open()
+    expect(engines[2]!.args.model).toBeUndefined()
+  })
+})
+
+// ── #137 아라 폴더는 화면에서 감춘다 ─────────────────────────────────────────
+describe('작업 폴더 표시 (#137)', () => {
+  it("★ 고를 것이 없어 떨어진 자리는 home 으로 표시한다 — 화면이 그 경로를 감춘다", async () => {
+    const seen: AraChatEvent[] = []
+    const home = process.platform === 'win32' ? 'C:/ara-home' : '/var/ara-home'
+    const chat = createAraChat({
+      server: fakeServer({ enabled: true }),
+      vault: memVault(),
+      activeSession: () => null,
+      lastLocalCwd: () => null,
+      araCwd: () => home,
+      emit: (e) => seen.push(e),
+      makeEngine: () => fakeEngine()
+    })
+    await chat.open()
+    expect(seen[0]).toMatchObject({ t: 'opened', cwd: home, home: true })
+    chat.close()
   })
 })

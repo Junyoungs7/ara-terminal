@@ -342,6 +342,7 @@ const api: EvApi = {
     worktreeRemove: (path: string, dest: string) => ipcRenderer.invoke('git:worktreeRemove', { path, dest }),
     isRepo: (path: string) => ipcRenderer.invoke('git:isRepo', { path }),
     approvePlan: () => ipcRenderer.invoke('ara:approvePlan'),
+    model: (model: string) => ipcRenderer.invoke('ara:model', { model }),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),
     close: () => ipcRenderer.invoke('ara:close'),
     state: () => ipcRenderer.invoke('ara:state'),

@@ -7212,13 +7212,29 @@
    도구는 접히는 묶음(B), 되묻기는 알약 버튼(C). 색은 --accent(금) 계열이다 — F16 의 .ai-panel 이
    쓰던 보라와 다른데, 목업이 그 색으로 승인됐고 이 패널이 그 자리를 이어받기 때문이다. */
 .ara-panel {
-  width: 360px;
-  flex: 0 0 360px;
+  /* 폭은 인라인 style 이 준다(#137 — 끌어서 넓힌다). 여기서는 늘지도 줄지도 않게만 못박는다. */
+  flex-grow: 0;
+  flex-shrink: 0;
   background: var(--bg-surface);
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+/* 왼쪽 가장자리 손잡이 — 보이지 않지만 잡힌다(사이드바 리사이저와 같은 폭). */
+.ara-grip {
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.ara-grip:hover {
+  background: var(--accent);
+  opacity: 0.35;
 }
 .ara-hd {
   height: var(--row-tabbar);
@@ -7287,12 +7303,16 @@
   word-break: break-word;
 }
 .ara-ai {
-  color: var(--text-mid);
-  font-size: var(--fs-md);
-  line-height: 1.55;
+  /* 읽는 글이라 한 단 키우고 줄간을 넓혔다(#137 "글씨체 별로야"). 글꼴은 번들 Pretendard 그대로 —
+     문제는 서체가 아니라 **크기·줄간·마크다운 없음**이었다. */
+  color: var(--text-hi);
+  font-size: var(--fs-lg);
+  line-height: 1.75;
   padding: 0 2px;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+.ara-me {
+  font-size: var(--fs-md);
 }
 .ara-note {
   color: var(--text-dim);
@@ -7507,6 +7527,11 @@
 .ara-hd .cwd:hover {
   color: var(--text-mid);
 }
+/* 아라 폴더일 때는 경로 대신 할 일을 적는다 — 경로가 아니므로 등폭·rtl 도 아니다. */
+.ara-hd .cwd.home {
+  font-family: var(--ui);
+  direction: ltr;
+}
 
 /* #136 계획 승인 — 입력칸 바로 위. 지금 정할 일이라 목록에 쌓지 않는다. */
 .ara-plan {
@@ -7663,4 +7688,180 @@
 }
 .bench-x:hover {
   color: var(--err);
+}
+
+
+/* ── #137 마크다운 — AI 답변 안쪽. 태그마다 여백을 새로 주지 않고 **간격만** 다스린다. */
+.md > * {
+  margin: 0;
+}
+.md > * + * {
+  margin-top: 8px;
+}
+.md-p {
+  white-space: pre-wrap;
+}
+.md-h {
+  color: var(--text-hi);
+  font-weight: 650;
+}
+.md-h.h1 {
+  font-size: var(--fs-xl);
+}
+.md-h.h2 {
+  font-size: var(--fs-lg);
+}
+.md-h.h3 {
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+}
+.md-ul,
+.md-ol {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.md-quote {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 9px;
+  color: var(--text-lo);
+  white-space: pre-wrap;
+}
+.md-hr {
+  border-top: 1px solid var(--line-strong);
+}
+.md-code {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  color: var(--accent-bright);
+}
+/* 코드블록은 **가로로 스크롤**한다 — 줄바꿈으로 접으면 명령을 잘못 읽는다. */
+.md-pre {
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 9px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-hi);
+  user-select: text;
+}
+.md-pre code {
+  white-space: pre;
+}
+
+/* ── #137 입력칸 — 보내기·중지가 **같은 줄 안**에 있다(상용 서비스 배치). */
+.ara-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 6px 6px 6px 10px;
+}
+.ara-box:focus-within {
+  border-color: var(--accent);
+}
+.ara-box.off {
+  opacity: 0.6;
+}
+.ara-box .ara-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  max-height: 160px;
+  font: var(--fs-md) / 1.55 var(--ui);
+}
+.ara-box .ara-input:focus {
+  outline: none;
+  border: 0;
+}
+/* 둥근 버튼 하나가 [보내기]와 [중지]를 겸한다 — 자리를 옮기면 눈이 매번 다시 찾는다. */
+.ara-send {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg-canvas);
+  cursor: pointer;
+}
+.ara-send svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+.ara-send:disabled {
+  background: var(--bg-overlay);
+  color: var(--text-dim);
+  cursor: default;
+}
+.ara-send.stop {
+  background: var(--err);
+  color: var(--bg-canvas);
+}
+/* 상태는 입력칸 아래 아주 얇게. */
+.ara-st {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+}
+
+/* 모델 고르기 — 칩을 누르면 위로 뜬다(입력칸이 아래라 아래로 열 자리가 없다). */
+.ara-model {
+  position: relative;
+  flex: none;
+}
+.ara-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 190px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 4px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+.ara-menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.ara-menu button:hover {
+  background: var(--bg-raised);
+}
+.ara-menu button.on .l {
+  color: var(--accent-bright);
+}
+.ara-menu .l {
+  color: var(--text-hi);
+  font-size: var(--fs-sm);
+}
+.ara-menu .h {
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
 }

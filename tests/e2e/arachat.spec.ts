@@ -23,7 +23,8 @@ async function openAra(ara: Ara): Promise<void> {
     ipcMain.handle('fs:pickDir', () => ({ dir }))
   }, process.cwd())
   await ara.page.click('.activity-bar .act-item[data-activity="ai"]')
-  await expect(ara.page.locator('.ara-panel .ara-hd .cwd')).toBeVisible()
+  // 세션이 없으니 아라 폴더에서 열린다 — 머리에는 경로 대신 [폴더 고르기]가 뜬다(#137).
+  await expect(ara.page.locator('.ara-panel .ara-hd .cwd.home')).toBeVisible()
 }
 
 test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶음·글·비용이 차례로 뜬다', async ({ ara }) => {
@@ -62,14 +63,18 @@ test('ARA2-2 [중지]는 도는 동안에만 눌린다 · 닫았다 열어도 �
   const { page } = ara
   await openAra(ara)
   const panel = page.locator('.ara-panel')
-  const stop = panel.locator('.ara-bar .ara-btn')
+  // #137: 보내기와 중지가 **같은 버튼**이다(상용 서비스 배치) — 도는 중에만 [중지]가 된다.
+  const send = panel.locator('.ara-send')
 
-  // 대기 중에는 멈출 것이 없다.
-  await expect(stop).toBeDisabled()
+  // 대기 중이고 쓴 것도 없으면 누를 것이 없다.
+  await expect(send).toBeDisabled()
+  await expect(send).not.toHaveClass(/stop/)
   await panel.locator('.ara-input').fill('안녕')
   await panel.locator('.ara-input').press('Enter')
   await expect(panel.locator('.ara-ai')).toContainText('받은 말: 안녕')
-  await expect(stop).toBeDisabled() // 턴이 끝나면 다시 잠긴다
+  // 턴이 끝나면 [중지]가 아니게 되고, 입력칸이 비어 있으니 다시 잠긴다.
+  await expect(send).not.toHaveClass(/stop/)
+  await expect(send).toBeDisabled()
 
   // 레일을 옮겼다 돌아와도 대화가 그대로다 — 언마운트하면 목록도 엔진도 새로 뜬다(#125 렌더 규칙).
   await page.click('.activity-bar .act-item[data-activity="preview"]')
@@ -217,4 +222,41 @@ test('ARA2-6★ [계획 먼저] → 계획이 나오면 승인 줄 → [이대�
   })
   await panel.locator('.ara-plan .ara-btn.p').click()
   expect(await ara.app.evaluate(() => (globalThis as unknown as { __approve: number }).__approve)).toBe(1)
+})
+
+test('ARA2-7★ 모델을 고른다 · 폭을 끌어 넓힌다 · 답변이 마크다운으로 그려진다', async ({ ara }) => {
+  const { page } = ara
+  await openAra(ara)
+  const panel = page.locator('.ara-panel')
+
+  // ① 모델 — 기본은 "고르지 않음"(사용자의 ~/.claude 그대로). 고르면 그 이름이 칩에 박힌다.
+  const chip = panel.locator('.ara-model .ara-chip')
+  await expect(chip).toHaveText('기본')
+  await chip.click()
+  await panel.locator('.ara-menu [data-model="claude-haiku-4-5-20251001"]').click()
+  await expect(panel.locator('.ara-menu')).toHaveCount(0)
+  await expect(chip).toHaveText('Haiku 4.5') // main 이 알려 준 값이다(화면이 짐작하지 않는다)
+
+  // ② 폭 — 고정이 아니다. 왼쪽 손잡이를 끌면 넓어진다.
+  const before = (await panel.boundingBox())!.width
+  const grip = panel.locator('.ara-grip')
+  const g = (await grip.boundingBox())!
+  await page.mouse.move(g.x + 2, g.y + 100)
+  await page.mouse.down()
+  await page.mouse.move(g.x - 160, g.y + 100, { steps: 8 })
+  await page.mouse.up()
+  const after = (await panel.boundingBox())!.width
+  expect(after).toBeGreaterThan(before + 100)
+
+  // ③ 마크다운 — 코드블록·목록·굵게가 글자 그대로가 아니라 **모양**으로 나온다.
+  await ara.app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('ara:event', {
+      t: 'text',
+      text: '## 결과\n\n**둘** 중 하나:\n\n- 지우기\n- 두기\n\n```bash\ndu -x -d1 /var\n```'
+    })
+  })
+  await expect(panel.locator('.md-h.h2')).toHaveText('결과')
+  await expect(panel.locator('.md-ul li')).toHaveCount(2)
+  await expect(panel.locator('.md-pre code')).toContainText('du -x -d1 /var')
+  await expect(panel.locator('.ara-ai strong')).toHaveText('둘')
 })

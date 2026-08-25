@@ -21,7 +21,13 @@ import { hasLocalCli } from '../util/localCli'
 import { pickEngineCwd, prepareAraMcp, type AraMcpHandoff } from './engine/araMcp'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
-export type ClaudeEngineArgs = { cwd: string; mcpConfigPath?: string; resumeId?: string; permissionMode?: string }
+export type ClaudeEngineArgs = {
+  cwd: string
+  mcpConfigPath?: string
+  resumeId?: string
+  permissionMode?: string
+  model?: string
+}
 
 export type AraChatDeps = {
   server: McpServerHandle
@@ -57,8 +63,12 @@ export type AraEngineKind = 'cli' | 'api'
 /** 화면이 받는 것 = 엔진 사건 + 이 층이 아는 것 몇 개. */
 export type AraChatEvent =
   | AiEngineEvent
-  /** 열렸다 — 어느 엔진으로, 어느 폴더에서, MCP 도구가 물렸는지. */
-  | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind }
+  /**
+   * 열렸다 — 어느 엔진으로, 어느 폴더에서, MCP 도구가 물렸는지.
+   * `home: true` 면 그 폴더는 **아라 폴더**(고를 것이 없어 떨어진 자리)라 화면이 경로를 감춘다 —
+   * `…\AppData\…ra-home` 은 사람에게 아무것도 알려 주지 않는다(2026-08-25 준영님).
+   */
+  | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind; home?: true }
   /** 이 PC 에 `claude` 가 없다 — 설치하든지 API 키로 가든지(설계 §5). */
   | { t: 'noEngine' }
   /** 닫혔다. */
@@ -68,6 +78,8 @@ export type AraChatEvent =
    * 우리가 부른 것뿐 아니라 승인으로 풀린 것도 여기로 나간다 — 화면이 스스로 짐작하지 않는다.
    */
   | { t: 'planMode'; on: boolean }
+  /** 지금 고른 모델(#137). 빈 문자열이면 사용자 기본값이다. */
+  | { t: 'model'; model: string }
 
 export type AraChat = {
   /** 대화를 연다. cwd 를 주면 그것을 쓰고(사용자가 고른 폴더), 없으면 §3.3 규칙으로 고른다. */
@@ -87,6 +99,11 @@ export type AraChat = {
   setPlanMode(on: boolean): void
   /** 계획을 받아들였다 — 실행 모드로 풀고 "그대로 진행해" 를 보낸다. */
   approvePlan(): void
+  /**
+   * 모델을 고른다(#137). **도는 중에 바뀐다** — 재기동도 --resume 도 없다(실측).
+   * 빈 문자열은 "사용자 기본값" 이라 열 때 인자를 안 붙인다(도는 중에는 되돌릴 말이 없어 무시한다).
+   */
+  setModel(model: string): void
   /** 권한 요청에 답한다. 대기열에 없는 id 는 조용히 버린다(늦게 온 답). */
   respond(requestId: string, allow: boolean): void
   interrupt(): void
@@ -112,6 +129,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
   let sessionId: string | null = null
   // 계획 먼저인가. 열 때 --permission-mode 로 나가고, 도는 중에는 control 요청으로 바뀐다.
   let planMode = false
+  // 고른 모델(#137). 빈 문자열 = 사용자의 ~/.claude 기본값.
+  let model = ''
   const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
 
   /** 엔진 사건 → 이 층의 규칙 → 화면. **두 엔진이 같은 배선을 쓴다**(그러라고 모양을 맞췄다). */
@@ -191,10 +210,17 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         cwd,
         ...(handoff ? { mcpConfigPath: handoff.configPath } : {}),
         ...(o.resumeId ? { resumeId: o.resumeId } : {}),
-        ...(planMode ? { permissionMode: PLAN } : {})
+        ...(planMode ? { permissionMode: PLAN } : {}),
+        ...(model ? { model } : {})
       })
       wire(engine)
-      deps.emit({ t: 'opened', cwd, withMcp: handoff !== null, engine: 'cli' })
+      deps.emit({
+        t: 'opened',
+        cwd,
+        withMcp: handoff !== null,
+        engine: 'cli',
+        ...(cwd === deps.araCwd() ? { home: true as const } : {})
+      })
       return { ok: true }
     },
 
@@ -206,6 +232,14 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       // 열려 있으면 갈아 끼우고, 아직 안 열렸으면 다음에 열 때 인자로 나간다.
       engine?.setMode(on ? PLAN : RUN)
       deps.emit({ t: 'planMode', on })
+    },
+
+    setModel(next) {
+      if (next === model) return
+      model = next
+      // 빈 값으로 되돌리는 것은 도는 중에 표현할 방법이 없다 — 다음에 열 때 반영된다.
+      if (next) engine?.setModel(next)
+      deps.emit({ t: 'model', model: next })
     },
 
     approvePlan() {
@@ -227,6 +261,7 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
     close: () => {
       planMode = false
+      model = ''
       if (!engine) return
       teardown()
       deps.emit({ t: 'closed' })
