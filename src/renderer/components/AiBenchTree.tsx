@@ -32,13 +32,16 @@ export function AiBenchTree({
   rows,
   activeSessionId,
   onOpen,
-  onRemove
+  onRemove,
+  onSplit
 }: {
   rows: WorkbenchRow[]
   activeSessionId: string | null
   /** 살아 있으면 그 탭으로, 아니면 그 자리에서 다시 띄운다. */
   onOpen: (s: AiSessionState, sessionId: string | null) => void
   onRemove: (s: AiSessionState) => void
+  /** #133 세션 분리 — 같은 저장소를 형제 폴더에 새 브랜치로 펼친다. */
+  onSplit: (s: AiSessionState) => void
 }): JSX.Element {
   if (rows.length === 0) {
     return <div className="bench-empty">{t('bench.empty')}</div>
@@ -75,6 +78,13 @@ export function AiBenchTree({
               {/* 켜져 있으면 **늘 보인다**(설계 §6 확정 2) — 잊게 두지 않는다. */}
               {r.s.skipPerms && <span className="skip">{t('bench.skipPerms')}</span>}
             </button>
+            {/* 분리 세션에서 또 분리하지 않는다 — worktree 의 worktree 는 git 이 허용해도
+                부모·자식 관계가 두 단이 되어 지울 때 무엇이 딸려 가는지 알기 어려워진다. */}
+            {!r.s.worktree && !dead && (
+              <button type="button" className="bench-x" title={t('bench.split')} onClick={() => onSplit(r.s)}>
+                ⑂
+              </button>
+            )}
             <button type="button" className="bench-x" title={t('bench.remove')} onClick={() => onRemove(r.s)}>
               ✕
             </button>

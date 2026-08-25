@@ -10,6 +10,7 @@
 //    bin 은 렌더러에서 이미 validCliBin 을 통과했지만 여기서 한 번 더 본다(신뢰 경계).
 import { handle } from './handle'
 import { hasLocalCli } from '../util/localCli'
+import { addWorktree, isGitRepo, removeWorktree } from '../util/localGit'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import { validCliBin } from '@shared/aiCli'
 
@@ -17,6 +18,11 @@ import { validCliBin } from '@shared/aiCli'
 const LOOKUP_TIMEOUT_MS = 4000
 
 export function registerLocalCliIpc(): void {
+  // #133 세션 분리(로컬). 명령 조립·검증은 util/localGit.ts 가 한다 — 렌더러는 폴더와 이름만 준다.
+  handle('git:isRepo', ({ path }) => isGitRepo(String(path)).then((repo) => ({ repo })))
+  handle('git:worktreeAdd', ({ path, name }) => addWorktree(String(path), String(name)))
+  handle('git:worktreeRemove', ({ path, dest }) => removeWorktree(String(path), String(dest)))
+
   handle('app:launchShell', () => ({ shell: defaultLaunchShell() }))
 
   handle('app:hasCli', ({ bin }) => {

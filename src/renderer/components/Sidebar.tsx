@@ -125,6 +125,7 @@ export function Sidebar({
   benchRows,
   onBenchOpen,
   onBenchRemove,
+  onBenchSplit,
   onNewBench
 }: {
   active: SidebarTab
@@ -163,6 +164,7 @@ export function Sidebar({
   benchRows: WorkbenchRow[]
   onBenchOpen: (s: AiSessionState, sessionId: string | null) => void
   onBenchRemove: (s: AiSessionState) => void
+  onBenchSplit: (s: AiSessionState) => void
   onNewBench: () => void
   // F14: 터미널 Ctrl+V 파일 업로드가 시작될 때 [파일] 탭을 펼쳐 전송 큐를 보여 준다.
   onRevealFiles: () => void
@@ -242,6 +244,7 @@ export function Sidebar({
           activeSessionId={activeSessionId}
           onOpen={onBenchOpen}
           onRemove={onBenchRemove}
+          onSplit={onBenchSplit}
         />
       </div>
     </div>

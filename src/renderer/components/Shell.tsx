@@ -33,6 +33,7 @@ import { aiRuns, registerAiRun } from '../store/aiSessions'
 import { benchRows as buildBenchRows, useAiWorkbench } from '../store/aiWorkbench'
 import { useAiQuietWatch } from '../store/aiQuietWatch'
 import { childrenOf, type AiSessionState } from '@shared/aiSession'
+import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, useGroupList } from '../store/groups'
 import { ACTIVITY_ITEMS, type ActivityId } from '../store/activityBar'
@@ -521,6 +522,57 @@ export function Shell() {
       await connectProfileRef.current?.(w.profileId, undefined, w.path)
     },
     [sessions]
+  )
+
+  /**
+   * #133 세션 분리 — 같은 저장소를 **형제 폴더에 새 브랜치로** 하나 더 펼친다(git worktree).
+   * 폴더를 복사하는 것과 다르다: git 이 아는 방식이라 브랜치·머지가 그대로 성립한다.
+   *
+   * 실패는 **git 이 준 말 그대로** 보여 준다 — "이미 있는 브랜치", "커밋 안 된 변경" 같은 것을
+   * 우리가 다시 쓰면 원인을 못 찾는다.
+   */
+  /**
+   * 원격 분리 — 그 서버에서 `git worktree add` 를 돌린다(§10.3 규칙 6). 명령 조립은 카탈로그가
+   * 하고(렌더러는 폴더·이름만 넘긴다), 결과는 우리가 심은 표식으로 읽는다(git 문구는 판마다 다르다).
+   */
+  const splitRemote = useCallback(
+    async (b: AiSessionState, name: string): Promise<WorktreeResult> => {
+      const sid = sessions.sessions.find((x) => x.type === 'ssh' && x.profileId === b.profileId)?.id
+      if (!sid) return { ok: false, reason: 'git', message: t('bench.split.needConn') }
+      const r = await window.ev?.remote.run(sid, 'git.worktree.add', { path: b.cwd, name })
+      if (!r || !r.ok) return { ok: false, reason: 'git', message: r ? String(r.reason) : '' }
+      return parseWorktreeOut(r.out)
+    },
+    [sessions.sessions]
+  )
+
+  const splitBench = useCallback(
+    async (b: AiSessionState) => {
+      const name = await askText({
+        title: t('bench.split'),
+        message: t('bench.split.msg').replace('{p}', b.cwd),
+        input: { placeholder: 'refactor' },
+        confirmLabel: t('bench.split.btn'),
+        cancelLabel: t('dlg.cancel')
+      })
+      const clean = validWorktreeName(name)
+      if (clean === null) {
+        if (name) mainRef.current?.toast(t('bench.split.badName'))
+        return
+      }
+      const r =
+        b.kind === 'remote'
+          ? await splitRemote(b, clean)
+          : await window.ev?.ara.worktreeAdd(b.cwd, clean)
+      if (!r) return
+      if (!r.ok) {
+        mainRef.current?.toast(r.reason === 'notRepo' ? t('bench.split.notRepo') : r.message)
+        return
+      }
+      bench.addChild(b, r.path, branchFor(clean))
+      mainRef.current?.toast(t('bench.split.done').replace('{p}', r.path))
+    },
+    [askText, bench, splitRemote]
   )
 
   /**
@@ -1193,6 +1245,7 @@ export function Shell() {
               tone: 'danger'
             }).then((r) => r === 'confirm' && bench.remove(b.id))
           }}
+          onBenchSplit={(b) => void splitBench(b)}
           onNewBench={() => runAiCliNow()}
           onCdTerminal={(absPath) => {
             // 트리→터미널 동기: 로컬·SSH 모두 cd 전송(R7 — 로컬 셸도 파일 탭을 쓴다).

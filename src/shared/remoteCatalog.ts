@@ -16,6 +16,7 @@
 // 파서는 전부 순수 함수다 — 배포판마다 출력이 달라 실제 샘플로 단위 테스트한다(tests/remoteCatalog.test.ts).
 
 import { validCliBin } from './aiCli'
+import { remoteWorktreeAdd, remoteWorktreeRemove } from './gitWorktree'
 
 /** 실행 가능한 명령 id. 이 목록 밖은 존재하지 않는다. */
 export type CmdId =
@@ -32,6 +33,9 @@ export type CmdId =
   // F26 R3: 설치된 프로그램·버전·설치일. 목록은 아래 PROBE_BINS 고정 표 — 렌더러가 정할 수 없다.
   | 'pkg.probe'
   // F28: 컨테이너 목록(docker → 없으면 podman).
+  // #133 세션 분리 — 원격에서도 같은 방식이다(설계 §10.3 규칙 6). 조립은 shared/gitWorktree.ts.
+  | 'git.worktree.add'
+  | 'git.worktree.remove'
   | 'ctr.list'
   // 2026-08-24: 쿠버 노드는 **탭이 따로다** — crictl 로 목록·파드·자원을 한 왕복에 받는다.
   | 'k8s.list'
@@ -821,6 +825,24 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
       const sig = validSignal(a?.signal)
       if (pid === null || sig === null) return null
       return `kill -${sig} ${pid} 2>&1`
+    }
+  },
+
+  // #133: 폴더를 만들고 브랜치를 만든다 = 원격 상태를 바꾼다 → write.
+  'git.worktree.add': {
+    write: true,
+    build: (args) => {
+      const a = args as { path?: unknown; name?: unknown } | null
+      if (typeof a?.path !== 'string' || typeof a?.name !== 'string') return null
+      return remoteWorktreeAdd(a.path, a.name)
+    }
+  },
+  'git.worktree.remove': {
+    write: true,
+    build: (args) => {
+      const a = args as { path?: unknown; dest?: unknown } | null
+      if (typeof a?.path !== 'string' || typeof a?.dest !== 'string') return null
+      return remoteWorktreeRemove(a.path, a.dest)
     }
   },
 

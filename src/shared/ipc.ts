@@ -1,4 +1,5 @@
 // IPC 타입 계약 (단일 진실). main 핸들러·preload 브리지·renderer 호출부가 이 파일을 import한다.
+import type { WorktreeResult } from './gitWorktree'
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
 import type { LaunchShell } from './aiCli'
@@ -425,6 +426,14 @@ export type InvokeContract = {
    * 그 페이로드는 세 필드 화이트리스트로 막혀 있고 여기는 주인이 다르다.
    */
   'aisession:save': { req: { list: unknown }; res: { ok: true } }
+  /**
+   * #133 세션 분리 — 로컬 `git worktree`. 렌더러는 **폴더와 이름만** 넘기고 명령은 main 이 만든다
+   * (F26 이 세운 규칙 그대로: 렌더러가 명령 문자열을 넘길 수 없다). 원격은 remote:run 의
+   * `git.worktree.*` 가 같은 일을 한다.
+   */
+  'git:worktreeAdd': { req: { path: string; name: string }; res: WorktreeResult }
+  'git:worktreeRemove': { req: { path: string; dest: string }; res: WorktreeResult }
+  'git:isRepo': { req: { path: string }; res: { repo: boolean } }
   /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
   'ara:planMode': { req: { on: boolean }; res: { ok: true } }
   'ara:approvePlan': { req: void; res: { ok: true } }
@@ -759,6 +768,10 @@ export type EvApi = {
     planMode(on: boolean): Promise<{ ok: true }>
     /** #128 작업대 목록 저장(아라 대화와 다른 물건이지만 같은 ara 표면에 둔다). */
     saveSessions(list: unknown): Promise<{ ok: true }>
+    /** #133 세션 분리(로컬). 원격은 remote.run('git.worktree.add') 쪽이다. */
+    worktreeAdd(path: string, name: string): Promise<WorktreeResult>
+    worktreeRemove(path: string, dest: string): Promise<WorktreeResult>
+    isRepo(path: string): Promise<{ repo: boolean }>
     approvePlan(): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>

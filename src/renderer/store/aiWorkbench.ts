@@ -149,10 +149,30 @@ export function useAiWorkbench() {
     (id: string) => setList((cur) => cur.filter((s) => s.id !== id && s.worktree?.parentId !== id)),
     []
   )
+  /** #133 분리 세션을 목록에 넣는다 — 부모를 기억한다(§10.3 규칙 4). */
+  const addChild = useCallback(
+    (parent: AiSessionState, cwd: string, branch: string) =>
+      setList((cur) => [
+        ...cur,
+        {
+          id: crypto.randomUUID(),
+          kind: parent.kind,
+          ...(parent.profileId ? { profileId: parent.profileId } : {}),
+          cwd,
+          engine: parent.engine,
+          skipPerms: parent.skipPerms,
+          title: defaultTitle(cwd),
+          lastUsedAt: Date.now(),
+          worktree: { parentId: parent.id, branch }
+        }
+      ]),
+    []
+  )
+
   const rename = useCallback(
     (id: string, title: string) => setList((cur) => cur.map((s) => (s.id === id ? { ...s, title } : s))),
     []
   )
 
-  return { list, paths, record, remove, rename }
+  return { list, paths, record, remove, rename, addChild }
 }
