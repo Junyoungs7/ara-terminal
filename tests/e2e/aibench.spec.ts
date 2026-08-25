@@ -3,7 +3,7 @@
 // 진짜 `claude` 를 띄우지 않는다: 목록을 main 쪽 채널(aisession:save)로 심고 화면이 그것을
 // 어떻게 그리는지만 본다. 적립·판정 규칙 자체는 tests/aiWorkbench.test.ts 가 순수 함수로 본다.
 import type { Ara } from './fixtures'
-import { test, expect, dialog, dialogCancel, dialogConfirm } from './fixtures'
+import { test, expect, dialog, dialogCancel, dialogConfirm, skipIntro } from './fixtures'
 
 const seed = (ara: Ara, list: unknown): Promise<unknown> =>
   ara.page.evaluate((l) => (window as unknown as { ev: { ara: { saveSessions(x: unknown): Promise<unknown> } } }).ev.ara.saveSessions(l), list)
@@ -24,6 +24,7 @@ test('BENCH-2★ 껐다 켜도 남고, 점이 처지를 말한다', async ({ ara
   // "껐다 켜기"의 하이드레이트 경로다(디스크 flush 는 30초 디바운스라 여기서 기다릴 이유가 없다).
   await page.reload()
   await page.waitForSelector('.pane-grid')
+  await skipIntro(page) // 새로고침이면 부팅 인사가 다시 지나간다(#139)
   await page.click('.lrail-item[data-tab="ai"]')
 
   const rows = page.locator('.bench-row')
@@ -51,6 +52,7 @@ test('BENCH-3★ 부모를 지우면 딸린 분리 세션을 먼저 알린다', 
   ])
   await page.reload()
   await page.waitForSelector('.pane-grid')
+  await skipIntro(page) // 새로고침이면 부팅 인사가 다시 지나간다(#139)
   await page.click('.lrail-item[data-tab="ai"]')
 
   await page.locator('.bench-row[data-bench="p"]').hover()

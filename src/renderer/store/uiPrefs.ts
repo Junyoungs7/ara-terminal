@@ -29,7 +29,8 @@ const DEFAULT_PREFS: UiPrefs = {
   activityOrder: activityOrderOf(undefined),
   activityHidden: activityHiddenOf(undefined),
   araCallName: '',
-  araWelcomeSeen: false
+  araWelcomeSeen: false,
+  bootSplash: true
 }
 
 export function useUiPrefs() {

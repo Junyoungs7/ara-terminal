@@ -57,7 +57,7 @@ export function rmDir(path: string): void {
 
 // 실 main(out/main/index.js)을 임시 userData 로 기동. GPU 는 끈다(CI/원격 데스크톱에서
 // SwiftShader 로 떨어지면 WebGL 렌더러가 오히려 불안정 — 앱이 DOM 렌더러로 폴백한다).
-export async function launchAra(userData: string, keepWelcome = false): Promise<Ara> {
+export async function launchAra(userData: string, keepIntro = false): Promise<Ara> {
   // #64: 이 앱 인스턴스의 종료 단계 기록 파일. main 의 exitTrace 가 여기에 한 줄씩 append 한다
   // (ARA_EXIT_TRACE 가 없으면 아무 일도 안 한다 — 제품에 상시 있지만 평소 무동작).
   const trace = join(userData, 'exit-trace.log')
@@ -76,15 +76,28 @@ export async function launchAra(userData: string, keepWelcome = false): Promise<
   // 부트 복원이 끝나 화면이 확정될 때까지(빈 상태는 안내 없이 .pane-grid 만 남으므로 그 자체로 충분 — UI-tabbar).
   await page.waitForSelector('.pane-grid', { timeout: 40_000 })
   await sandboxUserPaths(app, userData)
-  // #138: 첫 실행 인사가 화면을 덮는다(overlay). 이름을 받는 것 자체를 보는 검사만 그걸 원하고
-  // 나머지 90여 스펙은 그 뒤 화면을 눌러야 한다 — **여기서 한 번 지나 준다.**
-  // 그 검사는 launch 픽스처에 `keepWelcome` 을 줘서 끈다(환경변수로 하면 같은 워커의 다른
+  // 켤 때 지나가는 화면 둘 — **부팅 인사**(#139, 1.4초 오버레이)와 **이름 묻기**(#138).
+  // 그 둘을 보는 검사만 그걸 원하고 나머지 90여 스펙은 그 뒤 화면을 눌러야 한다 —
+  // **여기서 지나 준다.** 그 검사는 `keepIntro` 로 끈다(환경변수로 하면 같은 워커의 다른
   // 스펙까지 물든다 — 실제로 한 번 그렇게 깨졌다).
-  if (!keepWelcome) {
-    const skip = page.locator('[data-action="welcome.skip"]')
-    if (await skip.count()) await skip.click()
+  if (!keepIntro) {
+    await skipIntro(page)
   }
   return { app, page, userData, trace }
+}
+
+/**
+ * 켤 때 지나가는 화면(부팅 인사 → 이름 묻기)을 넘긴다. 새로고침 뒤에도 쓸 수 있게 내보낸다.
+ * **순서가 중요하다**: 인사가 위(z-index 200)라 그게 사라지기 전에 누르면 그 클릭을 인사가 먹는다.
+ */
+export async function skipIntro(page: Page): Promise<void> {
+  const boot = page.locator('.boot')
+  if (await boot.count()) {
+    await page.keyboard.press('Escape') // 아무 키면 건너뛴다
+    await boot.waitFor({ state: 'detached', timeout: 5_000 }).catch(() => {})
+  }
+  const skip = page.locator('[data-action="welcome.skip"]')
+  if (await skip.count()) await skip.click()
 }
 
 // #89·#92(2026-08-16): 테스트가 **사용자 PC 를 건드리지 않게** 두 경로를 이 인스턴스의 userData 로 돌린다.
@@ -250,7 +263,7 @@ export async function quitAra(a: Ara): Promise<void> {
 
 type SshFactory = (opts?: Parameters<typeof startPasswordServer>[0]) => Promise<Harness>
 
-export type Launcher = (userData: string, keepWelcome?: boolean) => Promise<Ara>
+export type Launcher = (userData: string, keepIntro?: boolean) => Promise<Ara>
 
 export const test = base.extend<{
   userDataDir: string
@@ -278,8 +291,8 @@ export const test = base.extend<{
   // ara 와 같은 이유로 ssh 를 앞세운다(해체 역순 — 앱이 ssh 서버보다 먼저 내려가야 한다).
   launch: async ({ ssh: _ssh }, use) => {
     const started: Ara[] = []
-    await use(async (userData: string, keepWelcome?: boolean) => {
-      const a = await launchAra(userData, keepWelcome === true)
+    await use(async (userData: string, keepIntro?: boolean) => {
+      const a = await launchAra(userData, keepIntro === true)
       started.push(a)
       return a
     })

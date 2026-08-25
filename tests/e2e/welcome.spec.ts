@@ -10,6 +10,9 @@ import { test, expect } from './fixtures'
 
 test('WELCOME-1★ 처음 켜면 이름을 묻고, 넣으면 다시 안 묻는다', async ({ launch, userDataDir }) => {
   const { page } = await launch(userDataDir, true)
+  // 부팅 인사가 위에 있다 — 지나가야 이름 창을 누를 수 있다(#139).
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.boot')).toHaveCount(0)
   const modal = page.locator('.modal.welcome')
   await expect(modal).toBeVisible()
 
@@ -28,6 +31,7 @@ test('WELCOME-1★ 처음 켜면 이름을 묻고, 넣으면 다시 안 묻는�
   // 새로고침해도 다시 안 뜬다(저장됐다는 뜻이다).
   await page.reload()
   await page.waitForSelector('.pane-grid')
+  await page.keyboard.press('Escape')
   await expect(page.locator('.modal.welcome')).toHaveCount(0)
 
   // 설정에서 그 이름이 보이고 바꿀 수 있다.
@@ -42,15 +46,47 @@ test('WELCOME-1★ 처음 켜면 이름을 묻고, 넣으면 다시 안 묻는�
 
 test('WELCOME-2 건너뛰어도 다시 안 뜬다 — 첫 화면이 관문이 되면 안 된다', async ({ launch, userDataDir }) => {
   const { page } = await launch(userDataDir, true)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.boot')).toHaveCount(0)
   await expect(page.locator('.modal.welcome')).toBeVisible()
   await page.click('[data-action="welcome.skip"]')
   await expect(page.locator('.modal.welcome')).toHaveCount(0)
   // 이름은 저장 안 됐지만 **다시는 안 뜬다** — 매번 물으면 첫 화면이 관문이 된다.
   await page.reload()
   await page.waitForSelector('.pane-grid')
+  await page.keyboard.press('Escape')
   await expect(page.locator('.modal.welcome')).toHaveCount(0)
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await page.click('.drawer.open .set-nav [data-section="ai"]')
   await expect(page.locator('.drawer.open [data-field="ai.callName"]')).toHaveValue('')
+})
+
+test('BOOT-1★ 켤 때 인사가 지나간다 · 아무 키로 건너뛴다 · 설정에서 끈다', async ({ launch, userDataDir }) => {
+  const { page } = await launch(userDataDir, true)
+  const boot = page.locator('.boot')
+  await expect(boot).toBeVisible()
+  await expect(boot).toContainText('A.R.A')
+
+  // ★ 붙잡지 않는다 — 아무 키면 바로 사라진다(급할 때 화면이 사람을 붙들면 안 된다).
+  await page.keyboard.press('Escape')
+  await expect(boot).toHaveCount(0)
+
+  // 이름을 넣으면 그 이름으로 인사한다.
+  await page.fill('.wc-input', '준영')
+  await page.click('[data-action="welcome.ok"]')
+  await page.reload()
+  await page.waitForSelector('.pane-grid')
+  await expect(page.locator('.boot-hi')).toContainText('Welcome, 준영님')
+  await page.keyboard.press('Escape')
+
+  // ★ 끌 수 있다 — 멋은 한 번이고 방해는 매일이다.
+  await page.click('.tb-menu span:text-is("파일")')
+  await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
+  await page.click('.drawer.open .set-nav [data-section="general"]')
+  await page.locator('.drawer.open .set-row', { hasText: '켤 때 인사 화면' }).locator('.set-toggle').click()
+  await page.keyboard.press('Escape')
+  await page.reload()
+  await page.waitForSelector('.pane-grid')
+  await expect(page.locator('.boot')).toHaveCount(0)
 })

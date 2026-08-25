@@ -8005,3 +8005,139 @@
   justify-content: center;
   margin-top: 20px;
 }
+
+/* ── #139 부팅 인사(자비스식) — 짧게 지나가는 화면. 움직임은 전부 CSS 다. */
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* 이름 묻기(.overlay 100)보다 위 — 인사가 먼저 지나간다 */
+  display: grid;
+  place-items: center;
+  background: var(--bg-canvas);
+  animation: boot-fade 0.25s ease-out;
+}
+.boot.out {
+  opacity: 0;
+  transition: opacity 0.35s ease-in;
+  pointer-events: none;
+}
+/* 가운데에서 번지는 빛 — 배 한 척이 어둠에서 떠오르는 느낌. */
+.boot::before {
+  content: '';
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%);
+  animation: boot-glow 1.6s ease-out both;
+}
+.boot-in {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.boot-mark {
+  width: 68px;
+  height: 68px;
+  animation: boot-mark 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.boot-name {
+  color: var(--text-hi);
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  /* 자간이 벌어지며 자리 잡는다 — 이 한 가지가 "부팅"처럼 보이게 하는 대부분이다. */
+  animation: boot-track 1s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation-delay: 0.1s;
+}
+.boot-hi {
+  color: var(--accent-bright);
+  font-size: var(--fs-lg);
+  animation: boot-up 0.7s ease-out both;
+  animation-delay: 0.45s;
+}
+/* 가로로 한 번 훑고 지나가는 빛.
+   **화면 전체**를 덮고 배경 위치만 움직인다 — 작은 상자를 transform 으로 밀면 그 상자의
+   모서리가 보인다(두 번 시도해서 두 번 다 사각형이 비쳤다). 덮으면 볼 모서리가 없다. */
+.boot-sweep {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 34%, color-mix(in srgb, var(--accent) 13%, transparent) 50%, transparent 66%);
+  background-size: 260% 100%;
+  animation: boot-sweep 1.2s ease-in-out both;
+  animation-delay: 0.3s;
+  pointer-events: none;
+}
+@keyframes boot-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes boot-glow {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+}
+@keyframes boot-mark {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.86);
+  }
+}
+@keyframes boot-track {
+  from {
+    opacity: 0;
+    letter-spacing: 0.9em;
+    text-indent: 0.9em;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+  }
+}
+@keyframes boot-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes boot-sweep {
+  from {
+    background-position: 160% 0;
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    background-position: -60% 0;
+    opacity: 0;
+  }
+}
+/* 움직임을 싫어하는 판에서는 그냥 떴다 사라진다 — 내용은 같다. */
+@media (prefers-reduced-motion: reduce) {
+  .boot::before,
+  .boot-mark,
+  .boot-name,
+  .boot-hi,
+  .boot-sweep {
+    animation: none;
+  }
+  .boot-name {
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+  }
+  .boot-sweep {
+    display: none;
+  }
+}

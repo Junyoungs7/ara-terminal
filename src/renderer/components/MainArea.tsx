@@ -16,6 +16,13 @@ import { SettingsDrawer, SIZE_MAX, SIZE_MIN } from './SettingsDrawer'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
+import { BootSplash } from './BootSplash'
+
+/**
+ * #139: 이 창에서 부팅 인사를 이미 지났나. **모듈 변수**인 이유 — MainArea 는 떼어낸 창마다
+ * 새로 마운트되지만, 인사는 앱을 켤 때 한 번이면 된다(탭을 새 창으로 뺄 때마다 인사하면 코미디다).
+ */
+let bootSplashShown = false
 import { visibleActivities, type ActivityId } from '../store/activityBar'
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
@@ -379,6 +386,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // #138: 스냅샷을 한 번이라도 읽었나. "안 지났다"와 "아직 안 읽었다"를 갈라야 한다 —
     // 기본값이 false 라 로드 전에 판정하면 이미 지난 사람에게도 매번 뜬다.
     const [prefsLoaded, setPrefsLoaded] = useState(false)
+    // #139 부팅 인사. **한 번만** 뜬다(창을 다시 그려도 아니다) — 모듈 변수로 그걸 기억한다.
+    const [splashDone, setSplashDone] = useState(bootSplashShown)
     useEffect(() => {
       window.ev?.workspace
         .load()
@@ -984,11 +993,22 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
 
     return (
       <div className="main">
+        {/* #139 부팅 인사 — 자비스식. 짧고, 아무 키로 건너뛰고, 설정에서 끈다.
+            **이름 묻기보다 먼저** 지나간다: 처음 켠 사람도 인사부터 받고 그다음 이름을 준다. */}
+        {prefsLoaded && prefs.bootSplash && !splashDone && (
+          <BootSplash
+            name={prefs.araCallName}
+            onDone={() => {
+              bootSplashShown = true
+              setSplashDone(true)
+            }}
+          />
+        )}
         {/* #138 첫 실행 인사 — 호칭을 받는다. 한 번 지나면(건너뛰어도) 다시 안 뜬다.
             **하이드레이트가 끝난 뒤**에만 판정한다: 기본값이 빈 문자열이라 로드 전에 보면
             이미 이름을 넣어 둔 사람에게도 매번 뜬다. prefs 의 주인이 여기라 여기서 그린다. */}
         <WelcomeModal
-          open={prefsLoaded && !prefs.araWelcomeSeen}
+          open={prefsLoaded && !prefs.araWelcomeSeen && (splashDone || !prefs.bootSplash)}
           onDone={(name) => updatePrefs({ araWelcomeSeen: true, ...(name ? { araCallName: name } : {}) })}
         />
         <TermTabbar

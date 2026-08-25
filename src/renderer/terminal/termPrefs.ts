@@ -40,6 +40,7 @@ export const termPrefs: Omit<
   // 호칭도 xterm 과 무관하다(#138) — main 의 엔진이 말투 파일에 쓴다.
   | 'araCallName'
   | 'araWelcomeSeen'
+  | 'bootSplash'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -70,6 +71,7 @@ export function prefsFrom(
     | 'aiCliFlags'
     | 'araCallName'
     | 'araWelcomeSeen'
+    | 'bootSplash'
   >
 ): UiPrefs {
   return {
@@ -96,7 +98,9 @@ export function prefsFrom(
     aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : '',
     // #138 호칭 — 시스템 프롬프트에 들어가는 값이라 줄바꿈·길이를 여기서 자른다.
     araCallName: callNameOf(ui.araCallName),
-    araWelcomeSeen: ui.araWelcomeSeen === true
+    araWelcomeSeen: ui.araWelcomeSeen === true,
+    // 미지정이면 **켬** — 처음 쓰는 사람에게 한 번은 보여 주고, 싫으면 끄게 한다.
+    bootSplash: ui.bootSplash !== false
   }
 }
 

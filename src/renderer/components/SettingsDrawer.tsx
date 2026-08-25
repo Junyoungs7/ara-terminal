@@ -718,6 +718,14 @@ export function SettingsDrawer({
                   labelKey={(v) => 'ui.scale.' + v}
                 />
               </Row>
+              {/* #139 켤 때 인사. 멋은 한 번이고 방해는 매일이라 **끌 수 있어야** 한다. */}
+              <Row label={t('settings.bootSplash')} desc={t('settings.bootSplash.desc')}>
+                <Toggle
+                  on={prefs.bootSplash}
+                  label={t('settings.bootSplash')}
+                  onChange={(bootSplash) => onPrefsChange({ bootSplash })}
+                />
+              </Row>
               {/* 2026-08-13 준영님 요청: 우측 바에 기능이 박혀 있는 것을 껐다 켜고 순서도 바꾼다. */}
               <Row label={t('settings.activity')} desc={t('settings.activity.desc')}>
                 <div className="act-cfg">
