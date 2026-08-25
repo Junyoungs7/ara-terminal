@@ -21,7 +21,7 @@ describe('액티비티 바 항목 정의', () => {
     // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
     // #84: 서버 콘솔의 표 다섯(ps·svc·disk·pkg·ctr)이 하단 탭이 되면서 여기 합류했다.
     //   sys 바로 뒤에 모아 둔다 — **하단에 열리는 것끼리** 붙어 있어야 바에서도 한 덩어리로 읽힌다
-    //   (log 는 그 아래지만 성격이 달라 aisess 뒤 자기 자리를 지킨다).
+    //   (log 는 그 아래지만 성격이 달라 k8s 뒤 자기 자리를 지킨다).
     //   순서가 바뀌면 저장된 activityOrder 는 그대로고 **새 항목만 뒤에 붙는다**(migrateOrder) —
     //   기존 사용자에게 안 보이는 사고는 그쪽이 막는다.
     expect(ACTIVITY_ITEMS).toEqual([
@@ -34,7 +34,6 @@ describe('액티비티 바 항목 정의', () => {
       'pkg',
       'ctr',
       'k8s',
-      'aisess',
       'log',
       'pastlog',
       'preview',
@@ -64,7 +63,6 @@ describe('활성 판정(isActivityOpen)', () => {
     pkg: false,
     ctr: false,
     k8s: false,
-    aisess: false,
     log: true,
     pastlog: false,
     preview: false,

@@ -619,7 +619,7 @@
   "conn.menu.file.delete": "삭제",
   "conn.menu.local.new": "로컬 셸 (Ctrl+Shift+T)",
   "conn.menu.ssh.open": "SSH 연결…",
-  "conn.menu.aicli.start": "AI CLI 시작… (Ctrl+Shift+L)",
+  "conn.menu.aicli.start": "여기서 AI 세션 (Ctrl+Shift+L)",
   "conn.menu.file.aicli": "이 폴더에서 AI CLI 시작…",
   "conn.menu.file.terminal": "여기서 터미널 열기",
   "conn.menu.file.askAi": "아라에게 물어보기",

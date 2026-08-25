@@ -283,6 +283,9 @@ const TREE_MENUS = {
   server: [
     'server.connect',
     'server.newSession',
+    // #131: 서버 행에서 바로 작업대. 그 자리가 이미 아는 것(서버)은 묻지 않는다 — 폴더는
+    // 그 서버에 붙었을 때의 홈이다(설계 §10.6, F27 의 "저장이 전제가 되면 안 된다"와 같은 원칙).
+    'aicli.start',
     'server.edit',
     'server.duplicate',
     'server.forgetHostKey',
@@ -526,7 +529,6 @@ export type MenuCommandId =
   | 'panel.console'
   | 'panel.ports'
   | 'panel.sysmon'
-  | 'panel.aisessions'
   | 'panel.log'
   | 'panel.ps'
   | 'panel.svc'
@@ -593,7 +595,6 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       { command: 'panel.ctr' },
       { command: 'panel.log' },
       // 우측 레일.
-      { command: 'panel.aisessions' },
       { command: 'panel.pastlog' },
       { action: 'sidebar.collapse' },
       { action: 'fileTree.toggle' },

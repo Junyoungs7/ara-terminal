@@ -1,5 +1,9 @@
-// F30 AI 세션 패널 — 준영님 요청(2026-08-12): 서버 여러 대에 AI CLI 를 띄워 두면 어느 놈이
-// 나를 기다리는지 모른다. 목업 D안 확정(mockups/ai-sessions.png).
+// F30 조용한 AI — 준영님 요청(2026-08-12): 서버 여러 대에 AI CLI 를 띄워 두면 어느 놈이
+// 나를 기다리는지 모른다.
+//
+// **#132(2026-08-25)에서 우측 [AI 세션] 레일이 없어졌다.** 목록은 사이드바 [AI] 작업대로 갔고
+// (왼쪽이 목록 자리다), 조용함 감시는 화면 없이 계속 돈다(store/aiQuietWatch.ts) — 화면과 함께
+// 지우면 "안 보고 있어도 알아챈다"는 목적째 사라진다. 이 파일은 그 이사를 따라간 것이다.
 //
 // 이 파일이 지키는 가장 중요한 성질은 AISESS-3 이다: **문구가 "기다립니다"가 아니라 "조용합니다"** 다.
 // 우리 판정 근거는 "출력이 멎었다" 하나뿐이라 대기를 확신할 수 없다 — 확신하는 척했다가 한 번
@@ -24,12 +28,12 @@ function makeCli(): { exec: (c: string, s: ServerChannel) => void; onShellData: 
   }
 }
 
-const panel = (page: Page) => page.locator('.monitor-panel.aisess')
+const rows = (page: Page) => page.locator('.bench-row')
 
-// 액티비티 바 순서: ai · monitor · sys · **aisess** · log · … (store/activityBar.ts 가 단일 출처)
-async function openAiSess(page: Page): Promise<void> {
-  await page.click('.act-item[data-activity="aisess"]')
-  await expect(panel(page)).toBeVisible()
+/** 작업대 목록은 **왼쪽** 사이드바다(#129) — 오른쪽 레일이 아니다. */
+async function openBench(page: Page): Promise<void> {
+  await page.click('.lrail-item[data-tab="ai"]')
+  await expect(page.locator('.sb-panel.active .bench-list, .sb-panel.active .bench-empty')).toBeVisible()
 }
 
 /**
@@ -59,55 +63,64 @@ async function sshForAi(ssh: (o: unknown) => Promise<{ port: number }>, password
   })
 }
 
-test('AISESS-1 실행 중인 AI 가 없으면 안내만 내고 점도 안 찍는다', async ({ ara }) => {
+test('AISESS-1 만들어 둔 것이 없으면 안내만 낸다 · 옛 레일은 사라졌다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await openAiSess(page)
-  await expect(page.locator('.aisess-empty')).toContainText('AI CLI')
-  await expect(page.locator('.aisess-row')).toHaveCount(0)
-  // 볼 것이 없으면 액티비티 바에 점을 찍지 않는다 — 늘 켜져 있으면 아무도 안 본다.
-  await expect(page.locator('.act-item[data-activity="aisess"] .act-badge')).toHaveCount(0)
+  await openBench(page)
+  await expect(page.locator('.bench-empty')).toContainText('AI CLI')
+  await expect(rows(page)).toHaveCount(0)
+  // #132: 우측 [AI 세션] 아이콘은 이제 없다 — 같은 목록이 두 자리에 있으면 어느 쪽이 진짜인지 모른다.
+  await expect(page.locator('.act-item[data-activity="aisess"]')).toHaveCount(0)
 })
 
-test('AISESS-2★ F27 로 시작한 AI 가 서버별로 묶여 목록에 오른다', async ({ ara, ssh }) => {
+test('AISESS-2★ 시작한 AI 가 작업대로 **적립된다** — 만들고 잊지 않는다', async ({ ara, ssh }) => {
   const { page } = ara
   const h = await sshForAi(ssh as never, 'pw-as2')
   await launchAi(page, 'as2srv', h.port, 'pw-as2')
 
-  await openAiSess(page)
-  await expect(page.locator('.aisess-row')).toHaveCount(1, { timeout: 30_000 })
-  await expect(page.locator('.aisess-cli')).toHaveText('claude')
-  // 폴더는 이제 **그 세션이 서 있는 곳**이다(하네스 procCwd) — 창에서 타이핑하던 값이 아니다.
-  await expect(page.locator('.aisess-path')).toHaveText('/home/tester')
-  // 서버 이름으로 묶인다 — 같은 서버에 여러 개를 띄우는 일이 흔하다.
-  await expect(page.locator('.aisess-grp')).toHaveCount(1)
+  await openBench(page)
+  await expect(rows(page)).toHaveCount(1, { timeout: 30_000 })
+  // 폴더는 **그 세션이 서 있는 곳**이다(하네스 procCwd) — 창에서 타이핑하던 값이 아니다.
+  // 제목은 그 경로의 마지막 칸이다(/home/tester → tester).
+  await expect(rows(page).locator('.t')).toHaveText('tester')
+  await expect(rows(page).locator('.bench-name')).toHaveAttribute('title', /\/home\/tester/)
+  // 살아 있으니 초록. 같은 조합을 또 띄워도 줄이 늘지 않는다(적립은 하나다).
+  await expect(rows(page)).toHaveAttribute('data-status', /live|quiet/)
 })
 
 test('AISESS-3★ 문구가 "기다립니다"가 아니라 "조용합니다"다 — 확신하지 않는다', async ({ ara, ssh }) => {
   const { page } = ara
   const h = await sshForAi(ssh as never, 'pw-as3')
   await launchAi(page, 'as3srv', h.port, 'pw-as3')
-  await openAiSess(page)
-  await expect(page.locator('.aisess-row')).toHaveCount(1, { timeout: 30_000 })
+  await openBench(page)
+  await expect(rows(page)).toHaveCount(1, { timeout: 30_000 })
 
-  const body = await panel(page).innerText()
-  // 판정 근거를 숨기지 않는다.
-  expect(body).toContain('출력이 60초 이상 멎었다')
-  // 그리고 단정하지 않는다 — 승인 대기일 수도, 오래 걸리는 작업일 수도 있다.
-  expect(body).not.toContain('기다립니다')
+  // 이제 그 말은 점의 툴팁에 있다(줄 하나에 문장을 붙일 자리가 없다 — 사이드바는 좁다).
+  const tip = await rows(page).locator('.bench-name').getAttribute('title')
+  expect(tip).toBeTruthy()
+  // 단정하지 않는다 — 승인 대기일 수도, 오래 걸리는 작업일 수도 있다.
+  expect(tip).not.toContain('기다립니다')
+  const quietTip = await page.evaluate(() => {
+    const el = document.querySelector('.bench-dot')
+    return el?.getAttribute('title') ?? ''
+  })
+  expect(quietTip).not.toContain('기다립니다')
 })
 
-test('AISESS-4 행을 누르면 그 세션 탭으로 간다', async ({ ara, ssh }) => {
+test('AISESS-4 살아 있는 줄을 누르면 그 탭으로 간다(새로 안 띄운다)', async ({ ara, ssh }) => {
   const { page } = ara
   const h = await sshForAi(ssh as never, 'pw-as4')
   await launchAi(page, 'as4srv', h.port, 'pw-as4')
-  await openAiSess(page)
-  await expect(page.locator('.aisess-row')).toHaveCount(1, { timeout: 30_000 })
+  await openBench(page)
+  await expect(rows(page)).toHaveCount(1, { timeout: 30_000 })
 
-  // AI 세션이 아닌 다른 탭으로 옮겨 둔 뒤, 패널 행을 눌러 돌아오는 것을 본다.
+  // 다른 탭으로 옮겨 둔 뒤, 줄을 눌러 돌아오는 것을 본다. 탭 수가 늘면 새로 띄운 것이다 — 그건 틀렸다.
   const before = await page.locator('.term-tabbar .ttab.active').innerText()
   await newLocalShell(page)
   await expect(page.locator('.term-tabbar .ttab.active')).not.toHaveText(before)
-  await page.locator('.aisess-row').click()
+  const tabs = await page.locator('.term-tabbar .ttab').count()
+  await openBench(page)
+  await rows(page).locator('.bench-name').click()
   await expect(page.locator('.term-tabbar .ttab.active')).toHaveText(before)
+  expect(await page.locator('.term-tabbar .ttab').count()).toBe(tabs)
 })

@@ -264,7 +264,6 @@ export type ActivityId =
   | 'ctr'
   // 2026-08-24 준영님: 쿠버는 컨테이너와 **다른 탭**이다(한 서버에 둘 다 깔릴 수 있다).
   | 'k8s'
-  | 'aisess'
   | 'log'
   // #86: 지난 세션 기록 — **우측**이다. 세션 목록은 세로 카드라 레일에 맞고, 우리 기능이다.
   | 'pastlog'
@@ -285,7 +284,6 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'pkg',
   'ctr',
   'k8s',
-  'aisess',
   'log',
   'pastlog',
   'preview',
@@ -298,8 +296,11 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
 //   서버 것 → 아래 · 아라(우리) 것 → 오른쪽. 모양(가로/세로)은 2순위, 예외는 문서에 적는다.
 //
 // 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는다.** #79(2026-08-14)부터 한 번에 하나만 열린다.
-// 여섯이었는데 셋만 남았다: 대화(ai)·AI 세션(aisess)·미니 프리뷰(preview) — 전부 우리 기능이다.
-export const RAIL_IDS = ['ai', 'aisess', 'pastlog', 'preview'] as const
+// 여섯이었는데 셋만 남았다: 대화(ai)·지난 세션(pastlog)·미니 프리뷰(preview) — 전부 우리 기능이다.
+// #132(2026-08-25): [AI 세션] 레일을 뺐다. 그 목록은 **사이드바 [AI] 작업대**로 갔고(왼쪽이 목록
+// 자리다), 조용함 감시는 화면 없이 계속 돈다(store/aiQuietWatch.ts) — 화면과 함께 지우면 그
+// 기능의 목적("안 보고 있어도 알아챈다")이 사라진다.
+export const RAIL_IDS = ['ai', 'pastlog', 'preview'] as const
 export type RailId = (typeof RAIL_IDS)[number]
 
 export function isRailId(id: ActivityId): id is RailId {

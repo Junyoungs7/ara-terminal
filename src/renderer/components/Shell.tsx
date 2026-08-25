@@ -31,8 +31,8 @@ import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { aiRuns, registerAiRun } from '../store/aiSessions'
 import { benchRows as buildBenchRows, useAiWorkbench } from '../store/aiWorkbench'
+import { useAiQuietWatch } from '../store/aiQuietWatch'
 import { childrenOf, type AiSessionState } from '@shared/aiSession'
-import { AiSessionsPanel } from './AiSessionsPanel'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, useGroupList } from '../store/groups'
 import { ACTIVITY_ITEMS, type ActivityId } from '../store/activityBar'
@@ -107,7 +107,6 @@ export function Shell() {
   // #125: 아라 대화를 **한 번이라도 열었나**. 아래 렌더 참고 — 첫 열림 전까지는 붙이지 않는다.
   const araEver = useRef(false)
   if (aiOpen) araEver.current = true
-  const aiSessOpen = rail === 'aisess'
   // #86: 지난 세션 — 우측 레일(세션 목록은 세로 카드다). 현재 기록은 하단 [세션 기록]이다.
   const pastLogOpen = rail === 'pastlog'
   const monitorOpen = bottom === 'monitor'
@@ -130,10 +129,6 @@ export function Shell() {
     null
   )
 
-  // F30 AI 세션 패널의 액티비티 바 점(조용한 AI 개수). 열림 상태는 위 rail 이 갖는다.
-  const [aiQuiet, setAiQuiet] = useState(0)
-  // 조용한 세션 id 들 — AiSessionsPanel 이 재고 있는 값을 그대로 받아 쓴다(중복 계산 금지).
-  const [quietIds, setQuietIds] = useState<Set<string>>(new Set())
   // #129 작업대 목록 — 껐다 켜도 남는다. 살아 있는지는 F30 의 실행 기록·세션 목록과 맞춰 본다.
   const bench = useAiWorkbench()
   // 작업 프로필(서버+폴더 즐겨찾기). 트리에 행을 만들지 않고 팝업 목록으로만 보여 준다.
@@ -232,6 +227,23 @@ export function Shell() {
 
   const { profiles, conn, lookup, save, remove, connect } = useProfiles()
 
+  // R6 연결 그룹: 프로필에서 파생된 그룹 + 저장된 빈 그룹. 트리·연결 폼이 같은 목록을 쓴다.
+  const { stored: storedGroups, save: saveGroups } = useGroupList()
+  const groups = groupsOf(profiles, storedGroups)
+  // 마지막으로 접속한 프로필(트리 active 표시).
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
+  // F7: 세션별 OSC7 cwd(터미널→SFTP 트리 동기 + 사이드바 세션 카드 표시).
+  // 활성 세션 하나만 구독하던 것을 전 세션 맵으로 넓혔다 — 카드마다 "지금 어느 폴더인지"가 필요하고,
+  // 세션을 오갈 때 cwd 가 null 로 깜빡이던 것도 사라진다(마지막 값을 기억한다).
+  const [cwdBy, setCwdBy] = useState<Record<string, string>>({})
+  // 메인 영역 세션 활성화 핸들(트리 세션 행 클릭 → 탭·패널 동기).
+  const mainRef = useRef<MainAreaHandle>(null)
+  const selectSession = useCallback((id: string) => mainRef.current?.activateSession(id), [])
+
+  // #132: 조용한 AI 감시 — **화면 없이 항상 돈다**. 그게 이 기능의 목적이라(안 보고 있어도
+  // 알아챈다) 패널을 걷어내면서 로직만 남겼다. 사이드바 [AI] 의 노란 점이 그 결과다.
+  const { quietIds } = useAiQuietWatch(selectSession)
+
   // 작업대 줄. 살아 있는 세션 찾기는 **F30 실행 기록**(어느 터미널에서 무엇이 도는가)을 통해서다 —
   // 같은 사실을 두 곳에서 다르게 세지 않는다.
   const benchList = useMemo(() => {
@@ -245,18 +257,6 @@ export function Shell() {
     })
   }, [bench.list, bench.paths, sessions.sessions, profiles, quietIds])
 
-  // R6 연결 그룹: 프로필에서 파생된 그룹 + 저장된 빈 그룹. 트리·연결 폼이 같은 목록을 쓴다.
-  const { stored: storedGroups, save: saveGroups } = useGroupList()
-  const groups = groupsOf(profiles, storedGroups)
-  // 마지막으로 접속한 프로필(트리 active 표시).
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
-  // F7: 세션별 OSC7 cwd(터미널→SFTP 트리 동기 + 사이드바 세션 카드 표시).
-  // 활성 세션 하나만 구독하던 것을 전 세션 맵으로 넓혔다 — 카드마다 "지금 어느 폴더인지"가 필요하고,
-  // 세션을 오갈 때 cwd 가 null 로 깜빡이던 것도 사라진다(마지막 값을 기억한다).
-  const [cwdBy, setCwdBy] = useState<Record<string, string>>({})
-  // 메인 영역 세션 활성화 핸들(트리 세션 행 클릭 → 탭·패널 동기).
-  const mainRef = useRef<MainAreaHandle>(null)
-  const selectSession = useCallback((id: string) => mainRef.current?.activateSession(id), [])
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다
   // (탭바 ＋ · Ctrl+` · 복제). 여기서 또 부르면 두 번 부르는 것일 뿐이다.
@@ -409,9 +409,6 @@ export function Shell() {
           return
         case 'panel.sysmon':
           toggleBottom('sys')
-          return
-        case 'panel.aisessions':
-          toggleRail('aisess')
           return
         case 'panel.log':
           toggleBottom('log')
@@ -992,6 +989,14 @@ export function Shell() {
         case 'server.newSession':
           void connectProfile(p.id) // 무조건 새 세션
           return
+        // #131 [여기서 AI 세션] — 접속하고, 셸이 서면 그 자리에서 CLI 를 띄운다(작업대가 된다).
+        // 접속 전에 보내면 셸이 아직 없다 — onSession 콜백이 그 순서를 지킨다.
+        case 'aicli.start':
+          // 폴더는 **그 서버의 홈**이다(`~`). 갓 붙은 세션은 cwd 가 아직 안 왔고, 그걸 기다리느니
+          // 홈에서 시작하는 편이 낫다 — 사용자는 CLI 안에서 옮겨 갈 수 있다. `~` 는 따옴표 밖에
+          // 두는 규칙(aiCli.quotePosix)이 이미 있어서 그대로 펼쳐진다.
+          void connectProfile(p.id, undefined, undefined, (sid) => runAiCliRef.current?.(undefined, '~', sid))
+          return
         case 'server.edit':
           openConnManager({ mode: 'select', profileId: p.id })
           return
@@ -1051,7 +1056,6 @@ export function Shell() {
       pkg: bottom === 'pkg',
       ctr: bottom === 'ctr',
       k8s: bottom === 'k8s',
-      aisess: aiSessOpen,
       log: logOpen,
       pastlog: pastLogOpen,
       preview: previewOpen,
@@ -1064,7 +1068,6 @@ export function Shell() {
       monitorOpen,
       sysOpen,
       bottom,
-      aiSessOpen,
       logOpen,
       pastLogOpen,
       previewOpen,
@@ -1309,15 +1312,6 @@ export function Shell() {
           activeId={sessions.activeId}
           onSelect={selectSession}
         />
-        {/* F30 AI 세션 — 어느 AI 가 조용한가. 패널이 닫혀 있어도 안에서 계속 센다
-            (액티비티 바 점과 OS 알림이 그 결과를 쓴다 — 닫아 두면 안 보이는 게 D안의 급소였다). */}
-        <AiSessionsPanel
-          open={aiSessOpen}
-          onClose={() => closeRail('aisess')}
-          onGoTo={selectSession}
-          onQuietChange={setAiQuiet}
-          onQuietIds={setQuietIds}
-        />
         {/* #86 지난 세션 — 로그 폴더를 읽어 목록을 낸다(새 저장소 없음). 현재 세션 기록은
             하단 [세션 기록] 탭이고, 여기서 [진행 중] 줄을 누르면 그쪽으로 보낸다. */}
         <PastLogPanel
@@ -1367,7 +1361,9 @@ export function Shell() {
           items={activityItems}
           state={activityState}
           onToggle={onActivityToggle}
-          badges={{ aisess: aiQuiet > 0 }}
+          // #132: [AI 세션] 레일이 없어졌지만 **점은 남는다** — 조용한 AI 가 있으면 사이드바
+          // [AI] 를 보라는 신호다(감시는 화면 없이 계속 돈다).
+          badges={{}}
           bottomOpen={bottom !== null}
           onToggleBottomBar={toggleBottomBar}
         />
