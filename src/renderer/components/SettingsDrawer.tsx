@@ -476,36 +476,43 @@ function AiSection({
  * 그렇게 정해 뒀고 준영님이 늘 쓰시는 조합이지만, **끌 자리가 있어야 켜 둘 수 있다** — 이 줄이
  * 그 자리다. 설명 문구에 무엇을 끄는 플래그인지 적어 둔다.
  */
+/** 플래그가 있는 CLI 만 고를 수 있다 — custom 은 사용자가 직접 적는 것이라 표가 없다. */
+const FLAGGED_CLIS = AI_CLI_IDS.filter((cli) => AI_CLIS[cli].flags.length > 0)
+
+/**
+ * AI CLI 기본 플래그(2026-08-25 준영님 요청으로 **하나씩** 보이게 고쳤다).
+ *
+ * 전에는 세 CLI 의 플래그가 한꺼번에 세 줄로 깔려 있었다. 그 줄들은 서로 무관한데 같이 보여서
+ * "지금 어느 것을 고치는 중인가"가 흐렸다 — 위 프로바이더처럼 **세그먼트로 하나만** 본다.
+ *
+ * 세그먼트를 **프로바이더에 묶지 않은** 이유: 다른 축이다. 서버에서 `codex` 를 띄우면서 아라 대화의
+ * API 는 anthropic 일 수 있다. 묶어 두면 한쪽을 고치려다 다른 쪽이 따라 바뀐다.
+ */
 function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange: (p: Partial<UiPrefs>) => void }) {
-  const set = (cli: AiCliId, flags: string[]) =>
-    onPrefsChange({ aiCliFlags: { ...prefs.aiCliFlags, [cli]: flags } })
+  const [cli, setCli] = useState<AiCliId>(FLAGGED_CLIS[0] ?? 'claude')
+  const set = (flags: string[]) => onPrefsChange({ aiCliFlags: { ...prefs.aiCliFlags, [cli]: flags } })
+  const on = prefs.aiCliFlags[cli] ?? []
   return (
     <>
-      {AI_CLI_IDS.filter((cli) => AI_CLIS[cli].flags.length > 0).map((cli) => {
-        const on = prefs.aiCliFlags[cli] ?? []
-        return (
-          <Row
-            key={cli}
-            label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`}
-            desc={t('settings.ai.cliFlags.desc')}
-          >
-            <div className="cliflags">
-              {AI_CLIS[cli].flags.map((f) => (
-                <label key={f.id} className="cliflag" data-flag={`${cli}.${f.id}`}>
-                  <input
-                    type="checkbox"
-                    checked={on.includes(f.id)}
-                    // 배타 그룹(-r/-c)은 toggleFlag 가 처리한다 — 여기서 또 해석하지 않는다.
-                    onChange={() => set(cli, toggleFlag(cli, on, f.id))}
-                  />
-                  <span>{t(f.labelKey)}</span>
-                  <code>{f.arg}</code>
-                </label>
-              ))}
-            </div>
-          </Row>
-        )
-      })}
+      <Row label={t('settings.ai.cliPick')} desc={t('settings.ai.cliPick.desc')}>
+        <Seg value={cli} options={FLAGGED_CLIS} onChange={setCli} labelKey={(v) => 'settings.ai.cli.' + v} />
+      </Row>
+      <Row label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`} desc={t('settings.ai.cliFlags.desc')}>
+        <div className="cliflags">
+          {AI_CLIS[cli].flags.map((f) => (
+            <label key={f.id} className="cliflag" data-flag={`${cli}.${f.id}`}>
+              <input
+                type="checkbox"
+                checked={on.includes(f.id)}
+                // 배타 그룹(-r/-c)은 toggleFlag 가 처리한다 — 여기서 또 해석하지 않는다.
+                onChange={() => set(toggleFlag(cli, on, f.id))}
+              />
+              <span>{t(f.labelKey)}</span>
+              <code>{f.arg}</code>
+            </label>
+          ))}
+        </div>
+      </Row>
     </>
   )
 }

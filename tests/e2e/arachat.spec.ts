@@ -130,24 +130,27 @@ test('ARA2-3★ 되묻기는 알약 버튼이고 숫자 키로도 고른다 — 
   ])
 })
 
-test('ARA2-5★ claude 가 없으면 두 갈래를 보여 준다 — 설치하거나 API 키로', async ({ ara }) => {
+test('ARA2-5★ claude 가 없으면 **알리고 API 로 넘어간다** · 스위치로 되돌린다', async ({ ara }) => {
   const { page } = ara
   await openAra(ara)
   const panel = page.locator('.ara-panel')
 
   // 하네스에는 캔드 엔진이 붙어 있어 이 상태가 저절로 오지 않는다 — 사건만 흘려 넣는다.
-  // "정말 없을 때 이 사건이 나오는가"는 tests/araChat.test.ts 가 where/which 를 가로채 본다.
+  // "정말 없을 때 이 사건이 나오고 API 로 넘어가는가"는 tests/araChat.test.ts 가 본다.
   await ara.app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].webContents.send('ara:event', { t: 'noEngine' })
   })
 
-  const box = panel.locator('.ara-empty')
-  await expect(box).toContainText('Claude Code 가 없습니다')
-  await expect(box.locator('.ara-cmd')).toContainText('@anthropic-ai/claude-code')
-  // 입력칸은 잠긴다 — 답할 상대가 없는데 글을 받으면 안 된다.
-  await expect(panel.locator('.ara-input')).toBeDisabled()
+  // 조용히 바꾸지 않는다 — 왜 넘어갔는지 한 줄로 남는다(설치 명령까지).
+  const note = panel.locator('.ara-note.bad')
+  await expect(note).toContainText('Claude Code 가 없어')
+  await expect(note).toContainText('@anthropic-ai/claude-code')
+  // 입력칸은 잠기지 않는다 — API 로 대화는 된다.
+  await expect(panel.locator('.ara-input')).toBeEnabled()
 
-  // [API 키로 쓰기]가 실제로 그 엔진을 요청하는지 배선으로 본다(화면 문구가 아니라).
+  // 스위치가 그 자리에 있고, 누르면 Claude Code 로 되돌리려 한다(배선으로 확인).
+  const eng = panel.locator('.ara-chip.eng')
+  await expect(eng).toHaveText('Claude Code') // 아직 opened 가 안 왔으니 표시는 cli 다
   await ara.app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('ara:open')
     ;(globalThis as unknown as { __opens: unknown[] }).__opens = []
@@ -156,10 +159,10 @@ test('ARA2-5★ claude 가 없으면 두 갈래를 보여 준다 — 설치하�
       return { ok: true }
     })
   })
-  await box.locator('.ara-btn.p').click()
+  await eng.click()
   const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { engine?: string }[] }).__opens)
   expect(opens).toHaveLength(1)
-  expect(opens[0].engine).toBe('api')
+  expect(opens[0].engine).toBe('api') // cli 표시 상태에서 누르면 api 를 요청한다
 })
 
 test('ARA2-4 폴더를 묻지 않는다 · 머리의 폴더를 눌러 옮긴다', async ({ ara }) => {
@@ -190,7 +193,7 @@ test('ARA2-6★ [계획 먼저] → 계획이 나오면 승인 줄 → [이대�
   const { page } = ara
   await openAra(ara)
   const panel = page.locator('.ara-panel')
-  const chip = panel.locator('.ara-chip')
+  const chip = panel.locator('.ara-chip.plan')
 
   // 켜기 — 상태가 화면이 아니라 main 에서 온다(planMode 사건). 화면이 스스로 짐작하지 않는다.
   await expect(chip).toHaveAttribute('aria-pressed', 'false')

@@ -27,7 +27,7 @@ import { t } from '../i18n'
 const CAN_TYPE = new Set<Phase>(['idle', 'working'])
 
 /** 상태줄에 뜨는 지금 상황. */
-type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'noEngine'
+type Phase = 'closed' | 'opening' | 'idle' | 'working'
 
 export function AraChatPanel({
   open,
@@ -77,7 +77,9 @@ export function AraChatPanel({
         return
       }
       if (e.t === 'noEngine') {
-        setPhase('noEngine')
+        // 이제 여기서 멈추지 않는다 — main 이 곧바로 API 엔진으로 다시 열고 'opened' 를 보낸다.
+        // 우리는 **왜 넘어갔는지**만 한 줄 남긴다(조용히 바꾸지 않는다는 약속이 이 줄이다).
+        setItems((cur) => reduceChat(cur, { t: 'error', message: t('ara.noEngine') }))
         return
       }
       if (e.t === 'closed') {
@@ -154,7 +156,7 @@ export function AraChatPanel({
     async (o: { cwd?: string; engine?: 'cli' | 'api' } = {}) => {
       setPhase('opening')
       const r = await window.ev?.ara.open({ ...o, active })
-      if (r && !r.ok && !r.noEngine) setPhase('closed')
+      if (r && !r.ok) setPhase('closed')
     },
     [active]
   )
@@ -215,8 +217,6 @@ export function AraChatPanel({
     <div className="ara-panel" onKeyDown={onKey}>
       <div className="ara-hd">
         <span className="t">{t('ara.title')}</span>
-        {/* API 키 모드는 **한눈에 달라 보여야 한다** — 도구가 없고 지갑이 다르다. */}
-        {engine === 'api' && <span className="ara-eng">{t('ara.engine.api')}</span>}
         {/* 폴더는 **묻지 않는다**(2026-08-25) — 늘 어딘가에서 돌고, 여기를 누르면 바꾼다.
             아라를 특정 폴더에 매어 두는 물건으로 만들지 않기 위해서다. */}
         {cwd && (
@@ -293,22 +293,6 @@ export function AraChatPanel({
           )
         )}
 
-        {/* #126 이 PC 에 claude 가 없다. 갈 수 있는 길을 둘 다 보여 준다 —
-            설치하고 다시 보든지, 지금 API 키로 쓰든지. 조용히 한쪽으로 끌고 가지 않는다. */}
-        {phase === 'noEngine' && (
-          <div className="ara-empty">
-            <div>{t('ara.noEngine')}</div>
-            <code className="ara-cmd">npm i -g @anthropic-ai/claude-code</code>
-            <div className="ara-row">
-              <button type="button" className="ara-btn" onClick={() => void start()}>
-                {t('ara.recheck')}
-              </button>
-              <button type="button" className="ara-btn p" onClick={() => void start({ engine: 'api' })}>
-                {t('ara.useApi')}
-              </button>
-            </div>
-          </div>
-        )}
         {phase === 'closed' && items.length === 0 && <div className="ara-empty">{t('ara.closed')}</div>}
       </div>
 
@@ -344,10 +328,21 @@ export function AraChatPanel({
           }}
         />
         <div className="ara-bar">
+          {/* 엔진 스위치(2026-08-25 준영님) — 무엇으로 도는지 고르고, 지금 무엇으로 도는지 본다.
+              claude 가 없으면 main 이 알아서 API 로 넘기고 이 스위치가 그쪽으로 옮겨져 있다. */}
+          <button
+            type="button"
+            className={'ara-chip eng' + (engine === 'api' ? ' on' : '')}
+            aria-pressed={engine === 'api'}
+            title={t(engine === 'api' ? 'ara.engine.tip.api' : 'ara.engine.tip.cli')}
+            onClick={() => void start({ ...(cwd ? { cwd } : {}), engine: engine === 'api' ? 'cli' : 'api' })}
+          >
+            {t(engine === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}
+          </button>
           {/* 계획 먼저는 **대화의 성격**을 바꾸는 스위치라 늘 보이는 자리에 둔다. */}
           <button
             type="button"
-            className={'ara-chip' + (planOn ? ' on' : '')}
+            className={'ara-chip plan' + (planOn ? ' on' : '')}
             aria-pressed={planOn}
             title={t('ara.plan.tip')}
             onClick={() => void window.ev?.ara.planMode(!planOn)}

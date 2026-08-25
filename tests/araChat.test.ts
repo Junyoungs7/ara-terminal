@@ -264,12 +264,22 @@ describe('엔진이 없을 때 · 폴백 (#126)', () => {
     return { chat, seen }
   }
 
-  it('★ claude 가 없으면 띄우지 않고 알린다 — 셸 오류 문자열을 짐작하지 않는다', async () => {
+  it('★ claude 가 없으면 띄우지 않는다 — 셸 오류 문자열을 짐작하지 않는다', async () => {
     hasClaude = false
-    const { chat, seen } = mk()
+    const { chat, seen } = mk() // api 를 안 준 판 = 갈 곳이 없다
     expect(await chat.open()).toEqual({ ok: false, noEngine: true })
     expect(seen).toEqual([{ t: 'noEngine' }])
     expect(chat.isOpen()).toBe(false)
+  })
+
+  it('★ claude 가 없고 폴백이 있으면 **알리고 넘어간다**(2026-08-25 준영님 지시)', async () => {
+    hasClaude = false
+    const { chat, seen } = mk({ api: true })
+    expect(await chat.open()).toEqual({ ok: true })
+    // 조용히 바꾸지 않는다 — 왜 넘어갔는지 사건으로 먼저 알리고, 그다음 API 로 열린다.
+    expect(seen.map((e) => e.t)).toEqual(['noEngine', 'opened'])
+    expect(seen[1]).toMatchObject({ engine: 'api' })
+    chat.close()
   })
 
   it('★ API 키 폴백은 폴더도 MCP 도 묻지 않는다 — 도구가 없으니 의미가 없다', async () => {

@@ -7496,31 +7496,6 @@
   cursor: default;
 }
 
-/* #126 폴백·안내 — 어느 엔진인지, 없을 때 어디로 갈지. */
-.ara-eng {
-  flex: none;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  padding: 1px 7px;
-  font-size: var(--fs-micro);
-  color: var(--accent-bright);
-}
-.ara-cmd {
-  align-self: stretch;
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 5px 8px;
-  font-family: var(--mono);
-  font-size: var(--fs-micro);
-  color: var(--text-mid);
-  user-select: text;
-  word-break: break-all;
-}
-.ara-row {
-  display: flex;
-  gap: 6px;
-}
 
 /* 머리의 작업 폴더는 **버튼**이다 — 눌러서 바꾼다(묻지 않는 대신 언제든 옮긴다). */
 .ara-hd .cwd {
@@ -7565,6 +7540,16 @@
   color: var(--text-mid);
 }
 .ara-chip.on {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+/* 엔진 스위치는 켜짐/꺼짐이 아니라 **둘 중 하나**다 — 어느 쪽이든 테두리를 준다(꺼진 것처럼
+   보이면 "Claude Code 가 안 붙었나" 로 읽힌다). API 쪽만 금색으로 눈에 걸리게 둔다. */
+.ara-chip.eng {
+  border-color: var(--line-strong);
+  color: var(--text-mid);
+}
+.ara-chip.eng.on {
   border-color: var(--accent);
   color: var(--accent-bright);
 }

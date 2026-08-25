@@ -173,7 +173,12 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       // 분류하게 된다. where/which 한 번이 그 짐작을 통째로 없앤다.
       const real = !deps.makeEngine && !isFakeAi()
       if (real && !(await hasLocalCli('claude'))) {
+        // 2026-08-25 준영님 지시: **자연스럽게 API 로 넘어간다.** 앞서는 "지갑이 바뀌니 사람이
+        // 고른다"로 두 갈래를 보여 줬는데, 쓰는 사람 입장에서는 갈 곳이 하나뿐인 갈림길이었다.
+        // 대신 **왜 넘어갔는지 알린다**(noEngine 사건 → 화면의 안내 줄)와 **엔진 토글이 눈에
+        // 보이게 API 로 바뀐다** — 조용히 바꾸는 것과는 다르다.
         deps.emit({ t: 'noEngine' })
+        if (deps.api) return this.open({ ...o, engine: 'api' })
         return { ok: false, noEngine: true }
       }
 
