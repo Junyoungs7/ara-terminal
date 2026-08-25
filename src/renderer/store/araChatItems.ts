@@ -71,7 +71,7 @@ export function reduceChat(items: ChatItem[], e: AiEngineEvent): ChatItem[] {
     }
 
     case 'ready':
-      return [...items, { k: 'note', id: nextId(), text: noteReady(e.cwd, e.tools.length), tone: 'plain' }]
+      return [...items, { k: 'note', id: nextId(), text: noteReady(e.cwd, e.tools.length, e.model), tone: 'plain' }]
 
     case 'error':
       return [...items, { k: 'note', id: nextId(), text: e.message, tone: 'bad' }]
@@ -106,9 +106,11 @@ export function openAsk(items: ChatItem[]): AskRequest | null {
   return null
 }
 
-function noteReady(cwd: string | null, tools: number): string {
-  const where = cwd ?? '?'
-  return `${where} 에서 시작했습니다 · 도구 ${tools}개`
+function noteReady(cwd: string | null, tools: number, model: string | null): string {
+  // 폴더가 없는 판 = API 키 엔진(#126). "? 에서 시작했습니다 · 도구 0개" 는 사실이지만 아무것도
+  // 알려 주지 않는다 — **무엇을 못 하는지**를 말해 주는 편이 낫다.
+  if (cwd === null) return `${model ?? 'API'} · 도구 없이 대화만 합니다`
+  return `${cwd} 에서 시작했습니다 · 도구 ${tools}개`
 }
 
 /**

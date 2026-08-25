@@ -326,7 +326,14 @@ const api: EvApi = {
   // W4 F23 MCP 조종 모드. getToken 이 없다 — 발급 응답에만 원문이 존재한다.
   // #125 아라 대화 — 채널 이름은 이 파일 안에만 있다(렌더러는 window.ev.ara 만 본다).
   ara: {
-    open: (o: { cwd?: string; resumeId?: string; active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null } = {}) =>
+    open: (
+      o: {
+        cwd?: string
+        resumeId?: string
+        active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+        engine?: 'cli' | 'api'
+      } = {}
+    ) =>
       ipcRenderer.invoke('ara:open', o),
     send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),

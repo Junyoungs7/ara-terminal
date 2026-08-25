@@ -36,7 +36,7 @@ import { aiModelsOf, aiProviderOf, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_L
 import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
-import { aiKeyVaultId, type AraSession } from './ai/AraSession'
+import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -215,16 +215,15 @@ app.whenReady().then(() => {
   // F16: 키는 기존 vault(secrets.vault)에, 모델·프로바이더는 기존 ui prefs 에 얹는다 — 새 저장소를
   // 만들지 않는다. 값은 렌더러가 ui:setPrefs 로 보낸 것이라 신뢰 경계 밖이다: aiProviderOf/aiModelsOf 로
   // 목록 안으로 클램프한다(모델명 자체는 자유 입력이라 목록 클램프 대상이 아니다 — sanitizeModelName 만 거친다).
-  ara = registerAiIpc(
-    secrets,
-    () => {
-      const ui = store.get().ui
-      const provider = aiProviderOf(ui.aiProvider)
-      const model = aiModelsOf(ui.aiModels)[provider]
-      return { provider, model, ...(ui.aiCompatibleBaseUrl ? { baseUrl: ui.aiCompatibleBaseUrl } : {}) }
-    },
-    getWebContents
-  )
+  // #126: 이 클로저를 아라 대화(B 엔진 폴백)도 쓴다 — 두 벌로 갈리면 설정 한 곳을 고쳐도
+  // 한쪽만 바뀐다.
+  const aiPrefs = (): AiPrefs => {
+    const ui = store.get().ui
+    const provider = aiProviderOf(ui.aiProvider)
+    const model = aiModelsOf(ui.aiModels)[provider]
+    return { provider, model, ...(ui.aiCompatibleBaseUrl ? { baseUrl: ui.aiCompatibleBaseUrl } : {}) }
+  }
+  ara = registerAiIpc(secrets, aiPrefs, getWebContents)
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
   mcp = registerMcpIpc(
@@ -251,7 +250,9 @@ app.whenReady().then(() => {
       vault: secrets,
       // 활성 세션은 화면이 open() 에 실어 보낸다(main 원장에는 "어느 탭을 보고 있나"가 없다).
       activeSession: () => null,
-      lastLocalCwd: () => sessions.snapshot().find((x) => x.type === 'local' && x.cwd)?.cwd ?? null
+      lastLocalCwd: () => sessions.snapshot().find((x) => x.type === 'local' && x.cwd)?.cwd ?? null,
+      // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
+      api: { vault: secrets, getPrefs: aiPrefs }
     },
     getWebContents
   )

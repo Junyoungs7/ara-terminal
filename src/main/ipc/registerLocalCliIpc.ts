@@ -6,10 +6,10 @@
 //    셸 선택 규칙은 PtyBackend 가 이미 갖고 있으므로 그 함수를 그대로 쓴다(두 벌로 갈리면 안 된다).
 //
 // ② 그 CLI 가 이 PC 에 있는가. 원격은 `remote:run('which.cli')` 로 보지만 로컬에는 그 채널이 없다.
-//    **셸을 거치지 않는 execFile** 로 where/which 를 부른다 — 셸을 태우면 bin 이 명령줄에 섞인다.
+//    조회 자체는 util/localCli.ts 가 한다(#126 에서 아라 대화도 같은 판정을 쓰게 되면서 꺼냈다).
 //    bin 은 렌더러에서 이미 validCliBin 을 통과했지만 여기서 한 번 더 본다(신뢰 경계).
-import { execFile } from 'node:child_process'
 import { handle } from './handle'
+import { hasLocalCli } from '../util/localCli'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import { validCliBin } from '@shared/aiCli'
 
@@ -22,12 +22,6 @@ export function registerLocalCliIpc(): void {
   handle('app:hasCli', ({ bin }) => {
     const safe = validCliBin(bin)
     if (safe === null) return Promise.resolve({ found: false })
-    const file = process.platform === 'win32' ? 'where' : 'which'
-    return new Promise<{ found: boolean }>((resolve) => {
-      execFile(file, [safe], { timeout: LOOKUP_TIMEOUT_MS, windowsHide: true }, (err, stdout) => {
-        // 종료코드와 출력을 **둘 다** 본다 — cliInstalled(원격)와 같은 판정이다.
-        resolve({ found: !err && stdout.trim() !== '' })
-      })
-    })
+    return hasLocalCli(safe, LOOKUP_TIMEOUT_MS).then((found) => ({ found }))
   })
 }

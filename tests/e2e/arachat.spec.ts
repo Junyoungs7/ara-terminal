@@ -130,3 +130,35 @@ test('ARA2-3★ 되묻기는 알약 버튼이고 숫자 키로도 고른다 — 
     { askId: 'a2', text: '둘 다' }
   ])
 })
+
+test('ARA2-5★ claude 가 없으면 두 갈래를 보여 준다 — 설치하거나 API 키로', async ({ ara }) => {
+  const { page } = ara
+  await openAra(ara)
+  const panel = page.locator('.ara-panel')
+
+  // 하네스에는 캔드 엔진이 붙어 있어 이 상태가 저절로 오지 않는다 — 사건만 흘려 넣는다.
+  // "정말 없을 때 이 사건이 나오는가"는 tests/araChat.test.ts 가 where/which 를 가로채 본다.
+  await ara.app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('ara:event', { t: 'noEngine' })
+  })
+
+  const box = panel.locator('.ara-empty')
+  await expect(box).toContainText('Claude Code 가 없습니다')
+  await expect(box.locator('.ara-cmd')).toContainText('@anthropic-ai/claude-code')
+  // 입력칸은 잠긴다 — 답할 상대가 없는데 글을 받으면 안 된다.
+  await expect(panel.locator('.ara-input')).toBeDisabled()
+
+  // [API 키로 쓰기]가 실제로 그 엔진을 요청하는지 배선으로 본다(화면 문구가 아니라).
+  await ara.app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('ara:open')
+    ;(globalThis as unknown as { __opens: unknown[] }).__opens = []
+    ipcMain.handle('ara:open', (_e, o) => {
+      ;(globalThis as unknown as { __opens: unknown[] }).__opens.push(o)
+      return { ok: true }
+    })
+  })
+  await box.locator('.ara-btn.p').click()
+  const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { engine?: string }[] }).__opens)
+  expect(opens).toHaveLength(1)
+  expect(opens[0].engine).toBe('api')
+})

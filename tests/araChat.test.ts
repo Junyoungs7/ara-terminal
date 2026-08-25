@@ -5,7 +5,7 @@
 //  ② 작업 폴더 규칙(§3.3) — 원격 경로를 로컬 폴더로 잘못 쓰지 않는다
 //  ③ 권한은 **사람이 답한다** — 대신 승인하는 자리가 없다
 //  ④ 닫으면 흔적이 없다(프로세스·토큰 파일)
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { createAraChat, type AraChatEvent } from '../src/main/ai/AraChat'
 import { isLocalPath, mcpConfigJson, pickEngineCwd, prepareAraMcp } from '../src/main/ai/engine/araMcp'
@@ -154,7 +154,7 @@ describe('아라 대화 한 벌', () => {
   it('열면 폴더와 MCP 물림 여부를 알린다', async () => {
     const { chat, seen } = setup({ session: { type: 'local', cwd: local } })
     expect(await chat.open()).toEqual({ ok: true })
-    expect(seen).toEqual([{ t: 'opened', cwd: local, withMcp: true }])
+    expect(seen).toEqual([{ t: 'opened', cwd: local, withMcp: true, engine: 'cli' }])
     expect(chat.isOpen()).toBe(true)
   })
 
@@ -168,7 +168,7 @@ describe('아라 대화 한 벌', () => {
   it('사용자가 고른 폴더가 규칙을 이긴다', async () => {
     const { chat, seen } = setup({ session: { type: 'ssh', cwd: '/srv' } })
     await chat.open({ cwd: local })
-    expect(seen[0]).toEqual({ t: 'opened', cwd: local, withMcp: true })
+    expect(seen[0]).toEqual({ t: 'opened', cwd: local, withMcp: true, engine: 'cli' })
   })
 
   it('★ 권한 요청은 대기열에 담긴다 — 화면이 늦게 붙어도 잃지 않는다', async () => {
@@ -223,4 +223,54 @@ describe('아라 대화 한 벌', () => {
     expect(() => chat.send('늦은 질문')).not.toThrow()
     expect(eng.sent).toEqual([])
   })
+})
+
+// ── #126 부재·실패 처리 + API 키 폴백 ────────────────────────────────────────
+// **claude 가 없는 PC 에서 무슨 일이 일어나는가**가 이 절의 전부다. 셸이 뱉는 로케일별 오류
+// 문자열을 짐작해 분류하는 대신 띄우기 전에 where/which 로 본다 — 그래서 그 조회를 가로챈다.
+vi.mock('../src/main/util/localCli', () => ({ hasLocalCli: () => Promise.resolve(hasClaude) }))
+let hasClaude = true
+
+describe('엔진이 없을 때 · 폴백 (#126)', () => {
+  const local = process.platform === 'win32' ? 'D:/work' : '/home/jun/work'
+  const mk = (o: { api?: boolean } = {}) => {
+    const seen: AraChatEvent[] = []
+    const chat = createAraChat({
+      server: fakeServer({ enabled: true }),
+      vault: memVault(),
+      activeSession: () => ({ type: 'local', cwd: local }),
+      lastLocalCwd: () => local,
+      emit: (e) => seen.push(e),
+      // makeEngine 을 주지 않는다 — 그게 있으면 "진짜로 띄우는 판"이 아니라 조회를 건너뛴다.
+      ...(o.api ? { api: { vault: memVault() as never, getPrefs: () => ({ provider: 'anthropic' as const, model: 'm' }) } } : {})
+    })
+    return { chat, seen }
+  }
+
+  it('★ claude 가 없으면 띄우지 않고 알린다 — 셸 오류 문자열을 짐작하지 않는다', async () => {
+    hasClaude = false
+    const { chat, seen } = mk()
+    expect(await chat.open()).toEqual({ ok: false, noEngine: true })
+    expect(seen).toEqual([{ t: 'noEngine' }])
+    expect(chat.isOpen()).toBe(false)
+  })
+
+  it('★ API 키 폴백은 폴더도 MCP 도 묻지 않는다 — 도구가 없으니 의미가 없다', async () => {
+    hasClaude = false
+    const { chat, seen } = mk({ api: true })
+    expect(await chat.open({ engine: 'api' })).toEqual({ ok: true })
+    expect(seen).toEqual([{ t: 'opened', cwd: null, withMcp: false, engine: 'api' }])
+    chat.close()
+  })
+
+  it('폴백을 쓸 수 없으면 그렇다고 말한다 — 조용히 A 로 되돌리지 않는다', async () => {
+    hasClaude = false
+    const { chat, seen } = mk()
+    expect(await chat.open({ engine: 'api' })).toEqual({ ok: false })
+    expect(seen[0]).toMatchObject({ t: 'error' })
+    expect(chat.isOpen()).toBe(false)
+  })
+
+  // "있으면 평소대로 연다"는 따로 두지 않는다 — 위 '열면 폴더와 MCP 물림 여부를 알린다'가
+  // 이미 그 길이다(엔진을 주입한 판이라 조회 자체를 지나가지 않는다).
 })

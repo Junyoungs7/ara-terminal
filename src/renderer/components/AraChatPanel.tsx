@@ -23,8 +23,11 @@ import { t } from '../i18n'
 // 접기 규칙은 화면이 아니라 store/araChatItems.ts 가 갖는다(순수 함수 — 검사 대상).
 // 여기 있는 것은 그 결과를 그리는 일과, 사람이 누르는 것을 IPC 로 보내는 일뿐이다.
 
+/** 이 상태들에서만 사람이 말을 보낼 수 있다(나머지는 먼저 할 일이 있다). */
+const CAN_TYPE = new Set<Phase>(['idle', 'working'])
+
 /** 상태줄에 뜨는 지금 상황. */
-type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'needCwd'
+type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'needCwd' | 'noEngine'
 
 export function AraChatPanel({
   open,
@@ -38,6 +41,8 @@ export function AraChatPanel({
   const [items, setItems] = useState<ChatItem[]>([])
   const [phase, setPhase] = useState<Phase>('closed')
   const [cwd, setCwd] = useState<string | null>(null)
+  // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
+  const [engine, setEngine] = useState<'cli' | 'api'>('cli')
   const [cost, setCost] = useState<{ usd: number; turns: number } | null>(null)
   const [draft, setDraft] = useState('')
   const [openTools, setOpenTools] = useState<Set<string>>(new Set())
@@ -53,11 +58,16 @@ export function AraChatPanel({
     const off = window.ev?.ara.onEvent((e: AraChatEvent) => {
       if (e.t === 'opened') {
         setCwd(e.cwd)
+        setEngine(e.engine)
         setPhase('idle')
         return
       }
       if (e.t === 'needCwd') {
         setPhase('needCwd')
+        return
+      }
+      if (e.t === 'noEngine') {
+        setPhase('noEngine')
         return
       }
       if (e.t === 'closed') {
@@ -109,10 +119,10 @@ export function AraChatPanel({
   }, [askId])
 
   const start = useCallback(
-    async (chosenCwd?: string) => {
+    async (o: { cwd?: string; engine?: 'cli' | 'api' } = {}) => {
       setPhase('opening')
-      const r = await window.ev?.ara.open({ ...(chosenCwd ? { cwd: chosenCwd } : {}), active })
-      if (r && !r.ok && !r.needCwd) setPhase('closed')
+      const r = await window.ev?.ara.open({ ...o, active })
+      if (r && !r.ok && !r.needCwd && !r.noEngine) setPhase('closed')
     },
     [active]
   )
@@ -127,7 +137,7 @@ export function AraChatPanel({
 
   const send = (text: string): void => {
     const s = text.trim()
-    if (s === '' || phase === 'closed' || phase === 'needCwd') return
+    if (s === '' || !CAN_TYPE.has(phase)) return
     setItems((cur) => pushMine(cur, s))
     setDraft('')
     setPhase('working')
@@ -142,7 +152,7 @@ export function AraChatPanel({
 
   const pickFolder = async (): Promise<void> => {
     const dir = await window.ev?.fs.pickDir()
-    if (dir) void start(dir)
+    if (dir) void start({ cwd: dir })
   }
 
   // 되묻기가 열려 있으면 숫자 키가 곧 선택이다(마우스 없이 답할 수 있어야 한다).
@@ -168,12 +178,14 @@ export function AraChatPanel({
     <div className="ara-panel" onKeyDown={onKey}>
       <div className="ara-hd">
         <span className="t">{t('ara.title')}</span>
+        {/* API 키 모드는 **한눈에 달라 보여야 한다** — 도구가 없고 지갑이 다르다. */}
+        {engine === 'api' && <span className="ara-eng">{t('ara.engine.api')}</span>}
         {cwd && (
           <span className="cwd" title={cwd}>
             {cwd}
           </span>
         )}
-        <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start(cwd ?? undefined)}>
+        <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
           <IconRefresh />
         </button>
         <button type="button" className="ara-ic" title={t('mon.close')} onClick={onClose}>
@@ -242,6 +254,22 @@ export function AraChatPanel({
           )
         )}
 
+        {/* #126 이 PC 에 claude 가 없다. 갈 수 있는 길을 둘 다 보여 준다 —
+            설치하고 다시 보든지, 지금 API 키로 쓰든지. 조용히 한쪽으로 끌고 가지 않는다. */}
+        {phase === 'noEngine' && (
+          <div className="ara-empty">
+            <div>{t('ara.noEngine')}</div>
+            <code className="ara-cmd">npm i -g @anthropic-ai/claude-code</code>
+            <div className="ara-row">
+              <button type="button" className="ara-btn" onClick={() => void start()}>
+                {t('ara.recheck')}
+              </button>
+              <button type="button" className="ara-btn p" onClick={() => void start({ engine: 'api' })}>
+                {t('ara.useApi')}
+              </button>
+            </div>
+          </div>
+        )}
         {phase === 'needCwd' && (
           <div className="ara-empty">
             <div>{t('ara.needCwd')}</div>
@@ -259,7 +287,7 @@ export function AraChatPanel({
           rows={2}
           value={draft}
           placeholder={ask ? t('ara.answerFirst') : t('ara.placeholder')}
-          disabled={phase === 'closed' || phase === 'needCwd'}
+          disabled={!CAN_TYPE.has(phase)}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation() // 터미널 단축키가 가로채지 않게

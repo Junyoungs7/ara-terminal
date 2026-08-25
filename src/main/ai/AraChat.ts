@@ -15,7 +15,9 @@ import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
 import type { McpServerHandle, TokenVault } from '../mcp/McpServer'
 import { createClaudeEngine } from './engine/ClaudeCliEngine'
 import { createFakeEngine } from './engine/FakeEngine'
-import { isFakeAi } from './AraSession'
+import { createApiEngine } from './engine/ApiEngine'
+import { isFakeAi, type AiPrefs, type KeyVault } from './AraSession'
+import { hasLocalCli } from '../util/localCli'
 import { pickEngineCwd, prepareAraMcp, type AraMcpHandoff } from './engine/araMcp'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
@@ -36,15 +38,25 @@ export type AraChatDeps = {
   emit: (e: AraChatEvent) => void
   /** 테스트 주입 — 없으면 진짜 claude 를 띄운다. */
   makeEngine?: (o: ClaudeEngineArgs) => AiEngine
+  /**
+   * B 엔진(API 키)이 쓸 것들 — `claude` 가 없는 PC 의 폴백(설계 §5, #126).
+   * 없으면 폴백을 못 연다(그 사실을 화면에 그대로 알린다 — 조용히 A 로 되돌리지 않는다).
+   */
+  api?: { vault: KeyVault; getPrefs: () => AiPrefs }
 }
+
+/** 어느 엔진으로 열려 있나. 돈도 능력도 다르므로 **화면에 늘 보인다**(§5). */
+export type AraEngineKind = 'cli' | 'api'
 
 /** 화면이 받는 것 = 엔진 사건 + 이 층이 아는 것 몇 개. */
 export type AraChatEvent =
   | AiEngineEvent
-  /** 열렸다 — 어느 폴더에서 도는지, MCP 도구가 물렸는지. */
-  | { t: 'opened'; cwd: string; withMcp: boolean }
+  /** 열렸다 — 어느 엔진으로, 어느 폴더에서, MCP 도구가 물렸는지. */
+  | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind }
   /** 폴더를 골라 달라(원격 세션만 보고 있거나 처음 쓸 때). */
   | { t: 'needCwd' }
+  /** 이 PC 에 `claude` 가 없다 — 설치하든지 API 키로 가든지(설계 §5). */
+  | { t: 'noEngine' }
   /** 닫혔다. */
   | { t: 'closed' }
 
@@ -55,7 +67,9 @@ export type AraChat = {
     resumeId?: string
     /** 화면이 알려 주는 지금 세션. 없으면 deps.activeSession() 을 본다. */
     active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
-  }): Promise<{ ok: boolean; needCwd?: boolean }>
+    /** 기본은 A(로컬 Claude Code). 'api' 는 사람이 폴백을 고른 것이다 — 우리가 몰래 바꾸지 않는다. */
+    engine?: AraEngineKind
+  }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
   send(text: string): void
   /** 권한 요청에 답한다. 대기열에 없는 id 는 조용히 버린다(늦게 온 답). */
   respond(requestId: string, allow: boolean): void
@@ -75,6 +89,23 @@ export function createAraChat(deps: AraChatDeps): AraChat {
   let sessionId: string | null = null
   const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
 
+  /** 엔진 사건 → 이 층의 규칙 → 화면. **두 엔진이 같은 배선을 쓴다**(그러라고 모양을 맞췄다). */
+  const wire = (e0: AiEngine): void => {
+    offEvent = e0.onEvent((e) => {
+      if (e.t === 'ready' && e.sessionId) sessionId = e.sessionId
+      // 권한 요청은 대기열에 담는다 — 화면이 늦게 붙어도 잃지 않는다.
+      if (e.t === 'permission') waiting.set(e.requestId, { requestId: e.requestId, tool: e.tool, brief: e.brief })
+      // 프로세스가 죽었으면 이 층도 함께 정리한다(고아·유령 대기열 금지).
+      if (e.t === 'exit') {
+        deps.emit(e)
+        teardown()
+        deps.emit({ t: 'closed' })
+        return
+      }
+      deps.emit(e)
+    })
+  }
+
   const teardown = (): void => {
     offEvent?.()
     offEvent = null
@@ -90,6 +121,18 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       // 다시 열면 앞의 것을 내린다 — 두 프로세스가 같은 대화를 물면 답이 섞인다.
       if (engine) teardown()
 
+      // ── B 엔진(API 키). 도구가 없으니 작업 폴더도 MCP 도 의미가 없다 — 그 둘을 통째로 건너뛴다.
+      if (o.engine === 'api') {
+        if (!deps.api) {
+          deps.emit({ t: 'error', message: 'API 키 엔진을 쓸 수 없습니다.' })
+          return { ok: false }
+        }
+        engine = createApiEngine(deps.api)
+        wire(engine)
+        deps.emit({ t: 'opened', cwd: null, withMcp: false, engine: 'api' })
+        return { ok: true }
+      }
+
       const active = o.active !== undefined ? o.active : deps.activeSession()
       const pick = o.cwd
         ? ({ kind: 'use', cwd: o.cwd } as const)
@@ -103,6 +146,15 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         return { ok: false, needCwd: true }
       }
 
+      // **띄우기 전에 있는지 본다.** 없는 것을 띄우면 셸이 로케일별로 다른 말("... is not
+      // recognized" / "명령을 찾을 수 없습니다")을 stderr 로 뱉고, 우리는 그 문자열을 짐작해서
+      // 분류하게 된다. where/which 한 번이 그 짐작을 통째로 없앤다.
+      const real = !deps.makeEngine && !isFakeAi()
+      if (real && !(await hasLocalCli('claude'))) {
+        deps.emit({ t: 'noEngine' })
+        return { ok: false, noEngine: true }
+      }
+
       // MCP 를 못 물려도 대화는 시작한다 — Claude Code 기본 기능은 그대로 산다(§3.2).
       handoff = await prepareAraMcp(deps.server, deps.vault)
 
@@ -113,20 +165,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         ...(handoff ? { mcpConfigPath: handoff.configPath } : {}),
         ...(o.resumeId ? { resumeId: o.resumeId } : {})
       })
-      offEvent = engine.onEvent((e) => {
-        if (e.t === 'ready' && e.sessionId) sessionId = e.sessionId
-        // 권한 요청은 대기열에 담는다 — 화면이 늦게 붙어도 잃지 않는다.
-        if (e.t === 'permission') waiting.set(e.requestId, { requestId: e.requestId, tool: e.tool, brief: e.brief })
-        // 프로세스가 죽었으면 이 층도 함께 정리한다(고아·유령 대기열 금지).
-        if (e.t === 'exit') {
-          deps.emit(e)
-          teardown()
-          deps.emit({ t: 'closed' })
-          return
-        }
-        deps.emit(e)
-      })
-      deps.emit({ t: 'opened', cwd: pick.cwd, withMcp: handoff !== null })
+      wire(engine)
+      deps.emit({ t: 'opened', cwd: pick.cwd, withMcp: handoff !== null, engine: 'cli' })
       return { ok: true }
     },
 

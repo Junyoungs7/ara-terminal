@@ -7495,3 +7495,29 @@
   color: var(--text-dim);
   cursor: default;
 }
+
+/* #126 폴백·안내 — 어느 엔진인지, 없을 때 어디로 갈지. */
+.ara-eng {
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: var(--fs-micro);
+  color: var(--accent-bright);
+}
+.ara-cmd {
+  align-self: stretch;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+  user-select: text;
+  word-break: break-all;
+}
+.ara-row {
+  display: flex;
+  gap: 6px;
+}

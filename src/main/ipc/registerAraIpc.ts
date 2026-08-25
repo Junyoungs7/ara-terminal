@@ -21,8 +21,13 @@ export function registerAraIpc(
     emit: (e) => pushSend(getWebContents(), 'ara:event', e)
   })
 
-  handle('ara:open', ({ cwd, resumeId, active }) =>
-    chat.open({ ...(cwd ? { cwd } : {}), ...(resumeId ? { resumeId } : {}), ...(active === undefined ? {} : { active }) })
+  handle('ara:open', ({ cwd, resumeId, active, engine }) =>
+    chat.open({
+      ...(cwd ? { cwd } : {}),
+      ...(resumeId ? { resumeId } : {}),
+      ...(active === undefined ? {} : { active }),
+      ...(engine === 'api' ? { engine: 'api' as const } : {})
+    })
   )
   handle('ara:send', ({ text }) => {
     chat.send(text)

@@ -410,8 +410,14 @@ export type InvokeContract = {
   // ── #125 아라 대화(로컬 Claude Code 브릿지) ──
   // 대화 한 벌의 규칙은 main 의 AraChat 이 갖는다. 렌더러는 열고·보내고·멈추고·닫을 뿐이다.
   'ara:open': {
-    req: { cwd?: string; resumeId?: string; active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null }
-    res: { ok: boolean; needCwd?: boolean }
+    req: {
+      cwd?: string
+      resumeId?: string
+      active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+      /** 'api' = 사람이 폴백을 고른 것(#126). 없으면 A(로컬 Claude Code). */
+      engine?: 'cli' | 'api'
+    }
+    res: { ok: boolean; needCwd?: boolean; noEngine?: boolean }
   }
   'ara:send': { req: { text: string }; res: { ok: true } }
   'ara:interrupt': { req: void; res: { ok: true } }
@@ -739,7 +745,8 @@ export type EvApi = {
       cwd?: string
       resumeId?: string
       active?: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
-    }): Promise<{ ok: boolean; needCwd?: boolean }>
+      engine?: 'cli' | 'api'
+    }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
     send(text: string): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>

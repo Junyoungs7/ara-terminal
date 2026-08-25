@@ -69,6 +69,11 @@ describe('접기 규칙', () => {
     expect((items[0] as { text: string }).text).toContain('2개')
   })
 
+  it('폴더가 없는 판(API 키 엔진)은 **무엇을 못 하는지**를 말한다', () => {
+    const items = run({ t: 'ready', sessionId: null, model: 'anthropic/claude-sonnet-4', cwd: null, tools: [] })
+    expect((items[0] as { text: string }).text).toBe('anthropic/claude-sonnet-4 · 도구 없이 대화만 합니다')
+  })
+
   it('오류는 눈에 띄는 줄로, 턴·종료는 목록에 쌓지 않는다(상태줄이 말한다)', () => {
     expect(run({ t: 'error', message: 'claude 없음' })[0]).toMatchObject({ tone: 'bad' })
     expect(run({ t: 'turn', costUsd: 1, ms: 2, turns: 1, text: '' })).toEqual([])
