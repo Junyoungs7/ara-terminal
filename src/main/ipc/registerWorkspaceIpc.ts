@@ -25,6 +25,11 @@ export function registerWorkspaceIpc(
     store.setDetachedWindows(detachedWindowStates())
     return { ok: true } as const
   })
+  // #128: 작업대 목록. update() 의 세 필드 화이트리스트를 넓히지 않으려고 자기 채널로 온다.
+  handle('aisession:save', ({ list }) => {
+    store.setAiSessions(list)
+    return { ok: true } as const
+  })
   handle('ui:setPrefs', (prefs) => {
     store.setPrefs(prefs)
     onPrefs?.(prefs)

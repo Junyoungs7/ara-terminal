@@ -4,6 +4,7 @@
 import type {
   DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile, AiCliRecent } from '@shared/types'
 import { SCHEMA_VERSION } from '@shared/types'
+import { aiSessionsOf } from '@shared/aiSession'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
 import { migrate } from './migrations'
@@ -43,6 +44,16 @@ export class WorkspaceStore {
     const { sessions, layout, tabGroups } = state ?? {}
     if (!layout || !Array.isArray(sessions) || !Array.isArray(tabGroups)) return
     this.snapshot = { ...this.snapshot, sessions, layout, tabGroups }
+    if (this.timer) return
+    this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
+  }
+
+  /**
+   * #128 AI 세션(작업대) 목록. update() 의 세 필드 화이트리스트를 건드리지 않으려고 따로 둔다
+   * (창 자리·설정과 같은 결). 저장값은 신뢰 경계 밖이라 aiSessionsOf 로 모양을 맞춰 받는다.
+   */
+  setAiSessions(list: unknown): void {
+    this.snapshot.aiSessions = aiSessionsOf(list)
     if (this.timer) return
     this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
   }

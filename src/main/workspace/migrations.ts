@@ -37,7 +37,10 @@ const STEPS: Record<number, MigrationStep> = {
         aiCompatibleBaseUrl: ''
       }
     }
-  }
+  },
+  // v5 → v6: #128 AI 세션(작업대). **빈 배열로 시작한다** — 옛 스냅샷에는 그런 개념이 없었고,
+  // 터미널 세션에서 유추해 지어내면 사용자가 만든 적 없는 작업대가 목록에 뜬다.
+  5: (s) => ({ ...s, schemaVersion: 6, aiSessions: [] })
 }
 
 // 알 수 없는 미래 버전이거나 스텝이 없으면 null → 호출부가 기본 스냅샷으로 폴백.

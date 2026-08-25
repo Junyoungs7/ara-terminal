@@ -16,6 +16,7 @@ export function defaultSnapshot(appVersion: string): WorkspaceSnapshot {
     layout: { type: 'pane', sessionId: null },
     sessions: [],
     tabGroups: [],
+    aiSessions: [],
     ui: {
       sidebar: { collapsed: false, activeTab: 'conn', width: 264 },
       font: { term: 'Nanum Gothic Coding', sizePx: 14, lineHeight: 1.58 },

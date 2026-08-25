@@ -420,6 +420,11 @@ export type InvokeContract = {
     res: { ok: boolean; needCwd?: boolean; noEngine?: boolean }
   }
   'ara:send': { req: { text: string }; res: { ok: true } }
+  /**
+   * #128 AI 세션(작업대) 목록 저장. workspace:save 와 따로인 이유는 types.ts 의 aiSessions 주석 참고 —
+   * 그 페이로드는 세 필드 화이트리스트로 막혀 있고 여기는 주인이 다르다.
+   */
+  'aisession:save': { req: { list: unknown }; res: { ok: true } }
   /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
   'ara:planMode': { req: { on: boolean }; res: { ok: true } }
   'ara:approvePlan': { req: void; res: { ok: true } }
@@ -752,6 +757,8 @@ export type EvApi = {
     }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
     send(text: string): Promise<{ ok: true }>
     planMode(on: boolean): Promise<{ ok: true }>
+    /** #128 작업대 목록 저장(아라 대화와 다른 물건이지만 같은 ara 표면에 둔다). */
+    saveSessions(list: unknown): Promise<{ ok: true }>
     approvePlan(): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>

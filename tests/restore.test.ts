@@ -89,6 +89,7 @@ const snapshotWith = (layout: LayoutNode, sessions: Session[]): WorkspaceSnapsho
   app: { version: '0.1.0' },
   profiles: [],
   knownHosts: {},
+  aiSessions: [],
   layout,
   sessions,
   tabGroups: [],

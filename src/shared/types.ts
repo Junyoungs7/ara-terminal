@@ -1,5 +1,6 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
 import type { AiCliId, AiCliRecent } from './aiCli'
+import type { AiSessionState } from './aiSession'
 export type { AiCliRecent }
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
@@ -7,7 +8,7 @@ export type { AiCliRecent }
 // v4: W4sat F21 — 프로필에 type(ssh/rdp) 판별 필드가 생겼다. 기존 프로필(전부 ssh)에 type:'ssh' 를 채운다.
 // v5: W5 아라 멀티 프로바이더 — 단일 ui.aiModel 을 provider-분리 ui.aiModels{provider:model} 로 옮긴다.
 // 기존 값은 실제 사용자 데이터(임의로 defaulting 할 수 없다)라 v3→v4 프로필 백필과 같은 실 마이그레이션.
-export const SCHEMA_VERSION = 5 as const
+export const SCHEMA_VERSION = 6 as const
 
 export type SecretRef = { store: 'vault'; key: string }
 
@@ -550,6 +551,15 @@ export type WorkspaceSnapshot = {
   ui: UiState
   /** F32 R2. 없으면 떼어낸 창이 없었다는 뜻(구버전 스냅샷 포함) — 마이그레이션이 필요 없다. */
   windows?: DetachedWindowState[]
+  /**
+   * #128 AI 세션(작업대). 스키마 6 에서 생겼고 마이그레이션은 **빈 배열**이다 —
+   * 옛 사용자에게 없던 것을 지어내지 않는다.
+   *
+   * `WorkspaceSaveInput` 에 넣지 않는다. 그 페이로드는 **세 필드 화이트리스트**로 막혀 있고
+   * (신뢰 경계), 여기는 주인이 다르다 — 탭 레이아웃을 저장하는 MainArea 가 작업대 목록까지
+   * 들고 다닐 이유가 없다. 창 자리(windows)·설정(ui)처럼 **자기 채널로 따로 flush** 한다.
+   */
+  aiSessions: AiSessionState[]
 }
 
 // 렌더러가 소유한 부분만 = workspace:save 페이로드. profiles·knownHosts·ui 의 주인은 main 이고

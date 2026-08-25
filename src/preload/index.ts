@@ -337,6 +337,7 @@ const api: EvApi = {
       ipcRenderer.invoke('ara:open', o),
     send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
     planMode: (on: boolean) => ipcRenderer.invoke('ara:planMode', { on }),
+    saveSessions: (list: unknown) => ipcRenderer.invoke('aisession:save', { list }),
     approvePlan: () => ipcRenderer.invoke('ara:approvePlan'),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),
     close: () => ipcRenderer.invoke('ara:close'),

@@ -9,7 +9,7 @@ import { ProviderError, type AiRequest, type ProviderAdapter } from '../src/main
 import { migrate } from '../src/main/workspace/migrations'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { splitBlocks, insertText } from '../src/renderer/components/aiBlocks'
-import { ACTIVITY_ITEMS, AI_PROVIDERS, DEFAULT_AI_MODEL, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
+import { ACTIVITY_ITEMS, AI_PROVIDERS, DEFAULT_AI_MODEL, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
 
 // ⚠️ 이 파일에는 실 API 호출이 없다. 영원히 없다(설계 §7). 전부 주입된 가짜 어댑터로 돈다.
 
@@ -454,7 +454,8 @@ describe('prefs 마이그레이션 v4→v5 — 단일 aiModel → provider 분�
       ui: { ctxMenuStyle: 'list', aiModel: 'claude-opus-5' }
     }
     const migrated = migrate(v4) as unknown as { schemaVersion: number; ui: Record<string, unknown> }
-    expect(migrated.schemaVersion).toBe(5)
+    // 스키마가 더 올라가도 이 검사의 주제는 v4→v5 단계다 — 최신 버전까지 밀려 온 것만 확인한다.
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION)
     expect(migrated.ui.aiProvider).toBe('anthropic')
     expect(migrated.ui.aiModels).toEqual({ anthropic: 'claude-opus-5' })
     expect(migrated.ui.aiCompatibleBaseUrl).toBe('')
