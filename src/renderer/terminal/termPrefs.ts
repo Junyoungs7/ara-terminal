@@ -15,6 +15,7 @@ import {
 } from '@shared/types'
 import { activityHiddenOf, activityOrderOf } from '../store/activityBar'
 import { aiCliFlagsOf } from '../../shared/aiCli'
+import { callNameOf } from '@shared/araPersona'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -36,6 +37,9 @@ export const termPrefs: Omit<
   | 'aiCliFlags'
   | 'activityOrder'
   | 'activityHidden'
+  // 호칭도 xterm 과 무관하다(#138) — main 의 엔진이 말투 파일에 쓴다.
+  | 'araCallName'
+  | 'araWelcomeSeen'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -64,6 +68,8 @@ export function prefsFrom(
     | 'activityOrder'
     | 'activityHidden'
     | 'aiCliFlags'
+    | 'araCallName'
+    | 'araWelcomeSeen'
   >
 ): UiPrefs {
   return {
@@ -87,7 +93,10 @@ export function prefsFrom(
     aiCliFlags: aiCliFlagsOf(ui.aiCliFlags),
     activityOrder: activityOrderOf(ui.activityOrder),
     activityHidden: activityHiddenOf(ui.activityHidden),
-    aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : ''
+    aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : '',
+    // #138 호칭 — 시스템 프롬프트에 들어가는 값이라 줄바꿈·길이를 여기서 자른다.
+    araCallName: callNameOf(ui.araCallName),
+    araWelcomeSeen: ui.araWelcomeSeen === true
   }
 }
 

@@ -7950,3 +7950,58 @@
     opacity: 0.7;
   }
 }
+
+/* ── #138 첫 실행 인사 — 처음 보는 얼굴이라 여백을 넉넉히 준다(설정 폼과 다른 자리다). */
+.modal.welcome {
+  /* .modal 은 머리/본문/발 3행 그리드다 — 이 창은 한 덩어리라 그 격자를 쓰지 않는다. */
+  display: block;
+  width: 380px;
+  padding: 28px 26px 20px;
+  text-align: center;
+}
+.wc-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 14px;
+}
+.wc-t {
+  color: var(--text-hi);
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.wc-d {
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  line-height: 1.65;
+  white-space: pre-line;
+  word-break: keep-all;
+  margin-bottom: 18px;
+}
+.wc-input {
+  width: 100%;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-hi);
+  font: var(--fs-lg) var(--ui);
+  text-align: center;
+}
+.wc-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* 어떻게 불릴지 미리 보여 준다 — 넣기 전에 알면 고쳐 쓰게 된다. */
+.wc-prev {
+  margin-top: 10px;
+  min-height: 18px;
+  color: var(--accent-bright);
+  font-size: var(--fs-sm);
+}
+.wc-ft {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 20px;
+}

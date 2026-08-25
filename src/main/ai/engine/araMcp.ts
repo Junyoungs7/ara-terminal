@@ -43,6 +43,26 @@ export type AraMcpHandoff = {
  * 서버를 켜고(필요하면), 아라 전용 토큰을 발급하고, 설정 파일을 써서 경로를 돌려준다.
  * 서버를 못 켜면 null — 그때는 **MCP 없이** 대화를 시작한다(Claude Code 기본 기능은 그대로 산다).
  */
+/**
+ * 말투 파일(#138). **argv 가 아니라 파일**로 넘긴다 — 호칭은 사용자가 친 글자이고, 이 저장소에는
+ * "사람이 친 글자는 argv 에 없다"는 규칙이 있다(ENG-3★). 임시 폴더에 쓰고 닫을 때 지운다.
+ */
+export function writePersona(text: string): { path: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), 'ara-persona-'))
+  const path = join(dir, 'persona.md')
+  writeFileSync(path, text, 'utf8')
+  return {
+    path,
+    cleanup: () => {
+      try {
+        rmSync(dir, { recursive: true, force: true })
+      } catch {
+        /* 프로세스가 아직 붙잡고 있을 수 있다 — OS 가 임시 폴더를 정리한다 */
+      }
+    }
+  }
+}
+
 export async function prepareAraMcp(server: McpServerHandle, vault: TokenVault): Promise<AraMcpHandoff | null> {
   if (!server.isEnabled()) {
     const r = await server.setEnabled(true).catch(() => null)

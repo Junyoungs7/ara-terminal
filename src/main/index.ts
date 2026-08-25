@@ -37,6 +37,7 @@ import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
+import { callNameOf } from '@shared/araPersona'
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -259,7 +260,9 @@ app.whenReady().then(() => {
         return dir
       },
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
-      api: { vault: secrets, getPrefs: aiPrefs }
+      api: { vault: secrets, getPrefs: aiPrefs },
+      // #138 호칭. 저장값은 신뢰 경계 밖이라 callNameOf 로 자른다(줄바꿈·지시문 흉내 금지).
+      callName: () => callNameOf(store.get().ui.araCallName)
     },
     getWebContents
   )

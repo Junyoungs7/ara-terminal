@@ -27,7 +27,9 @@ const DEFAULT_PREFS: UiPrefs = {
   aiCompatibleBaseUrl: '',
   aiCliFlags: aiCliFlagsOf(undefined),
   activityOrder: activityOrderOf(undefined),
-  activityHidden: activityHiddenOf(undefined)
+  activityHidden: activityHiddenOf(undefined),
+  araCallName: '',
+  araWelcomeSeen: false
 }
 
 export function useUiPrefs() {

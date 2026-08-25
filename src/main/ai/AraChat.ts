@@ -18,7 +18,8 @@ import { createFakeEngine } from './engine/FakeEngine'
 import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
-import { pickEngineCwd, prepareAraMcp, type AraMcpHandoff } from './engine/araMcp'
+import { pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff } from './engine/araMcp'
+import { buildPersona } from '@shared/araPersona'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
 export type ClaudeEngineArgs = {
@@ -27,6 +28,7 @@ export type ClaudeEngineArgs = {
   resumeId?: string
   permissionMode?: string
   model?: string
+  personaFile?: string
 }
 
 export type AraChatDeps = {
@@ -55,6 +57,8 @@ export type AraChatDeps = {
    * 없으면 폴백을 못 연다(그 사실을 화면에 그대로 알린다 — 조용히 A 로 되돌리지 않는다).
    */
   api?: { vault: KeyVault; getPrefs: () => AiPrefs }
+  /** 사용자 호칭(#138). 빈 문자열이면 기본 호칭으로 부른다. */
+  callName?: () => string
 }
 
 /** 어느 엔진으로 열려 있나. 돈도 능력도 다르므로 **화면에 늘 보인다**(§5). */
@@ -125,6 +129,7 @@ const APPROVE_TEXT = '좋아, 그 계획대로 진행해 줘.'
 export function createAraChat(deps: AraChatDeps): AraChat {
   let engine: AiEngine | null = null
   let handoff: AraMcpHandoff | null = null
+  let persona: { path: string; cleanup: () => void } | null = null
   let offEvent: (() => void) | null = null
   let sessionId: string | null = null
   // 계획 먼저인가. 열 때 --permission-mode 로 나가고, 도는 중에는 control 요청으로 바뀐다.
@@ -157,6 +162,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
     engine = null
     handoff?.cleanup()
     handoff = null
+    persona?.cleanup()
+    persona = null
     waiting.clear()
   }
 
@@ -203,6 +210,12 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
       // MCP 를 못 물려도 대화는 시작한다 — Claude Code 기본 기능은 그대로 산다(§3.2).
       handoff = await prepareAraMcp(deps.server, deps.vault)
+      // 말투(#138) — 못 써도 대화는 시작한다(말투가 없을 뿐이다).
+      try {
+        persona = writePersona(buildPersona(deps.callName?.() ?? ''))
+      } catch {
+        persona = null
+      }
 
       // ARA_AI_FAKE=1 이면 캔드 엔진(F16 관행). 주입(makeEngine)이 있으면 그게 먼저다.
       const make = deps.makeEngine ?? (isFakeAi() ? () => createFakeEngine() : (x: ClaudeEngineArgs) => createClaudeEngine(x))
@@ -211,7 +224,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         ...(handoff ? { mcpConfigPath: handoff.configPath } : {}),
         ...(o.resumeId ? { resumeId: o.resumeId } : {}),
         ...(planMode ? { permissionMode: PLAN } : {}),
-        ...(model ? { model } : {})
+        ...(model ? { model } : {}),
+        ...(persona ? { personaFile: persona.path } : {})
       })
       wire(engine)
       deps.emit({

@@ -1,4 +1,5 @@
 import { AI_ENTRY } from '@shared/features'
+import { callNameOf } from '@shared/araPersona'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
@@ -377,6 +378,20 @@ function AiSection({
 
   return (
     <>
+      {/* #138 호칭 — 엔진과 무관하다(Claude Code 든 API 든 아라는 같은 이름으로 부른다).
+          그래서 프로바이더보다 위, 이 섹션의 첫 줄이다. */}
+      <Row label={t('settings.ai.call')} desc={t('settings.ai.call.desc')}>
+        <input
+          type="text"
+          className="ai-key-input"
+          data-field="ai.callName"
+          maxLength={20}
+          spellCheck={false}
+          placeholder={t('welcome.placeholder')}
+          value={prefs.araCallName}
+          onChange={(e) => onPrefsChange({ araCallName: callNameOf(e.target.value) })}
+        />
+      </Row>
       <Row label={t('settings.ai.provider')} desc={t('settings.ai.provider.desc')}>
         <Seg value={provider} options={AI_PROVIDERS} onChange={(v) => void switchProvider(v)} labelKey={(v) => 'settings.ai.provider.' + v} />
       </Row>

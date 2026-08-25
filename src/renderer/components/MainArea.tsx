@@ -15,6 +15,7 @@ import { LogViewer } from './LogViewer'
 import { SettingsDrawer, SIZE_MAX, SIZE_MIN } from './SettingsDrawer'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
+import { WelcomeModal } from './WelcomeModal'
 import { visibleActivities, type ActivityId } from '../store/activityBar'
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
@@ -374,6 +375,16 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onAiCliFlags?.(prefs.aiCliFlags)
     }, [prefs.aiCliFlags, onAiCliFlags])
+
+    // #138: 스냅샷을 한 번이라도 읽었나. "안 지났다"와 "아직 안 읽었다"를 갈라야 한다 —
+    // 기본값이 false 라 로드 전에 판정하면 이미 지난 사람에게도 매번 뜬다.
+    const [prefsLoaded, setPrefsLoaded] = useState(false)
+    useEffect(() => {
+      window.ev?.workspace
+        .load()
+        .then(() => setPrefsLoaded(true))
+        .catch(() => setPrefsLoaded(true))
+    }, [])
 
     // 새 로컬 셸: 세션 생성 → 포커스 패널에 표시(패널이 없으면 첫 패널 생성).
     // "activeId 가 있으면 패널을 만든다"는 이펙트로 처리하면 layout 이 매 렌더 새 객체라 이펙트가 매 렌더 돌고,
@@ -973,6 +984,13 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
 
     return (
       <div className="main">
+        {/* #138 첫 실행 인사 — 호칭을 받는다. 한 번 지나면(건너뛰어도) 다시 안 뜬다.
+            **하이드레이트가 끝난 뒤**에만 판정한다: 기본값이 빈 문자열이라 로드 전에 보면
+            이미 이름을 넣어 둔 사람에게도 매번 뜬다. prefs 의 주인이 여기라 여기서 그린다. */}
+        <WelcomeModal
+          open={prefsLoaded && !prefs.araWelcomeSeen}
+          onDone={(name) => updatePrefs({ araWelcomeSeen: true, ...(name ? { araCallName: name } : {}) })}
+        />
         <TermTabbar
           sessions={list}
           activeId={activeId}

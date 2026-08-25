@@ -249,6 +249,11 @@ export type ClaudeArgsOpts = {
   permissionMode?: string
   /** 쓸 모델(#137). 비어 있으면 붙이지 않는다 = 사용자의 `~/.claude` 기본값. */
   model?: string
+  /**
+   * 말투 파일(#138). Claude Code 기본 프롬프트를 **지우지 않고 얹는다**(`--append-…`).
+   * 파일로 넘기는 이유는 araMcp.writePersona 주석 참고(사람이 친 글자를 argv 에 안 넣는다).
+   */
+  personaFile?: string
 }
 
 /**
@@ -279,5 +284,6 @@ export function buildClaudeArgs(o: ClaudeArgsOpts = {}): string[] {
   else if (o.sessionId) a.push('--session-id', o.sessionId)
   if (o.permissionMode) a.push('--permission-mode', o.permissionMode)
   if (o.model) a.push('--model', o.model)
+  if (o.personaFile) a.push('--append-system-prompt-file', o.personaFile)
   return a
 }
