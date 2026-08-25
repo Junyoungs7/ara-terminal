@@ -33,6 +33,10 @@ export function registerAraIpc(
     chat.send(text)
     return { ok: true } as const
   })
+  handle('ara:allow', async ({ cls }) => {
+    await chat.allow(cls)
+    return { ok: true } as const
+  })
   handle('ara:interrupt', () => {
     chat.interrupt()
     return { ok: true } as const

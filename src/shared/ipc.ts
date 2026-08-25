@@ -420,6 +420,8 @@ export type InvokeContract = {
     res: { ok: boolean; needCwd?: boolean; noEngine?: boolean }
   }
   'ara:send': { req: { text: string }; res: { ok: true } }
+  /** #135: 막힌 등급을 이 대화 동안 연다(프로세스를 --resume 으로 다시 띄운다). */
+  'ara:allow': { req: { cls: 'write' | 'exec' }; res: { ok: true } }
   'ara:interrupt': { req: void; res: { ok: true } }
   'ara:close': { req: void; res: { ok: true } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
@@ -748,6 +750,7 @@ export type EvApi = {
       engine?: 'cli' | 'api'
     }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
     send(text: string): Promise<{ ok: true }>
+    allow(cls: 'write' | 'exec'): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>

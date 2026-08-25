@@ -1,7 +1,7 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
 import { app, BrowserWindow } from 'electron'
 import { join, isAbsolute } from 'node:path'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
 import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
@@ -37,6 +37,7 @@ import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
+import { gateOf } from '@shared/aiGate'
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -251,8 +252,17 @@ app.whenReady().then(() => {
       // 활성 세션은 화면이 open() 에 실어 보낸다(main 원장에는 "어느 탭을 보고 있나"가 없다).
       activeSession: () => null,
       lastLocalCwd: () => sessions.snapshot().find((x) => x.type === 'local' && x.cwd)?.cwd ?? null,
+      // 아무것도 못 고를 때 가는 자리 — **묻지 않기 위해** 있다(2026-08-25 준영님 결정).
+      // 홈 디렉터리를 쓰지 않는다: 그 폴더를 프로젝트로 여긴 검색 도구가 집 전체를 훑는다.
+      araCwd: () => {
+        const dir = join(userData, 'ara-home')
+        mkdirSync(dir, { recursive: true })
+        return dir
+      },
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
-      api: { vault: secrets, getPrefs: aiPrefs }
+      api: { vault: secrets, getPrefs: aiPrefs },
+      // #135 문지기 등급 — 값은 렌더러가 보낸 것이라 신뢰 경계 밖이다(gateOf 가 통과로 클램프).
+      gate: () => gateOf(store.get().ui.araGate)
     },
     getWebContents
   )

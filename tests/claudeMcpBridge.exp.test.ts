@@ -230,6 +230,7 @@ describe('실증 — 아라 MCP 물리기 + 권한 관찰(#124)', () => {
         vault,
         activeSession: () => ({ type: 'local', cwd: dir }),
         lastLocalCwd: () => dir,
+        araCwd: () => dir,
         emit: (e) => {
           events.push(e.t)
           if (e.t === 'text') texts.push(e.text)

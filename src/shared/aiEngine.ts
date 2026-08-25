@@ -214,6 +214,11 @@ export type ClaudeArgsOpts = {
   sessionId?: string
   /** 사용자의 권한 설정을 따른다 — 우리가 기본값을 바꾸지 않는다. */
   permissionMode?: string
+  /**
+   * 아라 문지기가 막는 도구들(#135, shared/aiGate.ts 가 목록을 만든다).
+   * 비어 있으면 플래그 자체를 안 붙인다 — 기본은 "아무것도 막지 않는다"다.
+   */
+  disallowed?: readonly string[]
 }
 
 /**
@@ -243,5 +248,7 @@ export function buildClaudeArgs(o: ClaudeArgsOpts = {}): string[] {
   if (o.resumeId) a.push('--resume', o.resumeId)
   else if (o.sessionId) a.push('--session-id', o.sessionId)
   if (o.permissionMode) a.push('--permission-mode', o.permissionMode)
+  // 붙박이다 — 도는 중에 되돌릴 수 없어서(실측 §3.4f) 허용은 --resume 재기동으로 한다.
+  if (o.disallowed && o.disallowed.length > 0) a.push('--disallowedTools', ...o.disallowed)
   return a
 }

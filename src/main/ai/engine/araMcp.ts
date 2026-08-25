@@ -71,37 +71,34 @@ export async function prepareAraMcp(server: McpServerHandle, vault: TokenVault):
 
 // ── 작업 폴더 고르기(설계 §3.3) ───────────────────────────────────────────────
 
-export type CwdPick =
-  /** 이 폴더에서 돈다. */
-  | { kind: 'use'; cwd: string }
-  /** 물어봐야 한다 — 원격 경로는 이 PC 에 없다. */
-  | { kind: 'ask' }
-
 /**
  * 아라가 어느 폴더에서 돌 것인가.
+ *
+ * **묻지 않는다**(2026-08-25 준영님 결정). 아라는 특정 폴더에 매인 물건이 아니다 — 이 PC 에서 돌고,
+ * 터미널·원격 일은 **세션 도구**(session_list·session_read·session_input·sftp_*)로 한다. 폴더는
+ * "로컬 파일을 만질 때의 기본 자리"일 뿐이라, 그것 때문에 대화 시작을 막아 세울 이유가 없었다.
  *
  * | 활성 세션 | 결과 |
  * |---|---|
  * | 로컬 셸 | 그 셸의 cwd 그대로 — 그 폴더의 CLAUDE.md·훅·스킬을 읽는 것이 이득이다 |
- * | SSH | 원격 경로는 이 PC 에 없다 → 마지막으로 쓴 로컬 폴더, 없으면 **묻는다** |
- * | 없음 | 마지막으로 쓴 폴더, 없으면 묻는다 |
+ * | SSH·RDP | 원격 경로는 이 PC 에 없다 → 마지막으로 쓴 로컬 폴더 |
+ * | 아무것도 없음 | **아라 폴더**(fallback) — 늘 있는 자리다 |
  *
- * 임시 폴더로 격리하지 않는다: 그러면 로컬 파일 작업이 통째로 죽는다(§3.2).
+ * 홈 디렉터리를 기본으로 삼지 않는다: 그 폴더를 프로젝트로 여긴 검색 도구가 사용자의 집 전체를
+ * 훑게 된다. 임시 폴더로 격리하지도 않는다 — 그러면 로컬 파일 작업이 통째로 죽는다(§3.2).
  */
 export function pickEngineCwd(o: {
   sessionType: 'local' | 'ssh' | 'rdp' | null
   sessionCwd: string | null
   lastLocal: string | null
-}): CwdPick {
-  if (o.sessionType === 'local' && o.sessionCwd && isLocalPath(o.sessionCwd)) return { kind: 'use', cwd: o.sessionCwd }
-  if (o.lastLocal && isLocalPath(o.lastLocal)) return { kind: 'use', cwd: o.lastLocal }
-  return { kind: 'ask' }
+  /** 아무것도 못 고를 때 가는 자리. 늘 존재해야 한다(호출자가 만든다). */
+  fallback: string
+}): string {
+  if (o.sessionType === 'local' && o.sessionCwd && isLocalPath(o.sessionCwd)) return o.sessionCwd
+  if (o.lastLocal && isLocalPath(o.lastLocal)) return o.lastLocal
+  return o.fallback
 }
 
-/**
- * 이 PC 의 경로처럼 생겼는가. 원격 세션의 cwd(`/home/jun/...`)를 로컬 폴더로 잘못 쓰면
- * claude 가 "폴더 없음"으로 죽거나 **엉뚱한 폴더**(윈도우의 `\home\jun`)에서 돈다.
- */
 export function isLocalPath(p: string): boolean {
   if (process.platform !== 'win32') return p.startsWith('/')
   // 윈도우: 드라이브 문자 또는 UNC 만 로컬로 본다.

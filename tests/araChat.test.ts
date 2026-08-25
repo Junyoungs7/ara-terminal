@@ -108,18 +108,23 @@ describe('MCP 설정 파일', () => {
 describe('작업 폴더 고르기(§3.3)', () => {
   const local = process.platform === 'win32' ? 'D:\\work\\app' : '/home/jun/app'
   const remote = '/srv/app'
+  const home = process.platform === 'win32' ? 'C:/ara' : '/var/ara'
+  const pick = (o: { sessionType: 'local' | 'ssh' | 'rdp' | null; sessionCwd: string | null; lastLocal: string | null }) =>
+    pickEngineCwd({ ...o, fallback: home })
 
   it('로컬 셸이면 그 셸의 폴더에서 돈다 — 그 폴더의 CLAUDE.md·훅을 읽는 것이 이득이다', () => {
-    expect(pickEngineCwd({ sessionType: 'local', sessionCwd: local, lastLocal: null })).toEqual({ kind: 'use', cwd: local })
+    expect(pick({ sessionType: 'local', sessionCwd: local, lastLocal: null })).toBe(local)
   })
 
   it('★ SSH 세션의 원격 경로를 로컬 폴더로 쓰지 않는다 — 마지막 로컬 폴더로 떨어진다', () => {
-    expect(pickEngineCwd({ sessionType: 'ssh', sessionCwd: remote, lastLocal: local })).toEqual({ kind: 'use', cwd: local })
+    expect(pick({ sessionType: 'ssh', sessionCwd: remote, lastLocal: local })).toBe(local)
   })
 
-  it('★ 쓸 로컬 폴더가 없으면 묻는다 — 아무 데서나 시작하지 않는다', () => {
-    expect(pickEngineCwd({ sessionType: 'ssh', sessionCwd: remote, lastLocal: null })).toEqual({ kind: 'ask' })
-    expect(pickEngineCwd({ sessionType: null, sessionCwd: null, lastLocal: null })).toEqual({ kind: 'ask' })
+  it('★ 쓸 로컬 폴더가 없어도 **묻지 않는다** — 아라 폴더에서 시작한다', () => {
+    // 2026-08-25 준영님 결정: 아라는 특정 폴더에 매인 물건이 아니다. 터미널·원격 일은 세션
+    // 도구로 하고, 폴더는 "로컬 파일을 만질 때의 기본 자리"일 뿐이라 시작을 막을 이유가 없다.
+    expect(pick({ sessionType: 'ssh', sessionCwd: remote, lastLocal: null })).toBe(home)
+    expect(pick({ sessionType: null, sessionCwd: null, lastLocal: null })).toBe(home)
   })
 
   it('로컬 경로 판정 — 윈도우에서 원격 경로가 통과하면 안 된다', () => {
@@ -137,6 +142,7 @@ describe('작업 폴더 고르기(§3.3)', () => {
 
 describe('아라 대화 한 벌', () => {
   const local = process.platform === 'win32' ? 'D:\\work' : '/work'
+  const araHome = process.platform === 'win32' ? 'C:/ara' : '/var/ara'
   const setup = (o: { session?: { type: 'local' | 'ssh'; cwd: string | null } | null; lastLocal?: string | null } = {}) => {
     const seen: AraChatEvent[] = []
     const eng = fakeEngine()
@@ -145,6 +151,7 @@ describe('아라 대화 한 벌', () => {
       vault: memVault(),
       activeSession: () => o.session ?? null,
       lastLocalCwd: () => o.lastLocal ?? null,
+      araCwd: () => araHome,
       emit: (e) => seen.push(e),
       makeEngine: () => eng
     })
@@ -158,11 +165,11 @@ describe('아라 대화 한 벌', () => {
     expect(chat.isOpen()).toBe(true)
   })
 
-  it('★ 폴더를 못 고르면 열지 않고 묻는다', async () => {
+  it('★ 원격만 보고 있어도 **연다** — 아라 폴더에서 시작하고 원격은 세션 도구로 만진다', async () => {
     const { chat, seen } = setup({ session: { type: 'ssh', cwd: '/srv' } })
-    expect(await chat.open()).toEqual({ ok: false, needCwd: true })
-    expect(seen).toEqual([{ t: 'needCwd' }])
-    expect(chat.isOpen()).toBe(false)
+    expect(await chat.open()).toEqual({ ok: true })
+    expect(seen).toEqual([{ t: 'opened', cwd: araHome, withMcp: true, engine: 'cli' }])
+    expect(chat.isOpen()).toBe(true)
   })
 
   it('사용자가 고른 폴더가 규칙을 이긴다', async () => {
@@ -240,6 +247,7 @@ describe('엔진이 없을 때 · 폴백 (#126)', () => {
       vault: memVault(),
       activeSession: () => ({ type: 'local', cwd: local }),
       lastLocalCwd: () => local,
+      araCwd: () => local,
       emit: (e) => seen.push(e),
       // makeEngine 을 주지 않는다 — 그게 있으면 "진짜로 띄우는 판"이 아니라 조회를 건너뛴다.
       ...(o.api ? { api: { vault: memVault() as never, getPrefs: () => ({ provider: 'anthropic' as const, model: 'm' }) } } : {})
@@ -273,4 +281,81 @@ describe('엔진이 없을 때 · 폴백 (#126)', () => {
 
   // "있으면 평소대로 연다"는 따로 두지 않는다 — 위 '열면 폴더와 MCP 물림 여부를 알린다'가
   // 이미 그 길이다(엔진을 주입한 판이라 조회 자체를 지나가지 않는다).
+})
+
+// ── #135 문지기 ──────────────────────────────────────────────────────────────
+describe('문지기 (#135)', () => {
+  const local = process.platform === 'win32' ? 'D:/work' : '/home/jun/work'
+  const mk = (gate?: { write: boolean; exec: boolean }) => {
+    const seen: AraChatEvent[] = []
+    const engines: { args: unknown; eng: ReturnType<typeof fakeEngine> }[] = []
+    const chat = createAraChat({
+      server: fakeServer({ enabled: true }),
+      vault: memVault(),
+      activeSession: () => ({ type: 'local', cwd: local }),
+      lastLocalCwd: () => local,
+      araCwd: () => local,
+      emit: (e) => seen.push(e),
+      ...(gate ? { gate: () => gate } : {}),
+      makeEngine: (args) => {
+        const eng = fakeEngine()
+        engines.push({ args, eng })
+        return eng
+      }
+    })
+    return { chat, seen, engines }
+  }
+
+  it('등급을 끄면 그 도구들이 막을 목록으로 간다 · 기본은 아무것도 안 붙는다', async () => {
+    const { chat, engines } = mk({ write: false, exec: true })
+    await chat.open()
+    expect((engines[0]!.args as { disallowed?: string[] }).disallowed).toEqual(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
+
+    const plain = mk()
+    await plain.chat.open()
+    expect((plain.engines[0]!.args as { disallowed?: string[] }).disallowed).toBeUndefined()
+  })
+
+  it('★ 막힌 도구는 결과에서 알아채고 화면에 올린다 — 평범한 실패는 아니다', async () => {
+    const { chat, seen, engines } = mk({ write: false, exec: true })
+    await chat.open()
+    engines[0]!.eng.fire({
+      t: 'toolResult',
+      id: 't1',
+      ok: false,
+      brief: 'Error: No such tool available: Write. Write is disabled for this session, in subagents as well as here.'
+    })
+    expect(seen.at(-1)).toEqual({ t: 'blocked', tool: 'Write', cls: 'write' })
+
+    engines[0]!.eng.fire({ t: 'toolResult', id: 't2', ok: false, brief: 'exit 1' })
+    expect(seen.at(-1)).toMatchObject({ t: 'toolResult' })
+  })
+
+  it('★ 허용하면 같은 대화를 --resume 으로 다시 문다 — 런타임으로는 못 되돌린다(실측)', async () => {
+    const { chat, engines } = mk({ write: false, exec: true })
+    await chat.open()
+    engines[0]!.eng.fire({ t: 'ready', sessionId: 'sess-1', model: 'm', cwd: local, tools: [] })
+    await chat.allow('write')
+
+    expect(engines).toHaveLength(2)
+    const second = engines[1]!.args as { resumeId?: string; disallowed?: string[]; cwd: string }
+    expect(second.resumeId).toBe('sess-1') // 대화를 잃지 않는다
+    expect(second.cwd).toBe(local) // 폴더도 그대로
+    expect(second.disallowed).toBeUndefined() // 이제 안 막는다
+    expect(engines[0]!.eng.disposed).toBe(1) // 앞의 프로세스는 내린다
+  })
+
+  it('허용은 **이 대화 동안**이다 — 닫으면 설정으로 돌아간다', async () => {
+    const { chat, engines } = mk({ write: false, exec: true })
+    await chat.open()
+    await chat.allow('write')
+    chat.close()
+    await chat.open()
+    expect((engines.at(-1)!.args as { disallowed?: string[] }).disallowed).toEqual([
+      'Write',
+      'Edit',
+      'MultiEdit',
+      'NotebookEdit'
+    ])
+  })
 })

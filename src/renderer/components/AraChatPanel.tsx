@@ -27,7 +27,7 @@ import { t } from '../i18n'
 const CAN_TYPE = new Set<Phase>(['idle', 'working'])
 
 /** 상태줄에 뜨는 지금 상황. */
-type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'needCwd' | 'noEngine'
+type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'noEngine'
 
 export function AraChatPanel({
   open,
@@ -43,6 +43,8 @@ export function AraChatPanel({
   const [cwd, setCwd] = useState<string | null>(null)
   // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
   const [engine, setEngine] = useState<'cli' | 'api'>('cli')
+  // #135 문지기가 막은 것. 목록에 쌓지 않고 **입력칸 바로 위**에 세운다 — 지금 답해야 할 일이다.
+  const [blocked, setBlocked] = useState<{ tool: string; cls: 'write' | 'exec' } | null>(null)
   const [cost, setCost] = useState<{ usd: number; turns: number } | null>(null)
   const [draft, setDraft] = useState('')
   const [openTools, setOpenTools] = useState<Set<string>>(new Set())
@@ -62,12 +64,12 @@ export function AraChatPanel({
         setPhase('idle')
         return
       }
-      if (e.t === 'needCwd') {
-        setPhase('needCwd')
-        return
-      }
       if (e.t === 'noEngine') {
         setPhase('noEngine')
+        return
+      }
+      if (e.t === 'blocked') {
+        setBlocked({ tool: e.tool, cls: e.cls })
         return
       }
       if (e.t === 'closed') {
@@ -122,7 +124,7 @@ export function AraChatPanel({
     async (o: { cwd?: string; engine?: 'cli' | 'api' } = {}) => {
       setPhase('opening')
       const r = await window.ev?.ara.open({ ...o, active })
-      if (r && !r.ok && !r.needCwd && !r.noEngine) setPhase('closed')
+      if (r && !r.ok && !r.noEngine) setPhase('closed')
     },
     [active]
   )
@@ -138,6 +140,7 @@ export function AraChatPanel({
   const send = (text: string): void => {
     const s = text.trim()
     if (s === '' || !CAN_TYPE.has(phase)) return
+    setBlocked(null)
     setItems((cur) => pushMine(cur, s))
     setDraft('')
     setPhase('working')
@@ -180,10 +183,12 @@ export function AraChatPanel({
         <span className="t">{t('ara.title')}</span>
         {/* API 키 모드는 **한눈에 달라 보여야 한다** — 도구가 없고 지갑이 다르다. */}
         {engine === 'api' && <span className="ara-eng">{t('ara.engine.api')}</span>}
+        {/* 폴더는 **묻지 않는다**(2026-08-25) — 늘 어딘가에서 돌고, 여기를 누르면 바꾼다.
+            아라를 특정 폴더에 매어 두는 물건으로 만들지 않기 위해서다. */}
         {cwd && (
-          <span className="cwd" title={cwd}>
+          <button type="button" className="cwd" title={`${t('ara.cwd.change')}\n${cwd}`} onClick={() => void pickFolder()}>
             {cwd}
-          </span>
+          </button>
         )}
         <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
           <IconRefresh />
@@ -270,16 +275,28 @@ export function AraChatPanel({
             </div>
           </div>
         )}
-        {phase === 'needCwd' && (
-          <div className="ara-empty">
-            <div>{t('ara.needCwd')}</div>
-            <button type="button" className="ara-btn p" onClick={() => void pickFolder()}>
-              {t('ara.pickFolder')}
-            </button>
-          </div>
-        )}
         {phase === 'closed' && items.length === 0 && <div className="ara-empty">{t('ara.closed')}</div>}
       </div>
+
+      {/* #135: 문지기가 막았다. 허용은 **이 대화 동안**만이고, 프로세스를 --resume 으로 다시
+          문다(실측: 도는 중에는 못 되돌린다). 설정을 대신 바꾸지 않는다. */}
+      {blocked && (
+        <div className="ara-block">
+          <span className="q">{t('ara.blocked').replace('{tool}', blocked.tool)}</span>
+          <button
+            type="button"
+            className="ara-btn p"
+            onClick={() => {
+              const cls = blocked.cls
+              setBlocked(null)
+              setPhase('opening')
+              void window.ev?.ara.allow(cls)
+            }}
+          >
+            {t('ara.blocked.allow')}
+          </button>
+        </div>
+      )}
 
       <div className="ara-compose">
         <textarea

@@ -1,4 +1,5 @@
 import { AI_CHAT, ARA_CHAT } from '@shared/features'
+import { gateLeaks, gateOf } from '@shared/aiGate'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
@@ -343,6 +344,7 @@ function AiSection({
   const baseUrlCheck = provider === 'compatible' ? validateBaseUrl(baseUrl) : null
   // 설정 UI에 현재 어디로 전송되는지 호스트를 상시 표시한다(설계 W5 §보안 — 사용자가 자기도 모르게
   // 낯선 곳으로 보내지 않게). compatible 은 사용자 입력에서 파싱, 나머지는 고정 호스트.
+  const gate = gateOf(prefs.araGate)
   const host =
     provider === 'compatible'
       ? baseUrlCheck?.ok
@@ -446,6 +448,33 @@ function AiSection({
           {usage.output.toLocaleString('ko-KR')}
         </span>
       </Row>
+      {/* #135 아라 문지기 — 준영님 결정(2026-08-25): 등급을 사용자가 고른다.
+          "막는다"가 기본이 아니다. 기본은 통과이고, 조이는 것은 고르는 사람의 몫이다. */}
+      <div className="set-sec-t" data-sec="ai.gate" style={{ marginTop: 18 }}>
+        {t('settings.gate.sec')}
+      </div>
+      <div className="set-sec-d">{t('settings.gate.sec.desc')}</div>
+      <Row label={t('settings.gate.write')} desc={t('settings.gate.write.desc')}>
+        <Toggle
+          on={gate.write}
+          label={t('settings.gate.write')}
+          onChange={(v) => onPrefsChange({ araGate: { ...gate, write: v } })}
+        />
+      </Row>
+      <Row label={t('settings.gate.exec')} desc={t('settings.gate.exec.desc')}>
+        <Toggle
+          on={gate.exec}
+          label={t('settings.gate.exec')}
+          onChange={(v) => onPrefsChange({ araGate: { ...gate, exec: v } })}
+        />
+      </Row>
+      {/* 실측으로 알아낸 사실이라 숨기지 않는다: 셸을 열어 두면 파일 차단은 차단이 아니다
+          (모델이 `printf … > file` 로 그냥 쓴다 — 2026-08-25). */}
+      {gateLeaks(gate) && (
+        <div className="set-note" data-note="ai.gate.leak">
+          {t('settings.gate.leak')}
+        </div>
+      )}
       <div className="set-sec-t" data-sec="ai.cli" style={{ marginTop: 18 }}>
         {t('settings.ai.cliSec')}
       </div>

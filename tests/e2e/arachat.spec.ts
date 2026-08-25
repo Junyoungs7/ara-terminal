@@ -13,9 +13,9 @@ test.beforeEach(() => {
 })
 
 /**
- * 세션을 하나도 안 열고 레일을 연다 → **폴더를 묻는 상태**가 확정된다(§3.3 MCPB-4).
- * 로컬 셸을 먼저 띄우면 cwd 가 셸 통합으로 뒤늦게 도착해서 물을 때도 안 물을 때도 있다 —
- * 검사가 타이밍에 기대면 안 된다. 겸사겸사 "폴더 고르기"라는 실제 경로도 여기서 지난다.
+ * 세션을 하나도 안 열고 레일을 연다 → **아라 폴더에서 바로 시작한다**(2026-08-25 준영님 결정:
+ * 폴더를 묻지 않는다). 로컬 셸을 먼저 띄우면 cwd 가 셸 통합으로 뒤늦게 도착해 어느 폴더에서
+ * 열릴지가 타이밍에 달린다 — 검사가 거기에 기대면 안 된다.
  */
 async function openAra(ara: Ara): Promise<void> {
   await ara.app.evaluate(({ ipcMain }, dir) => {
@@ -23,8 +23,7 @@ async function openAra(ara: Ara): Promise<void> {
     ipcMain.handle('fs:pickDir', () => ({ dir }))
   }, process.cwd())
   await ara.page.click('.activity-bar .act-item[data-activity="ai"]')
-  await expect(ara.page.locator('.ara-panel .ara-empty')).toContainText('폴더가 필요합니다')
-  await ara.page.click('.ara-panel .ara-btn.p')
+  await expect(ara.page.locator('.ara-panel .ara-hd .cwd')).toBeVisible()
 }
 
 test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶음·글·비용이 차례로 뜬다', async ({ ara }) => {
@@ -161,4 +160,54 @@ test('ARA2-5★ claude 가 없으면 두 갈래를 보여 준다 — 설치하�
   const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { engine?: string }[] }).__opens)
   expect(opens).toHaveLength(1)
   expect(opens[0].engine).toBe('api')
+})
+
+test('ARA2-4 폴더를 묻지 않는다 · 머리의 폴더를 눌러 옮긴다', async ({ ara }) => {
+  const { page } = ara
+  await openAra(ara)
+  const panel = page.locator('.ara-panel')
+
+  // 폴더를 고르라는 화면이 **없다** — 열자마자 대화가 된다(2026-08-25 준영님 결정).
+  await expect(panel.locator('.ara-empty')).toHaveCount(0)
+  await expect(panel.locator('.ara-input')).toBeEnabled()
+
+  await ara.app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('ara:open')
+    ;(globalThis as unknown as { __opens: unknown[] }).__opens = []
+    ipcMain.handle('ara:open', (_e, o) => {
+      ;(globalThis as unknown as { __opens: unknown[] }).__opens.push(o)
+      return { ok: true }
+    })
+  })
+  await panel.locator('.ara-hd .cwd').click()
+  const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { cwd?: string }[] }).__opens)
+  expect(opens).toHaveLength(1)
+  expect(opens[0].cwd).toBe(process.cwd()) // openAra 가 fs:pickDir 을 저장소 루트로 스텁해 뒀다
+})
+
+test('ARA2-6★ 막히면 그 자리에서 묻는다 — [이 대화 동안 허용]이 그 등급을 연다', async ({ ara }) => {
+  const { page } = ara
+  await openAra(ara)
+  const panel = page.locator('.ara-panel')
+
+  // 하네스는 캔드 엔진이라 진짜로 막히지 않는다 — 사건만 흘려 넣는다. "정말 막혔을 때 이 사건이
+  // 나오는가"는 tests/araChat.test.ts 가 실측 문구 그대로 확인한다.
+  await ara.app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('ara:event', { t: 'blocked', tool: 'Write', cls: 'write' })
+  })
+  const box = panel.locator('.ara-block')
+  await expect(box).toContainText('Write')
+
+  await ara.app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('ara:allow')
+    ;(globalThis as unknown as { __allows: unknown[] }).__allows = []
+    ipcMain.handle('ara:allow', (_e, o) => {
+      ;(globalThis as unknown as { __allows: unknown[] }).__allows.push(o)
+      return { ok: true }
+    })
+  })
+  await box.locator('.ara-btn.p').click()
+  await expect(panel.locator('.ara-block')).toHaveCount(0)
+  const allows = await ara.app.evaluate(() => (globalThis as unknown as { __allows: { cls?: string }[] }).__allows)
+  expect(allows).toEqual([{ cls: 'write' }])
 })

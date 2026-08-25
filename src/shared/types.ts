@@ -1,5 +1,6 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
 import type { AiCliId, AiCliRecent } from './aiCli'
+import type { AraGate } from './aiGate'
 export type { AiCliRecent }
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
@@ -360,6 +361,8 @@ export type UiPrefs = {
   activityHidden: ActivityId[]
   // 2026-08-20 [AI]: CLI 별 기본 플래그. 하이드레이트가 끝난 값이라 네 CLI 가 모두 들어 있다.
   aiCliFlags: Record<AiCliId, string[]>
+  // #135 아라 문지기: 무엇을 그냥 통과시킬지. 기본은 둘 다 통과(0.1.0 까지의 행동).
+  araGate: AraGate
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -410,6 +413,8 @@ export type UiState = {
   // 아니다** — 시작하면 저절로 쌓이고, 상한(AI_CLI_RECENT_MAX)을 넘으면 오래된 것부터 버린다.
   // 비밀은 없다(서버는 profileId 로만 참조).
   aiCliRecent?: AiCliRecent[]
+  // #135: 아라 문지기 등급. 미지정이면 통과(gateOf 가 클램프한다).
+  araGate?: { write?: boolean; exec?: boolean }
   // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
   // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
   // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.
