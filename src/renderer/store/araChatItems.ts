@@ -110,6 +110,9 @@ function noteReady(cwd: string | null, tools: number, model: string | null): str
   // 폴더가 없는 판 = API 키 엔진(#126). "? 에서 시작했습니다 · 도구 0개" 는 사실이지만 아무것도
   // 알려 주지 않는다 — **무엇을 못 하는지**를 말해 주는 편이 낫다.
   if (cwd === null) return `${model ?? 'API'} · 도구 없이 대화만 합니다`
+  // 아라 폴더(고를 것이 없어 떨어진 자리)는 경로를 적지 않는다 — `…\A.R.A\ara-home` 은
+  // 사람에게 아무것도 알려 주지 않고 줄만 길어진다(2026-08-25 준영님, 머리 쪽과 같은 판단).
+  if (/[\/]ara-home$/.test(cwd)) return `준비됐습니다 · 도구 ${tools}개`
   return `${cwd} 에서 시작했습니다 · 도구 ${tools}개`
 }
 

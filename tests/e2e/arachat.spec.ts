@@ -252,11 +252,24 @@ test('ARA2-7★ 모델을 고른다 · 폭을 끌어 넓힌다 · 답변이 마�
   await ara.app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].webContents.send('ara:event', {
       t: 'text',
-      text: '## 결과\n\n**둘** 중 하나:\n\n- 지우기\n- 두기\n\n```bash\ndu -x -d1 /var\n```'
+      text:
+        '## 결과\n\n**둘** 중 하나:\n\n- 지우기\n- 두기\n\n| 이름 | 크기 |\n|---|---|\n| /var/log | 22G |\n| /var/lib | 9G |\n\n```bash\ndu -x -d1 /var\n```\n\n<script>alert(1)</script>'
     })
   })
-  await expect(panel.locator('.md-h.h2')).toHaveText('결과')
-  await expect(panel.locator('.md-ul li')).toHaveCount(2)
+  await expect(panel.locator('.md h2')).toHaveText('결과')
+  await expect(panel.locator('.md ul li')).toHaveCount(2)
   await expect(panel.locator('.md-pre code')).toContainText('du -x -d1 /var')
   await expect(panel.locator('.ara-ai strong')).toHaveText('둘')
+
+  // ④ 표는 **표로** 나온다(2026-08-25 제보: 파이프 글자가 그대로 보였다).
+  await expect(panel.locator('.md-table th')).toHaveCount(2)
+  await expect(panel.locator('.md-table tbody tr')).toHaveCount(2)
+  await expect(panel.locator('.md-table tbody tr').first()).toContainText('/var/log')
+
+  // ⑤★ 원문 HTML 은 **글자로** 남는다 — rehype-raw 를 안 넣는다(답변 속 태그가 진짜 태그가 되면 안 된다).
+  await expect(panel.locator('.ara-ai script')).toHaveCount(0)
+  await expect(panel.locator('.ara-ai')).toContainText('alert(1)')
+
+  // ⑥ 도는 동안 점이 움직인다 — 상태줄 글자만으로는 눈에 안 걸린다.
+  await expect(panel.locator('.ara-think')).toBeVisible()
 })

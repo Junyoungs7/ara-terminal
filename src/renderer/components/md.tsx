@@ -1,201 +1,66 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
 /**
- * 마크다운 조금(#137) — AI 답변을 읽을 만하게.
+ * AI 답변 마크다운(#137).
  *
- * **왜 직접 쓰나**: 라이브러리를 넣으면 그 라이브러리의 HTML 이 우리 화면에 들어온다. 이 글은
- * 모델이 쓴 것이라 **신뢰 경계 밖**이고, 이 앱에는 사내 서버 자격증명이 산다 — `dangerouslySetInnerHTML`
- * 을 쓰는 순간 그 판단을 남의 파서에 맡기게 된다. 여기서는 **React 엘리먼트만** 만든다: HTML 문자열이
- * 한 번도 생기지 않으므로 주입이라는 개념 자체가 없다.
+ * **처음엔 직접 짰다가 걷어냈다**(2026-08-25 준영님: *"굳이 만들어야 해? 라이브러리 있는데"*).
+ * 그 말이 맞았다. 직접 짠 이유로 "남의 HTML 이 우리 화면에 들어온다"를 들었는데, `react-markdown`
+ * 은 **HTML 문자열을 만들지 않는다** — remark 로 AST 를 만들고 React 엘리먼트로 그린다.
+ * 즉 내가 내세운 근거가 이 라이브러리에는 애초에 해당하지 않았다. 그러는 사이 손으로 짠 파서는
+ * 200줄이 됐고 표 하나에 또 늘었다 — 제보 하나에 한 조각씩 붙이는 건 라이브러리를 다시 쓰는 길이다.
  *
- * **왜 조금만 하나**: 답변에 실제로 나오는 것은 코드블록·굵게·목록·제목 정도다. 표·각주·이미지까지
- * 받으려면 파서가 열 배가 되고, 그건 라이브러리를 넣을 이유가 되지 갓 만든 코드가 할 일이 아니다.
- * 지원하지 않는 문법은 **글자 그대로 남는다**(사라지지 않는다 — 그게 이 판의 안전한 실패다).
- *
- * 지원: ```코드블록``` · `인라인` · **굵게** · *기울임* · # 제목 · - 목록 · 1. 목록 · > 인용 · ---
+ * **지키는 선 둘** (이건 라이브러리를 써도 우리가 정해야 한다):
+ *  ① `rehype-raw` 를 **넣지 않는다.** 넣으면 답변 속 `<script>`·`<iframe>` 이 진짜 태그가 된다.
+ *     기본값에서는 원문 HTML 이 글자로 남는다 — 이 앱에는 사내 자격증명이 살아서 그 선을 옮기지 않는다.
+ *  ② **링크는 눌러도 안 나간다.** Electron 창에서 `<a href>` 를 누르면 그 창이 통째로 그 주소로
+ *     간다(앱이 사라진다). 주소를 글자로 보여 주기만 하고, 여는 것은 사람이 정한다.
  */
-
-type Block =
-  | { k: 'code'; lang: string; text: string }
-  | { k: 'h'; level: 1 | 2 | 3; text: string }
-  | { k: 'ul'; items: string[] }
-  | { k: 'ol'; items: string[] }
-  | { k: 'quote'; text: string }
-  | { k: 'hr' }
-  | { k: 'p'; text: string }
-
-/** 글 → 블록들. 순수 함수라 검사 대상이다(화면 없이 규칙을 시험한다). */
-export function mdBlocks(src: string): Block[] {
-  const lines = src.split('\n')
-  const out: Block[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i] ?? ''
-
-    // 코드블록 — **닫히지 않아도 코드로 본다**(스트리밍 중에는 늘 열려 있다).
-    const fence = /^\s*```(\w*)\s*$/.exec(line)
-    if (fence) {
-      const lang = fence[1] ?? ''
-      const body: string[] = []
-      i += 1
-      while (i < lines.length && !/^\s*```\s*$/.test(lines[i] ?? '')) {
-        body.push(lines[i] ?? '')
-        i += 1
-      }
-      i += 1 // 닫는 줄(없으면 끝이다)
-      // 끝의 빈 줄은 버린다 — 안 닫힌 블록은 글 끝의 개행까지 삼켜서 코드 밑에 빈 칸이 남는다.
-      out.push({ k: 'code', lang, text: body.join('\n').replace(/\n+$/, '') })
-      continue
-    }
-
-    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
-      out.push({ k: 'hr' })
-      i += 1
-      continue
-    }
-
-    const h = /^(#{1,3})\s+(.*)$/.exec(line)
-    if (h) {
-      out.push({ k: 'h', level: (h[1]?.length ?? 1) as 1 | 2 | 3, text: h[2] ?? '' })
-      i += 1
-      continue
-    }
-
-    if (/^\s*>\s?/.test(line)) {
-      const body: string[] = []
-      while (i < lines.length && /^\s*>\s?/.test(lines[i] ?? '')) {
-        body.push((lines[i] ?? '').replace(/^\s*>\s?/, ''))
-        i += 1
-      }
-      out.push({ k: 'quote', text: body.join('\n') })
-      continue
-    }
-
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i] ?? '')) {
-        items.push((lines[i] ?? '').replace(/^\s*[-*+]\s+/, ''))
-        i += 1
-      }
-      out.push({ k: 'ul', items })
-      continue
-    }
-
-    if (/^\s*\d+[.)]\s+/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i] ?? '')) {
-        items.push((lines[i] ?? '').replace(/^\s*\d+[.)]\s+/, ''))
-        i += 1
-      }
-      out.push({ k: 'ol', items })
-      continue
-    }
-
-    // 문단 — 빈 줄까지 모은다(한 줄씩 끊으면 답변이 사다리처럼 보인다).
-    const para: string[] = []
-    while (i < lines.length) {
-      const cur = lines[i] ?? ''
-      if (cur.trim() === '' || /^\s*(```|#{1,3}\s|>|[-*+]\s|\d+[.)]\s|-{3,}\s*$)/.test(cur)) break
-      para.push(cur)
-      i += 1
-    }
-    if (para.length > 0) out.push({ k: 'p', text: para.join('\n') })
-    else i += 1 // 빈 줄
-  }
-  return out
-}
-
-/** 한 줄 안의 강조 — `코드` · **굵게** · *기울임*. 겹치면 **코드가 이긴다**(코드 안의 별표는 글자다). */
-export function mdInline(src: string): (string | { k: 'code' | 'b' | 'i'; text: string })[] {
-  const out: (string | { k: 'code' | 'b' | 'i'; text: string })[] = []
-  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|__([^_]+)__/g
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(src))) {
-    if (m.index > last) out.push(src.slice(last, m.index))
-    if (m[1] !== undefined) out.push({ k: 'code', text: m[1] })
-    else if (m[2] !== undefined) out.push({ k: 'b', text: m[2] })
-    else if (m[3] !== undefined) out.push({ k: 'i', text: m[3] })
-    else if (m[4] !== undefined) out.push({ k: 'b', text: m[4] })
-    last = m.index + m[0].length
-  }
-  if (last < src.length) out.push(src.slice(last))
-  return out
-}
-
-function Inline({ text }: { text: string }): JSX.Element {
-  return (
-    <>
-      {mdInline(text).map((p, i) =>
-        typeof p === 'string' ? (
-          <span key={i}>{p}</span>
-        ) : p.k === 'code' ? (
-          <code key={i} className="md-code">
-            {p.text}
-          </code>
-        ) : p.k === 'b' ? (
-          <strong key={i}>{p.text}</strong>
-        ) : (
-          <em key={i}>{p.text}</em>
-        )
-      )}
-    </>
-  )
-}
-
-/** 블록 → 화면. HTML 문자열을 만들지 않는다(위 주석 참고). */
 export function Markdown({ text }: { text: string }): JSX.Element {
   return (
     <div className="md">
-      {mdBlocks(text).map((b, i) => {
-        switch (b.k) {
-          case 'code':
-            // 긴 줄은 **가로로 스크롤**한다 — 줄바꿈으로 접으면 명령을 잘못 읽는다.
-            return (
-              <pre key={i} className="md-pre" data-lang={b.lang || undefined}>
-                <code>{b.text}</code>
-              </pre>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // 코드: 인라인과 블록을 갈라 각자 클래스를 준다(블록은 pre 가 가로로 스크롤한다).
+          code: ({ className, children, ...rest }) => {
+            const block = /language-/.test(className ?? '')
+            return block ? (
+              <code className={'md-blk ' + (className ?? '')} {...rest}>
+                {children}
+              </code>
+            ) : (
+              <code className="md-code" {...rest}>
+                {children}
+              </code>
             )
-          case 'h':
-            return (
-              <div key={i} className={'md-h h' + b.level}>
-                <Inline text={b.text} />
-              </div>
-            )
-          case 'ul':
-            return (
-              <ul key={i} className="md-ul">
-                {b.items.map((it, j) => (
-                  <li key={j}>
-                    <Inline text={it} />
-                  </li>
-                ))}
-              </ul>
-            )
-          case 'ol':
-            return (
-              <ol key={i} className="md-ol">
-                {b.items.map((it, j) => (
-                  <li key={j}>
-                    <Inline text={it} />
-                  </li>
-                ))}
-              </ol>
-            )
-          case 'quote':
-            return (
-              <div key={i} className="md-quote">
-                <Inline text={b.text} />
-              </div>
-            )
-          case 'hr':
-            return <div key={i} className="md-hr" />
-          default:
-            return (
-              <p key={i} className="md-p">
-                <Inline text={b.text} />
-              </p>
-            )
-        }
-      })}
+          },
+          pre: ({ children, ...rest }) => (
+            <pre className="md-pre" {...rest}>
+              {children}
+            </pre>
+          ),
+          // 표는 넘치면 가로로 스크롤한다 — 좁은 레일에서 칸을 접으면 숫자를 잘못 읽는다.
+          table: ({ children, ...rest }) => (
+            <div className="md-tablewrap">
+              <table className="md-table" {...rest}>
+                {children}
+              </table>
+            </div>
+          ),
+          blockquote: ({ children }) => <div className="md-quote">{children}</div>,
+          hr: () => <div className="md-hr" />,
+          // 위 ②: href 를 넘기지 않는다. 누를 수 없는 글자 + 주소는 툴팁으로.
+          a: ({ children, href }) => (
+            <span className="md-link" title={href}>
+              {children}
+            </span>
+          ),
+          img: ({ alt, src }) => <span className="md-img">{alt || String(src ?? '')}</span>
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   )
 }

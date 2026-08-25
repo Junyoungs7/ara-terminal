@@ -335,6 +335,15 @@ export function AraChatPanel({
           )
         )}
 
+        {/* 도는 동안 **목록 맨 아래**에서 점이 움직인다(2026-08-25 준영님: "돌아가는지 모르겠다").
+            상태줄 글자만으로는 눈에 안 걸린다 — 답이 흘러나오는 그 자리에 있어야 보인다. */}
+        {phase === 'working' && (
+          <div className="ara-think" aria-label={t('ara.phase.working')}>
+            <i />
+            <i />
+            <i />
+          </div>
+        )}
         {phase === 'closed' && items.length === 0 && <div className="ara-empty">{t('ara.closed')}</div>}
       </div>
 

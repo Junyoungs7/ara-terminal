@@ -7315,11 +7315,14 @@
   font-size: var(--fs-md);
 }
 .ara-note {
-  color: var(--text-dim);
-  font-size: var(--fs-micro);
-  font-family: var(--mono);
+  /* 2026-08-25 제보: 등폭 11px 이라 읽기 나빴다. 이건 **사람에게 하는 안내**지 기계 출력이 아니다 —
+     UI 글꼴로 바꾸고 한 단 키운다(등폭은 도구 줄·코드에만 남긴다). */
+  color: var(--text-lo);
+  font-size: var(--fs-sm);
+  font-family: var(--ui);
+  line-height: 1.5;
   padding: 0 2px;
-  word-break: break-all;
+  word-break: keep-all;
 }
 .ara-note.bad {
   color: var(--err);
@@ -7478,6 +7481,10 @@
 }
 .ara-bar .sp {
   margin-left: auto;
+}
+/* 칩 줄과 입력칸 사이 숨 — 붙여 두면 한 덩어리로 보여서 어느 것이 입력칸인지 흐리다(제보). */
+.ara-compose .ara-bar {
+  margin: 0 2px 8px;
 }
 .ara-bar .c {
   font-family: var(--mono);
@@ -7698,29 +7705,45 @@
 .md > * + * {
   margin-top: 8px;
 }
-.md-p {
-  white-space: pre-wrap;
+.md p {
+  margin: 0;
 }
-.md-h {
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
   color: var(--text-hi);
   font-weight: 650;
-}
-.md-h.h1 {
-  font-size: var(--fs-xl);
-}
-.md-h.h2 {
   font-size: var(--fs-lg);
 }
-.md-h.h3 {
+.md h1 {
+  font-size: var(--fs-xl);
+}
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
   font-size: var(--fs-md);
   color: var(--text-mid);
 }
-.md-ul,
-.md-ol {
+.md ul,
+.md ol {
   padding-left: 18px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+/* 링크는 눌리지 않는다(md.tsx ② 참고) — 그래도 링크였다는 것은 보이게 둔다. */
+.md-link {
+  color: var(--accent-bright);
+  text-decoration: underline dotted;
+  cursor: help;
+}
+.md-img {
+  color: var(--text-dim);
+  font-style: italic;
 }
 .md-quote {
   border-left: 2px solid var(--line-strong);
@@ -7864,4 +7887,66 @@
 .ara-menu .h {
   color: var(--text-dim);
   font-size: var(--fs-micro);
+}
+
+
+/* ── #137 표 — 좁은 레일에서도 표는 표다. 넘치면 **가로로 스크롤**한다(칸을 접지 않는다). */
+.md-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.md-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-sm);
+}
+.md-table th,
+.md-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.md-table th {
+  background: var(--bg-raised);
+  color: var(--text-hi);
+  font-weight: 600;
+}
+.md-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 도는 동안 목록 맨 아래에서 움직이는 점 셋 — 답이 흘러나오는 그 자리에 있어야 눈에 걸린다. */
+.ara-think {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 2px 6px;
+}
+.ara-think i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.35;
+  animation: ara-think 1.1s ease-in-out infinite;
+}
+.ara-think i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ara-think i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes ara-think {
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ara-think i {
+    animation: none;
+    opacity: 0.7;
+  }
 }
