@@ -9,6 +9,7 @@
 // profile:*(vault 자격증명 CRUD) · ssh:forgetHostKey(TOFU 우회) · ai:*(챗봇 자체 조종) · window:* ·
 // fs:*(로컬 파일시스템 전체 브라우징) · 레이아웃/분할(workspace:save 레이스 — 설계 §1.4).
 import { randomUUID } from 'node:crypto'
+import { aiSessionsOf } from '@shared/aiSession'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -121,6 +122,69 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
         if (answer === null) return fail('사람이 답하지 않았습니다(시간 초과 또는 대기 중인 질문이 너무 많음).')
         return ok(answer)
       })
+  )
+
+  /**
+   * #134 아라가 작업대를 **지휘한다**.
+   *
+   * 설계 §11 이 "만들지는 않되 막지도 않는다"로 남겨 둔 자리다. #128~#133 으로 두 전제가
+   * 갖춰져서(작업대에 id 가 있고, 명령을 넣는 길이 이미 있다) 이제 도구 둘이면 성립한다:
+   *   *"세 세션 다 테스트 돌리고 실패한 것만 알려 줘"*
+   *
+   * **`aisession_create` 는 안 만든다.** 모델은 `session_create` + `session_input` 로 이미 만들 수
+   * 있고, 여기에 또 만들면 실행 줄 조립이 두 벌로 갈린다(렌더러의 runAiCliNow 가 원본이다).
+   * 새로 필요한 것은 "무엇이 작업대인가"를 아는 일과 거기에 말을 거는 일뿐이다.
+   */
+  server.registerTool(
+    'aisession_list',
+    {
+      description:
+        '사용자가 만들어 둔 **AI 작업대** 목록입니다(서버·폴더·엔진). 터미널 세션 목록(session_list)과 다릅니다 — ' +
+        '이쪽은 "AI CLI 를 띄워 둔 자리"고, 지금 살아 있는 것에는 sessionId 가 붙습니다. ' +
+        'sessionId 가 있는 것에만 aisession_send 로 말을 걸 수 있습니다.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true }
+    },
+    async () =>
+      g(null, 'aisession_list', 'readOnly', {}, async () => {
+        const live = ctx.sessions.snapshot()
+        const rows = aiSessionsOf(ctx.ws.get().aiSessions).map((b) => ({
+          id: b.id,
+          title: b.title,
+          kind: b.kind,
+          cwd: b.cwd,
+          engine: b.engine,
+          ...(b.worktree ? { branch: b.worktree.branch } : {}),
+          // 살아 있는 터미널 찾기 — 폴더가 같은 그 서버(또는 로컬) 세션이다.
+          sessionId:
+            live.find((s) => s.cwd === b.cwd && (b.kind === 'remote' ? s.type === 'ssh' : s.type === 'local'))?.id ?? null
+        }))
+        return ok(JSON.stringify(rows))
+      })
+  )
+
+  server.registerTool(
+    'aisession_send',
+    {
+      description:
+        '살아 있는 AI 작업대에 지시를 보냅니다(그 터미널에 사람이 타이핑하는 것과 같습니다). ' +
+        'aisession_list 가 준 id 를 쓰세요. 줄바꿈은 우리가 붙입니다 — 보낸 즉시 실행됩니다.',
+      inputSchema: { id: z.string(), text: z.string() }
+    },
+    async ({ id, text }) => {
+      const bench = aiSessionsOf(ctx.ws.get().aiSessions).find((b) => b.id === id)
+      if (!bench) return fail('그런 작업대가 없습니다.')
+      const live = ctx.sessions
+        .snapshot()
+        .find((s) => s.cwd === bench.cwd && (bench.kind === 'remote' ? s.type === 'ssh' : s.type === 'local'))
+      if (!live) return fail('그 작업대는 지금 떠 있지 않습니다(사람이 사이드바 [AI] 에서 열어야 합니다).')
+      // 승인 게이트는 **그 세션 것**으로 지난다 — 작업대라고 해서 무르게 하지 않는다.
+      return g(live.id, 'aisession_send', 'sessionInput', { id, text }, async () => {
+        ctx.sessions.write(live.id, `${text}
+`)
+        return ok('전송함')
+      })
+    }
   )
 
   server.registerTool(
