@@ -20,6 +20,7 @@ import {
   buildClaudeArgs,
   interruptLine,
   parseStreamJson,
+  permissionModeLine,
   permissionReplyLine,
   userMessageLine,
   type AiEngine,
@@ -128,6 +129,8 @@ export function createClaudeEngine(opts: ClaudeEngineOpts): AiEngine {
     send: (text) => write(userMessageLine(text)),
 
     respondPermission: (requestId, allow) => write(permissionReplyLine(requestId, allow)),
+
+    setMode: (mode) => write(permissionModeLine(randomUUID(), mode)),
 
     interrupt: () => {
       if (!alive) return

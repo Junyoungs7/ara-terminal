@@ -18,11 +18,10 @@ import { createFakeEngine } from './engine/FakeEngine'
 import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
-import { blockedToolOf, classOfTool, disallowedTools, GATE_ALL_PASS, type AraGate } from '@shared/aiGate'
 import { pickEngineCwd, prepareAraMcp, type AraMcpHandoff } from './engine/araMcp'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
-export type ClaudeEngineArgs = { cwd: string; mcpConfigPath?: string; resumeId?: string; disallowed?: readonly string[] }
+export type ClaudeEngineArgs = { cwd: string; mcpConfigPath?: string; resumeId?: string; permissionMode?: string }
 
 export type AraChatDeps = {
   server: McpServerHandle
@@ -50,8 +49,6 @@ export type AraChatDeps = {
    * 없으면 폴백을 못 연다(그 사실을 화면에 그대로 알린다 — 조용히 A 로 되돌리지 않는다).
    */
   api?: { vault: KeyVault; getPrefs: () => AiPrefs }
-  /** 문지기 등급(#135). 없으면 아무것도 막지 않는다 — 0.1.0 까지의 행동이 기본이다. */
-  gate?: () => AraGate
 }
 
 /** 어느 엔진으로 열려 있나. 돈도 능력도 다르므로 **화면에 늘 보인다**(§5). */
@@ -64,10 +61,13 @@ export type AraChatEvent =
   | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind }
   /** 이 PC 에 `claude` 가 없다 — 설치하든지 API 키로 가든지(설계 §5). */
   | { t: 'noEngine' }
-  /** 문지기가 도구를 막았다(#135). cls 단위로 허용한다 — 허용은 `--resume` 재기동이다. */
-  | { t: 'blocked'; tool: string; cls: 'write' | 'exec' }
   /** 닫혔다. */
   | { t: 'closed' }
+  /**
+   * 계획 모드가 켜졌나/꺼졌나(#136). 화면이 이 값으로 [계획 먼저] 표시와 승인 버튼을 정한다.
+   * 우리가 부른 것뿐 아니라 승인으로 풀린 것도 여기로 나간다 — 화면이 스스로 짐작하지 않는다.
+   */
+  | { t: 'planMode'; on: boolean }
 
 export type AraChat = {
   /** 대화를 연다. cwd 를 주면 그것을 쓰고(사용자가 고른 폴더), 없으면 §3.3 규칙으로 고른다. */
@@ -80,11 +80,16 @@ export type AraChat = {
     engine?: AraEngineKind
   }): Promise<{ ok: boolean; noEngine?: boolean }>
   send(text: string): void
+  /**
+   * 계획 먼저 켜기/끄기(#136). **도는 중에도 바뀐다** — control 요청으로 모드만 갈아 끼운다
+   * (실측: 재기동도 --resume 도 필요 없다).
+   */
+  setPlanMode(on: boolean): void
+  /** 계획을 받아들였다 — 실행 모드로 풀고 "그대로 진행해" 를 보낸다. */
+  approvePlan(): void
   /** 권한 요청에 답한다. 대기열에 없는 id 는 조용히 버린다(늦게 온 답). */
   respond(requestId: string, allow: boolean): void
   interrupt(): void
-  /** 막힌 등급을 **이 대화 동안** 연다. 프로세스를 --resume 으로 다시 띄운다(실측: 런타임 변경 불가). */
-  allow(cls: 'write' | 'exec'): Promise<void>
   close(): void
   /** 지금 답을 기다리는 권한 요청들 — 화면이 다시 그릴 때 쓴다. */
   pending(): { requestId: string; tool: string; brief: string }[]
@@ -93,15 +98,20 @@ export type AraChat = {
   resumeId(): string | null
 }
 
+/** 계획만 세우고 아무것도 안 건드리는 모드(실측: 실제 편집이 막힌다). */
+const PLAN = 'plan'
+/** 승인 뒤 갈아 끼우는 모드. `default` 는 또 막힌다 — permissionModeLine 주석 참고. */
+const RUN = 'acceptEdits'
+/** 승인 = 사람이 버튼을 누른 것. 그 뜻을 모델에게 한 줄로 전한다. */
+const APPROVE_TEXT = '좋아, 그 계획대로 진행해 줘.'
+
 export function createAraChat(deps: AraChatDeps): AraChat {
   let engine: AiEngine | null = null
   let handoff: AraMcpHandoff | null = null
   let offEvent: (() => void) | null = null
   let sessionId: string | null = null
-  // 이 대화 동안만 열어 준 등급. 닫으면 사라진다 — 설정을 대신 바꾸지 않는다.
-  const granted = new Set<'write' | 'exec'>()
-  // 다시 띄울 때 그대로 쓰려고 붙잡아 둔다(허용은 같은 폴더·같은 대화로 이어져야 한다).
-  let lastCwd: string | null = null
+  // 계획 먼저인가. 열 때 --permission-mode 로 나가고, 도는 중에는 control 요청으로 바뀐다.
+  let planMode = false
   const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
 
   /** 엔진 사건 → 이 층의 규칙 → 화면. **두 엔진이 같은 배선을 쓴다**(그러라고 모양을 맞췄다). */
@@ -110,16 +120,6 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       if (e.t === 'ready' && e.sessionId) sessionId = e.sessionId
       // 권한 요청은 대기열에 담는다 — 화면이 늦게 붙어도 잃지 않는다.
       if (e.t === 'permission') waiting.set(e.requestId, { requestId: e.requestId, tool: e.tool, brief: e.brief })
-      // 문지기가 막은 것 — 도구 결과에 그 사실이 실려 온다(실측 §3.4f). 화면이 사람에게 묻는다.
-      if (e.t === 'toolResult' && !e.ok) {
-        const tool = blockedToolOf(e.brief)
-        const cls = tool ? classOfTool(tool) : null
-        if (tool && cls) {
-          deps.emit(e)
-          deps.emit({ t: 'blocked', tool, cls })
-          return
-        }
-      }
       // 프로세스가 죽었으면 이 층도 함께 정리한다(고아·유령 대기열 금지).
       if (e.t === 'exit') {
         deps.emit(e)
@@ -139,12 +139,6 @@ export function createAraChat(deps: AraChatDeps): AraChat {
     handoff?.cleanup()
     handoff = null
     waiting.clear()
-  }
-
-  /** 지금 걸려 있는 등급 = 설정 − 이 대화에서 연 것. */
-  const effective = (): AraGate => {
-    const g = deps.gate?.() ?? GATE_ALL_PASS
-    return { write: g.write || granted.has('write'), exec: g.exec || granted.has('exec') }
   }
 
   return {
@@ -188,13 +182,11 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
       // ARA_AI_FAKE=1 이면 캔드 엔진(F16 관행). 주입(makeEngine)이 있으면 그게 먼저다.
       const make = deps.makeEngine ?? (isFakeAi() ? () => createFakeEngine() : (x: ClaudeEngineArgs) => createClaudeEngine(x))
-      lastCwd = cwd
-      const disallowed = disallowedTools(effective())
       engine = make({
         cwd,
         ...(handoff ? { mcpConfigPath: handoff.configPath } : {}),
         ...(o.resumeId ? { resumeId: o.resumeId } : {}),
-        ...(disallowed.length > 0 ? { disallowed } : {})
+        ...(planMode ? { permissionMode: PLAN } : {})
       })
       wire(engine)
       deps.emit({ t: 'opened', cwd, withMcp: handoff !== null, engine: 'cli' })
@@ -203,6 +195,24 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
     send: (text) => engine?.send(text),
 
+    setPlanMode(on) {
+      if (planMode === on) return
+      planMode = on
+      // 열려 있으면 갈아 끼우고, 아직 안 열렸으면 다음에 열 때 인자로 나간다.
+      engine?.setMode(on ? PLAN : RUN)
+      deps.emit({ t: 'planMode', on })
+    },
+
+    approvePlan() {
+      if (!engine) return
+      // 목표는 `default` 가 아니라 **acceptEdits** 다 — default 로는 "권한을 아직 허용하지
+      // 않았다"로 또 막힌다(실측). 헤드리스에는 그 승인을 줄 창이 없다.
+      planMode = false
+      engine.setMode(RUN)
+      deps.emit({ t: 'planMode', on: false })
+      engine.send(APPROVE_TEXT)
+    },
+
     respond: (requestId, allow) => {
       if (!waiting.delete(requestId)) return
       engine?.respondPermission(requestId, allow)
@@ -210,20 +220,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
     interrupt: () => engine?.interrupt(),
 
-    async allow(cls) {
-      // 런타임으로는 못 되돌린다(실측) — 같은 대화를 --resume 으로 다시 문다.
-      if (granted.has(cls)) return
-      granted.add(cls)
-      const resumeId = sessionId
-      await this.open({
-        ...(lastCwd ? { cwd: lastCwd } : {}),
-        ...(resumeId ? { resumeId } : {}),
-        active: null
-      })
-    },
-
     close: () => {
-      granted.clear()
+      planMode = false
       if (!engine) return
       teardown()
       deps.emit({ t: 'closed' })

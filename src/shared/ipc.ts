@@ -420,8 +420,9 @@ export type InvokeContract = {
     res: { ok: boolean; needCwd?: boolean; noEngine?: boolean }
   }
   'ara:send': { req: { text: string }; res: { ok: true } }
-  /** #135: 막힌 등급을 이 대화 동안 연다(프로세스를 --resume 으로 다시 띄운다). */
-  'ara:allow': { req: { cls: 'write' | 'exec' }; res: { ok: true } }
+  /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
+  'ara:planMode': { req: { on: boolean }; res: { ok: true } }
+  'ara:approvePlan': { req: void; res: { ok: true } }
   'ara:interrupt': { req: void; res: { ok: true } }
   'ara:close': { req: void; res: { ok: true } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
@@ -750,7 +751,8 @@ export type EvApi = {
       engine?: 'cli' | 'api'
     }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
     send(text: string): Promise<{ ok: true }>
-    allow(cls: 'write' | 'exec'): Promise<{ ok: true }>
+    planMode(on: boolean): Promise<{ ok: true }>
+    approvePlan(): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>

@@ -365,7 +365,6 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
 
       store.setPrefs({
         aiCliFlags: { claude: [], codex: [], gemini: [], custom: [] },
-        araGate: { write: true, exec: true },
         uiScale: 'normal',
         sessionLogDir: '',
         appLogDir: '',

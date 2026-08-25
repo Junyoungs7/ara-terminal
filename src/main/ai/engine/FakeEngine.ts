@@ -42,6 +42,8 @@ export function createFakeEngine(): AiEngine {
       later(80, () => emit({ t: 'turn', costUsd: 0.012, ms: 80, turns: 1, text: '' }))
     },
     respondPermission: () => {},
+    // 캔드 엔진에는 권한 모드가 없다 — 화면이 부르는 것만 받아 준다.
+    setMode: () => {},
     interrupt: () => later(10, () => emit({ t: 'turn', costUsd: 0, ms: 0, turns: 0, text: '' })),
     dispose() {
       alive = false

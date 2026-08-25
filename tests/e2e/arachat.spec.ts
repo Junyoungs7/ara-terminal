@@ -185,29 +185,33 @@ test('ARA2-4 폴더를 묻지 않는다 · 머리의 폴더를 눌러 옮긴다'
   expect(opens[0].cwd).toBe(process.cwd()) // openAra 가 fs:pickDir 을 저장소 루트로 스텁해 뒀다
 })
 
-test('ARA2-6★ 막히면 그 자리에서 묻는다 — [이 대화 동안 허용]이 그 등급을 연다', async ({ ara }) => {
+
+test('ARA2-6★ [계획 먼저] → 계획이 나오면 승인 줄 → [이대로 진행]', async ({ ara }) => {
   const { page } = ara
   await openAra(ara)
   const panel = page.locator('.ara-panel')
+  const chip = panel.locator('.ara-chip')
 
-  // 하네스는 캔드 엔진이라 진짜로 막히지 않는다 — 사건만 흘려 넣는다. "정말 막혔을 때 이 사건이
-  // 나오는가"는 tests/araChat.test.ts 가 실측 문구 그대로 확인한다.
-  await ara.app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0].webContents.send('ara:event', { t: 'blocked', tool: 'Write', cls: 'write' })
-  })
-  const box = panel.locator('.ara-block')
-  await expect(box).toContainText('Write')
+  // 켜기 — 상태가 화면이 아니라 main 에서 온다(planMode 사건). 화면이 스스로 짐작하지 않는다.
+  await expect(chip).toHaveAttribute('aria-pressed', 'false')
+  await chip.click()
+  await expect(chip).toHaveAttribute('aria-pressed', 'true')
+
+  // 계획이 나오기 전에는 승인 줄이 없다.
+  await expect(panel.locator('.ara-plan')).toHaveCount(0)
+
+  await panel.locator('.ara-input').fill('로그 정리 계획 세워 줘')
+  await panel.locator('.ara-input').press('Enter')
+  await expect(panel.locator('.ara-plan')).toBeVisible() // 턴이 끝나면 선다
 
   await ara.app.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('ara:allow')
-    ;(globalThis as unknown as { __allows: unknown[] }).__allows = []
-    ipcMain.handle('ara:allow', (_e, o) => {
-      ;(globalThis as unknown as { __allows: unknown[] }).__allows.push(o)
+    ipcMain.removeHandler('ara:approvePlan')
+    ;(globalThis as unknown as { __approve: number }).__approve = 0
+    ipcMain.handle('ara:approvePlan', () => {
+      ;(globalThis as unknown as { __approve: number }).__approve += 1
       return { ok: true }
     })
   })
-  await box.locator('.ara-btn.p').click()
-  await expect(panel.locator('.ara-block')).toHaveCount(0)
-  const allows = await ara.app.evaluate(() => (globalThis as unknown as { __allows: { cls?: string }[] }).__allows)
-  expect(allows).toEqual([{ cls: 'write' }])
+  await panel.locator('.ara-plan .ara-btn.p').click()
+  expect(await ara.app.evaluate(() => (globalThis as unknown as { __approve: number }).__approve)).toBe(1)
 })

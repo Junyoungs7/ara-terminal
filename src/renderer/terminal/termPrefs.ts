@@ -14,7 +14,6 @@ import {
   type UiState
 } from '@shared/types'
 import { activityHiddenOf, activityOrderOf } from '../store/activityBar'
-import { gateOf } from '@shared/aiGate'
 import { aiCliFlagsOf } from '../../shared/aiCli'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
@@ -37,8 +36,6 @@ export const termPrefs: Omit<
   | 'aiCliFlags'
   | 'activityOrder'
   | 'activityHidden'
-  // 문지기 등급도 xterm 과 무관하다(#135) — main 의 엔진이 읽는 값이다.
-  | 'araGate'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -67,7 +64,6 @@ export function prefsFrom(
     | 'activityOrder'
     | 'activityHidden'
     | 'aiCliFlags'
-    | 'araGate'
   >
 ): UiPrefs {
   return {
@@ -91,9 +87,7 @@ export function prefsFrom(
     aiCliFlags: aiCliFlagsOf(ui.aiCliFlags),
     activityOrder: activityOrderOf(ui.activityOrder),
     activityHidden: activityHiddenOf(ui.activityHidden),
-    aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : '',
-    // #135 문지기 등급 — 저장값이 이상하면 **통과**로 내린다(막는 쪽이 기본이 아니다).
-    araGate: gateOf(ui.araGate)
+    aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : ''
   }
 }
 

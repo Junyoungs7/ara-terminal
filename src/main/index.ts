@@ -37,7 +37,6 @@ import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
-import { gateOf } from '@shared/aiGate'
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -260,9 +259,7 @@ app.whenReady().then(() => {
         return dir
       },
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
-      api: { vault: secrets, getPrefs: aiPrefs },
-      // #135 문지기 등급 — 값은 렌더러가 보낸 것이라 신뢰 경계 밖이다(gateOf 가 통과로 클램프).
-      gate: () => gateOf(store.get().ui.araGate)
+      api: { vault: secrets, getPrefs: aiPrefs }
     },
     getWebContents
   )

@@ -33,8 +33,12 @@ export function registerAraIpc(
     chat.send(text)
     return { ok: true } as const
   })
-  handle('ara:allow', async ({ cls }) => {
-    await chat.allow(cls)
+  handle('ara:planMode', ({ on }) => {
+    chat.setPlanMode(on === true)
+    return { ok: true } as const
+  })
+  handle('ara:approvePlan', () => {
+    chat.approvePlan()
     return { ok: true } as const
   })
   handle('ara:interrupt', () => {

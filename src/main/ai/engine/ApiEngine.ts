@@ -45,8 +45,9 @@ export function createApiEngine(opts: { vault: KeyVault; getPrefs: () => AiPrefs
       const { turnId } = session.send({ text })
       started.set(turnId, Date.now())
     },
-    // 권한 왕복이 없는 판이다 — 도구가 없으니 승인할 것도 없다.
+    // 권한 왕복이 없는 판이다 — 도구가 없으니 승인할 것도 없고 모드도 없다.
     respondPermission: () => {},
+    setMode: () => {},
     interrupt: () => session.cancel(),
     dispose() {
       alive = false

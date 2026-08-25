@@ -43,9 +43,13 @@ export function AraChatPanel({
   const [cwd, setCwd] = useState<string | null>(null)
   // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
   const [engine, setEngine] = useState<'cli' | 'api'>('cli')
-  // #135 문지기가 막은 것. 목록에 쌓지 않고 **입력칸 바로 위**에 세운다 — 지금 답해야 할 일이다.
-  const [blocked, setBlocked] = useState<{ tool: string; cls: 'write' | 'exec' } | null>(null)
   const [cost, setCost] = useState<{ usd: number; turns: number } | null>(null)
+  // #136 계획 먼저 — 켜면 아라가 **아무것도 건드리지 않고** 계획만 낸다(실측으로 확인한 모드).
+  // planReady = 그 계획이 나왔다(턴이 끝났다) → 승인 줄을 세운다.
+  const [planOn, setPlanOn] = useState(false)
+  const [planReady, setPlanReady] = useState(false)
+  // 사건 처리기는 한 번만 붙으므로(deps []) 최신 값을 ref 로 본다.
+  const planOnRef = useRef(false)
   const [draft, setDraft] = useState('')
   const [openTools, setOpenTools] = useState<Set<string>>(new Set())
   // 남은 시간을 초 단위로 다시 그리기 위한 시계(되묻기 카드가 열려 있을 때만 돈다).
@@ -68,16 +72,20 @@ export function AraChatPanel({
         setPhase('noEngine')
         return
       }
-      if (e.t === 'blocked') {
-        setBlocked({ tool: e.tool, cls: e.cls })
-        return
-      }
       if (e.t === 'closed') {
         setPhase('closed')
         return
       }
+      if (e.t === 'planMode') {
+        planOnRef.current = e.on
+        setPlanOn(e.on)
+        if (!e.on) setPlanReady(false)
+        return
+      }
       if (e.t === 'turn') {
         setPhase('idle')
+        // 계획 모드에서 턴이 끝났다 = 계획이 나왔다. 이제 사람이 정한다.
+        setPlanReady(planOnRef.current)
         setCost((c) => ({ usd: (c?.usd ?? 0) + (e.costUsd ?? 0), turns: (c?.turns ?? 0) + e.turns }))
       }
       if (e.t === 'text' || e.t === 'tool') setPhase('working')
@@ -140,8 +148,8 @@ export function AraChatPanel({
   const send = (text: string): void => {
     const s = text.trim()
     if (s === '' || !CAN_TYPE.has(phase)) return
-    setBlocked(null)
     setItems((cur) => pushMine(cur, s))
+    setPlanReady(false)
     setDraft('')
     setPhase('working')
     void window.ev?.ara.send(s)
@@ -278,22 +286,14 @@ export function AraChatPanel({
         {phase === 'closed' && items.length === 0 && <div className="ara-empty">{t('ara.closed')}</div>}
       </div>
 
-      {/* #135: 문지기가 막았다. 허용은 **이 대화 동안**만이고, 프로세스를 --resume 으로 다시
-          문다(실측: 도는 중에는 못 되돌린다). 설정을 대신 바꾸지 않는다. */}
-      {blocked && (
-        <div className="ara-block">
-          <span className="q">{t('ara.blocked').replace('{tool}', blocked.tool)}</span>
-          <button
-            type="button"
-            className="ara-btn p"
-            onClick={() => {
-              const cls = blocked.cls
-              setBlocked(null)
-              setPhase('opening')
-              void window.ev?.ara.allow(cls)
-            }}
-          >
-            {t('ara.blocked.allow')}
+      {/* #136: 계획이 나왔다. 누르면 실행 모드로 풀고 "그대로 진행해" 가 나간다 — 프로세스를
+          다시 띄우지 않는다(실측: control 요청으로 모드만 갈아 끼우면 된다).
+          고칠 게 있으면 그냥 아래에 쓰면 된다 — 버튼을 하나 더 두지 않는다. */}
+      {planOn && planReady && (
+        <div className="ara-plan">
+          <span className="q">{t('ara.plan.ask')}</span>
+          <button type="button" className="ara-btn p" onClick={() => void window.ev?.ara.approvePlan()}>
+            {t('ara.plan.go')}
           </button>
         </div>
       )}
@@ -317,6 +317,16 @@ export function AraChatPanel({
           }}
         />
         <div className="ara-bar">
+          {/* 계획 먼저는 **대화의 성격**을 바꾸는 스위치라 늘 보이는 자리에 둔다. */}
+          <button
+            type="button"
+            className={'ara-chip' + (planOn ? ' on' : '')}
+            aria-pressed={planOn}
+            title={t('ara.plan.tip')}
+            onClick={() => void window.ev?.ara.planMode(!planOn)}
+          >
+            {t('ara.plan')}
+          </button>
           <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />
           <span className="s">{t('ara.phase.' + phase)}</span>
           <span className="sp" />

@@ -336,7 +336,8 @@ const api: EvApi = {
     ) =>
       ipcRenderer.invoke('ara:open', o),
     send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
-    allow: (cls: 'write' | 'exec') => ipcRenderer.invoke('ara:allow', { cls }),
+    planMode: (on: boolean) => ipcRenderer.invoke('ara:planMode', { on }),
+    approvePlan: () => ipcRenderer.invoke('ara:approvePlan'),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),
     close: () => ipcRenderer.invoke('ara:close'),
     state: () => ipcRenderer.invoke('ara:state'),

@@ -42,15 +42,24 @@ function fakeServer(o: { enabled?: boolean; port?: number } = {}): McpServerHand
 }
 
 /** 가짜 엔진 — 프로세스 없이 사건을 흘려 넣는다. */
-function fakeEngine(): AiEngine & { sent: string[]; replies: [string, boolean][]; interrupts: number; disposed: number; fire(e: AiEngineEvent): void } {
+function fakeEngine(): AiEngine & {
+  sent: string[]
+  replies: [string, boolean][]
+  modes: string[]
+  interrupts: number
+  disposed: number
+  fire(e: AiEngineEvent): void
+} {
   const subs = new Set<(e: AiEngineEvent) => void>()
   const self = {
     sent: [] as string[],
     replies: [] as [string, boolean][],
+    modes: [] as string[],
     interrupts: 0,
     disposed: 0,
     send: (t: string) => self.sent.push(t),
     respondPermission: (id: string, ok: boolean) => self.replies.push([id, ok]),
+    setMode: (m: string) => self.modes.push(m),
     interrupt: () => (self.interrupts += 1),
     dispose: () => (self.disposed += 1),
     onEvent: (fn: (e: AiEngineEvent) => void) => {
@@ -283,12 +292,16 @@ describe('엔진이 없을 때 · 폴백 (#126)', () => {
   // 이미 그 길이다(엔진을 주입한 판이라 조회 자체를 지나가지 않는다).
 })
 
-// ── #135 문지기 ──────────────────────────────────────────────────────────────
-describe('문지기 (#135)', () => {
-  const local = process.platform === 'win32' ? 'D:/work' : '/home/jun/work'
-  const mk = (gate?: { write: boolean; exec: boolean }) => {
+
+// ── #136 계획 먼저 ───────────────────────────────────────────────────────────
+// 실측(2026-08-25)이 정한 흐름을 굳혀 둔다: plan 모드는 실제 편집을 막고, 승인 뒤
+// control 요청으로 **acceptEdits** 로 갈아 끼우면 같은 프로세스에서 그대로 실행된다.
+// `default` 로 바꾸면 "권한을 아직 허용하지 않았다"로 또 막힌다 — 그래서 목표 모드가 중요하다.
+describe('계획 먼저 (#136)', () => {
+  const local = process.platform === 'win32' ? 'D:/work' : '/work'
+  const setup = () => {
     const seen: AraChatEvent[] = []
-    const engines: { args: unknown; eng: ReturnType<typeof fakeEngine> }[] = []
+    const engines: { args: { permissionMode?: string }; eng: ReturnType<typeof fakeEngine> }[] = []
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
       vault: memVault(),
@@ -296,7 +309,6 @@ describe('문지기 (#135)', () => {
       lastLocalCwd: () => local,
       araCwd: () => local,
       emit: (e) => seen.push(e),
-      ...(gate ? { gate: () => gate } : {}),
       makeEngine: (args) => {
         const eng = fakeEngine()
         engines.push({ args, eng })
@@ -306,56 +318,54 @@ describe('문지기 (#135)', () => {
     return { chat, seen, engines }
   }
 
-  it('등급을 끄면 그 도구들이 막을 목록으로 간다 · 기본은 아무것도 안 붙는다', async () => {
-    const { chat, engines } = mk({ write: false, exec: true })
+  it('기본은 꺼져 있다 — 평소 대화는 그냥 한다', async () => {
+    const { chat, engines } = setup()
     await chat.open()
-    expect((engines[0]!.args as { disallowed?: string[] }).disallowed).toEqual(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
-
-    const plain = mk()
-    await plain.chat.open()
-    expect((plain.engines[0]!.args as { disallowed?: string[] }).disallowed).toBeUndefined()
+    expect(engines[0]!.args.permissionMode).toBeUndefined()
   })
 
-  it('★ 막힌 도구는 결과에서 알아채고 화면에 올린다 — 평범한 실패는 아니다', async () => {
-    const { chat, seen, engines } = mk({ write: false, exec: true })
+  it('★ 도는 중에 켜고 끈다 — 프로세스를 다시 띄우지 않는다', async () => {
+    const { chat, seen, engines } = setup()
     await chat.open()
-    engines[0]!.eng.fire({
-      t: 'toolResult',
-      id: 't1',
-      ok: false,
-      brief: 'Error: No such tool available: Write. Write is disabled for this session, in subagents as well as here.'
-    })
-    expect(seen.at(-1)).toEqual({ t: 'blocked', tool: 'Write', cls: 'write' })
+    chat.setPlanMode(true)
+    expect(engines[0]!.eng.modes).toEqual(['plan'])
+    expect(engines).toHaveLength(1) // 재기동 없음
+    expect(seen.at(-1)).toEqual({ t: 'planMode', on: true })
 
-    engines[0]!.eng.fire({ t: 'toolResult', id: 't2', ok: false, brief: 'exit 1' })
-    expect(seen.at(-1)).toMatchObject({ t: 'toolResult' })
+    chat.setPlanMode(false)
+    expect(engines[0]!.eng.modes).toEqual(['plan', 'acceptEdits'])
+    // 같은 값을 두 번 부르면 아무 일도 없다(화면 토글이 흔들려도 요청이 쌓이지 않는다).
+    chat.setPlanMode(false)
+    expect(engines[0]!.eng.modes).toHaveLength(2)
   })
 
-  it('★ 허용하면 같은 대화를 --resume 으로 다시 문다 — 런타임으로는 못 되돌린다(실측)', async () => {
-    const { chat, engines } = mk({ write: false, exec: true })
+  it('열기 전에 켜 두면 인자로 나간다 · 닫으면 꺼진다', async () => {
+    const { chat, engines } = setup()
+    chat.setPlanMode(true)
     await chat.open()
-    engines[0]!.eng.fire({ t: 'ready', sessionId: 'sess-1', model: 'm', cwd: local, tools: [] })
-    await chat.allow('write')
+    expect(engines[0]!.args.permissionMode).toBe('plan')
 
-    expect(engines).toHaveLength(2)
-    const second = engines[1]!.args as { resumeId?: string; disallowed?: string[]; cwd: string }
-    expect(second.resumeId).toBe('sess-1') // 대화를 잃지 않는다
-    expect(second.cwd).toBe(local) // 폴더도 그대로
-    expect(second.disallowed).toBeUndefined() // 이제 안 막는다
-    expect(engines[0]!.eng.disposed).toBe(1) // 앞의 프로세스는 내린다
-  })
-
-  it('허용은 **이 대화 동안**이다 — 닫으면 설정으로 돌아간다', async () => {
-    const { chat, engines } = mk({ write: false, exec: true })
-    await chat.open()
-    await chat.allow('write')
     chat.close()
     await chat.open()
-    expect((engines.at(-1)!.args as { disallowed?: string[] }).disallowed).toEqual([
-      'Write',
-      'Edit',
-      'MultiEdit',
-      'NotebookEdit'
-    ])
+    expect(engines[1]!.args.permissionMode).toBeUndefined()
+  })
+
+  it('★ 승인하면 **acceptEdits** 로 풀고 진행을 보낸다 — default 로는 또 막힌다(실측)', async () => {
+    const { chat, seen, engines } = setup()
+    chat.setPlanMode(true)
+    await chat.open()
+    chat.approvePlan()
+
+    const eng = engines[0]!.eng
+    expect(eng.modes).toEqual(['acceptEdits'])
+    expect(eng.sent).toEqual(['좋아, 그 계획대로 진행해 줘.'])
+    expect(seen.at(-1)).toEqual({ t: 'planMode', on: false })
+    expect(engines).toHaveLength(1) // 같은 프로세스·같은 대화
+  })
+
+  it('안 열려 있으면 승인은 아무 일도 하지 않는다(늦게 누른 버튼)', () => {
+    const { chat, seen } = setup()
+    expect(() => chat.approvePlan()).not.toThrow()
+    expect(seen).toEqual([])
   })
 })

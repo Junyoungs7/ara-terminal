@@ -7533,20 +7533,38 @@
   color: var(--text-mid);
 }
 
-/* #135 문지기가 막은 자리 — 입력칸 바로 위. 목록에 쌓지 않는다(지금 답할 일이다). */
-.ara-block {
+/* #136 계획 승인 — 입력칸 바로 위. 지금 정할 일이라 목록에 쌓지 않는다. */
+.ara-plan {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 8px;
   border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--warn) 8%, var(--bg-surface));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
 }
-.ara-block .q {
+.ara-plan .q {
   flex: 1;
   min-width: 0;
   color: var(--text-hi);
   font-size: var(--fs-sm);
   word-break: keep-all;
+}
+/* 상태줄의 [계획 먼저] 스위치. 켜져 있으면 금색으로 — 대화의 성격이 달라진 상태다. */
+.ara-chip {
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: var(--fs-micro) var(--ui);
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.ara-chip:hover {
+  color: var(--text-mid);
+}
+.ara-chip.on {
+  border-color: var(--accent);
+  color: var(--accent-bright);
 }

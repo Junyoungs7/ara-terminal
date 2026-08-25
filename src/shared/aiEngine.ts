@@ -40,6 +40,8 @@ export type AiEngine = {
   respondPermission(requestId: string, allow: boolean): void
   /** 지금 턴을 멈춘다. */
   interrupt(): void
+  /** 권한 모드를 도는 중에 바꾼다(#136 계획 승인). 못 하는 엔진은 아무 일도 안 한다. */
+  setMode(mode: string): void
   /** 프로세스를 내린다. 앱을 끌 때 반드시 부른다 — 고아 프로세스를 남기지 않는다(#64 규율). */
   dispose(): void
   onEvent(fn: (e: AiEngineEvent) => void): () => void
@@ -191,6 +193,25 @@ export function interruptLine(requestId: string): string {
   return JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'interrupt' } }) + '\n'
 }
 
+/**
+ * 권한 모드를 **도는 중에** 바꾼다(#136). 이것이 계획 승인 흐름의 유일한 실행 수단이다.
+ *
+ * 실측(2026-08-25): `set_permission_mode` 는 control 채널로 먹는다 —
+ * `{"subtype":"success","response":{"mode":"acceptEdits"}}` 를 돌려주고 곧바로 `init` 이 새 모드로
+ * 다시 온다. **재기동도 `--resume` 도 필요 없다.** 도구 차단 목록은 이렇게 못 바꾸지만
+ * (프로세스에 붙박이다), 계획 승인에 필요한 것은 정확히 모드 쪽이다.
+ *
+ * 목표 모드는 `default` 가 아니라 **`acceptEdits`** 다. `default` 로 바꿔 봤더니
+ * *"Claude requested permissions to write to …, but you haven't granted it yet"* 로 또 막혔다 —
+ * 헤드리스에는 그 승인을 줄 창이 없다(§3.4b).
+ */
+export function permissionModeLine(requestId: string, mode: string): string {
+  return (
+    JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'set_permission_mode', mode } }) +
+    '\n'
+  )
+}
+
 /** 권한 요청에 대한 답(#124 에서 쓴다). */
 export function permissionReplyLine(requestId: string, allow: boolean): string {
   return (
@@ -214,11 +235,6 @@ export type ClaudeArgsOpts = {
   sessionId?: string
   /** 사용자의 권한 설정을 따른다 — 우리가 기본값을 바꾸지 않는다. */
   permissionMode?: string
-  /**
-   * 아라 문지기가 막는 도구들(#135, shared/aiGate.ts 가 목록을 만든다).
-   * 비어 있으면 플래그 자체를 안 붙인다 — 기본은 "아무것도 막지 않는다"다.
-   */
-  disallowed?: readonly string[]
 }
 
 /**
@@ -248,7 +264,5 @@ export function buildClaudeArgs(o: ClaudeArgsOpts = {}): string[] {
   if (o.resumeId) a.push('--resume', o.resumeId)
   else if (o.sessionId) a.push('--session-id', o.sessionId)
   if (o.permissionMode) a.push('--permission-mode', o.permissionMode)
-  // 붙박이다 — 도는 중에 되돌릴 수 없어서(실측 §3.4f) 허용은 --resume 재기동으로 한다.
-  if (o.disallowed && o.disallowed.length > 0) a.push('--disallowedTools', ...o.disallowed)
   return a
 }
