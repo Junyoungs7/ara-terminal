@@ -7568,3 +7568,114 @@
   border-color: var(--accent);
   color: var(--accent-bright);
 }
+
+/* ── #129 사이드바 [AI] — 작업대 목록. 트리 행은 연결 트리와 같은 밀도로 맞춘다
+   (같은 사이드바 안에서 줄 높이가 다르면 다른 앱처럼 보인다). */
+.bench-empty {
+  padding: 16px 12px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.bench-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+.bench-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 10px;
+  min-height: 26px;
+}
+.bench-row:hover {
+  background: var(--bg-raised);
+}
+.bench-row.on {
+  background: var(--bg-overlay);
+}
+/* 분리 세션(worktree)은 부모 밑으로 한 칸. 세로선으로 부모·자식을 보이게 한다. */
+.bench-row.child {
+  padding-left: 22px;
+  position: relative;
+}
+.bench-row.child::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--line-strong);
+}
+.bench-row.dead .bench-name {
+  color: var(--text-dim);
+  cursor: default;
+}
+.bench-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-dim);
+}
+.bench-dot.ok {
+  background: var(--ok);
+}
+.bench-dot.warn {
+  background: var(--warn);
+}
+.bench-dot.bad {
+  background: var(--err);
+}
+.bench-dot.off {
+  background: var(--text-dim);
+  opacity: 0.6;
+}
+.bench-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--text-mid);
+  font: var(--fs-sm) var(--ui);
+  cursor: pointer;
+}
+.bench-name .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bench-name .br {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  flex: none;
+}
+.bench-name .skip {
+  color: var(--warn);
+  font-size: var(--fs-micro);
+  flex: none;
+}
+.bench-x {
+  flex: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+}
+.bench-row:hover .bench-x {
+  opacity: 1;
+}
+.bench-x:hover {
+  color: var(--err);
+}

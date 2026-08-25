@@ -3,13 +3,16 @@ import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { ConnTree, type TreeTarget } from './ConnTree'
 import { FileTree, type ActiveFileSession } from './FileTree'
+import { AiBenchTree } from './AiBenchTree'
+import type { WorkbenchRow } from '../store/aiWorkbench'
+import type { AiSessionState } from '@shared/aiSession'
 import type { DialogSpec, DialogResult } from './Dialog'
 import type { TreeActionId } from '../interactions/actions'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import { shownTab } from '../store/sidebar'
 import { t } from '../i18n'
 
-export type SidebarTab = 'conn' | 'file'
+export type SidebarTab = 'conn' | 'file' | 'ai'
 
 // 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(우측 액티비티 바와 같은
 // IntelliJ 툴윈도우 방식 — 누르면 열리고 다시 누르면 닫힌다). 글리프는 옛 탭 것을 그대로 쓴다:
@@ -26,10 +29,21 @@ const TAB_ICON: Record<SidebarTab, () => JSX.Element> = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
     </svg>
+  ),
+  // #129 작업대. 우측 [아라](관제실)와 **다른 글리프**를 쓴다 — 같은 모양이면 같은 것인 줄 안다.
+  ai: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <rect x="3" y="5" width="18" height="13" rx="2" />
+      <path d="M8 10.5l2 2-2 2M13 14.5h3" />
+    </svg>
   )
 }
 
-const TAB_LABEL: Record<SidebarTab, string> = { conn: 'sidebar.tab.conn', file: 'sidebar.tab.file' }
+const TAB_LABEL: Record<SidebarTab, string> = {
+  conn: 'sidebar.tab.conn',
+  file: 'sidebar.tab.file',
+  ai: 'sidebar.tab.ai'
+}
 
 /**
  * 좌측 아이콘 레일 — 사이드바의 여닫이. 우측 `ActivityBar` 와 **같은 규칙**이고, 클래스만 다르다
@@ -53,7 +67,7 @@ export function SidebarRail({
   const shown = shownTab(active, fileEnabled)
   return (
     <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
-      {(['conn', 'file'] as const).map((id) => {
+      {(['conn', 'file', 'ai'] as const).map((id) => {
         const Icon = TAB_ICON[id]
         const on = !collapsed && shown === id
         const disabled = id === 'file' && !fileEnabled
@@ -107,7 +121,11 @@ export function Sidebar({
   onAskAiPaths,
   onRevealFiles,
   ask,
-  askText
+  askText,
+  benchRows,
+  onBenchOpen,
+  onBenchRemove,
+  onNewBench
 }: {
   active: SidebarTab
   collapsed: boolean
@@ -141,6 +159,11 @@ export function Sidebar({
   // 작업대와 **같은 동작**이어야 한다(같은 트리인데 자리마다 다르면 안 된다 — 스모크가 잡았다).
   onTerminalHere: (absPath: string) => void
   onAskAiPaths: (paths: string[]) => void
+  // #129 [AI] 작업대 목록 — 행·열기·지우기·새로 만들기. 목록의 주인은 store/aiWorkbench.ts 다.
+  benchRows: WorkbenchRow[]
+  onBenchOpen: (s: AiSessionState, sessionId: string | null) => void
+  onBenchRemove: (s: AiSessionState) => void
+  onNewBench: () => void
   // F14: 터미널 Ctrl+V 파일 업로드가 시작될 때 [파일] 탭을 펼쳐 전송 큐를 보여 준다.
   onRevealFiles: () => void
   // 파일 삭제 확인·새 폴더 이름 입력(Shell 의 단일 Dialog 인스턴스).
@@ -158,6 +181,15 @@ export function Sidebar({
       <div className="sb-tabs">
         <span className="sb-head">{t(TAB_LABEL[tab])}</span>
         <div className="sb-tab-spacer" />
+        {/* #129 새 작업대 — 지금 보고 있는 세션의 폴더에서 AI CLI 를 띄운다(= 작업대를 만든다).
+            AI CLI 시작(Ctrl+Shift+L)과 **같은 길**이다 — 만드는 문이 둘로 갈리면 안 된다. */}
+        {tab === 'ai' && (
+          <button type="button" className="sb-act" data-action="bench.new" title={t('bench.new')} onClick={onNewBench}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
         {/* 새 연결 — 연결 관리자 모달 열기. [파일] 을 보고 있을 때는 뜻이 없어 내린다. */}
         {tab === 'conn' && (
           <button type="button" className="sb-act" title={t('sidebar.act.newConn')} onClick={onNewConn}>
@@ -202,6 +234,14 @@ export function Sidebar({
           onReveal={onRevealFiles}
           ask={ask}
           askText={askText}
+        />
+      </div>
+      <div className={'sb-panel' + (tab === 'ai' ? ' active' : '')} role="tabpanel">
+        <AiBenchTree
+          rows={benchRows}
+          activeSessionId={activeSessionId}
+          onOpen={onBenchOpen}
+          onRemove={onBenchRemove}
         />
       </div>
     </div>

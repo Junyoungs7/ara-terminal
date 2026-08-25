@@ -37,6 +37,8 @@ export function nextSidebar(prev: SidebarState, tab: SidebarState['activeTab']):
  * 패널은 연결 트리를 그리는** 어긋남이 났다(2026-08-19 스모크가 잡았다) — 둘이 같은 값을 봐야 한다.
  */
 export function shownTab(activeTab: SidebarState['activeTab'], fileEnabled: boolean): SidebarState['activeTab'] {
+  // #129 [AI] 작업대 목록은 세션이 없어도 읽을 것이 있다(껐다 켜도 남는 목록이다) — 안 떨어뜨린다.
+  if (activeTab === 'ai') return 'ai'
   return fileEnabled ? activeTab : 'conn'
 }
 
@@ -52,7 +54,7 @@ export function useSidebar() {
         if (!s) return
         // FB-ui2: 옛 스냅샷의 activeTab='monitor'(이관 전 세 번째 탭)는 conn 으로 되돌린다 —
         // 안 그러면 두 탭 다 active 매치가 안 돼 사이드바가 빈 채로 뜬다.
-        const activeTab = s.activeTab === 'file' ? 'file' : 'conn'
+        const activeTab = s.activeTab === 'file' || s.activeTab === 'ai' ? s.activeTab : 'conn'
         setSidebar({ ...DEFAULT_SIDEBAR, ...s, activeTab, width: clampSidebarWidth(s.width ?? DEFAULT_SIDEBAR.width) })
       })
       .catch(() => {})

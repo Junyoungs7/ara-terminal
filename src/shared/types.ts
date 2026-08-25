@@ -368,7 +368,7 @@ export type UiPrefs = {
 // W1 F9: 'monitor'(포트 모니터) 탭이 세 번째로 붙었었다.
 // FB-ui2: 모니터를 우측 액티비티 바로 이관하면서 사이드바에는 다시 conn/file 두 탭만 남았다.
 // 옛 스냅샷에 'monitor' 가 남아 있을 수 있어 읽는 쪽(store/sidebar.ts)이 그 값을 conn 으로 되돌린다.
-export type SidebarState = { collapsed: boolean; activeTab: 'conn' | 'file'; width: number }
+export type SidebarState = { collapsed: boolean; activeTab: 'conn' | 'file' | 'ai'; width: number }
 
 export type UiState = {
   sidebar: SidebarState

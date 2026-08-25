@@ -19,7 +19,8 @@ export function AiSessionsPanel({
   open,
   onClose,
   onGoTo,
-  onQuietChange
+  onQuietChange,
+  onQuietIds
 }: {
   open: boolean
   onClose: () => void
@@ -27,6 +28,11 @@ export function AiSessionsPanel({
   onGoTo: (sessionId: string) => void
   /** 액티비티 바 점을 켜고 끄기 위해 조용한 개수를 위로 올린다. */
   onQuietChange: (n: number) => void
+  /**
+   * #129: 어느 세션이 조용한가 — 사이드바 [AI] 작업대 목록이 같은 값을 쓴다.
+   * 판정을 두 곳에서 따로 하면 같은 세션을 두고 한쪽은 노랑, 한쪽은 초록이 된다.
+   */
+  onQuietIds: (ids: Set<string>) => void
 }) {
   // 패널이 닫혀 있어도 센다 — 그래야 액티비티 바 점과 알림이 돈다(이 기능의 목적이 그것이다).
   const views = useAiSessions(open)
@@ -34,6 +40,16 @@ export function AiSessionsPanel({
   const notifiedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => onQuietChange(quiet), [quiet, onQuietChange])
+
+  // 조용한 세션 id 묶음. 내용이 같으면 새 Set 을 올리지 않는다(위쪽이 매 5초 다시 그리면 안 된다).
+  const quietKey = views
+    .filter((v) => v.state === 'quiet')
+    .map((v) => v.run.sessionId)
+    .sort()
+    .join(',')
+  useEffect(() => {
+    onQuietIds(new Set(quietKey === '' ? [] : quietKey.split(',')))
+  }, [quietKey, onQuietIds])
 
   // OS 알림 — **앱이 뒤에 있을 때만.** 앞에 있으면 점으로 충분하고, 알림이 겹치기 시작하면
   // 그때부터 전부 무시하게 된다. 세션당 한 번만 띄운다(조용한 동안 5초마다 울리면 안 된다).

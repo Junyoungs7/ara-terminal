@@ -29,7 +29,9 @@ import { AI_CLI_LOCAL, aiCliFlagsOf, buildLaunch, shellFor } from '../../shared/
 import { CLEAR_LINE } from '../../shared/shellInput'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
-import { registerAiRun } from '../store/aiSessions'
+import { aiRuns, registerAiRun } from '../store/aiSessions'
+import { benchRows as buildBenchRows, useAiWorkbench } from '../store/aiWorkbench'
+import { childrenOf, type AiSessionState } from '@shared/aiSession'
 import { AiSessionsPanel } from './AiSessionsPanel'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, useGroupList } from '../store/groups'
@@ -130,6 +132,10 @@ export function Shell() {
 
   // F30 AI 세션 패널의 액티비티 바 점(조용한 AI 개수). 열림 상태는 위 rail 이 갖는다.
   const [aiQuiet, setAiQuiet] = useState(0)
+  // 조용한 세션 id 들 — AiSessionsPanel 이 재고 있는 값을 그대로 받아 쓴다(중복 계산 금지).
+  const [quietIds, setQuietIds] = useState<Set<string>>(new Set())
+  // #129 작업대 목록 — 껐다 켜도 남는다. 살아 있는지는 F30 의 실행 기록·세션 목록과 맞춰 본다.
+  const bench = useAiWorkbench()
   // 작업 프로필(서버+폴더 즐겨찾기). 트리에 행을 만들지 않고 팝업 목록으로만 보여 준다.
   const [workOpen, setWorkOpen] = useState(false)
   const work = useWorkProfiles()
@@ -225,6 +231,20 @@ export function Shell() {
   }, [processApprovalQueue])
 
   const { profiles, conn, lookup, save, remove, connect } = useProfiles()
+
+  // 작업대 줄. 살아 있는 세션 찾기는 **F30 실행 기록**(어느 터미널에서 무엇이 도는가)을 통해서다 —
+  // 같은 사실을 두 곳에서 다르게 세지 않는다.
+  const benchList = useMemo(() => {
+    const runs = aiRuns()
+    const alive = new Set(sessions.sessions.map((x) => x.id))
+    return buildBenchRows(bench.list, {
+      sessionOf: (b) => runs.find((r) => alive.has(r.sessionId) && r.path === b.cwd && r.cli === b.engine)?.sessionId ?? null,
+      isQuiet: (sid) => quietIds.has(sid),
+      pathExists: (b) => bench.paths[b.cwd],
+      profileExists: (id) => profiles.some((p) => p.id === id)
+    })
+  }, [bench.list, bench.paths, sessions.sessions, profiles, quietIds])
+
   // R6 연결 그룹: 프로필에서 파생된 그룹 + 저장된 빈 그룹. 트리·연결 폼이 같은 목록을 쓴다.
   const { stored: storedGroups, save: saveGroups } = useGroupList()
   const groups = groupsOf(profiles, storedGroups)
@@ -550,10 +570,49 @@ export function Shell() {
       // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널의 "조용한 AI" 판정이 이 등록에
       // 걸려 있다. 창이 하던 일인데, 창을 없애면서 같이 사라질 뻔했다(타입 검사가 잡았다).
       registerAiRun({ sessionId: sid, cli, path, startedAt: Date.now() })
+      // #129: 여기가 **작업대를 만드는 유일한 문**이다(설계 §10.6 — 만들고 잊지 않는다).
+      bench.record({
+        kind: sess?.type === 'ssh' ? 'remote' : 'local',
+        ...(sess?.type === 'ssh' && sess.profileId ? { profileId: sess.profileId } : {}),
+        cwd: path,
+        engine: cli,
+        // 플래그에 그 인자가 들어 있으면 켜진 것이다 — 화면이 그 사실을 상시 표시한다(§6 확정 2).
+        skipPerms: flags.some((f) => f.includes('dangerously-skip-permissions'))
+      })
     },
-    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags]
+    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags, bench]
   )
   runAiCliRef.current = runAiCliNow
+
+  /**
+   * #129 작업대를 연다 — **살아 있으면 그 탭으로, 아니면 그 자리에서 다시 띄운다.**
+   * 다시 띄우는 길은 처음 만들 때와 **같은 함수**(runAiCliNow)를 지난다. 두 벌로 갈리면
+   * "처음엔 되는데 되살리면 플래그가 다르다" 같은 것이 생긴다.
+   */
+  const openBench = useCallback(
+    async (b: AiSessionState, sessionId: string | null) => {
+      if (sessionId) {
+        selectSession(sessionId)
+        return
+      }
+      const cli = b.engine === 'custom' ? 'claude' : b.engine
+      if (b.kind === 'remote' && b.profileId) {
+        // 접속이 끝나면 그 세션에서 CLI 를 띄운다 — 접속 전에 보내면 셸이 아직 없다.
+        await connectProfileRef.current?.(b.profileId, undefined, b.cwd, (sid) => runAiCliRef.current?.(cli, b.cwd, sid))
+        return
+      }
+      const sid = await sessions.restoreLocal({
+        type: 'local',
+        title: b.title,
+        serverKey: 'localhost',
+        cwd: b.cwd,
+        profileId: null,
+        shell: undefined
+      })
+      if (sid) runAiCliRef.current?.(cli, b.cwd, sid)
+    },
+    [sessions, selectSession]
+  )
 
   // 지금 보고 있는 위치를 작업 프로필로 저장 — 이름만 물어본다(대상 서버·경로는 화면이 이미 안다).
   const saveWorkProfile = useCallback(
@@ -1115,6 +1174,23 @@ export function Shell() {
           onRevealFiles={revealFiles}
           ask={ask}
           askText={askText}
+          benchRows={benchList}
+          onBenchOpen={(b, sid) => void openBench(b, sid)}
+          onBenchRemove={(b) => {
+            // 분리 세션(worktree)의 부모를 지우면 자식도 함께 사라진다 — 먼저 알린다(§10.3 규칙 4).
+            const kids = childrenOf(bench.list, b.id)
+            if (kids.length === 0) {
+              bench.remove(b.id)
+              return
+            }
+            void ask({
+              title: t('bench.remove'),
+              message: t('bench.remove.kids').replace('{n}', String(kids.length)).replace('{t}', b.title),
+              confirmLabel: t('bench.remove'),
+              tone: 'danger'
+            }).then((r) => r === 'confirm' && bench.remove(b.id))
+          }}
+          onNewBench={() => runAiCliNow()}
           onCdTerminal={(absPath) => {
             // 트리→터미널 동기: 로컬·SSH 모두 cd 전송(R7 — 로컬 셸도 파일 탭을 쓴다).
             if (activeSession) window.ev.session.input(activeSession.id, cdCommand(absPath))
@@ -1240,6 +1316,7 @@ export function Shell() {
           onClose={() => closeRail('aisess')}
           onGoTo={selectSession}
           onQuietChange={setAiQuiet}
+          onQuietIds={setQuietIds}
         />
         {/* #86 지난 세션 — 로그 폴더를 읽어 목록을 낸다(새 저장소 없음). 현재 세션 기록은
             하단 [세션 기록] 탭이고, 여기서 [진행 중] 줄을 누르면 그쪽으로 보낸다. */}
