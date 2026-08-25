@@ -77,7 +77,14 @@ test('BOOT-1★ 켤 때 인사가 지나간다 · 아무 키로 건너뛴다 · 
   await page.click('[data-action="welcome.ok"]')
   await page.reload()
   await page.waitForSelector('.pane-grid')
-  await expect(page.locator('.boot-hi')).toContainText('Welcome, 준영님')
+  // 문구는 매번 다르다(인사·반가움·명언) — 그래서 **정확한 글자**가 아니라 규칙을 본다:
+  // 인사·반가움이면 이름이 들어 있고, 명언이면 출처가 붙어 있다. 둘 중 하나는 참이어야 한다.
+  const hi = page.locator('.boot-hi')
+  await expect(hi).toBeVisible()
+  const line = (await hi.innerText()).trim()
+  const byCount = await page.locator('.boot-by').count()
+  expect(line.length).toBeGreaterThan(0)
+  expect(line.includes('준영님') || byCount === 1).toBe(true)
   await page.keyboard.press('Escape')
 
   // ★ 끌 수 있다 — 멋은 한 번이고 방해는 매일이다.

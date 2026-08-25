@@ -8054,8 +8054,20 @@
 .boot-hi {
   color: var(--accent-bright);
   font-size: var(--fs-lg);
+  /* 명언은 인사보다 길다 — 한 줄에 다 넣으려다 화면 끝까지 가지 않게 폭을 잡고 가운데로. */
+  max-width: 520px;
+  text-align: center;
+  line-height: 1.6;
+  word-break: keep-all;
   animation: boot-up 0.7s ease-out both;
   animation-delay: 0.45s;
+}
+/* 출처 — 있는 것만 그린다. 지어낸 출처를 박아 두면 그게 사내에 그대로 퍼진다. */
+.boot-by {
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  animation: boot-up 0.7s ease-out both;
+  animation-delay: 0.62s;
 }
 /* 가로로 한 번 훑고 지나가는 빛.
    **화면 전체**를 덮고 배경 위치만 움직인다 — 작은 상자를 transform 으로 밀면 그 상자의
@@ -8130,6 +8142,7 @@
   .boot-mark,
   .boot-name,
   .boot-hi,
+  .boot-by,
   .boot-sweep {
     animation: none;
   }

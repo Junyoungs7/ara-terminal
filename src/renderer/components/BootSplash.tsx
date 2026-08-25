@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrandOrb } from './BrandOrb'
 import { honorific } from '@shared/araPersona'
-import { t } from '../i18n'
+import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'
 
 /**
  * 부팅 인사(#139) — 준영님: *"아이언맨의 자비스처럼."*
@@ -15,6 +15,9 @@ import { t } from '../i18n'
  * **가짜 진행 표시를 하지 않는다.** "세션 복원 중… 완료" 같은 줄을 흉내 내면 그럴듯하지만
  * 거짓말이다(실제로는 아무것도 안 재고 있다). 인사와 이름만 띄운다.
  *
+ * 한 줄은 **매번 다르다**(준영님 요청) — 인사·반가움·명언을 섞어 뽑는다. 고르는 규칙은
+ * shared/bootGreeting.ts 가 순수 함수로 갖는다(같은 줄이 두 번 연속 안 나오는 것까지 검사 대상이다).
+ *
  * 애니메이션은 전부 CSS 다 — 자바스크립트 타이머는 **사라지는 시점 하나**뿐이다.
  * `prefers-reduced-motion` 이면 움직임 없이 잠깐 떴다 사라진다(styles 쪽에서 처리).
  */
@@ -22,9 +25,38 @@ import { t } from '../i18n'
 /** 화면에 머무는 시간. 이보다 길면 "빨리 좀"이 되고, 짧으면 글자를 못 읽는다. */
 export const SPLASH_MS = 1400
 
+/**
+ * 직전에 띄운 줄. 같은 것이 두 번 연속 나오면 "랜덤"으로 안 느껴진다.
+ *
+ * **localStorage 에 둔다**(설정 파일이 아니라): 이건 사용자가 고른 값이 아니라 잠깐의 기억이고,
+ * workspace.json 에 넣으면 앱을 켤 때마다 설정 파일이 바뀐다. 프로필마다 따로인 것도 여기가 맞다.
+ */
+const LAST_KEY = 'ara.boot.lastGreet'
+const readLast = (): string | undefined => {
+  try {
+    return localStorage.getItem(LAST_KEY) ?? undefined
+  } catch {
+    return undefined // 저장소가 막힌 판 — 없으면 없는 대로 돈다
+  }
+}
+const writeLast = (v: string): void => {
+  try {
+    localStorage.setItem(LAST_KEY, v)
+  } catch {
+    /* 저장 못 해도 인사는 뜬다 */
+  }
+}
+
 export function BootSplash({ name, onDone }: { name: string; onDone: () => void }): JSX.Element {
   // 사라지는 중 — 즉시 언마운트하면 뚝 끊긴다(0.35초 동안 흐려진다).
   const [leaving, setLeaving] = useState(false)
+  // 뽑기는 **한 번만** — 렌더마다 다시 뽑으면 글자가 깜빡인다.
+  const [greet] = useState<Greet>(() => {
+    const last = readLast()
+    const g = pickGreeting({ name, hour: new Date().getHours(), rand: Math.random, ...(last ? { avoid: last } : {}) })
+    writeLast(g.text)
+    return g
+  })
 
   useEffect(() => {
     const bye = (): void => setLeaving(true)
@@ -52,8 +84,9 @@ export function BootSplash({ name, onDone }: { name: string; onDone: () => void 
           <BrandOrb />
         </div>
         <div className="boot-name">A.R.A</div>
-        {/* 이름이 있으면 그 이름으로, 없으면 그냥 인사한다(첫 실행에는 곧 이름을 묻는다). */}
-        <div className="boot-hi">{name ? t('boot.hi').replace('{n}', honorific(name)) : t('boot.hi.anon')}</div>
+        {/* 매번 다른 한 줄. 명언이면 아래에 출처가 붙는다(없는 출처는 지어내지 않는다). */}
+        <div className="boot-hi">{greetText(greet, honorific(name))}</div>
+        {greet.by && <div className="boot-by">— {greet.by}</div>}
         <div className="boot-sweep" />
       </div>
     </div>
