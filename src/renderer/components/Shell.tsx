@@ -1,4 +1,4 @@
-import { AI_CHAT, ARA_CHAT } from '@shared/features'
+import { AI_ENTRY, ARA_CHAT } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
@@ -76,10 +76,10 @@ export function Shell() {
   const [rail, setRail] = useState<RailId | null>(null)
   /**
    * 숨긴 기능의 레일은 열리지 않는다 — 부르는 자리마다 조건을 다는 대신 **여는 문 하나**를 막는다
-   * (features.AI_CHAT: 0.1.0 에서 아라 대화 숨김). 표·탐색기의 [아라에게 묻기]처럼 여기로 오는
+   * (features.AI_ENTRY). 표·탐색기의 [아라에게 묻기]처럼 여기로 오는
    * 길이 여럿이라, 문에서 막는 편이 빠뜨릴 자리가 없다.
    */
-  const railAllowed = useCallback((id: RailId) => AI_CHAT || ARA_CHAT || id !== 'ai', [])
+  const railAllowed = useCallback((id: RailId) => AI_ENTRY || id !== 'ai', [])
   const toggleRail = useCallback(
     (id: RailId) => setRail((cur) => (railAllowed(id) ? (cur === id ? null : id) : cur)),
     [railAllowed]
@@ -377,7 +377,7 @@ export function Shell() {
           mainRef.current?.openCheatsheet()
           return
         case 'ai.bootstrap':
-          if (!AI_CHAT) return // 0.1.0: 아라 대화 숨김(features.ts)
+          if (!AI_ENTRY) return // 아라 대화가 꺼진 판에서는 갈 곳이 없다(features.ts)
           setBootstrapOpen(true)
           return
         case 'panel.console':
@@ -1261,6 +1261,7 @@ export function Shell() {
               open={aiOpen}
               onClose={() => closeRail('ai')}
               active={activeSession ? { type: activeSession.type, cwd: activeCwd } : null}
+              prefill={aiPrefill}
             />
           )
         ) : (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AI_CHAT } from '../src/shared/features'
+import { AI_ENTRY } from '../src/shared/features'
 import { KEYMAP } from '../src/shared/keymap'
 import { ACTIVITY_ITEMS } from '../src/shared/types'
 import { splitTip } from '../src/renderer/store/tooltip'
@@ -26,8 +26,8 @@ const ACTIVITY_KEY = {
 describe('액티비티 바 툴팁 단축키', () => {
   it('참조하는 액션이 전부 KEYMAP 에 있고 배선돼 있다', () => {
     for (const [id, action] of Object.entries(ACTIVITY_KEY)) {
-      // 숨긴 기능(features.AI_CHAT)의 항목은 레일에 뜨지 않으므로 툴팁도 뜨지 않는다 — 건너뛴다.
-      if (!AI_CHAT && id === 'ai') continue
+      // 숨긴 기능(features.AI_ENTRY)의 항목은 레일에 뜨지 않으므로 툴팁도 뜨지 않는다 — 건너뛴다.
+      if (!AI_ENTRY && id === 'ai') continue
       const b = KEYMAP.find((k) => k.action === action)
       expect(b, id).toBeDefined()
       // 미구현 키를 툴팁에 적으면 눌러도 안 되는 키를 광고하는 셈이다.

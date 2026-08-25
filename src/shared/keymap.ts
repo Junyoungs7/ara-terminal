@@ -39,7 +39,7 @@ export type KeymapAction =
   // (#67 이전에는 우클릭 자리의 8칸 격자 palette.smart 가 따로 있어 이름이 헷갈렸다. 지금은 하나다.)
   | 'palette.all'
 
-import { AI_CHAT } from './features'
+import { AI_ENTRY } from './features'
 
 export type KeymapCategory =
   | 'panel'
@@ -125,10 +125,10 @@ const ALL_KEYS: readonly KeyBinding[] = [
 /**
  * 실제로 쓰는 키 목록. 숨긴 기능의 키는 **여기서 빠진다** — 치트시트·설정 [단축키]·matchBinding 이
  * 전부 이 배열 하나를 보므로, 목록에서 빠지면 눌러도 아무 일이 없고 문서에도 안 나온다
- * (features.AI_CHAT 참고 — 되살리면 저절로 돌아온다).
+ * (features.AI_ENTRY 참고 — 되살리면 저절로 돌아온다).
  */
 export const KEYMAP: readonly KeyBinding[] = ALL_KEYS.filter(
-  (k) => AI_CHAT || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')
+  (k) => AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')
 )
 
 // 렌더러 공용 — 단축키 표기(⌘)와 OS 이름이 들어가는 라벨(Finder/탐색기)이 같은 판정을 쓴다.

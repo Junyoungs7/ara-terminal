@@ -1,4 +1,4 @@
-import { AI_CHAT } from '@shared/features'
+import { AI_ENTRY } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
@@ -110,12 +110,12 @@ const ALL_CONTEXT_ACTIONS: readonly ContextAction[] = [
   }
 ]
 /**
- * 실제로 메뉴에 뜨는 항목. 숨긴 기능은 **여기서 빠진다**(features.AI_CHAT — 0.1.0 에서 아라 대화
+ * 실제로 메뉴에 뜨는 항목. 숨긴 기능은 **여기서 빠진다**(features.AI_ENTRY — 0.1.0 에서 아라 대화
  * 숨김). 이 배열 하나가 터미널 우클릭·파일 트리 메뉴의 단일 출처라, 여기서 빠지면 모든 메뉴에서
  * 함께 사라진다. 되살리면 저절로 돌아온다.
  */
 export const CONTEXT_ACTIONS: readonly ContextAction[] = ALL_CONTEXT_ACTIONS.filter(
-  (a) => AI_CHAT || a.id !== 'ai.ask'
+  (a) => AI_ENTRY || a.id !== 'ai.ask'
 )
 
 
@@ -619,11 +619,11 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
 ] as const
 
 /**
- * 화면에 그려지는 메뉴바. 숨긴 기능의 항목은 **여기서 빠진다**(features.AI_CHAT — 0.1.0 에서
+ * 화면에 그려지는 메뉴바. 숨긴 기능의 항목은 **여기서 빠진다**(features.AI_ENTRY — 0.1.0 에서
  * 아라 대화 숨김). KEYMAP 에서 빠진 액션이 메뉴에 남아 있으면 단축키 힌트가 빈 채로 뜨고,
  * 통합 검색(F1)에도 죽은 항목이 잡힌다 — 목록을 만드는 자리 하나에서 함께 거른다.
  */
-const HIDDEN_MENU = new Set<string>(AI_CHAT ? [] : ['ai.bootstrap', 'ai.toggle', 'ai.ask'])
+const HIDDEN_MENU = new Set<string>(AI_ENTRY ? [] : ['ai.bootstrap', 'ai.toggle', 'ai.ask'])
 export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = ALL_MENUBAR.map((m) => ({
   ...m,
   items: m.items.filter((it) => !HIDDEN_MENU.has('action' in it ? it.action : it.command))

@@ -198,9 +198,49 @@
       <section class="section" id="only">
         <div class="wrap">
           <p class="eyebrow reveal">아라에만 있는 것</p>
-          <h2 class="h-sect reveal">다른 데서 못 보셨을<br />세 가지입니다.</h2>
+          <h2 class="h-sect reveal">다른 데서 못 보셨을<br />네 가지입니다.</h2>
 
           <div class="feat" style="margin-top: 64px">
+            <div class="feat-txt reveal">
+              <h3>내 서버를 아는<br />AI 가 안에 있습니다.</h3>
+              <p>
+                터미널에 붙은 AI 는 보통 <b>당신의 서버를 모릅니다.</b> "지금 붙어 있는 서버 알려 줘"
+                라고 물으면 <code>~/.ssh/config</code> 를 확인해 보라고 답합니다.
+              </p>
+              <p style="margin-top: 14px">
+                아라 대화는 이 PC 에 깔린 <b>Claude Code 를 그대로</b> 씁니다 — 당신 계정, 당신 설정,
+                <code>CLAUDE.md</code> 까지. 거기에 <b>아라의 도구</b>(세션 목록 · 터미널 출력 읽기 ·
+                파일 전송 · 포트 포워딩)를 물려서, 로컬과 서버를 <b>한 문장 안에서</b> 오갑니다.
+                별도 요금이 붙지 않습니다.
+              </p>
+              <ul>
+                <li>한 일을 숨기지 않습니다 — 도구를 쓰면 한 줄로 접히고, 누르면 무엇을 했는지 펴집니다</li>
+                <li>갈림길에서는 <b>번호로 고르게</b> 물어봅니다</li>
+                <li><b>[계획 먼저]</b> 를 켜면 아무것도 건드리지 않고 계획만 냅니다 — 보고 나서 진행합니다</li>
+              </ul>
+            </div>
+            <div class="reveal">
+              <div class="card">
+                <div class="card-hd"><span>아라</span><span class="g">D:\AI\OFA</span></div>
+                <div class="card-bd">
+                  <p style="color: var(--text-hi); font-weight: 700; margin-bottom: 10px">dev 서버 디스크 좀 봐 줘</p>
+                  <div class="spec" style="margin-top: 0">
+                    <div><span class="k">도구 2개 썼습니다</span><span class="v">✓</span></div>
+                    <div><span class="k">session_list</span><span class="v">세션 3개</span></div>
+                    <div><span class="k">disk.usage</span><span class="v">dev-server</span></div>
+                  </div>
+                  <p style="margin-top: 14px"><b>/var</b> 가 91% 입니다. 로그가 22G 를 쓰고 있습니다.</p>
+                  <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap">
+                    <span class="btn btn-primary btn-sm" style="pointer-events: none">1 30일 넘은 것만</span>
+                    <span class="btn btn-ghost btn-sm" style="pointer-events: none">2 압축만</span>
+                    <span class="btn btn-ghost btn-sm" style="pointer-events: none">3 그대로 두기</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="feat rev">
             <div class="feat-txt reveal">
               <h3>원격 AI CLI 로그인이<br />클릭 한 번에 끝납니다.</h3>
               <p>
@@ -231,7 +271,7 @@
             </div>
           </div>
 
-          <div class="feat rev">
+          <div class="feat">
             <div class="feat-txt reveal">
               <h3>서버에 에이전트를<br />설치하지 않습니다.</h3>
               <p>
@@ -267,7 +307,7 @@
             </div>
           </div>
 
-          <div class="feat">
+          <div class="feat rev">
             <div class="feat-txt reveal">
               <h3>지나간 것도<br />남습니다.</h3>
               <p>

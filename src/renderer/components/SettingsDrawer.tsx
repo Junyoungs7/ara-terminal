@@ -1,4 +1,4 @@
-import { AI_CHAT, ARA_CHAT } from '@shared/features'
+import { AI_ENTRY } from '@shared/features'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
@@ -353,14 +353,14 @@ function AiSection({
       : AI_PROVIDER_HOSTS[provider]
 
   /**
-   * 0.1.0: **아라 대화는 숨긴다**(features.AI_CHAT). 이 섹션에서 프로바이더·키·모델·사용량은
+   * 0.1.0: **아라 대화는 숨긴다**(features.AI_ENTRY). 이 섹션에서 프로바이더·키·모델·사용량은
    * 대화 기능의 설정이라 함께 사라지고, **AI CLI 시작**(원격 claude·codex·gemini)의 플래그만 남는다 —
    * 그쪽은 대화가 아니라 터미널 기능이라 계속 쓰인다.
    *
    * #126 부터 `ARA_CHAT` 도 이 문을 연다. 아라 대화 v2 의 **폴백이 API 키 엔진**이라, 여기를 닫아
    * 두면 "API 키로 쓰기"를 눌러도 키를 넣을 자리가 없다 — 갈 곳 없는 버튼이 된다.
    */
-  if (!AI_CHAT && !ARA_CHAT) {
+  if (!AI_ENTRY) {
     return (
       <>
         <div className="set-note" data-note="ai.hidden">
@@ -640,7 +640,7 @@ export function SettingsDrawer({
     void window.ev?.ai
       .getState()
       .then((s) => {
-        if (alive && AI_CHAT && !s.hasKey) setSection('ai')
+        if (alive && AI_ENTRY && !s.hasKey) setSection('ai')
       })
       .catch(() => {})
     return () => {

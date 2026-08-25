@@ -6,7 +6,7 @@
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { AI_CHAT } from '../../src/shared/features'
+import { AI_ENTRY } from '../../src/shared/features'
 import { test, expect, REPO_ROOT, connectNewSshProfile, dialog, dialogCancel, dialogConfirm, newLocalShell, openBottomTool, sessionList } from './fixtures'
 
 // 실기동 캡처 — 가짜 IPC 하네스가 아니라 이 스위트가 쓰는 **실제 main 프로세스·실제 remote:* 경로**를
@@ -343,10 +343,10 @@ test('CON-8★ 권한이 없으면 stderr 를 그대로 보여 주고 강제 종
 })
 
 // CON-8b★ [아라에게 물어보기] — 누를 때만, 고른 행 하나만 보낸다(§5 준영님 요청).
-// 2026-08-23 에 아라 대화를 숨기면서 이 버튼도 사라졌다(features.AI_CHAT). 그 뒤로 이 검사가
-// 계속 빨갛게 남아 있었다 — ai.spec.ts 와 같은 방식으로 **상수를 보고 스스로 건너뛴다**.
+// 2026-08-23 에 아라 대화를 숨기면서 이 버튼도 사라졌고, #127 에서 새 패널(.ara-panel)로 돌아왔다.
+// 상수를 보고 스스로 건너뛰는 방식은 그대로 둔다 — 문이 닫힌 판에서는 버튼도 없다.
 test('CON-8b★ 아라에게 물어보기는 고른 행 하나만 미리 보여 주고 확인해야 보낸다', async ({ ara, ssh }) => {
-  test.skip(!AI_CHAT, '아라 대화 숨김 — src/shared/features.ts 의 AI_CHAT 을 켜면 다시 돈다')
+  test.skip(!AI_ENTRY, '아라 대화 숨김 — src/shared/features.ts 의 AI_ENTRY 를 켜면 다시 돈다')
   const ps = makePs()
   const h = await ssh({ password: 'pw-con8b', execHandler: ps.exec })
   await openConsole(ara.page, 'con8b', h.port, 'pw-con8b')
@@ -362,13 +362,13 @@ test('CON-8b★ 아라에게 물어보기는 고른 행 하나만 미리 보여 
   await expect(dialog(ara.page)).not.toContainText('postgres')
   // 취소하면 아라 패널은 열리지 않는다(명시적 제스처 — 기본 꺼짐).
   await dialog(ara.page).locator('.modal-ft .btn.sec').click()
-  await expect(ara.page.locator('.ai-panel')).toHaveCount(0)
+  await expect(ara.page.locator('.ara-panel')).toHaveCount(0)
 
   await ara.page.click('.con-btn[data-action="ps.ask"]')
   await dialogConfirm(ara.page)
-  await expect(ara.page.locator('.ai-panel')).toBeVisible()
+  await expect(ara.page.locator('.ara-panel')).toBeVisible()
   // 자동으로 보내지 않는다 — 입력칸에 얹어 주고 사람이 마무리한다.
-  await expect(ara.page.locator('.ai-input')).toHaveValue(/PID 1234/)
+  await expect(ara.page.locator('.ara-panel .ara-input')).toHaveValue(/PID 1234/)
 })
 
 // CON-8c★ 서버를 바꾸면 이전 서버의 목록·선택이 남지 않는다(엉뚱한 서버의 PID 를 죽이지 않게).

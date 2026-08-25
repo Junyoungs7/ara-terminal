@@ -32,11 +32,18 @@ type Phase = 'closed' | 'opening' | 'idle' | 'working' | 'noEngine'
 export function AraChatPanel({
   open,
   onClose,
-  active
+  active,
+  prefill
 }: {
   open: boolean
   onClose: () => void
   active: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+  /**
+   * 바깥에서 얹어 주는 말(#127) — 우클릭 [아라에게 묻기]·프로세스 표·부트스트랩이 여기로 온다.
+   * `at` 이 함께 오는 이유: 같은 문자열을 다시 골라도 새 요청인 줄 알아야 한다.
+   * 기본은 **보내지 않고 입력칸에 얹기**다 — 무엇이 나갈지 보고 사람이 마무리한다.
+   */
+  prefill?: { text: string; at: number; autoSend?: boolean } | null
 }): JSX.Element | null {
   const [items, setItems] = useState<ChatItem[]>([])
   const [phase, setPhase] = useState<Phase>('closed')
@@ -56,6 +63,7 @@ export function AraChatPanel({
   const [now, setNow] = useState(Date.now())
   const bodyRef = useRef<HTMLDivElement>(null)
   const askRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const ask = openAsk(items)
 
@@ -120,6 +128,20 @@ export function AraChatPanel({
     return () => clearInterval(id)
   }, [ask])
 
+  // 얹어 주는 말. at 이 바뀔 때만 반응한다(같은 선택을 다시 골라도 새 요청이다).
+  const prefillAt = prefill?.at
+  useEffect(() => {
+    const text = prefill?.text?.trim()
+    if (!open || !prefillAt || !text) return
+    if (prefill?.autoSend) sendRef.current(text)
+    else {
+      setDraft(text)
+      inputRef.current?.focus()
+    }
+    // prefill.text 는 at 과 함께 오므로 deps 에 at 만 둔다(AiPanel 이 쓰던 그 규칙).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillAt])
+
   // 되묻기가 오면 **카드로 포커스를 옮긴다.** 안 옮기면 숫자 키가 입력칸에 글자로 박히고,
   // 입력칸은 터미널 단축키를 막느라 키를 위로 안 올려 준다(stopPropagation) — 즉 숫자 선택이
   // 아예 안 닿는다. 자유롭게 쓰고 싶으면 입력칸을 누르면 된다(Enter 가 그 답으로 간다).
@@ -154,6 +176,10 @@ export function AraChatPanel({
     setPhase('working')
     void window.ev?.ara.send(s)
   }
+
+  // send 는 매 렌더 새로 만들어진다 — prefill 효과가 옛 것을 붙잡지 않게 ref 로 본다.
+  const sendRef = useRef(send)
+  sendRef.current = send
 
   const answer = (askId: string, text: string): void => {
     setItems((cur) => dropAsk(cur, askId))
@@ -300,6 +326,7 @@ export function AraChatPanel({
 
       <div className="ara-compose">
         <textarea
+          ref={inputRef}
           className="ara-input"
           rows={2}
           value={draft}
