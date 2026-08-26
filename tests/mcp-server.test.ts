@@ -50,6 +50,7 @@ type Rig = {
   approvalRequests: McpApprovalRequest[]
   // 화면으로 나간 "세션이 생겼다" 알림. 이게 비면 사용자에게 탭이 안 보인다(2026-08-26 제보).
   opened: Session[]
+  browserUrls: string[]
   cleanup: () => Promise<void>
 }
 
@@ -62,6 +63,8 @@ type Rig = {
 async function makeRig(): Promise<Rig> {
   const dir = mkdtempSync(join(tmpdir(), 'ev-mcp-http-'))
   const opened: Session[] = []
+  // 아라 브라우저에 띄운 주소. 비면 사용자 화면에 아무것도 안 뜬 것이다(2026-08-26 제보).
+  const browserUrls: string[] = []
   const sessions = new MainSessionManager({
     data() {},
     exit() {},
@@ -91,6 +94,7 @@ async function makeRig(): Promise<Rig> {
     ws,
     forwards,
     sftp,
+    browser: { open: (u: string) => { browserUrls.push(u); return u.startsWith('http') }, current: () => null, close: () => {} },
     ask: createAskUser({ ask: () => {}, askDone: () => {} }),
     approval,
     downloadsDir: join(dir, 'mcp-downloads'),
@@ -114,6 +118,7 @@ async function makeRig(): Promise<Rig> {
     approval,
     approvalRequests,
     opened,
+    browserUrls,
     cleanup: async () => {
       await server.stop()
       sessions.destroyAll()
@@ -228,6 +233,7 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
       ws,
       forwards: createForwardService(() => null),
       ask: createAskUser({ ask: () => {}, askDone: () => {} }),
+      browser: { open: () => true, current: () => null, close: () => {} },
       sftp: new SftpService(() => null, () => {}),
       approval: new McpApprovalManager({ approvalRequest() {}, activity() {}, stateChanged() {} }, createAuditLog(join(dir, 'logs'))),
       downloadsDir: join(dir, 'mcp-downloads'),
@@ -298,9 +304,13 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         // 2026-08-25 추가(#134): 아라가 **작업대를 지휘한다**. list 는 읽기, send 는 그 세션의
         // 승인 게이트를 그대로 지난다(작업대라고 무르게 하지 않는다). create 는 일부러 없다 —
         // session_create + session_input 으로 이미 되고, 또 만들면 실행 줄 조립이 두 벌로 갈린다.
+        // 2026-08-26 추가: **아라 안의 브라우저.** 이게 없어서 아라가 PowerShell 로 엣지를 띄우고
+        // 다른 MCP 플러그인(playwright)까지 끌어다 썼다(준영님 제보). 우리 창 안에 웹을 보여 주는
+        // 길은 이 도구뿐이고, 스킴은 http/https 로 잠겨 있다.
         'aisession_list',
         'aisession_send',
         'ask_user',
+        'browser_open',
         'forward_create',
         'forward_list',
         'forward_stop',
@@ -391,6 +401,29 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     expect(meta.serverKey).toBe('localhost')
     // 소유 창이 없다 = 본창. AI 가 만든 세션은 늘 사람이 보고 있는 창으로 간다.
     expect(meta.winId).toBeUndefined()
+    await client.close()
+  })
+
+  /**
+   * ★ 2026-08-26 준영님 제보 3 — *"8000 포트 브라우저로 띄워줘"* 에 아라가 `forward_create` 까지는
+   * 맞게 하고 그다음 **PowerShell `Start-Process`** 로 엣지를 열었다. 다시 시키니 이번엔 다른 MCP
+   * 플러그인(playwright)을 찾아 썼다. 우리 창 안에 브라우저가 있는데 **거기 닿는 도구가 없었다.**
+   *
+   * 도구가 없으면 모델은 밖에서 찾는다 — 세션 알림(#1)·서버 목록(#2)과 같은 뿌리다.
+   */
+  it('★ browser_open 이 아라 브라우저에 띄운다(로컬 브라우저로 나가지 않는다)', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    const res = await client.callTool({ name: 'browser_open', arguments: { url: 'http://localhost:8000' } })
+    expect(res.isError).toBeFalsy()
+    expect(rig.browserUrls).toEqual(['http://localhost:8000'])
+
+    // http/https 밖은 열지 않는다 — 파일·앱 스킴으로 우리 창을 끌고 갈 수 없다.
+    const bad = await client.callTool({ name: 'browser_open', arguments: { url: 'file:///C:/Windows/win.ini' } })
+    expect(bad.isError).toBe(true)
     await client.close()
   })
 

@@ -24,6 +24,7 @@ import type { ProfileStore } from '../secrets/ProfileStore'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { ForwardService } from '../forward/PortForward'
 import type { SftpService } from '../sftp/SftpService'
+import type { BrowserService } from '../browser/BrowserTabs'
 import { connectByProfile } from '../ipc/registerSshIpc'
 import { McpApprovalManager, type ToolClass } from './approval'
 import type { AskUserManager } from './askUser'
@@ -35,6 +36,13 @@ export type ToolCtx = {
   forwards: ForwardService
   sftp: SftpService
   approval: McpApprovalManager
+  /**
+   * 내장 브라우저(2026-08-26). **없어서 아라가 로컬 브라우저를 띄웠다** — 준영님이 "8000 포트를
+   * 브라우저로 띄워달라" 했더니 `forward_create` 까지는 맞게 하고 그다음 PowerShell 로
+   * `Start-Process http://127.0.0.1:8000` 을 불러 엣지를 열었다. 다시 시키니 이번엔 다른 MCP
+   * 플러그인(playwright)을 찾아 썼다. 우리 화면 안에 브라우저가 있는데 거기 닿는 길이 없었다.
+   */
+  browser: BrowserService
   downloadsDir: string // userData/mcp-downloads — AI는 이 밖에 저장할 수 없다(설계 §7 오케 확정 7).
   uploadsDir: string // userData/mcp-uploads — 업로드 소스도 여기 안으로 한정.
   /** AI 가 사람에게 되묻는 길(#125). 헤드리스에는 그 도구가 없어서 우리가 만든다 — askUser.ts 참고. */
@@ -215,7 +223,16 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'session_list',
-    { description: '열려 있는 터미널 세션 목록(로컬·SSH)을 반환합니다.', inputSchema: {}, annotations: { readOnlyHint: true } },
+    {
+      // 아라가 이걸 "서버 목록"으로 착각해 먼저 불렀다(2026-08-26 감사 로그 첫 줄). 빈 배열을 받고
+      // 그때부터 헤맸다 — **아닌 것을 아니라고 적는 것**이 이 한 줄의 일이다.
+      description:
+        '**지금 열려 있는 탭** 목록입니다(로컬 셸·SSH). 사용자가 화면에서 보고 있는 탭 그대로입니다. ' +
+        '등록된 서버 목록이 **아닙니다** — 접속할 서버는 시스템 프롬프트의 "등록된 서버" 표에 있습니다. ' +
+        '비어 있으면 아직 아무 탭도 안 열린 것이고, 접속이 필요하면 ssh_connect 를 쓰면 됩니다.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true }
+    },
     async () =>
       g(null, 'session_list', 'readOnly', {}, async () =>
         ok(JSON.stringify(ctx.sessions.snapshot().map((s) => ({ id: s.id, type: s.type, title: s.title, serverKey: s.serverKey, cwd: s.cwd ?? null }))))
@@ -225,7 +242,10 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   server.registerTool(
     'session_read',
     {
-      description: '세션의 최근 터미널 출력을 읽습니다(사용자가 화면에서 보고 있는 것과 같은 내용).',
+      description:
+        '그 탭의 최근 터미널 출력을 읽습니다(사용자가 화면에서 보고 있는 것과 같은 내용). ' +
+        '명령을 보낸 뒤 결과를 보려면 session_input 다음에 잠깐 두고 이걸 부르세요 — ' +
+        '길면 앞이 잘립니다(최근 것부터 남습니다).',
       inputSchema: { sessionId: z.string() },
       annotations: { readOnlyHint: true }
     },
@@ -313,7 +333,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   server.registerTool(
     'sftp_list',
     {
-      description: '활성 SSH 세션의 원격 디렉토리를 나열합니다.',
+      description:
+        '원격 폴더의 파일 목록입니다. sessionId 는 session_list 가 준 SSH 탭의 id 입니다 — '  +
+        '사용자가 사이드바 [파일] 트리에서 보는 것과 같은 내용입니다.',
       inputSchema: { sessionId: z.string(), path: z.string() },
       annotations: { readOnlyHint: true }
     },
@@ -328,7 +350,10 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   server.registerTool(
     'sftp_download',
     {
-      description: '원격 파일을 내려받습니다. 저장 위치는 고정 폴더(mcp-downloads) 안으로 한정되고, fileName 에는 경로 구분자를 쓸 수 없습니다.',
+      description:
+        '원격 파일을 내 PC 로 내려받습니다. 저장 위치는 고정 폴더(mcp-downloads) 안으로 한정되고, ' +
+        'fileName 에는 경로 구분자를 쓸 수 없습니다 — 임의 경로에 쓸 수 없다는 뜻입니다. ' +
+        '**내용을 읽어서 사용자에게 설명하려는 것이라면 내려받지 마세요** — 그건 파일을 옮기는 도구입니다.',
       inputSchema: { sessionId: z.string(), remotePath: z.string(), fileName: z.string() }
     },
     async ({ sessionId, remotePath, fileName }) =>
@@ -345,7 +370,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   server.registerTool(
     'sftp_upload',
     {
-      description: '고정 폴더(mcp-uploads) 안의 파일을 원격으로 올립니다. 임의 로컬 경로는 지정할 수 없습니다.',
+      description:
+        '고정 폴더(mcp-uploads) 안의 파일을 원격으로 올립니다. 임의 로컬 경로는 지정할 수 없습니다 — ' +
+        '사용자가 그 폴더에 넣어 둔 것만 올라갑니다. 올린 뒤 사이드바 [파일] 트리를 새로 고치면 보입니다.',
       inputSchema: { sessionId: z.string(), localFileName: z.string(), remoteDir: z.string() }
     },
     async ({ sessionId, localFileName, remoteDir }) =>
@@ -361,7 +388,10 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'sftp_mkdir',
-    { description: '원격에 폴더를 만듭니다.', inputSchema: { sessionId: z.string(), dir: z.string(), name: z.string() } },
+    {
+      description: '원격에 폴더를 만듭니다. 사이드바 [파일] 트리에 그대로 나타납니다.',
+      inputSchema: { sessionId: z.string(), dir: z.string(), name: z.string() }
+    },
     async ({ sessionId, dir, name }) =>
       g(sessionId, 'sftp_mkdir', 'writeAlways', { sessionId, dir, name }, async () => {
         if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
@@ -372,7 +402,10 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'sftp_rename',
-    { description: '원격 파일·폴더 이름을 바꿉니다.', inputSchema: { sessionId: z.string(), path: z.string(), name: z.string() } },
+    {
+      description: '원격 파일·폴더 이름을 바꿉니다. 사이드바 [파일] 트리에 그대로 반영됩니다.',
+      inputSchema: { sessionId: z.string(), path: z.string(), name: z.string() }
+    },
     async ({ sessionId, path, name }) =>
       g(sessionId, 'sftp_rename', 'writeAlways', { sessionId, path, name }, async () => {
         if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
@@ -383,7 +416,13 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'sftp_remove',
-    { description: '원격 파일·폴더를 삭제합니다(폴더는 재귀 삭제).', inputSchema: { sessionId: z.string(), paths: z.array(z.string()) } },
+    {
+      // **되돌릴 수 없다**를 설명문에 적는다 — 모델이 확인을 받을지 정하는 근거가 여기다.
+      description:
+        '원격 파일·폴더를 **영구 삭제**합니다(폴더는 재귀). 원격에는 휴지통이 없어 되돌릴 수 없습니다 — ' +
+        '지우기 전에 무엇을 지우는지 사용자에게 확인받으세요.',
+      inputSchema: { sessionId: z.string(), paths: z.array(z.string()) }
+    },
     async ({ sessionId, paths }) =>
       g(sessionId, 'sftp_remove', 'writeAlways', { sessionId, paths }, async () => {
         if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
@@ -394,14 +433,24 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'forward_list',
-    { description: '활성 포트 포워딩 목록을 반환합니다.', inputSchema: {}, annotations: { readOnlyHint: true } },
+    {
+      description:
+        '지금 연결돼 있는 포트 목록입니다(원격 포트 ↔ 내 PC 의 localPort). ' +
+        '화면 아래 [포트] 패널에 보이는 그 목록입니다. 브라우저로 열려면 localPort 를 browser_open 에 넘기세요.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true }
+    },
     async () => g(null, 'forward_list', 'readOnly', {}, async () => ok(JSON.stringify(ctx.forwards.list())))
   )
 
   server.registerTool(
     'forward_create',
     {
-      description: '원격 127.0.0.1:remotePort 를 내 PC 로 연결합니다(로컬 바인드·원격 목적지 모두 127.0.0.1 고정).',
+      description:
+        '원격 서버의 포트를 내 PC 로 끌어옵니다(원격 127.0.0.1:remotePort → 내 PC 의 빈 포트). ' +
+        '**웹 화면을 보여 드리려면 여기서 끝내지 마세요** — 돌려주는 localPort 로 ' +
+        '`browser_open("http://localhost:<localPort>")` 까지 해야 사용자 화면에 실제로 뜹니다. ' +
+        '이 둘이 화면의 [포트] 패널 [열기] 버튼이 하는 일 그대로입니다.',
       inputSchema: { sessionId: z.string(), remotePort: z.number() }
     },
     async ({ sessionId, remotePort }) =>
@@ -414,11 +463,45 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
 
   server.registerTool(
     'forward_stop',
-    { description: '포트 포워딩을 중지합니다.', inputSchema: { id: z.string() }, annotations: { readOnlyHint: true } },
+    {
+      description: '포트 연결을 끊습니다. 그 주소를 보고 있던 브라우저 탭은 더 이상 열리지 않습니다.',
+      inputSchema: { id: z.string() }
+    },
+    // writeAlways 로 올렸다(2026-08-26 감사). 사용자가 열어 둔 터널을 끊는 일이라 화면이 그만큼
+    // 바뀐다 — 만드는 것을 물어보면서 끊는 것을 안 묻는 비대칭이 이유 없이 놀랍다.
     async ({ id }) =>
-      g(null, 'forward_stop', 'readOnly', { id }, async () => {
+      g(null, 'forward_stop', 'writeAlways', { id }, async () => {
         ctx.forwards.stop(id)
         return ok('중지함')
+      })
+  )
+
+  /**
+   * 아라 안의 브라우저(2026-08-26 준영님 제보). **이게 없어서 아라가 밖으로 나갔다.**
+   *
+   * 사용자 화면 안에서 웹을 보여 주는 유일한 길이다. 로컬 브라우저(Start-Process·open·xdg-open)나
+   * 다른 브라우저 자동화 도구를 쓰면 우리 창 밖에 뜬다 — 사용자가 원한 것은 늘 우리 창 안이다.
+   *
+   * 열리는 자리는 사람이 [포트] 패널 [열기]를 눌렀을 때와 **같은 창·같은 탭 줄**이다. 같은 오리진이
+   * 이미 떠 있으면 그 탭을 다시 쓴다(창이 늘지 않는다).
+   */
+  server.registerTool(
+    'browser_open',
+    {
+      description:
+        '**아라 안의 브라우저**에 웹 주소를 띄웁니다. 사용자 화면 안에 탭으로 열립니다 — ' +
+        '웹 페이지를 보여 드릴 때는 항상 이 도구를 쓰세요. ' +
+        '내 PC 의 브라우저를 실행하거나(Start-Process·open·xdg-open 등) 다른 브라우저 도구를 쓰지 마세요 — ' +
+        '그건 우리 창 밖에 떠서 사용자가 원한 화면이 아닙니다. ' +
+        '원격 서버의 웹을 보여 주려면 forward_create 로 포트를 끌어온 뒤 그 localPort 주소를 넘기세요. ' +
+        'http/https 만 열립니다.',
+      inputSchema: { url: z.string() }
+    },
+    async ({ url }) =>
+      g(null, 'browser_open', 'writeAlways', { url }, async () => {
+        // 스킴 게이트는 BrowserTabs.openTab 안의 isSafeExternal 이 본다 — 여기서 두 번 쓰지 않는다.
+        if (!ctx.browser.open(url)) return fail('열 수 없는 주소입니다(http/https 만 됩니다).')
+        return ok('아라 브라우저에 띄웠습니다.')
       })
   )
 }

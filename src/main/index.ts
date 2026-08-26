@@ -193,7 +193,9 @@ app.whenReady().then(() => {
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
   remoteConsole = registerRemoteIpc(sessions, getWebContents, profiles)
-  forwards = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir).forwards
+  // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
+  const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
+  forwards = fwdIpc.forwards
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(
@@ -234,6 +236,8 @@ app.whenReady().then(() => {
       ws: store,
       forwards,
       sftp: sftpService,
+      // 아라 브라우저. 화면의 [포트]→[열기]가 쓰는 그 서비스를 그대로 넘긴다(같은 창·같은 탭 줄).
+      browser: fwdIpc.browser,
       downloadsDir: join(userData, 'mcp-downloads'),
       uploadsDir: join(userData, 'mcp-uploads')
     },

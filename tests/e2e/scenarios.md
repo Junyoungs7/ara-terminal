@@ -790,6 +790,17 @@ push 이벤트일 뿐이라 실 클라이언트 없이 `app.evaluate` 로 main �
 | MCP-26 (신규, FIX-mcpshell) | MCP HTTP 본문 1MB 상한 | — | 1MB 초과 body POST | 413 거부, 상한 이내는 정상 처리 | 🧪 `mcp-server.test.ts` | PASS |
 | MCP-27 (신규, FIX-mcpshell) | 세션 종료 시 승인 매니저 유령 세션 정리 | 세션 생성 후 종료 | `session_destroy` | 상태바 인디케이터 목록에서 즉시 제거(`forget()`) | 🧪 `mcp-approval.test.ts` | PASS |
 | MCP-28★ (신규, 2026-08-26 제보) | **AI 가 연 세션이 화면에 뜬다** | 세션 0개 | 렌더러 store 를 거치지 않고 `window.ev.session.create` 직접 호출(= MCP 가 main 에서 만드는 것과 같은 상황) | 탭·패널이 생긴다. `session:opened` 알림을 끄면 세션은 살아 있는데 탭이 0개 — 준영님이 본 그 화면 | ✅ + 🧪 `mcp-server.test.ts`(MCP 왕복으로 알림 확인)·`sessions.test.ts`(create·adopt 양쪽) | PASS |
+| MCP-29★ (신규, 2026-08-26 제보) | **아라 브라우저에 띄운다** | — | `browser_open("http://localhost:8000")` | 우리 창 안 브라우저 탭에 열린다. `file://` 등 http/https 밖은 거부 | 🧪 `mcp-server.test.ts` | PASS |
+| MCP-30 (신규, 2026-08-26 감사) | 포워딩 중지도 승인을 받는다 | 포워딩 있음 | `forward_stop` | 승인 다이얼로그가 뜬다(전에는 `readOnly` 라 조용히 끊겼다) | 🧪 화이트리스트/등급 표 | PASS |
+
+**MCP-29 가 지키는 것** — *"8000 포트 브라우저로 띄워줘"* 에 아라가 `forward_create` 까지는 맞게 하고
+그다음 **PowerShell `Start-Process`** 로 엣지를 열었다. 다시 시키니 다른 MCP 플러그인(playwright)을
+찾아 썼다. 우리 창 안에 브라우저가 있는데 **거기 닿는 도구가 없었다.** 도구가 없으면 모델은 밖에서
+찾는다 — MCP-28(알림 없음)·서버 표(목록 없음)와 같은 뿌리다.
+
+전수 감사 결과는 `agent_talk/AUDIT-mcp-tools.md`. 남은 큰 구멍 둘: **서버 콘솔**(`remote:*` — F26 의
+고정 명령 표가 이미 있는데 MCP 에 안 물렸다)과 **로그 tail**(`logtail:*`). 둘 다 없으면 아라가
+`session_input('ps aux')`·`tail -f` 로 터미널을 더럽히며 우회한다.
 
 **MCP-28 이 지키는 것** — *"KVT 접속했습니다, 터미널 열렸으니 바로 쓰시면 됩니다"* 라고 답했는데 화면에
 아무것도 안 뜬 제보(2026-08-26). 접속은 성공했고 세션도 살아 있었다. 빠진 것은 **화면에 알리는 한 줄**이라,
