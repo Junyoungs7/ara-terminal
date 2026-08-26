@@ -155,7 +155,20 @@ type ToolDef = {
   run: (args: Record<string, unknown>) => Promise<ToolResult>
 }
 
-export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
+/**
+ * 밖으로 나가는 문 둘(2026-08-26). **MCP 와 API 엔진이 같은 문을 쓴다** — 도구 실행·승인 게이트·
+ * 감사 로그가 한 벌이어야 "어느 엔진으로 했든 같은 규칙" 이 성립한다.
+ */
+export type AraToolGate = {
+  /** `ara_tools` — 묶음 목록 / 그 묶음의 도구와 인자. */
+  tools(group?: string): string
+  /** `ara_call` — 실제 실행. 인자 검증·승인·감사를 모두 지난다. */
+  call(tool: string, args?: Record<string, unknown>): Promise<ToolResult>
+  /** 프로바이더에 넘길 스키마(function calling). **둘뿐이라 손으로 쓴다** — 28개였다면 못 했다. */
+  readonly doors: readonly { name: string; description: string; parameters: Record<string, unknown> }[]
+}
+
+export function buildAraTools(ctx: ToolCtx): AraToolGate {
   const TOOLS = new Map<string, ToolDef>()
 
   /**
@@ -816,54 +829,92 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   // ── 밖으로 나가는 도구는 이 둘뿐이다 ────────────────────────────────────────
   const groupList = groupLines
 
+  const DOOR_TOOLS_DESC =
+    'A.R.A(아라) 가 할 수 있는 일의 **목록**입니다. group 없이 부르면 묶음 목록이, group 을 주면 ' +
+    '그 묶음의 도구와 인자가 옵니다. **무엇을 할 수 있는지 모를 때 먼저 여기를 보세요.** ' +
+    '묶음을 잘못 골랐으면 group 없이 다시 부르면 처음으로 돌아옵니다. ' +
+    '실행은 ara_call 로 합니다.'
+  const DOOR_CALL_DESC =
+    '아라 도구를 실행합니다. tool 이름과 args 는 ara_tools 가 알려 줍니다. ' +
+    '없는 이름을 주면 묶음 목록을 돌려주니 거기서 다시 고르면 됩니다.'
+
+  const runTools = (group?: string): string => {
+    if (!group) return `아라 도구 묶음입니다. ara_tools({group}) 로 안을 보세요.\n\n${groupList()}`
+    if (!(group in G)) return `"${group}" 이라는 묶음은 없습니다. 있는 묶음은 이렇습니다:\n\n${groupList()}`
+    const rows = [...TOOLS.entries()]
+      .filter(([, d]) => d.group === group)
+      .map(([name, d]) => `## ${name}${d.readOnly ? ' (읽기)' : ''}\n인자: ${d.argsHint}\n${d.description}`)
+      .join('\n\n')
+    return `# ${group} — ${G[group as TG]}\n\n${rows}\n\n실행: ara_call({tool, args})`
+  }
+
+  const runCall = async (tool: string, args?: Record<string, unknown>): Promise<ToolResult> => {
+    const def = TOOLS.get(tool)
+    if (!def) {
+      const near = [...TOOLS.keys()].filter((n) => n.includes(tool) || tool.includes(n.split('_')[0]))
+      return fail(
+        `"${tool}" 이라는 도구가 없습니다.` +
+          (near.length ? ` 비슷한 것: ${near.join(', ')}.` : '') +
+          `\n\n묶음부터 다시 고르세요:\n${groupList()}`
+      )
+    }
+    // 인자 검증은 **여기 한 곳**이다. zod 경계(스키마 밖 필드는 핸들러에 닿지 않는다)를 그대로 지킨다.
+    const parsed = def.schema.safeParse(args ?? {})
+    if (!parsed.success) {
+      return fail(`${tool} 의 인자가 맞지 않습니다(필요: ${def.argsHint}). ${parsed.error.issues[0]?.message ?? ''}`)
+    }
+    return def.run(parsed.data as Record<string, unknown>)
+  }
+
+  return {
+    tools: runTools,
+    call: runCall,
+    /**
+     * function calling 에 넘길 스키마. **손으로 쓴다** — 문이 둘뿐이라 zod→JSON Schema 변환기를
+     * 들일 이유가 없다(28개였다면 얘기가 달랐다). 프로바이더마다 감싸는 모양만 다르고 안쪽은 같다.
+     */
+    doors: [
+      {
+        name: 'ara_tools',
+        description: DOOR_TOOLS_DESC,
+        parameters: {
+          type: 'object',
+          properties: { group: { type: 'string', description: '묶음 이름. 없으면 묶음 목록을 준다.' } },
+          required: []
+        }
+      },
+      {
+        name: 'ara_call',
+        description: DOOR_CALL_DESC,
+        parameters: {
+          type: 'object',
+          properties: {
+            tool: { type: 'string', description: 'ara_tools 가 알려 준 도구 이름' },
+            args: { type: 'object', description: '그 도구의 인자', additionalProperties: true }
+          },
+          required: ['tool']
+        }
+      }
+    ]
+  }
+}
+
+/**
+ * MCP 서버에 문 둘을 건다. **실행은 게이트가 하고 여기는 등록만** 한다 —
+ * 같은 게이트를 API 엔진도 쓰기 때문이다(2026-08-26).
+ */
+export function registerMcpTools(server: McpServer, ctx: ToolCtx): AraToolGate {
+  const gate = buildAraTools(ctx)
+  const [toolsDoor, callDoor] = gate.doors
   server.registerTool(
     'ara_tools',
-    {
-      description:
-        'A.R.A(아라) 가 할 수 있는 일의 **목록**입니다. group 없이 부르면 묶음 목록이, group 을 주면 ' +
-        '그 묶음의 도구와 인자가 옵니다. **무엇을 할 수 있는지 모를 때 먼저 여기를 보세요.** ' +
-        '묶음을 잘못 골랐으면 group 없이 다시 부르면 처음으로 돌아옵니다. ' +
-        '실행은 ara_call 로 합니다.',
-      inputSchema: { group: z.string().optional() },
-      annotations: { readOnlyHint: true }
-    },
-    async ({ group }) => {
-      if (!group) return ok(`아라 도구 묶음입니다. ara_tools({group}) 로 안을 보세요.\n\n${groupList()}`)
-      if (!(group in G)) {
-        return ok(`"${group}" 이라는 묶음은 없습니다. 있는 묶음은 이렇습니다:\n\n${groupList()}`)
-      }
-      const rows = [...TOOLS.entries()]
-        .filter(([, d]) => d.group === group)
-        .map(([name, d]) => `## ${name}${d.readOnly ? ' (읽기)' : ''}\n인자: ${d.argsHint}\n${d.description}`)
-        .join('\n\n')
-      return ok(`# ${group} — ${G[group as TG]}\n\n${rows}\n\n실행: ara_call({tool, args})`)
-    }
+    { description: toolsDoor.description, inputSchema: { group: z.string().optional() }, annotations: { readOnlyHint: true } },
+    async ({ group }) => ok(gate.tools(group))
   )
-
   server.registerTool(
     'ara_call',
-    {
-      description:
-        '아라 도구를 실행합니다. tool 이름과 args 는 ara_tools 가 알려 줍니다. ' +
-        '없는 이름을 주면 묶음 목록을 돌려주니 거기서 다시 고르면 됩니다.',
-      inputSchema: { tool: z.string(), args: z.record(z.string(), z.unknown()).optional() }
-    },
-    async ({ tool, args }) => {
-      const def = TOOLS.get(tool)
-      if (!def) {
-        const near = [...TOOLS.keys()].filter((n) => n.includes(tool) || tool.includes(n.split('_')[0]))
-        return fail(
-          `"${tool}" 이라는 도구가 없습니다.` +
-            (near.length ? ` 비슷한 것: ${near.join(', ')}.` : '') +
-            `\n\n묶음부터 다시 고르세요:\n${groupList()}`
-        )
-      }
-      // 인자 검증은 **여기 한 곳**이다. zod 경계(스키마 밖 필드는 핸들러에 닿지 않는다)를 그대로 지킨다.
-      const parsed = def.schema.safeParse(args ?? {})
-      if (!parsed.success) {
-        return fail(`${tool} 의 인자가 맞지 않습니다(필요: ${def.argsHint}). ${parsed.error.issues[0]?.message ?? ''}`)
-      }
-      return def.run(parsed.data as Record<string, unknown>)
-    }
+    { description: callDoor.description, inputSchema: { tool: z.string(), args: z.record(z.string(), z.unknown()).optional() } },
+    async ({ tool, args }) => gate.call(tool, args)
   )
+  return gate
 }
