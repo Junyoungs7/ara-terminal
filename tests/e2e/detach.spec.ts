@@ -7,6 +7,7 @@
 // 로 잡는다(Playwright 가 BrowserWindow 하나를 Page 하나로 준다).
 import { test, expect, newLocalShell, sessionList, dialogAlt, dialogCancel, dialogConfirm } from './fixtures'
 import type { Page, ElectronApplication } from '@playwright/test'
+import { BOTTOM_IDS } from '../../src/shared/types'
 
 /**
  * **어느 아라 창 위도 아닌** 화면 좌표. 2026-08-23(제보 5)부터 main 이 "다른 아라 창 위에 놓았나"를
@@ -56,11 +57,15 @@ test('DETACH-2★ 떼어낸 창에서 하단바를 따로 켠다', async ({ ara 
 
   // 본창의 하단바 상태와 무관하다 — 창마다 자기 것이다.
   await expect(win.locator('.bottom-panel')).toHaveCount(0)
+  const mainBefore = await page.locator('.bottom-panel').count()
   await win.click('.act-bottombar')
   await expect(win.locator('.bottom-panel')).toBeVisible()
-  await expect(win.locator('.bottom-panel .bp-tab')).toHaveCount(8)
-  // 본창은 그대로 꺼져 있다.
-  await expect(page.locator('.bottom-panel')).toHaveCount(0)
+  // 개수를 손으로 박지 않는다 — F26 이 ps·svc·disk 를 더했을 때 8 이 낡아 이 검사만 깨졌다
+  // (지키려는 성질은 "떼어낸 창도 **같은** 하단바를 갖는다"이지 "탭이 여덟"이 아니다).
+  await expect(win.locator('.bottom-panel .bp-tab')).toHaveCount(BOTTOM_IDS.length)
+  // 저쪽을 켜도 이쪽은 안 움직인다. **"본창은 꺼져 있다"가 아니다** — 2026-08-24 부터 본창은
+  // 첫 세션이 생길 때 하단바가 자동으로 열리고, 떼어내도 그대로 남는다. 지킬 성질은 독립성이다.
+  expect(await page.locator('.bottom-panel').count()).toBe(mainBefore)
 })
 
 // DETACH-3★ 떼어낸 창에서도 **분할**이 된다(요청의 나머지 절반).

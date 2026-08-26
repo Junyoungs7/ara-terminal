@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
 import type { SessionSink, SessionSpec } from '../src/main/sessions/ISessionManager'
+import type { Session } from '../src/shared/types'
 
 // 실제 node-pty 셸을 스폰하는 통합성 단위 테스트. 짧은 명령을 실행해 라운드트립을 검증한다.
 const isWin = process.platform === 'win32'
@@ -17,6 +18,7 @@ const echoSpec = (): SessionSpec => ({
 function collect() {
   const chunks: Uint8Array[] = []
   const cwds: string[] = []
+  const opened: Session[] = []
   let exited = false
   let exitCode = -1
   const sink: SessionSink = {
@@ -29,10 +31,13 @@ function collect() {
     },
     cwd(_id, cwd) {
       cwds.push(cwd)
+    },
+    opened(meta) {
+      opened.push(meta)
     }
   }
   const text = () => Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8')
-  return { sink, chunks, cwds, text, get exited() { return exited }, get exitCode() { return exitCode } }
+  return { sink, chunks, cwds, opened, text, get exited() { return exited }, get exitCode() { return exitCode } }
 }
 
 const waitFor = async (pred: () => boolean, ms = 6000) => {
@@ -208,5 +213,51 @@ describe('세션 이름 (R2.1 rename · 중복 서버 구분)', () => {
     seedMeta(mgr, 'a', 'dev-server')
     seedMeta(mgr, 'c', 'dev-server·3')
     expect(mgr.nextTitle('dev-server')).toBe('dev-server·2')
+  })
+})
+
+/**
+ * 2026-08-26 준영님 제보 — 아라가 MCP 로 SSH 에 붙였는데 화면에 탭이 안 떴다.
+ *
+ * 세션 생성 경로는 `register()` 하나로 모인다(로컬 create · SSH adopt 공통). 알림을 거기 두는
+ * 이유가 그것이다 — 만드는 자리마다 알림을 흩으면 **다음에 생기는 경로**가 또 빠뜨린다.
+ */
+describe('세션이 생겼다는 알림(화면이 아는 유일한 길)', () => {
+  it('★ create 가 sink.opened 로 메타를 통째로 알린다(id 만으로는 탭을 못 그린다)', async () => {
+    const c = collect()
+    const mgr = new MainSessionManager(c.sink)
+    const id = await mgr.create(echoSpec())
+    expect(c.opened).toHaveLength(1)
+    expect(c.opened[0].id).toBe(id)
+    expect(c.opened[0].title).toBe('test')
+    expect(c.opened[0].serverKey).toBe('localhost')
+    mgr.destroyAll()
+  })
+
+  it('★ adopt(SSH 가 지나는 길)도 같은 알림을 낸다', () => {
+    const c = collect()
+    const mgr = new MainSessionManager(c.sink)
+    // 붙은 백엔드를 흉내낸다 — 편입 경로만 보는 것이라 실제 소켓이 필요 없다.
+    const backend = { onData() {}, onExit() {}, write() {}, resize() {}, pause() {}, resume() {}, kill() {} }
+    const id = mgr.adopt(backend as never, {
+      type: 'ssh',
+      profileId: 'p1',
+      title: 'KVT',
+      serverKey: 'KVT',
+      cwd: undefined,
+      shell: undefined
+    })
+    expect(c.opened.map((m) => m.id)).toEqual([id])
+    expect(c.opened[0].serverKey).toBe('KVT')
+  })
+
+  it('부른 창이 주인이다 — winId 를 주면 메타에 실려 나간다(안 주면 본창)', async () => {
+    const c = collect()
+    const mgr = new MainSessionManager(c.sink)
+    const mine = await mgr.create({ ...echoSpec(), winId: 'w-7' })
+    const main = await mgr.create(echoSpec())
+    expect(c.opened.find((m) => m.id === mine)!.winId).toBe('w-7')
+    expect(c.opened.find((m) => m.id === main)!.winId).toBeUndefined()
+    mgr.destroyAll()
   })
 })

@@ -23,7 +23,7 @@ import type { SessionSpec } from '../src/main/sessions/ISessionManager'
 import type { ToolCtx } from '../src/main/mcp/tools'
 import type { SecretStore } from '../src/main/secrets/SecretStore'
 import { MCP_DEFAULT_PORT } from '../src/shared/types'
-import type { SshProfile, McpApprovalRequest } from '../src/shared/types'
+import type { SshProfile, McpApprovalRequest, Session } from '../src/shared/types'
 import { startPasswordServer, type Harness } from './ssh-harness'
 
 const isWin = process.platform === 'win32'
@@ -48,6 +48,8 @@ type Rig = {
   approval: McpApprovalManager
   // S1(FIX-mcpshell) 회귀 가드용 — 승인 요청 원문(argsSummary 포함)을 순서대로 기록한다.
   approvalRequests: McpApprovalRequest[]
+  // 화면으로 나간 "세션이 생겼다" 알림. 이게 비면 사용자에게 탭이 안 보인다(2026-08-26 제보).
+  opened: Session[]
   cleanup: () => Promise<void>
 }
 
@@ -59,7 +61,13 @@ type Rig = {
 // 겪지 않는 문제). 고정 포트 자체의 재사용성은 별도의 전용 테스트 하나가 명시적으로 검증한다.
 async function makeRig(): Promise<Rig> {
   const dir = mkdtempSync(join(tmpdir(), 'ev-mcp-http-'))
-  const sessions = new MainSessionManager({ data() {}, exit() {}, cwd() {} })
+  const opened: Session[] = []
+  const sessions = new MainSessionManager({
+    data() {},
+    exit() {},
+    cwd() {},
+    opened: (m) => opened.push(m)
+  })
   const ws = new WorkspaceStore(join(dir, 'workspace.json'), '0.1.0')
   const profiles = new ProfileStore(ws, memSecretStore())
   const forwards = createForwardService((id) => sessions.sshClient(id))
@@ -105,6 +113,7 @@ async function makeRig(): Promise<Rig> {
     token,
     approval,
     approvalRequests,
+    opened,
     cleanup: async () => {
       await server.stop()
       sessions.destroyAll()
@@ -352,6 +361,36 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     expect(res.isError).toBe(true) // host 가 handler 에 닿았다면 profileId 없이도 뭔가 시도했을 텐데, 그냥 실패한다
     const list = await client.callTool({ name: 'session_list', arguments: {} })
     expect((list.content as { type: string; text: string }[])[0].text).toBe('[]') // 세션이 생기지 않았다
+    await client.close()
+  })
+
+  /**
+   * ★ 2026-08-26 준영님 제보 회귀 — *"KVT 접속했습니다, 터미널 열렸으니 바로 쓰시면 됩니다라고 뜨고
+   * 화면에 세션창이 안떠"*.
+   *
+   * 세션은 진짜로 만들어졌다(session_list 에 나온다). 빠진 것은 **화면에 알리는 한 줄**이었고,
+   * 그래서 사람이 볼 수도 닫을 수도 없는 연결이 남았다. AI 가 거짓말을 한 게 아니라 도구 설명문에
+   * "화면에 새 탭으로 나타납니다"라고 적혀 있었고 그게 사실이 아니었다.
+   *
+   * 목록에 있는 것만으로는 부족하다 — **알림이 나갔는가**를 본다.
+   */
+  it('★ MCP 로 만든 세션은 화면에 알림이 나간다(목록에만 있고 탭이 없으면 유령이다)', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    const res = await client.callTool({ name: 'session_create', arguments: { type: 'local' } })
+    expect(res.isError).toBeFalsy()
+    const { id } = JSON.parse((res.content as { type: string; text: string }[])[0].text) as { id: string }
+
+    expect(rig.opened.map((m) => m.id)).toContain(id)
+    // 탭을 그리려면 이름·서버 묶음이 함께 와야 한다(id 만 오면 화면이 무엇을 그릴지 모른다).
+    const meta = rig.opened.find((m) => m.id === id)!
+    expect(meta.title).toBeTruthy()
+    expect(meta.serverKey).toBe('localhost')
+    // 소유 창이 없다 = 본창. AI 가 만든 세션은 늘 사람이 보고 있는 창으로 간다.
+    expect(meta.winId).toBeUndefined()
     await client.close()
   })
 

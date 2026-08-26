@@ -71,7 +71,9 @@ export class MainSessionManager implements ISessionManager {
       cwd: spec.cwd,
       title: spec.title,
       serverKey: spec.serverKey,
-      manualTitle: spec.manualTitle
+      manualTitle: spec.manualTitle,
+      // 부른 창이 곧 주인이다(안 주면 본창). 이게 없으면 떼어낸 창에서 연 탭의 출력이 본창으로 간다.
+      ...(spec.winId ? { winId: spec.winId } : {})
     }
     this.register(backend, meta)
     return meta.id
@@ -116,6 +118,8 @@ export class MainSessionManager implements ISessionManager {
       this.handles.delete(id)
       this.sink.exit(id, exitCode, signal)
     })
+    // 스트림을 다 건 뒤에 알린다 — 받은 창이 곧바로 attach 해도 출력이 이미 흐르고 있어야 한다.
+    this.sink.opened?.(meta)
   }
 
   private enqueue(id: string, data: string): void {

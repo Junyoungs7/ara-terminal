@@ -728,6 +728,11 @@ export type EvApi = {
     onExit(id: string, cb: (info: SessionExit) => void): () => void
     // F7: 세션 cwd 변경 구독(터미널→SFTP 트리 동기). 해지 함수 반환.
     onCwd(id: string, cb: (info: SessionCwd) => void): () => void
+    /**
+     * 세션이 생겼다(`session:opened`). **화면이 자기가 열지 않은 세션을 알게 되는 유일한 길**이다 —
+     * 아라가 MCP 로 붙인 SSH 가 여기로 온다. 창은 `meta.winId` 가 자기 것일 때만 탭을 그린다.
+     */
+    onOpened(cb: (meta: Session) => void): () => void
   }
   // F14: 클립보드에 담긴 로컬 파일 경로(탐색기에서 복사한 파일). 파일이 아니면 빈 배열 —
   // 호출측은 그때 기존 텍스트 붙여넣기로 폴백한다.

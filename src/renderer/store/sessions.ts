@@ -102,6 +102,20 @@ export function useSessions(winId?: string) {
     if (id) setMru((m) => [id, ...m.filter((x) => x !== id)])
   }, [])
 
+  /**
+   * 이미 main 에 있는 세션을 이 창의 목록에 넣는다. serverKey·type 은 부르는 쪽이 안다.
+   *
+   * **모든 편입이 이 문을 지난다** — 내가 연 것도, 아라가 연 것도. 같은 id 를 두 번 넣지 않으므로
+   * `session:create` 의 응답과 `session:opened` 알림이 어느 순서로 도착해도 탭은 하나다.
+   */
+  const adopt = useCallback(
+    (id: string, title: string, serverKey: string, type: SessionType, profileId?: string) => {
+      setSessions((t) => (t.some((x) => x.id === id) ? t : [...t, { id, title, serverKey, type, profileId }]))
+      touch(id)
+    },
+    [touch]
+  )
+
   const open = useCallback(async () => {
     seq += 1
     const spec: SessionSpec = {
@@ -110,14 +124,14 @@ export function useSessions(winId?: string) {
       serverKey: 'localhost',
       cwd: undefined,
       profileId: null,
-      shell: undefined
+      shell: undefined,
+      // 이 창이 주인이다 — 안 주면 main 이 본창 것으로 잡아 출력이 저쪽으로 간다.
+      ...(winId ? { winId } : {})
     }
     const { id } = await window.ev.session.create(spec)
-    const s: Session = { id, title: spec.title, serverKey: spec.serverKey, type: 'local' }
-    setSessions((t) => [...t, s])
-    touch(id)
+    adopt(id, spec.title, spec.serverKey, 'local')
     return id
-  }, [touch])
+  }, [adopt, winId])
 
   // F25: RDP 세션은 pty 가 없다 — 렌더러 레지스트리에만 넣고 화면은 RdpView 가 그린다.
   // id 에 접두를 둬서 close·persist 가 main 세션과 구분할 수 있게 한다.
@@ -137,11 +151,10 @@ export function useSessions(winId?: string) {
   const restoreLocal = useCallback(
     async (spec: SessionSpec): Promise<string> => {
       const { id } = await window.ev.session.create(spec)
-      setSessions((t) => [...t, { id, title: spec.title, serverKey: spec.serverKey, type: 'local' }])
-      touch(id)
+      adopt(id, spec.title, spec.serverKey, 'local')
       return id
     },
-    [touch]
+    [adopt]
   )
 
   // 탭 닫기 = 세션 종료(pty/ssh 정리 + 레지스트리에서 제거).
@@ -161,15 +174,6 @@ export function useSessions(winId?: string) {
   }, [])
 
   const select = useCallback((id: string) => touch(id), [touch])
-
-  // 이미 main에서 생성된 세션(연결된 SSH 등)을 레지스트리에 편입. serverKey/type은 연결부가 전달.
-  const adopt = useCallback(
-    (id: string, title: string, serverKey: string, type: SessionType, profileId?: string) => {
-      setSessions((t) => (t.some((x) => x.id === id) ? t : [...t, { id, title, serverKey, type, profileId }]))
-      touch(id)
-    },
-    [touch]
-  )
 
   // 탭 이름 변경(R2.1). main 의 meta 가 스냅샷 저장의 진실이므로 IPC 를 함께 호출한다.
   const rename = useCallback((id: string, title: string) => {
@@ -220,6 +224,23 @@ export function useSessions(winId?: string) {
   useEffect(() => {
     if (winId) void refreshFromMain()
   }, [winId, refreshFromMain])
+
+  /**
+   * main 에서 세션이 생겼다 — **내가 열지 않은 세션이 화면에 나타나는 유일한 길.**
+   *
+   * 아라가 MCP `ssh_connect` 로 서버에 붙으면 세션은 진짜로 살아 있는데 화면엔 아무것도 없었다
+   * (2026-08-26 준영님 제보). 렌더러 목록이 "내가 연 것"만 기억하는 구조였기 때문이고, 그래서
+   * 사람이 그 연결을 볼 수도 닫을 수도 없었다.
+   *
+   * `winId` 로 거른다 — 세션은 한 창에만 있다(같은 세션을 두 창이 그리면 스크롤백이 갈라진다).
+   */
+  useEffect(() => {
+    const off = window.ev?.session.onOpened?.((m) => {
+      if ((m.winId ?? undefined) !== winId) return
+      adopt(m.id, m.title, m.serverKey, m.type, m.profileId ?? undefined)
+    })
+    return () => off?.()
+  }, [winId, adopt])
 
   // 소유 창이 바뀌면(떼어내기·되돌리기·그 창이 닫힘) 사본을 맞춘다. 본창은 "돌아온 세션"을
   // 여기서 처음 알고, 떼어낸 창은 "내 세션이 아니게 됐다"를 안다.

@@ -273,6 +273,12 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, info: SessionCwd) => cb(info)
       ipcRenderer.on(ch, listener)
       return () => ipcRenderer.removeListener(ch, listener)
+    },
+    // 세션 생성 알림 — id 별 채널이 아니다(아직 id 를 모르는 쪽이 듣는 이벤트라 그럴 수가 없다).
+    onOpened: (cb: (meta: Session) => void) => {
+      const listener = (_e: IpcRendererEvent, meta: Session) => cb(meta)
+      ipcRenderer.on('session:opened', listener)
+      return () => ipcRenderer.removeListener('session:opened', listener)
     }
   },
   // F14: 클립보드 파일 경로(Ctrl+V 로 파일을 붙여넣었는지 판별).

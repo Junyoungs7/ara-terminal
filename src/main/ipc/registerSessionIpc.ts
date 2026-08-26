@@ -40,6 +40,11 @@ export function registerSessionIpc(
     // F7: OSC7 cwd 변경 → SFTP 트리 자동 이동(터미널→트리 동기).
     cwd(id, cwd) {
       pushSend(getWebContents(id), `session:cwd:${id}`, { id, cwd })
+    },
+    // 세션이 생겼다 → 그 세션을 가진 창이 탭을 그린다. 렌더러가 만든 것도 여기를 지나지만
+    // 받는 쪽 adopt 가 같은 id 를 두 번 넣지 않는다(어느 쪽이 먼저 도착해도 탭은 하나다).
+    opened(meta) {
+      pushSend(getWebContents(meta.id), 'session:opened', meta)
     }
   })
 

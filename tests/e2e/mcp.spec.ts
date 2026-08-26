@@ -81,3 +81,37 @@ test('MCP-13 서버 켜짐 상태에서 데이터 범위 고지가 보인다', a
   await expect(page.locator(`${drawer} [data-field="mcp.port"]`)).toBeVisible()
   await expect(page.locator(`${drawer} .set-note[data-note="mcp.scope"]`)).toBeVisible()
 })
+
+/**
+ * MCP-28★ 2026-08-26 준영님 제보 — 아라에게 *"KVT 서버 열어달라"* 했더니 *"접속했습니다. 터미널
+ * 열렸으니 바로 쓰시면 됩니다"* 라고 답했는데 **화면에 세션창이 안 떴다**.
+ *
+ * 원인은 접속 실패가 아니었다. 세션은 진짜로 살아 있었고, 렌더러 목록이 "내가 연 것"만 기억하는
+ * 구조라 **렌더러가 열지 않은 세션은 영영 탭이 없었다**. 사람이 볼 수도 닫을 수도 없는 연결이다.
+ *
+ * 재현 방법: `window.ev.session.create` 를 **직접** 부른다. 이건 preload API 라 렌더러 store 를
+ * 지나지 않는다 — MCP 툴이 main 에서 세션을 만드는 것과 화면 입장에서 똑같은 상황이고,
+ * 그래서 탭이 생기는 길은 main 이 보내는 `session:opened` 알림 하나뿐이다.
+ */
+test('MCP-28★ 렌더러를 거치지 않고 main 에서 생긴 세션도 탭으로 나타난다', async ({ ara }) => {
+  const { page } = ara
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(0)
+
+  const id = await page.evaluate(async () => {
+    const r = await window.ev.session.create({
+      type: 'local',
+      title: '아라가 연 셸',
+      serverKey: 'localhost',
+      cwd: undefined,
+      profileId: null,
+      shell: undefined
+    })
+    return r.id
+  })
+  expect(id).toBeTruthy()
+
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(1)
+  await expect(page.locator('.term-tabbar .ttab')).toContainText('아라가 연 셸')
+  // 탭만 있고 화면이 비면 반쪽이다 — 사람이 바로 쓸 수 있어야 "열렸다"가 참이 된다.
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+})

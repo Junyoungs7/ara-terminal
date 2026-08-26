@@ -277,7 +277,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   server.registerTool(
     'ssh_connect',
     {
-      description: '등록된 프로필로 SSH 접속합니다. profileId 로만 지정합니다 — 호스트·자격증명은 이 툴로 전달할 수 없습니다.',
+      description:
+        '등록된 프로필로 SSH 접속합니다. 화면에 새 탭으로 나타나고 사용자가 바로 쓸 수 있습니다. ' +
+        'profileId 로만 지정합니다 — 호스트·자격증명은 이 툴로 전달할 수 없습니다.',
       inputSchema: { profileId: z.string() }
     },
     async ({ profileId }) =>
