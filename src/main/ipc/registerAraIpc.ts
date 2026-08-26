@@ -10,7 +10,7 @@ import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
 import { araModelOf } from '@shared/aiModels'
-import { listAraChats } from '../ai/araChats'
+import { listAraChats, listApiChats } from '../ai/araChats'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 
 export type AraRuntime = { chat: AraChat }
@@ -68,9 +68,14 @@ export function registerAraIpc(
    * 어느 폴더의 목록인가: 지금 열려 있는 대화의 작업 폴더. 아직 안 열었으면 기본 자리를 본다 —
    * 그게 아라를 그냥 열었을 때 가는 곳이라 사용자가 기대하는 목록과 같다.
    */
-  handle('ara:chats', () => ({
-    items: listAraChats(chat.cwd() ?? deps.araCwd(), ws.get().ui.araChatNames ?? {})
-  }))
+  handle('ara:chats', () => {
+    const names = ws.get().ui.araChatNames ?? {}
+    // 두 저장소를 합친다: CLI 는 Claude Code 가 남긴 것, API 는 우리가 남긴 것(2026-08-26 준영님
+    // 요청 — *"api를 사용했을때도 이 아라 세션, 대화 관리도 진행해야해"*). 사용자에게는 한 목록이다.
+    const cli = listAraChats(chat.cwd() ?? deps.araCwd(), names)
+    const api = deps.apiChatDir ? listApiChats(deps.apiChatDir(), names) : []
+    return { items: [...cli, ...api].sort((a, b) => b.at - a.at) }
+  })
   handle('ara:renameChat', ({ id, name }) => {
     ws.setAraChatName(id, typeof name === 'string' ? name : '')
     return { ok: true } as const

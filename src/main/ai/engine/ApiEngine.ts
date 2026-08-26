@@ -1,6 +1,8 @@
 import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
 import type { AiEnd } from '@shared/types'
+import { randomUUID } from 'node:crypto'
 import { AraSession, type AiPrefs, type KeyVault } from '../AraSession'
+import { appendTurn, readTurns } from '../apiChatLog'
 
 /**
  * **B 엔진** — API 키로 직접 부르는 대화(#126 폴백).
@@ -16,9 +18,24 @@ import { AraSession, type AiPrefs, type KeyVault } from '../AraSession'
  *  · 비용을 원화·달러로 못 준다(`turn.costUsd = null`) — 어댑터가 주는 것은 토큰 수뿐이다.
  *    거짓 숫자를 지어내느니 비우는 편이 낫다.
  */
-export function createApiEngine(opts: { vault: KeyVault; getPrefs: () => AiPrefs }): AiEngine {
+export function createApiEngine(opts: {
+  vault: KeyVault
+  getPrefs: () => AiPrefs
+  /**
+   * 대화 기록을 둘 폴더(2026-08-26). CLI 엔진은 Claude Code 가 남겨 주지만 이쪽은 남겨 줄 사람이
+   * 없다 — 없으면 앱을 끌 때 대화가 통째로 사라지고, 같은 화면에서 엔진에 따라 "지난 대화"가
+   * 있다 없다 한다.
+   */
+  dir?: string
+  /** 이어서 열 대화. 그 기록을 읽어 문맥으로 얹는다. */
+  resumeId?: string
+}): AiEngine {
   const listeners = new Set<(e: AiEngineEvent) => void>()
   let alive = true
+  // 이 대화의 id. 이어서 여는 것이면 그 id 를 그대로 쓴다(기록이 한 파일에 이어 붙는다).
+  const chatId = opts.resumeId ?? randomUUID()
+  // 답을 모은다 — end 이벤트에는 최종 텍스트가 없다(델타로만 온다).
+  const answer = new Map<string, string>()
   const emit = (e: AiEngineEvent): void => {
     if (!alive) return
     for (const fn of [...listeners]) fn(e)
@@ -26,22 +43,34 @@ export function createApiEngine(opts: { vault: KeyVault; getPrefs: () => AiPrefs
 
   const started = new Map<string, number>()
   const session = new AraSession(opts.vault, opts.getPrefs, {
-    delta: (_turnId, text) => emit({ t: 'text', text }),
+    delta: (turnId, text) => {
+      answer.set(turnId, (answer.get(turnId) ?? '') + text)
+      emit({ t: 'text', text })
+    },
     end: (e: AiEnd) => {
       const at = started.get(e.turnId)
       started.delete(e.turnId)
+      // 답을 기록에 남긴다. 실패·중단이어도 **거기까지 온 말**은 남긴다 — 사람이 본 것이 곧 대화다.
+      const text = answer.get(e.turnId) ?? ''
+      answer.delete(e.turnId)
+      if (opts.dir) appendTurn(opts.dir, chatId, 'assistant', text)
       // 실패는 오류로, 정상 종료·중단은 턴 끝으로. 중단은 사람이 누른 것이라 오류가 아니다.
       if (!e.ok && e.reason !== 'canceled') emit({ t: 'error', message: e.message })
       emit({ t: 'turn', costUsd: null, ms: at ? Date.now() - at : 0, turns: 1, text: '' })
     }
   })
 
+  // 이어서 여는 것이면 지난 턴을 문맥으로 얹는다(그래야 "아까 그거" 가 통한다).
+  if (opts.dir && opts.resumeId) session.restore(readTurns(opts.dir, opts.resumeId))
+
   const { provider, model } = opts.getPrefs()
   // 다음 tick 에 올린다 — 화면이 onEvent 를 걸기 전에 쏘면 첫 줄을 놓친다(CLI 엔진도 같다).
-  setTimeout(() => emit({ t: 'ready', sessionId: null, model: `${provider}/${model}`, cwd: null, tools: [] }), 0)
+  // sessionId 를 준다(2026-08-26): 화면이 "지금 어느 대화인가" 를 알아야 목록에서 그 줄을 표시한다.
+  setTimeout(() => emit({ t: 'ready', sessionId: chatId, model: `${provider}/${model}`, cwd: null, tools: [] }), 0)
 
   return {
     send(text) {
+      if (opts.dir) appendTurn(opts.dir, chatId, 'user', text)
       const { turnId } = session.send({ text })
       started.set(turnId, Date.now())
     },

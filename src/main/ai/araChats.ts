@@ -24,6 +24,11 @@ export type AraChatRow = {
   name: string
   /** 첫 질문에서 뽑은 제목. 이름이 없을 때 목록에 보이는 글. */
   title: string
+  /**
+   * 어느 엔진의 대화인가(2026-08-26). **이어서 열 때 그 엔진으로 열어야 한다** — API 로 하던 대화를
+   * CLI 로 열면 문맥이 통째로 없는 새 대화가 되고, 사용자는 "이어졌다"고 믿는다.
+   */
+  engine: 'cli' | 'api'
 }
 
 /**
@@ -101,7 +106,18 @@ const NAME_RE = /^([0-9a-f-]{36})\.jsonl$/i
  * 폴더가 없으면 빈 목록이다 — 아직 대화를 한 번도 안 한 것이고, 그건 오류가 아니다.
  */
 export function listAraChats(cwd: string, names: Record<string, string> = {}, home = homedir()): AraChatRow[] {
-  const dir = projectDir(cwd, home)
+  return readChatDir(projectDir(cwd, home), names, 'cli')
+}
+
+/**
+ * API 엔진 대화(2026-08-26). 같은 줄 모양이라 **같은 파서를 쓴다** — 저장한 사람만 다르다
+ * (CLI 는 Claude Code, 이쪽은 우리 apiChatLog.ts).
+ */
+export function listApiChats(dir: string, names: Record<string, string> = {}): AraChatRow[] {
+  return readChatDir(dir, names, 'api')
+}
+
+function readChatDir(dir: string, names: Record<string, string>, engine: 'cli' | 'api'): AraChatRow[] {
   let files: string[]
   try {
     files = readdirSync(dir)
@@ -122,7 +138,7 @@ export function listAraChats(cwd: string, names: Record<string, string> = {}, ho
       continue
     }
     const id = m[1]
-    rows.push({ id, at, name: names[id] ?? '', title: firstQuestion(path) })
+    rows.push({ id, at, name: names[id] ?? '', title: firstQuestion(path), engine })
   }
   return rows.sort((a, b) => b.at - a.at)
 }

@@ -187,6 +187,19 @@ export class AraSession {
     this.active?.controller.abort()
   }
 
+  /**
+   * 지난 대화를 되살린다(2026-08-26 — API 엔진의 "이어서 열기").
+   *
+   * 기록에서 읽은 턴을 그대로 얹는다. 진행 중이면 먼저 끊는다(clear 와 같은 이유 — 안 끊으면
+   * 사라진 턴에 델타가 계속 붙는다). 이 턴들은 **다음 요청의 문맥**이 되고, 예산이 모자라면
+   * buildRequestCore 가 앞에서부터 버린다(그 규칙은 그대로다).
+   */
+  restore(turns: AiTurn[]): void {
+    this.cancel()
+    this.turns = [...turns]
+    this.droppedTurns = 0
+  }
+
   // 새 대화. 진행 중이면 먼저 끊는다 — 안 끊으면 지워진 턴에 델타가 계속 붙는다.
   // 프로바이더 전환 시 렌더러가 호출한다(설계 W5 §보안 — 모델 간 컨텍스트 이월 방지).
   clear(): void {

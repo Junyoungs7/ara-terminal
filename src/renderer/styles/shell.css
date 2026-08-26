@@ -7325,8 +7325,19 @@
   white-space: nowrap;
 }
 .ara-chats .ac-at {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-dim);
   font-size: var(--fs-sm);
+}
+/* 어느 엔진의 대화인가. CLI 는 대부분이라 표시하지 않고 **API 만** 표시한다 —
+   이어서 열 때 그 엔진으로 열리므로 도구 유무가 달라진다. */
+.ara-chats .ac-eng {
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs, var(--fs-sm));
 }
 .ara-chats .ac-name {
   flex: 1;

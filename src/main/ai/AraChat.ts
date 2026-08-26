@@ -57,6 +57,11 @@ export type AraChatDeps = {
    * 없으면 폴백을 못 연다(그 사실을 화면에 그대로 알린다 — 조용히 A 로 되돌리지 않는다).
    */
   api?: { vault: KeyVault; getPrefs: () => AiPrefs }
+  /**
+   * B 엔진 대화 기록을 둘 폴더(2026-08-26). CLI 는 Claude Code 가 남겨 주지만 API 는 우리가
+   * 남겨야 한다 — 안 그러면 앱을 끌 때 대화가 사라지고 "지난 대화" 가 엔진마다 다르게 보인다.
+   */
+  apiChatDir?: () => string
   /** 사용자 호칭(#138). 빈 문자열이면 기본 호칭으로 부른다. */
   callName?: () => string
   /**
@@ -193,8 +198,14 @@ export function createAraChat(deps: AraChatDeps): AraChat {
           deps.emit({ t: 'error', message: 'API 키 엔진을 쓸 수 없습니다.' })
           return { ok: false }
         }
-        engine = createApiEngine(deps.api)
+        // B 엔진도 기록을 남긴다(2026-08-26) — 그래야 엔진에 상관없이 "지난 대화" 가 같게 보인다.
+        engine = createApiEngine({
+          ...deps.api,
+          ...(deps.apiChatDir ? { dir: deps.apiChatDir() } : {}),
+          ...(o.resumeId ? { resumeId: o.resumeId } : {})
+        })
         wire(engine)
+        lastCwd = null
         deps.emit({ t: 'opened', cwd: null, withMcp: false, engine: 'api' })
         return { ok: true }
       }

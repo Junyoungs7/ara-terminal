@@ -85,13 +85,18 @@ export function AraChatPanel({
   }
   // 지금 이어 가는 대화 id — 목록에서 그 줄을 표시한다(어디에 있는지 모르면 목록이 미궁이 된다).
   const [resumeId, setResumeId] = useState<string | null>(null)
-  /** 그 대화를 이어서 연다. 지금 대화는 닫히고 그쪽 기록 위에서 다시 시작한다. */
-  const resume = async (id: string): Promise<void> => {
+  /**
+   * 그 대화를 이어서 연다. 지금 대화는 닫히고 그쪽 기록 위에서 다시 시작한다.
+   *
+   * **그 대화의 엔진으로 연다**(2026-08-26): API 로 하던 대화를 CLI 로 열면 문맥이 통째로 없는
+   * 새 대화가 되는데, 사용자는 "이어졌다"고 믿는다. 기록이 어느 쪽에 있는지는 목록이 안다.
+   */
+  const resume = async (row: AraChatRow): Promise<void> => {
     setChatsOpen(false)
     setItems([])
     setPhase('opening')
-    setResumeId(id)
-    await window.ev?.ara.open({ resumeId: id, ...(cwd ? { cwd } : {}), active })
+    setResumeId(row.id)
+    await window.ev?.ara.open({ resumeId: row.id, engine: row.engine, ...(row.engine === 'cli' && cwd ? { cwd } : {}), active })
   }
   const saveName = async (id: string, name: string): Promise<void> => {
     setRenaming(null)
@@ -367,10 +372,13 @@ export function AraChatPanel({
                     type="button"
                     className="ac-open"
                     title={t('ara.chats.resume')}
-                    onClick={() => void resume(c.id)}
+                    onClick={() => void resume(c)}
                   >
                     <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
-                    <span className="ac-at">{new Date(c.at).toLocaleString()}</span>
+                    <span className="ac-at">
+                      {new Date(c.at).toLocaleString()}
+                      {c.engine === 'api' && <span className="ac-eng">API</span>}
+                    </span>
                   </button>
                   <button
                     type="button"

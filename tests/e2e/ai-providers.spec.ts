@@ -190,8 +190,18 @@ test('W5-13 모델 추천 칩을 누르면 입력값이 채워지고 칩이 선�
   await expect(page.locator(`${modelRow} .seg-ctl button[data-value="claude-opus-5"]`)).toHaveClass(/on/)
 })
 
-// W5-15 아라 패널 헤더에 현재 provider·model 이 표시된다(.ai-active-badge, hasKey 일 때만 노출).
-test('W5-15 아라 패널 헤더에 현재 provider·model 이 표시된다', async ({ ara }) => {
+/**
+ * W5-15 는 **옛 화면 것이다**(2026-08-26 확인).
+ *
+ * `.ai-panel`(AiPanel) 은 `ARA_CHAT` 플래그가 켜진 뒤로 화면에 안 붙는다 — 같은 레일 자리를
+ * `AraChatPanel` 이 쓴다(Shell.tsx 의 `ARA_CHAT ? … : …`). 그래서 이 검사는 열리지 않는 패널을
+ * 기다리다 실패했다. **제품이 아니라 검사가 낡은 것**이다.
+ *
+ * 지키려던 성질("지금 어느 모델인지 헤더에서 보인다")은 지금 화면에서 ARA2-7(모델 고르기)이
+ * 이미 지킨다. 플래그를 되돌릴 일이 없다고 볼 수 없어 지우지는 않고 건너뛴다 — 옛 패널을 정말
+ * 걷어내는 날 이 줄이 함께 지워진다.
+ */
+test.skip('W5-15 아라 패널 헤더에 현재 provider·model 이 표시된다(옛 AiPanel — ARA_CHAT 이후 미사용)', async ({ ara }) => {
   const { page } = ara
   await registerAiKey(page)
   await openAiPanel(page)

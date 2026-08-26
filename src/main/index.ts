@@ -293,6 +293,12 @@ app.whenReady().then(() => {
       },
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
       api: { vault: secrets, getPrefs: aiPrefs },
+      // API 엔진 대화 기록. CLI 는 Claude Code 가 ~/.claude/projects 에 남기지만 이쪽은 우리 몫이다.
+      apiChatDir: () => {
+        const dir = join(userData, 'ara-chats')
+        mkdirSync(dir, { recursive: true })
+        return dir
+      },
       // #138 호칭. 저장값은 신뢰 경계 밖이라 callNameOf 로 자른다(줄바꿈·지시문 흉내 금지).
       callName: () => callNameOf(store.get().ui.araCallName),
       // 2026-08-26: 등록된 SSH 서버를 **id 와 이름만** 넘긴다. 호스트·사용자·비밀은 안 나간다 —
