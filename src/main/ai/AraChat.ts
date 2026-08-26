@@ -124,6 +124,12 @@ export type AraChat = {
   isOpen(): boolean
   /** 이어서 열 때 쓸 세션 id(엔진이 알려 준 것). */
   resumeId(): string | null
+  /**
+   * 마지막으로 연 작업 폴더. **지난 대화 목록이 이걸 기준으로 찾는다**(2026-08-26) —
+   * Claude Code 는 기록을 폴더별로 나눠 두므로 어느 폴더의 대화인지가 곧 어느 목록인지다.
+   * 아직 한 번도 안 열었으면 null(그때는 기본 자리를 본다).
+   */
+  cwd(): string | null
 }
 
 /** 계획만 세우고 아무것도 안 건드리는 모드(실측: 실제 편집이 막힌다). */
@@ -143,6 +149,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
   let planMode = false
   // 고른 모델(#137). 빈 문자열 = 사용자의 ~/.claude 기본값.
   let model = ''
+  // 목록을 어느 폴더에서 찾을지 — open() 이 고른 값을 그대로 기억한다.
+  let lastCwd: string | null = null
   const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
 
   /** 엔진 사건 → 이 층의 규칙 → 화면. **두 엔진이 같은 배선을 쓴다**(그러라고 모양을 맞췄다). */
@@ -235,6 +243,7 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         ...(persona ? { personaFile: persona.path } : {})
       })
       wire(engine)
+      lastCwd = cwd
       deps.emit({
         t: 'opened',
         cwd,
@@ -290,6 +299,7 @@ export function createAraChat(deps: AraChatDeps): AraChat {
 
     pending: () => [...waiting.values()],
     isOpen: () => engine !== null,
-    resumeId: () => sessionId
+    resumeId: () => sessionId,
+    cwd: () => lastCwd
   }
 }

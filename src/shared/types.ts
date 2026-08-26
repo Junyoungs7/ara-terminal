@@ -401,6 +401,14 @@ export type UiState = {
    * 화면이 무엇을 잃는지 확인을 받는다(SettingsDrawer McpSection).
    */
   mcpEnabled?: boolean
+  /**
+   * 지난 아라 대화에 사람이 붙인 이름(2026-08-26 준영님 요청 — *"세션에 대화 이름도 넣을 수 있고
+   * 넣으면 rename"*). 키는 Claude Code 세션 id.
+   *
+   * **여기에만 있다**: Claude Code 에는 대화 이름이라는 개념이 없다(파일명이 uuid 다). 기록 자체는
+   * 그쪽 것을 읽기만 하고 우리 형식으로 다시 저장하지 않는다 — 두 벌이 되면 언젠가 어긋난다.
+   */
+  araChatNames?: Record<string, string>
   // F12 [로그]: 세션 로그 기록·보존 기간. 미지정이면 꺼짐 / 30일.
   sessionLog?: boolean
   logRetentionDays?: number

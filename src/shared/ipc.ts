@@ -37,6 +37,7 @@ import type { SessionSpec } from '../main/sessions/ISessionManager'
 import type { AskRequest } from '../main/mcp/askUser'
 import type { AraChatEvent } from '../main/ai/AraChat'
 import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
+import type { AraChatRow } from '../main/ai/araChats'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
 import type { PastLog } from '../main/log/SessionLog'
@@ -441,6 +442,10 @@ export type InvokeContract = {
   'ara:model': { req: { model: string }; res: { ok: true } }
   'ara:interrupt': { req: void; res: { ok: true } }
   'ara:close': { req: void; res: { ok: true } }
+  /** 지난 대화 목록(2026-08-26). 지금 작업 폴더 기준으로 최근 순. */
+  'ara:chats': { req: void; res: { items: AraChatRow[] } }
+  /** 대화에 이름 붙이기·지우기(빈 문자열이면 지운다). */
+  'ara:renameChat': { req: { id: string; name: string }; res: { ok: true } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
   'mcp:approvalRespond': { req: McpApprovalDecision; res: { ok: true } }
   // #125 되묻기 — AI 가 사람에게 물은 것에 답한다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서
@@ -734,6 +739,11 @@ export type EvApi = {
      */
     onOpened(cb: (meta: Session) => void): () => void
   }
+  /**
+   * 화면 아래 패널을 열라는 알림(`ui:panel`). 아라가 `panel_show` 로 부른다 — 결과가 수백 줄일 때
+   * 글로 옮겨 적는 대신 원래 그걸 보라고 만든 화면을 열어 준다(2026-08-26 준영님 제안).
+   */
+  panel: { onShow(cb: (e: { panel: string }) => void): () => void }
   // F14: 클립보드에 담긴 로컬 파일 경로(탐색기에서 복사한 파일). 파일이 아니면 빈 배열 —
   // 호출측은 그때 기존 텍스트 붙여넣기로 폴백한다.
   clipboard: {
@@ -781,6 +791,10 @@ export type EvApi = {
     isRepo(path: string): Promise<{ repo: boolean }>
     approvePlan(): Promise<{ ok: true }>
     model(model: string): Promise<{ ok: true }>
+    /** 지난 대화 목록(최근 순). 이름이 없으면 첫 질문이 title 로 온다. */
+    chats(): Promise<{ items: AraChatRow[] }>
+    /** 대화에 이름 붙이기. 빈 문자열이면 이름을 지운다(그때는 다시 첫 질문이 보인다). */
+    renameChat(id: string, name: string): Promise<{ ok: true }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>

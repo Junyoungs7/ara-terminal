@@ -2537,6 +2537,27 @@
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
+/* 아라가 "여기 보세요" 하고 연 탭(2026-08-26). 패널만 조용히 열리면 사용자는 답만 읽고 화면이
+   바뀐 걸 모른다 — 몇 초만 눈에 띄게 하고 사라진다(계속 깜빡이면 그게 더 거슬린다). */
+.bp-tab.flash {
+  animation: bp-flash 1.05s ease-out 3;
+}
+@keyframes bp-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  40% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 움직임을 줄여 달라고 한 사람에게는 깜빡이지 않고 테두리만 남긴다. */
+  .bp-tab.flash {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
 /* 활성 탭. `--bg-raised`(#1e2532)는 hover 의 `--bg-overlay`(#252e3e)보다 **어둡다** — 명시도가
    같고 이 규칙이 뒤에 오므로, 이대로 두면 비활성 탭을 호버했을 때 활성 탭보다 밝아진다.
    탭 여덟에서 "지금 뭐가 열려 있나"가 마우스 위치에 따라 뒤집히는 자리였다(2026-08-16).
@@ -7245,6 +7266,83 @@
   padding: 0 6px 0 10px;
   background: var(--bg-canvas);
   border-bottom: 1px solid var(--line);
+}
+/* 지난 대화 목록(2026-08-26). 머리 바로 아래에 펼쳐진다 — 떠 있는 창을 하나 더 만들지 않는다
+   (좁은 레일에서 창이 뜨면 대화를 가린다). */
+.ara-chats {
+  flex: none;
+  max-height: 46%;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.ara-chats .ac-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 4px 10px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.ara-chats .ac-empty {
+  padding: 10px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.ara-chats .ac-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 4px;
+}
+.ara-chats .ac-row:hover {
+  background: var(--bg-overlay);
+}
+/* 지금 이어 가는 대화. 목록에서 "내가 어디 있나" 가 안 보이면 고를 수가 없다. */
+.ara-chats .ac-row.on {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.ara-chats .ac-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--ui);
+}
+.ara-chats .ac-t {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ara-chats .ac-at {
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.ara-chats .ac-name {
+  flex: 1;
+  min-width: 0;
+  margin: 4px 0;
+  padding: 4px 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+}
+.ara-ic.sm {
+  padding: 2px 6px;
+  font-size: var(--fs-sm);
 }
 .ara-hd .t {
   color: var(--text-hi);

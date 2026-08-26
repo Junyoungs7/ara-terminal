@@ -73,6 +73,11 @@ type Props = {
   /** 지금 보고 있는 서버 이름(SSH 세션일 때만). 하단이 어느 서버 것인지 늘 보이게 한다. */
   server?: string
   /**
+   * 잠깐 강조할 탭(2026-08-26). 아라가 "여기 보세요" 하고 연 자리를 **눈이 찾을 수 있게** 한다 —
+   * 패널만 조용히 열리면 사용자는 답만 읽고 화면이 바뀐 걸 모른다.
+   */
+  flash?: BottomId | null
+  /**
    * 탭별 내용. **한 번 연 탭은 마운트를 유지**하고 숨기기만 한다(#87 ⑤, 2026-08-16) —
    * 프로세스 표를 정렬·검색해 놓고 로그를 잠깐 봤다 오면 처음부터인 것이 실제로 거슬렸다.
    * 떠 있는 창 시절에는 그렇게 했었다(#74). 안 보이는 탭이 원격에 명령을 보내지 않는 것은
@@ -81,7 +86,7 @@ type Props = {
   children: (tab: BottomId, active: boolean) => ReactNode
 }
 
-export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Props): JSX.Element | null {
+export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children }: Props): JSX.Element | null {
   // 높이는 세션 수명 동안만 산다(우측 레일·떠 있는 창과 같은 규칙 — 레이아웃 설정이 아니다).
   const [h, setH] = useState(DEFAULT_H)
   // #87 ④: 최대화 토글. 표를 크게 볼 때마다 경계를 끄는 것은 번거롭다(떠 있는 창에는 있던 것).
@@ -137,7 +142,7 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, children }: Prop
             <button
               key={id}
               type="button"
-              className={'bp-tab' + (id === tab ? ' on' : '')}
+              className={'bp-tab' + (id === tab ? ' on' : '') + (id === flash ? ' flash' : '')}
               role="tab"
               aria-selected={id === tab}
               data-bottom={id}

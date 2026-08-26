@@ -31,8 +31,9 @@ import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setMainErrorLogDir } from './log/MainErrorLog'
+import { pushSend } from './util/windowPush'
 import { logMainError } from './log/MainErrorLog'
-import { aiModelsOf, aiProviderOf, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
+import { aiModelsOf, aiProviderOf, isBottomId, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
 import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
@@ -246,6 +247,13 @@ app.whenReady().then(() => {
       remote: remoteSvc,
       sessionLog: () => sessionLog,
       history,
+      // 아라가 "이거 보세요" 하고 화면 아래 패널을 연다. 유효한 이름일 때만 보낸다 —
+      // 아무 문자열이나 렌더러로 흘리면 화면이 없는 탭을 열려다 조용히 아무 일도 안 한다.
+      showPanel: (panel: string) => {
+        if (!isBottomId(panel as never)) return false
+        pushSend(mainWc(), 'ui:panel', { panel })
+        return true
+      },
       downloadsDir: join(userData, 'mcp-downloads'),
       uploadsDir: join(userData, 'mcp-uploads')
     },
@@ -291,7 +299,8 @@ app.whenReady().then(() => {
       // 접속은 id 로 하므로 그 둘이면 충분하고, 모르면 아라가 설정 파일을 뒤진다(실제로 그랬다).
       servers: () => profiles.list().filter((p) => p.type === 'ssh').map((p) => ({ id: p.id, name: p.name }))
     },
-    getWebContents
+    getWebContents,
+    store
   )
   registerWindowIpc(() => mainWindow)
   createWindow()

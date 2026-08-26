@@ -143,6 +143,16 @@ export class WorkspaceStore {
     this.flush()
   }
 
+  /** 지난 대화 이름(2026-08-26). 빈 이름은 지운다 — "이름 없음"을 저장할 이유가 없다. */
+  setAraChatName(id: string, name: string): void {
+    const names = { ...(this.snapshot.ui.araChatNames ?? {}) }
+    const clean = name.replace(/\s+/g, ' ').trim().slice(0, 60)
+    if (clean) names[id] = clean
+    else delete names[id]
+    this.snapshot.ui.araChatNames = names
+    this.flush()
+  }
+
   /**
    * F23 MCP 서버 on/off (2026-08-26). **기본은 켬** — 미지정과 false 를 구분하려고 저장한다.
    * 저장하지 않으면 사용자가 끈 것이 재시작 때마다 되살아나 "껐는데 왜 또 켜지지"가 된다.

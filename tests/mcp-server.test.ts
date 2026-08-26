@@ -52,6 +52,7 @@ type Rig = {
   // 화면으로 나간 "세션이 생겼다" 알림. 이게 비면 사용자에게 탭이 안 보인다(2026-08-26 제보).
   opened: Session[]
   browserUrls: string[]
+  panelsShown: string[]
   cleanup: () => Promise<void>
 }
 
@@ -66,6 +67,7 @@ async function makeRig(): Promise<Rig> {
   const opened: Session[] = []
   // 아라 브라우저에 띄운 주소. 비면 사용자 화면에 아무것도 안 뜬 것이다(2026-08-26 제보).
   const browserUrls: string[] = []
+  const panelsShown: string[] = []
   const sessions = new MainSessionManager({
     data() {},
     exit() {},
@@ -99,6 +101,11 @@ async function makeRig(): Promise<Rig> {
     remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
     sessionLog: () => null,
     history: new HistoryStore(join(dir, 'history.json')),
+    // 아라가 연 패널. 비면 "이거 보세요" 를 안 한 것이다(2026-08-26 준영님 제안).
+    showPanel: (p: string) => {
+      panelsShown.push(p)
+      return ['ps', 'svc', 'disk', 'log', 'monitor', 'sys', 'pkg', 'ctr', 'k8s'].includes(p)
+    },
     ask: createAskUser({ ask: () => {}, askDone: () => {} }),
     approval,
     downloadsDir: join(dir, 'mcp-downloads'),
@@ -123,6 +130,7 @@ async function makeRig(): Promise<Rig> {
     approvalRequests,
     opened,
     browserUrls,
+    panelsShown,
     cleanup: async () => {
       await server.stop()
       sessions.destroyAll()
@@ -256,6 +264,7 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
       remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
       sessionLog: () => null,
       history: new HistoryStore(join(dir, 'history.json')),
+      showPanel: () => true,
       sftp: new SftpService(() => null, () => {}),
       approval: new McpApprovalManager({ approvalRequest() {}, activity() {}, stateChanged() {} }, createAuditLog(join(dir, 'logs'))),
       downloadsDir: join(dir, 'mcp-downloads'),
@@ -363,6 +372,8 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         'forward_stop',
         'history_list',
         'log_read',
+        // 2026-08-26: 결과가 많으면 글로 옮겨 적지 말고 **원래 그걸 보라고 만든 화면**을 연다.
+        'panel_show',
         'record_list',
         'record_read',
         'server_run',

@@ -281,6 +281,14 @@ const api: EvApi = {
       return () => ipcRenderer.removeListener('session:opened', listener)
     }
   },
+  // 아라가 "이거 보세요" 하고 화면 아래 패널을 여는 길(2026-08-26).
+  panel: {
+    onShow: (cb: (e: { panel: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, e: { panel: string }) => cb(e)
+      ipcRenderer.on('ui:panel', listener)
+      return () => ipcRenderer.removeListener('ui:panel', listener)
+    }
+  },
   // F14: 클립보드 파일 경로(Ctrl+V 로 파일을 붙여넣었는지 판별).
   clipboard: {
     readFiles: () => ipcRenderer.invoke('clipboard:readFiles')
@@ -343,6 +351,8 @@ const api: EvApi = {
       ipcRenderer.invoke('ara:open', o),
     send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
     planMode: (on: boolean) => ipcRenderer.invoke('ara:planMode', { on }),
+    chats: () => ipcRenderer.invoke('ara:chats'),
+    renameChat: (id: string, name: string) => ipcRenderer.invoke('ara:renameChat', { id, name }),
     saveSessions: (list: unknown) => ipcRenderer.invoke('aisession:save', { list }),
     worktreeAdd: (path: string, name: string) => ipcRenderer.invoke('git:worktreeAdd', { path, name }),
     worktreeRemove: (path: string, dest: string) => ipcRenderer.invoke('git:worktreeRemove', { path, dest }),

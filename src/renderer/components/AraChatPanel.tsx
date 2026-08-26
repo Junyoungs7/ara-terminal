@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AraChatEvent } from '../../main/ai/AraChat'
+import type { AraChatRow } from '../../main/ai/araChats'
 import type { AskRequest } from '../../main/mcp/askUser'
 import {
   dropAsk,
@@ -11,7 +12,7 @@ import {
   remainText,
   type ChatItem
 } from '../store/araChatItems'
-import { IconClose, IconRefresh } from './icons'
+import { IconClose, IconRefresh, IconHistory } from './icons'
 import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { t } from '../i18n'
@@ -71,6 +72,40 @@ export function AraChatPanel({
   // 남은 시간을 초 단위로 다시 그리기 위한 시계(되묻기 카드가 열려 있을 때만 돈다).
   const [now, setNow] = useState(Date.now())
   const bodyRef = useRef<HTMLDivElement>(null)
+  /**
+   * 지난 대화(2026-08-26 준영님 요청). Claude Code 의 `--resume` 목록을 우리 화면으로 가져온 것 —
+   * 기록은 그쪽 것을 읽기만 하고, **이름만 우리가 저장한다**(CLI 에는 대화 이름이 없다).
+   */
+  const [chatsOpen, setChatsOpen] = useState(false)
+  const [chats, setChats] = useState<AraChatRow[]>([])
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const loadChats = async (): Promise<void> => {
+    const r = await window.ev?.ara.chats().catch(() => null)
+    setChats(r?.items ?? [])
+  }
+  // 지금 이어 가는 대화 id — 목록에서 그 줄을 표시한다(어디에 있는지 모르면 목록이 미궁이 된다).
+  const [resumeId, setResumeId] = useState<string | null>(null)
+  /** 그 대화를 이어서 연다. 지금 대화는 닫히고 그쪽 기록 위에서 다시 시작한다. */
+  const resume = async (id: string): Promise<void> => {
+    setChatsOpen(false)
+    setItems([])
+    setPhase('opening')
+    setResumeId(id)
+    await window.ev?.ara.open({ resumeId: id, ...(cwd ? { cwd } : {}), active })
+  }
+  const saveName = async (id: string, name: string): Promise<void> => {
+    setRenaming(null)
+    await window.ev?.ara.renameChat(id, name).catch(() => {})
+    await loadChats()
+  }
+  const openChats = async (): Promise<void> => {
+    if (chatsOpen) {
+      setChatsOpen(false)
+      return
+    }
+    await loadChats()
+    setChatsOpen(true)
+  }
   const askRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -133,12 +168,27 @@ export function AraChatPanel({
     }
   }, [])
 
-  // 새 줄이 오면 아래로 붙인다 — 사람이 위로 올려 읽는 중이면 건드리지 않는다.
-  useEffect(() => {
+  /**
+   * 새 줄이 오면 아래로 붙인다 — 사람이 위로 올려 읽는 중이면 건드리지 않는다.
+   *
+   * **매번 거리를 재면 안 된다**(2026-08-26 준영님 제보: *"응답이 오면 채팅 스크롤이 자동으로
+   * 내려가게 상용 서비스처럼"*). 전에는 그릴 때마다 `바닥까지 80px 이내인가`를 봤는데, 표나 코드
+   * 블록이 한 번에 80px 넘게 들어오면 그 순간 조건이 깨지고 **그 뒤로 영영 안 따라간다.** 답이
+   * 길수록 확실히 어긋나서 "긴 답일수록 안 내려간다"가 됐다.
+   *
+   * 그래서 거리가 아니라 **의사**를 기억한다: 사람이 스크롤을 움직였을 때만 붙어 있을지 정하고,
+   * 그 사이 내용이 얼마나 늘어나든 그 결정을 지킨다. 우리가 내리는 것도 scroll 이벤트를 내지만
+   * 그때는 바닥이라 붙어 있음이 유지된다.
+   */
+  const stick = useRef(true)
+  const onBodyScroll = (): void => {
     const el = bodyRef.current
     if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    if (nearBottom) el.scrollTop = el.scrollHeight
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+  useEffect(() => {
+    const el = bodyRef.current
+    if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [items])
 
   useEffect(() => {
@@ -266,6 +316,16 @@ export function AraChatPanel({
             {home ? t('ara.cwd.pick') : cwd}
           </button>
         )}
+        {/* 지난 대화(2026-08-26). 이어서 열거나 이름을 붙인다 — Claude Code 의 `--resume` 자리다. */}
+        <button
+          type="button"
+          className={'ara-ic' + (chatsOpen ? ' on' : '')}
+          title={t('ara.chats')}
+          data-action="ara.chats"
+          onClick={() => void openChats()}
+        >
+          <IconHistory />
+        </button>
         <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
           <IconRefresh />
         </button>
@@ -274,7 +334,61 @@ export function AraChatPanel({
         </button>
       </div>
 
-      <div className="ara-body" ref={bodyRef}>
+      {chatsOpen && (
+        /**
+         * 지난 대화. 고르면 **그 대화를 이어서 연다**(`--resume`) — 지금 대화는 닫힌다.
+         * 이름을 붙이면 목록에 그 이름이 뜬다(안 붙이면 첫 질문이 제목이다).
+         */
+        <div className="ara-chats" data-field="ara.chats">
+          <div className="ac-hd">
+            <span>{t('ara.chats')}</span>
+            <button type="button" className="ara-ic" title={t('mon.close')} onClick={() => setChatsOpen(false)}>
+              <IconClose />
+            </button>
+          </div>
+          {chats.length === 0 && <div className="ac-empty">{t('ara.chats.none')}</div>}
+          {chats.map((c) => (
+            <div className={'ac-row' + (c.id === resumeId ? ' on' : '')} key={c.id} data-chat={c.id}>
+              {renaming === c.id ? (
+                <input
+                  className="ac-name"
+                  defaultValue={c.name}
+                  autoFocus
+                  placeholder={t('ara.chats.name')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void saveName(c.id, (e.target as HTMLInputElement).value)
+                    if (e.key === 'Escape') setRenaming(null)
+                  }}
+                  onBlur={(e) => void saveName(c.id, e.target.value)}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="ac-open"
+                    title={t('ara.chats.resume')}
+                    onClick={() => void resume(c.id)}
+                  >
+                    <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
+                    <span className="ac-at">{new Date(c.at).toLocaleString()}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ara-ic sm"
+                    title={t('ara.chats.rename')}
+                    data-action="ara.chats.rename"
+                    onClick={() => setRenaming(c.id)}
+                  >
+                    ✎
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="ara-body" ref={bodyRef} onScroll={onBodyScroll}>
         {items.map((it) =>
           it.k === 'me' ? (
             <div className="ara-me" key={it.id}>

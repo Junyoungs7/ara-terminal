@@ -46,6 +46,9 @@ export const IconPreview = () =>
     </>
   )
 export const IconRefresh = () => line(<path d="M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16" />)
+// 지난 대화 목록(2026-08-26) — 되감는 화살표 + 시계바늘.
+export const IconHistory = () =>
+  line(<path d="M3 3v6h6M3.5 13a9 9 0 105-8.5L3 9M12 8v5l3.5 2" />)
 // 탐색기 툴바 — 복사/붙여넣기/이름 바꾸기/삭제.
 export const IconCopy = () =>
   line(

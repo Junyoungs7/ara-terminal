@@ -56,6 +56,11 @@ export type ToolCtx = {
   sessionLog: () => SessionLogService | null
   /** 사람이 쳤던 명령(F11). "저번에 쓰던 그 명령" 을 찾는 길. */
   history: HistoryStore
+  /**
+   * 화면 아래 패널을 열어 준다(2026-08-26 준영님 제안). 결과가 수백 줄일 때 아라가 그걸 글로
+   * 옮겨 적는 대신 **원래 그걸 보라고 만든 화면**을 열어 주는 길이다. 없는 패널이면 false.
+   */
+  showPanel: (panel: string) => boolean
   downloadsDir: string // userData/mcp-downloads — AI는 이 밖에 저장할 수 없다(설계 §7 오케 확정 7).
   uploadsDir: string // userData/mcp-uploads — 업로드 소스도 여기 안으로 한정.
   /** AI 가 사람에게 되묻는 길(#125). 헤드리스에는 그 도구가 없어서 우리가 만든다 — askUser.ts 참고. */
@@ -623,7 +628,8 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
         'sys.overview(배포판·커널·가동시간) pkg.probe(설치된 프로그램) ctr.list(컨테이너) ctr.action ctr.rmi ' +
         'k8s.list which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove. ' +
         '인자가 필요한 것은 args 에 넣습니다(예: ps.kill → {pid}, svc.action → {unit, action}). ' +
-        '인자가 표의 규칙에 안 맞으면 아무것도 실행하지 않고 거절합니다.',
+        '인자가 표의 규칙에 안 맞으면 아무것도 실행하지 않고 거절합니다. ' +
+        '**돌려받은 목록이 수십 줄을 넘으면 글로 옮겨 적지 말고 panel_show 로 그 화면을 열어 주세요.**',
       inputSchema: { sessionId: z.string(), cmdId: z.string(), args: z.record(z.string(), z.unknown()).optional() }
     },
     async ({ sessionId, cmdId, args }) =>
@@ -641,6 +647,32 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
           if (!res.ok) return fail(`명령을 실행하지 못했습니다(${res.reason}). cmdId 와 args 를 확인하세요.`)
           return ok(JSON.stringify({ out: res.out, code: res.code }))
         }
+      )
+  )
+
+  /**
+   * 결과가 많을 때 **글로 옮겨 적지 말고 화면을 열어 준다**(2026-08-26 준영님 제안).
+   *
+   * 실제로 있었던 일: *"kvt 프로세스 목록 보여줘"* → 아라가 수백 줄을 받아 놓고 *"여기서 한 번에
+   * 정리해 드리기 어렵습니다"* 라고 답했다. 그런데 그 목록을 보라고 만든 화면이 이미 아래에 있다.
+   */
+  T(
+    'panel_show',
+    'server',
+    {
+      description:
+        '화면 아래 패널을 열어 사용자에게 보여 줍니다. **결과가 수십 줄을 넘으면 글로 옮겨 적지 말고 ' +
+        '이 도구로 그 화면을 열어 주고 "화면 아래 [○○] 탭에서 보실 수 있습니다" 라고 안내하세요** — ' +
+        '표·정렬·검색이 다 되는 화면이라 글보다 낫습니다. 몇 줄뿐이면 그냥 답에 쓰는 게 낫습니다. ' +
+        'panel: ps(프로세스) svc(서비스) disk(디스크) pkg(패키지) ctr(컨테이너) k8s monitor(포트) ' +
+        'sys(자원) log(로그).',
+      inputSchema: { panel: z.string() }
+    },
+    async ({ panel }) =>
+      g(null, 'panel_show', 'readOnly', { panel }, async () =>
+        ctx.showPanel(panel)
+          ? ok(`화면 아래 [${panel}] 탭을 열었습니다. 사용자에게 그 탭에서 볼 수 있다고 알려 주세요.`)
+          : fail('그런 패널이 없습니다. ps·svc·disk·pkg·ctr·k8s·monitor·sys·log 중에서 고르세요.')
       )
   )
 

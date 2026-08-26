@@ -185,6 +185,32 @@ export function Shell() {
     hadSession.current = has
   }, [sessions.sessions.length])
 
+  /**
+   * 아라가 "이거 보세요" 하고 화면 아래 패널을 연다(2026-08-26 준영님 제안).
+   *
+   * 실제로 있었던 일: *"kvt 프로세스 목록 보여줘"* → 아라가 수백 줄을 받아 놓고 *"여기서 한 번에
+   * 정리해 드리기 어렵습니다"* 라고 답했다. 그 목록을 보라고 만든 화면이 이미 아래에 있는데.
+   *
+   * **열기만 하면 안 된다** — 조용히 열리면 사용자는 답만 읽고 화면이 바뀐 걸 모른다. 그래서 그 탭을
+   * 몇 초 강조한다(눈이 찾을 자리를 만든다).
+   */
+  const [panelFlash, setPanelFlash] = useState<BottomId | null>(null)
+  useEffect(() => {
+    const off = window.ev?.panel?.onShow?.(({ panel }) => {
+      if (!isBottomId(panel as never)) return
+      const id = panel as BottomId
+      setBottom(id)
+      setPanelFlash(id)
+    })
+    return () => off?.()
+  }, [])
+  // 강조는 잠깐이다 — 계속 깜빡이면 그게 더 거슬린다.
+  useEffect(() => {
+    if (!panelFlash) return
+    const t = setTimeout(() => setPanelFlash(null), 3200)
+    return () => clearTimeout(t)
+  }, [panelFlash])
+
   // F23: MCP 승인 다이얼로그. mcp:approvalRequest 는 사용자 액션과 무관하게 아무 때나 도착하므로
   // 공유 dialog 슬롯(useDialog 는 한 번에 하나만 보여준다)을 두고 겹치면 앞 요청이 조용히 밀려나
   // 그 결정이 유실된다 — 큐로 순서대로 처리한다(main 의 2분 타임아웃이 최후 방어선이라 여기서
@@ -1267,6 +1293,7 @@ export function Shell() {
               // 이 패널의 [×] 둘이다(IntelliJ 툴윈도우와 같은 규칙).
               onTab={setBottom}
               onClose={() => setBottom(null)}
+              flash={panelFlash}
               // #84: 탭이 여덟이라 좁을 수 있다 — 액티비티 바의 순서·숨김 설정을 그대로 쓴다
               // (하단만의 새 설정을 만들지 않는다). 설정에서 끈 도구는 탭에서도 사라진다.
               ids={activityItems.filter(isBottomId)}
