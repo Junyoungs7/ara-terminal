@@ -262,7 +262,10 @@ app.whenReady().then(() => {
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
       api: { vault: secrets, getPrefs: aiPrefs },
       // #138 호칭. 저장값은 신뢰 경계 밖이라 callNameOf 로 자른다(줄바꿈·지시문 흉내 금지).
-      callName: () => callNameOf(store.get().ui.araCallName)
+      callName: () => callNameOf(store.get().ui.araCallName),
+      // 2026-08-26: 등록된 SSH 서버를 **id 와 이름만** 넘긴다. 호스트·사용자·비밀은 안 나간다 —
+      // 접속은 id 로 하므로 그 둘이면 충분하고, 모르면 아라가 설정 파일을 뒤진다(실제로 그랬다).
+      servers: () => profiles.list().filter((p) => p.type === 'ssh').map((p) => ({ id: p.id, name: p.name }))
     },
     getWebContents
   )

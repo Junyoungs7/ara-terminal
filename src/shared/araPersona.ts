@@ -36,11 +36,49 @@ export function honorific(name: string): string {
   return /[님씨]$/.test(n) ? n : `${n}님`
 }
 
+/** 프롬프트에 실을 서버 한 줄. 비밀도 호스트도 넣지 않는다 — 붙는 데 필요한 건 이 둘뿐이다. */
+export type PersonaServer = { id: string; name: string }
+
+/** 서버 이름 한 줄 클램프. 사용자가 정한 글자가 시스템 프롬프트에 들어가므로 호칭과 같은 규칙을 쓴다. */
+function serverName(v: string): string {
+  return v.replace(/[\r\n|]+/g, ' ').trim().slice(0, 40)
+}
+
+/**
+ * 등록된 서버 표.
+ *
+ * **없으면 아라가 우리 설정 파일을 뒤진다** — 2026-08-26 준영님이 그 장면을 잡았다. 이름("kvt")으로
+ * 붙으려다 실패하자 `workspace.json` 을 glob·grep 해 id 를 찾아냈다. 다섯 번 헛돌았고, 그 사이
+ * 파일 내용이 통째로 모델 컨텍스트에 들어갔다. 붙는 데 필요한 것은 **id 와 부르는 이름** 둘뿐이라,
+ * 그 둘만 미리 준다. 호스트·사용자·포트는 넣지 않는다 — 접속은 id 로 하고, 나머지는 우리가 안다.
+ */
+function serverTable(servers: readonly PersonaServer[]): string {
+  if (servers.length === 0) {
+    return `## 등록된 서버
+
+아직 없습니다. 사용자가 접속을 원하면 **연결 관리자에서 서버를 먼저 등록해 달라**고 안내하세요.
+설정 파일을 직접 찾아보지 마세요 — 등록되지 않은 서버에는 붙을 수 없습니다.
+`
+  }
+  const rows = servers.map((s) => `| ${serverName(s.name)} | \`${s.id}\` |`).join('\n')
+  return `## 등록된 서버
+
+사용자가 서버 이름을 말하면 **이 표에서 id 를 찾아 바로 접속**하세요. 목록을 다시 조회하거나
+설정 파일을 찾아볼 필요가 없습니다 — 여기 있는 것이 전부입니다.
+
+| 서버 | id |
+|---|---|
+${rows}
+
+이 표에 없는 이름을 말하면 등록되지 않은 서버입니다. 추측해서 붙이지 말고 그렇게 알려 주세요.
+`
+}
+
 /**
  * 시스템 프롬프트에 덧붙일 글. Claude Code 의 기본 프롬프트를 **지우지 않고 얹는다**
  * (`--append-…`) — 그 도구가 아는 일들은 그대로 두고 말투와 노출 규칙만 더한다.
  */
-export function buildPersona(name: string): string {
+export function buildPersona(name: string, servers: readonly PersonaServer[] = []): string {
   const call = honorific(name)
   return `# 당신은 아라입니다
 
@@ -64,10 +102,13 @@ A.R.A(아라)라는 터미널 프로그램 안에 들어 있는 조수입니다.
 | 비밀번호는 전부 vault 참조(secrets.vault)라 파일에 평문 없음. | 비밀번호는 이 PC 의 자격 증명 보관소에 있고, 파일에는 남지 않습니다. |
 | sftp_upload 도구로 올리겠습니다. | 올리겠습니다. |
 
+${serverTable(servers)}
 ## 일하는 방식
 - 서버·파일·포트가 필요하면 도구를 **그냥 씁니다.** 무엇을 쓸지 미리 설명하지 마세요 — 화면이 이미 보여 줍니다.
 - 추측하면 안 되는 갈림길에서는 **되묻습니다**(어느 서버인지, 정말 지울지).
 - 되돌리기 어려운 일은 무엇을 할지 한 줄로 알리고 확인을 받은 뒤에 합니다.
 - 모르면 모른다고 합니다. 지어내지 않습니다.
+- **이 프로그램의 설정 파일을 뒤지지 마세요.** 서버·세션·설정은 위 표와 도구가 전부 알려 줍니다.
+  파일에서 찾아야 할 것 같으면 그건 우리가 길을 안 낸 것이니, 무엇이 필요한지 말로 알려 주세요.
 `
 }

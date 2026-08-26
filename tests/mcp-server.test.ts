@@ -394,6 +394,33 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     await client.close()
   })
 
+  /**
+   * ★ 2026-08-26 — 없는 프로필로 붙으려 하면 **등록된 목록을 함께 돌려준다.**
+   *
+   * 그전에는 "연결 실패: 프로필을 찾을 수 없습니다"로 끝났고, 아라는 그 다음 수를 찾으려고
+   * 우리 workspace.json 을 뒤졌다(준영님 실측). 실패가 길을 알려 주지 않으면 모델은 파일을 연다.
+   */
+  it('★ 없는 프로필로 ssh_connect 하면 등록된 서버 목록이 실패 메시지에 실려 온다', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    rig.profiles.save({
+      type: 'ssh', name: 'KVT', host: '10.0.0.9', port: 22,
+      username: 'svc', authType: 'password', secret: 'x'
+    } as never)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    // 이름을 id 자리에 넣은 그 호출 그대로.
+    const res = await client.callTool({ name: 'ssh_connect', arguments: { profileId: 'kvt' } })
+    expect(res.isError).toBe(true)
+    const text = (res.content as { type: string; text: string }[])[0].text
+    expect(text).toContain('KVT')
+    expect(text).toContain(rig.profiles.list()[0].id)
+    // 목록은 이름과 id 뿐이다 — 비밀도 호스트도 이 길로 나가지 않는다.
+    expect(text).not.toContain('10.0.0.9')
+    await client.close()
+  })
+
   // S1(FIX-mcpshell) 회귀 — 재현: session_create 에 shell: 'cmd.exe /c ver' 를 실제로 보내면(수정 전)
   // MCP 승인→PtyBackend 왕복을 그대로 통과해 "ver" 명령이 실행되고 세션 출력에 윈도우 버전 배너가
   // 찍혔다(실측 확인, agent_talk/FIX-mcpshell-done.md 참조). 수정 후 shell 은 zod 파싱 단계에서

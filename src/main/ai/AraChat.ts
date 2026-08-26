@@ -19,7 +19,7 @@ import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
 import { pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff } from './engine/araMcp'
-import { buildPersona } from '@shared/araPersona'
+import { buildPersona, type PersonaServer } from '@shared/araPersona'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
 export type ClaudeEngineArgs = {
@@ -59,6 +59,13 @@ export type AraChatDeps = {
   api?: { vault: KeyVault; getPrefs: () => AiPrefs }
   /** 사용자 호칭(#138). 빈 문자열이면 기본 호칭으로 부른다. */
   callName?: () => string
+  /**
+   * 등록된 SSH 서버(2026-08-26). **말투가 아니라 속도 문제로 넣는다** — 이게 없으면 아라가
+   * 이름으로 붙어 보고 실패한 뒤 우리 workspace.json 을 뒤진다(준영님이 그 장면을 잡았다).
+   * 열 때 한 번 읽는다: 대화 중에 서버를 추가하면 그 대화는 모른다 — 그 자리는 ssh_connect 의
+   * 실패 안내가 받는다(도구가 목록을 함께 돌려준다).
+   */
+  servers?: () => PersonaServer[]
 }
 
 /** 어느 엔진으로 열려 있나. 돈도 능력도 다르므로 **화면에 늘 보인다**(§5). */
@@ -212,7 +219,7 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       handoff = await prepareAraMcp(deps.server, deps.vault)
       // 말투(#138) — 못 써도 대화는 시작한다(말투가 없을 뿐이다).
       try {
-        persona = writePersona(buildPersona(deps.callName?.() ?? ''))
+        persona = writePersona(buildPersona(deps.callName?.() ?? '', deps.servers?.() ?? []))
       } catch {
         persona = null
       }

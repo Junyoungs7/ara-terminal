@@ -58,6 +58,24 @@ function ensureDir(dir: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 }
 
+/**
+ * "그런 프로필 없다"에 **등록된 목록을 함께 실어 보낸다**(2026-08-26).
+ *
+ * 준영님이 잡은 장면: 아라가 `ssh_connect('kvt')` — 이름을 id 자리에 넣어 실패하자, 우리
+ * `workspace.json` 을 glob·grep 해 UUID 를 찾아내 다시 붙었다. 다섯 번 헛돌았고 설정 파일이
+ * 통째로 모델 컨텍스트에 들어갔다. 실패가 **다음 수를 알려 주지 않으면** 모델은 파일을 뒤진다.
+ *
+ * 이름·id 만 준다. 호스트·사용자·비밀은 이 툴이 다루는 것이 아니다(설계 §1.3 이 `profile:*` 를
+ * 뺀 이유는 자격증명 CRUD 이지, 어느 서버가 있는지를 숨기는 것이 아니다 — 그건 사용자가 등록한
+ * 이름이고 화면 사이드바에 이미 떠 있다).
+ */
+function unknownProfileText(profiles: ProfileStore): string {
+  const list = profiles.list().filter((p) => p.type === 'ssh')
+  if (list.length === 0) return '등록된 서버가 없습니다. 사용자가 연결 관리자에서 먼저 등록해야 합니다.'
+  const rows = list.map((p) => `${p.name} = ${p.id}`).join('\n')
+  return `그 서버를 찾을 수 없습니다. **이름이 아니라 id 로** 지정하세요. 등록된 서버:\n${rows}`
+}
+
 function sshFailureText(res: Exclude<SshConnectResult, { ok: true }>): string {
   switch (res.reason) {
     case 'hostKeyNew':
@@ -95,6 +113,14 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
     args: Record<string, unknown>,
     exec: () => Promise<ToolResult>
   ) => gated(ctx.approval, sessionId, tool, cls, args, exec)
+
+  // ssh_connect 와 session_create(type:'ssh') 가 같은 문을 쓴다. **없는 프로필을 먼저 거른다** —
+  // 그래야 "찾을 수 없다"에 등록된 목록을 실어 보낼 수 있다(그 안내가 없으면 모델이 파일을 뒤진다).
+  const connectProfile = async (profileId: string): Promise<ToolResult> => {
+    if (!ctx.profiles.get(profileId)) return fail(unknownProfileText(ctx.profiles))
+    const res = await connectByProfile(ctx.profiles, ctx.ws, ctx.sessions, profileId, false)
+    return res.ok ? ok(JSON.stringify({ id: res.id, title: res.title })) : fail(sshFailureText(res))
+  }
 
   // ── 사람에게 되묻기 ────────────────────────────────────────────────────────
   // 설명문이 곧 사용 설명서다: 모델은 이 글을 읽고 "언제 이 도구를 쓸지"를 정한다.
@@ -231,9 +257,7 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       return g(null, 'session_create', 'writeAlways', { ...args, 실행대상: target }, async () => {
         if (args.type === 'ssh') {
           if (!args.profileId) return fail('SSH 세션은 profileId 가 필요합니다.')
-          const res = await connectByProfile(ctx.profiles, ctx.ws, ctx.sessions, args.profileId, false)
-          if (!res.ok) return fail(sshFailureText(res))
-          return ok(JSON.stringify({ id: res.id, title: res.title }))
+          return await connectProfile(args.profileId)
         }
         const title = ctx.sessions.nextTitle('셸')
         const id = await ctx.sessions.create({
@@ -283,11 +307,7 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       inputSchema: { profileId: z.string() }
     },
     async ({ profileId }) =>
-      g(null, 'ssh_connect', 'writeAlways', { profileId }, async () => {
-        const res = await connectByProfile(ctx.profiles, ctx.ws, ctx.sessions, profileId, false)
-        if (!res.ok) return fail(sshFailureText(res))
-        return ok(JSON.stringify({ id: res.id, title: res.title }))
-      })
+      g(null, 'ssh_connect', 'writeAlways', { profileId }, () => connectProfile(profileId))
   )
 
   server.registerTool(
