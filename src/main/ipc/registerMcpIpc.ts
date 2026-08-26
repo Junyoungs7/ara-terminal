@@ -8,10 +8,16 @@ import { McpApprovalManager, type ApprovalEmit } from '../mcp/approval'
 import { createAuditLog } from '../mcp/auditLog'
 import { createAskUser, type AskRequest, type AskUserManager } from '../mcp/askUser'
 import { createMcpServer, issueRawToken, hashToken, MCP_TOKEN_VAULT_KEY, type TokenVault, type McpServerHandle } from '../mcp/McpServer'
-import type { ToolCtx } from '../mcp/tools'
+import { buildAraTools, type AraToolGate, type ToolCtx } from '../mcp/tools'
 import { pushSend } from '../util/windowPush'
 
-export type McpRuntime = { server: McpServerHandle; approval: McpApprovalManager; ask: AskUserManager }
+export type McpRuntime = {
+  server: McpServerHandle
+  approval: McpApprovalManager
+  ask: AskUserManager
+  /** 도구 게이트(2026-08-26). API 엔진이 이걸 그대로 쓴다 — 문·검증·승인이 한 벌이다. */
+  gate: AraToolGate
+}
 
 // deps: MCP 툴이 직접 호출할 기존 서비스 객체들(approval 은 여기서 만들어 채운다).
 // vault: 토큰 해시 저장(SafeStorageSecretStore 재사용 — 새 vault 를 만들지 않는다).
@@ -58,6 +64,8 @@ export function registerMcpIpc(
     askDone: (askId: string) => push('mcp:askDone', { askId })
   })
   const ctx: ToolCtx = { ...deps, approval, ask }
+  // 게이트를 여기서 한 번 만든다 — MCP 서버와 API 엔진이 **같은 것**을 쓴다.
+  const gate = buildAraTools(ctx)
   const server = createMcpServer(ctx, vault, bindPort)
 
   handle('mcp:getState', () => state())
@@ -103,5 +111,5 @@ export function registerMcpIpc(
   })
   handle('mcp:askPending', () => ({ items: ask.pending() }))
 
-  return { server, approval, ask }
+  return { server, approval, ask, gate }
 }

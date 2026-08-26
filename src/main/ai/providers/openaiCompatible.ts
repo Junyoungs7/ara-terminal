@@ -51,11 +51,32 @@ async function validate(key: string, model: string, baseUrl?: string): Promise<A
  * 서버의 나이를 우리가 알 방법이 없으니, 물어보는 대신 한 번 더 두드린다.
  */
 export function chatBody(req: AiRequest, newParamName: boolean): Record<string, unknown> {
+  /**
+   * 도구 왕복을 대화에 이어 붙인다(2026-08-26). OpenAI 형식은 **assistant 가 tool_calls 를 들고**
+   * 그 뒤에 `role:'tool'` 메시지가 **호출 하나당 하나씩** 온다 — 짝이 안 맞으면 400 이다.
+   */
+  const toolMsgs: Record<string, unknown>[] = []
+  for (const t of req.toolTurns ?? []) {
+    toolMsgs.push({
+      role: 'assistant',
+      content: null,
+      tool_calls: t.calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.args } }))
+    })
+    for (const r of t.results) toolMsgs.push({ role: 'tool', tool_call_id: r.callId, content: r.content })
+  }
   return {
     model: req.model,
     stream: true,
     [newParamName ? 'max_completion_tokens' : 'max_tokens']: req.maxTokens,
-    messages: [{ role: 'system', content: req.system }, ...req.messages]
+    messages: [{ role: 'system', content: req.system }, ...req.messages, ...toolMsgs],
+    ...(req.tools?.length
+      ? {
+          tools: req.tools.map((t) => ({
+            type: 'function',
+            function: { name: t.name, description: t.description, parameters: t.parameters }
+          }))
+        }
+      : {})
   }
 }
 
@@ -104,6 +125,8 @@ async function* stream(req: AiRequest, signal: AbortSignal): AsyncGenerator<Stre
     }
   }
 
+  // index → 모으는 중인 호출. 스트림이 끝나야 온전해진다.
+  const calls = new Map<number, { id: string; name: string; args: string }>()
   for await (const data of await openWithFallback()) {
     let json: Record<string, unknown>
     try {
@@ -115,14 +138,29 @@ async function* stream(req: AiRequest, signal: AbortSignal): AsyncGenerator<Stre
       const e = json.error as { message?: string } | string
       throw new ProviderError('api', typeof e === 'string' ? e : e.message ?? '일시적인 서버 오류입니다')
     }
-    const choices = json.choices as { delta?: { content?: string } }[] | undefined
+    const choices = json.choices as
+      | { delta?: { content?: string; tool_calls?: OpenAiToolDelta[] } }[]
+      | undefined
     const delta = choices?.[0]?.delta?.content
     if (typeof delta === 'string' && delta) yield { text: delta }
+    // 도구 호출은 **조각으로** 온다: index 별로 id·name 이 먼저, arguments 가 여러 프레임에 나뉘어.
+    for (const tc of choices?.[0]?.delta?.tool_calls ?? []) {
+      const at = tc.index ?? 0
+      const cur = calls.get(at) ?? { id: '', name: '', args: '' }
+      if (tc.id) cur.id = tc.id
+      if (tc.function?.name) cur.name = tc.function.name
+      if (tc.function?.arguments) cur.args += tc.function.arguments
+      calls.set(at, cur)
+    }
     const u = json.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
     if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0 }
   }
+  if (calls.size) yield { toolCalls: [...calls.values()].filter((c) => c.name) }
   if (usage) yield { usage }
 }
+
+/** OpenAI 의 tool_calls 델타 한 조각. arguments 는 이어 붙여야 온전한 JSON 이 된다. */
+type OpenAiToolDelta = { index?: number; id?: string; function?: { name?: string; arguments?: string } }
 
 function makeAdapter(id: 'openai' | 'compatible'): ProviderAdapter {
   return { id, defaultModels: AI_MODELS_BY_PROVIDER[id], validate, stream }

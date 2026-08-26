@@ -16,7 +16,7 @@ import type { McpServerHandle, TokenVault } from '../mcp/McpServer'
 import { createClaudeEngine } from './engine/ClaudeCliEngine'
 import { createFakeEngine } from './engine/FakeEngine'
 import { createApiEngine } from './engine/ApiEngine'
-import { isFakeAi, type AiPrefs, type KeyVault } from './AraSession'
+import { isFakeAi, type AiPrefs, type KeyVault, type SessionTools } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
 import { pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff } from './engine/araMcp'
 import { buildPersona, type PersonaServer } from '@shared/araPersona'
@@ -62,6 +62,11 @@ export type AraChatDeps = {
    * 남겨야 한다 — 안 그러면 앱을 끌 때 대화가 사라지고 "지난 대화" 가 엔진마다 다르게 보인다.
    */
   apiChatDir?: () => string
+  /**
+   * B 엔진에 쥐여 줄 도구(2026-08-26 준영님 요청). MCP 와 **같은 게이트**라 인자 검증·승인 창·
+   * 감사 로그가 그대로 붙는다. 없으면 도구 없이 대화만 한다(옛 동작).
+   */
+  apiTools?: () => SessionTools | null
   /** 사용자 호칭(#138). 빈 문자열이면 기본 호칭으로 부른다. */
   callName?: () => string
   /**
@@ -199,14 +204,17 @@ export function createAraChat(deps: AraChatDeps): AraChat {
           return { ok: false }
         }
         // B 엔진도 기록을 남긴다(2026-08-26) — 그래야 엔진에 상관없이 "지난 대화" 가 같게 보인다.
+        const apiTools = deps.apiTools?.() ?? null
         engine = createApiEngine({
           ...deps.api,
           ...(deps.apiChatDir ? { dir: deps.apiChatDir() } : {}),
-          ...(o.resumeId ? { resumeId: o.resumeId } : {})
+          ...(o.resumeId ? { resumeId: o.resumeId } : {}),
+          ...(apiTools ? { tools: apiTools } : {})
         })
         wire(engine)
         lastCwd = null
-        deps.emit({ t: 'opened', cwd: null, withMcp: false, engine: 'api' })
+        // withMcp 는 "도구를 쥐고 있나" 다 — 이제 API 도 참일 수 있다(화면 첫 줄이 그걸 말한다).
+        deps.emit({ t: 'opened', cwd: null, withMcp: apiTools !== null, engine: 'api' })
         return { ok: true }
       }
 

@@ -28,6 +28,7 @@ import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
+import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setApiPersona } from './ai/prompt'
@@ -41,6 +42,27 @@ import type { ForwardService } from './forward/PortForward'
 import type { RemoteConsoleService } from './remote/RemoteConsoleService'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
 import { buildPersona, callNameOf } from '@shared/araPersona'
+
+/**
+ * 모델이 준 인자(JSON 문자열)를 게이트에 넘기고 답을 글로 되돌린다(2026-08-26).
+ *
+ * **JSON 이 깨져 있을 수 있다** — 스트림으로 조각조각 오다 끊기면 그렇다. 그때 던지면 대화가
+ * 통째로 죽으니, 모델이 고쳐서 다시 부를 수 있게 사람 말로 알려 준다.
+ */
+async function runGate(gate: AraToolGate, name: string, argsJson: string): Promise<string> {
+  let args: Record<string, unknown>
+  try {
+    args = argsJson ? (JSON.parse(argsJson) as Record<string, unknown>) : {}
+  } catch {
+    return '인자를 읽지 못했습니다(JSON 이 깨졌습니다). 다시 불러 주세요.'
+  }
+  if (name === 'ara_tools') return gate.tools(typeof args.group === 'string' ? args.group : undefined)
+  if (name === 'ara_call') {
+    const res = await gate.call(String(args.tool ?? ''), (args.args as Record<string, unknown>) ?? {})
+    return res.content.map((c) => c.text).join('\n')
+  }
+  return `"${name}" 이라는 도구가 없습니다. ara_tools 로 목록을 보세요.`
+}
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -240,7 +262,8 @@ app.whenReady().then(() => {
     buildPersona(
       callNameOf(store.get().ui.araCallName),
       profiles.list().filter((p) => p.type === 'ssh').map((p) => ({ id: p.id, name: p.name })),
-      false
+      // 도구를 쥐고 있으면 CLI 와 같은 말투 글을 쓴다(2026-08-26 — API 도 도구가 생겼다).
+      mcp?.gate !== undefined
     )
   )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
@@ -306,6 +329,16 @@ app.whenReady().then(() => {
       // claude 가 없는 PC 의 폴백(설계 §5). F16 과 **같은 키·같은 설정**을 쓴다.
       api: { vault: secrets, getPrefs: aiPrefs },
       // API 엔진 대화 기록. CLI 는 Claude Code 가 ~/.claude/projects 에 남기지만 이쪽은 우리 몫이다.
+      /**
+       * B 엔진 도구(2026-08-26). MCP 서버가 꺼져 있어도 **게이트는 산다** — 게이트는 우리 안의
+       * 표이지 HTTP 리스너가 아니다. 사용자가 MCP 를 끈 것은 "밖에서 붙지 마라" 지
+       * "아라가 아무것도 하지 마라" 가 아니다.
+       */
+      apiTools: () => {
+        const gate = mcp?.gate
+        if (!gate) return null
+        return { specs: gate.doors, run: async (name, argsJson) => runGate(gate, name, argsJson) }
+      },
       apiChatDir: () => {
         const dir = join(userData, 'ara-chats')
         mkdirSync(dir, { recursive: true })

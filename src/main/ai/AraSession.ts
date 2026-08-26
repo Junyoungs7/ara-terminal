@@ -9,7 +9,8 @@
 import { maskSecrets } from '@shared/maskSecrets'
 import type { AiEnd, AiEnv, AiProvider, AiState, AiTurn } from '@shared/types'
 import { buildRequestCore } from './prompt'
-import { PROVIDERS, ProviderError, type AiRequest, type ProviderAdapter } from './providers'
+import type { ToolSpec, ToolCall, ToolResultMsg } from './providers'
+import { PROVIDERS, ProviderError, type AiRequest, type ProviderAdapter, type StreamChunk } from './providers'
 
 // vault 키 네임스페이스. ProfileStore 는 프로필 UUID 를 vault 키로 쓰므로 충돌하지 않는다(점이 든
 // 문자열은 UUID 가 아니다). 프로바이더별로 분리해 전환 시 재입력이 필요 없게 한다(설계 W5 §구조결정 3).
@@ -45,7 +46,7 @@ const FAKE_CHUNK = 24
 const FAKE_INTERVAL_MS = 100
 const FAKE_USAGE: Usage = { input: 412, output: 96 }
 
-async function* fakeSource(_req: AiRequest, signal: AbortSignal): AsyncGenerator<{ text?: string; usage?: Usage }> {
+async function* fakeSource(_req: AiRequest, signal: AbortSignal): AsyncGenerator<StreamChunk> {
   for (let i = 0; i < FAKE_ANSWER.length; i += FAKE_CHUNK) {
     if (signal.aborted) return
     await new Promise((r) => setTimeout(r, FAKE_INTERVAL_MS))
@@ -58,7 +59,23 @@ async function* fakeSource(_req: AiRequest, signal: AbortSignal): AsyncGenerator
 let turnSeq = 0
 const nextTurnId = (): string => `t${Date.now().toString(36)}-${(turnSeq += 1)}`
 
-type Emit = { delta: (turnId: string, text: string) => void; end: (e: AiEnd) => void }
+type Emit = {
+  delta: (turnId: string, text: string) => void
+  end: (e: AiEnd) => void
+  /** 도구를 부르기 직전(2026-08-26). 화면이 "무엇을 하고 있나" 를 보여 준다. */
+  tool?: (name: string, args: string) => void
+}
+
+/**
+ * 도구를 쥐여 주는 자리(2026-08-26 — API 엔진 function calling).
+ *
+ * **specs 는 프로바이더에 넘길 스키마, run 은 실제 실행이다.** 실행은 MCP 와 같은 게이트를 지나므로
+ * 인자 검증·승인 창·감사 로그가 전부 그대로 붙는다 — "어느 엔진으로 했든 같은 규칙" 이 여기서 성립한다.
+ */
+export type SessionTools = {
+  specs: readonly ToolSpec[]
+  run(name: string, argsJson: string): Promise<string>
+}
 
 export class AraSession {
   private turns: AiTurn[] = []
@@ -73,7 +90,9 @@ export class AraSession {
     private readonly getPrefs: () => AiPrefs,
     private readonly emit: Emit,
     // 테스트 seam — 제공하면 프로바이더 테이블 조회 없이 이 어댑터를 쓴다(ARA_AI_FAKE 보다 우선).
-    private readonly adapterOverride?: ProviderAdapter
+    private readonly adapterOverride?: ProviderAdapter,
+    /** 도구(없으면 예전처럼 도구 없이 돈다 — F16 판·테스트가 그대로 산다). */
+    private readonly tools?: SessionTools
   ) {}
 
   // 패널이 마운트할 때 받아 가는 전량. 키는 hasKey 로만 나간다 — 문자열도, 접두사도 주지 않는다
@@ -141,6 +160,14 @@ export class AraSession {
     this.emit.end(end)
   }
 
+  /**
+   * 도구 왕복 상한(2026-08-26 준영님 확인: **5회**).
+   *
+   * 왕복 한 번마다 대화 전체가 다시 전송된다 — Claude Code 는 구독이라 상관없지만 API 는 토큰당
+   * 과금이다. 상한에 걸리면 **조용히 더 쓰지 않고** 사용자에게 넘긴다.
+   */
+  private static readonly MAX_TOOL_ROUNDS = 5
+
   private async run(turn: AiTurn, env?: AiEnv): Promise<void> {
     const { provider, model, baseUrl } = this.getPrefs()
     const apiKey = this.vault.get(aiKeyVaultId(provider))
@@ -153,18 +180,55 @@ export class AraSession {
     // 답변 턴 자신은 아직 비어 있으므로 요청에 실리지 않는다(buildRequestCore 가 빈 assistant 턴을 거른다).
     const core = buildRequestCore(this.turns, model, env)
     this.droppedTurns = core.droppedTurns
-    const request: AiRequest = { ...core, provider, apiKey, ...(baseUrl ? { baseUrl } : {}) }
     const stream = isFakeAi() ? fakeSource : (this.adapterOverride ?? PROVIDERS[provider]).stream
+    const tools = this.tools?.specs
     try {
-      for await (const chunk of stream(request, controller.signal)) {
+      /**
+       * **툴 루프**(2026-08-26). 모델이 도구를 부르면 실행하고 결과를 되먹여 다시 묻는다.
+       * 도구를 안 쓰면 한 바퀴에 끝나므로 예전 흐름과 같다.
+       */
+      const rounds: { calls: ToolCall[]; results: ToolResultMsg[] }[] = []
+      for (let round = 0; ; round++) {
+        const request: AiRequest = {
+          ...core,
+          provider,
+          apiKey,
+          ...(baseUrl ? { baseUrl } : {}),
+          ...(tools?.length ? { tools } : {}),
+          ...(rounds.length ? { toolTurns: rounds } : {})
+        }
+        let calls: ToolCall[] = []
+        for await (const chunk of stream(request, controller.signal)) {
+          if (controller.signal.aborted) break
+          if (chunk.text) {
+            turn.text += chunk.text
+            this.emit.delta(turn.id, chunk.text)
+          }
+          if (chunk.toolCalls?.length) calls = chunk.toolCalls
+          if (chunk.usage) {
+            this.usage = { input: this.usage.input + chunk.usage.input, output: this.usage.output + chunk.usage.output }
+          }
+        }
         if (controller.signal.aborted) break
-        if (chunk.text) {
-          turn.text += chunk.text
-          this.emit.delta(turn.id, chunk.text)
+        if (!calls.length) break
+
+        // 상한에 걸렸다 — **조용히 더 쓰지 않는다.** 사용자가 이어 갈지 정한다(왕복마다 과금이다).
+        if (round + 1 >= AraSession.MAX_TOOL_ROUNDS) {
+          const over = `
+
+(도구를 ${AraSession.MAX_TOOL_ROUNDS}번 썼습니다 — 여기서 멈춥니다. 계속하려면 다시 말씀해 주세요.)`
+          turn.text += over
+          this.emit.delta(turn.id, over)
+          break
         }
-        if (chunk.usage) {
-          this.usage = { input: this.usage.input + chunk.usage.input, output: this.usage.output + chunk.usage.output }
+
+        const results: ToolResultMsg[] = []
+        for (const c of calls) {
+          this.emit.tool?.(c.name, c.args)
+          const text = await (this.tools?.run(c.name, c.args) ?? Promise.resolve('도구를 쓸 수 없습니다.'))
+          results.push({ callId: c.id, name: c.name, content: text })
         }
+        rounds.push({ calls, results })
       }
       // 중단은 성공이 아니다 — 지금까지 받은 델타는 화면에 남기고 "중단됨" 표식을 붙인다.
       if (controller.signal.aborted) {
