@@ -130,3 +130,44 @@ describe('도구 지침', () => {
     expect(p()).toContain('설정 파일을 뒤지지 마세요')
   })
 })
+
+/**
+ * 2026-08-26 제보 — API 엔진이 `kvt` 를 몰랐다. *"kvt가 어떤 서비스인지 모르겠다, `which kvt` 를
+ * 쳐 보시라"*. 그쪽은 F16 시절 말투 글을 따로 쓰고 있어서 **호칭도 서버 표도 안 갔다.**
+ *
+ * 이제 말투 글은 한 벌이고 도구 유무만 갈린다.
+ */
+describe('도구 없는 판(API 키)', () => {
+  const KVT = { id: 'b8249f29-ae55-42fd-8d15-2ab863f08404', name: 'KVT' }
+  const p = (): string => buildPersona('준영', [KVT], false)
+
+  it('★ 서버 표는 그대로 온다 — 이게 없어서 kvt 를 몰랐다', () => {
+    expect(p()).toContain('KVT')
+    expect(p()).toContain(KVT.id)
+  })
+
+  it('★ 도구가 없다고 분명히 적고, "했다고 말하지 마라"를 못박는다', () => {
+    const t = p()
+    expect(t).toContain('도구가 없습니다')
+    expect(t).toContain('했다고 말하지 마세요')
+  })
+
+  it('★ 엔진을 바꾸면 된다고 길을 알려 준다(막다른 길을 만들지 않는다)', () => {
+    expect(p()).toContain('Claude Code 로 바꾸시면')
+  })
+
+  it('★ which·--help 로 사용자를 심부름 시키지 말라고 적는다(제보의 그 장면)', () => {
+    expect(p()).toContain('which')
+    expect(p()).toContain('캐내려 하지 마세요')
+  })
+
+  it('도구 판에는 그 문구가 없다(같은 글이 두 얼굴이면 안 된다)', () => {
+    const withTools = buildPersona('준영', [KVT])
+    expect(withTools).toContain('ara_tools')
+    expect(withTools).not.toContain('도구가 없습니다')
+  })
+
+  it('호칭은 양쪽 같다', () => {
+    expect(p()).toContain('준영님')
+  })
+})

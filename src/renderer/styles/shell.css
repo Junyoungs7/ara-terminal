@@ -7299,15 +7299,42 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: 9px;
   padding: 9px 10px;
   border: none;
   background: none;
   cursor: pointer;
   text-align: left;
   font-family: var(--ui);
+}
+/* 줄머리 태그(CC/API) — 사이드바 SSH·RDP 배지와 **같은 클래스**를 쓴다(2026-08-26). 모양을 새로
+   만들면 같은 뜻의 배지가 두 벌이 된다. 색만 엔진별로 갈린다. */
+.modal.ara-chats .sess-type {
+  flex: none;
+  width: 34px;
+  padding: 1px 0;
+  text-align: center;
+  border-radius: 3px;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.modal.ara-chats .sess-type.cc {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.modal.ara-chats .sess-type.api {
+  color: var(--purple);
+  border-color: var(--purple-line);
+}
+.modal.ara-chats .ac-txt {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 .modal.ara-chats .ac-t {
   color: var(--text-hi);

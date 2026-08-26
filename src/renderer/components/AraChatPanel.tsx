@@ -12,7 +12,7 @@ import {
   remainText,
   type ChatItem
 } from '../store/araChatItems'
-import { IconClose, IconRefresh, IconHistory } from './icons'
+import { IconClose, IconRefresh, IconHistory, IconPlus } from './icons'
 import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { t } from '../i18n'
@@ -110,6 +110,14 @@ export function AraChatPanel({
       )
     )
     await window.ev?.ara.open({ resumeId: row.id, engine: row.engine, ...(row.engine === 'cli' && cwd ? { cwd } : {}), active })
+  }
+  /** 새 대화 — 이어 가던 것을 놓고 빈 판에서 시작한다(resumeId 없이 다시 연다). */
+  const newChat = async (): Promise<void> => {
+    setChatsOpen(false)
+    setItems([])
+    setResumeId(null)
+    setPhase('opening')
+    await window.ev?.ara.open({ ...(cwd ? { cwd } : {}), engine, active })
   }
   const saveName = async (id: string, name: string): Promise<void> => {
     setRenaming(null)
@@ -336,6 +344,12 @@ export function AraChatPanel({
         )}
         {/* 지난 대화(2026-08-26). 아이콘만 두니 무엇인지 안 읽혔다(준영님: *"잘 보이지않는데"*) —
             **글자로 쓴다.** 좁은 레일이라도 이 버튼은 이름값을 한다. */}
+        {/* 새 대화(2026-08-26 준영님 요청). 이어 가던 것을 놓고 **빈 판**에서 시작한다 —
+            resumeId 를 비우고 다시 여는 것이 전부다. */}
+        <button type="button" className="ara-hist" title={t('ara.chats.new')} data-action="ara.chats.new" onClick={() => void newChat()}>
+          <IconPlus />
+          <span>{t('ara.chats.new')}</span>
+        </button>
         <button type="button" className="ara-hist" title={t('ara.chats')} data-action="ara.chats" onClick={() => void openChats()}>
           <IconHistory />
           <span>{t('ara.chats')}</span>
@@ -391,10 +405,15 @@ export function AraChatPanel({
                   ) : (
                     <>
                       <button type="button" className="ac-open" title={t('ara.chats.resume')} onClick={() => void resume(c)}>
-                        <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
-                        <span className="ac-at">
-                          {new Date(c.at).toLocaleString()}
-                          {c.engine === 'api' && <span className="ac-eng">API</span>}
+                        {/* 줄머리 태그 — 사이드바의 SSH·RDP 배지와 같은 모양이다(2026-08-26 준영님:
+                            *"ssh, rdp처럼 태그를 만들어서 구분"*). 엔진을 섞어 쓰는 것보다 **어느
+                            쪽 대화인지 한눈에 아는 것**이 낫다는 판단이다. */}
+                        <span className={'sess-type ' + (c.engine === 'api' ? 'api' : 'cc')}>
+                          {c.engine === 'api' ? 'API' : 'CC'}
+                        </span>
+                        <span className="ac-txt">
+                          <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
+                          <span className="ac-at">{new Date(c.at).toLocaleString()}</span>
                         </span>
                       </button>
                       <button

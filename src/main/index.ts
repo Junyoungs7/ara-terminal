@@ -30,6 +30,7 @@ import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
+import { setApiPersona } from './ai/prompt'
 import { setMainErrorLogDir } from './log/MainErrorLog'
 import { pushSend } from './util/windowPush'
 import { logMainError } from './log/MainErrorLog'
@@ -39,7 +40,7 @@ import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
 import type { RemoteConsoleService } from './remote/RemoteConsoleService'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
-import { callNameOf } from '@shared/araPersona'
+import { buildPersona, callNameOf } from '@shared/araPersona'
 
 let store: WorkspaceStore
 let history: HistoryStore
@@ -231,6 +232,17 @@ app.whenReady().then(() => {
     const model = aiModelsOf(ui.aiModels)[provider]
     return { provider, model, ...(ui.aiCompatibleBaseUrl ? { baseUrl: ui.aiCompatibleBaseUrl } : {}) }
   }
+  /**
+   * B 엔진(API 키)도 **같은 말투 글**을 쓴다(2026-08-26). 도구가 없다는 것만 다르다 —
+   * 그전에는 F16 시절 글을 따로 써서 호칭도 서버 표도 안 갔다(제보: API 가 kvt 를 몰랐다).
+   */
+  setApiPersona(() =>
+    buildPersona(
+      callNameOf(store.get().ui.araCallName),
+      profiles.list().filter((p) => p.type === 'ssh').map((p) => ({ id: p.id, name: p.name })),
+      false
+    )
+  )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).

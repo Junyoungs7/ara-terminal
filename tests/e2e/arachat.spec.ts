@@ -315,7 +315,10 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   await expect(row).toBeVisible()
   // 이름이 없으면 첫 질문이 제목이다. API 기록이므로 배지가 붙는다.
   await expect(row.locator('.ac-t')).toHaveText('지난번 배포 점검')
-  await expect(row.locator('.ac-eng')).toHaveText('API')
+  await expect(row.locator('.sess-type')).toHaveText('API')
+
+  // ②b [새 대화] 는 목록 옆에 있다 — 이어 가던 것을 놓고 빈 판에서 시작한다.
+  await expect(a.page.locator('.ara-panel [data-action="ara.chats.new"]')).toContainText('새 대화')
 
   // ③ 이름을 붙이면 목록이 그 이름으로 바뀐다.
   await row.locator('[data-action="ara.chats.rename"]').click()

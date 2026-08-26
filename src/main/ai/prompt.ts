@@ -64,9 +64,26 @@ function envLine(env: AiEnv): string {
   return `사용자는 한국어를 쓰는 개발자이고, 지금 ${parts.join(', ')}을 보고 있습니다.`
 }
 
+/**
+ * B 엔진(API 키)이 쓸 말투 글.
+ *
+ * **2026-08-26 이전에는 아래 F16 시절 PERSONA 를 그대로 썼다.** 그래서 CLI 쪽에 #138 로 넣은
+ * 호칭·서버 표·노출 규칙이 API 대화에는 하나도 안 갔다 — 준영님이 API 로 *"kvt 연결해줘"* 했을 때
+ * 아라가 *"kvt가 어떤 서비스인지 모르겠다, `which kvt` 를 쳐 보시라"* 고 답한 이유가 이것이다.
+ * **서버 이름을 아예 몰랐다.**
+ *
+ * 이제 말투 글은 한 벌이고(shared/araPersona.ts) 도구 유무만 갈린다. 주입이 없으면 예전 글로
+ * 떨어진다 — 테스트와 옛 호출자를 위해서다.
+ */
+let personaFor: (() => string) | null = null
+export function setApiPersona(fn: (() => string) | null): void {
+  personaFor = fn
+}
+
 export function systemPrompt(env?: AiEnv): string {
-  if (!env) return PERSONA
-  const [head, ...rest] = PERSONA.split('\n')
+  const base = personaFor?.() ?? PERSONA
+  if (!env) return base
+  const [head, ...rest] = base.split('\n')
   return [head, envLine(env), ...rest].join('\n')
 }
 
