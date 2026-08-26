@@ -11,7 +11,7 @@
  * **이름만 우리 것이다.** Claude Code 에는 대화 이름이라는 개념이 없다(파일명이 uuid 다). 그래서
  * 사람이 붙인 이름은 workspace.json 에 두고, 없으면 **첫 질문**을 제목으로 쓴다.
  */
-import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs'
+import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -141,4 +141,57 @@ function readChatDir(dir: string, names: Record<string, string>, engine: 'cli' |
     rows.push({ id, at, name: names[id] ?? '', title: firstQuestion(path), engine })
   }
   return rows.sort((a, b) => b.at - a.at)
+}
+
+/** 되살린 대화 한 마디. 도구 호출·생각·훅은 뺀다 — 사람이 다시 읽을 것은 주고받은 말이다. */
+export type ChatMessage = { role: 'user' | 'assistant'; text: string }
+
+/**
+ * 그 대화에서 **주고받은 말**을 읽는다(2026-08-26 준영님 제보: *"클릭하면 여전히 아무것도 안나와"*).
+ *
+ * `--resume` 은 CLI 가 **문맥을 이어받는** 것이지 지난 메시지를 다시 보내 주지 않는다. 그래서 이어서
+ * 열면 아라는 앞 얘기를 아는데 **화면만 비어 있었다** — 사용자에게는 "안 열렸다"로 보인다.
+ * 화면을 채우려면 우리가 기록을 읽어야 한다.
+ *
+ * 두 저장소의 줄 모양이 조금 다르다:
+ *  · Claude Code: `content` 가 **배열**이다. `{type:'text'}` 만 우리 것이고 `thinking`·`tool_use` 는
+ *    화면에 옮길 물건이 아니다. user 줄에 `tool_result` 가 있으면 그건 **도구가 되돌려준 것**이지
+ *    사람 말이 아니라 통째로 건너뛴다.
+ *  · 우리 API 기록: `content` 가 문자열이다(apiChatLog.ts).
+ */
+export function readChatMessages(path: string, limit = 200): ChatMessage[] {
+  let raw: string
+  try {
+    raw = readFileSync(path, 'utf8')
+  } catch {
+    return []
+  }
+  const out: ChatMessage[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    let rec: { type?: string; message?: { content?: unknown } }
+    try {
+      rec = JSON.parse(line) as typeof rec
+    } catch {
+      continue
+    }
+    if (rec.type !== 'user' && rec.type !== 'assistant') continue
+    const c = rec.message?.content
+    if (typeof c === 'string') {
+      if (c.trim()) out.push({ role: rec.type, text: c })
+      continue
+    }
+    if (!Array.isArray(c)) continue
+    const parts = c as { type?: string; text?: string }[]
+    // 도구가 되돌려준 줄은 사람 말이 아니다 — 통째로 버린다.
+    if (parts.some((x) => x?.type === 'tool_result')) continue
+    const text = parts
+      .filter((x) => x?.type === 'text' && typeof x.text === 'string')
+      .map((x) => x.text as string)
+      .join('')
+      .trim()
+    if (text) out.push({ role: rec.type, text })
+  }
+  // 아주 긴 대화는 뒤에서부터 자른다 — 되살리는 것은 "이어서 보기" 지 전체 사본이 아니다.
+  return out.length > limit ? out.slice(-limit) : out
 }

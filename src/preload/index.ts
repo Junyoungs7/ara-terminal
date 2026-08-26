@@ -353,6 +353,7 @@ const api: EvApi = {
     planMode: (on: boolean) => ipcRenderer.invoke('ara:planMode', { on }),
     chats: () => ipcRenderer.invoke('ara:chats'),
     renameChat: (id: string, name: string) => ipcRenderer.invoke('ara:renameChat', { id, name }),
+    chatLog: (id: string) => ipcRenderer.invoke('ara:chatLog', { id }),
     saveSessions: (list: unknown) => ipcRenderer.invoke('aisession:save', { list }),
     worktreeAdd: (path: string, name: string) => ipcRenderer.invoke('git:worktreeAdd', { path, name }),
     worktreeRemove: (path: string, dest: string) => ipcRenderer.invoke('git:worktreeRemove', { path, dest }),

@@ -10,7 +10,13 @@ import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
 import { araModelOf } from '@shared/aiModels'
-import { listAraChats, listApiChats } from '../ai/araChats'
+import { listAraChats, listApiChats, projectDir, readChatMessages } from '../ai/araChats'
+import { chatPath } from '../ai/apiChatLog'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+/** 파일명으로 폴더 밖에 못 나가게 — apiChatLog.chatPath 와 같은 규칙. */
+const NAME_OK = /^[0-9a-f-]{36}$/i
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 
 export type AraRuntime = { chat: AraChat }
@@ -89,6 +95,27 @@ export function registerAraIpc(
     const byId = new Map([...cli, ...api].map((r) => [r.id, r]))
     return { items: [...byId.values()].sort((a, b) => b.at - a.at) }
   })
+  /**
+   * 이어서 열 때 화면을 채울 지난 말들(2026-08-26 제보: *"클릭하면 여전히 아무것도 안나와"*).
+   * `--resume` 은 문맥만 이어받고 지난 메시지를 다시 보내 주지 않는다 — 화면은 우리가 그린다.
+   *
+   * 어느 저장소에 있는지는 **찾아본다**: 목록이 두 곳을 합쳐 보여 주므로 id 만으로는 알 수 없다.
+   */
+  handle('ara:chatLog', ({ id }) => {
+    const cand: (string | null)[] = [
+      deps.apiChatDir ? chatPath(deps.apiChatDir(), id) : null,
+      ...[...new Set([deps.araCwd(), ...(chat.cwd() ? [chat.cwd() as string] : [])])].map((d) =>
+        NAME_OK.test(id) ? join(projectDir(d), `${id}.jsonl`) : null
+      )
+    ]
+    for (const p of cand) {
+      if (!p || !existsSync(p)) continue
+      const items = readChatMessages(p)
+      if (items.length) return { items }
+    }
+    return { items: [] }
+  })
+
   handle('ara:renameChat', ({ id, name }) => {
     ws.setAraChatName(id, typeof name === 'string' ? name : '')
     return { ok: true } as const

@@ -37,7 +37,7 @@ import type { SessionSpec } from '../main/sessions/ISessionManager'
 import type { AskRequest } from '../main/mcp/askUser'
 import type { AraChatEvent } from '../main/ai/AraChat'
 import type { RunFailReason, RunResult } from '../main/remote/RemoteConsoleService'
-import type { AraChatRow } from '../main/ai/araChats'
+import type { AraChatRow, ChatMessage } from '../main/ai/araChats'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
 import type { PastLog } from '../main/log/SessionLog'
@@ -446,6 +446,11 @@ export type InvokeContract = {
   'ara:chats': { req: void; res: { items: AraChatRow[] } }
   /** 대화에 이름 붙이기·지우기(빈 문자열이면 지운다). */
   'ara:renameChat': { req: { id: string; name: string }; res: { ok: true } }
+  /**
+   * 그 대화에서 주고받은 말(이어서 열 때 화면을 채운다). `--resume` 은 문맥만 이어받고 지난
+   * 메시지를 다시 보내 주지 않으므로, 화면은 우리가 기록을 읽어 그려야 한다.
+   */
+  'ara:chatLog': { req: { id: string }; res: { items: ChatMessage[] } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
   'mcp:approvalRespond': { req: McpApprovalDecision; res: { ok: true } }
   // #125 되묻기 — AI 가 사람에게 물은 것에 답한다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서
@@ -795,6 +800,8 @@ export type EvApi = {
     chats(): Promise<{ items: AraChatRow[] }>
     /** 대화에 이름 붙이기. 빈 문자열이면 이름을 지운다(그때는 다시 첫 질문이 보인다). */
     renameChat(id: string, name: string): Promise<{ ok: true }>
+    /** 그 대화의 주고받은 말 — 이어서 열 때 화면을 채운다. */
+    chatLog(id: string): Promise<{ items: ChatMessage[] }>
     interrupt(): Promise<{ ok: true }>
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>

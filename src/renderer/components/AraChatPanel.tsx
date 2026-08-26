@@ -93,9 +93,22 @@ export function AraChatPanel({
    */
   const resume = async (row: AraChatRow): Promise<void> => {
     setChatsOpen(false)
-    setItems([])
     setPhase('opening')
     setResumeId(row.id)
+    /**
+     * **지난 말들을 먼저 그린다**(2026-08-26 제보: *"클릭하면 여전히 아무것도 안나와"*).
+     *
+     * `--resume` 은 CLI 가 문맥을 이어받는 것이지 지난 메시지를 다시 보내 주지 않는다. 그래서
+     * 아라는 앞 얘기를 아는데 화면만 비어 있었다 — 사용자 눈에는 "안 열렸다" 다. 기록은 파일에
+     * 그대로 있으니 우리가 읽어 채운다.
+     */
+    const log = await window.ev?.ara.chatLog(row.id).catch(() => null)
+    setItems(
+      (log?.items ?? []).reduce<ChatItem[]>(
+        (acc, m) => (m.role === 'user' ? pushMine(acc, m.text) : reduceChat(reduceChat(acc, { t: 'text', text: m.text }), { t: 'turn', costUsd: null, ms: 0, turns: 0, text: '' })),
+        []
+      )
+    )
     await window.ev?.ara.open({ resumeId: row.id, engine: row.engine, ...(row.engine === 'cli' && cwd ? { cwd } : {}), active })
   }
   const saveName = async (id: string, name: string): Promise<void> => {

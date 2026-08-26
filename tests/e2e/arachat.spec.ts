@@ -292,7 +292,10 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, `${id}.jsonl`),
-    JSON.stringify({ type: 'user', message: { content: '지난번 배포 점검' }, at: Date.now() }) + '\n',
+    [
+      JSON.stringify({ type: 'user', message: { content: '지난번 배포 점검' }, at: Date.now() }),
+      JSON.stringify({ type: 'assistant', message: { content: '디스크 78% 였습니다.' }, at: Date.now() })
+    ].join('\n') + '\n',
     'utf8'
   )
 
@@ -320,7 +323,18 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   await row.locator('.ac-name').press('Enter')
   await expect(modal.locator(`.ac-row[data-chat="${id}"] .ac-t`)).toHaveText('금요일 배포')
 
-  // ④ 이름은 재기동 후에도 남는다(workspace.json 에 저장 — CLI 에는 대화 이름이 없다).
+  /**
+   * ④★ **고르면 지난 말들이 화면에 뜬다**(2026-08-26 제보: *"클릭하면 여전히 아무것도 안나와"*).
+   *
+   * `--resume` 은 문맥만 이어받고 지난 메시지를 다시 보내 주지 않는다 — 그래서 이어서 열면 아라는
+   * 앞 얘기를 아는데 **화면만 비어 있었다.** 기록을 읽어 채우는 것이 이 검사의 대상이다.
+   */
+  await modal.locator(`.ac-row[data-chat="${id}"] .ac-open`).click()
+  await expect(a.page.locator('.overlay.open .modal.ara-chats')).toHaveCount(0)
+  await expect(a.page.locator('.ara-panel .ara-me')).toContainText('지난번 배포 점검')
+  await expect(a.page.locator('.ara-panel .ara-ai').first()).toContainText('디스크 78% 였습니다')
+
+  // ⑤ 이름은 재기동 후에도 남는다(workspace.json 에 저장 — CLI 에는 대화 이름이 없다).
   await a.app.close()
   const b = await launch(userDataDir)
   await b.page.click('.activity-bar .act-item[data-activity="ai"]')
