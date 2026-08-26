@@ -7,15 +7,16 @@ import { type WebContents } from 'electron'
 import { handle } from './handle'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
-import { createRemoteConsoleService } from '../remote/RemoteConsoleService'
+import { createRemoteConsoleService, type RemoteConsoleService } from '../remote/RemoteConsoleService'
 import { pushSend } from '../util/windowPush'
 
-// 반환값은 종료 정리용(before-quit) — 앱을 닫은 뒤 폴러가 남지 않게 한다.
+// 반환값은 서비스 자체다: 종료 정리(before-quit)에 쓰고, **MCP 도 같은 인스턴스를 쓴다**
+// (2026-08-26 — 아라의 server_run 이 화면과 같은 폴러·타임아웃·세션 정리를 공유해야 한다).
 export function registerRemoteIpc(
   sessions: MainSessionManager,
   getWebContents: (sessionId?: string) => WebContents | null,
   profiles: ProfileStore
-): { stopAll: () => void } {
+): RemoteConsoleService {
   const svc = createRemoteConsoleService(
     (sessionId) => sessions.sshClient(sessionId),
     (e) => pushSend(getWebContents(e.sessionId), 'remote:data', e),
@@ -41,5 +42,5 @@ export function registerRemoteIpc(
     return { ok: true } as const
   })
 
-  return { stopAll: () => svc.stopAll() }
+  return svc
 }

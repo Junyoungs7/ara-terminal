@@ -25,6 +25,13 @@ import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { ForwardService } from '../forward/PortForward'
 import type { SftpService } from '../sftp/SftpService'
 import type { BrowserService } from '../browser/BrowserTabs'
+import type { RemoteConsoleService } from '../remote/RemoteConsoleService'
+import type { SessionLogService } from '../log/SessionLog'
+import type { HistoryStore } from '../history/HistoryStore'
+import { COMMANDS, type CmdId } from '@shared/remoteCatalog'
+import { GROUPS as G, groupLines, type ToolGroup as TG } from '@shared/araTools'
+import { readFileWindow } from '../log/readSessionLog'
+import { fetchTmuxSessions } from '../telemetry/TmuxSessions'
 import { connectByProfile } from '../ipc/registerSshIpc'
 import { McpApprovalManager, type ToolClass } from './approval'
 import type { AskUserManager } from './askUser'
@@ -43,6 +50,12 @@ export type ToolCtx = {
    * 플러그인(playwright)을 찾아 썼다. 우리 화면 안에 브라우저가 있는데 거기 닿는 길이 없었다.
    */
   browser: BrowserService
+  /** F26 서버 콘솔의 고정 명령 표. 화면만 쓰던 것을 아라에게도 연다(2026-08-26). */
+  remote: RemoteConsoleService
+  /** 세션 기록(F12). 늦은 바인딩 — 로거는 userData 경로를 알아야 만들 수 있다. */
+  sessionLog: () => SessionLogService | null
+  /** 사람이 쳤던 명령(F11). "저번에 쓰던 그 명령" 을 찾는 길. */
+  history: HistoryStore
   downloadsDir: string // userData/mcp-downloads — AI는 이 밖에 저장할 수 없다(설계 §7 오케 확정 7).
   uploadsDir: string // userData/mcp-uploads — 업로드 소스도 여기 안으로 한정.
   /** AI 가 사람에게 되묻는 길(#125). 헤드리스에는 그 도구가 없어서 우리가 만든다 — askUser.ts 참고. */
@@ -113,7 +126,56 @@ async function gated(
   return r.ok ? r.result : fail(r.message)
 }
 
+/**
+ * 도구 묶음(2026-08-26 준영님 지시).
+ *
+ * *"우리 도구가 많다보니까 전체 도구를 그냥 주는것보다 그룹화해서 먼저 그룹에서 선택,
+ * 그리고 그 그룹에서 도구 선택할 수 있게 비슷한 도구끼리 모아놓자."*
+ *
+ * 28개를 통째로 물리면 모델이 매번 그 스키마를 다 읽는다. 그래서 **밖으로 나가는 도구는 둘뿐**이고
+ * (`ara_tools`·`ara_call`) 진짜 도구는 이 표 안에 산다. 잘못 고르면 `ara_tools` 를 다시 부르면 된다 —
+ * 되돌아갈 자리가 있어야 사람도 모델도 헤매지 않는다.
+ */
+// 묶음 표는 shared 에 있다 — 말투 글(araPersona)도 같은 표를 읽어야 지도가 안 어긋난다.
+export { GROUPS, type ToolGroup } from '@shared/araTools'
+
+type ToolDef = {
+  group: TG
+  description: string
+  /** 인자 스키마. `ara_call` 이 이걸로 검증한 뒤에야 핸들러가 돈다(zod 경계는 그대로다). */
+  schema: z.ZodTypeAny
+  /** 사람 눈으로 읽는 인자 요약 — ara_tools 가 이걸 준다. */
+  argsHint: string
+  readOnly: boolean
+  run: (args: Record<string, unknown>) => Promise<ToolResult>
+}
+
 export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
+  const TOOLS = new Map<string, ToolDef>()
+
+  /**
+   * 표에 한 줄 얹는다. 예전 `server.registerTool` 과 **같은 모양**을 유지한다 — 핸들러 안의 승인
+   * 게이트(`g(...)`)도 그대로다. 바뀐 것은 "어디에 등록되나"뿐이라 도구 하나하나의 사고 이력이
+   * 담긴 주석이 제자리에 남는다.
+   */
+  const T = <S extends z.ZodRawShape>(
+    name: string,
+    group: TG,
+    spec: { description: string; inputSchema: S; annotations?: { readOnlyHint?: boolean } },
+    run: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResult>
+  ): void => {
+    const shape = spec.inputSchema
+    const keys = Object.keys(shape)
+    TOOLS.set(name, {
+      group,
+      description: spec.description,
+      schema: z.object(shape),
+      argsHint: keys.length === 0 ? '(없음)' : keys.join(', '),
+      readOnly: spec.annotations?.readOnlyHint === true,
+      run: run as (args: Record<string, unknown>) => Promise<ToolResult>
+    })
+  }
+
   const g = (
     sessionId: string | null,
     tool: string,
@@ -133,8 +195,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
   // ── 사람에게 되묻기 ────────────────────────────────────────────────────────
   // 설명문이 곧 사용 설명서다: 모델은 이 글을 읽고 "언제 이 도구를 쓸지"를 정한다.
   // 그래서 **언제 써야 하는지**를 또박또박 적는다(추측하지 말고 물어라).
-  server.registerTool(
+  T(
     'ask_user',
+    'ask',
     {
       description:
         '사람에게 직접 물어봅니다. **추측하면 안 되는 갈림길에서 이 도구를 쓰세요** — 예: 어느 서버/폴더를 쓸지, ' +
@@ -169,8 +232,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
    * 있고, 여기에 또 만들면 실행 줄 조립이 두 벌로 갈린다(렌더러의 runAiCliNow 가 원본이다).
    * 새로 필요한 것은 "무엇이 작업대인가"를 아는 일과 거기에 말을 거는 일뿐이다.
    */
-  server.registerTool(
+  T(
     'aisession_list',
+    'ai',
     {
       description:
         '사용자가 만들어 둔 **AI 작업대** 목록입니다(서버·폴더·엔진). 터미널 세션 목록(session_list)과 다릅니다 — ' +
@@ -197,8 +261,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'aisession_send',
+    'ai',
     {
       description:
         '살아 있는 AI 작업대에 지시를 보냅니다(그 터미널에 사람이 타이핑하는 것과 같습니다). ' +
@@ -221,8 +286,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
     }
   )
 
-  server.registerTool(
+  T(
     'session_list',
+    'session',
     {
       // 아라가 이걸 "서버 목록"으로 착각해 먼저 불렀다(2026-08-26 감사 로그 첫 줄). 빈 배열을 받고
       // 그때부터 헤맸다 — **아닌 것을 아니라고 적는 것**이 이 한 줄의 일이다.
@@ -239,8 +305,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       )
   )
 
-  server.registerTool(
+  T(
     'session_read',
+    'session',
     {
       description:
         '그 탭의 최근 터미널 출력을 읽습니다(사용자가 화면에서 보고 있는 것과 같은 내용). ' +
@@ -258,8 +325,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'session_create',
+    'session',
     {
       description: '새 터미널 세션을 만듭니다(로컬 셸 또는 등록된 프로필의 SSH). 화면에 새 탭으로 나타납니다.',
       inputSchema: {
@@ -293,8 +361,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
     }
   )
 
-  server.registerTool(
+  T(
     'session_input',
+    'session',
     {
       description: '터미널에 문자를 입력합니다(사람이 타이핑하는 것과 같은 채널 — 화면에 그대로 나타납니다).',
       inputSchema: { sessionId: z.string(), data: z.string() }
@@ -307,8 +376,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'session_destroy',
+    'session',
     { description: '세션을 종료합니다(탭을 닫는 것과 같습니다).', inputSchema: { sessionId: z.string() } },
     async ({ sessionId }) =>
       g(sessionId, 'session_destroy', 'writeAlways', { sessionId }, async () => {
@@ -318,8 +388,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'ssh_connect',
+    'session',
     {
       description:
         '등록된 프로필로 SSH 접속합니다. 화면에 새 탭으로 나타나고 사용자가 바로 쓸 수 있습니다. ' +
@@ -330,8 +401,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       g(null, 'ssh_connect', 'writeAlways', { profileId }, () => connectProfile(profileId))
   )
 
-  server.registerTool(
+  T(
     'sftp_list',
+    'file',
     {
       description:
         '원격 폴더의 파일 목록입니다. sessionId 는 session_list 가 준 SSH 탭의 id 입니다 — '  +
@@ -347,8 +419,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'sftp_download',
+    'file',
     {
       description:
         '원격 파일을 내 PC 로 내려받습니다. 저장 위치는 고정 폴더(mcp-downloads) 안으로 한정되고, ' +
@@ -367,8 +440,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'sftp_upload',
+    'file',
     {
       description:
         '고정 폴더(mcp-uploads) 안의 파일을 원격으로 올립니다. 임의 로컬 경로는 지정할 수 없습니다 — ' +
@@ -386,8 +460,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'sftp_mkdir',
+    'file',
     {
       description: '원격에 폴더를 만듭니다. 사이드바 [파일] 트리에 그대로 나타납니다.',
       inputSchema: { sessionId: z.string(), dir: z.string(), name: z.string() }
@@ -400,8 +475,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'sftp_rename',
+    'file',
     {
       description: '원격 파일·폴더 이름을 바꿉니다. 사이드바 [파일] 트리에 그대로 반영됩니다.',
       inputSchema: { sessionId: z.string(), path: z.string(), name: z.string() }
@@ -414,8 +490,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'sftp_remove',
+    'file',
     {
       // **되돌릴 수 없다**를 설명문에 적는다 — 모델이 확인을 받을지 정하는 근거가 여기다.
       description:
@@ -431,8 +508,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'forward_list',
+    'net',
     {
       description:
         '지금 연결돼 있는 포트 목록입니다(원격 포트 ↔ 내 PC 의 localPort). ' +
@@ -443,8 +521,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
     async () => g(null, 'forward_list', 'readOnly', {}, async () => ok(JSON.stringify(ctx.forwards.list())))
   )
 
-  server.registerTool(
+  T(
     'forward_create',
+    'net',
     {
       description:
         '원격 서버의 포트를 내 PC 로 끌어옵니다(원격 127.0.0.1:remotePort → 내 PC 의 빈 포트). ' +
@@ -461,8 +540,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
       })
   )
 
-  server.registerTool(
+  T(
     'forward_stop',
+    'net',
     {
       description: '포트 연결을 끊습니다. 그 주소를 보고 있던 브라우저 탭은 더 이상 열리지 않습니다.',
       inputSchema: { id: z.string() }
@@ -485,8 +565,9 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
    * 열리는 자리는 사람이 [포트] 패널 [열기]를 눌렀을 때와 **같은 창·같은 탭 줄**이다. 같은 오리진이
    * 이미 떠 있으면 그 탭을 다시 쓴다(창이 늘지 않는다).
    */
-  server.registerTool(
+  T(
     'browser_open',
+    'net',
     {
       description:
         '**아라 안의 브라우저**에 웹 주소를 띄웁니다. 사용자 화면 안에 탭으로 열립니다 — ' +
@@ -503,5 +584,254 @@ export function registerMcpTools(server: McpServer, ctx: ToolCtx): void {
         if (!ctx.browser.open(url)) return fail('열 수 없는 주소입니다(http/https 만 됩니다).')
         return ok('아라 브라우저에 띄웠습니다.')
       })
+  )
+
+  T(
+    'browser_close',
+    'net',
+    {
+      description:
+        '아라 브라우저에서 그 주소(오리진)의 탭을 닫습니다. 마지막 탭이면 브라우저 창이 함께 닫힙니다. ' +
+        'origin 은 "http://localhost:8000" 처럼 스킴+호스트+포트까지입니다.',
+      inputSchema: { origin: z.string() }
+    },
+    async ({ origin }) =>
+      g(null, 'browser_close', 'writeAlways', { origin }, async () =>
+        ctx.browser.closeOrigin(origin) ? ok('닫았습니다.') : fail('그 주소로 열린 탭이 없습니다.')
+      )
+  )
+
+  // ── 서버 상태 ──────────────────────────────────────────────────────────────
+  /**
+   * F26 서버 콘솔을 아라에게 연다(2026-08-26).
+   *
+   * **표가 이미 있었는데 안 물려 있었다.** `shared/remoteCatalog.ts` 는 고정 명령 + 파서라
+   * 렌더러가 명령 문자열을 못 넘긴다 — 그 안전한 표를 화면만 쓰고 아라는 못 썼다. 그래서 아라는
+   * 프로세스 목록이 필요하면 `session_input('ps aux')` 로 **사용자 터미널에 명령을 치고** 흘러가는
+   * 글자를 눈으로 파싱해야 했다. 여기를 열면 구조화된 표를 받고 터미널도 안 더럽힌다.
+   *
+   * 명령 문자열은 여전히 표 밖으로 못 나간다 — cmdId 와 검증된 인자만 받는다.
+   */
+  T(
+    'server_run',
+    'server',
+    {
+      description:
+        '서버 상태를 정해진 명령으로 조회하거나 조작합니다. **결과가 표로 정리돼 돌아옵니다** — ' +
+        '터미널에 직접 명령을 치지 마세요(사용자 화면이 지저분해지고 출력을 글자로 파싱해야 합니다). ' +
+        'cmdId 목록: ps.list(프로세스) ps.kill svc.list(서비스) svc.action disk.usage disk.du ' +
+        'sys.overview(배포판·커널·가동시간) pkg.probe(설치된 프로그램) ctr.list(컨테이너) ctr.action ctr.rmi ' +
+        'k8s.list which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove. ' +
+        '인자가 필요한 것은 args 에 넣습니다(예: ps.kill → {pid}, svc.action → {unit, action}). ' +
+        '인자가 표의 규칙에 안 맞으면 아무것도 실행하지 않고 거절합니다.',
+      inputSchema: { sessionId: z.string(), cmdId: z.string(), args: z.record(z.string(), z.unknown()).optional() }
+    },
+    async ({ sessionId, cmdId, args }) =>
+      // 등급은 표가 정한다 — 쓰기 명령(kill·systemctl·rmi)만 승인을 받는다.
+      g(
+        sessionId,
+        'server_run',
+        // 등급을 여기서 새로 정하지 않는다 — 무엇이 쓰기인지는 표가 이미 안다(kill·systemctl·rmi…).
+        COMMANDS[cmdId as CmdId]?.write === true ? 'writeAlways' : 'readOnly',
+        { sessionId, cmdId, args },
+        async () => {
+        if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
+          const res = await ctx.remote.run(sessionId, cmdId as CmdId, args)
+          // 실패 사유가 badArgs 면 인자가 표의 규칙을 벗어난 것이다 — 모델이 고쳐서 다시 부를 수 있게 그대로 준다.
+          if (!res.ok) return fail(`명령을 실행하지 못했습니다(${res.reason}). cmdId 와 args 를 확인하세요.`)
+          return ok(JSON.stringify({ out: res.out, code: res.code }))
+        }
+      )
+  )
+
+  T(
+    'tmux_list',
+    'server',
+    {
+      description: '그 서버에 떠 있는 tmux 세션 목록입니다. tmux 가 없으면 그렇게 알려 줍니다.',
+      inputSchema: { sessionId: z.string() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ sessionId }) =>
+      g(sessionId, 'tmux_list', 'readOnly', { sessionId }, async () => {
+        const client = ctx.sessions.sshClient(sessionId)
+        if (!client) return fail('SSH 세션이 아니거나 연결이 끊겼습니다.')
+        return ok(JSON.stringify(await fetchTmuxSessions(client)))
+      })
+  )
+
+  // ── 원격 텍스트 파일 ────────────────────────────────────────────────────────
+  // sftp_download 와 다르다: 이쪽은 **내용을 바로 다룬다**(파일을 옮기지 않는다). 아라가 설정 파일
+  // 한 줄을 고치려고 download → 로컬 편집 → upload 로 세 번 도는 것을 없앤다.
+  T(
+    'file_read',
+    'file',
+    {
+      description:
+        '원격 **텍스트 파일의 내용**을 읽습니다. 파일을 옮기지 않습니다 — 내용을 보거나 고치려면 ' +
+        'sftp_download 말고 이걸 쓰세요. 사용자가 편집기 창에서 보는 것과 같은 내용입니다.',
+      inputSchema: { sessionId: z.string(), path: z.string() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ sessionId, path }) =>
+      g(sessionId, 'file_read', 'readOnly', { sessionId, path }, async () => {
+        if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
+        const res = await ctx.sftp.readText(sessionId, path)
+        // D1 과 같은 자리에서 마스킹한다 — 설정 파일에는 비밀이 흔하다.
+        return res.ok ? ok(capContext(maskSecrets(res.text))) : fail(res.message)
+      })
+  )
+
+  T(
+    'file_write',
+    'file',
+    {
+      description:
+        '원격 텍스트 파일을 **통째로 덮어씁니다**(일부만 고치려면 file_read 로 읽어 고친 전문을 넘기세요). ' +
+        '되돌리기 어려우니 무엇을 바꾸는지 사용자에게 먼저 알리세요. eol 은 lf 가 기본입니다.',
+      inputSchema: {
+        sessionId: z.string(),
+        path: z.string(),
+        text: z.string(),
+        eol: z.enum(['lf', 'crlf']).optional()
+      }
+    },
+    async ({ sessionId, path, text, eol }) =>
+      g(sessionId, 'file_write', 'writeAlways', { sessionId, path, bytes: text.length }, async () => {
+        if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
+        const res = await ctx.sftp.writeText(sessionId, path, text, eol === 'crlf' ? 'crlf' : 'lf')
+        return res.ok ? ok('저장했습니다.') : fail(res.message)
+      })
+  )
+
+  // ── 기록 ────────────────────────────────────────────────────────────────────
+  T(
+    'log_read',
+    'record',
+    {
+      description:
+        '원격 **로그 파일의 끝부분**을 읽습니다(뒤에서부터 창 단위). 사용자 화면의 로그 뷰어가 ' +
+        '[이전 불러오기] 로 하는 그 일입니다. `tail -f` 를 터미널에 치지 마세요 — 그 탭이 묶여 버립니다. ' +
+        'before 에 이전 응답의 start 를 넣으면 그 앞을 더 읽습니다.',
+      inputSchema: { sessionId: z.string(), path: z.string(), before: z.number().optional() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ sessionId, path, before }) =>
+      g(sessionId, 'log_read', 'readOnly', { sessionId, path, before }, async () => {
+        if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
+        const res = await ctx.sftp.readWindow(sessionId, path, before)
+        return res.ok ? ok(JSON.stringify({ ...res, text: capContext(maskSecrets(res.text)) })) : fail(res.message)
+      })
+  )
+
+  T(
+    'record_list',
+    'record',
+    {
+      description:
+        '**지난 세션 기록** 목록입니다(날짜·서버·파일 이름). *"어제 그 서버에서 뭐 했더라"* 에 답할 때 씁니다. ' +
+        '내용은 record_read 에 file 을 넘겨 읽습니다. 기록이 꺼져 있으면 빈 목록입니다.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true }
+    },
+    async () =>
+      g(null, 'record_list', 'readOnly', {}, async () => ok(JSON.stringify(ctx.sessionLog()?.listPast() ?? [])))
+  )
+
+  T(
+    'record_read',
+    'record',
+    {
+      description:
+        '세션 기록을 읽습니다. **지금 열려 있는 탭**은 sessionId 로, **지난 기록**은 record_list 가 준 ' +
+        'file 로 지정합니다(둘 중 하나만). 뒤에서부터 창 단위로 옵니다 — before 에 이전 응답의 start 를 ' +
+        '넣으면 그 앞을 더 읽습니다.',
+      inputSchema: { sessionId: z.string().optional(), file: z.string().optional(), before: z.number().optional() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ sessionId, file, before }) =>
+      g(sessionId ?? null, 'record_read', 'readOnly', { sessionId, file, before }, async () => {
+        const log = ctx.sessionLog()
+        // 경로 확정·이름 검증은 pathOfFile 이 한다(렌더러와 같은 신뢰 경계를 그대로 쓴다).
+        const path = file ? (log?.pathOfFile(file) ?? null) : sessionId ? (log?.pathOf(sessionId) ?? null) : null
+        if (path) {
+          const res = readFileWindow(path, before)
+          return res.ok ? ok(JSON.stringify({ ...res, text: capContext(maskSecrets(res.text)) })) : fail(res.message)
+        }
+        // 기록이 꺼져 있으면 화면 버퍼가 전부다 — session_read 와 같은 자리로 떨어진다.
+        if (sessionId && ctx.sessions.has(sessionId)) {
+          const text = normalizeCr(stripAnsi(Buffer.from(ctx.sessions.peek(sessionId)).toString('utf8'), newStripState()))
+          return ok(capContext(maskSecrets(text)))
+        }
+        return fail('기록을 찾을 수 없습니다. record_list 로 지난 기록 이름을 먼저 확인하세요.')
+      })
+  )
+
+  T(
+    'history_list',
+    'record',
+    {
+      description:
+        '그 서버에서 **사람이 쳤던 명령** 목록입니다(최근 순). scope 는 SSH 면 서버 이름(session_list 의 ' +
+        'serverKey), 로컬이면 "local" 입니다. *"저번에 쓰던 그 명령"* 을 찾을 때 씁니다.',
+      inputSchema: { scope: z.string() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ scope }) =>
+      g(null, 'history_list', 'readOnly', { scope }, async () => ok(JSON.stringify(ctx.history.load(scope))))
+  )
+
+  // ── 밖으로 나가는 도구는 이 둘뿐이다 ────────────────────────────────────────
+  const groupList = groupLines
+
+  server.registerTool(
+    'ara_tools',
+    {
+      description:
+        'A.R.A(아라) 가 할 수 있는 일의 **목록**입니다. group 없이 부르면 묶음 목록이, group 을 주면 ' +
+        '그 묶음의 도구와 인자가 옵니다. **무엇을 할 수 있는지 모를 때 먼저 여기를 보세요.** ' +
+        '묶음을 잘못 골랐으면 group 없이 다시 부르면 처음으로 돌아옵니다. ' +
+        '실행은 ara_call 로 합니다.',
+      inputSchema: { group: z.string().optional() },
+      annotations: { readOnlyHint: true }
+    },
+    async ({ group }) => {
+      if (!group) return ok(`아라 도구 묶음입니다. ara_tools({group}) 로 안을 보세요.\n\n${groupList()}`)
+      if (!(group in G)) {
+        return ok(`"${group}" 이라는 묶음은 없습니다. 있는 묶음은 이렇습니다:\n\n${groupList()}`)
+      }
+      const rows = [...TOOLS.entries()]
+        .filter(([, d]) => d.group === group)
+        .map(([name, d]) => `## ${name}${d.readOnly ? ' (읽기)' : ''}\n인자: ${d.argsHint}\n${d.description}`)
+        .join('\n\n')
+      return ok(`# ${group} — ${G[group as TG]}\n\n${rows}\n\n실행: ara_call({tool, args})`)
+    }
+  )
+
+  server.registerTool(
+    'ara_call',
+    {
+      description:
+        '아라 도구를 실행합니다. tool 이름과 args 는 ara_tools 가 알려 줍니다. ' +
+        '없는 이름을 주면 묶음 목록을 돌려주니 거기서 다시 고르면 됩니다.',
+      inputSchema: { tool: z.string(), args: z.record(z.string(), z.unknown()).optional() }
+    },
+    async ({ tool, args }) => {
+      const def = TOOLS.get(tool)
+      if (!def) {
+        const near = [...TOOLS.keys()].filter((n) => n.includes(tool) || tool.includes(n.split('_')[0]))
+        return fail(
+          `"${tool}" 이라는 도구가 없습니다.` +
+            (near.length ? ` 비슷한 것: ${near.join(', ')}.` : '') +
+            `\n\n묶음부터 다시 고르세요:\n${groupList()}`
+        )
+      }
+      // 인자 검증은 **여기 한 곳**이다. zod 경계(스키마 밖 필드는 핸들러에 닿지 않는다)를 그대로 지킨다.
+      const parsed = def.schema.safeParse(args ?? {})
+      if (!parsed.success) {
+        return fail(`${tool} 의 인자가 맞지 않습니다(필요: ${def.argsHint}). ${parsed.error.issues[0]?.message ?? ''}`)
+      }
+      return def.run(parsed.data as Record<string, unknown>)
+    }
   )
 }

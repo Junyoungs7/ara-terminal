@@ -245,6 +245,8 @@ export function browserWindowForTest(): { win: BrowserWindow | null; tab: WebCon
 export type BrowserService = {
   /** 스킴이 http/https 가 아니면 열지 않고 false. 렌더러를 신뢰하지 않는 이중 방어. */
   open(url: string): boolean
+  /** 그 오리진 탭을 닫는다(마지막이면 창째). 안 열려 있었으면 false — MCP browser_close 가 쓴다. */
+  closeOrigin(origin: string): boolean
   current(): BrowserWindow | null
   close(): void
 }
@@ -252,6 +254,7 @@ export type BrowserService = {
 export function createBrowserService(getParent: () => BrowserWindow | null): BrowserService {
   return {
     open: (url) => openTab(url, getParent),
+    closeOrigin: closeTabByOrigin,
     current: () => browserWindowForTest().win,
     close: closeBrowserWindow
   }

@@ -94,3 +94,39 @@ describe('등록된 서버 표', () => {
     expect(p).toContain('연결 관리자')
   })
 })
+
+/**
+ * 2026-08-26 준영님 지시 — *"아라 지침에 우리 도구 먼저 확인하고 여기에 없으면 사용자에게 로컬
+ * 도구를 사용한다고 제안을 하게끔 해줘."*
+ *
+ * 하루에 세 번 같은 일이 났다: 도구가 없으면 아라는 밖에서 찾는다(PowerShell·playwright·Grep).
+ * 밖의 도구로 한 일은 화면 밖에서 일어나고 우리 감사 로그에도 안 남는다 — 그래서 **막는 게 아니라
+ * 먼저 묻게** 한다. 막을 수는 없고(Claude Code 내장 도구는 우리가 못 끈다) 물어보게는 할 수 있다.
+ */
+describe('도구 지침', () => {
+  const p = (): string => buildPersona('준영', [])
+
+  it('★ 우리 도구 목록을 먼저 보라고 적혀 있다(묶음 지도가 함께 실린다)', () => {
+    const t = p()
+    expect(t).toContain('ara_tools')
+    expect(t).toContain('ara_call')
+    // 묶음 일곱이 지도로 들어간다 — 없으면 아라가 무엇이 있는지 모른 채 고른다.
+    for (const g of ['session:', 'server:', 'file:', 'net:', 'record:', 'ai:', 'ask:']) expect(t).toContain(g)
+  })
+
+  it('★ 로컬 도구는 쓰기 전에 사용자에게 제안하라고 적혀 있다', () => {
+    const t = p()
+    expect(t).toContain('로컬 도구를 쓰기 전에')
+    expect(t).toContain('허락을 받습니다')
+    // 이유까지 적는다 — 규칙만 적으면 모델이 사정에 따라 건너뛴다(#138 에서 배운 것).
+    expect(t).toContain('기록에도')
+  })
+
+  it('묶음을 잘못 고르면 되돌아가는 법이 적혀 있다', () => {
+    expect(p()).toContain('다시 부르면 처음으로')
+  })
+
+  it('설정 파일을 뒤지지 말라는 규칙은 그대로 있다', () => {
+    expect(p()).toContain('설정 파일을 뒤지지 마세요')
+  })
+})

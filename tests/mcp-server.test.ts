@@ -17,6 +17,7 @@ import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
 import { ProfileStore } from '../src/main/secrets/ProfileStore'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { SftpService } from '../src/main/sftp/SftpService'
+import { HistoryStore } from '../src/main/history/HistoryStore'
 import { createForwardService } from '../src/main/forward/PortForward'
 import { connectSsh } from '../src/main/sessions/ssh/SshBackend'
 import type { SessionSpec } from '../src/main/sessions/ISessionManager'
@@ -94,7 +95,10 @@ async function makeRig(): Promise<Rig> {
     ws,
     forwards,
     sftp,
-    browser: { open: (u: string) => { browserUrls.push(u); return u.startsWith('http') }, current: () => null, close: () => {} },
+    browser: { open: (u: string) => { browserUrls.push(u); return u.startsWith('http') }, closeOrigin: () => true, current: () => null, close: () => {} },
+    remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
+    sessionLog: () => null,
+    history: new HistoryStore(join(dir, 'history.json')),
     ask: createAskUser({ ask: () => {}, askDone: () => {} }),
     approval,
     downloadsDir: join(dir, 'mcp-downloads'),
@@ -133,6 +137,21 @@ function makeClient(port: number, bearer?: string) {
     requestInit: bearer ? { headers: { Authorization: `Bearer ${bearer}` } } : {}
   })
   const client = new Client({ name: 'ev-test-harness', version: '1.0.0' })
+  /**
+   * 2026-08-26: 도구가 **묶음 뒤로** 들어갔다(밖으로 나가는 것은 ara_tools·ara_call 둘뿐).
+   *
+   * 이 파일의 검사들은 예전처럼 도구 이름으로 부른다 — 여기서 ara_call 로 옮겨 준다. 그게 오히려
+   * 좋은 검사가 된다: 같은 호출이 **디스패처를 지나서도 똑같이 동작해야** 통과하기 때문이다
+   * (스키마 검증·승인 등급·감사 로그 이름이 전부 그대로여야 한다).
+   */
+  const direct = client.callTool.bind(client)
+  client.callTool = ((req: { name: string; arguments?: unknown }, ...rest: unknown[]) =>
+    req.name === 'ara_tools' || req.name === 'ara_call'
+      ? (direct as (...a: unknown[]) => unknown)(req, ...rest)
+      : (direct as (...a: unknown[]) => unknown)(
+          { name: 'ara_call', arguments: { tool: req.name, args: req.arguments ?? {} } },
+          ...rest
+        )) as typeof client.callTool
   return { client, transport }
 }
 
@@ -233,7 +252,10 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
       ws,
       forwards: createForwardService(() => null),
       ask: createAskUser({ ask: () => {}, askDone: () => {} }),
-      browser: { open: () => true, current: () => null, close: () => {} },
+      browser: { open: () => true, closeOrigin: () => true, current: () => null, close: () => {} },
+      remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
+      sessionLog: () => null,
+      history: new HistoryStore(join(dir, 'history.json')),
       sftp: new SftpService(() => null, () => {}),
       approval: new McpApprovalManager({ approvalRequest() {}, activity() {}, stateChanged() {} }, createAuditLog(join(dir, 'logs'))),
       downloadsDir: join(dir, 'mcp-downloads'),
@@ -289,14 +311,36 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
 })
 
 describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
-  it('노출된 툴 이름이 화이트리스트와 정확히 일치한다(fs:*/profile:*/ai:*/window:*/분할 없음)', async () => {
+  /**
+   * 2026-08-26 준영님 지시로 도구를 **묶음 뒤로** 넣었다: *"전체 도구를 그냥 주는것보다 그룹화해서
+   * 먼저 그룹에서 선택, 그리고 그 그룹에서 도구 선택."* 그래서 이 검사는 두 겹이 됐다 —
+   * ① 밖으로 나가는 것은 둘뿐 ② 안의 목록은 예전 화이트리스트 그대로.
+   */
+  it('★ 밖으로 나가는 도구는 ara_tools·ara_call 둘뿐이다', async () => {
     const rig = await makeRig()
     rigs.push(rig)
     const { client, transport } = makeClient(rig.port, rig.token)
     await client.connect(transport)
     const { tools } = await client.listTools()
-    const names = tools.map((t) => t.name).sort()
-    expect(names).toEqual(
+    expect(tools.map((t) => t.name).sort()).toEqual(['ara_call', 'ara_tools'])
+    await client.close()
+  })
+
+  it('★ 묶음 뒤의 도구 목록이 화이트리스트와 정확히 일치한다(fs:*/profile:*/ai:*/window:*/분할 없음)', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    // 묶음 목록 → 각 묶음의 도구를 모은다(= 사람이 ara_tools 로 훑는 그 경로 그대로).
+    const groups = ['session', 'server', 'file', 'net', 'record', 'ai', 'ask']
+    const names: string[] = []
+    for (const group of groups) {
+      const res = await client.callTool({ name: 'ara_tools', arguments: { group } })
+      const text = (res.content as { type: string; text: string }[])[0].text
+      for (const m of text.matchAll(/^## ([a-z_]+)/gm)) names.push(m[1])
+    }
+    expect(names.sort()).toEqual(
       [
         // 2026-08-24 추가(#125): AI 가 **사람에게 되묻는** 도구. 파괴적 조작이 아니고 인자는
         // 질문·선택지 문자열뿐이다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서(실측) 이 자리를
@@ -304,16 +348,24 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         // 2026-08-25 추가(#134): 아라가 **작업대를 지휘한다**. list 는 읽기, send 는 그 세션의
         // 승인 게이트를 그대로 지난다(작업대라고 무르게 하지 않는다). create 는 일부러 없다 —
         // session_create + session_input 으로 이미 되고, 또 만들면 실행 줄 조립이 두 벌로 갈린다.
-        // 2026-08-26 추가: **아라 안의 브라우저.** 이게 없어서 아라가 PowerShell 로 엣지를 띄우고
-        // 다른 MCP 플러그인(playwright)까지 끌어다 썼다(준영님 제보). 우리 창 안에 웹을 보여 주는
-        // 길은 이 도구뿐이고, 스킴은 http/https 로 잠겨 있다.
+        // 2026-08-26 추가: **아라 안의 브라우저**(제보 3) + 전수 감사로 메운 구멍들 —
+        // server_run(F26 고정 명령 표) · tmux_list · file_read/write(원격 텍스트) ·
+        // log_read(원격 로그 꼬리) · record_*(세션 기록) · history_list(사람이 친 명령).
         'aisession_list',
         'aisession_send',
         'ask_user',
+        'browser_close',
         'browser_open',
+        'file_read',
+        'file_write',
         'forward_create',
         'forward_list',
         'forward_stop',
+        'history_list',
+        'log_read',
+        'record_list',
+        'record_read',
+        'server_run',
         'session_create',
         'session_destroy',
         'session_input',
@@ -325,11 +377,27 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         'sftp_remove',
         'sftp_rename',
         'sftp_upload',
-        'ssh_connect'
+        'ssh_connect',
+        'tmux_list'
       ].sort()
     )
-    for (const forbidden of ['profile', 'forgetHostKey', 'fs_list', 'fs_rename', 'window_', 'ai_send', 'split', 'layout'])
+    for (const forbidden of ['profile_', 'forgetHostKey', 'fs_list', 'fs_rename', 'window_', 'ai_send', 'split', 'layout'])
       expect(names.join(',')).not.toContain(forbidden)
+    await client.close()
+  })
+
+  it('★ 없는 묶음·없는 도구를 부르면 되돌아갈 목록을 준다(막다른 길을 만들지 않는다)', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    const badGroup = await client.callTool({ name: 'ara_tools', arguments: { group: 'nope' } })
+    expect((badGroup.content as { text: string }[])[0].text).toContain('session:')
+
+    const badTool = await client.callTool({ name: 'ara_call', arguments: { tool: 'nope_nope', args: {} } })
+    expect(badTool.isError).toBe(true)
+    expect((badTool.content as { text: string }[])[0].text).toContain('session:')
     await client.close()
   })
 
@@ -338,15 +406,17 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     rigs.push(rig)
     const { client, transport } = makeClient(rig.port, rig.token)
     await client.connect(transport)
-    const { tools } = await client.listTools()
+    // 묶음 뒤로 들어간 뒤로는 ara_tools 가 인자를 알려 주는 자리다 — 거기에 없으면 모델이 알 길이 없고,
+    // 설령 넘겨도 아래 테스트대로 zod 가 지운다.
+    const res = await client.callTool({ name: 'ara_tools', arguments: { group: 'session' } })
+    const text = (res.content as { type: string; text: string }[])[0].text
     for (const name of ['session_create', 'ssh_connect']) {
-      const tool = tools.find((t) => t.name === name)!
-      const schema = tool.inputSchema as { properties?: Record<string, unknown> }
-      const keys = Object.keys(schema.properties ?? {})
+      const block = text.slice(text.indexOf(`## ${name}`))
+      const hint = block.slice(0, block.indexOf(String.fromCharCode(10), block.indexOf('인자:')))
       // S1(FIX-mcpshell): shell 도 host/port/username/password 와 같은 급의 금지 필드다 — 자유 문자열이
       // 검증 없이 node-pty spawn 인자가 됐다(임의 실행파일/인자 실행). 렌더러 UI 도 이 필드를 쓰지 않는다.
       for (const forbidden of ['host', 'port', 'username', 'password', 'shell'])
-        expect(keys).not.toContain(forbidden)
+        expect(hint).not.toContain(forbidden)
     }
     // 참고(보안 리뷰어 확인용): MCP SDK 는 tools/list 응답의 JSON Schema 를 draft-7 로 내리는데,
     // zod v4-mini 의 draft-7 변환기가 additionalProperties:false 를 내려보내지 않는다(SDK 자체의

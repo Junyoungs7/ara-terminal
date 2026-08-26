@@ -21,6 +21,7 @@ import type { ToolCtx } from '../src/main/mcp/tools'
 import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { ProfileStore } from '../src/main/secrets/ProfileStore'
+import { HistoryStore } from '../src/main/history/HistoryStore'
 import type { SecretStore } from '../src/main/secrets/SecretStore'
 import { createForwardService } from '../src/main/forward/PortForward'
 import { SftpService } from '../src/main/sftp/SftpService'
@@ -60,7 +61,10 @@ describe('실증 — 로컬 Claude Code(구독 로그인)가 아라 MCP 도구�
         profiles: new ProfileStore(ws, memSecretStore()),
         ws,
         forwards: createForwardService(() => null),
-        browser: { open: () => true, current: () => null, close: () => {} },
+        browser: { open: () => true, closeOrigin: () => true, current: () => null, close: () => {} },
+        remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
+        sessionLog: () => null,
+        history: new HistoryStore(join(dir, 'history.json')),
         sftp: new SftpService(() => null, () => {}),
         approval,
         ask: createAskUser({ ask: () => {}, askDone: () => {} }),
@@ -213,7 +217,10 @@ describe('실증 — 아라 MCP 물리기 + 권한 관찰(#124)', () => {
         profiles: new ProfileStore(ws, memSecretStore()),
         ws,
         forwards: createForwardService(() => null),
-        browser: { open: () => true, current: () => null, close: () => {} },
+        browser: { open: () => true, closeOrigin: () => true, current: () => null, close: () => {} },
+        remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
+        sessionLog: () => null,
+        history: new HistoryStore(join(dir, 'history.json')),
         sftp: new SftpService(() => null, () => {}),
         approval,
         ask: createAskUser({ ask: () => {}, askDone: () => {} }),

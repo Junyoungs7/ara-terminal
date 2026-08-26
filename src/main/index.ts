@@ -36,6 +36,7 @@ import { aiModelsOf, aiProviderOf, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_L
 import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
 import type { ForwardService } from './forward/PortForward'
+import type { RemoteConsoleService } from './remote/RemoteConsoleService'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
 import { callNameOf } from '@shared/araPersona'
 
@@ -45,7 +46,8 @@ let sessions: MainSessionManager
 // W1: 폴링·tail 정리 훅(종료 시 원격에 프로세스를 남기지 않는다).
 let telemetry: { stopAll: () => void } | null = null
 // F26 서버 콘솔: 프로세스 표 등 주기 실행 구독. 텔레메트리와 같은 정리 훅.
-let remoteConsole: { stopAll: () => void } | null = null
+// 타입을 서비스로 둔다 — MCP(server_run)가 같은 인스턴스를 쓴다.
+let remoteConsole: RemoteConsoleService | null = null
 // W2 F8: 활성 포워딩. 세션 종료·앱 종료 때 리스너와 소켓을 접는다.
 let forwards: ForwardService | null = null
 // W2 F12: 세션 로그 tee. 기본 off — 설정에서 켜야 파일이 생긴다.
@@ -192,7 +194,8 @@ app.whenReady().then(() => {
   })
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
-  remoteConsole = registerRemoteIpc(sessions, getWebContents, profiles)
+  const remoteSvc = registerRemoteIpc(sessions, getWebContents, profiles)
+  remoteConsole = remoteSvc
   // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
   const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
   forwards = fwdIpc.forwards
@@ -238,6 +241,10 @@ app.whenReady().then(() => {
       sftp: sftpService,
       // 아라 브라우저. 화면의 [포트]→[열기]가 쓰는 그 서비스를 그대로 넘긴다(같은 창·같은 탭 줄).
       browser: fwdIpc.browser,
+      // F26 서버 콘솔·기록·히스토리 — 화면만 쓰던 것을 아라에게도 연다(2026-08-26 전수 감사).
+      remote: remoteSvc,
+      sessionLog: () => sessionLog,
+      history,
       downloadsDir: join(userData, 'mcp-downloads'),
       uploadsDir: join(userData, 'mcp-uploads')
     },
