@@ -54,7 +54,8 @@ let forwards: ForwardService | null = null
 let sessionLog: SessionLogService | null = null
 // W3 F16: 아라 대화. main 이 소유하므로 패널을 닫아도 살아 있고, 종료 시 진행 중 스트림을 끊는다.
 let ara: AraSession | null = null
-// W4 F23: MCP 서버 + 승인 매니저. 기본 꺼짐 — 설정 [MCP]에서 켜야 리스너가 생긴다.
+// W4 F23: MCP 서버 + 승인 매니저. **기본 켜짐**(2026-08-26) — 아라가 우리 도구를 쓰는 길이
+// 이것뿐이라 꺼진 채로 시작하면 아라가 반쪽이 된다. 설정 [MCP]에서 끌 수는 있다(확인을 받는다).
 let mcp: McpRuntime | null = null
 let araChat: AraRuntime | null = null
 let mainWindow: BrowserWindow | null = null
@@ -251,8 +252,20 @@ app.whenReady().then(() => {
     secrets,
     logDir,
     () => store.get().ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
-    getWebContents
+    getWebContents,
+    // e2e 는 앱을 여러 개 동시에 띄운다 — 기본 켜짐이 된 뒤로 고정 포트를 두고 싸운다.
+    process.env['ARA_E2E'] === '1' ? 0 : undefined
   )
+  /**
+   * MCP 는 **기본으로 켠다**(2026-08-26 준영님 지시). 아라가 우리 도구를 쓰는 길이 이것뿐이라,
+   * 꺼진 채로 시작하면 사용자가 아무것도 안 건드렸는데 아라가 반쪽이 된다.
+   *
+   * 명시적으로 끈 것(false)만 존중한다 — 실패해도 앱은 그대로 뜬다(포트를 못 잡는 상황에서
+   * 부팅을 막을 이유가 없다. 화면의 [MCP] 섹션이 꺼짐으로 보이고 다시 켤 수 있다).
+   */
+  if (store.get().ui.mcpEnabled !== false) {
+    void mcp.server.setEnabled(true).catch((e: unknown) => logMainError('mcp autostart', e))
+  }
   // #125 아라 대화 — 엔진(로컬 Claude Code 상주)·MCP 물리기·되묻기의 화면 쪽 통로.
   // 작업 폴더는 **지금 보고 있는 세션**을 따라간다(설계 §3.3): 로컬 셸이면 그 폴더, 원격만
   // 보고 있으면 마지막 로컬 폴더, 그것도 없으면 화면이 사용자에게 묻는다.

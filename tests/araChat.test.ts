@@ -98,15 +98,24 @@ describe('MCP 설정 파일', () => {
     h!.cleanup()
   })
 
-  it('서버가 꺼져 있으면 켜 준다 · 못 켜면 null(그래도 대화는 시작한다)', async () => {
+  /**
+   * ★ 2026-08-26 **방침이 뒤집혔다.** 전에는 여기서 몰래 켰다("사용자가 안 켜 뒀다고 아라가 도구를
+   * 잃을 이유는 없다"). 그런데 이제 서버가 기본으로 켜져 있고, 끄는 화면은 *"끄면 아라가 우리 도구를
+   * 못 씁니다"* 라고 경고한다. 그래 놓고 여기서 도로 켜면 **그 경고가 거짓말**이 되고 사용자가 끈
+   * 것이 조용히 되살아난다.
+   */
+  it('★ 서버가 꺼져 있으면 켜지 않고 null — 사용자가 끈 것을 되살리지 않는다', async () => {
     const off = fakeServer({ enabled: false })
-    const h = await prepareAraMcp(off, memVault())
-    expect(off.enabledCalls).toBe(1)
+    expect(await prepareAraMcp(off, memVault())).toBeNull()
+    // 켜려는 시도 자체가 없어야 한다(있으면 설정 화면의 경고가 거짓이 된다).
+    expect(off.enabledCalls).toBe(0)
+  })
+
+  it('켜져 있으면 설정 파일을 만들어 준다(그때만 아라가 도구를 쥔다)', async () => {
+    const on = fakeServer({ enabled: true })
+    const h = await prepareAraMcp(on, memVault())
     expect(h).not.toBeNull()
     h!.cleanup()
-
-    const broken = { ...fakeServer(), setEnabled: async () => Promise.reject(new Error('포트 점유')) } as McpServerHandle
-    expect(await prepareAraMcp(broken, memVault())).toBeNull()
   })
 
   it('★ 닫으면 토큰이 든 파일이 사라진다', async () => {

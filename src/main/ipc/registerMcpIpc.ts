@@ -22,7 +22,15 @@ export function registerMcpIpc(
   vault: TokenVault,
   logDir: string,
   retentionDays: () => number,
-  getWebContents: () => WebContents | null
+  getWebContents: () => WebContents | null,
+  /**
+   * 바인드 포트. 안 주면 프로덕션 고정 포트(외부 클라이언트 설정이 바뀌지 않게).
+   *
+   * **e2e 는 0(임의 포트)을 준다**: 서버가 기본으로 켜지게 된 뒤로(2026-08-26) 테스트 워커들이
+   * 앱을 여러 개 동시에 띄우면 전부 같은 고정 포트를 잡으려 해서 하나만 성공한다. 프로덕션은
+   * 앱이 하나라 겪지 않는 문제다.
+   */
+  bindPort?: number
 ): McpRuntime {
   const push = (channel: string, payload: unknown): void => pushSend(getWebContents(), channel, payload)
 
@@ -50,10 +58,16 @@ export function registerMcpIpc(
     askDone: (askId: string) => push('mcp:askDone', { askId })
   })
   const ctx: ToolCtx = { ...deps, approval, ask }
-  const server = createMcpServer(ctx, vault)
+  const server = createMcpServer(ctx, vault, bindPort)
 
   handle('mcp:getState', () => state())
-  handle('mcp:setEnabled', ({ enabled }) => server.setEnabled(enabled))
+  // 켜고 끄는 것을 **저장한다**(2026-08-26). 기본이 켬이 됐으므로, 끈 선택을 기억하지 않으면
+  // 재시작마다 되살아난다. 여기서 저장하는 이유는 이 채널이 유일한 토글 경로이기 때문이다.
+  handle('mcp:setEnabled', async ({ enabled }) => {
+    const r = await server.setEnabled(enabled)
+    deps.ws.setMcpEnabled(enabled)
+    return r
+  })
   // 새 토큰 발급 = 구 토큰 즉시 무효(vault 의 단일 키를 덮어쓰므로 별도 무효화 로직이 필요 없다).
   handle('mcp:issueToken', () => {
     const token = issueRawToken()

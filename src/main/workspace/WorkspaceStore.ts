@@ -143,6 +143,15 @@ export class WorkspaceStore {
     this.flush()
   }
 
+  /**
+   * F23 MCP 서버 on/off (2026-08-26). **기본은 켬** — 미지정과 false 를 구분하려고 저장한다.
+   * 저장하지 않으면 사용자가 끈 것이 재시작 때마다 되살아나 "껐는데 왜 또 켜지지"가 된다.
+   */
+  setMcpEnabled(on: boolean): void {
+    this.snapshot.ui.mcpEnabled = on
+    this.flush()
+  }
+
   // ── 사이드바 폭·접힘·활성 탭(R4.3). 드래그 중이 아니라 놓았을 때만 오므로 저빈도 → 즉시 flush. ──
   setSidebar(sidebar: SidebarState): void {
     this.snapshot.ui.sidebar = sidebar

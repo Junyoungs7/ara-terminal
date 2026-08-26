@@ -64,10 +64,16 @@ export function writePersona(text: string): { path: string; cleanup: () => void 
 }
 
 export async function prepareAraMcp(server: McpServerHandle, vault: TokenVault): Promise<AraMcpHandoff | null> {
-  if (!server.isEnabled()) {
-    const r = await server.setEnabled(true).catch(() => null)
-    if (!r) return null
-  }
+  /**
+   * **꺼져 있으면 켜지 않는다**(2026-08-26 방침 변경).
+   *
+   * 전에는 여기서 몰래 켰다 — "사용자가 MCP 를 켜 두지 않았다고 아라가 도구를 잃을 이유는 없다"는
+   * 이유였다. 그런데 이제 서버가 **기본으로 켜져 있고**(ui.mcpEnabled), 끄는 화면은 "끄면 아라가
+   * 우리 도구를 못 씁니다"라고 경고한다. 그래 놓고 여기서 도로 켜면 그 경고가 거짓말이 되고,
+   * 사용자가 끈 것이 조용히 되살아난다. 꺼져 있으면 아라는 도구 없이 시작하고, 화면이 그 사실을
+   * 그대로 알린다(`withMcp: false` → "도구 없이 대화만 합니다").
+   */
+  if (!server.isEnabled()) return null
   const port = server.port()
   if (!port) return null
 

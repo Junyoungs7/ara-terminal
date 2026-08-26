@@ -535,7 +535,7 @@ function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange
 // [MCP] 섹션 (W4 F23). AI 키 섹션과 같은 절제 원칙: 발급된 토큰 원문을 이 컴포넌트 밖(상위 상태·
 // workspace.json)으로 올리지 않는다 — 발급 응답에서 받은 그 순간에만 화면에 잠깐 보여주고, 다시
 // 드로어를 열면 사라져 있다(재조회 채널이 계약에 없다 — mcp:getToken 부재).
-function McpSection() {
+function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult> }) {
   const [state, setState] = useState<McpState | null>(null)
   const [busy, setBusy] = useState(false)
   const [freshToken, setFreshToken] = useState<string | null>(null)
@@ -547,7 +547,24 @@ function McpSection() {
     return () => off?.()
   }, [])
 
+  /**
+   * 끄기 전에 **무엇을 잃는지** 말한다(2026-08-26 준영님 지시).
+   *
+   * 이 토글은 겉보기에 "서버 하나 끄기"지만 실제로는 **아라의 손을 자르는 일**이다 — 우리 도구에
+   * 닿는 길이 이것뿐이라, 끈 채로 아라에게 시키면 아라는 밖에서 방법을 찾거나(로컬 셸·다른 MCP)
+   * 못 한다고 답한다. 켜는 쪽은 묻지 않는다(되돌리는 방향이라 놀랄 일이 없다).
+   */
   const toggle = async (on: boolean) => {
+    if (!on && ask) {
+      const r = await ask({
+        title: t('settings.mcp.off.title'),
+        message: t('settings.mcp.off.msg'),
+        confirmLabel: t('settings.mcp.off.btn'),
+        cancelLabel: t('dlg.cancel'),
+        tone: 'danger'
+      })
+      if (r !== 'confirm') return
+    }
     setBusy(true)
     await window.ev?.mcp.setEnabled(on).catch(() => {})
     setBusy(false)
@@ -983,7 +1000,7 @@ export function SettingsDrawer({
 
           {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} />}
 
-          {section === 'mcp' && <McpSection />}
+          {section === 'mcp' && <McpSection ask={ask} />}
 
           {section === 'keys' && (
             <>

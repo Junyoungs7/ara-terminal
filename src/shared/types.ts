@@ -392,6 +392,15 @@ export type UiState = {
   cursorStyle?: CursorStyle
   cursorBlink?: boolean
   bell?: BellStyle
+  /**
+   * F23 [MCP]: 서버를 켜 둘까. **미지정 = 켬**(2026-08-26 준영님 지시: *"mcp는 무조건 기본으로
+   * 켜지게"*). 이 앱에서 아라가 우리 도구를 쓰는 길이 MCP 하나뿐이라, 꺼진 채로 시작하면
+   * 사용자가 아무 설정도 안 건드렸는데 아라가 반쪽이 된다.
+   *
+   * 명시적으로 끈 것(false)은 존중한다 — 그래서 "미지정"과 "false" 를 구분한다. 끄기 전에는
+   * 화면이 무엇을 잃는지 확인을 받는다(SettingsDrawer McpSection).
+   */
+  mcpEnabled?: boolean
   // F12 [로그]: 세션 로그 기록·보존 기간. 미지정이면 꺼짐 / 30일.
   sessionLog?: boolean
   logRetentionDays?: number
