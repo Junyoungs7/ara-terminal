@@ -273,3 +273,57 @@ test('ARA2-7★ 모델을 고른다 · 폭을 끌어 넓힌다 · 답변이 마�
   // ⑥ 도는 동안 점이 움직인다 — 상태줄 글자만으로는 눈에 안 걸린다.
   await expect(panel.locator('.ara-think')).toBeVisible()
 })
+
+/**
+ * ARA2-8★ 지난 대화 목록(2026-08-26 준영님 요청 + 제보).
+ *
+ * 요청은 *"이전 대화 라는 버튼으로 누르면 대화창에서 뜨지 말고 팝업으로"* 였고, 제보는
+ * *"이전 대화 목록 누르면 아무것도 안나와"* 였다. 둘 다 여기서 지킨다.
+ *
+ * **실제 홈을 건드리지 않는다.** CLI 대화 기록은 `~/.claude/projects/` 에 있어서 거기에 시험용
+ * 파일을 심으면 사용자 PC 를 더럽힌다. API 기록은 `userData/ara-chats/` — 테스트가 만든 임시
+ * 폴더 안이라 마음껏 심을 수 있고, 목록은 두 저장소를 합쳐 보여 주므로 같은 화면을 검사한다.
+ */
+test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 · 이어서 열기', async ({ userDataDir, launch }) => {
+  const { writeFileSync, mkdirSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const id = 'aaaaaaaa-1111-2222-3333-444444444444'
+  const dir = join(userDataDir, 'ara-chats')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, `${id}.jsonl`),
+    JSON.stringify({ type: 'user', message: { content: '지난번 배포 점검' }, at: Date.now() }) + '\n',
+    'utf8'
+  )
+
+  const a = await launch(userDataDir)
+  await a.page.click('.activity-bar .act-item[data-activity="ai"]')
+  await expect(a.page.locator('.ara-panel')).toBeVisible()
+
+  // ① 버튼이 **글자로** 보인다 — 아이콘만 뒀더니 무엇인지 안 읽혔다(준영님 제보).
+  const btn = a.page.locator('.ara-panel [data-action="ara.chats"]')
+  await expect(btn).toContainText('지난 대화')
+
+  // ② 누르면 **팝업**이 뜨고 목록이 비어 있지 않다(제보의 그 자리).
+  await btn.click()
+  const modal = a.page.locator('.overlay.open .modal.ara-chats')
+  await expect(modal).toBeVisible()
+  const row = modal.locator(`.ac-row[data-chat="${id}"]`)
+  await expect(row).toBeVisible()
+  // 이름이 없으면 첫 질문이 제목이다. API 기록이므로 배지가 붙는다.
+  await expect(row.locator('.ac-t')).toHaveText('지난번 배포 점검')
+  await expect(row.locator('.ac-eng')).toHaveText('API')
+
+  // ③ 이름을 붙이면 목록이 그 이름으로 바뀐다.
+  await row.locator('[data-action="ara.chats.rename"]').click()
+  await row.locator('.ac-name').fill('금요일 배포')
+  await row.locator('.ac-name').press('Enter')
+  await expect(modal.locator(`.ac-row[data-chat="${id}"] .ac-t`)).toHaveText('금요일 배포')
+
+  // ④ 이름은 재기동 후에도 남는다(workspace.json 에 저장 — CLI 에는 대화 이름이 없다).
+  await a.app.close()
+  const b = await launch(userDataDir)
+  await b.page.click('.activity-bar .act-item[data-activity="ai"]')
+  await b.page.locator('.ara-panel [data-action="ara.chats"]').click()
+  await expect(b.page.locator(`.overlay.open .modal.ara-chats .ac-row[data-chat="${id}"] .ac-t`)).toHaveText('금요일 배포')
+})

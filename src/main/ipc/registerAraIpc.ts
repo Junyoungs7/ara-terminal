@@ -70,11 +70,24 @@ export function registerAraIpc(
    */
   handle('ara:chats', () => {
     const names = ws.get().ui.araChatNames ?? {}
-    // 두 저장소를 합친다: CLI 는 Claude Code 가 남긴 것, API 는 우리가 남긴 것(2026-08-26 준영님
-    // 요청 — *"api를 사용했을때도 이 아라 세션, 대화 관리도 진행해야해"*). 사용자에게는 한 목록이다.
-    const cli = listAraChats(chat.cwd() ?? deps.araCwd(), names)
+    /**
+     * **어느 폴더의 대화를 보여 주나** — 2026-08-26 준영님 제보 *"이전 대화 목록 누르면 아무것도
+     * 안나와"* 를 판 자리다.
+     *
+     * Claude Code 는 기록을 **작업 폴더별로** 나눠 둔다. 처음엔 "지금 대화의 폴더" 하나만 봤는데,
+     * 아라를 서버 탭에서 열면 그 폴더가 `D:\어떤프로젝트` 로 잡히고 정작 아라 대화 대부분이 있는
+     * 아라 폴더는 안 보인다 — 사용자에게는 그냥 "빈 목록"이다.
+     *
+     * 사람이 기대하는 것은 **내 아라 대화 전부**다. 그래서 아라 폴더(늘 여기다)와 지금 폴더를
+     * 함께 본다. `~/.claude/projects` 전체를 훑지는 않는다 — 거기에는 이 앱과 무관한 대화도 있다.
+     */
+    const dirs = new Set([deps.araCwd(), ...(chat.cwd() ? [chat.cwd() as string] : [])])
+    const cli = [...dirs].flatMap((d) => listAraChats(d, names))
+    // API 는 우리가 남긴 것(폴더가 하나다 — 작업 폴더 개념이 없다).
     const api = deps.apiChatDir ? listApiChats(deps.apiChatDir(), names) : []
-    return { items: [...cli, ...api].sort((a, b) => b.at - a.at) }
+    // 같은 대화가 두 번 오지 않게(폴더 둘이 겹칠 수 있다) id 로 접는다.
+    const byId = new Map([...cli, ...api].map((r) => [r.id, r]))
+    return { items: [...byId.values()].sort((a, b) => b.at - a.at) }
   })
   handle('ara:renameChat', ({ id, name }) => {
     ws.setAraChatName(id, typeof name === 'string' ? name : '')

@@ -7267,56 +7267,49 @@
   background: var(--bg-canvas);
   border-bottom: 1px solid var(--line);
 }
-/* 지난 대화 목록(2026-08-26). 머리 바로 아래에 펼쳐진다 — 떠 있는 창을 하나 더 만들지 않는다
-   (좁은 레일에서 창이 뜨면 대화를 가린다). */
-.ara-chats {
-  flex: none;
-  max-height: 46%;
+/* 지난 대화 목록(2026-08-26). **팝업이다** — 처음엔 패널 머리 아래에 펼쳤는데 좁은 레일에서
+   대화를 밀어내며 반쪽만 보였다(준영님 제보). 고르는 화면이 고를 것을 가리면 안 된다. */
+.modal.ara-chats {
+  width: 520px;
+  grid-template-rows: auto 1fr;
+}
+.modal.ara-chats .ac-list {
   overflow-y: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-raised);
+  padding: 6px;
 }
-.ara-chats .ac-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px 4px 10px;
+.modal.ara-chats .ac-empty {
+  padding: 24px;
+  text-align: center;
   color: var(--text-dim);
-  font-size: var(--fs-sm);
 }
-.ara-chats .ac-empty {
-  padding: 10px;
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
-}
-.ara-chats .ac-row {
+.modal.ara-chats .ac-row {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 6px 0 4px;
+  border-radius: var(--radius-sm);
 }
-.ara-chats .ac-row:hover {
+.modal.ara-chats .ac-row:hover {
   background: var(--bg-overlay);
 }
 /* 지금 이어 가는 대화. 목록에서 "내가 어디 있나" 가 안 보이면 고를 수가 없다. */
-.ara-chats .ac-row.on {
+.modal.ara-chats .ac-row.on {
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.ara-chats .ac-open {
+.modal.ara-chats .ac-open {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
-  padding: 6px;
+  gap: 2px;
+  padding: 9px 10px;
   border: none;
   background: none;
   cursor: pointer;
   text-align: left;
   font-family: var(--ui);
 }
-.ara-chats .ac-t {
+.modal.ara-chats .ac-t {
   color: var(--text-hi);
   font-size: var(--fs-md);
   max-width: 100%;
@@ -7324,26 +7317,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ara-chats .ac-at {
+.modal.ara-chats .ac-at {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--text-dim);
   font-size: var(--fs-sm);
 }
-/* 어느 엔진의 대화인가. CLI 는 대부분이라 표시하지 않고 **API 만** 표시한다 —
-   이어서 열 때 그 엔진으로 열리므로 도구 유무가 달라진다. */
-.ara-chats .ac-eng {
+/* 어느 엔진의 대화인가. CLI 가 대부분이라 **API 만** 표시한다 — 이어서 열면 그 엔진으로 열리므로
+   도구 유무가 달라진다. */
+.modal.ara-chats .ac-eng {
   padding: 0 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: var(--fs-xs, var(--fs-sm));
 }
-.ara-chats .ac-name {
+.modal.ara-chats .ac-name {
   flex: 1;
   min-width: 0;
-  margin: 4px 0;
-  padding: 4px 6px;
+  margin: 4px;
+  padding: 6px 8px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--bg-base);
@@ -7352,8 +7344,30 @@
   font-size: var(--fs-md);
 }
 .ara-ic.sm {
-  padding: 2px 6px;
+  padding: 2px 8px;
+}
+/* 머리의 [지난 대화] — 아이콘만 두니 무엇인지 안 읽혔다(준영님 제보). 글자를 함께 둔다. */
+.ara-hist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--ui);
   font-size: var(--fs-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ara-hist:hover {
+  color: var(--text-hi);
+  background: var(--bg-overlay);
+}
+.ara-hist svg {
+  width: 13px;
+  height: 13px;
 }
 .ara-hd .t {
   color: var(--text-hi);

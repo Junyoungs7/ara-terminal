@@ -321,15 +321,11 @@ export function AraChatPanel({
             {home ? t('ara.cwd.pick') : cwd}
           </button>
         )}
-        {/* 지난 대화(2026-08-26). 이어서 열거나 이름을 붙인다 — Claude Code 의 `--resume` 자리다. */}
-        <button
-          type="button"
-          className={'ara-ic' + (chatsOpen ? ' on' : '')}
-          title={t('ara.chats')}
-          data-action="ara.chats"
-          onClick={() => void openChats()}
-        >
+        {/* 지난 대화(2026-08-26). 아이콘만 두니 무엇인지 안 읽혔다(준영님: *"잘 보이지않는데"*) —
+            **글자로 쓴다.** 좁은 레일이라도 이 버튼은 이름값을 한다. */}
+        <button type="button" className="ara-hist" title={t('ara.chats')} data-action="ara.chats" onClick={() => void openChats()}>
           <IconHistory />
+          <span>{t('ara.chats')}</span>
         </button>
         <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
           <IconRefresh />
@@ -341,58 +337,68 @@ export function AraChatPanel({
 
       {chatsOpen && (
         /**
-         * 지난 대화. 고르면 **그 대화를 이어서 연다**(`--resume`) — 지금 대화는 닫힌다.
-         * 이름을 붙이면 목록에 그 이름이 뜬다(안 붙이면 첫 질문이 제목이다).
+         * **팝업으로 띄운다**(2026-08-26 준영님: *"대화창에서 뜨지 말고 팝업으로 선택하게"*).
+         *
+         * 처음엔 패널 머리 아래에 펼쳤는데 좁은 레일에서 대화를 밀어내며 반쪽만 보였다 — 고르는
+         * 화면이 고를 것을 가리면 안 된다. 화면 가운데 창으로 띄우면 목록이 한눈에 들어온다.
+         *
+         * 고르면 **그 대화를 이어서 연다**(`--resume`). 이름을 붙이면 목록에 그 이름이 뜬다
+         * (안 붙이면 첫 질문이 제목이다).
          */
-        <div className="ara-chats" data-field="ara.chats">
-          <div className="ac-hd">
-            <span>{t('ara.chats')}</span>
-            <button type="button" className="ara-ic" title={t('mon.close')} onClick={() => setChatsOpen(false)}>
-              <IconClose />
-            </button>
-          </div>
-          {chats.length === 0 && <div className="ac-empty">{t('ara.chats.none')}</div>}
-          {chats.map((c) => (
-            <div className={'ac-row' + (c.id === resumeId ? ' on' : '')} key={c.id} data-chat={c.id}>
-              {renaming === c.id ? (
-                <input
-                  className="ac-name"
-                  defaultValue={c.name}
-                  autoFocus
-                  placeholder={t('ara.chats.name')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void saveName(c.id, (e.target as HTMLInputElement).value)
-                    if (e.key === 'Escape') setRenaming(null)
-                  }}
-                  onBlur={(e) => void saveName(c.id, e.target.value)}
-                />
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="ac-open"
-                    title={t('ara.chats.resume')}
-                    onClick={() => void resume(c)}
-                  >
-                    <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
-                    <span className="ac-at">
-                      {new Date(c.at).toLocaleString()}
-                      {c.engine === 'api' && <span className="ac-eng">API</span>}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="ara-ic sm"
-                    title={t('ara.chats.rename')}
-                    data-action="ara.chats.rename"
-                    onClick={() => setRenaming(c.id)}
-                  >
-                    ✎
-                  </button>
-                </>
-              )}
+        <div
+          className="overlay open dlg-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setChatsOpen(false)
+          }}
+        >
+          <div className="modal ara-chats" role="dialog" aria-modal="true" aria-label={t('ara.chats')} data-field="ara.chats">
+            <div className="modal-hd">
+              <span>{t('ara.chats')}</span>
+              <button type="button" className="ara-ic" title={t('mon.close')} onClick={() => setChatsOpen(false)}>
+                <IconClose />
+              </button>
             </div>
-          ))}
+            <div className="ac-list">
+              {chats.length === 0 && <div className="ac-empty">{t('ara.chats.none')}</div>}
+              {chats.map((c) => (
+                <div className={'ac-row' + (c.id === resumeId ? ' on' : '')} key={c.id} data-chat={c.id}>
+                  {renaming === c.id ? (
+                    <input
+                      className="ac-name"
+                      defaultValue={c.name}
+                      autoFocus
+                      placeholder={t('ara.chats.name')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void saveName(c.id, (e.target as HTMLInputElement).value)
+                        if (e.key === 'Escape') setRenaming(null)
+                      }}
+                      onBlur={(e) => void saveName(c.id, e.target.value)}
+                    />
+                  ) : (
+                    <>
+                      <button type="button" className="ac-open" title={t('ara.chats.resume')} onClick={() => void resume(c)}>
+                        <span className="ac-t">{c.name || c.title || t('ara.chats.untitled')}</span>
+                        <span className="ac-at">
+                          {new Date(c.at).toLocaleString()}
+                          {c.engine === 'api' && <span className="ac-eng">API</span>}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="ara-ic sm"
+                        title={t('ara.chats.rename')}
+                        data-action="ara.chats.rename"
+                        onClick={() => setRenaming(c.id)}
+                      >
+                        ✎
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
