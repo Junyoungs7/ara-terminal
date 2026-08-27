@@ -2640,7 +2640,10 @@
    준영님 제보 ⑥("시스템 모니터는 지금 하단 중 좌측에만 보이고 있고")이 바로 이것이다.
    래퍼가 하나 더 끼어도 안 죽게 후손 선택자로 둔다. */
 .bp-pane .log-panel.embedded,
-.bp-pane .monitor-panel.embedded {
+.bp-pane .monitor-panel.embedded,
+/* 2026-08-27 [서버 로그]도 같은 자리다. 준영님 제보("뭔가 잘려 보인다") — flex:1 이 없으면
+   가로 flex 인 .bp-pane 안에서 **내용 너비만큼만** 그려진다(위 2026-08-17 사고와 같은 종류). */
+.bp-pane .applog {
   width: auto;
   flex: 1;
   border-left: none;
@@ -5121,15 +5124,18 @@
 .applog {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-width: 0;
   min-height: 0;
 }
+/* 입력 줄 — 다른 탭의 도구 줄(.lv-head · 표 필터)과 같은 높이·같은 여백으로 맞춘다. */
 .ap-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 0 8px;
+  min-height: 30px;
   flex: none;
+  background: var(--bg-surface);
   border-bottom: 1px solid var(--line);
 }
 .ap-box {
@@ -5158,6 +5164,12 @@
   white-space: nowrap;
 }
 .ap-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  max-width: 46em;
+  margin: 0 auto;
+  text-align: center;
   padding: 16px 12px;
   color: var(--text-dim);
   font-size: var(--fs-sm);
