@@ -397,6 +397,29 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
     await client.close()
   })
 
+  /**
+   * ★ 2026-08-26 준영님 제보 — API 로 두 번째 서버를 붙일 때 아라가 `session_connect`(없는 이름)를
+   * 불렀고, **우리 안내가 `session_create` 를 첫 후보로 짚어 줬다.** 정답인 `ssh_connect` 는 후보에
+   * 아예 없었다(접두사만 봤으니까). 모델은 그 안내를 믿고 헛돌다 왕복 상한에 걸렸다.
+   *
+   * 잘못 짚어 주는 것은 안 짚어 주는 것보다 나쁘다 — 모델은 우리 말을 믿는다.
+   */
+  it('★ 오타 난 도구 이름에 **정답이 후보로** 나오고, 그 묶음 전체가 함께 온다', async () => {
+    const rig = await makeRig()
+    rigs.push(rig)
+    const { client, transport } = makeClient(rig.port, rig.token)
+    await client.connect(transport)
+
+    const res = await client.callTool({ name: 'ara_call', arguments: { tool: 'session_connect', args: {} } })
+    const text = (res.content as { text: string }[])[0].text
+    // `_connect` 가 겹치므로 정답이 후보에 든다(예전에는 없었다).
+    expect(text).toContain('ssh_connect')
+    // 이름에서 묶음이 읽히면 그 묶음 전체를 함께 준다 — ara_tools 를 또 부를 필요가 없다.
+    expect(text).toContain('## session_create')
+    expect(text).toContain('## session_list')
+    await client.close()
+  })
+
   it('★ 없는 묶음·없는 도구를 부르면 되돌아갈 목록을 준다(막다른 길을 만들지 않는다)', async () => {
     const rig = await makeRig()
     rigs.push(rig)

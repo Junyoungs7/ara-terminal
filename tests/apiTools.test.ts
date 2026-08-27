@@ -4,7 +4,7 @@
  * **문이 둘뿐이라 가능했다**(ara_tools·ara_call). 28개를 그대로 노출했다면 프로바이더마다 스키마를
  * 변환해야 했고, 요청마다 28개분이 토큰으로 나갔을 것이다.
  *
- * 여기서 보는 것은 **루프**다: 모델이 도구를 부르면 실행하고 결과를 되먹여 다시 묻는다. 상한(5)에
+ * 여기서 보는 것은 **루프**다: 모델이 도구를 부르면 실행하고 결과를 되먹여 다시 묻는다. 상한(10)에
  * 걸리면 조용히 더 쓰지 않고 사용자에게 넘긴다 — 왕복마다 과금이라 그 결정은 사람 몫이다.
  */
 import { describe, it, expect } from 'vitest'
@@ -13,7 +13,7 @@ import { chatBody } from '../src/main/ai/providers/openaiCompatible'
 import type { AiRequest, ProviderAdapter, StreamChunk, ToolCall } from '../src/main/ai/providers'
 import type { AiEnd, AiProvider } from '../src/shared/types'
 
-const vault = { get: () => 'k-test' }
+const vault = { get: () => 'k-test', set: () => {}, delete: () => {}, has: () => true }
 const prefs = () => ({ provider: 'openai' as AiProvider, model: 'gpt-5', baseUrl: undefined })
 
 /** 정해진 대본대로 답하는 가짜 프로바이더 — 라운드마다 무엇을 흘릴지 미리 적어 둔다. */
@@ -82,15 +82,15 @@ describe('툴 루프', () => {
     expect(seen[1].toolTurns?.[0].results[0]).toEqual({ callId: 'c1', name: 'ara_call', content: '세션 1개' })
   })
 
-  it('★ 상한 5회에서 멈추고 사용자에게 넘긴다 — 왕복마다 과금이라 그 결정은 사람 몫이다', async () => {
+  it('★ 상한에서 멈추고 사용자에게 넘긴다 — 왕복마다 과금이라 그 결정은 사람 몫이다', async () => {
     // 계속 도구만 부르는 모델(멈추지 않는 판).
     const { adapter, seen } = scripted([[{ toolCalls: [call('c')] }]])
     const { tools, ran } = makeTools()
     const { text, end } = await run(adapter, tools)
 
-    expect(ran).toHaveLength(4) // 5번째 요청에서 멈춘다(그 답의 도구는 실행하지 않는다)
-    expect(seen).toHaveLength(5)
-    expect(text).toContain('도구를 5번 썼습니다')
+    expect(ran).toHaveLength(9) // 10번째 요청에서 멈춘다(그 답의 도구는 실행하지 않는다)
+    expect(seen).toHaveLength(10)
+    expect(text).toContain('도구를 10번 썼습니다')
     expect(end.ok).toBe(true) // 오류가 아니다 — 사람이 이어 갈 수 있다
   })
 

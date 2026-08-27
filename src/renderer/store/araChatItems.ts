@@ -107,9 +107,16 @@ export function openAsk(items: ChatItem[]): AskRequest | null {
 }
 
 function noteReady(cwd: string | null, tools: number, model: string | null): string {
-  // 폴더가 없는 판 = API 키 엔진(#126). "? 에서 시작했습니다 · 도구 0개" 는 사실이지만 아무것도
-  // 알려 주지 않는다 — **무엇을 못 하는지**를 말해 주는 편이 낫다.
-  if (cwd === null) return `${model ?? 'API'} · 도구 없이 대화만 합니다`
+  /**
+   * 폴더가 없는 판 = API 키 엔진(#126).
+   *
+   * **"폴더가 없다 = 도구가 없다" 가 아니다**(2026-08-26 준영님 제보 — 도구를 3개 썼는데도 머리에
+   * "도구 없이 대화만 합니다" 가 떠 있었다). API 엔진에 function calling 을 붙인 뒤로 그 둘은
+   * 갈라졌다: 폴더는 여전히 없지만(작업 폴더 개념이 없다) 도구는 쥐고 있다. **숫자를 보고 정한다.**
+   */
+  if (cwd === null) {
+    return tools > 0 ? `${model ?? 'API'} · 도구 ${tools}개` : `${model ?? 'API'} · 도구 없이 대화만 합니다`
+  }
   // 아라 폴더(고를 것이 없어 떨어진 자리)는 경로를 적지 않는다 — `…\A.R.A\ara-home` 은
   // 사람에게 아무것도 알려 주지 않고 줄만 길어진다(2026-08-25 준영님, 머리 쪽과 같은 판단).
   if (/[\/]ara-home$/.test(cwd)) return `준비됐습니다 · 도구 ${tools}개`

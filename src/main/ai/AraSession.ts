@@ -161,12 +161,18 @@ export class AraSession {
   }
 
   /**
-   * 도구 왕복 상한(2026-08-26 준영님 확인: **5회**).
+   * 도구 왕복 상한.
    *
    * 왕복 한 번마다 대화 전체가 다시 전송된다 — Claude Code 는 구독이라 상관없지만 API 는 토큰당
    * 과금이다. 상한에 걸리면 **조용히 더 쓰지 않고** 사용자에게 넘긴다.
+   *
+   * **5 → 10**(2026-08-26 준영님 제보). 5로 뒀더니 두 번째 서버 연결에서 걸렸는데, 원인은 상한이
+   * 아니라 **헛돎**이었다: 모델이 없는 이름(`session_connect`)을 불렀고 우리 안내가 엉뚱한 후보
+   * (`session_create`)를 짚어 줘서 두 번을 버렸다. 그 안내를 고쳐 헛돎을 줄였고, 그래도
+   * "서버 세 대 붙여 줘" 처럼 **정당하게 왕복이 느는 일**이 있어 여유를 뒀다.
+   * 무한히 열지는 않는다 — 상한이 없으면 한 질문이 얼마를 쓸지 알 수 없다.
    */
-  private static readonly MAX_TOOL_ROUNDS = 5
+  private static readonly MAX_TOOL_ROUNDS = 10
 
   private async run(turn: AiTurn, env?: AiEnv): Promise<void> {
     const { provider, model, baseUrl } = this.getPrefs()

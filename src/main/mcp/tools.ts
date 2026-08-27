@@ -851,11 +851,24 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
   const runCall = async (tool: string, args?: Record<string, unknown>): Promise<ToolResult> => {
     const def = TOOLS.get(tool)
     if (!def) {
-      const near = [...TOOLS.keys()].filter((n) => n.includes(tool) || tool.includes(n.split('_')[0]))
+      /**
+       * **잘못 짚어 주면 모델이 그대로 헤맨다**(2026-08-26 준영님 제보).
+       *
+       * 아라가 `session_connect`(없는 이름)를 불렀을 때 우리는 **접두사만** 보고 `session_create` 를
+       * 첫 후보로 줬다 — 정작 정답인 `ssh_connect` 는 후보에 **없었다**(접두사가 다르니까).
+       * 모델은 그 안내를 믿고 `session_create` 를 시도했고, 목록을 확인할 즈음엔 왕복을 다 썼다.
+       *
+       * 그래서 이제 **이름 조각이 하나라도 겹치는 것**을 후보로 준다(`_connect` 가 겹친다).
+       * 이름에서 묶음이 읽히면(`session_…`) **그 묶음 전체**를 함께 준다 — 실패 한 번에 목록까지
+       * 받으므로 `ara_tools` 를 따로 부를 필요가 없어 왕복도 준다.
+       */
+      const parts = tool.split(/[_.\-\s]/).filter(Boolean)
+      const near = [...TOOLS.keys()].filter((n) => n.split(/[_.]/).some((seg) => parts.includes(seg)))
+      const guess = parts.find((x) => x in G) as TG | undefined
       return fail(
         `"${tool}" 이라는 도구가 없습니다.` +
           (near.length ? ` 비슷한 것: ${near.join(', ')}.` : '') +
-          `\n\n묶음부터 다시 고르세요:\n${groupList()}`
+          (guess ? `\n\n${runTools(guess)}` : `\n\n묶음부터 다시 고르세요:\n${groupList()}`)
       )
     }
     // 인자 검증은 **여기 한 곳**이다. zod 경계(스키마 밖 필드는 핸들러에 닿지 않는다)를 그대로 지킨다.
