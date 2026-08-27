@@ -639,7 +639,14 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
         '터미널에 직접 명령을 치지 마세요(사용자 화면이 지저분해지고 출력을 글자로 파싱해야 합니다). ' +
         'cmdId 목록: ps.list(프로세스) ps.kill svc.list(서비스) svc.action disk.usage disk.du ' +
         'sys.overview(배포판·커널·가동시간) pkg.probe(설치된 프로그램) ctr.list(컨테이너) ctr.action ctr.rmi ' +
-        'k8s.list which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove. ' +
+        'k8s.list which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove ' +
+        'app.trace app.pipe. ' +
+        '**백그라운드로 도는 서버의 로그를 찾을 때**(2026-08-27): `app.trace{port}` 로 그 포트를 듣는 ' +
+        '프로세스의 출력이 어디로 가는지 봅니다. 결과 kind 에 따라 — ' +
+        'file 이면 그 path 를 log_read 로 읽으면 되고, ' +
+        'tmux 면 `app.pipe{pane, port}` 를 한 번 걸어 로그 파일을 만든 뒤 그 path 를 읽습니다. ' +
+        'tty·pipe·null 이면 **원리상 볼 수 없습니다** — 그 프로세스가 로그를 아무 데도 안 남긴 것이라, ' +
+        '지어내지 말고 "다시 띄울 때 `> 파일 2>&1` 로 남기시라" 고 안내하세요. ' +
         '인자가 필요한 것은 args 에 넣습니다(예: ps.kill → {pid}, svc.action → {unit, action}). ' +
         '인자가 표의 규칙에 안 맞으면 아무것도 실행하지 않고 거절합니다. ' +
         '**돌려받은 목록이 수십 줄을 넘으면 글로 옮겨 적지 말고 panel_show 로 그 화면을 열어 주세요.**',

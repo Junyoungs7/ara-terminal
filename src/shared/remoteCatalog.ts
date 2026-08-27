@@ -42,6 +42,15 @@ export type CmdId =
   // F28 R2: 컨테이너 상태 바꾸기·지우기 / 이미지 지우기. 전부 확인 다이얼로그를 거친다.
   | 'ctr.action'
   | 'ctr.rmi'
+  /**
+   * 백그라운드로 도는 서버의 **로그가 어디 있나**(2026-08-27 준영님 요청).
+   *
+   * 원격에서 AI 가 `npm run dev`·`uvicorn` 을 띄우면 그 출력은 대개 **아무 데도 안 남는다** —
+   * 로그 파일을 만들지 않으면 화면 밖으로 사라진다. 포트 하나로 그 자리를 찾아낸다.
+   */
+  | 'app.trace'
+  /** tmux 팬의 출력을 파일로 실시간 복사(이미 돌고 있는 것에도 붙는다 — 실측 확인). */
+  | 'app.pipe'
 
 export type ProcRow = {
   pid: number
@@ -85,6 +94,20 @@ export type DirUsage = { kb: number; path: string }
 // 통과한 값만 명령줄에 들어간다. 여기서 막지 못한 것은 원격 셸이 그대로 해석한다.
 
 /** PID 는 1 이상의 정수만. 0·음수는 kill(2) 에서 **프로세스 그룹 전체**를 뜻해 치명적이다. */
+/** 포트 번호. 1~65535 정수만 — 그 밖은 명령을 조립조차 하지 않는다. */
+export function validPort(v: unknown): number | null {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 65535) return null
+  return v
+}
+
+/**
+ * tmux 팬 이름(`세션:창.팬`). **우리가 준 것만 되돌려받는다** — app.trace 가 뱉은 형식이라
+ * 자유 문자열이 아니다. 셸 인용 안에 들어가므로 따옴표·메타문자는 통째로 거절한다.
+ */
+export function validPane(v: unknown): string | null {
+  return typeof v === 'string' && /^[A-Za-z0-9_.\-]{1,60}:\d{1,4}\.\d{1,4}$/.test(v) ? v : null
+}
+
 export function validPid(v: unknown): number | null {
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 4_194_304) return null
   return v
@@ -279,6 +302,57 @@ export const PROBE_BINS = [
  * 앞 7칸은 공백으로 갈리고 **나머지 전부가 명령줄**이다(명령줄에는 공백이 얼마든 들어간다).
  * 그래서 split 로 통째로 나누면 안 되고, 앞에서부터 7번만 끊어 낸다.
  */
+/**
+ * 포트 하나를 추적한 결과(2026-08-27).
+ *
+ * `kind` 가 이 기능의 전부다 — **로그를 볼 수 있나, 없으면 왜 없나.**
+ *  · `file`  : stdout 이 파일이다 → 그대로 tail 하면 된다
+ *  · `tmux`  : tmux 팬이다 → pipe-pane 을 걸면 파일이 생긴다(그 다음 tail)
+ *  · `tty`   : 터미널인데 tmux 가 아니다 → 그 터미널을 보고 있는 사람만 본다
+ *  · `pipe`  : 파이프로 넘어갔다 → 훔쳐보려면 root 권한 도구가 필요하다(안 한다)
+ *  · `null`  : /dev/null 로 버려졌다 → **애초에 없다**
+ *  · `none`  : 그 포트를 듣는 프로세스가 없다
+ */
+export type AppTrace = {
+  kind: 'file' | 'tmux' | 'tty' | 'pipe' | 'null' | 'none'
+  port: number
+  pid?: number
+  /** kind==='file' 이면 그 로그 경로. tmux 면 pipe-pane 을 건 뒤 쓸 자리. */
+  path?: string
+  /** kind==='tmux' 일 때 그 팬(`세션:창.팬`). */
+  pane?: string
+  /** 그 프로세스의 명령줄 — 사람이 "아 그거" 하고 알아보는 유일한 단서다. */
+  cmd?: string
+}
+
+/**
+ * app.trace 출력 파서.
+ *
+ * 명령이 줄마다 `키=값` 을 찍게 만들었다 — 서버마다 다른 `ss`·`ls` 출력 형식을 파싱하는 대신
+ * **원격 셸이 우리 형식으로 정리해서** 준다(파싱 실패 지점을 하나로 줄인다).
+ */
+export function parseAppTrace(out: string, port: number): AppTrace {
+  const kv = new Map<string, string>()
+  for (const line of out.split(/\r?\n/)) {
+    const i = line.indexOf('=')
+    if (i > 0) kv.set(line.slice(0, i).trim(), line.slice(i + 1).trim())
+  }
+  const pidRaw = Number(kv.get('pid'))
+  const pid = Number.isInteger(pidRaw) && pidRaw > 0 ? pidRaw : undefined
+  if (!pid) return { kind: 'none', port }
+  const fd1 = kv.get('fd1') ?? ''
+  const cmd = kv.get('cmd') || undefined
+  const pane = kv.get('pane') || undefined
+  const base = { port, pid, ...(cmd ? { cmd } : {}) }
+  if (fd1 === '/dev/null') return { ...base, kind: 'null' }
+  if (fd1.startsWith('pipe:') || fd1.startsWith('socket:')) return { ...base, kind: 'pipe' }
+  if (fd1.startsWith('/dev/pts/') || fd1 === '/dev/tty') {
+    return pane ? { ...base, kind: 'tmux', pane, path: `/tmp/ara-tail-${port}.log` } : { ...base, kind: 'tty' }
+  }
+  if (fd1.startsWith('/')) return { ...base, kind: 'file', path: fd1 }
+  return { ...base, kind: 'pipe' }
+}
+
 export function parsePs(out: string): ProcRow[] {
   const rows: ProcRow[] = []
   for (const raw of out.split('\n')) {
@@ -816,6 +890,55 @@ const PS_CMD = 'ps -eo pid=,user=,pcpu=,pmem=,rss=,stat=,etimes=,args= --sort=-p
 
 export const COMMANDS: Record<CmdId, CmdSpec> = {
   'ps.list': { build: () => PS_CMD },
+
+  /**
+   * 그 포트를 듣는 프로세스의 **로그가 어디로 가나**(2026-08-27 준영님 요청).
+   *
+   * 원격 셸이 `키=값` 으로 정리해서 준다 — 서버마다 다른 `ss`·`ls` 출력 형식을 우리가 파싱하는
+   * 대신 저쪽에서 한 모양으로 맞춘다(실패 지점을 하나로 줄인다).
+   *
+   * **읽기만 한다.** `readlink` 와 `tmux list-panes` 뿐이고 아무것도 바꾸지 않는다.
+   * tmux 가 없거나 그 팬을 못 찾으면 `pane=` 이 비어서 나간다(그 자체가 답이다).
+   */
+  'app.trace': {
+    build: (args) => {
+      const port = validPort((args as { port?: unknown } | null)?.port)
+      if (port === null) return null
+      return [
+        `P=$(ss -ltnp 2>/dev/null | grep -F ':${port} ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)`,
+        `[ -z "$P" ] && P=$(lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null | head -1)`,
+        'echo "pid=$P"',
+        '[ -z "$P" ] && exit 0',
+        'echo "fd1=$(readlink /proc/$P/fd/1 2>/dev/null)"',
+        'T=$(readlink /proc/$P/fd/1 2>/dev/null)',
+        `echo "pane=$(tmux list-panes -a -F '#{pane_tty} #{session_name}:#{window_index}.#{pane_index}' 2>/dev/null | grep -F "$T " | head -1 | awk '{print $2}')"`,
+        // cmd 는 **맨 끝**이고 **한 줄로 눌러서** 낸다. 남의 프로세스 인자라(우리가 만든 값이 아니다)
+        // 개행이 들어 있으면 그 뒤가 `키=값` 으로 읽혀 **pane 을 위조**할 수 있다 — 실측에서 파이썬
+        // `-c` 코드가 통째로 여러 줄로 쏟아졌다. 개행·널을 공백으로 눌러 그 길을 없앤다.
+        `echo "cmd=$(tr '\0\n\r' '   ' < /proc/$P/cmdline 2>/dev/null | cut -c1-200)" 2>/dev/null`
+      ].join('; ')
+    }
+  },
+
+  /**
+   * tmux 팬의 출력을 **파일로 실시간 복사**한다(실측 2026-08-27: 이미 돌고 있는 것에도 붙는다).
+   *
+   * `write: true` 인 이유 — 남의 팬에 리다이렉트를 거는 일이라 사용자 확인을 받아야 한다.
+   * 같은 팬에 두 번 걸면 tmux 가 앞의 것을 끊고 새로 건다(중복 기록이 아니다).
+   * 파일은 `/tmp` 에 둔다: 실시간으로 보려고 만든 것이지 보관용이 아니고, 남의 홈을 더럽히지 않는다.
+   */
+  'app.pipe': {
+    write: true,
+    build: (args) => {
+      const a = args as { pane?: unknown; port?: unknown } | null
+      const port = validPort(a?.port)
+      const pane = validPane(a?.pane)
+      if (port === null || pane === null) return null
+      const path = `/tmp/ara-tail-${port}.log`
+      return `tmux pipe-pane -o -t '${pane}' 'cat >> ${path}' 2>&1 && echo "path=${path}"`
+    }
+  },
+
 
   'ps.kill': {
     write: true,
