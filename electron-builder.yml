@@ -10,6 +10,15 @@ files:
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:
   - node_modules/node-pty/**
+# 깨우기 말 모델(2026-08-27) — **설치본에 함께 싣는다.** 준영님 결정: 개인 PC 에서 쓸 때
+# 사내 서버에 붙으려면 VPN 이 필요하니, 음성 하나 켜자고 VPN 을 켜게 할 수는 없다.
+# 파일은 저장소에 없다(87MB) — 빌드 전에 `npm run voice:model` 이 resources/voice/ 에 받아 둔다.
+# 없으면 이 항목은 조용히 비어 나가고, 앱은 단축키 음성만 되고 그 사실을 설정에서 말한다.
+extraResources:
+  - from: resources/voice
+    to: voice
+    filter:
+      - '**/*'
 # 자동 업데이트 (#98, 2026-08-23) — **배포 사이트와 같은 폴더**를 본다.
 # `site/` 를 사내 웹 루트에 올리면 설치본·blockmap·latest.yml 이 전부 `downloads/` 에 함께 있다
 # (`npm run site:stage` 가 거기로 복사한다). 그래서 다운로드 페이지와 업데이트 채널이 한 자리다.
@@ -25,9 +34,9 @@ publish:
   channel: latest
 win:
   target: nsis
-  # 아이콘: 거미 마스터 ara-icon.svg → 1024px PNG(`npm run icons:png`). electron-builder 가
+  # 아이콘: 마스터 ara-icon.svg(생성물 — npm run icons:svg) → 1024px PNG(`npm run icons:png`). electron-builder 가
   # 512px 이상 PNG 를 주면 .ico 를 알아서 만든다 — .ico 6종을 손으로 만들지 않는다.
-  # 로고가 바뀌면 그 스크립트를 다시 돌린다(scripts/make-icon-png.cjs).
+  # 로고가 바뀌면 icons:svg → icons:png 를 다시 돌린다.
   icon: resources/icons/ara-icon.png
   # 코드 서명은 MVP 미적용(SmartScreen 경고 수용). 배포 직전 EV/OV 서명 도입.
 nsis:
