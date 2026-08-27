@@ -27,6 +27,7 @@ import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
+import { registerVoiceIpc } from './ipc/registerVoiceIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
@@ -267,6 +268,8 @@ app.whenReady().then(() => {
     )
   )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
+  // 2026-08-27 음성 모드 — 받아쓰기·읽어 주기. 같은 vault 를 쓰지만 **키는 여기서도 안 나간다**.
+  registerVoiceIpc({ vault: secrets, getCompatibleBaseUrl: () => aiPrefs().baseUrl ?? '' })
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
   mcp = registerMcpIpc(
