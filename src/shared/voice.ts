@@ -73,6 +73,30 @@ export function afterWake(heard: string, wake: string = DEFAULT_WAKE): string {
   return ''
 }
 
+/**
+ * 부른 뒤에 무엇을 할까 — **한 호흡이냐 두 호흡이냐**(2026-08-27 준영님 지적).
+ *
+ * 사람은 두 가지로 말한다:
+ *   ① 두 호흡 — "아라야." … (아라가 대답) … "KVT 로그 보여줘"
+ *   ② 한 호흡 — "아라야, KVT 로그 보여줘"
+ *
+ * 둘 다 받아야 하고, **대답은 ①에서만 한다.** ②에서 "네?" 하고 되받으면 이미 다 말한 사람을
+ * 한 박자 세우는 셈이라 오히려 굼떠 보인다 — 그때는 잠자코 일하러 가는 편이 빠르다.
+ */
+export type WakePlan =
+  /** 부르기만 했다 → 짧게 대답하고 다음 말을 기다린다(WAKE_GRACE_MS 안에 안 오면 도로 잠든다). */
+  | { kind: 'ack' }
+  /** 한 호흡에 다 말했다 → 대답 없이 바로 처리한다. */
+  | { kind: 'run'; command: string }
+  /** 부른 적이 없다 → 아무 일도 일어나지 않는다. */
+  | { kind: 'ignore' }
+
+export function wakePlan(heard: string, wake: string = DEFAULT_WAKE): WakePlan {
+  if (!matchWake(heard, wake)) return { kind: 'ignore' }
+  const rest = afterWake(heard, wake)
+  return rest === '' ? { kind: 'ack' } : { kind: 'run', command: rest }
+}
+
 /** 닫으라는 말인가. 다른 말에 섞여 있어도 받는다("아 그만" · "그만해"). */
 export function isStopPhrase(heard: string): boolean {
   const n = normalizeHeard(heard)

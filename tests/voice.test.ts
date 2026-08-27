@@ -17,7 +17,8 @@ import {
   matchWake,
   normalizeHeard,
   rms,
-  vadStep
+  vadStep,
+  wakePlan
 } from '../src/shared/voice'
 
 describe('깨우는 말', () => {
@@ -51,6 +52,31 @@ describe('깨우는 말', () => {
 
   it('정규화는 한글·영문·숫자만 남긴다', () => {
     expect(normalizeHeard('아라야, KVT #8000!')).toBe('아라야kvt8000')
+  })
+})
+
+describe('★ 한 호흡 · 두 호흡 (2026-08-27 준영님 지적)', () => {
+  it('두 호흡 — 부르기만 하면 대답하고 기다린다', () => {
+    expect(wakePlan('아라야')).toEqual({ kind: 'ack' })
+    expect(wakePlan('아라야.')).toEqual({ kind: 'ack' })
+  })
+
+  it('한 호흡 — 다 말했으면 대답 없이 바로 일한다', () => {
+    expect(wakePlan('아라야, KVT 로그 보여줘')).toEqual({ kind: 'run', command: 'KVT 로그 보여줘' })
+    expect(wakePlan('아라야 이거 해줘')).toEqual({ kind: 'run', command: '이거 해줘' })
+  })
+
+  it('부른 적 없으면 아무 일도 없다', () => {
+    expect(wakePlan('오늘 점심 뭐 먹지')).toEqual({ kind: 'ignore' })
+  })
+
+  it('두 호흡의 둘째 마디는 그냥 명령이다 — 다시 부르지 않아도 된다', () => {
+    // 깨어난 뒤에는 wakePlan 을 거치지 않는다. 들린 말이 곧 명령이고, 멈추는 규칙만 VAD 가 본다.
+    expect(vadStep({ level: 0.2, spokenMs: 1500, silenceMs: SILENCE_MS, elapsedMs: 2600 })).toBe('send')
+  })
+
+  it('두 호흡인데 둘째 마디가 안 오면 조용히 도로 잠든다(아무것도 안 보낸다)', () => {
+    expect(vadStep({ level: 0, spokenMs: 0, silenceMs: WAKE_GRACE_MS, elapsedMs: WAKE_GRACE_MS })).toBe('giveup')
   })
 })
 
