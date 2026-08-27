@@ -87,6 +87,13 @@ function Dialog({
     if (!spec) setPw('')
   }, [spec])
 
+  // 열릴 때 포커스를 창 안으로 들인다(입력칸이 있으면 그쪽이 가져간다 — 아래 autoFocus).
+  // ref 로 직접 부르는 이유: div 의 autoFocus 속성은 React 가 실제로 focus() 해 주지 않는다(실측).
+  const boxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (spec && !spec.input) boxRef.current?.focus()
+  }, [spec])
+
   // ESC=취소 / Enter=확인. 다이얼로그가 열려 있는 동안만 바인딩하고, 뒤쪽 핸들러로 새지 않게 캡처 단계에서 멈춘다.
   useEffect(() => {
     if (!spec) return
@@ -110,7 +117,19 @@ function Dialog({
 
   return (
     <div className="overlay open dlg-overlay" onClick={(e) => e.target === e.currentTarget && onClose('cancel')}>
-      <div className={'modal sm' + (danger ? ' danger' : '')} role="alertdialog" aria-modal="true" aria-label={spec.title}>
+      {/* 포커스는 **창 자체**가 받는다(확인 버튼이 아니라).
+          2026-08-27 실측: Enter 로 무언가를 실행하다 이 창이 뜨면 — [서버 로그] 입력칸에 잘못된 값을
+          넣고 Enter — 자동 포커스된 확인 버튼이 **같은 타건의 keypress** 로 눌려 창이 떴다 사라졌다
+          (keydown → 버튼 포커스 → keypress → click, 2ms 안에 전부). 창이 포커스를 받으면 그 길이
+          없어지고, Enter=확인은 위 window 핸들러가 그대로 담당한다(입력칸이 있으면 그쪽이 가져간다). */}
+      <div
+        className={'modal sm' + (danger ? ' danger' : '')}
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={spec.title}
+        tabIndex={-1}
+        ref={boxRef}
+      >
         <div className="modal-hd">
           <div className="mh-ico">
             {danger ? (
@@ -179,7 +198,7 @@ function Dialog({
             </button>
           )}
           {/* 입력이 있으면 포커스는 입력칸이 가져간다(Enter 는 위 window 핸들러가 확인으로 받는다). */}
-          <button className={'btn ' + (danger ? 'dgr' : 'pri')} onClick={() => onClose('confirm')} autoFocus={!spec.input}>
+          <button className={'btn ' + (danger ? 'dgr' : 'pri')} onClick={() => onClose('confirm')}>
             {spec.confirmLabel ?? t('dlg.ok')}
           </button>
         </div>

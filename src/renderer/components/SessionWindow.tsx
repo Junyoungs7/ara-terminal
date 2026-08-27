@@ -21,6 +21,7 @@ import { useSessions } from '../store/sessions'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { BOTTOM_IDS, type BottomId } from '@shared/types'
+import { AppLogPanel } from './AppLogPanel'
 import type { SessionWinTarget } from '@shared/sessionWin'
 import { t } from '../i18n'
 
@@ -32,6 +33,8 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   const mainRef = useRef<MainAreaHandle>(null)
   const { ask, askText, node: dialogNode } = useDialog()
   const [bottom, setBottom] = useState<BottomId | null>(null)
+  // [서버 로그] 탭이 세션마다 보고 있는 파일(본창 Shell.logPaths 와 같은 규칙).
+  const [logPaths, setLogPaths] = useState<Record<string, string>>({})
   const lastBottom = useRef<BottomId>('monitor')
   if (bottom) lastBottom.current = bottom
   const toggleBottomBar = useCallback(() => setBottom((cur) => (cur ? null : lastBottom.current)), [])
@@ -118,6 +121,12 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
                     onRefresh={telemetry.refresh}
                     onForwardsChanged={telemetry.refreshForwards}
                     ask={ask}
+                    onOpenLog={(path) => {
+                      if (activeSession) {
+                        setLogPaths((m) => ({ ...m, [activeSession.id]: path }))
+                        setBottom('applog')
+                      }
+                    }}
                   />
                 ) : id === 'sys' ? (
                   <SysMonitorPanel
@@ -129,6 +138,23 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
                     serverName={activeSession?.title ?? ''}
                     stats={telemetry.stats}
                     history={sysHistory}
+                  />
+                ) : id === 'applog' ? (
+                  // 본창과 같은 탭이다(기능은 양쪽 같게 — 창을 뺐다고 도구가 줄면 안 된다).
+                  <AppLogPanel
+                    sessionId={activeSession?.id ?? null}
+                    isSsh={activeSession?.type === 'ssh'}
+                    path={(activeSession && logPaths[activeSession.id]) || null}
+                    onOpen={(p) => activeSession && setLogPaths((m) => ({ ...m, [activeSession.id]: p }))}
+                    onClose={() =>
+                      activeSession &&
+                      setLogPaths((m) => {
+                        const next = { ...m }
+                        delete next[activeSession.id]
+                        return next
+                      })
+                    }
+                    ask={ask}
                   />
                 ) : id === 'log' ? (
                   <LogPanel

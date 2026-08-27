@@ -265,6 +265,8 @@ export type ActivityId =
   // 2026-08-24 준영님: 쿠버는 컨테이너와 **다른 탭**이다(한 서버에 둘 다 깔릴 수 있다).
   | 'k8s'
   | 'log'
+  // 2026-08-27 준영님: 원격 로그 뷰어가 하단바를 덮어 "로그를 보면서 하단바를 못 쓴다" → 탭으로 내렸다.
+  | 'applog'
   // #86: 지난 세션 기록 — **우측**이다. 세션 목록은 세로 카드라 레일에 맞고, 우리 기능이다.
   | 'pastlog'
   | 'preview'
@@ -285,6 +287,7 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'ctr',
   'k8s',
   'log',
+  'applog',
   'pastlog',
   'preview',
   'explorer',
@@ -321,7 +324,7 @@ export function isRailId(id: ActivityId): id is RailId {
 //
 // 액티비티 바 항목은 그대로 두고, 누르면 하단 패널이 그 탭으로 열린다 — 바를 옮기지 않는 이유는
 // 우리 바가 "무엇을 열지"를 고르는 것이지 VS Code 처럼 "사이드바 내용을 바꾸는" 것이 아니어서다.
-export const BOTTOM_IDS = ['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s', 'log'] as const
+export const BOTTOM_IDS = ['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s', 'log', 'applog'] as const
 export type BottomId = (typeof BOTTOM_IDS)[number]
 
 export function isBottomId(id: ActivityId): id is BottomId {

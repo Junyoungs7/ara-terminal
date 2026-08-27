@@ -12,6 +12,7 @@ import { ActivityBar } from './ActivityBar'
 import { PortMonitor } from './PortMonitor'
 import { BottomPanel } from './BottomPanel'
 import { LogPanel } from './LogPanel'
+import { AppLogPanel } from './AppLogPanel'
 import { PastLogPanel } from './PastLogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
@@ -114,6 +115,19 @@ export function Shell() {
   // #83: 시스템 모니터는 **서버 자원**이라 아래다(§4.8 — 내용이 자리를 정한다).
   const sysOpen = bottom === 'sys'
   const logOpen = bottom === 'log'
+  /**
+   * 2026-08-27 [서버 로그] 탭 — 세션마다 **지금 보고 있는 로그 파일**.
+   * 세션별로 나누는 이유는 하단바의 규칙 그대로다: "터미널은 A서버인데 하단은 B서버"를 만들지
+   * 않는다. 탭을 바꿔도(다른 표를 보러 가도) 여기 값은 남아 스트림이 살아 있다.
+   */
+  const [logPaths, setLogPaths] = useState<Record<string, string>>({})
+  const openAppLog = useCallback(
+    (sessionId: string, path: string) => {
+      setLogPaths((m) => ({ ...m, [sessionId]: path }))
+      openBottom('applog')
+    },
+    [openBottom]
+  )
   // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
   // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
   const [aiPrefill, setAiPrefill] = useState<{ text: string; at: number; autoSend?: boolean } | null>(null)
@@ -1135,6 +1149,7 @@ export function Shell() {
       ctr: bottom === 'ctr',
       k8s: bottom === 'k8s',
       log: logOpen,
+      applog: bottom === 'applog',
       pastlog: pastLogOpen,
       preview: previewOpen,
       explorer: explorerOpen,
@@ -1250,7 +1265,7 @@ export function Shell() {
             setAiPrefill({ text: paths.join('\n'), at: Date.now() })
           }}
           onTailFile={(absPath) => {
-            if (activeSession) mainRef.current?.openLogTail(activeSession.id, absPath)
+            if (activeSession) openAppLog(activeSession.id, absPath)
           }}
           onRevealFiles={revealFiles}
           ask={ask}
@@ -1310,7 +1325,7 @@ export function Shell() {
                     onForwardsChanged={telemetry.refreshForwards}
                     ask={ask}
                     onOpenLog={(path) => {
-                      if (activeSession) mainRef.current?.openLogTail(activeSession.id, path)
+                      if (activeSession) openAppLog(activeSession.id, path)
                     }}
                   />
                 ) : id === 'sys' ? (
@@ -1325,6 +1340,24 @@ export function Shell() {
                     serverName={activeSession?.title ?? ''}
                     stats={telemetry.stats}
                     history={sysHistory}
+                  />
+                ) : id === 'applog' ? (
+                  // 2026-08-27: 원격 프로그램의 실시간 로그. 예전엔 메인 영역 바닥 오버레이라
+                  // 하단바를 덮었다(준영님 제보) — 탭으로 내려와 이제 아무것도 가리지 않는다.
+                  <AppLogPanel
+                    sessionId={activeSession?.id ?? null}
+                    isSsh={activeSession?.type === 'ssh'}
+                    path={(activeSession && logPaths[activeSession.id]) || null}
+                    onOpen={(p) => activeSession && openAppLog(activeSession.id, p)}
+                    onClose={() =>
+                      activeSession &&
+                      setLogPaths((m) => {
+                        const next = { ...m }
+                        delete next[activeSession.id]
+                        return next
+                      })
+                    }
+                    ask={ask}
                   />
                 ) : id === 'log' ? (
                   <LogPanel

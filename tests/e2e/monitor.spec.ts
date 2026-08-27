@@ -311,12 +311,21 @@ test('MON-16★ [로그] — 파일이면 바로 열고, tmux 면 물어보고, 
   await openMonitor(page, port, 'pw', 'logsrv')
   await expect(portRows(page).first()).toBeVisible()
 
-  // ① stdout 이 파일 → 곧바로 로그 뷰어가 뜬다.
+  // ① stdout 이 파일 → **[서버 로그] 탭**으로 넘어가며 뷰어가 뜬다(2026-08-27: 예전에는
+  //    하단바를 덮는 오버레이였다 — "로그를 보면서 하단바를 못 쓴다"는 제보로 탭이 됐다).
   tele.state.trace = 'pid=2451\nfd1=/srv/app/out.log\npane=\ncmd=node server.js'
   await portRow(page, 8080).locator('[data-action="port.log"]').click()
+  await expect(page.locator('.bp-tab.on[data-bottom="applog"]')).toBeVisible()
   await expect(page.locator('.logview')).toBeVisible()
   await expect(page.locator('.logview')).toContainText('out.log')
-  await page.locator('.logview .lv-head button').last().click()
+
+  // ★ 로그를 켜 둔 채 다른 탭으로 갔다 와도 그대로 있다 — 이것이 탭으로 내린 이유다.
+  await openBottomTool(page, 'monitor')
+  await expect(portRows(page).first()).toBeVisible()
+  await openBottomTool(page, 'applog')
+  await expect(page.locator('.logview')).toContainText('out.log')
+  await page.locator('.logview .lv-head button').last().click() // [×] = 이 로그만 닫는다
+  await openBottomTool(page, 'monitor')
 
   // ② tmux → 남의 팬을 건드리므로 **묻는다.** 취소하면 아무 일도 없다.
   tele.state.trace = 'pid=2451\nfd1=/dev/pts/6\npane=dev:0.1\ncmd=npm run dev'
@@ -332,12 +341,48 @@ test('MON-16★ [로그] — 파일이면 바로 열고, tmux 면 물어보고, 
   await expect(page.locator('.logview')).toBeVisible()
   expect(tele.state.piped).toContain("pipe-pane -o -t 'dev:0.1'")
   await page.locator('.logview .lv-head button').last().click()
+  await openBottomTool(page, 'monitor')
 
   // ③ /dev/null → **못 본다.** 빈손으로 돌려보내지 않고 왜인지와 다음 수를 말한다.
   tele.state.trace = 'pid=2451\nfd1=/dev/null\npane=\ncmd=node server.js'
   await portRow(page, 8080).locator('[data-action="port.log"]').click()
   await expect(dialog(page)).toContainText('버리도록')
   await expect(dialog(page)).toContainText('2>&1')
+  await dialogConfirm(page)
+  await expect(page.locator('.logview')).toHaveCount(0)
+})
+
+/**
+ * MON-17 [서버 로그] 탭의 입력칸 — 포트 표를 거치지 않고 **직접** 친다(2026-08-27 준영님 추가 요청:
+ * *"여기에도 포트 번호를 치면 바로 연결되게"*). 경로를 알고 있으면 경로도 그대로 받는다.
+ */
+test('MON-17★ [서버 로그] 탭에 포트/경로를 직접 쳐도 같은 길로 열린다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const tele = makeTelemetry()
+  const { port } = await ssh({ password: 'pw', execHandler: tele.exec })
+  await openMonitor(page, port, 'pw', 'logbox')
+  await expect(portRows(page).first()).toBeVisible()
+  await openBottomTool(page, 'applog')
+
+  // ① 포트 번호 → 추적해서 찾은 파일이 열린다(포트 행 [로그] 와 같은 갈래를 지난다).
+  tele.state.trace = 'pid=771\nfd1=/var/log/uvicorn.log\npane=\ncmd=uvicorn app:main'
+  await page.getByTestId('applog-target').fill('8000')
+  await page.getByTestId('applog-target').press('Enter')
+  await expect(page.locator('.logview')).toContainText('uvicorn.log')
+  await page.locator('.logview .lv-head button').last().click()
+
+  // ② 절대 경로 → 찾을 것이 없다. 그대로 연다.
+  await page.getByTestId('applog-target').fill('/home/jun/app.log')
+  await page.locator('[data-action="applog.open"]').click()
+  await expect(page.locator('.logview')).toContainText('/home/jun/app.log')
+  await page.locator('.logview .lv-head button').last().click()
+
+  // ③ 포트도 경로도 아닌 것은 조용히 무시하지 않고 무엇을 넣어야 하는지 말한다.
+  // Enter 로 낸다 — 실측(2026-08-27): 다이얼로그가 그 타건을 [확인]으로 받아 떴다 사라졌다.
+  // Dialog 가 자기를 연 키를 한 틱 무시하게 고쳤고, 이 줄이 그 회귀를 잡는다.
+  await page.getByTestId('applog-target').fill('app.log')
+  await page.getByTestId('applog-target').press('Enter')
+  await expect(dialog(page)).toContainText('절대 경로')
   await dialogConfirm(page)
   await expect(page.locator('.logview')).toHaveCount(0)
 })

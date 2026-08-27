@@ -16,7 +16,7 @@ import { BOTTOM_IDS } from '../src/shared/types'
 // FB-ui2(FB-0006) 우측 액티비티 바 — 항목 정의·활성 판정의 순수 로직.
 
 describe('액티비티 바 항목 정의', () => {
-  it('열다섯 항목을 이 순서로 갖는다', () => {
+  it('열여섯 항목을 이 순서로 갖는다', () => {
     // F26: 서버 콘솔(console)은 탐색기 다음 자리 — 둘 다 서버를 마우스로 다루는 떠 있는 창이다.
     // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
     // #84: 서버 콘솔의 표 다섯(ps·svc·disk·pkg·ctr)이 하단 탭이 되면서 여기 합류했다.
@@ -35,6 +35,9 @@ describe('액티비티 바 항목 정의', () => {
       'ctr',
       'k8s',
       'log',
+      // 2026-08-27: [서버 로그] — 세션 기록(log) 바로 뒤. 둘 다 "로그"라 이름이 붙어 있어야
+      // 무엇이 무엇인지 바에서 한눈에 갈린다(그쪽은 내가 친 것, 이쪽은 서버가 뱉는 것).
+      'applog',
       'pastlog',
       'preview',
       'explorer',
@@ -64,6 +67,7 @@ describe('활성 판정(isActivityOpen)', () => {
     ctr: false,
     k8s: false,
     log: true,
+    applog: false,
     pastlog: false,
     preview: false,
     explorer: false,

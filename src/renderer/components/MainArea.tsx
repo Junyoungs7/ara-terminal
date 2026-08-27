@@ -11,7 +11,6 @@ import type { ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
-import { LogViewer } from './LogViewer'
 import { SettingsDrawer, SIZE_MAX, SIZE_MIN } from './SettingsDrawer'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
@@ -49,7 +48,6 @@ export type MainAreaHandle = {
   openCheatsheet: () => void
   zoomFont: (delta: number) => void
   // W1 F13: [파일] 탭에서 고른 원격 로그를 메인 영역 하단 뷰어로 연다(새 창 금지).
-  openLogTail: (sessionId: string, path: string) => void
   /**
    * 2026-08-18: Shell 도 한 줄 안내가 필요해졌다(AI CLI 창을 없애면서 — 폴더를 모르는 세션에서
    * 그냥 넘어가면 "눌렀는데 아무 일도 안 남"이 된다). 토스트 구현을 Shell 에 또 만들지 않는다.
@@ -178,7 +176,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // R3.2 터미널 내 검색 바(Ctrl+Shift+F). 포커스 패널의 세션을 검색한다.
     const [searchOpen, setSearchOpen] = useState(false)
     // W1 F13 로그 뷰어(파일 탭 우클릭 [tail로 보기]). 한 번에 하나만 — 다른 파일을 고르면 갈아탄다.
-    const [logTail, setLogTail] = useState<{ sessionId: string; path: string } | null>(null)
     // 설정 창 — 열림 상태 + 폰트(F5)·터미널 동작(R5) 스토어(하이드레이트/실시간 적용/영속).
     const [settingsOpen, setSettingsOpen] = useState(false)
     const { font, update: updateFont } = useFont()
@@ -742,7 +739,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         },
         openCheatsheet: () => setCheatsheetOpen(true),
         zoomFont,
-        openLogTail: (sessionId: string, path: string) => setLogTail({ sessionId, path }),
         toast: showToast
       }),
       [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast]
@@ -1042,15 +1038,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         />
         {bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
-        {/* 파일마다 스트림이 새로 시작돼야 하므로 key 에 경로를 넣는다(같은 컴포넌트 재사용 금지). */}
-        {logTail && (
-          <LogViewer
-            key={`${logTail.sessionId}:${logTail.path}`}
-            sessionId={logTail.sessionId}
-            path={logTail.path}
-            onClose={() => setLogTail(null)}
-          />
-        )}
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
           onAction={onAction}

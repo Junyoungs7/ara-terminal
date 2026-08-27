@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, Server, Ship } from 'lucide-react'
+import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, ScrollText, Server, Ship } from 'lucide-react'
 import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
 import { isBottomId, isRailId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
@@ -27,6 +27,9 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   k8s: () => <Ship />,
   // F30 AI 세션 — 아라 아이콘과 헷갈리지 않게 다른 글리프를 쓴다(그쪽은 대화, 이쪽은 관측).
   log: IconLog,
+  // 2026-08-27 [서버 로그] — 세션 기록(log)과 가르려고 두루마리 글리프를 쓴다(그쪽은 내가 친 것,
+  // 이쪽은 서버 프로그램이 뱉는 것).
+  applog: () => <ScrollText />,
   // #86: 지난 세션 — 시계 되감기. [세션 기록](현재)과 글리프를 달리해 둘을 가른다.
   pastlog: () => <History />,
   preview: IconPreview,
@@ -89,6 +92,7 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   ctr: 'console.tool.ctr',
   k8s: 'console.tool.k8s',
   log: 'log.title',
+  applog: 'applog.title',
   pastlog: 'pastlog.title',
   preview: 'preview.title',
   explorer: 'wb.title',

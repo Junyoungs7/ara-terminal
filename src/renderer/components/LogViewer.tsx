@@ -19,11 +19,18 @@ const MAX_LINES = 5000
 export function LogViewer({
   sessionId,
   path,
-  onClose
+  onClose,
+  embedded
 }: {
   sessionId: string
   path: string
   onClose: () => void
+  /**
+   * 하단바 [서버 로그] 탭 안에서 그릴 때(2026-08-27 준영님 선택). 예전에는 메인 영역 바닥에
+   * 깔리는 오버레이라 **하단바를 통째로 덮었다** — 로그를 보는 동안 포트·프로세스 표를 쓸 수
+   * 없었다. 탭 안에서는 자리를 차지하는 대신 아무것도 가리지 않는다.
+   */
+  embedded?: boolean
 }) {
   const [hist, setHist] = useState('') // 파일에서 거슬러 읽은 과거
   const [live, setLive] = useState('') // tail 스트림이 붙인 실시간
@@ -99,7 +106,7 @@ export function LogViewer({
   }, [hist, live, paused])
 
   return (
-    <div className="logview">
+    <div className={'logview' + (embedded ? ' embed' : '')}>
       <div className="lv-head">
         <span className="lv-live">
           <span className={'lv-dot' + (paused ? ' paused' : '')} />

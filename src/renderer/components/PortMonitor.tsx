@@ -3,7 +3,7 @@ import type { PortForward, RemotePort } from '@shared/types'
 import type { DialogResult, DialogSpec } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
-import { parseAppTrace } from '@shared/remoteCatalog'
+import { traceRemoteLog } from './remoteLog'
 
 // [모니터] 탭 — 활성 SSH 세션의 리슨 포트↔프로세스 (W1 F9 / design-system 5.2 파일 행과 같은 행 규격).
 // W2 F8: 행에서 바로 포워딩을 만들고(↗) 내장 브라우저로 연다(열기).
@@ -184,62 +184,14 @@ export function PortMonitor({
   const urlOf = (f: PortForward): string => `http://localhost:${f.localPort}`
 
   /**
-   * 그 포트를 듣는 프로세스의 **로그를 찾아 띄운다**(2026-08-27 준영님 요청).
-   *
-   * 원격에서 AI 가 `npm run dev`·`uvicorn` 을 백그라운드로 띄우면 그 출력은 대개 아무 데도
-   * 안 남는다. `/proc/<pid>/fd/1` 을 읽으면 **어디로 갔는지**는 알 수 있다(실측으로 갈래 확인):
-   *  · 파일  → 그대로 tail
-   *  · tmux → `pipe-pane` 을 걸어 파일을 만든 뒤 tail (남의 팬을 건드리므로 **확인을 받는다**)
-   *  · 그 밖 → **원리상 볼 수 없다.** 지어내지 않고 왜인지와 다음 수를 말한다.
+   * 그 포트를 듣는 프로세스의 **로그를 찾아 [서버 로그] 탭에 띄운다**(2026-08-27 준영님 요청).
+   * 갈래 판단과 문구는 remoteLog.ts 에 있다 — 그 탭의 포트 입력칸과 **같은 길**을 써야 해서다.
    */
   const openLog = async (port: number, pid?: number): Promise<void> => {
     if (!sessionId) return
     // pid 를 함께 넘긴다 — 이 행이 이미 알고 있는 값이라 원격에서 다시 찾을 이유가 없다.
-    const res = await window.ev?.remote.run(sessionId, 'app.trace', { port, pid }).catch(() => null)
-    if (!res?.ok) {
-      // 실패 사유를 뭉개지 않는다: 세션이 끊긴 것과 서버가 느린 것은 사람이 할 일이 다르다.
-      await ask?.({
-        title: t('port.log'),
-        message: res?.reason === 'noSession' ? t('console.err.noSession') : t('port.log.fail'),
-        cancelLabel: null
-      })
-      return
-    }
-    const tr = parseAppTrace(res.out, port)
-    if (tr.kind === 'file' && tr.path) {
-      onOpenLog?.(tr.path)
-      return
-    }
-    if (tr.kind === 'tmux' && tr.pane && tr.path) {
-      // 남의 tmux 팬에 리다이렉트를 건다 — 되돌릴 수 있지만 남의 것을 건드리는 일이라 묻는다.
-      const r = await ask?.({
-        title: t('port.log.pipe.title'),
-        message: `${t('port.log.pipe.msg')}
-
-${tr.cmd ?? ''}`,
-        confirmLabel: t('port.log.pipe.btn'),
-        cancelLabel: t('dlg.cancel')
-      })
-      if (r !== 'confirm') return
-      const piped = await window.ev?.remote.run(sessionId, 'app.pipe', { pane: tr.pane, port }).catch(() => null)
-      if (piped?.ok) onOpenLog?.(tr.path)
-      else await ask?.({ title: t('port.log'), message: t('port.log.fail'), cancelLabel: null })
-      return
-    }
-    // 못 보는 경우 — **왜인지와 다음 수**를 말한다(빈손으로 돌려보내지 않는다).
-    const why =
-      tr.kind === 'none'
-        ? t('port.log.none')
-        : tr.kind === 'denied'
-          ? t('port.log.denied')
-          : tr.kind === 'null'
-            ? t('port.log.null')
-            : tr.kind === 'tty'
-              ? t('port.log.tty')
-              : t('port.log.pipe.no')
-    await ask?.({ title: t('port.log'), message: `${why}
-
-${t('port.log.howto')}`, cancelLabel: null })
+    const path = await traceRemoteLog({ sessionId, port, pid, ask })
+    if (path) onOpenLog?.(path)
   }
 
   /** 이 행이 지금 브라우저에 떠 있는가 — 포워딩이 있고 그 주소의 탭이 살아 있을 때만. */

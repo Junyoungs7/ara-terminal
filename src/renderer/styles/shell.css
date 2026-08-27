@@ -3680,6 +3680,11 @@
 .overlay.open {
   display: flex;
 }
+/* 열릴 때 창이 포커스를 받는다(Dialog.tsx 주석 — 확인 버튼이 같은 타건에 눌리는 것을 막는다).
+   프로그램이 준 포커스라 테두리는 그리지 않는다: 사람이 탭으로 온 것이 아니다. */
+.modal:focus {
+  outline: none;
+}
 .modal {
   width: 820px;
   max-width: 94vw;
@@ -5110,6 +5115,56 @@
   color: var(--text-hi);
 }
 
+/* ── 2026-08-27 [서버 로그] 하단 탭 — 포트/경로 입력 한 줄 + 그 아래 로그 뷰어. ──
+   준영님 제보: 로그 뷰어가 오버레이라 하단바를 덮어 "로그를 보면서 하단바를 못 썼다".
+   탭으로 내려오면서 뷰어는 이 안에서 자리를 채운다(아무것도 가리지 않는다). */
+.applog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.ap-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+}
+.ap-box {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--bg-abyss);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-sm);
+}
+.ap-box:focus {
+  outline: none;
+  border-color: var(--accent-line);
+}
+.ap-head .ts-btn {
+  flex: none;
+  width: auto;
+  min-width: 22px;
+  padding: 0 10px;
+  font-family: var(--ui);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.ap-empty {
+  padding: 16px 12px;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
 /* ── F13 로그 뷰어 — 메인 영역 하단에 깔리는 읽기 전용 패널(새 창 금지, 터미널은 뒤에 그대로 있다). ── */
 .logview {
   position: absolute;
@@ -5124,6 +5179,16 @@
   border-top: 1px solid var(--accent-line);
   box-shadow: var(--shadow-md);
   z-index: 40;
+}
+/* 하단 탭 안에서는 떠 있지 않는다 — 남은 자리를 채운다(덮는 것이 문제였다). */
+.logview.embed {
+  position: static;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  border-top: none;
+  box-shadow: none;
+  z-index: auto;
 }
 .lv-head {
   display: flex;
