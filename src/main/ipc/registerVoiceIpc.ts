@@ -6,6 +6,9 @@
 // 어느 키를 쓰나: 받아쓰기·읽어 주기는 **OpenAI 포맷**이라 openai 키를 먼저 보고, 없으면
 // compatible(사내 게이트웨이·Azure)로 떨어진다. 앤트로픽·구글 키만 있으면 음성은 못 켠다 —
 // 그 사실을 설정 화면이 그 자리에서 말한다.
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { app } from 'electron'
 import { handle } from './handle'
 import { aiKeyVaultId, type KeyVault } from '../ai/AraSession'
 import { speak, speakable, transcribe, type VoiceKeys } from '../ai/voice'
@@ -24,7 +27,28 @@ function keysOf(d: VoiceDeps): VoiceKeys {
   return compat && base ? { key: compat, baseUrl: base } : { key: '' }
 }
 
+/**
+ * 설치본에 실린 깨우기 말 모델을 찾는다(2026-08-27 준영님 결정 — 개인 PC 는 사내 서버에 붙으려면
+ * VPN 이 필요하니 **설치본에 함께 싣는다**). 패키지본은 resources/voice, 개발은 저장소의 같은 자리.
+ * 없으면 그냥 없는 것이다 — 음성은 단축키로 돌고 설정이 그 사실을 말한다.
+ */
+function wakeModelPath(): string | null {
+  const dirs = [join(process.resourcesPath, 'voice'), join(app.getAppPath(), 'resources', 'voice')]
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+    const hit = readdirSync(dir).find((f) => f.endsWith('.zip') || f.endsWith('.tar.gz'))
+    if (hit) return join(dir, hit)
+  }
+  return null
+}
+
 export function registerVoiceIpc(deps: VoiceDeps): void {
+  handle('voice:wakeModel', () => {
+    const p = wakeModelPath()
+    // 83MB 를 한 번 넘긴다. 음성을 켠 사람이 마이크를 열 때 한 번뿐이라 스트리밍을 만들지 않는다.
+    return p ? { ok: true as const, bytes: new Uint8Array(readFileSync(p)) } : { ok: false as const }
+  })
+
   handle('voice:ready', () => {
     const k = keysOf(deps)
     return k.key ? { ok: true } : { ok: false, why: 'noKey' as const }

@@ -16,6 +16,9 @@ import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
 import { BootSplash } from './BootSplash'
+import { VoiceOverlay } from './VoiceOverlay'
+import { useVoiceMode } from '../store/voice'
+import { createWakeEngine } from '../store/wakeWord'
 
 /**
  * #139: 이 창에서 부팅 인사를 이미 지났나. **모듈 변수**인 이유 — MainArea 는 떼어낸 창마다
@@ -180,6 +183,20 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     const [settingsOpen, setSettingsOpen] = useState(false)
     const { font, update: updateFont } = useFont()
     const { prefs, update: updatePrefs } = useUiPrefs()
+
+    /**
+     * 음성 모드(2026-08-27 준영님). 설정에서 켜야 마이크가 열리고, 깨우는 말("아라야")은
+     * **이 PC 안에서** 가린다 — 그 전 소리는 저장도 전송도 되지 않는다.
+     * 언제 듣고 멈추나는 shared/voice.ts, 마이크·파형은 store/voice.ts 가 갖는다.
+     * prefs 의 주인이 여기라 훅도 여기 산다(두 곳에서 부르면 사본이 갈린다 — 위 §96 주석).
+     */
+    const voice = useVoiceMode({
+      enabled: prefs.voice.on,
+      wakeWord: prefs.voice.wake,
+      ttsVoice: prefs.voice.ttsVoice,
+      speakBack: prefs.voice.speakBack,
+      makeWake: createWakeEngine
+    })
 
     const showToast = useCallback((msg: string) => {
       setToast(msg)
@@ -788,6 +805,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             if (text) window.ev.session.input(sid, text)
             return
           }
+          // Alt+V — 깨우는 말 없이 바로 듣는다(회의 중이거나 소리 내 부르기 뭣할 때).
+          case 'voice.toggle':
+            if (voice.ui.state === 'off') showToast(t('voice.off.toast'))
+            else if (voice.ui.state === 'asleep') voice.open()
+            else voice.close()
+            return
           case 'split.horizontal':
             void doSplit('tb')
             return
@@ -1038,6 +1061,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         />
         {bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
+        <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} />
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
           onAction={onAction}

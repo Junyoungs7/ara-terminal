@@ -324,7 +324,8 @@ const api: EvApi = {
   voice: {
     ready: () => ipcRenderer.invoke('voice:ready'),
     transcribe: (audio: Uint8Array, mime: string) => ipcRenderer.invoke('voice:transcribe', { audio, mime }),
-    speak: (text: string, voice: string) => ipcRenderer.invoke('voice:speak', { text, voice })
+    speak: (text: string, voice: string) => ipcRenderer.invoke('voice:speak', { text, voice }),
+    wakeModel: () => ipcRenderer.invoke('voice:wakeModel')
   },
   ai: {
     getState: () => ipcRenderer.invoke('ai:getState'),

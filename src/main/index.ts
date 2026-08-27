@@ -1,5 +1,5 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import { join, isAbsolute } from 'node:path'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
@@ -270,6 +270,9 @@ app.whenReady().then(() => {
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
   // 2026-08-27 음성 모드 — 받아쓰기·읽어 주기. 같은 vault 를 쓰지만 **키는 여기서도 안 나간다**.
   registerVoiceIpc({ vault: secrets, getCompatibleBaseUrl: () => aiPrefs().baseUrl ?? '' })
+  // 마이크 권한 — Electron 은 기본으로 **거절**한다(브라우저와 달리 물어보지도 않는다).
+  // 우리가 여는 것은 음성 모드 하나뿐이라 media 만 열고 나머지는 그대로 막는다.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
   mcp = registerMcpIpc(

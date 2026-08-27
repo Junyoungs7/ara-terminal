@@ -5,6 +5,7 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_SESSION_LOG,
   DEFAULT_UI_SCALE,
+  DEFAULT_VOICE,
   type UiPrefs
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
@@ -30,7 +31,8 @@ const DEFAULT_PREFS: UiPrefs = {
   activityHidden: activityHiddenOf(undefined),
   araCallName: '',
   araWelcomeSeen: false,
-  bootSplash: true
+  bootSplash: true,
+  voice: DEFAULT_VOICE
 }
 
 export function useUiPrefs() {

@@ -387,6 +387,8 @@ export type InvokeContract = {
    */
   'voice:ready': { req: void; res: { ok: boolean; why?: 'noKey' } }
   'voice:transcribe': { req: { audio: Uint8Array; mime: string }; res: { ok: true; text: string } | { ok: false; reason: string; message: string } }
+  /** 설치본에 실린 깨우기 말 모델. 없으면 ok:false — 그때 음성은 단축키로만 돈다. */
+  'voice:wakeModel': { req: void; res: { ok: true; bytes: Uint8Array } | { ok: false } }
   'voice:speak': { req: { text: string; voice: string }; res: { ok: true; audio: Uint8Array; mime: string } | { ok: false; reason: string; message: string } }
   'ai:getState': { req: void; res: AiState }
   // 키 저장 + 검증(models.retrieve — GET 이라 토큰 과금 0). key:'' 는 삭제. 읽는 채널은 없다.
@@ -839,6 +841,7 @@ export type EvApi = {
     ready(): Promise<{ ok: boolean; why?: 'noKey' }>
     transcribe(audio: Uint8Array, mime: string): Promise<{ ok: true; text: string } | { ok: false; reason: string; message: string }>
     speak(text: string, voice: string): Promise<{ ok: true; audio: Uint8Array; mime: string } | { ok: false; reason: string; message: string }>
+    wakeModel(): Promise<{ ok: true; bytes: Uint8Array } | { ok: false }>
   }
   ai: {
     getState(): Promise<AiState>

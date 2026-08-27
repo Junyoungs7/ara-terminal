@@ -24,6 +24,7 @@ export type KeymapAction =
   | 'clipboard.paste'
   | 'ai.ask'
   | 'ai.toggle'
+  | 'voice.toggle'
   | 'ai.cli'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
@@ -93,6 +94,8 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 메뉴바가 implemented 를 보고 자동으로 따라온다.
   { action: 'ai.ask', category: 'ai', labelKo: 'AI에게 질문', win: 'Ctrl+Shift+A', mac: 'Cmd+Shift+A', implemented: true },
   { action: 'ai.toggle', category: 'ai', labelKo: 'AI 창 토글', win: 'Alt+A', mac: 'Opt+A', implemented: true },
+  // 2026-08-27 음성 — Ctrl+Shift+V 는 붙여넣기다. AI 창(Alt+A)과 같은 갈래로 Alt+V 를 쓴다.
+  { action: 'voice.toggle', category: 'ai', labelKo: '음성으로 말하기', win: 'Alt+V', mac: 'Opt+V', implemented: true },
   // F27: AI CLI 한 번에 시작. Ctrl+Shift+L(Launch) — 미사용 Ctrl+Shift+* 조합이라 R3.8 정책 그대로다
   // (Ctrl+L 단독은 셸 화면 지우기라 건드리지 않는다).
   { action: 'ai.cli', category: 'ai', labelKo: 'AI CLI 시작', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+L', implemented: true },

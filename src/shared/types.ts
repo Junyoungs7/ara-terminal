@@ -371,7 +371,25 @@ export type UiPrefs = {
   araWelcomeSeen: boolean
   /** #139 켤 때 인사 화면. 매일 켜는 사람에게는 셋째 날부터 방해라 끌 수 있다. */
   bootSplash: boolean
+  /**
+   * 음성 모드(2026-08-27). **API 키가 있어야 켜진다** — 받아쓰기·읽어 주기가 둘 다 키를 쓴다.
+   * 켜져 있으면 마이크가 열려 있지만 **깨우는 말은 이 PC 안에서** 가린다(그 전 소리는 안 나간다).
+   */
+  voice: VoicePrefs
 }
+
+export type VoicePrefs = {
+  /** 켜면 마이크를 연다. 끄면 아예 열지 않는다(권한 창도 안 뜬다). */
+  on: boolean
+  /** 깨우는 말. 자유 입력이 아니라 고른다 — 짧고 흔한 말은 오작동이 잦다. */
+  wake: string
+  /** 읽어 주기 목소리(OpenAI). */
+  ttsVoice: string
+  /** 답을 소리로 읽을까. 끄면 자막만 나온다. */
+  speakBack: boolean
+}
+
+export const DEFAULT_VOICE: VoicePrefs = { on: false, wake: '아라야', ttsVoice: 'alloy', speakBack: true }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
 // 활성 탭을 실제로 여기에 싣고 재시작 후 복원한다.
@@ -443,6 +461,8 @@ export type UiState = {
   araWelcomeSeen?: boolean
   /** #139 부팅 인사. 미지정이면 켬. */
   bootSplash?: boolean
+  /** 음성 모드(2026-08-27). 미지정이면 **꺼짐** — 마이크는 사람이 켜야 열린다. */
+  voice?: Partial<VoicePrefs>
   // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
   // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
   // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.
