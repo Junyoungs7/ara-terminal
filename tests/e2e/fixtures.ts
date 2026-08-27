@@ -535,7 +535,16 @@ export type TailChannel = {
 export type TeleHarness = {
   // 다음 바퀴부터 반영되는 서버 상태. load=0 이면 /proc/stat 누적치가 그대로라 CPU 가 계속 0% 다
   // (완전히 놀고 있는 서버) — "첫 바퀴 0% → 다음 바퀴 실값"을 타이밍에 기대지 않고 만들 수 있다.
-  state: { ports: string; proc: boolean; gpu: string | null; load: number }
+  state: {
+    ports: string
+    proc: boolean
+    gpu: string | null
+    load: number
+    /** app.trace 가 돌려줄 줄들(2026-08-27) — 검사마다 갈래를 갈아 끼운다. */
+    trace?: string
+    /** 실제로 나간 pipe-pane 명령. 남의 팬을 건드렸는지(또는 안 건드렸는지) 본다. */
+    piped?: string
+  }
   // 수집 명령이 원격으로 나간 횟수(수동 새로고침이 폴링 주기를 앞당겼는지 판정).
   rounds: () => number
   tails: TailChannel[]
@@ -544,7 +553,17 @@ export type TeleHarness = {
 
 export function makeTelemetry(init?: Partial<TeleHarness['state']>): TeleHarness {
   // gpu 는 nvidia-smi 가 주는 줄 그대로: `사용률, 사용메모리MiB, 총메모리MiB`(nounits).
-  const state = { ports: SS_OUT, proc: true, gpu: '61, 2048, 24576' as string | null, load: 1, ...init }
+  const state = {
+    ports: SS_OUT,
+    proc: true,
+    gpu: '61, 2048, 24576' as string | null,
+    load: 1,
+    /** app.trace 가 돌려줄 줄들(2026-08-27). 검사마다 갈래를 갈아 끼운다. */
+    trace: undefined as string | undefined,
+    /** 실제로 나간 pipe-pane 명령 — 남의 팬을 건드렸는지 확인용. */
+    piped: undefined as string | undefined,
+    ...init
+  }
   const tails: TailChannel[] = []
   let rounds = 0
   // 바퀴마다 /proc/stat 누적치를 늘린다 — CPU 는 두 샘플의 차이라 값이 고정이면 늘 0% 다.
@@ -552,6 +571,23 @@ export function makeTelemetry(init?: Partial<TeleHarness['state']>): TeleHarness
   const cpu = { user: 120_000, system: 60_000, idle: 900_000, iowait: 20_000 }
 
   const exec = (command: string, stream: ServerChannel): void => {
+    /**
+     * app.trace(2026-08-27) — 포트를 듣는 프로세스의 출력이 어디로 가나.
+     * 진짜 서버는 `키=값` 여러 줄을 낸다(원격 셸이 정리해서 준다). 하네스는 그 답만 흉내 낸다.
+     */
+    if (command.includes('readlink')) {
+      stream.write((state.trace ?? 'pid=') + '\\n')
+      stream.exit(0)
+      stream.end()
+      return
+    }
+    if (command.includes('pipe-pane')) {
+      state.piped = command
+      stream.write('path=/tmp/ara-tail.log\n')
+      stream.exit(0)
+      stream.end()
+      return
+    }
     if (command.startsWith('tail ')) {
       const ch: TailChannel = {
         command,

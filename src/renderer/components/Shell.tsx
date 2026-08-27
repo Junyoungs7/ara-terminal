@@ -1309,6 +1309,9 @@ export function Shell() {
                     onRefresh={telemetry.refresh}
                     onForwardsChanged={telemetry.refreshForwards}
                     ask={ask}
+                    onOpenLog={(path) => {
+                      if (activeSession) mainRef.current?.openLogTail(activeSession.id, path)
+                    }}
                   />
                 ) : id === 'sys' ? (
                   // F29 시스템 모니터 — CPU·메모리·GPU 는 위 telemetry 구독을 그대로 받는다

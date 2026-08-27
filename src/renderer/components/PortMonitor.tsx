@@ -3,6 +3,7 @@ import type { PortForward, RemotePort } from '@shared/types'
 import type { DialogResult, DialogSpec } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
+import { parseAppTrace } from '@shared/remoteCatalog'
 
 // [모니터] 탭 — 활성 SSH 세션의 리슨 포트↔프로세스 (W1 F9 / design-system 5.2 파일 행과 같은 행 규격).
 // W2 F8: 행에서 바로 포워딩을 만들고(↗) 내장 브라우저로 연다(열기).
@@ -142,6 +143,8 @@ type PortMonitorProps = {
   inWindow?: boolean
   /** 포트 충돌을 물을 때 쓴다(제보 17). 없으면 묻지 않고 예전처럼 임의 포트로 넘어간다. */
   ask?: (spec: DialogSpec) => Promise<DialogResult>
+  /** 찾아낸 로그 파일을 띄운다(2026-08-27). 없으면 [로그] 버튼이 아무 일도 안 하므로 함께 넘긴다. */
+  onOpenLog?: (path: string) => void
 }
 
 export function PortMonitor({
@@ -152,7 +155,8 @@ export function PortMonitor({
   onRefresh,
   onForwardsChanged,
   inWindow,
-  ask
+  ask,
+  onOpenLog
 }: PortMonitorProps) {
   // FB-0003: 세션을 바꿔도 사용자가 고른 필터는 유지한다 — 서버마다 매번 다시 고르게 하지 않는다.
   const [query, setQuery] = useState('')
@@ -178,6 +182,52 @@ export function PortMonitor({
 
   /** 그 포워딩을 브라우저에서 여는 주소. 오리진 비교에도 이 값을 쓴다(같은 규칙 한 곳). */
   const urlOf = (f: PortForward): string => `http://localhost:${f.localPort}`
+
+  /**
+   * 그 포트를 듣는 프로세스의 **로그를 찾아 띄운다**(2026-08-27 준영님 요청).
+   *
+   * 원격에서 AI 가 `npm run dev`·`uvicorn` 을 백그라운드로 띄우면 그 출력은 대개 아무 데도
+   * 안 남는다. `/proc/<pid>/fd/1` 을 읽으면 **어디로 갔는지**는 알 수 있다(실측으로 갈래 확인):
+   *  · 파일  → 그대로 tail
+   *  · tmux → `pipe-pane` 을 걸어 파일을 만든 뒤 tail (남의 팬을 건드리므로 **확인을 받는다**)
+   *  · 그 밖 → **원리상 볼 수 없다.** 지어내지 않고 왜인지와 다음 수를 말한다.
+   */
+  const openLog = async (port: number): Promise<void> => {
+    if (!sessionId) return
+    const res = await window.ev?.remote.run(sessionId, 'app.trace', { port }).catch(() => null)
+    if (!res?.ok) {
+      await ask?.({ title: t('port.log'), message: t('port.log.fail'), cancelLabel: null })
+      return
+    }
+    const tr = parseAppTrace(res.out, port)
+    if (tr.kind === 'file' && tr.path) {
+      onOpenLog?.(tr.path)
+      return
+    }
+    if (tr.kind === 'tmux' && tr.pane && tr.path) {
+      // 남의 tmux 팬에 리다이렉트를 건다 — 되돌릴 수 있지만 남의 것을 건드리는 일이라 묻는다.
+      const r = await ask?.({
+        title: t('port.log.pipe.title'),
+        message: `${t('port.log.pipe.msg')}
+
+${tr.cmd ?? ''}`,
+        confirmLabel: t('port.log.pipe.btn'),
+        cancelLabel: t('dlg.cancel')
+      })
+      if (r !== 'confirm') return
+      const piped = await window.ev?.remote.run(sessionId, 'app.pipe', { pane: tr.pane, port }).catch(() => null)
+      if (piped?.ok) onOpenLog?.(tr.path)
+      else await ask?.({ title: t('port.log'), message: t('port.log.fail'), cancelLabel: null })
+      return
+    }
+    // 못 보는 경우 — **왜인지와 다음 수**를 말한다(빈손으로 돌려보내지 않는다).
+    const why =
+      tr.kind === 'none' ? t('port.log.none') : tr.kind === 'null' ? t('port.log.null') : tr.kind === 'tty' ? t('port.log.tty') : t('port.log.pipe.no')
+    await ask?.({ title: t('port.log'), message: `${why}
+
+${t('port.log.howto')}`, cancelLabel: null })
+  }
+
   /** 이 행이 지금 브라우저에 떠 있는가 — 포워딩이 있고 그 주소의 탭이 살아 있을 때만. */
   const isOpen = (fwd: PortForward | undefined): boolean => Boolean(fwd && openOrigins.has(urlOf(fwd)))
 
@@ -406,6 +456,20 @@ export function PortMonitor({
                           onClick={() => void openPort(p.port)}
                         >
                           {t('fwd.open')}
+                        </button>
+                      )}
+                      {/* [로그] — 그 포트를 듣는 프로세스의 출력을 찾아 띄운다(2026-08-27 준영님 요청).
+                          원격에서 AI 가 백그라운드로 띄운 서버는 로그가 어디에도 안 남는 일이 흔하다. */}
+                      {isSsh && (
+                        <button
+                          type="button"
+                          className="pbtn"
+                          data-action="port.log"
+                          data-port={p.port}
+                          title={t('port.log.title')}
+                          onClick={() => void openLog(p.port)}
+                        >
+                          {t('port.log')}
                         </button>
                       )}
                       {/* 터널 해제는 남겨 둔다 — [닫기]는 창을 닫을 뿐이라 터널을 끊을 자리가 따로

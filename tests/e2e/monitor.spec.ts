@@ -10,7 +10,10 @@ import {
   openBottomTool,
   portNumbers,
   portRow,
-  portRows
+  portRows,
+  dialog,
+  dialogCancel,
+  dialogConfirm
 } from './fixtures'
 import type { Page } from '@playwright/test'
 import type { TeleHarness } from './fixtures'
@@ -290,4 +293,51 @@ test('MON-15 검색과 범위가 함께 걸린다', async ({ ara, ssh }) => {
   await ara.page.fill('.pmon .sb-search input', '2')
   // 1024 이상 **그리고** '2' 포함 → 5432 하나. 22 도 '2' 지만 범위 밖이라 빠진다(둘은 AND 다).
   expect(await portNumbers(ara.page)).toEqual([5432])
+})
+
+/**
+ * MON-16★ 포트 행의 **[로그]** — 백그라운드 서버의 출력을 찾아 띄운다(2026-08-27 준영님 요청).
+ *
+ * > *"원격 서버에서 ai가 백그라운드로 띄운 서버의 로그를 실시간으로"*
+ *
+ * 갈래는 WSL 실측으로 정했다(`/proc/<pid>/fd/1`): 파일이면 그대로, tmux 면 pipe-pane 을 걸어
+ * 파일을 만든 뒤, 그 밖이면 **원리상 못 본다**. 여기서는 세 갈래가 화면에서 각각 어떻게
+ * 끝나는지를 본다 — 특히 **못 볼 때 빈손으로 돌려보내지 않는 것**이 중요하다.
+ */
+test('MON-16★ [로그] — 파일이면 바로 열고, tmux 면 물어보고, 못 보면 이유를 말한다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const tele = makeTelemetry()
+  const { port } = await ssh({ password: 'pw', execHandler: tele.exec })
+  await openMonitor(page, port, 'pw', 'logsrv')
+  await expect(portRows(page).first()).toBeVisible()
+
+  // ① stdout 이 파일 → 곧바로 로그 뷰어가 뜬다.
+  tele.state.trace = 'pid=2451\nfd1=/srv/app/out.log\npane=\ncmd=node server.js'
+  await portRow(page, 8080).locator('[data-action="port.log"]').click()
+  await expect(page.locator('.logview')).toBeVisible()
+  await expect(page.locator('.logview')).toContainText('out.log')
+  await page.locator('.logview .lv-head button').last().click()
+
+  // ② tmux → 남의 팬을 건드리므로 **묻는다.** 취소하면 아무 일도 없다.
+  tele.state.trace = 'pid=2451\nfd1=/dev/pts/6\npane=dev:0.1\ncmd=npm run dev'
+  await portRow(page, 8080).locator('[data-action="port.log"]').click()
+  await expect(dialog(page)).toContainText('tmux')
+  await dialogCancel(page)
+  await expect(page.locator('.logview')).toHaveCount(0)
+  expect(tele.state.piped).toBeUndefined() // 취소했으면 명령이 나가지 않는다
+
+  // 확인하면 pipe-pane 이 나가고 그 파일이 열린다.
+  await portRow(page, 8080).locator('[data-action="port.log"]').click()
+  await dialogConfirm(page)
+  await expect(page.locator('.logview')).toBeVisible()
+  expect(tele.state.piped).toContain("pipe-pane -o -t 'dev:0.1'")
+  await page.locator('.logview .lv-head button').last().click()
+
+  // ③ /dev/null → **못 본다.** 빈손으로 돌려보내지 않고 왜인지와 다음 수를 말한다.
+  tele.state.trace = 'pid=2451\nfd1=/dev/null\npane=\ncmd=node server.js'
+  await portRow(page, 8080).locator('[data-action="port.log"]').click()
+  await expect(dialog(page)).toContainText('버리도록')
+  await expect(dialog(page)).toContainText('2>&1')
+  await dialogConfirm(page)
+  await expect(page.locator('.logview')).toHaveCount(0)
 })
