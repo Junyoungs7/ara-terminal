@@ -192,11 +192,17 @@ export function PortMonitor({
    *  · tmux → `pipe-pane` 을 걸어 파일을 만든 뒤 tail (남의 팬을 건드리므로 **확인을 받는다**)
    *  · 그 밖 → **원리상 볼 수 없다.** 지어내지 않고 왜인지와 다음 수를 말한다.
    */
-  const openLog = async (port: number): Promise<void> => {
+  const openLog = async (port: number, pid?: number): Promise<void> => {
     if (!sessionId) return
-    const res = await window.ev?.remote.run(sessionId, 'app.trace', { port }).catch(() => null)
+    // pid 를 함께 넘긴다 — 이 행이 이미 알고 있는 값이라 원격에서 다시 찾을 이유가 없다.
+    const res = await window.ev?.remote.run(sessionId, 'app.trace', { port, pid }).catch(() => null)
     if (!res?.ok) {
-      await ask?.({ title: t('port.log'), message: t('port.log.fail'), cancelLabel: null })
+      // 실패 사유를 뭉개지 않는다: 세션이 끊긴 것과 서버가 느린 것은 사람이 할 일이 다르다.
+      await ask?.({
+        title: t('port.log'),
+        message: res?.reason === 'noSession' ? t('console.err.noSession') : t('port.log.fail'),
+        cancelLabel: null
+      })
       return
     }
     const tr = parseAppTrace(res.out, port)
@@ -222,7 +228,15 @@ ${tr.cmd ?? ''}`,
     }
     // 못 보는 경우 — **왜인지와 다음 수**를 말한다(빈손으로 돌려보내지 않는다).
     const why =
-      tr.kind === 'none' ? t('port.log.none') : tr.kind === 'null' ? t('port.log.null') : tr.kind === 'tty' ? t('port.log.tty') : t('port.log.pipe.no')
+      tr.kind === 'none'
+        ? t('port.log.none')
+        : tr.kind === 'denied'
+          ? t('port.log.denied')
+          : tr.kind === 'null'
+            ? t('port.log.null')
+            : tr.kind === 'tty'
+              ? t('port.log.tty')
+              : t('port.log.pipe.no')
     await ask?.({ title: t('port.log'), message: `${why}
 
 ${t('port.log.howto')}`, cancelLabel: null })
@@ -467,7 +481,7 @@ ${t('port.log.howto')}`, cancelLabel: null })
                           data-action="port.log"
                           data-port={p.port}
                           title={t('port.log.title')}
-                          onClick={() => void openLog(p.port)}
+                          onClick={() => void openLog(p.port, p.pid)}
                         >
                           {t('port.log')}
                         </button>

@@ -355,6 +355,20 @@ describe('RemoteConsoleService — 카탈로그를 통과하지 못한 것은 �
     expect(log).toEqual(['kill -TERM 1234 2>&1'])
   })
 
+  /**
+   * ★ 2026-08-27 준영님 제보. 끊긴 커넥션에서 ssh2 는 콜백이 아니라 **동기로 던진다**.
+   * 안 잡으면 Promise 가 reject → IPC reject → 화면은 이유를 모르는 실패를 받았다.
+   */
+  it('★ 끊긴 커넥션에서 exec 이 던져도 터지지 않고 noSession 으로 끝난다', async () => {
+    const dead = {
+      exec() {
+        throw new Error('Not connected')
+      }
+    } as unknown as Client
+    const svc = createRemoteConsoleService(() => dead, () => {})
+    expect(await svc.run('s1', 'ps.list', {})).toEqual({ ok: false, reason: 'noSession' })
+  })
+
   it('SSH 세션이 없으면 noSession — 명령은 나가지 않는다', async () => {
     const log: string[] = []
     const svc = createRemoteConsoleService(() => null, () => {})

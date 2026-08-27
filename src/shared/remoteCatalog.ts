@@ -311,10 +311,11 @@ export const PROBE_BINS = [
  *  · `tty`   : 터미널인데 tmux 가 아니다 → 그 터미널을 보고 있는 사람만 본다
  *  · `pipe`  : 파이프로 넘어갔다 → 훔쳐보려면 root 권한 도구가 필요하다(안 한다)
  *  · `null`  : /dev/null 로 버려졌다 → **애초에 없다**
+ *  · `denied`: 프로세스는 있는데 **남의 것**이다 → /proc/<pid>/fd 를 읽을 권한이 없다
  *  · `none`  : 그 포트를 듣는 프로세스가 없다
  */
 export type AppTrace = {
-  kind: 'file' | 'tmux' | 'tty' | 'pipe' | 'null' | 'none'
+  kind: 'file' | 'tmux' | 'tty' | 'pipe' | 'null' | 'none' | 'denied'
   port: number
   pid?: number
   /** kind==='file' 이면 그 로그 경로. tmux 면 pipe-pane 을 건 뒤 쓸 자리. */
@@ -344,6 +345,10 @@ export function parseAppTrace(out: string, port: number): AppTrace {
   const cmd = kv.get('cmd') || undefined
   const pane = kv.get('pane') || undefined
   const base = { port, pid, ...(cmd ? { cmd } : {}) }
+  // fd1 이 비었다 = readlink 가 아무것도 못 읽었다. 두 경우뿐이고 사람에게 할 말이 다르다:
+  // cmdline 은 읽혔다(= 프로세스는 있는데 /proc/<pid>/fd 가 남의 것이라 막혔다) → denied,
+  // 그것마저 못 읽었다(= 그 사이 꺼졌다) → none. 예전엔 둘 다 'pipe' 로 떨어져 엉뚱한 이유를 댔다.
+  if (fd1 === '') return { ...base, kind: cmd ? 'denied' : 'none' }
   if (fd1 === '/dev/null') return { ...base, kind: 'null' }
   if (fd1.startsWith('pipe:') || fd1.startsWith('socket:')) return { ...base, kind: 'pipe' }
   if (fd1.startsWith('/dev/pts/') || fd1 === '/dev/tty') {
@@ -902,11 +907,28 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
    */
   'app.trace': {
     build: (args) => {
-      const port = validPort((args as { port?: unknown } | null)?.port)
+      const a = args as { port?: unknown; pid?: unknown } | null
+      const port = validPort(a?.port)
       if (port === null) return null
+      // **pid 를 다시 찾지 않는다.** 포트 표(RemoteTelemetry.parsePorts)가 이미 뽑아 둔 값이 있으면
+      // 그것을 쓴다 — 이 명령에서 제일 잘 깨지던 조각이 pid 찾기였다(2026-08-27 준영님 제보).
+      const known = validPid(a?.pid)
+      const find =
+        known !== null
+          ? `P=${known}`
+          : [
+              // ss 는 RHEL 계열에서 /usr/sbin 에 있고 **비대화형 exec 의 PATH 에는 그 자리가 없다**.
+              // 그러면 "찾지 못했습니다"만 나온다 — 화면의 포트 목록은 멀쩡히 보이는데도.
+              // netstat 폴백은 텔레메트리(COLLECT_CMD)와 같은 짝을 쓴다: 두 곳이 다른 답을 내면 안 된다.
+              'PATH=$PATH:/usr/sbin:/sbin',
+              `L=$( (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -F ':${port} ' | head -1)`,
+              // ss: users:(("node",pid=1234,fd=20)) / netstat: 1234/node
+              `P=$(echo "$L" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)`,
+              `[ -z "$P" ] && P=$(echo "$L" | grep -oE '[0-9]+/' | head -1 | tr -d /)`,
+              `[ -z "$P" ] && P=$(lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null | head -1)`
+            ].join('; ')
       return [
-        `P=$(ss -ltnp 2>/dev/null | grep -F ':${port} ' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)`,
-        `[ -z "$P" ] && P=$(lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null | head -1)`,
+        find,
         'echo "pid=$P"',
         '[ -z "$P" ] && exit 0',
         'echo "fd1=$(readlink /proc/$P/fd/1 2>/dev/null)"',
@@ -915,7 +937,10 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
         // cmd 는 **맨 끝**이고 **한 줄로 눌러서** 낸다. 남의 프로세스 인자라(우리가 만든 값이 아니다)
         // 개행이 들어 있으면 그 뒤가 `키=값` 으로 읽혀 **pane 을 위조**할 수 있다 — 실측에서 파이썬
         // `-c` 코드가 통째로 여러 줄로 쏟아졌다. 개행·널을 공백으로 눌러 그 길을 없앤다.
-        `echo "cmd=$(tr '\0\n\r' '   ' < /proc/$P/cmdline 2>/dev/null | cut -c1-200)" 2>/dev/null`
+        // 백슬래시는 **두 번** 적는다. 한 번만 적으면 템플릿 문자열이 여기서 진짜 NUL·개행으로
+        // 바꿔 버리고, 그 NUL 이 exec 요청에 실려 나가면 sshd 가 패킷을 거부하며 **연결을 끊는다**
+        // (2026-08-27 준영님 제보: [로그] 를 누르면 세션이 끊겼다). tr 가 해석할 몫은 tr 에게 준다.
+        `echo "cmd=$(tr '\\0\\n\\r' '   ' < /proc/$P/cmdline 2>/dev/null | cut -c1-200)" 2>/dev/null`
       ].join('; ')
     }
   },
@@ -1134,5 +1159,10 @@ export function buildCommand(id: unknown, args: unknown): { cmd: string; write: 
   if (!isCmdId(id)) return null
   const spec = COMMANDS[id]
   const cmd = spec.build(args)
-  return cmd === null ? null : { cmd, write: spec.write === true }
+  if (cmd === null) return null
+  // 여기 명령은 전부 `;` 로 이은 **한 줄**이다. NUL·개행이 들어갔다면 예외 없이 이스케이프 사고다
+  // (`'\0'` 를 템플릿 문자열에 그대로 적으면 진짜 NUL 이 된다 — 2026-08-27 실측). 특히 NUL 은
+  // 치명적이다: sshd 는 NUL 이 든 exec 요청을 거부하면서 **커넥션 전체를 끊는다**. 그래서 나가기 전에
+  // 여기서 막는다 — 표의 어느 명령이 그래도 마찬가지다(호출측은 badArgs 와 같은 길로 받는다).
+  return /[\0\r\n]/.test(cmd) ? null : { cmd, write: spec.write === true }
 }

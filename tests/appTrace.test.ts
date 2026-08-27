@@ -38,6 +38,15 @@ describe('추적 결과 읽기', () => {
   })
 
   /**
+   * ★ 2026-08-27 준영님 제보 뒤 갈라낸 갈래. fd1 이 비는 이유는 둘이고 할 말이 다르다 —
+   * 예전에는 둘 다 'pipe'("다른 프로그램으로 흘러갑니다")로 떨어져 **엉뚱한 이유**를 댔다.
+   */
+  it('★ 남의(또는 root) 프로세스면 denied — 꺼진 것과 다르게 말한다', () => {
+    expect(trace(['pid=7', 'fd1=', 'pane=', 'cmd=/usr/bin/python3 app.py']).kind).toBe('denied')
+    expect(trace(['pid=7', 'fd1=', 'pane=', 'cmd=']).kind).toBe('none')
+  })
+
+  /**
    * ★ 실측에서 나온 위험 — cmdline 은 **남의 프로세스 인자**다. 거기에 개행과 `pane=` 을 심으면
    * 우리 파서가 속을 수 있었다. 그래서 명령이 cmd 를 **한 줄로 눌러 맨 끝에** 낸다.
    */
@@ -75,5 +84,28 @@ describe('명령 조립', () => {
     const cmd = COMMANDS['app.trace'].build({ port: 8000})!
     expect(cmd).toContain('readlink')
     expect(cmd).not.toContain('rm ')
+  })
+
+  /**
+   * ★ 2026-08-27 준영님 제보: 포트 목록에는 8000 이 멀쩡히 보이는데 [로그]는 못 찾았다.
+   * 화면이 이미 아는 pid 를 안 쓰고 원격에서 `ss` 로 다시 찾았고, RHEL 계열의 비대화형 exec 은
+   * PATH 에 /usr/sbin 이 없어 그 `ss` 가 아예 실행되지 않는다(목록은 netstat 폴백으로 나온 것).
+   */
+  it('★ pid 를 알면 다시 찾지 않는다 — 찾기가 제일 잘 깨지는 조각이었다', () => {
+    const cmd = COMMANDS['app.trace'].build({ port: 8000, pid: 1234 })!
+    expect(cmd).toContain('P=1234')
+    expect(cmd).not.toContain('ss -ltnp')
+  })
+
+  it('★ pid 를 모를 때의 폴백은 텔레메트리와 같은 짝(ss || netstat) + sbin 을 쓴다', () => {
+    const cmd = COMMANDS['app.trace'].build({ port: 8000 })!
+    expect(cmd).toContain('/usr/sbin')
+    expect(cmd).toContain('netstat -ltnp')
+  })
+
+  it('pid 가 정수가 아니면 그 값은 명령에 닿지 않는다(폴백으로 떨어진다)', () => {
+    const cmd = COMMANDS['app.trace'].build({ port: 8000, pid: '1; rm -rf /' })!
+    expect(cmd).not.toContain('rm -rf')
+    expect(cmd).toContain('netstat -ltnp')
   })
 })

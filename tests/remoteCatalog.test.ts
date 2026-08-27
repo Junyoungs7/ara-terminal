@@ -133,6 +133,25 @@ describe('명령 조립', () => {
     expect(buildCommand('constructor', {})).toBeNull()
   })
 
+  /**
+   * ★ 2026-08-27 준영님 제보의 진짜 원인. `app.trace` 가 템플릿 문자열에 `'\0\n\r'` 를 한 겹으로 적어
+   * **진짜 NUL·개행**을 명령에 실어 보냈고, sshd 는 NUL 이 든 exec 요청을 거부하면서 **커넥션을 끊었다** —
+   * 그래서 [로그] 를 누를 때마다 "로그를 찾지 못했습니다" + 세션 끊김이 같이 났다.
+   *
+   * 표 전체를 훑는다: 한 명령의 실수가 세션을 죽이므로 새 명령이 늘어도 여기서 걸려야 한다.
+   * 탭은 막지 않는다(`--format '{{.ID}}\t…'` 처럼 일부러 쓴다) — 치명적인 것은 NUL·개행뿐이다.
+   */
+  it('★ 어떤 명령도 NUL·개행을 원격에 보내지 않는다 (sshd 가 커넥션을 끊는다)', () => {
+    const sample = { port: 8000, pid: 1234, pane: 'dev:0.1', signal: 'TERM', unit: 'nginx.service', action: 'start', path: '/home/jun/app', name: 'wt', dest: '/home/jun/wt', cli: 'claude' }
+    for (const id of Object.keys(COMMANDS)) {
+      const cmd = buildCommand(id, sample)?.cmd
+      if (cmd === undefined) continue
+      expect.soft(cmd, `${id} 에 제어문자가 실렸다`).not.toMatch(/[\0\r\n]/)
+    }
+    // 문지기 자체도 확인한다 — 표를 통과해도 제어문자가 있으면 나가지 못한다.
+    expect(buildCommand('app.trace', { port: 8000 })?.cmd).not.toMatch(/[\0\r\n]/)
+  })
+
   it('읽기 명령은 인자 없이 조립된다', () => {
     expect(buildCommand('ps.list', undefined)?.cmd).toContain('ps -eo')
     expect(buildCommand('ps.list', undefined)?.write).toBe(false)

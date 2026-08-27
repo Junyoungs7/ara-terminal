@@ -576,7 +576,7 @@ export function makeTelemetry(init?: Partial<TeleHarness['state']>): TeleHarness
      * 진짜 서버는 `키=값` 여러 줄을 낸다(원격 셸이 정리해서 준다). 하네스는 그 답만 흉내 낸다.
      */
     if (command.includes('readlink')) {
-      stream.write((state.trace ?? 'pid=') + '\\n')
+      stream.write((state.trace ?? 'pid=') + '\n')
       stream.exit(0)
       stream.end()
       return

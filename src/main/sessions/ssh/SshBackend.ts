@@ -5,6 +5,7 @@ import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from
 import type { SessionBackend } from '../SessionBackend'
 import type { KnownHost, SshProfile } from '@shared/types'
 import { fingerprintSha256, hostId, verifyHostKey } from './hostkey'
+import { logMainError } from '../../log/MainErrorLog'
 import { SHELL_PID_CMD, cwdLink, parseShellPid } from './remoteCwd'
 
 // 출력이 이만큼 멎으면 프롬프트가 뜬 것으로 보고 CWD 를 한 번 읽는다(remoteCwd.ts 참조).
@@ -130,6 +131,14 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
     })
 
     client.on('error', (err: Error & { level?: string }) => {
+      // 접속이 끝난 **뒤에** 오는 오류는 여기서 조용히 사라졌다(done 은 settled 면 아무것도 안 한다).
+      // 그래서 세션이 왜 죽었는지가 어디에도 안 남았고, 화면에는 이유 없는 "연결이 끊겼습니다"만 떴다
+      // (2026-08-27 준영님 제보 — "이건 끊길 일이 아닌데"). keepalive 시간초과·서버 종료·소켓 오류가
+      // 전부 이 길로 온다: 이제 userData/logs/main-error.log 에 남는다.
+      if (settled) {
+        logMainError(`ssh:${profile.host}:${profile.port}`, err)
+        return
+      }
       // 호스트키 거부(hostVerifier=false)면 여기로 온다 → 저장해 둔 거부 이유를 그대로 반환.
       // (verifier가 통과한 뒤의 인증 실패는 hostKeyRejection이 null이므로 auth로 분기)
       if (hostKeyRejection) {

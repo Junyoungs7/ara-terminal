@@ -137,38 +137,45 @@ export function createRemoteConsoleService(
 // 오지만, 합치지 않는 명령이 나중에 늘어도 "권한이 없습니다"가 화면에서 사라지지 않게 한다.
 function exec(client: Client, cmd: string, stdin: string | null = null): Promise<RunResult> {
   return new Promise((resolve) => {
-    client.exec(cmd, (err, stream) => {
-      if (err || !stream) {
-        resolve({ ok: false, reason: 'exec' })
-        return
-      }
-      // `sudo -S` 는 비밀번호를 **stdin 한 줄**로 읽는다. 다 쓰면 바로 닫아야 뒤따르는 명령이
-      // 남은 입력을 기다리지 않는다(닫지 않으면 exec 이 타임아웃까지 매달린다).
-      if (stdin !== null) {
-        stream.write(stdin + '\n')
-        stream.end()
-      }
-      let out = ''
-      let timer: NodeJS.Timeout | null = null
-      let settled = false
-      const finish = (r: RunResult): void => {
-        if (settled) return
-        settled = true
-        if (timer) clearTimeout(timer)
-        resolve(r)
-      }
-      timer = setTimeout(() => {
-        stream.close()
-        finish({ ok: false, reason: 'timeout' })
-      }, EXEC_TIMEOUT_MS)
-      const add = (c: Buffer): void => {
-        out += c.toString('utf8')
-      }
-      stream.on('data', add)
-      stream.stderr.on('data', add)
-      // exit-status 를 안 보내는 서버·하네스도 있다 — 그 경우는 0(성공)으로 본다(SftpService 와 같은 가정).
-      stream.on('close', (code: number) => finish({ ok: true, out, code: typeof code === 'number' ? code : 0 }))
-      stream.on('error', () => finish({ ok: false, reason: 'exec' }))
-    })
+    // 끊긴 커넥션에서 ssh2 는 콜백이 아니라 **동기로 던진다**(SshBackend.withSftp 주석과 같은 사실).
+    // 안 잡으면 이 Promise 가 reject 되고 → IPC 가 reject 되고 → 화면은 이유 없는 실패를 받는다.
+    // 2026-08-27 준영님 제보([로그] 를 눌렀는데 "로그를 찾지 못했습니다"만 떴다)의 절반이 이 길이었다.
+    try {
+      client.exec(cmd, (err, stream) => {
+        if (err || !stream) {
+          resolve({ ok: false, reason: 'exec' })
+          return
+        }
+        // `sudo -S` 는 비밀번호를 **stdin 한 줄**로 읽는다. 다 쓰면 바로 닫아야 뒤따르는 명령이
+        // 남은 입력을 기다리지 않는다(닫지 않으면 exec 이 타임아웃까지 매달린다).
+        if (stdin !== null) {
+          stream.write(stdin + '\n')
+          stream.end()
+        }
+        let out = ''
+        let timer: NodeJS.Timeout | null = null
+        let settled = false
+        const finish = (r: RunResult): void => {
+          if (settled) return
+          settled = true
+          if (timer) clearTimeout(timer)
+          resolve(r)
+        }
+        timer = setTimeout(() => {
+          stream.close()
+          finish({ ok: false, reason: 'timeout' })
+        }, EXEC_TIMEOUT_MS)
+        const add = (c: Buffer): void => {
+          out += c.toString('utf8')
+        }
+        stream.on('data', add)
+        stream.stderr.on('data', add)
+        // exit-status 를 안 보내는 서버·하네스도 있다 — 그 경우는 0(성공)으로 본다(SftpService 와 같은 가정).
+        stream.on('close', (code: number) => finish({ ok: true, out, code: typeof code === 'number' ? code : 0 }))
+        stream.on('error', () => finish({ ok: false, reason: 'exec' }))
+      })
+    } catch {
+      resolve({ ok: false, reason: 'noSession' })
+    }
   })
 }
