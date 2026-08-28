@@ -40,7 +40,7 @@ export type KeymapAction =
   // (#67 이전에는 우클릭 자리의 8칸 격자 palette.smart 가 따로 있어 이름이 헷갈렸다. 지금은 하나다.)
   | 'palette.all'
 
-import { AI_ENTRY } from './features'
+import { AI_ENTRY, VOICE } from './features'
 
 export type KeymapCategory =
   | 'panel'
@@ -131,7 +131,10 @@ const ALL_KEYS: readonly KeyBinding[] = [
  * (features.AI_ENTRY 참고 — 되살리면 저절로 돌아온다).
  */
 export const KEYMAP: readonly KeyBinding[] = ALL_KEYS.filter(
-  (k) => AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')
+  (k) =>
+    (AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')) &&
+    // 2026-08-28 음성은 숨김 — 치트시트에도 안 뜨고 matchBinding 도 안 걸린다.
+    (VOICE || k.action !== 'voice.toggle')
 )
 
 // 렌더러 공용 — 단축키 표기(⌘)와 OS 이름이 들어가는 라벨(Finder/탐색기)이 같은 판정을 쓴다.

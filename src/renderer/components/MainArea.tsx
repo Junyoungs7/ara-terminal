@@ -15,6 +15,7 @@ import { SettingsDrawer, SIZE_MAX, SIZE_MIN } from './SettingsDrawer'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
+import { VOICE } from '@shared/features'
 import { BootSplash } from './BootSplash'
 import { VoiceOverlay } from './VoiceOverlay'
 import { useVoiceMode } from '../store/voice'
@@ -191,7 +192,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      * prefs 의 주인이 여기라 훅도 여기 산다(두 곳에서 부르면 사본이 갈린다 — 위 §96 주석).
      */
     const voice = useVoiceMode({
-      enabled: prefs.voice.on,
+      // features.VOICE 가 false 인 동안은 무슨 설정값이 있든 마이크를 열지 않는다.
+      enabled: VOICE && prefs.voice.on,
       wakeWord: prefs.voice.wake,
       ttsVoice: prefs.voice.ttsVoice,
       speakBack: prefs.voice.speakBack,
@@ -1061,7 +1063,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         />
         {bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
-        <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} onTalk={voice.open} />
+        {VOICE && <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} onTalk={voice.open} />}
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
           onAction={onAction}

@@ -1,4 +1,4 @@
-import { AI_ENTRY } from '@shared/features'
+import { AI_ENTRY, VOICE } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
@@ -45,8 +45,12 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'log', 'ai', 'voice', 'mcp', 'keys', 'about'] as const
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
+// 2026-08-28: 음성은 숨김(features.VOICE) — 목록에서 아예 빼서 탭도 본문도 안 생긴다.
+export const SETTINGS_SECTIONS = (
+  ['general', 'terminal', 'font', 'log', 'ai', 'voice', 'mcp', 'keys', 'about'] as const
+).filter((s) => VOICE || s !== 'voice') as readonly SettingsSectionAll[]
+type SettingsSectionAll = 'general' | 'terminal' | 'font' | 'log' | 'ai' | 'voice' | 'mcp' | 'keys' | 'about'
+export type SettingsSection = SettingsSectionAll
 
 // 미리보기·비교 스트립에 쓰는 실사용 한글 터미널 출력(알파벳 예시 금지 — 스펙 #3).
 const PREVIEW_LINES: { cls: string; text: string }[] = [
