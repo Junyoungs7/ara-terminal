@@ -212,7 +212,11 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
                 key={r.id}
                 className={'ctr-row' + (r.state === 'running' ? '' : ' down') + (r.id === selected ? ' sel' : '')}
                 data-ctr={r.name}
-                onClick={() => setSelected((cur) => (cur === r.id ? null : r.id))}
+                // 2026-08-28 감사 ④: 여기만 **토글**이었다(다시 누르면 선택 해제). 선택은 아래
+                // [정지]·[제거]·[강제 종료]를 무장하는 값이라, [제거] 전에 행을 다시 눌러 확인한
+                // 사용자가 모든 버튼이 조용히 꺼지는 것을 겪었다. 형제 표(프로세스·서비스)처럼
+                // 누른 행을 그냥 고른다 — 같은 제스처가 탭마다 다른 뜻이면 안 된다.
+                onClick={() => setSelected(r.id)}
               >
                 <td className="crun">
                   <span className={'ctr-dot' + (r.state === 'running' ? ' on' : '')} aria-hidden />
@@ -237,7 +241,9 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
         </table>
 
         {feed.blocked && <BlockedBox blocked={feed.blocked} onElevate={feed.elevateNow} />}
-        {!feed.blocked && shown.length === 0 && <div className="con-empty">{t('console.ctr.none')}</div>}
+        {!feed.blocked && shown.length === 0 && (
+          <div className="con-empty">{t(feed.loading ? 'console.ctr.loading' : 'console.ctr.none')}</div>
+        )}
       </div>
 
       {/* 조작 줄. 고르기 전에는 전부 잠겨 있고, 고른 컨테이너 상태에 맞는 것만 열린다. */}

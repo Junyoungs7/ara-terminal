@@ -322,7 +322,9 @@ export function K8sPanel({
         </table>
 
         {feed.blocked && <BlockedBox blocked={feed.blocked} onElevate={feed.elevateNow} />}
-        {!feed.blocked && groups.length === 0 && <div className="con-empty">{t('console.k8s.none')}</div>}
+        {!feed.blocked && groups.length === 0 && (
+          <div className="con-empty">{t(feed.loading ? 'console.k8s.loading' : 'console.k8s.none')}</div>
+        )}
       </div>
     </div>
   )

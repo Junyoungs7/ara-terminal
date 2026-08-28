@@ -64,6 +64,7 @@ export function PortWindow() {
         {active ? (
           <PortMonitor
             ports={telemetry.ports}
+            loaded={telemetry.loaded}
             forwards={telemetry.forwards}
             sessionId={active.id}
             isSsh

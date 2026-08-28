@@ -132,6 +132,13 @@ export function portConflict(
 
 type PortMonitorProps = {
   ports: RemotePort[]
+  /**
+   * 첫 텔레메트리 한 바퀴가 도착했는가(store/telemetry.ts 가 준다).
+   * 이 값 없이 `ports.length === 0` 만 보면 붙자마자 "리슨 중인 포트가 없습니다"를 그린다 —
+   * 사용자는 그걸 읽고 탭을 닫고, 1~2초 뒤 도착한 포트는 볼 사람이 없다(2026-08-28 감사 ②).
+   * 프로세스·서비스·디스크·패키지 표가 이미 같은 규칙으로 로딩 문구를 먼저 낸다.
+   */
+  loaded: boolean
   // 이 세션의 활성 포워딩(main 이 진실). 행과는 remotePort 로 맞춘다.
   forwards: PortForward[]
   sessionId: string | null
@@ -149,6 +156,7 @@ type PortMonitorProps = {
 
 export function PortMonitor({
   ports,
+  loaded,
   forwards,
   sessionId,
   isSsh,
@@ -350,7 +358,7 @@ export function PortMonitor({
           가로를 쓰는데 여기만 좁은 판 절충안이 남아 있었다. 열이 생기면서 그동안 숨겨 뒀던
           셋이 도로 나온다: 포워딩 중 접히던 PID · ⇄ 툴팁에만 있던 목적지 · 글리프였던 해제. */}
       <div className="pmon-list">
-        {ports.length === 0 && <div className="sftp-empty">{t('mon.empty')}</div>}
+        {ports.length === 0 && <div className="sftp-empty">{t(loaded ? 'mon.empty' : 'mon.loading')}</div>}
         {ports.length > 0 && visible.length === 0 && <div className="sftp-empty">{t('mon.noMatch')}</div>}
         {visible.length > 0 && (
           <table className="ptbl">

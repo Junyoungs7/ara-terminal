@@ -10,6 +10,10 @@ import type { PortForward, RemotePort, RemoteStats } from '@shared/types'
 export function useTelemetry(sessionId: string | null, isSsh: boolean) {
   const [ports, setPorts] = useState<RemotePort[]>([])
   const [stats, setStats] = useState<RemoteStats | null>(null)
+  // 첫 한 바퀴가 돌아왔는가. 빈 배열 하나로는 "아직 안 왔다"와 "정말 없다"를 가를 수 없어서
+  // 포트 목록이 마운트 즉시 "리슨 중인 포트가 없습니다"라고 거짓말을 했다(2026-08-28 감사 ②).
+  // 세션을 바꾸면 다시 false 로 — 새 서버의 첫 바퀴도 기다려야 한다.
+  const [loaded, setLoaded] = useState(false)
   // F8 활성 포워딩. push 채널을 만들지 않는다 — 아래 텔레메트리 틱에 얹어 따라오게 하고,
   // 생성·해제 직후에는 refreshForwards 로 즉시 한 번 더 읽는다(2.5초를 기다리지 않게).
   const [forwards, setForwards] = useState<PortForward[]>([])
@@ -30,8 +34,10 @@ export function useTelemetry(sessionId: string | null, isSsh: boolean) {
     setPorts([])
     setStats(null)
     setForwards([])
+    setLoaded(false)
     if (!sessionId) return
     const off = window.ev?.telemetry.onData(sessionId, (d) => {
+      setLoaded(true)
       setPorts(d.ports)
       // 파싱 실패(비리눅스 등)로 stats 가 없어도 포트 목록은 그대로 둔다.
       if (d.stats) setStats(d.stats)
@@ -55,5 +61,5 @@ export function useTelemetry(sessionId: string | null, isSsh: boolean) {
     if (isSsh) refreshForwards()
   }, [sessionId, isSsh, refreshForwards])
 
-  return { ports, stats, forwards, refresh, refreshForwards }
+  return { ports, stats, loaded, forwards, refresh, refreshForwards }
 }

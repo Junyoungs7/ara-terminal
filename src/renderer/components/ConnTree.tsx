@@ -265,7 +265,9 @@ export function ConnTree({
         className="tree"
         ref={treeRef}
         role="tree"
-        aria-label={t('conn.tab.conn')}
+        // 2026-08-28 감사 ①(c): `conn.tab.conn` 은 없는 키라 스크린리더가 접근성 이름 대신
+        // 키 문자열을 읽었다. 사이드바 탭이 쓰는 이름과 같아야 할 자리라 그 키를 그대로 쓴다.
+        aria-label={t('sidebar.tab.conn')}
         {...treeKeys}
         onContextMenu={(e) => openCtx(e, 'sidebar', { kind: 'local' })}
       >

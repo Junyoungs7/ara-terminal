@@ -123,6 +123,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
                 id === 'monitor' ? (
                   <PortMonitor
                     ports={telemetry.ports}
+                    loaded={telemetry.loaded}
                     forwards={telemetry.forwards}
                     sessionId={activeSession?.id ?? null}
                     isSsh={activeSession?.type === 'ssh'}

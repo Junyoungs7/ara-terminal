@@ -11,6 +11,7 @@ import {
   type CtrRuntime
 } from '@shared/remoteCatalog'
 import { t } from '../i18n'
+import { remoteError } from '../store/remoteState'
 
 // 컨테이너 탭과 쿠버네티스 탭이 **함께 쓰는 것**만 여기 둔다(2026-08-24 탭 분리).
 // 두 탭은 보여 주는 것이 다르지만 가져오는 방식은 같다: 5초 폴링 · 막히면 이유 한 줄 ·
@@ -76,6 +77,12 @@ export type CtrFeed = {
   blocked: CtrBlocked | null
   /** 목록 자체를 못 받은 경우(세션 끊김 등) — 막힘과 다르다. */
   note: string | null
+  /**
+   * 첫 한 바퀴가 아직 안 왔다. 이걸 안 보면 두 탭이 마운트 즉시 "컨테이너가 없습니다"를 그린다 —
+   * 폴링이 5초라 **탭을 열 때마다 5초간 거짓말**이었다(2026-08-28 감사 ②).
+   * 형제 표 넷(프로세스·서비스·디스크·패키지)은 이미 로딩 문구를 먼저 낸다.
+   */
+  loading: boolean
   elevateNow: () => void
   reload: () => void
 }
@@ -93,6 +100,9 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
   // sudo 가 거절한 이유는 **붙잡아 둔다.** 안 그러면 5초 뒤 평범한 폴링이 그 자리를 덮어써서
   // "눌렀는데 잠깐 뭐가 스쳤다"로 끝난다 — 다음에 버튼을 누를 때까지 남긴다.
   const [sudoErr, setSudoErr] = useState<CtrBlocked | null>(null)
+  // 한 바퀴가 **어떻게든 끝났는가**(성공·막힘·실패 전부 포함). 결과가 무엇이든 그때부터는
+  // 화면이 사실을 말할 수 있다 — 그 전까지만 로딩이다.
+  const [loaded, setLoaded] = useState(false)
   const srvKey = `${cmd}:${server ?? sessionId ?? ''}`
   const [elevate, setElevate] = useState(() => ELEVATED.has(srvKey))
   const prevCpu = useRef<{ at: number; ns: Map<string, number> } | null>(null)
@@ -103,8 +113,12 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
     void window.ev?.remote
       ?.run(sessionId, cmd, elevate ? { sudo: true } : undefined)
       .then((r) => {
+        setLoaded(true)
         if (!r?.ok) {
-          setNote(t('console.ctr.error'))
+          // 2026-08-28 감사 ⑥: 전에는 실패 전부를 `console.ctr.error`("컨테이너 목록을 읽지
+          // 못했습니다")로 떨어뜨렸다 — 터널이 끊겨도 도커를 탓했다. 형제 다섯이 쓰는 그 판정
+          // 함수로 사유를 그대로 옮긴다(noSession → "SSH 세션이 끊어졌습니다").
+          setNote(remoteError({ out: '', err: r?.reason ?? 'exec' }, 0))
           return
         }
         // sudo 가 거절했다 — **여기서 즉시 끈다.** 폴링이 5초마다 틀린 비밀번호를 다시 보내면
@@ -162,7 +176,11 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
         }
         prevCpu.current = { at: now, ns }
       })
-      .catch(() => setNote(t('console.ctr.error')))
+      // IPC 자체가 거절당한 길(하네스·창 파괴 레이스). 사유가 없으니 실행 실패로 본다.
+      .catch(() => {
+        setLoaded(true)
+        setNote(remoteError({ out: '', err: 'exec' }, 0))
+      })
   }, [cmd, sessionId, elevate, srvKey])
 
   // 세션이 바뀌면 이전 서버 목록을 즉시 버린다(F26 CON-8c 규칙).
@@ -178,6 +196,7 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
     setSudoErr(null)
     setRuntime('docker')
     setCpu(new Map())
+    setLoaded(false)
     prevCpu.current = null
   }, [sessionId, active])
 
@@ -196,6 +215,7 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
     // 거절 이유가 있으면 그것이 이긴다 — 다음에 버튼을 누를 때까지.
     blocked: sudoErr ?? blocked,
     note,
+    loading: !loaded,
     elevateNow: () => {
       setSudoErr(null)
       ELEVATED.add(srvKey)

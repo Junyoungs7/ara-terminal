@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { test, expect, newLocalShell, runCommand, termText, connectNewSshProfile, dialogConfirm } from './fixtures'
+import { test, expect, newLocalShell, runCommand, termText, connectNewSshProfile, dialog, dialogConfirm } from './fixtures'
 
 // 같은 서버 안 복사(sftp:copyRemote)는 SFTP 가 아니라 **exec 으로 `cp`** 를 돌린다 — 이 하네스엔
 // 진짜 셸이 없으므로 cp 한 줄만 흉내 낸다. 작은따옴표 인용을 실제로 풀어 보기 때문에 shQuote 조립이
@@ -551,6 +551,43 @@ test('WB-4★ 로컬 폴더에서 AI CLI 를 시작하면 그 폴더로 가는 �
     // 셸에 들어간 줄에 그 폴더와 CLI 이름이 함께 있다(기본 CLI = claude).
     await expect.poll(() => termText(page, sessionId), { timeout: 20_000 }).toContain(basename(dir))
     expect(await termText(page, sessionId)).toContain('claude')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// WB-5★ [작업 프로필로 저장] — 2026-08-28 감사 ③.
+//
+// WB-1 은 이 항목이 **메뉴에 보이는지**만 봤고 그래서 통과하고 있었다. 실제로는 작업대의 FileTree
+// 마운트에 `onSaveWork` 가 없어서 눌러도 아무 일이 없었다 — 토스트도, 오류도 없이 끝났다.
+// design-system §4.8 이 이 항목을 "파일 화면의 아라 연결점은 어디서나 같다" 목록에 올려 뒀으니
+// 메뉴에서 감추는 것은 답이 아니다. 보이는 것 말고 **저장까지 되는지**를 여기서 확인한다.
+test('WB-5★ 작업대에서 [작업 프로필로 저장]을 누르면 즐겨찾기에 실제로 담긴다', async ({ ara }) => {
+  const { page } = ara
+  const dir = makeLocalFixture('ara-wb5-')
+  try {
+    await newLocalShell(page)
+    await openExplorer(page)
+    await openLocalFiles(page)
+    const p = pane(page)
+    await gotoPath(page, dir)
+
+    // 저장 전에는 즐겨찾기가 하나도 없다(임시 userData 라 매번 빈 상태에서 시작한다).
+    await expect(page.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(0)
+
+    await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+    await page.click('.ctx-menu [data-action="file.saveWork"]')
+
+    // 이름만 묻는다 — 대상 서버·경로는 화면이 이미 안다. 확인창에 그 둘이 박혀 있다.
+    await expect(dialog(page)).toBeVisible({ timeout: 10_000 })
+    await expect(dialog(page)).toContainText(basename(dir))
+    await dialog(page).locator('.dlg-input').fill('WB5 즐겨찾기')
+    await dialogConfirm(page)
+
+    // 좌측 즐겨찾기에 그 이름이 뜬다 — 저장이 실제로 일어났다는 증거다.
+    await expect(page.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(1, {
+      timeout: 10_000
+    })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

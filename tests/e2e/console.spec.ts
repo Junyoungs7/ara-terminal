@@ -1202,6 +1202,14 @@ test('CON-28★ 컨테이너 상태에 따라 열리는 조작이 갈린다', as
   await expect(ctrBtn(ara.page, 'rm')).toBeEnabled()
   await expect(ctrBtn(ara.page, 'stop')).toBeDisabled()
   await expect(ctrBtn(ara.page, 'attach')).toBeDisabled()
+
+  // 2026-08-28 감사 ④: 이 표만 **토글**이었다 — 고른 행을 다시 누르면 선택이 풀렸다.
+  // 선택은 아래 조작을 무장하는 값이라, [제거] 전에 행을 다시 눌러 확인한 사용자에게는
+  // 모든 버튼이 조용히 꺼진 것으로 보인다. 같은 제스처가 [서비스]에서는 아무 일도 없다.
+  await ctrRow(ara.page, 'db').click()
+  await expect(ctrRow(ara.page, 'db')).toHaveClass(/sel/)
+  await expect(ctrBtn(ara.page, 'rm')).toBeEnabled()
+
   await shot(ara.page, 'F28-R2-ctr.png')
 })
 

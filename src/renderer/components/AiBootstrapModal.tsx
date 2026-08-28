@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { dispatchAction } from '../../shared/keymap'
+import { AI_PROVIDER_LABELS, DEFAULT_AI_PROVIDER, type AiProvider } from '@shared/types'
 import { buildBootstrapPrompt, BOOTSTRAP_FIELD_MAX, type BootstrapForm, type BootstrapKind } from './aiBootstrap'
 
 // F17 AI 부트스트랩 GUI — 폼만 새로 만든다. 전송·표시는 AiPanel/AraSession(F16)을 그대로 재사용한다
@@ -28,6 +29,8 @@ type Props = {
 export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
   const [form, setForm] = useState<BootstrapForm>(emptyForm)
   const [hasKey, setHasKey] = useState(true)
+  // 안내 문구가 "무엇의 키인지" 말하려면 프로바이더 이름이 있어야 한다 — getState 가 이미 준다.
+  const [provider, setProvider] = useState<AiProvider>(DEFAULT_AI_PROVIDER)
 
   // 열릴 때마다 폼 리셋 + 키 상태 재조회(F16 노키 안내와 같은 카드를 보여줄지 판단).
   useEffect(() => {
@@ -35,7 +38,10 @@ export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
     setForm({ ...emptyForm, target: hasSsh ? emptyForm.target : 'local' })
     void window.ev?.ai
       .getState()
-      .then((s) => setHasKey(s.hasKey))
+      .then((s) => {
+        setHasKey(s.hasKey)
+        setProvider(s.provider)
+      })
       .catch(() => {})
   }, [open, hasSsh])
 
@@ -77,7 +83,13 @@ export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
           <div className="dlg-body">
             <div className="ai-card">
               <div className="ai-card-t">{t('ai.noKey.title')}</div>
-              <div className="ai-card-d">{t('ai.noKey.desc')}</div>
+              {/* 2026-08-28 감사 ①(b): 여기가 `ai.noKey.desc` 를 부르고 있었는데 그런 키는 없다 —
+                  화면에 키 문자열이 그대로 찍혔다(t() 는 없는 키를 그대로 돌려준다). 문구는 갈려
+                  있다: 앞은 프로바이더 이름, 뒤는 `ai.noKey.desc.suffix`. **새 PC 첫 실행 경로**라
+                  처음 켠 사람이 보는 자리다. AiPanel:300 과 같은 방식으로 조립한다. */}
+              <div className="ai-card-d">
+                {AI_PROVIDER_LABELS[provider]} {t('ai.noKey.desc.suffix')}
+              </div>
               <button type="button" className="btn sec" onClick={() => dispatchAction('settings.open')}>
                 {t('ai.noKey.btn')}
               </button>

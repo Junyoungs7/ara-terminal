@@ -1,7 +1,8 @@
 // SSH 실접속 통합 검증 — node ssh2 서버 하네스에 실제로 접속해 파이프라인 전체를 실증한다.
 // 검증: 호스트키 TOFU(최초 차단→수락 후 저장→불일치 차단), 비밀번호 인증, shell 한글 출력, 입력 에코.
 import { describe, it, expect, afterEach } from 'vitest'
-import { connectSsh } from '../src/main/sessions/ssh/SshBackend'
+import { EventEmitter } from 'node:events'
+import { connectSsh, SshBackend } from '../src/main/sessions/ssh/SshBackend'
 import { startPasswordServer, genHostKey, type Harness } from './ssh-harness'
 import type { KnownHost, SshProfile } from '../src/shared/types'
 import type { SessionBackend } from '../src/main/sessions/SessionBackend'
@@ -158,5 +159,52 @@ describe('SSH 실접속 (ssh2 하네스)', () => {
 
   it('genHostKey는 매번 다른 호스트키를 만든다(지문 변조 시나리오용)', () => {
     expect(genHostKey()).not.toBe(genHostKey())
+  })
+})
+
+// 2026-08-28 감사 ⑤ 회귀 가드.
+//
+// onExit 은 채널 close 와 커넥션 close **양쪽**에 걸려 있다(한쪽만 보면 절반을 놓친다: 셸이 스스로
+// 끝나면 채널만 닫히고, 네트워크가 끊기면 채널 close 없이 커넥션만 닫힌다). 문제는 사용자가 `exit`
+// 을 쳤을 때다 — 채널이 닫히고 곧이어 커넥션도 닫혀 **둘 다** 온다. 예전엔 그대로 두 번 흘러나가
+// 터미널에 `[프로세스 종료]` 가 두 줄 찍히고(TerminalPane 에 가드가 없다), MainArea 의 "사용자가
+// 닫았다" 표시는 한 번 쓰면 지워지는 값이라 두 번째 호출이 방금 닫은 탭에 [재접속] 카드를 띄웠다.
+//
+// 하네스로는 이 상황을 만들 수 없다: ssh2 루프백 서버는 셸 채널을 스스로 닫지 않아서 `kill()` 로도
+// `dropAll()` 로도 **커넥션 close 하나만** 온다(실측). 그래서 두 이벤트를 직접 쏘는 가짜로 건다 —
+// 검사 대상은 "close 두 번 → 콜백 한 번"이라는 래치 하나뿐이다.
+describe('SshBackend.onExit 래치', () => {
+  const fakePair = (): { client: EventEmitter; channel: EventEmitter; backend: SshBackend } => {
+    const client = new EventEmitter()
+    const channel = new EventEmitter()
+    // 생성자가 셸 PID 를 찾으려 exec 를 부른다. 없으면 던지고 SshBackend 가 삼켜(=추적 포기)
+    // 나머지는 그대로 동작한다 — 이 검사는 CWD 추적과 무관하다.
+    return { client, channel, backend: new SshBackend(client as never, channel as never) }
+  }
+
+  it('채널과 커넥션이 둘 다 닫혀도 콜백은 한 번뿐이다(`exit` 을 친 경우)', () => {
+    const { client, channel, backend } = fakePair()
+    const codes: number[] = []
+    backend.onExit((code) => codes.push(code))
+    channel.emit('close', 0)
+    client.emit('close')
+    expect(codes).toEqual([0]) // 래치가 없으면 [0, 0] 이다
+  })
+
+  it('커넥션만 닫혀도(네트워크 끊김) 종료를 놓치지 않는다', () => {
+    const { client, backend } = fakePair()
+    const codes: number[] = []
+    backend.onExit((code) => codes.push(code))
+    client.emit('close')
+    expect(codes).toEqual([0])
+  })
+
+  it('채널이 준 종료코드를 그대로 넘긴다(먼저 온 쪽이 이긴다)', () => {
+    const { client, channel, backend } = fakePair()
+    const codes: number[] = []
+    backend.onExit((code) => codes.push(code))
+    channel.emit('close', 130) // Ctrl+C 로 끝난 셸
+    client.emit('close') // 뒤따라오는 커넥션 close 는 0 으로 덮어쓰지 않는다
+    expect(codes).toEqual([130])
   })
 })

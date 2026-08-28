@@ -86,6 +86,12 @@ type Props = {
   onLaunch: (id: WbLaunchId, profileId: string | null, cwd?: string) => void
   /** #88 R1: 그 폴더가 채워진 AI CLI 시작 창(#90 부터 내 PC 도 대상이 된다). */
   onAiCli: (profileId: string | null, path: string) => void
+  /**
+   * [작업 프로필로 저장] — 즐겨찾기 목록의 주인은 Shell 이라 여기서 만들지 않고 올려보낸다
+   * (사이드바 트리의 같은 메뉴와 **같은 함수**에 도착해야 한다).
+   * 대상을 함께 넘기는 이유: 이 창은 활성 터미널과 다른 서버를 보고 있을 수 있다.
+   */
+  onSaveWork: (profileId: string | null, path: string) => void
   /** 바깥에서 건네는 "이 서버의 이 폴더를 열어라". at 이 바뀔 때만 한 번 반응한다. */
   reveal?: { profileId: string; path: string; at: number } | null
   /**
@@ -109,6 +115,7 @@ export function WorkbenchView({
   onSendInput,
   onLaunch,
   onAiCli,
+  onSaveWork,
   reveal,
   onWorkAction
 }: Props): JSX.Element {
@@ -388,6 +395,7 @@ export function WorkbenchView({
                   // 연결된다는 점"). 대상이 로컬이든 서버든 같은 자리에서 이어진다.
                   onTerminalHere={(p) => onLaunch('term', isLocal ? null : target.profileId, p)}
                   onAiCli={(p) => onAiCli(isLocal ? null : target.profileId, p)}
+                  onSaveWork={(p) => onSaveWork(isLocal ? null : target.profileId, p)}
                   onAskAiPaths={(paths) => onAskAi(paths.join('\n'))}
                 />
               ) : (

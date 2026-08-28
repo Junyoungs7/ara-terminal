@@ -708,20 +708,32 @@ export function Shell() {
   )
 
   // 지금 보고 있는 위치를 작업 프로필로 저장 — 이름만 물어본다(대상 서버·경로는 화면이 이미 안다).
+  //
+  // 2026-08-28 감사 ③: 작업대(WorkbenchView)의 파일 화면에도 이 항목이 살아야 한다 —
+  // design-system §4.8 이 [작업 프로필로 저장]을 "파일 화면의 아라 연결점은 어디서나 같다"
+  // 목록에 명시해 뒀다(그동안 메뉴에는 있는데 핸들러가 없어 눌러도 아무 일이 없었다).
+  // 그런데 작업대는 **활성 터미널과 다른 서버**를 보고 있을 수 있어서, 대상을 그 창에게 받는다:
+  // 그 값을 안 받고 활성 세션으로 저장하면 즐겨찾기가 엉뚱한 서버를 가리킨다.
+  // 인자를 안 주면(사이드바 트리) 예전 그대로 활성 세션이 곧 대상이다.
   const saveWorkProfile = useCallback(
-    async (path: string) => {
+    async (path: string, forProfileId?: string | null) => {
+      const profileId =
+        forProfileId !== undefined ? forProfileId : activeSession?.type === 'ssh' ? (activeProfileId ?? null) : null
+      // 확인창이 찍을 대상 이름 — 저장될 값(profileId)에서 뽑는다. 화면이 말한 대상과 저장되는
+      // 대상이 갈리면 "그 서버로 저장한 줄 알았는데"가 된다.
+      const server = profileId ? (profiles.find((p) => p.id === profileId)?.name ?? '') : t('conn.group.local')
       const name = await askText({
         title: t('work.save.title'),
         message: t('work.save.msg'),
-        detail: [{ label: t('conn.fail.server'), value: activeSession?.serverKey ?? t('conn.group.local') }, { label: t('statusbar.cwd'), value: path }],
+        detail: [{ label: t('conn.fail.server'), value: server }, { label: t('statusbar.cwd'), value: path }],
         input: { placeholder: t('work.save.placeholder'), value: path.split(/[\/]/).filter(Boolean).pop() ?? '' },
         confirmLabel: t('work.save.btn')
       })
       if (!name) return
-      // 활성 세션이 SSH 면 그 프로필, 로컬이면 null(= 로컬 셸을 그 폴더에서 연다).
-      work.add(name, activeSession?.type === 'ssh' ? (activeProfileId ?? null) : null, path)
+      // profileId 가 null 이면 로컬(= 로컬 셸을 그 폴더에서 연다).
+      work.add(name, profileId, path)
     },
-    [askText, work, activeSession, activeProfileId]
+    [askText, work, profiles, activeSession, activeProfileId]
   )
 
   const renameWorkProfile = useCallback(
@@ -1322,6 +1334,7 @@ export function Shell() {
                 id === 'monitor' ? (
                   <PortMonitor
                     ports={telemetry.ports}
+                    loaded={telemetry.loaded}
                     forwards={telemetry.forwards}
                     sessionId={activeSession?.id ?? null}
                     isSsh={activeSession?.type === 'ssh'}
@@ -1514,6 +1527,7 @@ export function Shell() {
             if (sid) window.ev?.session.input(sid, text)
           }}
           onAiCli={(_profileId, path) => runAiCliNow(undefined, path)}
+          onSaveWork={(profileId, path) => void saveWorkProfile(path, profileId)}
           onLaunch={(id, profileId, cwd) => {
             // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번
             // 구독하지 않는다) 하단 그 탭을 열 뿐이다. 터미널은 그 서버로 새 세션.

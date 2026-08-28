@@ -320,7 +320,22 @@ export class SshBackend implements SessionBackend {
     this.channel.stderr.on('data', tap)
   }
   onExit(cb: (exitCode: number, signal?: number) => void): void {
-    this.channel.on('close', (code: number | null) => cb(code ?? 0))
-    this.client.on('close', () => cb(0))
+    // 둘 다 거는 이유: 셸이 스스로 끝나면 채널만 닫히고(`exit`), 네트워크가 끊기면 채널 close 없이
+    // 커넥션만 닫힌다 — 한쪽만 보면 나머지 절반의 종료를 놓친다.
+    //
+    // 2026-08-28 감사 ⑤: 그런데 `exit` 을 치면 **둘 다** 발화한다(채널이 닫히고 곧이어 커넥션도
+    // 닫힌다). 그러면 종료 하나가 session:exit 두 번이 되고, 눈에 보이는 결과가 둘이었다:
+    //   · TerminalPane 이 `[프로세스 종료 — code N]` 을 두 줄 찍는다(그쪽엔 가드가 없다).
+    //   · MainArea 의 closedByUser 는 **한 번 쓰면 지워지는 표시**라, 두 번째 호출은 "사용자가
+    //     닫은 게 아니다"로 판정돼 방금 닫은 탭에 [재접속] 카드를 띄운다.
+    // 종료는 한 번이다 — 먼저 온 쪽만 통과시킨다.
+    let fired = false
+    const once = (code: number): void => {
+      if (fired) return
+      fired = true
+      cb(code)
+    }
+    this.channel.on('close', (code: number | null) => once(code ?? 0))
+    this.client.on('close', () => once(0))
   }
 }

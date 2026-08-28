@@ -9,6 +9,7 @@ import { migrate } from '../src/main/workspace/migrations'
 import { SCHEMA_VERSION } from '../src/shared/types'
 import { connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../src/renderer/store/profiles'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
+import { t } from '../src/renderer/i18n'
 
 // 실사용 UX 라운드 1(2026-08-03) 순수 로직: 컨텍스트 메뉴 배치·항목, 구조화 실패 메시지,
 // 호스트키 재설정(knownHosts 삭제).
@@ -297,5 +298,41 @@ describe('호스트키 재설정 (knownHosts 삭제)', () => {
     store.addKnownHost('b:22', hk)
     store.removeKnownHost('a:22')
     expect(Object.keys(store.getKnownHosts())).toEqual(['b:22'])
+  })
+})
+
+// 2026-08-28 감사 ①·② 회귀 가드.
+//
+// `t()` 는 없는 키를 **키 문자열 그대로** 돌려준다(i18n/index.ts:24) — 개발 중에 누락을 눈에
+// 띄게 하려는 설계인데, 그대로 배포되면 사용자가 화면에서 `dlg.close` 같은 글자를 읽는다.
+// 실제로 세 자리가 그렇게 새 있었다(그중 하나는 새 PC 첫 실행 경로였다).
+//
+// 여기 적힌 것은 그때 새어 나갔거나 그 수리로 새로 생긴 키들이다. 소비하는 자리를 함께 적어 둔다
+// — 키를 지우거나 이름을 바꿀 때 어디가 깨지는지 이 표만 보면 안다.
+// (모든 `t()` 호출을 훑는 일반 검사는 별건이다 — scan:i18n.)
+describe('화면에 새면 안 되는 i18n 키', () => {
+  const USED_AT: readonly [key: string, where: string][] = [
+    ['dlg.close', 'WorkProfileModal 푸터 버튼 · 닫기 아이콘 툴팁'],
+    ['ai.noKey.desc.suffix', 'AiPanel·AiBootstrapModal 노키 안내(프로바이더 이름 뒤에 붙는다)'],
+    ['sidebar.tab.conn', 'ConnTree 트리의 접근성 이름'],
+    ['console.ctr.loading', 'ContainerTable 첫 바퀴 전'],
+    ['console.k8s.loading', 'K8sPanel 첫 바퀴 전'],
+    ['mon.loading', 'PortMonitor 첫 바퀴 전'],
+    ['console.err.noSession', 'ctrShared 가 remoteError 로 옮기는 세션 끊김 사유']
+  ]
+
+  for (const [key, where] of USED_AT) {
+    it(`${key} — ${where}`, () => {
+      const text = t(key)
+      expect(text, `${key} 가 ko.json 에 없다 — 이 자리에 키 문자열이 그대로 찍힌다`).not.toBe(key)
+      expect(text.trim().length).toBeGreaterThan(0)
+    })
+  }
+
+  // 로딩 문구가 빈 문구와 같으면 고쳐 봐야 화면은 그대로다(둘을 갈라 놓은 것이 수리의 전부다).
+  it('로딩 문구와 빈 문구는 서로 다른 말이다', () => {
+    expect(t('console.ctr.loading')).not.toBe(t('console.ctr.none'))
+    expect(t('console.k8s.loading')).not.toBe(t('console.k8s.none'))
+    expect(t('mon.loading')).not.toBe(t('mon.empty'))
   })
 })
