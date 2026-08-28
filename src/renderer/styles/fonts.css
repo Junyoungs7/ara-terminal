@@ -2,6 +2,13 @@
    A.R.A 번들 폰트 — @font-face 로컬 로드 (CDN 금지, 오프라인 사내망 보장)
    폰트 원본·라이선스: resources/fonts/ (OFL). Vite가 빌드 시 out/renderer/assets 로 해시 복사.
    CSP font-src 'self' 로 로컬만 로드 — 네트워크 요청 0.
+
+   **font-display 는 전부 `swap` 이다**(2026-08-28, `block` 에서 바꿨다). 번들이 생 TTF 라
+   D2Coding 4.19MB · 나눔고딕코딩 2.3MB 인데, `block` 은 그게 풀릴 때까지 그 글꼴로 그릴 글자를
+   **안 보이게** 한다 — 터미널 본문이 통째로 빈 화면이 된다. `swap` 은 폴백으로 먼저 그리고
+   나중에 갈아 끼운다. 어차피 `block` 의 블록 구간에도 레이아웃 계산에는 폴백 메트릭이 쓰이므로
+   `block` 이 정렬을 지켜 주는 것도 아니다 — 글자만 숨길 뿐이다.
+   ※ 근본 해결은 woff2 변환(수 배 작아진다)이고 도구가 필요해 배포 후로 미뤘다.
    ============================================================ */
 
 /* 한글 고정폭 primary (design-system §2.1) — Google Fonts / SIL OFL */
@@ -9,14 +16,14 @@
   font-family: 'Nanum Gothic Coding';
   font-style: normal;
   font-weight: 400;
-  font-display: block;
+  font-display: swap;
   src: url('../../../resources/fonts/NanumGothicCoding-Regular.ttf') format('truetype');
 }
 @font-face {
   font-family: 'Nanum Gothic Coding';
   font-style: normal;
   font-weight: 700;
-  font-display: block;
+  font-display: swap;
   src: url('../../../resources/fonts/NanumGothicCoding-Bold.ttf') format('truetype');
 }
 
@@ -25,7 +32,7 @@
   font-family: 'D2Coding';
   font-style: normal;
   font-weight: 400;
-  font-display: block;
+  font-display: swap;
   src: url('../../../resources/fonts/D2Coding-Regular.ttf') format('truetype');
 }
 
@@ -34,7 +41,7 @@
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 100 800;
-  font-display: block;
+  font-display: swap;
   src: url('../../../resources/fonts/JetBrainsMono-Regular.ttf') format('truetype');
 }
 

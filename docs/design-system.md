@@ -350,6 +350,16 @@ v4 밀도를 계승 — 여백은 촘촘하되 리듬은 일정하게.
 | 커서 깜빡임 | `blink 1.15s step-end infinite` |
 | 포커스 링 | `box-shadow 0 0 0 3px var(--accent-glow)` (즉시) |
 
+> **이 표의 값에 이름이 생겼다 (2026-08-28).** 색·타입·radius·그림자는 토큰인데 **시간과 이징만**
+> 없어서 84곳이 리터럴이었고, 같은 값이 `0.12s`/`120ms` 두 표기로 섞였고, 위 표가 이름 붙인 이징
+> 둘 대신 셋이 돌아다녔다. tokens.css 에 다섯을 올렸다:
+> `--dur-fade`(.18s) · `--dur-pop`(.2s) · `--dur-drawer`(.28s) · `--ease-pop` · `--ease-drawer`.
+> 호버(`.12–.15s`)는 **범위**라 이름을 하나로 못 잡아 남겼다.
+> 같은 날 **모달 등장 모션을 실제로 걸었다** — 그전에는 `@keyframes pop` 이 치트시트에만 걸려 있어
+> 연결 관리자·확인 다이얼로그·환영·AI 부트스트랩만 툭 나타났다(앱이 두 제품처럼 보이던 원인).
+> `.overlay.open` = 페이드, `.overlay.open .modal` = 팝, 둘 다 `prefers-reduced-motion` 에서 꺼진다.
+> 나머지 리터럴 일괄 치환은 배포 후다 — 회귀 위험 대비 화면에 보이는 이득이 없다.
+
 ### 3.4 그림자 (R8 — 중립 3단)
 
 떠 있는 정도만 표현한다. **전부 중립 검정** — 색이 들어간 그림자는 발광이고, 발광은 §1.4 에서 금지다.
@@ -483,11 +493,18 @@ function switchSbTab(tab) {
 | row divider-R | 3 | 2 | — |
 
 - **포커스 패널**: `box-shadow: 0 0 0 2px var(--accent-line)` 시안 링 강조
-- **패널 헤더 (R3.9 — 2026-08-03)**: **상태 dot + 세션명뿐.** 타입 칩·분할 버튼·최대화·닫기 버튼을
-  전부 뺐다. 패널 ×(detach)는 "창은 사라졌는데 탭은 남는" 동작이라 세션을 닫은 줄 알게 만들었다.
-  세션 조작은 **탭 한 곳**(× / 우클릭 메뉴)으로, 패널 조작은 **단축키**로 일원화한다.
-  detach 기능 자체는 남아 있다 — `⌘⇧W` 와 터미널 우클릭 "패널에서 빼기"(FB-ui2 — §7.8 참고,
-  "패널 닫기"라는 옛 라벨이 세션 종료처럼 들려 라벨만 고쳤다).
+- **패널 헤더 (R3.9 — 2026-08-03 / **2026-08-17 개정**)**: 상태 dot(`.pdot`) + 세션명(`.ptitle`) +
+  **[최대화](`.pmax`)** + **[닫기](`.px`)**. 코드가 정본이다 — `PaneGrid.tsx:293-327`.
+
+  R3.9 당시엔 "타입 칩·분할·최대화·닫기를 전부 뺐다"였고 이 문서는 그 문장에 멈춰 있었다.
+  **두 번 뒤집혔다:**
+  - **2026-08-17 제보 ⑦** — 칸이 둘 이상일 때 `.pmax` 를 되살렸다. 분할해 놓고 하나를 잠깐 크게
+    볼 때 `Ctrl+Shift+Enter` 를 모르는 사람의 손이 닿을 자리가 있어야 한다. **칸이 하나뿐이면
+    버튼도 없다**(눌러도 아무 일 없는 버튼을 두지 않는다).
+  - **2026-08-11 준영님 결정** — `.px` 는 이제 detach 가 아니라 **세션 종료**다("탭을 껐으면
+    세션도 꺼지고 해당 창도 꺼져야 한다. 다시 붙는 건 없다"). 옛 문장의 근거였던 "창은 사라졌는데
+    탭은 남는" 동작 자체가 없어졌으므로 버튼을 뺄 이유도 함께 없어졌다. 경위는
+    `shared/keymap.ts:70-78` 의 `pane.close` 주석에 남아 있다.
 - **divider**: 5px 투명 트랙, 호버 시 `--accent` 라인으로 드래그 핸들 표시
 
 ### 4.5 사이드바 여닫이 — 좌측 아이콘 레일 (2026-08-19 개정)
@@ -496,7 +513,9 @@ function switchSbTab(tab) {
 안으로 튀어나와 하단바(z-index 6)에 덮였고, #95 에서 자리를 안쪽으로 당겨도 "잘 안 보이고 닫는
 버튼도 애매"하다는 제보가 다시 나왔다. 자리를 다투는 대신 **여닫이를 레일로 옮겼다.**
 
-- `.lrail` — 사이드바 왼쪽 40px 아이콘 열. 항목은 `[연결]`·`[파일]` 둘(`.lrail-item[data-tab]`)
+- `.lrail` — 사이드바 왼쪽 40px 아이콘 열. 항목은 `[연결]`·`[파일]`·`[작업대]` **셋**
+  (`.lrail-item[data-tab]`). 정본은 `Sidebar.tsx` 의 `['conn','file','ai']` — #129 가 작업대 목록을
+  넣으며 둘에서 셋이 됐다(같은 드리프트가 `tests/smoke-boot.cjs` 에서도 실패로 나왔다)
 - **누르면 열리고, 열려 있는 것을 다시 누르면 닫힌다**(IntelliJ 툴윈도우 = 우측 `.activity-bar` 와 같은 규칙)
 - 다른 아이콘은 갈아탄다. 접혀 있으면 무엇을 눌러도 펴면서 그것을 연다
 - 규칙은 `nextSidebar(prev, tab)` 한 함수에 있다(`store/sidebar.ts`, 단위 테스트 대상).
@@ -920,6 +939,19 @@ function switchSbTab(tab) {
 - 검색창: `.sb-search .field`(연결 트리 검색과 동일 컴포넌트) 재사용.
 - 범위 토글: `.pmon-range`(`.seg-ctl` 패딩만 좁힌 변형) — "사용자 포트"(기본, `<1024` 시스템 포트
   숨김) / "전체 보기". `.pmon-hidden`: 감춘 개수 표시(`N개 숨김`) — 필터가 있다는 걸 알게 한다.
+
+  > ⚠️ **`.pmon-range`·`.pmon-hidden` 은 지금 컴포넌트에 없다**(2026-08-28 확인). 위는 2026-08-05
+  > 당시의 기록이고, 그 뒤 **두 번** 바뀌었다 — ① 두 갈래 범위 토글이 **숫자 구간 입력**으로,
+  > ② **2026-08-17 제보 ⑥** 에서 제목·검색·필터 네 줄이 **한 줄**로 접혔다(하단 패널로 내려오며
+  > 세로 260px 중 목록에 70px 밖에 안 남았다 — 아래는 세로가 귀하고 가로가 남는다).
+  >
+  > **지금 쓰는 이름은 이것들이다** — 정본은 `PortMonitor.tsx:269-340`:
+  > `.pmon` › `.pmon-bar`(한 줄 컨트롤) › `.pmon-title` · `.pmon-count`(보이는 개수) ·
+  > `.sb-search .field`(검색 — 연결 트리와 같은 컴포넌트, 그대로 유지) ·
+  > `.pmon-span`(번호 구간 `.pspan` × 2 + `.pspan-dash`) · `.seg-ctl.pmon-use`(any/fwd/free) ·
+  > `.pmon-list`. 포워딩 상태 표시는 `.pmon-free`.
+  >
+  > CSS 에 남은 `.pmon-range`·`.pmon-hidden` 규칙은 **가리키는 요소가 없다**(죽은 CSS — AUDIT-R5 정리 대상).
 - 순수 함수 `filterPorts`(components/PortMonitor.tsx)로 범위·검색을 분리 — 검색은 범위가 이미
   걸러낸 목록 안에서만 돈다.
 - "프로세스 모름" 문제 원인 규명: `ss -tlnp`/`netstat -tlnp` 는 **다른 사용자 소유 프로세스 정보를
@@ -1067,9 +1099,17 @@ function switchSbTab(tab) {
 
 ### 8.3 파비콘 규격
 
-- 배 마스터를 그대로 쓴다(`site/assets/ara-icon.svg` = `resources/icons/ara-icon.svg`).
-  16px 에서도 "위의 밝은 덩어리(배) / 아래의 어두운 물결"로 갈려 식별된다.
-- HTML 적용: `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` (inline data URI — `index.html`)
+- **덜어낸 판을 쓴다** — `assets/brand/ara-favicon.svg`(= `site/assets/ara-icon.svg` = `video/public/logo.svg`).
+  512 마스터(`resources/icons/ara-icon.svg`)와 **설계상 다른 파일이다**: 위 §8.2 의 판 표대로
+  64px 이하에서는 서버 랙을 버린다(그 크기에서 막대 셋과 점 여섯은 얼룩으로 뭉친다).
+  16px 에서도 "금색 고리 + 그 안의 어두운 창"으로 갈려 식별된다.
+  > 이 줄은 2026-08-28 까지 *"배 마스터를 그대로 쓴다(`site/assets/ara-icon.svg` =
+  > `resources/icons/ara-icon.svg`)"* 였다 — 배는 §8.2 가 걷어냈고 두 파일은 같지도 않다.
+- HTML 적용: `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` (inline data URI — `index.html`).
+  **그 href 는 손으로 쓰지 않는다** — `npm run icons:svg`(`scripts/make-brand-svg.mjs` 의 `patchFavicon`)가
+  덜어낸 판을 인라인해 그 한 줄만 갈아 끼운다. 파일 전체를 생성하지 않는 유일한 산출물이다
+  (CSP·title·마운트 지점이 같은 파일에 있다). **자리를 못 찾으면 생성기가 죽는다** — 조용히
+  넘어가면 2026-08-27 리브랜드 때처럼 옛 마크가 혼자 남고도 생성기는 성공했다고 말한다.
 - PNG 변환 시: 512/256/128/64/32/16px 6종 추출 (Electron `nativeImage`·`electron-builder` .ico/.icns 용)
 
 ---

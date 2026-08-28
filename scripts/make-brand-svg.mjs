@@ -20,7 +20,12 @@
 //   site/assets/ara-icon.svg       사이트 — 24px 헤더 + 파비콘이라 덜어낸 판
 //   video/public/logo.svg          영상 — 22px/92px 둘 다 쓰므로 덜어낸 판
 //   src/renderer/components/brandMark.ts  타이틀바 마크(BrandOrb)가 쓸 고리 경로
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+//   src/renderer/index.html        앱 파비콘 — 파일 통째가 아니라 <link rel="icon"> 의 href **한 줄**
+//
+// **왜 index.html 까지 여기서 쓰나.** 2026-08-27 리브랜드 때 위 여섯은 다 갈렸는데 index.html 만
+// 생성기 밖에 있어서 **걷어낸 배 마크가 파비콘으로 혼자 살아남았다**(AUDIT-R4 ①). 마크는 한 곳에서
+// 나와야 한다 — 손으로 따라 고치는 자리가 하나라도 남으면 다음 리브랜드에서 또 그 하나가 남는다.
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -96,6 +101,43 @@ const write = (rel, body) => {
   if (!existsSync(dirname(p))) mkdirSync(dirname(p), { recursive: true })
   writeFileSync(p, body, 'utf8')
   console.log(`  ${rel}  ${(Buffer.byteLength(body) / 1024).toFixed(1)}KB`)
+}
+
+/**
+ * SVG → `href="…"` 에 그대로 넣는 data URI.
+ * encodeURIComponent 로 전부 인코딩하면 5.5KB 가 두 배로 분다(공백이 전부 %20). HTML 속성 안에서
+ * 실제로 깨지는 문자만 바꾼다 — 속성 따옴표는 `"` 를 쓰므로 SVG 안의 `"` 는 `'` 로 내린다.
+ * `%` 를 **가장 먼저** 바꾼다: 뒤 치환이 만드는 `%` 를 다시 인코딩하면 안 된다.
+ */
+function dataUri(svg) {
+  const body = svg
+    .replace(/<!--[\s\S]*?-->/g, '') // 한 줄로 접으면 주석 뒤가 전부 주석이 된다
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/"/g, "'")
+    .replace(/%/g, '%25')
+    .replace(/#/g, '%23')
+    .replace(/&/g, '%26')
+    .replace(/</g, '%3C')
+    .replace(/>/g, '%3E')
+  return `data:image/svg+xml,${body}`
+}
+
+/**
+ * index.html 의 `<link rel="icon">` href 를 갈아 끼운다. 파일을 통째로 쓰지 않는 유일한 산출물이라
+ * 따로 둔다 — 그 안에 CSP·title·마운트 지점이 함께 있어 생성기가 소유할 수 없다.
+ * 자리를 못 찾으면 **조용히 넘어가지 않고 죽는다.** 조용히 넘어가면 정확히 리브랜드 때 벌어진 일
+ * (옛 마크가 그대로 남는데 생성기는 성공했다고 말하는 것)이 다시 벌어진다.
+ */
+function patchFavicon(rel, svg) {
+  const p = join(ROOT, rel)
+  const src = readFileSync(p, 'utf8')
+  const re = /(rel="icon"[^>]*?href=")[^"]*(")/
+  if (!re.test(src)) throw new Error(`${rel}: <link rel="icon"> href 를 못 찾았다 — 표시를 확인해라`)
+  const uri = dataUri(svg)
+  const out = src.replace(re, (_m, a, b) => a + uri + b)
+  writeFileSync(p, out, 'utf8')
+  console.log(`  ${rel}  파비콘 href 갱신 (${(Buffer.byteLength(uri) / 1024).toFixed(1)}KB data URI)`)
 }
 
 // ── 512 마스터 ───────────────────────────────────────────────────────────────
@@ -245,4 +287,5 @@ write('assets/brand/ara-favicon.svg', small)
 write('site/assets/ara-icon.svg', small)
 write('video/public/logo.svg', small)
 write('src/renderer/components/brandMark.ts', markTs)
+patchFavicon('src/renderer/index.html', small)
 console.log('→ PNG 도 다시 뽑으려면: npm run icons:png')

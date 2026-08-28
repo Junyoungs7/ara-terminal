@@ -71,7 +71,7 @@
 }
 .cheatsheet.open {
   display: flex;
-  animation: fade 0.16s ease;
+  animation: fade var(--dur-fade) ease;
 }
 @keyframes fade {
   from {
@@ -90,10 +90,13 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  animation: pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  animation: pop var(--dur-pop) var(--ease-pop);
   display: flex;
   flex-direction: column;
 }
+/* `fade`(위)·`pop`(아래)은 **이 파일 밖에서도 쓴다** — shell.css 의 `.overlay.open`/`.modal` 이
+   같은 둘을 건다(§3.3 의 "오버레이 페이드"·"모달 등장"이 한 몸이라 두 벌로 두지 않는다).
+   키프레임은 문서 전역이라 정의 위치와 무관하게 닿는다. 지우거나 이름을 바꾸면 모달도 같이 죽는다. */
 @keyframes pop {
   from {
     transform: scale(0.97) translateY(8px);
@@ -102,6 +105,13 @@
   to {
     transform: none;
     opacity: 1;
+  }
+}
+/* 움직임을 줄여 달라고 한 사람에게는 치트시트도 그대로 나타난다(shell.css 의 모달 규칙과 같은 결). */
+@media (prefers-reduced-motion: reduce) {
+  .cheatsheet.open,
+  .cs-card {
+    animation: none;
   }
 }
 .cs-hd {
