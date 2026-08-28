@@ -24,13 +24,28 @@
 // 다만 포트·시스템은 활성 세션 telemetry 구독에 매여 있어 여기서 다시 구독하지 않는다 —
 // 그 둘과 [터미널] 은 ↗ 를 달아 밖에서 열린다고 미리 알린다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Boxes, Ship, FolderOpen, Gauge, HardDrive, Network, Package, Server, TerminalSquare } from 'lucide-react'
+import {
+  Activity,
+  Boxes,
+  Ship,
+  FolderOpen,
+  Gauge,
+  HardDrive,
+  Maximize2,
+  Minimize2,
+  Monitor,
+  Network,
+  Package,
+  Server,
+  Star,
+  TerminalSquare
+} from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import type { Session } from '../store/sessions'
 import { FileTree, type ActiveFileSession } from './FileTree'
 import { ServerTool, type ServerToolId } from './ServerTool'
 import { ServerOverview } from './ServerOverview'
-import { IconClose, IconFolder } from './icons'
+import { IconClose, IconFolder, inlineIcon } from './icons'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { LOCAL_TARGET, sameTarget, type ExpTarget } from '../store/explorerTabs'
 import { useFloatWindow } from '../store/floatWindow'
@@ -267,7 +282,8 @@ export function WorkbenchView({
           title={t(maximized ? 'explorer.restore' : 'explorer.maximize')}
           onClick={toggleMax}
         >
-          {maximized ? '❐' : '▢'}
+          {/* 크기는 `.exp-wbtn svg`(13px)가 정한다 — 옆 [닫기]와 같은 규칙을 그대로 쓴다. */}
+          {maximized ? <Minimize2 /> : <Maximize2 />}
         </button>
         <button type="button" className="exp-wbtn x" title={t('wb.close')} onClick={onClose}>
           <IconClose />
@@ -318,14 +334,23 @@ export function WorkbenchView({
                 setFavMenu({ x: e.clientX, y: e.clientY, id: w.id })
               }}
             >
-              <span className="ic">★</span>
+              {/* 이 셋(즐겨찾기·내 PC·서버)은 **한 목록 안에 나란히** 선다 — 하나만 글리프로
+                  남으면 그 줄만 굵기가 다르다. `.exp-node .ic` 는 15px 칸 + text-align:center 라
+                  가로는 맞고, 세로만 inlineIcon 이 잡는다. */}
+              <span className="ic">
+                <Star size={13} style={inlineIcon} />
+              </span>
               <span className="nm">{w.name}</span>
             </div>
           ))}
 
           <div className="exp-grp">{t('explorer.nav.thisPc')}</div>
           <div className={'exp-node' + (isLocal ? ' on' : '')} onClick={() => pick(LOCAL_TARGET)}>
-            <span className="ic">🖴</span>
+            {/* 🖴(U+1F5B4)는 번들 폰트에 없어 OS 이모지로 폴백하던 자리다. HardDrive 는 [디스크]
+                도구 카드가 이미 쓰고 있어 쓰지 않는다 — 같은 그림이 두 뜻이면 둘 다 안 읽힌다. */}
+            <span className="ic">
+              <Monitor size={13} style={inlineIcon} />
+            </span>
             <span className="nm">{t('explorer.nav.home')}</span>
           </div>
 
@@ -342,7 +367,10 @@ export function WorkbenchView({
                 title={`${p.username}@${p.host}${live ? '' : ' · ' + t('explorer.nav.willConnect')}`}
                 onClick={() => pickServer(p)}
               >
-                <span className="ic">🖧</span>
+                {/* 🖧(U+1F5E7)도 번들 폰트 밖이다. */}
+                <span className="ic">
+                  <Server size={13} style={inlineIcon} />
+                </span>
                 <span className="nm">{p.name}</span>
                 <span className={'exp-dot' + (live ? ' live' : '')} />
               </div>

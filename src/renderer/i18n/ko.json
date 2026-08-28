@@ -866,7 +866,7 @@
   "settings.ai.key.none": "등록된 키 없음",
   "settings.ai.key.checking": "키를 확인하는 중…",
   "settings.ai.key.hint": "저장을 누르면 프로바이더에 한 번 물어 키가 실제로 통하는지 확인합니다.",
-  "settings.ai.key.ok": "✔ 확인됨",
+  "settings.ai.key.ok": "✓ 확인됨",
   "settings.ai.key.fail.auth": "✗ 키가 유효하지 않습니다",
   "settings.ai.key.fail.network": "✗ 네트워크에 연결할 수 없습니다 — 사내망 프록시 설정을 확인하세요",
   "settings.ai.key.fail.model": "✗ 선택한 모델을 쓸 수 없는 키입니다",

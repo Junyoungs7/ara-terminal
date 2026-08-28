@@ -2,9 +2,10 @@
 // 트리에 새 행을 만들지 않는 것이 이 화면의 존재 이유다(준영님 안): 한 서버에 작업 위치가 여러 개여도
 // 사이드바 계층은 그대로고, 로컬 폴더도 같은 목록에 나란히 둘 수 있다.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PenLine, Star, X } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchWorkProfile } from '../store/workProfiles'
-import { IconClose } from './icons'
+import { IconClose, inlineIcon } from './icons'
 import { t } from '../i18n'
 
 type Props = {
@@ -98,7 +99,9 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
               onClick={() => onPick(w)}
               title={`${w.path}${hostOf(w) ? ' · ' + hostOf(w) : ''}`}
             >
-              <span className="wp-star">★</span>
+              <span className="wp-star">
+                <Star size={12} style={inlineIcon} />
+              </span>
               {/* 두 줄: [이름 … 서버] / [경로]. 서버·호스트를 오른쪽에 두 줄로 쌓았더니 이름·경로와
                   세로로 엇갈려 읽기 어려웠다(준영님 제보) — 서버는 이름과 같은 줄 끝에 칩으로 붙이고
                   호스트는 툴팁으로 내린다(목록에서 매번 필요한 정보가 아니다). */}
@@ -121,7 +124,11 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
                     onRename(w.id)
                   }}
                 >
-                  ✎
+                  {/* `.wp-act .cc-b` 에는 `.rowact .cc-b svg` 같은 크기 규칙이 없다 —
+                      트리 행 액션과 같아 보이도록 그쪽과 같은 11px 로 맞춘다.
+                      Pencil 이 아니라 PenLine 인 이유: icons.tsx 의 IconPencil(탐색기 [이름 바꾸기])이
+                      "밑줄 + 연필"이다. 같은 뜻에 다른 그림을 두지 않는다. */}
+                  <PenLine size={11} style={inlineIcon} />
                 </span>
                 <span
                   className="cc-b danger"
@@ -131,7 +138,7 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
                     onDelete(w.id)
                   }}
                 >
-                  ✕
+                  <X size={11} style={inlineIcon} />
                 </span>
               </span>
             </div>

@@ -175,7 +175,8 @@ test('AI-6 컨텍스트 칩을 켜고 보내면 사용자 턴에 첨부 배지�
   await page.click('.ai-panel [data-action="ai.send"]')
 
   const badge = page.locator('.ai-turn.user [data-action="ai.ctxPeek"]').last()
-  await expect(badge).toContainText('📎')
+  // FINISH-M2: 📎 이모지 → lucide Paperclip SVG. 글자가 아니라 아이콘이 있는지를 본다.
+  await expect(badge.locator('svg')).toHaveCount(1)
   await expect(badge).toContainText('줄')
   await badge.click()
   await expect(page.locator('.ai-turn.user .ai-ctx-full').last()).toContainText('컨텍스트원문표식')

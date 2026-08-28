@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import type { BrowserTabView } from '@shared/browserWin'
+import { inlineIcon } from './icons'
 import { t } from '../i18n'
 
 // 내장 브라우저의 **탭 줄**. 2026-08-21 준영님 제보로 생겼다:
@@ -77,7 +79,7 @@ export function BrowserWindow() {
                     void window.ev?.browserTabs.closeTab(tab.id).catch(() => {})
                   }}
                 >
-                  ×
+                  <X size={12} style={inlineIcon} />
                 </span>
               </div>
             )

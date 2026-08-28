@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { RdpView } from './RdpView'
@@ -307,7 +308,9 @@ export function PaneGrid({
                     toggleMaximize(cell.id)
                   }}
                 >
-                  {maximizedId === cell.id ? '❐' : '▢'}
+                  {/* 옆 `.px` 는 CSS 가 11px 로 그린다(`.pane-hd .px svg`). `.pmax` 에는 같은
+                      규칙이 없어 여기서 크기를 준다 — 둘이 나란히 있으므로 같은 값이어야 한다. */}
+                  {maximizedId === cell.id ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
                 </span>
               )}
               {cell && (

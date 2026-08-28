@@ -73,7 +73,8 @@ export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
           <div>
             <h2>{t('ai.bootstrap.title')}</h2>
           </div>
-          <span className="x" onClick={onClose}>
+          {/* SVG 는 스크린리더가 읽지 않는다 — 이름은 여기서 준다(닫기 버튼 감사, FINISH-M2). */}
+          <span className="x" role="button" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
             <IconClose />
           </span>
         </div>

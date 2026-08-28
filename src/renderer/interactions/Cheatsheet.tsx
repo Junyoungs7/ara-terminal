@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { KEYMAP, type KeyBinding, type KeymapCategory } from '../../shared/keymap'
 import { IconClose } from '../components/icons'
+import { t } from '../i18n'
 
 // 단축키 치트시트 — KEYMAP(shared/keymap.ts) 단일 소스에서 자동 생성(하드코딩 표 금지).
 // 4열 그리드(design-system §9.4). 8개 카테고리를 4개 표시 컬럼으로 묶는다.
@@ -58,7 +59,9 @@ export function Cheatsheet({ open, onClose }: Props) {
             <h2>A.R.A 단축키 치트시트</h2>
             <p>모든 키보드 단축키 — ? 로 언제든지</p>
           </div>
-          <span className="x" onClick={onClose}>
+          {/* SVG 는 스크린리더가 읽지 않는다 — 이름은 여기서 준다(닫기 버튼 감사, FINISH-M2).
+              이 파일의 나머지 문구는 아직 하드코딩이다 — 접근 가능한 이름만 i18n 을 쓴다. */}
+          <span className="x" role="button" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
             <IconClose />
           </span>
         </div>

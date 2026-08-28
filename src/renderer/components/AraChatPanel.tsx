@@ -12,7 +12,7 @@ import {
   remainText,
   type ChatItem
 } from '../store/araChatItems'
-import { IconClose, IconRefresh, IconHistory, IconPlus } from './icons'
+import { IconClose, IconRefresh, IconHistory, IconPencil, IconPlus } from './icons'
 import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { t } from '../i18n'
@@ -423,7 +423,8 @@ export function AraChatPanel({
                         data-action="ara.chats.rename"
                         onClick={() => setRenaming(c.id)}
                       >
-                        ✎
+                        {/* 크기는 `.ara-ic svg`(13px)가 정한다. 탐색기 [이름 바꾸기]와 같은 그림. */}
+                        <IconPencil />
                       </button>
                     </>
                   )}

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { BOTTOM_IDS, type BottomId } from '@shared/types'
@@ -166,7 +167,8 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
           title={t(maxed ? 'explorer.restore' : 'explorer.maximize')}
           onClick={() => setMaxed((v) => !v)}
         >
-          {maxed ? '❐' : '▢'}
+          {/* 크기는 `.bp-max svg`(13px)가 정한다 — §8.4 "SVG 태그에 px 를 박지 않는다". */}
+          {maxed ? <Minimize2 /> : <Maximize2 />}
         </button>
         <button type="button" className="bp-close" title={t('mon.close')} onClick={onClose}>
           <IconClose />

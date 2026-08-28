@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Plus } from 'lucide-react'
 import type { ConnectionProfile, ProfileInput } from '@shared/types'
 import { connDotClass, type ConnState } from '../store/profiles'
 import { Dropdown } from './Dropdown'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
-import { IconClose } from './icons'
+import { IconClose, inlineIcon } from './icons'
 import { PasswordInput } from './PasswordInput'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { treeMenu } from '../interactions/actions'
@@ -310,7 +311,8 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
             <h2>{t('conn.title')}</h2>
             <p>{t('conn.subtitle')}</p>
           </div>
-          <span className="x" onClick={onClose}>
+          {/* SVG 는 스크린리더가 읽지 않는다 — 이름은 여기서 준다(닫기 버튼 감사, FINISH-M2). */}
+          <span className="x" role="button" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
             <IconClose />
           </span>
         </div>
@@ -368,7 +370,7 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
             {/* 목록 맨 아래. 칸 전체가 스크롤되므로 sticky 로 바닥에 붙여 둔다 — 서버가 스무 개면
                 "아래"가 화면 밖이라 버튼을 찾으러 스크롤해야 한다. */}
             <button type="button" className="pl-add" onClick={newProfile}>
-              ＋ {t('conn.new')}
+              <Plus size={13} style={inlineIcon} /> {t('conn.new')}
             </button>
           </div>
           <div className="prof-form" onKeyDown={onFormKeyDown}>

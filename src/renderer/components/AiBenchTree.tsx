@@ -1,5 +1,7 @@
+import { GitBranch, X } from 'lucide-react'
 import type { AiSessionState } from '@shared/aiSession'
 import type { WorkbenchRow, WorkbenchStatus } from '../store/aiWorkbench'
+import { inlineIcon } from './icons'
 import { t } from '../i18n'
 
 /**
@@ -79,14 +81,16 @@ export function AiBenchTree({
               {r.s.skipPerms && <span className="skip">{t('bench.skipPerms')}</span>}
             </button>
             {/* 분리 세션에서 또 분리하지 않는다 — worktree 의 worktree 는 git 이 허용해도
-                부모·자식 관계가 두 단이 되어 지울 때 무엇이 딸려 가는지 알기 어려워진다. */}
+                부모·자식 관계가 두 단이 되어 지울 때 무엇이 딸려 가는지 알기 어려워진다.
+                ⑂(U+2442)는 Pretendard·나눔고딕코딩 어디에도 없어 두부가 될 수 있던 자리다 —
+                분기 = git worktree 이므로 GitBranch 가 뜻까지 맞는다. */}
             {!r.s.worktree && !dead && (
               <button type="button" className="bench-x" title={t('bench.split')} onClick={() => onSplit(r.s)}>
-                ⑂
+                <GitBranch size={11} style={inlineIcon} />
               </button>
             )}
             <button type="button" className="bench-x" title={t('bench.remove')} onClick={() => onRemove(r.s)}>
-              ✕
+              <X size={11} style={inlineIcon} />
             </button>
           </div>
         )

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MoreHorizontal, Star } from 'lucide-react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { connDotClass, type ConnState } from '../store/profiles'
@@ -7,7 +8,7 @@ import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, tmuxMenuItem, type TreeActionId, type TreeMenuKind } from '../interactions/actions'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
-import { IconClose } from './icons'
+import { IconClose, inlineIcon } from './icons'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
 // 사이드바 연결 트리 — 목업 S1(순수 트리). 2026-08-08 재설계.
@@ -297,7 +298,9 @@ export function ConnTree({
                 onClick={() => onOpenWork?.(w)}
                 onContextMenu={(e) => openCtx(e, 'fav', { kind: 'work', workId: w.id })}
               >
-                <span className="fav-i">★</span>
+                <span className="fav-i">
+                  <Star size={12} style={inlineIcon} />
+                </span>
                 <span className="fav-n">{w.name}</span>
                 <span className="fav-p">{w.path}</span>
               </div>
@@ -402,7 +405,8 @@ export function ConnTree({
                           openCtx(e, p.type === 'rdp' ? 'serverRdp' : 'server', { kind: 'server', profileId: p.id })
                         }
                       >
-                        ⋯
+                        {/* 크기는 `.rowact .cc-b svg`(11px)가 정한다 — 세션 행의 [닫기]와 같은 규칙. */}
+                        <MoreHorizontal />
                       </span>
                     </span>
                   </div>
