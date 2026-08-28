@@ -437,7 +437,7 @@
   place-items: center;
   border: none;
   background: none;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--text-dim);
   cursor: pointer;
   transition: 0.12s;
@@ -889,7 +889,7 @@
 .sftp-xfer .xfer-bar {
   height: 4px;
   background: var(--bg-canvas);
-  border-radius: 20px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 .sftp-xfer .xfer-fill {
@@ -1567,7 +1567,7 @@
   order: -1;
   padding: 0 5px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: var(--fs-nano);
   line-height: 1.5;
   color: var(--text-dim);
@@ -1846,7 +1846,7 @@
   width: 40px;
   height: 5px;
   margin-right: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--line);
   vertical-align: middle;
   overflow: hidden;
@@ -2421,7 +2421,7 @@
   color: var(--text-lo);
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 1px 5px;
   margin-right: 4px;
 }
@@ -2921,7 +2921,9 @@
   padding: 3px;
   background: var(--bg-overlay);
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  /* 우클릭 메뉴(.ctx-menu)와 같은 물건이다 — 떠 있는 목록 + 고를 수 있는 행. 그쪽이 이미
+     --radius(껍데기) / --radius-sm(행) 이라 여기도 같은 짝을 쓴다(7·5px 자작값이었다). */
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   font-family: var(--term);
   font-size: var(--tt);
@@ -2932,7 +2934,7 @@
   height: 22px;
   line-height: 22px;
   padding: 0 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
   white-space: pre;
   overflow: hidden;
@@ -3200,14 +3202,14 @@
   width: 40px;
   height: 4px;
   background: var(--bg-overlay);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   flex: none;
 }
 .gauge .bar i {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: width 0.3s linear;
 }
 .gauge .bar.cpu i {
@@ -3494,7 +3496,7 @@
 .tbadge {
   flex: none;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 700;
@@ -3536,7 +3538,7 @@
   height: 19px;
   display: grid;
   place-items: center;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--text-dim);
   font-size: var(--fs-sm);
 }
@@ -3616,7 +3618,7 @@
   width: 34px;
   padding: 1px 0;
   text-align: center;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 700;
@@ -3874,7 +3876,7 @@
   font-size: var(--fs-md);
   font-weight: 600;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-overlay);
   color: var(--text-dim);
 }
@@ -4366,7 +4368,9 @@
 .set-toggle {
   width: 38px;
   height: 21px;
-  border-radius: 11px;
+  /* 알약(예외 — 아래 .ai-chip·.rf-n 과 함께 tokens.css §Radius 주석 참고). 옛 값 11px 은
+     "높이 21 의 절반"을 손으로 적은 것이라 이미 알약이었다 — 모양은 그대로고 뜻만 적었다. */
+  border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--bg-canvas);
   position: relative;
@@ -4428,7 +4432,9 @@
   gap: 10px;
   padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  /* 프로필 행(.prof)과 같은 "고를 수 있는 목록 행"이고 같은 설정 서랍 안에 있다 —
+     그쪽이 --radius 라 여기도 맞춘다(10px 자작값이 나란히 놓였을 때 눈에 걸리던 자리). */
+  border-radius: var(--radius);
   cursor: pointer;
   background: var(--bg-canvas);
   transition: 0.13s;
@@ -4483,7 +4489,7 @@
   color: var(--accent-bright);
   background: var(--accent-glow);
   border: 1px solid var(--accent-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
   font-weight: 700;
 }
@@ -4591,7 +4597,7 @@
   appearance: none;
   height: 4px;
   background: var(--bg-overlay);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex: 1;
   outline: none;
 }
@@ -5615,7 +5621,9 @@
 .ai-chip {
   background: transparent;
   border: 1px solid var(--line-strong);
-  border-radius: 20px;
+  /* 알약(예외). 옛 20px 도 칩 높이의 절반을 넘어 이미 알약으로 그려지고 있었다 —
+     같은 이름의 .ara-chip 이 이미 알약이라 표기를 그쪽에 맞춘다. */
+  border-radius: 999px;
   color: var(--text-lo);
   font-family: inherit;
   font-size: var(--fs-sm);
@@ -5954,7 +5962,9 @@
 .rf-n {
   margin-left: 5px;
   padding: 0 4px;
-  border-radius: 7px;
+  /* 알약(예외). 옛 7px 은 그때 글자 크기에서의 "높이 절반"이었는데, 이 배지는 --fs-micro 라
+     --ui-scale 을 탄다 — 배율을 올리면 고정 7px 이 알약이기를 그만둔다. 그래서 뜻으로 적는다. */
+  border-radius: 999px;
   background: var(--accent);
   color: var(--bg-abyss);
   font-family: var(--ui);
@@ -5982,7 +5992,7 @@
 .rx-track {
   flex: 1;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--bg-raised);
   overflow: hidden;
 }
@@ -6308,7 +6318,7 @@
   flex: none;
   padding: 0 6px;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--text-mid);
   font-size: var(--fs-md);
   white-space: nowrap;
@@ -6449,7 +6459,7 @@
   margin-left: 7px;
   padding: 1px 5px;
   border: 1px solid var(--accent-line);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--accent-glow);
   color: var(--accent);
   /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이라 12px 하한 대상이 아니다 — 한글이 들어갈 자리가 없다. */
@@ -6547,7 +6557,7 @@
   padding: 0 8px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: var(--text-dim);
   font-family: var(--ui);
   font-size: var(--fs-md);
@@ -6585,7 +6595,7 @@
   padding: 7px 9px 8px;
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 .sysm-mhead {
   display: flex;
@@ -6690,7 +6700,7 @@
 .sysm-dbar {
   height: 5px;
   margin: 3px 0 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--bg-raised);
   overflow: hidden;
 }
@@ -7173,7 +7183,7 @@
   width: 34px;
   padding: 1px 0;
   text-align: center;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   font-size: var(--fs-micro);
   font-weight: 700;
   border: 1px solid var(--line);
@@ -7296,7 +7306,8 @@
   align-self: flex-end;
   max-width: 86%;
   background: var(--bg-overlay);
-  border-radius: var(--radius) var(--radius) 2px var(--radius);
+  /* 오른쪽 아래만 각지다 — 말풍선 꼬리 대신이다. 척도의 맨 아래 칸을 쓴다(옛 2px). */
+  border-radius: var(--radius) var(--radius) var(--radius-xs) var(--radius);
   padding: 6px 9px;
   color: var(--text-hi);
   font-size: var(--fs-md);
@@ -8196,7 +8207,7 @@
   display: block;
   width: 5px;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(180deg, var(--accent-bright), var(--accent) 50%, var(--accent-bright));
   transform: scaleY(0.06);
   transition: transform 90ms cubic-bezier(0.25, 0.9, 0.35, 1), opacity 260ms ease;
@@ -8396,7 +8407,7 @@
   display: block;
   width: 2px;
   height: 100%;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--accent);
   transform: scaleY(0.12);
   transition: transform 90ms cubic-bezier(0.25, 0.9, 0.35, 1);

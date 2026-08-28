@@ -79,16 +79,28 @@ for (const root of ROOTS) {
 // 범위는 font-size 하나다. width·padding 까지 지금 토큰화하는 것은 별개의 큰 작업이고,
 // 이 가드의 목적은 "**척도**가 다시 흩어지는 것"을 막는 것이다.
 //
-// ⏸ border-radius 는 **아직 안 건다**(2026-08-28 AUDIT-R6 에서 재고 뒤 보류, #149).
-// 같은 병이 같은 자리에 퍼져 있는 것은 맞다 — **33곳, 13종**(1·2·3·4·5·6·7·8·10·11·20px),
-// 그중 `3px` 하나가 **열여섯 곳**이라 이름 없는 사실상의 토큰이다.
-// 그런데 **순서가 반대다.** font-size 때는 척도를 tokens.css 로 모은 *뒤* 가드를 걸었다(위 문단).
-// radius 는 아직 안 모았고, 지금 토큰(4·6·8px)이 덮는 것은 33건 중 **7건뿐**이다 —
-// 나머지 26건은 **쓸 토큰이 존재하지 않는다.** 그 상태로 가드만 켜면 게이트가 없는 토큰을
-// 요구하게 된다(§ var() 폴백에서 폴백 있는 것을 통과시킨 것과 같은 이유).
-// 되살릴 때: #149 에서 `--radius-xs: 3px` 를 추가하고 33곳을 정리한 **뒤**, 아래 두 줄을 켠다.
-//   const STYLES_BR = /border-radius\s*:\s*[^;]*\b[0-9.]+px/i
-//   const PILL = /border-radius\s*:\s*9{3,}px/i   // 알약은 척도가 아니라 관용구 — 예외로 둔다
+// ⏸→▶ border-radius. **2026-08-28 아침에 보류했다가 같은 날 켰다**(#149) — 보류 사유가
+// "규칙이 틀렸다"가 아니라 "**순서가 반대다**"였기 때문이다. 그 판단은 지우지 않고 남긴다:
+//
+//   [보류할 때] 병은 실재했다 — **33곳, 13종**(1·2·3·4·5·6·7·8·10·11·20px), 그중 `3px` 하나가
+//   **열여섯 곳**이라 이름 없는 사실상의 토큰이었다. 그런데 font-size 때는 척도를 tokens.css 로
+//   모은 *뒤* 가드를 걸었는데(위 문단) radius 는 아직 안 모았고, 그때 토큰(4·6·8px)이 덮는 것은
+//   33건 중 **7건뿐**이었다. 그 상태로 가드만 켜면 게이트가 **없는 토큰을 요구**하게 된다
+//   (§ var() 폴백에서 폴백 있는 것을 통과시킨 것과 같은 이유).
+//
+//   [지금 켜는 이유] 그 선행 조건을 이번 라운드에서 끝냈다. `--radius-xs: 3px` 를 추가해
+//   척도를 4단으로 넓혔고(16곳이 이미 쓰던 값에 이름만 붙인 것이다), 남은 열 곳은 추측 대신
+//   **이웃이 쓰는 토큰**으로 맞췄다(.term-comp→.ctx-menu · .font-item→.prof). 이제 리터럴로
+//   남은 것은 알약뿐이고, 그건 아래 PILL 로 빠진다 — **요구할 토큰이 전부 존재한다.**
+//
+// ⚠️ `calc(var(--radius) - 2px)` 같은 관계식도 **일부러 위반으로 잡는다.** px 가 보이면 걸린다.
+// 중첩 보정이 정말 필요하면 예외를 파지 말고 척도에 칸을 하나 더 만들어라 — 예외를 허용한
+// 순간 그 자리에 매직 오프셋이 돌아온다(이번 열 곳 중 관계식이 필요한 자리는 결국 없었다).
+const STYLES_BR = /border-radius\s*:\s*[^;]*\b[0-9.]+px/i
+// 알약은 척도가 아니라 관용구 — 예외로 둔다. 토글 스위치·칩·개수 배지처럼 "끝이 반원"이
+// 모양의 정의인 자리다. 다만 tokens.css §Radius 는 알약을 거부하고 있는데 실제로는 여덟 곳이
+// 쓴다 — 그 모순을 없앨지는 디자인 결정이라 값을 유지한 채 남겨 두었다(FINISH-M1 보고).
+const PILL = /border-radius\s*:\s*9{3,}px/i
 const STYLES_FS = /font-size\s*:\s*[^;]*\b[0-9.]+px/i
 for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('.css') && !EXCLUDE.includes(n))) {
   const file = join('src/renderer/styles', name)
@@ -97,6 +109,9 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
     .forEach((line, i) => {
       if (STYLES_FS.test(line)) {
         violations.push(`${file}:${i + 1}  font-size px 리터럴(tokens.css 의 --fs-* 를 쓸 것)  → ${line.trim()}`)
+      }
+      if (STYLES_BR.test(line) && !PILL.test(line)) {
+        violations.push(`${file}:${i + 1}  border-radius px 리터럴(tokens.css 의 --radius-* 를 쓸 것)  → ${line.trim()}`)
       }
       // 2026-08-16: **HEX 는 styles/ 도 본다.** 그전까지 HEX 검사는 ROOTS(components·interactions)
       // 에만 걸려 있었는데 그 두 디렉터리에는 .css 파일이 **0개**다 — "HEX 리터럴 금지"가 색이
@@ -116,6 +131,22 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
       }
     })
 }
+
+// tokens.css 도 **border-radius 만은** 검사한다(2026-08-28, #149). 이 파일은 색·척도의 정의부라
+// 위 루프에서 통째로 빠져 있는데, 파일 **아래쪽**에는 정의가 아니라 평범한 규칙이 산다
+// (`* { box-sizing }` · `body` · `::-webkit-scrollbar-*`). 실제로 거기 스크롤바 손잡이가
+// `20px` 을 쓰고 있었고 — 척도 밖의 값인데 **가드가 안 보는 파일이라 조용했다.** 한 번 뚫린
+// 구멍은 다음에도 뚫린다. `border-radius:` 라는 속성명은 :root 의 토큰 정의(`--radius-lg: 8px`)
+// 에는 나올 수 없으므로 이 검사만 걸어도 정의부를 오탐하지 않는다.
+readFileSync(join('src/renderer/styles', 'tokens.css'), 'utf8')
+  .split('\n')
+  .forEach((line, i) => {
+    if (STYLES_BR.test(line) && !PILL.test(line)) {
+      violations.push(
+        `src/renderer/styles/tokens.css:${i + 1}  border-radius px 리터럴(--radius-* 를 쓸 것)  → ${line.trim()}`
+      )
+    }
+  })
 
 // 정의되지 않은 var() 검사 (AUDIT-R6 ②). 스캐너가 HEX·px 는 봐도 **`var(--x)` 의 `--x` 가
 // 실제로 있는지는 안 봤다.** 없는 토큰을 쓰면 브라우저는 오류 없이 **선언을 통째로 버린다** —
