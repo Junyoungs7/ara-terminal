@@ -33,6 +33,23 @@ const T_DYNAMIC = /\bt\(\s*[A-Za-z_$([]/
 const ANY_LITERAL = /(['"`])([A-Za-z0-9_.]{1,60})\1/g
 
 const files = walk('src')
+
+/**
+ * **공허성 방지**(2026-08-28 — Orca 의 래칫 테스트에서 가져온 규칙).
+ *
+ * 스캐너가 훑을 파일을 하나도 못 찾으면 위반도 0이라 **조용히 통과한다.** 디렉터리를 옮기거나
+ * 확장자 목록이 어긋나면 그날부터 이 게이트는 아무것도 안 지키면서 초록으로 남는다 —
+ * 게이트와 위약(placebo)의 차이가 이 한 줄이다. 하한은 현재 수(약 190)의 절반쯤에 둔다.
+ */
+const MIN_FILES = 100
+if (files.length < MIN_FILES) {
+  console.error(
+    `i18n 스캔이 공허하다: 소스 ${files.length}개만 찾았다(하한 ${MIN_FILES}).\n` +
+      'walk() 의 루트나 확장자 목록이 코드베이스와 어긋났다 — 스캐너를 고쳐라.'
+  )
+  process.exit(1)
+}
+
 const missing = []      // {file, line, key}
 const prefixes = new Set()
 const literals = new Set()

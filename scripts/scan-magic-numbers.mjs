@@ -35,6 +35,26 @@ function walk(dir) {
 }
 
 const violations = []
+
+/**
+ * **공허성 방지**(2026-08-28 — Orca 의 래칫 테스트에서 가져온 규칙).
+ *
+ * 훑을 파일을 하나도 못 찾으면 위반도 0이라 **조용히 통과한다.** ROOTS 를 옮기거나 styles/ 를
+ * 다른 데로 빼면 그날부터 이 게이트는 아무것도 안 지키면서 초록으로 남는다.
+ * 게이트와 위약(placebo)의 차이가 이 한 줄이다 — 하한은 현재 수의 절반쯤에 둔다.
+ */
+const MIN_TSX = 30
+const MIN_CSS = 3
+const tsxFiles = ROOTS.flatMap((r) => walk(r))
+const cssFiles = readdirSync('src/renderer/styles').filter((n) => n.endsWith('.css') && !EXCLUDE.includes(n))
+if (tsxFiles.length < MIN_TSX || cssFiles.length < MIN_CSS) {
+  console.error(
+    `매직넘버 스캔이 공허하다: tsx ${tsxFiles.length}개(하한 ${MIN_TSX}) · css ${cssFiles.length}개(하한 ${MIN_CSS}).\n` +
+      'ROOTS 나 styles/ 경로가 코드베이스와 어긋났다 — 스캐너를 고쳐라.'
+  )
+  process.exit(1)
+}
+
 for (const root of ROOTS) {
   for (const file of walk(root)) {
     const lines = readFileSync(file, 'utf8').split('\n')
