@@ -14,7 +14,6 @@ tests/.w1b-harness-main.cjs
 tests/.w2-harness-main.cjs
 tests/.w4sat-harness-main.cjs
 tests/.fixdestroy-harness-main.cjs
-tests/.fb-sync-harness-main.cjs
 tests/.shutdown-harness-main.cjs
 
 # Playwright 실행 산출물(T1) — 리포트·실패 아티팩트는 커밋하지 않는다

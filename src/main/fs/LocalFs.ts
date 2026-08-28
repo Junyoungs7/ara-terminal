@@ -189,10 +189,11 @@ export async function trash(paths: string[]): Promise<FileOpResult> {
 }
 
 /**
- * #90: 없으면 중간 단계까지 만든다(`mkdir -p` 상당). AI CLI 시작 창의 [없으면 만들기]가 쓴다 —
- * 원격은 `sftp:mkdir` 이 한 단계씩이라 렌더러가 훑지만(aiCliLaunch.ensureRemoteDir), 로컬은
- * node 가 recursive 를 그냥 해 준다. **makeDir 과 달리 경로 구분자를 허용한다** — 여기 오는 값은
- * 사용자가 폼에 적은 전체 경로이지 "이 폴더 안의 새 이름"이 아니다(그래서 invalidName 을 안 탄다).
+ * #90: 없으면 중간 단계까지 만든다(`mkdir -p` 상당). node 가 recursive 를 그냥 해 준다.
+ * **makeDir 과 달리 경로 구분자를 허용한다** — 여기 오는 값은 사용자가 폼에 적은 전체 경로이지
+ * "이 폴더 안의 새 이름"이 아니다(그래서 invalidName 을 안 탄다).
+ * (원래 부르던 곳은 AI CLI 시작 창의 [없으면 만들기]였다. 그 창은 cc72bcb 에서 사라졌고
+ *  렌더러 짝이던 aiCliLaunch.ensureRemoteDir 도 AUDIT-R5 에서 지웠다 — `fs:mkdirp` 배선만 남았다.)
  */
 export async function makeDirP(path: string): Promise<FileOpResult> {
   try {

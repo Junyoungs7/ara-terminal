@@ -450,13 +450,6 @@
   width: 13px;
   height: 13px;
 }
-/* 머리 오른쪽 도구 묶음 — 버튼 사이는 2px, 제목과는 여백으로 떨어뜨린다. */
-.tw-tools {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
 
 .sb-panel {
   display: none;
@@ -1054,10 +1047,6 @@
   width: 2px;
   background: var(--accent);
 }
-.exp-tab-ic {
-  flex: none;
-  font-size: var(--fs-sm);
-}
 .exp-tab-nm {
   white-space: nowrap;
   overflow: hidden;
@@ -1190,23 +1179,11 @@
    창 껍데기(.exp-win / .exp-title / .exp-tabs / .exp-grip)는 파일 탐색기 것을 그대로 쓴다 —
    두 창의 조작이 같아야 배울 게 없다. 여기서는 그 안의 런치패드 격자와 프로세스 표만 정의한다.
    한글이 들어가는 글자는 12px 이 하한이다(그 아래는 래스터화에서 뭉개진다 — tests/font.test.ts 가 지킨다). */
-.con-tico {
-  color: var(--accent);
-}
 /* 지금 만지고 있는 서버 — 제목줄에 늘 보여야 한다(엉뚱한 서버의 프로세스를 죽이지 않게). */
 .con-srv {
   color: var(--accent);
   font-family: var(--ui);
   font-size: var(--fs-md);
-}
-.con-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  background: var(--bg-abyss);
-}
-.con-body .sb-placeholder {
-  margin: auto;
 }
 
 /* 런치패드 — 4열 아이콘 격자(목업 ①). 도구가 늘어도 자리가 남는다. */
@@ -4854,8 +4831,8 @@
   width: 520px;
 }
 /* 체크박스 — 네이티브 checkbox(별도 토글 위젯을 만들지 않는다), accent-color 만 테마에 맞춘다.
-   F24 피드백 폼에서 왔지만 그 기능은 2026-08-13 에 걷어냈고, 클래스는 디스크 창(가상 FS 보기)과
-   AI CLI 창(플래그)이 이어서 쓴다. */
+   F24 피드백 폼에서 왔지만 그 기능은 2026-08-13 에 걷어냈고, 클래스는 디스크 창(가상 FS 보기)이
+   이어서 쓴다. */
 .fb-check {
   display: flex;
   align-items: center;
@@ -4869,91 +4846,6 @@
   width: 14px;
   height: 14px;
   cursor: pointer;
-}
-/* ---------- F27 AI CLI 시작 ---------- */
-/* .modal.sm + .set-row/.sr-* + .fb-check 를 그대로 쓴다. 여기 있는 것은 "보낼 명령" 줄과 최근 목록,
-   그리고 그 둘이 들어갈 만큼의 폭뿐이다(부트스트랩 폼과 같은 계열). */
-.modal.aicli-modal {
-  width: 540px;
-}
-.aicli-modal .dlg-body {
-  max-height: 62vh;
-  overflow-y: auto;
-}
-.aicli-none {
-  font-size: var(--fs-md);
-  color: var(--warn);
-  line-height: 1.5;
-}
-/* 체크박스·custom 입력은 위 컨트롤 아래로 쌓인다(.dlg-input 이 이미 margin-top 을 갖는다). */
-.aicli-chk {
-  margin-top: 9px;
-}
-.aicli-arg {
-  font-family: var(--mono);
-  font-size: var(--fs-md);
-  color: var(--text-dim);
-}
-.aicli-preview {
-  display: grid;
-  gap: 6px;
-}
-/* 이 줄이 곧 전송 문자열이다 — 줄바꿈해서라도 전부 보여 준다(잘라서 감추지 않는다). */
-.aicli-cmd {
-  margin: 0;
-  padding: 10px 11px;
-  background: var(--bg-terminal);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: var(--fs-md);
-  line-height: 1.6;
-  color: var(--t-green);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.aicli-cmd.bad {
-  color: var(--err);
-  font-family: var(--ui);
-  word-break: keep-all;
-}
-.aicli-recent {
-  display: grid;
-  gap: 4px;
-}
-.aicli-rrow {
-  display: grid;
-  /* 명령 칸이 가장 넓다 — 어느 플래그로 돌렸는지가 최근 목록에서 서로를 가르는 정보다. */
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.1fr) minmax(0, 1.9fr);
-  gap: 10px;
-  align-items: baseline;
-  padding: 6px 9px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: var(--fs-md);
-}
-.aicli-rrow:hover {
-  background: var(--bg-raised);
-}
-.aicli-rrow .ar-srv {
-  color: var(--text-hi);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aicli-rrow .ar-path {
-  color: var(--text-mid);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aicli-rrow .ar-cmd {
-  font-family: var(--mono);
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .dlg-body {
   padding: 15px 17px;
@@ -5072,24 +4964,6 @@
 }
 .pmon-bar .sb-search .field {
   padding: 3px 8px;
-}
-.pmon-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px 6px;
-}
-.pmon-range {
-  flex: none;
-}
-.pmon-range button {
-  padding: 4px 8px;
-  font-size: var(--fs-sm);
-}
-.pmon-hidden {
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
 }
 /* 2026-08-21: padding-top 을 걷었다. sticky 헤더는 **패딩 박스 위**에 붙어서, 위쪽 패딩이
    있으면 그만큼의 띠가 헤더보다 위에 남고 **행이 그 틈으로 지나가 보인다**(준영님 제보).
@@ -6375,36 +6249,6 @@
   margin-left: auto;
 }
 
-/* 구간 안의 빈 포트 — 번호 칩. 방화벽이 8000~9000 만 열어 준 서버에서 쓸 번호를 바로 고른다. */
-.pmon-free {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 0 10px 6px;
-}
-.pfree-sum {
-  width: 100%;
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
-}
-.pfree-chip {
-  padding: 1px 6px;
-  border: 1px solid var(--ok-line);
-  border-radius: var(--radius-sm);
-  color: var(--ok);
-  font-family: var(--ui);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-.pfree-chip:hover {
-  background: var(--bg-raised);
-}
-.pfree-more {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
-}
-
 /* ── 작업 프로필 팝업 ── 서버+폴더 즐겨찾기 목록. 트리에 행을 만들지 않는 대신 여기서 고른다. */
 .wp-modal {
   width: 460px;
@@ -7150,21 +6994,11 @@
 .ctr-name {
   color: var(--text-hi);
 }
-.ctr-image {
-  color: var(--accent-bright);
-}
-.ctr-name,
-.ctr-image,
-.ctr-status,
-.ctr-ports {
+.ctr-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-.ctr-status,
-.ctr-ports {
-  color: var(--text-dim);
 }
 
 /* ── F30 AI 세션 패널 ────────────────────────────────────────────────────── */
@@ -7192,95 +7026,6 @@
   50% {
     opacity: 0.3;
   }
-}
-.aisess-cnt {
-  margin-left: auto;
-  margin-right: 8px;
-  font-size: var(--fs-nano);
-  color: var(--warn);
-}
-.aisess-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.aisess-empty {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
-  padding: 14px 12px;
-  line-height: 1.5;
-}
-.aisess-grp {
-  font-size: var(--fs-micro);
-  color: var(--text-dim);
-  padding: 8px 12px 4px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.aisess-row {
-  display: grid;
-  grid-template-columns: 8px 1fr auto;
-  gap: 9px;
-  align-items: start;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-.aisess-row:hover {
-  background: var(--bg-raised);
-}
-.aisess-row.gone {
-  cursor: default;
-  opacity: 0.55;
-}
-.aisess-row .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-top: 5px;
-  background: var(--idle);
-}
-.aisess-row .dot.quiet {
-  background: var(--warn);
-  animation: aisess-breathe 1.6s ease-in-out infinite;
-}
-.aisess-row .dot.busy {
-  background: var(--ok);
-}
-.aisess-main {
-  min-width: 0;
-}
-.aisess-cli {
-  display: block;
-  color: var(--text-hi);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aisess-path {
-  display: block;
-  color: var(--text-dim);
-  font-size: var(--fs-micro);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aisess-el {
-  font-size: var(--fs-micro);
-  color: var(--text-dim);
-  white-space: nowrap;
-  padding-top: 1px;
-}
-.aisess-el.w {
-  color: var(--warn);
-}
-.aisess-foot {
-  flex: none;
-  padding: 9px 12px;
-  border-top: 1px solid var(--line);
-  font-size: var(--fs-micro);
-  color: var(--text-dim);
-  line-height: 1.45;
 }
 
 /* 키 확인 중 표시 (2026-08-23 제보 — "저장했는데 아무것도 안 뜬다").
@@ -7463,13 +7208,6 @@
   gap: 6px;
   color: var(--text-dim);
   font-size: var(--fs-sm);
-}
-/* 어느 엔진의 대화인가. CLI 가 대부분이라 **API 만** 표시한다 — 이어서 열면 그 엔진으로 열리므로
-   도구 유무가 달라진다. */
-.modal.ara-chats .ac-eng {
-  padding: 0 4px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
 }
 .modal.ara-chats .ac-name {
   flex: 1;

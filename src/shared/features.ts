@@ -14,13 +14,15 @@
  * (MCP 는 반대 방향 — 바깥 AI 가 우리 터미널을 조종하는 서버다). 도구 호출·세션 인지·컨텍스트
  * 관리가 갖춰지기 전에는 "터미널에 붙은 AI"라고 부를 수 없으므로, 반쯤 되는 채로 내보내지 않는다.
  *
- * 숨기는 것: 우측 레일 [대화] · Alt+A · Ctrl+Shift+A · 우클릭 [아라에게 질문] ·
- *            AI 부트스트랩 · 설정 [AI] 의 프로바이더/키/모델/사용량.
- * 남기는 것: **AI CLI 시작**(Ctrl+Shift+L — 원격 claude·codex·gemini 실행) · AI 세션 패널 ·
- *            MCP 서버(바깥 AI 가 우리 도구를 쓰는 길). 이 셋은 대화 기능이 아니라 터미널 기능이다.
+ * **지금 이 값이 끄는 것은 없다**(AUDIT-R5 에서 바로잡았다 — 전에는 여기에 "우측 레일 [대화] ·
+ * Alt+A · Ctrl+Shift+A · 우클릭 [아라에게 질문] · AI 부트스트랩 · 설정 [AI]" 여섯을 숨긴다고
+ * 적혀 있었는데 **여섯 다 켜져 있다**). 그 여섯은 전부 아래 AI_ENTRY 가 문을 지키고,
+ * `AI_ENTRY = AI_CHAT || ARA_CHAT` 인데 #125 에서 `ARA_CHAT = true` 가 되어 상수 true 다.
+ * 옛 AiPanel 화면도 이 값이 아니라 `ARA_CHAT` 이 가른다(Shell.tsx 의 삼항).
+ * 살아 있는 소비자는 `tests/e2e/ai.spec.ts` 하나 — 이 값을 보고 스스로 건너뛴다.
  *
- * 되살릴 때: 이 값을 true 로 되돌리면 진입점이 전부 돌아온다. 함께 되살릴 것 —
- * `tests/e2e/ai.spec.ts`(이 상수를 보고 스스로 건너뛴다) · 사이트/영상의 AI 대화 소개.
+ * 그래도 남겨 둔다: `ARA_CHAT` 을 되돌리는 날 **무엇을 다시 켜는지**를 이 문장이 갖고 있고,
+ * 그때 `AI_ENTRY` 가 다시 이 값을 본다. 옛 화면 정리(AiPanel 404줄)는 그 결정과 함께 한다.
  */
 export const AI_CHAT = false
 
@@ -60,6 +62,8 @@ export const AI_ENTRY = AI_CHAT || ARA_CHAT
  * 남기는 것: 코드 전부. shared/voice.ts 의 판단 규칙과 그 검사 18개도 계속 돈다.
  *
  * 되살릴 때: 이 값을 true 로 되돌리고 electron-builder.yml 의 extraResources 주석을 푼다
- * (`npm run voice:model` 로 모델을 먼저 받아 둘 것). 남은 일은 #140 에 적혀 있다.
+ * (`npm run voice:model` 로 모델을 먼저 받아 둘 것). 그리고 **`vosk-browser` 를 package.json 의
+ * devDependencies 에서 dependencies 로 되돌린다** — AUDIT-R5 에서 옮겼다. 동적 import 라 부팅
+ * 비용은 없었지만 SDK 5.8MB 가 못 쓰는 채로 asar 에 실리고 있었다. 남은 일은 #140 에 적혀 있다.
  */
 export const VOICE = false

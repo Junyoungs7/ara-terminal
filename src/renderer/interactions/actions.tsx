@@ -10,9 +10,11 @@ import type { SortKey, SortSpec } from '../store/fileView'
 // (이중 정의 금지, 계획서 §C F4c). 목업 variant-final-3 의 8항목·순서·아이콘을 그대로 이식.
 //
 // tint: 'ai' → --purple, 'danger' → --err (목업의 인라인 HEX 대신 토큰 — 매직넘버 스캔 통과).
-// future: true → 아직 없는 기능. 비활성 스타일 + "추후 지원" 토스트.
-// (ai.ask 는 W3 에서, log.save 는 2026-08-14 에 실배선돼 future 를 뗐다 — 지금은 쓰는 곳이 없다.
-//  없는 기능을 메뉴에 남겨 두면 "눌렀는데 안 되네"가 되므로 다음에도 신중히 쓸 것.)
+//
+// 여기 있던 `future: true`(= 비활성 스타일 + "추후 지원" 토스트)는 AUDIT-R5 에서 걷어냈다.
+// ai.ask 가 W3 에서, log.save 가 2026-08-14 에 실배선되며 마지막 사용처가 사라졌고 그 뒤로는
+// 아무 액션도 세우지 않았다. 없는 기능을 메뉴에 남겨 두면 "눌렀는데 안 되네"가 되므로
+// 다시 필요해지면 그때 세운다.
 
 export type ActionId =
   | 'copy'
@@ -43,7 +45,6 @@ export type ContextAction = {
   labelKo: string
   icon: ReactNode
   tint?: 'ai' | 'danger'
-  future?: boolean
 }
 
 const svg = (children: ReactNode, extra?: Record<string, string>) => (
@@ -174,8 +175,7 @@ export function terminalMenu(tmux?: TmuxListResult | 'loading'): MenuItem[] {
       label: a.labelKo,
       icon: a.icon,
       ...(hint ? { hint } : {}),
-      ...(a.tint === 'danger' ? { danger: true } : {}),
-      ...(a.future ? { dim: true } : {})
+      ...(a.tint === 'danger' ? { danger: true } : {})
     }
   }
   const out: MenuItem[] = []

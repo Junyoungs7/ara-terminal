@@ -12,21 +12,15 @@ describe('컨텍스트 액션 단일 레지스트리', () => {
     expect(CONTEXT_ACTIONS).toHaveLength(AI_ENTRY ? 6 : 5)
   })
 
-  it('★ "추후 지원" 항목이 하나도 없다 — 눌렀는데 안 되는 메뉴를 두지 않는다', () => {
-    // 2026-08-14: 마지막 하나였던 log.save 가 실배선됐다(로그 패널을 연다). 그전에는
-    // "추후 지원" 토스트만 냈는데 패널의 [내려받기]는 이미 동작하고 있었다 — 있는 기능이
-    // 없는 척하고 있었다. future 플래그 자체는 남겨 두되 쓰는 곳이 없어야 한다.
-    expect(CONTEXT_ACTIONS.filter((a) => a.future).map((a) => a.id)).toEqual([])
-  })
-
-  it('실동작 5종(복사/붙여넣기/복제/아라에게 묻기/닫기)은 future 아님', () => {
+  // "추후 지원" 항목이 없다는 것을 여기서 두 번 셌었다(future 플래그가 빈 배열인가 · 실동작
+  // 5종이 future 가 아닌가). AUDIT-R5 에서 `future` 필드를 지웠으므로 이제 **컴파일러가** 그
+  // 불변식을 지킨다 — 다시 세우려면 타입에 필드를 되살려야 하고 그 자리에서 눈에 띈다.
+  it('실동작 5종(복사/붙여넣기/복제/아라에게 묻기/닫기)이 레지스트리에 있다', () => {
     // split.* 는 2026-08-18 에 서브메뉴로 빠져 이 레지스트리에 없다 — 그 둘이 살아 있는지는
     // ux-round1 의 "묶음 둘이 서브메뉴로 있다" 가 본다(같은 사실을 두 곳에서 세지 않는다).
     const live = ['copy', 'paste', 'session.duplicate', 'pane.close', ...(AI_ENTRY ? ['ai.ask'] : [])]
     for (const id of live) {
-      const a = CONTEXT_ACTIONS.find((x) => x.id === id)
-      expect(a).toBeDefined()
-      expect(a?.future).toBeFalsy()
+      expect(CONTEXT_ACTIONS.find((x) => x.id === id), id).toBeDefined()
     }
   })
 })

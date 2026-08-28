@@ -40,10 +40,6 @@ export function sessionWindowOf(winId: string): BrowserWindow | null {
   return w && !w.isDestroyed() ? w : null
 }
 
-export function sessionWindowIds(): string[] {
-  return [...windows.keys()]
-}
-
 /**
  * 그 화면 좌표에 **우리 창**이 있는가(2026-08-23 제보 5).
  *
