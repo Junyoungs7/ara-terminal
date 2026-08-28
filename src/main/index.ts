@@ -31,6 +31,7 @@ import { registerVoiceIpc } from './ipc/registerVoiceIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
+import { clearStaleSelfToken } from './ai/engine/araMcp'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setApiPersona } from './ai/prompt'
 import { setMainErrorLogDir } from './log/MainErrorLog'
@@ -312,6 +313,10 @@ app.whenReady().then(() => {
    * 명시적으로 끈 것(false)만 존중한다 — 실패해도 앱은 그대로 뜬다(포트를 못 잡는 상황에서
    * 부팅을 막을 이유가 없다. 화면의 [MCP] 섹션이 꺼짐으로 보이고 다시 켤 수 있다).
    */
+  // AUDIT-R1 배선(2026-08-28): 지난 실행이 남긴 아라 MCP 토큰을 무효로 만든다. 정상 종료 때는 이미
+  // 지워지지만 **크래시 뒤에는 원문 토큰이 든 임시 파일이 남는다.** 이번 실행의 토큰은 대화를 열 때
+  // 새로 발급되므로 여기서 지워도 잃는 기능이 없다 — araChat 이 열리기 전이기만 하면 된다.
+  clearStaleSelfToken(secrets)
   if (store.get().ui.mcpEnabled !== false) {
     void mcp.server.setEnabled(true).catch((e: unknown) => logMainError('mcp autostart', e))
   }
@@ -387,36 +392,61 @@ const exitTrace = (stage: string): void => {
   }
 }
 
+/**
+ * 정리 한 걸음. **던져도 다음 걸음으로 넘어간다** (AUDIT-R2 ①, 2026-08-28).
+ *
+ * 예전에는 스무 줄이 맨몸으로 늘어서 있었다. 그 첫 줄 `store.flush()` 는 `writeFileSync` +
+ * `renameSync` ×2(util/atomicJson.ts)라 **try/catch 가 하나도 없다** — 준영님 PC 의 오피스키퍼가
+ * 갓 쓴 파일을 잡으면 `EBUSY` 로 던진다(scripts/stage-release.mjs 가 같은 현상을 이미 적어 뒀다).
+ * 디스크 가득·userData 쓰기 불가도 같은 결과다. 한 번 던지면 아래 정리가 **통째로** 건너뛰어져
+ * conpty·ssh·claude 가 고아로 남고 39217 이 물린 채 창만 사라졌다(`uncaughtException` 이 조용히
+ * 삼켜서 아무도 못 봤다).
+ *
+ * 걸음마다 감싸는 이유: 한 덩어리로 감싸면 중간에서 던졌을 때 그 **뒤쪽**(MCP 리스너·RDP 릴레이)이
+ * 여전히 통째로 날아간다. 정리 항목들은 서로 의존하지 않으므로 하나가 실패해도 나머지는 해야 한다.
+ */
+const quitStep = (name: string, fn: () => void): void => {
+  try {
+    fn()
+  } catch (err) {
+    logMainError(`before-quit ${name}`, err)
+  }
+}
+
 app.on('before-quit', (e) => {
   exitTrace(ptyExitsDrained ? 'before-quit(2nd)' : 'before-quit(1st)')
   if (ptyExitsDrained) return
-  store?.flush()
-  history?.flush()
-  telemetry?.stopAll()
-  closePortWindow()
-  remoteConsole?.stopAll()
-  forwards?.stopAll()
+  // **정리보다 먼저 종료를 미룬다.** 예전엔 이 줄이 맨 끝이었다 — 그래서 정리 도중 무엇이든 던지면
+  // 여기 닿지 못하고 앱이 그 자리에서 죽었다(위 quitStep 주석). 미루기를 앞세우고 정리를 전부
+  // 감쌌으므로, 무슨 일이 나도 아래 finish() 예약까지는 반드시 내려온다.
+  e.preventDefault()
+  // 플러시 둘은 서로 남남이다 — workspace 저장이 실패해도 명령 기록은 저장돼야 한다.
+  quitStep('workspace flush', () => store?.flush())
+  quitStep('history flush', () => history?.flush())
+  quitStep('telemetry', () => telemetry?.stopAll())
+  quitStep('portWindow', () => closePortWindow())
+  quitStep('remoteConsole', () => remoteConsole?.stopAll())
+  quitStep('forwards', () => forwards?.stopAll())
   exitTrace('flushed')
-  sessionLog?.closeAll()
-  sessions?.destroyAll()
+  quitStep('sessionLog', () => sessionLog?.closeAll())
+  quitStep('sessions', () => sessions?.destroyAll())
   exitTrace('sessions-destroyed')
   // F16: 진행 중 스트림 abort — 종료 후에도 살아 있는 좀비 HTTP 요청을 남기지 않는다.
-  ara?.cancel()
+  quitStep('ara', () => ara?.cancel())
   // #123 규율: claude 상주 프로세스를 반드시 내린다(고아 금지 — #64 와 같은 선).
-  araChat?.chat.close()
+  quitStep('araChat', () => araChat?.chat.close())
   // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
   // 가능해야 한다(좀비 리스너 없음).
-  void mcp?.server.stop()
+  quitStep('mcp', () => void mcp?.server.stop())
   // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.
   // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).
-  closeAllRdpSpanWindows()
-  closeAllSessionWindows()
-  stopAllRdpRelays()
+  quitStep('rdpSpanWindows', () => closeAllRdpSpanWindows())
+  quitStep('sessionWindows', () => closeAllSessionWindows())
+  quitStep('rdpRelays', () => stopAllRdpRelays())
   exitTrace('services-stopped')
   // 정리는 여기까지 전부 끝났다. 남은 건 죽인 pty 의 exit 콜백이 메인 루프에 도착하기를 기다리는 것뿐
   // (실측 14~16ms, 상한 500ms). 그 뒤 다시 quit 하면 위 early return 으로 곧장 종료된다.
-  e.preventDefault()
   const finish = (): void => {
     exitTrace('drained')
     ptyExitsDrained = true

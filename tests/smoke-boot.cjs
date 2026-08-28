@@ -238,6 +238,10 @@ function registerWorkspaceStub() {
   ipcMain.handle('ui:setPrefs', (_e, prefs) => { Object.assign(UI, prefs); return { ok: true } })
   // R6: 빈 그룹 목록.
   ipcMain.handle('ui:setGroups', (_e, { groups }) => { UI.groups = groups; return { ok: true } })
+  // AUDIT-R2 ④: 화면이 버전을 **여기서** 받아 온다. 예전에는 렌더러가 '0.1.0' 을 박아 두고 있어서
+  // 이 스텁이 없어도 [정보]·상태바 검사가 통과했다 — 그 박아 둔 값이 바로 결함이었다(IPC 가 실패해도
+  // 영영 0.1.0 을 보여 준다). 렌더러가 빈 값으로 시작하도록 고쳤으므로 하네스도 진짜로 답해야 한다.
+  ipcMain.handle('app:getVersion', () => require('../package.json').version)
   // R3.3: 실제 브라우저를 띄우면 스모크가 멈추므로 호출만 기록하고 스킴 검증 결과를 흉내낸다.
   ipcMain.handle('app:openExternal', (_e, { url }) => {
     const safe = /^https?:\/\//.test(url)

@@ -56,6 +56,7 @@ const api: EvApi = {
     // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
     updateState: () => ipcRenderer.invoke('update:get'),
     updateCheck: () => ipcRenderer.invoke('update:check'),
+    updateDownload: () => ipcRenderer.invoke('update:download'),
     updateInstall: () => ipcRenderer.invoke('update:install'),
     onUpdateState: (cb: (s: UpdateState) => void) => {
       const listener = (_e: IpcRendererEvent, s: UpdateState): void => cb(s)

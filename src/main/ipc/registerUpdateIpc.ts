@@ -26,6 +26,11 @@ export function registerUpdateIpc(getWebContents: () => WebContents | null): Aut
     svc.check()
     return { ok: true } as const
   })
+  // 받기는 사람이 누른다(AutoUpdate 설계 결정 0) — 그래서 확인과 같은 모양의 채널이 하나 더 있다.
+  handle('update:download', () => {
+    svc.download()
+    return { ok: true } as const
+  })
   handle('update:install', () => {
     svc.install()
     return { ok: true } as const

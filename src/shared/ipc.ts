@@ -155,6 +155,8 @@ export type InvokeContract = {
    */
   'update:get': { req: void; res: UpdateState }
   'update:check': { req: void; res: { ok: true } }
+  /** 받기 — `available` 일 때만 뜻이 있다(자동으로 받지 않는다. UpdateState 주석 참고). */
+  'update:download': { req: void; res: { ok: true } }
   'update:install': { req: void; res: { ok: true } }
   // session 도메인 (계획서 §B.2/§B.7). create/resize/destroy/list.
   'session:create': { req: SessionSpec; res: { id: string } }
@@ -477,11 +479,13 @@ export type InvokeContract = {
  * 업데이트 상태 (#98).
  *  · off — 개발 모드이거나 배포 주소가 없다(화면에서 이 줄을 숨긴다)
  *  · idle — 확인 전이거나 최신
+ *  · available — 새 버전이 있다. **받는 것은 사람이 누른다**(AUDIT-R2 ③, 2026-08-28 준영님 결정 —
+ *    평문 HTTP 피드 + 무서명 빌드라 electron-updater 가 서명 검증을 건너뛴다. 무인 설치 경로를 없앤다)
  *  · checking / downloading(percent) / ready(받아 뒀다 — 재시작하면 적용)
  *  · error — 사유를 그대로 보여 준다(사내망 밖이면 흔히 여기로 온다)
  */
 export type UpdateState = {
-  status: 'off' | 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+  status: 'off' | 'idle' | 'available' | 'checking' | 'downloading' | 'ready' | 'error'
   version?: string
   percent?: number
   message?: string
@@ -550,9 +554,10 @@ export type EvApi = {
     openExternal(url: string): Promise<{ ok: boolean }>
     /** #90: 이 PC 기본 셸의 조립 규칙(`&&` 가 되는지). AI CLI 시작이 미리보기·전송에 함께 쓴다. */
     launchShell(): Promise<LaunchShell>
-    /** #98 자동 업데이트 — 상태 조회 · 즉시 확인 · 받아 둔 버전으로 재시작. */
+    /** #98 자동 업데이트 — 상태 조회 · 즉시 확인 · 받기 · 받아 둔 버전으로 재시작. */
     updateState(): Promise<UpdateState>
     updateCheck(): Promise<{ ok: true }>
+    updateDownload(): Promise<{ ok: true }>
     updateInstall(): Promise<{ ok: true }>
     onUpdateState(cb: (s: UpdateState) => void): () => void
     /** #90: 그 실행 파일이 이 PC 에 있는가(where/which). 원격의 cliInstalled 에 대응한다. */

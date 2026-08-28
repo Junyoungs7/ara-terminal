@@ -50,6 +50,14 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   // 상태바 그래프가 늘 그려지므로 이력도 늘 쌓는다(본창과 같은 규칙 — 제보 ③).
   const sysHistory = useStatsHistory(telemetry.stats, activeSession?.id ?? null, true)
 
+  // 앱 버전. 예전엔 `version=""` 을 넘겨 이 창의 상태바와 [정보]에 **`v` 만** 떴다(AUDIT-R2 ④).
+  // 본창 Shell 과 같은 방식으로 main 에게 물어 온다 — 못 받으면 빈 문자열이고, 그때는 받는 쪽이
+  // 줄 자체를 감춘다.
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    window.ev?.app.getVersion().then(setVersion).catch(() => {})
+  }, [])
+
   // 창 제목 = 보고 있는 세션. 작업표시줄에서 어느 서버 창인지 구분되는 유일한 단서다.
   useEffect(() => {
     document.title = activeSession ? `${activeSession.serverKey} — ${activeSession.title}` : t('app.name')
@@ -100,7 +108,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
           ref={mainRef}
           sessions={sessions}
           detachedWinId={target.winId}
-          version=""
+          version={version}
           ask={ask}
           askText={askText}
           bottom={
@@ -207,7 +215,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
       {/* 상태바 — 지금 붙어 있는 곳과 자원. 연결 프로필 목록은 이 창에 없으므로(본창 것이다)
           호스트 표기는 serverKey 로 떨어진다 — statusModel 이 그 폴백을 이미 갖고 있다. */}
       <StatusBar
-        version=""
+        version={version}
         session={activeSession}
         profile={undefined}
         conn={{}}

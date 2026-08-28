@@ -63,7 +63,10 @@ export function Shell() {
   const { sidebar, update: updateSidebar, preview: previewSidebar } = useSidebar()
   // 드래그 중에는 사이드바 폭 트랜지션을 끈다(0.22s ease 가 걸린 채로 끌면 폭이 커서를 따라오지 않는다).
   const [resizing, setResizing] = useState(false)
-  const [version, setVersion] = useState('0.1.0')
+  // 빈 문자열로 시작한다 — 예전엔 '0.1.0' 이 박혀 있었다. 아래 getVersion() 은 `.catch(() => {})`
+  // 라 IPC 가 실패하면 그 값이 **영원히** 남는데, 마침 그때 맞는 값이라 사람이 믿어 버린다
+  // (0.1.1 을 깔고도 [정보]가 0.1.0 을 말하는 순간 버전 표시는 거짓말이 된다 — AUDIT-R2 ④).
+  const [version, setVersion] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   // 우측 레일 — **한 번에 하나만** 열린다(#79, 2026-08-14 준영님 결정).
   //
@@ -476,8 +479,9 @@ export function Shell() {
           void ask({
             title: t('about.title'),
             message: t('about.msg'),
+            // 버전을 아직(또는 끝내) 못 받았으면 줄 자체를 뺀다 — `v` 만 덩그러니 뜨느니 없는 게 낫다.
             detail: [
-              { label: t('about.version'), value: `v${version}` },
+              ...(version ? [{ label: t('about.version'), value: `v${version}` }] : []),
               { label: t('about.platform'), value: navigator.userAgent.includes('Mac') ? 'macOS' : 'Windows' }
             ],
             confirmLabel: t('dlg.ok'),

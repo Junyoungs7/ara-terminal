@@ -166,17 +166,21 @@ function UpdateRow() {
     return window.ev?.app?.onUpdateState?.(setSt)
   }, [])
   if (st.status === 'off') return null
+  // `available` 은 **busy 가 아니다** — 새 버전을 찾아 두고 안 받은 상태에서도 다시 확인할 수 있어야
+  // 한다. 여기에 넣으면 버튼이 영영 잠긴다(AUDIT-R2 ③ — check() 가드와 같은 이유).
   const busy = st.status === 'checking' || st.status === 'downloading'
   const detail =
-    st.status === 'downloading'
-      ? t('settings.update.downloading').replace('{v}', st.version ?? '').replace('{p}', String(st.percent ?? 0))
-      : st.status === 'ready'
-        ? t('settings.update.ready').replace('{v}', st.version ?? '')
-        : st.status === 'checking'
-          ? t('settings.update.checking')
-          : st.status === 'error'
-            ? t('settings.update.error') + ' — ' + (st.message ?? '')
-            : t('settings.update.idle')
+    st.status === 'available'
+      ? t('settings.update.available').replace('{v}', st.version ?? '')
+      : st.status === 'downloading'
+        ? t('settings.update.downloading').replace('{v}', st.version ?? '').replace('{p}', String(st.percent ?? 0))
+        : st.status === 'ready'
+          ? t('settings.update.ready').replace('{v}', st.version ?? '')
+          : st.status === 'checking'
+            ? t('settings.update.checking')
+            : st.status === 'error'
+              ? t('settings.update.error') + ' — ' + (st.message ?? '')
+              : t('settings.update.idle')
   return (
     <Row label={t('settings.update')} desc={t('settings.update.desc')}>
       <div className="set-dir">
@@ -192,6 +196,16 @@ function UpdateRow() {
         >
           {t('settings.update.check')}
         </button>
+        {st.status === 'available' && (
+          <button
+            type="button"
+            className="btn"
+            data-action="update.download"
+            onClick={() => void window.ev?.app?.updateDownload?.()}
+          >
+            {t('settings.update.download')}
+          </button>
+        )}
         {st.status === 'ready' && (
           <button
             type="button"
