@@ -1,5 +1,12 @@
 // F1/F2 부트 스모크 — 실제 Electron으로 셸을 띄우고 보안 불변식 + window.ev + 세션 라운드트립을 검증.
 // Playwright 없이 Electron main 프로세스에서 직접 어서션. 통과 시 exit 0, 실패 시 exit 1.
+//
+// ⚠️ **UI 개수를 단언하는 검사다. 화면 구성을 바꾸면 여기도 같이 고친다.**
+// (AUDIT-R6) 이 파일이 제품보다 낡아 5건이 실패한 채로 몇 달을 지나왔다 — 레일 아이콘이 둘에서
+// 셋으로, 서버 메뉴가 일곱에서 여덟로 늘었는데 기대값은 그대로였다. 회귀가 아니라 **드리프트**다.
+// 원인은 단순하다: 스모크를 **배포 직전에만** 돌린다. 화면을 바꾼 그 라운드에서 같이 안 돌리면
+// 몇 달 뒤 배포 게이트에서 한꺼번에 터지고, 그때는 "이게 회귀인가 낡은 기대값인가"부터 가려야 한다.
+// 화면 구성(탭·메뉴 항목·섹션 개수)을 건드린 라운드는 그 라운드에서 이 파일을 함께 고친다.
 // 세션 IPC는 실제 preload(out/preload/index.js)와 계약이 동일한 최소 핸들러로 배선한다(F2 에코 라운드트립).
 const { app, BrowserWindow, ipcMain, safeStorage, clipboard } = require('electron')
 const { join } = require('node:path')
@@ -375,9 +382,18 @@ app.whenReady().then(async () => {
  * 숨긴 기능(src/shared/features.ts)의 검사는 건너뛴다. 값을 여기 또 적으면 둘이 어긋나므로
  * **정의부를 그대로 읽는다** — 상수를 되돌리면 이 검사들도 저절로 살아난다.
  */
-const AI_CHAT = /AI_CHAT\s*=\s*true/.test(
-  require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'shared', 'features.ts'), 'utf8')
+const FEATURES_SRC = require('node:fs').readFileSync(
+  require('node:path').join(__dirname, '..', 'src', 'shared', 'features.ts'),
+  'utf8'
 )
+const AI_CHAT = /AI_CHAT\s*=\s*true/.test(FEATURES_SRC)
+/**
+ * **메뉴에 [아라에게 묻기]가 뜨는가**는 AI_CHAT 이 아니라 `AI_ENTRY = AI_CHAT || ARA_CHAT` 이
+ * 정한다(features.ts:47 · actions.tsx:120). #126 에서 ARA_CHAT 이 켜지면서 항목이 돌아왔는데
+ * 여기는 AI_CHAT 만 보고 있어 **7항목을 기대한 채 8항목이 뜨는** 실패가 됐다 — AUDIT-R6.
+ */
+const ARA_CHAT = /ARA_CHAT\s*=\s*true/.test(FEATURES_SRC)
+const AI_ENTRY = AI_CHAT || ARA_CHAT
 
 const checks = []
   checks.push(['contextIsolation', wp.contextIsolation === true])
@@ -408,8 +424,9 @@ const checks = []
   checks.push(['.sidebar 렌더', r.hasSidebar])
   checks.push(['.term-tabbar 렌더', r.hasTabbar])
   checks.push(['.statusbar 렌더', r.hasStatusbar])
-  // FB-ui2: [모니터] 탭이 우측 액티비티 바로 이관되며 사이드바는 다시 2개(연결·파일)가 됐다.
-  checks.push(['좌측 레일 아이콘 2개(연결·파일)', r.sbTabs === 2])
+  // FB-ui2: [모니터] 탭이 우측 액티비티 바로 이관되며 사이드바는 2개(연결·파일)가 됐고,
+  // #129 가 [작업대](ai)를 넣어 다시 3개가 됐다 — 정의부는 Sidebar.tsx 의 `['conn','file','ai']`.
+  checks.push(['좌측 레일 아이콘 3개(연결·파일·작업대)', r.sbTabs === 3])
   checks.push(['브랜드=A.R.A', r.brandName.includes('A.R.A')])
   checks.push(['3행 그리드', /px .+ px/.test(r.gridRows) || r.gridRows.split(' ').length === 3])
 
@@ -821,11 +838,12 @@ const checks = []
   checks.push(['터미널 우클릭 기본 = 리스트 메뉴', f4c.listOpen === true])
   // 2026-08-18: 평면 여덟 줄에서 **묶음 둘**(분할 ▸ 가로/세로 · AI 실행 ▸ CLI 셋)로 바뀌었다.
   // 첫 단계는 여전히 여덟 줄인데 그중 둘이 서브메뉴 부모다(자식은 호버해야 그려진다).
-  const ctxWanted = AI_CHAT
+  // (tmux 항목은 SSH 세션일 때만 붙는다 — 여기는 로컬 셸이라 없다.)
+  const ctxWanted = AI_ENTRY
     ? 'copy,paste,split,aicli.run,session.duplicate,log.save,ai.ask,pane.close'
     : 'copy,paste,split,aicli.run,session.duplicate,log.save,pane.close'
-  checks.push([`리스트 첫 단계 = 실동작 ${AI_CHAT ? 6 : 5} + 묶음 2`, f4c.listItems.join(',') === ctxWanted])
-  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_CHAT ? 8 : 7)])
+  checks.push([`리스트 첫 단계 = 실동작 ${AI_ENTRY ? 6 : 5} + 묶음 2`, f4c.listItems.join(',') === ctxWanted])
+  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_ENTRY ? 8 : 7)])
   // R3.8 재배치 반영 — 힌트도 keymap 단일 소스에서 나오므로 자동으로 Ctrl+Shift 계열이 된다.
   // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
@@ -1150,8 +1168,10 @@ const checks = []
   // 서버·세션 메뉴 둘 다 끝에 tmux 서브메뉴 항목(session.tmux)이 하나씩 더 붙는다(6→7 / 3→4).
   // 2026-08-18: 'aicli.start' 를 **뺐다**(창을 없애면서 — 서버 행에는 폴더도 세션도 없어
   // 물어볼 곳이 사라졌다. 붙은 뒤 터미널 우클릭이 그 자리다) → 8 → 7항목.
-  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 7항목(tmux 포함)', ux.serverMenu.length === 7])
-  checks.push(['서버 메뉴 항목 구성(연결/새세션/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
+  // #131 에서 **되돌아왔다**: 서버 행에서 바로 작업대를 연다(그 자리가 이미 아는 것은 묻지 않고,
+  // 폴더는 그 서버에 붙었을 때의 홈으로 잡는다 — actions.tsx:290). newSession 다음 자리다 → 8항목.
+  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 8항목(작업대·tmux 포함)', ux.serverMenu.length === 8])
+  checks.push(['서버 메뉴 항목 구성(연결/새세션/작업대/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,aicli.start,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
   checks.push(['삭제 항목만 위험 톤', ux.dangerCount === 1])
   checks.push(['컨텍스트 메뉴 키보드 이동(↑↓)', ux.kbdCursor === 1])
   checks.push(['바깥 클릭으로 메뉴 닫힘', ux.menuClosedByBackdrop === true])

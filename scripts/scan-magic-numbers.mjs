@@ -56,8 +56,19 @@ for (const root of ROOTS) {
 // shell.css·interactions.css 에 font-size 리터럴이 **229곳, 12종**(9~15.5px) 쌓였고,
 // 크기가 흩어져 있어 "UI 글자를 키운다"를 한 번에 할 방법이 없었다(UI-font3 이 실험만 하고
 // 적용하지 못한 이유). 척도를 tokens.css 로 모은 뒤, 다시 흩어지지 않게 여기서 막는다.
-// 범위는 font-size 하나로 좁힌다 — styles/ 의 width·padding 까지 지금 토큰화하는 것은
-// 별개의 큰 작업이고, 이 가드의 목적은 "글자 크기가 다시 흩어지는 것"을 막는 것이다.
+// 범위는 font-size 하나다. width·padding 까지 지금 토큰화하는 것은 별개의 큰 작업이고,
+// 이 가드의 목적은 "**척도**가 다시 흩어지는 것"을 막는 것이다.
+//
+// ⏸ border-radius 는 **아직 안 건다**(2026-08-28 AUDIT-R6 에서 재고 뒤 보류, #149).
+// 같은 병이 같은 자리에 퍼져 있는 것은 맞다 — **33곳, 13종**(1·2·3·4·5·6·7·8·10·11·20px),
+// 그중 `3px` 하나가 **열여섯 곳**이라 이름 없는 사실상의 토큰이다.
+// 그런데 **순서가 반대다.** font-size 때는 척도를 tokens.css 로 모은 *뒤* 가드를 걸었다(위 문단).
+// radius 는 아직 안 모았고, 지금 토큰(4·6·8px)이 덮는 것은 33건 중 **7건뿐**이다 —
+// 나머지 26건은 **쓸 토큰이 존재하지 않는다.** 그 상태로 가드만 켜면 게이트가 없는 토큰을
+// 요구하게 된다(§ var() 폴백에서 폴백 있는 것을 통과시킨 것과 같은 이유).
+// 되살릴 때: #149 에서 `--radius-xs: 3px` 를 추가하고 33곳을 정리한 **뒤**, 아래 두 줄을 켠다.
+//   const STYLES_BR = /border-radius\s*:\s*[^;]*\b[0-9.]+px/i
+//   const PILL = /border-radius\s*:\s*9{3,}px/i   // 알약은 척도가 아니라 관용구 — 예외로 둔다
 const STYLES_FS = /font-size\s*:\s*[^;]*\b[0-9.]+px/i
 for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('.css') && !EXCLUDE.includes(n))) {
   const file = join('src/renderer/styles', name)
@@ -86,6 +97,40 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
     })
 }
 
+// 정의되지 않은 var() 검사 (AUDIT-R6 ②). 스캐너가 HEX·px 는 봐도 **`var(--x)` 의 `--x` 가
+// 실제로 있는지는 안 봤다.** 없는 토큰을 쓰면 브라우저는 오류 없이 **선언을 통째로 버린다** —
+// 그래서 RDP 카드가 각진 모서리로, [지난 대화] 버튼이 테두리 없는 맨 글자로 배포 직전까지 갔다.
+// ⚠️ 폴백이 있으면(`var(--group-clr, var(--accent))`) 통과다 — 그 넷(--group-clr·--t-bg·--sx·--sy)은
+// TSX 가 인라인으로 넣는 값이라 CSS 에 정의부가 없는 게 정상이다. 위반으로 잡으면 게이트가
+// 틀린 걸 요구하게 된다. TSX 가 setProperty 로 넣는 것도 같은 이유로 CSS 에 기본값을 두거나
+// 폴백을 붙이는 쪽이 답이다 — 예외 목록을 늘리지 않는다.
+const VAR_DEF = /(^|[;{\s])(--[A-Za-z0-9_-]+)\s*:/g
+const VAR_USE = /var\(\s*(--[A-Za-z0-9_-]+)\s*([,)])/g
+const defined = new Set()
+for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('.css'))) {
+  for (const m of readFileSync(join('src/renderer/styles', name), 'utf8').matchAll(VAR_DEF)) defined.add(m[2])
+}
+function walkAll(dir) {
+  let out = []
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
+    if (statSync(p).isDirectory()) out = out.concat(walkAll(p))
+    else if (['.css', '.ts', '.tsx'].includes(extname(p))) out.push(p)
+  }
+  return out
+}
+for (const file of walkAll('src/renderer')) {
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .forEach((line, i) => {
+      for (const m of line.matchAll(VAR_USE)) {
+        if (m[2] === ')' && !defined.has(m[1])) {
+          violations.push(`${file}:${i + 1}  정의 없는 토큰 ${m[1]} (선언이 통째로 버려진다)  → ${line.trim()}`)
+        }
+      }
+    })
+}
+
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
 const braceErrors = []
@@ -107,4 +152,4 @@ if (violations.length) {
   console.error('매직넘버 스캔 실패 — 토큰(var(--*))을 사용하세요:\n' + violations.join('\n'))
   process.exit(1)
 }
-console.log('매직넘버 스캔 통과 (HEX/px 리터럴 없음, CSS 중괄호 균형 정상)')
+console.log(`매직넘버 스캔 통과 (HEX/px 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)`)
