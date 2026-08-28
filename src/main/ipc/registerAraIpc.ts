@@ -15,9 +15,24 @@ import { chatPath } from '../ai/apiChatLog'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** 파일명으로 폴더 밖에 못 나가게 — apiChatLog.chatPath 와 같은 규칙. */
+/**
+ * 대화 id 의 유일한 모양(UUID). 두 곳이 이걸 본다:
+ *  · 파일명으로 폴더 밖에 못 나가게 — apiChatLog.chatPath 와 같은 규칙.
+ *  · `--resume <id>` 로 **셸 명령줄에 들어가는 값**이라(ClaudeCliEngine.realSpawn 이 `shell:true`
+ *    로 띄운다) 그 줄에 들어가는 것은 우리가 만든 값뿐이어야 한다(ClaudeCliEngine 이 스스로 적어
+ *    둔 불변식). quoteArg 는 `\"` 로 이스케이프하는데 **윈도우 cmd 는 백슬래시를 이스케이프로 안
+ *    본다** — 정상 UI 로는 만들 수 없는 값이지만, 그 사실에 기대는 대신 모양으로 막는다.
+ */
 const NAME_OK = /^[0-9a-f-]{36}$/i
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
+
+/**
+ * 이어서 열 대화 id. 모양이 아니면 null 이고, 그러면 **이어 열지 않고 새로 연다** —
+ * 조용히 이상한 값을 `--resume` 뒤에 싣는 것보다 낫다(못 이어받는 것은 화면에서 바로 보인다).
+ */
+export function validResumeId(v: unknown): string | null {
+  return typeof v === 'string' && NAME_OK.test(v) ? v : null
+}
 
 export type AraRuntime = { chat: AraChat }
 
@@ -32,14 +47,15 @@ export function registerAraIpc(
     emit: (e) => pushSend(getWebContents(), 'ara:event', e)
   })
 
-  handle('ara:open', ({ cwd, resumeId, active, engine }) =>
-    chat.open({
+  handle('ara:open', ({ cwd, resumeId, active, engine }) => {
+    const rid = validResumeId(resumeId)
+    return chat.open({
       ...(cwd ? { cwd } : {}),
-      ...(resumeId ? { resumeId } : {}),
+      ...(rid ? { resumeId: rid } : {}),
       ...(active === undefined ? {} : { active }),
       ...(engine === 'api' ? { engine: 'api' as const } : {})
     })
-  )
+  })
   handle('ara:send', ({ text }) => {
     chat.send(text)
     return { ok: true } as const

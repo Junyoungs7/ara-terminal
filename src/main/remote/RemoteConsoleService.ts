@@ -65,8 +65,12 @@ export function createRemoteConsoleService(
     if (!built) return { ok: false, reason: 'badArgs' }
     const client = getClient(sessionId)
     if (!client) return { ok: false, reason: 'noSession' }
-    // 권한을 올려 달라고 한 명령에만 비밀번호를 흘린다(카탈로그가 `sudo -S` 를 붙인 그 명령).
-    const pw = (args as { sudo?: unknown } | null)?.sudo === true ? getSudoPw(sessionId) : null
+    // **카탈로그가 실제로 `sudo -S` 를 붙인 명령에만** 비밀번호를 흘린다.
+    // 2026-08-28 감사 전에는 렌더러가 보낸 `args.sudo` 를 근거로 삼았는데, 표 17개 중 sudo 를
+    // 쓰는 건 셋뿐이라 `remote:run(id,'pkg.probe',{sudo:true})` 가 sudo 를 안 붙인 평범한
+    // 스크립트의 stdin 으로 SSH 비밀번호를 보냈다(그 스크립트가 stdin 을 안 읽어 새지 않았을 뿐).
+    // 이제 판단 근거가 우리가 만든 명령 문자열이라 렌더러가 흔들 수 없다.
+    const pw = built.sudo ? getSudoPw(sessionId) : null
     return exec(client, built.cmd, pw)
   }
 
@@ -148,10 +152,13 @@ function exec(client: Client, cmd: string, stdin: string | null = null): Promise
         }
         // `sudo -S` 는 비밀번호를 **stdin 한 줄**로 읽는다. 다 쓰면 바로 닫아야 뒤따르는 명령이
         // 남은 입력을 기다리지 않는다(닫지 않으면 exec 이 타임아웃까지 매달린다).
-        if (stdin !== null) {
-          stream.write(stdin + '\n')
-          stream.end()
-        }
+        if (stdin !== null) stream.write(stdin + '\n')
+        // **비밀번호가 없어도 닫는다.** 표의 명령은 하나도 stdin 을 읽지 않으므로 닫아서 잃을 것이
+        // 없고, 닫지 않으면 키 인증 프로필의 sudo 명령이 비밀번호를 기다리며 10초 타임아웃까지
+        // 매달렸다 — 화면에는 `timeout` 만 올라가 "서버가 느리다"는 엉뚱한 이유가 됐다.
+        // 닫으면 sudo 가 스스로 "a password is required" 를 뱉고, 그 문장을 ctrSudoFailed 가
+        // 알아봐 화면이 권한 올리기를 끄고 진짜 이유를 보여 준다(2026-08-28 감사).
+        stream.end()
         let out = ''
         let timer: NodeJS.Timeout | null = null
         let settled = false

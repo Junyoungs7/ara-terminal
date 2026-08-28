@@ -1,6 +1,9 @@
 // F23 승인 게이트 단위 테스트 — HTTP·MCP SDK 없이 McpApprovalManager/createAuditLog 만 검증한다.
 // 설계 §8 체크리스트 중 "승인·자동허용·레이트리밋"·"감사 추적" 항을 여기서 어서션으로 증명한다.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+// tools.ts 는 fs/LocalFs 를 거쳐 electron 의 shell 을 잡는다. 여기서 보는 것은 승인 등급뿐이라
+// 껍데기로 세운다(tests/secrets.test.ts 와 같은 방식).
+vi.mock('electron', () => ({ shell: { openPath: () => {} }, app: { getPath: () => tmpdir() } }))
 import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +11,7 @@ import { McpApprovalManager, NEW_SESSION, type ApprovalEmit } from '../src/main/
 import { createAuditLog, type AuditLog, type AuditRecord } from '../src/main/mcp/auditLog'
 import { MCP_RATE_LIMIT_PER_MIN, MCP_AUTO_ALLOW_MAX_MINUTES } from '../src/shared/types'
 import type { McpApprovalRequest, McpActivity } from '../src/shared/types'
+import { buildAraTools, type ToolCtx } from '../src/main/mcp/tools'
 
 function collector() {
   const approvalRequests: McpApprovalRequest[] = []
@@ -387,5 +391,63 @@ describe('McpApprovalManager.forget — 세션 종료 시 유령 세션 정리(S
     const mgr = new McpApprovalManager(c.emit, audit)
     mgr.forget('never-existed')
     expect(c.stateChangedCount).toBe(0)
+  })
+})
+
+/**
+ * ★ 2026-08-28 배포 전 감사 — **server_run 의 sudo 가 승인을 통째로 건너뛰었다.**
+ *
+ * 등급을 `COMMANDS[cmdId]?.write === true` 로만 정했는데, `args` 는 `z.record(...unknown)` 이라
+ * `{sudo:true}` 가 그대로 통과한다. 그런데 sudo 로 감싸는 셋(ctr.list·k8s.list·app.trace)은
+ * **읽기 명령이라 `write` 가 없다** → `readOnly` → 자동 허용. 즉 아라가 다이얼로그 없이
+ * 원격 root 실행을 할 수 있었다.
+ *
+ * 여기서 보는 것은 **등급 계산이 아니라 그 결과**다: readOnly 모드(킬 스위치)에서
+ * writeAlways 는 승인 요청 없이 즉시 거부된다 — 그 거부가 곧 "승인 대상으로 분류됐다"는 증거다.
+ */
+describe('server_run 등급 — 권한 올리기는 승인을 받는다', () => {
+  const buildGate = (mgr: McpApprovalManager, ran: string[]) =>
+    buildAraTools({
+      approval: mgr,
+      sessions: { has: () => true },
+      // 실행까지 간 호출만 여기에 쌓인다 — 거부되면 exec 자체가 안 돌아간다.
+      remote: {
+        run: async (_s: string, id: string) => {
+          ran.push(id)
+          return { ok: true as const, out: '', code: 0 }
+        }
+      }
+    } as unknown as ToolCtx)
+
+  it('★ {sudo:true} 면 write 플래그가 없는 ctr.list 도 승인 대상이다 — 킬 스위치가 막는다', async () => {
+    const c = collector()
+    const mgr = new McpApprovalManager(c.emit, createAuditLog(dir))
+    const ran: string[] = []
+    const gate = buildGate(mgr, ran)
+    mgr.setMode('s1', 'readOnly') // 사람이 "쓰기 금지" 로 내려 둔 상태
+
+    const denied = await gate.call('server_run', { sessionId: 's1', cmdId: 'ctr.list', args: { sudo: true } })
+    expect(denied.isError).toBe(true)
+    expect(ran).toEqual([]) // 원격에 나가지도 않았다
+    expect(c.approvalRequests).toHaveLength(0) // readOnly 모드는 대기 없이 즉시 거부한다
+
+    // 같은 명령이라도 권한 올리기가 아니면 읽기다 — 고치면서 평범한 조회를 막지 않았다.
+    const plain = await gate.call('server_run', { sessionId: 's1', cmdId: 'ctr.list' })
+    expect(plain.isError).toBeUndefined()
+    expect(ran).toEqual(['ctr.list'])
+  })
+
+  it('★ 기본(approval) 모드에서는 사람에게 승인 창이 뜬다 — 예전엔 조용히 실행됐다', async () => {
+    const c = collector()
+    const mgr = new McpApprovalManager(c.emit, createAuditLog(dir))
+    const ran: string[] = []
+    const gate = buildGate(mgr, ran)
+
+    const pending = gate.call('server_run', { sessionId: 's1', cmdId: 'app.trace', args: { port: 8000, sudo: true } })
+    await vi.waitFor(() => expect(c.approvalRequests).toHaveLength(1))
+    expect(c.approvalRequests[0].tool).toBe('server_run')
+    mgr.respond({ requestId: c.approvalRequests[0].requestId, decision: 'approve' })
+    await pending
+    expect(ran).toEqual(['app.trace']) // 사람이 승인한 뒤에야 나간다
   })
 })

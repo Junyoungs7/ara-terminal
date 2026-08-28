@@ -12,13 +12,13 @@
  *  ③ **닫으면 흔적이 없다.** 프로세스를 내리고 토큰이 든 임시 설정 파일을 지운다.
  */
 import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
-import type { McpServerHandle, TokenVault } from '../mcp/McpServer'
+import type { McpServerHandle } from '../mcp/McpServer'
 import { createClaudeEngine } from './engine/ClaudeCliEngine'
 import { createFakeEngine } from './engine/FakeEngine'
 import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault, type SessionTools } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
-import { pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff } from './engine/araMcp'
+import { clearStaleSelfToken, pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff, type SelfTokenVault } from './engine/araMcp'
 import { buildPersona, type PersonaServer } from '@shared/araPersona'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
@@ -33,7 +33,8 @@ export type ClaudeEngineArgs = {
 
 export type AraChatDeps = {
   server: McpServerHandle
-  vault: TokenVault
+  /** 아라 토큰을 발급하고 **지우는** 자리. 지우는 쪽은 araMcp 의 SelfTokenVault 가 요구한다. */
+  vault: SelfTokenVault
   /**
    * 지금 보고 있는 세션(작업 폴더를 여기서 고른다 — §3.3).
    * **활성 세션을 아는 것은 렌더러다**(main 의 세션 원장에는 "어느 탭을 보고 있나"가 없다) —
@@ -185,7 +186,11 @@ export function createAraChat(deps: AraChatDeps): AraChat {
     offEvent = null
     engine?.dispose()
     engine = null
+    // 토큰이 든 임시 파일을 지우고(cleanup), **그 토큰 자체도 무효로 만든다**. 파일만 지우면
+    // vault 의 해시가 남아 그 토큰이 계속 통한다 — 2026-08-28 감사 전까지 삭제자가 없어서
+    // 한 번 발급된 아라 토큰이 재시작을 넘어 영원히 유효했다.
     handoff?.cleanup()
+    if (handoff) clearStaleSelfToken(deps.vault)
     handoff = null
     persona?.cleanup()
     persona = null

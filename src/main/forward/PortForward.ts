@@ -76,18 +76,29 @@ export function createForwardService(
       e.info.conns = e.sockets.size
     })
     socket.on('error', () => socket.destroy())
-    client.forwardOut(LOCAL_BIND, socket.remotePort ?? 0, REMOTE_HOST, e.info.remotePort, (err, stream) => {
-      if (err) {
-        // 원격 프로세스가 아직 그 포트를 안 듣고 있는 흔한 경우. 리스너는 유지하고(새로고침하면 성공)
-        // 소켓만 끊는다. 사유는 [모니터] 탭이 보여 준다.
-        e.info.lastError = err.message
-        socket.destroy()
-        return
-      }
-      socket.pipe(stream)
-      stream.pipe(socket)
-      stream.on('error', () => socket.destroy())
-    })
+    // 끊긴 커넥션에서 ssh2 는 콜백이 아니라 **동기로 던진다**(RemoteConsoleService.exec ·
+    // SshBackend.findShellPid/withSftp · SftpService 가 전부 같은 이유로 막아 뒀다).
+    // **여기만 `net.Server` 의 connection 콜백 안이라 안 잡으면 uncaughtException 이 된다.**
+    // 재현: 포워딩이 열린 채로 SSH 가 죽고(keepalive 타임아웃·서버 재부팅) 브라우저가 터널 URL 을
+    // 다시 친다. 바로 위 null-client 분기로는 못 잡는다 — sshClient() 가 아직 반쯤 죽은 Client 를
+    // 돌려주기 때문이다. 그때는 리스너가 남아 있을 이유도 없으니 같은 처리로 접는다.
+    try {
+      client.forwardOut(LOCAL_BIND, socket.remotePort ?? 0, REMOTE_HOST, e.info.remotePort, (err, stream) => {
+        if (err) {
+          // 원격 프로세스가 아직 그 포트를 안 듣고 있는 흔한 경우. 리스너는 유지하고(새로고침하면 성공)
+          // 소켓만 끊는다. 사유는 [모니터] 탭이 보여 준다.
+          e.info.lastError = err.message
+          socket.destroy()
+          return
+        }
+        socket.pipe(stream)
+        stream.pipe(socket)
+        stream.on('error', () => socket.destroy())
+      })
+    } catch {
+      socket.destroy()
+      stop(e.info.id)
+    }
   }
 
   // 한 번의 listen 시도. 성공하면 실제 포트, 실패(EADDRINUSE 등)하면 null.

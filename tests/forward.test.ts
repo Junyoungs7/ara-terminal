@@ -274,4 +274,30 @@ describe('수명·멱등', () => {
     expect(await roundTrip(res.forward.localPort, 'x')).toBe('') // 응답 없이 끊긴다
     expect(svc.list()).toHaveLength(0)
   })
+
+  /**
+   * ★ 2026-08-28 배포 전 감사. **ssh2 는 끊긴 연결에서 콜백이 아니라 동기로 던진다** —
+   * 형제 호출부는 전부 막아 뒀는데(RemoteConsoleService.exec · SshBackend · SftpService)
+   * 여기만 `net.Server` 의 connection 콜백 안이라 던진 것이 **uncaughtException** 이 됐다.
+   *
+   * 재현: 포워딩이 열린 채로 SSH 가 죽고(keepalive 타임아웃·서버 재부팅) 브라우저가 터널 URL 을
+   * 다시 친다. 바로 위 검사의 null-client 분기로는 못 잡는다 — `sshClient()` 가 아직 **반쯤 죽은**
+   * Client 를 돌려주기 때문이다. 하네스가 필요 없다: 던지는 커넥션 자체가 이 검사의 전부다.
+   */
+  it('★ 반쯤 죽은 커넥션에서 forwardOut 이 동기로 던져도 앱이 안 죽는다', async () => {
+    const dead = {
+      forwardOut: () => {
+        throw new Error('Not connected')
+      }
+    } as unknown as Client
+    const svc = createForwardService(() => dead)
+    const res = await svc.create('sid', 6007)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    // 여기서 예외가 새면 vitest 가 처리되지 않은 오류로 이 파일을 통째로 실패시킨다(= 앱이 죽는 자리).
+    expect(await roundTrip(res.forward.localPort, 'x')).toBe('')
+    // null-client 분기와 **같은 처리**: 소켓을 끊고 리스너도 접는다.
+    expect(svc.list()).toHaveLength(0)
+    expect(await reachable('127.0.0.1', res.forward.localPort)).toBe(false)
+  })
 })

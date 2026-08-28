@@ -40,6 +40,31 @@ export type AraMcpHandoff = {
 }
 
 /**
+ * 아라 토큰을 지울 수 있는 vault.
+ *
+ * `TokenVault`(McpServer.ts)에는 `delete` 가 없다 — 읽고 쓰기만 하는 계약이라 **아무도 이 토큰을
+ * 지우지 않았다**(2026-08-28 감사: 발급자만 있고 삭제자가 저장소에 하나도 없었다). 실제로 넘어오는
+ * 것은 `SecretStore` 라 `delete` 가 이미 있고, 여기서만 그 사실을 요구한다 — McpServer 의 공용
+ * 타입을 넓히지 않는 이유는 그 파일이 이 라운드의 소유가 아니어서다.
+ */
+export type SelfTokenVault = TokenVault & { delete(key: string): void }
+
+/**
+ * 아라 토큰을 무효로 만든다. **대화를 닫을 때**(AraChat.teardown)와 **부팅할 때** 부른다.
+ *
+ * 왜 둘 다인가: 임시 폴더의 `mcp.json` 은 정상 종료 경로에서만 지워지므로 크래시 뒤에는 원문
+ * 토큰이 담긴 파일이 디스크에 남는다. 그 짝인 해시가 vault 에 그대로 있으면 그 파일을 주운 쪽이
+ * **재시작을 넘어 영원히** 우리 MCP 서버에 들어올 수 있다. 부팅 때 한 번 지우면 지난 실행이 남긴
+ * 것은 그 자리에서 죽는다 — 이번 실행의 토큰은 대화를 열 때 새로 발급된다(prepareAraMcp).
+ *
+ * 사용자 토큰(MCP_TOKEN_VAULT_KEY)은 건드리지 않는다 — 외부 클라이언트에 넣어 둔 것이라
+ * 조용히 끊기면 안 된다(키를 나눈 이유가 그것이다).
+ */
+export function clearStaleSelfToken(vault: SelfTokenVault): void {
+  vault.delete(MCP_SELF_TOKEN_VAULT_KEY)
+}
+
+/**
  * 서버를 켜고(필요하면), 아라 전용 토큰을 발급하고, 설정 파일을 써서 경로를 돌려준다.
  * 서버를 못 켜면 null — 그때는 **MCP 없이** 대화를 시작한다(Claude Code 기본 기능은 그대로 산다).
  */

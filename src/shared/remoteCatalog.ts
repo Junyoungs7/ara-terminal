@@ -247,12 +247,18 @@ function elevatable(cmd: string, sudo: boolean, keep = ""): string {
 }
 
 /**
+ * sudo 로 감싼 명령의 머리. **이 글자로 시작하는 명령만 stdin 으로 비밀번호를 받는다** —
+ * buildCommand 가 이걸로 판정하므로 wrapSudo 와 판정이 갈릴 수 없다(같은 상수 하나를 본다).
+ */
+const SUDO_WRAP = "sudo -S -p '' sh -c '";
+
+/**
  * **스크립트 전체를 한 번의 sudo 로 감싼다.** 명령마다 sudo 를 부르면 stdin 의 비밀번호를 그
  * 횟수만큼 넣어야 하고(한 줄만 넣으면 두 번째부터 조용히 실패한다), `-p ''` 로 프롬프트 글자가
  * 출력에 섞이는 것도 막는다.
  */
 const wrapSudo = (script: string, sudo: boolean): string =>
-  sudo ? `sudo -S -p '' sh -c '${sqEscape(script)}'` : script;
+  sudo ? `${SUDO_WRAP}${sqEscape(script)}'` : script;
 
 /**
  * 컨테이너 안으로 들어가는 명령 — **이것만 exec 채널이 아니라 터미널로 간다**(`session.input`).
@@ -360,8 +366,16 @@ export function parseAppTrace(out: string, port: number): AppTrace {
   const pid = Number.isInteger(pidRaw) && pidRaw > 0 ? pidRaw : undefined;
   // pid 를 못 읽었다 — 그런데 포트는 열려 있다면 **꺼진 게 아니라 안 보이는 것**이다.
   // 남의 계정(또는 root)이 띄웠거나 /proc 이 hidepid 로 잠긴 서버다(2026-08-28 준영님 제보).
-  if (!pid)
+  //
+  // sudo 가 거절한 경우가 먼저다: 그러면 스크립트가 **아예 안 돌아서** `listen=` 줄조차 없고,
+  // 그걸 그대로 읽으면 "그 포트를 듣는 프로세스가 없습니다" 라는 거짓말이 된다. 이 재시도는
+  // 애초에 hidden 에서만 뜨는 버튼이라(remoteLog.traceRemoteLog) **여전히 안 보인다**가 맞는 답이고,
+  // 화면의 `port.log.hidden.fail` 이 이미 "저장된 비밀번호가 없거나 sudo 권한이 없다"고 말한다.
+  // 키 인증 프로필이 여기로 온다 — getSudoPw 가 패스프레이즈를 안 보내므로(registerRemoteIpc).
+  if (!pid) {
+    if (ctrSudoFailed(out)) return { kind: "hidden", port };
     return { kind: Number(kv.get("listen")) > 0 ? "hidden" : "none", port };
+  }
   const fd1 = kv.get("fd1") ?? "";
   const cmd = kv.get("cmd") || undefined;
   const pane = kv.get("pane") || undefined;
@@ -997,9 +1011,15 @@ export type CmdSpec = {
   write?: true;
 };
 
-/** ps 는 CPU 내림차순으로 받아 온다 — 화면에서 다시 정렬하더라도 첫 화면이 쓸모 있어야 한다. */
+/**
+ * ps 는 CPU 내림차순으로 받아 온다 — 화면에서 다시 정렬하더라도 첫 화면이 쓸모 있어야 한다.
+ *
+ * `head -300` 은 성능 몫이다(2026-08-28): 이 명령은 2.5초마다 도는 폴러의 것이고, 바쁜 호스트는
+ * 프로세스가 수천 개라 한 바퀴에 100~300KB 가 IPC 를 건너 전부 파싱된다. 이미 `--sort=-pcpu` 라
+ * **잘려 나가는 꼬리는 CPU 를 안 쓰는 쪽**이고, 300줄이면 화면 어느 정렬로도 사람이 볼 만큼 남는다.
+ */
 const PS_CMD =
-  "ps -eo pid=,user=,pcpu=,pmem=,rss=,stat=,etimes=,args= --sort=-pcpu 2>/dev/null";
+  "ps -eo pid=,user=,pcpu=,pmem=,rss=,stat=,etimes=,args= --sort=-pcpu 2>/dev/null | head -300";
 
 export const COMMANDS: Record<CmdId, CmdSpec> = {
   "ps.list": { build: () => PS_CMD },
@@ -1275,11 +1295,25 @@ export function isCmdId(v: unknown): v is CmdId {
   );
 }
 
+/**
+ * 이 호출이 **사람의 승인**을 받아야 하는가.
+ *
+ * 두 가지다: 표가 쓰기라고 적어 둔 명령(kill·systemctl·rmi…)이거나, **권한을 올려 달라고 한 것**이거나.
+ * 뒤쪽을 빠뜨렸던 것이 2026-08-28 감사에서 나온 구멍이다 — wrapSudo 를 쓰는 셋(ctr.list·k8s.list·
+ * app.trace)은 읽기 명령이라 `write` 가 없고, 그래서 `{sudo:true}` 를 실은 MCP 호출이 **다이얼로그
+ * 없이 원격 root 실행**으로 떨어졌다. 표의 `write` 와 무관하게 판단한다: 지금 sudo 를 안 씌우는
+ * 명령이라도 나중에 씌우게 되면 그날 승인이 저절로 따라와야 한다.
+ */
+export function isPrivileged(id: unknown, args: unknown): boolean {
+  if ((args as { sudo?: unknown } | null)?.sudo === true) return true;
+  return isCmdId(id) && COMMANDS[id].write === true;
+}
+
 /** id + 인자 → 실행할 명령. 표에 없거나 인자가 틀리면 null. main 은 이 함수만 통과시킨다. */
 export function buildCommand(
   id: unknown,
   args: unknown,
-): { cmd: string; write: boolean } | null {
+): { cmd: string; write: boolean; sudo: boolean } | null {
   if (!isCmdId(id)) return null;
   const spec = COMMANDS[id];
   const cmd = spec.build(args);
@@ -1288,5 +1322,12 @@ export function buildCommand(
   // (`'\0'` 를 템플릿 문자열에 그대로 적으면 진짜 NUL 이 된다 — 2026-08-27 실측). 특히 NUL 은
   // 치명적이다: sshd 는 NUL 이 든 exec 요청을 거부하면서 **커넥션 전체를 끊는다**. 그래서 나가기 전에
   // 여기서 막는다 — 표의 어느 명령이 그래도 마찬가지다(호출측은 badArgs 와 같은 길로 받는다).
-  return /[\0\r\n]/.test(cmd) ? null : { cmd, write: spec.write === true };
+  //
+  // `sudo` 는 **인자에 그렇게 적혀 있느냐가 아니라 실제로 씌웠느냐**다. 렌더러가 보낸 불리언을
+  // 그대로 믿으면 `{sudo:true}` 를 실은 `pkg.probe`(sudo 를 안 쓰는 명령)의 stdin 으로 SSH
+  // 비밀번호가 흘러간다 — 지금 그 스크립트가 stdin 을 안 읽어 새지 않을 뿐, 파일 머리가 스스로
+  // 약속한 불변식("`sudo -S` 를 붙인 그 명령에만")을 코드가 안 지키고 있었다(2026-08-28 감사).
+  return /[\0\r\n]/.test(cmd)
+    ? null
+    : { cmd, write: spec.write === true, sudo: cmd.startsWith(SUDO_WRAP) };
 }

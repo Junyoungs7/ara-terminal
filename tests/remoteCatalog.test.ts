@@ -36,7 +36,10 @@ import {
   validCtrId,
   validCtrAction,
   validImageRef,
-  buildCtrExec
+  buildCtrExec,
+  isPrivileged,
+  parseAppTrace,
+  type CmdId
 } from '../src/shared/remoteCatalog'
 
 describe('인자 검증 — PID', () => {
@@ -899,5 +902,107 @@ describe('컨테이너 권한 올리기 — 명령 조립', () => {
     // 컨테이너 목록이 정상으로 온 것을 실패로 읽으면 안 된다.
     expect(ctrSudoFailed('{"containers":[]}')).toBe(false)
     expect(ctrSudoFailed('level=fatal msg="connect: permission denied"')).toBe(false)
+  })
+})
+
+// 2026-08-28 배포 전 감사(AUDIT-R1). 여기서 지키는 것 셋:
+//  · 비밀번호가 나가는 기준은 **우리가 만든 명령**이지 렌더러가 보낸 불리언이 아니다
+//  · 권한을 올려 달라고 한 호출은 **표의 write 와 무관하게** 사람의 승인을 받는다
+//  · 2.5초마다 도는 목록은 한 바퀴에 들고 올 양의 상한이 있다
+describe('권한 올리기 — 누가 판단하는가(AUDIT-R1)', () => {
+  /**
+   * 모든 명령을 **실제로 조립되는 인자**로 부른다. 하나라도 null 이면 그 자체가 실패다 —
+   * 표에 명령이 늘었는데 이 표를 안 늘리면 새 명령이 조용히 검사 밖으로 빠진다.
+   */
+  const ARGS: Record<CmdId, unknown> = {
+    'ps.list': null,
+    'ps.kill': { pid: 4242, signal: 'TERM' },
+    'svc.list': null,
+    'svc.action': { unit: 'nginx.service', action: 'restart' },
+    'disk.usage': null,
+    'disk.du': { path: '/var' },
+    'which.cli': { bin: 'claude' },
+    'sys.overview': null,
+    'pkg.probe': null,
+    'git.worktree.add': { path: '/srv/app', name: 'fix1' },
+    'git.worktree.remove': { path: '/srv/app', dest: '/srv/app-fix1' },
+    'ctr.list': null,
+    'k8s.list': null,
+    'ctr.action': { id: 'a'.repeat(12), action: 'stop' },
+    'ctr.rmi': { image: 'nginx:1.24' },
+    'app.trace': { port: 8000 },
+    'app.pipe': { pane: 'dev:0.1', port: 8000 }
+  }
+
+  /** wrapSudo 를 실제로 쓰는 명령. 이 셋 말고는 sudo 를 붙이지 않는다. */
+  const WRAPPED: CmdId[] = ['ctr.list', 'k8s.list', 'app.trace']
+
+  it('★ buildCommand 의 sudo 플래그는 wrapSudo 적용 여부와 정확히 일치한다', () => {
+    const flagged: string[] = []
+    for (const id of Object.keys(COMMANDS) as CmdId[]) {
+      const args = { ...(ARGS[id] as object | null), sudo: true }
+      const r = buildCommand(id, args)
+      expect(r, `${id} 의 인자 표가 낡았다(조립 실패)`).not.toBeNull()
+      // 문자열이 아니라 플래그를 믿게 되는 자리라, 둘이 어긋나면 비밀번호가 엉뚱한 명령으로 간다.
+      expect(r!.sudo, id).toBe(r!.cmd.startsWith("sudo -S -p '' sh -c '"))
+      if (r!.sudo) flagged.push(id)
+    }
+    expect(flagged.sort()).toEqual([...WRAPPED].sort())
+  })
+
+  it('★ {sudo:true} 를 실어도 sudo 를 안 쓰는 명령은 플래그가 안 선다 — 그 stdin 으로 비밀번호가 가면 안 된다', () => {
+    // 감사 전에는 RemoteConsoleService 가 args.sudo 를 보고 판단해서, sudo 를 안 붙인
+    // pkg.probe 의 stdin 으로 SSH 비밀번호가 나갔다(그 스크립트가 stdin 을 안 읽어 샜을 뿐).
+    for (const id of ['pkg.probe', 'ps.list', 'svc.list'] as CmdId[]) {
+      const r = buildCommand(id, { ...(ARGS[id] as object | null), sudo: true })!
+      expect(r.sudo, id).toBe(false)
+      expect(r.cmd, id).not.toContain('sudo')
+    }
+  })
+
+  it('★ {sudo:true} 면 표의 write 와 무관하게 승인을 받는다 — ctr.list 는 write 가 없다', () => {
+    // 이게 MCP 의 등급을 정한다. ctr.list 에 write 가 없다는 사실이 전제라 함께 못박는다.
+    expect(COMMANDS['ctr.list'].write).toBeUndefined()
+    expect(isPrivileged('ctr.list', { sudo: true })).toBe(true)
+    expect(isPrivileged('ctr.list', null)).toBe(false)
+    // 같은 구멍이 나머지 두 개에도 있었다.
+    expect(isPrivileged('k8s.list', { sudo: true })).toBe(true)
+    expect(isPrivileged('app.trace', { port: 8000, sudo: true })).toBe(true)
+    // 쓰기 명령은 sudo 없이도 그대로 승인 대상이다(원래 규칙을 무르게 하지 않는다).
+    expect(isPrivileged('ps.kill', { pid: 1, signal: 'TERM' })).toBe(true)
+    expect(isPrivileged('ps.list', null)).toBe(false)
+    // 불리언이 아니면 권한 올리기가 아니다 — 명령 조립과 같은 기준이다.
+    expect(isPrivileged('ctr.list', { sudo: 'yes' })).toBe(false)
+    // 표에 없는 id 라도 sudo 를 달고 오면 자동 허용으로 떨어지지 않는다.
+    expect(isPrivileged('없는명령', { sudo: true })).toBe(true)
+    expect(isPrivileged('없는명령', null)).toBe(false)
+  })
+
+  it('★ 권한을 올려도 하는 일은 같다 — sudo 판이 여전히 읽기 전용이다', () => {
+    for (const id of WRAPPED) {
+      const cmd = buildCommand(id, { ...(ARGS[id] as object | null), sudo: true })!.cmd
+      for (const bad of ['rm ', 'kill ', 'systemctl ', 'tee ', '>>']) {
+        expect(cmd, `${id} 에 ${bad} 가 끼어들었다`).not.toContain(bad)
+      }
+    }
+  })
+
+  it('ps.list 는 한 바퀴에 300줄까지만 — 2.5초마다 도는 명령이라 꼬리를 들고 오지 않는다', () => {
+    const r = buildCommand('ps.list', null)!
+    expect(r.cmd).toContain('--sort=-pcpu') // 잘리는 쪽이 CPU 를 안 쓰는 쪽이어야 의미가 있다
+    expect(r.cmd).toContain('head -300')
+    // 읽기 명령인 사실은 그대로다(watch 가 write 를 거절한다 — 그 길이 막히면 표가 안 뜬다).
+    expect(COMMANDS['ps.list'].write).toBeUndefined()
+    expect(r.write).toBe(false)
+  })
+
+  it('★ sudo 가 거절하면 "포트를 듣는 프로세스가 없다"가 아니라 "여전히 안 보인다"다', () => {
+    // 관리자 권한 재시도는 hidden 에서만 뜨는 버튼이다. sudo 가 스스로 거절하면 스크립트가 아예
+    // 안 돌아 listen= 줄조차 없는데, 그걸 none 으로 읽으면 화면이 "그 포트는 꺼졌다"고 거짓말한다.
+    // 키 인증 프로필이 여기로 온다(패스프레이즈를 sudo 로 보내지 않으므로).
+    expect(parseAppTrace('sudo: a password is required', 8000).kind).toBe('hidden')
+    expect(parseAppTrace('sudo: no tty present and no askpass program specified', 8000).kind).toBe('hidden')
+    // 진짜로 아무도 안 듣는 경우는 그대로 none 이다.
+    expect(parseAppTrace('pid=\nlisten=0', 8000).kind).toBe('none')
   })
 })

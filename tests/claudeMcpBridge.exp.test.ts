@@ -31,9 +31,10 @@ function memSecretStore(): SecretStore {
   const m = mem<string>()
   return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v), delete: (k) => void m.delete(k), has: (k) => m.has(k) }
 }
-function memTokenVault(): TokenVault {
+// delete 는 AraChat 이 요구한다(SelfTokenVault) — 대화를 닫을 때 아라 토큰을 무효로 만든다.
+function memTokenVault(): TokenVault & { delete(key: string): void } {
   const m = mem<string>()
-  return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v), has: (k) => m.has(k) }
+  return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v), has: (k) => m.has(k), delete: (k) => void m.delete(k) }
 }
 
 describe('실증 — 로컬 Claude Code(구독 로그인)가 아라 MCP 도구를 호출한다', () => {

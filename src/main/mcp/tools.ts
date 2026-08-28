@@ -28,7 +28,7 @@ import type { BrowserService } from '../browser/BrowserTabs'
 import type { RemoteConsoleService } from '../remote/RemoteConsoleService'
 import type { SessionLogService } from '../log/SessionLog'
 import type { HistoryStore } from '../history/HistoryStore'
-import { COMMANDS, type CmdId } from '@shared/remoteCatalog'
+import { isPrivileged, type CmdId } from '@shared/remoteCatalog'
 import { GROUPS as G, groupLines, type ToolGroup as TG } from '@shared/araTools'
 import { readFileWindow } from '../log/readSessionLog'
 import { fetchTmuxSessions } from '../telemetry/TmuxSessions'
@@ -657,8 +657,11 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
       g(
         sessionId,
         'server_run',
-        // 등급을 여기서 새로 정하지 않는다 — 무엇이 쓰기인지는 표가 이미 안다(kill·systemctl·rmi…).
-        COMMANDS[cmdId as CmdId]?.write === true ? 'writeAlways' : 'readOnly',
+        // 등급을 여기서 새로 정하지 않는다 — 무엇이 승인을 받아야 하는지는 표가 이미 안다.
+        // `write` 만 보면 안 된다: `args` 는 `z.record(...unknown)` 이라 `{sudo:true}` 가 그대로
+        // 통과하는데 wrapSudo 를 쓰는 셋(ctr.list·k8s.list·app.trace)은 읽기 명령이라 `write` 가
+        // 없다 — 그래서 아라가 **다이얼로그 없이 원격 root 실행**을 할 수 있었다(2026-08-28 감사).
+        isPrivileged(cmdId, args) ? 'writeAlways' : 'readOnly',
         { sessionId, cmdId, args },
         async () => {
         if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')

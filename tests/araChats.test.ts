@@ -4,11 +4,15 @@
  * **Claude Code 의 기록을 읽기만 한다.** 우리 형식으로 다시 저장하지 않는 것이 이 파일의 전제라,
  * 검사도 그쪽 파일 모양(`~/.claude/projects/<폴더>/<uuid>.jsonl`)을 그대로 만들어 놓고 읽는다.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { listAraChats, projectKey, projectDir, titleOf } from '../src/main/ai/araChats'
+// registerAraIpc 는 ipc/handle.ts 를 거쳐 electron 을 잡는다. 여기서 보는 것은 id 모양 검증뿐이라
+// 껍데기로 세운다(tests/secrets.test.ts 와 같은 방식).
+vi.mock('electron', () => ({ ipcMain: { handle: () => {} }, app: { getPath: () => tmpdir() } }))
+import { validResumeId } from '../src/main/ipc/registerAraIpc'
 
 let home: string
 beforeEach(() => {
@@ -93,5 +97,37 @@ describe('대화 목록', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].title).toBe('')
     expect(rows[0].id).toBe('66666666-6666-6666-6666-666666666666')
+  })
+})
+
+/**
+ * 2026-08-28 배포 전 감사 — **그 id 가 셸 명령줄에 들어간다.**
+ *
+ * `ara:open({resumeId})` 는 `--resume <id>` 로 나가고, ClaudeCliEngine.realSpawn 은 그 줄을
+ * `spawn(line, { shell: true })` 로 띄운다. 그 파일이 스스로 적어 둔 불변식은 "그 줄에 들어가는
+ * 것은 우리가 만든 값뿐"인데, IPC 는 참·거짓만 보고 렌더러가 준 문자열을 그대로 실었다.
+ * quoteArg 는 `\"` 로 이스케이프하지만 **윈도우 cmd 는 백슬래시를 이스케이프로 안 본다** —
+ * 정상 UI 로는 못 만드는 값이라 심각도는 낮아도, 모양으로 막는 편이 그 사실에 기대는 것보다 낫다.
+ */
+describe('이어서 열 대화 id 검증', () => {
+  it('★ uuid 모양만 통과한다 — 그 값이 셸 명령줄에 들어간다', () => {
+    const ok = '77777777-7777-7777-7777-777777777777'
+    expect(validResumeId(ok)).toBe(ok)
+    for (const bad of [
+      'x" & calc.exe & "',
+      '77777777-7777-7777-7777-777777777777 && whoami',
+      '$(id)',
+      '`id`',
+      '77777777-7777-7777-7777-77777777777', // 한 글자 짧다
+      '77777777-7777-7777-7777-7777777777777', // 한 글자 길다
+      '../../etc/passwd',
+      '',
+      null,
+      undefined,
+      42,
+      { toString: () => ok }
+    ]) {
+      expect(validResumeId(bad), String(bad)).toBeNull()
+    }
   })
 })

@@ -2,8 +2,15 @@
 // ② RemoteConsoleService 의 실행 경로. ②의 핵심은 **카탈로그를 통과하지 못한 것은 exec 에 닿지 않는다**
 // 이므로, 전부 "명령이 몇 개 나갔는가"를 세서 판정한다(결과 문자열이 아니라 나갔는지 여부가 보안 성질이다).
 // 폴링 수명(busy 가드·세션 정리)은 tests/telemetry.test.ts 의 같은 이름 블록을 본떴다.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Client } from 'ssh2'
+// sudoPasswordOf 를 부르려면 registerRemoteIpc 를 불러와야 하고, 그 파일은 ipc/handle.ts 를 거쳐
+// electron 을 잡는다. 여기서 보는 것은 vault 조회 규칙뿐이라 electron 은 껍데기로 세운다
+// (tests/secrets.test.ts·localfs.test.ts 와 같은 방식).
+vi.mock('electron', () => ({ ipcMain: { handle: () => {} }, app: { getPath: () => tmpdir() } }))
 import type { ProcRow, SvcRow, CmdId, CtrRow, PkgRow } from '../src/shared/remoteCatalog'
 import { ctrActions, sortCtrs, nextCtrSort, DEFAULT_CTR_SORT } from '../src/renderer/components/ContainerTable'
 import {
@@ -18,6 +25,11 @@ import { tidyReason } from '../src/renderer/components/ctrShared'
 import { DEFAULT_PKG_SORT, filterPkgs, nextPkgSort, sortPkgs } from '../src/renderer/components/PkgTable'
 import { parseDf, parseDu, parsePs, parseSystemctl } from '../src/shared/remoteCatalog'
 import { createRemoteConsoleService } from '../src/main/remote/RemoteConsoleService'
+import { sudoPasswordOf } from '../src/main/ipc/registerRemoteIpc'
+import { ProfileStore } from '../src/main/secrets/ProfileStore'
+import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
+import type { SecretStore } from '../src/main/secrets/SecretStore'
+import type { Session } from '../src/shared/types'
 import {
   DEFAULT_SORT,
   filterProcs,
@@ -294,7 +306,7 @@ describe('디스크 표 — 폴더 파고들기', () => {
 // hang: 응답하지 않는 서버 — busy 가드 검증용.
 function fakeClient(
   log: string[],
-  opts: { hang?: boolean; out?: string; err?: string; code?: number; stdinLog?: string[] } = {}
+  opts: { hang?: boolean; out?: string; err?: string; code?: number; stdinLog?: string[]; onEnd?: () => void } = {}
 ): Client {
   return {
     exec(cmd: string, cb: (err: Error | null, stream: unknown) => void) {
@@ -314,7 +326,8 @@ function fakeClient(
         // 권한 올리기(sudo -S)는 비밀번호를 **stdin 으로만** 보낸다 — 명령줄에 실렸는지
         // 여기서 갈라 본다(log 에는 명령만, stdinLog 에는 stdin 만 쌓인다).
         write: (d: string) => opts.stdinLog?.push(String(d)),
-        end: () => {}
+        // stdin 을 **닫았는지**도 센다: 안 닫으면 비밀번호 없는 sudo 가 입력을 기다리며 매달린다.
+        end: () => opts.onEnd?.()
       })
       if (opts.hang) return
       setImmediate(() => {
@@ -563,6 +576,11 @@ describe('쿠버 파드 묶기', () => {
 // 2026-08-24 준영님 요청 — 서버 설정을 바꾸지 않고 권한을 올린다(sudo + 접속에 쓴 비밀번호).
 // 이 블록이 지키는 것 셋: **비밀번호는 명령줄에 없다** · 요청하지 않은 명령에는 안 보낸다 ·
 // 거절당하면 화면이 즉시 끈다(반복 전송 = 계정 잠김).
+// 진짜 비밀이 아니라 **표식**이다 — "이 값이 어디로 갔나"만 보면 되므로 비밀번호처럼 생길 이유가
+// 없다. 저장소 규칙: 검사 자료에도 실제 비밀번호·패스프레이즈를 적지 않는다.
+const SUDO_PW = '<sudo-pw>'
+const PASSPHRASE = '<key-passphrase>'
+
 describe('컨테이너 권한 올리기 — 비밀번호는 stdin 으로만', () => {
   it('★ sudo 를 요청하면 stdin 으로 가고, 명령줄에는 한 글자도 안 남는다', async () => {
     const log: string[] = []
@@ -571,18 +589,18 @@ describe('컨테이너 권한 올리기 — 비밀번호는 stdin 으로만', ()
       () => fakeClient(log, { out: '', stdinLog }),
       () => {},
       50,
-      () => 'hunter2'
+      () => SUDO_PW
     )
     await svc.run('s1', 'ctr.list', { sudo: true })
     expect(log[0]).toContain('sudo -S -p ')
-    expect(log[0]).not.toContain('hunter2') // 명령줄에 실리면 원격 `ps` 와 감사 로그에 찍힌다
-    expect(stdinLog.join('')).toBe('hunter2\n')
+    expect(log[0]).not.toContain(SUDO_PW) // 명령줄에 실리면 원격 `ps` 목록과 감사 로그에 찍힌다
+    expect(stdinLog.join('')).toBe(SUDO_PW + '\n')
   })
 
   it('★ 권한을 요청하지 않은 명령에는 비밀번호를 보내지 않는다', async () => {
     const log: string[] = []
     const stdinLog: string[] = []
-    const svc = createRemoteConsoleService(() => fakeClient(log, { out: '', stdinLog }), () => {}, 50, () => 'hunter2')
+    const svc = createRemoteConsoleService(() => fakeClient(log, { out: '', stdinLog }), () => {}, 50, () => SUDO_PW)
     await svc.run('s1', 'ctr.list')
     await svc.run('s1', 'ps.list')
     expect(stdinLog).toEqual([])
@@ -595,6 +613,108 @@ describe('컨테이너 권한 올리기 — 비밀번호는 stdin 으로만', ()
     const svc = createRemoteConsoleService(() => fakeClient(log, { out: '', stdinLog }), () => {}, 50)
     await svc.run('s1', 'ctr.list', { sudo: true })
     expect(stdinLog).toEqual([])
+  })
+
+  /**
+   * ★ 2026-08-28 배포 전 감사. **판단 근거가 렌더러가 보낸 불리언이었다.**
+   *
+   * 표 17개 중 sudo 를 쓰는 건 셋뿐인데 `args.sudo` 만 보고 비밀번호를 넣어서,
+   * `remote:run(id,'pkg.probe',{sudo:true})` 가 sudo 를 안 붙인 평범한 스크립트의 stdin 으로
+   * SSH 비밀번호를 흘려보냈다. 그 스크립트가 stdin 을 안 읽어 새지 않았을 뿐, 이 파일 머리가
+   * 스스로 약속한 불변식("`sudo -S` 를 붙인 그 명령에만")을 코드가 안 지키고 있었다.
+   */
+  it('★ sudo 를 안 씌운 명령에는 {sudo:true} 를 실어도 비밀번호가 안 나간다', async () => {
+    const log: string[] = []
+    const stdinLog: string[] = []
+    const svc = createRemoteConsoleService(
+      () => fakeClient(log, { out: '', stdinLog }),
+      () => {},
+      50,
+      () => SUDO_PW
+    )
+    for (const id of ['pkg.probe', 'ps.list', 'svc.list'] as CmdId[]) {
+      await svc.run('s1', id, { sudo: true })
+    }
+    expect(log.every((c) => !c.startsWith('sudo -S'))).toBe(true)
+    expect(stdinLog).toEqual([]) // 한 글자도 나가지 않았다
+    // 진짜 sudo 명령에는 그대로 간다(고치면서 기능을 죽이지 않았다).
+    await svc.run('s1', 'ctr.list', { sudo: true })
+    expect(stdinLog.join('')).toBe(SUDO_PW + '\n')
+  })
+
+  /**
+   * ★ 비밀번호가 없어도 **stdin 을 닫는다.** 안 닫으면 `sudo -S` 가 입력을 기다리며 10초
+   * 타임아웃까지 매달리고, 화면에는 `timeout` 만 올라가 "서버가 느리다"는 엉뚱한 이유가 된다.
+   * 닫으면 sudo 가 스스로 "a password is required" 를 뱉어 화면이 진짜 이유를 보여 준다
+   * (그 문장을 ctrSudoFailed 가 알아본다).
+   */
+  it('★ 비밀번호가 없어도 stdin 을 닫는다 — sudo 가 매달리지 않고 스스로 실패한다', async () => {
+    const log: string[] = []
+    const stdinLog: string[] = []
+    let ended = 0
+    const svc = createRemoteConsoleService(
+      () => fakeClient(log, { out: '', stdinLog, onEnd: () => (ended += 1) }),
+      () => {},
+      50
+    )
+    await svc.run('s1', 'ctr.list', { sudo: true })
+    expect(stdinLog).toEqual([])
+    expect(ended).toBe(1)
+  })
+})
+
+// 2026-08-28 배포 전 감사 — **어떤 비밀이 sudo 로 나가는가.**
+describe('sudo 비밀번호 조회 — 인증 방식을 본다', () => {
+  const sess = (profileId: string): Pick<import('../src/main/sessions/MainSessionManager').MainSessionManager, 'snapshot'> => ({
+    snapshot: (): Session[] => [{ id: 's1', type: 'ssh', title: 'srv', serverKey: 'srv', profileId }]
+  })
+
+  /** 인메모리 vault(profiles.test.ts 의 FakeVault 와 같은 물건 — 여기선 한 번만 쓴다). */
+  function fakeVault(): SecretStore {
+    const m = new Map<string, string>()
+    return { get: (k) => m.get(k) ?? null, set: (k, v) => void m.set(k, v), delete: (k) => void m.delete(k), has: (k) => m.has(k) }
+  }
+
+  function store(): { profiles: ProfileStore; dir: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'ara-sudopw-'))
+    const ws = new WorkspaceStore(join(dir, 'workspace.json'), '0.0.0')
+    return { profiles: new ProfileStore(ws, fakeVault()), dir }
+  }
+
+  /**
+   * ★ 키 인증 프로필의 vault 값은 로그인 비밀번호가 아니라 **개인키 패스프레이즈**다
+   * (SshBackend 가 `cfg.passphrase` 로 쓴다). 감사 전에는 인증 방식을 안 보고 lookupSecret 을
+   * 그대로 돌려줘서, 암호화된 개인키로 붙은 사용자가 [관리자 권한으로 찾기]를 누르면 그
+   * 패스프레이즈가 원격 sudo 의 stdin 으로 나갔다 — sudo 는 거절하니 화면엔 아무 일도 없고,
+   * 개인키를 지키는 문자열만 남의 장비에 남는다.
+   */
+  it('★ 키 인증이면 null — 개인키 패스프레이즈가 원격 sudo 로 나가지 않는다', () => {
+    const { profiles, dir } = store()
+    const p = profiles.save({
+      type: 'ssh',
+      name: 'key-srv',
+      host: 'h',
+      port: 22,
+      username: 'u',
+      authType: 'key',
+      keyPath: '~/.ssh/id_ed25519',
+      secret: PASSPHRASE // 개인키 패스프레이즈 — 저장은 되지만 sudo 로는 나가면 안 된다
+    })
+    // 전제 확인: lookupSecret 자체는 인증 방식을 안 본다(refOf 가 키 인증의 secretRef 도 준다).
+    // 그래서 **부르는 쪽**이 걸러야 한다는 것이 이 검사의 요지다.
+    expect(profiles.lookupSecret(p)).toEqual({ ok: true, secret: PASSPHRASE })
+    expect(sudoPasswordOf(sess(p.id), profiles, 's1')).toBeNull()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('비밀번호 인증이면 그 비밀번호를 준다 — 기능은 그대로다', () => {
+    const { profiles, dir } = store()
+    const p = profiles.save({ type: 'ssh', name: 'pw-srv', host: 'h', port: 22, username: 'u', authType: 'password', secret: SUDO_PW })
+    expect(sudoPasswordOf(sess(p.id), profiles, 's1')).toBe(SUDO_PW)
+    // 프로필이 없는 세션(로컬 셸 등)은 애초에 줄 것이 없다.
+    expect(sudoPasswordOf(sess('없는프로필'), profiles, 's1')).toBeNull()
+    expect(sudoPasswordOf(sess(p.id), profiles, '다른세션')).toBeNull()
+    rmSync(dir, { recursive: true, force: true })
   })
 })
 

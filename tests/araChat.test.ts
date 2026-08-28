@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { createAraChat, type AraChatEvent } from '../src/main/ai/AraChat'
-import { isLocalPath, mcpConfigJson, pickEngineCwd, prepareAraMcp } from '../src/main/ai/engine/araMcp'
+import { clearStaleSelfToken, isLocalPath, mcpConfigJson, pickEngineCwd, prepareAraMcp } from '../src/main/ai/engine/araMcp'
 import {
   hashToken,
   MCP_SELF_TOKEN_VAULT_KEY,
@@ -18,9 +18,17 @@ import {
 } from '../src/main/mcp/McpServer'
 import type { AiEngine, AiEngineEvent } from '../src/shared/aiEngine'
 
-function memVault(): TokenVault & { map: Map<string, string> } {
+function memVault(): TokenVault & { map: Map<string, string>; delete(key: string): void } {
   const map = new Map<string, string>()
-  return { map, get: (k) => map.get(k) ?? null, set: (k, v) => void map.set(k, v), has: (k) => map.has(k) }
+  return {
+    map,
+    get: (k) => map.get(k) ?? null,
+    set: (k, v) => void map.set(k, v),
+    has: (k) => map.has(k),
+    // 진짜 vault(SecretStore)에는 원래 있는 것이다. TokenVault 계약에만 없어서 **아라 토큰을
+    // 지우는 사람이 하나도 없었다**(2026-08-28 감사) — araMcp.SelfTokenVault 가 이제 요구한다.
+    delete: (k) => void map.delete(k)
+  }
 }
 
 function fakeServer(o: { enabled?: boolean; port?: number } = {}): McpServerHandle & { enabledCalls: number } {
@@ -167,16 +175,17 @@ describe('아라 대화 한 벌', () => {
   const setup = (o: { session?: { type: 'local' | 'ssh'; cwd: string | null } | null; lastLocal?: string | null } = {}) => {
     const seen: AraChatEvent[] = []
     const eng = fakeEngine()
+    const vault = memVault()
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
-      vault: memVault(),
+      vault,
       activeSession: () => o.session ?? null,
       lastLocalCwd: () => o.lastLocal ?? null,
       araCwd: () => araHome,
       emit: (e) => seen.push(e),
       makeEngine: () => eng
     })
-    return { chat, eng, seen }
+    return { chat, eng, seen, vault }
   }
 
   it('열면 폴더와 MCP 물림 여부를 알린다', async () => {
@@ -251,6 +260,35 @@ describe('아라 대화 한 벌', () => {
     // 닫힌 뒤 보내는 것은 아무 일도 하지 않는다(예외 없이).
     expect(() => chat.send('늦은 질문')).not.toThrow()
     expect(eng.sent).toEqual([])
+  })
+
+  /**
+   * ★ 2026-08-28 배포 전 감사. **발급자만 있고 삭제자가 저장소에 하나도 없었다.**
+   *
+   * 임시 폴더의 설정 파일(`ara-mcp-` 로 시작하는 자리의 `mcp.json`)에는 원문 토큰이 들어 있고
+   * 정상 종료 경로에서만 지워진다. 그 짝인 해시가 vault 에 남아 있으면 크래시가 남긴 그 파일을
+   * 주운 쪽이 **재시작을 넘어 영원히** 우리 MCP 서버에 들어올 수 있다. 파일과 토큰을 함께 죽인다.
+   */
+  it('★ 닫으면 토큰 자체를 무효로 만든다 — 파일만 지워서는 그 토큰이 계속 통한다', async () => {
+    const { chat, vault } = setup({ session: { type: 'local', cwd: local } })
+    vault.set(MCP_TOKEN_VAULT_KEY, hashToken('사용자-토큰'))
+    await chat.open()
+    expect(vault.get(MCP_SELF_TOKEN_VAULT_KEY)).toMatch(/^[0-9a-f]{64}$/)
+    chat.close()
+    expect(vault.get(MCP_SELF_TOKEN_VAULT_KEY)).toBeNull()
+    // 사용자 토큰은 건드리지 않는다 — 외부 클라이언트에 넣어 둔 것이 조용히 끊기면 안 된다.
+    expect(vault.get(MCP_TOKEN_VAULT_KEY)).toBe(hashToken('사용자-토큰'))
+  })
+
+  it('★ 부팅 정리로 지난 실행이 남긴 토큰을 무효로 만든다 — 사용자 토큰은 그대로', () => {
+    const vault = memVault()
+    vault.set(MCP_TOKEN_VAULT_KEY, hashToken('사용자-토큰'))
+    vault.set(MCP_SELF_TOKEN_VAULT_KEY, hashToken('크래시가-남긴-아라-토큰'))
+    clearStaleSelfToken(vault)
+    expect(vault.get(MCP_SELF_TOKEN_VAULT_KEY)).toBeNull()
+    expect(vault.get(MCP_TOKEN_VAULT_KEY)).toBe(hashToken('사용자-토큰'))
+    // 남은 것이 없어도 조용히 지나간다(부팅 경로라 던지면 앱이 안 뜬다).
+    expect(() => clearStaleSelfToken(memVault())).not.toThrow()
   })
 })
 
