@@ -33,8 +33,18 @@ describe('추적 결과 읽기', () => {
   })
 
   it('그 포트를 듣는 프로세스가 없으면 none', () => {
-    expect(trace(['pid=']).kind).toBe('none')
+    expect(trace(['pid=', 'listen=0']).kind).toBe('none')
     expect(trace([]).kind).toBe('none')
+  })
+
+  /**
+   * ★ 2026-08-28 준영님 제보(8080): 포트는 떠 있는데 "이미 꺼졌을 수 있습니다"가 나왔다.
+   * **켜져 있는 걸 화면이 이미 보여 주고 있는데** 꺼졌다고 말한 것이다 — 남의 계정·root 가
+   * 띄웠거나 /proc 이 잠겨 pid 를 못 읽었을 뿐이다. 그 둘을 가른다.
+   */
+  it('★ 포트는 열려 있는데 pid 를 못 읽으면 hidden — "꺼졌다"고 하지 않는다', () => {
+    expect(trace(['pid=', 'listen=1']).kind).toBe('hidden')
+    expect(trace(['pid=', 'listen=0']).kind).toBe('none')
   })
 
   /**
@@ -101,6 +111,21 @@ describe('명령 조립', () => {
     const cmd = COMMANDS['app.trace'].build({ port: 8000 })!
     expect(cmd).toContain('/usr/sbin')
     expect(cmd).toContain('netstat -ltnp')
+  })
+
+  it('★ 포트가 열려 있는지도 함께 묻는다 — hidden 과 none 을 가르는 근거다', () => {
+    expect(COMMANDS['app.trace'].build({ port: 8000, pid: 1234 })!).toContain('listen=')
+  })
+
+  it('관리자 권한 재시도는 읽기 명령 그대로를 sudo 로 감싼다(하는 일은 같다)', () => {
+    const plain = COMMANDS['app.trace'].build({ port: 8000, pid: 12 })!
+    const sudo = COMMANDS['app.trace'].build({ port: 8000, pid: 12, sudo: true })!
+    expect(plain).not.toContain('sudo')
+    expect(sudo.startsWith('sudo -S -p')).toBe(true)
+    expect(sudo).toContain('readlink')
+    // 여전히 읽기 전용이다 — sudo 를 붙였다고 바꾸는 명령이 끼어들지 않는다.
+    expect(sudo).not.toContain('rm ')
+    expect(COMMANDS['app.trace'].write).toBeUndefined()
   })
 
   it('pid 가 정수가 아니면 그 값은 명령에 닿지 않는다(폴백으로 떨어진다)', () => {
