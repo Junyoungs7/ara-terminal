@@ -1061,7 +1061,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         />
         {bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
-        <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} />
+        <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} onTalk={voice.open} />
         {toast && <div className="pane-toast">{toast}</div>}
         <ContextInteractions
           onAction={onAction}

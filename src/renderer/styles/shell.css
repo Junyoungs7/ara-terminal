@@ -8562,3 +8562,72 @@
   line-height: 1.65;
   word-break: keep-all;
 }
+
+/* 대기 칩 — 켜져 있다는 유일한 표시(2026-08-27 준영님: "켜기 했는데 아무 반응이 없는데?").
+   화면을 덮지 않으면서 **마이크가 살아 있다는 것**까지 말해야 해서 작은 막대를 함께 둔다:
+   글자만 있으면 "켜졌다고 적혀 있을 뿐"이지만, 막대가 움직이면 실제로 듣고 있다는 증거가 된다. */
+.voice-chip {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 13px 6px 11px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--bg-abyss);
+  box-shadow: var(--shadow-md);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  opacity: 0.82;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.voice-chip:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--text-hi);
+}
+.voice-chip.dead {
+  border-color: var(--err-line);
+  color: var(--err);
+  cursor: default;
+  max-width: 34em;
+  text-align: left;
+}
+.vc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: vc-pulse 2.2s ease-in-out infinite;
+}
+.voice-chip.dead .vc-dot {
+  background: var(--err);
+  animation: none;
+}
+@keyframes vc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.vc-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+.vc-bars span {
+  display: block;
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: scaleY(0.12);
+  transition: transform 90ms cubic-bezier(0.25, 0.9, 0.35, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-dot { animation: none; }
+  .vc-bars span { transition: none; }
+}

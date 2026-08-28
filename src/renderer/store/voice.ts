@@ -37,9 +37,11 @@ export type VoiceUi = {
   /** 이번 턴에 쓴 도구 이름들(자막에 알약으로 붙는다). */
   tools: string[]
   error: string | null
+  /** 깨우는 말 엔진이 떴나. 안 떴으면 Alt+V 로만 열린다 — 화면이 그 사실을 말해야 한다. */
+  wakeReady: boolean
 }
 
-const EMPTY: VoiceUi = { state: 'off', bars: [], heard: '', answer: '', tools: [], error: null }
+const EMPTY: VoiceUi = { state: 'off', bars: [], heard: '', answer: '', tools: [], error: null, wakeReady: false }
 
 export type VoiceOpts = {
   /** 설정에서 켰나. 끄면 마이크를 아예 열지 않는다. */
@@ -262,6 +264,7 @@ export function useVoiceMode(opts: VoiceOpts): {
       // 깨우는 말 엔진에 **원본을 그대로** 먹인다(로컬). 없으면 단축키로만 열린다.
       if (opts.makeWake) {
         const wake = await opts.makeWake().catch(() => null)
+        patch({ wakeReady: wake !== null })
         if (wake && !dead) {
           s.wake = wake
           const tap = ctx.createScriptProcessor(4096, 1, 1)

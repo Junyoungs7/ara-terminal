@@ -23,11 +23,14 @@ const LABEL: Record<VoiceState, string> = {
 export function VoiceOverlay({
   ui,
   wakeWord,
-  onClose
+  onClose,
+  onTalk
 }: {
   ui: VoiceUi
   wakeWord: string
   onClose: () => void
+  /** 칩을 눌러 바로 말하기(Alt+V 와 같은 길). */
+  onTalk: () => void
 }) {
   // Esc 로 닫는다. 캡처 단계에서 멈춰 뒤쪽 핸들러(터미널 검색 등)로 새지 않게 한다.
   useEffect(() => {
@@ -42,7 +45,38 @@ export function VoiceOverlay({
   }, [onClose])
 
   // 잠자는 중에는 화면을 덮지 않는다 — 마이크만 열려 있을 뿐 사람은 일을 하고 있다.
-  if (ui.state === 'off' || ui.state === 'asleep') return null
+  // 대신 **작은 칩**을 남긴다(2026-08-27 준영님: "음성 켜기 했는데 아무 반응이 없는데?").
+  // 처음엔 아무것도 안 그렸는데, 그러면 켠 사람이 켜졌는지 알 길이 없다 — 켜져 있다는 사실과
+  // 마이크가 실제로 살아 있다는 것(막대가 움직인다)을 이 칩 하나가 말한다.
+  if (ui.state === 'asleep' || (ui.state === 'off' && ui.error)) {
+    const dead = ui.state === 'off'
+    return (
+      <button
+        type="button"
+        className={'voice-chip' + (dead ? ' dead' : '')}
+        data-voice="chip"
+        onClick={dead ? undefined : onTalk}
+        title={dead ? (ui.error ?? '') : t('voice.chip.title')}
+      >
+        <span className="vc-dot" />
+        {!dead && (
+          <span className="vc-bars" aria-hidden>
+            {ui.bars.slice(0, 12).map((v, i) => (
+              <span key={i} style={{ transform: `scaleY(${(0.12 + v * 1.6).toFixed(3)})` }} />
+            ))}
+          </span>
+        )}
+        <span className="vc-txt">
+          {dead
+            ? (ui.error ?? '')
+            : ui.wakeReady
+              ? t('voice.chip.wake').replace('{w}', wakeWord)
+              : t('voice.chip.hotkey')}
+        </span>
+      </button>
+    )
+  }
+  if (ui.state === 'off') return null
 
   const live = ui.state === 'listening'
   return (
