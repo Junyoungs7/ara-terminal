@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
 import { t } from '../i18n'
-import { IconClose, inlineIcon } from './icons'
+import { IconClose } from './icons'
 import { splitBlocks, insertText, type AiBlock } from './aiBlocks'
 import { writeClipboard } from '../store/clipboardWrite'
 import { tailLines } from '../terminal/termRegistry'
@@ -78,8 +78,9 @@ function Turn({ turn, sessionId }: { turn: AiTurn; sessionId: string | null }) {
           <>
             {/* 전송 후에도 "그 턴에 실제로 보낸 그 텍스트"를 되짚을 수 있어야 신뢰가 성립한다. */}
             <button type="button" className="ai-ctx-badge" data-action="ai.ctxPeek" onClick={() => setShowCtx((v) => !v)}>
-              {/* 📎 는 컬러 이모지로 폴백해 이 줄만 색이 튀었다(주변은 전부 --text-dim 단색). */}
-              <Paperclip size={12} style={inlineIcon} /> {t('ai.ctx.attached')} ·{' '}
+              {/* 📎 는 컬러 이모지로 폴백해 이 줄만 색이 튀었다(주변은 전부 --text-dim 단색).
+                  크기·글자와의 간격은 `.ai-ctx-badge`(inline-flex + gap)가 정한다. */}
+              <Paperclip /> {t('ai.ctx.attached')} ·{' '}
               {turn.context.split('\n').length}
               {t('ai.ctx.lines')}
             </button>
@@ -290,9 +291,9 @@ export function AiPanel({ open, onClose, session, prefill, onOpenBootstrap }: Pr
         >
           {t('ai.clear')}
         </button>
-        <span className="ai-x" title={t('ai.close')} onClick={onClose}>
+        <button type="button" className="ai-x" title={t('ai.close')} onClick={onClose}>
           <IconClose />
-        </span>
+        </button>
       </div>
 
       <div className="ai-body" ref={bodyRef}>

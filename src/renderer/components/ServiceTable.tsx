@@ -9,6 +9,7 @@
 //    systemdMissing(out) 이면 안내 한 줄로 갈아 끼운다(프로세스 창의 로컬 세션 안내와 같은 결).
 //  · 쓰기가 셋이다(시작·정지·재시작). 셋 다 확인 다이얼로그에 **유닛 이름을 박아서** 묻고,
 //    실패하면 서버가 준 문장을 그대로 보여 준다(sudo 는 붙이지 않는다).
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRowKeys } from '../store/rowKeys'
 import { parseSystemctl, systemdMissing, type SvcAction, type SvcRow } from '@shared/remoteCatalog'
@@ -245,7 +246,9 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
                     onClick={() => setSort((s) => nextSvcSort(s, c.key))}
                   >
                     {t('console.svc.col.' + c.key)}
-                    {sort.key === c.key && <span className="con-caret">{sort.desc ? '▾' : '▴'}</span>}
+                    {sort.key === c.key && (
+                      <span className="con-caret">{sort.desc ? <ChevronDown /> : <ChevronUp />}</span>
+                    )}
                   </th>
                 ))}
               </tr>

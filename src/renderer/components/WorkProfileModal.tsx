@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { PenLine, Star, X } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchWorkProfile } from '../store/workProfiles'
-import { IconClose, inlineIcon } from './icons'
+import { IconClose } from './icons'
 import { t } from '../i18n'
 
 type Props = {
@@ -65,9 +65,9 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
           <b>{t('work.title')}</b>
           <span className="wp-sub">{t('work.subtitle')}</span>
           <span className="sb-tab-spacer" />
-          <span className="mon-close" title={t('dlg.close')} onClick={onClose}>
+          <button type="button" className="mon-close" title={t('dlg.close')} onClick={onClose}>
             <IconClose />
-          </span>
+          </button>
         </div>
         <div className="sb-search wp-search">
           <div className="field">
@@ -100,7 +100,7 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
               title={`${w.path}${hostOf(w) ? ' · ' + hostOf(w) : ''}`}
             >
               <span className="wp-star">
-                <Star size={12} style={inlineIcon} />
+                <Star />
               </span>
               {/* 두 줄: [이름 … 서버] / [경로]. 서버·호스트를 오른쪽에 두 줄로 쌓았더니 이름·경로와
                   세로로 엇갈려 읽기 어려웠다(준영님 제보) — 서버는 이름과 같은 줄 끝에 칩으로 붙이고
@@ -124,11 +124,10 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
                     onRename(w.id)
                   }}
                 >
-                  {/* `.wp-act .cc-b` 에는 `.rowact .cc-b svg` 같은 크기 규칙이 없다 —
-                      트리 행 액션과 같아 보이도록 그쪽과 같은 11px 로 맞춘다.
+                  {/* 크기·상자는 `.rowact .cc-b` 묶음이 정한다(M3 에서 `.wp-act .cc-b` 를 그 목록에 합쳤다).
                       Pencil 이 아니라 PenLine 인 이유: icons.tsx 의 IconPencil(탐색기 [이름 바꾸기])이
                       "밑줄 + 연필"이다. 같은 뜻에 다른 그림을 두지 않는다. */}
-                  <PenLine size={11} style={inlineIcon} />
+                  <PenLine />
                 </span>
                 <span
                   className="cc-b danger"
@@ -138,7 +137,7 @@ export function WorkProfileModal({ open, list, profiles, onClose, onPick, onRena
                     onDelete(w.id)
                   }}
                 >
-                  <X size={11} style={inlineIcon} />
+                  <X />
                 </span>
               </span>
             </div>

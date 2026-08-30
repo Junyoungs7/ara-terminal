@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AraChatEvent } from '../../main/ai/AraChat'
 import type { AraChatRow } from '../../main/ai/araChats'
@@ -453,7 +454,9 @@ export function AraChatPanel({
             // B: 평소엔 한 줄로 접혀 있다. 무엇을 했는지 궁금하면 편다.
             <div className="ara-fold" key={it.id} data-tools={it.lines.length}>
               <div className="hd" onClick={() => toggleTools(it.id)}>
-                <span className="caret">{openTools.has(it.id) ? '▾' : '▸'}</span>
+                <span className={'caret' + (openTools.has(it.id) ? '' : ' closed')}>
+                  <ChevronDown />
+                </span>
                 <span className="n">{t('ara.tools.n').replace('{n}', String(it.lines.length))}</span>
                 <span className="st">{it.lines.some((l) => l.ok === null) ? '…' : it.lines.every((l) => l.ok) ? '✓' : '✕'}</span>
               </div>

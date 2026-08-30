@@ -145,9 +145,9 @@ export function CommandBook({ open, onClose, sessionId, initialQuery }: Props) {
             <p>{t('cmdbook.subtitle')}</p>
           </div>
           {/* SVG 는 스크린리더가 읽지 않는다 — 이름은 여기서 준다(닫기 버튼 감사, FINISH-M2). */}
-          <span className="x" role="button" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
+          <button type="button" className="x" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
             <IconClose />
-          </span>
+          </button>
         </div>
         <div className="sp-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

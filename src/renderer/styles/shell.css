@@ -297,9 +297,12 @@
   margin-left: 8px;
   -webkit-app-region: no-drag;
 }
+/* 창 컨트롤은 **다른 갈래로 남긴다**(M3). 패널 닫기와 생김새를 맞추지 않는다 — 신호등은 OS 창의
+   관용구이고, 여기서만 색이 곧 기능이다(빨강=닫기). 공유하는 것은 <button> 리셋뿐이다. */
 .tb-ctl {
   width: var(--tb-dot);
   height: var(--tb-dot);
+  border: 0;
   border-radius: 50%;
   cursor: pointer;
   transition: 0.12s;
@@ -1119,12 +1122,19 @@
   color: var(--text-hi);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* 글리프가 앉던 자리 — 이제 SVG 가 들어온다(M2 §5 ④). 글자는 베이스라인에 앉지만 SVG 는 안 그래서
+   `place-items: center` 로 상자 한가운데에 못박는다. 크기도 여기서 정한다(§8.4 — SVG 태그에 px 를 안 박는다). */
 .exp-node .ic {
   flex: none;
   width: 15px;
-  text-align: center;
+  display: grid;
+  place-items: center;
   font-size: var(--fs-md);
   color: var(--text-dim);
+}
+.exp-node .ic svg {
+  width: 13px;
+  height: 13px;
 }
 .exp-node .nm {
   overflow: hidden;
@@ -1356,11 +1366,18 @@
 .bw-dot.load {
   background: var(--accent);
 }
+/* × 가 앉던 자리(M2 §5 ④). <button> 으로는 못 바꿨다 — 부모가 `role="tab"` 이라 중첩이 된다(M3 §4). */
 .bw-x {
+  display: grid;
+  place-items: center;
   color: var(--text-dim);
   font-size: var(--fs-md);
   padding: 0 2px;
   cursor: pointer;
+}
+.bw-x svg {
+  width: 12px;
+  height: 12px;
 }
 .bw-x:hover {
   color: var(--err);
@@ -1777,8 +1794,18 @@
 .con-tbl th.on {
   color: var(--accent);
 }
+/* 표 정렬 캐럿 — 펼침 캐럿과 **같은 크기**를 쓰되 회전은 안 한다(M3). 상태가 "펼침/접힘"이 아니라
+   "오름/내림"이라 ChevronUp·ChevronDown 두 개를 갈아 끼우는 쪽이 뜻에 맞는다.
+   `▴`(U+25B4)는 `▸` 보다도 안 보이던 글자다 — 같은 화면에서 펼침만 SVG 로 바뀌면 정렬만 글자로 남는다. */
 .con-caret {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
   margin-left: 3px;
+}
+.con-caret svg {
+  width: 12px;
+  height: 12px;
 }
 .con-tbl td {
   padding: 0 10px;
@@ -2745,6 +2772,11 @@
   cursor: pointer;
   flex: none;
 }
+/* 바로 옆 `.px` 에는 있는 규칙이 여기만 없어서 TSX 가 `size={11}` 로 때우고 있었다(M2 §5 ①). */
+.pane-hd .pmax svg {
+  width: 11px;
+  height: 11px;
+}
 .pane-hd .pmax + .px {
   margin-left: 0;
 }
@@ -3408,10 +3440,45 @@
 .srv-hd:hover {
   color: var(--text-lo);
 }
-.srv-hd .caret {
-  width: 9px;
-  font-size: var(--fs-micro);
+/* ── 펼침 캐럿 (M3 · 준영님 "지금껀 잘 안 보여") ──
+   `▸`/`▾`(U+25B8/25BE)는 **Pretendard 에 없다**(M2 가 cmap 을 파싱해 실측했다) — Windows 기본
+   심볼 폰트로 그려지고 있었고 그 폰트의 그 글리프가 작고 얇다. design-system §8.4 가 캐럿을
+   면제한 근거("폰트 폴백 편차가 없는 글자")가 애초에 사실이 아니었다.
+
+   두 글리프를 갈아 끼우지 않고 **하나(ChevronDown)를 돌린다** — Orca 트리 행과 같은 방식이다.
+   펼침이 전환으로 보이고, 글자를 바꿀 때 생기던 미세한 자리 흔들림도 없어진다.
+
+   여섯 자리가 이 한 규칙을 쓴다: 연결 트리 셋(그룹 머리 · 서버 트위스티 `.tw` · 로컬) ·
+   AI 도구 접기(`.ara-fold`) · K8s 파드(`.pod-caret`). 크기는 여기서만 정한다.
+   `inline-grid` 인 이유: `.pod-caret` 만 flex 가 아닌 `<td>` 안에 있어 `grid` 로 두면 줄이 바뀐다.
+   flex 자리에서는 어차피 `grid` 로 블록화되고 `vertical-align` 은 무시된다. */
+.caret,
+.tw,
+.pod-caret {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  width: 12px;
   flex: none;
+}
+.caret svg,
+.tw svg,
+.pod-caret svg {
+  width: 12px;
+  height: 12px;
+  transition: transform var(--dur-fade);
+}
+.caret.closed svg,
+.tw.closed svg,
+.pod-caret.closed svg {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .caret svg,
+  .tw svg,
+  .pod-caret svg {
+    transition: none;
+  }
 }
 .srv-hd .g-count {
   margin-left: auto;
@@ -3480,13 +3547,10 @@
 .srv-node.off .sname {
   color: var(--text-lo);
 }
-/* 트위스티 — 세션이 있는 서버만. 자리는 늘 차지해 이름 왼쪽 줄이 흔들리지 않는다. */
+/* 트위스티 — 세션이 있는 서버만. 자리는 늘 차지해 이름 왼쪽 줄이 흔들리지 않는다
+   (세션이 없는 서버는 `<span class="tw">` 빈 것으로 폭만 잡는다 — 위 캐럿 규칙이 그 폭을 준다). */
 .tw {
-  width: 10px;
-  flex: none;
-  font-size: var(--fs-micro);
   color: var(--text-dim);
-  text-align: center;
 }
 .tw.on:hover {
   color: var(--text-hi);
@@ -3533,7 +3597,10 @@
 .sess-node.active .rowact {
   opacity: 1;
 }
-.rowact .cc-b {
+/* `.wp-act .cc-b`(작업 프로필 행의 이름 변경·삭제)는 **기본 규칙이 아예 없었다** — 같은 `.cc-b` 인데
+   트리 행에서는 19×19 상자이고 저기서는 맨 아이콘이었다. 선택자 목록에 합친다(M2 §5 ③). */
+.rowact .cc-b,
+.wp-act .cc-b {
   width: 19px;
   height: 19px;
   display: grid;
@@ -3542,15 +3609,18 @@
   color: var(--text-dim);
   font-size: var(--fs-sm);
 }
-.rowact .cc-b:hover {
+.rowact .cc-b:hover,
+.wp-act .cc-b:hover {
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
-.rowact .cc-b.danger:hover {
+.rowact .cc-b.danger:hover,
+.wp-act .cc-b.danger:hover {
   background: var(--err-line);
   color: var(--err);
 }
-.rowact .cc-b svg {
+.rowact .cc-b svg,
+.wp-act .cc-b svg {
   width: 11px;
   height: 11px;
 }
@@ -3640,13 +3710,19 @@
 }
 
 /* 즐겨찾기(작업 프로필) — 서버+폴더를 한 번에 여는 행. 지금까지 Ctrl+P 팝업에만 있어
-   존재를 잊게 됐다(조사한 제품들은 전부 최상단 그룹으로 올려 둔다). */
+   존재를 잊게 됐다(조사한 제품들은 전부 최상단 그룹으로 올려 둔다).
+   ★ 자리는 `.exp-node .ic` 와 같은 처리 — 글리프가 SVG 로 바뀌었다(M2 §5 ④). */
 .fav-node .fav-i {
   flex: none;
   width: 14px;
+  display: grid;
+  place-items: center;
   color: var(--warn);
   font-size: var(--fs-sm);
-  text-align: center;
+}
+.fav-node .fav-i svg {
+  width: 12px;
+  height: 12px;
 }
 .fav-node .fav-n {
   overflow: hidden;
@@ -3743,24 +3819,37 @@
   color: var(--text-dim);
   margin-top: 1px;
 }
-.modal-hd .x {
+/* ── 오버레이 우상단 닫기 (M3) ──
+   모달(.modal-hd) · 설정 드로어(.drawer-hd) · 치트시트/명령어북(.cs-hd)이 **선언 하나 다르지 않게
+   같은 규칙 세 벌**이었다(.cs-hd 쪽은 interactions.css 에 복사본으로 살았다). 한 벌로 합친다 —
+   클래스는 그대로 둔다(e2e·스모크가 그 이름으로 요소를 찾는다). 셋이 같아야 한다는 사실이
+   이제 선택자 목록에 적혀 있어, 다음에 하나만 고치는 일이 안 생긴다.
+   `border`·`background` 는 <button> 이 되면서 필요해진 UA 기본값 제거다(.exp-wbtn·.bp-close 와 같은 방식).
+   옛 `font-size: var(--fs-xl)` 는 뺐다 — ✕ 글리프였을 때의 값이고 지금 자식은 SVG 하나뿐이다. */
+.modal-hd .x,
+.drawer-hd .x,
+.cs-hd .x {
   margin-left: auto;
   width: 27px;
   height: 27px;
   display: grid;
   place-items: center;
+  border: 0;
+  background: none;
   border-radius: var(--radius-sm);
   color: var(--text-dim);
   cursor: pointer;
-  font-size: var(--fs-xl);
   transition: 0.14s;
 }
 .modal-hd .x svg,
-.drawer-hd .x svg {
+.drawer-hd .x svg,
+.cs-hd .x svg {
   width: 13px;
   height: 13px;
 }
-.modal-hd .x:hover {
+.modal-hd .x:hover,
+.drawer-hd .x:hover,
+.cs-hd .x:hover {
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
@@ -3786,10 +3875,17 @@
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
    `.prof-list` 가 통째로 스크롤되는 칸이라 sticky 로 바닥에 붙인다 — 배경을 깔아 두지 않으면
    아래로 지나가는 행이 글자에 겹쳐 읽힌다. */
+/* 아이콘 + 글자 버튼(M2 §5 ⑤) — `.ara-hist` 가 이미 쓰는 문법. `justify-content` 를 함께 주는 이유:
+   지금 가운데 정렬은 <button> 의 UA `text-align: center` 가 해 주고 있는데, flex 로 바꾸는 순간
+   그게 안 먹는다(안 주면 글자가 왼쪽으로 붙는다). 6px 은 이 파일에서 가장 흔한 간격이다(36곳). */
 .pl-add {
   position: sticky;
   bottom: 0;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
   margin-top: 4px;
   border: 1px dashed var(--line);
@@ -3800,6 +3896,10 @@
   font-size: var(--fs-md);
   cursor: pointer;
   transition: 0.12s;
+}
+.pl-add svg {
+  width: 13px;
+  height: 13px;
 }
 .pl-add:hover {
   border-style: solid;
@@ -4205,22 +4305,7 @@
   color: var(--text-dim);
   margin-top: 1px;
 }
-.drawer-hd .x {
-  margin-left: auto;
-  width: 27px;
-  height: 27px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: var(--fs-xl);
-  transition: 0.14s;
-}
-.drawer-hd .x:hover {
-  background: var(--bg-overlay);
-  color: var(--text-hi);
-}
+/* .drawer-hd .x 는 위 `.modal-hd .x` 묶음이 함께 그린다(M3). */
 /* R5: 섹션이 5개로 늘어 좌측 세로 nav + 우측 스크롤 패널 2열이 됐다(가로 탭은 라벨이 눌린다). */
 .drawer-body {
   display: flex;
@@ -5021,13 +5106,28 @@
   font-weight: 600;
   letter-spacing: 0.02em;
 }
-.mon-close {
+/* ── 패널 머리 닫기 (M3) ──
+   `.mon-close`(로그·지난 로그·시스템 감시·작업 프로필)와 `.ai-x`(AI 패널)가 같은 규칙 두 벌이었다.
+   합치면서 **`svg` 크기 규칙을 새로 넣는다** — 이 두 자리는 `IconClose`(크기 속성이 없는 24 viewBox)를
+   담고 있는데 리포 어디에도 그 SVG 를 재는 규칙이 없어 **0×0 으로 그려지고 있었다.** 상자에 남은 것은
+   패딩뿐인 4×4 라, 닫기 아이콘이 안 보이고 클릭 표적도 4px 였다(헤드리스 실측 · M3 보고 §2).
+   13px 은 옆 자리 `.modal-hd .x svg`·`.bp-close svg` 와 같은 값이다. */
+.mon-close,
+.ai-x {
   display: flex;
+  border: 0;
+  background: none;
   color: var(--text-dim);
   cursor: pointer;
   padding: 2px;
 }
-.mon-close:hover {
+.mon-close svg,
+.ai-x svg {
+  width: 13px;
+  height: 13px;
+}
+.mon-close:hover,
+.ai-x:hover {
   color: var(--text-hi);
 }
 
@@ -5421,15 +5521,7 @@
   color: var(--text-hi);
   border-color: var(--purple-line);
 }
-.ai-x {
-  display: flex;
-  color: var(--text-dim);
-  cursor: pointer;
-  padding: 2px;
-}
-.ai-x:hover {
-  color: var(--text-hi);
-}
+/* .ai-x 는 위 `.mon-close` 묶음이 함께 그린다(M3). */
 
 .ai-body {
   flex: 1;
@@ -5574,8 +5666,12 @@
 }
 
 /* 첨부 전문 — 전송 전(컴포저)과 전송 후(말풍선 아래) 모두 같은 모양으로 펼쳐 본다.
-   "무엇을 보냈나"를 되짚을 수 없으면 컨텍스트 첨부는 신뢰할 수 없는 기능이 된다. */
+   "무엇을 보냈나"를 되짚을 수 없으면 컨텍스트 첨부는 신뢰할 수 없는 기능이 된다.
+   클립 아이콘 + 글자는 `.pl-add` 와 같은 문법(M2 §5 ⑤) — 이쪽은 폭을 안 쓰므로 inline-flex 다. */
 .ai-ctx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -5583,6 +5679,10 @@
   font-size: var(--fs-sm);
   padding: 4px 0 0;
   cursor: pointer;
+}
+.ai-ctx-badge svg {
+  width: 12px;
+  height: 12px;
 }
 .ai-ctx-badge:hover {
   color: var(--purple);
@@ -6290,10 +6390,17 @@
 .wp-row:hover .wp-act {
   opacity: 1;
 }
+/* ★ 가 앉던 자리 — `.fav-node .fav-i` 와 같은 처리·같은 크기(즐겨찾기 표시가 화면마다 다르면 안 된다). */
 .wp-star {
+  display: grid;
+  place-items: center;
   color: var(--warn);
   font-size: var(--fs-sm);
   flex: none;
+}
+.wp-star svg {
+  width: 12px;
+  height: 12px;
 }
 .wp-main {
   flex: 1;
@@ -6343,9 +6450,7 @@
   transition: 0.1s;
   flex: none;
 }
-.wp-act .cc-b.danger:hover {
-  color: var(--err);
-}
+/* .wp-act .cc-b 는 위 `.rowact .cc-b` 묶음이 함께 그린다(M3). */
 .wp-hint {
   color: var(--text-dim);
   font-size: var(--fs-md);
@@ -6935,10 +7040,7 @@
   cursor: pointer;
 }
 .pod-caret {
-  display: inline-block;
-  width: 12px;
   color: var(--text-mid);
-  font-size: var(--fs-sm);
 }
 .pod-row:hover .pod-caret {
   color: var(--accent);
@@ -7356,8 +7458,6 @@
 }
 .ara-fold .hd .caret {
   color: var(--text-dim);
-  font-size: var(--fs-micro);
-  width: 8px;
 }
 .ara-fold .hd .n {
   color: var(--text-mid);
@@ -7692,8 +7792,11 @@
   font-size: var(--fs-micro);
   flex: none;
 }
+/* 작업대 행 액션 — 트리 행 액션(`.rowact .cc-b`)과 같은 상자·같은 아이콘 크기로 맞춘다(M2 §5 ②). */
 .bench-x {
   flex: none;
+  display: grid;
+  place-items: center;
   background: transparent;
   border: 0;
   color: var(--text-dim);
@@ -7701,6 +7804,10 @@
   padding: 2px 4px;
   cursor: pointer;
   opacity: 0;
+}
+.bench-x svg {
+  width: 11px;
+  height: 11px;
 }
 .bench-row:hover .bench-x {
   opacity: 1;

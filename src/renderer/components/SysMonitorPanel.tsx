@@ -187,9 +187,9 @@ export function SysMonitorPanel({
       {!embedded && (
         <div className="mon-head">
           <span className="mon-name">{t('sysm.title')}</span>
-          <span className="mon-close" title={t('mon.close')} onClick={onClose}>
+          <button type="button" className="mon-close" title={t('mon.close')} onClick={onClose}>
             <IconClose />
-          </span>
+          </button>
         </div>
       )}
       <div className="sysm-tabs" role="tablist">

@@ -146,21 +146,6 @@ export const IconLog = () =>
       <path d="M8 8h8M8 12h8M8 16h5" />
     </>
   )
-/**
- * 글자 자리에 놓는 SVG 의 수직 정렬 (FINISH-M2 — 텍스트 글리프 → 아이콘 교체).
- *
- * 아이콘 컨테이너 대부분은 `display:grid; place-items:center`(`.px`·`.bp-max`·`.rowact .cc-b` …)라
- * 아무것도 안 해도 가운데 맞는다. 그런데 **원래 글자가 있던 자리**(`.bench-x`·`.wp-star`·`.fav-i`
- * `.exp-node .ic`·`.bw-x`·`.pl-add`·`.ai-ctx-badge`)는 그 CSS 가 없다 — 글자는 베이스라인에 앉으므로
- * 필요가 없었다. 거기에 SVG 를 그대로 넣으면 **베이스라인에 밑변이 닿아 1~2px 위로 뜬다.**
- *
- * `vertical-align:middle` 은 소문자 x 높이의 절반에 아이콘 중심을 맞춘다 — 옆 글자와 광학 중심이
- * 같아진다. 수치가 아니라 키워드라 매직넘버가 아니다.
- *
- * 해당 자리의 CSS 가 `place-items:center` 로 바뀌면 이 상수는 통째로 지운다.
- */
-export const inlineIcon = { verticalAlign: 'middle' } as const
-
 // 아라(AI) 마크 — tb-ai 와 같은 3중 원(투명도로 심도), stroke 1.7.
 export const IconAra = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">

@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { parsePkgProbe, PROBE_BINS, type PkgRow } from '@shared/remoteCatalog'
 import { IconRefresh, IconClose } from './icons'
@@ -160,7 +161,9 @@ export function PkgTable({ sessionId, active }: { sessionId: string | null; acti
                   onClick={() => setSort((s) => nextPkgSort(s, c.key))}
                 >
                   {t('console.pkg.col.' + c.key)}
-                  {sort.key === c.key && <span className="con-caret">{sort.desc ? '▾' : '▴'}</span>}
+                  {sort.key === c.key && (
+                    <span className="con-caret">{sort.desc ? <ChevronDown /> : <ChevronUp />}</span>
+                  )}
                 </th>
               ))}
             </tr>

@@ -145,26 +145,8 @@
   color: var(--text-dim);
   margin-top: 1px;
 }
-.cs-hd .x svg {
-  width: 13px;
-  height: 13px;
-}
-.cs-hd .x {
-  margin-left: auto;
-  width: 27px;
-  height: 27px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: var(--fs-xl);
-  transition: 0.14s;
-}
-.cs-hd .x:hover {
-  background: var(--bg-overlay);
-  color: var(--text-hi);
-}
+/* .cs-hd .x(치트시트·명령어북 닫기)는 여기 있던 규칙이 shell.css 의 `.modal-hd .x` 와 한 글자도
+   다르지 않았다 — 그쪽 선택자 목록에 합쳤다(M3). 모양을 고칠 일이 있으면 거기 한 곳만 고친다. */
 .cs-body {
   padding: 18px;
   overflow-y: auto;
@@ -425,11 +407,17 @@
   cursor: default;
   color: var(--text-dim);
 }
-/* 서브메뉴를 여는 상위 행(캐럿과 같은 텍스트 글리프 예외 — §8.4). */
+/* 서브메뉴를 여는 상위 행. 여기만 **회전하지 않는 ChevronRight** 다(M3) — 펼침 상태가 아니라
+   "오른쪽에 더 있다"는 방향 표시라서, 트리 캐럿처럼 돌리면 뜻이 달라진다. */
 .ctx-item .ci-sub-arrow {
+  display: grid;
+  place-items: center;
   flex: none;
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+}
+.ctx-item .ci-sub-arrow svg {
+  width: 12px;
+  height: 12px;
 }
 .ctx-item.has-sub.cur .ci-sub-arrow {
   color: var(--accent-bright);

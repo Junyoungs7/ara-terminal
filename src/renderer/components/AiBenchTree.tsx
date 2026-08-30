@@ -1,7 +1,6 @@
 import { GitBranch, X } from 'lucide-react'
 import type { AiSessionState } from '@shared/aiSession'
 import type { WorkbenchRow, WorkbenchStatus } from '../store/aiWorkbench'
-import { inlineIcon } from './icons'
 import { t } from '../i18n'
 
 /**
@@ -86,11 +85,11 @@ export function AiBenchTree({
                 분기 = git worktree 이므로 GitBranch 가 뜻까지 맞는다. */}
             {!r.s.worktree && !dead && (
               <button type="button" className="bench-x" title={t('bench.split')} onClick={() => onSplit(r.s)}>
-                <GitBranch size={11} style={inlineIcon} />
+                <GitBranch />
               </button>
             )}
             <button type="button" className="bench-x" title={t('bench.remove')} onClick={() => onRemove(r.s)}>
-              <X size={11} style={inlineIcon} />
+              <X />
             </button>
           </div>
         )

@@ -308,9 +308,8 @@ export function PaneGrid({
                     toggleMaximize(cell.id)
                   }}
                 >
-                  {/* 옆 `.px` 는 CSS 가 11px 로 그린다(`.pane-hd .px svg`). `.pmax` 에는 같은
-                      규칙이 없어 여기서 크기를 준다 — 둘이 나란히 있으므로 같은 값이어야 한다. */}
-                  {maximizedId === cell.id ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+                  {/* 크기는 `.pane-hd .pmax svg`(11px)가 정한다 — 옆 `.px` 와 같은 규칙. */}
+                  {maximizedId === cell.id ? <Minimize2 /> : <Maximize2 />}
                 </span>
               )}
               {cell && (

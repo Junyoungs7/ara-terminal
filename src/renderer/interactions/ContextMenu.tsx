@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 // 컴팩트 컨텍스트 메뉴 (F4c — .sp-* 오버레이와 같은 표면·헤어라인·등장 애니메이션).
@@ -151,7 +152,12 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
             {it.icon && <span className="ci-ic">{it.icon}</span>}
             <span className="ci-lbl">{it.label}</span>
             {it.hint && <span className="ci-kbd">{it.hint}</span>}
-            {it.submenu && <span className="ci-sub-arrow">▸</span>}
+            {/* 트리 캐럿과 달리 **안 돌린다** — 펼침 상태가 아니라 "오른쪽에 더 있다"는 방향 표시다. */}
+            {it.submenu && (
+              <span className="ci-sub-arrow">
+                <ChevronRight />
+              </span>
+            )}
           </div>
         ))}
       </div>

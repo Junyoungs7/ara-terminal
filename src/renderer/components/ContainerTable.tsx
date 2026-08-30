@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { buildCtrExec, sortContainers, type CtrAction, type CtrRow } from '@shared/remoteCatalog'
 import type { DialogResult, DialogSpec } from './Dialog'
@@ -201,7 +202,9 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
                   onClick={c.key === null ? undefined : () => setSort((p) => nextCtrSort(p, c.key!))}
                 >
                   {t('console.ctr.col.' + c.label)}
-                  {sort.key === c.key && <span className="con-caret">{sort.desc ? '▾' : '▴'}</span>}
+                  {sort.key === c.key && (
+                    <span className="con-caret">{sort.desc ? <ChevronDown /> : <ChevronUp />}</span>
+                  )}
                 </th>
               ))}
             </tr>

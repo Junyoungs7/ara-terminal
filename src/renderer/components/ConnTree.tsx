@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MoreHorizontal, Star } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, Star } from 'lucide-react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { connDotClass, type ConnState } from '../store/profiles'
@@ -8,7 +8,7 @@ import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, tmuxMenuItem, type TreeActionId, type TreeMenuKind } from '../interactions/actions'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
-import { IconClose, inlineIcon } from './icons'
+import { IconClose } from './icons'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
 // 사이드바 연결 트리 — 목업 S1(순수 트리). 2026-08-08 재설계.
@@ -284,7 +284,10 @@ export function ConnTree({
             aria-expanded={!collapsed.__fav}
             onClick={() => setCollapsed((c) => ({ ...c, __fav: !c.__fav }))}
           >
-            <span className="caret">{collapsed.__fav ? '▸' : '▾'}</span>
+            {/* 접히면 CSS 가 -90° 로 돌린다 — 글리프 둘을 갈아 끼우지 않는다(shell.css `.caret`). */}
+            <span className={'caret' + (collapsed.__fav ? ' closed' : '')}>
+              <ChevronDown />
+            </span>
             {t('explorer.nav.favorites')} <span className="g-count">{workProfiles.length}</span>
           </div>
           {!collapsed.__fav &&
@@ -299,7 +302,7 @@ export function ConnTree({
                 onContextMenu={(e) => openCtx(e, 'fav', { kind: 'work', workId: w.id })}
               >
                 <span className="fav-i">
-                  <Star size={12} style={inlineIcon} />
+                  <Star />
                 </span>
                 <span className="fav-n">{w.name}</span>
                 <span className="fav-p">{w.path}</span>
@@ -319,7 +322,9 @@ export function ConnTree({
               onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
               onContextMenu={(e) => openCtx(e, group === none ? 'groupNone' : 'group', { kind: 'group', group })}
             >
-              <span className="caret">{isCollapsed ? '▸' : '▾'}</span>
+              <span className={'caret' + (isCollapsed ? ' closed' : '')}>
+                <ChevronDown />
+              </span>
               {group} <span className="g-count">{list.length}</span>
             </div>
             {!isCollapsed &&
@@ -378,14 +383,15 @@ export function ConnTree({
                     {/* 트위스티 자리는 세션이 없어도 비워 둔다 — 안 그러면 서버마다 이름 시작점이 어긋난다. */}
                     {sess.length > 0 ? (
                       <span
-                        className="tw on"
+                        className={'tw on' + (nodeCollapsed ? ' closed' : '')}
                         title={nodeCollapsed ? t('conn.tree.expand') : t('conn.tree.collapse')}
                         onClick={(e) => {
                           e.stopPropagation()
                           setCollapsed((c) => ({ ...c, ['node:' + p.id]: !c['node:' + p.id] }))
                         }}
                       >
-                        {nodeCollapsed ? '▸' : '▾'}
+                        {/* <button> 으로 안 만든다 — 부모 `.srv-node` 가 `role="treeitem"` 이라 중첩이 된다(M3 §4.1). */}
+                        <ChevronDown />
                       </span>
                     ) : (
                       <span className="tw" />
@@ -448,7 +454,9 @@ export function ConnTree({
           onClick={() => setCollapsed((c) => ({ ...c, __local: !c.__local }))}
           onContextMenu={(e) => openCtx(e, 'local', { kind: 'local' })}
         >
-          <span className="caret">{collapsed.__local ? '▸' : '▾'}</span>
+          <span className={'caret' + (collapsed.__local ? ' closed' : '')}>
+            <ChevronDown />
+          </span>
           {t('conn.group.local')} <span className="g-count">{localSessions.length}</span>
         </div>
         {!collapsed.__local && (

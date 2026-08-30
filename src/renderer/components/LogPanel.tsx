@@ -126,13 +126,13 @@ export function LogPanel({ open, onClose, sessionId, sessionTitle, embedded }: P
           {t(source === 'file' ? 'log.src.file' : 'log.src.buffer')}
         </span>
         <div className="sb-tab-spacer" />
-        <span className="sb-act" title={t('sftp.refresh')} onClick={() => void reload()}>
+        <button type="button" className="sb-act" title={t('sftp.refresh')} onClick={() => void reload()}>
           <IconRefresh />
-        </span>
+        </button>
         {!embedded && (
-          <span className="mon-close" title={t('mon.close')} onClick={onClose}>
+          <button type="button" className="mon-close" title={t('mon.close')} onClick={onClose}>
             <IconClose />
-          </span>
+          </button>
         )}
       </div>
       <div className="sb-search">

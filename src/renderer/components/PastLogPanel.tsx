@@ -78,12 +78,12 @@ export function PastLogPanel({ open, onClose, onOpenCurrent }: Props): JSX.Eleme
     <div className="monitor-panel pastlog">
       <div className="mon-head">
         <span className="mon-name">{t('pastlog.title')}</span>
-        <span className="sb-act" title={t('sftp.refresh')} onClick={() => void reload()}>
+        <button type="button" className="sb-act" title={t('sftp.refresh')} onClick={() => void reload()}>
           <IconRefresh />
-        </span>
-        <span className="mon-close" title={t('mon.close')} onClick={onClose}>
+        </button>
+        <button type="button" className="mon-close" title={t('mon.close')} onClick={onClose}>
           <IconClose />
-        </span>
+        </button>
       </div>
 
       {sel === null ? (

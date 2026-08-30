@@ -1004,9 +1004,12 @@ export function FileTree({
             </button>
           </>
         )}
-        <div className="sb-act" title={t('sftp.up')} onClick={goUp}>
+        {/* M3: 같은 `.sb-act` 인데 [뒤로]·[앞으로]만 <button> 이고 [상위로]·[올리기]·[새로고침]은
+            <div> 이었다 — 한 줄에 나란히 선 다섯 개가 셋만 키보드로 못 닿았다. CSS 는 이미
+            <button> 기준(border·background 제거)이라 태그만 갈면 모양은 그대로다. */}
+        <button type="button" className="sb-act" title={t('sftp.up')} onClick={goUp}>
           <IconUp />
-        </div>
+        </button>
         {/* #88 R2 이름 검색 — **이 폴더 안**만 훑는다(하위 폴더까지 뒤지는 검색은 [윈도우 탐색기에서
             보기]로 넘긴다). 아이콘을 누르면 입력이 펴지고, 폴더를 옮기면 저절로 접힌다. */}
         {toolbar && filterOn && (
@@ -1060,17 +1063,17 @@ export function FileTree({
           </select>
         )}
         {backend.remote && (
-          <div className="sb-act" title={t('sftp.upload')} onClick={pickAndUpload}>
+          <button type="button" className="sb-act" title={t('sftp.upload')} onClick={pickAndUpload}>
             <IconUpload />
-          </div>
+          </button>
         )}
         {/* 2026-08-24 준영님: 자동 동기 안내가 **줄 하나를 상주로 잡아먹고** 있었다.
             한 번 읽으면 그만인 글이라 새로고침 옆 물음표 뒤로 넣는다(하단 표들과 같은 방식).
             안내가 필요한 상태(cwd 이벤트를 한 번도 못 받은 원격 셸)에서만 나타난다. */}
         {backend.remote && !autoSynced && <HelpTip text={t('sftp.bestEffort')} />}
-        <div className="sb-act" title={t('sftp.refresh')} onClick={refresh}>
+        <button type="button" className="sb-act" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
-        </div>
+        </button>
       </div>
 
       {/* 경로는 **자기 줄**을 갖는다 (2026-08-22 준영님 제보 12번 — "하나의 바에 뒤로가기·경로 수정·

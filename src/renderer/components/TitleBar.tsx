@@ -91,19 +91,22 @@ export function TitleBar({
         )}
       </div>
       <div className="tb-controls">
-        <span className="tb-ctl min" title={t('titlebar.min')} onClick={() => void window.ev?.window.minimize()}>
+        {/* M3: 셋 다 <button> 이다. 신호등은 창 컨트롤 관용구라 **모양은 패널 닫기와 따로 가되**,
+            키보드로 닫을 수 있어야 한다는 점은 다르지 않다(전에는 마우스로만 닿았다). */}
+        <button type="button" className="tb-ctl min" title={t('titlebar.min')} onClick={() => void window.ev?.window.minimize()}>
           {glyph('M3 6h6')}
-        </span>
-        <span
+        </button>
+        <button
+          type="button"
           className="tb-ctl max"
           title={t('titlebar.max')}
           onClick={() => void window.ev?.window.toggleMaximize()}
         >
           {glyph('M4.2 7.8L7.8 4.2M7.8 4.2H5.2M7.8 4.2v2.6M4.2 7.8h2.6M4.2 7.8V5.2')}
-        </span>
-        <span className="tb-ctl close" title={t('titlebar.close')} onClick={() => void window.ev?.window.close()}>
+        </button>
+        <button type="button" className="tb-ctl close" title={t('titlebar.close')} onClick={() => void window.ev?.window.close()}>
           {glyph('M3.6 3.6l4.8 4.8M8.4 3.6l-4.8 4.8')}
-        </span>
+        </button>
       </div>
       <ContextMenu
         open={open !== null}

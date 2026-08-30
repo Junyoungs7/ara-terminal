@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { type CtrPodInfo, type CtrRow } from '@shared/remoteCatalog'
 import { IconClose, IconRefresh } from './icons'
@@ -255,7 +256,9 @@ export function K8sPanel({
                   onClick={c.key === null ? undefined : () => setSort((p) => nextPodSort(p, c.key!))}
                 >
                   {t('console.ctr.col.' + c.label)}
-                  {sort.key === c.key && <span className="con-caret">{sort.desc ? '▾' : '▴'}</span>}
+                  {sort.key === c.key && (
+                    <span className="con-caret">{sort.desc ? <ChevronDown /> : <ChevronUp />}</span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -275,8 +278,8 @@ export function K8sPanel({
                     <span className={'ctr-dot' + (rank === 0 ? '' : ' on')} aria-hidden />
                   </td>
                   <td className="cpod">
-                    <span className="pod-caret" aria-hidden>
-                      {open ? '▾' : '▸'}
+                    <span className={'pod-caret' + (open ? '' : ' closed')} aria-hidden>
+                      <ChevronDown />
                     </span>
                     <span className="pod-name" title={g.key}>
                       <span className="pod-ns">{g.ns ? g.ns + '/' : ''}</span>

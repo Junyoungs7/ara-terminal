@@ -804,9 +804,9 @@ export function SettingsDrawer({
           <h2>{t('settings.title')}</h2>
           <p>{t('settings.subtitle')}</p>
         </div>
-        <span className="x" title={t('settings.close')} onClick={onClose}>
+        <button type="button" className="x" title={t('settings.close')} onClick={onClose}>
           <IconClose />
-        </span>
+        </button>
       </div>
 
       <div className="drawer-body">

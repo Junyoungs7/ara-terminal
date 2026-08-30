@@ -60,10 +60,11 @@ export function Cheatsheet({ open, onClose }: Props) {
             <p>모든 키보드 단축키 — ? 로 언제든지</p>
           </div>
           {/* SVG 는 스크린리더가 읽지 않는다 — 이름은 여기서 준다(닫기 버튼 감사, FINISH-M2).
-              이 파일의 나머지 문구는 아직 하드코딩이다 — 접근 가능한 이름만 i18n 을 쓴다. */}
-          <span className="x" role="button" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
+              이 파일의 나머지 문구는 아직 하드코딩이다 — 접근 가능한 이름만 i18n 을 쓴다.
+              M3: <button> 이 되면서 `role="button"` 은 뺐다(진짜 버튼에 역할을 덧칠하지 않는다). */}
+          <button type="button" className="x" aria-label={t('dlg.close')} title={t('dlg.close')} onClick={onClose}>
             <IconClose />
-          </span>
+          </button>
         </div>
         <div className="cs-body">
           <div className="cs-grid">

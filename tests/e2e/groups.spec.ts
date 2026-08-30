@@ -94,7 +94,8 @@ test('GROUP-5 그룹을 접으면 하위 연결이 숨는다', async ({ ara, ssh
   await expect(page.locator('.tree .srv-node')).toHaveCount(1)
   await header.click()
   await expect(page.locator('.tree .srv-node')).toHaveCount(0)
-  await expect(header.locator('.caret')).toHaveText('▸')
+  // 캐럿은 글자가 아니라 SVG 다(M3) — 접힘은 `.closed`(CSS 가 -90° 로 돌린다)로 본다.
+  await expect(header.locator('.caret')).toHaveClass(/\bclosed\b/)
   await header.click()
   await expect(page.locator('.tree .srv-node')).toHaveCount(1)
 })
