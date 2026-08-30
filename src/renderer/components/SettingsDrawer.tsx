@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { ACTIVITY_TITLE_KEY } from './ActivityBar'
-import { moveActivity, toggleActivityHidden } from '../store/activityBar'
+import { activitySlot, activityWhereKey, moveActivity, toggleActivityHidden } from '../store/activityBar'
 import {
   AI_MODELS_BY_PROVIDER,
   AI_PROVIDER_HOSTS,
@@ -847,16 +847,28 @@ export function SettingsDrawer({
                   onChange={(bootSplash) => onPrefsChange({ bootSplash })}
                 />
               </Row>
-              {/* 2026-08-13 준영님 요청: 우측 바에 기능이 박혀 있는 것을 껐다 켜고 순서도 바꾼다. */}
+              {/* 2026-08-13 준영님 요청: 우측 바에 기능이 박혀 있는 것을 껐다 켜고 순서도 바꾼다.
+                  2026-08-30 준영님 제보: *"하단 바로 간 기능들도 우측 사이드바 순서에 포함"* —
+                  이 목록은 이름만 보여 줘서 [프로세스](아래에 열림)와 [대화](오른쪽에 열림)가
+                  구분 없이 나란히 섰다. 툴팁이 쓰는 그 꼬리표를 여기에도 붙인다(activityWhereKey). */}
               <Row label={t('settings.activity')} desc={t('settings.activity.desc')}>
                 <div className="act-cfg">
                   {prefs.activityOrder.map((id, i) => {
                     const shown = !prefs.activityHidden.includes(id)
+                    const whereKey = activityWhereKey(id)
                     const move = (delta: -1 | 1): void =>
                       onPrefsChange({ activityOrder: moveActivity(prefs.activityOrder, id, delta) })
                     return (
-                      <div className={'act-cfg-row' + (shown ? '' : ' off')} key={id} data-activity={id}>
-                        <span className="acr-name">{t(ACTIVITY_TITLE_KEY[id])}</span>
+                      <div
+                        className={'act-cfg-row' + (shown ? '' : ' off')}
+                        key={id}
+                        data-activity={id}
+                        data-slot={activitySlot(id)}
+                      >
+                        <span className="acr-name">
+                          {t(ACTIVITY_TITLE_KEY[id])}
+                          {whereKey && <span className="acr-where"> · {t(whereKey)}</span>}
+                        </span>
                         <button
                           type="button"
                           className="acr-move"

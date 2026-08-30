@@ -22,5 +22,14 @@ export const LICENSES: FontLicense[] = [
     name: 'Pretendard',
     copyright: 'Copyright (c) 2021, Kil Hyung-jin',
     source: 'orioncactus/pretendard'
+  },
+  // FINISH-M6(2026-08-30): FINISH-M4 가 심볼 폰트를 번들에 실으면서(styles/fonts.css 의
+  // 'ARA Nerd Font Symbols' @font-face + resources/fonts/OFL-SymbolsNerdFontMono.txt) 이 표만
+  // 넷에 멈춰 있었다 — 화면의 고지가 실제 배포물보다 낡으면 그건 법적 고지가 아니라 장식이다.
+  // tests/fontLicenses.test.ts 가 resources/fonts/OFL-*.txt 와 이 표를 맞춰 다시 벌어지지 않게 한다.
+  {
+    name: 'Symbols Nerd Font Mono',
+    copyright: 'Copyright (c) 2014, Ryan L McIntyre',
+    source: 'ryanoasis/nerd-fonts'
   }
 ]

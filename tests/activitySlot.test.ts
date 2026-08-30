@@ -1,20 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { ACTIVITY_ITEMS, BOTTOM_IDS, RAIL_IDS, isBottomId, isRailId, type ActivityId } from '../src/shared/types'
+import { ACTIVITY_ITEMS, BOTTOM_IDS, RAIL_IDS, isBottomId, isRailId } from '../src/shared/types'
+import { activitySlot, activityWhereKey } from '../src/renderer/store/activityBar'
 
 // #87 ①(2026-08-16) — 액티비티 항목이 **어디에 열리는가**.
 //
 // 준영님이 처음 지적하신 "이 버튼을 눌렀는데 왜 다른 창이 켜지지?"의 마지막 잔재였다:
-// 아이콘 열넷 중 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 눌러 봐야 알았다.
+// 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 눌러 봐야 알았다.
 //
-// 화면(ActivityBar)은 이 판정을 **배치의 단일 출처**(RAIL_IDS/BOTTOM_IDS)에서 파생한다.
-// 여기서 지키는 것은 그 파생이 성립한다는 것 — 두 목록이 겹치거나 어느 항목이 어디에도 없으면
+// 화면(ActivityBar 툴팁 · 설정 [우측 아이콘 바] 목록)은 이 판정을 **배치의 단일 출처**
+// (RAIL_IDS/BOTTOM_IDS)에서 파생한다. 두 목록이 겹치거나 어느 항목이 어디에도 없으면
 // 툴팁이 거짓말을 하거나 구분선이 엉뚱한 자리에 생긴다.
 //
-// (activitySlot 자체는 ActivityBar.tsx 에 있고 TSX 라 여기서 import 하지 않는다 — 같은 규칙을
-//  타입 수준에서 지키는 것이 목적이고, 실제 툴팁·구분선은 e2e 가 화면에서 본다.)
+// FINISH-M6(2026-08-30): 전에는 `activitySlot` 이 ActivityBar.tsx 에 있어 여기서 못 불렀고,
+// 그래서 이 파일이 **같은 규칙을 한 벌 더 적어** 두고 있었다(그 사본이 진짜와 어긋나도 초록이었다).
+// 규칙을 store/activityBar.ts 로 내리면서 진짜를 부른다.
 
-const slotOf = (id: ActivityId): 'bottom' | 'rail' | 'window' =>
-  isBottomId(id) ? 'bottom' : isRailId(id) ? 'rail' : 'window'
+const slotOf = activitySlot
 
 describe('배치 슬롯 — 모든 항목이 정확히 한 자리에 속한다', () => {
   it('★ 아래와 오른쪽이 겹치지 않는다 — 겹치면 툴팁이 둘 중 아무 말이나 한다', () => {
@@ -40,5 +41,38 @@ describe('배치 슬롯 — 모든 항목이 정확히 한 자리에 속한다',
     expect([...BOTTOM_IDS].sort()).toEqual(['applog', 'ctr', 'disk', 'k8s', 'log', 'monitor', 'pkg', 'ps', 'svc', 'sys'])
     // #132(2026-08-25): aisess 를 뺐다 — 목록은 사이드바 [AI] 로 갔고 감시는 화면 없이 돈다.
     expect([...RAIL_IDS].sort()).toEqual(['ai', 'pastlog', 'preview'])
+  })
+})
+
+/**
+ * FINISH-M6(2026-08-30) — 준영님 제보: *"설정에서 우측 사이드바 설정하는데 하단 바로 간 기능들도
+ * 우측 사이드바 순서에 포함되어서."*
+ *
+ * 설정 [우측 아이콘 바] 목록이 **이름만** 보여 줘서 [프로세스](하단바 탭)와 [대화](우측 레일)가
+ * 구분 없이 나란히 서 있었다. 그 목록은 이제 툴팁과 **같은 꼬리표**를 쓴다 — 그러니 여기서
+ * 지킬 것은 "꼬리표가 붙는 항목"과 "안 붙는 항목"이 갈리는 규칙 하나다.
+ */
+describe('어디에 열림 꼬리표(activityWhereKey)', () => {
+  it('★ 하단 항목은 [아래에 열림] 을 받는다 — 이 꼬리표가 없어서 목록이 거짓으로 읽혔다', () => {
+    for (const id of BOTTOM_IDS) expect(activityWhereKey(id), id).toBe('activity.where.bottom')
+  })
+
+  it('레일 항목은 [오른쪽에 열림]', () => {
+    for (const id of RAIL_IDS) expect(activityWhereKey(id), id).toBe('activity.where.rail')
+  })
+
+  // 오버레이는 그 자체가 목적지라 "어디에 열리는지"를 말할 것이 없다(툴팁도 같은 규칙).
+  it('설정·명령어 북은 꼬리표가 없다 / 작업대는 [창으로 열림]', () => {
+    expect(activityWhereKey('settings')).toBeNull()
+    expect(activityWhereKey('cmdbook')).toBeNull()
+    expect(activityWhereKey('explorer')).toBe('activity.where.window')
+  })
+
+  it('★ 꼬리표 키는 전부 ko.json 에 있다 — 없으면 화면에 키 문자열이 그대로 찍힌다', async () => {
+    const ko = (await import('../src/renderer/i18n/ko.json')).default as Record<string, string>
+    for (const id of ACTIVITY_ITEMS) {
+      const key = activityWhereKey(id)
+      if (key) expect(ko[key], `${id} → ${key}`).toBeTruthy()
+    }
   })
 })

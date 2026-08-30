@@ -991,7 +991,10 @@ const checks = []
   checks.push(['폰트 리스트 3종 렌더', f5.fontItems === 3])
   checks.push(['실사용 한글 미리보기(알파벳 아님)', f5.koreanPreview === true])
   checks.push(['미리보기 라인 6줄', f5.previewLines === 6])
-  checks.push(['OFL 라이선스 고지 4종', f5.licenseRows === 4])
+  // FINISH-M6(2026-08-30): 4 → 5. FINISH-M4 가 심볼 폰트를 번들에 실었는데 고지 표는 넷에 멈춰
+  // 있었다(그 폰트만 고지 없이 나갈 뻔했다). **이 숫자는 이제 부차적이다** — 표와 실제 배포물
+  // (resources/fonts/OFL-*.txt)이 어긋나면 tests/fontLicenses.test.ts 가 먼저 잡는다.
+  checks.push(['OFL 라이선스 고지 5종', f5.licenseRows === 5])
   checks.push(['크기 슬라이더 10–20px', f5.sizeMin === '10' && f5.sizeMax === '20'])
   checks.push(['폰트 전환 → --term 반영(D2Coding)', /D2Coding/.test(f5.termVarAfterPick)])
   checks.push(['크기 변경 → --tt 바인딩(18px)', f5.ttVarAfterSize === '18px'])

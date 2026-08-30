@@ -1,6 +1,12 @@
 import { Activity, BookOpen, Boxes, Gauge, HardDrive, History, Package, PanelBottom, ScrollText, Server, Ship } from 'lucide-react'
-import { isActivityOpen, type ActivityId, type ActivityOpenState } from '../store/activityBar'
-import { isBottomId, isRailId } from '@shared/types'
+import {
+  activitySlot,
+  activityWhereKey,
+  isActivityOpen,
+  type ActivityId,
+  type ActivityOpenState
+} from '../store/activityBar'
+import { isBottomId } from '@shared/types'
 import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
 import { KEYMAP, type KeymapAction } from '../../shared/keymap'
@@ -55,29 +61,13 @@ const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
 
 const isMac = navigator.userAgent.includes('Mac')
 
-/**
- * #87 ①(2026-08-16): 이 항목이 **어디에 열리는가**.
- *
- * 준영님이 처음 지적하신 "이 버튼을 눌렀는데 왜 다른 창이 켜지지?"의 마지막 잔재였다 —
- * 아이콘 열넷 중 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 **눌러 봐야 알았다.**
- * #83 에서 규칙(아래=서버 것 / 오른쪽=아라 것)을 정했으니 바에도 그 구획이 보여야 한다.
- * 판정은 배치의 단일 출처(RAIL_IDS/BOTTOM_IDS)에서 파생한다 — 여기 목록을 또 만들지 않는다.
- */
-export type ActivitySlot = 'bottom' | 'rail' | 'window'
-export function activitySlot(id: ActivityId): ActivitySlot {
-  if (isBottomId(id)) return 'bottom'
-  if (isRailId(id)) return 'rail'
-  return 'window' // 작업대 창 · 설정 드로어
-}
-
-/** 툴팁 — 이름 + 어디에 열리는지 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록은 이름만 쓴다. */
+/** 툴팁 — 이름 + 어디에 열리는지 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록도 같은 꼬리표를 쓴다. */
 export function activityTip(id: ActivityId): string {
   const name = t(ACTIVITY_TITLE_KEY[id])
   const action = ACTIVITY_KEY[id]
   const b = action ? KEYMAP.find((k) => k.action === action) : undefined
-  // 설정은 어디에 열리는지 말할 것이 없다(드로어는 그 자체가 목적지다).
-  // 설정·명령어 북은 어디에 열리는지 말할 것이 없다(오버레이 그 자체가 목적지다).
-  const where = id === 'settings' || id === 'cmdbook' ? '' : ` · ${t('activity.where.' + activitySlot(id))}`
+  const key = activityWhereKey(id)
+  const where = key ? ` · ${t(key)}` : ''
   return b ? `${name}${where} (${isMac ? b.mac : b.win})` : `${name}${where}`
 }
 
