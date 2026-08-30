@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { cmdExeArgs } from '../src/main/ai/engine/ClaudeCliEngine'
 import { createMcpServer, hashToken, issueRawToken, MCP_TOKEN_VAULT_KEY, type TokenVault } from '../src/main/mcp/McpServer'
 import { McpApprovalManager, type ApprovalEmit } from '../src/main/mcp/approval'
 import { createAuditLog } from '../src/main/mcp/auditLog'
@@ -93,24 +94,25 @@ describe('실증 — 로컬 Claude Code(구독 로그인)가 아라 MCP 도구�
         'utf8'
       )
 
-      // Windows 에서 `claude` 는 .cmd 셸 스크립트라 shell:true 가 필요하고, 그러면 인자 배열이
-      // 아니라 **한 줄 명령**으로 넘겨야 한글·공백이 안 잘린다(첫 시도에서 프롬프트가 "지금" 한
-      // 글자로 잘렸다). stdin 은 닫는다 — 안 그러면 3초를 기다렸다가 경고를 낸다.
+      // 인용은 **제품과 같은 인코더**를 쓴다(#156). 여기 값은 전부 리터럴이라 위험은 없었지만,
+      // 옛 코드(한 줄로 붙여 셸에 넘기기)는 #152 가 고친 **깨진 인용 패턴의 사본**이었다 —
+      // 다음 사람이 이걸 보고 복사하면 그 버그가 돌아온다. 경로도 손대지 않고 그대로 넘긴다
+      // (제품이 `--mcp-config` 에 넘기는 값과 같은 모양이다 — 옛 코드의 `/` 치환은 인용이
+      // 깨져서 필요했던 우회다). stdin 은 닫는다 — 안 그러면 3초를 기다렸다가 경고를 낸다.
       const prompt = 'ara MCP 서버의 session_list 도구를 호출해서 열려 있는 세션의 id 를 그대로 한 줄로만 답해라.'
-      const cmd = [
-        'claude',
-        '-p',
-        `"${prompt}"`,
-        '--mcp-config',
-        `"${cfg.replaceAll('\\', '/')}"`,
-        '--allowedTools',
-        'mcp__ara__session_list',
-        '--output-format',
-        'json'
-      ].join(' ')
+      const args = ['-p', prompt, '--mcp-config', cfg, '--allowedTools', 'mcp__ara__session_list', '--output-format', 'json']
 
       const out = await new Promise<string>((resolve, reject) => {
-        const p = spawn(cmd, { cwd: dir, shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
+        // stdio 를 상수로 빼면 `as const` 가 readonly 튜플이 되어 spawn 의 오버로드가 전부 떨어진다
+        // (`p.stdout` 이 never 가 된다) — 양쪽에 그대로 적는다.
+        const p =
+          process.platform === 'win32'
+            ? spawn(process.env.ComSpec || 'cmd.exe', cmdExeArgs('claude', args), {
+                cwd: dir,
+                windowsVerbatimArguments: true,
+                stdio: ['ignore', 'pipe', 'pipe']
+              })
+            : spawn('claude', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] })
         let buf = ''
         p.stdout.on('data', (d) => (buf += d))
         p.stderr.on('data', (d) => (buf += d))
