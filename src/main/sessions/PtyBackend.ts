@@ -101,9 +101,16 @@ export async function drainKilledPtys(): Promise<void> {
 export class PtyBackend implements SessionBackend {
   private readonly pty: IPty
 
-  constructor(spec: SessionSpec) {
+  /**
+   * paneId(= 세션 id)는 **훅이 어느 탭인지 말하게 하는 값**이다(F1a). 셸 env 에 넣어 두면
+   * 사용자가 직접 친 `claude` 도 그 셸의 자식이라 물려받는다 — 우리가 띄운 것만 아는 것이 아니라
+   * **그 탭에서 도는 것을 안다**(docs/orca-analysis.md §3). 포트(`ARA_HOOK_PORT`)는 세션마다 같은
+   * 값이라 main 의 process.env 에 한 번만 심고 여기서 그대로 물려받는다.
+   */
+  constructor(spec: SessionSpec, paneId?: string) {
     const { file, args: baseArgs, kind } = resolveShell(spec)
-    const { args, env } = withShellIntegration(kind, baseArgs, process.env as Record<string, string>)
+    const base = { ...(process.env as Record<string, string>), ...(paneId ? { ARA_PANE: paneId } : {}) }
+    const { args, env } = withShellIntegration(kind, baseArgs, base)
     const win = process.platform === 'win32'
     // Windows conpty 종료 경로 안정화: useConptyDll=true 는 kill() 시 node-pty 가
     // conpty_console_list_agent 를 child_process.fork 하지 않는다. 그 fork 는 AttachConsole(pid)
@@ -128,7 +135,7 @@ export class PtyBackend implements SessionBackend {
           cols: 80,
           rows: 24,
           cwd: spec.cwd || process.cwd(),
-          env: process.env as Record<string, string>,
+          env: base,
           ...winOpts
         })
       } else {

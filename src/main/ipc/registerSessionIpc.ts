@@ -58,8 +58,6 @@ export function registerSessionIpc(
     return { ok: true } as const
   })
   handle('session:list', () => mgr.snapshot())
-  // F30: 조용한 AI 세션 판정용. 화면에 안 보이는 탭은 renderer 로 데이터가 안 나가므로 여기서 센다.
-  handle('session:activity', () => mgr.activity())
   handle('session:rename', ({ id, title }) => {
     mgr.rename(id, title)
     return { ok: true } as const

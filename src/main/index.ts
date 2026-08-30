@@ -29,6 +29,7 @@ import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerVoiceIpc } from './ipc/registerVoiceIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
+import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { clearStaleSelfToken } from './ai/engine/araMcp'
@@ -83,6 +84,8 @@ let ara: AraSession | null = null
 // W4 F23: MCP 서버 + 승인 매니저. **기본 켜짐**(2026-08-26) — 아라가 우리 도구를 쓰는 길이
 // 이것뿐이라 꺼진 채로 시작하면 아라가 반쪽이 된다. 설정 [MCP]에서 끌 수는 있다(확인을 받는다).
 let mcp: McpRuntime | null = null
+// F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
+let agent: AgentRuntime | null = null
 let araChat: AraRuntime | null = null
 let mainWindow: BrowserWindow | null = null
 
@@ -131,7 +134,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const userData = app.getPath('userData')
   store = new WorkspaceStore(join(userData, 'workspace.json'), app.getVersion())
   history = new HistoryStore(join(userData, 'history.json'))
@@ -197,6 +200,7 @@ app.whenReady().then(() => {
     (id) => {
       forwards?.stopSession(id)
       mcp?.approval.forget(id) // S3: 세션 종료 시 승인 매니저의 유령 항목도 같이 지운다(GAP #6).
+      agent?.server.forget(id) // F1a: 그 탭의 에이전트 상태도 지운다 — 죽은 세션의 상태가 곧 유령이다.
       // 커넥션이 없으면 저장할 길이 없다 — 그 세션으로 연 편집기 창도 함께 닫는다.
       closeEditorsForSession(id)
     },
@@ -365,6 +369,19 @@ app.whenReady().then(() => {
     store
   )
   registerWindowIpc(() => mainWindow)
+  /**
+   * F1a 훅 기반 에이전트 상태 — **창을 만들기 전에** 포트를 잡는다.
+   *
+   * 순서가 이유의 전부다: 포트는 `ARA_HOOK_PORT` 로 셸에 물려주는 값이라, 세션이 하나라도 먼저
+   * 뜨면 그 탭의 `claude` 는 갈 곳을 모른 채 돌게 된다(그 탭만 영영 `unverifiable` 이다).
+   * 리슨에 실패해도 앱은 그대로 뜬다 — 상태 표시가 부팅을 막을 이유가 없다.
+   */
+  // ⚠️ e2e 는 **진짜 홈을 건드리지 않는다.** 이 기능은 사용자 PC 의 `~/.claude/settings.json` 을
+  // 고치는 일이라, 검사가 그걸 그대로 하면 준영님 Claude Code 설정이 테스트 부산물로 바뀐다
+  // (fixtures.ts 의 sandboxUserPaths 와 같은 규율 — 그쪽은 휴지통·다운로드를 임시 userData 로 돌린다).
+  const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
+  agent = registerAgentIpc(hookHome, () => mainWc())
+  await agent.start().catch((e: unknown) => logMainError('agent hook server', e))
   createWindow()
 
   app.on('activate', () => {
@@ -438,6 +455,8 @@ app.on('before-quit', (e) => {
   // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
   // 가능해야 한다(좀비 리스너 없음).
   quitStep('mcp', () => void mcp?.server.stop())
+  // F1a: 훅 리스너도 접는다(MCP 와 같은 이유 — 좀비 리스너 금지).
+  quitStep('agentHooks', () => void agent?.server.stop())
   // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.
   // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).

@@ -38,12 +38,6 @@ type Handle = {
   // attach 전 출력은 링버퍼에만 쌓고 내보내지 않는다. 구독자가 없는 시점의 출력(adopt 직후·부트 복원 중)이
   // 유실되던 경로를 없앤다 — renderer 는 xterm 을 만든 뒤 attach 로 한 번에 받아 간다.
   attached: boolean
-  // F30: 이 세션에서 마지막으로 출력이 온 시각(epoch ms). "AI 가 조용하다"의 유일한 근거다.
-  //
-  // 왜 main 이 들고 있나: 화면에 안 보이는 탭은 attached 가 false 라 renderer 로 데이터가 안 나간다
-  // (flush 의 `if (h.attached)`). 그런데 **조용한지 알고 싶은 건 정확히 그 안 보이는 탭들**이다.
-  // 그래서 renderer 가 셀 수 없고 여기서 세야 한다.
-  lastDataAt: number
 }
 
 // F12 세션 로그 tee. main/index.ts 가 늦게 주입한다(로거는 userData 경로를 알아야 만들 수 있다).
@@ -62,9 +56,11 @@ export class MainSessionManager implements ISessionManager {
 
   async create(spec: SessionSpec): Promise<string> {
     // 로컬만 여기서 스폰. SSH는 연결(호스트키·vault)을 IPC 레이어가 처리 후 adopt()로 넘긴다.
-    const backend = new PtyBackend(spec)
+    // id 를 먼저 만든다 — 셸 env 에 그 값을 넣어야 훅이 "어느 탭인지" 말할 수 있다(F1a).
+    const id = randomUUID()
+    const backend = new PtyBackend(spec, id)
     const meta: Session = {
-      id: randomUUID(),
+      id,
       type: spec.type,
       shell: spec.shell,
       profileId: spec.profileId ?? null,
@@ -98,9 +94,7 @@ export class MainSessionManager implements ISessionManager {
       paused: false,
       backlog: [],
       backlogBytes: 0,
-      attached: false,
-      // 방금 만들었으니 그 시각부터 센다 — 0 으로 두면 "1970년부터 조용함"이 된다.
-      lastDataAt: Date.now()
+      attached: false
     }
     this.handles.set(id, h)
     backend.onData((data) => this.enqueue(id, data))
@@ -133,7 +127,6 @@ export class MainSessionManager implements ISessionManager {
       h.meta.cwd = cwd
       this.sink.cwd(id, cwd)
     }
-    h.lastDataAt = Date.now()
     const bytes = Buffer.from(data, 'utf8')
     h.buf.push(bytes)
     h.bufBytes += bytes.length
@@ -295,14 +288,6 @@ export class MainSessionManager implements ISessionManager {
   /** 그 창의 세션들 — 창이 닫힐 때 본창으로 되돌리려면 목록이 필요하다. */
   sessionsOfWindow(winId: string): string[] {
     return [...this.handles.values()].filter((h) => h.meta.winId === winId).map((h) => h.meta.id)
-  }
-
-  /**
-   * F30: 세션별 마지막 출력 시각. **snapshot() 에 얹지 않는 이유** — 그쪽은 workspace.json 으로
-   * 영속되는 타입이라, 매 출력마다 바뀌는 값을 넣으면 스냅샷이 늘 더럽고 복원 때 낡은 시각이 딸려온다.
-   */
-  activity(): { id: string; lastDataAt: number }[] {
-    return [...this.handles.entries()].map(([id, h]) => ({ id, lastDataAt: h.lastDataAt }))
   }
 
   // F7: 세션의 ssh2 커넥션 반환(SFTP 서브시스템 재사용용). 로컬/미존재 세션은 null.

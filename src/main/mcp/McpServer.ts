@@ -33,8 +33,8 @@ export function hashToken(token: string): string {
 }
 
 // 상수시간 비교(타이밍 공격 방어). 해시는 항상 64 hex 문자라 길이 분기 자체가 원문 토큰에 대한 정보를
-// 새지 않는다.
-function safeEqualHex(a: string, b: string): boolean {
+// 새지 않는다. F1a 훅 서버도 이걸 쓴다 — 토큰 비교 방식이 두 벌로 갈리면 한쪽만 약해진다.
+export function safeEqualHex(a: string, b: string): boolean {
   const ab = Buffer.from(a, 'hex')
   const bb = Buffer.from(b, 'hex')
   return ab.length === bb.length && timingSafeEqual(ab, bb)

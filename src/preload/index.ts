@@ -15,6 +15,7 @@ import type {
   RemoteData,
   UpdateState
 } from '@shared/ipc'
+import type { AgentStatus } from '@shared/agentStatus'
 import type { LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
 import type { PastLog } from '@shared/ipc'
@@ -250,7 +251,6 @@ const api: EvApi = {
     resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('session:resize', { id, cols, rows }),
     destroy: (id: string) => ipcRenderer.invoke('session:destroy', { id }),
     list: (): Promise<Session[]> => ipcRenderer.invoke('session:list'),
-    activity: () => ipcRenderer.invoke('session:activity'),
     rename: (id: string, title: string) => ipcRenderer.invoke('session:rename', { id, title }),
     autoTitle: (id: string, title: string) => ipcRenderer.invoke('session:autoTitle', { id, title }),
     attach: (id: string) => ipcRenderer.invoke('session:attach', { id }),
@@ -375,6 +375,15 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, ev: AraChatEvent) => cb(ev)
       ipcRenderer.on('ara:event', listener)
       return () => ipcRenderer.removeListener('ara:event', listener)
+    }
+  },
+  // F1a 에이전트 상태 — 훅이 말해 준 것을 받아만 본다(쓰는 함수가 없다는 것이 계약이다).
+  agent: {
+    state: () => ipcRenderer.invoke('agent:state'),
+    onStatus: (cb: (s: AgentStatus) => void) => {
+      const listener = (_e: IpcRendererEvent, s: AgentStatus) => cb(s)
+      ipcRenderer.on('agent:status', listener)
+      return () => ipcRenderer.removeListener('agent:status', listener)
     }
   },
   mcp: {

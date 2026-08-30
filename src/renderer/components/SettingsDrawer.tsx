@@ -22,6 +22,7 @@ import {
   type UiPrefs
 } from '@shared/types'
 import type { UpdateState } from '@shared/ipc'
+import type { AgentHookState } from '@shared/agentStatus'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
 import { WAKE_WORDS } from '@shared/voice'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
@@ -92,15 +93,24 @@ function Seg<T extends string>({
   value,
   options,
   onChange,
-  labelKey
+  labelKey,
+  field
 }: {
   value: T
   options: readonly T[]
   onChange: (v: T) => void
   labelKey: (v: T) => string
+  /**
+   * 이 세그먼트가 무엇을 고르는지(입력칸의 `data-field` 와 같은 규칙 — 스모크가 이걸로 집는다).
+   *
+   * 왜 필요한가: `.seg-ctl` 만 보고 집으면 **같은 섹션에 세그먼트가 하나 더 생기는 날** 조용히
+   * 엉뚱한 것을 센다. [AI] 섹션에서 실제로 그랬다 — AI CLI 고르기 세그먼트가 프로바이더 검사에
+   * 섞여 들어갔다(#150).
+   */
+  field?: string
 }) {
   return (
-    <div className="seg-ctl">
+    <div className="seg-ctl" data-field={field}>
       {options.map((o) => (
         <button type="button" key={o} className={value === o ? 'on' : ''} onClick={() => onChange(o)} data-value={o}>
           {t(labelKey(o))}
@@ -495,7 +505,13 @@ function AiSection({
         />
       </Row>
       <Row label={t('settings.ai.provider')} desc={t('settings.ai.provider.desc')}>
-        <Seg value={provider} options={AI_PROVIDERS} onChange={(v) => void switchProvider(v)} labelKey={(v) => 'settings.ai.provider.' + v} />
+        <Seg
+          value={provider}
+          options={AI_PROVIDERS}
+          onChange={(v) => void switchProvider(v)}
+          labelKey={(v) => 'settings.ai.provider.' + v}
+          field="ai.provider"
+        />
       </Row>
 
       {provider === 'compatible' && (
@@ -567,6 +583,7 @@ function AiSection({
         {t('settings.ai.cliSec')}
       </div>
       <div className="set-sec-d">{t('settings.ai.cliSec.desc')}</div>
+      <AgentHookRow />
       <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       {/* 이 문장은 장식이 아니다 — 사내 배포에서 데이터 반출 고지가 화면에 없으면 안 된다(설계 §4.7).
           W5: 선택된 프로바이더 이름·호스트가 들어가게 갱신 — "Anthropic API로 전송됩니다" 고정 문구는
@@ -576,6 +593,33 @@ function AiSection({
         {AI_PROVIDER_LABELS[provider]} API({host}){t('settings.ai.note.suffix')}
       </div>
     </>
+  )
+}
+
+/**
+ * F1a 에이전트 상태 훅 — **심겼나, 안 심겼으면 왜.**
+ *
+ * 이 줄이 필요한 이유: 훅이 없으면 AI 세션 상태가 전부 "모름"으로 남는데, 그게 **버그처럼 보인다.**
+ * 실패는 대개 사람이 고칠 것(깨진 `settings.json`·쓰기 권한)이라 사유를 그대로 보여 준다.
+ * 다시 심는 버튼은 두지 않는다 — 설치는 기동 때 한 번이고, 고친 뒤 앱을 다시 켜면 된다.
+ */
+function AgentHookRow() {
+  const [state, setState] = useState<AgentHookState | null>(null)
+  useEffect(() => {
+    void window.ev?.agent
+      .state()
+      .then(setState)
+      .catch(() => {})
+  }, [])
+  if (!state) return null
+  return (
+    <Row label={t('settings.ai.hook')} desc={t('settings.ai.hook.desc')}>
+      <span className="v" data-field="ai.hook">
+        {state.install.ok
+          ? `${t('settings.ai.hook.on')} · 127.0.0.1:${state.port}`
+          : `${t('settings.ai.hook.off')} — ${state.install.message}`}
+      </span>
+    </Row>
   )
 }
 

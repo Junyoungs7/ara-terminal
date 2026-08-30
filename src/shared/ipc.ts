@@ -29,6 +29,7 @@ import type {
   McpActivity,
   WorkProfile
 } from './types'
+import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -163,9 +164,14 @@ export type InvokeContract = {
   'session:resize': { req: { id: string; cols: number; rows: number }; res: { ok: true } }
   'session:destroy': { req: { id: string }; res: { ok: true } }
   'session:list': { req: void; res: Session[] }
-  // F30 AI 세션 패널: 세션별 마지막 출력 시각. session:list 와 나눈 이유는 그쪽이 workspace.json 으로
-  // 영속되는 타입이기 때문이다(매 출력마다 바뀌는 값을 넣으면 스냅샷이 늘 더럽다).
-  'session:activity': { req: void; res: { id: string; lastDataAt: number }[] }
+  /**
+   * F1a 에이전트 상태 — 훅 서버 포트·설치 결과·지금까지 들은 상태.
+   *
+   * ⚠️ **`session:activity`(세션별 마지막 출력 시각)를 대체한다.** 그 채널은 "60초 조용하면
+   * 기다리는 중"이라는 추론의 유일한 입력이었고, F1a 에서 그 판정을 걷어내며 함께 지웠다 —
+   * 데이터를 남겨 두면 다음 사람이 같은 추론을 다시 만든다(docs/orca-analysis.md §3).
+   */
+  'agent:state': { req: void; res: AgentHookState }
   // 탭 이름 변경(R2.1). main 의 meta.title 이 진실이라(persist 가 session:list 를 저장한다)
   // 여기서 갱신해야 재시작 후에도 이름이 남는다.
   'session:rename': { req: { id: string; title: string }; res: { ok: true } }
@@ -739,8 +745,6 @@ export type EvApi = {
     resize(id: string, cols: number, rows: number): Promise<{ ok: true }>
     destroy(id: string): Promise<{ ok: true }>
     list(): Promise<Session[]>
-    /** F30: 세션별 마지막 출력 시각(epoch ms) — "조용한 AI" 판정의 유일한 근거. */
-    activity(): Promise<{ id: string; lastDataAt: number }[]>
     rename(id: string, title: string): Promise<{ ok: true }>
     autoTitle(id: string, title: string): Promise<{ applied: boolean }>
     // onData 구독 직후 호출 — 지금까지의 출력(backlog)을 받고 그 다음부터 라이브 이벤트가 온다.
@@ -772,6 +776,14 @@ export type EvApi = {
   history: {
     load(scope: string): Promise<string[]>
     append(scope: string, command: string): Promise<{ ok: true }>
+  }
+  /**
+   * F1a 에이전트 상태 — **CLI 가 훅으로 말해 준 것**. 화면은 받아 그릴 뿐 만들지 않는다.
+   * 쓰는 함수가 없다는 것이 계약이다: 렌더러가 상태를 주장할 길이 표면에 존재하지 않는다.
+   */
+  agent: {
+    state(): Promise<AgentHookState>
+    onStatus(cb: (s: AgentStatus) => void): () => void
   }
   // W4 F23 MCP 조종 모드. **getToken 이 없다는 것이 계약이다** — issueToken 응답에만 원문이 존재.
   mcp: {
