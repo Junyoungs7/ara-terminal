@@ -12,7 +12,11 @@ import {
   userMessageLine,
   type AiEngineEvent
 } from '../src/shared/aiEngine'
-import { createClaudeEngine, quoteArg, type EngineProc } from '../src/main/ai/engine/ClaudeCliEngine'
+import { cmdExeArgs, createClaudeEngine, encodeWinArg, type EngineProc } from '../src/main/ai/engine/ClaudeCliEngine'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // ── 파서 ─────────────────────────────────────────────────────────────────────
 
@@ -130,10 +134,92 @@ describe('명령줄 조립', () => {
     expect(buildClaudeArgs({ sessionId: 's2' })).toContain('--session-id')
   })
 
-  it('윈도우 인용 — 공백이 든 경로만 감싼다', () => {
-    expect(quoteArg('--verbose')).toBe('--verbose')
-    expect(quoteArg('C:\\tmp\\ara.json')).toBe('C:\\tmp\\ara.json')
-    expect(quoteArg('C:\\my tmp\\ara.json')).toBe('"C:\\my tmp\\ara.json"')
+})
+
+// ── 윈도우 명령줄(#152) ──────────────────────────────────────────────────────
+// `.cmd` 셔임은 cmd.exe 를 지나야 뜨고, 그러면 **한 줄을 파서 둘이 읽는다**(cmd → CommandLineToArgvW).
+// 옛 인코딩(`\"`)은 CRT 만 만족시켜서 cmd 의 따옴표 짝을 뒤집었고, 그 뒤의 `&` 가 인자를 잘랐다.
+
+describe('윈도우 인자 인코딩', () => {
+  it('★ 내장 따옴표는 `""`, `%` 는 인용 밖 `"^%"` — cmd 와 CRT 를 동시에 만족시킨다', () => {
+    expect(encodeWinArg('--verbose')).toBe('"--verbose"')
+    expect(encodeWinArg('C:\\my tmp\\ara.json')).toBe('"C:\\my tmp\\ara.json"')
+    // `\"` 를 쓰면 cmd 가 따옴표를 하나 더 세고, 그때부터 짝이 뒤집힌다.
+    expect(encodeWinArg('c"d')).toBe('"c""d"')
+    // 캐럿은 인용 안에서 이스케이프가 아니라 글자다 — `%` 만 인용 밖으로 낸다.
+    expect(encodeWinArg('e%F%g')).toBe('"e"^%"F"^%"g"')
+    // 닫는 따옴표 앞 백슬래시는 두 배로(안 그러면 그 백슬래시가 따옴표를 먹는다).
+    expect(encodeWinArg('C:\\tmp\\')).toBe('"C:\\tmp\\\\"')
+    expect(encodeWinArg('C:\\U\\%N%\\')).toBe('"C:\\U\\\\"^%"N"^%"\\\\"')
+    expect(encodeWinArg('')).toBe('""')
+  })
+
+  it('★ CR/LF·NUL 은 인코딩하지 않고 거부한다 — cmd 는 개행에서 명령을 끝낸다(이스케이프가 없다)', () => {
+    for (const bad of ['질문\n두 줄', 'a\r\nb', 'a\0b']) expect(() => encodeWinArg(bad), bad).toThrow()
+    // 셸 메타문자는 거부가 아니라 통과다 — 윈도우 계정 이름에 들어갈 수 있는 글자다.
+    expect(() => encodeWinArg('C:\\Users\\R&D\\ara.json')).not.toThrow()
+  })
+
+  it('cmd 플래그를 우리가 고른다 — /d AutoRun 무시 · /v:off 지연확장 · /s 한 겹만 벗김', () => {
+    expect(cmdExeArgs('claude', ['-p'])).toEqual(['/d', '/v:off', '/s', '/c', '"claude "-p""'])
+    // ★ 실행 파일 이름은 인용하지 않는다 — 인용하면 셔임의 `%~dp0` 가 현재 폴더로 펴져
+    //    `claude.exe` 를 못 찾는다(2026-08-30 실측). 위험한 글자가 있을 때만 인코딩한다.
+    expect(cmdExeArgs('C:\\bin\\claude.cmd', [])[4]).toBe('"C:\\bin\\claude.cmd"')
+    expect(cmdExeArgs('C:\\my bin\\claude.cmd', [])[4]).toBe('""C:\\my bin\\claude.cmd""')
+  })
+
+  // 문자열 비교로는 못 잡는다 — 두 파서를 다 지나 봐야 안다(후보 인코딩 하나가 여기서 떨어졌다).
+  it.skipIf(process.platform !== 'win32')('★ 진짜 .cmd 셔임을 지나도 인자가 그대로 도착한다(실측)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ara-cmdline-'))
+    try {
+      writeFileSync(join(dir, 'printargs.js'), 'console.log(JSON.stringify(process.argv.slice(2)))\n')
+      // npm 셔임과 같은 자리: `%*` 를 배치가 한 번 더 파싱한다.
+      writeFileSync(join(dir, 'shim.cmd'), '@ECHO off\r\nnode "%~dp0printargs.js" %*\r\n')
+      const vector = ['a b', 'c"d', 'e%F%g', 'h&i', 'j^k', 'C:\\U\\%ARA_TEST_VAR%\\ara.json', 'C:\\tmp\\']
+      const r = spawnSync(process.env.ComSpec || 'cmd.exe', cmdExeArgs(join(dir, 'shim.cmd'), vector), {
+        // 셔임 폴더가 아닌 곳에서 띄운다 — 실행 파일 이름을 인용하면 `%~dp0` 가 여기로 펴져
+        // printargs.js 를 못 찾는다(셔임이 자기 옆의 파일을 찾는 그 자리다).
+        cwd: process.cwd(),
+        windowsVerbatimArguments: true,
+        encoding: 'utf8',
+        env: { ...process.env, ARA_TEST_VAR: 'EXPANDED' }
+      })
+      // 옛 코드에서는 `&` 가 인자를 자르고 `i" "jk"` 를 명령으로 실행했다(2026-08-30 실측).
+      expect(JSON.parse(r.stdout || 'null')).toEqual(vector)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  // 인코더가 맞아도 **프로세스가 안 뜨면** 소용없다 — 여기만 realSpawn 을 진짜로 지난다
+  // (다른 검사는 전부 spawnProc 를 끼워 넣는다).
+  it.skipIf(process.platform !== 'win32')('★ 셔임으로 띄운 엔진이 실제로 붙는다 — 플래그가 그대로 도착한다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ara-engine-'))
+    try {
+      // 받은 argv 를 tools 로 되돌려 주는 가짜 CLI. 진짜 CLI 는 한 줄도 부르지 않는다.
+      writeFileSync(
+        join(dir, 'fake-cli.js'),
+        'console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "s1", tools: process.argv.slice(2) }))\n'
+      )
+      writeFileSync(join(dir, 'shim.cmd'), '@ECHO off\r\nnode "%~dp0fake-cli.js" %*\r\n')
+      const seen: AiEngineEvent[] = []
+      // 공백·`&`·`%` 를 한꺼번에 — 윈도우 계정 이름에 실제로 들어갈 수 있는 모양이다.
+      const cfg = 'C:\\my tmp\\R&D %ARA_TEST_VAR%\\ara.json'
+      const e = createClaudeEngine({ cwd: process.cwd(), bin: join(dir, 'shim.cmd'), mcpConfigPath: cfg })
+      await new Promise<void>((done) => {
+        e.onEvent((ev) => {
+          seen.push(ev)
+          if (ev.t === 'exit') done()
+        })
+      })
+      e.dispose()
+      const ready = seen.find((x) => x.t === 'ready')
+      expect(ready?.t === 'ready' && ready.sessionId).toBe('s1')
+      // 우리가 만든 플래그가 한 자도 안 바뀌고 도착했다.
+      expect(ready?.t === 'ready' && ready.tools).toEqual(buildClaudeArgs({ mcpConfigPath: cfg }))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

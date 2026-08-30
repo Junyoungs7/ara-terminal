@@ -18,10 +18,9 @@ import { join } from 'node:path'
 /**
  * 대화 id 의 유일한 모양(UUID). 두 곳이 이걸 본다:
  *  · 파일명으로 폴더 밖에 못 나가게 — apiChatLog.chatPath 와 같은 규칙.
- *  · `--resume <id>` 로 **셸 명령줄에 들어가는 값**이라(ClaudeCliEngine.realSpawn 이 `shell:true`
- *    로 띄운다) 그 줄에 들어가는 것은 우리가 만든 값뿐이어야 한다(ClaudeCliEngine 이 스스로 적어
- *    둔 불변식). quoteArg 는 `\"` 로 이스케이프하는데 **윈도우 cmd 는 백슬래시를 이스케이프로 안
- *    본다** — 정상 UI 로는 만들 수 없는 값이지만, 그 사실에 기대는 대신 모양으로 막는다.
+ *  · `--resume <id>` 로 **엔진의 argv 에 들어가는 값**이다(ClaudeCliEngine.realSpawn 이 `shell:true`
+ *    를 버리고 cmd 를 직접 부른 뒤로 인용은 #152 인코더가 지킨다). 인코더 하나에 기대는 것보다
+ *    모양으로 막는 편이 싸다 — 정상 UI 로는 만들 수 없는 값이다.
  */
 const NAME_OK = /^[0-9a-f-]{36}$/i
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
