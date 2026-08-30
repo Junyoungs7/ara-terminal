@@ -70,6 +70,33 @@ describe('상태는 훅이 말해 준 것이다', () => {
   })
 })
 
+describe('🔴 목록에 있고 없고를 정하는 것은 훅이다', () => {
+  it('★ 실행 기록이 없어도 훅이 말한 세션은 목록에 든다', () => {
+    // 준영님이 터미널에 직접 `claude` 를 친 경우다. 우리 문을 안 지났으니 `registerAiRun` 이
+    // 없고, 예전에는 그래서 **훅이 상태를 받고 있는데도 화면에 없었다.**
+    const v = viewsOf([], [sess('직접친것')], [st('직접친것', 'waiting')])
+    expect(v).toHaveLength(1)
+    expect(v[0]!.state).toBe('waiting')
+    expect(v[0]!.run.cli).toBe('claude') // 어느 CLI 인지는 훅이 말했다
+  })
+
+  it('실행 기록이 있으면 그쪽이 더 안다 — 훅이 못 주는 폴더·시작 시각이 거기 있다', () => {
+    const v = viewsOf([run('a', '/srv/erp')], [sess('a')], [st('a', 'working')])[0]!
+    expect(v.run.path).toBe('/srv/erp')
+    expect(v.run.startedAt).toBe(NOW - 600_000)
+  })
+
+  it('실행 기록이 없으면 폴더는 그 터미널이 아는 만큼만', () => {
+    const v = viewsOf([], [{ ...sess('a'), cwd: '/home/tester' }], [st('a', 'working')])[0]!
+    expect(v.run.path).toBe('/home/tester')
+    expect(viewsOf([], [sess('a')], [st('a', 'working')])[0]!.run.path).toBe('')
+  })
+
+  it('같은 세션이 실행 기록과 훅 양쪽에 있어도 줄은 하나다', () => {
+    expect(viewsOf([run('a')], [sess('a')], [st('a', 'working')])).toHaveLength(1)
+  })
+})
+
 describe('정렬 — 나를 부르는 것이 위로', () => {
   it('기다림 → 끝남 → 도는 중 → 모름 → 사라짐', () => {
     const runs = [run('work'), run('gone'), run('unk'), run('wait'), run('done')]

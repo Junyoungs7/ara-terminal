@@ -31,7 +31,7 @@ import { CLEAR_LINE } from '../../shared/shellInput'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { aiRuns, registerAiRun } from '../store/aiSessions'
-import { benchRows as buildBenchRows, useAiWorkbench } from '../store/aiWorkbench'
+import { benchRows as buildBenchRows, hookRows, useAiWorkbench } from '../store/aiWorkbench'
 import { useAiQuietWatch } from '../store/aiQuietWatch'
 import { childrenOf, type AiSessionState } from '@shared/aiSession'
 import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
@@ -284,20 +284,29 @@ export function Shell() {
 
   // #132: 조용한 AI 감시 — **화면 없이 항상 돈다**. 그게 이 기능의 목적이라(안 보고 있어도
   // 알아챈다) 패널을 걷어내면서 로직만 남겼다. 사이드바 [AI] 의 노란 점이 그 결과다.
-  const { quietIds } = useAiQuietWatch(selectSession)
+  const { views: aiViews } = useAiQuietWatch(selectSession)
 
   // 작업대 줄. 살아 있는 세션 찾기는 **F30 실행 기록**(어느 터미널에서 무엇이 도는가)을 통해서다 —
   // 같은 사실을 두 곳에서 다르게 세지 않는다.
+  //
+  // 🔴 그 뒤에 **훅만 말해 준 세션**을 덧붙인다: 준영님이 터미널에 직접 `claude` 를 치면 우리
+  // 문(`AI CLI 시작`)을 안 지나 적립도 실행 기록도 없지만, 훅은 그 세션의 상태를 받고 있다.
+  // 목록에 있고 없고를 정하는 것은 우리가 띄웠는지가 아니라 **훅이 말을 걸어 왔는지**다.
   const benchList = useMemo(() => {
     const runs = aiRuns()
     const alive = new Set(sessions.sessions.map((x) => x.id))
-    return buildBenchRows(bench.list, {
+    const seen = new Map(aiViews.map((v) => [v.run.sessionId, v]))
+    const rows = buildBenchRows(bench.list, {
       sessionOf: (b) => runs.find((r) => alive.has(r.sessionId) && r.path === b.cwd && r.cli === b.engine)?.sessionId ?? null,
-      isQuiet: (sid) => quietIds.has(sid),
+      seen: (sid) => seen.get(sid) ?? null,
+      serverOf: (b) =>
+        b.kind === 'remote' ? (profiles.find((p) => p.id === b.profileId)?.name ?? '') : t('conn.group.local'),
       pathExists: (b) => bench.paths[b.cwd],
       profileExists: (id) => profiles.some((p) => p.id === id)
     })
-  }, [bench.list, bench.paths, sessions.sessions, profiles, quietIds])
+    const taken = new Set(rows.map((r) => r.sessionId).filter((x): x is string => x !== null))
+    return [...rows, ...hookRows(aiViews, taken, t('conn.group.local'))]
+  }, [bench.list, bench.paths, sessions.sessions, profiles, aiViews])
 
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다

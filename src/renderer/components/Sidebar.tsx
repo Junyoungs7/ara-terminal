@@ -241,6 +241,8 @@ export function Sidebar({
       <div className={'sb-panel' + (tab === 'ai' ? ' active' : '')} role="tabpanel">
         <AiBenchTree
           rows={benchRows}
+          // 경과 열의 시계는 이 패널을 보고 있을 때만 돈다([파일] 트리와 같은 규칙).
+          active={tab === 'ai'}
           activeSessionId={activeSessionId}
           onOpen={onBenchOpen}
           onRemove={onBenchRemove}

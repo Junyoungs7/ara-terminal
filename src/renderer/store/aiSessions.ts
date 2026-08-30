@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { AgentState, AgentStatus } from '@shared/agentStatus'
 import type { AiCliId } from '@shared/aiCli'
 import type { Session } from '@shared/types'
-import { agentStatuses, subscribeAgent } from './agentStatus'
+import { agentStatuses, forgetAgentStatus, subscribeAgent } from './agentStatus'
 
 // F30 AI 세션 패널 — "지금 어느 AI 가 나를 기다리나".
 //
@@ -46,6 +46,11 @@ export type AiSessionView = {
 /**
  * 실행 기록 + 세션 목록 + **훅이 말해 준 상태** → 화면이 그릴 것.
  * 순수 함수라 단위 테스트 대상이다 — 여기서 틀리면 화면이 조용히 거짓말을 한다.
+ *
+ * 🔴 **목록에 있고 없고를 정하는 것은 훅이다.** 예전에는 `runs`(= 우리가 띄운 것)만 훑었고,
+ * 그래서 준영님이 터미널에 직접 `claude` 를 치면 **훅은 그 세션의 상태를 받고 있는데 목록에는
+ * 안 보였다**. 실행 기록은 이제 "있으면 더 잘 아는 것"(어느 CLI 를 어느 폴더에서 띄웠나)이지
+ * 목록의 자격 요건이 아니다 — 자격은 **말을 걸어 온 세션 전부**다.
  */
 // `now` 를 안 받는다: 상태의 나이는 **화면이 그릴 때** 재면 되고, 여기서 미리 빼 두면 그 값이
 // 다음 틱까지 낡은 채 남는다. 무엇보다 이 함수가 시각을 안 보는 것이 곧 "침묵은 입력이 아니다"다.
@@ -55,15 +60,25 @@ export function viewsOf(
   statuses: readonly AgentStatus[]
 ): AiSessionView[] {
   const byId = new Map(sessions.map((s) => [s.id, s]))
+  const runOf = new Map(runs.map((r) => [r.sessionId, r]))
   const statusOf = new Map(statuses.map((s) => [s.sessionId, s]))
-  return runs.map((run) => {
-    const session = byId.get(run.sessionId) ?? null
+  return [...new Set([...runOf.keys(), ...statusOf.keys()])].map((sessionId) => {
+    const session = byId.get(sessionId) ?? null
+    const st = statusOf.get(sessionId)
+    // 실행 기록이 없는 세션 = **우리가 안 띄운 것.** 훅과 세션이 아는 만큼만 채운다:
+    // CLI 는 훅이 말했고(어느 표를 태워 왔나) 폴더·이름은 그 터미널이 안다.
+    const run: AiRun = runOf.get(sessionId) ?? {
+      sessionId,
+      cli: st?.cli ?? 'claude',
+      path: session?.cwd ?? '',
+      // 언제 시작했는지는 모른다 — **처음 들은 때**가 우리가 아는 가장 이른 시각이다.
+      startedAt: st?.stateStartedAt ?? 0
+    }
     if (!session) {
       // 세션이 사라졌다 = CLI 도 끝났다. 목록에서 바로 지우지 않고 잠깐 남긴다 —
       // "방금 끝났다"도 알고 싶은 정보다(끝난 걸 모르고 기다리는 일이 없게).
       return { run, session: null, state: 'gone' as const, stateStartedAt: run.startedAt, unconfirmed: false, serverName: '' }
     }
-    const st = statusOf.get(run.sessionId)
     return {
       run,
       session,
@@ -125,17 +140,23 @@ export function useAiSessions(active: boolean) {
 
   const tick = useCallback(async () => {
     const list = aiRuns()
-    if (list.length === 0) {
+    const statuses = agentStatuses()
+    // 둘 다 비어야 볼 것이 없다 — **훅만 말해 준 세션**이 여기서 잘려 나가던 자리다.
+    if (list.length === 0 && statuses.length === 0) {
       setViews([])
       return
     }
     const sessions = (await window.ev?.session.list()) ?? []
     const now = Date.now()
-    const next = sortViews(viewsOf(list, sessions, agentStatuses()))
-    // 끝난 지 오래된 것은 기록에서도 지운다.
+    const next = sortViews(viewsOf(list, sessions, statuses))
+    // 끝난 지 오래된 것은 기록에서도 지운다. 상태 사본도 함께 — main 은 세션이 끝날 때
+    // 자기 원장에서 지우지만(index.ts 의 `agent.server.forget`) 그 사실을 밀어 주지는 않아,
+    // 여기서 안 지우면 죽은 세션의 상태가 렌더러 캐시에 영영 남는다.
     const stale = (v: AiSessionView): boolean => v.state === 'gone' && now - v.stateStartedAt > GONE_KEEP_MS
     for (const v of next) {
-      if (stale(v)) forgetAiRun(v.run.sessionId)
+      if (!stale(v)) continue
+      forgetAiRun(v.run.sessionId)
+      forgetAgentStatus(v.run.sessionId)
     }
     setViews(next.filter((v) => !stale(v)))
   }, [])

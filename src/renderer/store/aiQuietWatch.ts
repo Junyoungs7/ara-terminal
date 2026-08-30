@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { notifyTag } from '@shared/agentStatus'
-import { useAiSessions, waitingCount } from './aiSessions'
+import { useAiSessions, waitingCount, type AiSessionView } from './aiSessions'
 import { t } from '../i18n'
 
 /**
@@ -22,7 +22,11 @@ import { t } from '../i18n'
  */
 export const NOTIFY_DELAY_MS = 1_500
 
-export function useAiQuietWatch(onGoTo: (sessionId: string) => void): { quiet: number; quietIds: Set<string> } {
+export function useAiQuietWatch(onGoTo: (sessionId: string) => void): {
+  quiet: number
+  /** 사이드바 [AI] 가 그리는 것과 **같은 뷰**다 — 목록과 알림이 각자 세면 두 벌로 갈린다. */
+  views: AiSessionView[]
+} {
   // 항상 돈다(true) — 볼 사람이 없어도 세는 것이 이 물건의 일이다.
   const views = useAiSessions(true)
   // 예약된 알림(태그 → 타이머)과 이미 울린 것(태그). **태그는 상태가 시작된 시각을 담으므로**
@@ -78,8 +82,8 @@ export function useAiQuietWatch(onGoTo: (sessionId: string) => void): { quiet: n
     }
   }, [])
 
-  // 사이드바 계약은 그대로다(`quiet`/`quietIds`) — 그 화면의 어휘를 바꾸는 것은 별도 라운드다.
-  // 바뀐 것은 **무엇이 그 집합에 드는가**뿐이다: 조용한 것이 아니라 **나를 기다리는 것**.
-  const quietIds = new Set(views.filter((v) => v.state === 'waiting').map((v) => v.run.sessionId))
-  return { quiet: waitingCount(views), quietIds }
+  // 사이드바는 이제 `quietIds`(기다리는 세션 id 집합) 대신 **뷰 자체**를 받는다: 줄이 두 줄이
+  // 되면서 상태 말고도 그 상태가 언제 시작됐는지·어느 CLI 인지가 필요해졌고, 무엇보다
+  // **훅만 말해 준 세션**은 작업대 목록에 없어 id 집합으로는 그릴 수가 없다.
+  return { quiet: waitingCount(views), views }
 }

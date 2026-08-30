@@ -39,6 +39,15 @@ export function agentStatuses(): AgentStatus[] {
   return [...byId.values()]
 }
 
+/**
+ * 죽은 세션의 사본을 버린다. **화면이 상태를 만들지 않는다**는 규칙을 어기지 않는다 —
+ * 여기서 지우는 것은 상태가 아니라 **이미 없어진 세션의 흔적**이다(main 은 세션이 끝날 때
+ * 자기 원장에서 지우지만 그 사실을 렌더러로 밀어 주지 않는다).
+ */
+export function forgetAgentStatus(sessionId: string): void {
+  if (byId.delete(sessionId)) emit()
+}
+
 /** 상태가 바뀔 때마다 불린다. 해지 함수 반환. */
 export function subscribeAgent(cb: () => void): () => void {
   start()
