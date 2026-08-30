@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
+import { prefsFrom } from '../src/renderer/terminal/termPrefs'
 import { SCHEMA_VERSION, type WorkspaceSaveInput } from '../src/shared/types'
 
 let dir: string
@@ -65,6 +66,30 @@ describe('WorkspaceStore', () => {
     writeFileSync(path, JSON.stringify({ schemaVersion: 999 }), 'utf8')
     const store = new WorkspaceStore(path, '0.1.0')
     expect(store.get().schemaVersion).toBe(SCHEMA_VERSION)
+  })
+
+  /**
+   * 2026-08-30(FINISH-M7): 설정 [우측 아이콘 바]를 없애면서 `ui.activityOrder`·`ui.activityHidden`
+   * 을 **안 읽기로만** 했다(마이그레이션 없음). 이미 그 값이 들어 있는 workspace.json 을 쓰는
+   * 사용자가 있는데, 읽는 쪽이 모르는 필드에 던지면 **그 사람은 워크스페이스를 통째로 잃는다**
+   * (loadFromDisk 가 던지면 defaultSnapshot 으로 안전 부팅 → 세션·프로필·설정이 전부 초기값).
+   * 그러니 "던지지 않는다"를 여기에 못 박는다 — 스키마 검증을 나중에 넣는 사람이 이 검사를 본다.
+   */
+  it('★ 안 읽는 옛 필드(activityOrder·activityHidden)가 있어도 워크스페이스를 잃지 않는다', () => {
+    const base = new WorkspaceStore(path, '0.1.0').get()
+    base.ui.sidebar.width = 321 // 이 값이 살아 돌아와야 "기본값으로 리셋"이 아니다.
+    const raw = base as unknown as { ui: Record<string, unknown> }
+    raw.ui.activityOrder = ['log', 'ai', '없어진항목']
+    raw.ui.activityHidden = ['preview']
+    writeFileSync(path, JSON.stringify(base), 'utf8')
+
+    const store = new WorkspaceStore(path, '0.1.0')
+    expect(store.get().ui.sidebar.width).toBe(321)
+    // 렌더러 읽기 경로도 같이 본다 — 설정 화면·부트 복원이 공유하는 하이드레이트다.
+    const prefs = prefsFrom(store.get().ui)
+    expect(prefs.scrollback).toBe(store.get().ui.scrollback ?? prefs.scrollback)
+    expect(prefs).not.toHaveProperty('activityOrder')
+    expect(prefs).not.toHaveProperty('activityHidden')
   })
 
   it('flush는 savedAt과 app.version을 갱신한다', () => {

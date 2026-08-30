@@ -3,8 +3,6 @@ import { callNameOf } from '@shared/araPersona'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
-import { ACTIVITY_TITLE_KEY } from './ActivityBar'
-import { activitySlot, activityWhereKey, moveActivity, toggleActivityHidden } from '../store/activityBar'
 import {
   AI_MODELS_BY_PROVIDER,
   AI_PROVIDER_HOSTS,
@@ -847,62 +845,10 @@ export function SettingsDrawer({
                   onChange={(bootSplash) => onPrefsChange({ bootSplash })}
                 />
               </Row>
-              {/* 2026-08-13 준영님 요청: 우측 바에 기능이 박혀 있는 것을 껐다 켜고 순서도 바꾼다.
-                  2026-08-30 준영님 제보: *"하단 바로 간 기능들도 우측 사이드바 순서에 포함"* —
-                  이 목록은 이름만 보여 줘서 [프로세스](아래에 열림)와 [대화](오른쪽에 열림)가
-                  구분 없이 나란히 섰다. 툴팁이 쓰는 그 꼬리표를 여기에도 붙인다(activityWhereKey). */}
-              <Row label={t('settings.activity')} desc={t('settings.activity.desc')}>
-                <div className="act-cfg">
-                  {prefs.activityOrder.map((id, i) => {
-                    const shown = !prefs.activityHidden.includes(id)
-                    const whereKey = activityWhereKey(id)
-                    const move = (delta: -1 | 1): void =>
-                      onPrefsChange({ activityOrder: moveActivity(prefs.activityOrder, id, delta) })
-                    return (
-                      <div
-                        className={'act-cfg-row' + (shown ? '' : ' off')}
-                        key={id}
-                        data-activity={id}
-                        data-slot={activitySlot(id)}
-                      >
-                        <span className="acr-name">
-                          {t(ACTIVITY_TITLE_KEY[id])}
-                          {whereKey && <span className="acr-where"> · {t(whereKey)}</span>}
-                        </span>
-                        <button
-                          type="button"
-                          className="acr-move"
-                          data-action="up"
-                          aria-label={t('settings.activity.up')}
-                          title={t('settings.activity.up')}
-                          disabled={i === 0}
-                          onClick={() => move(-1)}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="acr-move"
-                          data-action="down"
-                          aria-label={t('settings.activity.down')}
-                          title={t('settings.activity.down')}
-                          disabled={i === prefs.activityOrder.length - 1}
-                          onClick={() => move(1)}
-                        >
-                          ↓
-                        </button>
-                        <Toggle
-                          on={shown}
-                          label={t(ACTIVITY_TITLE_KEY[id])}
-                          onChange={() =>
-                            onPrefsChange({ activityHidden: toggleActivityHidden(prefs.activityHidden, id) })
-                          }
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              </Row>
+              {/* 2026-08-30 준영님 결정: [우측 아이콘 바] 행이 여기 있었다(순서 ↑↓ + 숨김 토글).
+                  *"그냥 우측 아이콘바 설정하는건 제거하자. 더 별로다"* — 순서 배열이 하나인데 그리는
+                  화면이 둘(레일·하단 탭줄)이라 슬롯 경계를 넘는 ↑↓ 는 눌러도 화면이 안 바뀌었다.
+                  이제 순서는 shared/types.ts 의 ACTIVITY_ITEMS 하나가 정한다. */}
               <Row label={t('settings.copyOnSelect')} desc={t('settings.copyOnSelect.desc')}>
                 <Toggle
                   on={prefs.copyOnSelect}

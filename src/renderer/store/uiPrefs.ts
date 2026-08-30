@@ -9,7 +9,6 @@ import {
   type UiPrefs
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
-import { activityHiddenOf, activityOrderOf } from './activityBar'
 import { aiCliFlagsOf } from '../../shared/aiCli'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
@@ -27,8 +26,6 @@ const DEFAULT_PREFS: UiPrefs = {
   aiModels: aiModelsOf(undefined),
   aiCompatibleBaseUrl: '',
   aiCliFlags: aiCliFlagsOf(undefined),
-  activityOrder: activityOrderOf(undefined),
-  activityHidden: activityHiddenOf(undefined),
   araCallName: '',
   araWelcomeSeen: false,
   bootSplash: true,

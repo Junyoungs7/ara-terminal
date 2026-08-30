@@ -245,11 +245,8 @@ export function aiModelsOf(raw: unknown): Record<AiProvider, string> {
 // 설정으로 노출하지 않는다(값이 바뀌지 않는 것에 설정을 만들지 않는다).
 export const AI_CONTEXT_LINES = 120
 
-// 우측 액티비티 바 항목(FB-ui2). 2026-08-13 부터 **끄고 켜고 순서를 바꿀 수 있어** 설정으로
-// 저장되므로 shared 에 둔다 — 렌더러 화면 지식이 아니라 저장되는 값의 스키마다.
-// 아래 순서가 **기본 순서**이자, 저장된 목록에 없는 새 항목이 뒤에 붙는 기준이다.
+// 우측 액티비티 바 항목(FB-ui2).
 // #91(2026-08-16): 'console' 이 사라졌다 — 서버 콘솔 창이 [서버 작업대](explorer)에 흡수됐다.
-// 저장된 activityOrder 에 남아 있어도 activityOrderOf 가 모르는 이름을 버린다(마이그레이션 불필요).
 //
 // #84(2026-08-16): 서버 콘솔의 도구 다섯(ps·svc·disk·pkg·ctr)이 여기 합류했다 — 하단 탭이
 // 되면서 액티비티 항목이 됐고, 그 덕에 **끄고 켜고 순서 바꾸기가 공짜로 따라왔다**(설정에 이미 있다).
@@ -276,6 +273,18 @@ export type ActivityId =
   | 'cmdbook'
   | 'settings'
 
+/**
+ * **화면에 나오는 순서의 유일한 정의부다**(2026-08-30 FINISH-M7). 설정 [우측 아이콘 바]가
+ * 없어지면서 순서를 바꿀 자리는 이 배열뿐이다 — 여기를 고치면 그것이 곧 사용자 화면이다.
+ * 레일은 이 순서에서 `isBottomId` 아닌 것, 하단 탭줄은 `BOTTOM_IDS` 순서다.
+ *
+ * 지금 순서를 읽는 법(그대로 두기로 한 근거):
+ *  · 레일 — 대화 · 지난 세션 · 미니 프리뷰 ｜ 작업대 · 명령어 북 · 설정.
+ *    앞 셋이 옆에 붙는 패널(RAIL_IDS), 뒤 셋이 창·오버레이라 그 경계에 구분선이 하나 그어진다.
+ *  · 하단 — 둘씩 짝이다: 포트·시스템(지금 상태) / 프로세스·서비스(돌고 있는 것) /
+ *    디스크·패키지(깔려 있는 것) / 컨테이너·쿠버 / 세션 기록·서버 로그(둘 다 로그, 붙어 있어야
+ *    무엇이 무엇인지 갈린다).
+ */
 export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'ai',
   'monitor',
@@ -318,9 +327,9 @@ export function isRailId(id: ActivityId): id is RailId {
 // 창과 하단 두 군데서 보던 것을 하나로 모은 것이다. **서버는 세션 탭이 정한다** — 하단에
 // 서버 선택 UI 를 두지 않는다(터미널은 A서버인데 하단은 B서버인 상태를 만들지 않는다).
 //
-// 여덟이면 탭바가 약 560px 다. 우측 레일을 열면 하단이 772px 라 여유가 200px 뿐인데,
-// **액티비티 바의 항목 숨기기·순서 바꾸기를 그대로 쓴다**(visibleActivities) — 안 쓰는 도구를
-// 설정에서 끄면 탭도 사라진다. 하단만의 새 설정을 만들지 않는다.
+// 열이면 탭바가 좁은 배치에서 넘친다. 2026-08-30(FINISH-M7) 준영님 결정으로 **숨기기가 없어져**
+// 열 개가 늘 선다 — 넘치는 것은 `.bp-tabscroll` 의 가로 스크롤이 받는다(§4.7 반응형과 같은 답).
+// 라벨은 접히지 않는다(`.bp-tab { white-space: nowrap; flex: none }`).
 //
 // 액티비티 바 항목은 그대로 두고, 누르면 하단 패널이 그 탭으로 열린다 — 바를 옮기지 않는 이유는
 // 우리 바가 "무엇을 열지"를 고르는 것이지 VS Code 처럼 "사이드바 내용을 바꾸는" 것이 아니어서다.
@@ -359,10 +368,6 @@ export type UiPrefs = {
   aiProvider: AiProvider
   aiModels: Record<AiProvider, string>
   aiCompatibleBaseUrl: string
-  // 우측 액티비티 바(2026-08-13): 항목 순서 + 숨긴 항목. 순서는 **전체 목록**을 담고, 숨김은 그중
-  // 안 보이는 것만 담는다 — 껐다 켜도 원래 자리로 돌아오게 하려면 순서를 잃지 말아야 한다.
-  activityOrder: ActivityId[]
-  activityHidden: ActivityId[]
   // 2026-08-20 [AI]: CLI 별 기본 플래그. 하이드레이트가 끝난 값이라 네 CLI 가 모두 들어 있다.
   aiCliFlags: Record<AiCliId, string[]>
   /** #138 아라가 부를 호칭. 빈 문자열이면 아직 안 받았다. */
@@ -442,10 +447,9 @@ export type UiState = {
   aiModels?: Partial<Record<AiProvider, string>>
   // compatible 전용 base URL. 비밀이 아니다 — 설정 화면에 항상 보이는 값(전송 대상 투명성).
   aiCompatibleBaseUrl?: string
-  // 우측 액티비티 바 항목 순서·숨김(2026-08-13). 저장된 값은 신뢰 경계 밖이라 읽는 쪽에서
-  // activityOrderOf/activityHiddenOf 가 모르는 이름을 버리고 새 항목을 뒤에 채운다.
-  activityOrder?: string[]
-  activityHidden?: string[]
+  // 2026-08-30(FINISH-M7): activityOrder·activityHidden 이 여기 있었다. 우측 아이콘 바를 설정에서
+  // 고치는 기능을 통째로 없애 순서는 ACTIVITY_ITEMS 하나가 정한다 — ctxMenuStyle 과 같은 처리다.
+  // 옛 스냅샷에 남아 있는 키는 읽는 쪽이 없어 그대로 무시된다(마이그레이션 불필요).
   // R6: 프로필에서 파생되지 않는 그룹까지 담는 목록. 프로필이 있는 그룹은 파생으로 나오므로
   // 여기 저장이 필요한 것은 "빈 그룹"이지만, 이름 변경·삭제를 한 곳에서 처리하려고 전체를 싣는다.
   groups?: string[]

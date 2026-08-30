@@ -61,7 +61,11 @@ const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
 
 const isMac = navigator.userAgent.includes('Mac')
 
-/** 툴팁 — 이름 + 어디에 열리는지 + (있으면) 단축키. 설정 [우측 아이콘 바] 목록도 같은 꼬리표를 쓴다. */
+/**
+ * 툴팁 — 이름 + 어디에 열리는지 + (있으면) 단축키.
+ * 여기 걸리는 것은 레일 항목뿐이라 `· 아래에 열림`(activity.where.bottom)은 실제로는 안 나온다
+ * (2026-08-30: 그 문구를 쓰던 설정 목록이 없어졌다). 판정은 규칙에서 파생하므로 그대로 둔다.
+ */
 export function activityTip(id: ActivityId): string {
   const name = t(ACTIVITY_TITLE_KEY[id])
   const action = ACTIVITY_KEY[id]
@@ -98,7 +102,7 @@ export function ActivityBar({
   bottomOpen,
   onToggleBottomBar
 }: {
-  /** 그릴 항목과 그 순서. 설정에서 끄고 켜고 옮길 수 있어(2026-08-13) 더 이상 고정 배열이 아니다. */
+  /** 그릴 항목과 그 순서 — `SHOWN_ACTIVITIES`(= `ACTIVITY_ITEMS` 에서 숨긴 기능만 뺀 것). */
   items: readonly ActivityId[]
   state: ActivityOpenState
   onToggle: (id: ActivityId) => void
@@ -119,8 +123,9 @@ export function ActivityBar({
       {railItems.map((id, i) => {
         const Icon = ICONS[id]
         const active = isActivityOpen(id, state)
-        // 묶음이 바뀌는 자리에 선을 하나 긋는다 — 아이콘 열넷이 한 덩어리로 보이면 규칙이 안 읽힌다.
-        // 사용자가 순서를 바꿔 섞어 놓으면 선이 여러 개 생기는데, 그것도 정직한 표시다.
+        // 묶음이 바뀌는 자리에 선을 하나 긋는다 — 아이콘이 한 덩어리로 보이면 규칙이 안 읽힌다.
+        // 2026-08-30: 순서가 ACTIVITY_ITEMS 로 고정돼(설정에서 못 바꾼다) 선은 **한 자리**에만
+        // 그어진다 — 미니 프리뷰 ↔ 서버 작업대, 옆에 붙는 패널과 창·오버레이의 경계다.
         const sep = i > 0 && activitySlot(railItems[i - 1]) !== activitySlot(id)
         return (
           <button

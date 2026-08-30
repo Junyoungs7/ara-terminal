@@ -26,7 +26,6 @@ import { createWakeEngine } from '../store/wakeWord'
  * 새로 마운트되지만, 인사는 앱을 켤 때 한 번이면 된다(탭을 새 창으로 뺄 때마다 인사하면 코미디다).
  */
 let bootSplashShown = false
-import { visibleActivities, type ActivityId } from '../store/activityBar'
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
@@ -96,11 +95,8 @@ type MainAreaProps = {
   onCommandBookOpenChange?: (open: boolean) => void
   /** 새 로컬 셸을 열면 사이드바를 [파일] 탭으로 — 사이드바 상태의 주인은 Shell 이라 요청만 한다. */
   onRevealFiles?: () => void
-  /** 우측 액티비티 바에 그릴 항목·순서. prefs 의 주인이 여기라 Shell 로 올려 준다
-      (useUiPrefs 를 두 곳에서 부르면 사본이 갈려 설정 변경이 바에 안 비친다). */
-  onActivityItems?: (items: ActivityId[]) => void
   /**
-   * 2026-08-20: AI CLI 기본 플래그(설정 [AI]). `onActivityItems` 와 같은 미러 —
+   * 2026-08-20: AI CLI 기본 플래그(설정 [AI]). onSettingsOpenChange 와 같은 미러 —
    * prefs 의 주인이 여기라, 실행하는 쪽(Shell.runAiCliNow)에 값을 올려 준다.
    */
   onAiCliFlags?: (flags: Record<string, string[]>) => void
@@ -141,7 +137,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onSettingsOpenChange,
       onCommandBookOpenChange,
       onRevealFiles,
-      onActivityItems,
       onAiCliFlags,
       bottom,
       detachedWinId
@@ -390,10 +385,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onCommandBookOpenChange?.(commandBookOpen)
     }, [commandBookOpen, onCommandBookOpenChange])
-
-    useEffect(() => {
-      onActivityItems?.(visibleActivities(prefs.activityOrder, prefs.activityHidden))
-    }, [prefs.activityOrder, prefs.activityHidden, onActivityItems])
 
     useEffect(() => {
       onAiCliFlags?.(prefs.aiCliFlags)

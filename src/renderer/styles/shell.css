@@ -2540,7 +2540,10 @@
    `.bp-tabs` 는 `--row-tabbar` 고정 높이라 그 두 번째 줄이 행 밖으로 잘린다. nowrap 이 접힘을,
    flex:none 이 찌그러짐을, 위 overflow-x 가 넘침을 각각 막는다 — 셋 다 필요하다.
    깨지는 조건: 1440 창 + 아라 패널(360px) → .main 772px < 탭 여덟이 요구하는 폭. 배율
-   [아주 크게]면 레일 없이도 걸린다. */
+   [아주 크게]면 레일 없이도 걸린다.
+   2026-08-30: 탭이 **열**이고 숨기기 설정도 없어져(FINISH-M7) 이 조건에 늘 걸린다. 넘치는 만큼은
+   위 overflow-x 가 받지만 **스크롤 막대를 감춰 둬서(scrollbar-width:none) 더 있다는 표시가 없다** —
+   좁은 배치에서 뒤쪽 탭(세션 기록·서버 로그)이 조용히 잘린다. 별건이라 여기 적어만 둔다. */
 .bp-tab {
   position: relative;
   border: none;
@@ -4392,61 +4395,6 @@
   color: var(--accent-bright);
   min-width: 54px;
   text-align: right;
-}
-
-/* 우측 아이콘 바 구성(2026-08-13) — 항목마다 이름 · 위·아래 · on/off 한 줄. */
-.act-cfg {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: var(--sp-2);
-  background: var(--bg-raised);
-}
-.act-cfg-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  min-height: 28px;
-  padding: 0 var(--sp-2);
-  border-radius: var(--radius-sm);
-}
-.act-cfg-row:hover {
-  background: var(--bg-overlay);
-}
-/* 꺼 둔 항목도 목록에서는 자리를 지킨다 — 다시 켜면 그 자리에 나온다는 것이 보여야 한다. */
-.act-cfg-row.off .acr-name {
-  color: var(--text-lo);
-  text-decoration: line-through;
-}
-.acr-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-hi);
-  font-size: var(--fs-md);
-}
-.acr-move {
-  flex: none;
-  width: 24px;
-  min-height: 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg-canvas);
-  color: var(--text-mid);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-.acr-move:hover:not(:disabled) {
-  border-color: var(--line-strong);
-  color: var(--text-hi);
-}
-.acr-move:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 /* on/off 토글(선택 자동 복사·커서 깜빡임) */

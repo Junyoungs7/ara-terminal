@@ -13,7 +13,6 @@ import {
   type UiPrefs,
   type UiState
 } from '@shared/types'
-import { activityHiddenOf, activityOrderOf } from '../store/activityBar'
 import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
 import { DEFAULT_VOICE } from '@shared/types'
@@ -37,8 +36,6 @@ export const termPrefs: Omit<
   | 'aiCompatibleBaseUrl'
   // AI CLI 기본 플래그도 xterm 이 읽어 갈 값이 아니다(터미널에 밀어 넣을 한 줄을 만들 때만 쓴다).
   | 'aiCliFlags'
-  | 'activityOrder'
-  | 'activityHidden'
   // 호칭도 xterm 과 무관하다(#138) — main 의 엔진이 말투 파일에 쓴다.
   | 'araCallName'
   | 'araWelcomeSeen'
@@ -70,8 +67,6 @@ export function prefsFrom(
     | 'aiProvider'
     | 'aiModels'
     | 'aiCompatibleBaseUrl'
-    | 'activityOrder'
-    | 'activityHidden'
     | 'aiCliFlags'
     | 'araCallName'
     | 'araWelcomeSeen'
@@ -95,11 +90,7 @@ export function prefsFrom(
     // 손상·구버전 스냅샷은 aiProviderOf/aiModelsOf 가 기본값으로 내린다(main 이 같은 함수로 다시 클램프한다).
     aiProvider: aiProviderOf(ui.aiProvider),
     aiModels: aiModelsOf(ui.aiModels),
-    // 액티비티 바 순서·숨김. 저장값은 신뢰 경계 밖이라 여기서 클램프하고, 새로 생긴 항목은
-    // activityOrderOf 가 기본 자리에 끼워 넣는다(안 그러면 새 기능이 영영 안 보인다).
     aiCliFlags: aiCliFlagsOf(ui.aiCliFlags),
-    activityOrder: activityOrderOf(ui.activityOrder),
-    activityHidden: activityHiddenOf(ui.activityHidden),
     aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : '',
     // #138 호칭 — 시스템 프롬프트에 들어가는 값이라 줄바꿈·길이를 여기서 자른다.
     araCallName: callNameOf(ui.araCallName),

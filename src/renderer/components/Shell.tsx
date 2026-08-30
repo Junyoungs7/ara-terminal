@@ -37,7 +37,7 @@ import { childrenOf, type AiSessionState } from '@shared/aiSession'
 import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, useGroupList } from '../store/groups'
-import { ACTIVITY_ITEMS, type ActivityId } from '../store/activityBar'
+import { SHOWN_ACTIVITIES, type ActivityId } from '../store/activityBar'
 import type { TreeTarget } from './ConnTree'
 import { cdCommand } from './filePath'
 import type { MenuCommandId, TreeActionId } from '../interactions/actions'
@@ -157,10 +157,8 @@ export function Shell() {
   const [settingsActive, setSettingsActive] = useState(false)
   // 명령어 북도 같은 미러다(2026-08-22 제보 9번으로 액티비티 바 항목이 됐다).
   const [cmdbookActive, setCmdbookActive] = useState(false)
-  // 우측 액티비티 바에 그릴 항목(설정에서 끄고 켜고 옮긴 결과). prefs 의 주인은 MainArea 라
-  // 거기서 올려 준다 — settingsActive 미러와 같은 방식.
-  const [activityItems, setActivityItems] = useState<ActivityId[]>(() => [...ACTIVITY_ITEMS])
-  // 설정 [AI] 의 CLI 기본 플래그. 같은 미러다 — 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
+  // 설정 [AI] 의 CLI 기본 플래그. settingsActive 와 같은 미러다(prefs 의 주인은 MainArea) —
+  // 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
   const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
   // W4sat F20: 탐색기 전체화면 모드. .middle 은 언마운트하지 않는다(display:none 만) — 터미널
   // 세션·레이아웃이 살아 있어야 나갈 때 보존된다(스펙 요구사항). 미니 프리뷰·아라 패널과 같은 규칙으로
@@ -1325,9 +1323,8 @@ export function Shell() {
               onTab={setBottom}
               onClose={() => setBottom(null)}
               flash={panelFlash}
-              // #84: 탭이 여덟이라 좁을 수 있다 — 액티비티 바의 순서·숨김 설정을 그대로 쓴다
-              // (하단만의 새 설정을 만들지 않는다). 설정에서 끈 도구는 탭에서도 사라진다.
-              ids={activityItems.filter(isBottomId)}
+              // 탭 목록·순서는 BOTTOM_IDS 다 — BottomPanel 의 기본값이라 여기서 넘기지 않는다
+              // (2026-08-30: 설정에서 끄고 옮기던 기능이 없어져 걸러 낼 것이 없다).
               server={activeSession?.type === 'ssh' ? (activeSession?.serverKey ?? '') : ''}
             >
               {(id, active) =>
@@ -1434,7 +1431,6 @@ export function Shell() {
           onCommandBookOpenChange={setCmdbookActive}
           onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
-          onActivityItems={setActivityItems}
           onAiCliFlags={setAiCliFlags}
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}
@@ -1491,7 +1487,7 @@ export function Shell() {
         )}
         {/* FB-ui2(FB-0006): 우측 최외곽 고정 — 위 우측 레일들 바깥. */}
         <ActivityBar
-          items={activityItems}
+          items={SHOWN_ACTIVITIES}
           state={activityState}
           onToggle={onActivityToggle}
           // #132: [AI 세션] 레일이 없어졌지만 **점은 남는다** — 조용한 AI 가 있으면 사이드바

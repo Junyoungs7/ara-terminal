@@ -184,85 +184,31 @@ test('SET-8 바꾼 설정이 재기동 후에도 유지된다', async ({ userDat
   ).toHaveClass(/on/)
 })
 
-// SET-ACT★ 우측 아이콘 바 구성 — 준영님 2026-08-13: "우측 사이드바에 기능이 박혀 있는데
-// 설정에서 껐다 켰다, 순서 변경하게 해줘". 판정은 **실제 바**가 따라 움직이는지로 한다.
-// 2026-08-17: 이 설정 하나가 **두 자리**를 움직인다 — 오른쪽·창에 열리는 것은 우측 액티비티 바,
-// 아래에 열리는 여덟은 **하단 탭줄**. 하단만의 새 설정을 만들지 않았기 때문이고,
-// 그 약속이 지켜지는지를 여기서 본다.
-test('SET-ACT★ 아이콘 구성을 설정에서 끄고 켜고 순서를 바꾼다(바·탭줄 둘 다)', async ({ ara }) => {
+// SET-ACT★ 아이콘 바·하단 탭줄의 목록과 순서.
+// 2026-08-30 준영님 결정으로 설정 [우측 아이콘 바]가 **없어졌다**(순서·숨기기 둘 다).
+// 순서를 고칠 손잡이가 없으니 **파생이 틀리면 사용자가 되돌릴 수 없다** — 그만큼 이 계약이
+// 살아 있어야 한다. 단위 검사(tests/activityBar.test.ts)는 배열만 보고, 여기서는 **진짜 화면**을 본다.
+test('SET-ACT★ 아이콘 바는 ACTIVITY_ITEMS 순서, 하단 탭줄은 BOTTOM_IDS 열 개', async ({ ara }) => {
   const { page } = ara
-  const barIds = () =>
-    page.locator('.activity-bar .act-item').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.activity))
-  const dockIds = () =>
-    page.locator('.bottom-panel .bp-tab').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bottom))
-  const cfgRow = (id: string) => page.locator(`${drawer} .act-cfg-row[data-activity="${id}"]`)
-
-  // 탭줄은 하단바를 켜야 나온다(IntelliJ 방식 — 토글 하나가 하단바 전체를 켠다).
   await page.click('.act-bottombar')
   await expect(page.locator('.bottom-panel')).toBeVisible()
 
-  const before = await barIds()
-  const beforeDock = await dockIds()
-  expect(before[0]).toBe('ai')
-  // 하단 도구는 바가 아니라 탭줄에 있다(둘 다에 있으면 안 된다).
-  expect(before).not.toContain('log')
-  expect(beforeDock).toContain('log')
-
-  await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="general"]`)
-  await expect(cfgRow('ai')).toBeVisible()
-
-  // ① 끄면 그 자리에서 사라진다(하단 항목은 탭줄에서).
-  await cfgRow('log').locator('.set-toggle').click()
-  await expect.poll(dockIds).not.toContain('log')
-  // 목록에서는 자리를 지킨다(다시 켜면 그 자리로 돌아온다는 것이 보여야 한다).
-  await expect(cfgRow('log')).toHaveClass(/off/)
-
-  // ② 다시 켜면 원래 자리로 돌아온다.
-  await cfgRow('log').locator('.set-toggle').click()
-  await expect.poll(dockIds).toEqual(beforeDock)
-
-  // ③ 순서를 바꾸면 **그 항목이 사는 자리**가 따라 바뀐다.
-  //    sys 를 올리면 탭줄이, preview 를 끄면 바가 움직인다 — 순서·숨김은 하나인데
-  //    그려지는 곳이 둘이라는 것을 양쪽으로 확인한다.
-  await cfgRow('sys').locator('[data-action="up"]').click()
-  await expect.poll(dockIds).toEqual(['sys', 'monitor', ...beforeDock.slice(2)])
-  await expect.poll(barIds).toEqual(before) // 바는 그대로
-
-  // 바 항목도 같은 설정에 반응한다. (순서로 보이려면 여러 번 올려야 한다 — 바 항목 사이에
-  //  하단 항목이 끼어 있어서 한 칸 올리기로는 **바에서 보이는 순서**가 안 바뀐다. 끄기로 본다.)
-  await cfgRow('preview').locator('.set-toggle').click()
-  await expect.poll(barIds).not.toContain('preview')
-  await cfgRow('preview').locator('.set-toggle').click()
-  await expect.poll(barIds).toEqual(before)
-
-  // 맨 위 항목은 더 올릴 수 없다(ai 는 목록 첫 자리 — 위 조작들이 그 자리를 안 건드렸다).
-  await expect(cfgRow('ai').locator('[data-action="up"]')).toBeDisabled()
-})
-
-// SET-ACT2 설정한 구성이 재기동 후에도 남는다(ui.activityOrder/activityHidden).
-test('SET-ACT2 아이콘 바 구성이 재기동 후에도 유지된다', async ({ userDataDir, launch }) => {
-  const a1 = await launch(userDataDir)
-  await a1.page.keyboard.press('Control+,')
-  await a1.page.click(`${drawer} .set-nav [data-section="general"]`)
-  await a1.page.locator(`${drawer} .act-cfg-row[data-activity="preview"] .set-toggle`).click()
-  await a1.page.locator(`${drawer} .act-cfg-row[data-activity="monitor"] [data-action="up"]`).click()
-  await a1.page.keyboard.press('Escape')
-  await a1.page.click('.act-bottombar') // 하단바를 켜 둔 채 재기동한다(탭 순서를 보려면 켜져 있어야 한다)
-  await persist(a1.page)
-  await quitAra(a1)
-
-  const a2 = await launch(userDataDir)
-  // 하단바 열림 여부는 세션 수명 상태라 재기동하면 꺼져 있다 — 다시 켜고 탭 순서를 본다.
-  await a2.page.click('.act-bottombar')
-  await a2.page.locator('.bottom-panel').waitFor({ state: 'visible' })
-  // monitor 는 하단 도구라 **탭줄** 첫 자리로, preview 는 레일이라 **바**에서 사라졌어야 한다.
-  const barIds = await a2.page
+  const barIds = await page
     .locator('.activity-bar .act-item')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.activity))
-  const dockIds = await a2.page
+  const dockIds = await page
     .locator('.bottom-panel .bp-tab')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bottom))
-  expect(dockIds[0]).toBe('monitor')
-  expect(barIds).not.toContain('preview')
+
+  // 레일 = ACTIVITY_ITEMS 에서 isBottomId 아닌 것 + 맨 아래 [하단바] 토글(ActivityId 가 아니다).
+  expect(barIds).toEqual(['ai', 'pastlog', 'preview', 'explorer', 'cmdbook', 'settings', 'bottombar'])
+  // 하단 탭줄 = BOTTOM_IDS 그대로. 숨기기가 없어졌으니 **늘 열**이다(준영님이 감수하신 결과).
+  expect(dockIds).toEqual(['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s', 'log', 'applog'])
+  // 둘 다에 있으면 같은 도구가 화면에 두 번 나온다.
+  for (const id of dockIds) expect(barIds).not.toContain(id)
+
+  // 설정 [일반]에 그 목록이 남아 있으면 안 된다.
+  await page.keyboard.press('Control+,')
+  await page.click(`${drawer} .set-nav [data-section="general"]`)
+  await expect(page.locator(`${drawer} .act-cfg`)).toHaveCount(0)
 })

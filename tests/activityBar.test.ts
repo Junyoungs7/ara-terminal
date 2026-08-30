@@ -2,16 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { AI_ENTRY } from '../src/shared/features'
 import {
   ACTIVITY_ITEMS,
-  activityHiddenOf,
-  activityOrderOf,
   isActivityOpen,
-  moveActivity,
-  toggleActivityHidden,
-  visibleActivities,
-  type ActivityId,
+  SHOWN_ACTIVITIES,
   type ActivityOpenState
 } from '../src/renderer/store/activityBar'
-import { BOTTOM_IDS } from '../src/shared/types'
+import { BOTTOM_IDS, isBottomId } from '../src/shared/types'
 
 // FB-ui2(FB-0006) 우측 액티비티 바 — 항목 정의·활성 판정의 순수 로직.
 
@@ -20,10 +15,10 @@ describe('액티비티 바 항목 정의', () => {
     // F26: 서버 콘솔(console)은 탐색기 다음 자리 — 둘 다 서버를 마우스로 다루는 떠 있는 창이다.
     // F29: 시스템 모니터(sys)는 포트 모니터 바로 다음 — 둘 다 "지금 이 서버가 어떤 상태인가"다.
     // #84: 서버 콘솔의 표 다섯(ps·svc·disk·pkg·ctr)이 하단 탭이 되면서 여기 합류했다.
-    //   sys 바로 뒤에 모아 둔다 — **하단에 열리는 것끼리** 붙어 있어야 바에서도 한 덩어리로 읽힌다
+    //   sys 바로 뒤에 모아 둔다 — 하단에 열리는 것끼리 붙어 있어야 탭줄에서 한 덩어리로 읽힌다
     //   (log 는 그 아래지만 성격이 달라 k8s 뒤 자기 자리를 지킨다).
-    //   순서가 바뀌면 저장된 activityOrder 는 그대로고 **새 항목만 뒤에 붙는다**(migrateOrder) —
-    //   기존 사용자에게 안 보이는 사고는 그쪽이 막는다.
+    //   2026-08-30(FINISH-M7): 이 배열이 **화면 순서의 유일한 정의부**가 됐다(설정에서 순서를
+    //   바꾸는 기능이 없어졌다). 여기를 고치면 그것이 곧 사용자 화면이라, 이 기대값이 곧 계약이다.
     expect(ACTIVITY_ITEMS).toEqual([
       'ai',
       'monitor',
@@ -47,10 +42,39 @@ describe('액티비티 바 항목 정의', () => {
     ])
   })
 
-  // #84: 하단 탭 여덟이 전부 액티비티 항목이어야 설정에서 끄고 순서를 바꿀 수 있다
-  // (탭바가 좁을 때의 유일한 해법이고, 하단만의 새 설정을 만들지 않기로 한 근거다).
-  it('★ 하단 탭은 전부 액티비티 항목이다 — 설정의 순서·숨김이 그대로 먹는다', () => {
+  // #84: 하단 탭은 전부 액티비티 항목이다 — 배치의 단일 출처가 하나라는 뜻이다.
+  it('★ 하단 탭은 전부 액티비티 항목이다', () => {
     for (const id of BOTTOM_IDS) expect(ACTIVITY_ITEMS).toContain(id)
+  })
+})
+
+/**
+ * 2026-08-30(FINISH-M7): 설정에서 순서·숨김을 고치는 기능이 없어지면서 **화면에 나오는 목록은
+ * 전적으로 이 배열에서 파생**된다. 사람이 손댈 손잡이가 없어졌으니, 파생이 틀리면 아무도
+ * 되돌릴 수 없다 — 그 파생을 여기서 굳힌다.
+ */
+describe('그리는 목록은 ACTIVITY_ITEMS 에서만 나온다', () => {
+  it('레일 = isBottomId 아닌 것, 순서 보존', () => {
+    // ActivityBar.tsx 가 items.filter(id => !isBottomId(id)) 로 그린다.
+    expect(SHOWN_ACTIVITIES.filter((id) => !isBottomId(id))).toEqual(
+      ACTIVITY_ITEMS.filter((id) => !isBottomId(id) && (AI_ENTRY || id !== 'ai'))
+    )
+  })
+
+  it('하단 탭 = BOTTOM_IDS, 순서 보존', () => {
+    // BottomPanel 의 기본값이 BOTTOM_IDS 그대로다(Shell 이 ids 를 넘기지 않는다).
+    expect(SHOWN_ACTIVITIES.filter(isBottomId)).toEqual([...BOTTOM_IDS])
+  })
+
+  it('★ 레일 ∪ 하단 = 전체 — 어느 화면에도 안 나오는 도구가 없다', () => {
+    const rail = SHOWN_ACTIVITIES.filter((id) => !isBottomId(id))
+    const bottom = SHOWN_ACTIVITIES.filter(isBottomId)
+    expect([...rail, ...bottom].sort()).toEqual([...SHOWN_ACTIVITIES].sort())
+    expect(rail.filter((id) => bottom.includes(id as never))).toEqual([]) // 둘 다에 있으면 화면에 두 번 나온다
+  })
+
+  it('숨긴 기능만 빠진다(features.AI_ENTRY) — 그 외에는 전부 그린다', () => {
+    expect(SHOWN_ACTIVITIES).toEqual(AI_ENTRY ? [...ACTIVITY_ITEMS] : ACTIVITY_ITEMS.filter((x) => x !== 'ai'))
   })
 })
 
@@ -87,86 +111,5 @@ describe('활성 판정(isActivityOpen)', () => {
     for (const id of ACTIVITY_ITEMS) {
       expect(isActivityOpen(id, state)).toBe(state[id])
     }
-  })
-})
-
-// 2026-08-13 준영님 요청: 우측 바 항목을 껐다 켜고 순서도 바꾼다. 저장값은 신뢰 경계 밖이라
-// 읽는 쪽에서 손보는 규칙이 이 블록의 검증 대상이다.
-/**
- * 지금 판에서 **실제로 보이는** 기본 순서. features.AI_ENTRY 가 꺼져 있으면 'ai' 가 빠진다 —
- * 기대값에 그 사실을 한 번만 적어 두고, 되살리면 이 상수가 알아서 다시 늘어난다.
- */
-const VISIBLE = ACTIVITY_ITEMS.filter((x) => AI_ENTRY || x !== 'ai')
-
-describe('저장된 순서 읽기(activityOrderOf)', () => {
-  it('저장된 것이 없으면 기본 순서 그대로', () => {
-    expect(activityOrderOf(undefined)).toEqual([...VISIBLE])
-    expect(activityOrderOf([])).toEqual([...VISIBLE])
-    expect(activityOrderOf('쓰레기')).toEqual([...VISIBLE])
-  })
-
-  it('모르는 이름은 버리고 중복은 하나만 남긴다', () => {
-    const got = activityOrderOf(['log', '없는항목', 'log', 'pastlog'])
-    expect(got.filter((x) => x === 'log')).toHaveLength(1)
-    expect(got).not.toContain('없는항목')
-    expect(got.slice(0, 2)).toEqual(['log', 'pastlog']) // 저장해 둔 순서가 앞에 그대로
-  })
-
-  it('★ 빠진 항목을 기본 순서 자리에 끼워 넣는다 — 새 기능이 영영 안 보이면 안 된다', () => {
-    // 사용자가 예전에 세 개만 저장해 뒀다고 하자. 나머지가 전부 살아 있어야 한다.
-    const got = activityOrderOf(['explorer', 'pastlog', 'log'])
-    expect([...got].sort()).toEqual([...VISIBLE].sort())
-    // 저장해 둔 순서는 그대로 지킨다.
-    expect(got.indexOf('explorer')).toBeLessThan(got.indexOf('pastlog'))
-    expect(got.indexOf('pastlog')).toBeLessThan(got.indexOf('log'))
-  })
-
-  // #91: 'console' 은 없어졌다(서버 콘솔 창이 [서버 작업대]에 흡수됐다). 옛 스냅샷에 남아 있어도
-  // 모르는 이름으로 버려져야 한다 — 안 그러면 눌러도 아무 일 없는 아이콘이 바에 남는다.
-  it('★ 없어진 항목(console)은 저장값에 남아 있어도 버린다', () => {
-    const got = activityOrderOf(['console', 'pastlog'])
-    expect(got).not.toContain('console')
-    expect([...got].sort()).toEqual([...VISIBLE].sort())
-    // 숨긴 기능도 같은 취급이다 — 저장값에 남아 있어도 목록에 안 들어온다(features.AI_ENTRY).
-    if (!AI_ENTRY) expect(activityOrderOf(['ai', 'log'])).not.toContain('ai')
-  })
-
-  it('빠진 항목은 기본 순서대로 뒤에 붙는다(예측 가능하게)', () => {
-    const got = activityOrderOf(['monitor', 'explorer'])
-    expect(got.slice(0, 2)).toEqual(['monitor', 'explorer'])
-    // 나머지는 기본 순서 그대로 뒤에.
-    expect(got.slice(2)).toEqual(VISIBLE.filter((x) => x !== 'monitor' && x !== 'explorer'))
-  })
-})
-
-describe('숨김·순서 바꾸기', () => {
-  it('숨긴 항목만 바에서 빠진다(순서는 그대로)', () => {
-    const order = [...ACTIVITY_ITEMS]
-    expect(visibleActivities(order, ['log', 'preview'])).toEqual(order.filter((x) => x !== 'log' && x !== 'preview'))
-  })
-
-  it('★ 껐다 켜면 원래 자리로 돌아온다 — 순서 배열을 건드리지 않기 때문', () => {
-    const order = [...ACTIVITY_ITEMS]
-    const off = toggleActivityHidden([], 'sys')
-    expect(visibleActivities(order, off)).not.toContain('sys')
-    const on = toggleActivityHidden(off, 'sys')
-    expect(visibleActivities(order, on)).toEqual(order)
-  })
-
-  it('한 칸씩 옮기고, 끝에서는 그대로 둔다(감아 돌지 않는다)', () => {
-    const order: ActivityId[] = ['ai', 'monitor', 'sys']
-    expect(moveActivity(order, 'monitor', -1)).toEqual(['monitor', 'ai', 'sys'])
-    expect(moveActivity(order, 'monitor', 1)).toEqual(['ai', 'sys', 'monitor'])
-    expect(moveActivity(order, 'ai', -1)).toEqual(order) // 맨 위에서 위로
-    expect(moveActivity(order, 'sys', 1)).toEqual(order) // 맨 아래에서 아래로
-  })
-
-  it('숨김 목록도 모르는 이름을 버린다', () => {
-    expect(activityHiddenOf(['log', '없는항목', 'log'])).toEqual(['log'])
-    expect(activityHiddenOf(undefined)).toEqual([])
-  })
-
-  it('전부 숨기는 것도 허용한다 — 바가 빈 채로 남는다(설정은 Ctrl+, 로 연다)', () => {
-    expect(visibleActivities([...ACTIVITY_ITEMS], [...ACTIVITY_ITEMS])).toEqual([])
   })
 })

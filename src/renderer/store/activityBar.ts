@@ -5,9 +5,8 @@ import { ACTIVITY_ITEMS, isBottomId, isRailId, type ActivityId } from '@shared/t
 // ActivityBar.tsx 가 여기서 나온 목록을 그대로 매핑해 그린다. 아이콘·툴팁·클릭 배선은 컴포넌트가 갖고,
 // 여기는 "무슨 항목이 어떤 순서로 보이는가"와 "지금 열려 있는가"만 둔다(단위 테스트 대상).
 //
-// 항목 정의(ActivityId·ACTIVITY_ITEMS)는 **shared/types.ts** 에 있다 — 2026-08-13 부터 순서·숨김이
-// 설정으로 저장돼(ui.activityOrder/activityHidden) main 도 같은 스키마를 보기 때문이다.
-// 여기서 다시 내보내 기존 import 경로를 유지한다.
+// 항목 정의(ActivityId·ACTIVITY_ITEMS)는 **shared/types.ts** 에 있다. 여기서 다시 내보내
+// 기존 import 경로를 유지한다.
 export { ACTIVITY_ITEMS, type ActivityId }
 
 export type ActivityOpenState = Record<ActivityId, boolean>
@@ -19,8 +18,9 @@ export type ActivityOpenState = Record<ActivityId, boolean>
  * 어떤 것은 아래, 어떤 것은 오른쪽, 어떤 것은 창인데 **눌러 봐야 알았다.**
  * 판정은 배치의 단일 출처(RAIL_IDS/BOTTOM_IDS)에서 파생한다 — 여기 목록을 또 만들지 않는다.
  *
- * 2026-08-30(FINISH-M6): ActivityBar.tsx 에 있던 것을 이리로 내렸다. 설정 [우측 아이콘 바]
- * 목록도 같은 판정을 써야 하는데 그쪽은 화면 두 곳이 되고, TSX 라 단위 검사가 못 들어왔다.
+ * 2026-08-30(FINISH-M6): ActivityBar.tsx 에 있던 것을 이리로 내렸다 — TSX 라 단위 검사가 못
+ * 들어왔다. 같은 날 M7 이 설정 목록을 없애 부르는 곳은 툴팁 하나로 돌아갔지만, 판정이 순수
+ * 함수로 검사되는 편이 낫다(레일에 무엇이 서는지가 이제 이 규칙에만 달려 있다).
  */
 export type ActivitySlot = 'bottom' | 'rail' | 'window'
 export function activitySlot(id: ActivityId): ActivitySlot {
@@ -33,7 +33,7 @@ export function activitySlot(id: ActivityId): ActivitySlot {
  * "어디에 열림"을 말할 i18n 키 — 말할 것이 없으면 null.
  *
  * 설정·명령어 북은 **오버레이 그 자체가 목적지**라 어디에 열리는지 말할 것이 없다.
- * 문구가 아니라 **키**를 돌려준다: 이 판정은 순수 규칙이고, 번역은 부르는 쪽(툴팁·설정 목록)의 몫이다.
+ * 문구가 아니라 **키**를 돌려준다: 이 판정은 순수 규칙이고, 번역은 부르는 쪽(툴팁)의 몫이다.
  */
 export function activityWhereKey(id: ActivityId): string | null {
   return id === 'settings' || id === 'cmdbook' ? null : 'activity.where.' + activitySlot(id)
@@ -45,62 +45,10 @@ export function isActivityOpen(id: ActivityId, state: ActivityOpenState): boolea
   return state[id]
 }
 
-const known = (v: unknown): v is ActivityId => ACTIVITY_ITEMS.includes(v as ActivityId) && shown(v as ActivityId)
-
 /**
- * 숨긴 기능의 항목은 아예 목록에 넣지 않는다(features.AI_ENTRY — 아라 대화로 가는 문).
- * 저장된 순서에 남아 있어도 여기서 걸러진다. 되살리면 "빠진 항목은 뒤에 붙인다" 규칙이
- * 알아서 다시 꽂는다.
+ * 실제로 그릴 항목. **순서는 ACTIVITY_ITEMS 가 정한다** — 2026-08-30(FINISH-M7) 준영님 결정으로
+ * 설정에서 순서를 바꾸고 항목을 숨기는 기능이 통째로 없어졌다(*"그냥 우측 아이콘바 설정하는건
+ * 제거하자"*). 여기서 빼는 것은 **숨긴 기능** 하나뿐이다(features.AI_ENTRY — 아라 대화로 가는 문).
+ * 되살리면 이 상수가 알아서 다시 늘어난다.
  */
-const shown = (id: ActivityId): boolean => AI_ENTRY || id !== 'ai'
-
-/**
- * 저장된 순서 → 쓸 수 있는 순서. 저장값은 신뢰 경계 밖이라 세 가지를 손본다:
- *  · 모르는 이름은 버린다(옛 스냅샷에 남은, 없어진 항목).
- *  · 중복은 첫 번째만 남긴다.
- *  · **빠진 항목은 뒤에 붙인다** — 이게 핵심이다. 새 기능이 액티비티 바에 추가돼도, 한 번이라도
- *    순서를 저장한 사용자에게는 영영 안 보이는 사고를 막는다.
- *
- * 빠진 것을 "기본 순서의 이웃 뒤에" 꽂는 방식도 해 봤는데(설계 의도인 묶음을 지키려고) 결과가
- * 뒤엉켰다 — 저장된 두어 개 사이로 새 항목이 파고들어 순서를 눈으로 못 따라간다. 어차피 평소에는
- * 전체 목록이 저장돼 있어 이 보정이 도는 때는 **새 항목이 생겼을 때뿐**이고, 그때는 맨 뒤에
- * 조용히 붙는 편이 예측 가능하다(원하면 설정에서 옮기면 된다).
- */
-export function activityOrderOf(raw: unknown): ActivityId[] {
-  const saved = Array.isArray(raw) ? raw.filter(known) : []
-  const out: ActivityId[] = []
-  for (const id of saved) if (!out.includes(id)) out.push(id)
-  if (out.length === 0) return ACTIVITY_ITEMS.filter(shown)
-  for (const id of ACTIVITY_ITEMS) if (shown(id) && !out.includes(id)) out.push(id)
-  return out
-}
-
-/** 저장된 숨김 목록 → 아는 이름만. 전부 숨기는 것도 허용한다(바는 빈 채로 남는다). */
-export function activityHiddenOf(raw: unknown): ActivityId[] {
-  const saved = Array.isArray(raw) ? raw.filter(known) : []
-  return [...new Set(saved)]
-}
-
-/** 실제로 바에 그릴 목록. */
-export function visibleActivities(order: readonly ActivityId[], hidden: readonly ActivityId[]): ActivityId[] {
-  return order.filter((id) => !hidden.includes(id))
-}
-
-/**
- * 한 칸 위·아래로 옮긴다. 끝에서 더 가면 **그대로 둔다**(감아 돌지 않는다) — 목록이 눈에 다 보이는
- * 설정 화면에서 맨 위 항목이 갑자기 맨 아래로 튀면 실수로밖에 안 읽힌다.
- * 숨긴 항목도 자리를 지킨 채 같이 움직인다(껐다 켜면 원래 자리로 돌아온다).
- */
-export function moveActivity(order: readonly ActivityId[], id: ActivityId, delta: -1 | 1): ActivityId[] {
-  const from = order.indexOf(id)
-  const to = from + delta
-  if (from < 0 || to < 0 || to >= order.length) return [...order]
-  const next = [...order]
-  next.splice(to, 0, next.splice(from, 1)[0])
-  return next
-}
-
-/** 숨김 토글. 순서는 건드리지 않는다 — 다시 켜면 있던 자리에 그대로 나온다. */
-export function toggleActivityHidden(hidden: readonly ActivityId[], id: ActivityId): ActivityId[] {
-  return hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id]
-}
+export const SHOWN_ACTIVITIES: readonly ActivityId[] = ACTIVITY_ITEMS.filter((id) => AI_ENTRY || id !== 'ai')
