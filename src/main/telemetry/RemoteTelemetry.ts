@@ -167,13 +167,22 @@ export type TelemetryService = {
   // 구독 해지 → 그 세션 폴링 중지.
   stop(sessionId: string): void
   stopAll(): void
+  /**
+   * #147: **보는 사람이 없는 동안 타이머만 멈춘다.** 구독(subs·refs)은 그대로 둔다 —
+   * 렌더러는 자기가 구독 중인 줄 알고 있어서 다시 start 를 부르지 않는다. stopAll 처럼
+   * 계수를 버리면 되살릴 때 무엇을 몇 개 켤지 아는 곳이 없어져 상태바가 영영 낡은 숫자로 남는다.
+   */
+  pauseAll(): void
+  /** 멈춰 있던 구독을 전부 되살리고 **즉시 한 바퀴** 돈다(창을 켜자마자 낡은 숫자를 보지 않게). */
+  resumeAll(): void
   // 테스트용: 현재 폴링 중인 세션 수.
   activeCount(): number
 }
 
 // refs: **몇 창이 이 세션을 보고 있나.** 2026-08-21 포트 모니터 독립 창이 생기면서 한 세션을
 // 두 창이 함께 볼 수 있게 됐다 — 계수가 없으면 한쪽이 닫힐 때 다른 쪽 폴링까지 멎는다.
-type Sub = { timer: NodeJS.Timeout; busy: boolean; prev: CpuSample | null; refs: number }
+// timer 가 null = 일시정지 중(#147). 구독은 살아 있고 타이머만 없다.
+type Sub = { timer: NodeJS.Timeout | null; busy: boolean; prev: CpuSample | null; refs: number }
 
 // getClient: 세션 id → ssh2 Client(로컬·종료된 세션은 null → 폴링 자동 중지).
 export function createTelemetryService(
@@ -182,6 +191,16 @@ export function createTelemetryService(
   intervalMs: number = POLL_MS
 ): TelemetryService {
   const subs = new Map<string, Sub>()
+  // #147: 보는 창이 없는 동안. 이때 들어온 start 는 구독만 만들고 타이머는 안 건다 —
+  // 안 그러면 멈춘 상태에서 새로 연 세션 하나만 혼자 서버에 붙는다.
+  let paused = false
+
+  const arm = (sessionId: string): NodeJS.Timeout => setInterval(() => void tick(sessionId), intervalMs)
+
+  const disarm = (sub: Sub): void => {
+    if (sub.timer) clearInterval(sub.timer)
+    sub.timer = null
+  }
 
   async function tick(sessionId: string): Promise<void> {
     const sub = subs.get(sessionId)
@@ -205,7 +224,7 @@ export function createTelemetryService(
     if (!sub) return
     sub.refs--
     if (sub.refs > 0) return // 아직 보고 있는 창이 남았다
-    clearInterval(sub.timer)
+    disarm(sub)
     subs.delete(sessionId)
   }
 
@@ -213,14 +232,8 @@ export function createTelemetryService(
     start(sessionId) {
       const sub = subs.get(sessionId)
       if (sub) sub.refs++
-      else
-        subs.set(sessionId, {
-          timer: setInterval(() => void tick(sessionId), intervalMs),
-          busy: false,
-          prev: null,
-          refs: 1
-        })
-      void tick(sessionId) // 첫 화면을 주기만큼 기다리지 않게
+      else subs.set(sessionId, { timer: paused ? null : arm(sessionId), busy: false, prev: null, refs: 1 })
+      if (!paused) void tick(sessionId) // 첫 화면을 주기만큼 기다리지 않게(멈춰 있으면 resumeAll 이 켠다)
     },
     // 수동 새로고침 — **구독을 늘리지 않고** 지금 한 바퀴만 돈다. 예전엔 이것도 start 였는데
     // 참조 계수가 생기면서 두 뜻을 가르지 않으면 새로고침마다 참조가 샌다.
@@ -231,8 +244,24 @@ export function createTelemetryService(
     // 앱 종료 정리 — 여기서는 **참조 계수를 보지 않는다.** 계수를 통과시키면 두 창이 보던
     // 세션은 폴러가 남아 프로세스가 안 죽는다(2026-08-21 단위 테스트가 잡았다).
     stopAll() {
-      for (const sub of subs.values()) clearInterval(sub.timer)
+      for (const sub of subs.values()) disarm(sub)
       subs.clear()
+    },
+    // #147: 보이는 창이 하나도 없다 — 2.5초마다 서버에 붙을 이유가 사라졌다(하루 11,520 채널).
+    // 이미 멈춰 있으면 아무 일도 안 한다(disarm 이 멱등).
+    pauseAll() {
+      paused = true
+      for (const sub of subs.values()) disarm(sub)
+    },
+    // 타이머가 이미 있는 구독은 건너뛴다 — 두 번 부르면 타이머가 겹쳐 폴링이 두 배가 된다
+    // (고치려던 것의 반대다). 판정을 플래그가 아니라 구독 자체에서 읽는다.
+    resumeAll() {
+      paused = false
+      for (const [sessionId, sub] of subs) {
+        if (sub.timer) continue
+        sub.timer = arm(sessionId)
+        void tick(sessionId)
+      }
     },
     activeCount: () => subs.size
   }

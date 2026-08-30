@@ -20,6 +20,7 @@ import { registerLocalCliIpc } from './ipc/registerLocalCliIpc'
 import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
+import { anyWindowVisible } from './windows/visibleWindows'
 import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
 import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
 import { registerRemoteIpc } from './ipc/registerRemoteIpc'
@@ -71,7 +72,8 @@ let store: WorkspaceStore
 let history: HistoryStore
 let sessions: MainSessionManager
 // W1: 폴링·tail 정리 훅(종료 시 원격에 프로세스를 남기지 않는다).
-let telemetry: { stopAll: () => void } | null = null
+// #147: + 창 가시성에 따른 원격 폴링 일시정지(pauseAll/resumeAll).
+let telemetry: { stopAll: () => void; pauseAll: () => void; resumeAll: () => void } | null = null
 // F26 서버 콘솔: 프로세스 표 등 주기 실행 구독. 텔레메트리와 같은 정리 훅.
 // 타입을 서비스로 둔다 — MCP(server_run)가 같은 인스턴스를 쓴다.
 let remoteConsole: RemoteConsoleService | null = null
@@ -133,6 +135,36 @@ function createWindow(): void {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
+
+/**
+ * #147 아무도 안 보는 동안 원격 폴링을 멈춘다.
+ *
+ * 텔레메트리는 **main 프로세스 타이머**라 크로미움의 백그라운드 스로틀링이 안 걸린다 — 창을 내려도
+ * 2.5초마다 SSH exec 이 그대로 나간다(하루 11,520 채널. 점심 한 시간이면 1,440번).
+ *
+ * 판정은 anyWindowVisible 한 곳에서만 한다(이벤트마다 따로 세면 그 자리가 곧 어긋난다).
+ * 구독은 안 버린다 — pauseAll 은 타이머만 멈추고, resumeAll 이 즉시 한 바퀴 돌려 되살린다.
+ */
+const syncTelemetryPolling = (): void => {
+  if (anyWindowVisible(BrowserWindow.getAllWindows())) telemetry?.resumeAll()
+  else telemetry?.pauseAll()
+}
+
+/**
+ * **창 종류마다 걸지 않는다** — 여기 한 곳에서 받는다. createWindow 안에만 걸면 떼어낸 세션 창·
+ * 포트 모니터 창이 빠지고, 새 창 종류가 생길 때마다 또 샌다.
+ *
+ * 'close' 가 아니라 'closed' 인 이유: close 시점의 창은 **아직 목록에 있고 아직 보인다**(그리고
+ * 세션 창은 close 를 막고 물어볼 수 있다 — SessionWindows). 파괴가 끝난 뒤에 세야 마지막 창을
+ * 닫는 순간 멎는다.
+ */
+app.on('browser-window-created', (_e, win) => {
+  win.on('show', syncTelemetryPolling)
+  win.on('hide', syncTelemetryPolling)
+  win.on('minimize', syncTelemetryPolling)
+  win.on('restore', syncTelemetryPolling)
+  win.on('closed', syncTelemetryPolling)
+})
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')

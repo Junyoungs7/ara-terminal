@@ -22,7 +22,7 @@ export function registerTelemetryIpc(
   // getWebContents 로는 안 잡히는데, 포트 목록은 읽기 화면이라 같이 받아야 한다.
   // 목록으로 받는 이유: 창이 늘면 여기만 늘린다(호출부가 판단을 갖는다).
   alsoTo: () => WebContents[] = () => []
-): { stopAll: () => void } {
+): { stopAll: () => void; pauseAll: () => void; resumeAll: () => void } {
   // sessionId 를 주면 그 세션의 창으로, 안 주면 본창으로(내 PC 자원처럼 창에 안 매인 것).
   // + 함께 보고 있는 창들. 같은 wc 가 두 번 들어가지 않게 거른다.
   const send = (channel: string, payload: unknown, sessionId?: string): void => {
@@ -95,6 +95,17 @@ export function registerTelemetryIpc(
       localTelemetry.stopAll()
       host.stop()
       logs.stopAll()
-    }
+    },
+    /**
+     * #147: 보이는 창이 없는 동안 **원격 폴링만** 멈춘다(2.5초마다 SSH exec = 하루 11,520 채널).
+     *
+     * 나머지를 안 넣은 이유:
+     *  · localTelemetry·host — os.cpus() 를 읽는 인프로세스 계산이다. 이 과제의 이유(운영 서버에
+     *    붙는 횟수)에 해당하지 않는다.
+     *  · logs(LogTail) — 폴링이 아니라 사용자가 **보라고 켜 둔** tail 스트림이다. 멈추려면 채널을
+     *    닫아야 하고, 그러면 그 사이 줄이 통째로 빈다(-n 0 이라 되감을 수도 없다).
+     */
+    pauseAll: () => telemetry.pauseAll(),
+    resumeAll: () => telemetry.resumeAll()
   }
 }

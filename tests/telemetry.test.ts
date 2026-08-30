@@ -1,6 +1,6 @@
 // W1 F9/F10/F13 검증 — 파서 픽스처(순수 함수) + 폴링 수명(구독 0이면 중지) +
 // ssh2 하네스로 exec 폴링·tail 스트림 실증(실서버 접속 없음).
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import type { Client, ServerChannel } from 'ssh2'
 import { connectSsh, type SshBackend } from '../src/main/sessions/ssh/SshBackend'
 import { SHELL_PID_CMD } from '../src/main/sessions/ssh/remoteCwd'
@@ -11,8 +11,10 @@ import {
   parseMem,
   parsePorts,
   parseTelemetry,
-  parseGpu
+  parseGpu,
+  type TelemetryService
 } from '../src/main/telemetry/RemoteTelemetry'
+import { anyWindowVisible, type WindowVisibility } from '../src/main/windows/visibleWindows'
 import { createLogTailService, shQuote } from '../src/main/telemetry/LogTail'
 import { gaugesOf, statusModel } from '../src/renderer/components/StatusBar'
 import { fileMenu } from '../src/renderer/interactions/actions'
@@ -49,6 +51,26 @@ MemAvailable:   20481024 kB
 
 const collectOut = (ports: string, busy: number, gpu?: string): string =>
   `${ports}__ARA_STAT__\n${STAT_OUT(busy)}__ARA_GPU__\n${gpu ?? ''}`
+
+// exec 을 세는 가짜 클라이언트. 명령을 받으면 픽스처를 흘리고 채널을 닫는다.
+function fakeClient(onExec: () => void): Client {
+  return {
+    exec(_cmd: string, cb: (err: Error | null, stream: unknown) => void) {
+      onExec()
+      const handlers = new Map<string, ((c?: Buffer) => void)[]>()
+      const on = (ev: string, fn: (c?: Buffer) => void): unknown => {
+        handlers.set(ev, [...(handlers.get(ev) ?? []), fn])
+        return null
+      }
+      const stream = { on, stderr: { on }, close: () => {} }
+      cb(null, stream)
+      setImmediate(() => {
+        for (const fn of handlers.get('data') ?? []) fn(Buffer.from(collectOut(SS_OUT, 100)))
+        for (const fn of handlers.get('close') ?? []) fn()
+      })
+    }
+  } as unknown as Client
+}
 
 describe('포트 파서', () => {
   it('ss -tlnp 출력에서 포트·프로세스·PID 를 뽑는다', () => {
@@ -146,26 +168,6 @@ describe('GPU 조각 파싱', () => {
 })
 
 describe('폴링 수명', () => {
-  // exec 을 세는 가짜 클라이언트. 명령을 받으면 픽스처를 흘리고 채널을 닫는다.
-  function fakeClient(onExec: () => void): Client {
-    return {
-      exec(_cmd: string, cb: (err: Error | null, stream: unknown) => void) {
-        onExec()
-        const handlers = new Map<string, ((c?: Buffer) => void)[]>()
-        const on = (ev: string, fn: (c?: Buffer) => void): unknown => {
-          handlers.set(ev, [...(handlers.get(ev) ?? []), fn])
-          return null
-        }
-        const stream = { on, stderr: { on }, close: () => {} }
-        cb(null, stream)
-        setImmediate(() => {
-          for (const fn of handlers.get('data') ?? []) fn(Buffer.from(collectOut(SS_OUT, 100)))
-          for (const fn of handlers.get('close') ?? []) fn()
-        })
-      }
-    } as unknown as Client
-  }
-
   it('start 는 즉시 한 바퀴 돌고, stop 이후에는 폴링이 멈춘다', async () => {
     let execs = 0
     const got: TelemetryData[] = []
@@ -225,6 +227,133 @@ describe('폴링 수명', () => {
     svc.tickNow('s1')
     svc.stop('s1')
     expect(svc.activeCount()).toBe(0)
+  })
+})
+
+// #147 — 보는 사람이 없는 동안 서버에 붙지 않는다. main 프로세스 타이머라 크로미움 스로틀링이
+// 안 걸려서(창을 내려도 그대로 돈다) 우리가 직접 멈춰야 한다.
+//
+// 여기서 지키는 것은 **구독이 살아남는가**다: 렌더러는 자기가 구독 중인 줄 알고 있어서 다시
+// start 를 부르지 않는다 — 계수를 버리면(stopAll 처럼) 창을 되살려도 상태바가 영영 안 돈다.
+describe('#147 폴링 일시정지', () => {
+  const TICK = 20
+  beforeEach(() => void vi.useFakeTimers())
+  afterEach(() => void vi.useRealTimers())
+
+  // getClient 호출 수 = 그 세션의 서버에 붙은 횟수. 멈췄는지의 유일한 증거다.
+  function svcOf(): { svc: TelemetryService; calls: () => number } {
+    let calls = 0
+    const svc = createTelemetryService(
+      () => {
+        calls += 1
+        return fakeClient(() => {})
+      },
+      () => {},
+      TICK
+    )
+    return { svc, calls: () => calls }
+  }
+
+  const adv = async (ms: number): Promise<void> => void (await vi.advanceTimersByTimeAsync(ms))
+
+  it('★ pauseAll 뒤에는 시간이 흘러도 서버에 안 붙는다 — 구독은 그대로다', async () => {
+    const { svc, calls } = svcOf()
+    svc.start('s1')
+    await adv(TICK * 3)
+    expect(calls()).toBeGreaterThan(0)
+    svc.pauseAll()
+    const paused = calls()
+    await adv(TICK * 20)
+    expect(calls()).toBe(paused)
+    expect(svc.activeCount()).toBe(1) // 구독을 버리지 않았다 — 이게 stopAll 과 다른 점이다
+  })
+
+  it('★ resumeAll 은 주기를 기다리지 않고 즉시 한 바퀴 돈다(낡은 숫자를 안 본다)', async () => {
+    const { svc, calls } = svcOf()
+    svc.start('s1')
+    // 주기 경계가 아니라 그 사이에서 멈춘다 — 진행 중인 바퀴(busy)가 없어야 "즉시 한 바퀴"를 셀 수 있다.
+    await adv(TICK / 2)
+    svc.pauseAll()
+    const paused = calls()
+    svc.resumeAll()
+    expect(calls()).toBe(paused + 1) // 즉시 — 여기서 await 이 없다는 게 요점이다
+    await adv(TICK * 3)
+    expect(calls()).toBeGreaterThan(paused + 1) // 그리고 다시 주기적으로 돈다
+    expect(svc.activeCount()).toBe(1)
+  })
+
+  it('★ 두 창이 보던 세션은 pause→resume 을 지나도 계수가 2 다', async () => {
+    const { svc } = svcOf()
+    svc.start('s1') // 본창
+    svc.start('s1') // 포트 모니터 독립 창
+    await adv(TICK)
+    svc.pauseAll()
+    svc.resumeAll()
+    await adv(TICK)
+    svc.stop('s1') // 한 창을 닫았다
+    expect(svc.activeCount()).toBe(1) // 다른 창이 아직 본다
+    svc.stop('s1')
+    expect(svc.activeCount()).toBe(0)
+  })
+
+  it('★ 멈춘 동안 들어온 start 는 혼자 돌지 않는다 — resumeAll 이 함께 켠다', async () => {
+    const { svc, calls } = svcOf()
+    svc.pauseAll()
+    svc.start('s1')
+    expect(svc.activeCount()).toBe(1)
+    await adv(TICK * 10)
+    expect(calls()).toBe(0)
+    svc.resumeAll()
+    expect(calls()).toBe(1)
+  })
+
+  it('★ 멱등 — pauseAll·resumeAll 을 두 번 불러도 타이머가 겹치지 않는다(겹치면 폴링이 두 배다)', async () => {
+    const { svc, calls } = svcOf()
+    svc.start('s1')
+    await adv(TICK)
+    svc.pauseAll()
+    svc.pauseAll()
+    const paused = calls()
+    await adv(TICK * 5)
+    expect(calls()).toBe(paused)
+    svc.resumeAll()
+    svc.resumeAll() // 두 번째는 이미 도는 구독을 건드리지 않아야 한다
+    const resumed = calls()
+    await adv(TICK * 5)
+    expect(calls()).toBe(resumed + 5) // 다섯 바퀴 — 타이머가 겹쳤다면 열 바퀴다
+  })
+})
+
+// 판정이 한 함수인 이유: 이벤트마다 따로 세면 그중 하나가 곧 어긋난다.
+describe('#147 창 가시성 판정', () => {
+  const w = (visible: boolean, minimized = false, destroyed = false): WindowVisibility => ({
+    isVisible: () => visible,
+    isMinimized: () => minimized,
+    isDestroyed: () => destroyed
+  })
+
+  it('보이는 창이 하나도 없으면 false — 그때만 멈춘다', () => {
+    expect(anyWindowVisible([])).toBe(false)
+    expect(anyWindowVisible([w(false)])).toBe(false)
+    expect(anyWindowVisible([w(true, true)])).toBe(false) // 최소화는 보는 게 아니다
+    expect(anyWindowVisible([w(true, false, true)])).toBe(false) // 파괴 중인 창
+  })
+
+  it('★ 본창을 내려도 분리 창이 보이면 계속 돈다 — 보고 있는 화면을 죽이지 않는다', () => {
+    expect(anyWindowVisible([w(true, true), w(true)])).toBe(true)
+    expect(anyWindowVisible([w(true)])).toBe(true)
+  })
+
+  it('창 상태를 묻다 던지면(파괴 레이스) 그 창은 없는 것으로 친다', () => {
+    const boom = {
+      isDestroyed: () => {
+        throw new Error('destroyed')
+      },
+      isVisible: () => true,
+      isMinimized: () => false
+    }
+    expect(anyWindowVisible([boom])).toBe(false)
+    expect(anyWindowVisible([boom, w(true)])).toBe(true)
   })
 })
 
