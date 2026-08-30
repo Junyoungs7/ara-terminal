@@ -156,9 +156,11 @@
      맑은 고딕은 비례 폰트라 로그·에디터 본문에서 한글이 섞이면 열이 밀린다. 그 장치는
      터미널(--term)에서 설정 토글로 계속 살아 있다.
      --term — 터미널 본문 전용. 설정 [폰트]가 실시간으로 덮어쓴다(store/font.ts bindCssVars).
-     여기 정적값은 하이드레이트 전 첫 페인트용 기본값이라 기본 선택과 맞춰 둔다. */
+     여기 정적값은 하이드레이트 전 첫 페인트용 기본값이라 기본 선택과 맞춰 둔다
+     (stackFor() 가 조립하는 값과 같아야 한다 — 'ARA Nerd Font Symbols' 는 PUA 전용
+     unicode-range 페이스라 항상 맨 앞에 붙는다. FINISH-M4). */
   --mono: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
-  --term: 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
+  --term: 'ARA Nerd Font Symbols', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
 
   /* 터미널 본문 크기·행간 (§2.2, 10–20px 슬라이더) + 셸 치수 (§4.1) */
   /* --tt(크기)·--tl(행간)은 F5 폰트 설정이 workspace.json ui.font 에서 하이드레이트.

@@ -184,7 +184,7 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 |---|---|---|
 | `--ui` | `'Pretendard Variable', 'Pretendard', -apple-system, 'Segoe UI', sans-serif` | 모든 UI 텍스트 (메뉴, 라벨, 버튼, 노드명) |
 | `--mono` | **고정** `'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace` | 경로·명령줄·로그 본문·에디터·키 표기·API 키 — *격자에 맞아야 뜻이 사는* 27곳. **터미널 설정을 따라가지 않는다**(2026-08-21) |
-| `--term` | `'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace` (기본값 — 설정에서 바꿀 수 있음) | 터미널 본문 (한글 고정폭 정렬) |
+| `--term` | `'ARA Nerd Font Symbols', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace` (기본값 — 설정에서 바꿀 수 있음) | 터미널 본문 (한글 고정폭 정렬) |
 
 > **UI-font (2026-08-04, 준영님 확정 요구): `--mono`는 항상 `--term`과 같은 값이다.**
 > `store/font.ts`의 `bindCssVars`가 설정에서 고른 터미널 폰트로 `--term`·`--mono`를 함께
@@ -221,6 +221,23 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 > Width 속성표로 미리 정하고 그 안에 어떤 폰트가 그리든 그리기만 하므로, 한글 글리프의
 > 출처 폰트가 바뀌어도 열 배치 자체는 흔들리지 않는다(구조적 보장 + 실측 둘 다 확인 —
 > `agent_talk/UI-font4-done.md`).
+>
+> **FINISH-M4(2026-08-28) — 폰트가 넷인 이유: `'ARA Nerd Font Symbols'` 는 글꼴이 아니라 심볼
+> 보충이다.** 서버 쪽에서 starship · powerlevel10k · oh-my-zsh 나 lsd/eza 를 쓰면 프롬프트에
+> 브랜치·폴더 아이콘과 powerline 구분자()가 나오는데, 이 글리프들은 유니코드 **사설 사용
+> 영역(PUA)** 코드포인트라 번들 폰트 셋(나눔고딕코딩·D2Coding·JetBrains Mono) 어디에도 없다
+> — 전부 두부(□)로 그려졌고 사용자 눈에는 "터미널이 깨졌다"로 보였다. 그래서 Nerd Fonts 의
+> `NerdFontsSymbolsOnly` 묶음(SIL OFL, `resources/fonts/SymbolsNerdFontMono-Regular.woff2`
+> + `OFL-SymbolsNerdFontMono.txt`)을 번들하고, **`unicode-range: U+E000-F8FF, U+F0000-FFFFD,
+> U+100000-10FFFD` 로 PUA 세 구간에만 가둔다.** 가두는 이유: 이 페이스는 스택 맨 앞에 있고
+> range 가 없으면 라틴까지 이 폰트가 먹어서 **사용자가 고른 터미널 글꼴이 통째로 뒤집힌다.**
+> range 안에서는 다른 폰트에 애초에 그 글리프가 없으므로 충돌이 없고, range 밖에서는 이
+> 페이스가 매치되지 않아 기존 렌더링에 미치는 영향이 0이다. 그래서 `stackFor()`(fontStacks.ts)
+> 는 **설정과 무관하게 항상** 이 페이스를 맨 앞에 붙인다 — 글꼴 선택지가 아니라 상수다.
+> `Mono` 변종인 것도 의도다(한 칸 폭 — 두 칸 폭 변종은 셀 격자에서 프롬프트를 밀어낸다).
+> 실측(cmap 파싱): U+E0B0·U+E0A0·U+F09B·U+E702 등 10,396 코드포인트가 range 안에 있고,
+> 라틴 `A`·한글 `가`·`→` 는 이 폰트에 아예 없다. range 밖으로 빠지는 건 U+23FB⏻ 계열 14자뿐인데
+> 전부 일반 유니코드 기호라 시스템 폰트가 이미 그린다.
 
 #### 한글 폰트 리서치 결과 (v2 — 2026-08-02)
 

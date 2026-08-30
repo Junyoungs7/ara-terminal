@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
@@ -42,22 +42,73 @@ describe('F5 폰트 스택(fontStacks)', () => {
 
   it('stackFor는 알 수 없는 키에 대해 primary(나눔고딕코딩)로 폴백한다', () => {
     // UI-font4: 기본(krSystemFallback=true)엔 'KR System' 접두가 붙는다 — false로 순수 스택만 비교.
-    expect(stackFor('없는폰트', false)).toBe(FONT_OPTIONS[0].stack)
+    // FINISH-M4: 'ARA Nerd Font Symbols' 는 설정과 무관하게 항상 붙으므로 접두를 벗기고 비교한다.
+    expect(stripNerd(stackFor('없는폰트', false))).toBe(FONT_OPTIONS[0].stack)
     expect(stackFor('D2Coding', false)).toContain('D2Coding')
   })
 })
 
+// FINISH-M4: 항상 붙는 PUA 심볼 페이스 접두를 벗겨 그 이전 규약을 그대로 검사할 수 있게 한다.
+const NERD = "'ARA Nerd Font Symbols'"
+const stripNerd = (s: string): string => s.replace(`${NERD}, `, '')
+
+describe('FINISH-M4: Nerd Font 심볼(PUA) — 서버 프롬프트 아이콘이 두부로 나오던 것', () => {
+  it('설정과 무관하게 모든 스택 맨 앞에 붙는다 (KR System on/off · 후보 전부)', () => {
+    for (const o of FONT_OPTIONS) {
+      expect(stackFor(o.key)).toBe(`${NERD}, 'KR System', ${o.stack}`)
+      expect(stackFor(o.key, false)).toBe(`${NERD}, ${o.stack}`)
+    }
+  })
+
+  it('★ unicode-range 가 PUA 세 구간에만 국한된다 — 넓으면 터미널 글꼴이 통째로 바뀐다', () => {
+    const css = readFileSync(join(__dirname, '../src/renderer/styles/fonts.css'), 'utf8')
+    const block = css.split('@font-face').find((b) => b.includes("'ARA Nerd Font Symbols'"))
+    expect(block, '심볼 @font-face 를 못 찾음').toBeTruthy()
+    const range = /unicode-range:\s*([^;]+);/.exec(block!)?.[1]?.trim()
+    expect(range, 'unicode-range 가 없다 — 이 폰트가 라틴까지 먹는다').toBeTruthy()
+
+    // 값을 실제 구간으로 파싱해, 한글/라틴/기호가 하나라도 걸리면 실패시킨다.
+    const spans = range!.split(',').map((part) => {
+      const [lo, hi] = part.trim().replace(/^U\+/i, '').split('-')
+      return { lo: parseInt(lo, 16), hi: parseInt(hi ?? lo, 16) }
+    })
+    const covers = (cp: number): boolean => spans.some((s) => cp >= s.lo && cp <= s.hi)
+
+    expect(covers(0xe0b0), 'powerline 구분자(U+E0B0)가 빠졌다').toBe(true)
+    expect(covers(0xf09b), 'git 브랜치 계열(U+F09B)이 빠졌다').toBe(true)
+    for (const [cp, what] of [
+      [0x41, '라틴 A'],
+      [0xac00, '한글 가'],
+      [0xd7a3, '한글 힣'],
+      [0x2192, '기호 →'],
+      [0x2500, '박스 그리기 ─'],
+      [0x3131, '한글 자모 ㄱ']
+    ] as const) {
+      expect(covers(cp), `${what}(U+${cp.toString(16).toUpperCase()}) 가 range 에 들어갔다`).toBe(false)
+    }
+  })
+
+  it('폰트 파일과 OFL 라이선스가 번들에 함께 있다 (OFL 은 라이선스 동봉이 조건)', () => {
+    const dir = join(__dirname, '../resources/fonts')
+    // Mono 변종이어야 한다 — 두 칸 폭 변종은 셀 격자에서 프롬프트를 밀어낸다.
+    expect(statSync(join(dir, 'SymbolsNerdFontMono-Regular.woff2')).size).toBeGreaterThan(100_000)
+    expect(statSync(join(dir, 'OFL-SymbolsNerdFontMono.txt')).size).toBeGreaterThan(0)
+  })
+})
+
 describe('UI-font4: 한글 시스템 폴백(KR System) — Tabby 재현 (agent_talk/UI-font4-done.md)', () => {
+  // FINISH-M4 이후 stackFor 는 항상 PUA 심볼 페이스를 앞에 붙인다 — stripNerd 로 벗기고
+  // KR System 규약만 검사한다(심볼 페이스 자체는 FINISH-M4 describe 에서 별도로 본다).
   it('기본값(true)은 모든 후보 스택 맨 앞에 KR System을 추가한다', () => {
     for (const o of FONT_OPTIONS) {
-      expect(stackFor(o.key)).toBe(`'KR System', ${o.stack}`)
-      expect(stackFor(o.key, true)).toBe(`'KR System', ${o.stack}`)
+      expect(stripNerd(stackFor(o.key))).toBe(`'KR System', ${o.stack}`)
+      expect(stripNerd(stackFor(o.key, true))).toBe(`'KR System', ${o.stack}`)
     }
   })
 
   it('false면 되돌리기 — KR System 없이 이전 동작과 완전히 동일하다', () => {
     for (const o of FONT_OPTIONS) {
-      expect(stackFor(o.key, false)).toBe(o.stack)
+      expect(stripNerd(stackFor(o.key, false))).toBe(o.stack)
     }
   })
 
@@ -102,7 +153,7 @@ describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사�
     const { bindCssVars } = await import('../src/renderer/store/font')
     for (const o of FONT_OPTIONS) {
       bindCssVars({ term: o.key, sizePx: 14, lineHeight: 1.58 })
-      expect(props['--term']).toBe(`'KR System', ${o.stack}`)
+      expect(stripNerd(props['--term'])).toBe(`'KR System', ${o.stack}`)
       expect(props['--mono'], `${o.key}: --mono 가 설정을 따라갔다`).toBeUndefined()
       expect(props['--ui'], `${o.key}: --ui 가 설정을 따라갔다`).toBeUndefined()
     }
@@ -111,7 +162,7 @@ describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사�
   it('krSystemFallback:false 면 --term 에서 KR System 이 빠진다(설정 되돌리기)', async () => {
     const { bindCssVars } = await import('../src/renderer/store/font')
     bindCssVars({ term: 'Nanum Gothic Coding', sizePx: 14, lineHeight: 1.58, krSystemFallback: false })
-    expect(props['--term']).toBe(FONT_OPTIONS[0].stack)
+    expect(stripNerd(props['--term'])).toBe(FONT_OPTIONS[0].stack)
     expect(props['--term']).not.toContain('KR System')
   })
 

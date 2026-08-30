@@ -44,7 +44,17 @@ export const FONT_OPTIONS: FontOption[] = [
 // 근거·픽셀 비교: agent_talk/UI-font4-done.md. 기본 on, 설정에서 끄면 이전 동작(번들 폰트만)으로 복귀.
 const KR_SYSTEM_FACE = "'KR System'"
 
+// FINISH-M4(2026-08-28): 'ARA Nerd Font Symbols' — 사설 사용 영역(PUA)에만 적용되는 @font-face
+// (styles/fonts.css, unicode-range U+E000-F8FF · U+F0000-FFFFD · U+100000-10FFFD).
+// **설정과 무관하게 항상 붙는다**: 서버 쪽 프롬프트(starship·powerlevel10k·oh-my-zsh)와 lsd/eza 가
+// 찍는 아이콘·powerline 구분자가 그 구간에 있는데 번들 폰트 셋 중 어느 것도 갖고 있지 않아서
+// 두부(□)로 나온다. 사용자가 무슨 글꼴을 고르든 이 결핍은 같으므로 선택지가 아니라 상수다.
+// unicode-range 가 좁아 순서는 결과를 바꾸지 않지만(다른 폰트엔 그 글리프가 없다) 심볼 폰트를
+// 맨 앞에 두는 것이 관용이고, 읽는 사람이 "항상 붙는다"를 바로 알아본다.
+const NERD_SYMBOLS_FACE = "'ARA Nerd Font Symbols'"
+
 export function stackFor(term: string, krSystemFallback = true): string {
   const opt = FONT_OPTIONS.find((o) => o.key === term) ?? FONT_OPTIONS[0]
-  return krSystemFallback ? `${KR_SYSTEM_FACE}, ${opt.stack}` : opt.stack
+  const base = krSystemFallback ? `${KR_SYSTEM_FACE}, ${opt.stack}` : opt.stack
+  return `${NERD_SYMBOLS_FACE}, ${base}`
 }
