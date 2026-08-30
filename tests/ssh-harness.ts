@@ -26,6 +26,15 @@ export type Harness = {
   port: number
   hostKeyPem: string
   password: string
+  /** F1b: 셸 채널로 온 env 요청(`ARA_HOOK_PORT` 등). 실제 sshd 는 AcceptEnv 로 거르지만 여기선 다 받는다. */
+  shellEnv: Record<string, string>
+  /** F1b: 클라이언트가 forwardIn 으로 받아 간 원격 포트(0 = 요청이 없었거나 거절했다). */
+  forwardedPort: () => number
+  /**
+   * F1b: **원격에서 그 포트에 누가 붙었다**를 만들어 낸다(실제 sshd 가 훅의 curl 을 받아 하는 일).
+   * 돌려주는 채널이 곧 그 커넥션이다 — 여기에 HTTP 를 그대로 쓰면 우리 훅 서버까지 가야 한다.
+   */
+  openForwarded: () => Promise<ServerChannel>
   close: () => Promise<void>
   /**
    * **이미 붙어 있는 연결을 끊는다.** `close()` 는 새 연결만 막고 살아 있는 연결은 그대로 두므로
@@ -66,6 +75,8 @@ export async function startPasswordServer(opts?: {
   //   · sftp READLINK `/proc/<pid>/cwd` 로 그 cwd 를 돌려준다
   // procMissing: /proc 이 없는 서버(비리눅스) — READLINK 를 거절해 "조용히 포기"를 검증한다.
   procCwd?: { pid: number; initial?: string; procMissing?: boolean }
+  // F1b: 역터널(tcpip-forward) 을 받아 준다. 안 주면 거절한다 — `AllowTcpForwarding no` 서버가 그렇다.
+  forwardIn?: boolean
 }): Promise<Harness> {
   const password = opts?.password ?? 'testpw123'
   const hostKeyPem = opts?.hostKeyPem ?? genHostKey()
@@ -77,11 +88,26 @@ export async function startPasswordServer(opts?: {
 
   // 살아 있는 연결. dropAll() 이 이걸 끊는다.
   const live = new Set<Connection>()
+  // F1b: 셸에 실려 온 env · 역터널을 받아 준 커넥션과 그 포트.
+  const shellEnv: Record<string, string> = {}
+  let forwarded: { conn: Connection; port: number } | null = null
 
   const server = new Server({ hostKeys: [hostKeyPem] }, (client) => {
     live.add(client)
     client.on('close', () => live.delete(client))
     client.on('error', () => live.delete(client))
+    // F1b: 역터널 요청. 실제 sshd 처럼 **우리가 포트를 고르고**(요청은 0 이다) 그 번호를 돌려준다.
+    client.on('request', (accept, reject, name, info) => {
+      if (!opts?.forwardIn || name !== 'tcpip-forward') {
+        reject?.()
+        return
+      }
+      // 하네스에서는 아무도 실제로 이 포트를 듣지 않는다 — 연결은 openForwarded() 가 만든다.
+      const asked = (info as { bindPort?: number }).bindPort ?? 0
+      const port = asked > 0 ? asked : 45000 + Math.floor(Math.random() * 1000)
+      forwarded = { conn: client, port }
+      accept?.(port)
+    })
     client.on('authentication', (ctx) => {
       if (ctx.method === 'password' && ctx.password === password) ctx.accept()
       else if (ctx.method === 'none') ctx.reject(['password'])
@@ -101,6 +127,11 @@ export async function startPasswordServer(opts?: {
         // ssh2 서버의 pty/shell 이벤트는 accept 함수를 직접 넘긴다(객체 아님).
         session.on('pty', (acceptPty) => {
           if (acceptPty) acceptPty()
+        })
+        // F1b: 셸 요청 앞에 오는 env 요청. ssh2 는 이걸 wantReply 없이 보내므로 accept 가 없을 수 있다.
+        session.on('env', (acceptEnv, _rejectEnv, info) => {
+          shellEnv[info.key] = info.val
+          acceptEnv?.()
         })
         session.on('shell', (acceptShell) => {
           const stream = acceptShell()
@@ -201,6 +232,16 @@ export async function startPasswordServer(opts?: {
     port,
     hostKeyPem,
     password,
+    shellEnv,
+    forwardedPort: () => forwarded?.port ?? 0,
+    openForwarded: () =>
+      new Promise<ServerChannel>((resolve, reject) => {
+        if (!forwarded) return reject(new Error('역터널이 없다 — forwardIn 을 받지 않았다'))
+        // 채널의 목적지(boundAddr:boundPort)가 클라이언트가 등록해 둔 바인딩과 맞아야 받아 준다.
+        forwarded.conn.forwardOut('127.0.0.1', forwarded.port, '127.0.0.1', 54321, (err, ch) =>
+          err ? reject(err) : resolve(ch)
+        )
+      }),
     close: () =>
       new Promise<void>((resolve) => {
         for (const c of live) c.end()

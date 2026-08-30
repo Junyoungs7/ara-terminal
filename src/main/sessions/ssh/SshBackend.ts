@@ -7,6 +7,8 @@ import type { KnownHost, SshProfile } from '@shared/types'
 import { fingerprintSha256, hostId, verifyHostKey } from './hostkey'
 import { logMainError } from '../../log/MainErrorLog'
 import { SHELL_PID_CMD, cwdLink, parseShellPid } from './remoteCwd'
+import type { HookSink } from '../../agent/AgentHookServer'
+import { prepareRemoteHooks } from '../../agent/remoteHooks'
 
 // 출력이 이만큼 멎으면 프롬프트가 뜬 것으로 보고 CWD 를 한 번 읽는다(remoteCwd.ts 참조).
 // 짧을수록 트리가 빨리 따라오지만, 명령 출력 중간중간 읽는 낭비가 는다.
@@ -28,6 +30,15 @@ export type ConnectDeps = {
   acceptHostKey: boolean // 최초 접속 확인 다이얼로그 통과 여부
   // 최초 접속 시 지문을 knownHosts에 기록하는 콜백(부수효과는 호출측이 소유).
   onHostKeyAccepted: (id: string, host: KnownHost) => void
+  /**
+   * F1b 원격 훅. 주면 **셸을 열기 전에** 역터널을 열고 원격 `~/.claude/settings.json` 을 병합한 뒤,
+   * 그 결과 env(`ARA_HOOK_PORT`·`ARA_PANE`)를 셸 요청에 실어 보낸다.
+   *
+   * paneId 는 **세션 id 를 미리 받은 것**이다 — 셸이 열린 뒤에 정해지면 env 에 실을 수 없다
+   * (그래서 `MainSessionManager.adopt` 가 id 를 받는다. 로컬은 `create` 가 같은 이유로 id 를 먼저 만든다).
+   * 안 주면 이 커넥션은 훅 없이 열린다(접속 테스트 경로가 그렇다).
+   */
+  hooks?: { sink: HookSink; paneId: string }
 }
 
 export type ConnectOutcome =
@@ -109,6 +120,36 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
       negotiatedAlg = nego.serverHostKey
     })
 
+    // F1b: 훅 준비는 **셸을 열기 전에** 끝나야 한다 — env 는 셸 요청에 함께 실려 가므로 셸이 먼저
+    // 뜨면 그 탭에서 도는 claude 는 갈 곳을 모른다(F1a 가 창보다 먼저 포트를 잡는 것과 같은 순서).
+    // 준비가 실패해도 셸은 연다: 훅은 있으면 좋은 것이지 접속의 조건이 아니다.
+    const openShell = async (): Promise<void> => {
+      let env: Record<string, string> | null = null
+      if (deps.hooks) {
+        try {
+          const prep = await prepareRemoteHooks(client, deps.hooks.sink, deps.hooks.paneId)
+          env = prep?.env ?? null
+          void prep?.installed.then((r) => {
+            // 설치 실패는 접속을 막지 않는다 — 대신 조용히 사라지지도 않게 남긴다(왜 상태가
+            // 안 뜨는지 물어볼 사람이 있다). `skipped` 는 실패가 아니라 **안 한 것**이라 안 남긴다
+            // (claude 없는 서버가 대부분이고, 그때마다 로그를 쌓으면 로그가 곧 소음이다).
+            if (!r.ok && r.reason !== 'skipped') logMainError(`agent hook install:${profile.host}`, new Error(r.message))
+          })
+        } catch (e) {
+          logMainError(`agent hook prepare:${profile.host}`, e)
+        }
+      }
+      // 3인자 형태로 부른다: `env` 를 창 옵션과 같은 객체에 넣으면 ssh2 가 그 객체를 통째로 opts 로
+      // 해석해 **pty 요청의 term·크기가 사라진다**(ssh2 client.js shell() 의 인자 판별).
+      client.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, env ? { env } : {}, (err, channel) => {
+        if (err) {
+          done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })
+          return
+        }
+        done({ ok: true, backend: new SshBackend(client, channel) })
+      })
+    }
+
     client.on('ready', () => {
       // 인증까지 성공(hostVerifier도 통과). 최초 접속이었다면 지문을 knownHosts에 기록.
       if (hostKeyState) {
@@ -121,13 +162,7 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
           })
         }
       }
-      client.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (err, channel) => {
-        if (err) {
-          done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })
-          return
-        }
-        done({ ok: true, backend: new SshBackend(client, channel) })
-      })
+      void openShell()
     })
 
     client.on('error', (err: Error & { level?: string }) => {

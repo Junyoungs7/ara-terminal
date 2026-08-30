@@ -9,21 +9,37 @@ import { applyHook, isHookCli, type AgentStatus } from '@shared/agentStatus'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from './claudeHooks'
 
-export type AgentHookServerHandle = {
+/**
+ * 원격(F1b)이 쓰는 좁은 모양 — 포트를 묻고 그 서버의 토큰을 등록한다.
+ * 세션 매니저가 이것만 들고 있으면 SSH 접속 경로가 훅 서버 전체를 알 필요가 없다.
+ */
+export type HookSink = {
+  port(): number
+  /**
+   * 소유자별 토큰 등록. **서버마다 토큰이 다르다**(원격 `~/.claude/settings.json` 은 호스트마다
+   * 따로 있고, 그 파일에서 되찾은 값이 곧 그 호스트의 토큰이다). 소유자는 세션 id 라 세션이
+   * 끝나면 `forget` 이 같이 지운다 — 죽은 서버의 토큰이 계속 통하면 그게 곧 남은 열쇠다.
+   */
+  setToken(owner: string, token: string): void
+}
+
+export type AgentHookServerHandle = HookSink & {
   /** 리슨을 시작하고 잡은 포트를 돌려준다. 실패하면 0 — 앱은 그대로 뜨고 상태가 `unverifiable` 로 남는다. */
   start(): Promise<number>
-  port(): number
   statuses(): AgentStatus[]
-  /** 세션이 끝나면 그 상태도 지운다 — 죽은 세션의 상태가 원장에 남으면 그게 곧 유령이다. */
+  /** 세션이 끝나면 그 상태도, 그 세션이 등록한 토큰도 지운다 — 죽은 세션의 것이 남으면 그게 곧 유령이다. */
   forget(sessionId: string): void
   stop(): Promise<void>
 }
+
+/** 로컬 훅 토큰의 소유자 이름. 세션 id 는 uuid 라 이 이름과 부딪히지 않는다. */
+const LOCAL_OWNER = 'local'
 
 // `/hook/<cli>/<event>` — cli 가 경로에 있는 것이 다른 CLI 를 갈아 끼울 자리다(어댑터 seam).
 const HOOK_PATH = /^\/hook\/([a-z]+)\/([A-Za-z]+)$/
 
 export function createAgentHookServer(opts: {
-  /** 훅 설정에 심어 둔 토큰. 이 값과 맞는 요청만 상태를 바꾼다. */
+  /** 로컬 `~/.claude/settings.json` 에 심어 둔 토큰. 원격 것은 `setToken` 으로 뒤에 붙는다. */
   token: string
   onStatus: (s: AgentStatus) => void
   /** 테스트 seam. 프로덕션은 0(OS 가 고른다). */
@@ -32,12 +48,20 @@ export function createAgentHookServer(opts: {
   const statuses = new Map<string, AgentStatus>()
   let httpServer: HttpServer | null = null
   let boundPort = 0
-  const expected = hashToken(opts.token)
+  // 소유자 → 토큰 해시. **집합인 것이 요점이다**: 서버가 하나뿐이던 시절엔 토큰도 하나였는데,
+  // 그대로 원격을 붙이면 서버 N 개가 같은 열쇠를 쓰게 되고 그러면 어느 서버의 훅이든 다른 서버의
+  // 훅인 척할 수 있다. McpServer.authOk 의 `expected` 배열과 같은 모양이다.
+  const tokens = new Map<string, string>([[LOCAL_OWNER, hashToken(opts.token)]])
 
   function authOk(req: IncomingMessage): boolean {
     const got = req.headers[HOOK_TOKEN_HEADER]
     if (typeof got !== 'string' || got.length === 0) return false
-    return safeEqualHex(hashToken(got), expected)
+    const hash = hashToken(got)
+    // 비교는 해시마다 상수시간이다. 어느 것과 맞았는지만 갈리고 비밀은 새지 않는다(MCP 와 같은 규율).
+    for (const expected of tokens.values()) {
+      if (safeEqualHex(hash, expected)) return true
+    }
+    return false
   }
 
   function onRequest(req: IncomingMessage, res: ServerResponse): void {
@@ -97,8 +121,13 @@ export function createAgentHookServer(opts: {
     },
     port: () => boundPort,
     statuses: () => [...statuses.values()],
+    setToken(owner, token) {
+      if (owner === LOCAL_OWNER || !owner || !token) return
+      tokens.set(owner, hashToken(token))
+    },
     forget(sessionId) {
       statuses.delete(sessionId)
+      tokens.delete(sessionId)
     },
     async stop() {
       const s = httpServer

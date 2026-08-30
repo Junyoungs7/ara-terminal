@@ -1,6 +1,7 @@
 // ssh 도메인 IPC 핸들러 (계획서 §C F3). 프로필 조회→비밀 복호(vault)→호스트키 TOFU→연결→세션 편입.
 // 실패는 구조화된 SshConnectResult로 반환(예외 던지지 않음): 고아 secretRef/호스트키/인증 구분.
 import net from 'node:net'
+import { randomUUID } from 'node:crypto'
 import type { ConnTestResult, SshConnectResult } from '@shared/ipc'
 import type { ProfileInput, SshProfile } from '@shared/types'
 import { handle } from './handle'
@@ -44,25 +45,34 @@ export async function connectByProfile(
     secret = lookup.secret
   }
 
+  // F1b: 세션 id 를 **접속 전에** 만든다 — 그 값이 원격 셸의 `ARA_PANE` 이 되고, 그래야 사용자가
+  // 직접 친 `claude` 의 훅도 자기가 어느 탭인지 말할 수 있다(편입 후엔 이미 셸이 떠 있다).
+  const paneId = randomUUID()
+  const hookSink = sessions.hooks()
   const outcome = await connectSsh(profile, {
     knownHosts: ws.getKnownHosts(),
     secret,
     acceptHostKey,
-    onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host)
+    onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
+    ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {})
   })
 
   if (!outcome.ok) return outcome
 
   // 연결된 백엔드를 로컬과 동일 세션 파이프라인에 편입(별도 경로 금지).
   const title = sessions.nextTitle(profile.name)
-  const id = sessions.adopt(outcome.backend, {
-    type: 'ssh',
-    profileId: profile.id,
-    title,
-    serverKey: profile.name,
-    cwd: undefined,
-    shell: undefined
-  })
+  const id = sessions.adopt(
+    outcome.backend,
+    {
+      type: 'ssh',
+      profileId: profile.id,
+      title,
+      serverKey: profile.name,
+      cwd: undefined,
+      shell: undefined
+    },
+    paneId
+  )
   return { ok: true, id, title }
 }
 

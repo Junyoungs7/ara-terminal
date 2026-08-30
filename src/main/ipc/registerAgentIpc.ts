@@ -6,11 +6,8 @@ import { type WebContents } from 'electron'
 import { handle } from './handle'
 import type { AgentHookState } from '@shared/agentStatus'
 import { createAgentHookServer, type AgentHookServerHandle } from '../agent/AgentHookServer'
-import { installClaudeHooks } from '../agent/claudeHooks'
+import { HOOK_PORT_ENV, installClaudeHooks } from '../agent/claudeHooks'
 import { pushSend } from '../util/windowPush'
-
-/** 훅이 POST 할 주소를 셸에 알려 주는 env. 비밀이 아니다(토큰은 훅 설정 파일에만 산다). */
-export const HOOK_PORT_ENV = 'ARA_HOOK_PORT'
 
 export type AgentRuntime = {
   server: AgentHookServerHandle

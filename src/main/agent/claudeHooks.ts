@@ -16,6 +16,14 @@ export const HOOK_MARK = 'ara-agent-hook'
 export const HOOK_TOKEN_HEADER = 'x-ara-token'
 export const HOOK_PANE_HEADER = 'x-ara-pane'
 
+/**
+ * 훅이 읽는 env 둘. **명령 문자열과 심는 쪽이 같은 상수를 본다** — 이름이 어긋나면 훅은
+ * 조용히 아무 일도 안 하고(포트가 없으니), 그 조용함은 버그처럼 보이지 않는다.
+ * 로컬은 main 의 process.env(포트)·PtyBackend(pane)가, 원격은 SSH 셸 요청이 넣는다(F1b).
+ */
+export const HOOK_PORT_ENV = 'ARA_HOOK_PORT'
+export const HOOK_PANE_ENV = 'ARA_PANE'
+
 /** 훅 실행 상한(초). curl 의 -m 2 가 먼저 끊지만, 그게 안 먹는 상황을 위한 바깥 울타리다. */
 const HOOK_TIMEOUT_SEC = 5
 
@@ -40,10 +48,10 @@ type Settings = Record<string, unknown> & { hooks?: Record<string, HookEntry[]> 
  * 안 읽으면 CLI 쪽 쓰기가 EPIPE 를 볼 수 있다.
  */
 export function hookCommand(event: string, token: string): string {
-  const url = `http://127.0.0.1:$ARA_HOOK_PORT/hook/claude/${event}`
+  const url = `http://127.0.0.1:$${HOOK_PORT_ENV}/hook/claude/${event}`
   return (
-    `[ -n "$ARA_HOOK_PORT" ] && curl -sS -m 2 -X POST` +
-    ` -H "${HOOK_TOKEN_HEADER}: ${token}" -H "${HOOK_PANE_HEADER}: $ARA_PANE"` +
+    `[ -n "$${HOOK_PORT_ENV}" ] && curl -sS -m 2 -X POST` +
+    ` -H "${HOOK_TOKEN_HEADER}: ${token}" -H "${HOOK_PANE_HEADER}: $${HOOK_PANE_ENV}"` +
     ` --data-binary @- "${url}" >/dev/null 2>&1; exit 0 # ${HOOK_MARK}`
   )
 }
@@ -93,13 +101,41 @@ export function tokenInSettings(settings: unknown): string | null {
 }
 
 /** 256비트 랜덤(McpServer.issueRawToken 과 같은 규격 — base64url 이라 셸·헤더에 그대로 실린다). */
-const newToken = (): string => randomBytes(32).toString('base64url')
+export const newToken = (): string => randomBytes(32).toString('base64url')
 
 /**
- * 훅을 심고 **그때 쓰인 토큰**을 함께 돌려준다.
+ * 설정 파일 **내용 한 덩어리**에 대해 "무엇을 쓸 것인가"를 정한다. 파일을 안 읽고 안 쓴다.
+ *
+ * 이 함수가 문자열을 받는 이유: 같은 판단이 로컬(fs)과 원격(SFTP) 두 곳에서 필요한데, 그 둘은
+ * **읽고 쓰는 방법만** 다르다(F1b). 판단이 두 벌이 되면 원격만 남의 설정을 지우는 날이 온다.
+ *
+ * · `null` 내용 = 파일 없음 = 첫 설치(정상)
+ * · 깨진 JSON = **손대지 않는다.** 못 읽는 파일을 우리 것으로 덮으면 남의 설정이 사라진다
+ * · `next === null` = 이미 같다 → 쓰지 않는다(설정 파일의 mtime 을 흔들 이유가 없다)
+ */
+export type HookPlan = { ok: false; message: string } | { ok: true; token: string; next: Settings | null }
+
+export function planHooks(currentText: string | null): HookPlan {
+  let current: unknown = null
+  if (currentText !== null) {
+    try {
+      current = JSON.parse(currentText)
+    } catch (e) {
+      return { ok: false, message: String(e) }
+    }
+  }
+  // 심어 둔 토큰이 있으면 그대로 쓴다 → 두 번째 기동부터는 파일이 완전히 같아 아무것도 안 쓴다.
+  const token = tokenInSettings(current) ?? newToken()
+  const next = mergeHooks(current, token)
+  if (current !== null && JSON.stringify(current) === JSON.stringify(next)) return { ok: true, token, next: null }
+  return { ok: true, token, next }
+}
+
+/**
+ * 훅을 심고 **그때 쓰인 토큰**을 함께 돌려준다(로컬 `~/.claude/settings.json`).
  *
  * 읽기 실패와 파싱 실패를 가른다: 없는 파일은 첫 설치(정상)고, **깨진 파일은 손대지 않고**
- * 사용자에게 말한다 — 못 읽는 파일을 우리 것으로 덮으면 남의 설정이 사라진다.
+ * 사용자에게 말한다.
  */
 export function installClaudeHooks(home: string): { install: AgentHookInstall; token: string } {
   const token0 = newToken()
@@ -107,26 +143,27 @@ export function installClaudeHooks(home: string): { install: AgentHookInstall; t
   const dir = join(home, '.claude')
   const path = join(dir, 'settings.json')
 
-  let current: unknown = null
+  let text: string | null = null
   if (existsSync(path)) {
     try {
-      current = JSON.parse(readFileSync(path, 'utf8'))
+      text = readFileSync(path, 'utf8')
     } catch (e) {
       return { install: { ok: false, reason: 'parse', message: `${path} 를 읽을 수 없습니다: ${String(e)}` }, token: token0 }
     }
   }
 
-  const token = tokenInSettings(current) ?? token0
+  const plan = planHooks(text)
+  if (!plan.ok) {
+    return { install: { ok: false, reason: 'parse', message: `${path} 를 읽을 수 없습니다: ${plan.message}` }, token: token0 }
+  }
+  if (plan.next === null) return { install: { ok: true, path }, token: plan.token }
   try {
-    const next = mergeHooks(current, token)
-    // 이미 같으면 쓰지 않는다 — 매 기동마다 사용자 설정 파일의 mtime 을 흔들 이유가 없다.
-    if (current !== null && JSON.stringify(current) === JSON.stringify(next)) return { install: { ok: true, path }, token }
     mkdirSync(dir, { recursive: true })
     // writeJsonAtomic 은 기존 파일을 `settings.json.bak` 으로 밀어낸 뒤 rename 한다 — 남의 파일을
     // 고치는 자리라 그 되돌릴 자리가 특히 값지다. 대신 원본의 들여쓰기·키 순서는 한 번 다시 쓰인다.
-    writeJsonAtomic(path, next)
+    writeJsonAtomic(path, plan.next)
   } catch (e) {
-    return { install: { ok: false, reason: 'write', message: `${path} 에 쓸 수 없습니다: ${String(e)}` }, token }
+    return { install: { ok: false, reason: 'write', message: `${path} 에 쓸 수 없습니다: ${String(e)}` }, token: plan.token }
   }
-  return { install: { ok: true, path }, token }
+  return { install: { ok: true, path }, token: plan.token }
 }

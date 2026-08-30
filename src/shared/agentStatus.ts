@@ -134,8 +134,11 @@ export type AgentHookInstall =
    *   가장 나쁜 실패다). 사람이 고쳐야 하므로 화면에 말한다.
    * · write — 읽기는 됐는데 쓰기가 실패했다(권한·디스크·오피스키퍼).
    * · noHome — 홈 디렉터리를 못 찾았다.
+   * · skipped — **실패가 아니라 안 한 것이다**(F1b 원격). 그 서버에 `~/.claude` 가 아예 없으면
+   *   Claude Code 가 없는 서버라, 심어 봐야 아무도 안 읽는 파일을 남의 프로덕션 서버에 만드는 일이다.
+   *   설치는 SSH 가 붙을 때마다 다시 시도하므로 나중에 깔면 그다음 접속에서 심긴다.
    */
-  | { ok: false; reason: 'parse' | 'write' | 'noHome'; message: string }
+  | { ok: false; reason: 'parse' | 'write' | 'noHome' | 'skipped'; message: string }
 
 /** 설정 화면·렌더러가 한 번에 받아 가는 것. */
 export type AgentHookState = {

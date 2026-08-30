@@ -382,6 +382,9 @@ app.whenReady().then(async () => {
   const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
   agent = registerAgentIpc(hookHome, () => mainWc())
   await agent.start().catch((e: unknown) => logMainError('agent hook server', e))
+  // F1b: 원격도 같은 서버로 듣는다. SSH 가 붙을 때 역터널을 열고 그 호스트의 토큰을 등록하는 자리라
+  // 세션 매니저가 들고 있는다(늦은 바인딩 — 훅 서버는 부팅 뒤에 생긴다).
+  sessions.setHooks(agent.server)
   createWindow()
 
   app.on('activate', () => {

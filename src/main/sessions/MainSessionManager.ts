@@ -9,6 +9,7 @@ import { PtyBackend } from './PtyBackend'
 import { SshBackend } from './ssh/SshBackend'
 import { parseOsc7Cwd } from './osc7'
 import type { Session } from '@shared/types'
+import type { HookSink } from '../agent/AgentHookServer'
 
 // 백프레셔 메커니즘 1: flush당 상한 바이트. 초과 시 즉시 flush.
 const FLUSH_BYTE_BUDGET = 64 * 1024
@@ -46,12 +47,23 @@ type SessionLogTee = { write(meta: Session, chunk: Uint8Array): void; close(sess
 export class MainSessionManager implements ISessionManager {
   private readonly handles = new Map<string, Handle>()
   private log: SessionLogTee | null = null
+  private hookSink: HookSink | null = null
 
   constructor(private readonly sink: SessionSink) {}
 
   // F12: 출력 스트림 tee. null 이면 아무 일도 일어나지 않는다(기록 off 는 로거 내부에서도 한 번 더 막는다).
   setLog(log: SessionLogTee | null): void {
     this.log = log
+  }
+
+  // F1b: 훅 서버(늦은 바인딩 — setLog 와 같은 이유로 이 객체는 부팅 뒤에 생긴다).
+  // 세션을 만드는 두 길(렌더러의 ssh:connect · MCP 의 ssh_connect)이 **같은 것을 보게** 하려고
+  // 여기 둔다. 훅이 말하는 것은 세션의 상태이고, 세션을 아는 것은 이 객체다.
+  setHooks(sink: HookSink | null): void {
+    this.hookSink = sink
+  }
+  hooks(): HookSink | null {
+    return this.hookSink
   }
 
   async create(spec: SessionSpec): Promise<string> {
@@ -76,8 +88,10 @@ export class MainSessionManager implements ISessionManager {
   }
 
   // 외부에서 준비한 백엔드(예: 연결된 SshBackend)를 세션으로 편입. 로컬과 동일 파이프라인.
-  adopt(backend: SessionBackend, meta: Omit<Session, 'id'>): string {
-    const full: Session = { id: randomUUID(), ...meta }
+  // id 를 받는 이유(F1b): SSH 는 **셸을 열기 전에** 그 셸의 env 에 세션 id 를 넣어야 한다
+  // (`ARA_PANE`). 편입하고 나서 id 를 정하면 그때는 이미 셸이 떠 있다.
+  adopt(backend: SessionBackend, meta: Omit<Session, 'id'>, id: string = randomUUID()): string {
+    const full: Session = { id, ...meta }
     this.register(backend, full)
     return full.id
   }
