@@ -20,8 +20,8 @@
 .sp-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
   border-bottom: 1px solid var(--line);
 }
 .sp-search svg {
@@ -49,10 +49,10 @@
   color: var(--text-dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
-  padding: 1px 4px;
+  padding: var(--sp-hair) var(--sp-2);
 }
 .sp-empty {
-  padding: 14px 10px;
+  padding: var(--sp-7) var(--sp-5);
   text-align: center;
   font-size: var(--fs-md);
   font-weight: 500;
@@ -117,8 +117,8 @@
 .cs-hd {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
+  gap: var(--sp-5);
+  padding: var(--sp-7) var(--sp-9);
   border-bottom: 1px solid var(--line);
   flex: none;
 }
@@ -143,19 +143,19 @@
 .cs-hd p {
   font-size: var(--fs-md);
   color: var(--text-dim);
-  margin-top: 1px;
+  margin-top: var(--sp-hair);
 }
 /* .cs-hd .x(치트시트·명령어북 닫기)는 여기 있던 규칙이 shell.css 의 `.modal-hd .x` 와 한 글자도
    다르지 않았다 — 그쪽 선택자 목록에 합쳤다(M3). 모양을 고칠 일이 있으면 거기 한 곳만 고친다. */
 .cs-body {
-  padding: 18px;
+  padding: var(--sp-9);
   overflow-y: auto;
   flex: 1;
 }
 .cs-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: var(--sp-8);
 }
 .cs-col-title {
   font-size: var(--fs-md);
@@ -163,10 +163,10 @@
   letter-spacing: 0.9px;
   text-transform: uppercase;
   color: var(--accent-bright);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-5);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-3);
 }
 .cs-col-title::after {
   content: '';
@@ -178,7 +178,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0;
+  padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--line-soft);
 }
 .cs-row:last-child {
@@ -192,7 +192,7 @@
 }
 .cs-keys {
   display: flex;
-  gap: 3px;
+  gap: var(--sp-2);
   align-items: center;
 }
 .cs-k {
@@ -202,7 +202,7 @@
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
+  padding: var(--sp-1) var(--sp-3);
   color: var(--text-hi);
   box-shadow: inset 0 -1px 0 var(--line);
 }
@@ -212,7 +212,7 @@
   font-family: var(--mono);
 }
 .cs-foot {
-  padding: 10px 18px;
+  padding: var(--sp-5) var(--sp-9);
   border-top: 1px solid var(--line);
   flex: none;
   display: flex;
@@ -232,7 +232,7 @@
 .cb-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-1);
 }
 .cb-item {
   border-bottom: 1px solid var(--line-soft);
@@ -243,8 +243,8 @@
 .cb-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 8px 4px;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-2);
   cursor: pointer;
   border-radius: var(--radius-sm);
 }
@@ -274,8 +274,8 @@
 .cb-detail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 4px 10px 78px;
+  gap: var(--sp-4);
+  padding: var(--sp-1) var(--sp-2) var(--sp-5) 78px;
 }
 .cb-caution {
   font-size: var(--fs-md);
@@ -287,7 +287,7 @@
   flex: none;
   font-size: var(--fs-micro);
   font-weight: 600;
-  padding: 1px 6px;
+  padding: var(--sp-hair) var(--sp-3);
   border-radius: var(--radius-xs);
   background: var(--bg-raised);
   border: 1px solid var(--line);
@@ -329,7 +329,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  padding: 5px;
+  padding: var(--sp-3);
   /* ContextMenu.tsx 의 EDGE(14) 두 배 — 좌표 계산과 이 상한이 어긋나면 한쪽이 가장자리에 붙는다. */
   max-height: calc(100vh - 28px);
   overflow-x: hidden;
@@ -340,8 +340,8 @@
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 9px;
+  gap: var(--sp-5);
+  padding: var(--sp-3) var(--sp-5);
   border-radius: var(--radius-sm);
   font-size: var(--fs-md);
   font-weight: 500;
@@ -378,7 +378,7 @@
   color: var(--text-dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
-  padding: 1px 4px;
+  padding: var(--sp-hair) var(--sp-2);
   flex: none;
 }
 /* 미래 기능(로그 저장 · AI 질문) — 눌리되 비활성 톤. */
