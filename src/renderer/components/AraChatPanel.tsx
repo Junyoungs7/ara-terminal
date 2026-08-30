@@ -4,6 +4,8 @@ import type { AraChatEvent } from '../../main/ai/AraChat'
 import type { AraChatRow } from '../../main/ai/araChats'
 import type { AskRequest } from '../../main/mcp/askUser'
 import {
+  appendPaths,
+  clipFileName,
   dropAsk,
   openAsk,
   pickByKey,
@@ -13,6 +15,8 @@ import {
   remainText,
   type ChatItem
 } from '../store/araChatItems'
+import { filePaths, registerPasteTarget } from '../store/pasteFiles'
+import { joinPath } from './filePath'
 import { IconClose, IconRefresh, IconHistory, IconPencil, IconPlus } from './icons'
 import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
@@ -29,6 +33,29 @@ import { t } from '../i18n'
 
 /** 이 상태들에서만 사람이 말을 보낼 수 있다(나머지는 먼저 할 일이 있다). */
 const CAN_TYPE = new Set<Phase>(['idle', 'working'])
+
+/**
+ * #154 붙여넣은 캡처가 떨어지는 곳 — [받은 파일] 폴더(fs.downloadsDir) 아래 이 이름의 하위 폴더.
+ * 임시 폴더가 아닌 이유: 대화 도중에도 대화가 끝난 뒤에도 아라가 그 파일을 다시 읽을 수 있어야 한다.
+ */
+const PASTE_SUB = 'ara'
+
+/**
+ * 경로 없는 파일(= 클립보드 캡처)을 디스크에 떨구고 그 경로를 돌려준다.
+ *
+ * 왜 파일이어야 하나: 아라에게 넘기는 것은 **경로**다(아래 intake 참고). 캡처는 File.path 가 비어
+ * 있어 그대로는 넘길 것이 없다 — 여기서 실체를 만들어 주지 않으면 "붙였는데 아무 일도 안 일어난다".
+ */
+async function saveClipFile(f: File): Promise<{ path: string } | { error: string }> {
+  const fail = (why?: string): { error: string } => ({ error: why ? `${t('ara.drop.failed')} — ${why}` : t('ara.drop.failed') })
+  const dir = await window.ev?.fs.downloadsDir().catch(() => '')
+  if (!dir) return fail()
+  const name = clipFileName(f.name, Date.now())
+  const bytes = new Uint8Array(await f.arrayBuffer())
+  const r = await window.ev?.fs.saveBytes({ dir, sub: PASTE_SUB, name, bytes }).catch(() => null)
+  if (!r?.ok) return fail(r?.message)
+  return { path: joinPath(joinPath(dir, PASTE_SUB), name) }
+}
 
 /** 상태줄에 뜨는 지금 상황. */
 type Phase = 'closed' | 'opening' | 'idle' | 'working'
@@ -135,6 +162,9 @@ export function AraChatPanel({
   }
   const askRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // #154 파일이 패널 위로 들어와 있다 — 놓을 자리라는 표시(파일 트리의 .drag-over 와 같은 모양).
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [dropping, setDropping] = useState(false)
 
   const ask = openAsk(items)
 
@@ -277,6 +307,50 @@ export function AraChatPanel({
   const sendRef = useRef(send)
   sendRef.current = send
 
+  /**
+   * #154 파일·이미지 받아 넣기 — **끌어다 놓기도 붙여넣기도 여기 하나로 온다.** 화면을 캡처해
+   * 붙이는 일이 파일을 끌어 오는 일만큼 잦은데, 두 자리에 따로 쓰면 한쪽만 고치는 날이 온다.
+   *
+   * 넣는 것은 **경로 몇 줄**이다: 우클릭 [아라에게 묻기](Shell.onAskAiPaths)가 이미 그렇게 넘기고
+   * 아라는 경로를 받아 자기 도구로 읽는다 — 두 번째 첨부 규약을 만들지 않는다.
+   *
+   * 그리고 **보내지 않는다.** 입력칸에 얹기만 하는 것은 prefill 과 같은 규칙이다(무엇이 나갈지
+   * 보고 사람이 마무리한다) — 놓자마자 질문이 날아가면 되돌릴 자리가 없다.
+   */
+  const intake = useCallback(async (files: readonly File[]): Promise<void> => {
+    const paths = filePaths(files)
+    for (const f of files) {
+      if ((f as File & { path?: string }).path) continue
+      const r = await saveClipFile(f)
+      if ('path' in r) paths.push(r.path)
+      // 조용히 버리지 않는다 — 붙인 사람은 붙었다고 믿는다.
+      else setItems((cur) => reduceChat(cur, { t: 'error', message: r.error }))
+    }
+    if (paths.length === 0) return
+    setDraft((d) => appendPaths(d, paths))
+    inputRef.current?.focus()
+  }, [])
+
+  /**
+   * 붙여넣기(Ctrl+V). 파일·캡처만 받고 **글은 입력칸 몫**이라 그대로 넘긴다(false).
+   *
+   * 대상이 넷이 돼도 서로 뺏지 않는다: pickPasteTarget 은 **포커스가 든 대상**에게만 준다.
+   * 터미널·파일 트리·RDP 화면과 이 패널은 DOM 이 겹치지 않아 늘 하나만 걸린다.
+   */
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    return registerPasteTarget({
+      el,
+      allowEditable: true, // 입력칸에 커서를 둔 채 붙여넣는 것이 정상 경로다
+      onFiles: (files) => {
+        if (files.length === 0) return false
+        void intake(files)
+        return true
+      }
+    })
+  }, [open, intake])
+
   const answer = (askId: string, text: string): void => {
     setItems((cur) => dropAsk(cur, askId))
     void window.ev?.mcp.answerAsk(askId, text)
@@ -326,7 +400,26 @@ export function AraChatPanel({
   if (!open) return null
 
   return (
-    <div className="ara-panel" onKeyDown={onKey} style={{ width, flexBasis: width }}>
+    <div
+      className={'ara-panel' + (dropping ? ' drag-over' : '')}
+      ref={panelRef}
+      onKeyDown={onKey}
+      style={{ width, flexBasis: width }}
+      onDragOver={(e) => {
+        // **파일 드래그만 받는다.** 탭 드래그는 text/plain 에 세션 id 를 싣는데 그것까지 받으면
+        // 패널이 "여기 놓을 수 있다"고 거짓말한다(FileTree 가 같은 이유로 같은 검사를 한다).
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        setDropping(false)
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        void intake([...e.dataTransfer.files])
+      }}
+    >
       {/* 폭 조절 손잡이 — 왼쪽 가장자리. 사이드바 리사이저와 같은 자리·같은 동작이다. */}
       <div className="ara-grip" onMouseDown={onDragDown} title={t('ara.width')} />
       <div className="ara-hd">

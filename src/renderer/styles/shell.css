@@ -7161,6 +7161,12 @@
   min-height: 0;
   position: relative;
 }
+/* #154 파일·이미지를 끌어 온 중 — 파일 트리 드롭(.sftp-wrap.drag-over)과 **같은 표시**다.
+   놓을 수 있는 자리는 앱 어디서나 같게 보여야 한다. */
+.ara-panel.drag-over {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: -4px;
+}
 /* 왼쪽 가장자리 손잡이 — 보이지 않지만 잡힌다(사이드바 리사이저와 같은 폭). */
 .ara-grip {
   position: absolute;

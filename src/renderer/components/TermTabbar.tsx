@@ -203,8 +203,10 @@ export function TermTabbar({
         const from = dragId ?? e.dataTransfer.getData('text/plain')
         setDragId(null)
         setOverId(null)
+        // **탭일 때만** 표시를 남긴다(#154 — PaneGrid.onGridDrop 과 같은 이유).
+        if (!from) return
         markTabDropHandled() // 이 드롭은 탭바가 처리했다 — dragEnd 가 새 창을 만들지 않게
-        if (from) drop(from, s.id)
+        drop(from, s.id)
       }
     }
   })

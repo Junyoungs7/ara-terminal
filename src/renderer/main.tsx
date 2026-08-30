@@ -33,6 +33,21 @@ const browserWin =
 // 전역 위임이라 `title` 을 쓰는 89곳을 하나도 고치지 않는다(store/tooltip.ts).
 installTooltips()
 
+// #154 **빗나간 파일 드롭을 막는다.** 받는 자리(아라 패널·파일 트리·RDP 화면) 밖에 파일을 놓으면
+// Chromium 은 창을 그 파일로 이동시킨다 — 앱이 통째로 사라지고 열려 있던 세션이 다 끊긴다.
+// 파일을 끌어다 놓으라고 권하는 기능을 넣는 이상, 빗나갔을 때의 대가가 "앱이 죽는다"면 안 된다.
+//
+// 받는 자리는 자기 dragover 에서 preventDefault 를 부르므로 여기서 건드리지 않는다(defaultPrevented).
+// 그 밖에서는 못 놓는다고 커서로 말한다 — 막아 놓고 놓을 수 있는 척하지 않는다.
+for (const type of ['dragover', 'drop']) {
+  window.addEventListener(type, (e) => {
+    const ev = e as DragEvent
+    if (ev.defaultPrevented) return
+    ev.preventDefault()
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'none'
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {editorTarget ? (

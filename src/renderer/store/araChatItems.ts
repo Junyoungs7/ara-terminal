@@ -138,3 +138,26 @@ export function remainText(expiresAt: number, now: number): string {
   if (s <= 0) return ''
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} 남음`
 }
+
+/**
+ * #154 끌어다 놓거나 붙여넣은 경로를 입력칸에 **덧붙인다**(덮어쓰지 않는다).
+ *
+ * 쓰던 글을 지우면 안 된다 — "이 파일 좀 봐 줘" 까지 적어 놓고 파일을 끌어오는 것이 보통 순서다.
+ * 뒤에 줄바꿈을 남겨 두는 것도 그래서다: 놓자마자 이어서 쓸 수 있어야 한다.
+ */
+export function appendPaths(draft: string, paths: readonly string[]): string {
+  if (paths.length === 0) return draft
+  const head = draft.trim() === '' ? '' : draft.replace(/\s+$/, '') + '\n'
+  return head + paths.join('\n') + '\n'
+}
+
+/**
+ * #154 클립보드 캡처를 저장할 이름. 캡처는 경로가 없어 파일로 떨궈야 아라가 읽는다.
+ *
+ * **시각을 앞에 붙인다**: main 의 saveBytes 는 같은 이름이 있으면 `(2)` 로 비켜 가는데 그 이름을
+ * 돌려주지 않는다 — 겹치면 우리가 아라에게 알려 준 경로가 **다른 파일**을 가리킨다.
+ * 수상한 문자를 여기서 지우는 것도 같은 이유다(main 의 safeBase 는 그런 이름을 아예 거절한다).
+ */
+export function clipFileName(name: string, at: number): string {
+  return `${at}-${(name || 'image.png').replace(/[^\w.\-가-힣]/g, '_')}`
+}

@@ -139,9 +139,13 @@ export function PaneGrid({
       e.preventDefault()
       const info = preview
       setPreview(null)
-      markTabDropHandled() // 터미널 칸이 받았다 — 탭 dragEnd 가 새 창을 만들지 않게(제보 5)
+      // **탭일 때만** 표시를 남긴다(#154). 전에는 drop 이 오기만 하면 남겼는데, 파일을 여기에
+      // 떨어뜨리면(창을 파일로 이동시키지 않으려고 main.tsx 가 전역에서 막는다) 그 드롭까지 "탭을
+      // 받았다"로 세어 400ms 안에 끝난 탭 드래그가 새 창을 못 만든다.
       const sessionId = e.dataTransfer.getData('text/plain')
-      if (!sessionId || !info) return
+      if (!sessionId) return
+      markTabDropHandled() // 터미널 칸이 받았다 — 탭 dragEnd 가 새 창을 만들지 않게(제보 5)
+      if (!info) return
       // 다른 창에서 온 탭이면 **먼저 이 창으로 가져온다**(2026-08-23 크롬식 창 관리).
       // 여기서 바로 칸에 올릴 수는 없다 — 그 세션은 아직 이 창 목록에 없어서 아무것도 안 그려진
       // 빈 칸이 된다. 가져오기가 끝나면 그쪽이 띄운다(방향(zone)은 버린다 — 창을 옮기는 조작에

@@ -910,11 +910,12 @@ const checks = []
     const aiKeyField = document.querySelector('.drawer.open input[data-field="ai.key"]')
     // 저장된 키를 되읽어 채우지 않는다 — 필드는 언제 열어도 비어 있어야 한다.
     const aiKeyEmpty = aiKeyField?.value === '' && aiKeyField?.type === 'password'
-    // W5: 모델 추천 칩은 .ai-model-ctl 안에만 있다(스코프로 provider Seg 와 구분) — provider 는
-    // 그 밖의 .seg-ctl(현재 [AI] 섹션에는 provider Seg 하나뿐).
+    // W5: 모델 추천 칩은 .ai-model-ctl 안에만 있다(스코프로 provider Seg 와 구분).
+    // provider 는 **자기 이름으로** 집는다(#150): 전에는 "그 밖의 .seg-ctl" 이었는데 [AI] 섹션에
+    // AI CLI 고르기 세그먼트(claude/codex/gemini)가 생기면서 그것까지 프로바이더로 셌다.
     const aiModels = [...document.querySelectorAll('.drawer.open .ai-model-ctl .seg-ctl button')].map(b => b.dataset.value)
-    const aiProviders = [...document.querySelectorAll('.drawer.open .set-pane .seg-ctl button')]
-      .filter(b => !b.closest('.ai-model-ctl')).map(b => b.dataset.value)
+    const aiProviders = [...document.querySelectorAll('.drawer.open .seg-ctl[data-field="ai.provider"] button')]
+      .map(b => b.dataset.value)
     document.querySelector('.drawer.open .set-nav span[data-section="font"]')?.click()
     await wait(200)
     const compareRows = document.querySelectorAll('.drawer.open .fc-strip .fc-row').length
@@ -971,13 +972,18 @@ const checks = []
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
-  if (AI_CHAT)
+  //
+  // #150: 아래 넷은 `AI_CHAT` 으로 막혀 **한 번도 돈 적이 없다.** 그런데 이 섹션을 그리는 문은
+  // SettingsDrawer 의 `AI_ENTRY`(= AI_CHAT || ARA_CHAT)다 — 검사할 것이 화면에 멀쩡히 있는데
+  // 검사만 건너뛰고 있었다(실패가 아니라 침묵이라 실패 목록에도 안 잡혔다).
+  // **제품이 무엇으로 문을 잠그는지를 그대로 쓴다.**
+  if (AI_ENTRY)
   checks.push(['F16→W5: 설정 [AI] 데이터 반출 고지에 현재 프로바이더·호스트가 들어간다', /Anthropic Claude API\(api\.anthropic\.com\)\s*로 전송/.test(f5.aiNote)])
-  if (AI_CHAT)
+  if (AI_ENTRY)
   checks.push(['F16: API 키 입력이 password 이고 저장된 키를 되읽지 않음', f5.aiKeyEmpty === true])
-  if (AI_CHAT)
+  if (AI_ENTRY)
   checks.push(['W5: 프로바이더 세그먼트 4종(anthropic/openai/google/compatible)', f5.aiProviders.join(',') === 'anthropic,openai,google,compatible'])
-  if (AI_CHAT)
+  if (AI_ENTRY)
     checks.push([
       'W5: 기본 프로바이더(anthropic) 모델 추천 칩 3종(sonnet-5/opus-5/haiku-4.5) — 자유 입력도 항상 허용',
       f5.aiModels.join(',') === 'claude-sonnet-5,claude-opus-5,claude-haiku-4-5'
@@ -1602,7 +1608,9 @@ const checks = []
     SNAP.wideSave.size === 0
   ])
   checks.push(['R2.5: 치트시트에 미구현 항목 0', r2.csDead === 0])
-  if (AI_CHAT)
+  // #150 과 같은 침묵이 여기에도 하나 더 있었다. 치트시트에 이 두 줄이 뜨는 문은 keymap.ts:135 의
+  // `AI_ENTRY` 다 — 줄은 뜨는데 검사만 안 돌고 있었다.
+  if (AI_ENTRY)
   checks.push(['F16: 배선된 AI 단축키 2종이 치트시트에 올라온다', r2.csHasAi === true])
   checks.push(['R3.8: 치트시트가 새로 배선된 검색·클립보드·파일 트리를 싣는다', r2.csHasR3 === true])
   checks.push(['R2.5: 치트시트가 되살린 단축키를 싣는다', r2.csHasRevived === true])
