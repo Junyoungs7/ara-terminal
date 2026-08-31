@@ -179,9 +179,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     // 지금 목록에 떠 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
     let compItems: string[] = []
     let compIndex = 0
-    // 사용자가 ↑↓ 로 후보에 **손을 댔나**. 목록은 저절로 뜨므로 이 표시가 없으면 Enter 는 셸의
-    // 것이다(completionKeys.ts 참고 — 안 그러면 다 친 명령이 실행되지 않는다).
-    let compChosen = false
 
     const clearGhost = () => {
       if (ghostTimer) {
@@ -193,7 +190,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       ghostDeco = null
       ghostMarker?.dispose()
       ghostMarker = null
-      compChosen = false
       if (compItems.length > 0) {
         compItems = []
         compIndex = 0
@@ -285,7 +281,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       const n = compItems.length
       if (n === 0) return
       compIndex = (compIndex + delta + n) % n
-      compChosen = true // 손을 댔다 — 이제부터 Enter 는 목록의 것이다
       drawGhost(compItems[compIndex].slice(lineBuf.length))
       setComp((c) => (c ? { ...c, index: compIndex } : c))
     }
@@ -330,7 +325,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       if (isAppShortcut(e)) return false
-      // F11: 고스트가 떠 있을 때만 Tab·→=채택 / ↓↑=고르기 / Enter=고른 것 넣기 / ESC=해제.
+      // F11: 고스트가 떠 있을 때만 Tab·→=채택 / ↓↑=고르기 / ESC=해제, 목록이 떴으면 Enter=고르기
+      // (그때 **친 그대로 실행하려면 ESC 를 먼저** 누른다 — completionKeys 의 Enter 항 참고).
       // 무엇을 가로챌지는 completionKeys 가 정한다(순수 판정 — 여기는 그 결정을 실행만 한다).
       // 고스트가 없으면 셸의 자동완성·인터럽트·커서 이동을 그대로 통과시킨다(R3.8 정책).
       // isComposing: 한글을 조합하는 중이면 Enter 는 **글자를 확정하는 키**다(IME 가 먼저 가져간다).
@@ -340,7 +336,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
           key: e.key,
           ghost: true,
           items: compItems.length,
-          chosen: compChosen,
           // 버퍼를 읽는 값이라 필요한 키에서만 잰다(키다운마다 줄을 훑을 이유가 없다).
           atLineEnd: e.key === 'ArrowRight' && atLineEnd()
         })

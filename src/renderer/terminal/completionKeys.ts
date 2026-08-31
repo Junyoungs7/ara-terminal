@@ -13,16 +13,6 @@ export type CompState = {
   /** 지금 목록에 든 후보 수. 2 이상일 때만 목록이 화면에 있다(하나면 고스트만 뜬다). */
   items: number
   /**
-   * 사용자가 ↑↓ 로 후보를 **직접 골랐나**.
-   *
-   * 이것이 `Enter` 가로채기의 유일한 조건이다. 목록은 타이핑하는 동안 **저절로** 뜨므로,
-   * 떠 있다는 것만으로 Enter 를 가져가면 사용자가 다 친 명령이 실행되지 않는다 —
-   * `ls` 를 치면 히스토리의 `ls -la`·`ls -l` 때문에 목록이 뜨고, Enter 는 `ls` 를 실행하는 대신
-   * `ls -la` 를 집어넣는다. 그 다음 Enter 는 **내가 안 친 명령**을 실행한다.
-   * 저절로 뜬 것은 저절로 Enter 를 가져가지 않는다 — ↑↓ 로 손을 댔을 때만 목록의 Enter 다.
-   */
-  chosen: boolean
-  /**
    * 커서가 줄 끝인가 — `→` 로 고스트를 받는 유일한 조건.
    * `→` 는 터미널에서 **커서 이동**이라는 본래 뜻이 있다. 줄 가운데서 그것을 뺏으면 오른쪽으로
    * 움직일 방법이 없어진다(fish·zsh-autosuggestions 도 줄 끝에서만 제안을 받는다).
@@ -47,8 +37,21 @@ export function completionKey(s: CompState): CompAction {
       return s.items > 1 ? 'next' : 'pass'
     case 'ArrowUp':
       return s.items > 1 ? 'prev' : 'pass'
+    /**
+     * 목록이 떠 있으면 `Enter` 는 **고르기**다 — 실행이 아니다(2026-08-31 준영님 결정, IDE 감각).
+     *
+     * 대가를 알고 고른 것이라 여기 적어 둔다. 목록은 타이핑하는 동안 **저절로** 뜨므로,
+     * 히스토리에 `ls -la`·`ls -l` 이 있으면 **`ls` 를 치는 순간 목록이 뜬다.** 그 상태의 `Enter`
+     * 는 `ls` 를 실행하지 않고 `ls -la` 를 줄에 넣는다 — **친 그대로 실행하려면 `Esc` 로 목록을
+     * 먼저 닫아야 한다.** 그것이 이 동작의 탈출구이고, 안내 문구(`term.comp.hint`)가 `Esc` 를
+     * 맨 앞에 두는 이유다.
+     *
+     * ⚠️ 그러니 `Esc` 를 절대 막지 마라 — 막으면 다 친 명령을 실행할 길이 없어진다.
+     * 되돌리려면(= 저절로 뜬 목록은 Enter 를 안 가져가게) `&& s.chosen`(사용자가 ↑↓ 로 골랐나)
+     * 한 조각을 되살리면 된다. 그 판단은 이미 한 번 내려졌다 — 되돌리기 전에 준영님께 물어라.
+     */
     case 'Enter':
-      return s.items > 1 && s.chosen ? 'accept' : 'pass'
+      return s.items > 1 ? 'accept' : 'pass'
     default:
       return 'pass'
   }

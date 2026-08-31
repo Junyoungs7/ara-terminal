@@ -10,7 +10,6 @@ const S = (over: Partial<CompState> = {}): CompState => ({
   key: 'Tab',
   ghost: true,
   items: 2,
-  chosen: false,
   atLineEnd: true,
   ...over
 })
@@ -34,23 +33,31 @@ describe('completionKey — → 로 고스트 받기', () => {
 })
 
 describe('completionKey — 목록에서의 Enter', () => {
-  it('목록이 떠 있고 ↑↓ 로 골랐으면 Enter 는 고르기다 (셸로 가지 않는다)', () => {
-    expect(completionKey(S({ key: 'Enter', items: 2, chosen: true }))).toBe('accept')
+  it('목록이 떠 있으면 Enter 는 고르기다 (셸로 가지 않는다)', () => {
+    expect(completionKey(S({ key: 'Enter', items: 2 }))).toBe('accept')
   })
 
-  it('목록이 없으면 Enter 는 셸로 간다', () => {
-    expect(completionKey(S({ key: 'Enter', items: 0, chosen: false }))).toBe('pass')
-    expect(completionKey(S({ key: 'Enter', items: 1, chosen: false }))).toBe('pass')
+  it('목록이 없으면 Enter 는 셸로 간다 — 고스트만 떠 있는 줄은 친 그대로 실행된다', () => {
+    expect(completionKey(S({ key: 'Enter', items: 0 }))).toBe('pass')
+    expect(completionKey(S({ key: 'Enter', items: 1 }))).toBe('pass')
   })
 
-  it('저절로 뜬 목록은 Enter 를 가져가지 않는다 — 다 친 명령은 실행돼야 한다', () => {
-    // `ls` 를 쳤는데 히스토리의 `ls -la`·`ls -l` 로 목록이 뜬 상황. 여기서 Enter 를 뺏으면
-    // ls 가 실행되지 않고 `ls -la` 가 들어가고, 다음 Enter 는 내가 안 친 명령을 실행한다.
-    expect(completionKey(S({ key: 'Enter', items: 2, chosen: false }))).toBe('pass')
+  it('저절로 뜬 목록도 Enter 를 가져간다 — 그 대가를 알고 고른 동작이다 (2026-08-31 준영님 결정)', () => {
+    // `ls` 를 쳤는데 히스토리의 `ls -la`·`ls -l` 로 목록이 뜬 상황. 여기서 Enter 는 ls 를
+    // 실행하지 않고 `ls -la` 를 넣는다. **친 그대로 실행하려면 Esc 를 먼저** — 아래가 그 검사다.
+    expect(completionKey(S({ key: 'Enter', items: 2 }))).toBe('accept')
   })
 
-  it('골랐더라도 고스트가 사라졌으면 Enter 는 셸로 간다', () => {
-    expect(completionKey(S({ key: 'Enter', ghost: false, chosen: true }))).toBe('pass')
+  it('고스트가 없으면 목록 값과 무관하게 Enter 는 셸로 간다', () => {
+    expect(completionKey(S({ key: 'Enter', ghost: false }))).toBe('pass')
+  })
+
+  it('🔴 탈출구: Esc 로 닫으면 그다음 Enter 는 친 그대로 실행된다', () => {
+    // 이 두 줄이 위 동작의 안전장치 전부다. 막히면 목록이 뜬 줄은 실행할 방법이 없어진다.
+    const open = S({ key: 'Escape', items: 2 })
+    expect(completionKey(open)).toBe('dismiss')
+    // dismiss = TerminalPane 의 clearGhost — 고스트도 목록도 함께 지운다(ghostSuffix='' · compItems=[]).
+    expect(completionKey({ ...open, key: 'Enter', ghost: false, items: 0 })).toBe('pass')
   })
 })
 

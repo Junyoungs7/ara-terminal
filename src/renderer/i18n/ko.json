@@ -450,7 +450,7 @@
   "session.close.target": "세션",
   "session.close.confirm": "종료",
   "tab.offscreenHint": "화면에 표시 중 아님 · 클릭하면 표시",
-  "term.comp.hint": "↑↓ 고르고 Enter · Tab·→ 바로 넣기 · Esc 닫기",
+  "term.comp.hint": "Esc 닫고 친 대로 실행 · ↑↓ 고르기 · Enter·Tab·→ 넣기",
   "sessionwin.close.title": "이 창을 닫습니다",
   "sessionwin.close.msg": "아래 세션이 종료됩니다. 실행 중인 작업도 함께 중단되고 되돌릴 수 없습니다.",
   "sessionwin.close.local": "내 PC",
