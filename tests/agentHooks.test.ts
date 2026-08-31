@@ -118,6 +118,17 @@ describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
     // 이벤트는 URL 에 있다(페이로드를 파싱하지 않는 이유).
     expect(cmd).toContain('/hook/claude/Stop')
   })
+
+  it('#160 종료 훅도 심긴다 — matcher 없이(reason 을 안 가린다)', () => {
+    const home = tmp()
+    installClaudeHooks(home)
+    const hooks = (readSettings(home) as unknown as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]> })
+      .hooks
+    const end = hooks.SessionEnd!.at(-1)!
+    expect(end.hooks[0]!.command).toContain('/hook/claude/SessionEnd')
+    // `clear`·`logout`·`prompt_input_exit`·`other` 를 전부 받는다 — 매처를 쓰면 크래시(`other`)를 놓친다.
+    expect(end.matcher).toBeUndefined()
+  })
 })
 
 // ── 수신 서버 ────────────────────────────────────────────────────────────────
@@ -200,6 +211,23 @@ describe('훅 수신 — 인증·귀속·매핑', () => {
     // 프로토타입 오염 경로 — `in` 으로 짰으면 여기서 상태가 만들어진다.
     expect(await post(port, '/hook/constructor/Stop', hookHeaders('tok-1', 'p1'))).toBe(404)
     expect(await post(port, '/nope', hookHeaders('tok-1', 'p1'))).toBe(404)
+  })
+
+  it('#160 세션은 살아 있고 CLI 만 죽었다 — 줄이 `작업 중`에서 안 굳는다', async () => {
+    const { port, server, pushed } = await rig()
+    // ① 일하는 중
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    expect(server.statuses()[0]!.state).toBe('working')
+
+    // ② 탭은 그대로 둔 채 claude 만 나간다(Ctrl+D · /exit · 크래시 — 전부 SessionEnd 로 온다)
+    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'))).toBe(204)
+    expect(server.statuses()[0]!.state).toBe('unverifiable')
+    expect(pushed.at(-1)!.state).toBe('unverifiable') // 화면까지 밀린다(원장만 바뀌면 줄은 그대로다)
+
+    // ③ **토큰은 살아 있다.** 세션이 죽은 게 아니라 CLI 만 죽었다 — 같은 탭에서 다시 띄우면
+    //    그 훅은 같은 토큰으로 온다. `forget`(토큰까지 지운다)을 쓰지 않은 이유가 이 줄이다.
+    expect(await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))).toBe(204)
+    expect(server.statuses()[0]!.state).toBe('working')
   })
 
   it('세션이 끝나면 그 상태를 잊는다', async () => {

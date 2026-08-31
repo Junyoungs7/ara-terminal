@@ -16,18 +16,22 @@ describe('훅 이벤트 → 상태', () => {
     expect(of('PostToolUse')).toBe('working')
     expect(of('Notification')).toBe('waiting')
     expect(of('Stop')).toBe('done')
+    // #160: 나간 것은 끝낸 것이 아니다. `done` 이면 크래시가 "끝냈습니다"로 나간다.
+    expect(of('SessionEnd')).toBe('unverifiable')
+    expect(of('SessionEnd')).not.toBe('done')
   })
 
   it('모르는 이벤트는 null — 아무 주장도 안 한다', () => {
     // 이 한 줄이 이 라운드의 전부다: CLI 가 새 이벤트를 추가해도 우리 판정이 흔들리지 않는다.
-    for (const e of ['SubagentStop', 'PreCompact', 'SessionEnd', '', 'stop', 'Whatever']) {
+    // (claude-code 2.0.76 은 훅 이벤트가 서른 개가 넘는다 — 그중 우리가 아는 것만 표에 있다.)
+    for (const e of ['SubagentStop', 'PreCompact', 'PostCompact', 'TaskCreated', '', 'stop', 'Whatever']) {
       expect(HOOK_STATE_OF.claude(e)).toBeNull()
     }
   })
 
   it('설치하는 이벤트 = 표의 키(모르는 이벤트를 심지 않는다)', () => {
     expect([...CLAUDE_HOOK_EVENTS].sort()).toEqual(
-      ['Notification', 'PostToolUse', 'PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'].sort()
+      ['Notification', 'PostToolUse', 'PreToolUse', 'SessionEnd', 'SessionStart', 'Stop', 'UserPromptSubmit'].sort()
     )
     for (const e of CLAUDE_HOOK_EVENTS) expect(HOOK_STATE_OF.claude(e)).not.toBeNull()
   })
@@ -80,6 +84,43 @@ describe('타임스탬프 둘 — 무엇이 언제 움직이나', () => {
     const c = applyHook(b, claude('Stop'), T0 + 4_000)!
     expect(notifyTag(c)).not.toBe(notifyTag(b))
     expect(notifyTag(c)).toBe(`agent:s1:${T0 + 4_000}`)
+  })
+})
+
+describe('#160 CLI 가 나갔다 — 탭은 살아 있고 claude 만 죽은 경우', () => {
+  it('일하던 중에 나가면 `작업 중`이 아니라 `모른다`가 된다', () => {
+    // 구멍의 모양 그대로: PreToolUse(working) 뒤에 Stop 없이 SessionEnd 만 온다(Ctrl+D·크래시).
+    const working = applyHook(null, claude('PreToolUse'), T0)!
+    const ended = applyHook(working, claude('SessionEnd'), T0 + 30_000)!
+    expect(ended.state).toBe('unverifiable')
+    expect(ended.stateStartedAt).toBe(T0 + 30_000) // 상태가 바뀌었으니 시계도 새로 선다
+    expect(ended.updatedAt).toBe(T0 + 30_000)
+  })
+
+  it('사람을 기다리던 중에 나가도 마찬가지 — 알림 대상에서 빠진다', () => {
+    const waiting = applyHook(null, claude('Notification'), T0)!
+    const ended = applyHook(waiting, claude('SessionEnd'), T0 + 1_000)!
+    // `waiting` 이 유일한 알림 상태다(aiQuietWatch). 나간 세션이 계속 사람을 부르면 안 된다.
+    expect(ended.state).toBe('unverifiable')
+  })
+
+  it('한 턴을 끝내고 나가도 `끝남`에 머물지 않는다 — 그 탭엔 이제 CLI 가 없다', () => {
+    const done = applyHook(null, claude('Stop'), T0)!
+    expect(done.state).toBe('done')
+    expect(applyHook(done, claude('SessionEnd'), T0 + 1_000)!.state).toBe('unverifiable')
+  })
+
+  it('다시 띄우면 그 줄이 되살아난다 — 종료가 세션을 지우는 것이 아니다', () => {
+    const ended = applyHook(applyHook(null, claude('PreToolUse'), T0)!, claude('SessionEnd'), T0 + 1_000)!
+    const again = applyHook(ended, claude('SessionStart'), T0 + 2_000)!
+    expect(again.state).toBe('working')
+    expect(again.stateStartedAt).toBe(T0 + 2_000)
+  })
+
+  it('없던 세션에 SessionEnd 만 오면 `모른다`를 만든다 — 그게 참이다', () => {
+    // 앱을 늦게 켜서 앞의 훅을 놓쳤을 때. 상태를 안 만들어도 화면은 `unverifiable` 이라 같지만,
+    // 들은 것을 원장에 남기는 쪽이 `updatedAt` 을 정직하게 만든다.
+    expect(applyHook(null, claude('SessionEnd'), T0)!.state).toBe('unverifiable')
   })
 })
 

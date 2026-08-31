@@ -14,7 +14,9 @@
  *  · working — CLI 가 지금 일하고 있다(도구 호출·프롬프트 제출 직후)
  *  · waiting — **사람을 기다린다**(권한 질문·되묻기). 알림이 울리는 유일한 상태다
  *  · done    — CLI 가 한 턴을 끝냈다고 **스스로** 말했다
- *  · unverifiable — **모른다.** 훅이 없거나(설치 실패·훅 없는 CLI) 아직 한 마디도 못 들었다.
+ *  · unverifiable — **모른다.** 훅이 없거나(설치 실패·훅 없는 CLI), 아직 한 마디도 못 들었거나,
+ *    **CLI 가 나갔다고 말했다**(SessionEnd — 아래 표 참고). 셋 다 "지금 저 탭에서 무엇이 도는지
+ *    확인할 수 없다"라 같은 값이다.
  *    ⚠️ 여기서 옛 60초 규칙으로 되돌아가지 마라 — 모르면 모른다고 하는 것이 이 라운드의 전부다.
  */
 export type AgentState = 'working' | 'waiting' | 'done' | 'unverifiable'
@@ -52,6 +54,27 @@ export type HookCli = 'claude'
  * 실측(2026-08-30, `claude --settings` 로 실제 훅을 받아 확인): 한 턴은
  * `SessionStart → UserPromptSubmit → PreToolUse → PostToolUse → Stop` 으로 온다.
  * `Notification` 은 권한 질문·입력 대기 때 온다 — 둘 다 **사람을 기다리는** 상태라 같이 waiting 이다.
+ *
+ * **`SessionEnd` 는 `Stop` 과 다른 사실이다** (#160, 2026-08-31). `Stop` 은 *"한 턴을 끝냈다"* 고,
+ * `SessionEnd` 는 *"나간다"* 다. 이게 없던 동안, 탭은 열어 둔 채 claude 만 나가면
+ * (Ctrl+D · `/exit` · 크래시) 그 줄은 **영원히 `작업 중`** 이었다 — 아무도 아무것도 안 하는데
+ * 화면이 "일하고 있다"고 단언했다. F1 이 없앤 거짓말과 같은 종류다.
+ *
+ * 근거(claude-code 2.0.76 번들 `cli.js` 를 직접 읽었다 + code.claude.com/docs/en/hooks):
+ *  · 훅 이벤트 목록과 `settings.json` 스키마의 `hooks` 키 집합에 `SessionEnd` 가 있다
+ *  · 종료 경로가 `executeSessionEndHooks(reason)` 을 **await 한 뒤** 프로세스를 내린다
+ *    → `/exit` = `prompt_input_exit`, `/logout` = `logout`, Ctrl-C·SIGINT·오류 종료 = `other`
+ *  · 매처 값: `clear` · `logout` · `prompt_input_exit` · `other`(`reason` 필드로 매칭)
+ *
+ * **`done` 으로 매핑하지 않는다** — 나간 것은 끝낸 것이 아니다(크래시도 여기로 온다).
+ * **새 상태(`ended`)도 만들지 않는다**: CLI 가 없으면 그 탭에서 무엇이 도는지 우리는 모르고,
+ * `unverifiable` 이 정확히 그 말이다. 상태 자체를 지우는 것(`forget`)과 화면이 **똑같다** —
+ * 상태 없는 세션도 `unverifiable` 로 그린다(aiSessions.ts·aiWorkbench.ts). 다만 지우는 쪽은
+ * 제거를 렌더러로 밀 창구가 없고(`agent:status` 는 상태 하나만 나른다), `forget` 은 그 세션의
+ * **토큰까지** 지워서 같은 탭에서 claude 를 다시 띄우면 훅이 401 로 막힌다. 그래서 표 한 줄이다.
+ *
+ * `clear`(= `/clear`)도 같이 받는다. 그때 claude 는 살아 있지만 곧바로 `SessionStart` 가 따라와
+ * `working` 으로 돌아온다 — 매처로 걸러 낼 이유가 없다(매처 없는 것이 이 파일의 규율이다).
  */
 const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
   SessionStart: 'working',
@@ -59,7 +82,8 @@ const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
   PreToolUse: 'working',
   PostToolUse: 'working',
   Notification: 'waiting',
-  Stop: 'done'
+  Stop: 'done',
+  SessionEnd: 'unverifiable'
 }
 
 /**

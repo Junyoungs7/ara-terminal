@@ -943,7 +943,7 @@
   "bench.st.working": "일하고 있습니다",
   "bench.st.waiting": "나를 기다립니다 — 승인이나 답이 필요합니다",
   "bench.st.done": "한 턴을 끝냈습니다",
-  "bench.st.unverifiable": "모릅니다 — 그 CLI 에서 아직 아무 말도 못 들었습니다",
+  "bench.st.unverifiable": "모릅니다 — 그 탭에서 지금 무엇이 도는지 확인할 수 없습니다",
   "bench.g.waiting": "대기 중",
   "bench.g.working": "작업 중",
   "bench.g.done": "끝남",
