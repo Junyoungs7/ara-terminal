@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
-import { whenResizeAllowed } from './resizeGate'
+import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
 import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
 import { appendHistory, cachedHistory, feedInput, ghostList, loadHistory, shouldRecord } from '../store/history'
@@ -551,9 +551,19 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     const ro = new ResizeObserver(() => whenResizeAllowed(doFit))
     ro.observe(host)
 
+    // 자가 치유(2026-08-31). 행 수가 실제 높이보다 많아지면 프롬프트가 화면 밖으로 내려가 안 보이는데,
+    // 다시 맞출 계기는 **크기가 또 바뀔 때**(ResizeObserver)뿐이라 한 번 어긋나면 그대로 굳는다.
+    // 포커스는 드물게 오고 값이 싸다 — fit() 은 치수가 이미 맞으면 아무것도 하지 않는다.
+    // 게이트를 거치지 않는 것이 핵심이다: 게이트가 붙들린 채 남은 상황이 바로 나아야 할 상황이다.
+    const onFocus = (): void => doFit()
+    textarea?.addEventListener('focus', onFocus)
+
     return () => {
       disposed = true
       ro.disconnect()
+      // 죽은 pane 의 fit 을 대기줄에 남기지 않는다(게이트가 붙들린 동안 탭을 닫은 경우).
+      cancelPendingResize(doFit)
+      textarea?.removeEventListener('focus', onFocus)
       host.removeEventListener('mouseup', onMouseUp)
       offData()
       offExit()

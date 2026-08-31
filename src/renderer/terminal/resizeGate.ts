@@ -28,7 +28,15 @@ export function holdTermResize(): () => void {
     if (held > 0) return
     const run = [...pending]
     pending.clear()
-    for (const f of run) f()
+    for (const f of run) {
+      // 하나가 던져도 나머지는 돈다. 여기서 새어 나가면 **그 뒤 칸들이 영영 안 맞춰진다** —
+      // 다시 맞출 계기(ResizeObserver)는 크기가 또 바뀔 때만 오기 때문이다(2026-08-31).
+      try {
+        f()
+      } catch (err) {
+        console.warn('[resizeGate] 밀린 fit 하나가 던졌다 — 나머지는 계속한다', err)
+      }
+    }
   }
 }
 
@@ -36,6 +44,15 @@ export function holdTermResize(): () => void {
 export function whenResizeAllowed(fn: () => void): void {
   if (held > 0) pending.add(fn)
   else fn()
+}
+
+/**
+ * 밀어 둔 콜백을 뺀다. 죽은 pane(언마운트된 터미널)의 fit 이 대기줄에 남아 있으면,
+ * 풀리는 순간 이미 dispose 된 xterm 을 만진다 — 지금은 위 try 가 막아 주지만 애초에
+ * 남길 이유가 없다(클로저가 term·host 를 통째로 붙들고 있기도 하다).
+ */
+export function cancelPendingResize(fn: () => void): void {
+  pending.delete(fn)
 }
 
 /** 테스트용 — 붙들린 상태인지. */

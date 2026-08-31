@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
@@ -98,27 +98,66 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
   const hRef = useRef(h)
   hRef.current = h
 
-  // 위쪽 경계를 끌어 높이 조절. 사이드바 .sb-resizer 와 같은 조작감 — 새 방식을 만들지 않는다.
-  const startResize = useCallback((e: React.MouseEvent) => {
+  /** 지금 붙들고 있는 게이트. 끄는 도중 이 컴포넌트가 사라져도 풀 수 있게 밖에 둔다(아래 참고). */
+  const heldRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => heldRef.current?.(), [])
+
+  /**
+   * 위쪽 경계를 끌어 높이 조절. 조작감은 사이드바 `.sb-resizer` 와 같다 — 다만 **포인터 캡처**를
+   * 쓴다(2026-08-31 준영님 제보).
+   *
+   * 예전에는 `window` 의 mousedown/mouseup 짝으로 게이트를 붙들었다. 그런데 `mouseup` 은
+   * **OS 가 마우스 캡처를 뺏어 가면 영영 안 온다**(Alt+Tab·알림·UAC·화면 잠금 — Chromium 은
+   * 그때 mouseup 을 지어내지 않는다). 한 번만 그러면 `held` 가 1 에 눌러앉아 그때부터
+   * **열려 있는 모든 터미널이 다시는 안 맞춰진다** — 앱을 껐다 켜야 낫는 영구 고장이고,
+   * 증상은 프롬프트가 하단바 밑으로 내려가 안 보이는 것이다.
+   *
+   * `setPointerCapture` 는 커서가 창 밖으로 나가도 이 요소로 이벤트를 계속 보내 주고, 놓는 순간
+   * `lostpointercapture` 를 준다. **재서 확인했다**(Electron 38 / Chromium, CDP 실입력):
+   *   놓기 → `pointerdown → GOTCAPTURE → pointermove(요소 밖에서도) → pointerup → LOSTCAPTURE`
+   * 다만 **캡처 요소가 DOM 에서 사라지면 `lostpointercapture` 가 안 온다**(같은 실측) — 그래서
+   * 위 `heldRef` 언마운트 cleanup 은 여벌이 아니라 **없으면 새는 자리**다. OS 가 캡처를 통째로 뺏는
+   * 경우(Alt+Tab·UAC·잠금)도 이벤트가 온다는 보장이 없어 `window` 의 `blur` 를 하나 더 깐다 —
+   * 일찍 풀려서 손해 보는 것은 그 드래그 한 번의 프레임뿐이고, 늦게(=영영) 안 풀리면 앱을
+   * 껐다 켜야 한다. 실패는 싼 쪽으로 기울인다.
+   * 캡처를 **먼저** 잡고 그다음에 붙드는 순서라, `setPointerCapture` 가 던져도 게이트는 안 샌다.
+   *
+   * ⚠ 하네스 주의: Electron 의 `webContents.sendInputEvent` 가 만드는 포인터는 `pointerType` 이
+   * 비어 있어 **캡처가 안 잡힌다**(실측). 이 손잡이를 검사로 끌려면 Playwright 의 `page.mouse`
+   * (CDP `Input.dispatchMouseEvent`)를 써야 한다 — 합성 `MouseEvent` 로는 아예 시작도 안 된다.
+   *
+   * `.sb-resizer`(사이드바)는 mouse 로 남긴다: 게이트를 붙들지 않아 mouseup 을 놓쳐도 터미널이
+   * 망가지지 않고(`.resizing` 클래스가 남을 뿐), 스모크가 위 방식(합성 `MouseEvent`)으로 그쪽을
+   * 끈다(`tests/smoke-boot.cjs`) — 같이 바꾸면 이 라운드가 릴리스 하네스까지 건드리게 된다.
+   */
+  const startResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     e.preventDefault()
+    const el = e.currentTarget
     const y0 = e.clientY
     const h0 = hRef.current
+    el.setPointerCapture(e.pointerId)
     // 하단바가 터미널을 **밀어내므로**(2026-08-22) 끄는 동안 터미널 높이가 매 프레임 바뀐다.
     // 그때마다 xterm 을 다시 맞추면 분할 칸 수만큼 곱해진다 — 놓을 때 한 번만 흘린다.
     const release = holdTermResize()
-    const move = (ev: MouseEvent): void => {
+    heldRef.current = release
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId !== e.pointerId) return
       // 위로 끌면 커진다. 터미널이 아주 얇아지지 않게 위쪽 여백을 남긴다.
       const next = h0 + (y0 - ev.clientY)
       setH(Math.max(MIN_H, Math.min(window.innerHeight - MIN_ABOVE, next)))
     }
-    const up = (): void => {
-      release()
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
+    const end = (): void => {
+      release() // 두 번 불려도 안전하다(holdTermResize 가 released 로 막는다)
+      heldRef.current = null
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('lostpointercapture', end)
+      window.removeEventListener('blur', end)
     }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+    // 캡처 중에는 이 포인터의 이벤트가 전부 el 로 온다 — window 에 걸 이유가 없다.
+    el.addEventListener('pointermove', move)
+    el.addEventListener('lostpointercapture', end)
+    window.addEventListener('blur', end)
   }, [])
 
   // 한 번이라도 연 탭 — 접어도 목록에서 빼지 않는다. 마운트를 유지해 상태(검색어·정렬·경로)를 지킨다.
@@ -134,7 +173,7 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
     // 2026-08-22: 하단바가 터미널을 **밀어낸다**(덮지 않는다 — 가려서 프롬프트가 안 보였다).
     // 경계를 끄는 동안의 리플로우는 resizeGate 가 막는다(startResize 참고).
     <div className={'bottom-panel' + (maxed ? ' maxed' : '')} style={maxed ? undefined : { height: h }}>
-      <div className="bp-resizer" role="separator" title={t('bottom.resize')} onMouseDown={startResize} />
+      <div className="bp-resizer" role="separator" title={t('bottom.resize')} onPointerDown={startResize} />
       <div className="bp-tabs" role="tablist" aria-label={t('bottom.label')}>
         {/* 탭만 스크롤한다(2026-08-16). `.bp-tabs` 통째로 overflow 를 걸면 **닫기 버튼까지**
             스크롤 밖으로 밀려나 탭이 많을 때 패널을 못 닫는다 — 서버명·최대화·닫기는 밖에 남긴다.

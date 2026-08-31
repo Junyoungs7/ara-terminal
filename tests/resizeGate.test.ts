@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { holdTermResize, isResizeHeld, whenResizeAllowed } from '../src/renderer/terminal/resizeGate'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import {
+  cancelPendingResize,
+  holdTermResize,
+  isResizeHeld,
+  whenResizeAllowed
+} from '../src/renderer/terminal/resizeGate'
 
 // 2026-08-22 준영님 결정(제보 14·15)으로 하단바가 터미널을 **밀어내게** 됐다. 그러면 경계를 끄는
 // 동안 터미널 높이가 매 프레임 바뀌는데, 그때마다 xterm 을 다시 맞추면 분할 칸 수만큼 곱해진다.
@@ -71,6 +76,47 @@ describe('터미널 리사이즈 게이트', () => {
     whenResizeAllowed(() => (n += 1))
     expect(n).toBe(0)
     r2()
+    expect(n).toBe(1)
+  })
+
+  // ── 2026-08-31 준영님 제보: 프롬프트가 하단바 밑으로 내려가 안 보인다 ──
+  // 뿌리는 "한 번 어긋나면 영원히 어긋난 채"다. 다시 맞출 계기는 크기가 또 바뀔 때(ResizeObserver)
+  // 뿐이라, 밀어 둔 fit 이 한 번 새면 그 칸은 앱을 껐다 켤 때까지 안 맞는다.
+
+  it('★ 콜백 하나가 던져도 나머지가 돈다 — 죽은 칸 하나에 산 칸들이 끌려가지 않는다', () => {
+    const hit: string[] = []
+    const release = holdTermResize()
+    whenResizeAllowed(() => void hit.push('a'))
+    whenResizeAllowed(() => {
+      throw new Error('dispose 된 터미널에서 fit')
+    })
+    whenResizeAllowed(() => void hit.push('c'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() => release()).not.toThrow() // 놓는 쪽(하단바 손잡이)까지 깨지면 안 된다
+    warn.mockRestore()
+    expect(hit).toEqual(['a', 'c'])
+    expect(isResizeHeld()).toBe(false)
+  })
+
+  it('★ 취소한 콜백은 안 돈다 — 언마운트된 pane 의 fit 을 대기줄에 남기지 않는다', () => {
+    const hit: string[] = []
+    const dead = (): void => void hit.push('dead')
+    const alive = (): void => void hit.push('alive')
+    const release = holdTermResize()
+    whenResizeAllowed(dead)
+    whenResizeAllowed(alive)
+    cancelPendingResize(dead) // TerminalPane cleanup
+    release()
+    expect(hit).toEqual(['alive'])
+  })
+
+  it('붙들지 않은 콜백을 취소해도 아무 일도 없다', () => {
+    let n = 0
+    const fn = (): void => {
+      n += 1
+    }
+    cancelPendingResize(fn) // 대기줄에 없다 — 조용히 넘어간다
+    whenResizeAllowed(fn)
     expect(n).toBe(1)
   })
 })
