@@ -210,6 +210,54 @@ for (const file of walkAll('src/renderer')) {
     })
 }
 
+// ── 대비 게이트 (2026-08-31) ────────────────────────────────────────────────
+// 이 스캐너는 "토큰을 쓰는가"만 봤지 **그 토큰이 읽히는가**는 안 봤다. 그래서 다음이 조용히
+// 통과했다: 글자 4단 램프의 대비를 `--bg-canvas` 하나에 대고 손으로 재서 tokens.css 주석과
+// docs/design-system.md 표에 적어 뒀는데, 사이드바·하단바는 `--bg-surface` 위에 살고 hover·
+// 칩은 그보다 밝은 `--bg-overlay` 위에 산다. 그 두 배경에서 `--text-dim` 은 3.49 · 2.80 으로
+// **하한 3.5 를 깨고 있었다** — 준영님이 "안 보인다"고 짚을 때까지 다섯 달.
+//
+// 결함의 정체는 값이 아니라 **손으로 잰 수가 배경이 늘면서 낡은 것**이다. 그래서 값을 고치는
+// 대신 여기서 매번 계산한다: 램프 × 배경 **전 조합**을 WCAG 2.x 상대휘도로 재고 가장 나쁜
+// 짝이 하한 미만이면 세운다. 배경 토큰이 하나 늘어도 자동으로 조합에 들어온다 — 사람이
+// 표를 갱신할 것을 믿지 않는 것이 이 검사의 요점이다.
+//
+// ⚠️ 주석을 먼저 걷는다. tokens.css 주석은 "왜 이 값이면 안 되는가"를 적느라 배경 HEX 를
+// 인용하고 있어서, 안 걷으면 주석 속 색이 토큰으로 잡힌다(위 HEX 검사가 isComment 를 두는 것과
+// 같은 이유다).
+const MIN_RATIO = 3.5
+// 공허성 방지 — 위 MIN_TSX/MIN_CSS 와 같은 규칙. 접두사를 바꾸거나 램프를 다른 파일로 옮기면
+// 조합이 0이 되어 "위반 없음"으로 초록이 된다. 지금 4×6=24 조합이라 하한을 절반쯤에 둔다.
+const MIN_PAIRS = 12
+const TOKENS_SRC = readFileSync(join('src/renderer/styles', 'tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+const relLum = (hex) =>
+  [1, 3, 5]
+    .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    .reduce((s, v, i) => s + [0.2126, 0.7152, 0.0722][i] * v, 0)
+const contrast = (a, b) => {
+  const [hi, lo] = [relLum(a), relLum(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+const grab = (re) => [...TOKENS_SRC.matchAll(re)].map((m) => [m[1], m[2]])
+const ramp = grab(/(--text-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)
+const surfaces = grab(/(--bg-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)
+const pairs = ramp.flatMap(([tn, tv]) => surfaces.map(([bn, bv]) => [tn, bn, contrast(tv, bv)]))
+if (pairs.length < MIN_PAIRS) {
+  console.error(
+    `대비 검사가 공허하다: 글자 ${ramp.length}종 × 배경 ${surfaces.length}종 = ${pairs.length}조합(하한 ${MIN_PAIRS}).\n` +
+      'tokens.css 의 --text-* / --bg-* 접두사가 바뀌었거나 램프가 다른 파일로 갔다 — 스캐너를 고쳐라.'
+  )
+  process.exit(1)
+}
+for (const [tn, bn, r] of pairs.filter(([, , r]) => r < MIN_RATIO)) {
+  violations.push(
+    `src/renderer/styles/tokens.css  대비 ${r.toFixed(2)} < ${MIN_RATIO} — ${tn} 을 ${bn} 위에 얹으면 안 읽힌다` +
+      ' (opacity 로 덮지 말고 램프의 명도를 올려라)'
+  )
+}
+const worst = pairs.reduce((a, b) => (a[2] <= b[2] ? a : b))
+
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
 const braceErrors = []
@@ -231,4 +279,7 @@ if (violations.length) {
   console.error('매직넘버 스캔 실패 — 토큰(var(--*))을 사용하세요:\n' + violations.join('\n'))
   process.exit(1)
 }
-console.log(`매직넘버 스캔 통과 (HEX/px 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)`)
+console.log(
+  `매직넘버 스캔 통과 (HEX/px 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
+    `대비 ${pairs.length}조합 전부 ${MIN_RATIO} 이상 — 가장 나쁜 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}`
+)
