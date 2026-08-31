@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
+import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
 import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
@@ -178,6 +179,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     // 지금 목록에 떠 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
     let compItems: string[] = []
     let compIndex = 0
+    // 사용자가 ↑↓ 로 후보에 **손을 댔나**. 목록은 저절로 뜨므로 이 표시가 없으면 Enter 는 셸의
+    // 것이다(completionKeys.ts 참고 — 안 그러면 다 친 명령이 실행되지 않는다).
+    let compChosen = false
 
     const clearGhost = () => {
       if (ghostTimer) {
@@ -189,6 +193,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       ghostDeco = null
       ghostMarker?.dispose()
       ghostMarker = null
+      compChosen = false
       if (compItems.length > 0) {
         compItems = []
         compIndex = 0
@@ -280,6 +285,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       const n = compItems.length
       if (n === 0) return
       compIndex = (compIndex + delta + n) % n
+      compChosen = true // 손을 댔다 — 이제부터 Enter 는 목록의 것이다
       drawGhost(compItems[compIndex].slice(lineBuf.length))
       setComp((c) => (c ? { ...c, index: compIndex } : c))
     }
@@ -288,6 +294,20 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       clearGhost()
       if (!lineBuf) return
       ghostTimer = setTimeout(() => renderGhost(GHOST_RETRIES), GHOST_DELAY_MS)
+    }
+
+    /**
+     * 커서 뒤에 글자가 없나 — `→` 로 고스트를 받을 유일한 조건(completionKeys.ts 참고).
+     *
+     * 커서 위치는 **화면에만** 있다: 리드라인이 줄 어디를 편집 중인지는 입력 스트림으로 알 수 없다
+     * (`lineBeforeCursor` 가 앞쪽을 화면에서 읽는 것과 같은 이유). 오른쪽 여백은 conpty 가 폭까지
+     * 공백으로 채워 보내므로 trimRight 로 걷어 낸다 — 안 그러면 어떤 줄도 "끝"이 되지 못한다.
+     * 줄을 못 읽으면 **가로채지 않는다**: 확신이 없을 때 커서 이동을 뺏는 쪽이 더 큰 손해다.
+     */
+    const atLineEnd = (): boolean => {
+      const buf = term.buffer.active
+      const line = buf.getLine(buf.baseY + buf.cursorY)
+      return line ? line.translateToString(true, buf.cursorX) === '' : false
     }
 
     // Tab 채택: 나머지를 셸에 실제로 입력한다(화면의 흐린 글자를 진짜 입력으로 바꾼다).
@@ -310,26 +330,27 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       if (isAppShortcut(e)) return false
-      // F11: 고스트가 떠 있을 때만 Tab=채택 / ESC=해제. 없으면 셸의 자동완성·인터럽트를 그대로
-      // 통과시킨다(R3.8 정책 — 앱이 셸 기능을 뺏지 않는다).
-      if (ghostSuffix && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        // 제보 10: 목록이 떠 있는 동안만 ↓/↑ 가 후보를 고른다. 목록이 없으면(후보 하나이거나
-        // ESC 로 닫았으면) 방향키는 그대로 셸로 가 히스토리 탐색이 된다 — 앱이 셸을 뺏지 않는다.
-        if (compItems.length > 1 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-          e.preventDefault()
-          moveComp(e.key === 'ArrowDown' ? 1 : -1)
-          return false
-        }
-        if (e.key === 'Tab') {
+      // F11: 고스트가 떠 있을 때만 Tab·→=채택 / ↓↑=고르기 / Enter=고른 것 넣기 / ESC=해제.
+      // 무엇을 가로챌지는 completionKeys 가 정한다(순수 판정 — 여기는 그 결정을 실행만 한다).
+      // 고스트가 없으면 셸의 자동완성·인터럽트·커서 이동을 그대로 통과시킨다(R3.8 정책).
+      // isComposing: 한글을 조합하는 중이면 Enter 는 **글자를 확정하는 키**다(IME 가 먼저 가져간다).
+      // 그 Enter 까지 고르기로 쓰면 조합 중인 글자가 사라지고 엉뚱한 후보가 들어간다.
+      if (ghostSuffix && !e.isComposing && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const act = completionKey({
+          key: e.key,
+          ghost: true,
+          items: compItems.length,
+          chosen: compChosen,
+          // 버퍼를 읽는 값이라 필요한 키에서만 잰다(키다운마다 줄을 훑을 이유가 없다).
+          atLineEnd: e.key === 'ArrowRight' && atLineEnd()
+        })
+        if (act !== 'pass') {
           // false 만 돌려주면 xterm 이 손을 떼면서 브라우저 기본 동작(Tab = 포커스 이동)이 살아나
           // 터미널이 포커스를 잃는다 — 채택 직후 타이핑이 먹통이 된다.
           e.preventDefault()
-          acceptGhost()
-          return false
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          clearGhost()
+          if (act === 'accept') acceptGhost()
+          else if (act === 'dismiss') clearGhost()
+          else moveComp(act === 'next' ? 1 : -1)
           return false
         }
       }
