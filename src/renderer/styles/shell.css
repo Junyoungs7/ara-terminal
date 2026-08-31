@@ -558,9 +558,10 @@
 .fcrumb > span:last-child .seg {
   color: var(--accent);
 }
+/* 구분자 `/` 도 글자다 — §1.3 이중 감쇠 금지. dim × .7 은 canvas 위에서 3.00 이었다.
+   세그먼트(--text-lo)보다 조용해야 하는 것은 맞고, 그건 이미 한 단계 아래 토큰이 낸다(4.70). */
 .fcrumb .sepr {
   color: var(--text-dim);
-  opacity: 0.7;
 }
 /* 경로 직접 입력 — .fpath-box 와 같은 자리를 쓴다(줄이 늘었다 줄었다 하지 않게 높이를 맞춘다). */
 .fpath-in {
@@ -1727,8 +1728,15 @@
   border-color: var(--line-strong);
   color: var(--text-hi);
 }
-.con-btn:disabled {
-  opacity: 0.4;
+/* ⚠️ 비활성 버튼의 톤은 **opacity 가 아니라 한 단계 아래 토큰**이다(§1.3). #161 에서 잰 값:
+   mid × .4 는 raised 위에서 2.29 였다. "못 누른다"는 신호는 색 한 칸(mid 6.81 → dim 4.02)과
+   호버 없음·cursor:default 가 함께 낸다 — 이 셋이면 충분하고, 안 읽히는 라벨은 뜻이 없다.
+   `.danger` 를 같이 적는 이유: `.con-btn.danger` 가 이 규칙 **아래** 있어 같은 명시도로 이긴다.
+   그대로 두면 비활성 [죽이기] 가 --err 를 그대로 써 눌리는 버튼처럼 보인다(ProcessTable). */
+.con-btn:disabled,
+.con-btn.danger:disabled {
+  color: var(--text-dim);
+  border-color: var(--line);
   cursor: default;
 }
 .con-btn.danger {
@@ -2055,9 +2063,9 @@
   background: var(--bg-raised);
   color: var(--text-hi);
 }
+/* dim 은 이미 있었다 — 거기 .45 를 또 곱해 surface 위 1.96 이었다(§1.3). 색만 남긴다: 4.41. */
 .ftb:disabled {
   color: var(--text-dim);
-  opacity: 0.45;
   cursor: default;
 }
 .ftb.danger:hover:not(:disabled) {
@@ -2979,12 +2987,14 @@
   background: var(--accent-glow);
   color: var(--text-hi);
 }
+/* 안내 한 줄(`Esc 닫고 친 대로 실행 · …`) — **한글이다.** §1.3 이중 감쇠 금지: dim × .75 는
+   overlay(가장 밝은 표면, 이 팝업의 바탕) 위에서 2.64 였다. 위 `.ci` 와 같은 dim 이면 3.54 다.
+   조용함은 색이 아니라 자리(목록 밖 맨 아래 줄)가 낸다. */
 .term-comp .ci-hint {
   padding: var(--sp-1) var(--sp-4) var(--sp-hair);
   color: var(--text-dim);
   font-family: var(--ui);
   font-size: var(--fs-sm);
-  opacity: 0.75;
 }
 /* R5 시각 벨 — BEL 수신 시 짧게 번쩍인다(설정 [터미널] > 벨 = 시각). */
 .term-pane.bell {
@@ -3483,12 +3493,14 @@
     transition: none;
   }
 }
+/* 묶음 안 개수 — 숫자라 --fs-nano 는 허용이지만(척도 §하한), opacity 는 아니다.
+   머리글에서 물려받은 dim 에 .75 를 곱해 surface 위에서 3.10 이었다. 걷으면 4.41.
+   라벨보다 조용해야 하는 것은 margin-left:auto 가 낸다(오른쪽 끝에 떨어져 있다). */
 .srv-hd .g-count {
   margin-left: auto;
   font-family: var(--ui);
   font-size: var(--fs-nano);
   font-weight: 500;
-  opacity: 0.75;
 }
 
 /* 행 공통 — 서버·세션·즐겨찾기가 같은 높이·같은 호버를 쓴다. */
@@ -4235,7 +4247,11 @@
   color: var(--text-mid);
   border: 1px solid var(--line-strong);
 }
-.btn.sec:hover {
+/* ⚠️ `:not(:disabled)` 는 장식이 아니다. 아래 `.btn:disabled` 가 opacity 를 쓰던 동안에는 호버가
+   이겨도 결과가 함께 흐려져 티가 안 났는데, 감쇠를 색으로 바꾼 지금은 `.btn.sec:hover`(0,3,0)가
+   `.btn:disabled`(0,2,0)를 이겨 **못 누르는 버튼이 호버에서 멀쩡해 보인다.** 이 파일의 다른
+   버튼들(.con-btn·.ftb·.ai-chip·.ai-code-btn)이 이미 쓰는 표기를 여기도 맞춘다. */
+.btn.sec:hover:not(:disabled) {
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
@@ -4246,11 +4262,18 @@
     var(--shadow-sm),
     inset 0 1px 0 var(--edge-hi);
 }
-.btn.pri:hover {
+.btn.pri:hover:not(:disabled) {
   filter: brightness(1.08);
 }
+/* 채운 버튼도 같다. `.pri` 는 특히 나빴다: --on-accent(어두운 글자) × .5 가 액센트 면과 **같이**
+   어두워져 그라디언트 아래쪽에서 2.33 — 라벨이 사라지는데 버튼은 여전히 앰버라 눌러 보게 된다.
+   그래서 비활성은 "흐린 주버튼"이 아니라 **주버튼이 아니게** 만든다: 면을 raised 로 내리고
+   글자를 dim(4.02)으로 둔다. border 는 건드리지 않는다 — .sec 은 있고 .pri 는 없어서, 여기서
+   더하면 활성↔비활성이 오갈 때 버튼 크기가 2px 씩 뛴다. */
 .btn:disabled {
-  opacity: 0.5;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  box-shadow: none;
   cursor: default;
 }
 
@@ -4942,7 +4965,7 @@
   background: var(--err);
   color: var(--bg-abyss);
 }
-.btn.dgr:hover {
+.btn.dgr:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 /* 기본 확인 버튼은 열릴 때 포커스를 받는다(Enter 즉시 실행). 브라우저 기본 노란 링 대신
@@ -5597,8 +5620,9 @@
   color: var(--purple);
   border-color: var(--purple-line);
 }
+/* lo × .4 = canvas(.ai-code-hd 바탕) 위 2.08. 한 칸 아래 토큰으로: 4.70. */
 .ai-code-btn:disabled {
-  opacity: 0.4;
+  color: var(--text-dim);
   cursor: default;
 }
 .ai-code-body {
@@ -5689,8 +5713,9 @@
 .ai-chip.ghost {
   border-style: dashed;
 }
+/* lo × .4 = surface 위 2.04 → dim 4.41. */
 .ai-chip:disabled {
-  opacity: 0.4;
+  color: var(--text-dim);
   cursor: default;
 }
 .ai-input-row {
@@ -5715,8 +5740,12 @@
   outline: none;
   border-color: var(--purple-line);
 }
+/* hi × .55 는 4.57 로 하한을 넘기긴 했다 — 그래도 걷는다. §1.3 은 수치가 아니라 **방법**을
+   금지하고(글자 위에 opacity 를 곱하지 않는다), 바로 옆 .ai-chip·.ai-code-btn 과 같은 판단이
+   같은 모양으로 적혀 있어야 다음 사람이 여기만 다르게 베끼지 않는다. hi → dim 은 두 칸이라
+   "못 친다"가 더 분명해진다(4.41). */
 .ai-input:disabled {
-  opacity: 0.55;
+  color: var(--text-dim);
 }
 .ai-usage {
   color: var(--text-dim);
@@ -5997,9 +6026,9 @@
   color: var(--text-hi);
   border-color: var(--line-strong);
 }
+/* dim 위에 또 .45 — raised 위 1.88 이었다(§1.3). 색만 남긴다: 4.02. */
 .rdp-files button:disabled {
   color: var(--text-dim);
-  opacity: 0.45;
   cursor: default;
 }
 .rdp-files button:disabled:hover {
@@ -7984,8 +8013,12 @@
 .ara-box:focus-within {
   border-color: var(--accent);
 }
+/* ⚠️ **부모에 건 opacity 는 자손 전체에 곱해진다** — AUDIT-R4 의 `td { opacity:.45 }` 와 같은 병이다.
+   여기 안에는 textarea 가 있고 꺼진 동안 그건 .ara-input:disabled(--text-dim)라, 이 한 줄이
+   그 글자를 raised 위 2.36 까지 끌어내리고 있었다(자기 자리에는 글자가 없어 눈에 안 띈다).
+   꺼졌다는 신호는 테두리 한 칸으로 낸다 — 안쪽 글자와 [보내기] 는 각자 이미 비활성 톤이다. */
 .ara-box.off {
-  opacity: 0.6;
+  border-color: var(--line);
 }
 .ara-box .ara-input {
   flex: 1;
@@ -8547,11 +8580,11 @@
   color: var(--text-dim);
   font-size: var(--fs-xs);
   cursor: pointer;
-  opacity: 0.82;
-  transition: opacity 0.15s, border-color 0.15s;
+  /* 쉬는 톤은 opacity 가 아니라 색이 낸다(§1.3). 호버가 이미 --text-hi 로 올리고 있어서
+     .82 는 글자 대비만 5.09 → 3.84 로 깎고 있었을 뿐이다 — 신호는 색 전환이 그대로 낸다. */
+  transition: color 0.15s, border-color 0.15s;
 }
 .voice-chip:hover {
-  opacity: 1;
   border-color: var(--accent);
   color: var(--text-hi);
 }

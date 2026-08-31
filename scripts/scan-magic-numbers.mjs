@@ -275,6 +275,54 @@ if (braceErrors.length) {
   process.exit(1)
 }
 
+// ── 글자 위 이중 감쇠 (2026-08-31, #161) ───────────────────────────────────
+// 위 대비 게이트는 **램프 토큰 자체**만 잰다. `opacity` 로 한 번 더 흐려진 합성값은 못 본다.
+// 그 사각지대에서 같은 병이 세 번 났다: `.pkg-row.missing td`(2.5) · `.bench-sec .hint`(2.57) ·
+// 그리고 #161 이 훑어 찾은 11곳(1.88~3.10). 매번 사람이 눈으로 찾았다.
+//
+// ⚠️ **이 검사는 울타리가 아니다.** "이 opacity 가 글자에 닿나"는 정적으로 판정할 수 없다 —
+// `.foo { opacity: .5 }` 의 `.foo` 안에 글자가 있는지는 CSS 만 봐서는 모르고, opacity 는 자손
+// 전체에 곱해진다(위 `.ara-box.off` 가 정확히 그 모양이었다: 자기 자리엔 글자가 없고 안쪽
+// textarea 를 2.36 으로 끌어내렸다). 그걸 규칙으로 흉내 내면 오탐이 쌓이고, 오탐이 쌓인 게이트는
+// 사람이 무시한다. 그래서 **한 가지 모양만** 본다:
+//
+//   같은 규칙이 글자를 칠하면서(`color:` / `font-*:`) 동시에 자기를 흐린다(`0 < opacity < 1`)
+//
+// 이 모양은 오탐이 없다(그 규칙에 글자가 있다는 것을 규칙 자신이 말하고 있다). 대신 절반만
+// 잡는다 — #161 의 11곳 중 6곳, 과거 두 건 중 `.hint` 하나. `opacity` 만 홀로 적힌 나머지는
+// 여전히 사람이 봐야 한다. 그 절반을 남기고도 넣는 이유는 잡히는 쪽이 **가장 흔한 저작 동작**
+// (라벨을 칠하고 그 자리에서 흐리기)이기 때문이고, 통과했다고 "글자 대비가 검사됐다"는 뜻은
+// 아니라는 것을 여기 적어 둔다. 나머지 절반까지 보려면 정적 검사가 아니라 **렌더된 DOM** 에서
+// 실효 opacity 사슬과 계산된 색을 재야 한다(e2e 축의 일이다 — CSS 만으로는 못 한다).
+// `color:` 는 선언 처음에만 — `background: …` / `transition: color .15s` 는 콜론이 없어 안 걸린다.
+const TEXT_DECL = /(?:^|[;{])\s*(?:color|font(?:-[a-z]+)?)\s*:/
+const FADE_DECL = /(?:^|[;{])\s*opacity\s*:\s*(0?\.\d+)\s*(?:;|$)/
+let ruleCount = 0
+for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
+  const file = join(STYLES_DIR, name)
+  const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const chunk of src.split('}')) {
+    const at = chunk.lastIndexOf('{')
+    if (at < 0) continue
+    ruleCount++
+    const body = chunk.slice(at + 1)
+    const fade = body.match(FADE_DECL)
+    // `opacity: 0`(숨김)·`1`(복원)은 감쇠가 아니라 스위치다. 0<n<1 만 본다(`0.0` 포함해서 거른다).
+    if (!fade || Number(fade[1]) <= 0) continue
+    if (!TEXT_DECL.test(body)) continue
+    const sel = chunk.slice(0, at).split('\n').filter((s) => s.trim()).slice(-3).join(' ').trim()
+    violations.push(
+      `${file}  글자 위 이중 감쇠 — ${sel} { … opacity: ${fade[1]} } ` +
+        '(§1.3: 흐리게는 opacity 가 아니라 한 단계 아래 --text-* 토큰이다)'
+    )
+  }
+}
+// 공허성 방지 — 위 MIN_PAIRS 와 같은 규칙. 파서가 깨져 규칙을 0개로 읽으면 조용히 초록이 된다.
+if (ruleCount < 300) {
+  console.error(`이중 감쇠 검사가 공허하다: 규칙 ${ruleCount}개만 읽혔다(하한 300). CSS 파서를 고쳐라.`)
+  process.exit(1)
+}
+
 if (violations.length) {
   console.error('매직넘버 스캔 실패 — 토큰(var(--*))을 사용하세요:\n' + violations.join('\n'))
   process.exit(1)
