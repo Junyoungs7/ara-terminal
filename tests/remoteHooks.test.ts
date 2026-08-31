@@ -88,6 +88,26 @@ const settingsPath = (root: string): string => join(root, '.claude', 'settings.j
 const readSettings = (root: string): { hooks?: Record<string, { hooks: { command: string }[] }[]> } =>
   JSON.parse(readFileSync(settingsPath(root), 'utf8'))
 
+/**
+ * 설치가 **끝난** 설정을 읽는다. `prepareRemoteHooks()` 를 직접 부르는 검사들은 그 반환값
+ * (`installed`)으로 완료를 알지만, 접속만으로 심기는 경로에는 그 손잡이가 없다.
+ *
+ * ⚠️ 파일이 **생긴 것**을 기다리면 안 된다 — SFTP OPEN 이 `openSync(rp, 'w')` 로 0바이트 파일을
+ * 먼저 만들고(tests/sftp-harness.ts) WRITE 는 다음 바퀴에 온다. 그 틈에 읽으면 빈 파일이라
+ * `JSON.parse` 가 "Unexpected end of JSON input" 으로 터진다.
+ * (#159 실측: 이 파일 단독 60회 중 2회, 스위트 전체 20회 중 1회.)
+ */
+async function installedSettings(root: string): Promise<ReturnType<typeof readSettings>> {
+  await waitFor(() => {
+    try {
+      return !!readSettings(root).hooks?.Stop
+    } catch {
+      return false // 아직 없거나(ENOENT) 쓰는 중(빈 파일)
+    }
+  })
+  return readSettings(root)
+}
+
 /** 역터널로 들어온 척 HTTP 를 한 번 보낸다 — 훅의 curl 이 원격에서 하는 그 일이다. */
 async function postThroughTunnel(
   h: Harness,
@@ -124,8 +144,7 @@ describe('F1b 원격 훅 — 세션이 붙을 때 심고, 터널로 듣는다', 
     expect(h.shellEnv['ARA_HOOK_PORT']).toBe(String(h.forwardedPort()))
     expect(h.shellEnv['ARA_PANE']).toBe('pane-remote-1')
     // ② 설치 — AI 를 띄우지 않았는데 이미 심겨 있다(이 순서가 이 라운드의 요점이다).
-    await waitFor(() => existsSync(settingsPath(root)))
-    const stop = readSettings(root).hooks?.Stop
+    const stop = (await installedSettings(root)).hooks?.Stop
     expect(JSON.stringify(stop)).toContain(HOOK_MARK)
     // 원격도 로컬과 **같은 한 줄**이다 — POSIX 한 줄이 세 OS 를 덮는다.
     expect(stop!.at(-1)!.hooks[0]!.command).toContain('[ -n "$ARA_HOOK_PORT" ]')
