@@ -2,9 +2,17 @@
 // 검증: 호스트키 TOFU(최초 차단→수락 후 저장→불일치 차단), 비밀번호 인증, shell 한글 출력, 입력 에코.
 import { describe, it, expect, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { connectSsh, SshBackend } from '../src/main/sessions/ssh/SshBackend'
+import { connectByProfile } from '../src/main/ipc/registerSshIpc'
+import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
+import { ProfileStore } from '../src/main/secrets/ProfileStore'
+import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { startPasswordServer, genHostKey, type Harness } from './ssh-harness'
 import type { KnownHost, SshProfile } from '../src/shared/types'
+import type { SecretStore } from '../src/main/secrets/SecretStore'
 import type { SessionBackend } from '../src/main/sessions/SessionBackend'
 
 let harness: Harness | null = null
@@ -159,6 +167,138 @@ describe('SSH 실접속 (ssh2 하네스)', () => {
 
   it('genHostKey는 매번 다른 호스트키를 만든다(지문 변조 시나리오용)', () => {
     expect(genHostKey()).not.toBe(genHostKey())
+  })
+})
+
+/**
+ * #158 셸을 아는 크기로 연다.
+ *
+ * 예전에는 `cols: 80, rows: 24` 가 코드에 박혀 있었고 실제 크기는 렌더러가 붙은 **뒤에** 오는
+ * `session:resize` 로 따라잡았다 — 그 사이에 도착한 것(로그인 배너·MOTD·첫 프롬프트)은 80칸 폭으로
+ * 그려진다. 크기를 아는 호출자는 이제 접속 전에 실어 보낸다.
+ *
+ * 🔴 **회귀 가드의 핵심은 "안 주면 예전 그대로"다.** MCP `ssh_connect` 와 [접속 테스트]는 화면이
+ * 없어 크기를 알 수 없다 — 그쪽이 깨지면 이 변경은 손해다.
+ */
+describe('#158 셸 크기', () => {
+  const connectWith = async (h: Harness, size?: { cols: number; rows: number }) =>
+    await connectSsh(pwProfile(h.port), {
+      knownHosts: {},
+      secret: h.password,
+      acceptHostKey: true,
+      onHostKeyAccepted: () => {},
+      ...(size ? { size } : {})
+    })
+
+  it('size 를 주면 그 치수로 pty 를 요청한다(80×24 하드코딩이 아니다)', async () => {
+    harness = await startPasswordServer()
+    const res = await connectWith(harness, { cols: 203, rows: 51 })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    await wait(200)
+    expect(harness.ptyRequest()).toEqual({ cols: 203, rows: 51 })
+    // 셸이 이미 제 크기로 떴으므로 뒤따르는 window-change 없이도 맞다.
+    expect(harness.windowChanges()).toEqual([])
+    res.backend.kill()
+  })
+
+  it('size 를 안 주면 예전과 똑같이 80×24 로 연다(MCP ssh_connect·접속 테스트 경로)', async () => {
+    harness = await startPasswordServer()
+    const res = await connectWith(harness)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    await wait(200)
+    expect(harness.ptyRequest()).toEqual({ cols: 80, rows: 24 })
+    res.backend.kill()
+  })
+
+  it('열린 뒤의 resize 는 그대로 window-change 로 나간다(크기를 줘도 흐름은 그대로)', async () => {
+    harness = await startPasswordServer()
+    const res = await connectWith(harness, { cols: 100, rows: 30 })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    await wait(200)
+    // 같은 크기로 한 번(렌더러가 마운트 직후 무조건 한 번 보낸다), 다른 크기로 한 번.
+    res.backend.resize(100, 30)
+    res.backend.resize(120, 40)
+    await wait(200)
+    // 같은 크기라도 걸러 내지 않는다 — SIGWINCH 한 번은 무해하고, 거르려면 "지금 크기"를 백엔드가
+    // 따로 들고 있어야 한다(연결 경로와 어긋나면 그게 더 나쁘다). 여기서는 **세기만** 한다.
+    expect(harness.windowChanges()).toEqual([
+      { cols: 100, rows: 30 },
+      { cols: 120, rows: 40 }
+    ])
+    res.backend.kill()
+  })
+})
+
+/**
+ * #158 IPC 진입점(`connectByProfile`)에서 본 같은 계약. 위 describe 는 `connectSsh` 를 직접 부르지만
+ * **실제로 깨질 수 있는 자리는 여기**다 — 렌더러와 MCP 가 이 함수 하나를 공유하고, MCP 는 인자를
+ * 다섯 개만 준다(`connectByProfile(profiles, ws, sessions, profileId, false)`).
+ */
+describe('#158 connectByProfile 두 호출자', () => {
+  const rig = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ev-158-'))
+    const m = new Map<string, string>()
+    const store: SecretStore = {
+      get: (k) => m.get(k) ?? null,
+      set: (k, v) => void m.set(k, v),
+      delete: (k) => void m.delete(k),
+      has: (k) => m.has(k)
+    }
+    const ws = new WorkspaceStore(join(dir, 'workspace.json'), '0.1.0')
+    const profiles = new ProfileStore(ws, store)
+    const sessions = new MainSessionManager({ data() {}, exit() {}, cwd() {} })
+    return { dir, ws, profiles, sessions }
+  }
+
+  const saveProfile = (r: ReturnType<typeof rig>, h: Harness) =>
+    r.profiles.save({
+      id: 'p1',
+      name: 'harness',
+      host: '127.0.0.1',
+      port: h.port,
+      username: 'tester',
+      authType: 'password',
+      secret: h.password
+    })
+
+  it('렌더러 경로(size 를 준다)는 그 치수로 셸을 연다', async () => {
+    harness = await startPasswordServer()
+    const r = rig()
+    saveProfile(r, harness)
+    const res = await connectByProfile(r.profiles, r.ws, r.sessions, 'p1', true, undefined, { cols: 180, rows: 45 })
+    expect(res.ok).toBe(true)
+    await wait(200)
+    expect(harness.ptyRequest()).toEqual({ cols: 180, rows: 45 })
+    r.sessions.destroyAll()
+    rmSync(r.dir, { recursive: true, force: true })
+  })
+
+  it('MCP 경로(인자 5개)는 예전 그대로 80×24 로 연다', async () => {
+    harness = await startPasswordServer()
+    const r = rig()
+    saveProfile(r, harness)
+    // MCP tools.ts 의 호출 그대로 — size 도 password 도 없다.
+    const res = await connectByProfile(r.profiles, r.ws, r.sessions, 'p1', true)
+    expect(res.ok).toBe(true)
+    await wait(200)
+    expect(harness.ptyRequest()).toEqual({ cols: 80, rows: 24 })
+    r.sessions.destroyAll()
+    rmSync(r.dir, { recursive: true, force: true })
+  })
+
+  it('0 이나 음수 치수는 무시하고 기본값으로 연다(IPC 는 신뢰 경계 밖)', async () => {
+    harness = await startPasswordServer()
+    const r = rig()
+    saveProfile(r, harness)
+    const res = await connectByProfile(r.profiles, r.ws, r.sessions, 'p1', true, undefined, { cols: 0, rows: -5 })
+    expect(res.ok).toBe(true)
+    await wait(200)
+    expect(harness.ptyRequest()).toEqual({ cols: 80, rows: 24 })
+    r.sessions.destroyAll()
+    rmSync(r.dir, { recursive: true, force: true })
   })
 })
 

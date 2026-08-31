@@ -42,6 +42,22 @@ if (typeof window !== 'undefined') {
     }
   }
 }
+/**
+ * #158: **접속 전에 셸 크기를 아는 유일한 창구.**
+ *
+ * 새 SSH 세션은 `layout.showSession` 이 **포커스 칸의 sessionId 를 갈아 끼우는** 식으로 뜬다 —
+ * 칸은 그대로고 안에 든 세션만 바뀐다. 그러니 지금 그 칸에 있는 xterm 의 cols·rows 가 곧 새
+ * 세션이 갖게 될 치수다(픽셀 상자도 폰트도 그대로다). 포커스 칸의 세션 = `sessions.activeId`
+ * 이므로(MainArea 가 둘을 양방향으로 잇는다) 부르는 쪽은 그 id 만 주면 된다.
+ *
+ * 없으면 null — 칸이 비었거나(첫 세션) 그 칸이 xterm 이 아닌 경우(RDP·복원 placeholder)다.
+ * 그때는 main 이 80×24 로 열고 마운트 직후의 resize 가 따라잡는다(예전 동작 그대로).
+ */
+export function sizeOf(sessionId: string | null): { cols: number; rows: number } | null {
+  const e = sessionId ? terms.get(sessionId) : null
+  return e ? { cols: e.term.cols, rows: e.term.rows } : null
+}
+
 export function getSelection(sessionId: string): string {
   return terms.get(sessionId)?.term.getSelection() ?? ''
 }

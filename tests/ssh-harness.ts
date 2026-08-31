@@ -28,6 +28,13 @@ export type Harness = {
   password: string
   /** F1b: 셸 채널로 온 env 요청(`ARA_HOOK_PORT` 등). 실제 sshd 는 AcceptEnv 로 거르지만 여기선 다 받는다. */
   shellEnv: Record<string, string>
+  /**
+   * #158: 셸 앞에 오는 **pty 요청의 치수**. 셸을 아는 크기로 여는지(하드코딩 80×24 가 아닌지)를
+   * 보는 유일한 창구다 — 클라이언트 쪽에서는 확인할 방법이 없다. 요청이 없었으면 null.
+   */
+  ptyRequest: () => { cols: number; rows: number } | null
+  /** #158: 접속 뒤 따라온 `window-change` 요청들(순서대로). 몇 번 오는지를 세려고 둔다. */
+  windowChanges: () => { cols: number; rows: number }[]
   /** F1b: 클라이언트가 forwardIn 으로 받아 간 원격 포트(0 = 요청이 없었거나 거절했다). */
   forwardedPort: () => number
   /**
@@ -91,6 +98,9 @@ export async function startPasswordServer(opts?: {
   // F1b: 셸에 실려 온 env · 역터널을 받아 준 커넥션과 그 포트.
   const shellEnv: Record<string, string> = {}
   let forwarded: { conn: Connection; port: number } | null = null
+  // #158: pty 요청의 치수와 그 뒤 따라온 window-change 들.
+  let ptyRequest: { cols: number; rows: number } | null = null
+  const windowChanges: { cols: number; rows: number }[] = []
 
   const server = new Server({ hostKeys: [hostKeyPem] }, (client) => {
     live.add(client)
@@ -125,8 +135,14 @@ export async function startPasswordServer(opts?: {
       client.on('session', (accept) => {
         const session = accept()
         // ssh2 서버의 pty/shell 이벤트는 accept 함수를 직접 넘긴다(객체 아님).
-        session.on('pty', (acceptPty) => {
+        session.on('pty', (acceptPty, _rejectPty, info) => {
+          ptyRequest = { cols: info.cols, rows: info.rows }
           if (acceptPty) acceptPty()
+        })
+        // #158: 셸이 뜬 뒤의 크기 변경(SIGWINCH). 실제 sshd 는 pty 를 다시 재는데, 여기선 센다.
+        session.on('window-change', (acceptWc, _rejectWc, info) => {
+          windowChanges.push({ cols: info.cols, rows: info.rows })
+          acceptWc?.()
         })
         // F1b: 셸 요청 앞에 오는 env 요청. ssh2 는 이걸 wantReply 없이 보내므로 accept 가 없을 수 있다.
         session.on('env', (acceptEnv, _rejectEnv, info) => {
@@ -233,6 +249,8 @@ export async function startPasswordServer(opts?: {
     hostKeyPem,
     password,
     shellEnv,
+    ptyRequest: () => ptyRequest,
+    windowChanges: () => windowChanges,
     forwardedPort: () => forwarded?.port ?? 0,
     openForwarded: () =>
       new Promise<ServerChannel>((resolve, reject) => {

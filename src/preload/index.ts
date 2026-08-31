@@ -95,8 +95,8 @@ const api: EvApi = {
     delete: (id: string) => ipcRenderer.invoke('profile:delete', { id })
   },
   ssh: {
-    connect: (profileId: string, acceptHostKey?: boolean, password?: string) =>
-      ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password }),
+    connect: (profileId: string, acceptHostKey?: boolean, password?: string, size?: { cols: number; rows: number }) =>
+      ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size }),
     forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
     test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },

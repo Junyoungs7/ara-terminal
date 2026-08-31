@@ -224,7 +224,13 @@ export type InvokeContract = {
   // password: 이번 접속에만 쓰는 비밀번호(2026-08-21 준영님 제보 18번 — "따로 저장하지 않고 연결 후
   // 입력"). 저장돼 있는 비밀보다 우선하고 **vault 에 쓰지 않는다**. RDP 는 예전부터 이 흐름이었고
   // (rdp-creds 화면) SSH 에는 없어서, 비밀번호를 저장하지 않으면 접속할 길이 아예 없었다.
-  'ssh:connect': { req: { profileId: string; acceptHostKey?: boolean; password?: string }; res: SshConnectResult }
+  // size: #158 셸을 열 치수. 새 세션은 포커스 칸에 뜨고 그 칸의 xterm 이 이미 그 크기라, 접속
+  // **전에** 실어 보내면 80×24 로 열었다가 뒤따르는 resize 로 따라잡는 경합이 사라진다.
+  // 선택 인자다 — 화면이 없는 호출자(MCP ssh_connect)는 안 주고, 그러면 지금까지와 똑같이 동작한다.
+  'ssh:connect': {
+    req: { profileId: string; acceptHostKey?: boolean; password?: string; size?: { cols: number; rows: number } }
+    res: SshConnectResult
+  }
   // 호스트키 재설정: 프로필의 knownHosts 항목 삭제 → 다음 접속이 다시 TOFU 확인이 된다.
   // 서버 재설치로 지문이 바뀐 경우 mismatch 차단을 푸는 유일한 경로(사용자 확인 후 호출).
   'ssh:forgetHostKey': { req: { profileId: string }; res: { ok: true; removed: boolean } }
@@ -603,8 +609,16 @@ export type EvApi = {
     delete(id: string): Promise<{ ok: true }>
   }
   ssh: {
-    /** password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용). */
-    connect(profileId: string, acceptHostKey?: boolean, password?: string): Promise<SshConnectResult>
+    /**
+     * password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용).
+     * size 는 셸을 열 치수(#158) — 안 주면 80×24 로 연다.
+     */
+    connect(
+      profileId: string,
+      acceptHostKey?: boolean,
+      password?: string,
+      size?: { cols: number; rows: number }
+    ): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
     /** [접속 테스트] — 저장하지 않고 폼 값으로 붙어 본다(ssh=인증까지, rdp=도달까지). */
     test(input: ProfileInput): Promise<ConnTestResult>

@@ -22,6 +22,7 @@ import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
 import { useSessions } from '../store/sessions'
+import { sizeOf } from '../terminal/termRegistry'
 import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { useWorkProfiles } from '../store/workProfiles'
@@ -792,7 +793,11 @@ export function Shell() {
       const target = await lookup(profileId)
       if (target?.type === 'rdp') return openRdpProfile(profileId)
       setActiveProfileId(profileId)
-      const res = await connect(profileId, acceptHostKey, password)
+      // #158: 새 세션이 뜰 자리는 **포커스 칸**이고(아래 selectSession → layout.showSession),
+      // 그 칸은 지금 activeId 의 xterm 이 쓰고 있다 — 그 치수가 곧 이 세션의 치수다.
+      // 접속 전에 실어 보내면 원격 셸의 첫 프롬프트·배너부터 제 폭으로 온다. 모르면(칸이 비었거나
+      // RDP 면) 안 보내고, main 이 80×24 로 연 뒤 마운트 직후 resize 가 따라잡는다(예전 동작).
+      const res = await connect(profileId, acceptHostKey, password, sizeOf(sessions.activeId) ?? undefined)
       if (res.ok) {
         const p = await lookup(profileId)
         const name = p?.name ?? 'ssh'

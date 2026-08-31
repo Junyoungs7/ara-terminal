@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
-import { registerTerm, remeasureAll, unregisterTerm } from '../src/renderer/terminal/termRegistry'
+import { registerTerm, remeasureAll, sizeOf, unregisterTerm } from '../src/renderer/terminal/termRegistry'
 
 // 2026-08-31 실측: 번들 폰트는 `font-display: swap` 이라 파일이 오기 전에는 스택의 **다음 폰트**로
 // 그려진다. xterm 은 `term.open()` 때 딱 한 번 셀을 재고 `document.fonts` 를 보지 않으므로,
@@ -72,5 +72,26 @@ describe('폰트가 늦게 온 뒤의 셀 재측정 (remeasureAll)', () => {
 
   it('열린 터미널이 없으면 아무 일도 없다', () => {
     expect(() => remeasureAll()).not.toThrow()
+  })
+})
+
+// #158: 접속 **전에** 셸 크기를 아는 창구. 새 SSH 세션은 포커스 칸의 sessionId 를 갈아 끼우는
+// 식으로 뜨므로(layout.showSession), 지금 그 칸에 있는 xterm 의 치수가 곧 새 세션의 치수다.
+// null 이 나오는 경우(빈 칸·RDP·placeholder)는 **폴백을 타야 한다** — main 이 80×24 로 연다.
+describe('#158 포커스 칸의 치수 읽기 (sizeOf)', () => {
+  beforeEach(() => {
+    for (const id of ['a', 'b', 'c']) unregisterTerm(id)
+  })
+
+  const addon = { fit: {} as unknown as FitAddon, ...noopAddons }
+
+  it('등록된 터미널의 cols·rows 를 그대로 준다', () => {
+    registerTerm('a', { term: { cols: 203, rows: 51 } as unknown as Terminal, ...addon })
+    expect(sizeOf('a')).toEqual({ cols: 203, rows: 51 })
+  })
+
+  it('없는 세션·null 이면 null 이다(그때는 접속이 크기를 안 보낸다)', () => {
+    expect(sizeOf('a')).toBeNull()
+    expect(sizeOf(null)).toBeNull()
   })
 })

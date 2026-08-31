@@ -26,7 +26,12 @@ export async function connectByProfile(
    * 막혀 길이 없었다). 여기서도 vault 에 쓰지 않는다: 저장은 연결 관리자의 [저장]이 하는 일이다.
    * MCP 경로는 이 인자를 주지 않는다(AI 가 비밀번호를 들고 오는 길을 만들지 않는다).
    */
-  password?: string
+  password?: string,
+  /**
+   * #158 셸을 열 치수. **렌더러만 안다** — 새 세션이 뜰 포커스 칸의 xterm 이 이미 그 크기다.
+   * MCP `ssh_connect` 는 화면과 무관하게 부르므로 주지 않는다(그러면 80×24, 지금까지와 동일).
+   */
+  size?: { cols: number; rows: number }
 ): Promise<SshConnectResult> {
   const profile = profiles.get(profileId)
   if (!profile) return { ok: false, reason: 'network', message: '프로필을 찾을 수 없습니다.' }
@@ -54,7 +59,8 @@ export async function connectByProfile(
     secret,
     acceptHostKey,
     onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
-    ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {})
+    ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {}),
+    ...(size && size.cols > 0 && size.rows > 0 ? { size } : {})
   })
 
   if (!outcome.ok) return outcome
@@ -162,8 +168,8 @@ export function registerSshIpc(
   ws: WorkspaceStore,
   sessions: MainSessionManager
 ): void {
-  handle('ssh:connect', ({ profileId, acceptHostKey, password }): Promise<SshConnectResult> =>
-    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password)
+  handle('ssh:connect', ({ profileId, acceptHostKey, password, size }): Promise<SshConnectResult> =>
+    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size)
   )
 
   handle('conn:test', ({ input }): Promise<ConnTestResult> => testProfile(profiles, ws, input))

@@ -14,6 +14,13 @@ import { prepareRemoteHooks } from '../../agent/remoteHooks'
 // 짧을수록 트리가 빨리 따라오지만, 명령 출력 중간중간 읽는 낭비가 는다.
 const CWD_SETTLE_MS = 150
 
+// 크기를 아무도 안 알려 줬을 때 셸을 여는 치수. SSH 관례값이고 **추정이 아니라 폴백**이다 —
+// 부르는 쪽이 크기를 아는 경로(렌더러)는 deps.size 로 주고, 모르는 경로(MCP ssh_connect·접속
+// 테스트)만 여기로 온다. 예전에는 이 둘이 구분되지 않아 아는 쪽도 80×24 로 열고 뒤따르는
+// resize 로 따라잡았다(#158).
+const FALLBACK_COLS = 80
+const FALLBACK_ROWS = 24
+
 // ~ 확장(개인키 경로). Windows/유닉스 홈 모두 대응.
 function expandHome(p: string): string {
   if (p.startsWith('~')) {
@@ -39,6 +46,17 @@ export type ConnectDeps = {
    * 안 주면 이 커넥션은 훅 없이 열린다(접속 테스트 경로가 그렇다).
    */
   hooks?: { sink: HookSink; paneId: string }
+  /**
+   * #158 셸을 **아는 크기로 연다.** 주면 그 치수로 pty 를 요청하고, 안 주면 80×24 로 연다.
+   *
+   * 선택 인자인 것이 계약이다 — 부르는 쪽이 크기를 아는 경로와 모르는 경로가 둘 다 있다:
+   *   · 렌더러(`ssh:connect`) — 새 세션은 **포커스 칸**에 뜨고 그 칸의 픽셀 상자는 이미 정해져
+   *     있다. 지금 그 칸을 쓰고 있는 xterm 의 cols·rows 가 곧 새 세션의 치수다(termRegistry.sizeOf).
+   *   · MCP `ssh_connect`·[접속 테스트] — 화면과 무관하게 부른다. 크기를 알 길이 없으므로
+   *     **안 주고, 지금까지와 똑같이 동작한다.**
+   * 어느 쪽이든 렌더러가 붙으면 `session:resize` 가 뒤따라 온다 — 이 값이 틀려도 곧 교정된다.
+   */
+  size?: { cols: number; rows: number }
 }
 
 export type ConnectOutcome =
@@ -141,7 +159,9 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
       }
       // 3인자 형태로 부른다: `env` 를 창 옵션과 같은 객체에 넣으면 ssh2 가 그 객체를 통째로 opts 로
       // 해석해 **pty 요청의 term·크기가 사라진다**(ssh2 client.js shell() 의 인자 판별).
-      client.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, env ? { env } : {}, (err, channel) => {
+      const cols = deps.size?.cols ?? FALLBACK_COLS
+      const rows = deps.size?.rows ?? FALLBACK_ROWS
+      client.shell({ term: 'xterm-256color', cols, rows }, env ? { env } : {}, (err, channel) => {
         if (err) {
           done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })
           return
@@ -325,7 +345,21 @@ export class SshBackend implements SessionBackend {
     try {
       this.channel.setWindow(rows, cols, 0, 0)
     } catch {
-      // 채널 종료 레이스: 무시.
+      /**
+       * #158 **버려도 되는 이유**(2026-08-31 실측). 예전엔 "채널 종료 레이스: 무시" 한 줄이라
+       * 왜 괜찮은지가 아무 데도 없었다.
+       *
+       * ① **보류할 상태가 없다.** SshBackend 는 **이미 열린 채널**로만 만들어진다
+       *    (`done({ ok: true, backend: new SshBackend(client, channel) })`) — "아직 안 열림"이
+       *    존재하지 않으므로 나중에 적용할 것을 쌓아 둘 이유가 없다. 남는 경우는 "이미 닫힘"뿐이고,
+       *    닫힌 셸의 창 크기는 아무 의미가 없다.
+       * ② **애초에 거의 던지지 않는다.** ssh2 의 `Channel.setWindow` 는 `writable &&
+       *    outgoing.state === 'open'` 일 때만 패킷을 만든다(lib/Channel.js) — 닫힌 뒤에는 조용한
+       *    no-op 다. 하네스로 `kill()` 후·상대가 끊은 후 둘 다 불러 봤고 **둘 다 안 던졌다.**
+       * 그래도 남겨 두는 것은, 소켓만 먼저 죽고 채널 상태가 아직 open 인 찰나(RST)를 재현하지
+       * 못했기 때문이다. 이 파일의 CWD 추적이 바로 그런 순간에 ssh2 가 **동기로 던져** main 을
+       * 통째로 죽인 이력이 있다(stopCwd 주석) — 세 줄로 살 수 있는 보험이다.
+       */
     }
   }
   pause(): void {
