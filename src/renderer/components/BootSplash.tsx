@@ -22,8 +22,14 @@ import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'
  * `prefers-reduced-motion` 이면 움직임 없이 잠깐 떴다 사라진다(styles 쪽에서 처리).
  */
 
-/** 화면에 머무는 시간. 이보다 길면 "빨리 좀"이 되고, 짧으면 글자를 못 읽는다. */
-export const SPLASH_MS = 1400
+/**
+ * 화면에 머무는 시간.
+ *
+ * 1400 이었는데 **읽기 전에 지나갔다**(2026-08-31 준영님: "너무 빨리 지나가는데 2초로"). 매번 다른
+ * 한 줄을 뽑아 놓고 못 읽게 하면 그 장치가 통째로 헛돈다 — 사라지는 350ms 를 빼면 실제로 읽을 수
+ * 있던 시간은 1초 남짓이었다.
+ */
+export const SPLASH_MS = 2000
 
 /**
  * 직전에 띄운 줄. 같은 것이 두 번 연속 나오면 "랜덤"으로 안 느껴진다.
