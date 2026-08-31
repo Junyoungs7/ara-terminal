@@ -6,10 +6,16 @@ import { t } from '../i18n'
 // 화면에는 아무 일도 안 일어나서, 사용자는 복사된 줄 알고 붙여넣다가 **엉뚱한(이전) 값**을 붙인다.
 // 조용한 실패 중에서도 나쁜 쪽이다: 실패했다는 사실 자체가 안 보인다.
 //
-// 실제로 거부되는 자리는 하나다: **창에 포커스가 없으면** Chromium 이 async 클립보드 쓰기를
-// 거부한다(`navigator.clipboard.writeText`). 앱을 쓰는 동안에는 늘 포커스가 있어 거의 안 나지만,
-// 창이 비활성인 채로 단축키가 들어오는 경로에서는 난다 — e2e 하네스가 창을 showInactive() 로
-// 띄우는데, 2026-08-13 CLIP-1 이 빨갛던 원인이 정확히 그거였다(DLP 가 아니었다).
+// 실패의 원인은 하나였다: **창에 포커스가 없으면** Chromium 이 async 클립보드 쓰기를 거부한다.
+// 2026-08-31 준영님이 세션 창에서 그걸 만나셨다 — 앱을 쓰는 중인데도 거부됐다(떼어낸 창·RDP·
+// 아라 브라우저처럼 포커스가 다른 데 가 있는 자리가 여럿이다).
+//
+// **그래서 쓰기를 main 으로 옮겼다.** OS 클립보드에 직접 쓰므로 포커스라는 개념이 없다 —
+// 거부될 길이 사라진다. 브라우저의 그 방어는 남의 탭이 클립보드를 덮어쓰는 것을 막으려는 것이고,
+// 사용자가 자기 앱에서 자기 손으로 누른 복사에는 지킬 것이 없다.
+// (읽기는 안 옮긴다 — 남의 클립보드를 읽는 쪽은 포커스 확인이 실제로 값을 한다.)
+//
+// ⚠️ **직접 `navigator.clipboard.writeText` 를 부르지 마라.** 이 파일을 거쳐야 그 차이가 유지된다.
 
 /** 안내를 어디로 낼지. 앱은 토스트를 쓰고, 붙기 전(초기 렌더)에는 콘솔로만 — rdpSpanOpen 과 같은 결. */
 let notify: (msg: string) => void = (msg) => {
@@ -30,7 +36,13 @@ export function setClipboardNotifier(fn: (msg: string) => void): void {
  */
 export async function writeClipboard(text: string, announce = false): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text)
+    // **main 을 거친다.** `navigator.clipboard.writeText` 는 문서에 포커스가 없으면 Chromium 이
+    // 거부하는데, 우리 앱에는 포커스가 다른 데 가 있는 자리가 여럿이다 — 떼어낸 세션 창·RDP·
+    // 아라 브라우저. 2026-08-31 준영님이 세션 창에서 그 거부를 만나셨다.
+    // main 의 clipboard 는 OS 에 직접 쓰므로 포커스 개념이 없다(registerWindowIpc 의 주석 참조).
+    // 폴백을 두지 않는다: 폴백이 있으면 IPC 가 조용히 죽어도 옛 실패가 그대로 돌아온다.
+    const res = await window.ev?.clipboard.writeText(text)
+    if (!res?.ok) throw new Error('clipboard write rejected')
     if (announce) notify(t('ctx.copied'))
     return true
   } catch {

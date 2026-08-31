@@ -72,4 +72,21 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
   // Clipboard API 는 텍스트·이미지뿐) main 이 읽어 실존 파일만 돌려준다 — app:openExternal 과
   // 같은 "렌더러가 못 하는 OS 접근을 검증해서 대신해 준다" 자리다.
   handle('clipboard:readFiles', () => ({ paths: clipboardFilePaths(clipboard) }))
+
+  /**
+   * 텍스트 복사. **렌더러의 `navigator.clipboard.writeText` 를 대신한다.**
+   *
+   * 그 API 는 **문서에 포커스가 없으면 Chromium 이 거부한다.** 브라우저에서는 합리적인 방어지만
+   * (아무 탭이나 남의 클립보드를 덮어쓰면 안 된다) 우리는 사용자가 자기 앱에서 자기 손으로 누른
+   * 복사다 — 그 방어가 지킬 것이 없고, 대신 **떼어낸 세션 창·RDP·브라우저 뷰처럼 포커스가 다른
+   * 곳에 있는 자리에서 조용히 거부된다.** 2026-08-31 준영님 제보가 그 자리다.
+   *
+   * main 의 `clipboard` 는 OS 클립보드에 직접 쓰므로 포커스 개념이 없다. 실패할 길이 사라진다.
+   * (읽기는 안 옮긴다 — 남의 클립보드를 읽는 것은 포커스 확인이 실제로 값을 한다.)
+   */
+  handle('clipboard:writeText', (text: string) => {
+    if (typeof text !== 'string') return { ok: false }
+    clipboard.writeText(text)
+    return { ok: true }
+  })
 }

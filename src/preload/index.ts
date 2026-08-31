@@ -292,7 +292,9 @@ const api: EvApi = {
   },
   // F14: 클립보드 파일 경로(Ctrl+V 로 파일을 붙여넣었는지 판별).
   clipboard: {
-    readFiles: () => ipcRenderer.invoke('clipboard:readFiles')
+    readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
+    // 쓰기는 main 을 거친다 — navigator.clipboard 는 포커스가 없으면 거부한다(registerWindowIpc 주석).
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
   },
   // F11: 명령어 히스토리. load 는 배열만 돌려주도록 풀어 준다(렌더러가 res.entries 를 벗기지 않게).
   history: {

@@ -416,6 +416,7 @@ export type InvokeContract = {
   'ai:clear': { req: void; res: { ok: true } }
   // 트랙 C 소비 채널 — 타입만 선확정(핸들러는 트랙 C).
   'clipboard:readFiles': { req: void; res: { paths: string[] } }
+  'clipboard:writeText': { req: string; res: { ok: boolean } }
   // RDP 원격 클립보드에서 내려받은 바이트를 사용자가 고른 폴더에 쓴다. name·sub 는 원격이 준
   // 문자열이라 main 이 조각마다 검사한다(폴더 밖 쓰기 차단).
   'fs:saveBytes': { req: { dir: string; sub?: string; name: string; bytes: Uint8Array }; res: FileOpResult }
@@ -785,6 +786,7 @@ export type EvApi = {
   // 호출측은 그때 기존 텍스트 붙여넣기로 폴백한다.
   clipboard: {
     readFiles(): Promise<{ paths: string[] }>
+    writeText(text: string): Promise<{ ok: boolean }>
   }
   // F11 명령어 히스토리. scope = SSH 는 serverKey, 로컬은 'local'.
   history: {

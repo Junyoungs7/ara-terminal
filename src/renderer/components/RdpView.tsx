@@ -12,6 +12,7 @@
 // 비밀번호는 프로필에 저장해 두면 바로 붙고, 없으면 화면에서 받는다(2026-08-07).
 // 클립보드는 텍스트 양방향으로 연동돼 있다(이미지·파일은 아직).
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { writeClipboard } from '../store/clipboardWrite'
 import { registerPasteTarget } from '../store/pasteFiles'
 import { t } from '../i18n'
 import { Dropdown } from './Dropdown'
@@ -377,7 +378,9 @@ export function RdpView({
           // 원격이 이제 텍스트를 들고 있다 = 아까 복사해 둔 파일 목록은 무효다. 안 지우면 탐색기
           // 붙여넣기가 만료된 클립보드 락을 향해 요청하다 조용히 실패한다.
           setRemoteFiles([])
-          void navigator.clipboard?.writeText(text).catch(() => {})
+          // main 경유(writeClipboard). 이건 **원격이 밀어 주는** 쓰기라 창이 뒤에 있을 때 오기 쉬운데,
+          // navigator.clipboard 는 그때 거부한다 — RDP 에서 복사하고 알트탭한 뒤 붙이면 빈 채였다.
+          void writeClipboard(text)
         })
         builder.forceClipboardUpdateCallback(() => {
           void navigator.clipboard

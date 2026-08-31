@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { writeClipboard } from '../store/clipboardWrite'
 import { useRowKeys } from '../store/rowKeys'
 import type { FileEntry, FileListResult, FileOpResult, SftpProgress, SftpXferResult } from '@shared/ipc'
 import { ContextMenu } from '../interactions/ContextMenu'
@@ -679,7 +680,8 @@ export function FileTree({
           osClipAtCopy = []
         })
       // 붙여넣을 곳이 앱 밖일 수도 있다 — 절대경로를 텍스트로도 올려 둔다(터미널·편집기에 그대로 붙는다).
-      void navigator.clipboard?.writeText(entries.map((e) => joinPath(path, e.name)).join('\n')).catch(() => {})
+      // writeClipboard 를 거친다(main 경유) — 직접 navigator 를 부르면 포커스가 없을 때 조용히 거부된다.
+      void writeClipboard(entries.map((e) => joinPath(path, e.name)).join('\n'))
     },
     [selectedEntries, session, path]
   )
