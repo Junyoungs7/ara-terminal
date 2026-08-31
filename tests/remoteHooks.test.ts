@@ -15,7 +15,7 @@ import type { Client } from 'ssh2'
 import { connectSsh } from '../src/main/sessions/ssh/SshBackend'
 import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
 import { prepareRemoteHooks } from '../src/main/agent/remoteHooks'
-import { HOOK_MARK, HOOK_PANE_HEADER, HOOK_TOKEN_HEADER, tokenInSettings } from '../src/main/agent/claudeHooks'
+import { HOOK_MARK, HOOK_PANE_HEADER, HOOK_TOKEN_HEADER, hookTtyFile, tokenInSettings } from '../src/main/agent/claudeHooks'
 import { startPasswordServer, type Harness } from './ssh-harness'
 import type { AgentStatus } from '../src/shared/agentStatus'
 import type { SshProfile } from '../src/shared/types'
@@ -147,7 +147,7 @@ describe('F1b 원격 훅 — 세션이 붙을 때 심고, 터널로 듣는다', 
     const stop = (await installedSettings(root)).hooks?.Stop
     expect(JSON.stringify(stop)).toContain(HOOK_MARK)
     // 원격도 로컬과 **같은 한 줄**이다 — POSIX 한 줄이 세 OS 를 덮는다.
-    expect(stop!.at(-1)!.hooks[0]!.command).toContain('[ -n "$ARA_HOOK_PORT" ]')
+    expect(stop!.at(-1)!.hooks[0]!.command).toContain('ARA_P="$ARA_HOOK_PORT"')
   })
 
   it('터널로 온 POST 가 그 탭의 상태가 된다', async () => {
@@ -275,6 +275,89 @@ describe('F1b 원격 훅 — 세션이 붙을 때 심고, 터널로 듣는다', 
     expect(await prepareRemoteHooks(client, server, 'pane-remote-7')).toBeNull()
     expect(h.forwardedPort()).toBe(0)
     expect(existsSync(settingsPath(root))).toBe(false)
+  })
+})
+
+// ── #162 tty 폴백 ────────────────────────────────────────────────────────────
+// stock sshd 는 `AcceptEnv LANG LC_*` 만 받아 우리 env 를 조용히 버린다. 준영님은 sudo 로 한 줄
+// 열 수 있지만 동료들은 대부분 못 연다 — 그 서버에서는 이 기능이 **오류도 없이** 그냥 없었다.
+// 그래서 같은 두 값을 그 셸의 tty 이름으로 파일에도 놓는다.
+
+const ttyFile = (root: string, tty: string): string => join(root, '.claude', hookTtyFile(tty))
+
+/** 폴백 파일이 다 쓰일 때까지 기다린다(SFTP OPEN 이 0바이트 파일을 먼저 만든다 — #159 와 같은 함정). */
+async function readTtyFile(root: string, tty: string): Promise<string> {
+  const p = ttyFile(root, tty)
+  await waitFor(() => existsSync(p) && readFileSync(p, 'utf8').includes('\n'))
+  return readFileSync(p, 'utf8').trim()
+}
+
+describe('#162 tty 폴백 — 서버 설정을 안 고쳐도 켜진다', () => {
+  it('접속만으로 그 셸의 tty 이름으로 포트·탭이 적힌다', async () => {
+    const root = tmp()
+    const h = await startPasswordServer({ sftpRoot: root, forwardIn: true, procCwd: { pid: 4242 } })
+    harnesses.push(h)
+    const { server } = await hookServer()
+
+    await connect(h, { sink: server, paneId: 'pane-tty-1' })
+
+    // 첫 커넥션의 tty 는 /dev/pts/3 이다(하네스가 커넥션마다 다르게 준다 = 실제 sshd).
+    expect(await readTtyFile(root, '/dev/pts/3')).toBe(`${h.forwardedPort()} pane-tty-1`)
+    // env 도 그대로 간다 — 폴백이지 대체가 아니다(AcceptEnv 가 열린 서버는 왕복 하나를 아낀다).
+    expect(h.shellEnv['ARA_HOOK_PORT']).toBe(String(h.forwardedPort()))
+    // 화면이 말할 것: 심겼고, 서버 설정 없이도 된다.
+    await waitFor(() => server.remotes()[0]?.fallback === true)
+    expect(server.remotes()[0]).toMatchObject({ server: 'harness', install: { ok: true }, fallback: true })
+  })
+
+  it('같은 서버에 탭 둘이 붙어도 서로를 덮어쓰지 않는다 — 포트를 훅 문자열에 박으면 깨지는 자리다', async () => {
+    const root = tmp()
+    const h = await startPasswordServer({ sftpRoot: root, forwardIn: true, procCwd: { pid: 4242 } })
+    harnesses.push(h)
+    const { server } = await hookServer()
+
+    await connect(h, { sink: server, paneId: 'pane-A' })
+    await connect(h, { sink: server, paneId: 'pane-B' })
+
+    const a = await readTtyFile(root, '/dev/pts/3')
+    const b = await readTtyFile(root, '/dev/pts/4')
+    expect(a.split(' ')[1]).toBe('pane-A')
+    expect(b.split(' ')[1]).toBe('pane-B')
+    // 터널이 둘이라 포트도 둘이다. 먼저 닫히는 탭이 남은 탭의 포트를 죽이지 않는다.
+    expect(a.split(' ')[0]).not.toBe(b.split(' ')[0])
+    // 설정 파일은 그대로 하나 — 토큰을 되찾아 두 번째 접속은 아무것도 안 쓴다.
+    expect(existsSync(settingsPath(root) + '.bak')).toBe(false)
+  })
+
+  it('/proc 이 없는 서버는 폴백을 못 놓고, 화면이 **그렇게 말한다**', async () => {
+    const root = tmp()
+    const h = await startPasswordServer({
+      sftpRoot: root,
+      forwardIn: true,
+      procCwd: { pid: 4242, procMissing: true }
+    })
+    harnesses.push(h)
+    const { server } = await hookServer()
+
+    await connect(h, { sink: server, paneId: 'pane-noproc' })
+
+    // 설치는 됐다(설정 파일은 심겼다). 폴백만 못 놓았다 = 그 서버는 sshd 한 줄이 필요하다.
+    await waitFor(() => server.remotes()[0]?.fallback === false)
+    expect(server.remotes()[0]).toMatchObject({ install: { ok: true }, fallback: false })
+    expect(existsSync(ttyFile(root, '/dev/pts/3'))).toBe(false)
+  })
+
+  it('`~/.claude` 가 없는 서버에는 폴백 파일도 안 만든다 — 발자국은 이득이 있는 곳에만', async () => {
+    const root = tmp(false)
+    const h = await startPasswordServer({ sftpRoot: root, forwardIn: true, procCwd: { pid: 4242 } })
+    harnesses.push(h)
+    const { server } = await hookServer()
+
+    await connect(h, { sink: server, paneId: 'pane-noclaude' })
+
+    await waitFor(() => server.remotes()[0]?.fallback === false)
+    expect(server.remotes()[0]).toMatchObject({ install: { ok: false, reason: 'skipped' }, fallback: false })
+    expect(existsSync(join(root, '.claude'))).toBe(false)
   })
 })
 

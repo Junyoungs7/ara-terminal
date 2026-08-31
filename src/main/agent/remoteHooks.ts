@@ -21,7 +21,7 @@ import { posix } from 'node:path'
 import type { Client, SFTPWrapper } from 'ssh2'
 import type { AgentHookInstall } from '@shared/agentStatus'
 import type { HookSink } from './AgentHookServer'
-import { HOOK_PANE_ENV, HOOK_PORT_ENV, planHooks } from './claudeHooks'
+import { HOOK_PANE_ENV, HOOK_PORT_ENV, hookTtyFile, planHooks } from './claudeHooks'
 // 역터널의 두 끝. `PortForward` 의 불변식 상수를 그대로 쓴다 — 같은 규칙을 두 벌로 적지 않는다
 // (REMOTE_HOST = 원격이 리슨할 주소, LOCAL_BIND = 우리 훅 서버가 앉아 있는 주소).
 import { LOCAL_BIND, REMOTE_HOST } from '../forward/PortForward'
@@ -42,10 +42,19 @@ const SETTINGS_MAX_BYTES = 1024 * 1024
 const FORWARD_TIMEOUT_MS = 3000
 
 export type RemoteHookPrep = {
-  /** 그 세션 셸에 실어 보낼 env. 훅 명령이 이 둘을 읽는다(로컬과 **같은 한 줄**이다). */
+  /** 그 세션 셸에 실어 보낼 env. 훅 명령이 이 둘을 **먼저** 읽는다(로컬과 같은 한 줄이다). */
   env: Record<string, string>
   /** 원격 설정 병합의 결과. 셸을 막지 않으려고 뒤에서 도는 일이라 약속으로 돌려준다(검사·로깅용). */
   installed: Promise<AgentHookInstall>
+  /**
+   * #162 **env 를 안 받아 주는 서버를 위한 두 번째 길.** 셸의 tty(`/dev/pts/3`)를 알게 되면
+   * 같은 두 값을 `~/.claude/ara-tty-3` 에 적는다 — 훅은 env 가 비었을 때 그 파일을 읽는다.
+   *
+   * 왜 나중인가: tty 는 **셸이 열려야** 생긴다. env 는 셸 요청에 실어야 해서 그전에 정해야 하고,
+   * 이건 그 뒤라 두 시점이 갈린다(부르는 쪽은 `SshBackend` 의 셸 PID 조회 자리다).
+   * 셸이 뜨자마자 몇 밀리초 안이라 사용자가 `claude` 를 치기 전에 끝난다.
+   */
+  publish: (tty: string) => void
 }
 
 /**
@@ -57,7 +66,9 @@ export type RemoteHookPrep = {
 export async function prepareRemoteHooks(
   client: Client,
   sink: HookSink,
-  paneId: string
+  paneId: string,
+  /** 화면에 그대로 뜨는 서버 이름(#162 §부수). 프로필 이름, 없으면 host. */
+  server = ''
 ): Promise<RemoteHookPrep | null> {
   const localPort = sink.port()
   // 우리 훅 서버가 안 떴으면 원격에 심어 봐야 갈 곳이 없다 — 남의 설정 파일을 헛되이 고치지 않는다.
@@ -69,11 +80,53 @@ export async function prepareRemoteHooks(
   if (remotePort <= 0) return null
   pipeHookConnections(client, remotePort, localPort)
 
+  // 설치는 셸을 기다리게 하지 않는다: 사용자가 `claude` 를 치는 것은 한참 뒤고, 느린 링크에서
+  // SFTP 왕복 몇 번이 탭 열리는 시간이 되면 그게 더 나쁜 거래다.
+  const installed = installRemoteHooks(client, sink, paneId)
+  void installed.then((install) => sink.report(server, { install }))
+
   return {
     env: { [HOOK_PORT_ENV]: String(remotePort), [HOOK_PANE_ENV]: paneId },
-    // 설치는 셸을 기다리게 하지 않는다: 사용자가 `claude` 를 치는 것은 한참 뒤고, 느린 링크에서
-    // SFTP 왕복 몇 번이 탭 열리는 시간이 되면 그게 더 나쁜 거래다.
-    installed: installRemoteHooks(client, sink, paneId)
+    installed,
+    publish(tty) {
+      void publishTtyFile(client, installed, tty, `${remotePort} ${paneId}`).then((ok) =>
+        sink.report(server, { fallback: ok })
+      )
+    }
+  }
+}
+
+/**
+ * tty 폴백 파일 하나를 쓴다. **설치가 된 서버에만** 쓴다 — `~/.claude` 가 없는 서버(=Claude Code 가
+ * 없는 서버)에 폴더도 파일도 만들지 않는다는 규율은 여기도 같다.
+ *
+ * 지우지 않는다: 끊기는 커넥션으로 SFTP 를 다시 여는 값보다 남는 값이 싸다. 남아도 해롭지 않다 —
+ * 죽은 포트를 가리키는 파일은 curl 이 즉시 거절당하고 `exit 0` 이며, 같은 tty 를 다시 쓰는 세션은
+ * 이 파일을 **덮어쓴다**(그래서 오래된 값이 살아 돌아오지 않는다).
+ *
+ * ⚠️ `tty` 는 **원격이 준 문자열**이다(그쪽 readlink 의 답). `hookTtyFile` 이 마지막 슬래시 뒤만
+ * 남기므로 `../../etc/…` 같은 답으로도 `~/.claude` 밖을 못 나간다 — 이름을 basename 으로 짓는 것은
+ * 훅 쪽 확장과 맞추기 위해서이기도 하고, 그 자체가 경로 탈출 방지이기도 하다.
+ */
+async function publishTtyFile(
+  client: Client,
+  installed: Promise<AgentHookInstall>,
+  tty: string,
+  line: string
+): Promise<boolean> {
+  const install = await installed
+  const name = hookTtyFile(tty)
+  if (!install.ok || !name) return false
+  let sftp: SFTPWrapper | null = null
+  try {
+    sftp = await openSftp(client)
+    await writeFile(sftp, posix.join(posix.dirname(install.path), name), `${line}\n`)
+    return true
+  } catch {
+    // 쓰기 실패는 설치 실패와 같은 급이 아니다 — env 가 오는 서버라면 그대로 잘 돈다.
+    return false
+  } finally {
+    sftp?.end()
   }
 }
 

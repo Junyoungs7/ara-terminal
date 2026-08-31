@@ -24,6 +24,33 @@ export const HOOK_PANE_HEADER = 'x-ara-pane'
 export const HOOK_PORT_ENV = 'ARA_HOOK_PORT'
 export const HOOK_PANE_ENV = 'ARA_PANE'
 
+/**
+ * #162 원격 폴백 파일 — **env 를 안 받아 주는 sshd 를 위한 두 번째 길.**
+ *
+ * stock sshd 는 `AcceptEnv LANG LC_*` 만 받고 위 둘을 **조용히 버린다**(2026-08-31 실증).
+ * sudo 가 되는 서버는 한 줄로 열 수 있지만 동료들은 대부분 안 되고, 그 서버에서는 이 기능이
+ * 오류 없이 그냥 없다. 그래서 같은 두 값을 **파일로도** 놓는다: `~/.claude/ara-tty-<tty>`.
+ *
+ * 왜 tty 로 이름을 짓나: 훅이 **아무 도움 없이 읽을 수 있는 자기 식별자**가 그것뿐이다.
+ * `SSH_TTY` 는 **sshd 자신이** 셸에 넣는 값이라(우리가 보내는 값이 아니라) AcceptEnv 와 무관하게
+ * 언제나 있고, 훅은 셸의 자손이라 그대로 물려받는다. 세션마다 tty 가 달라 **같은 서버에 탭
+ * 여럿이 붙어도 서로를 덮어쓰지 않는다** — 포트를 훅 명령에 박아 넣는 안이 깨지는 자리가 거기다
+ * (먼저 닫히는 탭이 남은 탭의 포트를 죽인다).
+ *
+ * 신뢰 경계는 그대로다: 이 파일을 쓸 수 있는 사람은 `~/.claude/settings.json` 도 쓸 수 있다.
+ */
+export const HOOK_TTY_PREFIX = 'ara-tty-'
+
+/**
+ * tty 경로(`/dev/pts/3`) → 폴백 파일 이름(`ara-tty-3`). 훅 한 줄의 `SSH_TTY` 접미 확장(마지막
+ * 슬래시 뒤만 남긴다)과 **같은 계산**이다 — 우리는 그 셸의 `/proc/<pid>/fd/0` 를 읽어 같은
+ * 문자열에서 출발하므로 두 이름이 어긋날 수 없다.
+ */
+export function hookTtyFile(tty: string): string {
+  const base = tty.slice(tty.lastIndexOf('/') + 1)
+  return base ? `${HOOK_TTY_PREFIX}${base}` : ''
+}
+
 /** 훅 실행 상한(초). curl 의 -m 2 가 먼저 끊지만, 그게 안 먹는 상황을 위한 바깥 울타리다. */
 const HOOK_TIMEOUT_SEC = 5
 
@@ -39,19 +66,29 @@ type Settings = Record<string, unknown> & { hooks?: Record<string, HookEntry[]> 
  *    **사용자가 직접 친 `claude` 에서도** 그대로 보인다(셸의 자식이므로).
  *
  * 규율 둘:
- *  · `ARA_HOOK_PORT` 가 없으면(우리 터미널 밖에서 띄운 claude) **아무 일도 하지 않는다.**
+ *  · 포트를 **어느 길로도** 못 얻으면(우리 터미널 밖에서 띄운 claude) **아무 일도 하지 않는다.**
  *  · 무슨 일이 있어도 `exit 0`. 훅이 0이 아닌 값을 내면 사용자의 Claude Code 에 오류가 뜨고,
  *    PreToolUse 는 **도구 실행 자체를 막는다** — 우리 상태 표시가 남의 작업을 막으면 안 된다.
+ *
+ * 값을 얻는 길이 둘인 것이 #162 다. **env 가 먼저고 파일은 폴백이다** — 그래서 로컬은 파일을
+ * 아예 쳐다보지 않는다(`$HOME/.claude/ara-tty-` 는 존재하지도 않는다). 서버가 env 를 버리는
+ * 원격에서만 `read` 가 돈다(HOOK_TTY_PREFIX 주석).
  *
  * 본문(stdin)은 보내되 우리는 읽지 않는다: 이벤트 이름은 **URL 에 있고**(설치할 때 우리가 안다)
  * 페이로드는 PostToolUse 처럼 수백 KB 가 될 수 있다. 그래도 stdin 은 흘려보내야 한다 —
  * 안 읽으면 CLI 쪽 쓰기가 EPIPE 를 볼 수 있다.
+ *
+ * 실측(2026-08-31, sh·bash 각각): env 만 있을 때·파일만 있을 때·둘 다 없을 때·빈 파일·`set -e`
+ * 다섯 경우 모두 `exit 0` 이고, env 가 있으면 파일은 읽히지 않는다(tests/agentHooks.test.ts).
  */
 export function hookCommand(event: string, token: string): string {
-  const url = `http://127.0.0.1:$${HOOK_PORT_ENV}/hook/claude/${event}`
+  const url = `http://127.0.0.1:$ARA_P/hook/claude/${event}`
   return (
-    `[ -n "$${HOOK_PORT_ENV}" ] && curl -sS -m 2 -X POST` +
-    ` -H "${HOOK_TOKEN_HEADER}: ${token}" -H "${HOOK_PANE_HEADER}: $${HOOK_PANE_ENV}"` +
+    `ARA_P="$${HOOK_PORT_ENV}"; ARA_N="$${HOOK_PANE_ENV}";` +
+    ` ARA_F="$HOME/.claude/${HOOK_TTY_PREFIX}\${SSH_TTY##*/}";` +
+    ` [ -z "$ARA_P" ] && [ -r "$ARA_F" ] && read -r ARA_P ARA_N < "$ARA_F";` +
+    ` [ -n "$ARA_P" ] && curl -sS -m 2 -X POST` +
+    ` -H "${HOOK_TOKEN_HEADER}: ${token}" -H "${HOOK_PANE_HEADER}: $ARA_N"` +
     ` --data-binary @- "${url}" >/dev/null 2>&1; exit 0 # ${HOOK_MARK}`
   )
 }

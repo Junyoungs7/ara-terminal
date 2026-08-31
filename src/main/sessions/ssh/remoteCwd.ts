@@ -26,3 +26,16 @@ export function parseShellPid(out: string): number | null {
 export function cwdLink(pid: number): string {
   return `/proc/${pid}/cwd`
 }
+
+/**
+ * #162 이 PID 의 표준입력이 가리키는 tty. 대화형 셸의 fd 0 은 곧 그 세션의 pty 슬레이브라
+ * **`$SSH_TTY` 와 글자까지 같은 문자열**(`/dev/pts/3`)이 나온다 — 그 두 값이 같아야 훅이
+ * 자기 파일을 찾는다(claudeHooks.HOOK_TTY_PREFIX).
+ *
+ * `ps -o tty=` 로도 알 수 있지만 그쪽은 서식이 배포판마다 다르다(`pts/3` · BSD 는 `s003`) —
+ * 여기서는 **원본 문자열**이 필요하다. 위 cwd 와 같은 권한·같은 sftp 채널로 읽으므로 이미
+ * 검증된 길이고, /proc 이 없는 원격에서는 cwd 추적과 **같이** 조용히 포기한다.
+ */
+export function ttyLink(pid: number): string {
+  return `/proc/${pid}/fd/0`
+}

@@ -25,7 +25,13 @@ export function registerAgentIpc(
   const { install, token } = installClaudeHooks(home)
   const server = createAgentHookServer({ token, onStatus: (s) => pushSend(getWebContents(), 'agent:status', s) })
 
-  const state = (): AgentHookState => ({ port: server.port(), install, statuses: server.statuses() })
+  // #162 원격 줄이 함께 온다 — 어느 서버에 심겼고 어느 서버가 아직 sshd 한 줄을 기다리는지.
+  const state = (): AgentHookState => ({
+    port: server.port(),
+    install,
+    statuses: server.statuses(),
+    remote: server.remotes()
+  })
   handle('agent:state', () => state())
 
   return {

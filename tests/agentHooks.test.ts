@@ -1,10 +1,19 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
-import { HOOK_MARK, HOOK_PANE_HEADER, HOOK_TOKEN_HEADER, installClaudeHooks, mergeHooks, tokenInSettings } from '../src/main/agent/claudeHooks'
+import {
+  HOOK_MARK,
+  HOOK_PANE_HEADER,
+  HOOK_TOKEN_HEADER,
+  hookTtyFile,
+  installClaudeHooks,
+  mergeHooks,
+  tokenInSettings
+} from '../src/main/agent/claudeHooks'
 import { CLAUDE_HOOK_EVENTS, type AgentStatus } from '../src/shared/agentStatus'
 
 // F1a 훅 — 설치(남의 훅을 지키는가)와 수신(인증·매핑·귀속)의 검사.
@@ -27,6 +36,45 @@ const readSettings = (home: string): Record<string, never> => JSON.parse(readFil
 const writeSettings = (home: string, v: unknown): void => {
   mkdirSync(join(home, '.claude'), { recursive: true })
   writeFileSync(settingsPath(home), typeof v === 'string' ? v : JSON.stringify(v, null, 2), 'utf8')
+}
+
+/** 심긴 그대로의 훅 한 줄(문자열을 다시 만들지 않는다 — 파일에 들어간 바이트를 본다). */
+const installedCommand = (home: string, event: string): string => {
+  installClaudeHooks(home)
+  const hooks = (readSettings(home) as unknown as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks
+  return hooks[event]!.at(-1)!.hooks[0]!.command
+}
+
+/**
+ * #162 훅 한 줄을 **진짜 POSIX 셸에 태운다.** 이 한 줄이 이 라운드의 전부라 눈으로 읽어서는 안 된다 —
+ * env 가 있을 때 파일을 안 읽는지, 없을 때 읽는지, 어느 경우에도 `exit 0` 인지는 돌려 봐야 안다.
+ *
+ * curl 은 **셸 함수로 가린다**: PATH 도 실행권한도 안 건드리고 어느 셸에서나 함수가 먼저 잡힌다.
+ * 훅 한 줄이 curl 의 stdout·stderr 를 버리므로 인자는 fd 3 으로 빼낸다.
+ */
+function posixShell(): string {
+  if (process.platform !== 'win32') return '/bin/sh'
+  const roots = [process.env['ProgramFiles'] ?? 'C:\\Program Files', 'C:\\Program Files', 'C:\\Program Files (x86)']
+  for (const r of roots) {
+    const p = join(r, 'Git', 'bin', 'bash.exe')
+    if (existsSync(p)) return p
+  }
+  // 조용히 건너뛰지 않는다(#150): 못 찾으면 이 검사는 아무것도 안 지키면서 초록이 된다.
+  throw new Error('Git Bash 를 못 찾았다 — 훅 한 줄을 실제 셸로 검증할 수 없다')
+}
+
+function runHook(cmd: string, env: Record<string, string>, opts?: { setE?: boolean }): { code: number; curl: string } {
+  const dir = tmp()
+  const log = join(dir, 'curl.log').replace(/\\/g, '/')
+  const script = `${opts?.setE ? 'set -e\n' : ''}exec 3> "${log}"\ncurl() { printf '%s\\n' "$*" >&3; }\n${cmd}\n`
+  const r = spawnSync(posixShell(), ['-c', script], { env: { PATH: process.env['PATH'] ?? '', ...env }, encoding: 'utf8' })
+  return { code: r.status ?? -1, curl: readFileSync(log, 'utf8').trim() }
+}
+
+/** 원격 폴백 파일 하나를 그 홈에 놓는다(원격에서 `remoteHooks.publish` 가 하는 일). */
+function putTtyFile(home: string, tty: string, line: string): void {
+  mkdirSync(join(home, '.claude'), { recursive: true })
+  writeFileSync(join(home, '.claude', hookTtyFile(tty)), `${line}\n`, 'utf8')
 }
 
 describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
@@ -108,15 +156,76 @@ describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
   })
 
   it('훅 한 줄은 포트가 없으면 아무 일도 안 하고, 무슨 일이 있어도 exit 0 이다', () => {
-    const home = tmp()
-    installClaudeHooks(home)
-    const cmd = (readSettings(home) as unknown as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks
-      .Stop!.at(-1)!.hooks[0]!.command
-    expect(cmd).toContain('[ -n "$ARA_HOOK_PORT" ]')
+    const cmd = installedCommand(tmp(), 'Stop')
+    expect(cmd).toContain('ARA_P="$ARA_HOOK_PORT"')
+    expect(cmd).toContain('[ -n "$ARA_P" ] && curl')
     expect(cmd).toContain('exit 0')
     expect(cmd).toContain('127.0.0.1')
     // 이벤트는 URL 에 있다(페이로드를 파싱하지 않는 이유).
     expect(cmd).toContain('/hook/claude/Stop')
+  })
+
+  /**
+   * #162 — sshd 가 env 를 버리는 서버에서도 켜지게 하는 두 번째 길. **로컬은 그대로여야 한다.**
+   * 아래 다섯은 전부 심긴 문자열을 실제 셸에 태운 결과다(눈으로 읽은 것이 아니다).
+   */
+  describe('#162 훅 한 줄을 실제 셸에 태운다', () => {
+    it('env 가 있으면 env 를 쓴다 — 폴백 파일이 있어도 안 읽는다(로컬 경로 불변)', () => {
+      const home = tmp()
+      const cmd = installedCommand(home, 'Stop')
+      putTtyFile(home, '/dev/pts/3', '111 file-pane')
+      const r = runHook(cmd, {
+        HOME: home.replace(/\\/g, '/'),
+        SSH_TTY: '/dev/pts/3',
+        ARA_HOOK_PORT: '222',
+        ARA_PANE: 'env-pane'
+      })
+      expect(r.code).toBe(0)
+      expect(r.curl).toContain('127.0.0.1:222/hook/claude/Stop')
+      expect(r.curl).toContain(`${HOOK_PANE_HEADER}: env-pane`)
+      expect(r.curl).not.toContain('file-pane')
+    })
+
+    it('env 가 없으면 자기 tty 의 폴백 파일에서 포트·탭을 읽는다 — 이게 이 라운드의 요점이다', () => {
+      const home = tmp()
+      const cmd = installedCommand(home, 'PreToolUse')
+      putTtyFile(home, '/dev/pts/7', '43905 pane-from-file')
+      const r = runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/7' })
+      expect(r.code).toBe(0)
+      expect(r.curl).toContain('127.0.0.1:43905/hook/claude/PreToolUse')
+      expect(r.curl).toContain(`${HOOK_PANE_HEADER}: pane-from-file`)
+    })
+
+    it('남의 tty 파일은 안 읽는다 — 같은 서버의 다른 탭 것을 가로채면 그게 오귀속이다', () => {
+      const home = tmp()
+      const cmd = installedCommand(home, 'Stop')
+      putTtyFile(home, '/dev/pts/3', '111 other-tab')
+      const r = runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/9' })
+      expect(r.code).toBe(0)
+      expect(r.curl).toBe('')
+    })
+
+    it('둘 다 없으면 curl 을 아예 안 부른다 — 빈 파일도, SSH_TTY 가 없어도(로컬 윈도우)', () => {
+      const home = tmp()
+      const cmd = installedCommand(home, 'Stop')
+      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/') })).toEqual({ code: 0, curl: '' })
+      putTtyFile(home, '/dev/pts/5', '')
+      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/5' })).toEqual({ code: 0, curl: '' })
+    })
+
+    it('폴백 파일 이름은 원격이 준 문자열로도 `~/.claude` 밖을 못 나간다', () => {
+      expect(hookTtyFile('/dev/pts/3')).toBe('ara-tty-3')
+      // readlink 의 답은 그 서버가 정한다 — 마지막 슬래시 뒤만 남겨 경로가 되지 못하게 한다.
+      expect(hookTtyFile('/dev/../../../etc/cron.d/pwn')).toBe('ara-tty-pwn')
+      expect(hookTtyFile('')).toBe('')
+      expect(hookTtyFile('/dev/pts/')).toBe('') // 이름이 없으면 안 쓴다
+    })
+
+    it('`set -e` 여도 exit 0 이다 — 0이 아니면 PreToolUse 가 남의 도구 실행을 막는다', () => {
+      const home = tmp()
+      const cmd = installedCommand(home, 'PreToolUse')
+      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/9' }, { setE: true }).code).toBe(0)
+    })
   })
 
   it('#160 종료 훅도 심긴다 — matcher 없이(reason 을 안 가린다)', () => {

@@ -164,10 +164,32 @@ export type AgentHookInstall =
    */
   | { ok: false; reason: 'parse' | 'write' | 'noHome' | 'skipped'; message: string }
 
+/**
+ * #162 원격 서버 한 대의 설치 결과 — **화면이 이걸 그대로 말한다.**
+ *
+ * 이 줄이 없던 동안 원격 설치는 성공하든 실패하든 화면에 아무것도 안 남겼다(실패만
+ * `main-error.log` 로). 그래서 "왜 저 서버만 상태가 안 뜨지"에 답할 방법이 사용자에게 없었다 —
+ * 기능 하나가 통째로 없는데 없다는 것조차 안 보였다.
+ */
+export type RemoteHookReport = {
+  /** 프로필 이름(없으면 host). 서버 한 대당 한 줄 — 마지막 접속 결과가 남는다. */
+  server: string
+  install: AgentHookInstall
+  /**
+   * tty 폴백 파일을 그 서버에 적었나(claudeHooks.HOOK_TTY_PREFIX).
+   * · `true`  — sshd 를 안 고쳐도 상태가 뜬다.
+   * · `false` — /proc 이 없어 tty 를 못 읽었다 → 그 서버는 **sshd 의 AcceptEnv 한 줄이 필요하다.**
+   * · `'pending'` — 아직 셸의 tty 를 읽는 중(접속 직후 한 순간).
+   */
+  fallback: boolean | 'pending'
+}
+
 /** 설정 화면·렌더러가 한 번에 받아 가는 것. */
 export type AgentHookState = {
   /** 훅이 POST 하는 포트(0 = 서버가 안 떴다). */
   port: number
   install: AgentHookInstall
   statuses: AgentStatus[]
+  /** 이번 실행에서 붙어 본 원격 서버들(#162). 안 붙었으면 빈 배열. */
+  remote: RemoteHookReport[]
 }

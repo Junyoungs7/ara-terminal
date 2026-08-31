@@ -5,7 +5,7 @@
 // 적어 두는 고정 포트지만, 훅 포트는 **우리가 env 로 알려 주므로** 고정할 이유가 없다.
 // 그래서 0 으로 열어 OS 가 주는 것을 쓴다(39217 이 이미 고정 포트 충돌을 겪었다).
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
-import { applyHook, isHookCli, type AgentStatus } from '@shared/agentStatus'
+import { applyHook, isHookCli, type AgentStatus, type RemoteHookReport } from '@shared/agentStatus'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from './claudeHooks'
 
@@ -21,12 +21,20 @@ export type HookSink = {
    * 끝나면 `forget` 이 같이 지운다 — 죽은 서버의 토큰이 계속 통하면 그게 곧 남은 열쇠다.
    */
   setToken(owner: string, token: string): void
+  /**
+   * #162 그 서버의 설치 결과를 화면 쪽으로 올린다. **세션이 아니라 서버 단위**라 `forget` 이
+   * 안 지운다 — 탭을 닫은 뒤에도 "그 서버는 왜 안 됐나"는 남아 있어야 답이 된다.
+   * 두 번에 나눠 온다(설치 → tty 폴백): 아는 것부터 화면에 올리려고.
+   */
+  report(server: string, patch: Partial<RemoteHookReport>): void
 }
 
 export type AgentHookServerHandle = HookSink & {
   /** 리슨을 시작하고 잡은 포트를 돌려준다. 실패하면 0 — 앱은 그대로 뜨고 상태가 `unverifiable` 로 남는다. */
   start(): Promise<number>
   statuses(): AgentStatus[]
+  /** #162 이번 실행에서 붙어 본 원격 서버들의 설치 결과. 설정 [AI] 가 그대로 읽는다. */
+  remotes(): RemoteHookReport[]
   /** 세션이 끝나면 그 상태도, 그 세션이 등록한 토큰도 지운다 — 죽은 세션의 것이 남으면 그게 곧 유령이다. */
   forget(sessionId: string): void
   stop(): Promise<void>
@@ -52,6 +60,8 @@ export function createAgentHookServer(opts: {
   // 그대로 원격을 붙이면 서버 N 개가 같은 열쇠를 쓰게 되고 그러면 어느 서버의 훅이든 다른 서버의
   // 훅인 척할 수 있다. McpServer.authOk 의 `expected` 배열과 같은 모양이다.
   const tokens = new Map<string, string>([[LOCAL_OWNER, hashToken(opts.token)]])
+  // #162 서버 → 설치 결과. 서버 대수만큼만 자라고(세션 수가 아니다) 화면이 그대로 읽는다.
+  const reports = new Map<string, RemoteHookReport>()
 
   function authOk(req: IncomingMessage): boolean {
     const got = req.headers[HOOK_TOKEN_HEADER]
@@ -121,9 +131,17 @@ export function createAgentHookServer(opts: {
     },
     port: () => boundPort,
     statuses: () => [...statuses.values()],
+    remotes: () => [...reports.values()],
     setToken(owner, token) {
       if (owner === LOCAL_OWNER || !owner || !token) return
       tokens.set(owner, hashToken(token))
+    },
+    report(server, patch) {
+      const prev = reports.get(server)
+      const install = patch.install ?? prev?.install
+      // 설치 결과 없이 폴백만 오는 일은 없다(순서가 그렇다). 와도 반쪽짜리 줄은 안 만든다.
+      if (!server || !install) return
+      reports.set(server, { server, install, fallback: patch.fallback ?? prev?.fallback ?? 'pending' })
     },
     forget(sessionId) {
       statuses.delete(sessionId)

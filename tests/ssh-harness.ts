@@ -80,7 +80,11 @@ export async function startPasswordServer(opts?: {
   //   · exec 로 온 셸 PID 질의에 pid 로 답한다
   //   · shell 입력의 `cd <path>` 로 가상 cwd 를 옮긴다(OSC7 은 안 낸다 — 그게 요점이다)
   //   · sftp READLINK `/proc/<pid>/cwd` 로 그 cwd 를 돌려준다
+  //   · #162 sftp READLINK `/proc/<pid>/fd/0` 로 그 셸의 tty 를 돌려준다(원격 훅의 폴백 파일 이름)
   // procMissing: /proc 이 없는 서버(비리눅스) — READLINK 를 거절해 "조용히 포기"를 검증한다.
+  //
+  // ⚠️ **커넥션마다 다른 pid·tty 를 준다**(pid+n · /dev/pts/(3+n)). 실제 sshd 가 그렇고,
+  // 같은 서버에 탭 둘이 붙었을 때 서로의 폴백 파일을 덮어쓰지 않는지가 #162 의 급소다.
   procCwd?: { pid: number; initial?: string; procMissing?: boolean }
   // F1b: 역터널(tcpip-forward) 을 받아 준다. 안 주면 거절한다 — `AllowTcpForwarding no` 서버가 그렇다.
   forwardIn?: boolean
@@ -102,7 +106,13 @@ export async function startPasswordServer(opts?: {
   let ptyRequest: { cols: number; rows: number } | null = null
   const windowChanges: { cols: number; rows: number }[] = []
 
+  // #162 커넥션 순번 — 셸 pid·tty 를 커넥션마다 다르게 준다(실제 sshd 와 같다).
+  let connSeq = 0
+
   const server = new Server({ hostKeys: [hostKeyPem] }, (client) => {
+    const connIdx = connSeq++
+    const connPid = (proc?.pid ?? 0) + connIdx
+    const connTty = `/dev/pts/${3 + connIdx}`
     live.add(client)
     client.on('close', () => live.delete(client))
     client.on('error', () => live.delete(client))
@@ -204,7 +214,7 @@ export async function startPasswordServer(opts?: {
             const stream = acceptExec()
             // 셸 PID 질의는 하네스가 직접 답한다(테스트가 매번 흉내 낼 필요 없게).
             if (proc && info.command.includes('$PPID')) {
-              stream.write(`${proc.pid}\n`)
+              stream.write(`${connPid}\n`)
               stream.exit(0)
               stream.end()
               return
@@ -223,12 +233,15 @@ export async function startPasswordServer(opts?: {
             const sftp = acceptSftp()
             if (proc) {
               sftp.on('READLINK', (reqid: number, p: string) => {
-                if (proc.procMissing || p !== `/proc/${proc.pid}/cwd`) {
+                // #162 fd/0 = 그 셸의 tty. cwd 와 같은 /proc 이라 없는 서버에서는 둘 다 없다.
+                const target =
+                  proc.procMissing ? '' : p === `/proc/${connPid}/cwd` ? procCwdNow : p === `/proc/${connPid}/fd/0` ? connTty : ''
+                if (!target) {
                   sftp.status(reqid, SFTP_NO_SUCH_FILE)
                   return
                 }
                 const attrs = { mode: 0o120777, uid: 0, gid: 0, size: 0, atime: 0, mtime: 0 }
-                sftp.name(reqid, [{ filename: procCwdNow, longname: procCwdNow, attrs }])
+                sftp.name(reqid, [{ filename: target, longname: target, attrs }])
               })
             }
             if (sftpRoot) serveSftp(sftp, sftpRoot)

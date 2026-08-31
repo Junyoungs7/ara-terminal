@@ -6,7 +6,7 @@ import type { SessionBackend } from '../SessionBackend'
 import type { KnownHost, SshProfile } from '@shared/types'
 import { fingerprintSha256, hostId, verifyHostKey } from './hostkey'
 import { logMainError } from '../../log/MainErrorLog'
-import { SHELL_PID_CMD, cwdLink, parseShellPid } from './remoteCwd'
+import { SHELL_PID_CMD, cwdLink, parseShellPid, ttyLink } from './remoteCwd'
 import type { HookSink } from '../../agent/AgentHookServer'
 import { prepareRemoteHooks } from '../../agent/remoteHooks'
 
@@ -143,10 +143,13 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
     // 준비가 실패해도 셸은 연다: 훅은 있으면 좋은 것이지 접속의 조건이 아니다.
     const openShell = async (): Promise<void> => {
       let env: Record<string, string> | null = null
+      // #162 셸이 뜬 뒤에 그 셸의 tty 를 알려 줄 자리. env 를 버리는 sshd 에서 훅이 자기를 찾는 길이다.
+      let onTty: ((tty: string) => void) | undefined
       if (deps.hooks) {
         try {
-          const prep = await prepareRemoteHooks(client, deps.hooks.sink, deps.hooks.paneId)
+          const prep = await prepareRemoteHooks(client, deps.hooks.sink, deps.hooks.paneId, profile.name || profile.host)
           env = prep?.env ?? null
+          onTty = prep?.publish
           void prep?.installed.then((r) => {
             // 설치 실패는 접속을 막지 않는다 — 대신 조용히 사라지지도 않게 남긴다(왜 상태가
             // 안 뜨는지 물어볼 사람이 있다). `skipped` 는 실패가 아니라 **안 한 것**이라 안 남긴다
@@ -166,7 +169,7 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
           done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })
           return
         }
-        done({ ok: true, backend: new SshBackend(client, channel) })
+        done({ ok: true, backend: new SshBackend(client, channel, onTty) })
       })
     }
 
@@ -218,7 +221,12 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
 export class SshBackend implements SessionBackend {
   constructor(
     private readonly client: Client,
-    private readonly channel: ClientChannel
+    private readonly channel: ClientChannel,
+    /**
+     * #162 이 셸의 tty 를 한 번 알려 준다(못 알아내면 빈 문자열 — 그것도 답이라 반드시 부른다).
+     * 원격 훅이 그 이름으로 폴백 파일을 놓는다. 안 주면 tty 를 읽지 않는다(접속 테스트 경로).
+     */
+    private readonly onTty?: (tty: string) => void
   ) {
     // 셸 PID 는 커넥션이 살아 있는 동안 안 변한다 — 접속 직후 한 번만 찾는다.
     void this.findShellPid()
@@ -244,6 +252,39 @@ export class SshBackend implements SessionBackend {
       this.cwdTimer = null
     }
     this.cwdSftp = null
+    // #162 포기도 결과다. 여기를 안 지나는 포기 경로가 없으므로(위 주석) 한 자리에서 알린다 —
+    // 안 알리면 설정 화면이 그 서버를 영영 "확인 중"으로 둔다.
+    this.emitTty('')
+  }
+
+  // #162 tty 는 세션당 한 번만 알린다. 못 알아낸 경우(빈 문자열)도 한 번이다.
+  private ttySent = false
+  private emitTty(tty: string): void {
+    if (this.ttySent || !this.onTty) return
+    this.ttySent = true
+    this.onTty(tty)
+  }
+
+  /**
+   * #162 셸 PID 를 찾은 직후, **같은 sftp 채널로** tty 와 cwd 를 잇달아 읽는다.
+   * 따로 부르면 두 채널이 열린다(첫 `withSftp` 가 아직 돌아오기 전에 두 번째가 또 연다).
+   */
+  private readShellLinks(): void {
+    if (!this.onTty) {
+      this.readCwd()
+      return
+    }
+    this.withSftp((sftp) => {
+      if (!sftp) return // withSftp 가 이미 stopCwd → emitTty('')
+      try {
+        sftp.readlink(ttyLink(this.shellPid!), (err, target) => {
+          this.emitTty(err || !target ? '' : target)
+          this.readCwd()
+        })
+      } catch {
+        this.stopCwd()
+      }
+    })
   }
 
   private findShellPid(): void {
@@ -263,7 +304,7 @@ export class SshBackend implements SessionBackend {
           // ps·$PPID 가 없는 원격(임베디드·fish 등)이면 여기서 조용히 포기한다 —
           // 파일 트리는 기존 "자동 동기 미지원" 안내대로 수동 이동만 된다.
           if (this.shellPid === null) this.stopCwd()
-          else this.readCwd() // 로그인 디렉토리를 즉시 한 번 반영
+          else this.readShellLinks() // tty(#162) 한 번 + 로그인 디렉토리를 즉시 한 번 반영
         })
         stream.stderr.resume() // 안 읽으면 채널이 안 닫힌다
       })
