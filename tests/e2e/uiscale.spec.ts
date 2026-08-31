@@ -5,6 +5,7 @@
 // "잘리지 않게"를 사람 눈이 아니라 기계가 판정하게 만든 것이 준영님 요구의 자동 검증분이다.
 import { test, expect, newLocalShell, openBottomTool, openConnTab, persist, quitAra } from './fixtures'
 import type { Page } from '@playwright/test'
+import { UI_SCALES, UI_SCALE_FACTOR } from '../../src/shared/types'
 
 // 스크롤을 허용하지 않는 상자인데 내용이 넘치는 곳 = 잘린 곳.
 // overflow 가 auto/scroll 인 상자는 넘쳐도 사용자가 스크롤로 볼 수 있으므로 잘림이 아니다.
@@ -43,6 +44,37 @@ async function clippedElements(page: Page): Promise<string[]> {
     }
     return out
   })
+}
+
+// **창이 감당 못 하는 크기**인가. 위 clippedElements 와 다른 것을 본다: 저건 overflow:hidden 인
+// 상자만 보는데, 상태바처럼 overflow 를 안 건 줄이 밀어낸 폭은 거기 안 잡히고 #root 까지 올라와야
+// 보인다(도크 여덟이 900px 창에서 972px 을 요구했던 자리 — shell.css .statusbar 주석).
+async function windowOverflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const r = document.getElementById('root')
+    if (!r) return ['#root 를 못 찾았다']
+    const out: string[] = []
+    if (r.scrollWidth > r.clientWidth + 1) out.push(`가로 ${r.scrollWidth}>${r.clientWidth}`)
+    if (r.scrollHeight > r.clientHeight + 1) out.push(`세로 ${r.scrollHeight}>${r.clientHeight}`)
+    return out
+  })
+}
+
+// --sp-8(기준 16px)이 실제로 몇 px 로 그려지는지. 토큰은 `calc(16px * …)` 문자열이라 선언값으로는
+// 못 잰다 — 그 값을 쓰는 요소를 만들어 계산된 px 를 읽는다(SCALE-2 와 같은 수법).
+async function spacingPx(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:absolute;visibility:hidden;padding-left:var(--sp-8)'
+    document.body.appendChild(probe)
+    const px = parseFloat(getComputedStyle(probe).paddingLeft)
+    probe.remove()
+    return px
+  })
+}
+
+async function setScale(page: Page, factor: number): Promise<void> {
+  await page.evaluate((v) => document.documentElement.style.setProperty('--ui-scale', String(v)), factor)
 }
 
 // 화면에 사람이 읽는 글자가 실제로 얼마로 그려지는지. 토큰이 var() 로 흐르므로
@@ -179,6 +211,43 @@ test('SCALE-5★ 하단 패널을 열고 창을 좁혀도 잘리는 요소가 �
   expect(seen.inside, '900px 창에서 보이는 탭이 절반도 안 된다').toBeGreaterThanOrEqual(
     Math.ceil(seen.total / 2)
   )
+})
+
+/**
+ * SCALE-6★ 여백도 배율을 탄다 — 그리고 타도 최소 폭에서 안 넘친다 (2026-08-31, #155).
+ *
+ * `--sp-scale` 이 `1` 고정이던 동안에는 배율을 올려도 여백이 그대로였다: 글자만 커져 화면이
+ * 빽빽해지고, 내리면 반대로 헐렁했다(배율 기능이 절반만 돌던 상태다). 지금은 `var(--ui-scale)` 라
+ * `--sp-*` 를 쓰는 500여 곳이 글자와 함께 움직인다.
+ *
+ * 그래서 이 검사는 둘을 본다. **둘 다 없으면 안 된다:**
+ *  ① **정말 타는가.** 이게 없으면 누가 그 한 줄을 `1` 로 되돌려도 스위트가 전부 초록이다 —
+ *     SCALE-1~5 는 글자 크기와 잘림만 보므로 여백이 죽은 것을 못 본다.
+ *  ② **타도 안 넘치는가.** 여백이 커지면 한 줄에 여럿이 늘어선 곳의 min-content 가 곧 창의
+ *     최소 폭이 된다. 그래서 **가장 좁은 창**에서 배율 전 구간을 돈다 — 값을 여기 손으로 적지 않고
+ *     설정이 실제로 내는 UI_SCALE_FACTOR 에서 가져온다(선택지가 늘면 검사도 같이 늘어난다).
+ */
+test('SCALE-6★ 여백도 배율을 타고, 그 상태로 좁은 창에서도 안 넘친다', async ({ ara }) => {
+  const { page } = ara
+  await newLocalShell(page)
+  await openConnTab(page)
+
+  // ① 배율마다 --sp-8 이 16px × 배율로 그려진다.
+  for (const name of UI_SCALES) {
+    const factor = UI_SCALE_FACTOR[name]
+    await setScale(page, factor)
+    expect(await spacingPx(page), `--sp-8 이 ${name}(×${factor}) 배율을 안 탄다`).toBeCloseTo(16 * factor, 1)
+  }
+
+  // ② 버튼이 가장 빽빽한 화면(하단 패널 도구 넷)을 가장 좁은 창에 넣고 배율 전 구간을 돈다.
+  for (const tool of ['monitor', 'sys', 'disk', 'ps'] as const) await openBottomTool(page, tool)
+  await page.setViewportSize({ width: 900, height: 620 })
+  for (const name of UI_SCALES) {
+    await setScale(page, UI_SCALE_FACTOR[name])
+    await page.waitForTimeout(300) // 리플로우
+    expect(await windowOverflow(page), `${name} @ 900x620 — 앱이 창보다 크다`).toEqual([])
+    expect(await clippedElements(page), `${name} @ 900x620 잘림`).toEqual([])
+  }
 })
 
 test('SCALE-4 설정 [일반]에서 배율을 바꾸면 글자가 즉시 커지고 재시작 후에도 유지된다', async ({
