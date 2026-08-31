@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FontConfig } from '@shared/types'
 import { stackFor } from '../terminal/fontStacks'
-import { applyFontToAll } from '../terminal/termRegistry'
+import { applyFontToAll, remeasureAll } from '../terminal/termRegistry'
 
 // F5 폰트 설정 단일 소스. workspace.json ui.font 에서 하이드레이트 →
 // (1) --term/--tt/--tl CSS 변수 바인딩(sizePx↔--tt, 계획서 C-5)
@@ -53,6 +53,18 @@ export function useFont() {
         setFont(f)
       })
       .catch(() => {})
+  }, [])
+
+  // 번들 폰트가 **나중에** 도착하면 xterm 이 처음 잰 셀 크기가 틀린 채로 굳는다
+  // (`remeasureAll` 주석에 실측값). 한 묶음이 다 왔을 때마다 다시 맞춘다.
+  //
+  // `document.fonts.ready` 를 쓰지 않는 이유: 그 약속은 **읽는 시점**에 진행 중인 로딩만 기다린다.
+  // 터미널 글꼴은 첫 터미널이 그려질 때 비로소 요청되므로, 부팅 때 미리 읽어 둔 ready 는
+  // 그보다 먼저 풀려 아무것도 못 잡는다. `loadingdone` 은 그 뒤의 묶음에도 계속 온다.
+  useEffect(() => {
+    const onLoaded = (): void => remeasureAll()
+    document.fonts.addEventListener('loadingdone', onLoaded)
+    return () => document.fonts.removeEventListener('loadingdone', onLoaded)
   }, [])
 
   // 변경 적용: 상태 + CSS 변수 + 열린 xterm 전체 + 영속. 부분 갱신(크기만/폰트만) 지원.

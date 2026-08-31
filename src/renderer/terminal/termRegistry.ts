@@ -195,3 +195,35 @@ export function applyFontToAll(fontFamily: string, fontSize: number, lineHeight:
     }
   }
 }
+
+/**
+ * 웹폰트가 **나중에** 도착했을 때 셀 치수를 다시 재고 열린 터미널을 전부 맞춘다.
+ *
+ * 번들 폰트는 `font-display: swap` 이라(styles/fonts.css) 파일이 오기 전에는 스택의 **다음
+ * 폰트**로 그려진다. 그런데 xterm 은 `term.open()` 때 딱 한 번 셀을 재고 `document.fonts` 를
+ * 보지 않는다 — 진짜 폰트가 도착해도 **폴백의 셀 크기로 굳는다.**
+ *
+ * 실측(2026-08-31, 준영님 설정 JetBrains Mono 14px/1.3, 폴백=나눔고딕코딩):
+ *   굳은 셀 7×18 → 126칸 44행. 진짜 치수 8.4×23 으로는 107칸 34행이다.
+ * 셸에는 126×44 라고 알려 주고, 글자는 자기 칸보다 넓고 높게 그려져 가로·세로로 겹친다.
+ * 기본 글꼴(나눔고딕코딩)에서는 안 난다 — `--mono` 가 UI 전반에 쓰여 이미 받아져 있기 때문이다.
+ * **기본값으로 시험하면 재현되지 않는다.**
+ *
+ * ⚠ `applyFontToAll` 로는 못 고친다. 값이 그대로라서다 — xterm 의 OptionsService 는
+ * `rawOptions[k] !== v` 일 때만 이벤트를 쏘고, 셀을 다시 재는 곳은 `fontFamily`·`fontSize` 가
+ * **실제로 바뀔 때** 걸린 리스너 하나뿐이다(CharSizeService). 그래서 크기를 한 번 흔든다.
+ * 같은 태스크 안에서 되돌리므로 중간 값이 그려지지는 않는다.
+ */
+export function remeasureAll(): void {
+  for (const { term, fit } of terms.values()) {
+    const size = term.options.fontSize
+    if (size === undefined) continue
+    term.options.fontSize = size + 1
+    term.options.fontSize = size
+    try {
+      fit.fit()
+    } catch {
+      // 위와 같은 이유(숨김 패널) — 한 칸이 실패해도 나머지는 맞춘다.
+    }
+  }
+}
