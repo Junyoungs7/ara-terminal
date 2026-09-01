@@ -23,7 +23,13 @@ export function registerAgentIpc(
   // 설치 결과는 기동 시 한 번 정해지고 그대로 화면이 말한다. 재시도 버튼을 만들지 않는다 —
   // 실패 사유(깨진 JSON·쓰기 불가)는 앱이 고칠 수 있는 것이 아니라 사람이 고칠 것이다.
   const { install, token } = installClaudeHooks(home)
-  const server = createAgentHookServer({ token, onStatus: (s) => pushSend(getWebContents(), 'agent:status', s) })
+  const server = createAgentHookServer({
+    token,
+    onStatus: (s) => pushSend(getWebContents(), 'agent:status', s),
+    // 제거는 **상태와 다른 사실**이라 창구도 다르다: `agent:status` 는 `AgentStatus` 하나를 나르고
+    // 그 타입에는 "없음"을 담을 값이 없다. 이 채널이 없던 것이 #160 이 지우기를 못 쓴 이유였다.
+    onExit: (sessionId) => pushSend(getWebContents(), 'agent:exit', { sessionId })
+  })
 
   // #162 원격 줄이 함께 온다 — 어느 서버에 심겼고 어느 서버가 아직 sshd 한 줄을 기다리는지.
   const state = (): AgentHookState => ({

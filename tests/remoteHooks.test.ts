@@ -64,7 +64,7 @@ function pwProfile(port: number): SshProfile {
 
 async function hookServer(token = 'local-token'): Promise<{ server: AgentHookServerHandle; pushed: AgentStatus[] }> {
   const pushed: AgentStatus[] = []
-  const server = createAgentHookServer({ token, onStatus: (s) => void pushed.push(s), bindPort: 0 })
+  const server = createAgentHookServer({ token, onStatus: (s) => void pushed.push(s), onExit: () => {}, bindPort: 0 })
   servers.push(server)
   expect(await server.start()).toBeGreaterThan(0)
   return { server, pushed }
@@ -269,7 +269,7 @@ describe('F1b 원격 훅 — 세션이 붙을 때 심고, 터널로 듣는다', 
     const h = await startPasswordServer({ sftpRoot: root, forwardIn: true })
     harnesses.push(h)
     // start() 를 안 부른 서버 = 포트 0.
-    const server = createAgentHookServer({ token: 't', onStatus: () => {}, bindPort: 0 })
+    const server = createAgentHookServer({ token: 't', onStatus: () => {}, onExit: () => {}, bindPort: 0 })
     servers.push(server)
     const client = await connect(h)
     expect(await prepareRemoteHooks(client, server, 'pane-remote-7')).toBeNull()

@@ -68,13 +68,12 @@ export type HookCli = 'claude'
  *
  * **`done` 으로 매핑하지 않는다** — 나간 것은 끝낸 것이 아니다(크래시도 여기로 온다).
  * **새 상태(`ended`)도 만들지 않는다**: CLI 가 없으면 그 탭에서 무엇이 도는지 우리는 모르고,
- * `unverifiable` 이 정확히 그 말이다. 상태 자체를 지우는 것(`forget`)과 화면이 **똑같다** —
- * 상태 없는 세션도 `unverifiable` 로 그린다(aiSessions.ts·aiWorkbench.ts). 다만 지우는 쪽은
- * 제거를 렌더러로 밀 창구가 없고(`agent:status` 는 상태 하나만 나른다), `forget` 은 그 세션의
- * **토큰까지** 지워서 같은 탭에서 claude 를 다시 띄우면 훅이 401 로 막힌다. 그래서 표 한 줄이다.
+ * `unverifiable` 이 정확히 그 말이다.
  *
- * `clear`(= `/clear`)도 같이 받는다. 그때 claude 는 살아 있지만 곧바로 `SessionStart` 가 따라와
- * `working` 으로 돌아온다 — 매처로 걸러 낼 이유가 없다(매처 없는 것이 이 파일의 규율이다).
+ * ⚠️ **이 표는 이제 `SessionEnd` 의 절반만 담는다**(2026-09-01 준영님). 사람이 자기 손으로
+ * 끝낸 종료는 "모른다"가 아니라 **없는 것**이라 상태가 아니라 제거로 간다 — `isUserExit` 를
+ * 보라. 표가 답하는 것은 **나머지 전부**(크래시·`/clear`·claude 스스로 나간 경우)이고,
+ * 그것들은 여전히 "저 탭에서 무엇이 도는지 확인할 수 없다"라 `unverifiable` 이 맞다.
  */
 const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
   SessionStart: 'working',
@@ -84,6 +83,43 @@ const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
   Notification: 'waiting',
   Stop: 'done',
   SessionEnd: 'unverifiable'
+}
+
+/**
+ * `SessionEnd` 의 `reason` 중 **사람이 자기 손으로 끝낸 것.**
+ *
+ * 준영님(2026-09-01): *"내가 직접 종료했으면 확인 불가가 아닌 종료 또는 목록에서 제거되어야 해."*
+ * #160 은 `SessionEnd` 를 통째로 `unverifiable` 로 봤는데, 그 판단이 여기서 갈린다 — 내가 나가라고
+ * 쳐서 나간 CLI 는 **모르는 것이 아니다.** 없는 것이다.
+ *
+ * 왜 이 둘뿐인가 — claude-code 2.0.76 번들 `cli.js` 에서 `reason` 이 만들어지는 자리를 전부 읽었다:
+ *  · `prompt_input_exit` — `/exit`(별칭 `/quit`). 프롬프트 앞의 사람이 나가라고 쳤다
+ *  · `logout` — `/logout`. 계정을 내리고 나간다. 역시 사람이 친 것이다
+ *  · `clear` — `/clear`. **프로세스가 안 죽는다**(SessionEnd 만 쏘고 곧 `SessionStart` 가 따라온다)
+ *  · `bypass_permissions_disabled` — 설정이 막아 **claude 가 스스로** 나갔다. 사람이 끝낸 것이 아니다
+ *  · `other` — **기본값이라 그 외 전부**가 여기로 온다: SIGINT·SIGTERM·오류 종료·크래시
+ *
+ * 🔴 **Ctrl+D 는 여기 없다.** 번들이 Ctrl-C 와 Ctrl-D 를 같은 자리에서 같게 처리한다
+ * (`function xQ(A){… keyName:"Ctrl-C" … j8(0) …, keyName:"Ctrl-D" … j8(0)}`) — 둘 다 `reason` 을
+ * 안 주므로 기본값 `other` 다. 즉 **훅만 보고는 Ctrl+D 종료와 크래시를 가를 수 없다.** 그래서
+ * Ctrl+D 는 `확인 불가` 로 남는다: 크래시를 "사용자가 끝냈다"로 그리는 것이 더 나쁜 거짓말이라,
+ * 못 가르는 쪽을 `unverifiable` 에 둔다. 이걸 바꾸려면 **크래시도 같이 사라지는 값**을 치러야 한다.
+ *
+ * ⚠️ **차단 목록이 아니라 허용 목록이다.** CLI 가 `reason` 을 하나 늘리면 그건 우리가 모르는
+ * 종료고, 모르는 것은 `unverifiable` 로 남는 편이 맞다 — `HOOK_STATE_OF` 의 `null` 규율과 같다.
+ */
+const USER_EXIT_REASONS: readonly string[] = ['prompt_input_exit', 'logout']
+
+/**
+ * 이 훅이 **사용자가 손으로 끝낸 종료**인가. 참이면 상태를 지운다 → 줄이 사라진다.
+ *
+ * 🔴 **지우는 것은 상태뿐이다. 토큰은 남긴다**(`AgentHookServer.forget` 을 부르면 안 된다):
+ * 죽은 것은 CLI 지 세션(탭)이 아니다. 같은 탭에서 claude 를 다시 띄우면 그 훅은 **같은 토큰**으로
+ * 오는데, 토큰까지 지우면 401 로 막혀 그 줄이 영영 안 살아난다. 원격은 더 나쁘다 — 그 호스트의
+ * 열쇠는 재접속 전엔 못 되찾는다. #160 이 그 함정을 검사로 박아 뒀다.
+ */
+export function isUserExit(event: string, reason: string | null): boolean {
+  return event === 'SessionEnd' && reason !== null && USER_EXIT_REASONS.includes(reason)
 }
 
 /**

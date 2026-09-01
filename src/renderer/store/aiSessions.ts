@@ -135,18 +135,36 @@ export function aiRuns(): AiRun[] {
 /** 끝난 지 오래된 기록을 걷어낸다 — "끝남" 이 영원히 남지 않게. */
 export const GONE_KEEP_MS = 5 * 60_000
 
+/**
+ * 🔴 **사용자가 자기 손으로 끝낸 세션을 목록에서 뺀다**(준영님 2026-09-01).
+ *
+ * 둘 다 지워야 줄이 사라진다: 목록의 자격은 `runs ∪ statuses` 라, 상태만 버리면 **실행 기록이
+ * 남은 줄은 `확인 불가` 로 그대로 서 있다** — 준영님이 보신 화면이 정확히 그것이다.
+ *
+ * `gone` 정리(아래 `tick`)와 같은 짝이고 다른 것은 시점뿐이다: 저기는 탭이 사라지고 5분 뒤,
+ * 여기는 **훅이 "나간다"고 말한 즉시**. 상태를 만드는 것이 아니라 흔적을 버리는 것이라
+ * "화면이 상태를 만들지 않는다"는 규칙에 걸리지 않는다(agentStatus.ts 의 같은 주석).
+ */
+export function forgetAiSession(sessionId: string): void {
+  forgetAgentStatus(sessionId)
+  forgetAiRun(sessionId)
+}
+
 export function useAiSessions(active: boolean) {
   const [views, setViews] = useState<AiSessionView[]>([])
 
   const tick = useCallback(async () => {
-    const list = aiRuns()
-    const statuses = agentStatuses()
     // 둘 다 비어야 볼 것이 없다 — **훅만 말해 준 세션**이 여기서 잘려 나가던 자리다.
-    if (list.length === 0 && statuses.length === 0) {
+    if (aiRuns().length === 0 && agentStatuses().length === 0) {
       setViews([])
       return
     }
     const sessions = (await window.ev?.session.list()) ?? []
+    // 스토어는 **await 뒤에** 읽는다. 제거는 두 스토어를 잇달아 건드려 틱을 두 번 깨우는데,
+    // 앞에서 읽으면 먼저 깬 틱이 **지우기 전 사본**을 들고 나중에 도착할 수 있다 — 그러면 방금
+    // 사라진 줄이 되살아난다. 이 함수가 시각을 안 보듯, 낡은 사본도 안 본다.
+    const list = aiRuns()
+    const statuses = agentStatuses()
     const now = Date.now()
     const next = sortViews(viewsOf(list, sessions, statuses))
     // 끝난 지 오래된 것은 기록에서도 지운다. 상태 사본도 함께 — main 은 세션이 끝날 때
@@ -168,10 +186,13 @@ export function useAiSessions(active: boolean) {
     // 도착하는 즉시 온다 — 그래서 "화면은 즉시"가 성립한다.
     const t = setInterval(() => void tick(), POLL_MS)
     const offAgent = subscribeAgent(() => void tick())
+    // 사용자가 끝낸 세션의 **제거**는 상태와 다른 창구로 온다(shared/ipc.ts 의 `agent.onExit`).
+    const offExit = window.ev?.agent.onExit(forgetAiSession)
     listeners.add(tick)
     return () => {
       clearInterval(t)
       offAgent()
+      offExit?.()
       listeners.delete(tick)
     }
   }, [tick, active])

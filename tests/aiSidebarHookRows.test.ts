@@ -12,7 +12,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { request as httpRequest } from 'node:http'
 import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from '../src/main/agent/claudeHooks'
-import { viewsOf } from '../src/renderer/store/aiSessions'
+import { aiRuns, forgetAiSession, registerAiRun, viewsOf } from '../src/renderer/store/aiSessions'
 import { groupRows, hookRows } from '../src/renderer/store/aiWorkbench'
 import type { Session } from '../src/shared/types'
 
@@ -24,16 +24,17 @@ afterEach(async () => {
   for (const s of servers.splice(0)) await s.stop()
 })
 
-async function serve(): Promise<{ port: number; server: AgentHookServerHandle }> {
-  const server = createAgentHookServer({ token: TOKEN, onStatus: () => {} })
+async function serve(): Promise<{ port: number; server: AgentHookServerHandle; exited: string[] }> {
+  const exited: string[] = []
+  const server = createAgentHookServer({ token: TOKEN, onStatus: () => {}, onExit: (id) => void exited.push(id) })
   servers.push(server)
   const port = await server.start()
   expect(port).toBeGreaterThan(0)
-  return { port, server }
+  return { port, server, exited }
 }
 
 /** 훅이 셸에서 보내는 것과 같은 모양의 POST 하나(claudeHooks.ts 가 심는 명령이 이 요청을 만든다). */
-function postHook(port: number, pane: string, event: string): Promise<number> {
+function postHook(port: number, pane: string, event: string, body = '{}'): Promise<number> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       {
@@ -49,7 +50,7 @@ function postHook(port: number, pane: string, event: string): Promise<number> {
       }
     )
     req.on('error', reject)
-    req.end('{}')
+    req.end(body)
   })
 }
 
@@ -100,5 +101,59 @@ describe('훅만 말해 준 세션이 사이드바 [AI] 에 뜬다', () => {
     expect(noPane).toBe(204)
     expect(server.statuses()).toEqual([])
     expect(hookRows(viewsOf([], [shell('pane-1')], server.statuses()), new Set(), '로컬')).toEqual([])
+  })
+})
+
+// 🔴 **`/exit` 한 방이 줄 하나를 지우기까지** — 위와 같은 경로를 반대로 본다.
+//
+// 준영님(2026-09-01): *"내가 직접 종료했으면 확인 불가가 아닌 종료 또는 목록에서 제거되어야 해.
+// 지금은 해당 세션창이 꺼져야 사라져."* 탭은 그대로 두고 claude 만 나가는 경우다.
+describe('사용자가 끝낸 세션은 목록에서 사라진다', () => {
+  const body = (reason: string): string => JSON.stringify({ hook_event_name: 'SessionEnd', reason })
+
+  afterEach(() => {
+    // 실행 기록은 모듈 스코프라 검사 사이에 샌다.
+    for (const r of aiRuns()) forgetAiSession(r.sessionId)
+  })
+
+  it('★ 훅만 말해 준 세션 — `/exit` 하면 줄이 없다', async () => {
+    const { port, server, exited } = await serve()
+    await postHook(port, 'pane-1', 'PreToolUse')
+    expect(hookRows(viewsOf([], [shell('pane-1')], server.statuses()), new Set(), '로컬')).toHaveLength(1)
+
+    expect(await postHook(port, 'pane-1', 'SessionEnd', body('prompt_input_exit'))).toBe(204)
+    expect(exited).toEqual(['pane-1'])
+    // 탭은 아직 살아 있다(사람이 그 자리에서 다른 걸 할 참이다). 그래도 AI 줄은 없다.
+    expect(hookRows(viewsOf([], [shell('pane-1')], server.statuses()), new Set(), '로컬')).toEqual([])
+  })
+
+  it('★ 우리가 띄운 세션 — **실행 기록까지** 지워야 줄이 사라진다', async () => {
+    const { port, server, exited } = await serve()
+    // [AI CLI 시작] 이 남기는 기록. 목록의 자격은 `runs ∪ statuses` 라 이것만으로도 줄이 선다.
+    registerAiRun({ sessionId: 'pane-1', cli: 'claude', path: 'D:/work/app', startedAt: Date.now() })
+    await postHook(port, 'pane-1', 'PreToolUse')
+
+    await postHook(port, 'pane-1', 'SessionEnd', body('prompt_input_exit'))
+    expect(exited).toEqual(['pane-1'])
+
+    // 🔴 여기가 준영님이 보신 화면이다: main 이 상태를 지워도 실행 기록이 남아 줄은 그대로 서 있고,
+    //    상태가 없으니 `확인 불가` 로 그려진다. "종료해도 확인 불가로 안 내려간다"의 반대편.
+    const stillThere = viewsOf(aiRuns(), [shell('pane-1')], server.statuses())
+    expect(stillThere[0]!.state).toBe('unverifiable')
+
+    // 제거 신호를 렌더러가 받으면(`agent.onExit` → 이 함수) 둘 다 사라진다.
+    for (const id of exited) forgetAiSession(id)
+    expect(aiRuns()).toEqual([])
+    expect(viewsOf(aiRuns(), [shell('pane-1')], server.statuses())).toEqual([])
+  })
+
+  it('크래시(`other`)는 줄을 안 지운다 — 모르는 것은 `확인 불가` 로 남는다', async () => {
+    const { port, server, exited } = await serve()
+    await postHook(port, 'pane-1', 'PreToolUse')
+    await postHook(port, 'pane-1', 'SessionEnd', body('other'))
+    expect(exited).toEqual([])
+    const rows = hookRows(viewsOf([], [shell('pane-1')], server.statuses()), new Set(), '로컬')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.state).toBe('unverifiable')
   })
 })

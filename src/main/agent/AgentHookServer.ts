@@ -5,7 +5,7 @@
 // 적어 두는 고정 포트지만, 훅 포트는 **우리가 env 로 알려 주므로** 고정할 이유가 없다.
 // 그래서 0 으로 열어 OS 가 주는 것을 쓴다(39217 이 이미 고정 포트 충돌을 겪었다).
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
-import { applyHook, isHookCli, type AgentStatus, type RemoteHookReport } from '@shared/agentStatus'
+import { applyHook, isHookCli, isUserExit, type AgentStatus, type HookCli, type RemoteHookReport } from '@shared/agentStatus'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from './claudeHooks'
 
@@ -46,10 +46,35 @@ const LOCAL_OWNER = 'local'
 // `/hook/<cli>/<event>` — cli 가 경로에 있는 것이 다른 CLI 를 갈아 끼울 자리다(어댑터 seam).
 const HOOK_PATH = /^\/hook\/([a-z]+)\/([A-Za-z]+)$/
 
+/**
+ * `SessionEnd` 본문에서 읽어 볼 앞머리(바이트). 이 이벤트의 페이로드는 짧다 —
+ * `session_id`·`transcript_path`·`cwd`·`hook_event_name`·`reason` 뿐이라 4KB 면 남는다.
+ * **다른 이벤트는 한 바이트도 담지 않는다**(PostToolUse 는 파일 내용을 통째로 싣고 온다).
+ */
+const BODY_PEEK = 4096
+
+/** 본문에서 `reason` 하나만 꺼낸다. 못 읽으면 `null` — 모르면 모르는 대로 `unverifiable` 이 된다. */
+function reasonOf(body: Buffer): string | null {
+  try {
+    const r = (JSON.parse(body.toString('utf8')) as { reason?: unknown }).reason
+    return typeof r === 'string' ? r : null
+  } catch {
+    return null
+  }
+}
+
 export function createAgentHookServer(opts: {
   /** 로컬 `~/.claude/settings.json` 에 심어 둔 토큰. 원격 것은 `setToken` 으로 뒤에 붙는다. */
   token: string
   onStatus: (s: AgentStatus) => void
+  /**
+   * 사용자가 자기 손으로 끝낸 세션 — **줄을 지우라는 신호**(`isUserExit`).
+   *
+   * `onStatus` 와 갈라 둔 이유가 이 라운드의 절반이다: `AgentStatus` 에는 "없음"을 담을 값이
+   * 없어서, 상태 채널 하나로는 main 이 원장에서 지워도 그 사실이 렌더러에 도착하지 못했다
+   * (그래서 #160 은 지우기를 아예 쓰지 못하고 `unverifiable` 로 표 한 줄을 놨다).
+   */
+  onExit: (sessionId: string) => void
   /** 테스트 seam. 프로덕션은 0(OS 가 고른다). */
   bindPort?: number
 }): AgentHookServerHandle {
@@ -74,14 +99,35 @@ export function createAgentHookServer(opts: {
     return false
   }
 
+  /** 훅 하나를 원장에 반영하고 화면으로 민다. */
+  function apply(cli: HookCli, pane: string, event: string): void {
+    const next = applyHook(statuses.get(pane) ?? null, { cli, sessionId: pane, event }, Date.now())
+    if (!next) return
+    statuses.set(pane, next)
+    opts.onStatus(next)
+  }
+
+  /**
+   * 사용자가 끝낸 세션의 상태를 버린다. **`forget` 이 아니다 — 토큰은 남긴다**(그 함정은
+   * `isUserExit` 주석과 tests/agentHooks.test.ts 의 #160 검사에 적혀 있다).
+   *
+   * 원장에 그 세션이 없었어도 신호는 민다: 렌더러에는 **실행 기록**(`aiRuns`)이 따로 남아 있고,
+   * 그 줄을 걷어내는 것도 이 신호의 몫이다(목록의 근거가 `runs ∪ statuses` 라서 상태만 지우면
+   * 줄은 `확인 불가` 로 그대로 서 있다 — 준영님이 보신 것이 정확히 그 화면이다).
+   */
+  function dropStatus(pane: string): void {
+    statuses.delete(pane)
+    opts.onExit(pane)
+  }
+
   function onRequest(req: IncomingMessage, res: ServerResponse): void {
-    // 본문은 **읽되 담지 않는다**: 이벤트 이름은 URL 에 있고(설치할 때 우리가 넣었다) 페이로드는
-    // PostToolUse 처럼 수백 KB 가 될 수 있다. 그래도 흘려보내야 훅 쪽 쓰기가 EPIPE 를 안 본다.
-    req.resume()
-    const done = (code: number): void => {
-      if (req.readableEnded) res.writeHead(code).end()
-      else req.on('end', () => res.writeHead(code).end())
+    // 본문은 **끝까지 흘려보낸 뒤** 답한다 — 안 읽으면 훅 쪽 쓰기가 EPIPE 를 본다.
+    const after = (fn: () => void): void => {
+      if (req.readableEnded) fn()
+      else req.on('end', fn)
+      req.resume()
     }
+    const done = (code: number): void => after(() => void res.writeHead(code).end())
     if (!authOk(req)) return done(401)
     if (req.method !== 'POST') return done(405)
     const m = HOOK_PATH.exec(req.url ?? '')
@@ -93,12 +139,24 @@ export function createAgentHookServer(opts: {
     const pane = req.headers[HOOK_PANE_HEADER]
     if (typeof pane !== 'string' || pane.length === 0) return done(204)
 
-    const next = applyHook(statuses.get(pane) ?? null, { cli, sessionId: pane, event }, Date.now())
-    if (next) {
-      statuses.set(pane, next)
-      opts.onStatus(next)
+    // 이벤트 이름은 URL 에 있어(설치할 때 우리가 넣었다) 본문을 볼 이유가 없었다. `SessionEnd`
+    // 하나만 예외다 — **누가 끝냈나**를 가르는 `reason` 이 본문에만 있다. 나머지는 그대로 흘려보낸다.
+    if (event !== 'SessionEnd') {
+      apply(cli, pane, event)
+      return done(204)
     }
-    done(204)
+    const head: Buffer[] = []
+    let size = 0
+    req.on('data', (c: Buffer) => {
+      if (size >= BODY_PEEK) return
+      head.push(c.subarray(0, BODY_PEEK - size))
+      size += c.length
+    })
+    after(() => {
+      if (isUserExit(event, reasonOf(Buffer.concat(head)))) dropStatus(pane)
+      else apply(cli, pane, event)
+      res.writeHead(204).end()
+    })
   }
 
   return {
@@ -109,6 +167,9 @@ export function createAgentHookServer(opts: {
             onRequest(req, res)
           } catch {
             // 훅 하나가 실패해도 서버는 산다 — 상태 표시가 앱을 흔들면 안 된다.
+            // 본문은 여기서도 흘려보낸다: 던진 자리가 `after` 앞이면 아무도 안 읽어 훅이
+            // 자기 타임아웃(-m 2)까지 매달린다.
+            req.resume()
             if (!res.headersSent) res.writeHead(500).end()
           }
         })

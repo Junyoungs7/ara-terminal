@@ -235,7 +235,9 @@ describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
       .hooks
     const end = hooks.SessionEnd!.at(-1)!
     expect(end.hooks[0]!.command).toContain('/hook/claude/SessionEnd')
-    // `clear`·`logout`·`prompt_input_exit`·`other` 를 전부 받는다 — 매처를 쓰면 크래시(`other`)를 놓친다.
+    // `clear`·`logout`·`prompt_input_exit`·`other` 를 **전부** 받는다. `reason` 마다 갈리는 것은
+    // 맞지만(isUserExit) 그 판단은 본문을 읽어서 하지 매처로 하지 않는다 — 매처로 쪼개면
+    // 이벤트 하나가 URL 여러 개가 되고, 아직 모르는 `reason` 이 조용히 통째로 사라진다.
     expect(end.matcher).toBeUndefined()
   })
 })
@@ -258,14 +260,26 @@ async function post(
   })
 }
 
-async function rig(token = 'tok-1'): Promise<{ port: number; server: AgentHookServerHandle; pushed: AgentStatus[] }> {
+async function rig(
+  token = 'tok-1'
+): Promise<{ port: number; server: AgentHookServerHandle; pushed: AgentStatus[]; exited: string[] }> {
   const pushed: AgentStatus[] = []
-  const server = createAgentHookServer({ token, onStatus: (s) => void pushed.push(s), bindPort: 0 })
+  const exited: string[] = []
+  const server = createAgentHookServer({
+    token,
+    onStatus: (s) => void pushed.push(s),
+    onExit: (id) => void exited.push(id),
+    bindPort: 0
+  })
   servers.push(server)
   const port = await server.start()
   expect(port).toBeGreaterThan(0)
-  return { port, server, pushed }
+  return { port, server, pushed, exited }
 }
+
+/** claude 가 `SessionEnd` 훅의 stdin 으로 흘려보내는 것과 같은 모양(번들 `cli.js`: `{...,reason}`). */
+const endBody = (reason: string): string =>
+  JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 'c-1', cwd: 'D:/work/app', reason })
 
 const hookHeaders = (token: string, pane: string): Record<string, string> => ({
   [HOOK_TOKEN_HEADER]: token,
@@ -322,21 +336,78 @@ describe('훅 수신 — 인증·귀속·매핑', () => {
     expect(await post(port, '/nope', hookHeaders('tok-1', 'p1'))).toBe(404)
   })
 
-  it('#160 세션은 살아 있고 CLI 만 죽었다 — 줄이 `작업 중`에서 안 굳는다', async () => {
-    const { port, server, pushed } = await rig()
+  it('#160 크래시로 CLI 만 죽었다 — 줄이 `작업 중`에서 안 굳고, 모르면 모른다고 한다', async () => {
+    const { port, server, pushed, exited } = await rig()
     // ① 일하는 중
     await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
     expect(server.statuses()[0]!.state).toBe('working')
 
-    // ② 탭은 그대로 둔 채 claude 만 나간다(Ctrl+D · /exit · 크래시 — 전부 SessionEnd 로 온다)
-    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'))).toBe(204)
+    // ② 탭은 그대로 둔 채 claude 만 죽는다. Ctrl+C·SIGTERM·오류 종료가 전부 `other` 로 온다
+    //    (번들 `cli.js` 의 기본값이라 구분이 애초에 없다) → **사용자가 끝냈다고 그리면 거짓말**이다.
+    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('other'))).toBe(204)
     expect(server.statuses()[0]!.state).toBe('unverifiable')
     expect(pushed.at(-1)!.state).toBe('unverifiable') // 화면까지 밀린다(원장만 바뀌면 줄은 그대로다)
+    expect(exited).toEqual([]) // 줄은 남는다 — 지우는 것은 사람이 끝냈을 때뿐이다
 
     // ③ **토큰은 살아 있다.** 세션이 죽은 게 아니라 CLI 만 죽었다 — 같은 탭에서 다시 띄우면
     //    그 훅은 같은 토큰으로 온다. `forget`(토큰까지 지운다)을 쓰지 않은 이유가 이 줄이다.
     expect(await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))).toBe(204)
     expect(server.statuses()[0]!.state).toBe('working')
+  })
+
+  it('`reason` 을 못 읽으면 `확인 불가` 다 — 모르는 종료를 사용자가 끝낸 것으로 치지 않는다', async () => {
+    const { port, server, exited } = await rig()
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    for (const body of ['{}', 'not json', '{"reason":123}', '{"reason":"bypass_permissions_disabled"}']) {
+      expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), body)).toBe(204)
+      expect(server.statuses()[0]!.state).toBe('unverifiable')
+      expect(exited).toEqual([])
+    }
+  })
+
+  it('🔴 사용자가 `/exit` 로 끝냈다 — 줄이 사라지고, **같은 토큰으로 다시 살아난다**', async () => {
+    const { port, server, exited } = await rig()
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    expect(server.statuses()).toHaveLength(1)
+
+    // ① 상태가 통째로 사라진다 — `확인 불가` 로 남는 것이 아니라 **없다**
+    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('prompt_input_exit'))).toBe(204)
+    expect(server.statuses()).toEqual([])
+    // ② 그 사실이 화면 쪽으로 밀린다. 이 창구가 없던 것이 #160 이 지우기를 못 쓴 이유였다
+    expect(exited).toEqual(['p1'])
+
+    // ③ 🔴 **토큰은 안 지웠다.** `forget` 을 썼으면 여기가 401 이고 그 탭의 줄은 영영 안 살아난다
+    //    (원격은 더 나쁘다 — 그 호스트의 열쇠는 재접속 전엔 못 되찾는다).
+    expect(await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))).toBe(204)
+    expect(server.statuses()[0]).toMatchObject({ sessionId: 'p1', state: 'working' })
+  })
+
+  it('`/logout` 도 사람이 끝낸 것이다', async () => {
+    const { port, server, exited } = await rig()
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('logout'))
+    expect(server.statuses()).toEqual([])
+    expect(exited).toEqual(['p1'])
+  })
+
+  it('`/clear` 는 나간 것이 아니다 — 줄이 사라지지 않는다(곧 SessionStart 가 따라온다)', async () => {
+    const { port, server, exited } = await rig()
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('clear'))
+    expect(server.statuses()).toHaveLength(1)
+    expect(exited).toEqual([])
+    await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))
+    expect(server.statuses()[0]!.state).toBe('working')
+  })
+
+  it('본문을 통째로 담지 않는다 — 앞머리(4KB)를 넘으면 모르는 종료로 친다', async () => {
+    const { port, server, exited } = await rig()
+    // 담는 양에 상한이 있다는 것을 이 검사가 붙든다: 상한이 없으면 여기서 1MB 를 그대로 파싱하고
+    // (`prompt_input_exit` 를 읽어 지우고) 지나가, 다음 사람이 상한을 지워도 아무도 못 잡는다.
+    const big = `${endBody('prompt_input_exit')}${'x'.repeat(1_000_000)}`
+    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), big)).toBe(204)
+    expect(exited).toEqual([])
+    expect(server.statuses()[0]!.state).toBe('unverifiable')
   })
 
   it('세션이 끝나면 그 상태를 잊는다', async () => {

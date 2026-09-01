@@ -386,6 +386,11 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, s: AgentStatus) => cb(s)
       ipcRenderer.on('agent:status', listener)
       return () => ipcRenderer.removeListener('agent:status', listener)
+    },
+    onExit: (cb: (sessionId: string) => void) => {
+      const listener = (_e: IpcRendererEvent, p: { sessionId: string }) => cb(p.sessionId)
+      ipcRenderer.on('agent:exit', listener)
+      return () => ipcRenderer.removeListener('agent:exit', listener)
     }
   },
   mcp: {

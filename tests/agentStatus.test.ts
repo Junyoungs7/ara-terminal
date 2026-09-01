@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { applyHook, CLAUDE_HOOK_EVENTS, HOOK_STATE_OF, isHookCli, notifyTag, type AgentStatus } from '../src/shared/agentStatus'
+import {
+  applyHook,
+  CLAUDE_HOOK_EVENTS,
+  HOOK_STATE_OF,
+  isHookCli,
+  isUserExit,
+  notifyTag,
+  type AgentStatus
+} from '../src/shared/agentStatus'
 
 // F1a 상태 매핑 — **추론을 그만둔 자리의 단위 검사.**
 // 여기서 틀리면 화면이 조용히 거짓말을 한다(안 기다리는 걸 기다린다 하거나, 기다리는 걸 놓치거나).
@@ -87,9 +95,37 @@ describe('타임스탬프 둘 — 무엇이 언제 움직이나', () => {
   })
 })
 
-describe('#160 CLI 가 나갔다 — 탭은 살아 있고 claude 만 죽은 경우', () => {
+// 사람이 끝낸 종료만 줄을 지운다. **`applyHook` 은 나머지를 맡는다** — 아래 #160 묶음이
+// 그 나머지고, 여기가 갈림길이다.
+describe('isUserExit — 어디까지를 "사용자가 직접 종료"로 보나', () => {
+  it('사람이 친 것만 참이다', () => {
+    expect(isUserExit('SessionEnd', 'prompt_input_exit')).toBe(true) // /exit · /quit
+    expect(isUserExit('SessionEnd', 'logout')).toBe(true) // /logout
+  })
+
+  it('나머지 종료는 전부 거짓 — 모르면 `확인 불가` 로 남는다', () => {
+    // `clear` 는 프로세스가 안 죽고, `bypass_permissions_disabled` 는 claude 가 스스로 나간 것이며,
+    // `other` 는 크래시·SIGINT·**Ctrl+D** 가 전부 섞여 있는 기본값이다(번들에서 확인).
+    for (const r of ['clear', 'other', 'bypass_permissions_disabled', '']) {
+      expect(isUserExit('SessionEnd', r)).toBe(false)
+    }
+    expect(isUserExit('SessionEnd', null)).toBe(false) // 본문을 못 읽었다
+  })
+
+  it('모르는 `reason` 은 지우지 않는다 — 허용 목록이지 차단 목록이 아니다', () => {
+    expect(isUserExit('SessionEnd', 'some_future_reason')).toBe(false)
+  })
+
+  it('다른 이벤트는 `reason` 이 뭐든 상관없다', () => {
+    for (const e of ['Stop', 'SessionStart', 'Notification']) {
+      expect(isUserExit(e, 'prompt_input_exit')).toBe(false)
+    }
+  })
+})
+
+describe('#160 CLI 가 나갔다 — 탭은 살아 있고 claude 만 죽은 경우(사람이 끝낸 것이 아닌 쪽)', () => {
   it('일하던 중에 나가면 `작업 중`이 아니라 `모른다`가 된다', () => {
-    // 구멍의 모양 그대로: PreToolUse(working) 뒤에 Stop 없이 SessionEnd 만 온다(Ctrl+D·크래시).
+    // 구멍의 모양 그대로: PreToolUse(working) 뒤에 Stop 없이 SessionEnd 만 온다(크래시·Ctrl+D).
     const working = applyHook(null, claude('PreToolUse'), T0)!
     const ended = applyHook(working, claude('SessionEnd'), T0 + 30_000)!
     expect(ended.state).toBe('unverifiable')

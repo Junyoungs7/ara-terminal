@@ -800,6 +800,11 @@ export type EvApi = {
   agent: {
     state(): Promise<AgentHookState>
     onStatus(cb: (s: AgentStatus) => void): () => void
+    /**
+     * 사용자가 자기 손으로 끝낸 세션(`/exit`·`/logout`) — **그 줄은 이제 없다.**
+     * 상태 채널과 갈라 둔 이유가 그것이다: `AgentStatus` 에는 "없음"을 담을 값이 없다.
+     */
+    onExit(cb: (sessionId: string) => void): () => void
   }
   // W4 F23 MCP 조종 모드. **getToken 이 없다는 것이 계약이다** — issueToken 응답에만 원문이 존재.
   mcp: {
