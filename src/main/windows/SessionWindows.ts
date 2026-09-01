@@ -160,12 +160,28 @@ export function openSessionWindow(
     if (windows.get(winId) === win) windows.delete(winId)
     opts.onClosed(winId)
   })
-  // show() 만으로는 본창 뒤에 열릴 수 있다(특히 본창이 최대화돼 있을 때) — 그러면 사용자에게는
-  // "떼어냈는데 창이 안 뜬다"로 보인다(2026-08-22 준영님 제보 31번). 앞으로 가져온다:
-  // 내장 브라우저 창이 이미 같은 규칙이다(BrowserTabs.ts 의 show()+focus()).
+  /**
+   * 새 창은 **앞에 온다.** show() 만으로는 본창 뒤에 열릴 수 있어(특히 본창이 최대화돼 있을 때)
+   * 2026-08-22 제보 31번 때 focus() 를 붙였다. 그런데도 2026-09-01 준영님 제보:
+   * *"탭을 끌고 다른 쪽으로 이동하면 분리한 창이 왜 가장 아래로 가는 거야?"*
+   *
+   * focus() 로는 못 메우는 구멍이 남아 있었다. 윈도우는 **포그라운드가 아닌 프로세스의 활성화
+   * 요청을 거부한다**(SetForegroundWindow 제한). 탭을 창 밖에 놓는 그 동작이 정확히 그 조건을
+   * 만든다: 크롬·메모장·탐색기는 텍스트 드롭을 받아들이고(그래서 dropEffect 로는 판정할 수 없었다
+   * — store/tabDetach.ts 주석) 받으면서 **자기를 앞으로 가져온다.** 그 뒤에 우리가 show()+focus()
+   * 를 불러도 활성화는 거부되고, 창은 작업표시줄만 깜빡이며 **그 앱 뒤에** 그려진다.
+   *
+   * moveTop() 은 활성화가 아니라 **z-order 만** 올린다("regardless of focus" — Electron API 문서).
+   * 활성화가 아니므로 포그라운드 제한에 걸리지 않고, 창을 옮기지도 않는다(끌어다 놓은 자리는
+   * 그대로 둔다 — 그건 지금 동작이 맞다). setAlwaysOnTop 은 쓰지 않는다: 그건 "항상 위"라 다른
+   * 앱을 계속 가린다. 필요한 것은 **만들 때 한 번 앞으로**다.
+   *
+   * 순서: show → focus(가능하면 키보드까지) → moveTop(거부당했어도 눈에는 보이게).
+   */
   win.once('ready-to-show', () => {
     win.show()
     win.focus()
+    win.moveTop()
   })
 
   const hash = sessionWinHash(winId)
