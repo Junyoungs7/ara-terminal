@@ -24,7 +24,7 @@ Gemini·Copilot·OpenCode·Pi…)을 **각각 자기 git 워크트리에서 동�
 |---|---|
 | 스택 | **Electron + electron-vite + TypeScript + React** (+ Tailwind·shadcn) — **우리와 같다** |
 | 규모 | `src/` 16,840 `.ts/.tsx` — 그중 **6,757(40%)이 테스트**. main 6,163 · renderer 8,472 · shared 1,671 · relay 298 · cli 240 |
-| 라이선스 | **MIT** — 코드를 실제로 가져올 수 있다(AGPL 인 Paseo 와 결정적으로 다르다) |
+| 라이선스 | **MIT** — 코드를 실제로 가져올 수 있다 |
 | 한국어 | **이미 지원.** `locales/ko.json` + `ko-ui-semantic-mistranslations.test.ts`(사람이 고친 오역을 테스트에 못 박아 자동 번역이 못 덮게 한다) |
 | 그 밖 | 모바일 동반앱 · `orca` CLI 제어면 · Design Mode · GitHub/Linear 내장 · 스킬/플러그인 |
 
@@ -41,6 +41,38 @@ Gemini·Copilot·OpenCode·Pi…)을 **각각 자기 git 워크트리에서 동�
 
 → **융합은 제품 합병이 아니다.** 현실적인 모양은 **저쪽의 "에이전트 감독 층"을 우리 터미널에
 이식**하는 것이다. MIT 라 가능하고 스택이 같아 이식 비용이 낮다.
+
+### 곁: Paseo (2026-09-01, 준영님 요청으로 1차 확인)
+
+`github.com/getpaseo/paseo` · `D:\paseo` 에 클론 · v0.7.0 · 소스 3,681 · 커밋이 그날도 있었다.
+
+⚠️ **위 표에 "AGPL 인 Paseo" 라고 적었던 것은 틀렸다 — 실제로는 Apache-2.0 이다**(`LICENSE`,
+`package.json`). 저작권 고지만 지키면 **여기도 코드를 가져올 수 있다.** 그 한 줄 때문에 후보에서
+빠질 뻔했다 — **안 재고 적은 문장이 판단을 바꾼다**(§5 의 래칫이 막으려는 것과 같은 부류다).
+
+한 줄: *"Claude Code·Codex·Copilot·OpenCode·Pi 를 위한 하나의 인터페이스."* 구조가 우리와
+결정적으로 다르다 — **데몬이 중심이다:**
+
+```
+[데몬 packages/server 931]  ← 에이전트 프로세스를 소유 · WebSocket API · MCP 서버
+        ↑
+ app(Expo 2212: iOS·Android·웹) · cli(228) · desktop(Electron 144) · relay(15, E2E 암호화)
+```
+
+**앱이 곧 프로그램이 아니다.** 데스크톱은 얇은 껍데기고 화면은 붙었다 떨어졌다 한다.
+→ 우리 **F24~F27**(node-pty 를 별도 프로세스로 · 화면 모델을 데몬이 든다)이 가려던 자리의 완성품이고,
+**Orca 도 원격에 릴레이 데몬을 배포한다.** 셋 중 **우리만 앱이 죽으면 작업도 죽는다.**
+
+가져올 것으로 보이는 자리 넷(전부 **아직 안 읽었다** — 다음 라운드):
+`packages/server`(데몬 설계) · `docs/permissions.md`(우리 MCP 승인 게이트와 비교) ·
+`packages/relay`(15파일짜리 E2E 페어링) · `skills/`(`/paseo-handoff`·`advisor`·`committee` —
+**에이전트가 에이전트를 부리는 것이 제품 기능**이다. 우리 #81 이 그 자리다).
+
+저쪽에 없는 것: RDP · 포트 모니터/포워딩 · 서버 콘솔 · SFTP · **여러 서버를 운영하는 관점**.
+우리에게 없는 것: 데몬 · 모바일 · E2E 릴레이 · 에이전트 간 인계 · 음성(우리는 #140 으로 숨겨 뒀다).
+
+**순서에 대한 판단**: Orca 32개 중 F1 하나만 이식한 상태다. 여기서 Paseo 를 같이 열면 분석
+문서만 둘이 되고 이식이 안 된다. **1.0.0 을 낸 뒤 두 분석을 한 로드맵으로 합치는 것**이 맞다.
 
 ---
 
