@@ -87,6 +87,15 @@ function Ttab({
       title={editing ? undefined : offscreen ? `${s.title} — ${t('tab.offscreenHint')}` : s.title}
       data-session-id={s.id}
       onClick={() => onSelect(s.id)}
+      // 휠 클릭으로 닫는다(브라우저·VS Code 감각, 2026-09-01 준영님). **✕ 와 같은 함수**를 부른다 —
+      // 종료 경로가 둘이면 확인 창·정리 절차가 갈린다(MainArea.destroySessions 가 항상 물어본다).
+      // `auxclick` 인 이유: mousedown/mouseup 의 button===1 로 가르면 누른 탭과 뗀 탭이 다를 수 있다.
+      // 가운데 버튼 자동스크롤 막기는 `.tt-scroll` 의 mousedown 한 곳에 있다(탭 사이 빈 자리도 스크롤 대상이라).
+      onAuxClick={(e) => {
+        if (e.button !== 1) return
+        e.preventDefault()
+        onClose(s.id)
+      }}
       onDoubleClick={() => onStartEdit(s.id)}
       onContextMenu={(e) => onCtx(e, s.id)}
     >
@@ -278,6 +287,12 @@ export function TermTabbar({
       <div
         className={'tt-scroll' + (adopting ? ' adopting' : '')}
         ref={scrollRef}
+        // 가운데 버튼 자동스크롤을 막는다 — 이 줄이 가로 스크롤 컨테이너라, 안 막으면 탭을 휠
+        // 클릭할 때마다 스크롤 모드가 켜진다. 탭 사이 빈 자리·＋ 도 같은 줄이라 여기 한 곳에서 막는다.
+        // 버튼 1 에만 건다: 드래그 재정렬은 버튼 0 이라 영향을 받지 않는다.
+        onMouseDown={(e) => {
+          if (e.button === 1) e.preventDefault()
+        }}
         // 탭 사이가 아니라 **빈 자리**에 놓는 경우(크롬도 여기서 받는다). 내 창 드래그는 위 탭들이
         // 이미 처리하므로 여기서는 남의 창에서 온 것만 본다.
         onDragOver={(e) => {

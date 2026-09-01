@@ -61,7 +61,7 @@ import { t } from '../i18n'
 // 3행 그리드 앱 셸 (design-system §4.1): 타이틀바 / (사이드바+메인) / 상태바.
 export function Shell() {
   // R4.3: 폭·접힘·활성 탭이 한 상태로 묶여 workspace.json 에 저장된다(그전엔 렌더러 지역 상태).
-  const { sidebar, update: updateSidebar, preview: previewSidebar } = useSidebar()
+  const { sidebar, update: updateSidebar, preview: previewSidebar, revealAi } = useSidebar()
   // 드래그 중에는 사이드바 폭 트랜지션을 끈다(0.22s ease 가 걸린 채로 끌면 폭이 커서를 따라오지 않는다).
   const [resizing, setResizing] = useState(false)
   // 빈 문자열로 시작한다 — 예전엔 '0.1.0' 이 박혀 있었다. 아래 getVersion() 은 `.catch(() => {})`
@@ -308,6 +308,13 @@ export function Shell() {
     const taken = new Set(rows.map((r) => r.sessionId).filter((x): x is string => x !== null))
     return [...rows, ...hookRows(aiViews, taken, t('conn.group.local'))]
   }, [bench.list, bench.paths, sessions.sessions, profiles, aiViews])
+
+  // ① AI 를 켜면 사이드바가 [AI] 로 간다(2026-09-01 준영님). **터미널 탭은 안 옮긴다** — 옮기면
+  // 사용자 밑에서 물건이 움직인다(orca-analysis §3). 바뀌는 것은 사이드바 뷰뿐이고, 언제 바꿀지는
+  // store/sidebar.ts 의 `revealAiTab` 이 혼자 정한다(뺏지 않을 조건 넷이 거기 적혀 있다).
+  useEffect(() => {
+    revealAi(benchList.map((r) => r.sessionId).filter((x): x is string => x !== null))
+  }, [benchList, revealAi])
 
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다

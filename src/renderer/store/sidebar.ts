@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SidebarState } from '@shared/types'
 
 // R4.3 사이드바 상태 단일 소스. ui.sidebar{width,collapsed,activeTab} 스키마는 F1부터 있었지만
@@ -42,8 +42,54 @@ export function shownTab(activeTab: SidebarState['activeTab'], fileEnabled: bool
   return fileEnabled ? activeTab : 'conn'
 }
 
+/**
+ * 사이드바를 [AI] 아닌 것으로 바꾼 직후 자동 전환을 쉬는 시간. **짧게** 잡는다: 길면
+ * "새 셸을 열고 claude 를 쳤는데 안 따라온다"가 되어 기능이 고장 난 것처럼 보인다.
+ */
+export const AI_REVEAL_GRACE_MS = 10_000
+
+/**
+ * ① AI 를 켜면 사이드바가 [AI] 로 간다(2026-09-01 준영님).
+ *
+ * ⚠️ 옮기는 것은 **사이드바 뷰뿐**이다. 터미널 탭은 그 자리에 둔다 — `docs/orca-analysis.md` §3 이
+ * 그걸 명시적으로 거부한다("탭이 AI 영역으로 이동하면 사용자 밑에서 물건이 움직인다"). 여기서
+ * 하는 일은 **방금 시작된 AI 가 목록에 뜬 것을 보여 주는 것**이다.
+ *
+ * 화면을 뺏는 기능이라 규칙이 곧 전부다:
+ *  ① 이미 [AI] 를 보고 있으면 아무 일도 하지 않는다
+ *  ② 사이드바를 방금 다른 것으로 바꿨으면 쉰다 — **파일을 뒤지는 중에 화면이 바뀌는 것이 제일 나쁘다**
+ *  ③ **접힘을 건드리지 않는다.** 접은 것은 의도다 — 접힌 채로 [AI] 를 활성만 해 둔다
+ *     (그래서 patch 에 `collapsed` 가 없다. 다음에 펴면 [AI] 가 나온다)
+ *  ④ 처음 한 번만. claude 는 도구를 부를 때마다 상태를 보내므로, 매번 튀면 못 쓴다
+ *
+ * 돌려주는 `known` 은 **지금 목록에 있는 것 전부**다: 사라진 세션은 잊는다(그 id 는 다시 오지
+ * 않고, 안 잊으면 집합이 앱 수명 동안 자란다).
+ */
+export function revealAiTab(args: {
+  /** 지금 AI 가 도는 세션 id 들 — 작업대 목록에 줄이 있는 것(훅이 말을 걸어 온 것 포함). */
+  live: readonly string[]
+  /** 이미 한 번 본 id 들. */
+  known: ReadonlySet<string>
+  activeTab: SidebarState['activeTab']
+  /** 사이드바를 [AI] 아닌 것으로 바꾼 마지막 시각(0 = 없음). */
+  switchedAt: number
+  now: number
+}): { patch: Partial<SidebarState> | null; known: Set<string> } {
+  const known = new Set(args.live)
+  const fresh = args.live.some((id) => !args.known.has(id))
+  const go = fresh && args.activeTab !== 'ai' && args.now - args.switchedAt >= AI_REVEAL_GRACE_MS
+  return { patch: go ? { activeTab: 'ai' } : null, known }
+}
+
 export function useSidebar() {
   const [sidebar, setSidebar] = useState<SidebarState>(DEFAULT_SIDEBAR)
+  // ① 자동 전환의 기억 둘. 상태가 아니라 **판정 재료**라 ref 다 — 바뀌었다고 다시 그릴 것이 없다.
+  const switchedAt = useRef(0)
+  const knownAi = useRef<ReadonlySet<string>>(new Set())
+  // 판정은 setState 업데이터 **밖에서** 한다: 안에서 하면 StrictMode 의 이중 호출이 knownAi 를
+  // 두 번 갱신해 두 번째가 "새 것 없음"이 되고, 개발 중에만 기능이 죽는다.
+  const cur = useRef(sidebar)
+  cur.current = sidebar
 
   // 초기 하이드레이트. 옛 스냅샷에 sidebar 가 없거나 폭이 범위 밖이면 기본값으로 눌러 담는다.
   useEffect(() => {
@@ -64,14 +110,38 @@ export function useSidebar() {
   const update = useCallback((patch: Partial<SidebarState> | ((prev: SidebarState) => Partial<SidebarState>)) => {
     setSidebar((prev) => {
       const next = { ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }
+      // ① 자동 전환이 이걸 뺏지 않게, **[AI] 아닌 것으로 바꾼** 순간을 기억한다. 손으로 고른 것
+      // (레일·단축키)만이 아니라 앱이 보여 주기로 한 것(붙여넣기 업로드 → [파일])도 같이 센다 —
+      // 둘 다 "지금 사용자 눈이 거기 있다"는 뜻이고, 뺏으면 안 되는 이유가 같다.
+      // 같은 prev 를 두 번 봐도 결과가 같아(멱등) StrictMode 이중 호출이 문제되지 않는다.
+      if (next.activeTab !== prev.activeTab && next.activeTab !== 'ai') switchedAt.current = Date.now()
       // 하네스(ui:setSidebar 미배선)에서 unhandled rejection 이 나지 않게 삼킨다.
       window.ev?.ui.setSidebar(next).catch(() => {})
       return next
     })
   }, [])
 
+  /**
+   * ① AI 가 목록에 새로 떴다 — 사이드바를 [AI] 로. 판정은 `revealAiTab` 혼자 한다.
+   * **매 tick 불러도 된다**: 새 세션 id 가 없으면 아무 일도 일어나지 않는다(함정 ④).
+   */
+  const revealAi = useCallback(
+    (live: readonly string[]) => {
+      const r = revealAiTab({
+        live,
+        known: knownAi.current,
+        activeTab: cur.current.activeTab,
+        switchedAt: switchedAt.current,
+        now: Date.now()
+      })
+      knownAi.current = r.known
+      if (r.patch) update(r.patch)
+    },
+    [update]
+  )
+
   // 드래그 중(매 mousemove)에는 저장하지 않고 화면만 바꾼다 — 놓을 때 update 로 한 번 저장한다.
   const preview = useCallback((width: number) => setSidebar((prev) => ({ ...prev, width })), [])
 
-  return { sidebar, update, preview }
+  return { sidebar, update, preview, revealAi }
 }
