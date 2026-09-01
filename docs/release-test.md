@@ -28,11 +28,17 @@ npm test
 npm run scan:i18n      # 없는 i18n 키 → 화면에 키 문자열이 그대로 찍힌다
 npm run scan:magic     # HEX/px 리터럴 · CSS 중괄호 · 정의 없는 var(--x)
 npm run scan:push
+grep -rn TEMP-DIAG src/   # 0건이어야 한다 — 아래 ⚠ 참고
 npm run smoke          # ⚠️ Electron 창이 뜬다 — 사람이 보는 앞에서만 돌린다
 npm run smoke:quitfail # 종료 정리가 실패해도 앱이 매달리지 않는가
 npm run check:rdpwasm  # 실제 CSP 아래 프로덕션 번들을 file:// 로 읽는 유일한 시험
 npm run e2e:full
 ```
+
+⚠️ **`TEMP-DIAG` 는 0건이어야 한다.** 원인을 못 가리는 제보를 쫓을 때 콘솔 로그를 잠깐
+심는다(2026-09-01 RDP 클립보드·커서가 그랬다). **재고 나면 걷는 것이 그 라운드의 마지막 단계**인데
+잊으면 조용히 배포로 나간다 — 해롭지는 않지만 사용자 콘솔에 우리 디버그가 찍힌다.
+`grep -rn TEMP-DIAG src/` 로 한 번에 찾힌다.
 
 > **`npm run smoke` 는 UI 개수를 단언하는 검사입니다. 화면 구성을 바꾸면 그 라운드에서
 > `tests/smoke-boot.cjs` 도 같이 고칩니다.** 2026-08-28 에 이 파일이 제품보다 낡아 5건이

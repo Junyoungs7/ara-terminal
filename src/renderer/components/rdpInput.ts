@@ -179,12 +179,19 @@ export function resolveSize(label: string, host: { clientWidth: number; clientHe
 }
 
 // 캔버스 표시 크기와 실제 해상도가 다를 수 있다(CSS 스케일) — 원격 좌표계로 환산한다.
+//
+// 2026-09-01: 창 맞춤일 때 캔버스가 칸을 꽉 채우고(`object-fit: contain`) 그림이 **가운데에
+// 여백을 두고** 놓인다 — 상자 기준으로만 재면 그 여백만큼 클릭이 밀린다. 그래서 짧은 쪽 배율로
+// 실제 그림 상자를 다시 구해 잰다. 여백이 없으면(상자 = 그림) 두 배율이 같아 예전과 같은 값이다.
 export function canvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): { x: number; y: number } {
   const r = canvas.getBoundingClientRect()
-  const sx = r.width === 0 ? 1 : canvas.width / r.width
-  const sy = r.height === 0 ? 1 : canvas.height / r.height
-  const x = Math.round((clientX - r.left) * sx)
-  const y = Math.round((clientY - r.top) * sy)
+  const fit = Math.min(r.width / canvas.width, r.height / canvas.height)
+  const scale = Number.isFinite(fit) && fit > 0 ? fit : 1
+  // 그려진 그림의 왼쪽·위(레터박스 여백만큼 안쪽).
+  const left = r.left + (r.width - canvas.width * scale) / 2
+  const top = r.top + (r.height - canvas.height * scale) / 2
+  const x = Math.round((clientX - left) / scale)
+  const y = Math.round((clientY - top) / scale)
   return {
     x: Math.min(Math.max(x, 0), canvas.width - 1),
     y: Math.min(Math.max(y, 0), canvas.height - 1)

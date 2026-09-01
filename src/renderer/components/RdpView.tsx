@@ -134,10 +134,28 @@ const KIND_KEY: Record<number, string> = {
   6: 'rdp.err.negotiation'
 }
 
+/**
+ * ⚠️ TEMP-DIAG(2026-09-01 준영님 제보 ④·⑤·⑥) — **확인되면 이 블록과 부르는 자리를 전부 지운다**
+ * (`grep TEMP-DIAG`). 원격 복사·해상도 추종·커서가 어디서 끊기는지 코드만 봐서는 가릴 수 없다:
+ * 클라이언트 쪽 계약은 셋 다 맞다(패키지 index.d.ts·wasm 문자열로 확인). 남은 것은 "원격이
+ * 보내 오는가"인데 그건 붙어 있는 화면에서만 보인다. DevTools 콘솔에만 남기고 화면은 안 건드린다.
+ */
+function diag(tag: string, ...rest: unknown[]): void {
+  console.info(`[rdp-diag ${tag}]`, ...rest)
+}
+const diagClip = (step: string, detail: unknown): void => diag('clip', step, detail)
+
 // 원격이 커서 모양을 바꿀 때 호출된다. 인자 형태가 버전마다 조금씩 다를 수 있어 방어적으로 읽는다
 // — 커서 하나 때문에 세션이 끊기면 안 된다.
 function cursorStyleCallback(canvas: HTMLCanvasElement) {
+  // TEMP-DIAG: 같은 커서가 연달아 오면 콘솔이 잠긴다 — 모양이 바뀔 때만 한 줄.
+  let lastSig = ''
   return (style: unknown, data?: unknown, hotspotX?: unknown, hotspotY?: unknown): void => {
+    const sig = `${typeof style}/${String(style).slice(0, 16)}/${typeof data === 'string' ? data.length : typeof data}`
+    if (sig !== lastSig) {
+      lastSig = sig
+      diag('cursor', sig, hotspotX, hotspotY)
+    }
     try {
       const kind = typeof style === 'string' ? style : 'default'
       if (kind === 'hidden') canvas.style.cursor = 'none'
@@ -363,13 +381,18 @@ export function RdpView({
         // (원격이 처리한다) 여기서 가로챌 것이 없다 — 데이터만 이 채널로 오간다.
         builder.remoteClipboardChangedCallback((data: unknown) => {
           const d = data as { items?: () => { mimeType(): string; value(): unknown }[] }
+          diagClip('changed', typeof d?.items)
           if (typeof d?.items !== 'function') return
           let text: string | null = null
           try {
-            text = pickClipboardText(d.items())
-          } catch {
+            const items = d.items()
+            diagClip('items', items.map((i) => `${i.mimeType()}:${typeof i.value()}`).join(', ') || '(없음)')
+            text = pickClipboardText(items)
+          } catch (e) {
+            diagClip('items threw', String(e))
             return /* wasm 객체가 이미 해제됨 */
           }
+          diagClip('picked', text === null ? 'null' : `${text.length}자`)
           // 텍스트가 없으면 파일 목록만 온 것이다 — files-available 가 처리하므로 여기선 손대지 않는다.
           if (!text) return
           // 원격이 준 것을 로컬에 써 넣는다. 그 지문을 남겨 두지 않으면 다음 포커스에서
@@ -380,7 +403,7 @@ export function RdpView({
           setRemoteFiles([])
           // main 경유(writeClipboard). 이건 **원격이 밀어 주는** 쓰기라 창이 뒤에 있을 때 오기 쉬운데,
           // navigator.clipboard 는 그때 거부한다 — RDP 에서 복사하고 알트탭한 뒤 붙이면 빈 채였다.
-          void writeClipboard(text)
+          void writeClipboard(text).then((ok) => diagClip('writeClipboard', ok ? 'ok' : '실패'))
         })
         builder.forceClipboardUpdateCallback(() => {
           void navigator.clipboard
@@ -468,8 +491,11 @@ export function RdpView({
         const canvas = canvasRef.current
         if (!canvas || (canvas.width === w && canvas.height === h)) return
         try {
+          // TEMP-DIAG(제보 ⑤): 요청은 나갔는데 서버가 무시하는 것인지, 요청 자체가 안 나가는 것인지.
+          diag('resize', `요청 ${w}×${h}`, `캔버스 ${canvas.width}×${canvas.height}`)
           sessionRef.current?.resize?.(w, h)
-        } catch {
+        } catch (e) {
+          diag('resize threw', String(e))
           /* 세션 종료 중 */
         }
       }, 400)
@@ -781,7 +807,13 @@ export function RdpView({
           ref={canvasRef}
           width={RDP_WIDTH}
           height={RDP_HEIGHT}
-          className={'rdp-canvas' + (phase === 'connected' ? ' on' : '')}
+          // fit = 창 맞춤(고정 해상도도 다중 모니터도 아닐 때). 그때만 캔버스가 칸을 채운다 —
+          // 서버가 해상도 변경 요청을 무시해도 화면이 작은 채로 남지 않는다(제보 ⑤).
+          className={
+            'rdp-canvas' +
+            (phase === 'connected' ? ' on' : '') +
+            (!fixedSize && !fixedResolution(res) ? ' fit' : '')
+          }
           // 캔버스는 기본적으로 키 이벤트를 못 받는다 — tabIndex 가 있어야 포커스된다.
           tabIndex={0}
           onMouseMove={onMouseMove}
