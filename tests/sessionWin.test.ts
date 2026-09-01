@@ -3,6 +3,9 @@
 import { describe, it, expect } from 'vitest'
 import { parseSessionWinHash, sessionWinHash } from '../src/shared/sessionWin'
 import { usableBounds } from '../src/main/windows/SessionWindows'
+import { shouldShowBootSplash } from '../src/renderer/components/BootSplash'
+import { mergeMainSnapshot } from '../src/renderer/store/sessions'
+import type { Session } from '../src/renderer/store/sessions'
 
 describe('세션 창 해시', () => {
   it('win 을 읽는다', () => {
@@ -60,5 +63,68 @@ describe('떼어낸 창 자리', () => {
   it('경계: 모니터 오른쪽 끝 바로 밖은 버린다', () => {
     expect(usableBounds({ x: 3840, y: 0, width: 800, height: 600 }, DUAL)).toBeNull()
     expect(usableBounds({ x: 3839, y: 0, width: 800, height: 600 }, DUAL)).not.toBeNull()
+  })
+})
+
+// ── 떼어낸 창은 인사하지 않는다 (2026-09-01 제보 ①) ─────────────────────────
+//
+// 창마다 렌더러가 따로라 "이미 인사했다"를 기억하는 모듈 변수가 새 창에서 새로 시작한다 —
+// 그래서 탭을 뗄 때마다 2초짜리 부팅 인사가 떴고, 분리가 그만큼 늦어졌다.
+describe('부팅 인사를 그리는 창', () => {
+  const on = { prefsLoaded: true, bootSplash: true, splashDone: false }
+
+  it('본창에서는 뜬다', () => {
+    expect(shouldShowBootSplash(on)).toBe(true)
+  })
+
+  it('★ 떼어낸 창에서는 안 뜬다 — 인사는 앱을 켤 때의 것이지 창을 열 때의 것이 아니다', () => {
+    expect(shouldShowBootSplash({ ...on, detachedWinId: 'w1abc' })).toBe(false)
+  })
+
+  it('기존 조건은 그대로 — 로드 전·설정 off·이미 지남', () => {
+    expect(shouldShowBootSplash({ ...on, prefsLoaded: false })).toBe(false)
+    expect(shouldShowBootSplash({ ...on, bootSplash: false })).toBe(false)
+    expect(shouldShowBootSplash({ ...on, splashDone: true })).toBe(false)
+  })
+})
+
+// ── 되돌리기가 RDP 를 지우지 않는다 (2026-09-01 제보 ②) ──────────────────────
+//
+// 떼어낸 창을 다시 탭으로 붙이면 `session:moved` → refreshFromMain 이 돌고, 그것이 목록을
+// main 스냅샷으로 통째로 덮었다. RDP 세션은 main 에 없어서(pty 가 없다) 그 순간 사라졌고,
+// RdpView 가 언마운트되며 릴레이까지 끊겼다 — 터미널은 main 에 살아 있어 멀쩡했다.
+const sess = (id: string, type: Session['type'] = 'local'): Session => ({
+  id,
+  title: id,
+  serverKey: type === 'local' ? 'localhost' : 'srv',
+  type
+})
+
+describe('main 스냅샷 합치기', () => {
+  it('★ main 이 모르는 RDP 세션은 남는다 — 되돌리기 한 번에 원격 화면이 꺼지면 안 된다', () => {
+    const cur = [sess('a'), sess('rdp:p1:1', 'rdp')]
+    expect(mergeMainSnapshot(cur, [sess('a')]).map((s) => s.id)).toEqual(['a', 'rdp:p1:1'])
+  })
+
+  it('돌아온 세션은 들어오고, 떠난 세션은 빠진다', () => {
+    const cur = [sess('a'), sess('rdp:p1:1', 'rdp'), sess('gone')]
+    const mine = [sess('a'), sess('b', 'ssh')]
+    expect(mergeMainSnapshot(cur, mine).map((s) => s.id)).toEqual(['a', 'rdp:p1:1', 'b'])
+  })
+
+  it('★ 이 창의 탭 순서를 지킨다 — 세션 하나가 돌아왔다고 남의 탭이 움직이면 안 된다', () => {
+    const cur = [sess('c'), sess('a'), sess('b')]
+    const mine = [sess('a'), sess('b'), sess('c')] // main 은 생성 순만 안다
+    expect(mergeMainSnapshot(cur, mine).map((s) => s.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('메타는 main 것이 이긴다(제목 변경·소유 창) — 사본이 진실을 덮지 않는다', () => {
+    const cur = [{ ...sess('a'), title: '옛 이름' }]
+    const [merged] = mergeMainSnapshot(cur, [{ ...sess('a'), title: '새 이름', winId: 'w1' }])
+    expect(merged).toMatchObject({ title: '새 이름', winId: 'w1' })
+  })
+
+  it('처음 뜬 창(빈 목록)은 스냅샷 그대로', () => {
+    expect(mergeMainSnapshot([], [sess('a'), sess('b')]).map((s) => s.id)).toEqual(['a', 'b'])
   })
 })

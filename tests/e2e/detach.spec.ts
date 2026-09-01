@@ -5,7 +5,7 @@
 //
 // 이 파일이 **창 두 개**를 다루는 첫 e2e 다. Electron 앱의 두 번째 창은 `app.waitForEvent('window')`
 // 로 잡는다(Playwright 가 BrowserWindow 하나를 Page 하나로 준다).
-import { test, expect, newLocalShell, sessionList, dialogAlt, dialogCancel, dialogConfirm } from './fixtures'
+import { test, expect, newLocalShell, sessionList, connModal, dialogAlt, dialogCancel, dialogConfirm } from './fixtures'
 import type { Page, ElectronApplication } from '@playwright/test'
 import { BOTTOM_IDS } from '../../src/shared/types'
 
@@ -323,6 +323,47 @@ test('DETACH-13 자기 탭을 자기 탭바에 놓으면 순서만 바뀐다', a
   await expect(page.locator('.ttab')).toHaveCount(2)
   expect((await sessionList(page)).length).toBe(2)
   expect(a).not.toBe(b)
+})
+
+/**
+ * DETACH-14★ 되돌리기가 **RDP 탭을 지우지 않는다**(2026-09-01 준영님 제보 ②).
+ *
+ * 되돌리기는 `session:moved` → refreshFromMain 을 태우는데, 그것이 이 창의 목록을 main 스냅샷으로
+ * 통째로 덮었다. RDP 세션은 pty 가 없어 main 에 없다 → 목록에서 사라지고 → RdpView 가 언마운트되며
+ * 릴레이까지 끊겼다. **터미널만 멀쩡했던 이유가 그 차이다** — 그래서 검사도 둘을 한 화면에 둔다.
+ *
+ * 붙을 RDP 서버는 없다(릴레이가 곧 실패한다). 상관없다 — 이 결함은 접속 상태와 무관하게
+ * "탭이 목록에서 빠지는가"이고, 그것이 곧 화면이 사라지는 경로다.
+ */
+test('DETACH-14★ 떼어낸 창을 되돌려도 본창의 RDP 탭이 살아 있다', async ({ ara }) => {
+  const { page } = ara
+  const a = await newLocalShell(page)
+  // 연결 관리자에서 RDP 프로필 만들기 — rdp.spec.ts 와 같은 절차를 로컬에 다시 둔다
+  // (이 파일의 관례: 공유 파일(fixtures)은 건드리지 않는다).
+  await page.keyboard.press('Control+Shift+M')
+  await connModal(page).waitFor()
+  await page.click('.modal .prof-list .pl-add')
+  await page.click('.prof-form .seg-ctl button:has-text("RDP")')
+  const field = (label: string) => page.locator(`.prof-form .fld:has(> label:text-is("${label}")) input`).first()
+  await field('연결 이름').fill('rdp-detach')
+  await field('호스트').fill('127.0.0.1')
+  await field('사용자').fill('dev')
+  await page.click('.modal-ft .btn.pri') // [저장 후 접속] — 저장 즉시 내장 뷰가 뜬다
+  await expect(connModal(page)).toHaveCount(0, { timeout: 15_000 })
+  const rdpTab = page.locator('.ttab[data-session-id^="rdp:"]')
+  await expect(rdpTab).toHaveCount(1, { timeout: 15_000 })
+
+  // 셸만 떼어냈다 돌려보낸다. RDP 탭은 처음부터 끝까지 본창 것이다.
+  const win = await detachTab(ara, a)
+  await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(rdpTab).toHaveCount(1) // 떼어내기는 원래 멀쩡했다(그쪽은 목록을 덮지 않는다)
+  await askClose(win)
+  await expect(win.locator('.dlg-overlay .dlg-detail .dlg-row')).toHaveCount(1, { timeout: 15_000 })
+  await dialogAlt(win) // [본창으로 보내기]
+
+  await expect(page.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
+  await expect(rdpTab).toHaveCount(1) // ★ 예전엔 여기서 0 이 됐다
+  await expect(page.locator('.rdp-view')).toHaveCount(1)
 })
 
 // DETACH-5 떼어낸 창에는 **연결 트리·설정이 없다**(준영님 확정 구성 "작업 창").

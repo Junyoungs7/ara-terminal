@@ -32,6 +32,25 @@ import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'
 export const SPLASH_MS = 2000
 
 /**
+ * 이 창이 인사를 그릴 것인가. **본창만** 그린다.
+ *
+ * 2026-09-01 준영님 제보: *"창 분리할 때 어서오세요가 떠서 분리가 늦게 돼."* 떼어낸 창은
+ * `MainArea` 를 그대로 쓰는데(SessionWindow), 그 안에 이 스플래시가 있었다. 창마다 렌더러가
+ * 따로라 "이미 인사했다"를 기억하는 모듈 변수도 새로 시작한다 — 뗄 때마다 2초를 기다렸다.
+ * 부팅 인사는 **앱을 켤 때**의 것이지 창을 열 때의 것이 아니다. SPLASH_MS 2초는 부팅에서는
+ * 준영님이 요청하신 값이라 그대로 두고, 여기서 창을 가른다.
+ */
+export function shouldShowBootSplash(o: {
+  /** 떼어낸 창이면 그 창 id(본창은 undefined) — MainArea 의 같은 이름 prop 그대로. */
+  detachedWinId?: string
+  prefsLoaded: boolean
+  bootSplash: boolean
+  splashDone: boolean
+}): boolean {
+  return !o.detachedWinId && o.prefsLoaded && o.bootSplash && !o.splashDone
+}
+
+/**
  * 직전에 띄운 줄. 같은 것이 두 번 연속 나오면 "랜덤"으로 안 느껴진다.
  *
  * **localStorage 에 둔다**(설정 파일이 아니라): 이건 사용자가 고른 값이 아니라 잠깐의 기억이고,

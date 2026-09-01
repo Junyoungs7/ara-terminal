@@ -6115,9 +6115,16 @@
   max-width: 100%;
   max-height: 100%;
 }
-/* 포커스 링은 OS 강조색(사용자 PC 는 주황)을 따라간다 — 우리 파란 강조색으로 고정한다. */
+/* 2026-09-01 준영님 제보 ③: 원격 화면 **위에는 우리 표시를 얹지 않는다.** 여기 있던 강조색
+   링(outline-offset:-2px 이라 캔버스 안쪽에 그려졌다)이 원격 데스크톱 픽셀을 덮어 화면이
+   어긋나 보였다. 포커스가 어느 칸에 있는지는 바깥 `.pane.focused` 링이 이미 말한다 —
+   **그건 그대로 둔다**(터미널 칸에서는 필요하다). 끄지 않으면 전역 `:focus-visible` 바닥값이
+   대신 걸리므로 명시적으로 끈다. */
 .rdp-canvas:focus,
-.rdp-canvas:focus-visible,
+.rdp-canvas:focus-visible {
+  outline: none;
+}
+/* 비밀번호 칸은 우리 UI 다 — OS 강조색(사용자 PC 는 주황) 대신 우리 파란색으로 고정한다. */
 .rdp-creds input:focus,
 .rdp-creds input:focus-visible {
   outline: 2px solid var(--accent);

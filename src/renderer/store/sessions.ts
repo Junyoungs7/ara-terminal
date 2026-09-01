@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSpec } from '../../main/sessions/ISessionManager'
 import type { SessionType } from '@shared/types'
 
@@ -69,6 +69,27 @@ export function reorderById<T extends { id: string }>(list: T[], dragId: string,
 
 export const reorderSessions = reorderById<Session>
 
+/**
+ * main 의 스냅샷으로 이 창의 목록을 맞추되 **main 이 모르는 세션은 남긴다.**
+ *
+ * 2026-09-01 준영님 제보: *"분리된 창을 다시 탭에 붙이면 rdp 창이 꺼지거나 사라져."* 되돌리기는
+ * `session:moved` → refreshFromMain 을 태우는데, 그게 목록을 main 스냅샷으로 **통째로 덮었다.**
+ * RDP 세션은 pty 가 없어 main 에 없다(openRdp 는 렌더러 목록에만 넣는다) → 목록에서 빠지고 →
+ * RdpView 가 언마운트되며 그 cleanup 이 릴레이까지 끊었다. **터미널이 멀쩡했던 이유가 그 차이다**
+ * (터미널은 main 에 살아 있어 스냅샷에 그대로 들어 있다).
+ *
+ * `type === 'rdp'` 만 남긴다 — "main 이 모르는 것 전부"로 넓히면 main 에서 죽은 세션의 껍데기
+ * 탭까지 영영 남는다(그 정리가 이 덮어쓰기의 본래 일이다).
+ *
+ * 순서는 **이 창의 탭 순서**를 따른다 — 스냅샷 순서는 생성 순이라 드래그 재정렬(R2.3)을 모른다.
+ */
+export function mergeMainSnapshot(cur: Session[], mine: Session[]): Session[] {
+  const byId = new Map(mine.map((m) => [m.id, m]))
+  const known = new Set(cur.map((s) => s.id))
+  const kept = cur.filter((s) => byId.has(s.id) || s.type === 'rdp').map((s) => byId.get(s.id) ?? s)
+  return [...kept, ...mine.filter((m) => !known.has(m.id))]
+}
+
 // 분할이 새 패널에 올릴 배경 세션(패널 미배치) 고르기 — 최근 사용 순, 그다음 탭 순서(R2.0).
 // 없으면 null(호출부가 새 로컬 셸을 만든다).
 export function pickBackgroundSession(
@@ -92,6 +113,9 @@ let seq = 0
  */
 export function useSessions(winId?: string) {
   const [sessions, setSessions] = useState<Session[]>([])
+  // 지금 목록의 최신 사본. refreshFromMain 이 비동기라 클로저 값으로는 낡은 목록을 합치게 된다.
+  const listRef = useRef<Session[]>(sessions)
+  listRef.current = sessions
   const [activeId, setActiveId] = useState<string | null>(null)
   // 최근 사용 순(앞이 최신). 분할이 배경 세션을 고를 때 쓴다(R2.0).
   const [mru, setMru] = useState<string[]>([])
@@ -202,6 +226,8 @@ export function useSessions(winId?: string) {
    *
    * 떼어낸 창은 세션을 **자기가 만들지 않았다**(본창에서 떼어져 왔다) — 그래서 여느 창처럼
    * "내가 연 것을 기억"하는 방식으로는 목록이 영영 비어 있다. main 의 스냅샷이 유일한 출처다.
+   *
+   * 단 스냅샷은 **main 이 아는 것만** 담는다 — 합치는 규칙은 mergeMainSnapshot 이 갖는다(제보 ②).
    */
   const refreshFromMain = useCallback(async () => {
     const all = await window.ev?.session.list().catch(() => null)
@@ -216,8 +242,10 @@ export function useSessions(winId?: string) {
         ...(m.profileId ? { profileId: m.profileId } : {}),
         ...(m.winId ? { winId: m.winId } : {})
       }))
-    setSessions(mine)
-    setActiveId((cur) => (cur && mine.some((x) => x.id === cur) ? cur : (mine[0]?.id ?? null)))
+    // 비동기라 클로저의 sessions 는 낡았을 수 있다 — 지금 목록을 ref 에서 읽는다.
+    const next = mergeMainSnapshot(listRef.current, mine)
+    setSessions(next)
+    setActiveId((cur) => (cur && next.some((x) => x.id === cur) ? cur : (next[0]?.id ?? null)))
   }, [winId])
 
   // 떼어낸 창은 뜨자마자 자기 세션을 받아 온다(본창은 F6 복원이 그 일을 한다 — 두 번 하지 않는다).

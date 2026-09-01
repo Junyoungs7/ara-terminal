@@ -16,7 +16,7 @@ import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
 import { VOICE } from '@shared/features'
-import { BootSplash } from './BootSplash'
+import { BootSplash, shouldShowBootSplash } from './BootSplash'
 import { VoiceOverlay } from './VoiceOverlay'
 import { useVoiceMode } from '../store/voice'
 import { createWakeEngine } from '../store/wakeWord'
@@ -1006,8 +1006,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     return (
       <div className="main">
         {/* #139 부팅 인사 — 자비스식. 짧고, 아무 키로 건너뛰고, 설정에서 끈다.
-            **이름 묻기보다 먼저** 지나간다: 처음 켠 사람도 인사부터 받고 그다음 이름을 준다. */}
-        {prefsLoaded && prefs.bootSplash && !splashDone && (
+            **이름 묻기보다 먼저** 지나간다: 처음 켠 사람도 인사부터 받고 그다음 이름을 준다.
+            **떼어낸 창에서는 안 뜬다**(2026-09-01 제보 ① — shouldShowBootSplash 주석 참고). */}
+        {shouldShowBootSplash({ detachedWinId, prefsLoaded, bootSplash: prefs.bootSplash, splashDone }) && (
           <BootSplash
             name={prefs.araCallName}
             onDone={() => {
@@ -1018,9 +1019,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         )}
         {/* #138 첫 실행 인사 — 호칭을 받는다. 한 번 지나면(건너뛰어도) 다시 안 뜬다.
             **하이드레이트가 끝난 뒤**에만 판정한다: 기본값이 빈 문자열이라 로드 전에 보면
-            이미 이름을 넣어 둔 사람에게도 매번 뜬다. prefs 의 주인이 여기라 여기서 그린다. */}
+            이미 이름을 넣어 둔 사람에게도 매번 뜬다. prefs 의 주인이 여기라 여기서 그린다.
+            인사와 같은 이유로 **본창에서만** 묻는다: 이름은 앱에 한 번 주는 것이라, 아직 답하지
+            않은 사람이 탭을 떼어내면 새 창이 이름부터 묻고 앉아 있게 된다(제보 ① 과 같은 병). */}
         <WelcomeModal
-          open={prefsLoaded && !prefs.araWelcomeSeen && (splashDone || !prefs.bootSplash)}
+          open={!detachedWinId && prefsLoaded && !prefs.araWelcomeSeen && (splashDone || !prefs.bootSplash)}
           onDone={(name) => updatePrefs({ araWelcomeSeen: true, ...(name ? { araCallName: name } : {}) })}
         />
         <TermTabbar
