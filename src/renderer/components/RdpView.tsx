@@ -11,11 +11,13 @@
 //
 // 비밀번호는 프로필에 저장해 두면 바로 붙고, 없으면 화면에서 받는다(2026-08-07).
 // 클립보드는 텍스트 양방향으로 연동돼 있다(이미지·파일은 아직).
+import { Check } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { writeClipboard } from '../store/clipboardWrite'
 import { registerPasteTarget } from '../store/pasteFiles'
 import { t } from '../i18n'
-import { Dropdown } from './Dropdown'
+import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
+import { IconChevronDown } from './icons'
 import { PasswordInput } from './PasswordInput'
 import {
   KEY_COMBOS,
@@ -36,8 +38,97 @@ import {
   type RdpKeyMode
 } from './rdpInput'
 
-// 키 변환 모드 ↔ 드롭다운 라벨(Dropdown 은 문자열만 다룬다 — 해상도와 같은 방식).
+// 키 변환 모드 ↔ 사람이 읽는 라벨(옵션 메뉴의 현재값·항목 양쪽에 쓴다).
 const keyModeLabel = (m: RdpKeyMode): string => t(`rdp.keys.${m}`)
+
+// 조합키 라벨은 번역하지 않는다 — 키 이름 자체가 라벨이다(버튼 시절과 같은 글자).
+const COMBO_LABEL: Record<string, string> = {
+  ctrlAltDel: 'Ctrl+Alt+Del',
+  altTab: 'Alt+Tab',
+  win: 'Win'
+}
+
+// 고른 항목에만 체크. 안 고른 항목도 빈 칸을 넘겨 라벨 왼쪽 줄을 맞춘다(.ci-ic 가 폭을 잡는다).
+const check = (on: boolean): JSX.Element => (on ? <Check /> : <span />)
+
+/** 옵션 버튼과 그 아래 메뉴 사이 간격(Dropdown 의 목록 배치와 같은 값). */
+const MENU_GAP = 4
+
+/**
+ * [옵션] 리스트의 내용 — **순수 함수**(단위 테스트 대상).
+ *
+ * 2026-09-01 준영님: *"창크기 맞춤·키 변환 없음·파일 받기·보내기·단축키·다중 모니터는 그냥 옵션
+ * 버튼 하나로 리스트 형태로"*. 좁은 창에서 헤더 버튼들이 줄바꿈·잘리던 것을 접는 것이 목적인데,
+ * 접으면 **버튼이 몸으로 말하던 것이 사라진다** — 그래서 셋의 성격이 리스트에서 모양으로 갈린다:
+ *
+ *  · **고르는 것**(해상도 · 키 변환) — 서브메뉴 + 오른쪽에 **지금 값**(hint). 하위 항목엔 체크.
+ *    닫아 둔 채로도 알 수 있게 [옵션] 버튼의 툴팁이 같은 값을 말한다.
+ *  · **하는 것**(파일 받기·보내기 · 단축키 보내기 · 다중 모니터) — 오른쪽이 비어 있고 누르면 실행.
+ *  · **못 하는 것** — 비활성 + 오른쪽에 **켜지는 조건**. 버튼이던 시절에는 hover 툴팁이 하던
+ *    말인데(`rdp.file.recv.title`), 접으면 hover 할 버튼 자체가 없다. 조건을 눈에 보이게 적고
+ *    (`rdp.file.recv.need`) 원문은 행의 title 로 남긴다.
+ *
+ * 여기서 항목이 하나 빠지면 그 기능은 앱에서 **닿을 길이 없어진다**(다른 진입점이 없다) —
+ * tests/rdpOptions.test.ts 가 목록과 비활성 사유를 못 박는 이유다.
+ */
+export function rdpOptionItems(s: {
+  connected: boolean
+  res: string
+  keyMode: RdpKeyMode
+  recvCount: number
+  canSpan: boolean
+  /** 다중 모니터 창에서만. 있으면 해상도는 읽기 전용이다(모니터 배치가 정한 값). */
+  fixedSize?: [number, number]
+}): MenuItem[] {
+  return [
+    s.fixedSize
+      ? // 다중 모니터 창: 크기는 모니터 배치가 정한다 — 고를 여지가 없으니 값만 보여 준다.
+        { id: 'res', label: t('rdp.opt.res'), hint: resLabel(s.fixedSize), title: t('rdp.span.fixed'), disabled: true }
+      : {
+          id: 'res',
+          label: t('rdp.opt.res'),
+          hint: s.res,
+          title: t('rdp.res.title'),
+          submenu: [...RDP_RESOLUTIONS.map(resLabel), t('rdp.res.fit')].map((o) => ({
+            id: `res:${o}`,
+            label: o,
+            icon: check(o === s.res)
+          }))
+        },
+    {
+      id: 'keys',
+      label: t('rdp.opt.keys'),
+      hint: keyModeLabel(s.keyMode),
+      title: t('rdp.keys.title'),
+      submenu: RDP_KEY_MODES.map((m) => ({ id: `keys:${m}`, label: keyModeLabel(m), icon: check(m === s.keyMode) }))
+    },
+    // 붙기 전에는 보낼 것도 받을 것도, 원격에 보낼 키도 없다 — 버튼 시절과 같은 조건이다.
+    ...(s.connected
+      ? [
+          {
+            id: 'recv',
+            label: t('rdp.file.recv'),
+            hint:
+              s.recvCount > 0 ? t('rdp.file.recv.n').replace('{n}', String(s.recvCount)) : t('rdp.file.recv.need'),
+            title: t('rdp.file.recv.title'),
+            disabled: s.recvCount === 0
+          },
+          { id: 'send', label: t('rdp.file.send'), title: t('rdp.file.send.title') },
+          {
+            id: 'combo',
+            label: t('rdp.opt.combo'),
+            submenu: Object.entries(COMBO_LABEL).map(([k, label]) => ({
+              id: `combo:${k}`,
+              label,
+              title: t(`rdp.combo.${k}`)
+            }))
+          }
+        ]
+      : []),
+    // 되돌리는 길([닫기])은 저쪽 창 헤더에 있다 — 창이 달라 같은 자리에 둘 수 없다.
+    ...(s.canSpan ? [{ id: 'span', label: t('rdp.span'), title: t('rdp.span.title') }] : [])
+  ]
+}
 
 // 해상도는 rdpInput.ts 가 정의한다(순수 로직 — 단위 테스트 대상). 캔버스는 고른 해상도로 그리고
 // CSS 가 비율을 유지한 채 칸에 맞춰 축소한다.
@@ -242,6 +333,9 @@ export function RdpView({
   // 원격 클립보드에 올라온 파일 목록. 버튼은 **항상 있고** 이게 비면 비활성이다 —
   // 원격↔원격 복사마다 버튼이 튀어나오던 게 소음이었다(준영님 지적).
   const [remoteFiles, setRemoteFiles] = useState<RdpFileInfo[]>([])
+  // 옵션 메뉴가 열린 자리(뷰포트 좌표). null 이면 닫혀 있다.
+  const [optMenu, setOptMenu] = useState<{ x: number; y: number } | null>(null)
+  const optBtnRef = useRef<HTMLButtonElement>(null)
   const providerRef = useRef<RdpProvider | null>(null)
   // 클립보드 소유권 추적. announced = 우리가 원격에 마지막으로 알린 것, fromRemote = 원격이 준 것.
   // 이 둘이 없으면 포커스마다 로컬 클립보드를 다시 알려 **원격에서 방금 복사한 것을 덮어쓴다**.
@@ -721,78 +815,95 @@ export function RdpView({
     }
   }, [])
 
+  // 받을 수 있는 것은 파일뿐이다(폴더는 이 경로로 못 내려받는다) — 배지·비활성 판정이 같은 수를 본다.
+  const recvCount = remoteFiles.filter((f) => !f.isDirectory).length
+  const optionItems = rdpOptionItems({
+    connected: phase === 'connected',
+    res,
+    keyMode,
+    recvCount,
+    canSpan: !!onSpan,
+    ...(fixedSize ? { fixedSize } : {})
+  })
+
+  // 닫으면 포커스를 버튼으로 되돌린다 — 안 그러면 ESC 후 Tab 이 화면 맨 앞부터 다시 돈다.
+  // 조합키는 실행 뒤 스스로 캔버스에 포커스를 준다(sendCombo) — 이 다음에 불리므로 그쪽이 이긴다.
+  // preventScroll: 다중 모니터 창에서는 이때 헤더가 이미 접혀 있을 수 있다 — 화면 밖 버튼에
+  // 포커스를 주면 브라우저가 그것을 보이게 하려고 컨테이너를 스크롤한다(캔버스가 밀린다).
+  const closeOptMenu = useCallback(() => {
+    setOptMenu(null)
+    optBtnRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  const pickOption = (id: string): void => {
+    if (id.startsWith('res:')) pickRes(id.slice('res:'.length))
+    else if (id.startsWith('keys:')) {
+      const m = RDP_KEY_MODES.find((x) => x === id.slice('keys:'.length))
+      if (m) setKeyMode(m)
+    } else if (id.startsWith('combo:')) sendCombo(id.slice('combo:'.length))
+    else if (id === 'recv') void receiveFiles()
+    else if (id === 'send') void sendFiles()
+    else if (id === 'span') onSpan?.()
+  }
+
   return (
     <div className="rdp-view">
       <div className="rdp-hd">
-        <span className="rdp-name">{name}</span>
-        <span className="rdp-state">{t(`rdp.state.${phase}`)}</span>
-        {fixedSize ? (
-          // 다중 모니터 창: 크기는 모니터 배치가 정한다 — 고를 여지가 없으니 값만 보여 준다.
-          <span className="rdp-res fixed" title={t('rdp.span.fixed')}>
-            {resLabel(fixedSize)}
-          </span>
-        ) : (
-          <span className="rdp-res" title={t('rdp.res.title')}>
-            <Dropdown
-              value={res}
-              options={[...RDP_RESOLUTIONS.map(resLabel), t('rdp.res.fit')]}
-              onChange={pickRes}
-              ariaLabel={t('rdp.res.title')}
-            />
-          </span>
+        {/* 이름·상태는 **다중 모니터 창에만** 둔다(2026-09-01 준영님: "그 하단에 연결됨, 서버 이름은
+            필요 없어 보이고"). 탭 뷰에서는 칸 머리(.pane-hd)가 같은 `session.title` 을 이미 적고,
+            안 붙은 상태는 본문 오버레이가 더 크게 말한다 — 여기 한 줄은 순전히 중복이었다.
+            테두리 없는 다중 모니터 창에는 그 둘이 없어 여기가 유일한 자리다. */}
+        {fixedSize && (
+          <>
+            <span className="rdp-name">{name}</span>
+            <span className="rdp-state">{t(`rdp.state.${phase}`)}</span>
+          </>
         )}
-        <span className="rdp-keys" title={t('rdp.keys.title')}>
-          <Dropdown
-            value={keyModeLabel(keyMode)}
-            options={RDP_KEY_MODES.map(keyModeLabel)}
-            onChange={(v) => setKeyMode(RDP_KEY_MODES.find((m) => keyModeLabel(m) === v) ?? 'off')}
-            ariaLabel={t('rdp.keys.title')}
-          />
-        </span>
-        {phase === 'connected' && (
-          <span className="rdp-files">
-            <button
-              type="button"
-              disabled={remoteFiles.filter((f) => !f.isDirectory).length === 0}
-              onClick={() => void receiveFiles()}
-              title={t('rdp.file.recv.title')}
-            >
-              {t('rdp.file.recv')}
-              {remoteFiles.filter((f) => !f.isDirectory).length > 0 && (
-                <span className="rf-n">{remoteFiles.filter((f) => !f.isDirectory).length}</span>
-              )}
-            </button>
-            <button type="button" onClick={() => void sendFiles()} title={t('rdp.file.send.title')}>
-              {t('rdp.file.send')}
-            </button>
-          </span>
-        )}
-        {phase === 'connected' && (
-          <span className="rdp-combos">
-            <button type="button" onClick={() => sendCombo('ctrlAltDel')} title={t('rdp.combo.ctrlAltDel')}>
-              Ctrl+Alt+Del
-            </button>
-            <button type="button" onClick={() => sendCombo('altTab')} title={t('rdp.combo.altTab')}>
-              Alt+Tab
-            </button>
-            <button type="button" onClick={() => sendCombo('win')} title={t('rdp.combo.win')}>
-              Win
-            </button>
-          </span>
-        )}
-        {onSpan && (
-          <button type="button" className="rdp-span-btn" onClick={onSpan} title={t('rdp.span.title')}>
-            {t('rdp.span')}
-          </button>
-        )}
+        {/* 좁은 창에서 헤더 버튼 여섯이 줄바꿈·잘렸다 — 버튼 하나 + 리스트로 접는다.
+            메뉴는 앱의 유일한 메뉴 컴포넌트(ContextMenu)를 그대로 쓴다. 접힌 값은 이 버튼의
+            툴팁이 말한다(열지 않고도 지금 해상도·키 배열을 알 수 있어야 한다). */}
+        <button
+          type="button"
+          ref={optBtnRef}
+          className="rdp-opt-btn"
+          aria-haspopup="menu"
+          aria-expanded={optMenu !== null}
+          title={`${t('rdp.opt.title')} — ${fixedSize ? resLabel(fixedSize) : res} · ${keyModeLabel(keyMode)}`}
+          onClick={(e) => {
+            if (optMenu) return setOptMenu(null)
+            const r = e.currentTarget.getBoundingClientRect()
+            setOptMenu({ x: r.left, y: r.bottom + MENU_GAP })
+          }}
+        >
+          {t('rdp.opt')}
+          {/* 원격이 파일을 복사했다는 신호. 접힌 항목의 배지를 버튼으로 끌어올리지 않으면
+              "받을 것이 생겼다"를 알 길이 사라진다(버튼 시절 .rf-n 이 하던 일이다). */}
+          {recvCount > 0 && <span className="rf-n">{recvCount}</span>}
+          <IconChevronDown />
+        </button>
         {/* 탭 뷰에는 닫기 버튼을 두지 않는다 — 종료는 탭 닫기로 통일한다(세션의 홈은 탭이다).
-            다중 모니터 창은 테두리가 없어 OS 닫기 버튼이 없으므로 여기가 유일한 출구다. */}
+            다중 모니터 창은 테두리가 없어 OS 닫기 버튼이 없으므로 여기가 유일한 출구다.
+            그래서 이것만은 메뉴에 접지 않는다(나가는 길은 보여야 한다). */}
         {onCloseWindow && (
           <button type="button" className="rdp-span-close" onClick={onCloseWindow} title={t('rdp.span.close.title')}>
             {t('rdp.span.close')}
           </button>
         )}
       </div>
+      {/* 메뉴는 헤더 **밖**에 둔다. 다중 모니터 창의 헤더는 `transform` 으로 접히는데(.rdp-span
+          .rdp-hd), 변형된 조상 안에서는 `position: fixed` 가 뷰포트가 아니라 그 조상을 기준으로
+          잡힌다 — 안에 두면 마우스를 메뉴로 내리는 순간 헤더가 접히며 메뉴를 데리고 올라간다. */}
+      <ContextMenu
+        open={optMenu !== null}
+        x={optMenu?.x ?? 0}
+        y={optMenu?.y ?? 0}
+        items={optionItems}
+        onPick={(id) => {
+          closeOptMenu()
+          pickOption(id)
+        }}
+        onClose={closeOptMenu}
+      />
       {xfer && (
         <div className="rdp-xfer">
           <span className="rx-label">{xfer.label}</span>

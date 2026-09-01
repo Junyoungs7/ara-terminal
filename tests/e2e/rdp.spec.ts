@@ -217,7 +217,10 @@ test('RDPV-23 모니터가 한 장이면 펼치지 않는다', async ({ ara }) =
   await createRdpProfile(ara.page, { name: 'rdp-span3' })
   await srvNode(ara.page, 'rdp-span3').dblclick()
   await expect(ara.page.locator('.rdp-view')).toBeVisible({ timeout: 15_000 })
-  await ara.page.click('.rdp-span-btn')
+  // 2026-09-01: 헤더 버튼 여섯이 [옵션] 한 자리로 접혔다(좁은 창 줄바꿈·잘림) — [다중 모니터]도
+  // 그 리스트 안에 있다. 버튼을 눌러 리스트를 연 뒤 항목을 고른다.
+  await ara.page.click('.rdp-opt-btn')
+  await ara.page.click('.ctx-menu .ctx-item[data-action="span"]')
   await expect(ara.page.locator('.pane-toast')).toBeVisible({ timeout: 5_000 })
   expect(await spanWindows(ara.app)).toHaveLength(0)
 })

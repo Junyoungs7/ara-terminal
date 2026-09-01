@@ -5991,28 +5991,17 @@
   font-family: var(--mono);
   font-size: var(--fs-md);
 }
-/* 해상도 선택 — 공용 드롭다운을 헤더 높이(28px)에 맞게 줄여 쓴다. */
-.rdp-res {
+/* 옵션 버튼 — 2026-09-01 준영님: "화면이 작을 때 rdp 창의 상단 버튼들이 글자 줄바꿈, 잘림
+   현상이 발생하는데 … 그냥 옵션 버튼 하나로 리스트 형태로". 해상도·키 변환 드롭다운 둘과
+   파일 받기·보내기·조합키 셋·다중 모니터까지 여덟 개가 이 한 자리로 접혔다. 폭을 안 먹으므로
+   창을 아무리 줄여도 줄바꿈이 생기지 않는다(그게 이 변경의 전부다).
+   리스트는 앱의 유일한 메뉴 컴포넌트(.ctx-menu)를 그대로 쓴다 — 새 팝업을 만들지 않는다. */
+.rdp-opt-btn {
   margin-left: auto;
-  width: 132px;
-}
-/* Mac→Windows 키 변환 모드. 해상도 옆에 같은 톤으로 붙인다(라벨이 길어 조금 넓다). */
-.rdp-keys {
-  width: 152px;
-  flex: none;
-}
-.rdp-res .dd-btn,
-.rdp-keys .dd-btn {
-  padding: var(--sp-1) var(--sp-4);
-  font-size: var(--fs-md);
-}
-/* 파일 전송 버튼(클립보드 파일 받기·보내기). 조합키 버튼과 같은 톤이되 받기는 강조한다 —
-   원격이 파일을 복사한 순간에만 나타나는 버튼이라 눈에 걸려야 한다. */
-.rdp-files {
   display: flex;
+  align-items: center;
   gap: var(--sp-3);
-}
-.rdp-files button {
+  flex: none;
   padding: var(--sp-2) var(--sp-4);
   background: var(--bg-raised);
   border: 1px solid var(--line);
@@ -6020,22 +6009,20 @@
   color: var(--text-mid);
   font-family: inherit;
   font-size: var(--fs-md);
+  white-space: nowrap;
   cursor: pointer;
 }
-.rdp-files button:hover {
+.rdp-opt-btn:hover {
   color: var(--text-hi);
   border-color: var(--line-strong);
 }
-/* dim 위에 또 .45 — raised 위 1.88 이었다(§1.3). 색만 남긴다: 4.02. */
-.rdp-files button:disabled {
-  color: var(--text-dim);
-  cursor: default;
+/* 캐럿은 메뉴 행의 서브메뉴 화살표(.ci-sub-arrow svg)와 같은 크기로 둔다. */
+.rdp-opt-btn svg {
+  width: 12px;
+  height: 12px;
 }
-.rdp-files button:disabled:hover {
-  color: var(--text-dim);
-  border-color: var(--line);
-}
-/* 받을 파일이 있을 때만 붙는 개수 배지 — 버튼이 튀어나오는 대신 이걸로 알린다. */
+/* 받을 파일이 있을 때만 붙는 개수 배지 — 버튼이 튀어나오는 대신 이걸로 알린다.
+   버튼이 메뉴로 접힌 뒤에는 이 배지가 [옵션] 위로 올라와 "받을 것이 생겼다"를 말한다. */
 .rf-n {
   margin-left: var(--sp-3);
   padding: 0 var(--sp-2);
@@ -6090,24 +6077,6 @@
   outline-offset: -6px;
 }
 
-/* 조합키 전송 버튼(Alt+Tab 등은 OS 가 가로채 직접 누를 수 없다). */
-.rdp-combos {
-  display: flex;
-  gap: var(--sp-3);
-}
-.rdp-combos button {
-  padding: var(--sp-2) var(--sp-4);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--text-mid);
-  font-size: var(--fs-md);
-  cursor: pointer;
-}
-.rdp-combos button:hover {
-  color: var(--text-hi);
-  border-color: var(--line-strong);
-}
 /* 원격 해상도(1920x1080)를 비율 그대로 칸에 맞춘다 — 늘려 채우면 글자가 뭉개진다.
    canvas 는 대체 요소라 max-* 만 주면 브라우저가 종횡비를 유지한 채 축소한다. */
 .rdp-canvas.on {
@@ -6481,32 +6450,17 @@
 .rdp-span .rdp-body {
   height: 100%;
 }
-.rdp-res.fixed {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-/* 헤더 버튼 생김새는 [파일 받기]·[보내기] 와 같게 둔다 — 기본 button 스타일로 두면 흰 상자가 된다(실측). */
-.rdp-span-btn,
+/* 헤더 버튼 생김새는 [옵션] 과 같게 둔다 — 기본 button 스타일로 두면 흰 상자가 된다(실측).
+   이 창의 유일한 출구라 [옵션] 보다 진하게 둔다(나가는 길은 눈에 띄어야 한다). */
 .rdp-span-close {
-  margin-left: auto;
   padding: var(--sp-2) var(--sp-4);
   background: var(--bg-raised);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  color: var(--text-mid);
+  color: var(--text-hi);
   font-family: inherit;
   font-size: var(--fs-md);
   cursor: pointer;
-}
-.rdp-span-btn:hover,
-.rdp-span-close:hover {
-  color: var(--text-hi);
-  border-color: var(--line-strong);
-}
-/* 이 창의 유일한 출구다 — 다른 헤더 버튼보다 눈에 띄어야 한다. */
-.rdp-span-close {
-  color: var(--text-hi);
-  border-color: var(--line-strong);
 }
 
 /* 다중 모니터: 이 창은 주 모니터 몫만 보여 준다. 캔버스는 원격 전체 크기라 컨테이너로 잘라 내고
@@ -7864,7 +7818,9 @@
   font-variant-numeric: tabular-nums;
 }
 /* 2번째 줄은 점 폭(7) + 간격(8) 만큼 들어가 제목과 왼쪽을 맞춘다. 오른쪽은 액션 자리로
-   늘 비워 둔다 — 호버할 때만 자리를 만들면 글자가 밀려 목록이 들썩인다. */
+   늘 비워 둔다 — 호버할 때만 자리를 만들면 글자가 밀려 목록이 들썩인다.
+   그 자리는 액션 상자에서 **계산해서** 낸다(`.bench-x` 둘 + 사이 틈 + `.bench-acts` 의 right):
+   숫자를 따로 적어 두면 표적을 키운 날 글자가 버튼 밑으로 들어간다. */
 .bench-name .l2 {
   display: flex;
   align-items: center;
@@ -7872,7 +7828,7 @@
   min-width: 0;
   overflow: hidden;
   padding-left: 15px;
-  padding-right: 38px;
+  padding-right: calc(var(--sb-hit) * 2 + var(--sp-1) + var(--sp-2));
   font-size: var(--fs-micro);
   color: var(--text-lo);
 }
@@ -7917,16 +7873,27 @@
 .bench-row:hover .bench-acts {
   opacity: 1;
 }
-/* 작업대 행 액션 — 트리 행 액션(`.rowact .cc-b`)과 같은 상자·같은 아이콘 크기로 맞춘다(M2 §5 ②). */
+/* 작업대 행 액션(분기·✕) — 2026-09-01 준영님 *"깃 워크트리 버튼이 너무 작아."*
+   여백으로 만든 상자는 15×19 였다. **키우는 것은 아이콘이 아니라 누를 수 있는 영역**이라
+   사이드바가 이미 쓰는 클릭 표적 토큰(--sb-hit, 26px)으로 상자만 바꾼다 — 아이콘은 11px 그대로라
+   줄의 모양은 안 움직인다. 대신 호버 배경을 준다: 표적이 커진 것을 눈으로 알 방법이 그것뿐이다
+   (트리 행 `.rowact .cc-b:hover` 와 같은 처리).
+
+   ⚠️ **행 높이는 안 흔들린다** — `.bench-acts` 가 `position:absolute` 라 이 상자는 흐름 밖에 있다
+   (묶음 안에서 행 높이가 일정할 것이 사이드바 라운드 d6 의 네 장치 중 하나다).
+   ⚠️ **둘 다 같은 클래스다.** 하나만 키우면 그게 더 어색하다. */
 .bench-x {
   flex: none;
   display: grid;
   place-items: center;
+  width: var(--sb-hit);
+  height: var(--sb-hit);
   background: transparent;
   border: 0;
+  border-radius: var(--radius-xs);
   color: var(--text-dim);
   font-size: var(--fs-micro);
-  padding: var(--sp-1) var(--sp-2);
+  padding: 0;
   cursor: pointer;
 }
 .bench-x svg {
@@ -7934,6 +7901,7 @@
   height: 11px;
 }
 .bench-x:hover {
+  background: var(--bg-overlay);
   color: var(--err);
 }
 

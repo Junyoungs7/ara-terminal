@@ -14,6 +14,12 @@ export type MenuItem = {
   hint?: string
   dim?: boolean // 미래 기능(로그 저장·AI) — 눌리되 "추후 지원" 안내
   disabled?: boolean // FB-monitor: 정보 전용 행(로딩·상태 안내) — 클릭·Enter 모두 무시
+  /**
+   * 행에 붙는 설명(전역 툴팁이 받는다 — store/tooltip.ts 가 `[title]` 을 위임으로 가로챈다).
+   * 버튼을 메뉴로 접으면 버튼이 달고 있던 툴팁이 함께 사라진다 — **왜 비활성인지**처럼
+   * hint 한 칸에 안 들어가는 말이 그때 없어진다(2026-09-01 RDP 툴바). 접는 쪽이 그 말을 여기 옮긴다.
+   */
+  title?: string
   // FB-monitor(F19 tmux): 1단계 서브메뉴(호버로 열림). 중첩은 이 한 단계만 지원한다.
   submenu?: readonly MenuItem[]
 }
@@ -131,6 +137,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
             key={it.id}
             role="menuitem"
             data-action={it.id}
+            {...(it.title ? { title: it.title } : {})}
             className={
               'ctx-item' +
               (it.danger ? ' danger' : '') +
@@ -168,6 +175,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
               key={sub.id}
               role="menuitem"
               data-action={sub.id}
+              {...(sub.title ? { title: sub.title } : {})}
               className={'ctx-item' + (sub.danger ? ' danger' : '') + (sub.disabled ? ' disabled' : '')}
               onClick={() => {
                 if (sub.disabled) return
