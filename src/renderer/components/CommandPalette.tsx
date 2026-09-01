@@ -42,10 +42,27 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
   // 묶어서 그린 목록과 어긋나 ↑↓ 가 위아래로 튄다.
   const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
+  /**
+   * 목록 자리는 검색 상자를 재서 정한다. 목록이 `position: fixed` 라 **화면 좌표**이고,
+   * 그래서 **상자가 움직이면 다시 재야 한다.**
+   *
+   * 2026-09-02 준영님 제보: *"Ctrl+Shift+I 로 콘솔을 킨 상태에서 F1 으로 리스트가 나온 상태에서
+   * 콘솔을 끄면, 리스트가 원래 콘솔이 켜진 상태의 위치에 계속 있어서 검색바와 위치가 안 맞는다."*
+   * DevTools 를 여닫으면 뷰포트가 바뀌어 상자가 움직이는데 `[open]` 만 보고 있었다.
+   *
+   * **걷지 않고 다시 잰다.** 터미널 고스트는 리사이즈 때 걷는 쪽을 골랐는데(TerminalPane 의
+   * onResize → clearGhost) 그건 커서를 쫓아다닐 값이 없어서였다. 여기는 사용자가 **검색어를 치던
+   * 중**이라 목록이 사라지면 그게 더 나쁘다.
+   */
   useLayoutEffect(() => {
     if (!open) return
-    const r = boxRef.current?.getBoundingClientRect()
-    if (r) setDrop({ left: r.left, top: r.bottom + 4, width: r.width })
+    const place = (): void => {
+      const r = boxRef.current?.getBoundingClientRect()
+      if (r) setDrop({ left: r.left, top: r.bottom + 4, width: r.width })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
   }, [open])
 
   useEffect(() => {
