@@ -23,6 +23,14 @@ export type AiRun = {
   /** 실행한 폴더 — 같은 서버에 여러 개를 띄우는 일이 흔해서 구분에 필요하다. */
   path: string
   startedAt: number
+  /**
+   * 🔴 그 CLI 가 내려갔다고 **들은** 때(`forgetAiSession`). 기록을 지우는 대신 표시만 한다 —
+   * 이 기록이 **작업대 ↔ 탭을 잇는 유일한 끈**이라서다(Shell.tsx 의 `sessionOf`). 지워 버리면
+   * 탭이 멀쩡히 살아 있는데도 작업대 줄이 `sessionId` 를 잃고, 그 줄은 상태와 무관하게
+   * `쉬는 중` 으로 떨어져(store/aiWorkbench.ts 의 `groupOf`) 누르면 **새 탭**을 띄운다.
+   * 목록에서 걷어내는 일은 `viewsOf` 가 이 표시를 보고 한다.
+   */
+  exitedAt?: number
 }
 
 /** 훅이 말해 준 상태 넷 + 세션이 사라진 자리. */
@@ -62,7 +70,12 @@ export function viewsOf(
   const byId = new Map(sessions.map((s) => [s.id, s]))
   const runOf = new Map(runs.map((r) => [r.sessionId, r]))
   const statusOf = new Map(statuses.map((s) => [s.sessionId, s]))
-  return [...new Set([...runOf.keys(), ...statusOf.keys()])].map((sessionId) => {
+  // 내려갔다고 들은 CLI 는 안 그린다 — **기록은 남아 있지만**(작업대 ↔ 탭 링크가 그것뿐이다)
+  // 목록의 자격은 잃는다. 조건이 셋인 이유: 새 상태가 오면 그 탭에서 다시 띄운 것이고(→ 그린다),
+  // 탭이 사라졌으면 아래 `gone` 으로 흘려보내야 `tick` 의 정리가 기록을 걷어 간다.
+  const gone = (id: string): boolean =>
+    runOf.get(id)?.exitedAt !== undefined && !statusOf.has(id) && byId.has(id)
+  return [...new Set([...runOf.keys(), ...statusOf.keys()])].filter((id) => !gone(id)).map((sessionId) => {
     const session = byId.get(sessionId) ?? null
     const st = statusOf.get(sessionId)
     // 실행 기록이 없는 세션 = **우리가 안 띄운 것.** 훅과 세션이 아는 만큼만 채운다:
@@ -136,10 +149,18 @@ export function aiRuns(): AiRun[] {
 export const GONE_KEEP_MS = 5 * 60_000
 
 /**
- * 🔴 **사용자가 자기 손으로 끝낸 세션을 목록에서 뺀다**(준영님 2026-09-01).
+ * 🔴 **내려갔다고 들은 CLI 를 목록에서 뺀다**(준영님 2026-09-01).
  *
- * 둘 다 지워야 줄이 사라진다: 목록의 자격은 `runs ∪ statuses` 라, 상태만 버리면 **실행 기록이
- * 남은 줄은 `확인 불가` 로 그대로 서 있다** — 준영님이 보신 화면이 정확히 그것이다.
+ * 상태만 버리면 안 된다: 목록의 자격은 `runs ∪ statuses` 라, 실행 기록이 남은 줄은
+ * `확인 불가` 로 그대로 서 있다 — 준영님이 처음 보신 화면이 그것이다.
+ *
+ * 🔴 **그렇다고 기록을 지우지도 않는다**(2026-09-01 저녁 제보 ①). 이 기록은 두 곳이 쓰는데
+ * 뜻이 다르다: 목록에게는 "그릴 줄이 있다"지만 **작업대에게는 "이 작업대가 지금 어느 탭에
+ * 살고 있나"** 이고(Shell.tsx 의 `sessionOf`), 그 끈은 이것 하나뿐이다. 지워 버리면 탭이
+ * 멀쩡한데 작업대 줄이 `sessionId` 를 잃어 **`쉬는 중`** 으로 떨어지고(aiWorkbench 의 `groupOf`
+ * 는 `sessionId` 가 없으면 상태를 아예 안 본다), 그 줄을 누르면 **새 탭**이 뜬다. 준영님이 보신
+ * 두 증상이 이 한 줄에서 나왔다. 그래서 **표시만 남기고**(`exitedAt`) 걷어내는 판단은
+ * `viewsOf` 에 맡긴다 — 저장된 작업대는 `확인 불가` 로, 훅만 세운 줄은 통째로 사라진다.
  *
  * `gone` 정리(아래 `tick`)와 같은 짝이고 다른 것은 시점뿐이다: 저기는 탭이 사라지고 5분 뒤,
  * 여기는 **훅이 "나간다"고 말한 즉시**. 상태를 만드는 것이 아니라 흔적을 버리는 것이라
@@ -147,7 +168,10 @@ export const GONE_KEEP_MS = 5 * 60_000
  */
 export function forgetAiSession(sessionId: string): void {
   forgetAgentStatus(sessionId)
-  forgetAiRun(sessionId)
+  const run = runs.get(sessionId)
+  if (!run) return
+  runs.set(sessionId, { ...run, exitedAt: Date.now() })
+  emit()
 }
 
 export function useAiSessions(active: boolean) {

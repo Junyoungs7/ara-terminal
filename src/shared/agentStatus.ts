@@ -70,9 +70,9 @@ export type HookCli = 'claude'
  * **새 상태(`ended`)도 만들지 않는다**: CLI 가 없으면 그 탭에서 무엇이 도는지 우리는 모르고,
  * `unverifiable` 이 정확히 그 말이다.
  *
- * ⚠️ **이 표는 이제 `SessionEnd` 의 절반만 담는다**(2026-09-01 준영님). 사람이 자기 손으로
- * 끝낸 종료는 "모른다"가 아니라 **없는 것**이라 상태가 아니라 제거로 간다 — `isUserExit` 를
- * 보라. 표가 답하는 것은 **나머지 전부**(크래시·`/clear`·claude 스스로 나간 경우)이고,
+ * ⚠️ **이 표는 이제 `SessionEnd` 의 일부만 담는다**(2026-09-01 준영님). 나갔다고 들은 종료는
+ * "모른다"가 아니라 **없는 것**이라 상태가 아니라 제거로 간다 — `isCliGone` 을 보라.
+ * 표가 답하는 것은 **나머지**(`/clear` 처럼 프로세스가 안 죽는 것 · 모르는 `reason`)이고,
  * 그것들은 여전히 "저 탭에서 무엇이 도는지 확인할 수 없다"라 `unverifiable` 이 맞다.
  */
 const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
@@ -86,40 +86,49 @@ const CLAUDE_EVENT_STATE: Readonly<Record<string, AgentState>> = {
 }
 
 /**
- * `SessionEnd` 의 `reason` 중 **사람이 자기 손으로 끝낸 것.**
+ * `SessionEnd` 의 `reason` 중 **그 CLI 가 정말 내려간 것.**
  *
- * 준영님(2026-09-01): *"내가 직접 종료했으면 확인 불가가 아닌 종료 또는 목록에서 제거되어야 해."*
- * #160 은 `SessionEnd` 를 통째로 `unverifiable` 로 봤는데, 그 판단이 여기서 갈린다 — 내가 나가라고
- * 쳐서 나간 CLI 는 **모르는 것이 아니다.** 없는 것이다.
+ * 준영님(2026-09-01 저녁): *"컨트롤 D 로 종료했는데 목록에 남아."* 2d80150 은 이 목록을
+ * `prompt_input_exit`·`logout` 둘로 잡고 뜻을 **"사람이 자기 손으로 끝냈다"**로 뒀는데,
+ * 그러면 Ctrl+D 가 빠진다 — 번들이 Ctrl-C 와 Ctrl-D 를 같은 자리에서 같게 처리하고
+ * (`function xQ(A){… keyName:"Ctrl-C" … j8(0) …, keyName:"Ctrl-D" … j8(0)}`) 둘 다 `reason` 을
+ * 안 주므로 기본값 `other` 로 온다(2.0.76 `cli.js`: `async function j8(A=0,Q="other",B)`).
+ * **훅만 보고는 Ctrl+D 와 크래시를 가를 수 없다.**
  *
- * 왜 이 둘뿐인가 — claude-code 2.0.76 번들 `cli.js` 에서 `reason` 이 만들어지는 자리를 전부 읽었다:
- *  · `prompt_input_exit` — `/exit`(별칭 `/quit`). 프롬프트 앞의 사람이 나가라고 쳤다
- *  · `logout` — `/logout`. 계정을 내리고 나간다. 역시 사람이 친 것이다
- *  · `clear` — `/clear`. **프로세스가 안 죽는다**(SessionEnd 만 쏘고 곧 `SessionStart` 가 따라온다)
- *  · `bypass_permissions_disabled` — 설정이 막아 **claude 가 스스로** 나갔다. 사람이 끝낸 것이 아니다
- *  · `other` — **기본값이라 그 외 전부**가 여기로 온다: SIGINT·SIGTERM·오류 종료·크래시
+ * 🔴 **준영님이 대가를 아시고 `other` 를 고르셨다**(2026-09-01): claude 가 **오류로 죽어도**
+ * 줄이 사라진다 — 화면만 보면 정상 종료와 구별되지 않는다. 그 대가가 작은 이유는 **오류로
+ * 죽으면 그 오류가 터미널에 그대로 찍혀 있기** 때문이다. 탭은 살아 있고 사람은 거기 있다.
+ * 반대쪽 대가(줄이 남는 쪽)는 그런 보완재가 없다 — 아무 일도 안 하는 줄이 목록을 채운다.
  *
- * 🔴 **Ctrl+D 는 여기 없다.** 번들이 Ctrl-C 와 Ctrl-D 를 같은 자리에서 같게 처리한다
- * (`function xQ(A){… keyName:"Ctrl-C" … j8(0) …, keyName:"Ctrl-D" … j8(0)}`) — 둘 다 `reason` 을
- * 안 주므로 기본값 `other` 다. 즉 **훅만 보고는 Ctrl+D 종료와 크래시를 가를 수 없다.** 그래서
- * Ctrl+D 는 `확인 불가` 로 남는다: 크래시를 "사용자가 끝냈다"로 그리는 것이 더 나쁜 거짓말이라,
- * 못 가르는 쪽을 `unverifiable` 에 둔다. 이걸 바꾸려면 **크래시도 같이 사라지는 값**을 치러야 한다.
+ * 그래서 목록의 뜻이 **"사람이 끝냈다" → "종료를 들었고 그 프로세스가 정말 내려갔다"** 로 바뀐다:
+ *  · `prompt_input_exit` — `/exit`(별칭 `/quit`)
+ *  · `logout` — `/logout`. 계정을 내리고 나간다
+ *  · `other` — **기본값이라 그 외 전부**: Ctrl+D · Ctrl+C · SIGINT/SIGTERM · 오류 종료
  *
- * ⚠️ **차단 목록이 아니라 허용 목록이다.** CLI 가 `reason` 을 하나 늘리면 그건 우리가 모르는
- * 종료고, 모르는 것은 `unverifiable` 로 남는 편이 맞다 — `HOOK_STATE_OF` 의 `null` 규율과 같다.
+ * ⚠️ **`clear` 는 여전히 여기 없다.** `/clear` 는 `SessionEnd` 만 쏘고 **프로세스가 안 죽는다**
+ * (곧 `SessionStart` 가 따라온다). 도는 AI 의 줄을 지우는 것이 이 기능이 저지를 수 있는 가장 나쁜
+ * 실패라(F1 이 없앤 거짓말과 같은 종류) 여기만은 못 넣는다.
+ *
+ * ⚠️ **모르는 `reason` 도 안 지운다 — 여전히 허용 목록이다.** 뜻이 "종료를 들었다"로 넓어졌으니
+ * 차단 목록(= `clear` 만 빼고 전부 지운다)이 더 일관돼 보이지만, 그러면 **`clear` 같은 reason 이
+ * 하나 더 생기는 날 도는 AI 의 줄이 조용히 사라진다.** 두 실패는 값이 다르다: 모르는 종료를
+ * 안 지우면 `확인 불가` 줄이 하나 남고(눈에 보이고 ✕ 로 치울 수 있다), 잘못 지우면 일하는 AI 가
+ * 화면에서 없어진다(그 사실을 알 방법이 없다). 싼 쪽을 고른다 — `HOOK_STATE_OF` 의 `null` 규율과 같다.
+ * `bypass_permissions_disabled`(claude 가 스스로 나갔다)도 같은 이유로 그대로 뒀다 —
+ * 준영님이 고른 것은 `other` 지 "전부"가 아니다.
  */
-const USER_EXIT_REASONS: readonly string[] = ['prompt_input_exit', 'logout']
+const GONE_REASONS: readonly string[] = ['prompt_input_exit', 'logout', 'other']
 
 /**
- * 이 훅이 **사용자가 손으로 끝낸 종료**인가. 참이면 상태를 지운다 → 줄이 사라진다.
+ * 이 훅이 **그 CLI 가 내려갔다는 말**인가. 참이면 상태를 지운다 → 줄이 사라진다.
  *
  * 🔴 **지우는 것은 상태뿐이다. 토큰은 남긴다**(`AgentHookServer.forget` 을 부르면 안 된다):
  * 죽은 것은 CLI 지 세션(탭)이 아니다. 같은 탭에서 claude 를 다시 띄우면 그 훅은 **같은 토큰**으로
  * 오는데, 토큰까지 지우면 401 로 막혀 그 줄이 영영 안 살아난다. 원격은 더 나쁘다 — 그 호스트의
  * 열쇠는 재접속 전엔 못 되찾는다. #160 이 그 함정을 검사로 박아 뒀다.
  */
-export function isUserExit(event: string, reason: string | null): boolean {
-  return event === 'SessionEnd' && reason !== null && USER_EXIT_REASONS.includes(reason)
+export function isCliGone(event: string, reason: string | null): boolean {
+  return event === 'SessionEnd' && reason !== null && GONE_REASONS.includes(reason)
 }
 
 /**

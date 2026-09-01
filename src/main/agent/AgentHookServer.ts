@@ -5,7 +5,7 @@
 // 적어 두는 고정 포트지만, 훅 포트는 **우리가 env 로 알려 주므로** 고정할 이유가 없다.
 // 그래서 0 으로 열어 OS 가 주는 것을 쓴다(39217 이 이미 고정 포트 충돌을 겪었다).
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
-import { applyHook, isHookCli, isUserExit, type AgentStatus, type HookCli, type RemoteHookReport } from '@shared/agentStatus'
+import { applyHook, isCliGone, isHookCli, type AgentStatus, type HookCli, type RemoteHookReport } from '@shared/agentStatus'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from './claudeHooks'
 
@@ -68,7 +68,7 @@ export function createAgentHookServer(opts: {
   token: string
   onStatus: (s: AgentStatus) => void
   /**
-   * 사용자가 자기 손으로 끝낸 세션 — **줄을 지우라는 신호**(`isUserExit`).
+   * CLI 가 내려간 세션 — **줄을 지우라는 신호**(`isCliGone`).
    *
    * `onStatus` 와 갈라 둔 이유가 이 라운드의 절반이다: `AgentStatus` 에는 "없음"을 담을 값이
    * 없어서, 상태 채널 하나로는 main 이 원장에서 지워도 그 사실이 렌더러에 도착하지 못했다
@@ -108,8 +108,8 @@ export function createAgentHookServer(opts: {
   }
 
   /**
-   * 사용자가 끝낸 세션의 상태를 버린다. **`forget` 이 아니다 — 토큰은 남긴다**(그 함정은
-   * `isUserExit` 주석과 tests/agentHooks.test.ts 의 #160 검사에 적혀 있다).
+   * 내려간 CLI 의 상태를 버린다. **`forget` 이 아니다 — 토큰은 남긴다**(그 함정은
+   * `isCliGone` 주석과 tests/agentHooks.test.ts 의 #160 검사에 적혀 있다).
    *
    * 원장에 그 세션이 없었어도 신호는 민다: 렌더러에는 **실행 기록**(`aiRuns`)이 따로 남아 있고,
    * 그 줄을 걷어내는 것도 이 신호의 몫이다(목록의 근거가 `runs ∪ statuses` 라서 상태만 지우면
@@ -140,7 +140,7 @@ export function createAgentHookServer(opts: {
     if (typeof pane !== 'string' || pane.length === 0) return done(204)
 
     // 이벤트 이름은 URL 에 있어(설치할 때 우리가 넣었다) 본문을 볼 이유가 없었다. `SessionEnd`
-    // 하나만 예외다 — **누가 끝냈나**를 가르는 `reason` 이 본문에만 있다. 나머지는 그대로 흘려보낸다.
+    // 하나만 예외다 — **정말 내려갔나**를 가르는 `reason` 이 본문에만 있다. 나머지는 그대로 흘려보낸다.
     if (event !== 'SessionEnd') {
       apply(cli, pane, event)
       return done(204)
@@ -153,7 +153,7 @@ export function createAgentHookServer(opts: {
       size += c.length
     })
     after(() => {
-      if (isUserExit(event, reasonOf(Buffer.concat(head)))) dropStatus(pane)
+      if (isCliGone(event, reasonOf(Buffer.concat(head)))) dropStatus(pane)
       else apply(cli, pane, event)
       res.writeHead(204).end()
     })

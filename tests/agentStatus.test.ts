@@ -3,8 +3,8 @@ import {
   applyHook,
   CLAUDE_HOOK_EVENTS,
   HOOK_STATE_OF,
+  isCliGone,
   isHookCli,
-  isUserExit,
   notifyTag,
   type AgentStatus
 } from '../src/shared/agentStatus'
@@ -95,30 +95,37 @@ describe('타임스탬프 둘 — 무엇이 언제 움직이나', () => {
   })
 })
 
-// 사람이 끝낸 종료만 줄을 지운다. **`applyHook` 은 나머지를 맡는다** — 아래 #160 묶음이
+// 내려갔다고 들은 종료만 줄을 지운다. **`applyHook` 은 나머지를 맡는다** — 아래 #160 묶음이
 // 그 나머지고, 여기가 갈림길이다.
-describe('isUserExit — 어디까지를 "사용자가 직접 종료"로 보나', () => {
-  it('사람이 친 것만 참이다', () => {
-    expect(isUserExit('SessionEnd', 'prompt_input_exit')).toBe(true) // /exit · /quit
-    expect(isUserExit('SessionEnd', 'logout')).toBe(true) // /logout
+describe('isCliGone — 어디까지를 "그 CLI 가 내려갔다"로 보나', () => {
+  it('★ `other` 가 참이다 — **Ctrl+D 가 여기로 온다**(준영님 2026-09-01 저녁)', () => {
+    // 번들이 Ctrl-D 를 Ctrl-C 와 같게 처리하고 `reason` 을 안 넘겨 기본값 `other` 로 온다.
+    // 그래서 크래시도 같이 사라진다 — 준영님이 그 대가를 아시고 고르셨다(오류로 죽으면
+    // 그 오류가 터미널에 찍혀 있다).
+    expect(isCliGone('SessionEnd', 'other')).toBe(true)
+    expect(isCliGone('SessionEnd', 'prompt_input_exit')).toBe(true) // /exit · /quit
+    expect(isCliGone('SessionEnd', 'logout')).toBe(true) // /logout
   })
 
-  it('나머지 종료는 전부 거짓 — 모르면 `확인 불가` 로 남는다', () => {
-    // `clear` 는 프로세스가 안 죽고, `bypass_permissions_disabled` 는 claude 가 스스로 나간 것이며,
-    // `other` 는 크래시·SIGINT·**Ctrl+D** 가 전부 섞여 있는 기본값이다(번들에서 확인).
-    for (const r of ['clear', 'other', 'bypass_permissions_disabled', '']) {
-      expect(isUserExit('SessionEnd', r)).toBe(false)
-    }
-    expect(isUserExit('SessionEnd', null)).toBe(false) // 본문을 못 읽었다
+  it('🔴 `clear` 는 절대 지우지 않는다 — 프로세스가 안 죽는다', () => {
+    // `/clear` 는 SessionEnd 만 쏘고 곧 SessionStart 가 따라온다. 여기서 지우면 **일하는 AI 의
+    // 줄이 사라진다** — 이 기능이 저지를 수 있는 가장 나쁜 실패다.
+    expect(isCliGone('SessionEnd', 'clear')).toBe(false)
   })
 
   it('모르는 `reason` 은 지우지 않는다 — 허용 목록이지 차단 목록이 아니다', () => {
-    expect(isUserExit('SessionEnd', 'some_future_reason')).toBe(false)
+    // `other` 가 들어와 목록의 뜻이 "사람이 끝냈다"에서 "종료를 들었다"로 넓어졌지만 **차단
+    // 목록으로 뒤집지는 않았다**: `clear` 같은 reason 이 하나 더 생기는 날 도는 AI 가 조용히
+    // 사라지는 쪽이, 모르는 종료의 줄이 하나 남는 쪽보다 비싸다.
+    expect(isCliGone('SessionEnd', 'some_future_reason')).toBe(false)
+    expect(isCliGone('SessionEnd', 'bypass_permissions_disabled')).toBe(false) // claude 가 스스로 나갔다
+    expect(isCliGone('SessionEnd', '')).toBe(false)
+    expect(isCliGone('SessionEnd', null)).toBe(false) // 본문을 못 읽었다
   })
 
   it('다른 이벤트는 `reason` 이 뭐든 상관없다', () => {
     for (const e of ['Stop', 'SessionStart', 'Notification']) {
-      expect(isUserExit(e, 'prompt_input_exit')).toBe(false)
+      expect(isCliGone(e, 'other')).toBe(false)
     }
   })
 })

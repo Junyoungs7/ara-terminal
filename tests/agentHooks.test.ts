@@ -236,7 +236,7 @@ describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
     const end = hooks.SessionEnd!.at(-1)!
     expect(end.hooks[0]!.command).toContain('/hook/claude/SessionEnd')
     // `clear`·`logout`·`prompt_input_exit`·`other` 를 **전부** 받는다. `reason` 마다 갈리는 것은
-    // 맞지만(isUserExit) 그 판단은 본문을 읽어서 하지 매처로 하지 않는다 — 매처로 쪼개면
+    // 맞지만(isCliGone) 그 판단은 본문을 읽어서 하지 매처로 하지 않는다 — 매처로 쪼개면
     // 이벤트 하나가 URL 여러 개가 되고, 아직 모르는 `reason` 이 조용히 통째로 사라진다.
     expect(end.matcher).toBeUndefined()
   })
@@ -336,18 +336,18 @@ describe('훅 수신 — 인증·귀속·매핑', () => {
     expect(await post(port, '/nope', hookHeaders('tok-1', 'p1'))).toBe(404)
   })
 
-  it('#160 크래시로 CLI 만 죽었다 — 줄이 `작업 중`에서 안 굳고, 모르면 모른다고 한다', async () => {
-    const { port, server, pushed, exited } = await rig()
+  it('★ Ctrl+D 로 끝냈다(`other`) — 줄이 사라지고, **같은 토큰으로 다시 살아난다**', async () => {
+    const { port, server, exited } = await rig()
     // ① 일하는 중
     await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
     expect(server.statuses()[0]!.state).toBe('working')
 
-    // ② 탭은 그대로 둔 채 claude 만 죽는다. Ctrl+C·SIGTERM·오류 종료가 전부 `other` 로 온다
-    //    (번들 `cli.js` 의 기본값이라 구분이 애초에 없다) → **사용자가 끝냈다고 그리면 거짓말**이다.
+    // ② 탭은 그대로 둔 채 claude 만 나간다. Ctrl+D·Ctrl+C·SIGTERM·오류 종료가 전부 `other` 다
+    //    (번들 `cli.js` 의 `j8(A=0,Q="other")` 기본값이라 구분이 애초에 없다).
+    //    2026-09-01 저녁 준영님 결정: **크래시가 같이 사라지는 값을 치르고** other 를 지운다.
     expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('other'))).toBe(204)
-    expect(server.statuses()[0]!.state).toBe('unverifiable')
-    expect(pushed.at(-1)!.state).toBe('unverifiable') // 화면까지 밀린다(원장만 바뀌면 줄은 그대로다)
-    expect(exited).toEqual([]) // 줄은 남는다 — 지우는 것은 사람이 끝냈을 때뿐이다
+    expect(server.statuses()).toEqual([]) // `확인 불가` 로 남는 것이 아니라 **없다**
+    expect(exited).toEqual(['p1'])
 
     // ③ **토큰은 살아 있다.** 세션이 죽은 게 아니라 CLI 만 죽었다 — 같은 탭에서 다시 띄우면
     //    그 훅은 같은 토큰으로 온다. `forget`(토큰까지 지운다)을 쓰지 않은 이유가 이 줄이다.
@@ -355,7 +355,17 @@ describe('훅 수신 — 인증·귀속·매핑', () => {
     expect(server.statuses()[0]!.state).toBe('working')
   })
 
-  it('`reason` 을 못 읽으면 `확인 불가` 다 — 모르는 종료를 사용자가 끝낸 것으로 치지 않는다', async () => {
+  it('#160 나갔다고 들으면 `작업 중`에서 안 굳는다 — 안 지우는 종료도 상태는 바뀐다', async () => {
+    const { port, server, pushed, exited } = await rig()
+    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
+    // 모르는 `reason` — 지우지는 않지만 `작업 중` 으로 굳어 있으면 그게 #160 의 거짓말이다.
+    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('some_future_reason'))
+    expect(server.statuses()[0]!.state).toBe('unverifiable')
+    expect(pushed.at(-1)!.state).toBe('unverifiable') // 화면까지 밀린다(원장만 바뀌면 줄은 그대로다)
+    expect(exited).toEqual([])
+  })
+
+  it('`reason` 을 못 읽으면 `확인 불가` 다 — 모르는 종료를 내려간 것으로 치지 않는다', async () => {
     const { port, server, exited } = await rig()
     await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
     for (const body of ['{}', 'not json', '{"reason":123}', '{"reason":"bypass_permissions_disabled"}']) {

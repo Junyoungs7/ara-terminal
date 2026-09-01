@@ -12,8 +12,9 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { request as httpRequest } from 'node:http'
 import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from '../src/main/agent/claudeHooks'
-import { aiRuns, forgetAiSession, registerAiRun, viewsOf } from '../src/renderer/store/aiSessions'
-import { groupRows, hookRows } from '../src/renderer/store/aiWorkbench'
+import { aiRuns, forgetAiRun, forgetAiSession, registerAiRun, viewsOf } from '../src/renderer/store/aiSessions'
+import { benchRows, groupRows, hookRows } from '../src/renderer/store/aiWorkbench'
+import type { AiSessionState } from '../src/shared/aiSession'
 import type { Session } from '../src/shared/types'
 
 // 헤더 값이라 라틴만 쓴다(HTTP 헤더는 한글을 담지 못한다 — 실제 토큰도 hex 다).
@@ -56,6 +57,9 @@ function postHook(port: number, pane: string, event: string, body = '{}'): Promi
 
 /** 그 탭이 살아 있다는 사실만 준다 — 우리가 띄운 것이 아니라 사용자가 셸에서 친 것이다. */
 const shell = (id: string): Session => ({ id, type: 'local', title: 'app', serverKey: 'localhost', cwd: 'D:/work/app' })
+
+/** 훅이 `SessionEnd` 에 싣고 오는 본문 — **누가 끝냈나는 여기에만 있다**(URL 이 아니라). */
+const body = (reason: string): string => JSON.stringify({ hook_event_name: 'SessionEnd', reason })
 
 describe('훅만 말해 준 세션이 사이드바 [AI] 에 뜬다', () => {
   it('★ POST 한 방 → 줄 하나. 실행 기록(registerAiRun)은 없다', async () => {
@@ -109,11 +113,10 @@ describe('훅만 말해 준 세션이 사이드바 [AI] 에 뜬다', () => {
 // 준영님(2026-09-01): *"내가 직접 종료했으면 확인 불가가 아닌 종료 또는 목록에서 제거되어야 해.
 // 지금은 해당 세션창이 꺼져야 사라져."* 탭은 그대로 두고 claude 만 나가는 경우다.
 describe('사용자가 끝낸 세션은 목록에서 사라진다', () => {
-  const body = (reason: string): string => JSON.stringify({ hook_event_name: 'SessionEnd', reason })
-
   afterEach(() => {
-    // 실행 기록은 모듈 스코프라 검사 사이에 샌다.
-    for (const r of aiRuns()) forgetAiSession(r.sessionId)
+    // 실행 기록은 모듈 스코프라 검사 사이에 샌다. `forgetAiSession` 은 이제 **표시만** 하므로
+    // (그래야 작업대 ↔ 탭 링크가 산다) 여기서는 진짜로 지우는 쪽을 쓴다.
+    for (const r of aiRuns()) forgetAiRun(r.sessionId)
   })
 
   it('★ 훅만 말해 준 세션 — `/exit` 하면 줄이 없다', async () => {
@@ -141,19 +144,99 @@ describe('사용자가 끝낸 세션은 목록에서 사라진다', () => {
     const stillThere = viewsOf(aiRuns(), [shell('pane-1')], server.statuses())
     expect(stillThere[0]!.state).toBe('unverifiable')
 
-    // 제거 신호를 렌더러가 받으면(`agent.onExit` → 이 함수) 둘 다 사라진다.
+    // 제거 신호를 렌더러가 받으면(`agent.onExit` → 이 함수) 줄이 사라진다.
     for (const id of exited) forgetAiSession(id)
-    expect(aiRuns()).toEqual([])
     expect(viewsOf(aiRuns(), [shell('pane-1')], server.statuses())).toEqual([])
+    // 🔴 **기록 자체는 안 지운다** — 작업대가 이 탭을 찾는 끈이 이것뿐이다(아래 묶음이 그 자리다).
+    expect(aiRuns()[0]).toMatchObject({ sessionId: 'pane-1' })
   })
 
-  it('크래시(`other`)는 줄을 안 지운다 — 모르는 것은 `확인 불가` 로 남는다', async () => {
+  it('모르는 `reason` 은 줄을 안 지운다 — `확인 불가` 로 남는다', async () => {
     const { port, server, exited } = await serve()
     await postHook(port, 'pane-1', 'PreToolUse')
-    await postHook(port, 'pane-1', 'SessionEnd', body('other'))
+    await postHook(port, 'pane-1', 'SessionEnd', body('some_future_reason'))
     expect(exited).toEqual([])
     const rows = hookRows(viewsOf([], [shell('pane-1')], server.statuses()), new Set(), '로컬')
     expect(rows).toHaveLength(1)
     expect(rows[0]!.state).toBe('unverifiable')
+  })
+})
+
+// 🔴 **저장된 작업대는 다른 물건이다** — 준영님 2026-09-01 저녁 제보 ①.
+//
+// *"AI 세션에 잘 들어와서 컨트롤 D 로 종료했는데 **쉬는 중**으로 뜨고, 다시 클릭하면 계속
+// 새 세션에 떠."* 위 묶음은 **훅만 세운 줄**만 봤다. 저장된 작업대(#129)는 목록에 따로 서 있고
+// 그 줄이 어느 탭에 사는지는 **실행 기록으로만** 안다(Shell.tsx 의 `sessionOf`). 제거가 그
+// 기록까지 지우면 탭이 멀쩡한데 줄이 `sessionId` 를 잃고, `groupOf` 는 `sessionId` 가 없으면
+// 상태를 아예 안 보므로 `쉬는 중` 으로 떨어진다 — 그리고 `쉬는 중` 줄을 누르면 새로 띄운다.
+// **두 증상이 한 줄에서 나왔다.**
+describe('저장된 작업대 — Ctrl+D 뒤에도 그 탭을 잃지 않는다', () => {
+  const bench: AiSessionState = {
+    id: 'bench-1',
+    kind: 'local',
+    cwd: 'D:/work/app',
+    engine: 'claude',
+    skipPerms: false,
+    title: 'app',
+    lastUsedAt: 1_700_000_000_000
+  }
+
+  /** Shell.tsx 가 하는 그대로: 살아 있는 탭 중 폴더·CLI 가 맞는 실행 기록을 찾는다. */
+  const rowsOf = (alive: readonly Session[], statuses: Parameters<typeof viewsOf>[2]) => {
+    const live = new Set(alive.map((s) => s.id))
+    const seen = new Map(viewsOf(aiRuns(), alive, statuses).map((v) => [v.run.sessionId, v]))
+    return benchRows([bench], {
+      sessionOf: (b) =>
+        aiRuns().find((r) => live.has(r.sessionId) && r.path === b.cwd && r.cli === b.engine)?.sessionId ?? null,
+      seen: (sid) => seen.get(sid) ?? null,
+      serverOf: () => '로컬',
+      pathExists: () => true,
+      profileExists: () => false
+    })
+  }
+
+  afterEach(() => {
+    for (const r of aiRuns()) forgetAiRun(r.sessionId)
+  })
+
+  it('★ 탭이 살아 있으면 `확인 불가` 다 — `쉬는 중` 이 아니다', async () => {
+    const { port, server, exited } = await serve()
+    registerAiRun({ sessionId: 'pane-1', cli: 'claude', path: 'D:/work/app', startedAt: Date.now() })
+    await postHook(port, 'pane-1', 'PreToolUse')
+    expect(groupRows(rowsOf([shell('pane-1')], server.statuses())).map((g) => g.id)).toEqual(['working'])
+
+    // Ctrl+D → `other` → 제거 신호가 온다(②).
+    await postHook(port, 'pane-1', 'SessionEnd', body('other'))
+    expect(exited).toEqual(['pane-1'])
+    for (const id of exited) forgetAiSession(id)
+
+    const rows = rowsOf([shell('pane-1')], server.statuses())
+    // ① 묶음이 고정된다: 탭이 살아 있는 한 `확인 불가` 다.
+    expect(groupRows(rows).map((g) => g.id)).toEqual(['unverifiable'])
+    // ② 그리고 누르면 **그 탭으로 간다** — 새로 띄우지 않는다(`onOpen` 이 sessionId 를 받는다).
+    expect(rows[0]!.sessionId).toBe('pane-1')
+  })
+
+  it('탭까지 닫히면 그때는 `쉬는 중` 이다 — 저장된 작업대의 제자리', async () => {
+    const { port, server, exited } = await serve()
+    registerAiRun({ sessionId: 'pane-1', cli: 'claude', path: 'D:/work/app', startedAt: Date.now() })
+    await postHook(port, 'pane-1', 'SessionEnd', body('other'))
+    for (const id of exited) forgetAiSession(id)
+
+    const rows = rowsOf([], server.statuses())
+    expect(groupRows(rows).map((g) => g.id)).toEqual(['idle'])
+    expect(rows[0]!.sessionId).toBeNull()
+  })
+
+  it('같은 탭에서 다시 띄우면 줄이 되살아난다 — 표시가 굳지 않는다', async () => {
+    const { port, server, exited } = await serve()
+    registerAiRun({ sessionId: 'pane-1', cli: 'claude', path: 'D:/work/app', startedAt: Date.now() })
+    await postHook(port, 'pane-1', 'SessionEnd', body('other'))
+    for (const id of exited) forgetAiSession(id)
+
+    // 사람이 그 탭에 `claude` 를 다시 친다. 토큰이 살아 있어 훅이 통하고(0bebcf0 의 검사),
+    // 상태가 다시 생기므로 `exitedAt` 표시는 더 이상 줄을 가리지 못한다.
+    expect(await postHook(port, 'pane-1', 'SessionStart')).toBe(204)
+    expect(groupRows(rowsOf([shell('pane-1')], server.statuses())).map((g) => g.id)).toEqual(['working'])
   })
 })
