@@ -49,12 +49,13 @@ test('PREV-3 세션마다 카드가 하나씩 생긴다', async ({ ara, ssh }) =
   await expect(card(page, localId)).toHaveCount(1)
   await expect(card(page, sshId)).toHaveCount(1)
   await expect(card(page, sshId).locator('.mini-name')).toHaveText('prev3')
-  // 그룹색 dot 은 인라인 배경색으로 칠해진다(로컬/서버 구분).
-  const localDot = await card(page, localId).locator('.mini-dot').evaluate((el) => (el as HTMLElement).style.background)
-  const sshDot = await card(page, sshId).locator('.mini-dot').evaluate((el) => (el as HTMLElement).style.background)
-  expect(localDot).toBeTruthy()
-  expect(sshDot).toBeTruthy()
-  expect(localDot).not.toBe(sshDot)
+  // #166: 점은 **상태**를 말한다 — 서버색이 아니다(탭·칸 머리와 같은 점). 둘 다 붙어 있으니
+  // 둘 다 `on` 이고, 서버 구분은 이름(.mini-name)과 카드 툴팁이 **글자로** 진다.
+  await expect(card(page, localId).locator('.mini-dot.sdot.on')).toHaveCount(1)
+  await expect(card(page, sshId).locator('.mini-dot.sdot.on')).toHaveCount(1)
+  // 색만으로 상태를 말하지 않는다(§6) — 점이 글자로도 말한다.
+  await expect(card(page, sshId).locator('.mini-dot')).toHaveAttribute('title', /켜짐/)
+  await expect(card(page, sshId)).toHaveAttribute('title', /prev3/)
 })
 
 // PREV-4 카드 본문 = 그 세션의 마지막 줄들

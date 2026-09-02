@@ -15,6 +15,7 @@ import { Check } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readClipboard, writeClipboard } from '../store/clipboardWrite'
 import { registerPasteTarget } from '../store/pasteFiles'
+import type { RdpPhase } from '../store/sessionState'
 import { t } from '../i18n'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { IconChevronDown } from './icons'
@@ -159,9 +160,17 @@ type Props = {
   onSpan?: () => void
   /** 다중 모니터 창에서만 온다. 헤더에 [닫기] 를 낸다(테두리가 없어 OS 닫기 버튼이 없다). */
   onCloseWindow?: () => void
+  /**
+   * 접속 단계가 바뀔 때마다. **탭 뷰에서만** 온다 — 칸 머리·탭의 점이 이걸 보고 색을 정한다(#166).
+   * 이 통로가 없어서 RDP 는 끊겨도 점이 초록이었다(RdpView 안에만 phase 가 있었다).
+   * 다중 모니터 창에는 탭도 칸 머리도 없어 넘기지 않는다(그쪽은 헤더의 글자가 같은 말을 한다).
+   */
+  onPhase?: (phase: Phase) => void
 }
 
-type Phase = 'creds' | 'connecting' | 'connected' | 'error'
+// 단계 이름은 store/sessionState.ts 가 갖는다 — 칸 머리 점이 이 값을 보고 색을 정하므로
+// (#166) 두 벌로 갈리면 "끊겼는데 초록"이 다시 생긴다.
+type Phase = RdpPhase
 
 /**
  * 다중 모니터 자식 창이 입력을 흘려보내는 통로.
@@ -226,27 +235,22 @@ const KIND_KEY: Record<number, string> = {
 }
 
 /**
- * ⚠️ TEMP-DIAG(2026-09-01 준영님 제보 ④·⑤·⑥) — **확인되면 이 블록과 부르는 자리를 전부 지운다**
- * (`grep TEMP-DIAG`). 원격 복사·해상도 추종·커서가 어디서 끊기는지 코드만 봐서는 가릴 수 없다:
- * 클라이언트 쪽 계약은 셋 다 맞다(패키지 index.d.ts·wasm 문자열로 확인). 남은 것은 "원격이
- * 보내 오는가"인데 그건 붙어 있는 화면에서만 보인다. DevTools 콘솔에만 남기고 화면은 안 건드린다.
+ * 원격이 커서 모양을 바꿀 때 호출된다. 인자 형태가 버전마다 조금씩 다를 수 있어 방어적으로 읽는다
+ * — 커서 하나 때문에 세션이 끊기면 안 된다.
+ *
+ * ⚠️ **지금 이 콜백은 한 번도 불리지 않는다**(2026-09-02 제보 "커서가 안 바뀐다" · #167 에서 가름).
+ * 원격 탓이 아니다: 클라이언트는 Pointer 캐시를 non-zero 로 광고하므로 서버는 포인터 업데이트를
+ * 보내 온다. 버리는 쪽은 **우리가 쓰는 wasm 빌드**다 — `ironrdp-web` 의 `build_config` 가
+ * `enable_server_pointer: false` 로 박아 두었고(`TODO(#327): expose these options from the WASM
+ * module`), 그 값이 `ActiveStage` 로 내려가 `if (!self.enable_server_pointer) return` 에서
+ * 포인터 출력을 통째로 걸러 낸다. JS/TS 쪽에는 그 값을 바꿀 손잡이가 없다(빌더 메서드도, 확장도
+ * 없다 — index.d.ts 확인). 고치려면 `vendor/ara-multimonitor.patch` 에 그 한 줄
+ * (`enable_server_pointer: true`, `pointer_software_rendering` 은 false 유지)을 더해 wasm 을
+ * 다시 빌드해야 한다. 그때까지 아래 본문은 잠들어 있지만 **지우면 안 된다** — 빌더가 이 콜백을
+ * 필수로 요구한다(`set_cursor_style_callback missing`).
  */
-function diag(tag: string, ...rest: unknown[]): void {
-  console.info(`[rdp-diag ${tag}]`, ...rest)
-}
-const diagClip = (step: string, detail: unknown): void => diag('clip', step, detail)
-
-// 원격이 커서 모양을 바꿀 때 호출된다. 인자 형태가 버전마다 조금씩 다를 수 있어 방어적으로 읽는다
-// — 커서 하나 때문에 세션이 끊기면 안 된다.
 function cursorStyleCallback(canvas: HTMLCanvasElement) {
-  // TEMP-DIAG: 같은 커서가 연달아 오면 콘솔이 잠긴다 — 모양이 바뀔 때만 한 줄.
-  let lastSig = ''
   return (style: unknown, data?: unknown, hotspotX?: unknown, hotspotY?: unknown): void => {
-    const sig = `${typeof style}/${String(style).slice(0, 16)}/${typeof data === 'string' ? data.length : typeof data}`
-    if (sig !== lastSig) {
-      lastSig = sig
-      diag('cursor', sig, hotspotX, hotspotY)
-    }
     try {
       const kind = typeof style === 'string' ? style : 'default'
       if (kind === 'hidden') canvas.style.cursor = 'none'
@@ -310,7 +314,8 @@ export function RdpView({
   onCanvasReady,
   inputBridgeRef,
   onSpan,
-  onCloseWindow
+  onCloseWindow,
+  onPhase
 }: Props): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -338,6 +343,8 @@ export function RdpView({
   // 'connecting' 으로 시작한다 — 첫 시도가 자동이라 'creds' 로 시작하면 저장된 비밀번호가 있어도
   // 입력 폼이 한 프레임 번쩍인다.
   const [phase, setPhase] = useState<Phase>('connecting')
+  // 단계를 위로 올린다(#166) — 이 값이 여기 갇혀 있어서 칸 머리 점이 끊겨도 초록이었다.
+  useEffect(() => onPhase?.(phase), [phase, onPhase])
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   // 기본은 "창 크기에 맞춤" — 열자마자 칸을 꽉 채운다(고정 해상도는 고르는 사람만 쓴다).
@@ -498,18 +505,13 @@ export function RdpView({
         // (원격이 처리한다) 여기서 가로챌 것이 없다 — 데이터만 이 채널로 오간다.
         builder.remoteClipboardChangedCallback((data: unknown) => {
           const d = data as { items?: () => { mimeType(): string; value(): unknown }[] }
-          diagClip('changed', typeof d?.items)
           if (typeof d?.items !== 'function') return
           let text: string | null = null
           try {
-            const items = d.items()
-            diagClip('items', items.map((i) => `${i.mimeType()}:${typeof i.value()}`).join(', ') || '(없음)')
-            text = pickClipboardText(items)
-          } catch (e) {
-            diagClip('items threw', String(e))
+            text = pickClipboardText(d.items())
+          } catch {
             return /* wasm 객체가 이미 해제됨 */
           }
-          diagClip('picked', text === null ? 'null' : `${text.length}자`)
           // 텍스트가 없으면 파일 목록만 온 것이다 — files-available 가 처리하므로 여기선 손대지 않는다.
           if (!text) return
           // 원격이 준 것을 로컬에 써 넣는다. 그 지문을 남겨 두지 않으면 다음 포커스에서
@@ -520,12 +522,9 @@ export function RdpView({
           setRemoteFiles([])
           // main 경유(writeClipboard). 이건 **원격이 밀어 주는** 쓰기라 창이 뒤에 있을 때 오기 쉬운데,
           // navigator.clipboard 는 그때 거부한다 — RDP 에서 복사하고 알트탭한 뒤 붙이면 빈 채였다.
-          void writeClipboard(text).then((ok) => diagClip('writeClipboard', ok ? 'ok' : '실패'))
+          void writeClipboard(text)
         })
         builder.forceClipboardUpdateCallback(() => {
-          // TEMP-DIAG(#165): **이게 뜨면 채널은 살아 있다**(원격이 우리에게 내용을 요구한 것이다) —
-          // 그러면 남은 문제는 방향 하나뿐이고, 안 뜨면 채널 자체를 의심하는 쪽이 맞다.
-          diagClip('forceUpdate', '원격이 우리 클립보드를 요구했다')
           // main 경유(readClipboard). 여기가 **로컬→원격 붙여넣기가 죽어 있던 자리**다:
           // `navigator.clipboard.readText()` 는 권한 핸들러가 clipboard-read 를 거절해 늘 실패했고,
           // 그 실패를 빈 `.catch()` 가 삼켰다 — 원격이 요구해도 우리는 아무것도 못 보냈다.
@@ -555,7 +554,16 @@ export function RdpView({
         // run() 이 끝나면 원격이 세션을 닫은 것이다 — **다만 우리가 끈 것이 아닐 때만.**
         // 이 칸이 이미 사라졌으면 그 종료는 우리 cleanup 이 만든 것이라 보고하지 않는다(goneRef).
         cleanup()
-        if (!goneRef.current) onClose()
+        if (goneRef.current) return
+        /**
+         * **끊긴 것을 phase 로도 말한다**(#166). `onClose()` 는 탭을 닫자고 제안할 뿐이고,
+         * 종료 확인을 **취소하면 이 칸이 그대로 남는다** — 그때 phase 가 'connected' 로 굳어
+         * 있으면 죽은 세션에 초록 점이 붙는다. 준영님이 보신 "끊겨도 초록"의 가장 순수한 자리다.
+         * 오류 화면의 [재시도] 가 그대로 재접속 길이 된다(닫았다 다시 열 필요가 없다).
+         */
+        setError(t('rdp.err.closed'))
+        setPhase('error')
+        onClose()
       } catch (e) {
         cleanup()
         const head = describeRdpError(e)
@@ -627,11 +635,8 @@ export function RdpView({
         const canvas = canvasRef.current
         if (!canvas || (canvas.width === w && canvas.height === h)) return
         try {
-          // TEMP-DIAG(제보 ⑤): 요청은 나갔는데 서버가 무시하는 것인지, 요청 자체가 안 나가는 것인지.
-          diag('resize', `요청 ${w}×${h}`, `캔버스 ${canvas.width}×${canvas.height}`)
           sessionRef.current?.resize?.(w, h)
-        } catch (e) {
-          diag('resize threw', String(e))
+        } catch {
           /* 세션 종료 중 */
         }
       }, 400)
@@ -653,12 +658,12 @@ export function RdpView({
       const data = new mod.ClipboardData()
       data.addText('text/plain', text)
       await session.onClipboardPaste(data)
-      diagClip('pushed', `${text.length}자`)
     } catch (e) {
-      // TEMP-DIAG(#165): 이 catch 가 **로컬→원격이 왜 안 되는지를 통째로 삼키고 있었다.**
-      // 채널이 안 열렸으면 여기서 던진다(wasm 쪽 "Clipboard backend error"). 화면은 그대로 안 깨고
-      // 콘솔에만 남긴다 — 지금까지 "아무 일도 안 일어남"으로 보이던 것이 여기다.
-      diagClip('onClipboardPaste threw', String(e))
+      // ⚠️ **삼키지 않는다.** #165(로컬→원격 붙여넣기가 통째로 죽어 있던 사고) 때 원인이 몇 주간
+      // 안 보인 자리가 바로 여기다 — 빈 catch 였고, 채널이 안 열렸을 때 wasm 이 던지는
+      // "Clipboard backend error" 가 그대로 사라졌다. 화면은 안 깨고(붙여넣기 하나 때문에 세션을
+      // 끊지 않는다) 콘솔에는 반드시 남긴다.
+      console.warn('[rdp] 클립보드를 원격에 보내지 못했습니다:', e)
     }
   }, [])
 

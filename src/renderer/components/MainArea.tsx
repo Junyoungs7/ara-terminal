@@ -29,6 +29,7 @@ let bootSplashShown = false
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
 import { aiRuns } from '../store/aiSessions'
+import { setSessionState, useSessionStates } from '../store/sessionState'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
 import { buildTmuxInput } from '../../shared/tmux'
@@ -158,6 +159,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       reorder
     } = sessions
     const layout = useLayout(null)
+    // 세션 점(#166)이 바뀌면 다시 그린다 — 탭바와 칸 머리가 둘 다 이 컴포넌트 밑에 있다.
+    // RDP 단계는 세션 목록도 레이아웃도 건드리지 않으므로 이 구독이 없으면 점이 멈춘다.
+    useSessionStates()
     // 지금 목록의 최신 사본. **늦게 도착한 요청**이 자기가 만들어질 때의 낡은 목록을 보지 않게
     // destroySessions 가 여기서 읽는다(제보 ④ — store/sessions.ts 의 listRef 와 같은 이유).
     const listRef = useRef<Session[]>(list)
@@ -533,6 +537,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 대가: 이 탭이 **진짜로** 네트워크 때문에 끊겨도 카드가 안 뜬다. 다시 띄우는 자리는
             // 작업대(#129)이고, 그 줄이 이 세션을 이미 알고 있다.
             if (aiRuns().some((r) => r.sessionId === s.id)) return
+            // 탭의 점도 함께 바뀐다(#166) — 칸 머리는 아래 오류 카드로 이미 알지만 탭은
+            // restoreErrors 를 안 본다. 두 자리가 같은 사실을 다르게 그리면 그게 다음 제보다.
+            setSessionState(s.id, 'lost')
             setRestoreErrors((m) => {
               if (m.has(s.id)) return m
               const n = new Map(m)

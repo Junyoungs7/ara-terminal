@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { groupColor, type Session } from '../store/sessions'
+import { sessionTip, type Session } from '../store/sessions'
+import { sessionState } from '../store/sessionState'
+import { StateDot } from './StateDot'
 import { tailSegs, type TailSeg } from '../terminal/termRegistry'
 import { t } from '../i18n'
 
@@ -169,13 +171,15 @@ export function MiniPreview({
             key={s.id}
             className={'mini-card' + (s.id === activeId ? ' active' : '') + (live[s.id] ? ' live' : '')}
             data-session={s.id}
-            title={s.title}
+            title={sessionTip(s)}
             onClick={() => onSelect(s.id)}
             onMouseEnter={(e) => enter(s.id, e.currentTarget)}
             onMouseLeave={scheduleClose}
           >
             <div className="mini-title">
-              <span className="mini-dot" style={{ background: groupColor(s.serverKey, s.type === 'local') }} />
+              {/* 탭·칸 머리와 **같은 점**이다(#166) — 서버색이 아니라 상태. 값은 매 갱신 때
+                  다시 읽힌다(이 카드는 REFRESH_MS 마다 다시 그려진다). */}
+              <StateDot cls="mini-dot" state={sessionState(s.id)} />
               <span className="mini-name">{s.title}</span>
             </div>
             {/* 터미널 축소판처럼 보이게: 어두운 화면 + 마지막 줄 끝의 깜박이는 커서. */}

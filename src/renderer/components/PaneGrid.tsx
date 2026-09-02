@@ -4,6 +4,8 @@ import { t } from '../i18n'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { RdpView } from './RdpView'
 import { IconClose } from './icons'
+import { StateDot } from './StateDot'
+import { rdpSessionState, sessionState, setSessionState } from '../store/sessionState'
 import type { PaneCell, useLayout } from '../store/layout'
 import type { Session } from '../store/sessions'
 import { paneDropZone, zoneRect, type DropZone, type Rect } from '../store/dropZone'
@@ -295,7 +297,11 @@ export function PaneGrid({
                 e.dataTransfer.effectAllowed = 'move'
               }}
             >
-              <span className="pdot" style={{ background: err ? 'var(--err)' : 'var(--ok)' }} />
+              {/* 점은 **상태**를 말한다(#166) — 색을 여기서 고르지 않는다.
+                  `err` 는 이 슬롯이 복원 실패 placeholder 일 때의 유일한 단서다(세션이 없어
+                  등록된 상태도 없다). 세션이 살아 있는데 끊긴 경우는 MainArea 가 `lost` 로
+                  등록하므로 탭·칸이 같은 값을 본다. */}
+              <StateDot cls="pdot" state={err ? 'lost' : sessionState(key)} />
               <span className="ptitle">
                 <b>{err ? err.title : (session?.title ?? key)}</b>
               </span>
@@ -365,6 +371,9 @@ export function PaneGrid({
                   name={session.title}
                   onClose={() => onCloseSession?.(session.id)}
                   onSpan={() => void spanRdp(session.profileId ?? '', session.title)}
+                  // #166: RDP 는 pty 가 없어 `session.onExit` 를 안 탄다 — 끊김을 아는 것은
+                  // 이 컴포넌트뿐이다. 그 단계를 세션 상태로 옮겨 탭·칸이 같은 점을 그린다.
+                  onPhase={(p) => setSessionState(session.id, rdpSessionState(p))}
                 />
               ) : (
                 <TerminalPane

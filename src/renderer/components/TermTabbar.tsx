@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { groupColor, type Session } from '../store/sessions'
+import { sessionTip, type Session } from '../store/sessions'
+import { sessionState } from '../store/sessionState'
+import { StateDot } from './StateDot'
 import { isTabOverflowing } from '../store/tabOverflow'
 import { markTabDropHandled, tabDropHandled } from '../store/tabDetach'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
@@ -8,8 +10,14 @@ import { t } from '../i18n'
 import { IconChevronDown, IconClose, IconPlus } from './icons'
 
 // 터미널 탭바 — FB-tabs: 서버 그룹 래퍼(.tg)를 없애고 평평한 개별 탭으로 그린다(피드백:
-// "그룹핑으로 묶이는게 불편해" ≠ "서버 구분이 필요 없다"). 어느 서버 세션인지는 .tdot 색
-// (groupColor — 로컬은 accent, 원격은 서버명 해시)만으로 최소 단서를 남긴다.
+// "그룹핑으로 묶이는게 불편해" ≠ "서버 구분이 필요 없다").
+//
+// #166(2026-09-02): **어느 서버인지는 이제 글자로 말한다** — 툴팁에 serverKey 를 적는다.
+// 그전에는 .tdot 을 서버명 해시색으로 칠해 그 단서를 남겼는데, 같은 모양의 점이 칸 머리에서는
+// 복원 실패 여부를, [AI] 목록에서는 에이전트 상태를 말하고 있었다(준영님: "세션 서버마다 다르게
+// 점을 하지 말고 켜지면 초록색 등으로 동일하게"). 색을 상태에 내주고 서버를 글자로 옮긴 이유:
+// 해시색은 **범례가 없어 원래도 읽을 수 없었다**(어느 색이 어느 서버인지 알 방법이 없고, 서버가
+// 여섯을 넘으면 색이 겹친다). 반대로 툴팁의 이름은 그 자리에서 읽힌다.
 //
 // R2: 더블클릭 인라인 이름 변경 / 우클릭 메뉴 / 드래그 재정렬. 편집 상태는 MainArea 가 들고 있다
 // (트리 우클릭 "이름 변경"도 같은 편집을 열어야 하므로 — 편집 시작점이 두 곳이면 상태도 하나여야 한다).
@@ -51,7 +59,6 @@ type TabDnd = {
 
 function Ttab({
   s,
-  color,
   active,
   offscreen,
   editing,
@@ -63,7 +70,6 @@ function Ttab({
   onCtx
 }: {
   s: Session
-  color: string
   active: boolean
   // FB-ui2(FB-0005): 패널에 배치되지 않음 — 클릭하면 showSession 이 포커스 패널에 다시 표시한다.
   offscreen: boolean
@@ -86,7 +92,7 @@ function Ttab({
         (dragging ? ' dragging' : '') +
         (dropping ? ' drop' : '')
       }
-      title={editing ? undefined : offscreen ? `${s.title} — ${t('tab.offscreenHint')}` : s.title}
+      title={editing ? undefined : offscreen ? `${sessionTip(s)} — ${t('tab.offscreenHint')}` : sessionTip(s)}
       data-session-id={s.id}
       onClick={() => onSelect(s.id)}
       // 휠 클릭으로 닫는다(브라우저·VS Code 감각, 2026-09-01 준영님). **✕ 와 같은 함수**를 부른다 —
@@ -101,7 +107,7 @@ function Ttab({
       onDoubleClick={() => onStartEdit(s.id)}
       onContextMenu={(e) => onCtx(e, s.id)}
     >
-      <span className="tdot" style={{ background: color }} />
+      <StateDot cls="tdot" state={sessionState(s.id)} />
       {editing ? (
         <input
           className="tt-edit"
@@ -278,7 +284,6 @@ export function TermTabbar({
     <Ttab
       key={s.id}
       s={s}
-      color={groupColor(s.serverKey, s.type === 'local')}
       active={s.id === activeId}
       offscreen={!placedIds.has(s.id)}
       editing={editingId === s.id}
@@ -291,11 +296,12 @@ export function TermTabbar({
     />
   )
 
-  // 오버플로 드롭다운 항목 — 탭과 같은 서버색 dot + 활성 탭엔 "현재" 힌트.
+  // 오버플로 드롭다운 항목 — 탭과 **같은 점**(상태) + 활성 탭엔 "현재" 힌트. 서버는 행의 title 로.
   const overflowItems: MenuItem[] = sessions.map((s) => ({
     id: s.id,
     label: s.title,
-    icon: <span className="tdot" style={{ background: groupColor(s.serverKey, s.type === 'local') }} />,
+    icon: <StateDot cls="tdot" state={sessionState(s.id)} />,
+    title: sessionTip(s),
     ...(s.id === activeId ? { hint: t('tab.active') } : {})
   }))
 

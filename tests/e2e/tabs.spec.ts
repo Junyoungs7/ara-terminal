@@ -115,8 +115,9 @@ test('TAB-7 Ctrl+Tab 으로 탭을 순환한다', async ({ ara }) => {
   await expect(page.locator('.term-tabbar .ttab.active .tlabel')).toHaveText(labels[0])
 })
 
-// TAB-8 FB-tabs: 그룹 래퍼 제거 — 같은 서버의 SSH 세션도 평평한 개별 탭, 구분은 dot 색만.
-test('TAB-8 같은 서버의 SSH 세션이 그룹 래퍼 없이 dot 색으로만 구분된다', async ({ ara, ssh }) => {
+// TAB-8 FB-tabs: 그룹 래퍼 제거 — 같은 서버의 SSH 세션도 평평한 개별 탭.
+// #166 이후 서버 단서는 dot 색이 아니라 **탭 툴팁의 글자**다(점은 상태만 말한다).
+test('TAB-8 같은 서버의 SSH 세션이 그룹 래퍼 없이 툴팁의 서버 이름으로 구분된다', async ({ ara, ssh }) => {
   const { page } = ara
   const h = await ssh({ password: 'grp-pw' })
   await connectNewSshProfile(page, { name: 'tab-remote', port: h.port, password: 'grp-pw' })
@@ -127,13 +128,19 @@ test('TAB-8 같은 서버의 SSH 세션이 그룹 래퍼 없이 dot 색으로만
   await page.click('.ctx-menu .ctx-item[data-action="session.duplicate"]')
   await expect(page.locator('.term-tabbar .tg')).toHaveCount(0)
   await expect(page.locator('.term-tabbar .ttab')).toHaveCount(2)
-  // 최소 구분 단서(FB-tabs): 같은 서버 두 탭의 dot 색이 서로 같다 — 완전히 구분 불가는 아니다.
-  const colors = await page
+  // 최소 구분 단서(#166): 두 탭 모두 툴팁에 **서버 이름**이 적힌다. 점은 이제 상태 전용이라
+  // 서버를 말하지 않는다 — 그 자리를 글자가 받았다(제목이 서버명이면 한 번만 적는다).
+  const tips = await page
+    .locator('.term-tabbar .ttab')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('title') ?? ''))
+  expect(tips).toHaveLength(2)
+  for (const tip of tips) expect(tip).toContain('tab-remote')
+  // 점은 셋 중 하나의 상태 클래스를 달고, 툴팁으로도 말한다(§6 — 색 단독 금지).
+  const dots = await page
     .locator('.term-tabbar .ttab .tdot')
-    .evaluateAll((els) => els.map((el) => (el as HTMLElement).style.background))
-  expect(colors).toHaveLength(2)
-  expect(colors[0]).toBeTruthy()
-  expect(colors[0]).toBe(colors[1])
+    .evaluateAll((els) => els.map((el) => `${el.className}|${el.getAttribute('title') ?? ''}`))
+  expect(dots).toHaveLength(2)
+  for (const d of dots) expect(d).toMatch(/sdot (on|connecting|lost)\|.+/)
 })
 
 // TAB-9 FB-tabs: 탭이 넘치면 우측 오버플로 드롭다운이 뜨고, 고르면 그 탭으로 전환된다.

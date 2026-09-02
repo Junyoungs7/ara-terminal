@@ -2200,8 +2200,8 @@
   box-shadow: inset 0 -2px 0 var(--accent);
   background: var(--accent-glow);
 }
-/* 터미널 탭 (목업 .ttab/.tterm-add — 플랫 탭. FB-tabs: 서버 그룹 래퍼 제거, 어느 서버인지는
-   .tdot 색으로 최소 단서만 남긴다) */
+/* 터미널 탭 (목업 .ttab/.tterm-add — 플랫 탭. FB-tabs: 서버 그룹 래퍼 제거. #166 부터
+   어느 서버인지는 **탭 툴팁의 글자**가 말한다 — .tdot 은 상태 전용이다) */
 .ttab {
   display: flex;
   align-items: center;
@@ -2258,14 +2258,26 @@
   height: 1px;
   background: var(--bg-terminal);
 }
-/* FB-tabs: 그룹 래퍼를 없앤 대신 이 dot 색을 세션의 서버(groupColor)로 칠한다 — §5.1 설계
-   문서가 이미 "상태 또는 세션 타입 색"으로 열어 둔 용도. 인라인 style 로 JS가 색을 넣는다. */
-.ttab .tdot {
+/* 세션 점 — **뜻은 여기 하나가** 정한다(#166, store/sessionState.ts).
+   자리 클래스(.tdot·.pdot·.mini-dot)는 이제 붙잡을 손잡이일 뿐이고 색과 크기는 상태가 정한다:
+   전에는 세 자리가
+   각자 인라인 style 로 칠했고, 그래서 같은 6px 원이 "어느 서버"·"복원 실패"·"AI 상태" 세 가지를
+   말했다(준영님: "켜지면 초록색 등으로 동일하게"). 어휘는 셋뿐 — 트리 연결 노드(§5.2)와 같다.
+   ⚠️ 색만으로 말하지 않는다(§6) — StateDot 이 툴팁을 함께 단다.
+   크기도 여기서 준다: 예전에는 자리마다 같은 4줄을 따로 적었고 `.ttab .tdot` 은 **탭 안으로**
+   한정돼 있어서, 같은 마크업을 쓰는 오버플로 드롭다운의 점이 0×0 으로 안 보였다. */
+.sdot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   flex: none;
   background: var(--ok);
+}
+.sdot.connecting {
+  background: var(--warn);
+}
+.sdot.lost {
+  background: var(--err);
 }
 .ttab .tx {
   display: grid;
@@ -2715,12 +2727,7 @@
   font-size: var(--fs-md);
   user-select: none;
 }
-.pane-hd .pdot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-}
+/* 크기·모양은 `.sdot` 이 준다(#166) — 자리마다 같은 4줄을 적던 것을 한 곳으로 모았다. */
 .pane-hd .ptitle {
   font-family: var(--ui);
   font-size: var(--fs-sm);
@@ -5324,12 +5331,7 @@
   margin-bottom: var(--sp-2);
   min-width: 0;
 }
-.mini-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-}
+/* 크기·모양·색은 `.sdot` 이 준다(#166) — 탭·칸 머리와 **같은 점**이다. */
 .mini-name {
   font-size: var(--fs-md);
   color: var(--text-mid);

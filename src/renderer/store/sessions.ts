@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSpec } from '../../main/sessions/ISessionManager'
 import type { SessionType } from '@shared/types'
+import { forgetSessionState } from './sessionState'
 
 // 렌더러 세션 레지스트리 — 트리·탭·패널이 공유하는 단일 소스(이중 상태 금지, F4b).
 // 세션의 홈은 탭이다: 탭 닫기 = 세션 종료, 패널 닫기 = detach(세션 유지, 탭에 남음).
@@ -31,6 +32,18 @@ export function groupColor(serverKey: string, local: boolean): string {
   let h = 0
   for (let i = 0; i < serverKey.length; i++) h = (h * 31 + serverKey.charCodeAt(i)) >>> 0
   return GROUP_COLORS[h % GROUP_COLORS.length]
+}
+
+/**
+ * 세션 하나를 글자로 소개한다 — `제목 · 서버`(툴팁 전용, 순수).
+ *
+ * #166 에서 점이 서버색을 잃었다(점은 이제 상태만 말한다 — sessionState.ts). 그 단서를 **글자로**
+ * 옮긴 자리가 여기다. 제목이 곧 서버 이름인 경우가 많지만 늘 그렇지는 않다: 사용자가 바꿀 수
+ * 있고(R2.1) 셸의 OSC 제목이 덮어쓴다(R3.6) — 그때 탭에서 서버를 알 방법이 하나도 없어진다.
+ * 같으면 두 번 적지 않는다.
+ */
+export function sessionTip(s: Session): string {
+  return s.title === s.serverKey ? s.title : `${s.title} · ${s.serverKey}`
 }
 
 // 세션 목록 → 삽입 순서를 보존한 서버 그룹 배열(순수 — 단위 테스트 대상).
@@ -227,6 +240,9 @@ export function useSessions(winId?: string) {
   const close = useCallback((id: string) => {
     // rdp 는 main 에 세션이 없다(릴레이는 RdpView 가 정리한다).
     if (!id.startsWith('rdp:')) void window.ev.session.destroy(id)
+    // 점의 상태도 함께 버린다(#166). 탭이 빠지는 길은 여럿이지만(✕·칸 닫기·오류 카드 [닫기]·
+    // 재접속) **전부 이 함수를 지난다** — 흩어 놓으면 한 길만 안 지운다.
+    forgetSessionState(id)
     // 지우기 **전에** 읽는다 — 이 세션이 활성이었다면 기록의 맨 앞이 자기 자신이고, 그 다음이
     // "직전에 보던 탭"이다(nextActiveAfter 가 자기 자신은 건너뛴다).
     const recent = mruRef.current

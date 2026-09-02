@@ -597,9 +597,13 @@ const checks = []
     // FB-tabs: 그룹 래퍼(.tg)는 완전히 없어야 한다 — 있으면 회귀.
     const tabGroups = document.querySelectorAll('.term-tabbar .tg').length
     const sshTabs = document.querySelectorAll('.term-tabbar .ttab').length
-    // 구분 단서: SSH 탭의 dot 색이 비어 있지 않다(groupColor 인라인 style).
-    const sshTabDot = document.querySelectorAll('.term-tabbar .ttab .tdot')[localTabsBefore]
-    const sshDotColor = sshTabDot ? sshTabDot.style.background : ''
+    // #166: 점은 **상태**만 말한다(서버색 아님) — 상태 클래스 + 글자 툴팁이 함께 있어야 한다(§6).
+    // 서버 단서는 탭 툴팁의 글자로 옮겼다.
+    const sshTab = document.querySelectorAll('.term-tabbar .ttab')[localTabsBefore]
+    const sshTabDot = sshTab ? sshTab.querySelector('.tdot') : null
+    const sshDotState = sshTabDot ? /\bsdot (on|connecting|lost)\b/.test(sshTabDot.className) : false
+    const sshDotTip = sshTabDot ? (sshTabDot.getAttribute('title') || '') : ''
+    const sshTabTip = sshTab ? (sshTab.getAttribute('title') || '') : ''
     // 트리(S1): 서버 행 아래 세션 행(.sess-list .sess-node) 렌더.
     // 타입은 **서버 행의 배지**가 말한다 — 세션 행에서 계정@호스트·타입을 걷어냈다(2026-08-08 재설계).
     // 로컬 세션이 먼저 올 수 있어 SSH 배지를 단 서버 그룹 안에서 집는다.
@@ -643,7 +647,7 @@ const checks = []
       tabsAfterClose = document.querySelectorAll('.term-tabbar .ttab').length
     }
     return {
-      localTabsBefore, tabGroups, sshTabs, sshDotColor,
+      localTabsBefore, tabGroups, sshTabs, sshDotState, sshDotTip, sshTabTip,
       treeSessRow, treeSessType, treeRowActive, sshTabActive,
       tabsBeforeClose, panesBeforeClose, panesAfterClose, tabsAfterPaneClose, sshCloseAsks, tabsAfterClose
     }
@@ -652,7 +656,9 @@ const checks = []
   checks.push(['로컬 세션은 평평한 개별 탭', f4b.localTabsBefore >= 1])
   checks.push(['트리 서버 노드 더블클릭 → 접속(원클릭은 선택)', f4b.sshTabs > f4b.localTabsBefore])
   checks.push(['그룹 래퍼(.tg) 완전 제거(FB-tabs)', f4b.tabGroups === 0])
-  checks.push(['탭 dot 색으로 서버 구분 단서(groupColor)', f4b.sshDotColor.length > 0])
+  checks.push(['탭 dot 은 상태를 말한다(#166 — 서버색 아님)', f4b.sshDotState === true])
+  checks.push(['탭 dot 은 색만으로 말하지 않는다(§6 — 툴팁)', f4b.sshDotTip.length > 0])
+  checks.push(['서버 단서는 탭 툴팁의 글자(#166)', f4b.sshTabTip.length > 0])
   checks.push(['트리 서버 노드 하위 세션 행 렌더', f4b.treeSessRow === true])
   checks.push(['트리 서버 행 타입 배지=SSH', f4b.treeSessType === 'SSH'])
   checks.push(['트리 세션 클릭 → 트리 행 active', f4b.treeRowActive === true])
