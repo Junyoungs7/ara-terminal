@@ -30,7 +30,7 @@ import type {
   WorkProfile
 } from './types'
 import type { AgentHookState, AgentStatus } from './agentStatus'
-import type { AiCliRecent } from './aiCli'
+import type { AiCliRecent, AiCommand } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
@@ -227,8 +227,16 @@ export type InvokeContract = {
   // size: #158 셸을 열 치수. 새 세션은 포커스 칸에 뜨고 그 칸의 xterm 이 이미 그 크기라, 접속
   // **전에** 실어 보내면 80×24 로 열었다가 뒤따르는 resize 로 따라잡는 경합이 사라진다.
   // 선택 인자다 — 화면이 없는 호출자(MCP ssh_connect)는 안 주고, 그러면 지금까지와 똑같이 동작한다.
+  // aiCommand: D(#168) 주면 이 세션은 셸이 아니라 **그 AI CLI 가 프로세스인 채로** 열린다.
+  // 안 주면 지금까지와 똑같다 — 사용자의 셸 탭은 이 필드를 절대 채우지 않는다.
   'ssh:connect': {
-    req: { profileId: string; acceptHostKey?: boolean; password?: string; size?: { cols: number; rows: number } }
+    req: {
+      profileId: string
+      acceptHostKey?: boolean
+      password?: string
+      size?: { cols: number; rows: number }
+      aiCommand?: { argv: AiCommand; cwd: string }
+    }
     res: SshConnectResult
   }
   // 호스트키 재설정: 프로필의 knownHosts 항목 삭제 → 다음 접속이 다시 TOFU 확인이 된다.
@@ -614,12 +622,14 @@ export type EvApi = {
     /**
      * password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용).
      * size 는 셸을 열 치수(#158) — 안 주면 80×24 로 연다.
+     * aiCommand 는 D(#168) — 주면 셸이 아니라 그 AI CLI 가 이 세션의 프로세스다.
      */
     connect(
       profileId: string,
       acceptHostKey?: boolean,
       password?: string,
-      size?: { cols: number; rows: number }
+      size?: { cols: number; rows: number },
+      aiCommand?: { argv: AiCommand; cwd: string }
     ): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
     /** [접속 테스트] — 저장하지 않고 폼 값으로 붙어 본다(ssh=인증까지, rdp=도달까지). */

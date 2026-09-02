@@ -4,7 +4,7 @@ import { spawn as ptySpawn, type IPty } from 'node-pty'
 import type { SessionBackend } from './SessionBackend'
 import type { SessionSpec } from './ISessionManager'
 import { SHELL_INTEGRATION } from './osc7'
-import { shellFor, type LaunchShell } from '@shared/aiCli'
+import { buildLocalAiArgv, safeAiCommand, shellFor, type AiCommand, type LaunchShell } from '@shared/aiCli'
 
 // OSC7 주입 방식이 셸마다 달라 종류를 판별한다(powershell=시작 인자, bash=환경변수, 그 외=stdin 폴백).
 type ShellKind = 'powershell' | 'bash' | 'other'
@@ -53,6 +53,19 @@ function withShellIntegration(
     return { args, env: { ...env, PROMPT_COMMAND: SHELL_INTEGRATION.bashPromptCommand } }
   }
   return { args, env }
+}
+
+/**
+ * D(#168) **이 pty 의 프로세스를 CLI 로 만든다** — 셸을 열고 명령을 타이핑해 넣는 대신.
+ * 그러면 그 탭에 이전 출력이 존재하지 않고, CLI 가 끝나면 세션도 끝난다(Orca·Paseo 가 같은 모양).
+ *
+ * 조립 규칙 자체는 `shared/aiCli.buildLocalAiArgv` 가 갖는다(왜 셸을 거치는지도 거기 적혀 있다) —
+ * 여기서는 **셸 고르기**(resolveShell 의 결과)를 그 규칙에 이어 줄 뿐이다. 규칙이 이 파일에 있으면
+ * node-pty 없이는 검사할 수 없어, 조립이 맞는지 아무도 못 본다.
+ * 셸 통합(OSC7)은 심지 않는다 — cd 할 셸이 없고, `-NoExit` 이 붙으면 CLI 가 끝나도 탭이 안 닫힌다.
+ */
+function aiArgv(kind: ShellKind, cmd: AiCommand): string[] | null {
+  return buildLocalAiArgv(shellFor(kind, process.platform === 'win32' ? 'win32' : 'other'), cmd)
 }
 
 // zsh 폴백 주입 지연 — 셸이 stdin 을 받을 준비가 되기 전에 쓰면 그대로 버려진다.
@@ -110,7 +123,14 @@ export class PtyBackend implements SessionBackend {
   constructor(spec: SessionSpec, paneId?: string) {
     const { file, args: baseArgs, kind } = resolveShell(spec)
     const base = { ...(process.env as Record<string, string>), ...(paneId ? { ARA_PANE: paneId } : {}) }
-    const { args, env } = withShellIntegration(kind, baseArgs, base)
+    // D(#168) 훅 env 는 여기서 갈리지 않는다: `ARA_PANE` 은 위 base 에, `ARA_HOOK_PORT` 는 main 의
+    // process.env 에 있고 CLI 는 이 셸의 자식(정확히는 exec 된 자기 자신)이라 그대로 물려받는다.
+    // 그래서 **새로 띄운 AI 도 사용자가 직접 친 claude 와 똑같이** [AI] 목록에 뜬다.
+    const cmd = spec.command ? safeAiCommand(spec.command) : null
+    const cmdArgs = cmd ? aiArgv(kind, cmd) : null
+    // 검증에 걸리면 조용히 셸을 여는 대신 크게 실패한다 — "AI 를 띄웠는데 셸이 떴다" 는 못 알아챈다.
+    if (spec.command && !cmdArgs) throw new Error('실행할 수 없는 AI 명령입니다.')
+    const { args, env } = cmdArgs ? { args: cmdArgs, env: base } : withShellIntegration(kind, baseArgs, base)
     const win = process.platform === 'win32'
     // Windows conpty 종료 경로 안정화: useConptyDll=true 는 kill() 시 node-pty 가
     // conpty_console_list_agent 를 child_process.fork 하지 않는다. 그 fork 는 AttachConsole(pid)
@@ -129,8 +149,10 @@ export class PtyBackend implements SessionBackend {
       })
     } catch (err) {
       // pwsh 부재 등 스폰 실패 → cmd 폴백(Windows 한정). cmd 는 OSC7 통합 대상이 아니다.
+      // AI 세션이면 폴백도 그 명령을 띄운다 — 여기서 맨 셸로 떨어지면 사용자는 CLI 를 기다리며
+      // 빈 프롬프트를 본다.
       if (win && file !== 'cmd.exe') {
-        this.pty = ptySpawn('cmd.exe', [], {
+        this.pty = ptySpawn('cmd.exe', cmd ? (aiArgv('other', cmd) ?? []) : [], {
           name: 'xterm-256color',
           cols: 80,
           rows: 24,
@@ -144,7 +166,9 @@ export class PtyBackend implements SessionBackend {
     }
     // zsh 등 시작 인자/환경 경로가 없는 셸만 stdin 폴백(에코 발생 — osc7.ts 주석 참조).
     // 셸이 준비되기 전에 쓰면 무시되므로 짧게 지연. 실패는 무시(추적은 best-effort).
-    if (kind === 'other' && !win) {
+    // AI 세션은 제외한다: 저기 앉아 있는 것은 프롬프트가 아니라 CLI 라, 이 스니펫이 **질문 칸에
+    // 타이핑된다**(추적할 cwd 도 없다 — CLI 는 cd 하지 않는다).
+    if (kind === 'other' && !win && !cmd) {
       setTimeout(() => {
         try {
           this.pty.write(SHELL_INTEGRATION.posix)

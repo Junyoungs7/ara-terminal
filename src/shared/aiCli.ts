@@ -1,4 +1,10 @@
-// F27 AI CLI 한 번에 시작 — 원격 셸에 밀어 넣을 **한 줄**을 만드는 유일한 자리.
+// F27 AI CLI 한 번에 시작 — 그 CLI 를 **무엇으로 띄울지 정하는 유일한 자리.**
+//
+// 길이 둘이다(D · #168 에서 둘째가 붙었다):
+//  ① 이미 열린 셸에 **밀어 넣을 한 줄**(buildLaunch) — 사용자가 직접 치는 것과 같은 채널.
+//  ② 새 세션의 **프로세스 자체**(aiCommandOf · buildRemoteAiCommand) — 이전 출력이 없는 AI 탭.
+// 둘 다 같은 표·같은 검증을 지난다. 갈라지면 "우클릭으로 띄운 것과 새 탭으로 띄운 것의 플래그가
+// 다르다" 가 된다.
 //
 // 왜 여기 한 곳인가(remoteCatalog.ts 와 같은 이유, 성격은 다르다):
 // F26 의 `remote:*` 는 exec 채널이라 렌더러가 명령 문자열을 넘길 수 없게 id 만 받는다. 이쪽은
@@ -225,25 +231,126 @@ export type LaunchOptions = {
   shell?: LaunchShell
 }
 
+// ── D(#168) 그 세션의 **프로세스**로 띄우기 ──────────────────────────────────
+// 위쪽은 "셸에 밀어 넣을 한 줄"이고, 여기부터는 "그 pty 가 실행할 것" 이다. 조립 규칙의 주인이
+// 이 파일 하나라는 점은 같다 — 갈라지면 미리보기와 실제가 어긋난다.
+
 /**
- * 그 셸에서 실행될 한 줄. 인자가 하나라도 틀리면 null(= 시작하지 않고 안내).
- * 화면의 "보낼 명령" 미리보기와 실제 전송 문자열은 **이 함수의 같은 반환값**이다 —
- * 셸이 갈리면 미리보기도 갈려야 한다(PowerShell 대상인데 `cd … &&` 를 보여 주면 거짓말이다).
+ * 실행할 CLI 하나. **끝까지 배열로 간다** — 렌더러 → IPC → 세션 스펙 → 스폰까지 문자열로 잇는
+ * 자리가 없다(#152 가 없앤 인용 사고를 되돌리지 않는다).
  */
-export function buildLaunch(o: LaunchOptions): string | null {
+export type AiCommand = { bin: string; args: string[] }
+
+/** 플래그 개수 상한. 이 표의 CLI 중 제일 많은 것이 셋이라 넉넉하다. */
+const MAX_ARGS = 16
+
+/**
+ * 명령줄에 **인용 없이** 그대로 실을 수 있는 토큰인가.
+ *
+ * 이 규칙이 이 기능의 안전 근거다: 셸(`sh -lc` · `powershell -Command` · `cmd /c`)을 한 번
+ * 지나야 하는데, 토큰에 공백·따옴표·`&`·`$`·`%` 가 없으면 **어느 파서가 읽어도 결과가 같다.**
+ * 사용자가 고른 폴더는 여기 오지 않는다 — 로컬은 pty 의 `cwd` 옵션으로, 원격은 `cd` 한 줄로
+ * 따로 나른다(그쪽은 quotePosix 가 인용한다). 그래서 이 문자열에는 **우리 표의 값만** 남는다.
+ */
+const ARGV_SAFE = /^[A-Za-z0-9@._/:+=-]+$/
+
+/**
+ * 신뢰 경계 재확인. `session:create` 는 렌더러가 스펙을 통째로 넘기는 채널이라(`shell` 이 S1 에서
+ * MCP 스키마에서 빠진 것과 같은 자리), 스폰하는 쪽이 **한 번 더** 본다. 통과하지 못하면 null 이고
+ * 부르는 쪽이 반드시 분기한다(예외를 삼켜 "조용히 아무 일도 안 남" 이 되지 않게 — 이 파일의 규율).
+ */
+export function safeAiCommand(v: unknown): AiCommand | null {
+  const o = v as AiCommand | null
+  if (!o || typeof o !== 'object') return null
+  const bin = validCliBin(o.bin)
+  if (bin === null) return null
+  if (!Array.isArray(o.args) || o.args.length > MAX_ARGS) return null
+  if (!o.args.every((a) => typeof a === 'string' && a !== '' && a.length <= MAX_BIN && ARGV_SAFE.test(a))) return null
+  return { bin, args: [...o.args] }
+}
+
+/** 이 CLI 를 이 플래그로 띄울 argv. 검증은 `buildLaunch` 와 **같은 것**을 지난다. */
+export function aiCommandOf(o: Pick<LaunchOptions, 'cli' | 'bin' | 'flags'>): AiCommand | null {
   const spec = AI_CLIS[o.cli]
   if (!spec) return null
   const bin = o.cli === 'custom' ? validCliBin(o.bin) : spec.bin
   if (bin === null || bin === '') return null
-  const path = validPath(o.path)
-  if (path === null) return null
   // 표에 없는 id 가 하나라도 섞였으면 조립하지 않는다(조용히 무시하면 미리보기와 실제가 갈린다).
   const chosen = spec.flags.filter((f) => o.flags.includes(f.id))
   if (chosen.length !== new Set(o.flags).size) return null
   const groups = chosen.map((f) => f.group).filter((g): g is string => g !== undefined)
   if (new Set(groups).size !== groups.length) return null
-  const args = chosen.map((f) => f.arg).join(' ')
-  return cdThen(o.shell ?? 'posix', path, `${bin}${args ? ' ' + args : ''}`)
+  return safeAiCommand({ bin, args: chosen.map((f) => f.arg) })
+}
+
+/**
+ * 로컬에서 **그 pty 의 프로세스**가 될 셸 argv (D §①). 반환값이 곧 spawn 의 두 번째 인자다.
+ *
+ * 왜 셸을 한 겹 거치나 — 함정이 둘이다:
+ *  · POSIX: 곧바로 `claude` 를 띄우면 사용자의 `PATH`(nvm·pyenv·asdf)가 통째로 없어진다.
+ *  · 윈도우: `claude` 는 npm 이 깐 `.cmd` 셔임이라 **애초에 CreateProcess 로 못 뜬다**(#152 실측).
+ * 그 셸의 **유일한 일이 이 명령**이라 이전 출력이 없고, 명령이 끝나면 셸도 끝난다(= 세션 종료).
+ *
+ * `-l`/프로필 로딩의 대가는 배너 한 번이고, 안 하는 대가는 "command not found" 다
+ * (`buildRemoteAiCommand` 주석과 같은 저울). 보이는 것이 안 뜨는 것보다 싸다.
+ *
+ * posix 의 `exec "$@"` 는 인자를 **낱말 그대로** 넘기는 관용구다 — 이어 붙인 문자열을 로그인
+ * 셸이 다시 파싱하지 않는다. ponytail: `"$@"` 를 모르는 셸(fish)이 `$SHELL` 이면 여기서 실패한다.
+ * bash·zsh·sh·ksh 를 덮고, 필요해지면 그때 갈래를 하나 더 낸다.
+ */
+export function buildLocalAiArgv(shell: LaunchShell, cmd: AiCommand): string[] | null {
+  const safe = safeAiCommand(cmd)
+  if (safe === null) return null
+  // 낱말 하나하나가 그대로 argv 가 된다(ARGV_SAFE 가 공백·따옴표·메타문자를 이미 걸렀다).
+  const tokens = [safe.bin, ...safe.args]
+  // `-NoExit` 은 절대 붙이지 않는다 — CLI 가 끝나도 탭이 안 닫혀 D 의 효과가 사라진다.
+  if (shell === 'powershell') return ['-NoLogo', '-Command', ...tokens]
+  if (shell === 'cmd') return ['/d', '/s', '/c', ...tokens]
+  return ['-lc', 'exec "$@"', 'ara', ...tokens]
+}
+
+/**
+ * 원격에서 **그 exec 채널의 프로세스**가 될 한 줄 (D §②).
+ *
+ * ```
+ * cd '<폴더>' && exec "${SHELL:-/bin/sh}" -lc 'exec "$@"' ara <bin> <args…>
+ * ```
+ *
+ * 🔴 **환경이 사라지는 함정을 여기서 푼다.** sshd 의 exec 는 `$SHELL -c '<이 문자열>'` 로 도는데
+ * 그건 **로그인도 대화형도 아니라** bash 가 `.bashrc`·`.bash_profile` 을 하나도 안 읽는다 —
+ * nvm·pyenv·asdf 로 깐 `claude` 는 그 PATH 에 없다. 그래서 `-l` 로 로그인 셸을 한 겹 거친다.
+ * 대가는 `/etc/motd`·프로필의 배너가 맨 위에 한 번 찍히는 것이고, 안 거치는 대가는 **"claude:
+ * command not found"** 다(앱 안에서 되돌릴 방법이 없다). 보이는 것이 안 뜨는 것보다 싸다.
+ *
+ * 인용 층이 **하나뿐**인 것이 이 조립의 요점이다: `cd` 는 바깥 셸이 하니 폴더만 quotePosix 로
+ * 감싸면 되고, `exec "$@"` 덕에 bin·args 는 **낱말 그대로** 로그인 셸의 위치인자가 된다
+ * (`ARGV_SAFE` 가 낱말임을 보장한다). 중첩 따옴표를 만들지 않으므로 이스케이프 사고가 성립하지 않는다.
+ */
+export function buildRemoteAiCommand(cmd: AiCommand, path: string): string | null {
+  const safe = safeAiCommand(cmd)
+  if (safe === null) return null
+  const p = validPath(path)
+  if (p === null) return null
+  return cdThen('posix', p, `exec "\${SHELL:-/bin/sh}" -lc 'exec "$@"' ara ${[safe.bin, ...safe.args].join(' ')}`)
+}
+
+/**
+ * 그 셸에서 실행될 한 줄. 인자가 하나라도 틀리면 null(= 시작하지 않고 안내).
+ * 화면의 "보낼 명령" 미리보기와 실제 전송 문자열은 **이 함수의 같은 반환값**이다 —
+ * 셸이 갈리면 미리보기도 갈려야 한다(PowerShell 대상인데 `cd … &&` 를 보여 주면 거짓말이다).
+ *
+ * ⚠️ **D(#168)이 마지막 제품 소비자를 가져갔다**(Shell.runAiCliNow 가 위 ②로 옮겼다). 지금 이
+ * 함수를 부르는 것은 `tests/aiCli.test.ts` 뿐이다 — 그 검사가 지키는 인용 규칙(`cdThen`)은
+ * `buildRemoteAiCommand` 가 그대로 쓰므로 값이 남아 있다. 걷어내려면 `LaunchShell` 의
+ * powershell·cmd 갈래와 `app:launchShell` IPC(이미 부르는 화면이 없다)까지 함께 가야 한다 —
+ * 이 라운드의 일이 아니다. 새로 부르지 마라: 세션을 띄우는 길은 ②다.
+ */
+export function buildLaunch(o: LaunchOptions): string | null {
+  const cmd = aiCommandOf(o)
+  if (cmd === null) return null
+  const path = validPath(o.path)
+  if (path === null) return null
+  return cdThen(o.shell ?? 'posix', path, [cmd.bin, ...cmd.args].join(' '))
 }
 
 /**

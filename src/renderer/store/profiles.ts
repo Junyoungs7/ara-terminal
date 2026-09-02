@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionProfile, ProfileInput } from '@shared/types'
 import type { SshConnectResult } from '@shared/ipc'
+import type { AiCommand } from '@shared/aiCli'
 import { t } from '../i18n'
 
 export type ConnectFailure = Extract<SshConnectResult, { ok: false }>
@@ -79,15 +80,17 @@ export function useProfiles() {
   // 연결. 호스트키 최초 접속(hostKeyNew) 시 상위에서 확인 다이얼로그 후 acceptHostKey로 재호출.
   // password: 저장해 두지 않은 비밀번호를 그 자리에서 받아 넘길 때만 실린다(저장되지 않는다).
   // size: 셸을 열 치수(#158). 부르는 쪽이 알면 준다 — 안 주면 main 이 80×24 로 연다.
+  // aiCommand: D(#168) 주면 그 세션은 셸이 아니라 AI CLI 가 프로세스인 채로 열린다.
   const connect = useCallback(
     async (
       profileId: string,
       acceptHostKey?: boolean,
       password?: string,
-      size?: { cols: number; rows: number }
+      size?: { cols: number; rows: number },
+      aiCommand?: { argv: AiCommand; cwd: string }
     ): Promise<SshConnectResult> => {
       setConn((c) => ({ ...c, [profileId]: 'connecting' }))
-      const res = await window.ev.ssh.connect(profileId, acceptHostKey, password, size)
+      const res = await window.ev.ssh.connect(profileId, acceptHostKey, password, size, aiCommand)
       setConn((c) => ({ ...c, [profileId]: res.ok ? 'connected' : 'error' }))
       return res
     },

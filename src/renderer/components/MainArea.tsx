@@ -28,6 +28,7 @@ import { createWakeEngine } from '../store/wakeWord'
 let bootSplashShown = false
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
+import { aiRuns } from '../store/aiSessions'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
 import { buildTmuxInput } from '../../shared/tmux'
@@ -525,6 +526,13 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         .map((s) =>
           window.ev?.session.onExit(s.id, () => {
             if (closedByUser.current.delete(s.id)) return // 사용자가 닫은 것 — 조용히 보낸다
+            // D(#168) **AI 탭은 끊긴 게 아니라 끝난 것이다.** 그 세션의 프로세스가 곧 CLI 라
+            // (셸이 아니다) CLI 가 나가면 세션도 나간다 — 정상 종료다. 여기에 [재접속] 을 내면
+            // 거짓말이고, 눌러도 돌아오는 것은 AI 가 아니라 맨 셸이다. TerminalPane 의
+            // `[프로세스 종료 — code N]` 한 줄이 맞는 결과다(나간 것을 조용히 지우지 않는다).
+            // 대가: 이 탭이 **진짜로** 네트워크 때문에 끊겨도 카드가 안 뜬다. 다시 띄우는 자리는
+            // 작업대(#129)이고, 그 줄이 이 세션을 이미 알고 있다.
+            if (aiRuns().some((r) => r.sessionId === s.id)) return
             setRestoreErrors((m) => {
               if (m.has(s.id)) return m
               const n = new Map(m)

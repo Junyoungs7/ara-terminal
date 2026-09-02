@@ -10,6 +10,7 @@ import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { connectSsh } from '../sessions/ssh/SshBackend'
 import { hostId } from '../sessions/ssh/hostkey'
+import { safeAiCommand, validPath } from '@shared/aiCli'
 
 // 프로필 id → 연결 → 세션 편입. registerSshIpc(renderer 경유) 와 F23 MCP ssh_connect/session_create 가
 // 이 함수 하나를 공유한다(같은 함수의 두 번째 호출자 — F16 패턴). acceptHostKey 는 호출측이 정한다:
@@ -31,7 +32,12 @@ export async function connectByProfile(
    * #158 셸을 열 치수. **렌더러만 안다** — 새 세션이 뜰 포커스 칸의 xterm 이 이미 그 크기다.
    * MCP `ssh_connect` 는 화면과 무관하게 부르므로 주지 않는다(그러면 80×24, 지금까지와 동일).
    */
-  size?: { cols: number; rows: number }
+  size?: { cols: number; rows: number },
+  /**
+   * D(#168) 주면 이 세션은 **셸이 아니라 이 AI CLI 로** 열린다. 신뢰 경계 밖 값이라 여기서
+   * 다시 본다(MCP 는 이 인자를 주지 않는다 — `ssh_connect` 스키마에 자리가 없다).
+   */
+  aiCommand?: { argv: unknown; cwd: string }
 ): Promise<SshConnectResult> {
   const profile = profiles.get(profileId)
   if (!profile) return { ok: false, reason: 'network', message: '프로필을 찾을 수 없습니다.' }
@@ -54,13 +60,18 @@ export async function connectByProfile(
   // 직접 친 `claude` 의 훅도 자기가 어느 탭인지 말할 수 있다(편입 후엔 이미 셸이 떠 있다).
   const paneId = randomUUID()
   const hookSink = sessions.hooks()
+  // D(#168): 조립은 하지 않고 **검증만** 한다(조립의 주인은 shared/aiCli.ts 하나다).
+  const argv = aiCommand ? safeAiCommand(aiCommand.argv) : null
+  const aiCwd = aiCommand ? validPath(aiCommand.cwd) : null
+  if (aiCommand && (!argv || !aiCwd)) return { ok: false, reason: 'network', message: '실행할 수 없는 AI 명령입니다.' }
   const outcome = await connectSsh(profile, {
     knownHosts: ws.getKnownHosts(),
     secret,
     acceptHostKey,
     onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
     ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {}),
-    ...(size && size.cols > 0 && size.rows > 0 ? { size } : {})
+    ...(size && size.cols > 0 && size.rows > 0 ? { size } : {}),
+    ...(argv && aiCwd ? { aiCommand: { argv, cwd: aiCwd } } : {})
   })
 
   if (!outcome.ok) return outcome
@@ -168,8 +179,8 @@ export function registerSshIpc(
   ws: WorkspaceStore,
   sessions: MainSessionManager
 ): void {
-  handle('ssh:connect', ({ profileId, acceptHostKey, password, size }): Promise<SshConnectResult> =>
-    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size)
+  handle('ssh:connect', ({ profileId, acceptHostKey, password, size, aiCommand }): Promise<SshConnectResult> =>
+    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, aiCommand)
   )
 
   handle('conn:test', ({ input }): Promise<ConnTestResult> => testProfile(profiles, ws, input))

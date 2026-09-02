@@ -9,6 +9,7 @@ import { logMainError } from '../../log/MainErrorLog'
 import { SHELL_PID_CMD, cwdLink, parseShellPid, ttyLink } from './remoteCwd'
 import type { HookSink } from '../../agent/AgentHookServer'
 import { prepareRemoteHooks } from '../../agent/remoteHooks'
+import { buildRemoteAiCommand, type AiCommand } from '@shared/aiCli'
 
 // 출력이 이만큼 멎으면 프롬프트가 뜬 것으로 보고 CWD 를 한 번 읽는다(remoteCwd.ts 참조).
 // 짧을수록 트리가 빨리 따라오지만, 명령 출력 중간중간 읽는 낭비가 는다.
@@ -57,7 +58,27 @@ export type ConnectDeps = {
    * 어느 쪽이든 렌더러가 붙으면 `session:resize` 가 뒤따라 온다 — 이 값이 틀려도 곧 교정된다.
    */
   size?: { cols: number; rows: number }
+  /**
+   * D(#168) **셸 대신 이 CLI 를 그 채널의 프로세스로 연다**(AI 세션 전용).
+   *
+   * ⚠️ 여기만 `exec` 채널이다. F1b 는 **일부러** exec 로 가지 않았다 — `ForceCommand` 나
+   * `PermitTTY no` 인 서버에서 exec 가 거절되면 그날부터 **모든 SSH 탭이 안 열린다.** 그 값이
+   * 달라서 여기서는 간다: 이 채널은 "AI 를 띄운다" 하나뿐이라, 거절당해도 **그 한 번**이 실패하고
+   * 사용자의 셸 탭은 지금까지와 똑같이 `client.shell()` 로 열린다. 기존 경로는 한 줄도 안 바뀐다.
+   */
+  aiCommand?: { argv: AiCommand; cwd: string }
 }
+
+/**
+ * D(#168) AI 채널만 훅 설치가 끝나기를 기다리는 상한.
+ *
+ * 셸은 안 기다린다(remoteHooks.ts 주석 — 사용자가 `claude` 를 치는 것은 한참 뒤다). 여기서는
+ * **우리가 그 순간을 정한다**: claude 는 뜰 때 `settings.json` 을 한 번 읽으므로, 아직 안 심긴
+ * 채로 띄우면 그 세션은 훅이 없어 [AI] 목록에 안 뜬다 — 이 기능이 원한 것의 정반대다.
+ * 두 번째 접속부터는 파일이 이미 같아 왕복 없이 즉시 끝난다(planHooks 의 `next === null`).
+ * 상한에 닿으면 그냥 띄운다 — 탭이 영영 안 열리는 것이 더 나쁘다.
+ */
+const HOOK_INSTALL_WAIT_MS = 3000
 
 export type ConnectOutcome =
   | { ok: true; backend: SshBackend }
@@ -150,6 +171,10 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
           const prep = await prepareRemoteHooks(client, deps.hooks.sink, deps.hooks.paneId, profile.name || profile.host)
           env = prep?.env ?? null
           onTty = prep?.publish
+          // D(#168) AI 채널만 설치를 기다린다(HOOK_INSTALL_WAIT_MS 주석의 이유).
+          if (deps.aiCommand && prep) {
+            await Promise.race([prep.installed, new Promise((r) => setTimeout(r, HOOK_INSTALL_WAIT_MS))])
+          }
           void prep?.installed.then((r) => {
             // 설치 실패는 접속을 막지 않는다 — 대신 조용히 사라지지도 않게 남긴다(왜 상태가
             // 안 뜨는지 물어볼 사람이 있다). `skipped` 는 실패가 아니라 **안 한 것**이라 안 남긴다
@@ -164,6 +189,26 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
       // 해석해 **pty 요청의 term·크기가 사라진다**(ssh2 client.js shell() 의 인자 판별).
       const cols = deps.size?.cols ?? FALLBACK_COLS
       const rows = deps.size?.rows ?? FALLBACK_ROWS
+      // D(#168) AI 세션 — 셸이 아니라 이 명령이 그 채널의 프로세스다. **pty 를 함께 요청한다**:
+      // 그래야 CLI 가 TUI 로 뜨고, sshd 가 `SSH_TTY` 를 넣어 주며(#162 폴백 파일이 그 이름을 쓴다)
+      // `/proc/<pid>/fd/0` 도 그 tty 를 가리킨다 — 즉 아래 findShellPid·publish 가 셸 때와 똑같이 돈다.
+      if (deps.aiCommand) {
+        const line = buildRemoteAiCommand(deps.aiCommand.argv, deps.aiCommand.cwd)
+        if (line === null) {
+          done({ ok: false, reason: 'network', message: '실행할 수 없는 AI 명령입니다.' })
+          return
+        }
+        client.exec(line, { pty: { term: 'xterm-256color', cols, rows }, ...(env ? { env } : {}) }, (err, channel) => {
+          if (err) {
+            // 여기서 실패해도 잃는 것은 이 한 번이다(ConnectDeps.aiCommand 주석) — 사용자의 셸 탭은
+            // 이 길을 지나지 않는다. 사유를 그대로 올려 무엇이 거절했는지 보이게 한다.
+            done({ ok: false, reason: 'network', message: `AI 채널 열기 실패: ${err.message}` })
+            return
+          }
+          done({ ok: true, backend: new SshBackend(client, channel, onTty) })
+        })
+        return
+      }
       client.shell({ term: 'xterm-256color', cols, rows }, env ? { env } : {}, (err, channel) => {
         if (err) {
           done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })

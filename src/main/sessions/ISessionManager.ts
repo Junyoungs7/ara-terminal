@@ -1,6 +1,7 @@
 // ISessionManager — 프로세스 위치 불변 인터페이스 (계획서 §B.7).
 // Phase 2에서 UtilitySessionManager로 교체해도 renderer/shared 계약 변경 0.
 import type { Session } from '@shared/types'
+import type { AiCommand } from '@shared/aiCli'
 
 // manualTitle 은 복원 전용: 사용자가 바꿔 둔 탭 이름을 재스폰 후에도 OSC 제목에서 지켜 준다(R3.6).
 // winId 는 **부른 창**이다: 떼어낸 창에서 연 새 탭은 그 창 것이어야 한다(안 주면 본창).
@@ -9,7 +10,20 @@ import type { Session } from '@shared/types'
 export type SessionSpec = Pick<
   Session,
   'type' | 'shell' | 'profileId' | 'cwd' | 'serverKey' | 'title' | 'manualTitle' | 'winId'
->
+> & {
+  /**
+   * D(#168) **이 세션의 프로세스가 곧 이 CLI 다.** 주면 셸을 열지 않는다.
+   *
+   * `shell` 과 성격이 다르다: 저건 "무슨 셸을 열까"(문자열 하나)라 인자를 실을 자리가 없고,
+   * 이건 **명령 + 인자**라 배열이어야 한다(문자열로 이으면 `#152` 의 인용 문제가 돌아온다).
+   * `Session` 메타에는 안 남긴다 — 스냅샷에 실려 복원되면 그때는 CLI 가 아니라 셸이어야 한다
+   * (되살리는 일은 작업대가 `bench.record` 로 따로 기억한다).
+   *
+   * 신뢰 경계: 스폰하는 쪽이 `safeAiCommand` 로 한 번 더 본다(MCP `session_create` 스키마에는
+   * 이 필드가 없다 — AI 는 실행파일을 고를 수 없다는 S1 규칙 그대로다).
+   */
+  command?: AiCommand
+}
 
 // main→renderer 스트림 싱크. IPC 레이어가 주입한다(세션 매니저는 IPC를 모른다).
 export interface SessionSink {

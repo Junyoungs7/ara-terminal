@@ -16,7 +16,7 @@ import type {
   UpdateState
 } from '@shared/ipc'
 import type { AgentStatus } from '@shared/agentStatus'
-import type { LaunchShell } from '@shared/aiCli'
+import type { AiCommand, LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
 import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
@@ -95,8 +95,14 @@ const api: EvApi = {
     delete: (id: string) => ipcRenderer.invoke('profile:delete', { id })
   },
   ssh: {
-    connect: (profileId: string, acceptHostKey?: boolean, password?: string, size?: { cols: number; rows: number }) =>
-      ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size }),
+    // aiCommand: D(#168) 셸 대신 그 AI CLI 를 프로세스로 여는 세션. 안 주면 지금까지와 같다.
+    connect: (
+      profileId: string,
+      acceptHostKey?: boolean,
+      password?: string,
+      size?: { cols: number; rows: number },
+      aiCommand?: { argv: AiCommand; cwd: string }
+    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, aiCommand }),
     forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
     test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },
