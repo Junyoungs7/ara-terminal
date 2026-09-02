@@ -113,14 +113,6 @@ export function openSessionWindow(
     return existing
   }
 
-  /**
-   * TEMP-DIAG(2026-09-02 제보 ②) — *"크롬처럼 창 분리하면 바로 뜨는 게 아니고 살짝 기다리다 뜨더라고."*
-   * 그 기다림이 **어디**인지 재는 눈이다: 창을 만들라는 요청(win:detach 가 곧바로 여기로 온다)부터
-   * ⓐ 렌더러가 번들을 다 받은 시점 ⓑ 첫 페인트(ready-to-show)까지. dev(vite: 모듈 수백 개를 HTTP 로)
-   * 와 프로덕션(loadFile: 번들 하나)이 다르므로 **양쪽에서 한 번씩** 봐야 한다.
-   * 답이 나오면 걷는다 — release-test 게이트가 `grep -rn TEMP-DIAG src/` 0건을 요구한다.
-   */
-  const t0 = Date.now()
   const box = usableBounds(opts.bounds ?? droppedAt(opts.at), screen.getAllDisplays())
   const win = new BrowserWindow({
     ...(box ?? { width: WIDTH, height: HEIGHT }),
@@ -196,7 +188,6 @@ export function openSessionWindow(
    * 그 자리) moveTop 이 orderFrontRegardless 다. 창을 옮기지는 않는다(끌어다 놓은 자리는 그대로).
    */
   win.once('ready-to-show', () => {
-    console.log(`[TEMP-DIAG detach] ready-to-show +${Date.now() - t0}ms (${winId})`)
     win.setAlwaysOnTop(true)
     win.show()
     win.setAlwaysOnTop(false)
@@ -206,9 +197,6 @@ export function openSessionWindow(
 
   const hash = sessionWinHash(winId)
   const devUrl = process.env['ELECTRON_RENDERER_URL']
-  console.log(`[TEMP-DIAG detach] BrowserWindow 생성 +${Date.now() - t0}ms (${devUrl ? 'dev' : 'prod'})`)
-  win.webContents.once('dom-ready', () => console.log(`[TEMP-DIAG detach] dom-ready +${Date.now() - t0}ms`))
-  win.webContents.once('did-finish-load', () => console.log(`[TEMP-DIAG detach] did-finish-load +${Date.now() - t0}ms`))
   if (devUrl) void win.loadURL(devUrl + hash)
   else void win.loadFile(join(__dirname, '../renderer/index.html'), { hash: hash.slice(1) })
   return win

@@ -410,16 +410,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       )
     )
     term.open(host)
-    /**
-     * TEMP-DIAG(2026-09-02 제보 ①) — *"창을 뗄 때 `Viewport.syncScrollArea` 가 던진다."*
-     *
-     * 던지는 자리는 **xterm 이 자기 생성자에서 건 `setTimeout(0)`** 이다(Viewport 생성자 끝의
-     * `setTimeout(() => this.syncScrollArea())`). 취소할 손잡이가 없어서, **같은 태스크 안에서
-     * 만들고 버린 터미널**이면 그 타이머가 이미 dispose 된 RenderService 를 읽는다.
-     * 그 조건이 실제로 성립하는지를 보는 눈: 아래 dispose 로그와 **t 가 같으면** 그 경우다.
-     * 답이 나오면 걷는다(release-test 가 TEMP-DIAG 0건을 요구한다).
-     */
-    console.log(`[TEMP-DIAG term] open ${sessionId} t=${Math.round(performance.now())}`)
     // R3.4 WebGL 렌더러 — 실패(드라이버 없음·headless)나 컨텍스트 로스트 시 DOM 렌더러로 되돌린다.
     // dispose 만 하면 xterm 이 자동으로 DOM 폴백을 쓰므로 별도 재생성은 없다.
     // 언마운트 때 term.dispose() 보다 먼저 GL 컨텍스트를 끊어야 한다 — 순서가 뒤바뀌면 창을 닫는
@@ -607,7 +597,6 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
         // 이미 컨텍스트 로스트로 해제된 경우 — 무시.
       }
       term.dispose()
-      console.log(`[TEMP-DIAG term] dispose ${sessionId} t=${Math.round(performance.now())}`) // 위 open 주석 참고
       termRef.current = null
       fitRef.current = null
     }
