@@ -93,21 +93,39 @@ export function mergeMainSnapshot(cur: Session[], mine: Session[]): Session[] {
 /**
  * 탭 하나가 목록에서 빠졌다 — **그 자리를 누가 채우는가.**
  *
- * 떠난 자리의 **오른쪽** 탭, 없으면 왼쪽, 그것도 없으면 첫 탭(브라우저 관례). 활성 탭이 아니었으면
- * 아무것도 안 바뀐다.
+ * **직전에 보던 탭(MRU)** 이다 — 2026-09-02 준영님 결정. 그 앞의 규칙(오른쪽 → 왼쪽 → 첫 탭)은
+ * 이제 **MRU 가 비었을 때의 폴백**이다: 이 창에서 아직 아무 탭도 본 적이 없는 경우(첫 세션을
+ * 떼어냈다)가 그것이다. 활성 탭이 아니었으면 아무것도 안 바뀐다.
+ *
+ * MRU 목록에는 **이미 없어진 세션이 남아 있을 수 있다**(다른 창으로 떠났거나 닫혔다) — 그래서
+ * 살아 있는 것(`rest`) 중 가장 최근을 고른다. 목록 자체는 useSessions 의 `mru` 를 그대로 쓴다.
+ * 새 기록을 만들지 않는다: 그 기록은 분할이 배경 세션을 고를 때(pickBackgroundSession) 이미 쓰고
+ * 있고, 활성 탭이 바뀌는 모든 길이 `touch` 한 곳으로 모여 있다.
  *
  * 이 규칙이 함수인 이유: 탭이 빠지는 길이 **둘**이다 — ✕ 로 닫기(close)와 창으로 떼어내기
  * (`session:moved`). 2026-09-02 준영님 제보 *"창 분리하면 아라 기본 창에서는 바로 이전 세션 창이
  * 켜져야 하는데 안 켜지고 있어"* 가 그 둘이 갈라져 있어서 나왔다: 닫기에만 규칙이 있었고
  * 떼어내기는 탭만 지우고 activeId 를 떠난 세션에 둔 채로 뒀다(그 세션의 칸은 아무것도 안 그린다 →
  * 빈 창). 두 길이 다르게 굴면 그게 다음 제보라서, 규칙을 한 곳에 둔다.
+ *
+ * ⚠️ **✕ 로 닫을 때도 같은 규칙이다.** 준영님은 분리를 말씀하셨지만 갈라 두지 않는다 — 위 문단이
+ * 곧 그 이유다(둘이 다르게 굴어서 나온 제보를 고치는 중에 다시 가르는 셈이다). 관례로도 어긋나지
+ * 않는다: VS Code 는 닫은 뒤 **최근에 쓰던 편집기**로 간다(focusRecentEditorAfterClose 가 기본값
+ * true)이고, 이 앱의 팔레트·F1 이 이미 그쪽 관례를 따른다. 브라우저(오른쪽 탭)와는 갈리지만
+ * 여기 탭은 브라우저 탭보다 편집기 탭에 가깝다 — 서버 작업은 두 탭을 오가며 한다.
  */
-export function nextActiveAfter(before: Session[], removedId: string, cur: string | null): string | null {
+export function nextActiveAfter(
+  before: Session[],
+  removedId: string,
+  cur: string | null,
+  mru: readonly string[] = []
+): string | null {
   if (cur !== removedId) return cur
   const idx = before.findIndex((x) => x.id === removedId)
   if (idx < 0) return cur
   const rest = before.filter((x) => x.id !== removedId)
-  return rest[idx]?.id ?? rest[idx - 1]?.id ?? rest[0]?.id ?? null
+  const recent = mru.find((id) => id !== removedId && rest.some((x) => x.id === id))
+  return recent ?? rest[idx]?.id ?? rest[idx - 1]?.id ?? rest[0]?.id ?? null
 }
 
 // 분할이 새 패널에 올릴 배경 세션(패널 미배치) 고르기 — 최근 사용 순, 그다음 탭 순서(R2.0).
@@ -137,8 +155,12 @@ export function useSessions(winId?: string) {
   const listRef = useRef<Session[]>(sessions)
   listRef.current = sessions
   const [activeId, setActiveId] = useState<string | null>(null)
-  // 최근 사용 순(앞이 최신). 분할이 배경 세션을 고를 때 쓴다(R2.0).
+  // 최근 사용 순(앞이 최신). 분할이 배경 세션을 고를 때(R2.0), 그리고 탭이 빠진 자리를 채울 때
+  // (nextActiveAfter) 쓴다. setState 업데이터 안에서 읽어야 해서 listRef 와 같은 사본을 둔다 —
+  // 클로저의 mru 는 알림이 도착한 시점의 낡은 값이다.
   const [mru, setMru] = useState<string[]>([])
+  const mruRef = useRef<string[]>(mru)
+  mruRef.current = mru
 
   // 활성 세션 변경 = MRU 갱신. 활성화 경로가 여러 개(탭·트리·복원)라 한 곳으로 모은다.
   const touch = useCallback((id: string | null) => {
@@ -205,9 +227,12 @@ export function useSessions(winId?: string) {
   const close = useCallback((id: string) => {
     // rdp 는 main 에 세션이 없다(릴레이는 RdpView 가 정리한다).
     if (!id.startsWith('rdp:')) void window.ev.session.destroy(id)
+    // 지우기 **전에** 읽는다 — 이 세션이 활성이었다면 기록의 맨 앞이 자기 자신이고, 그 다음이
+    // "직전에 보던 탭"이다(nextActiveAfter 가 자기 자신은 건너뛴다).
+    const recent = mruRef.current
     setMru((m) => m.filter((x) => x !== id))
     setSessions((t) => {
-      setActiveId((cur) => nextActiveAfter(t, id, cur))
+      setActiveId((cur) => nextActiveAfter(t, id, cur, recent))
       return t.filter((x) => x.id !== id)
     })
   }, [])
@@ -295,10 +320,13 @@ export function useSessions(winId?: string) {
       }
       // 떠났다(세션은 살아 있다 — 다른 창이 그린다). 활성 탭이었으면 **✕ 로 닫을 때와 같은 규칙**으로
       // 그 자리를 채운다 — 안 그러면 없는 세션이 활성인 채 남아 이 창이 빈다(2026-09-02 제보 ②).
+      // close 와 같은 순서다: 기록을 읽고 → 자리를 정하고 → 기록에서 뺀다.
+      const recent = mruRef.current
       setSessions((cur) => {
-        setActiveId((a) => nextActiveAfter(cur, sessionId, a))
+        setActiveId((a) => nextActiveAfter(cur, sessionId, a, recent))
         return cur.filter((x) => x.id !== sessionId)
       })
+      setMru((m) => m.filter((x) => x !== sessionId))
     })
     return () => off?.()
   }, [winId, refreshFromMain])

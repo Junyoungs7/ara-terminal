@@ -101,7 +101,11 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
       ref={boxRef}
       data-action="palette.open"
       // 칸 어디를 눌러도 타이핑을 시작할 수 있어야 한다(돋보기·여백을 눌렀을 때도).
-      onClick={() => inputRef.current?.focus()}
+      // **여는 것도 여기서** 한다 — 아래 input 의 onFocus 가 아니라(그 이유는 onChange 위 주석).
+      onClick={() => {
+        inputRef.current?.focus()
+        onOpen()
+      }}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="11" cy="11" r="7" />
@@ -115,9 +119,29 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
         spellCheck={false}
         placeholder={t('palette.placeholder')}
         value={q}
-        onFocus={onOpen}
         onBlur={onClose}
-        onChange={(e) => setQ(e.target.value)}
+        /**
+         * 2026-09-02 준영님 제보: *"Ctrl+Shift+I 로 콘솔을 키고 다시 끄면 왜 F1 즉 검색 리스트가
+         * 계속 켜지는 거야?"*
+         *
+         * 여기 있던 `onFocus={onOpen}` 이 원인이다 — **"칸에 포커스가 있다" 를 "목록이 열렸다"로
+         * 읽고 있었다.** 그런데 이 칸은 문서에서 **처음 나오는 포커스 가능한 요소**이고, 포커스는
+         * 우리가 주지 않아도 온다: 창이 다시 활성화될 때 브라우저가 마지막 포커스를 되돌려 주고,
+         * DevTools 를 닫는 그 순간이 정확히 그 자리다(Alt+Tab 으로 돌아올 때도 같다).
+         * 그래서 콘솔을 여닫을 때마다 **한 번씩** 목록이 켜졌다(반복 루프가 아니라 토글 1회당 1회다).
+         *
+         * ⚠️ 어제 고친 `9abcfa4` 는 **떠 있는 목록의 위치**였고 이건 **열리는 것 자체**라 다른
+         * 문제다. 위 useLayoutEffect 의 resize 리스너는 `open` 일 때만 붙고 `setDrop` 만 하므로
+         * 이 증상과 무관하다(그것까지 확인했다).
+         *
+         * 여는 계기를 **사람의 뜻**으로 좁힌다: 칸을 누르거나(위 onClick), 치거나(여기), F1
+         * (Shell 의 keydown → open → 아래 이펙트가 포커스를 준다). 브라우저가 되돌려 준 포커스는
+         * 그중 어느 것도 아니다.
+         */
+        onChange={(e) => {
+          setQ(e.target.value)
+          onOpen()
+        }}
         onKeyDown={(e) => {
           // 터미널·트리 단축키가 검색 중에 발동하지 않게 여기서 끊는다. 그래서 **여는 키를 다시
           // 눌러 닫는 것도 여기서** 받아야 한다 — 안 그러면 창 단축키 핸들러까지 닿지 않는다.
@@ -148,6 +172,10 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
           // 항목을 누를 때 입력칸이 먼저 포커스를 잃으면(onBlur → 닫힘) 클릭이 도착하기도 전에
           // 목록이 사라진다. mousedown 을 막아 포커스를 붙잡아 둔다.
           onMouseDown={(e) => e.preventDefault()}
+          // 목록은 검색 상자 **안에** 그려진다(position:fixed 라 눈에는 아래로 떨어져 보인다).
+          // 그래서 항목 클릭이 상자의 onClick 까지 올라가 pick() 이 방금 닫은 목록을 다시 연다 —
+          // 여기서 끊는다(빈 목록·안내줄을 눌렀을 때도 같다).
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="cp-list" ref={listRef}>
             {shown.length === 0 && <div className="cp-empty">{t('palette.empty')}</div>}

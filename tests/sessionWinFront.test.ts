@@ -22,7 +22,8 @@ const h = vi.hoisted(() => {
   class FakeWin {
     static last: FakeWin | null = null
     private readonly handlers = new Map<string, () => void>()
-    readonly webContents = { isDestroyed: () => false, isCrashed: () => false }
+    // once 는 로딩 단계 진단(TEMP-DIAG)이 건다 — 가짜 창에도 있어야 openSessionWindow 가 지나간다.
+    readonly webContents = { isDestroyed: () => false, isCrashed: () => false, once: (): void => {} }
     constructor(opts: Record<string, unknown>) {
       opened.push(opts)
       FakeWin.last = this

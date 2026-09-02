@@ -129,34 +129,53 @@ describe('main 스냅샷 합치기', () => {
   })
 })
 
-// ── 탭이 빠진 자리를 누가 채우는가 (2026-09-02 제보 ②) ───────────────────────
+// ── 탭이 빠진 자리를 누가 채우는가 (2026-09-02 제보 ②·③) ─────────────────────
 //
 // *"창 분리하면 아라 기본 창에서는 바로 이전 세션 창이 켜져야 하는데 안 켜지고 있어."*
 //
 // 탭이 목록에서 빠지는 길이 둘이다 — ✕ 로 닫기와 창으로 떼어내기. 닫기에만 규칙이 있었고
 // 떼어내기는 activeId 를 **떠난 세션에 둔 채로** 뒀다: 그 세션의 칸은 아무것도 안 그리니 본창이
 // 통째로 빈다. 두 길이 같은 함수를 쓰는지를 여기서 고정한다(다르게 굴면 그게 다음 제보다).
+//
+// 자리를 채우는 규칙은 **직전에 보던 탭(MRU)** 이다(2026-09-02 준영님 결정). 아래 ★ 넷은
+// 원래 "오른쪽이 받는다"를 고정하던 검사인데, 그 규칙이 없어진 게 아니라 **기록이 없을 때의
+// 폴백**으로 내려갔다 — 그래서 지우지 않고 뜻만 그렇게 바꿨다(mru 인자를 안 주면 곧 그 경우다).
 describe('빠진 탭의 자리', () => {
   const abc = [sess('a'), sess('b'), sess('c')]
 
-  it('★ 오른쪽 탭이 그 자리를 받는다 — 브라우저와 같은 관례', () => {
+  it('★ 본 기록이 없으면 오른쪽 탭이 그 자리를 받는다 — 폴백', () => {
     expect(nextActiveAfter(abc, 'b', 'b')).toBe('c')
   })
 
-  it('★ 맨 오른쪽이 빠지면 왼쪽으로 — 오른쪽이 없을 때의 유일한 이웃이다', () => {
+  it('★ 기록이 없고 맨 오른쪽이 빠지면 왼쪽으로 — 오른쪽이 없을 때의 유일한 이웃이다', () => {
     expect(nextActiveAfter(abc, 'c', 'c')).toBe('b')
   })
 
   it('활성 탭이 아니면 아무것도 안 바뀐다 — 남의 탭이 떠났다고 화면이 움직이면 안 된다', () => {
-    expect(nextActiveAfter(abc, 'a', 'c')).toBe('c')
+    expect(nextActiveAfter(abc, 'a', 'c', ['a', 'c', 'b'])).toBe('c')
   })
 
   it('마지막 하나가 빠지면 없다', () => {
-    expect(nextActiveAfter([sess('a')], 'a', 'a')).toBeNull()
+    expect(nextActiveAfter([sess('a')], 'a', 'a', ['a'])).toBeNull()
   })
 
   it('같은 알림이 두 번 와도 활성 탭이 튀지 않는다 — 두 번째는 이미 옮겨 간 뒤다', () => {
-    const after = nextActiveAfter(abc, 'b', 'b') // 'c'
-    expect(nextActiveAfter([sess('a'), sess('c')], 'b', after)).toBe('c')
+    const mru = ['b', 'a', 'c']
+    const after = nextActiveAfter(abc, 'b', 'b', mru) // 'a'(직전에 보던 탭)
+    expect(nextActiveAfter([sess('a'), sess('c')], 'b', after, mru)).toBe('a')
+  })
+
+  it('★ 직전에 보던 탭이 받는다 — 오른쪽(c)이 아니라 a 다', () => {
+    // 기록 앞이 곧 떠나는 세션이다(활성이었으니까) — 그 다음이 "직전에 보던" 탭.
+    expect(nextActiveAfter(abc, 'b', 'b', ['b', 'a', 'c'])).toBe('a')
+  })
+
+  it('기록에 남은 죽은 세션은 건너뛴다 — 살아 있는 것 중 가장 최근', () => {
+    // 'z' 는 이미 닫혔거나 다른 창으로 떠났다(기록은 그걸 모른다).
+    expect(nextActiveAfter(abc, 'b', 'b', ['b', 'z', 'c', 'a'])).toBe('c')
+  })
+
+  it('기록이 떠나는 세션뿐이면 폴백으로 떨어진다 — 첫 세션을 떼어낸 경우', () => {
+    expect(nextActiveAfter(abc, 'a', 'a', ['a'])).toBe('b')
   })
 })
