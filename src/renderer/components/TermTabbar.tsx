@@ -39,6 +39,8 @@ type Props = {
    * overId 는 놓인 자리의 탭(있으면 그 옆에 끼운다). 실제 이동은 main 이 소유 창을 바꿔서 한다.
    */
   onAdopt?: (sessionId: string, overId?: string) => void
+  /** 한 줄 안내(토스트). 지금은 "RDP 는 창을 분리할 수 없다" 한 자리에서만 쓴다 — MainArea 소유. */
+  onNotice?: (msg: string) => void
 }
 
 type TabDnd = {
@@ -148,7 +150,8 @@ export function TermTabbar({
   onDuplicate,
   onCloseOthers,
   onReorder,
-  onAdopt
+  onAdopt,
+  onNotice
 }: Props) {
   // ＋ 버튼 우클릭 보조 메뉴 좌표(로컬 셸 / SSH 연결) — 좌클릭은 onNew() 로 바로 로컬 셸을 연다(UI-tabbar).
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
@@ -243,6 +246,20 @@ export function TermTabbar({
    * (준영님 제보 31번) 원인을 좁힐 단서도 남지 않는다.
    */
   const detach = (id: string, at?: { x: number; y: number }) => {
+    /**
+     * **RDP 는 창 사이를 못 옮긴다** — 알려진 한계다(0e2bd72). pty 가 없어 main 에 세션이 없고
+     * (openRdp 가 렌더러 목록에만 넣는다) 소유를 바꿀 대상 자체가 없다. 그래서 여기까지 오면
+     * main 이 "그런 세션 없음"으로 거절했고, 화면에는 **아무 일도 안 일어났다** — 2026-09-02
+     * 준영님: *"창 분리를 할 때 rdp 는 분리가 안 되고."* 사용자는 자기가 잘못 끌었다고 여긴다.
+     *
+     * 고치지는 않고(소유 모델 얘기다) **말은 한다.** 드래그 자체를 막지 않는 이유: 그러면 RDP 탭의
+     * 순서 바꾸기와 칸에 놓기(분할)까지 함께 죽는다 — 되는 일을 막는 값이 더 크다.
+     * 우클릭 [창 분리]도 같은 문을 지나므로 안내가 한 곳이면 족하다.
+     */
+    if (sessions.find((x) => x.id === id)?.type === 'rdp') {
+      onNotice?.(t('tab.detach.rdp'))
+      return
+    }
     void window.ev?.window
       .detachSession(id, at)
       .then((r) => {

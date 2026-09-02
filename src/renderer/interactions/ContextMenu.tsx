@@ -51,6 +51,32 @@ export function clampMenu(
   }
 }
 
+/**
+ * 서브메뉴 자리 — 부모 **옆**에 붙인다(순수 — 단위 테스트 대상).
+ *
+ * 2026-09-02 준영님(RDP): *"리스트가 겹쳐서 보여서 이전으로 리스트가 가려지고 있어."* 가로 자리를
+ * `clampMenu` 로 구한 것이 원인이었다 — 그건 **뷰포트 안으로 밀어 넣는** 함수라, 부모가 이미
+ * 오른쪽 상한(`vw - MENU_W - EDGE`)에 서 있으면 `부모 + MENU_W` 를 같은 값으로 되밀어 부모를
+ * 정확히 덮는다. 서브메뉴 자체는 처음부터 있었고(F19 tmux) 우클릭 메뉴는 커서 자리에 열려
+ * 어쩌다 걸렸을 뿐인데, RDP [옵션] 은 헤더 오른쪽 끝이라 **항상** 그 조건이다.
+ *
+ * 그래서 가로는 밀지 않고 **뒤집는다**: 오른쪽에 한 장이 안 들어가면 부모 왼쪽에 붙인다.
+ * 세로는 미는 것이 맞다 — 위아래로 밀려도 부모를 가리지 않는다.
+ */
+export function submenuPos(
+  parent: { left: number; top: number },
+  index: number,
+  count: number,
+  vw: number,
+  vh: number
+): { left: number; top: number } {
+  const right = parent.left + MENU_W
+  // 뷰포트가 메뉴 두 장 + 여백(462px)보다 좁으면 어디에 놔도 겹친다 — 그때는 왼쪽 가장자리에
+  // 붙인다(화면 밖으로 내보내는 쪽이 더 나쁘다).
+  const left = right + MENU_W + EDGE <= vw ? right : Math.max(EDGE, parent.left - MENU_W)
+  return { left, top: clampMenu(parent.left, parent.top + index * ROW_H, count, vw, vh).top }
+}
+
 type Props = {
   open: boolean
   x: number
@@ -117,9 +143,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
   if (!open || items.length === 0) return null
   const pos = clampMenu(x, y, items.length, window.innerWidth, window.innerHeight)
   const subItems = subIdx !== null ? items[subIdx]?.submenu : undefined
-  const subPos = subItems
-    ? clampMenu(pos.left + MENU_W, pos.top + subIdx! * ROW_H, subItems.length, window.innerWidth, window.innerHeight)
-    : null
+  const subPos = subItems ? submenuPos(pos, subIdx!, subItems.length, window.innerWidth, window.innerHeight) : null
 
   return (
     <>

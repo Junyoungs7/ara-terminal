@@ -56,6 +56,29 @@ export function cellsFor(panes: Pane[], pairAxis: PairAxis = 'lr'): PaneCell[] {
   return panes.map((p, i) => ({ ...p, ...order[i] }))
 }
 
+/**
+ * 지금 보이는 칸이 **전부 RDP** 인가 — 하단바를 그릴지 정한다.
+ *
+ * 2026-09-02 준영님: *"rdp 는 어차피 하단바를 사용 못하니까 rdp 연결할 때는 하단바를 켜지 말게
+ * 해 줘."* 포트·프로세스·컨테이너는 **SSH 세션의 것**이라 RDP 칸에는 보여 줄 것이 없다.
+ *
+ * **포커스 칸이 아니라 칸 구성으로 판정한다.** 포커스 기준이면 터미널과 RDP 를 나란히 둔 분할에서
+ * 칸을 옮길 때마다 하단바가 사라졌다 나타나고, 하단바는 덮지 않고 **밀어내므로**(terminal/
+ * resizeGate.ts 머리주석) 그때마다 터미널이 다시 맞춰진다 — 클릭 한 번에 화면이 튄다.
+ * 한 칸이라도 터미널이면 그 터미널이 하단바를 쓴다.
+ *
+ * 칸이 하나도 없으면(빈 시작) 지금까지처럼 둔다 — 감출 근거가 없다.
+ * `rdp:` 접두는 이 저장소가 이미 쓰는 판정이다(MainArea 의 스냅샷 저장 제외 · sessions.close).
+ *
+ * **남는 것**: 우측 바의 [하단바] 토글은 그동안에도 켜진 채로 보인다. 그 버튼은 "무엇을 열지"가
+ * 아니라 "**하단바를 쓸지**"를 정하는 설정이고(ActivityBar.tsx 주석) 그 설정은 여전히 켜져 있는
+ * 것이 맞다 — 다만 RDP 칸에서 눌러도 화면이 안 바뀐다. 그게 걸리면 이 판정을 Shell 로 올려
+ * (onSettingsOpenChange 식 미러) 버튼을 비활성으로 만들면 된다.
+ */
+export function allPanesRdp(panes: readonly Pane[]): boolean {
+  return panes.length > 0 && panes.every((p) => p.sessionId.startsWith('rdp:'))
+}
+
 // 스냅샷 §B.3 layout 트리로 직렬화. 단일 패널=pane, 그 외=중첩 split(row/col).
 export function toLayoutNode(state: LayoutState): LayoutNode {
   const { panes, colRatio, rowRatio, pairAxis } = state

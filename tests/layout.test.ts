@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gridUsage, cellsFor, toLayoutNode, MAX_PANES, type LayoutState, type Pane } from '../src/renderer/store/layout'
+import { allPanesRdp, gridUsage, cellsFor, toLayoutNode, MAX_PANES, type LayoutState, type Pane } from '../src/renderer/store/layout'
 import type { LayoutNode } from '../src/shared/types'
 
 const mkPanes = (n: number): Pane[] =>
@@ -110,5 +110,25 @@ describe('toLayoutNode (§B.3 스냅샷 스키마)', () => {
     for (let n = 1; n <= MAX_PANES; n++) {
       expect(countLeaves(toLayoutNode(stateOf(n)))).toBeLessThanOrEqual(MAX_PANES)
     }
+  })
+})
+
+// 2026-09-02 준영님 ③: *"rdp 는 어차피 하단바를 사용 못하니까 rdp 연결할 때는 하단바를 켜지
+// 말게 해 줘."* 감추는 판정을 여기서 못 박는다 — 조용히 뒤집히면 **터미널을 보는데 하단바가
+// 없거나**(더 나쁘다) RDP 를 보는데 그대로 있거나 둘 중 하나다.
+describe('하단바를 감출 칸 구성', () => {
+  const pane = (sessionId: string): Pane => ({ id: `p-${sessionId}`, sessionId })
+
+  it('★ 칸이 전부 RDP 일 때만 감춘다', () => {
+    expect(allPanesRdp([pane('rdp:prof-1:2')])).toBe(true)
+    expect(allPanesRdp([pane('rdp:a:1'), pane('rdp:b:2')])).toBe(true)
+  })
+
+  it('★ 터미널이 한 칸이라도 있으면 둔다 — 그 칸이 하단바를 쓴다(포커스가 어디든)', () => {
+    expect(allPanesRdp([pane('rdp:a:1'), pane('s-local-1')])).toBe(false)
+  })
+
+  it('칸이 하나도 없으면(빈 시작) 감추지 않는다 — 감출 근거가 없다', () => {
+    expect(allPanesRdp([])).toBe(false)
   })
 })

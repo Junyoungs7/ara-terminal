@@ -5945,7 +5945,8 @@
   justify-content: center;
 }
 .rdp-creds,
-.rdp-err {
+.rdp-err,
+.rdp-wait {
   display: flex;
   flex-direction: column;
   gap: var(--sp-5);
@@ -5954,6 +5955,18 @@
   background: var(--bg-surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+/* 붙기를 기다리는 동안 — 인증 대기·오류와 **같은 카드**다. 이 상태만 맨 줄로 떠 있어서
+   "연결 중…"이 있는지 없는지 눈에 안 들어왔다(2026-09-02 준영님). 한 줄뿐이라 가운데로 모은다. */
+.rdp-wait {
+  align-items: center;
+}
+/* 기다린 초 — **진행률이 아니라 사실**이다(얼마나 걸릴지는 우리도 모른다). 도는 숫자 하나가
+   "멈춘 건가"를 가른다. 라틴/숫자뿐이라 등폭으로 두면 자릿수가 바뀌어도 안 흔들린다. */
+.rdp-sec {
+  margin-left: var(--sp-3);
+  font-family: var(--mono);
+  color: var(--text-dim);
 }
 .rdp-msg {
   color: var(--text-mid);

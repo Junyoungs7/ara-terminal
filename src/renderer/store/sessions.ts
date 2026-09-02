@@ -90,6 +90,26 @@ export function mergeMainSnapshot(cur: Session[], mine: Session[]): Session[] {
   return [...kept, ...mine.filter((m) => !known.has(m.id))]
 }
 
+/**
+ * 탭 하나가 목록에서 빠졌다 — **그 자리를 누가 채우는가.**
+ *
+ * 떠난 자리의 **오른쪽** 탭, 없으면 왼쪽, 그것도 없으면 첫 탭(브라우저 관례). 활성 탭이 아니었으면
+ * 아무것도 안 바뀐다.
+ *
+ * 이 규칙이 함수인 이유: 탭이 빠지는 길이 **둘**이다 — ✕ 로 닫기(close)와 창으로 떼어내기
+ * (`session:moved`). 2026-09-02 준영님 제보 *"창 분리하면 아라 기본 창에서는 바로 이전 세션 창이
+ * 켜져야 하는데 안 켜지고 있어"* 가 그 둘이 갈라져 있어서 나왔다: 닫기에만 규칙이 있었고
+ * 떼어내기는 탭만 지우고 activeId 를 떠난 세션에 둔 채로 뒀다(그 세션의 칸은 아무것도 안 그린다 →
+ * 빈 창). 두 길이 다르게 굴면 그게 다음 제보라서, 규칙을 한 곳에 둔다.
+ */
+export function nextActiveAfter(before: Session[], removedId: string, cur: string | null): string | null {
+  if (cur !== removedId) return cur
+  const idx = before.findIndex((x) => x.id === removedId)
+  if (idx < 0) return cur
+  const rest = before.filter((x) => x.id !== removedId)
+  return rest[idx]?.id ?? rest[idx - 1]?.id ?? rest[0]?.id ?? null
+}
+
 // 분할이 새 패널에 올릴 배경 세션(패널 미배치) 고르기 — 최근 사용 순, 그다음 탭 순서(R2.0).
 // 없으면 null(호출부가 새 로컬 셸을 만든다).
 export function pickBackgroundSession(
@@ -187,13 +207,8 @@ export function useSessions(winId?: string) {
     if (!id.startsWith('rdp:')) void window.ev.session.destroy(id)
     setMru((m) => m.filter((x) => x !== id))
     setSessions((t) => {
-      const next = t.filter((x) => x.id !== id)
-      setActiveId((cur) => {
-        if (cur !== id) return cur
-        const idx = t.findIndex((x) => x.id === id)
-        return next[idx]?.id ?? next[idx - 1]?.id ?? next[0]?.id ?? null
-      })
-      return next
+      setActiveId((cur) => nextActiveAfter(t, id, cur))
+      return t.filter((x) => x.id !== id)
     })
   }, [])
 
@@ -278,7 +293,12 @@ export function useSessions(winId?: string) {
         void refreshFromMain() // 내 창으로 왔다 — 메타를 main 에서 받아 온다
         return
       }
-      setSessions((cur) => cur.filter((x) => x.id !== sessionId)) // 떠났다(세션은 살아 있다)
+      // 떠났다(세션은 살아 있다 — 다른 창이 그린다). 활성 탭이었으면 **✕ 로 닫을 때와 같은 규칙**으로
+      // 그 자리를 채운다 — 안 그러면 없는 세션이 활성인 채 남아 이 창이 빈다(2026-09-02 제보 ②).
+      setSessions((cur) => {
+        setActiveId((a) => nextActiveAfter(cur, sessionId, a))
+        return cur.filter((x) => x.id !== sessionId)
+      })
     })
     return () => off?.()
   }, [winId, refreshFromMain])

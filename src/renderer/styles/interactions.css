@@ -422,7 +422,8 @@
 .ctx-item.has-sub.cur .ci-sub-arrow {
   color: var(--accent-bright);
 }
-/* 서브메뉴 패널 — 부모 우측에 나란히(clampMenu 재사용 배치), 표면·행 스타일은 .ctx-menu/.ctx-item 그대로. */
+/* 서브메뉴 패널 — 부모 **옆**에 나란히(ContextMenu.tsx 의 submenuPos: 오른쪽에 자리가 없으면
+   왼쪽으로 뒤집는다). 표면·행 스타일은 .ctx-menu/.ctx-item 그대로. */
 .ctx-submenu {
   z-index: 201;
 }

@@ -4,7 +4,7 @@ import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
 import { PaneGrid, type RestoreError } from './PaneGrid'
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
-import { useLayout, toLayoutNode, type PairAxis } from '../store/layout'
+import { useLayout, toLayoutNode, allPanesRdp, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import type { ActionId } from '../interactions/actions'
@@ -157,6 +157,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       reorder
     } = sessions
     const layout = useLayout(null)
+    // 지금 목록의 최신 사본. **늦게 도착한 요청**이 자기가 만들어질 때의 낡은 목록을 보지 않게
+    // destroySessions 가 여기서 읽는다(제보 ④ — store/sessions.ts 의 listRef 와 같은 이유).
+    const listRef = useRef<Session[]>(list)
+    listRef.current = list
     // 탭 인라인 편집 대상(R2.1). 시작점이 둘(탭 더블클릭 / 트리·탭 우클릭)이라 상태는 여기 하나만 둔다.
     const [editingId, setEditingId] = useState<string | null>(null)
     // ESC 취소 직후 blur 가 한 번 더 커밋을 부르는 것을 막는 가드(렌더 밖에서 판정해야 한다).
@@ -439,6 +443,27 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paneCount, showId])
 
+    /**
+     * 떼어낸 세션이 **있던 칸을 치운다** (2026-09-02 준영님 제보 ② — "창 분리하면 아라 기본 창에서는
+     * 바로 이전 세션 창이 켜져야 하는데 안 켜지고 있어").
+     *
+     * 탭만 지우면 그 칸은 **아무것도 안 그리는 빈 자리**로 남는다: PaneGrid 는 슬롯을 `sessions`
+     * 에서 만들므로 떠난 세션의 칸에는 그릴 것이 없고, 그래도 칸 수는 줄지 않아 위 이펙트도
+     * ("칸이 하나도 없으면 활성 세션을 올린다") 돌지 않는다. 그래서 화면이 통째로 빈다.
+     *
+     * ✕ 로 닫을 때는 destroySessions 가 이미 같은 일을 한다(layout.removeSession + close) —
+     * **떼어내기에만** 그게 없었다. 활성 탭을 옮기는 쪽 절반은 store/sessions.ts 의 nextActiveAfter 다.
+     * 여기서 듣는 이유: 칸(layout)의 주인이 이 컴포넌트라 store 가 손댈 수 없다.
+     */
+    const removePane = layout.removeSession
+    useEffect(() => {
+      const off = window.ev?.window.onSessionMoved?.(({ sessionId, winId: to }) => {
+        if ((to ?? undefined) === detachedWinId) return // 내 창으로 **온** 것 — 치울 칸이 없다
+        removePane(sessionId) // 이 창에 없던 세션이면 아무 일도 안 한다
+      })
+      return () => off?.()
+    }, [detachedWinId, removePane])
+
     // F6 지속: 세션/레이아웃/활성 탭 변경 시 스냅샷을 저장한다(기존 30s 디바운스 flush 경로 재사용).
     // 세션 메타(cwd/profileId/type)의 진실은 main(session.list) — 렌더러가 중복 보관하지 않는다.
     // 오류 패널(placeholder)은 실제 세션이 아니므로 layout 에서 빼고 저장한다.
@@ -651,7 +676,16 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // 여러 개를 한 번에 닫아도 확인은 한 번만 받는다("다른 탭 모두 닫기"에서 창이 연달아 뜨지 않게).
     const destroySessions = useCallback(
       async (ids: string[]) => {
-        const targets = ids.map((id) => list.find((s) => s.id === id)).filter((s): s is Session => !!s)
+        /**
+         * **지금** 목록에 있는 것만 닫는다. `list` 를 클로저로 읽으면 안 된다 — 늦게 도착한 요청은
+         * 자기가 만들어질 때의 낡은 목록을 들고 온다(RDP 의 `onClose` 가 그렇다: `connect` 안에
+         * 갇힌 콜백이라 접속하던 시점의 목록을 본다). 그러면 이미 닫은 세션을 "아직 있다"고 보고
+         * **확인 팝업을 한 번 더** 띄운다(2026-09-02 준영님 제보 ④).
+         *
+         * 아래 빈 배열 가드는 원래 그 경우를 삼키려고 있던 것이다 — 낡은 목록 때문에 걸리지
+         * 않았을 뿐이다. 살아 있는 목록을 보게 해서 그 가드를 되살린다.
+         */
+        const targets = ids.map((id) => listRef.current.find((s) => s.id === id)).filter((s): s is Session => !!s)
         if (targets.length === 0) return
         const ssh = targets.filter((s) => s.type === 'ssh')
         const message =
@@ -679,7 +713,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           close(s.id)
         }
       },
-      [layout, close, list, ask]
+      [layout, close, ask]
     )
 
     // 탭 × = 세션 종료.
@@ -1042,6 +1076,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onCloseOthers={closeOtherTabs}
           onReorder={reorder}
           onAdopt={(sessionId, overId) => void adoptSession(sessionId, overId)}
+          onNotice={showToast}
         />
         <PaneGrid
           layout={layout}
@@ -1055,7 +1090,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onTitle={onAutoTitle}
           onLink={(sessionId, url, isSsh, external) => void openLink(sessionId, url, isSsh, external)}
         />
-        {bottom}
+        {/* RDP 만 보고 있으면 하단바를 **그리지 않는다**(2026-09-02 준영님 ③ — allPanesRdp 주석).
+            ⚠️ 켜 둔 상태는 건드리지 않는다: 터미널 탭에서 열어 두고 RDP 탭에 갔다 돌아오면 그대로
+            있다. 껐다고 기억하면 사용자가 안 껐는데 꺼져 있는 것이 된다.
+            떼어낸 창도 여기를 지난다(SessionWindow 가 같은 prop 으로 넘긴다) — 두 창이 같게 논다. */}
+        {!allPanesRdp(layout.panes) && bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
         {VOICE && <VoiceOverlay ui={voice.ui} wakeWord={prefs.voice.wake} onClose={voice.close} onTalk={voice.open} />}
         {toast && <div className="pane-toast">{toast}</div>}

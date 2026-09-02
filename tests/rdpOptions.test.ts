@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import type { ReactElement } from 'react'
 import { Check } from 'lucide-react'
+import { MENU_EDGE, submenuPos } from '../src/renderer/interactions/ContextMenu'
 import { rdpOptionItems } from '../src/renderer/components/RdpView'
 import { RDP_KEY_MODES, RDP_RESOLUTIONS, resLabel } from '../src/renderer/components/rdpInput'
 import ko from '../src/renderer/i18n/ko.json'
@@ -89,5 +90,36 @@ describe('못 하는 것 — 왜 못 하는지 말한다', () => {
   it('하는 것에는 현재값 자리가 비어 있다 — 값과 동작이 모양으로 갈린다', () => {
     const items = rdpOptionItems({ ...base, recvCount: 1 })
     for (const id of ['send', 'combo', 'span']) expect(items.find((i) => i.id === id)?.hint).toBeUndefined()
+  })
+})
+
+// 2026-09-02 준영님: *"리스트가 겹쳐서 보여서 이전으로 리스트가 가려지고 있어."* 해상도·키 변환·
+// 단축키는 전부 서브메뉴라, 서브메뉴가 부모를 덮으면 **고르는 중에 목록이 사라진다.**
+// RDP [옵션] 은 헤더 오른쪽 끝이라 이 조건에 항상 걸린다 — 폭·좌표를 실제 값으로 검사한다.
+const MENU_W = 224
+describe('서브메뉴는 부모 옆에 선다 — 절대 덮지 않는다', () => {
+  it('오른쪽에 자리가 있으면 부모 바로 오른쪽', () => {
+    expect(submenuPos({ left: 300, top: 100 }, 0, 5, 1440, 900).left).toBe(300 + MENU_W)
+  })
+
+  it('★ 부모가 오른쪽 끝이면(RDP 헤더) 왼쪽으로 뒤집는다 — 밀어 넣으면 부모 위에 포개진다', () => {
+    // clampMenu 가 부모를 놓을 수 있는 가장 오른쪽. 예전 코드는 서브메뉴도 여기로 되밀어 정확히 겹쳤다.
+    const parentLeft = 1440 - MENU_W - MENU_EDGE
+    const sub = submenuPos({ left: parentLeft, top: 100 }, 1, 4, 1440, 900)
+    expect(sub.left).toBe(parentLeft - MENU_W)
+    expect(sub.left + MENU_W).toBeLessThanOrEqual(parentLeft) // 부모 상자와 겹치는 픽셀이 없다
+  })
+
+  it('창이 메뉴 두 장보다 좁아도 화면 밖으로는 안 나간다', () => {
+    expect(submenuPos({ left: MENU_EDGE, top: 100 }, 0, 4, 400, 900).left).toBe(MENU_EDGE)
+  })
+
+  it('세로는 부모 행에 맞추되 화면 안으로 민다 — 위아래로 밀려도 부모를 안 가린다', () => {
+    expect(submenuPos({ left: 300, top: 100 }, 0, 4, 1440, 900).top).toBe(100)
+    expect(submenuPos({ left: 300, top: 100 }, 3, 4, 1440, 900).top).toBeGreaterThan(100)
+    // 아래쪽 끝에서 연 서브메뉴는 통째로 화면 안에 들어온다(하단 여백까지).
+    const low = submenuPos({ left: 300, top: 880 }, 0, 6, 1440, 900)
+    expect(low.top).toBeLessThan(880)
+    expect(low.top).toBeGreaterThanOrEqual(MENU_EDGE)
   })
 })

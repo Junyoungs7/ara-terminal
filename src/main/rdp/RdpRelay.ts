@@ -114,6 +114,20 @@ async function rdpHandshake(
   throw new Error(lastErr)
 }
 
+/**
+ * ⚠️ TEMP-DIAG(#165 · 2026-09-02) — **확인되면 이 상수와 아래 스니퍼를 함께 지운다**(`grep TEMP-DIAG`).
+ *
+ * RDP 클립보드가 양방향으로 죽었는데 **같은 서버에서 MobaXterm 은 된다** → 서버 정책이 아니다.
+ * 남은 후보가 둘인데 코드만 봐서는 못 가린다: 클라이언트가 `cliprdr` 채널을 **광고조차 안 하는가**,
+ * 아니면 광고하는데 서버가 안 붙여 주는가.
+ *
+ * 릴레이가 TLS 를 끝내므로 **여기 지나는 바이트는 평문 RDP** 다 — 이 앱에서 그 스트림을 볼 수 있는
+ * 자리는 여기뿐이다. MCS Connect Initial 안 CS_NET 블록([MS-RDPBCGR] 2.2.1.3.4)의 채널 이름은
+ * 8바이트 ASCII 라 그대로 읽힌다. 채널 목록은 접속 초반에 한 번만 지나가므로 앞쪽 몇 덩어리만 본다.
+ */
+const SVC_SNIFF = ['cliprdr', 'rdpdr', 'rdpsnd', 'drdynvc', 'rdpgfx', 'rail']
+const SVC_SNIFF_CHUNKS = 16
+
 function pipe(ws: WebSocket, sock: tls.TLSSocket, done: (reason?: string) => void): void {
   let closed = false
   const finish = (reason?: string) => {
@@ -136,8 +150,20 @@ function pipe(ws: WebSocket, sock: tls.TLSSocket, done: (reason?: string) => voi
   })
   sock.on('error', (e) => finish(e.message))
   sock.on('close', () => finish())
+  // TEMP-DIAG(#165): 위 SVC_SNIFF 주석 참고. 판정 한 줄만 남기고 통과시킨다 — 바이트는 안 건드린다.
+  const svcSeen = new Set<string>()
+  let sniffLeft = SVC_SNIFF_CHUNKS
   ws.on('message', (data) => {
-    sock.write(data as Buffer)
+    const buf = data as Buffer
+    if (sniffLeft > 0 && Buffer.isBuffer(buf)) {
+      sniffLeft -= 1
+      for (const name of SVC_SNIFF) if (buf.includes(name)) svcSeen.add(name)
+      // 창이 닫히는 순간 한 번만 말한다. 하나도 없으면 그게 답이다("(없음)").
+      if (sniffLeft === 0) {
+        console.log('[rdp-diag svc] 클라이언트가 광고한 정적 채널:', [...svcSeen].join(', ') || '(없음)')
+      }
+    }
+    sock.write(buf)
   })
   ws.on('error', (e) => finish(e.message))
   ws.on('close', () => finish())

@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import { parseSessionWinHash, sessionWinHash } from '../src/shared/sessionWin'
 import { usableBounds } from '../src/main/windows/SessionWindows'
 import { shouldShowBootSplash } from '../src/renderer/components/BootSplash'
-import { mergeMainSnapshot } from '../src/renderer/store/sessions'
+import { mergeMainSnapshot, nextActiveAfter } from '../src/renderer/store/sessions'
 import type { Session } from '../src/renderer/store/sessions'
 
 describe('세션 창 해시', () => {
@@ -126,5 +126,37 @@ describe('main 스냅샷 합치기', () => {
 
   it('처음 뜬 창(빈 목록)은 스냅샷 그대로', () => {
     expect(mergeMainSnapshot([], [sess('a'), sess('b')]).map((s) => s.id)).toEqual(['a', 'b'])
+  })
+})
+
+// ── 탭이 빠진 자리를 누가 채우는가 (2026-09-02 제보 ②) ───────────────────────
+//
+// *"창 분리하면 아라 기본 창에서는 바로 이전 세션 창이 켜져야 하는데 안 켜지고 있어."*
+//
+// 탭이 목록에서 빠지는 길이 둘이다 — ✕ 로 닫기와 창으로 떼어내기. 닫기에만 규칙이 있었고
+// 떼어내기는 activeId 를 **떠난 세션에 둔 채로** 뒀다: 그 세션의 칸은 아무것도 안 그리니 본창이
+// 통째로 빈다. 두 길이 같은 함수를 쓰는지를 여기서 고정한다(다르게 굴면 그게 다음 제보다).
+describe('빠진 탭의 자리', () => {
+  const abc = [sess('a'), sess('b'), sess('c')]
+
+  it('★ 오른쪽 탭이 그 자리를 받는다 — 브라우저와 같은 관례', () => {
+    expect(nextActiveAfter(abc, 'b', 'b')).toBe('c')
+  })
+
+  it('★ 맨 오른쪽이 빠지면 왼쪽으로 — 오른쪽이 없을 때의 유일한 이웃이다', () => {
+    expect(nextActiveAfter(abc, 'c', 'c')).toBe('b')
+  })
+
+  it('활성 탭이 아니면 아무것도 안 바뀐다 — 남의 탭이 떠났다고 화면이 움직이면 안 된다', () => {
+    expect(nextActiveAfter(abc, 'a', 'c')).toBe('c')
+  })
+
+  it('마지막 하나가 빠지면 없다', () => {
+    expect(nextActiveAfter([sess('a')], 'a', 'a')).toBeNull()
+  })
+
+  it('같은 알림이 두 번 와도 활성 탭이 튀지 않는다 — 두 번째는 이미 옮겨 간 뒤다', () => {
+    const after = nextActiveAfter(abc, 'b', 'b') // 'c'
+    expect(nextActiveAfter([sess('a'), sess('c')], 'b', after)).toBe('c')
   })
 })

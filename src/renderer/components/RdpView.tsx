@@ -315,6 +315,23 @@ export function RdpView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const relayRef = useRef<string | null>(null)
+  /**
+   * **이 칸이 이미 사라졌나** — 우리가 끈 것을 원격이 끊었다고 보고하지 않기 위한 래치
+   * (2026-09-02 준영님 제보 ④: *"rdp 세션 연결 창을 끌 때 「끄겠습니까?」 팝업이 2번 뜨는 경우"*).
+   *
+   * 순서가 그렇게 만든다: 탭 ✕ → **팝업 ①** → [종료] → 세션이 목록에서 빠짐 → 이 컴포넌트
+   * 언마운트 → cleanup 이 `session.shutdown()` → **그래서** 아래 `await session.run()` 이 돌아옴
+   * → 그 자리의 `onClose()` 가 `closeTab` 을 다시 불러 **팝업 ②**. 동시가 아니라 차례로 뜬다 —
+   * ①을 확인해야 ②를 만드는 언마운트가 일어나기 때문이다.
+   *
+   * **왜 RDP 만인가**: 터미널에는 이미 같은 래치가 있다(`closedByUser` + `session.onExit`).
+   * RDP 는 pty 가 없어 `onExit` 를 안 타고 자기 콜백으로 따로 올라오는데 **그 갈래에만 규율이
+   * 없었다.** R3-5 의 `fired` 래치와 같은 자리다.
+   *
+   * "두 번째를 무시"가 아니다 — **우리가 만든 종료는 보고하지 않고**, 원격이 먼저 끊었을 때만
+   * `onClose()` 한다(그 경우 동작은 그대로다).
+   */
+  const goneRef = useRef(false)
   // 입력 전달에도 쓰므로 applyInputs 까지 참조에 담는다.
   const sessionRef = useRef<RdpSession | null>(null)
   const modRef = useRef<RdpMod | null>(null)
@@ -370,7 +387,13 @@ export function RdpView({
     }
   }, [])
 
-  useEffect(() => cleanup, [cleanup])
+  useEffect(
+    () => () => {
+      goneRef.current = true // 우리가 끄는 중이다 — 아래 run() 이 돌아와도 보고하지 않는다
+      cleanup()
+    },
+    [cleanup]
+  )
 
   // 클립보드 파일 → 원격. 진짜 paste 이벤트라 **여러 개가 다 오고 File 핸들이라 스트리밍된다**
   // (예전엔 main 이 바이트를 읽어 올려 총합 64MB 상한이 있었다 — 그 상한이 사라졌다).
@@ -500,6 +523,9 @@ export function RdpView({
           void writeClipboard(text).then((ok) => diagClip('writeClipboard', ok ? 'ok' : '실패'))
         })
         builder.forceClipboardUpdateCallback(() => {
+          // TEMP-DIAG(#165): **이게 뜨면 채널은 살아 있다**(원격이 우리에게 내용을 요구한 것이다) —
+          // 그러면 남은 문제는 방향 하나뿐이고, 안 뜨면 채널 자체를 의심하는 쪽이 맞다.
+          diagClip('forceUpdate', '원격이 우리 클립보드를 요구했다')
           void navigator.clipboard
             ?.readText()
             .then((t) => pushTextToRemote(t))
@@ -526,9 +552,10 @@ export function RdpView({
         setPhase('connected')
         setPassword('') // 화면 상태에도 남기지 않는다.
         await session.run()
-        // run() 이 끝나면 원격이 세션을 닫은 것이다.
+        // run() 이 끝나면 원격이 세션을 닫은 것이다 — **다만 우리가 끈 것이 아닐 때만.**
+        // 이 칸이 이미 사라졌으면 그 종료는 우리 cleanup 이 만든 것이라 보고하지 않는다(goneRef).
         cleanup()
-        onClose()
+        if (!goneRef.current) onClose()
       } catch (e) {
         cleanup()
         const head = describeRdpError(e)
@@ -541,6 +568,21 @@ export function RdpView({
     },
     [profileId, res, sizeOf, cleanup, onClose]
   )
+
+  // 붙기를 기다린 시간(초). 2026-09-02 준영님: *"rdp 연결 중 시간이 걸리면 연결 중이다라는 걸
+  // 표시해 주면 좋을 것 같아."* — 문구("연결 중…")는 이미 오버레이에 있었다. 없던 것은 **아직
+  // 살아 있다는 신호**다: 한 줄이 가만히 있으면 멈춘 것과 구분이 안 된다.
+  //
+  // ⚠️ 진행률은 만들지 않는다 — 얼마나 걸릴지 모르면서 채우는 막대는 거짓말이다(BootSplash 규율).
+  // 반면 **얼마나 기다렸는지는 사실**이라 그대로 적을 수 있다. 초 단위로만 세고 분으로 안 접는
+  // 이유도 같다(`agoText` 는 60초부터 `1m` 으로 굳는데, 그러면 숫자가 멈춰 목적이 사라진다).
+  const [waitSec, setWaitSec] = useState(0)
+  useEffect(() => {
+    if (phase !== 'connecting') return
+    setWaitSec(0)
+    const id = setInterval(() => setWaitSec((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [phase])
 
   // 첫 시도는 자동이다 — 저장된 비밀번호가 있으면 탭을 여는 순간 바로 붙고, 없으면 입력 화면이 뜬다.
   // res 등이 바뀌어 connect 신원이 갱신돼도 다시 시도하지 않게 ref 로 한 번만 잠근다.
@@ -611,8 +653,12 @@ export function RdpView({
       const data = new mod.ClipboardData()
       data.addText('text/plain', text)
       await session.onClipboardPaste(data)
-    } catch {
-      /* 세션이 방금 끊긴 경우 — 클립보드 하나 때문에 화면을 깨지 않는다 */
+      diagClip('pushed', `${text.length}자`)
+    } catch (e) {
+      // TEMP-DIAG(#165): 이 catch 가 **로컬→원격이 왜 안 되는지를 통째로 삼키고 있었다.**
+      // 채널이 안 열렸으면 여기서 던진다(wasm 쪽 "Clipboard backend error"). 화면은 그대로 안 깨고
+      // 콘솔에만 남긴다 — 지금까지 "아무 일도 안 일어남"으로 보이던 것이 여기다.
+      diagClip('onClipboardPaste threw', String(e))
     }
   }, [])
 
@@ -968,7 +1014,16 @@ export function RdpView({
                 </button>
               </form>
             )}
-            {phase === 'connecting' && <div className="rdp-msg">{t('rdp.state.connecting')}</div>}
+            {/* 인증 대기·오류와 같은 카드에 담는다 — 이 상태만 맨 줄이라 있는지 없는지 눈에 안
+                들어왔다. 초는 1초 뒤부터 붙어서(바로 붙는 접속에는 안 나온다) 줄 높이도 안 흔든다. */}
+            {phase === 'connecting' && (
+              <div className="rdp-wait">
+                <div className="rdp-msg">
+                  {t('rdp.state.connecting')}
+                  {waitSec > 0 && <span className="rdp-sec">{waitSec}s</span>}
+                </div>
+              </div>
+            )}
             {phase === 'error' && (
               <div className="rdp-err">
                 <div className="rdp-msg rdp-trace">{error}</div>
