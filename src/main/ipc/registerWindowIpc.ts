@@ -82,11 +82,24 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
    * 곳에 있는 자리에서 조용히 거부된다.** 2026-08-31 준영님 제보가 그 자리다.
    *
    * main 의 `clipboard` 는 OS 클립보드에 직접 쓰므로 포커스 개념이 없다. 실패할 길이 사라진다.
-   * (읽기는 안 옮긴다 — 남의 클립보드를 읽는 것은 포커스 확인이 실제로 값을 한다.)
    */
   handle('clipboard:writeText', (text: string) => {
     if (typeof text !== 'string') return { ok: false }
     clipboard.writeText(text)
     return { ok: true }
   })
+
+  /**
+   * 텍스트 읽기. **위 주석은 원래 "읽기는 안 옮긴다"였다 — 2026-09-02 에 뒤집었다.**
+   *
+   * 그때의 근거는 *"남의 클립보드를 읽는 것은 포커스 확인이 실제로 값을 한다"* 였는데, 실제로 읽기를
+   * 막고 있던 것은 포커스가 아니라 **권한 핸들러**였다: `index.ts` 가 `media` 말고 전부 거절하므로
+   * `navigator.clipboard.readText()` 는 `clipboard-read` 가 거부돼 항상 실패한다. 그 실패가
+   * RDP 로컬→원격 붙여넣기를 통째로 죽이고 있었다(원격이 요구해도 우리가 읽지 못한다).
+   *
+   * 권한 핸들러에서 `clipboard-read` 를 여는 길도 있었지만 **더 나쁘다.** 그 핸들러는 세션 전체에
+   * 걸려서 내장 브라우저가 띄우는 **원격 웹 페이지에도 같이 열린다.** 이 통로는 preload 를 지나는
+   * 우리 렌더러만 쓴다 — 쓰기를 옮긴 것과 같은 이유로, 같은 방식이다.
+   */
+  handle('clipboard:readText', () => clipboard.readText())
 }

@@ -57,7 +57,10 @@ export async function writeClipboard(text: string, announce = false): Promise<bo
  */
 export async function readClipboard(): Promise<string> {
   try {
-    return await navigator.clipboard.readText()
+    // main 경유(쓰기와 같은 이유 · registerWindowIpc 주석). `navigator.clipboard.readText()` 는
+    // 권한 핸들러가 `clipboard-read` 를 거절해 **이 앱에서는 항상 실패한다** — 2026-09-02 에
+    // RDP 로컬→원격 붙여넣기를 쫓다 드러났다. 읽는 자리는 전부 이 함수 하나를 지난다.
+    return await window.ev.clipboard.readText()
   } catch {
     notify(t('clipboard.readFailed'))
     return ''

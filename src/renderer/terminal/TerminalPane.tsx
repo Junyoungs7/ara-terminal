@@ -9,7 +9,7 @@ import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
-import { notifyPasted, writeClipboard } from '../store/clipboardWrite'
+import { notifyPasted, readClipboard, writeClipboard } from '../store/clipboardWrite'
 import { appendHistory, cachedHistory, feedInput, ghostList, loadHistory, shouldRecord } from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
@@ -370,12 +370,11 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
         // 있어서, 붙었는지 아닌지가 이 안내 말고는 단서가 없다. 실제 붙여넣기는 위 paste 이벤트가
         // 하므로 여기서는 "보냈다"가 아니라 한 박자 뒤에 알린다 — 파일 붙여넣기(업로드)는
         // 그쪽이 자기 안내를 내므로 겹치지 않게 텍스트일 때만.
-        void navigator.clipboard
-          .readText()
-          .then((t2) => {
-            if (t2) notifyPasted()
-          })
-          .catch(() => {})
+        // main 경유(readClipboard) — 같은 권한 문제로 이 읽기도 늘 실패했고, 그래서 텍스트를
+        // 붙여넣어도 "붙여넣기됨" 안내가 뜬 적이 없다(2026-09-02 · RDP 와 같은 뿌리).
+        void readClipboard().then((t2) => {
+          if (t2) notifyPasted()
+        })
         return false
       }
       return true

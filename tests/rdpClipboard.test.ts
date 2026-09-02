@@ -2,6 +2,8 @@
 // 원격은 한 번에 여러 형식을 올린다(text/plain · text/html · 이미지…). 여기서 잘못 고르면
 // 원격에서 Ctrl+C 한 뒤 로컬에 붙여넣었을 때 HTML 태그가 쏟아지거나 아무것도 안 붙는다.
 import { describe, it, expect } from 'vitest'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   clipboardSignature,
   pickClipboardText,
@@ -102,5 +104,33 @@ describe('원격에 알릴지 판단', () => {
     // 원격이 파일을 알리면 announced 는 지워지지만(주인이 원격), 로컬 지문은 fromRemote 와 같아
     // (원격 텍스트를 로컬에 써 뒀다) 다시 알리지 않는다.
     expect(shouldAnnounceClipboard('t:remote-text', null, 't:remote-text')).toBe(false)
+  })
+})
+
+// 2026-09-02: 로컬→원격 붙여넣기가 통째로 죽어 있었다. 채널은 멀쩡했고(서버가 우리 클립보드를
+// 요구하는 것까지 확인) **우리가 읽지 못하고 있었다** — `navigator.clipboard.readText()` 는
+// 권한 핸들러(`index.ts`: media 말고 전부 거절)가 `clipboard-read` 를 거부해 이 앱에서 늘 실패한다.
+// 빈 `.catch()` 들이 그 실패를 삼켜 몇 주를 버텼다.
+//
+// 고침은 "읽기를 main 으로"인데, **되돌아오기 가장 쉬운 종류의 고침**이다: 렌더러에서
+// `navigator.clipboard.readText()` 는 언제나 그럴듯해 보이고, 실패는 조용하다. 그래서 자리를 못 박는다.
+describe('클립보드 읽기는 main 을 지난다', () => {
+  const renderer = join(__dirname, '..', 'src', 'renderer')
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? sources(join(dir, e.name)) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []
+    )
+
+  it('★ 렌더러 어디에서도 navigator.clipboard.readText() 를 직접 부르지 않는다', () => {
+    const files = sources(renderer)
+    // 공허성 방지(scan-i18n 과 같은 규율) — 훑을 파일을 못 찾으면 위반 0이라 조용히 통과한다.
+    expect(files.length).toBeGreaterThan(50)
+    const offenders = files.filter((f) =>
+      // 주석에 적힌 이름은 봐준다(왜 옮겼는지를 적은 자리다) — 실제 호출만 잡는다.
+      readFileSync(f, 'utf8')
+        .split('\n')
+        .some((line) => !line.trimStart().startsWith('//') && /clipboard\s*\??\.\s*readText\s*\(/.test(line))
+    )
+    expect(offenders.map((f) => f.replace(renderer, '')).filter((f) => !f.includes('clipboardWrite'))).toEqual([])
   })
 })

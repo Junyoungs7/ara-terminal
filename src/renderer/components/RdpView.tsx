@@ -13,7 +13,7 @@
 // 클립보드는 텍스트 양방향으로 연동돼 있다(이미지·파일은 아직).
 import { Check } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { writeClipboard } from '../store/clipboardWrite'
+import { readClipboard, writeClipboard } from '../store/clipboardWrite'
 import { registerPasteTarget } from '../store/pasteFiles'
 import { t } from '../i18n'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
@@ -526,10 +526,10 @@ export function RdpView({
           // TEMP-DIAG(#165): **이게 뜨면 채널은 살아 있다**(원격이 우리에게 내용을 요구한 것이다) —
           // 그러면 남은 문제는 방향 하나뿐이고, 안 뜨면 채널 자체를 의심하는 쪽이 맞다.
           diagClip('forceUpdate', '원격이 우리 클립보드를 요구했다')
-          void navigator.clipboard
-            ?.readText()
-            .then((t) => pushTextToRemote(t))
-            .catch(() => {})
+          // main 경유(readClipboard). 여기가 **로컬→원격 붙여넣기가 죽어 있던 자리**다:
+          // `navigator.clipboard.readText()` 는 권한 핸들러가 clipboard-read 를 거절해 늘 실패했고,
+          // 그 실패를 빈 `.catch()` 가 삼켰다 — 원격이 요구해도 우리는 아무것도 못 보냈다.
+          void readClipboard().then((text) => pushTextToRemote(text))
         })
         // 최신 Windows 서버는 NLA 를 요구한다 — 끄면 접속 자체가 거절된다.
         builder.extension(mod.enableCredssp(true))
@@ -710,7 +710,7 @@ export function RdpView({
     if (!sessionRef.current) return
     // 경로만 먼저 읽는다(싸다) — 바이트는 정말 알릴 때만 읽는다.
     const paths = (await window.ev.clipboard.readFiles().catch(() => ({ paths: [] as string[] }))).paths
-    const text = paths.length === 0 ? ((await navigator.clipboard?.readText().catch(() => '')) ?? '') : ''
+    const text = paths.length === 0 ? await readClipboard() : ''
     const sig = clipboardSignature({ paths, text })
     if (!shouldAnnounceClipboard(sig, announcedRef.current, fromRemoteRef.current)) return
 
