@@ -61,6 +61,7 @@
     "voice:model": "node scripts/fetch-wake-model.mjs",
     "icons:svg": "node scripts/make-brand-svg.mjs",
     "icons:png": "electron scripts/make-icon-png.cjs",
+    "icons:ico": "electron scripts/make-icon-ico.cjs",
     "feed": "node scripts/local-update-feed.mjs"
   },
   "dependencies": {

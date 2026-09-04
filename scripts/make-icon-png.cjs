@@ -1,5 +1,8 @@
-// 브랜드 SVG → 1024×1024 PNG. electron-builder 는 512px 이상 PNG 를 주면 Windows .ico 와
-// mac .icns 를 알아서 만든다 — .ico 6종을 손으로 만들 필요가 없다.
+// 브랜드 SVG → 1024×1024 PNG. **이 PNG 는 이제 mac .icns 전용이다.**
+//
+// 예전엔 "electron-builder 가 512px 이상 PNG 로 .ico 도 알아서 만든다"고 적혀 있었다. 만들어 주기는
+// 하는데 **256 한 장짜리**라 작업 표시줄·Alt+Tab(16~48px)에서 아이콘이 깨졌다(2026-09-04 0.9.9).
+// Windows .ico 는 scripts/make-icon-ico.cjs 가 크기별로 굽는다 — **이 스크립트 다음에 꼭 같이 돌린다.**
 //
 // 왜 Electron 으로 그리나: 이 저장소에는 sharp·imagemagick 이 없고, 아이콘 한 장 때문에 빌드
 // 체인에 의존성을 얹을 이유가 없다. 우리는 이미 Electron 으로 화면을 찍는 하네스를 여럿 갖고 있다

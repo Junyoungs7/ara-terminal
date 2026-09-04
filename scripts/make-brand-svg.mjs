@@ -288,4 +288,5 @@ write('site/assets/ara-icon.svg', small)
 write('video/public/logo.svg', small)
 write('src/renderer/components/brandMark.ts', markTs)
 patchFavicon('src/renderer/index.html', small)
-console.log('→ PNG 도 다시 뽑으려면: npm run icons:png')
+// SVG 만 고치면 설치본 아이콘은 안 바뀐다 — PNG(mac .icns)와 ICO(Windows) 를 이어서 굽는다.
+console.log('→ 이어서 꼭 돌린다: npm run icons:png && npm run icons:ico')
