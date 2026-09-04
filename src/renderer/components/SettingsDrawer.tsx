@@ -190,9 +190,11 @@ function UpdateRow() {
               ? t('settings.update.error') + ' — ' + (st.message ?? '')
               : t('settings.update.idle')
   return (
-    <Row label={t('settings.update')} desc={t('settings.update.desc')}>
+    <Row label={t('settings.update')}>
       <div className="set-dir">
-        <span className="set-dir-path" data-update-status={st.status} title={detail}>
+        {/* 경로가 아니라 **문장**이다 — .is-msg 가 경로용 rtl·말줄임·고정폭을 되돌린다
+            (2026-09-04: 그게 없어 "…다 — [받기]를 누르세요 1.0.0" 으로 보였다). */}
+        <span className="set-dir-path is-msg" data-update-status={st.status} title={detail}>
           {detail}
         </span>
         <button

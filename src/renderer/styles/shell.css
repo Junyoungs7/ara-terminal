@@ -54,6 +54,21 @@
   direction: rtl; /* 경로는 **끝**(폴더 이름)이 중요하다 — 잘릴 때 앞을 자른다 */
   text-align: left;
 }
+/**
+ * 같은 자리에 **문장**이 올 때 — 경로용 규칙을 되돌린다.
+ *
+ * 2026-09-04 준영님 제보: 업데이트 상태가 `…다 — [받기]를 누르세요 1.0.0` 으로 보였다.
+ * 원문은 `1.0.0 이(가) 나왔습니다 — [받기]를 누르세요` 인데, `direction: rtl` 이 bidi 로
+ * **숫자를 뒤로 밀고 말줄임을 앞에 붙였다.** 경로에는 맞는 규칙이 한국어 문장에는 독이다.
+ * 문장은 잘리면 안 되므로(행동 안내가 뒤에 있다) 줄바꿈으로 받고, 고정폭도 쓰지 않는다.
+ */
+.set-dir-path.is-msg {
+  direction: ltr;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-family: inherit;
+}
 .set-dir-tag {
   margin-left: var(--sp-3);
   padding: var(--sp-hair) var(--sp-3);
@@ -3196,6 +3211,34 @@
   padding-top: var(--sp-4);
 }
 
+/* #98 업데이트 알림 — **버전 칸이 상태를 말한다**(2026-09-04). 새 칸을 만들지 않은 이유는
+   여기가 이미 버전 이야기를 하는 자리이기 때문이다. 받을 것이 있으면 눌리는 버튼이 되므로
+   .sb-seg.mcp 와 같은 버튼 초기화가 필요하다.
+   ⚠️ **색만으로 말하지 않는다**(§6): ↑·↓·✓ 글리프와 "있음 / 준비됨"이 글자로 같은 것을 말하고,
+   긴 설명은 title 툴팁이 갖는다. 포커스 링은 전역 :focus-visible 이 준다. */
+.sb-seg.upd {
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+}
+button.sb-seg.upd {
+  cursor: pointer;
+}
+/* 받을 것이 생겼다 / 받아 뒀다 — 둘 다 사람이 누를 차례라 같은 강조색을 쓴다. */
+.sb-seg.upd.available .val,
+.sb-seg.upd.ready .val {
+  color: var(--accent);
+}
+/* 받는 중은 알림이 아니라 경과다 — 강조하지 않는다. 숫자는 자리가 안 흔들리게 등폭으로. */
+.sb-seg.upd.downloading .val {
+  color: var(--text-mid);
+  font-variant-numeric: tabular-nums;
+}
+button.sb-seg.upd:hover .val {
+  color: var(--text-hi);
+}
+
 /* 좁을 때 버리는 순서 — 2026-08-17 제보 ⑧.
    ① 인코딩·버전: 늘 같은 값이다. ② 자원 게이지: 하단바 [시스템 모니터] 가 같은 것을 더 크게
    보여 준다. 호스트·경로와 세션 수는 마지막까지 남긴다 — 지금 어디에 붙어 있는지는
@@ -3204,6 +3247,11 @@
   .statusbar .sb-seg.enc,
   .statusbar .sb-seg.ver {
     display: none;
+  }
+  /* **업데이트를 말하고 있을 때는 안 접는다.** "늘 같은 값"이라 접었던 칸인데, 그때만은 늘 같은
+     값이 아니고 이 자리가 그 알림의 유일한 상시 자리다(창 하나는 닫히면 끝이다). */
+  .statusbar .sb-seg.ver.upd {
+    display: flex;
   }
 }
 @media (max-width: 980px) {

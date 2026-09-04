@@ -9,6 +9,6 @@ window.ARA_RELEASE = {
   version: '1.0.0',
   date: '2026-09-04',
   file: 'A.R.A Setup 1.0.0.exe',
-  size: '95.0 MB',
+  size: '95.1 MB',
   os: 'Windows 10 / 11 (64비트)'
 }

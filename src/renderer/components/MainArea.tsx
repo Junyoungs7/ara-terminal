@@ -17,6 +17,7 @@ import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
 import { VOICE } from '@shared/features'
 import { BootSplash, shouldShowBootSplash } from './BootSplash'
+import { useUpdatePrompt } from '../store/updateNotify'
 import { VoiceOverlay } from './VoiceOverlay'
 import { useVoiceMode } from '../store/voice'
 import { createWakeEngine } from '../store/wakeWord'
@@ -410,6 +411,25 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         .then(() => setPrefsLoaded(true))
         .catch(() => setPrefsLoaded(true))
     }, [])
+
+    // 인사(#139)와 호칭 묻기(#138)가 지금 떠 있는가. 아래 JSX 두 곳과 업데이트 알림 창이 **같은 값**을
+    // 본다 — 판정이 세 벌이면 언젠가 갈린다.
+    const splashOpen = shouldShowBootSplash({ detachedWinId, prefsLoaded, bootSplash: prefs.bootSplash, splashDone })
+    const welcomeOpen = !detachedWinId && prefsLoaded && !prefs.araWelcomeSeen && (splashDone || !prefs.bootSplash)
+
+    /**
+     * #98 업데이트 알림 — 켤 때 한 번 [나중에]/[받기] 를 묻는다(2026-09-04 준영님 0.9.9 실기).
+     *
+     * **본창에서만**(`detachedWinId`) 그리고 **인사가 지나간 뒤에만.** 첫 확인은 앱 기동 20초 뒤라
+     * (`registerUpdateIpc.ts` FIRST_CHECK_MS) 2초짜리 부팅 인사와는 어차피 안 겹치지만, 호칭 묻기는
+     * 사람이 답할 때까지 떠 있어 20초를 넘길 수 있다 — 그 위에 창을 얹으면 처음 켠 사람이 이름을
+     * 주다 말고 모르는 버전 이야기를 듣는다.
+     *
+     * ⚠️ `prefsLoaded` 를 따로 본다. 위 두 값은 스냅샷을 읽기 **전에도 false** 라(그래야 이미 지난
+     * 사람에게 인사가 다시 안 뜬다) 그 사이엔 "안 떠 있다"와 "아직 모른다"가 같은 얼굴이다 —
+     * #138 이 prefsLoaded 를 둔 것과 같은 이유다.
+     */
+    useUpdatePrompt(!detachedWinId && prefsLoaded && !splashOpen && !welcomeOpen, ask)
 
     // 새 로컬 셸: 세션 생성 → 포커스 패널에 표시(패널이 없으면 첫 패널 생성).
     // "activeId 가 있으면 패널을 만든다"는 이펙트로 처리하면 layout 이 매 렌더 새 객체라 이펙트가 매 렌더 돌고,
@@ -1057,7 +1077,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         {/* #139 부팅 인사 — 자비스식. 짧고, 아무 키로 건너뛰고, 설정에서 끈다.
             **이름 묻기보다 먼저** 지나간다: 처음 켠 사람도 인사부터 받고 그다음 이름을 준다.
             **떼어낸 창에서는 안 뜬다**(2026-09-01 제보 ① — shouldShowBootSplash 주석 참고). */}
-        {shouldShowBootSplash({ detachedWinId, prefsLoaded, bootSplash: prefs.bootSplash, splashDone }) && (
+        {splashOpen && (
           <BootSplash
             name={prefs.araCallName}
             onDone={() => {
@@ -1072,7 +1092,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             인사와 같은 이유로 **본창에서만** 묻는다: 이름은 앱에 한 번 주는 것이라, 아직 답하지
             않은 사람이 탭을 떼어내면 새 창이 이름부터 묻고 앉아 있게 된다(제보 ① 과 같은 병). */}
         <WelcomeModal
-          open={!detachedWinId && prefsLoaded && !prefs.araWelcomeSeen && (splashDone || !prefs.bootSplash)}
+          open={welcomeOpen}
           onDone={(name) => updatePrefs({ araWelcomeSeen: true, ...(name ? { araCallName: name } : {}) })}
         />
         <TermTabbar

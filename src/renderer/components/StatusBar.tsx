@@ -1,8 +1,10 @@
 import type { ConnectionProfile, RemoteStats } from '@shared/types'
+import type { UpdateState } from '@shared/ipc'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { t } from '../i18n'
 import { sparkArea, sparkPoints, type Sample } from '../store/sysMonitor'
+import { updateSeg } from '../store/updateNotify'
 
 // 하단 상태바 (design-system §4.1).
 //
@@ -97,7 +99,9 @@ export function StatusBar({
   sessionCount,
   stats = null,
   history = [],
-  children
+  children,
+  update = null,
+  onUpdateAction
 }: {
   version: string
   session: Session | null
@@ -115,8 +119,24 @@ export function StatusBar({
   // 2026-08-17 준영님 제보 ③: 하단 도구 여덟을 여는 아이콘 줄(BottomDock). **맨 오른쪽 끝**이라
   // children(McpIndicator)과 같은 슬롯에 넣을 수 없어 자리를 따로 둔다.
   dock?: React.ReactNode
+  /**
+   * #98 업데이트 상태(2026-09-04). **새 칸을 만들지 않는다** — 아래 버전 칸이 이미 버전 이야기를
+   * 하는 자리라 그 자리가 바뀐다. 안 주면 예전처럼 `v{version}` 만 보인다(떼어낸 창이 그 경우다:
+   * main 이 `update:state` 를 본창으로만 보낸다).
+   */
+  update?: UpdateState | null
+  /** 위 칸을 눌렀을 때. `ready` 의 확인 받기는 호출측(runUpdateAction)이 한다. */
+  onUpdateAction?: (action: 'download' | 'install') => void
 }) {
   const m = statusModel(session, profile, conn, cwd, stats, history)
+  const u = updateSeg(update ?? null, version)
+  // 업데이트를 말하는 동안에는 브랜드 라벨을 뺀다 — 상태바는 좁고, 지금 할 말은 "A.R.A" 가 아니다.
+  const verBody = (
+    <>
+      {!u.tone && <span className="lbl">{t('app.name')}</span>}
+      <span className="val">{u.text}</span>
+    </>
+  )
   const label = m.idle ? t('statusbar.state') : session?.type === 'ssh' ? t('statusbar.host') : t('statusbar.shell')
   return (
     <div className="statusbar">
@@ -159,10 +179,27 @@ export function StatusBar({
           <span className="lbl">{t('statusbar.encoding')}</span>
           <span className="val">UTF-8</span>
         </div>
-        <div className="sb-seg ver">
-          <span className="lbl">{t('app.name')}</span>
-          <span className="val">v{version}</span>
-        </div>
+        {/* #98: 버전 칸이 곧 업데이트 알림이다(2026-09-04). 받을 것이 있으면 눌리는 버튼이 되고,
+            없으면 예전 그대로 `v{version}` 만 보인다. `error`·`checking` 은 여기까지 안 온다 —
+            사내망 밖에서 하루 네 번 상태바가 빨개지면 안 된다(updateSeg 주석). */}
+        {u.action ? (
+          <button
+            type="button"
+            className={'sb-seg ver upd ' + u.tone}
+            /* 설정 서랍의 [받기]·[설치] 와 **다른 이름**이다 — 같은 동작이라도 자리가 다르면
+               선택자도 달라야 한다(안 그러면 e2e 가 엉뚱한 버튼을 누른다). 붙여 만들지 않는 이유는
+               따로 있다: 점으로 끝나는 리터럴은 scan-i18n 이 키 접두어로 삼는다. */
+            data-action={u.action === 'download' ? 'statusbar.update.download' : 'statusbar.update.install'}
+            title={u.title}
+            onClick={() => onUpdateAction?.(u.action as 'download' | 'install')}
+          >
+            {verBody}
+          </button>
+        ) : (
+          <div className={'sb-seg ver' + (u.tone ? ' upd ' + u.tone : '')} title={u.title || undefined}>
+            {verBody}
+          </div>
+        )}
       </div>
     </div>
   )

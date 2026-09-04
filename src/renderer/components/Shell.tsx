@@ -25,6 +25,7 @@ import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
 import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
+import { runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
 import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, aiCommandOf, type AiCommand } from '../../shared/aiCli'
@@ -188,6 +189,12 @@ export function Shell() {
   const dialog = useDialog()
   const ask = dialog.ask
   const askText = dialog.askText
+
+  // #98: 새 버전이 있으면 **상태 표시줄의 버전 칸**이 그걸 말한다(2026-09-04). 그전엔 이 상태가
+  // 닿는 화면이 설정 서랍 하나뿐이라 아무도 안 여는 서랍에서 혼잣말을 하고 있었다.
+  // 켤 때 한 번 뜨는 창은 MainArea 가 띄운다 — 부팅 인사·호칭 묻기와 안 겹치게 하려면 그 둘의
+  // 열림 상태가 필요한데 그건 저쪽에만 있다(prefs 의 주인이 MainArea 다).
+  const updateSt = useUpdateState()
 
   const sessions = useSessions()
 
@@ -1613,6 +1620,8 @@ export function Shell() {
         cwd={activeCwd}
         sessionCount={sessions.sessions.length}
         stats={telemetry.stats}
+        update={updateSt}
+        onUpdateAction={(a) => void runUpdateAction(a, updateSt?.version ?? '', ask)}
       >
         <McpIndicator getSessionTitle={(id) => sessions.sessions.find((s) => s.id === id)?.title ?? id} />
       </StatusBar>
