@@ -60,11 +60,12 @@ export type MirrorHandle = {
 export function openMirror(
   source: HTMLCanvasElement,
   monitor: SpanMonitor,
-  bridge: { current: RdpInputBridge | null }
+  bridge: { current: RdpInputBridge | null },
+  title: string
 ): MirrorHandle | null {
   const { slice, window: box } = monitor
   // 크기·자리는 features 로도 보내지만 **main 이 실제로 쓰는 값은 계획 쪽**이다
-  // (setWindowOpenHandler → monitorWindowBox). 여기 문자열은 브라우저 관례를 지키는 용도다.
+  // (setWindowOpenHandler → monitorByFrame). 여기 문자열은 브라우저 관례를 지키는 용도다.
   const win = window.open(
     '',
     `${MIRROR_FRAME_PREFIX}${monitor.id}`,
@@ -75,6 +76,8 @@ export function openMirror(
   win.document.open()
   win.document.write(DOC)
   win.document.close()
+  // 테두리가 생겨 제목 표시줄이 보인다(2026-09-04) — 비워 두면 거기에 about:blank 가 뜬다.
+  win.document.title = title
 
   const canvas = win.document.getElementById('m') as HTMLCanvasElement | null
   if (!canvas) {

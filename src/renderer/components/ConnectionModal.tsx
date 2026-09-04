@@ -32,6 +32,8 @@ type Form = {
   keyPath: string
   group: string
   secret: string
+  // rdp 전용: 이 서버에 붙을 때 탭이 아니라 모니터 전체에 펼친다(2026-09-04).
+  multiMonitor: boolean
 }
 
 export const emptyForm: Form = {
@@ -49,7 +51,8 @@ export const emptyForm: Form = {
   keyPath: '~/.ssh/id_ed25519',
   // R6: 그룹 기본값은 없음(빈 값 = "기타"). 개발/운영 두 이름을 앱이 정해 주던 자리다.
   group: '',
-  secret: ''
+  secret: '',
+  multiMonitor: false
 }
 
 function formFrom(p: ConnectionProfile): Form {
@@ -63,7 +66,8 @@ function formFrom(p: ConnectionProfile): Form {
     authType: p.type === 'ssh' ? p.auth.type : 'key',
     keyPath: p.type === 'ssh' && p.auth.type === 'key' ? p.auth.keyPath : '',
     group: p.group ?? '',
-    secret: '' // 비밀은 vault에만 — 편집 시 빈 값(미입력 시 기존 비밀 유지)
+    secret: '', // 비밀은 vault에만 — 편집 시 빈 값(미입력 시 기존 비밀 유지)
+    multiMonitor: p.type === 'rdp' && p.multiMonitor === true
   }
 }
 
@@ -224,7 +228,9 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     // 빈 그룹명은 저장하지 않는다 — 그룹 없음(트리의 "기타")과 같은 뜻이다.
     group: form.group.trim() || undefined,
     // rdp 도 비밀번호를 저장한다(2026-08-07) — 빈 값은 "그대로 두기"라 보내지 않는다.
-    secret: form.secret !== '' ? form.secret : undefined
+    secret: form.secret !== '' ? form.secret : undefined,
+    // rdp 전용. ssh 로 바꿔 저장하면 ProfileStore 가 버린다(그 타입엔 없는 필드다).
+    multiMonitor: form.type === 'rdp' ? form.multiMonitor : undefined
   })
 
   // 폼 어디서든 Enter → 저장하고 접속. 텍스트 칸만 대상이다(체크박스·버튼에서 Enter 를 가로채면
@@ -453,6 +459,29 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                   />
                 </div>
                 <div className="pf-hint">{t('conn.rdp.secret.hint')}</div>
+                {/* 2026-09-04 준영님: [다중 모니터] 를 옵션 메뉴에서 여기로 옮겼다 — 그 서버를 어떻게
+                    쓰는지의 성질이지 접속할 때마다 고르는 것이 아니다. 세그먼트는 이 폼이 이미 쓰는
+                    컨트롤이고(유형·인증 방식), 첫 칸이 기본값이라는 규칙도 그대로다. */}
+                <div className="fld" style={{ marginTop: 16 }}>
+                  <label>{t('conn.field.multiMonitor')}</label>
+                  <div className="seg-ctl">
+                    <button
+                      type="button"
+                      className={form.multiMonitor ? '' : 'on'}
+                      onClick={() => setForm({ ...form, multiMonitor: false })}
+                    >
+                      {t('conn.rdp.multi.off')}
+                    </button>
+                    <button
+                      type="button"
+                      className={form.multiMonitor ? 'on' : ''}
+                      onClick={() => setForm({ ...form, multiMonitor: true })}
+                    >
+                      {t('conn.rdp.multi.on')}
+                    </button>
+                  </div>
+                </div>
+                <div className="pf-hint">{t('conn.rdp.multi.hint')}</div>
               </>
             )}
             {form.type === 'ssh' && (

@@ -3,8 +3,8 @@
 // 모니터는 그냥 옵션 버튼 하나로 리스트 형태로 보여주는 게 좋아 보여."*
 //
 // 접는 변경의 위험은 **조용히 잃는 것**이다. 헤더 버튼은 앱에서 그 기능에 닿는 유일한 길이라
-// (파일 받기·조합키 전송·다중 모니터 전부 다른 진입점이 없다) 항목 하나가 빠지면 기능이
-// 사라진 것과 같은데, 화면은 멀쩡해 보인다. 그래서 목록을 여기서 못 박는다.
+// (파일 받기·조합키 전송 둘 다 다른 진입점이 없다) 항목 하나가 빠지면 기능이 사라진 것과 같은데,
+// 화면은 멀쩡해 보인다. 그래서 목록을 여기서 못 박는다.
 //
 // 두 번째로 잃기 쉬운 것이 **비활성 사유**다. 버튼일 때는 [파일 받기] 가 흐린 채로 그 자리에
 // 있었고 hover 하면 "원격에서 파일을 복사(Ctrl+C)하면 활성화됩니다" 가 떴다. 접으면 hover 할
@@ -17,24 +17,24 @@ import { rdpOptionItems } from '../src/renderer/components/RdpView'
 import { RDP_KEY_MODES, RDP_RESOLUTIONS, resLabel } from '../src/renderer/components/rdpInput'
 import ko from '../src/renderer/i18n/ko.json'
 
-const base = { connected: true, res: ko['rdp.res.fit'], keyMode: 'off' as const, recvCount: 0, canSpan: true }
+const base = { connected: true, res: ko['rdp.res.fit'], keyMode: 'off' as const, recvCount: 0 }
 const ids = (items: { id: string }[]): string[] => items.map((i) => i.id)
 /** 체크 표시가 붙은 하위 항목 — 안 붙은 항목도 자리를 맞추려 빈 <span> 을 받는다. */
 const checked = (subs: readonly { id: string; icon?: unknown }[]): string[] =>
   subs.filter((s) => (s.icon as ReactElement | undefined)?.type === Check).map((s) => s.id)
 
-describe('RDP [옵션] 리스트 — 여섯이 전부 있다', () => {
-  it('★ 접속 중 · 탭 뷰: 해상도 · 키 변환 · 파일 받기 · 보내기 · 단축키 · 다중 모니터', () => {
-    expect(ids(rdpOptionItems(base))).toEqual(['res', 'keys', 'recv', 'send', 'combo', 'span'])
+describe('RDP [옵션] 리스트 — 다섯이 전부 있다', () => {
+  it('★ 접속 중: 해상도 · 키 변환 · 파일 받기 · 보내기 · 단축키', () => {
+    expect(ids(rdpOptionItems(base))).toEqual(['res', 'keys', 'recv', 'send', 'combo'])
   })
 
   it('안 붙었으면 파일·단축키는 없다 — 보낼 것도 받을 것도 없다(버튼 시절과 같은 조건)', () => {
-    expect(ids(rdpOptionItems({ ...base, connected: false }))).toEqual(['res', 'keys', 'span'])
+    expect(ids(rdpOptionItems({ ...base, connected: false }))).toEqual(['res', 'keys'])
   })
 
-  it('다중 모니터 창에는 [다중 모니터] 가 없다 — 이미 그 창이다', () => {
-    expect(ids(rdpOptionItems({ ...base, canSpan: false }))).toEqual(['res', 'keys', 'recv', 'send', 'combo'])
-  })
+  // 2026-09-04: [다중 모니터] 는 이 목록에서 빠져 **연결 정보(프로필)** 로 갔다 — 접속할 때마다
+  // 고르는 것이 아니라 그 서버를 어떻게 쓰는지의 성질이라서다(ConnectionModal 의 세그먼트).
+  // 여기 있던 시절에는 이미 붙은 탭 위에서 눌러 같은 서버에 세션을 하나 더 만드는 길이기도 했다.
 
   it('단축키 셋(Ctrl+Alt+Del · Alt+Tab · Win)이 전부 하위에 있다 — OS 가 가로채 직접 못 누르는 키다', () => {
     const combo = rdpOptionItems(base).find((i) => i.id === 'combo')
@@ -89,7 +89,7 @@ describe('못 하는 것 — 왜 못 하는지 말한다', () => {
 
   it('하는 것에는 현재값 자리가 비어 있다 — 값과 동작이 모양으로 갈린다', () => {
     const items = rdpOptionItems({ ...base, recvCount: 1 })
-    for (const id of ['send', 'combo', 'span']) expect(items.find((i) => i.id === id)?.hint).toBeUndefined()
+    for (const id of ['send', 'combo']) expect(items.find((i) => i.id === id)?.hint).toBeUndefined()
   })
 })
 

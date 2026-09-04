@@ -42,6 +42,15 @@ export type RdpProfile = {
   // 인증 방식 선택이 없어(RDP 는 비밀번호뿐) auth 유니온 대신 참조 하나만 둔다. 없으면 매번 입력받는다.
   secretRef?: SecretRef
   group?: string
+  /**
+   * 2026-09-04 준영님: 이 서버에 붙을 때는 **모니터 전체에 펼친다**(탭이 아니라 모니터마다 창 하나).
+   * 옵션 메뉴에 있던 [다중 모니터] 를 여기로 옮긴 것이다 — 누를 때마다 고르는 것이 아니라 그 서버를
+   * 어떻게 쓰는지의 성질이라서다. 없으면(옛 프로필) 지금까지처럼 탭으로 연다.
+   *
+   * ⚠️ 선택 필드라 `SCHEMA_VERSION` 은 올리지 않았다 — 올리면 옛 앱이 워크스페이스를 통째로 못 읽는다
+   *    (migrations.ts:49 → null → 기본 스냅샷). 자세한 이유는 store/updateNotify.ts 의 같은 주석.
+   */
+  multiMonitor?: boolean
 }
 
 export type ConnectionProfile = SshProfile | RdpProfile
@@ -68,6 +77,8 @@ export type ProfileInput = {
   group?: string
   // 비밀번호 인증의 비밀번호, 또는 키 인증의 패스프레이즈. undefined면 기존 비밀 유지(키 회전 안 함).
   secret?: string
+  // rdp 전용(RdpProfile.multiMonitor). ssh 프로필에는 뜻이 없어 ProfileStore 가 무시한다.
+  multiMonitor?: boolean
 }
 
 // 호스트키 TOFU: 최초 접속 시 지문 확인 프롬프트 / 불일치 시 차단 경고.

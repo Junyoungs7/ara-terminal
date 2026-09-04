@@ -9,7 +9,6 @@ import { rdpSessionState, sessionState, setSessionState } from '../store/session
 import type { PaneCell, useLayout } from '../store/layout'
 import type { Session } from '../store/sessions'
 import { paneDropZone, zoneRect, type DropZone, type Rect } from '../store/dropZone'
-import { spanRdp } from '../store/rdpSpanOpen'
 import { markTabDropHandled } from '../store/tabDetach'
 
 // F4a 분할 그리드 — 목업 variant-final-3 의 .pane-grid / .pane / .pane-hd / .div-* 를 그대로 재현하되
@@ -370,7 +369,6 @@ export function PaneGrid({
                   profileId={session.profileId ?? ''}
                   name={session.title}
                   onClose={() => onCloseSession?.(session.id)}
-                  onSpan={() => void spanRdp(session.profileId ?? '', session.title)}
                   // #166: RDP 는 pty 가 없어 `session.onExit` 를 안 탄다 — 끊김을 아는 것은
                   // 이 컴포넌트뿐이다. 그 단계를 세션 상태로 옮겨 탭·칸이 같은 점을 그린다.
                   onPhase={(p) => setSessionState(session.id, rdpSessionState(p))}

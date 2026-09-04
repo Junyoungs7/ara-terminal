@@ -164,6 +164,29 @@ describe('ProfileStore — RDP(F21 / 비밀번호 저장 2026-08-07)', () => {
     expect(store.lookupSecret(again)).toEqual({ ok: true, secret: 'pw1' })
   })
 
+  // 2026-09-04: [다중 모니터] 가 옵션 메뉴에서 프로필로 옮겨 왔다 — 저장되지 않으면 그 설정은
+  // 앱을 껐다 켤 때마다 사라진다. 스키마는 안 올렸으므로(옛 앱이 못 읽는다) **켰을 때만** 적는다.
+  it('★ 다중 모니터를 켜면 프로필에 남고, 끄면 필드 자체가 없다', () => {
+    const on = store.save({ type: 'rdp', name: 'win-pc', host: '10.0.5.10', port: 3389, username: 'jun', multiMonitor: true })
+    if (on.type !== 'rdp') throw new Error('expected rdp')
+    expect(on.multiMonitor).toBe(true)
+    expect(store.get(on.id)).toEqual(on) // 워크스페이스까지 갔다 왔다
+
+    const off = store.save({ id: on.id, type: 'rdp', name: 'win-pc', host: '10.0.5.10', port: 3389, username: 'jun', multiMonitor: false })
+    expect('multiMonitor' in off).toBe(false)
+  })
+
+  it('★ 저장 입력에 안 실으면 꺼진다 — 통째 덮어쓰기라 호출측이 매번 실어야 한다(Shell 의 그룹 이동·복제)', () => {
+    const on = store.save({ type: 'rdp', name: 'win-pc', host: '10.0.5.10', port: 3389, username: 'jun', multiMonitor: true })
+    const moved = store.save({ id: on.id, type: 'rdp', name: 'win-pc', host: '10.0.5.10', port: 3389, username: 'jun', group: '운영' })
+    expect('multiMonitor' in moved).toBe(false)
+  })
+
+  it('ssh 프로필에는 붙지 않는다 — 그 타입에 없는 필드다', () => {
+    const p = store.save({ type: 'ssh', name: 'box', host: '10.0.5.10', port: 22, username: 'jun', authType: 'password', secret: 'pw', multiMonitor: true })
+    expect('multiMonitor' in p).toBe(false)
+  })
+
   it('저장 안 한 rdp 는 secret:null — 호출측이 "그때 입력받기"로 분기한다', () => {
     const p = store.save({ type: 'rdp', name: 'win-pc', host: '10.0.5.10', port: 3389, username: 'jun' })
     expect(store.lookupSecret(p)).toEqual({ ok: true, secret: null })

@@ -1,12 +1,14 @@
 // 다중 모니터 RDP 창의 알맹이. 앱 렌더러를 해시(#rdpwin)로 갈라 쓴다(EditorWindow 와 같은 방식).
 //
-// 이 창은 모니터 여러 장을 통째로 덮는다 — 그래서 두 가지가 보통 창과 다르다:
-//  1. 헤더가 캔버스 **위에 떠 있다**. 헤더가 자리를 차지하면 캔버스가 그만큼 짧아져, 우리가 요구한
-//     원격 해상도와 비율이 어긋나 위아래에 검은 띠가 생긴다. 떠 있으면 캔버스가 창을 정확히 채운다.
-//  2. 마우스를 화면 맨 위로 올려야 헤더가 나온다(mstsc 의 연결 막대와 같은 방식). 늘 떠 있으면
-//     원격 작업표시줄·시작 메뉴를 가린다.
+// 이 창은 **창이 있는 전체화면**이다(2026-09-04). 전에는 테두리 없이 모니터를 통째로 덮었고, 나갈
+// 길이 없어 헤더를 캔버스 위에 띄워 두고 마우스를 맨 위로 올려야 나오게 했다 — 그 자리가 원격
+// 브라우저의 제목 표시줄과 같아 준영님이 "잡기 힘들다"고 하셨다. 이제 진짜 제목 표시줄이 있으므로
+// 헤더는 **늘 보이는 한 줄**로 자리를 차지한다(mstsc 의 고정한 연결 막대와 같다).
 //
-// 나가는 길은 셋이다: 헤더의 [닫기] · Alt+Tab(kiosk 가 아니라 OS 가 그대로 처리한다) · 앱 종료.
+// 헤더가 자리를 차지하면 그만큼 원격 화면이 짧아진다 — 그 높이(SPAN_HEADER_H)는 main 이 계획을
+// 세울 때 이미 빼 놓았다(shared/rdpSpan.ts). 여기서 CSS 로 높이를 바꾸면 그 계산이 어긋난다.
+//
+// 나가는 길: 제목 표시줄의 [X] · Alt+F4 · Alt+Tab 으로 비켜 두기(kiosk 가 아니라 OS 가 처리한다).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RdpView } from './RdpView'
 import type { SpanMonitor, SpanPlan } from '@shared/rdpSpan'
@@ -20,9 +22,6 @@ const monitorRectsOf = (plan: SpanPlan): MonitorRect[] =>
   plan.monitors.map((m) => ({ ...m.rdp, primary: m.primary }))
 
 export type RdpSpanTarget = { profileId: string; name: string; size: [number, number]; monitors: number }
-
-/** 마우스가 이 픽셀 안으로 올라오면 헤더를 보여 준다. */
-const REVEAL_EDGE = 40
 
 /**
  * `#rdpwin?profile=..&name=..&w=..&h=..&monitors=..` 를 읽는다. 형식이 아니면 null(= 보통 앱 창).
@@ -44,11 +43,7 @@ export function parseRdpWinHash(hash: string): RdpSpanTarget | null {
   }
 }
 
-/** 열리자마자 막대를 보여 주는 시간(ms). 나가는 길을 한 번은 보여 줘야 한다. */
-const INTRO_MS = 2500
-
 export function RdpSpanWindow({ target }: { target: RdpSpanTarget }): JSX.Element {
-  const [bar, setBar] = useState(true)
   // 모니터별 좌표. main 이 창을 열 때 계산해 둔 것을 받아 온다 — 없으면(구버전·경합) 경계 없이
   // 큰 화면 한 장으로 붙는다. 접속을 막지는 않는다.
   const [rects, setRects] = useState<MonitorRect[] | null>(null)
@@ -76,36 +71,25 @@ export function RdpSpanWindow({ target }: { target: RdpSpanTarget }): JSX.Elemen
       alive = false
     }
   }, [target.profileId])
-  // 창이 뜨는 순간 커서가 화면 한가운데 있으면 mousemove 가 즉시 막대를 접는다(실측). 그러면
-  // 나가는 길을 한 번도 못 본 채 화면이 통째로 덮인다 — 잠깐은 마우스보다 우선한다.
-  const intro = useRef(true)
 
   useEffect(() => {
     document.title = target.name
-    const id = setTimeout(() => {
-      intro.current = false
-      setBar(false)
-    }, INTRO_MS)
-    return () => clearTimeout(id)
   }, [target.name])
-
-  // 캔버스가 mousemove 를 원격으로 넘기지만 이벤트는 그대로 버블한다 — 컨테이너에서 한 번 더 본다.
-  const onMove = useCallback((e: React.MouseEvent) => {
-    const near = e.clientY < REVEAL_EDGE
-    if (near) intro.current = false // 사용자가 막대를 찾아왔다 — 소개는 끝났다
-    if (!intro.current) setBar(near)
-  }, [])
 
   // 접속이 붙으면 나머지 모니터마다 창을 연다. 자식 창은 이 캔버스를 잘라 보여 주는 껍데기고,
   // 세션·입력은 전부 이 창이 갖는다(store/rdpMirror.ts).
-  const onCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
-    for (const h of mirrorsRef.current) h.stop()
-    mirrorsRef.current = othersRef.current
-      .map((m) => openMirror(canvas, m, bridgeRef))
-      .filter((h): h is MirrorHandle => h !== null)
-  }, [])
+  const onCanvasReady = useCallback(
+    (canvas: HTMLCanvasElement) => {
+      for (const h of mirrorsRef.current) h.stop()
+      mirrorsRef.current = othersRef.current
+        .map((m) => openMirror(canvas, m, bridgeRef, target.name))
+        .filter((h): h is MirrorHandle => h !== null)
+    },
+    [target.name]
+  )
 
   // 이 창이 닫히면 자식 창도 함께 닫는다 — 남으면 세션 없는 정지 화면이 모니터를 덮고 있게 된다.
+  // (OS 쪽에서 닫히면 이 정리가 안 돈다 — main 도 같은 일을 한다. rdp/RdpWindows.ts 의 kids)
   useEffect(
     () => () => {
       for (const h of mirrorsRef.current) h.stop()
@@ -121,7 +105,7 @@ export function RdpSpanWindow({ target }: { target: RdpSpanTarget }): JSX.Elemen
   }, [target.profileId])
 
   return (
-    <div className={'rdp-span' + (bar ? ' bar' : '')} onMouseMove={onMove}>
+    <div className="rdp-span">
       {/* 계획을 받기 전에는 RdpView 를 만들지 않는다 — RDP 는 접속 시점 구성이 세션 구성이라,
           경계 없이 붙어 버리면 되돌리는 길이 재접속뿐이다. 기다림은 IPC 한 번(수 ms)이다. */}
       {planReady && (
@@ -139,7 +123,6 @@ export function RdpSpanWindow({ target }: { target: RdpSpanTarget }): JSX.Elemen
             inputBridgeRef={bridgeRef}
             onCanvasReady={onCanvasReady}
             onClose={close}
-            onCloseWindow={close}
           />
         </div>
       )}

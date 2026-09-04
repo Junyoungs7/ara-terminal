@@ -6484,46 +6484,21 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
 }
 
-/* 다중 모니터 RDP 창 — 모니터 여러 장을 통째로 덮는 테두리 없는 창의 알맹이.
-   헤더가 자리를 차지하면 캔버스가 그만큼 짧아져 우리가 요구한 원격 해상도와 비율이 어긋난다
-   (위아래 검은 띠). 그래서 헤더를 캔버스 위에 띄우고, 마우스를 맨 위로 올려야 나오게 한다. */
+/* 다중 모니터 RDP 창 — 모니터 하나를 채우는 "창이 있는 전체화면" 창의 알맹이.
+   2026-09-04 이전에는 테두리가 없어 헤더를 캔버스 위에 띄우고 마우스를 맨 위로 올려야 나오게
+   했는데, 그 자리가 원격 브라우저의 제목 표시줄과 겹쳐 싸웠다(준영님 실기 제보). 이제 제목
+   표시줄이 있으므로 헤더는 **늘 보이는 한 줄**로 자리를 차지한다. */
 .rdp-span {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background: var(--void);
 }
-.rdp-span .rdp-view {
-  position: relative;
-}
+/* ⚠️ 이 높이는 `shared/rdpSpan.ts` 의 `SPAN_HEADER_H` 와 **같은 수여야 한다** — main 이 그만큼을
+   빼고 원격 해상도를 정한다. 어긋나면 원격 화면 아래가 잘리거나 검게 남는다. 그래서 여기만은
+   `--row-tabbar`(UI 배율을 탄다)를 안 쓴다: 배율을 바꾼 사람의 창에서 화면이 어긋나면 안 된다. */
 .rdp-span .rdp-hd {
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: 2;
-  border-bottom: 0;
-  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-100%);
-  transition: transform 120ms ease-out;
-}
-.rdp-span.bar .rdp-hd {
-  transform: none;
-}
-/* 캔버스가 창을 정확히 채운다 — 요청한 원격 해상도가 창 크기와 같으므로 늘림이 없다. */
-.rdp-span .rdp-body {
-  height: 100%;
-}
-/* 헤더 버튼 생김새는 [옵션] 과 같게 둔다 — 기본 button 스타일로 두면 흰 상자가 된다(실측).
-   이 창의 유일한 출구라 [옵션] 보다 진하게 둔다(나가는 길은 눈에 띄어야 한다). */
-.rdp-span-close {
-  padding: var(--sp-2) var(--sp-4);
-  background: var(--bg-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-hi);
-  font-family: inherit;
-  font-size: var(--fs-md);
-  cursor: pointer;
+  height: 32px;
 }
 
 /* 다중 모니터: 이 창은 주 모니터 몫만 보여 준다. 캔버스는 원격 전체 크기라 컨테이너로 잘라 내고

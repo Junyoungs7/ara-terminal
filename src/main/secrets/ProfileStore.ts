@@ -47,6 +47,9 @@ export class ProfileStore {
         port: input.port,
         username: input.username,
         ...(secretRef ? { secretRef } : {}),
+        // 켰을 때만 적는다 — 끈 상태는 필드가 없는 것과 같은 뜻이고, 옛 앱이 읽어도 모르는 키가
+        // 하나 늘 뿐이다(스키마를 올리지 않은 이유는 shared/types.ts 의 주석).
+        ...(input.multiMonitor ? { multiMonitor: true } : {}),
         group: input.group
       }
       this.ws.upsertProfile(profile)

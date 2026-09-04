@@ -74,7 +74,7 @@
             <tr><td>서버에서 도는 프로그램의 로그를 보고 싶다</td><td><a class="link" href="#tools">§6</a></td></tr>
             <tr><td>서버 포트를 내 PC 로 당겨와서 브라우저로 보고 싶다</td><td><a class="link" href="#tools">§6</a></td></tr>
             <tr><td>윈도우 서버 화면을 보고 싶다 (RDP)</td><td><a class="link" href="#rdp">§7</a></td></tr>
-            <tr><td>원격 화면과 파일 · 글자를 주고받고 싶다</td><td><a class="link" href="#rdp-clip">§7.3</a></td></tr>
+            <tr><td>원격 화면과 파일 · 글자를 주고받고 싶다</td><td><a class="link" href="#rdp-clip">§7.4</a></td></tr>
             <tr><td>아라에게 말로 서버 일을 시키고 싶다</td><td><a class="link" href="#ai-chat">§8.1</a></td></tr>
             <tr><td>서버에서 <code>claude</code> 를 띄우고 싶다</td><td><a class="link" href="#ai-cli">§8.2</a></td></tr>
             <tr><td>지금 어느 AI 가 무엇을 하는지 보고 싶다</td><td><a class="link" href="#ai-list">§8.3</a></td></tr>
@@ -129,7 +129,7 @@
             <tr><td><strong>로컬 셸</strong></td><td>그대로 복원됩니다.</td></tr>
             <tr><td><strong>SSH (비밀번호 저장함)</strong></td><td>자동으로 다시 붙습니다.</td></tr>
             <tr><td><strong>SSH (저장 안 함)</strong></td><td>[다시 연결] 버튼으로 남습니다.</td></tr>
-            <tr><td><strong>원격 데스크톱(RDP)</strong></td><td><strong>복원되지 않습니다</strong>(<a class="link" href="#rdp-limits">§7.5</a>).</td></tr>
+            <tr><td><strong>원격 데스크톱(RDP)</strong></td><td><strong>복원되지 않습니다</strong>(<a class="link" href="#rdp-limits">§7.6</a>).</td></tr>
           </table>
           <div class="note">
             <span>ℹ️</span>
@@ -229,7 +229,7 @@
             <span>
               <b>원격 데스크톱(RDP) 탭만은 창 밖으로 뗄 수 없습니다.</b> 끌면
               "원격 데스크톱(RDP) 탭은 창을 분리할 수 없습니다 — 이 창에서만 볼 수 있습니다" 가 뜹니다.
-              이유는 <a class="link" href="#rdp-limits">§7.5</a> 에 적어 두었습니다.
+              이유는 <a class="link" href="#rdp-limits">§7.6</a> 에 적어 두었습니다.
             </span>
           </div>
           <p>
@@ -502,35 +502,41 @@
             권한 부족 · NLA/TLS 협상 거부 등). 그와 함께 <strong>[다시 시도]</strong> 가 나옵니다.
           </p>
 
-          <h3>7.2 화면 크기 · 다중 모니터</h3>
-          <p>
-            화면 위 <strong>[옵션]</strong> 안에 전부 들어 있습니다(좁은 창에서 버튼이 줄바꿈되지 않도록
-            하나로 접어 두었습니다).
-          </p>
+          <h3>7.2 화면 크기</h3>
+          <p>화면 위 <strong>[옵션]</strong> 안에 있습니다.</p>
           <table class="keys">
-            <tr><td><strong>해상도</strong></td><td>기본은 <strong>[창 크기에 맞춤]</strong> — 창을 키우면 원격 화면도 따라 커집니다. 고정 해상도 다섯(1280×720 · 1366×768 · 1600×900 · 1920×1080 · 2560×1440)도 고를 수 있습니다.</td></tr>
-            <tr><td><strong>다중 모니터</strong></td><td>모니터 전체를 덮는 창으로 <strong>새로</strong> 붙습니다.</td></tr>
+            <tr><td><strong>기본</strong></td><td><strong>[창 크기에 맞춤]</strong>. 창을 키우면 원격 화면도 따라 커집니다.</td></tr>
+            <tr><td><strong>고정</strong></td><td>1280×720 · 1366×768 · 1600×900 · 1920×1080 · 2560×1440</td></tr>
           </table>
           <ul>
-            <li>창 맞춤일 때 크기는 <strong>4의 배수로 맞춰</strong> 보냅니다 — 일부 서버가 어중간한 폭에서
+            <li>창 맞춤일 때 크기는 <strong>4의 배수로 맞춰</strong> 보냅니다. 일부 서버가 어중간한 폭에서
               화면을 깨뜨리기 때문입니다.</li>
             <li>접속 중에 크기를 바꾸는 것은 <strong>RDP 8.1 이상 서버에서만</strong> 반영됩니다. 그 아래
               서버는 붙을 때의 크기로 고정됩니다.</li>
-            <li><strong>다중 모니터 창에서는 해상도를 고를 수 없습니다</strong> — 모니터 배치가 크기를 정합니다.</li>
-            <li>모니터가 한 장이면 [다중 모니터]는 <strong>아무 일도 하지 않고</strong> 그렇게 알려 줍니다.
-              모니터가 <strong>어긋나게 놓여 있으면</strong> 화면 일부가 어느 모니터에도 안 보인다고 알려 줍니다
-              — 디스플레이 설정에서 위아래를 맞추면 사라집니다.</li>
           </ul>
-          <div class="note warn">
-            <span>⚠️</span>
+
+          <h3 id="rdp-multi">7.3 모니터 전체에 펼치기</h3>
+          <p>모니터마다 창을 하나씩 띄워 원격 바탕화면을 이어서 봅니다. <strong>서버마다 정합니다.</strong></p>
+          <ol>
+            <li>[연결] 탭에서 그 RDP 서버의 <strong>[정보 수정]</strong>.</li>
+            <li><strong>[모니터 전체에 펼치기]</strong> 를 고르고 저장합니다.</li>
+            <li>그 서버를 더블클릭하면 탭 대신 <strong>모니터마다 창</strong>이 뜹니다.</li>
+          </ol>
+          <table class="keys">
+            <tr><td><strong>창 모양</strong></td><td><strong>제목 표시줄이 있습니다.</strong> 작업표시줄도 가리지 않습니다. 옮기고 닫는 것이 보통 창과 같습니다.</td></tr>
+            <tr><td><strong>나오는 길</strong></td><td>제목 표시줄의 <strong>[X]</strong>. 창 하나를 닫으면 전부 닫힙니다.</td></tr>
+            <tr><td><strong>해상도</strong></td><td>고를 수 없습니다. 모니터 배치가 크기를 정합니다.</td></tr>
+            <tr><td><strong>모니터 한 장</strong></td><td>펼칠 곳이 없어 <strong>그냥 탭으로</strong> 열고 그렇게 알려 줍니다.</td></tr>
+          </table>
+          <div class="note">
+            <span>ℹ️</span>
             <span>
-              <b>다중 모니터 창에는 테두리가 없습니다</b> — OS 의 닫기 버튼도 없습니다. 나오는 길은
-              <b>창 위쪽에 마우스를 올려 [닫기]</b> 를 누르거나 <kbd>Alt</kbd>+<kbd>Tab</kbd> 입니다.
-              닫아도 <b>탭의 화면은 그대로 남습니다.</b>
+              모니터가 <b>어긋나게 놓여 있으면</b> 화면 일부가 어느 모니터에도 안 보인다고 알려 줍니다.
+              디스플레이 설정에서 위아래를 맞추면 사라집니다.
             </span>
           </div>
 
-          <h3 id="rdp-clip">7.3 클립보드 · 파일 주고받기</h3>
+          <h3 id="rdp-clip">7.4 클립보드 · 파일 주고받기</h3>
           <p>
             <strong>글자는 양방향으로 그냥 됩니다.</strong> 내 PC 에서 복사한 것을 원격에 붙여넣고, 반대도
             됩니다. <strong>이미지는 안 됩니다.</strong>
@@ -546,7 +552,7 @@
           </p>
           <p>아직 붙기 전이라면 파일 항목 자체가 나오지 않습니다.</p>
 
-          <h3>7.4 단축키 보내기 · Mac 키 배열</h3>
+          <h3>7.5 단축키 보내기 · Mac 키 배열</h3>
           <p>
             [옵션] → <strong>[단축키 보내기]</strong> 로 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd> ·
             <kbd>Alt</kbd>+<kbd>Tab</kbd> · <kbd>Win</kbd> 을 <strong>원격에</strong> 보냅니다.
@@ -563,7 +569,7 @@
             자리로 바꿔 보냅니다. ⌘ 를 Ctrl 로 보내는 배열도 고를 수 있고, 끌 수도 있습니다.
           </p>
 
-          <h3 id="rdp-limits">7.5 안 되는 것</h3>
+          <h3 id="rdp-limits">7.6 안 되는 것</h3>
           <p>
             <strong>겪기 전에 알아 두시는 편이 낫습니다.</strong> 셋 다 우리 쪽 한계이고, 잘못 쓰셔서
             그런 것이 아닙니다.
@@ -583,7 +589,9 @@
               <td>
                 터미널 탭은 되는데 RDP 탭만 안 됩니다.<br />
                 <em>왜:</em> 원격 화면을 <strong>그 창이 직접 들고 그리고 있어서</strong> 다른 창으로 넘길 수가
-                없습니다. 터미널은 화면 뒤쪽에서 돌아가는 것이라 옮길 수 있는 것과 다릅니다.
+                없습니다. 터미널은 화면 뒤쪽에서 돌아가는 것이라 옮길 수 있는 것과 다릅니다.<br />
+                RDP 를 <strong>따로 떨어진 창</strong>에서 쓰고 싶으시면
+                <a class="link" href="#rdp-multi">§7.3</a> 을 켜세요. 붙을 때부터 창으로 뜹니다.
               </td>
             </tr>
             <tr>
@@ -597,8 +605,9 @@
           <div class="note">
             <span>ℹ️</span>
             <span>
-              <b>[옵션] 안이 이 기능의 전부입니다.</b> 해상도 · 다중 모니터 · 클립보드 파일 · 단축키 보내기 ·
-              키 변환은 다른 진입점이 없습니다 — 찾는 것이 있으면 먼저 [옵션]을 열어 보세요.
+              <b>[옵션] 안이 이 기능의 전부입니다.</b> 해상도 · 클립보드 파일 · 단축키 보내기 · 키 변환은
+              다른 진입점이 없습니다. 찾는 것이 있으면 먼저 [옵션]을 열어 보세요.
+              <b>모니터 전체에 펼치기만 예외</b>로, 서버 연결 정보에서 정합니다(<a class="link" href="#rdp-multi">§7.3</a>).
             </span>
           </div>
         </section>
@@ -1031,7 +1040,7 @@
 
           <h3>원격 데스크톱에서 커서 모양이 안 바뀝니다</h3>
           <p>
-            알려진 한계입니다. 잘못 쓰신 것이 아닙니다. <a class="link" href="#rdp-limits">§7.5</a> 를
+            알려진 한계입니다. 잘못 쓰신 것이 아닙니다. <a class="link" href="#rdp-limits">§7.6</a> 를
             보세요.
           </p>
 

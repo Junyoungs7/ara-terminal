@@ -64,20 +64,23 @@ const MENU_GAP = 4
  *
  *  · **고르는 것**(해상도 · 키 변환) — 서브메뉴 + 오른쪽에 **지금 값**(hint). 하위 항목엔 체크.
  *    닫아 둔 채로도 알 수 있게 [옵션] 버튼의 툴팁이 같은 값을 말한다.
- *  · **하는 것**(파일 받기·보내기 · 단축키 보내기 · 다중 모니터) — 오른쪽이 비어 있고 누르면 실행.
+ *  · **하는 것**(파일 받기·보내기 · 단축키 보내기) — 오른쪽이 비어 있고 누르면 실행.
  *  · **못 하는 것** — 비활성 + 오른쪽에 **켜지는 조건**. 버튼이던 시절에는 hover 툴팁이 하던
  *    말인데(`rdp.file.recv.title`), 접으면 hover 할 버튼 자체가 없다. 조건을 눈에 보이게 적고
  *    (`rdp.file.recv.need`) 원문은 행의 title 로 남긴다.
  *
  * 여기서 항목이 하나 빠지면 그 기능은 앱에서 **닿을 길이 없어진다**(다른 진입점이 없다) —
  * tests/rdpOptions.test.ts 가 목록과 비활성 사유를 못 박는 이유다.
+ *
+ * 2026-09-04: [다중 모니터] 를 이 목록에서 **뺐다.** 누를 때마다 고르는 것이 아니라 **서버의 성질**
+ * 이라(그 서버는 늘 두 화면으로 쓴다) 연결 정보 쪽으로 옮겼다 — ConnectionModal 의 [다중 모니터]
+ * 체크. 여기 있던 시절에는 이미 붙어 있는 탭 위에서 눌러 **세션을 하나 더** 만드는 길이기도 했다.
  */
 export function rdpOptionItems(s: {
   connected: boolean
   res: string
   keyMode: RdpKeyMode
   recvCount: number
-  canSpan: boolean
   /** 다중 모니터 창에서만. 있으면 해상도는 읽기 전용이다(모니터 배치가 정한 값). */
   fixedSize?: [number, number]
 }): MenuItem[] {
@@ -125,9 +128,7 @@ export function rdpOptionItems(s: {
             }))
           }
         ]
-      : []),
-    // 되돌리는 길([닫기])은 저쪽 창 헤더에 있다 — 창이 달라 같은 자리에 둘 수 없다.
-    ...(s.canSpan ? [{ id: 'span', label: t('rdp.span'), title: t('rdp.span.title') }] : [])
+      : [])
   ]
 }
 
@@ -156,10 +157,6 @@ type Props = {
   onCanvasReady?: (canvas: HTMLCanvasElement) => void
   /** 다중 모니터 창이 자식 창의 입력을 흘려보낼 통로를 받아 간다. */
   inputBridgeRef?: { current: RdpInputBridge | null }
-  /** 탭 뷰에서만 온다. [다중 모니터] 버튼을 헤더에 낸다. */
-  onSpan?: () => void
-  /** 다중 모니터 창에서만 온다. 헤더에 [닫기] 를 낸다(테두리가 없어 OS 닫기 버튼이 없다). */
-  onCloseWindow?: () => void
   /**
    * 접속 단계가 바뀔 때마다. **탭 뷰에서만** 온다 — 칸 머리·탭의 점이 이걸 보고 색을 정한다(#166).
    * 이 통로가 없어서 RDP 는 끊겨도 점이 초록이었다(RdpView 안에만 phase 가 있었다).
@@ -313,8 +310,6 @@ export function RdpView({
   monitorRects,
   onCanvasReady,
   inputBridgeRef,
-  onSpan,
-  onCloseWindow,
   onPhase
 }: Props): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -873,14 +868,13 @@ export function RdpView({
     res,
     keyMode,
     recvCount,
-    canSpan: !!onSpan,
     ...(fixedSize ? { fixedSize } : {})
   })
 
   // 닫으면 포커스를 버튼으로 되돌린다 — 안 그러면 ESC 후 Tab 이 화면 맨 앞부터 다시 돈다.
   // 조합키는 실행 뒤 스스로 캔버스에 포커스를 준다(sendCombo) — 이 다음에 불리므로 그쪽이 이긴다.
-  // preventScroll: 다중 모니터 창에서는 이때 헤더가 이미 접혀 있을 수 있다 — 화면 밖 버튼에
-  // 포커스를 주면 브라우저가 그것을 보이게 하려고 컨테이너를 스크롤한다(캔버스가 밀린다).
+  // preventScroll: 다중 모니터 창의 캔버스는 창보다 크고(원격 전체 크기를 잘라 쓴다) 컨테이너가
+  // 그것을 감추고 있다 — 스크롤이 일어나면 그만큼 화면이 밀린다.
   const closeOptMenu = useCallback(() => {
     setOptMenu(null)
     optBtnRef.current?.focus({ preventScroll: true })
@@ -894,7 +888,6 @@ export function RdpView({
     } else if (id.startsWith('combo:')) sendCombo(id.slice('combo:'.length))
     else if (id === 'recv') void receiveFiles()
     else if (id === 'send') void sendFiles()
-    else if (id === 'span') onSpan?.()
   }
 
   return (
@@ -903,7 +896,7 @@ export function RdpView({
         {/* 이름·상태는 **다중 모니터 창에만** 둔다(2026-09-01 준영님: "그 하단에 연결됨, 서버 이름은
             필요 없어 보이고"). 탭 뷰에서는 칸 머리(.pane-hd)가 같은 `session.title` 을 이미 적고,
             안 붙은 상태는 본문 오버레이가 더 크게 말한다 — 여기 한 줄은 순전히 중복이었다.
-            테두리 없는 다중 모니터 창에는 그 둘이 없어 여기가 유일한 자리다. */}
+            다중 모니터 창에는 탭도 칸 머리도 없어 여기가 유일한 자리다. */}
         {fixedSize && (
           <>
             <span className="rdp-name">{name}</span>
@@ -932,18 +925,13 @@ export function RdpView({
           {recvCount > 0 && <span className="rf-n">{recvCount}</span>}
           <IconChevronDown />
         </button>
-        {/* 탭 뷰에는 닫기 버튼을 두지 않는다 — 종료는 탭 닫기로 통일한다(세션의 홈은 탭이다).
-            다중 모니터 창은 테두리가 없어 OS 닫기 버튼이 없으므로 여기가 유일한 출구다.
-            그래서 이것만은 메뉴에 접지 않는다(나가는 길은 보여야 한다). */}
-        {onCloseWindow && (
-          <button type="button" className="rdp-span-close" onClick={onCloseWindow} title={t('rdp.span.close.title')}>
-            {t('rdp.span.close')}
-          </button>
-        )}
+        {/* 어느 뷰에도 닫기 버튼을 두지 않는다 — 탭 뷰의 종료는 탭 닫기이고(세션의 홈은 탭이다),
+            다중 모니터 창은 2026-09-04 에 테두리를 되찾아 **제목 표시줄의 [X]** 가 그 일을 한다.
+            출구가 둘이면 어느 쪽이 무엇을 닫는지가 새 질문이 된다. */}
       </div>
-      {/* 메뉴는 헤더 **밖**에 둔다. 다중 모니터 창의 헤더는 `transform` 으로 접히는데(.rdp-span
-          .rdp-hd), 변형된 조상 안에서는 `position: fixed` 가 뷰포트가 아니라 그 조상을 기준으로
-          잡힌다 — 안에 두면 마우스를 메뉴로 내리는 순간 헤더가 접히며 메뉴를 데리고 올라간다. */}
+      {/* 메뉴는 헤더 **밖**에 둔다(2026-09-01 — 접히던 헤더 안에 두면 transform 조상 때문에
+          position:fixed 가 어긋났다). 헤더는 이제 접히지 않지만, 메뉴가 헤더 상자에 갇히지 않는
+          편이 좁은 창에서 안전하다 — 그대로 둔다. */}
       <ContextMenu
         open={optMenu !== null}
         x={optMenu?.x ?? 0}

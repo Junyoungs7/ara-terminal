@@ -26,6 +26,7 @@ import { sizeOf } from '../terminal/termRegistry'
 import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { runUpdateAction, useUpdateState } from '../store/updateNotify'
+import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
 import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, aiCommandOf, type AiCommand } from '../../shared/aiCli'
@@ -545,8 +546,8 @@ export function Shell() {
     [ask, lookup, openConnManager]
   )
 
-  // F25: RDP 프로필은 기본적으로 **앱 안에서** 연다(내장 RDP 뷰). OS 클라이언트 외부 실행은
-  // 우클릭 [외부 클라이언트로 열기]로 남겨 둔다(폴백 — 다중 모니터·RDP 파일 등은 OS 쪽이 강하다).
+  // F25: RDP 프로필은 **앱 안에서** 연다(내장 RDP 뷰). 탭이 기본이고, 프로필에 [모니터 전체에
+  // 펼치기] 가 켜져 있으면 모니터마다 창 하나로 간다(2026-09-04 — 아래).
   const openRdpProfile = useCallback(
     async (profileId: string): Promise<boolean> => {
       setActiveProfileId(profileId)
@@ -559,6 +560,10 @@ export function Shell() {
         selectSession(open.id)
         return true
       }
+      // 2026-09-04: 프로필이 [모니터 전체에 펼치기] 면 탭이 아니라 모니터마다 창 하나로 간다.
+      // 모니터가 한 장일 때만 탭으로 떨어진다(그때는 spanRdp 가 이유를 알린다) — 그 밖의 거절은
+      // 이미 창이 있다는 뜻이라 탭까지 열면 같은 서버에 두 번 붙어 서버가 앞 세션을 끊는다.
+      if (p.multiMonitor && (await spanRdp(profileId, p.name)) !== 'single') return true
       // F25: 터미널 세션과 같은 탭 목록에 편입한다 — 탭 전환·분할 칸 배치가 그대로 통한다.
       const id = sessions.openRdp(profileId, p.name, p.name)
       selectSession(id)
@@ -963,7 +968,9 @@ export function Shell() {
         if (p.group !== from) continue
         await save(
           p.type === 'rdp'
-            ? { id: p.id, type: 'rdp', name: p.name, host: p.host, port: p.port, username: p.username, group: to }
+            ? // multiMonitor 를 다시 실어야 한다 — 저장은 통째 덮어쓰기라, 빼면 그룹 이름만 바꿔도
+              // 그 서버의 [모니터 전체에 펼치기] 가 조용히 꺼진다.
+              { id: p.id, type: 'rdp' as const, name: p.name, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: to }
             : {
                 id: p.id,
                 type: 'ssh',
@@ -988,7 +995,8 @@ export function Shell() {
     (p: ConnectionProfile) =>
       save(
         p.type === 'rdp'
-          ? { type: 'rdp', name: `${p.name} ${t('conn.menu.copySuffix')}`, host: p.host, port: p.port, username: p.username, group: p.group }
+          ? // 비밀번호만 빼고 그대로 베낀다 — [모니터 전체에 펼치기] 도 그 서버의 성질이므로 따라간다.
+            { type: 'rdp' as const, name: `${p.name} ${t('conn.menu.copySuffix')}`, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: p.group }
           : {
               type: 'ssh',
               name: `${p.name} ${t('conn.menu.copySuffix')}`,

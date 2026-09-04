@@ -30,7 +30,7 @@ function field(page: Page, label: string) {
 // 저장 즉시 내장 뷰가 뜬다(릴레이는 붙을 서버가 없어 곧 실패한다 — 여기서 보는 것은 그 앞단이다).
 async function createRdpProfile(
   page: Page,
-  f: { name: string; host?: string; port?: string; username?: string }
+  f: { name: string; host?: string; port?: string; username?: string; multiMonitor?: boolean }
 ): Promise<void> {
   await page.keyboard.press('Control+Shift+M')
   await connModal(page).waitFor()
@@ -40,6 +40,8 @@ async function createRdpProfile(
   await field(page, '호스트').fill(f.host ?? '127.0.0.1')
   if (f.port) await field(page, '포트').fill(f.port)
   await field(page, '사용자').fill(f.username ?? 'dev')
+  // 2026-09-04: [다중 모니터] 는 옵션 메뉴가 아니라 여기서 정한다(그 서버를 어떻게 쓰는지의 성질).
+  if (f.multiMonitor) await page.click('.prof-form .seg-ctl button:has-text("모니터 전체에 펼치기")')
   await page.click('.modal-ft .btn.pri')
   await expect(connModal(page)).toHaveCount(0, { timeout: 15_000 })
 }
@@ -131,13 +133,14 @@ test('RDP-8 RDP 서버를 복제하면 RDP 타입 사본이 생긴다', async ({
 // 창이 계산한 자리에 뜨는가 · 그 창이 #rdpwin 경로로 들어가는가 · 같은 서버를 두 번 펼치지 않는가.
 // 실제 두 장 이상에서의 모습은 수동(RDPV-21).
 
-type WinInfo = { url: string; bounds: { x: number; y: number; width: number; height: number } }
+type Box = { x: number; y: number; width: number; height: number }
+type WinInfo = { url: string; bounds: Box; content: Box }
 
 async function spanWindows(app: ElectronApplication): Promise<WinInfo[]> {
   return app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .filter((w) => w.webContents.getURL().includes('rdpwin'))
-      .map((w) => ({ url: w.webContents.getURL(), bounds: w.getBounds() }))
+      .map((w) => ({ url: w.webContents.getURL(), bounds: w.getBounds(), content: w.getContentBounds() }))
   )
 }
 
@@ -157,8 +160,10 @@ const GEOM_TOL = 2
 /** 오차 안이면 기대값으로 맞춰 준다 — poll 로 재시도하면서도 diff 는 읽을 수 있게 하려는 것이다. */
 const snap = (actual: number, expected: number): number => (Math.abs(actual - expected) <= GEOM_TOL ? expected : actual)
 
-// RDPV-21 다중 모니터 창이 주 모니터를 덮는 자리에 뜨고 #rdpwin 으로 들어간다.
-test('RDPV-21 다중 모니터 창이 주 모니터를 덮는 자리에 뜬다', async ({ ara }) => {
+// RDPV-21 다중 모니터 창이 주 모니터의 **작업 영역**에 뜨고 #rdpwin 으로 들어간다.
+// 2026-09-04: 전에는 작업표시줄까지 덮는 테두리 없는 창이었다(그래서 bounds 와 같은지 봤다).
+// 이제 제목 표시줄이 있고 작업표시줄을 안 덮는다 — 그 둘이 이 검사의 뜻이다.
+test('RDPV-21 다중 모니터 창이 주 모니터의 작업 영역에 뜬다(제목 표시줄 있음)', async ({ ara }) => {
   await createRdpProfile(ara.page, { name: 'rdp-span' })
   const id = await profileIdByName(ara.page, 'rdp-span')
   expect(id).not.toBe('')
@@ -174,10 +179,10 @@ test('RDPV-21 다중 모니터 창이 주 모니터를 덮는 자리에 뜬다',
   expect(wins[0].url).toMatch(/[?&]h=\d+/)
 
   // 이 창은 **주 모니터 한 장**을 덮는다(나머지 모니터는 렌더러가 자식 창으로 연다 —
-  // store/rdpMirror.ts). 작업표시줄까지 덮어야 하므로 작업 영역이 아니라 bounds 와 같아야 한다.
+  // store/rdpMirror.ts). 작업표시줄은 덮지 않으므로 bounds 가 아니라 **작업 영역**과 같아야 한다.
   const primary = await ara.app.evaluate(({ screen }) => {
     const d = screen.getPrimaryDisplay()
-    return { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height }
+    return { x: d.workArea.x, y: d.workArea.y, width: d.workArea.width, height: d.workArea.height }
   })
   // **재시도를 유지한 채** 허용 오차를 준다. 오차만 넣고 한 번만 읽었더니 창이 자리를 잡기 전에
   // 재던 순간이 있어 전체 스위트에서만 빨갰다(2026-08-13 — 단독 실행에서는 늘 통과해 더 헷갈렸다).
@@ -185,11 +190,18 @@ test('RDPV-21 다중 모니터 창이 주 모니터를 덮는 자리에 뜬다',
     .poll(
       async () => {
         const b = (await spanWindows(ara.app))[0]?.bounds
-        return b ? { x: b.x, y: b.y, width: snap(b.width, primary.width), height: snap(b.height, primary.height) } : null
+        return b
+          ? { x: snap(b.x, primary.x), y: snap(b.y, primary.y), width: snap(b.width, primary.width), height: snap(b.height, primary.height) }
+          : null
       },
       { timeout: 10_000 }
     )
     .toEqual(primary)
+
+  // 테두리가 있다 = 내용 영역이 창보다 작다. 원격 해상도는 **내용 영역** 기준이라(shared/rdpSpan.ts)
+  // 이 차이를 안 빼면 원격 화면이 잘린다 — 여기서 "테두리가 실제로 생겼다"만 확인한다.
+  const win = (await spanWindows(ara.app))[0]
+  expect(win.content.height).toBeLessThan(win.bounds.height)
 
   await ara.page.evaluate((pid) => window.ev.rdp.closeSpan(pid), id)
   await expect.poll(() => spanWindows(ara.app).then((w) => w.length)).toBe(0)
@@ -209,18 +221,34 @@ test('RDPV-22 같은 서버를 두 번 펼치면 창이 늘지 않는다', async
   await expect.poll(() => spanWindows(ara.app).then((w) => w.length)).toBe(0)
 })
 
-// RDPV-23 모니터가 한 장이면 [다중 모니터] 버튼은 창을 열지 않고 안내만 한다.
-test('RDPV-23 모니터가 한 장이면 펼치지 않는다', async ({ ara }) => {
+// RDPV-23 모니터가 한 장이면 프로필이 [모니터 전체에 펼치기] 여도 보통 탭으로 열고 안내만 한다.
+// 2026-09-04: 진입점이 헤더 [다중 모니터] 버튼에서 **프로필 설정**으로 옮겨 갔다 — 창이 안 뜨는
+// 것만 보던 검사에 "그래서 탭으로 열렸다"를 더한다(아무 데도 안 열리면 그건 다른 고장이다).
+test('RDPV-23 모니터가 한 장이면 펼치지 않고 탭으로 연다', async ({ ara }) => {
   const only = await ara.app.evaluate(({ screen }) => screen.getAllDisplays().length)
   test.skip(only > 1, '모니터가 여러 장인 환경 — 이 가드는 한 장일 때만 검증된다')
 
-  await createRdpProfile(ara.page, { name: 'rdp-span3' })
+  await createRdpProfile(ara.page, { name: 'rdp-span3', multiMonitor: true })
   await srvNode(ara.page, 'rdp-span3').dblclick()
   await expect(ara.page.locator('.rdp-view')).toBeVisible({ timeout: 15_000 })
-  // 2026-09-01: 헤더 버튼 여섯이 [옵션] 한 자리로 접혔다(좁은 창 줄바꿈·잘림) — [다중 모니터]도
-  // 그 리스트 안에 있다. 버튼을 눌러 리스트를 연 뒤 항목을 고른다.
-  await ara.page.click('.rdp-opt-btn')
-  await ara.page.click('.ctx-menu .ctx-item[data-action="span"]')
   await expect(ara.page.locator('.pane-toast')).toBeVisible({ timeout: 5_000 })
   expect(await spanWindows(ara.app)).toHaveLength(0)
+})
+
+// RDPV-29 프로필의 [모니터 전체에 펼치기] 가 저장되고 다시 열어도 그대로다 — 스키마를 안 올렸으므로
+// (옛 앱이 워크스페이스를 못 읽는다) 이 선택 필드가 실제로 실려 나가는지 여기서 본다.
+test('RDPV-29 프로필의 [모니터 전체에 펼치기] 가 저장된다', async ({ ara }) => {
+  await createRdpProfile(ara.page, { name: 'rdp-multi', multiMonitor: true })
+  const saved = await ara.page.evaluate(async () => {
+    const list = await window.ev.profile.list()
+    const p = list.find((x) => x.name === 'rdp-multi')
+    return p && p.type === 'rdp' ? p.multiMonitor === true : null
+  })
+  expect(saved).toBe(true)
+
+  // 폼을 다시 열면 켜진 칸이 켜진 채로 보인다(안 그러면 저장하는 순간 조용히 꺼진다).
+  await srvNode(ara.page, 'rdp-multi').click({ button: 'right' })
+  await ara.page.click('.ctx-menu .ctx-item[data-action="server.edit"]')
+  await connModal(ara.page).waitFor()
+  await expect(ara.page.locator('.prof-form .seg-ctl button.on:has-text("모니터 전체에 펼치기")')).toBeVisible()
 })
