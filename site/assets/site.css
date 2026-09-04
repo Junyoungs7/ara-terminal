@@ -1171,6 +1171,10 @@ kbd {
 @media (max-width: 620px) {
   .keys td:first-child {
     width: auto;
+    /* nowrap 도 함께 푼다 — 이 표는 원래 단축키(`Ctrl+Shift+\`)만 담았는데 2026-09-04 에
+       "이걸 하려면" 색인이 들어오면서 첫 칸이 **한국어 문장**이 됐다. width 만 풀고 nowrap 을
+       두면 문장이 한 줄로 뻗어 좁은 화면에서 페이지가 가로로 밀린다. */
+    white-space: normal;
   }
 }
 

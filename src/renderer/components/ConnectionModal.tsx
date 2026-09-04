@@ -17,7 +17,10 @@ export type ConnModalRequest =
   | null
 
 // 폼 상태(목업 우측 .prof-form). secret은 저장 시에만 전송되고 화면엔 보관하지 않는다.
-// W4sat F21: type='rdp' 이면 authType/keyPath/secret 은 화면에서 숨고 저장에도 실리지 않는다.
+// W4sat F21: type='rdp' 이면 authType/keyPath 는 화면에서 숨는다.
+// ⚠️ secret 은 **아니다** — 그 뒤에 RDP 에도 선택형 비밀번호 칸이 생겼다(:436~454 참고).
+// 채우면 vault 에 저장되어 다음 접속부터 입력 화면을 건너뛴다. 2026-09-04 에 이 주석이 낡은 채로
+// 남아 사용 설명서가 "RDP 는 비밀번호를 저장하지 않는다"고 잘못 적는 원인이 됐다.
 type Form = {
   id?: string
   type: 'ssh' | 'rdp'

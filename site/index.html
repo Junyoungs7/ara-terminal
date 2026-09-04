@@ -6,7 +6,7 @@
     <title>A.R.A — 접속 다음을 바꾸는 터미널</title>
     <meta
       name="description"
-      content="A.R.A(아라)는 SSH 접속 다음을 바꿉니다. 서버에 아무것도 설치하지 않고 프로세스·서비스·디스크를 마우스로, 파일은 끌어다 놓기로, 창은 크롬처럼."
+      content="A.R.A(아라)는 SSH 접속 다음을 바꿉니다. 서버에 프로그램을 깔지 않고 프로세스·서비스·디스크를 마우스로, 파일은 끌어다 놓기로, 윈도우 서버는 같은 창의 RDP 탭으로."
     />
     <link rel="icon" href="assets/ara-icon.svg" />
     <link rel="stylesheet" href="assets/site.css" />
@@ -22,7 +22,6 @@
         </a>
         <nav class="nav-links">
           <a href="#diff">무엇이 다른가</a>
-          <a href="video.html">영상</a>
           <a href="#only">아라에만 있는 것</a>
           <a href="manual.html">사용 설명서</a>
           <a href="#download">다운로드</a>
@@ -39,7 +38,7 @@
           <p class="lead reveal">
             지금 쓰시는 터미널이 하는 일은 아라도 다 합니다. 아라는 <b>접속한 다음</b>을 바꿉니다 —
             서버 상태를 <b>마우스로</b> 보고, 파일을 <b>끌어다 옮기고</b>, 창을 <b>크롬처럼</b> 다룹니다.
-            원격 리눅스에는 <b>아무것도 설치하지 않습니다.</b>
+            원격 리눅스에 <b>깔 프로그램은 없습니다.</b>
           </p>
           <div class="hero-cta reveal">
             <a class="btn btn-primary" data-dl href="downloads/" download>
@@ -92,7 +91,8 @@
                   <div class="win-bottom">
                     <div class="bt">
                       <span>포트 모니터</span><span>시스템 모니터</span><span class="on">프로세스</span><span>서비스</span
-                      ><span>디스크</span><span>패키지</span><span>컨테이너</span><span>세션 기록</span>
+                      ><span>디스크</span><span>패키지</span><span>컨테이너</span><span>쿠버네티스</span
+                      ><span>세션 기록</span><span>서버 로그</span>
                     </div>
                     <table class="tbl">
                       <thead>
@@ -119,9 +119,9 @@
 
       <!-- ── 지표 ────────────────────────────────────────────────────── -->
       <div class="stats reveal">
-        <div><b>0</b><span>서버에 설치할 것</span></div>
-        <div><b>8</b><span>마우스로 여는 서버 도구</span></div>
-        <div><b>1</b><span>창 — 터미널·파일·서버 도구</span></div>
+        <div><b>0</b><span>서버에 깔 프로그램</span></div>
+        <div><b>10</b><span>마우스로 여는 서버 도구</span></div>
+        <div><b>1</b><span>창 — 터미널·파일·RDP·서버 도구</span></div>
         <div><b>100%</b><span>한국어 화면</span></div>
       </div>
 
@@ -147,14 +147,19 @@
               <tr>
                 <td class="k">서버가 왜 느린지 볼 때</td>
                 <td><code>top</code> · <code>ps -eo</code> · <code>systemctl</code> · <code>df</code> 를 외워서 타이핑, 결과는 글자 더미</td>
-                <td class="ours"><b>표로 봅니다.</b> 프로세스·서비스·디스크·패키지·컨테이너·포트·시스템 그래프를 클릭으로 열고 <b>정렬·검색·종료까지 마우스</b>로. 서버에는 <b>아무것도 설치하지 않습니다.</b></td>
+                <td class="ours"><b>표로 봅니다.</b> 포트·시스템 그래프·프로세스·서비스·디스크·패키지·컨테이너·쿠버네티스·세션 기록·서버 로그 <b>열 가지</b>를 클릭으로 열고 <b>정렬·검색·종료까지 마우스</b>로. 서버에 <b>깔 프로그램은 없습니다.</b></td>
               </tr>
               <tr>
                 <td class="k">파일을 옮길 때</td>
                 <td>창을 하나 더 띄우거나 <code>scp</code> 명령을 조립. 터미널에서 <code>cd</code> 한 곳과 파일 창이 따로 논다</td>
                 <td class="ours">왼쪽 트리가 <b><code>cd</code> 를 따라옵니다.</b> 끌어다 놓으면 업로드, <b>서버 ↔ 서버도 바로 복사.</b> 원격 파일은 더블클릭해 고치고 저장하면 그대로 올라갑니다.</td>
               </tr>
-                                          <tr>
+              <tr>
+                <td class="k">윈도우 서버를 볼 때</td>
+                <td>원격 데스크톱 연결을 따로 띄우고, 터미널 창과 번갈아 오간다</td>
+                <td class="ours">연결을 만들 때 <b>[RDP]</b> 를 고르면 윈도우 서버 화면이 <b>같은 창의 탭</b>으로 열립니다. SSH 탭 옆에 나란히 둡니다.</td>
+              </tr>
+              <tr>
                 <td class="k">원격 CLI 로그인(claude·gemini)</td>
                 <td>콜백 포트를 손으로 포워딩하고, 링크를 복사해 브라우저에 옮겨 붙인다</td>
                 <td class="ours">링크를 <b>Ctrl+클릭</b>. 콜백 포트를 <b>그 번호 그대로 터널링</b>하고 내장 브라우저로 엽니다. 로그인이 그 자리에서 끝납니다.</td>
@@ -187,7 +192,7 @@
               <tr>
                 <td class="k">새 버전</td>
                 <td>공지를 찾아 설치본을 내려받아 다시 설치</td>
-                <td class="ours">사내 서버에서 <b>알아서 받아 두고</b> 다음에 켤 때 적용합니다.</td>
+                <td class="ours">새 버전이 나오면 <b>알려 드립니다.</b> 받는 것은 <b>[받기]</b> 를 누르실 때, 적용은 다음에 켤 때입니다.</td>
               </tr>
             </tbody>
           </table>
@@ -198,11 +203,11 @@
       <section class="section" id="only">
         <div class="wrap">
           <p class="eyebrow reveal">아라에만 있는 것</p>
-          <h2 class="h-sect reveal">다른 데서 못 보셨을<br />네 가지입니다.</h2>
+          <h2 class="h-sect reveal">다른 데서 못 보셨을<br />다섯 가지입니다.</h2>
 
           <div class="feat" style="margin-top: 64px">
             <div class="feat-txt reveal">
-              <h3>내 서버를 아는<br />AI 가 안에 있습니다.</h3>
+              <h3>내 서버를 아는 AI 와,<br />그 AI 를 보는 목록.</h3>
               <p>
                 터미널에 붙은 AI 는 보통 <b>당신의 서버를 모릅니다.</b> "지금 붙어 있는 서버 알려 줘"
                 라고 물으면 <code>~/.ssh/config</code> 를 확인해 보라고 답합니다.
@@ -213,10 +218,17 @@
                 파일 전송 · 포트 포워딩)를 물려서, 로컬과 서버를 <b>한 문장 안에서</b> 오갑니다.
                 별도 요금이 붙지 않습니다.
               </p>
+              <p style="margin-top: 14px">
+                그리고 <b>띄워 둔 AI 를 지켜봅니다.</b> 사이드바 <b>[AI 세션]</b> 이 지금 어느 AI 가
+                무엇을 하고 있는지 한 목록으로 보여 줍니다 — <b>작업 중 · 나를 기다립니다 · 끝남</b>.
+                로컬이든 서버든, 아라가 띄운 것이든 터미널에 직접 친 <code>claude</code> 든 스스로
+                올라옵니다. 승인을 기다리는 에이전트를 찾으러 탭을 하나씩 눌러 볼 일이 없습니다.
+              </p>
               <ul>
                 <li>한 일을 숨기지 않습니다 — 도구를 쓰면 한 줄로 접히고, 누르면 무엇을 했는지 펴집니다</li>
                 <li>갈림길에서는 <b>번호로 고르게</b> 물어봅니다</li>
                 <li><b>[계획 먼저]</b> 를 켜면 아무것도 건드리지 않고 계획만 냅니다 — 보고 나서 진행합니다</li>
+                <li>모르면 <b>[확인 불가]</b> 라고 말합니다 — 조용한 것을 끝난 것으로 꾸미지 않습니다</li>
               </ul>
             </div>
             <div class="reveal">
@@ -241,6 +253,146 @@
           </div>
 
           <div class="feat rev">
+            <div class="feat-txt reveal">
+              <h3>윈도우 서버 화면을<br />같은 창에서 엽니다.</h3>
+              <p>
+                리눅스는 터미널로 보지만 윈도우 서버는 결국 화면을 봐야 합니다. 그래서 원격 데스크톱
+                프로그램을 따로 띄우고, 터미널 창과 번갈아 오가게 됩니다.
+              </p>
+              <p style="margin-top: 14px">
+                아라는 연결을 만들 때 <b>[RDP]</b> 를 고르기만 하면 됩니다(포트는 <code>3389</code> 로
+                채워집니다). 윈도우 서버 화면이 <b>탭 안에</b> 뜨고, SSH 탭 옆에 나란히 놓입니다.
+                따로 깔 프로그램은 없습니다.
+              </p>
+              <ul>
+                <li>화면 크기는 <b>[창 크기에 맞춤]</b>이 기본. 고정 해상도 다섯, 모니터 전체를 덮는 <b>[다중 모니터]</b>도 있습니다</li>
+                <li><b>텍스트 클립보드는 양방향.</b> 파일은 <b>[옵션] → [파일 보내기]</b>로 원격 클립보드에 올려 원격에서 <b>Ctrl+V</b></li>
+                <li><b>Ctrl+Alt+Del</b> · <b>Alt+Tab</b> · <b>Win</b> 키는 <b>[옵션] → [단축키 보내기]</b>로 보냅니다 — 직접 누르면 이 PC 가 가로챕니다</li>
+              </ul>
+              <div class="note warn" style="margin-top: 22px">
+                <span>⚠️</span>
+                <span>
+                  <b>먼저 알아 두실 네 가지.</b> ① <b>마우스 커서 모양이 바뀌지 않습니다</b> — 원격에서
+                  글자 위나 경계선 위로 가도 화살표 그대로입니다. ② <b>RDP 탭은 창 밖으로
+                  뗄 수 없습니다</b> — SSH 탭은 됩니다. ③ <b>앱을 껐다 켜면 RDP 탭은 돌아오지 않습니다</b> —
+                  SSH·로컬 탭은 복원되지만 RDP 는 다시 눌러 붙으셔야 합니다. ④ 글자는 양쪽으로 오가지만
+                  클립보드로 <b>이미지</b>를 옮기는 것은 아직 안 됩니다.
+                </span>
+              </div>
+            </div>
+            <div class="reveal">
+              <div class="card">
+                <div class="card-hd"><span>옵션</span><span class="g">win-2019 · RDP</span></div>
+                <div class="card-bd">
+                  <p style="color: var(--text-hi); font-weight: 700; margin-bottom: 10px">화면 크기 · 키 배열 · 파일 전송 · 단축키</p>
+                  <div class="spec" style="margin-top: 0">
+                    <div><span class="k">해상도</span><span class="v">창 크기에 맞춤</span></div>
+                    <div><span class="k">다중 모니터</span><span class="v">모니터 2장</span></div>
+                    <div><span class="k">파일 보내기</span><span class="v">고른 파일 → 원격 클립보드</span></div>
+                    <div><span class="k">파일 받기</span><span class="v">원격에서 Ctrl+C</span></div>
+                    <div><span class="k">단축키 보내기</span><span class="v">Ctrl+Alt+Del · Alt+Tab · Win</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="feat">
+            <div class="feat-txt reveal">
+              <h3>서버에 상주하는 것이<br />없습니다.</h3>
+              <p>
+                서버 관리 웹 도구는 보통 서버에 무언가를 깔아야 합니다. 운영 서버에 그 승인을 받는 일이
+                더 오래 걸립니다.
+              </p>
+              <p style="margin-top: 14px">
+                아라는 <b>이미 열려 있는 SSH 연결로 표준 명령을 대신 실행</b>하고 결과를 표로 그립니다.
+                <b>깔 패키지도, 도는 데몬도 없고, 밖에서 접속할 수 있는 포트를 열지도 않습니다.</b>
+                접속할 수 있는 서버면 <b>어디든 됩니다.</b> 배포판이 달라도 같은 화면으로 보이도록
+                명령을 골라 씁니다.
+              </p>
+              <p style="margin-top: 14px">
+                다만 <b>두 가지는 남습니다.</b> 사이드바 [AI 세션] 이 서버에서 도는 AI 의 상태를 말하려면,
+                그 서버가 한 마디를 보내 줘야 하기 때문입니다.
+              </p>
+              <p style="margin-top: 10px">
+                <b>① 돌아오는 통로 하나.</b> 붙어 있는 동안 그 SSH 연결 안에 되돌아오는 길을 하나 엽니다.
+                서버의 <code>127.0.0.1</code> 에만 열려 <b>밖에서는 닿을 수 없고</b>, 세션을 닫으면 함께
+                사라집니다. <code>ss -tlnp</code> 에는 보입니다 — 붙는 서버 <b>전부</b>에 열리므로
+                아래 ② 를 건너뛴 서버에도 이것만은 생깁니다.
+              </p>
+              <p style="margin-top: 10px">
+                <b>② 설정 파일에 훅 한 줄.</b> <code>~/.claude</code> 가 <b>이미 있는</b> 서버에만 얹습니다 —
+                원래 있던 훅은 그대로 두고, 고칠 것이 있고 원래 파일이 있었다면
+                <code>settings.json.bak</code> 사본을 남깁니다. 그 줄이 하는 일은 상태 한 번을 내 PC 로
+                보내는 <code>curl</code> 한 번이 전부이고 <b>도는 프로세스는 남지 않습니다.</b>
+                <code>~/.claude</code> 가 없는 서버에는 폴더도 파일도 만들지 않습니다.
+              </p>
+              <ul>
+                <li>열 가지를 마우스로 — 포트 · 시스템 그래프 · 프로세스 · 서비스 · 디스크 · 패키지 · 컨테이너 · 쿠버네티스 · 세션 기록 · 서버 로그</li>
+                <li>바꾸는 작업(종료 · 서비스 정지)은 <b>대상 이름을 보여 주고</b> 확인을 받습니다</li>
+                <li>실패하면 서버가 준 이유를 <b>그대로</b> 보여 줍니다(권한 부족을 숨기지 않습니다)</li>
+              </ul>
+              <div class="note" style="margin-top: 22px">
+                <span>🔎</span>
+                <span>
+                  <b>어느 서버에 무엇이 들어갔는지 화면에서 봅니다.</b> 설정 → <b>[AI]</b> → <b>[원격 상태 훅]</b>
+                  이 서버 한 줄씩 말합니다 — 심었다 / 건너뛰었다 / 못 심었다(사유 그대로).
+                  <b>끄는 스위치는 아직 없습니다.</b> 되돌리시려면 그 서버에서 손으로 지우시면 됩니다 —
+                  <code>settings.json</code> 에서 우리 줄을 빼거나 <code>.bak</code> 으로 되돌리고,
+                  <code>ara-tty-*</code> 파일을 지웁니다. 그렇게 하시면 <b>잃는 것은 AI 상태 표시 하나</b>뿐입니다.
+                  접속 · 터미널 · 파일 · 서버 도구 · 포트는 전부 그대로 됩니다.
+                  <a class="link" href="manual.html#start">사용 설명서</a>에 들어가는 내용과 지우는 법이 그대로 있습니다.
+                </span>
+              </div>
+            </div>
+            <div class="reveal">
+              <div class="card">
+                <div class="card-hd"><span>설정 · AI</span><span class="g">원격 상태 훅</span></div>
+                <div class="card-bd">
+                  <p style="color: var(--text-hi); font-weight: 700; margin-bottom: 10px">서버마다 무엇이 들어갔는지 그대로 말합니다</p>
+                  <div class="spec" style="margin-top: 0">
+                    <div><span class="k">dev-server</span><span class="v">심었습니다</span></div>
+                    <div><span class="k">kvt-gpu</span><span class="v">심었습니다</span></div>
+                    <div><span class="k">db-standby</span><span class="v">건너뜀 — ~/.claude 없음</span></div>
+                    <div><span class="k">legacy-box</span><span class="v">못 심음 — 사유 표시</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="feat rev">
+            <div class="feat-txt reveal">
+              <h3>지나간 것도<br />남습니다.</h3>
+              <p>
+                세션마다 주고받은 내용이 파일로 남습니다. <b>비밀번호·토큰으로 보이는 값은 가려서</b>
+                기록하고, <code>vim</code>·<code>htop</code> 같은 전체 화면 프로그램의 화면 갱신은
+                남기지 않습니다 — 그래야 나중에 읽을 수 있는 기록이 됩니다.
+              </p>
+              <ul>
+                <li>지금 세션의 명령과 결과를 <b>하단 [세션 기록]</b>에서 바로 봅니다</li>
+                <li>지난 세션은 우측 <b>[지난 세션]</b>에서 찾습니다</li>
+                <li>보관 기간(7·30·90일·무제한)과 쌓이는 폴더를 설정에서 정합니다</li>
+              </ul>
+            </div>
+            <div class="reveal">
+              <div class="card">
+                <div class="card-hd"><span>세션 기록</span><span class="g">dev-server · 오늘</span></div>
+                <div class="card-bd" style="padding: 0">
+                  <table class="tbl">
+                    <thead><tr><th>시각</th><th>명령</th><th>결과</th></tr></thead>
+                    <tbody>
+                      <tr class="hot"><td class="num">14:02</td><td>systemctl restart nginx</td><td>정상</td></tr>
+                      <tr><td class="num">13:58</td><td>git pull --rebase</td><td>정상</td></tr>
+                      <tr><td class="num">13:41</td><td>PGPASSWORD=•••••• psql -h db</td><td>가려서 기록</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="feat">
             <div class="feat-txt reveal">
               <h3>원격 AI CLI 로그인이<br />클릭 한 번에 끝납니다.</h3>
               <p>
@@ -270,74 +422,8 @@
               </div>
             </div>
           </div>
-
-          <div class="feat">
-            <div class="feat-txt reveal">
-              <h3>서버에 에이전트를<br />설치하지 않습니다.</h3>
-              <p>
-                서버 관리 웹 도구는 보통 서버에 무언가를 깔아야 합니다. 운영 서버에 그 승인을 받는 일이
-                더 오래 걸립니다.
-              </p>
-              <p style="margin-top: 14px">
-                아라는 <b>이미 열려 있는 SSH 연결로 표준 명령을 대신 실행</b>하고 결과를 표로 그립니다.
-                서버에 남는 것이 없고, 접속할 수 있는 서버면 <b>어디든 됩니다.</b> 배포판이 달라도
-                같은 화면으로 보이도록 명령을 골라 씁니다.
-              </p>
-              <ul>
-                <li>프로세스 · 서비스 · 디스크 · 패키지 · 컨테이너 · 포트 · 시스템 그래프 · 세션 기록</li>
-                <li>바꾸는 작업(종료 · 서비스 정지)은 <b>대상 이름을 보여 주고</b> 확인을 받습니다</li>
-                <li>실패하면 서버가 준 이유를 <b>그대로</b> 보여 줍니다(권한 부족을 숨기지 않습니다)</li>
-              </ul>
-            </div>
-            <div class="reveal">
-              <div class="card">
-                <div class="card-hd"><span>서비스</span><span class="g">dev-server</span></div>
-                <div class="card-bd" style="padding: 0">
-                  <table class="tbl">
-                    <thead><tr><th>유닛</th><th>상태</th><th>부팅 시</th></tr></thead>
-                    <tbody>
-                      <tr class="hot"><td>nginx.service</td><td>running</td><td>enabled</td></tr>
-                      <tr><td>postgresql.service</td><td>running</td><td>enabled</td></tr>
-                      <tr><td>vgt-erp.service</td><td>running</td><td>enabled</td></tr>
-                      <tr><td>backup.timer</td><td>waiting</td><td>enabled</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="feat rev">
-            <div class="feat-txt reveal">
-              <h3>지나간 것도<br />남습니다.</h3>
-              <p>
-                세션마다 주고받은 내용이 파일로 남습니다. <b>비밀번호·토큰으로 보이는 값은 가려서</b>
-                기록하고, <code>vim</code>·<code>htop</code> 같은 전체 화면 프로그램의 화면 갱신은
-                남기지 않습니다 — 그래야 나중에 읽을 수 있는 기록이 됩니다.
-              </p>
-              <ul>
-                <li>지금 세션의 명령과 결과를 <b>하단 [세션 기록]</b>에서 바로 봅니다</li>
-                <li>지난 세션은 <b>[이전 기록]</b>에서 찾습니다</li>
-                <li>보관 기간(7·30·90일·무제한)과 쌓이는 폴더를 설정에서 정합니다</li>
-              </ul>
-            </div>
-            <div class="reveal">
-              <div class="card">
-                <div class="card-hd"><span>세션 기록</span><span class="g">dev-server · 오늘</span></div>
-                <div class="card-bd" style="padding: 0">
-                  <table class="tbl">
-                    <thead><tr><th>시각</th><th>명령</th><th>결과</th></tr></thead>
-                    <tbody>
-                      <tr class="hot"><td class="num">14:02</td><td>systemctl restart nginx</td><td>정상</td></tr>
-                      <tr><td class="num">13:58</td><td>git pull --rebase</td><td>정상</td></tr>
-                      <tr><td class="num">13:41</td><td>PGPASSWORD=•••••• psql -h db</td><td>가려서 기록</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        </div>
+      </section>
 
       <!-- ── 나머지 기능 ─────────────────────────────────────────────── -->
       <section class="section">
@@ -356,19 +442,31 @@
             </div>
             <div class="tile reveal">
               <h4>통합 검색 · 명령어 북</h4>
-              <p><b>F1</b> 하나로 기능·서버·명령을 한 곳에서 찾습니다. 자주 쓰는 명령 80여 개는 골라 담아 두었습니다.</p>
+              <p><b>F1</b> 하나로 <b>기능 · 명령 · 서버 · 즐겨찾기</b> 네 갈래를 한 곳에서 찾습니다. 자주 쓰는 리눅스 명령 90여 개는 골라 담아 두었습니다.</p>
             </div>
             <div class="tile reveal">
               <h4>호스트 키를 기억합니다</h4>
               <p>처음 붙는 서버는 지문을 보여 주고 확인을 받습니다. 다음에 지문이 달라지면 접속을 멈춥니다.</p>
             </div>
             <div class="tile reveal">
-              <h4>비밀은 파일에 안 둡니다</h4>
-              <p>비밀번호 · 개인키 암구호 · API 키는 <b>Windows 자격 증명</b>에. 설정 파일에는 없습니다.</p>
+              <h4>비밀은 평문으로 안 둡니다</h4>
+              <p>비밀번호 · 개인키 암구호 · API 키는 <b>Windows 가 잠가</b> 보관합니다. 설정 파일에는 없고, 잠글 수 없는 환경이면 <b>저장을 거부</b>합니다.</p>
             </div>
             <div class="tile reveal">
               <h4>글자 크기와 폰트</h4>
-              <p>앱 화면 배율과 터미널 글꼴을 따로 정합니다. 한글 폰트 후보를 <b>같은 문장으로 비교</b>해 고릅니다.</p>
+              <p>앱 화면 배율과 터미널 글꼴을 따로 정합니다. 한글 고정폭 폰트를 포함해 <b>다섯 벌을 담아</b> 배포하고, 후보를 <b>같은 문장으로 비교</b>해 고릅니다.</p>
+            </div>
+            <div class="tile reveal">
+              <h4>터미널 자동완성</h4>
+              <p>지난 명령에서 이어질 말을 회색 글씨로 미리 보여 줍니다. <b>목록이 떠 있는 동안 Enter 는 고르기</b>이니, 친 그대로 실행하시려면 <b>Esc</b> 로 닫고 Enter 를 누르세요.</p>
+            </div>
+            <div class="tile reveal">
+              <h4>AI 세션을 갈라 씁니다</h4>
+              <p>[AI 세션] 목록에서 우클릭 → <b>[세션 분리]</b>. 같은 저장소를 형제 폴더에 새 브랜치로 하나 더 펴서, 에이전트 둘이 서로의 파일을 덮어쓰지 않게 합니다.</p>
+            </div>
+            <div class="tile reveal">
+              <h4>백그라운드 서버의 로그</h4>
+              <p>하단 <b>[서버 로그]</b> 에 포트 번호나 로그 파일 경로를 넣으면 출력을 실시간으로 봅니다. 포트 모니터의 각 줄에 있는 <b>[로그]</b> 버튼으로도 한 번에 열립니다.</p>
             </div>
           </div>
         </div>
@@ -402,8 +500,8 @@
             <div>
               <ol class="steps">
                 <li><b>설치 파일을 실행합니다.</b> 설치 경로를 고를 수 있습니다. 기본값 그대로 두어도 됩니다.</li>
-                <li><b>실행 후 ＋ 버튼</b>으로 로컬 셸이나 서버를 추가합니다. 서버는 이름·호스트·사용자만 있으면 됩니다.</li>
-                <li><b>업데이트는 알아서</b> 받습니다. 새 버전이 준비되면 다음에 켤 때 적용됩니다.</li>
+                <li><b>처음 켜면 짧은 인사</b>가 지나가고(아무 키나 누르면 건너뜁니다), 뭐라고 불러 드릴지 한 번 묻습니다. 그 다음 <b>＋ 버튼</b>으로 로컬 셸이나 서버를 추가합니다 — 서버는 이름·호스트·사용자만 있으면 됩니다.</li>
+                <li><b>새 버전이 나오면 알려 드립니다.</b> 받는 것은 <b>[받기]</b> 를 누르실 때, 적용은 그 다음에 켤 때입니다.</li>
               </ol>
               <div style="margin-top: 24px">
                 <div class="note warn">
@@ -430,8 +528,8 @@
               <p><a class="link" href="manual.html#start">사용 설명서의 [시작하기]</a>가 첫 서버 연결까지 5분 안에 안내합니다.</p>
             </div>
             <div class="tile reveal">
-              <h4>자동 업데이트</h4>
-              <p>실행 중에 사내 서버를 조용히 확인해 뒤에서 받아 둡니다. 쓰던 터미널을 끊고 재시작하지 않습니다.</p>
+              <h4>새 버전 알림</h4>
+              <p><b>확인은 자동, 내려받기는 [받기]를 누르실 때</b>입니다. 아직 코드 서명 전이라 무엇을 받는지 보고 고르시게 두었습니다 — 서명은 다음 판의 숙제입니다. 쓰던 터미널을 끊지 않습니다.</p>
             </div>
             <div class="tile reveal">
               <h4>설치가 막힌다면</h4>
