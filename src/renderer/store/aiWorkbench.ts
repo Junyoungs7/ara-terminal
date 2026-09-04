@@ -258,9 +258,10 @@ export function groupRows(rows: readonly WorkbenchRow[]): BenchGroup[] {
 }
 
 /**
- * 오른쪽 경과 열 — **라틴/숫자만.** `3분`으로 쓰면 한글 하한(11px) 때문에 `--fs-nano`(10.5px)를
- * 못 쓰고, 그러면 `--text-dim` 이 명도의 바닥이라 제목/2줄/시각이 3단으로 눌린다.
- * 라틴이면 크기 한 단이 공짜로 생겨 4단이 된다(tokens.css §글자 척도).
+ * 오른쪽 경과 열 — **라틴/숫자만.** 옛 근거(한글 하한 11px 때문에 10.5px 단을 못 쓴다)는
+ * A 판에서 사라졌다 — 그 단 자체가 없어졌고 보조는 11 하나다. 라틴을 유지하는 이유는 이제
+ * **폭**이다: `3분`·`41분`·`2시간`은 자릿수마다 폭이 흔들려 세로로 훑히는 열이 어긋난다.
+ * `3d`·`41m`·`2h` 는 두 글자에서 안 움직인다.
  */
 export function agoText(ms: number): string {
   const sec = Math.max(0, Math.floor(ms / 1000))

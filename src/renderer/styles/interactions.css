@@ -38,7 +38,7 @@
 .sp-search .esc-kbd {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
@@ -48,8 +48,8 @@
   padding: var(--sp-7) var(--sp-5);
   text-align: center;
   font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-dim);
+  font-weight: 400;
+  color: var(--text-mid);
 }
 /* ---------- 치트시트 오버레이 (§9.4) ---------- */
 .cheatsheet {
@@ -130,12 +130,12 @@
   height: 15px;
 }
 .cs-hd h2 {
-  font-size: var(--fs-lg);
-  font-weight: 700;
+  font-size: var(--fs-xl);
+  font-weight: 600;
 }
 .cs-hd p {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-top: var(--sp-hair);
 }
 /* .cs-hd .x(치트시트·명령어북 닫기)는 여기 있던 규칙이 shell.css 의 `.modal-hd .x` 와 한 글자도
@@ -152,7 +152,7 @@
 }
 .cs-col-title {
   font-size: var(--fs-md);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.9px;
   text-transform: uppercase;
   color: var(--accent-bright);
@@ -191,7 +191,7 @@
 .cs-k {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: 500;
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -202,6 +202,7 @@
 .cs-sep {
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
   font-family: var(--mono);
 }
 .cs-foot {
@@ -212,7 +213,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
 }
 
@@ -247,8 +248,8 @@
 .cb-cat {
   flex: none;
   width: 68px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 .cb-cmd {
@@ -279,7 +280,7 @@
 .cb-distro {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: 500;
   padding: var(--sp-hair) var(--sp-3);
   border-radius: var(--radius-xs);
   background: var(--bg-raised);
@@ -341,7 +342,7 @@
   padding: var(--sp-3) var(--sp-5);
   border-radius: var(--radius-sm);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-mid);
   cursor: pointer;
   white-space: nowrap;
@@ -371,7 +372,7 @@
 .ctx-item .ci-kbd {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
@@ -389,6 +390,7 @@
   opacity: 0.55;
 }
 .ctx-item.cur {
+  font-weight: 500;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }

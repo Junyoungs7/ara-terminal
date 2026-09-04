@@ -46,7 +46,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-mid);
   white-space: nowrap;
   overflow: hidden;
@@ -69,6 +69,10 @@
   text-overflow: clip;
   font-family: inherit;
 }
+/* 역할로 보면 타입 배지라 A 판의 dim 자리인데, **여기만 lo 로 둔다** — 이 배지는
+   `--bg-overlay`(앱에서 가장 밝은 면) 위에 산다. dim × overlay 는 **3.54** 로 시스템 전체에서
+   가장 나쁜 짝이고 하한 3.5 바로 위다. lo 면 4.51 이다. 게이트는 이걸 못 잡는다 —
+   scan:magic 은 램프 × 배경 조합만 재지 **어느 자리가 어느 면 위에 있는지**는 안 본다. */
 .set-dir-tag {
   margin-left: var(--sp-3);
   padding: var(--sp-hair) var(--sp-3);
@@ -77,6 +81,7 @@
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 /* 세션 창 제목 — 본창의 통합 검색창이 있던 자리. 창이 무엇을 보고 있는지 한 줄로 말한다. */
 .tb-title {
@@ -120,11 +125,15 @@
   height: 15px;
 }
 .tb-name {
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--fs-base);
   letter-spacing: 0.1px;
 }
+/* 로고의 **R**. 색만 주면 안 된다 — `<b>` 의 UA 기본 굵기는 `bolder` 라 600 부모 위에서
+   브라우저가 **800** 으로 올린다(700 부모에서는 900 이었다). 척도에 없는 네 번째 굵기가
+   아무도 안 적은 채로 화면에 있었다. inherit 로 부모 굵기를 그대로 물린다. */
 .tb-name b {
+  font-weight: inherit;
   color: var(--accent-bright);
 }
 .tb-menu {
@@ -175,10 +184,10 @@
   place-items: center;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   font-size: var(--fs-md);
-  font-weight: 700;
+  font-weight: 500;
   font-family: var(--ui);
   transition: var(--dur-quick);
 }
@@ -200,8 +209,8 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--bg-canvas);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
   -webkit-app-region: no-drag;
 }
 .tb-omni:hover,
@@ -221,13 +230,14 @@
   background: transparent;
   color: var(--text-hi);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .tb-omni-key {
   flex: none;
   font-family: var(--mono);
-  font-size: var(--fs-nano);
-  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0 var(--sp-2);
@@ -256,8 +266,9 @@
 }
 .cp-group {
   padding: var(--sp-3) var(--sp-6) var(--sp-2);
-  color: var(--text-lo);
+  color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.4px;
 }
 .cp-item {
@@ -287,14 +298,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-md);
 }
 .cp-empty,
 .cp-foot {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
 }
 .cp-empty {
   padding: var(--sp-7) var(--sp-6);
@@ -304,6 +315,8 @@
   padding: var(--sp-3) var(--sp-6);
   border-top: 1px solid var(--line);
   font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-dim);
 }
 
 .tb-controls {
@@ -416,9 +429,9 @@
 .sb-head {
   padding: 0 var(--sp-2);
   font-family: var(--ui);
-  font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-mid);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  color: var(--text-hi);
   white-space: nowrap;
 }
 .sb-tab-spacer {
@@ -476,14 +489,14 @@
   flex: 1;
   min-height: 0;
   padding: var(--sp-5);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 .sb-panel.active {
   display: flex;
 }
 .sb-placeholder {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-md);
   letter-spacing: 0.3px;
@@ -511,7 +524,7 @@
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-dim);
 }
 /* 경로 전용 줄 (2026-08-22 제보 12번). 아이콘 줄 아래에 따로 앉는다 — 사이드바(280px)에서
@@ -590,7 +603,7 @@
   background: var(--bg-canvas);
   color: var(--text-hi);
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   outline: none;
 }
 .sftp-path-bar .sb-act {
@@ -639,7 +652,7 @@
   background: var(--bg-canvas);
   color: var(--text-hi);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   outline: none;
 }
 .fdrv {
@@ -651,7 +664,7 @@
   background: var(--bg-canvas);
   color: var(--text-mid);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   cursor: pointer;
 }
 .fstat {
@@ -665,6 +678,7 @@
   background: var(--bg-raised);
   color: var(--text-mid);
   font-size: var(--fs-micro);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -744,6 +758,7 @@
 .frow .fmt {
   flex: none;
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -751,7 +766,7 @@
   flex: none;
   min-width: 34px;
   text-align: right;
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
   font-weight: 500;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -796,7 +811,7 @@
 .sftp-err {
   flex: none;
   padding: var(--sp-3) var(--sp-5);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--err);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--line-soft);
@@ -810,7 +825,7 @@
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-mid);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--line-soft);
@@ -828,7 +843,7 @@
   background: var(--bg-raised);
   color: var(--accent-bright);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -859,7 +874,7 @@
 .sftp-empty {
   padding: var(--sp-5);
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-family: var(--ui);
 }
 .sftp-xfer {
@@ -882,7 +897,7 @@
   margin-bottom: var(--sp-2);
 }
 .sftp-xfer .xfer-label {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-mid);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -944,7 +959,7 @@
 .sftp-xfer .xfer-pct {
   display: block;
   margin-top: var(--sp-2);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
   font-weight: 500;
   color: var(--text-dim);
   font-family: var(--ui);
@@ -1050,7 +1065,7 @@
   border-bottom: none;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: var(--bg-surface);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   cursor: pointer;
 }
@@ -1058,6 +1073,7 @@
   color: var(--text-mid);
 }
 .exp-tab.on {
+  font-weight: 500;
   background: var(--bg-abyss);
   border-color: var(--line-strong);
   color: var(--text-hi);
@@ -1104,7 +1120,7 @@
   border-color: transparent;
   background: transparent;
   color: var(--text-dim);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   padding: 0 var(--sp-5);
 }
 .exp-tab.add:hover {
@@ -1128,8 +1144,8 @@
 .exp-grp {
   padding: var(--sp-5) var(--sp-6) var(--sp-2);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.5px;
 }
 .exp-node {
@@ -1146,6 +1162,7 @@
   background: var(--bg-raised);
 }
 .exp-node.on {
+  font-weight: 500;
   background: var(--accent-glow);
   color: var(--text-hi);
   box-shadow: inset 2px 0 0 var(--accent);
@@ -1181,7 +1198,7 @@
 }
 .exp-none {
   padding: var(--sp-2) var(--sp-6);
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
 }
 
@@ -1216,7 +1233,7 @@
 /* ── F26 서버 콘솔 창 ──
    창 껍데기(.exp-win / .exp-title / .exp-tabs / .exp-grip)는 파일 탐색기 것을 그대로 쓴다 —
    두 창의 조작이 같아야 배울 게 없다. 여기서는 그 안의 런치패드 격자와 프로세스 표만 정의한다.
-   한글이 들어가는 글자는 12px 이 하한이다(그 아래는 래스터화에서 뭉개진다 — tests/font.test.ts 가 지킨다). */
+   한글이 들어가는 글자는 11px 이 하한이다(그 아래는 래스터화에서 뭉개진다 — tests/font.test.ts 가 지킨다). */
 /* 지금 만지고 있는 서버 — 제목줄에 늘 보여야 한다(엉뚱한 서버의 프로세스를 죽이지 않게). */
 .con-srv {
   color: var(--accent);
@@ -1263,6 +1280,7 @@
   top: 4px;
   right: 6px;
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 .con-app.ext:hover .ext-mark {
@@ -1282,7 +1300,7 @@
   font-size: var(--fs-md);
 }
 .con-app .sm {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 
@@ -1357,7 +1375,7 @@
   max-width: 240px;
   border-right: 1px solid var(--line);
   color: var(--text-lo);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   cursor: default;
   user-select: none;
 }
@@ -1441,7 +1459,7 @@
   border-right: 1px solid var(--line);
   background: none;
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-lo);
   white-space: nowrap;
   cursor: pointer;
@@ -1475,8 +1493,8 @@
   display: flex;
   align-items: center;
   padding: 0 var(--sp-7);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
 }
 .pw-body {
   min-height: 0;
@@ -1496,7 +1514,7 @@
 .ptbl {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .ptbl th {
   position: sticky;
@@ -1505,8 +1523,8 @@
   text-align: left;
   padding: var(--sp-3) var(--sp-5);
   font-size: var(--fs-micro);
-  font-weight: 600;
-  color: var(--text-lo);
+  font-weight: 500;
+  color: var(--text-dim);
   white-space: nowrap;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line-strong);
@@ -1572,6 +1590,7 @@
   gap: var(--sp-3);
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .pstate i {
   width: 7px;
@@ -1590,6 +1609,7 @@
 .pdest {
   font-family: var(--mono);
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--ok);
 }
 .pdest.none {
@@ -1613,7 +1633,8 @@
   padding: 0 var(--sp-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   line-height: 1.5;
   color: var(--text-dim);
 }
@@ -1628,7 +1649,7 @@
   background: var(--bg-surface);
   color: var(--text-mid);
   font-family: var(--ui);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-md);
   font-weight: 400;
   cursor: pointer;
   transition: var(--dur-quick);
@@ -1734,7 +1755,8 @@
   flex: none;
   color: var(--text-dim);
   font-family: var(--ui);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .con-btn {
   display: flex;
@@ -1817,8 +1839,8 @@
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
   color: var(--text-dim);
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
@@ -1887,6 +1909,7 @@
 .svc-row.sel td,
 .dsk-row.sel td,
 .ctr-row.sel td {
+  font-weight: 500;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
@@ -1923,7 +1946,7 @@
 }
 .con-empty {
   padding: var(--sp-9) var(--sp-6);
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   text-align: center;
 }
@@ -1967,7 +1990,8 @@
 .con-sect {
   flex: none;
   color: var(--text-dim);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .dsk-top {
   flex: 1;
@@ -2113,7 +2137,8 @@
   margin-left: auto;
   padding-right: var(--sp-2);
   color: var(--text-dim);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 
 /* ── 좌측 아이콘 레일 (§4.5) ──
@@ -2266,7 +2291,7 @@
 .ttab.active {
   background: var(--bg-terminal);
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
 }
 .ttab.active::before {
   content: '';
@@ -2441,7 +2466,7 @@
 .drop-preview-msg {
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--err);
   background: var(--bg-overlay);
   padding: var(--sp-2) var(--sp-4);
@@ -2472,9 +2497,9 @@
   user-select: none;
 }
 .pane-empty h2 {
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   font-weight: 600;
-  color: var(--text-mid);
+  color: var(--text-hi);
 }
 .pane-empty p {
   font-size: var(--fs-base);
@@ -2487,14 +2512,15 @@
   margin-top: var(--sp-3);
   flex-wrap: wrap;
   justify-content: center;
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 .pe-keys kbd {
   font-family: var(--mono);
-  font-size: var(--fs-nano);
-  font-weight: 600;
-  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-dim);
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
@@ -2599,7 +2625,7 @@
   background: none;
   font-family: var(--ui);
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   padding: var(--sp-2) var(--sp-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -2759,7 +2785,7 @@
 /* 크기·모양은 `.sdot` 이 준다(#166) — 자리마다 같은 4줄을 적던 것을 한 곳으로 모았다. */
 .pane-hd .ptitle {
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-mid);
   white-space: nowrap;
@@ -2813,7 +2839,7 @@
   margin-left: auto;
   border-radius: var(--radius-sm);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   opacity: 0;
   transition: var(--dur-quick);
   cursor: pointer;
@@ -2879,11 +2905,11 @@
 }
 .restore-err-card .rec-title {
   color: var(--text-hi);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   font-weight: 600;
 }
 .restore-err-card .rec-sub {
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
   max-width: 320px;
@@ -3014,7 +3040,7 @@
   line-height: 22px;
   padding: 0 var(--sp-4);
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3024,13 +3050,14 @@
   color: var(--text-hi);
 }
 /* 안내 한 줄(`Esc 닫고 친 대로 실행 · …`) — **한글이다.** §1.3 이중 감쇠 금지: dim × .75 는
-   overlay(가장 밝은 표면, 이 팝업의 바탕) 위에서 2.64 였다. 위 `.ci` 와 같은 dim 이면 3.54 다.
+   overlay(가장 밝은 표면, 이 팝업의 바탕) 위에서 2.64 였다. dim 만 써도 3.54 로 하한 코앞이라
+   A 판에서 lo(4.51)로 올렸다 — 위 `.ci` 와 같은 램프다.
    조용함은 색이 아니라 자리(목록 밖 맨 아래 줄)가 낸다. */
 .term-comp .ci-hint {
   padding: var(--sp-1) var(--sp-4) var(--sp-hair);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 /* R5 시각 벨 — BEL 수신 시 짧게 번쩍인다(설정 [터미널] > 벨 = 시각). */
 .term-pane.bell {
@@ -3094,7 +3121,7 @@
 }
 .ts-miss {
   color: var(--err);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: nowrap;
 }
 .ts-btn {
@@ -3154,8 +3181,8 @@
 }
 .sb-seg .lbl {
   color: var(--text-dim);
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.4px;
 }
 .sb-seg .val {
@@ -3340,7 +3367,7 @@ button.sb-seg.upd:hover .val {
   font-variant-numeric: tabular-nums;
 }
 .sb-seg.gauge-seg .val {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 
 /* ── W4 F23 MCP "AI 조종 중" 인디케이터 — --purple 계열(AI 전용 색, design-system §1.5). 글로우·
@@ -3382,7 +3409,7 @@ button.sb-seg.upd:hover .val {
   margin-bottom: var(--sp-3);
 }
 .mcp-pop-empty {
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   padding: var(--sp-3) 0;
 }
@@ -3423,8 +3450,8 @@ button.sb-seg.upd:hover .val {
 }
 .mcp-pop-note {
   margin-top: var(--sp-4);
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
+  font-size: var(--fs-md);
+  color: var(--text-mid);
   line-height: 1.5;
 }
 
@@ -3495,7 +3522,7 @@ button.sb-seg.upd:hover .val {
 .tree .empty {
   padding: var(--sp-7) var(--sp-5);
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-mid);
   text-align: center;
 }
 
@@ -3513,8 +3540,8 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-5) var(--sp-2);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.4px;
   cursor: pointer;
   user-select: none;
@@ -3562,13 +3589,13 @@ button.sb-seg.upd:hover .val {
     transition: none;
   }
 }
-/* 묶음 안 개수 — 숫자라 --fs-nano 는 허용이지만(척도 §하한), opacity 는 아니다.
+/* 묶음 안 개수 — 보조 단(11px)이다. opacity 는 여전히 금지다.
    머리글에서 물려받은 dim 에 .75 를 곱해 surface 위에서 3.10 이었다. 걷으면 4.41.
    라벨보다 조용해야 하는 것은 margin-left:auto 가 낸다(오른쪽 끝에 떨어져 있다). */
 .srv-hd .g-count {
   margin-left: auto;
   font-family: var(--ui);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
   font-weight: 500;
 }
 
@@ -3594,6 +3621,7 @@ button.sb-seg.upd:hover .val {
 }
 .srv-node.active,
 .sess-node.active {
+  font-weight: 500;
   background: var(--accent-glow);
   color: var(--text-hi);
   box-shadow: inset 2px 0 0 var(--accent);
@@ -3647,7 +3675,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.3px;
   border: 1px solid var(--line);
   color: var(--text-dim);
@@ -3691,7 +3719,7 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   border-radius: var(--radius-xs);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .rowact .cc-b:hover,
 .wp-act .cc-b:hover {
@@ -3744,6 +3772,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
 }
 .sess-node.active .sess-name {
+  font-weight: 500;
   color: var(--text-hi);
 }
 /* 경로는 뒤쪽(현재 폴더)이 중요하다 — 잘릴 때 앞을 자른다. */
@@ -3753,7 +3782,7 @@ button.sb-seg.upd:hover .val {
 }
 .sess-node .sess-cwd {
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3775,7 +3804,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: 500;
   border: 1px solid var(--line);
   color: var(--text-dim);
 }
@@ -3802,7 +3831,7 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   color: var(--warn);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .fav-node .fav-i svg {
   width: 12px;
@@ -3816,6 +3845,7 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   font-family: var(--mono);
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3894,13 +3924,13 @@ button.sb-seg.upd:hover .val {
   height: 15px;
 }
 .modal-hd h2 {
-  font-size: var(--fs-lg);
-  font-weight: 700;
+  font-size: var(--fs-xl);
+  font-weight: 600;
   color: var(--text-hi);
 }
 .modal-hd p {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-top: var(--sp-hair);
 }
 /* ── 오버레이 우상단 닫기 (M3) ──
@@ -3952,8 +3982,8 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   justify-content: space-between;
   padding: var(--sp-2) var(--sp-3) var(--sp-4);
-  font-size: var(--fs-md);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
@@ -4020,7 +4050,7 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 700;
+  font-weight: 600;
   flex: none;
   background: var(--bg-overlay);
   color: var(--accent);
@@ -4048,21 +4078,23 @@ button.sb-seg.upd:hover .val {
 }
 .prof .pf-host {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: var(--sp-hair);
 }
+/* `.set-dir-tag` 과 같은 예외 — overlay 위라 dim 이면 3.54 다(하한 3.5 바로 위). lo = 4.51. */
 .prof .pf-tag {
   font-family: var(--ui);
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   padding: var(--sp-hair) var(--sp-3);
   border-radius: var(--radius-sm);
   background: var(--bg-overlay);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .prof .pf-st {
   width: 7px;
@@ -4079,11 +4111,11 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-4);
   font-size: var(--fs-md);
   line-height: 1.5;
-  color: var(--text-dim);
+  color: var(--text-mid);
 }
 .pf-sec-t {
-  font-size: var(--fs-md);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   margin-bottom: var(--sp-6);
   display: flex;
@@ -4265,7 +4297,7 @@ button.sb-seg.upd:hover .val {
 }
 .modal-ft .hint {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
 }
 .modal-ft .sp {
@@ -4299,7 +4331,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   padding: var(--sp-4) var(--sp-8);
   font-size: var(--fs-base);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   font-family: var(--ui);
   display: inline-flex;
@@ -4400,12 +4432,12 @@ button.sb-seg.upd:hover .val {
   height: 15px;
 }
 .drawer-hd h2 {
-  font-size: var(--fs-lg);
-  font-weight: 700;
+  font-size: var(--fs-xl);
+  font-weight: 600;
 }
 .drawer-hd p {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-top: var(--sp-hair);
 }
 /* .drawer-hd .x 는 위 `.modal-hd .x` 묶음이 함께 그린다(M3). */
@@ -4426,7 +4458,7 @@ button.sb-seg.upd:hover .val {
 }
 .set-nav span {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
   padding: var(--sp-4) var(--sp-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -4470,11 +4502,11 @@ button.sb-seg.upd:hover .val {
 .set-row .sr-label {
   font-size: var(--fs-md);
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
 }
 .set-row .sr-desc {
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
+  font-size: var(--fs-md);
+  color: var(--text-mid);
   margin-top: var(--sp-1);
   line-height: 1.45;
 }
@@ -4535,13 +4567,13 @@ button.sb-seg.upd:hover .val {
 }
 .set-keys .sk-title {
   font-size: var(--fs-md);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent-bright);
   margin-bottom: var(--sp-3);
 }
 .set-sec-t {
-  font-size: var(--fs-md);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   margin: var(--sp-2) 0 var(--sp-5);
 }
@@ -4606,33 +4638,34 @@ button.sb-seg.upd:hover .val {
 .font-item .fi-name {
   font-size: var(--fs-base);
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
 }
 .font-item .fi-desc {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-mid);
   margin-top: var(--sp-hair);
 }
 .font-item .fi-tag {
   font-family: var(--ui);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
   color: var(--accent-bright);
   background: var(--accent-glow);
   border: 1px solid var(--accent-line);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-3);
-  font-weight: 700;
+  font-weight: 500;
 }
+/* `.set-dir-tag` 과 같은 예외 — overlay 위라 dim 이면 3.54 다. lo = 4.51. */
 .font-item .fi-tag.sys {
-  color: var(--text-dim);
+  color: var(--text-lo);
   background: var(--bg-overlay);
   border-color: var(--line);
 }
 .font-item .fi-sample {
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   color: var(--text-mid);
   min-width: 40px;
   text-align: right;
@@ -4643,8 +4676,8 @@ button.sb-seg.upd:hover .val {
   margin-bottom: var(--sp-8);
 }
 .fc-title {
-  font-size: var(--fs-md);
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   margin-bottom: var(--sp-5);
 }
@@ -4708,8 +4741,8 @@ button.sb-seg.upd:hover .val {
   flex: 1;
 }
 .fp-controls label {
-  font-size: var(--fs-md);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   letter-spacing: 0.4px;
 }
@@ -4762,7 +4795,8 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-6);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--line);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   font-family: var(--ui);
 }
@@ -4820,7 +4854,7 @@ button.sb-seg.upd:hover .val {
 }
 .license-row .lic-name {
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
 }
 .license-row .lic-meta {
@@ -4835,7 +4869,7 @@ button.sb-seg.upd:hover .val {
 }
 .set-note {
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-mid);
   margin-top: var(--sp-2);
   line-height: 1.55;
   padding: var(--sp-5) var(--sp-6);
@@ -4945,6 +4979,7 @@ button.sb-seg.upd:hover .val {
   cursor: pointer;
 }
 .dd-opt.cur {
+  font-weight: 500;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
@@ -5027,8 +5062,8 @@ button.sb-seg.upd:hover .val {
   align-items: baseline;
 }
 .dlg-row .dlg-k {
-  font-size: var(--fs-sm);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 .dlg-row .dlg-v {
@@ -5067,14 +5102,15 @@ button.sb-seg.upd:hover .val {
   min-height: 0;
 }
 .pmon-title {
-  font-size: var(--fs-sm);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   letter-spacing: 0.3px;
 }
 .pmon-count {
   font-family: var(--ui);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--accent-bright);
   background: var(--accent-glow);
   border-radius: var(--radius-sm);
@@ -5209,7 +5245,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--text-hi);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .ap-box:focus {
   outline: none;
@@ -5221,7 +5257,7 @@ button.sb-seg.upd:hover .val {
   min-width: 22px;
   padding: 0 var(--sp-5);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: nowrap;
 }
 .ap-empty {
@@ -5232,8 +5268,8 @@ button.sb-seg.upd:hover .val {
   margin: 0 auto;
   text-align: center;
   padding: var(--sp-8) var(--sp-6);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   line-height: 1.6;
   word-break: keep-all;
 }
@@ -5277,8 +5313,8 @@ button.sb-seg.upd:hover .val {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   letter-spacing: 0.3px;
 }
@@ -5295,12 +5331,12 @@ button.sb-seg.upd:hover .val {
 .lv-kind {
   flex: none;
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-mid);
 }
 .lv-path {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--text-hi);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5309,7 +5345,8 @@ button.sb-seg.upd:hover .val {
 }
 .lv-end {
   font-family: var(--mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--warn);
 }
 /* 검색 바에서 가져온 .ts-btn 은 아이콘 전용(22px 정사각)이라 글자 버튼([일시정지])이 세로로 접힌다.
@@ -5320,7 +5357,7 @@ button.sb-seg.upd:hover .val {
   min-width: 22px;
   padding: 0 var(--sp-4);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: nowrap;
 }
 .lv-body {
@@ -5358,7 +5395,7 @@ button.sb-seg.upd:hover .val {
   padding: 0 var(--sp-5);
   background: var(--bg-canvas);
   border-bottom: 1px solid var(--line);
-  color: var(--text-lo);
+  color: var(--text-dim);
   font-size: var(--fs-md);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -5373,7 +5410,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-4);
 }
 .mini-empty {
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   padding: var(--sp-6) var(--sp-2);
   text-align: center;
@@ -5410,6 +5447,7 @@ button.sb-seg.upd:hover .val {
   text-overflow: ellipsis;
 }
 .mini-card.active .mini-name {
+  font-weight: 500;
   color: var(--text-hi);
 }
 /* 6줄 축소판. 실제 터미널 폭을 담을 수 없으므로 넘치는 부분은 자른다(줄바꿈 금지 —
@@ -5551,7 +5589,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--text-lo);
   font-family: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-4);
   cursor: pointer;
 }
@@ -5582,7 +5620,7 @@ button.sb-seg.upd:hover .val {
   word-break: keep-all;
 }
 .ai-empty {
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   line-height: 1.6;
   padding: var(--sp-8) var(--sp-2);
@@ -5601,7 +5639,7 @@ button.sb-seg.upd:hover .val {
 .ai-card-t {
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 .ai-card-d {
   color: var(--text-lo);
@@ -5641,8 +5679,8 @@ button.sb-seg.upd:hover .val {
   word-break: break-word;
 }
 .ai-note {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
 }
 .ai-note.err {
   color: var(--err);
@@ -5666,7 +5704,8 @@ button.sb-seg.upd:hover .val {
 .ai-code-lang {
   flex: 1;
   color: var(--text-dim);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.04em;
 }
 .ai-code-btn {
@@ -5675,7 +5714,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--text-lo);
   font-family: inherit;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-md);
   padding: var(--sp-1) var(--sp-3);
   cursor: pointer;
 }
@@ -5715,7 +5754,8 @@ button.sb-seg.upd:hover .val {
   border: none;
   color: var(--text-dim);
   font-family: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   padding: var(--sp-2) 0 0;
   cursor: pointer;
 }
@@ -5735,7 +5775,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   font-family: var(--term);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-md);
   line-height: 1.5;
   color: var(--text-lo);
   white-space: pre-wrap;
@@ -5765,7 +5805,7 @@ button.sb-seg.upd:hover .val {
   border-radius: 999px;
   color: var(--text-lo);
   font-family: inherit;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
   cursor: pointer;
 }
@@ -5816,7 +5856,8 @@ button.sb-seg.upd:hover .val {
 }
 .ai-usage {
   color: var(--text-dim);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   padding-top: var(--sp-3);
   text-align: right;
 }
@@ -5852,7 +5893,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   gap: var(--sp-4);
   align-items: center;
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   padding: var(--sp-1) 0 var(--sp-5);
 }
@@ -5891,7 +5932,8 @@ button.sb-seg.upd:hover .val {
 }
 .cliflag code {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 /* 아라 패널 상단 — 현재 프로바이더·모델(무엇이 답하고 있는지). */
@@ -5899,7 +5941,8 @@ button.sb-seg.upd:hover .val {
   flex: none;
   max-width: 130px;
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   font-family: var(--ui);
   white-space: nowrap;
   overflow: hidden;
@@ -6059,7 +6102,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 /* 오류 원문(backtrace)은 길고 줄바꿈이 의미를 갖는다 — 접히지 않게 그대로 보여준다. */
@@ -6113,7 +6156,7 @@ button.sb-seg.upd:hover .val {
   color: var(--bg-abyss);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: 500;
 }
 /* 전송 진행 한 줄 — 헤더 바로 아래. 받기·보내기 공통이라 하나만 둔다(동시 전송은 순차 처리). */
 .rdp-xfer {
@@ -6148,7 +6191,8 @@ button.sb-seg.upd:hover .val {
 .rx-pct {
   flex: none;
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 /* 파일을 끌고 들어왔을 때 — 놓을 수 있다는 표시. */
@@ -6233,7 +6277,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   flex: none;
 }
@@ -6299,7 +6343,8 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   white-space: nowrap;
 }
 .log-body {
@@ -6336,7 +6381,8 @@ button.sb-seg.upd:hover .val {
 .log-hits {
   margin-bottom: var(--sp-3);
   color: var(--text-dim);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .log-foot {
   flex: none;
@@ -6348,7 +6394,7 @@ button.sb-seg.upd:hover .val {
 }
 .log-name {
   flex: 1;
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   white-space: nowrap;
   overflow: hidden;
@@ -6361,7 +6407,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   flex: none;
 }
@@ -6410,7 +6456,7 @@ button.sb-seg.upd:hover .val {
   max-width: 92vw;
 }
 .wp-modal .wp-sub {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 .wp-search {
@@ -6440,7 +6486,7 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   color: var(--warn);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   flex: none;
 }
 .wp-star svg {
@@ -6479,7 +6525,8 @@ button.sb-seg.upd:hover .val {
   display: block;
   margin-top: var(--sp-1);
   font-family: var(--mono);
-  font-size: var(--fs-md);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -6497,7 +6544,7 @@ button.sb-seg.upd:hover .val {
 }
 /* .wp-act .cc-b 는 위 `.rowact .cc-b` 묶음이 함께 그린다(M3). */
 .wp-hint {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 
@@ -6553,7 +6600,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
   color: var(--text-hi);
   box-shadow: var(--shadow-sm);
-  /* 12px 하한을 지킨다 — 그 아래로 내리면 한글이 래스터화에서 뭉개진다(UI-font 라운드, 회귀 가드 있음). */
+  /* 11px 하한을 지킨다 — 그 아래로 내리면 한글이 래스터화에서 뭉개진다(UI-font 라운드, 회귀 가드 있음). */
   font-size: var(--fs-md);
   line-height: 1.5;
   /* 마우스를 따라다니지 않으므로 포인터 이벤트를 받을 이유가 없다 — 받으면 그 아래 버튼이 안 눌린다. */
@@ -6572,8 +6619,9 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   background: var(--accent-glow);
   color: var(--accent);
-  /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이라 12px 하한 대상이 아니다 — 한글이 들어갈 자리가 없다. */
+  /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이다. 보조 단(11px) — 하한과 같은 값이라 여유는 없다. */
   font-size: var(--fs-micro);
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -6617,14 +6665,14 @@ button.sb-seg.upd:hover .val {
 .pl-live {
   flex: none;
   color: var(--accent-bright);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .pl-sub {
   display: flex;
   gap: var(--sp-4);
   margin-top: var(--sp-1);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
 }
 .pl-sub .pl-size {
   margin-left: auto;
@@ -6642,7 +6690,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   min-width: 0;
   color: var(--text-hi);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6668,7 +6716,7 @@ button.sb-seg.upd:hover .val {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-md);
   cursor: pointer;
@@ -6715,7 +6763,8 @@ button.sb-seg.upd:hover .val {
 }
 .sysm-mlabel {
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .sysm-mnow {
   color: var(--text-hi);
@@ -6761,8 +6810,8 @@ button.sb-seg.upd:hover .val {
 .sysm-sub,
 .sysm-note,
 .sysm-empty {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
 }
 .sysm-sub {
   margin: var(--sp-hair) 0 0;
@@ -6776,7 +6825,8 @@ button.sb-seg.upd:hover .val {
 }
 .sysm-sec {
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   margin: var(--sp-6) 0 var(--sp-3);
   padding-top: var(--sp-4);
   border-top: 1px solid var(--line);
@@ -6792,14 +6842,15 @@ button.sb-seg.upd:hover .val {
 }
 .sysm-dmount {
   color: var(--text-hi);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sysm-dpct {
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .sysm-dpct.warn {
   color: var(--warn);
@@ -6827,6 +6878,7 @@ button.sb-seg.upd:hover .val {
 .sysm-dsub {
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 
 /* #83(2026-08-15) 하단 패널 안 — 세로 280px 레일에서 가로로 넓고 세로가 짧은 자리로 옮겼다.
@@ -6874,8 +6926,8 @@ button.sb-seg.upd:hover .val {
    서버의 정체만 담는다: 배포판·커널·가동 시간. 자원 사용량은 F29 사이드바 몫이다. */
 .con-ov {
   grid-column: 1 / -1;
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   padding: 0 var(--sp-1) var(--sp-5);
   margin-bottom: var(--sp-2);
   border-bottom: 1px solid var(--line);
@@ -6887,14 +6939,14 @@ button.sb-seg.upd:hover .val {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   white-space: nowrap;
   cursor: pointer;
 }
 .con-note {
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   padding: var(--sp-4) var(--sp-1);
   line-height: 1.5;
   /* 안내 + 서버가 준 이유를 두 줄로 싣는다(컨테이너 표) — 줄바꿈을 살리되 들여쓰기는 접는다. */
@@ -6902,6 +6954,7 @@ button.sb-seg.upd:hover .val {
 }
 .con-note.sm {
   font-size: var(--fs-micro);
+  font-weight: 500;
   border-top: 1px solid var(--line);
   margin-top: var(--sp-3);
 }
@@ -6992,6 +7045,7 @@ button.sb-seg.upd:hover .val {
   border-radius: 50%;
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
   cursor: help;
   flex: none;
 }
@@ -7086,8 +7140,8 @@ button.sb-seg.upd:hover .val {
 .cb-detail {
   display: block;
   margin-top: var(--sp-2);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   font-family: var(--mono);
   word-break: break-all;
 }
@@ -7166,7 +7220,7 @@ button.sb-seg.upd:hover .val {
   }
 }
 .ai-key-hint {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 
 /* 응답을 기다리는 동안의 점 셋 (제보 — "응답 오기 전까지 아무 표시가 없다").
@@ -7261,7 +7315,7 @@ button.sb-seg.upd:hover .val {
 .modal.ara-chats .ac-empty {
   padding: 24px;
   text-align: center;
-  color: var(--text-dim);
+  color: var(--text-mid);
 }
 .modal.ara-chats .ac-row {
   display: flex;
@@ -7298,7 +7352,7 @@ button.sb-seg.upd:hover .val {
   text-align: center;
   border-radius: var(--radius-xs);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: 500;
   border: 1px solid var(--line);
   color: var(--text-dim);
 }
@@ -7330,7 +7384,8 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .modal.ara-chats .ac-name {
   flex: 1;
@@ -7356,9 +7411,9 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -7383,6 +7438,7 @@ button.sb-seg.upd:hover .val {
   text-align: right;
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
   font-family: var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7431,7 +7487,7 @@ button.sb-seg.upd:hover .val {
   /* 읽는 글이라 한 단 키우고 줄간을 넓혔다(#137 "글씨체 별로야"). 글꼴은 번들 Pretendard 그대로 —
      문제는 서체가 아니라 **크기·줄간·마크다운 없음**이었다. */
   color: var(--text-hi);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   line-height: 1.75;
   padding: 0 var(--sp-1);
   word-break: break-word;
@@ -7443,7 +7499,7 @@ button.sb-seg.upd:hover .val {
   /* 2026-08-25 제보: 등폭 11px 이라 읽기 나빴다. 이건 **사람에게 하는 안내**지 기계 출력이 아니다 —
      UI 글꼴로 바꾸고 한 단 키운다(등폭은 도구 줄·코드에만 남긴다). */
   color: var(--text-lo);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-family: var(--ui);
   line-height: 1.5;
   padding: 0 var(--sp-1);
@@ -7464,7 +7520,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   cursor: pointer;
 }
 .ara-fold .hd .caret {
@@ -7477,6 +7533,7 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
   font-family: var(--mono);
 }
 .ara-fold .in {
@@ -7540,7 +7597,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: var(--sp-2) var(--sp-5);
-  font: var(--fs-sm) var(--ui);
+  font: var(--fs-md) var(--ui);
   color: var(--text-hi);
   background: var(--bg-raised);
   cursor: pointer;
@@ -7553,15 +7610,17 @@ button.sb-seg.upd:hover .val {
   color: var(--accent);
   font-family: var(--mono);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .ara-ask .meta {
   margin-top: var(--sp-3);
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 
 .ara-empty {
-  color: var(--text-dim);
+  color: var(--text-mid);
   font-size: var(--fs-md);
   line-height: 1.6;
   padding: var(--sp-8) var(--sp-2);
@@ -7585,7 +7644,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   padding: var(--sp-3) var(--sp-4);
   color: var(--text-hi);
-  font: var(--fs-sm) / 1.5 var(--ui);
+  font: var(--fs-md) / 1.5 var(--ui);
 }
 .ara-input:focus {
   outline: none;
@@ -7600,6 +7659,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   margin-top: var(--sp-3);
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 .ara-bar .sp {
@@ -7631,7 +7691,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
   border-radius: var(--radius-sm);
   padding: var(--sp-2) var(--sp-5);
-  font: var(--fs-sm) var(--ui);
+  font: var(--fs-md) var(--ui);
   cursor: pointer;
 }
 .ara-btn.p {
@@ -7677,7 +7737,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   min-width: 0;
   color: var(--text-hi);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   word-break: keep-all;
 }
 /* 상태줄의 [계획 먼저] 스위치. 켜져 있으면 금색으로 — 대화의 성격이 달라진 상태다. */
@@ -7686,7 +7746,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font: var(--fs-micro) var(--ui);
   padding: var(--sp-hair) var(--sp-4);
   cursor: pointer;
@@ -7713,8 +7773,8 @@ button.sb-seg.upd:hover .val {
    (같은 사이드바 안에서 줄 높이가 다르면 다른 앱처럼 보인다). */
 .bench-empty {
   padding: var(--sp-8) var(--sp-6);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   line-height: 1.6;
   word-break: keep-all;
 }
@@ -7757,24 +7817,27 @@ button.sb-seg.upd:hover .val {
 .bench-sec.shut svg {
   transform: rotate(-90deg);
 }
-/* 개수는 알약이다(실물과 같다) — 라틴/숫자뿐이라 --fs-nano 가 합법이다. */
+/* 개수는 알약이다(실물과 같다) — 보조 단(11px). */
 .bench-sec .n {
   flex: none;
   background: var(--bg-surface);
   border-radius: 999px;
   padding: var(--sp-hair) var(--sp-3);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
 }
 /* `오래 멈춘 순` — **한글이다.** 2026-08-31 준영님이 안 읽힌다고 짚은 두 자리 중 하나이고,
-   여기는 규칙을 둘 깨고 있었다: --fs-nano(10.5px)는 tokens.css §척도가 **숫자·라틴 전용**으로
-   못박은 크기이고, opacity:.75 는 §1.3 이 이름으로 금지한 이중 감쇠다. 둘이 겹쳐 surface 위에서
+   여기는 규칙을 둘 깨고 있었다: 옛 10.5px 단은 tokens.css §척도가 **숫자·라틴 전용**으로
+   못박은 크기였고(A 판에서 그 단은 사라졌다 — 보조가 11 하나다), opacity:.75 는 §1.3 이 이름으로
+   금지한 이중 감쇠다. 둘이 겹쳐 surface 위에서
    대비 2.57 — 램프를 올려도 혼자 3.12 에 남는다. 크기는 묶음 머리(--fs-micro)와 같게 두고,
    감쇠는 걷는다. 이 글자가 라벨보다 조용해야 하는 것은 맞지만 그건 색이 아니라 **자리**가 낸다
    (margin-left:auto 로 오른쪽 끝에 떨어져 있다). */
 .bench-sec .hint {
   margin-left: auto;
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 .bench-row {
   position: relative;
@@ -7845,7 +7908,7 @@ button.sb-seg.upd:hover .val {
   padding: 0;
   text-align: left;
   color: var(--text-mid);
-  font: var(--fs-sm) var(--ui);
+  font: var(--fs-md) var(--ui);
   cursor: pointer;
 }
 .bench-name .l1 {
@@ -7864,11 +7927,12 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 /* 오른쪽 경과 열 — 화면에서 가장 어둡다. 명도가 --text-dim 에서 바닥나므로 넷째 칸은
-   크기가 진다. 라틴/숫자만 담기에 --fs-nano(10.5px)가 합법이다(한글 하한은 한글에만 걸린다). */
+   크기가 진다. 보조 단(11px)이다 — A 판에서 그 아래 단(10.5)이 사라져 한글 하한 단서도 없어졌다. */
 .bench-name .ago {
   flex: none;
   margin-left: auto;
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -7885,6 +7949,7 @@ button.sb-seg.upd:hover .val {
   padding-left: 15px;
   padding-right: calc(var(--sb-hit) * 2 + var(--sp-1) + var(--sp-2));
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-lo);
 }
 .bench-name .chip {
@@ -7906,12 +7971,14 @@ button.sb-seg.upd:hover .val {
 .bench-name .br {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   flex: none;
 }
 .bench-name .skip {
   color: var(--warn);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   flex: none;
 }
 /* 액션은 흐름 밖에 얹는다 — 1번째 줄 오른쪽 끝은 **경과 열**의 자리라 여기를 흐름에 넣으면
@@ -7978,8 +8045,8 @@ button.sb-seg.upd:hover .val {
 .md h5,
 .md h6 {
   color: var(--text-hi);
-  font-weight: 650;
-  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-size: var(--fs-xl);
 }
 .md h1 {
   font-size: var(--fs-xl);
@@ -8019,7 +8086,7 @@ button.sb-seg.upd:hover .val {
 }
 .md-code {
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   background: var(--bg-raised);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
@@ -8033,7 +8100,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-5);
   overflow-x: auto;
   font-family: var(--mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   line-height: 1.5;
   color: var(--text-hi);
   user-select: text;
@@ -8110,6 +8177,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-3);
   color: var(--text-dim);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 
 /* 모델 고르기 — 칩을 누르면 위로 뜬다(입력칸이 아래라 아래로 열 자리가 없다). */
@@ -8149,11 +8217,13 @@ button.sb-seg.upd:hover .val {
 }
 .ara-menu .l {
   color: var(--text-hi);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
+/* `.ara-menu` 의 바탕이 overlay 다 — dim 이면 3.54. lo = 4.51 (`.set-dir-tag` 과 같은 예외). */
 .ara-menu .h {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
+  font-weight: 500;
 }
 
 
@@ -8166,7 +8236,7 @@ button.sb-seg.upd:hover .val {
 .md-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .md-table th,
 .md-table td {
@@ -8178,7 +8248,7 @@ button.sb-seg.upd:hover .val {
 .md-table th {
   background: var(--bg-raised);
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
 }
 .md-table tr:last-child td {
   border-bottom: 0;
@@ -8234,7 +8304,7 @@ button.sb-seg.upd:hover .val {
 .wc-t {
   color: var(--text-hi);
   font-size: var(--fs-xl);
-  font-weight: 650;
+  font-weight: 600;
   margin-bottom: var(--sp-4);
 }
 .wc-d {
@@ -8252,7 +8322,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   padding: var(--sp-4) var(--sp-5);
   color: var(--text-hi);
-  font: var(--fs-lg) var(--ui);
+  font: var(--fs-xl) var(--ui);
   text-align: center;
 }
 .wc-input:focus {
@@ -8264,7 +8334,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-5);
   min-height: 18px;
   color: var(--accent-bright);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .wc-ft {
   display: flex;
@@ -8318,14 +8388,14 @@ button.sb-seg.upd:hover .val {
 .boot-name {
   color: var(--text-hi);
   font-size: var(--fs-xl);
-  font-weight: 650;
+  font-weight: 600;
   /* 자간이 벌어지며 자리 잡는다 — 이 한 가지가 "부팅"처럼 보이게 하는 대부분이다. */
   animation: boot-track 1s var(--ease-drawer) both;
   animation-delay: 0.1s;
 }
 .boot-hi {
   color: var(--accent-bright);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   /* 명언은 인사보다 길다 — 한 줄에 다 넣으려다 화면 끝까지 가지 않게 폭을 잡고 가운데로. */
   max-width: 520px;
   text-align: center;
@@ -8337,7 +8407,8 @@ button.sb-seg.upd:hover .val {
 /* 출처 — 있는 것만 그린다. 지어낸 출처를 박아 두면 그게 사내에 그대로 퍼진다. */
 .boot-by {
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   animation: boot-up 0.7s ease-out both;
   animation-delay: 0.62s;
 }
@@ -8501,14 +8572,14 @@ button.sb-seg.upd:hover .val {
 }
 .vo-state {
   margin-top: 26px;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   color: var(--text-hi);
   letter-spacing: 0.4px;
 }
 .vo-sub {
   margin-top: var(--sp-3);
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
+  font-size: var(--fs-md);
+  color: var(--text-mid);
 }
 /* 자막 — 아래에서 위로 흐린다. 글이 화면을 가리지 않게 배경을 세우지 않는다. */
 .vo-cap {
@@ -8533,8 +8604,8 @@ button.sb-seg.upd:hover .val {
   flex: none;
   width: 44px;
   padding-top: var(--sp-2);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: 500;
   letter-spacing: 0.3px;
 }
 .vo-who.me { color: var(--text-dim); }
@@ -8554,14 +8625,15 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-hair) var(--sp-5);
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-dim);
   white-space: nowrap;
 }
 .vo-err {
   margin-bottom: var(--sp-4);
   color: var(--err);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .vo-foot {
   display: flex;
@@ -8569,7 +8641,8 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-8);
   padding-top: var(--sp-5);
   border-top: 1px solid var(--line);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-lo);
 }
 .vo-wake { color: var(--text-dim); }
@@ -8580,7 +8653,8 @@ button.sb-seg.upd:hover .val {
   border-radius: 999px;
   background: var(--err-tint);
   color: var(--err);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   cursor: pointer;
 }
 .vo-stop:hover { border-color: var(--err); }
@@ -8602,8 +8676,8 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-abyss);
-  color: var(--text-dim);
-  font-size: var(--fs-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
   line-height: 1.65;
   word-break: keep-all;
 }
@@ -8625,7 +8699,8 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-abyss);
   box-shadow: var(--shadow-md);
   color: var(--text-dim);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-micro);
+  font-weight: 500;
   cursor: pointer;
   /* 쉬는 톤은 opacity 가 아니라 색이 낸다(§1.3). 호버가 이미 --text-hi 로 올리고 있어서
      .82 는 글자 대비만 5.09 → 3.84 로 깎고 있었을 뿐이다 — 신호는 색 전환이 그대로 낸다. */
