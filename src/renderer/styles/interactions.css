@@ -148,7 +148,9 @@
 .cs-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--sp-8);
+  /* 열 넷의 min-content 합 + 간격이 900px 창 + 특대 배율에서 본문보다 3px 넓었다
+     (tests/overflow-check.cjs 실측). 간격 셋을 한 단 내려 6px 을 열에 돌려준다. */
+  gap: var(--sp-7);
 }
 .cs-col-title {
   font-size: var(--fs-md);

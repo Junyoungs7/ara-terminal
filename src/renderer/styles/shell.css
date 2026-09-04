@@ -4243,7 +4243,12 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-md);
   font-weight: 500;
-  padding: var(--sp-3) var(--sp-5);
+  /* 가로 여백이 `--sp-5`(10px)였을 때 설정 [AI] 의 세 칸(claude-sonnet-5 …)·네 칸(… 호환 엔드포인트)
+     알약이 355px 드로어 **밖으로 삐져나왔다**(tests/overflow-check.cjs 실측: normal 5px, 프로바이더는
+     특대에서 6px). `nowrap` 이라 잘리지 않고 그대로 넘친다. 글자 크기를 내리면 짧은 세그먼트
+     (비밀번호/개인키 · 7·30·90일)까지 이유 없이 작아지므로 **여백을 한 단 내려** 버튼당 4px 을
+     되샀다 — 세 칸이면 12px, 네 칸이면 16px 이다. */
+  padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
   border-radius: var(--radius-sm);
   display: flex;
