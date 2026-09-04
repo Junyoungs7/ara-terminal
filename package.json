@@ -60,7 +60,8 @@
     "screenshot:fbmon": "electron-vite build && electron tests/fbmon-screenshot.cjs",
     "voice:model": "node scripts/fetch-wake-model.mjs",
     "icons:svg": "node scripts/make-brand-svg.mjs",
-    "icons:png": "electron scripts/make-icon-png.cjs"
+    "icons:png": "electron scripts/make-icon-png.cjs",
+    "feed": "node scripts/local-update-feed.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
