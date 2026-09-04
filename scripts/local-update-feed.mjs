@@ -44,8 +44,14 @@ const server = createServer((req, res) => {
   const urlPath = decodeURIComponent((req.url ?? '/').split('?')[0])
   const rel = urlPath.replace(/^\/downloads\/?/, '')
   const range = req.headers.range ?? ''
+  // **시각을 반드시 찍는다.** 2026-09-04 첫 시험에서 이게 없어 헤맸다 — 요청이 넷 들어왔는데
+  // 어느 것이 어느 실행의 것인지 못 갈랐고, 앱이 우리 피드를 본다고 잘못 읽었다
+  // (실은 바로가기로 뜬 다른 인스턴스가 사내 서버를 보고 있었다).
   const say = (status, extra = '') =>
-    console.log(`[${String(id).padStart(3, '0')}] ${status} ${urlPath}${range ? `  Range: ${range}` : ''}${extra}`)
+    console.log(
+      `${new Date().toTimeString().slice(0, 8)} [${String(id).padStart(3, '0')}] ${status} ${urlPath}` +
+        `${range ? `  Range: ${range}` : ''}${extra}`
+    )
 
   // 경로 탈출 방지 — 시험 도구라도 남의 디스크를 열어 주지 않는다.
   const file = join(root, normalize(rel))
