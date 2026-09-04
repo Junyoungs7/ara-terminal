@@ -41,8 +41,9 @@ export async function spanRdp(profileId: string, name: string): Promise<SpanOutc
     // "이미 열어 두었습니다"도 여기로 온다 — main 이 그 창을 앞으로 가져왔으므로 탭을 열면 안 된다.
     return 'opened'
   }
-  // 어긋나게 배치된 모니터는 감싸는 사각형에 구멍이 생긴다 — 원격 바탕화면은 거기까지 그려지지만
-  // 아무 모니터에도 안 보인다. 조용히 두면 "창이 사라졌다"로 오해한다.
+  // 크기가 다른 모니터를 나란히 쓰면 감싸는 사각형에 남는 자리가 생긴다 — 원격 바탕화면은 거기까지
+  // 그려지지만 아무 모니터에도 안 보인다. 조용히 두면 "창이 사라졌다"로 오해한다.
+  // (어긋난 배치는 이제 원인이 아니다 — planSpan 이 사각형을 맞붙여 깔아 어긋남을 안 따라간다.)
   if (res.plan.deadRatio > 0.02) notify(t('rdp.span.dead'))
   return 'opened'
 }

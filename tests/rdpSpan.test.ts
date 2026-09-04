@@ -9,13 +9,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   monitorByFrame,
-  monitorLayoutArgs,
+  monitorRects,
   planSpan,
   planSpanAll,
   spanOrigin,
   SPAN_HEADER_H,
+  type MonitorRect,
   type SpanChrome,
-  type SpanDisplay
+  type SpanDisplay,
+  type SpanPlan
 } from '../src/shared/rdpSpan'
 
 /** 작업 영역을 따로 안 주면 모니터 전체(작업표시줄 없음)로 본다. */
@@ -94,12 +96,19 @@ describe('펼치기 계획', () => {
     expect(p.remote.width).toBe(7680)
   })
 
-  it('★ 어긋난 배치의 죽은 영역을 알려 준다 — 원격 바탕화면은 있는데 아무 데도 안 보이는 칸이다', () => {
-    // 위아래로 어긋나게 붙인 두 장: 감싸는 사각형이 각 모니터 넓이의 합보다 크다.
+  it('★ 세로로 어긋난 배치를 따라가지 않는다 — 따라가면 아무 데도 안 보이는 띠만 생긴다', () => {
+    // 위아래로 540 어긋나게 붙인 두 장. 예전에는 그 어긋남을 그대로 원격에 알려 3분의 1이 죽었다.
     const p = planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 1920, 540, 1920, 1080)])!
-    expect(p.remote).toEqual({ width: 3840, height: 1620 })
-    // 사각형 3840x1620 = 6,220,800 / 모니터 합 = 4,147,200 → 3분의 1이 죽는다.
-    expect(p.deadRatio).toBeCloseTo(1 / 3, 3)
+    expect(p.remote).toEqual({ width: 3840, height: 1080 })
+    expect(p.monitors.map((m) => m.rdp.top)).toEqual([0, 0])
+    expect(p.deadRatio).toBe(0)
+  })
+
+  it('★ 크기가 다르면 남는 자리가 죽은 영역이다 — 그건 알린다', () => {
+    // 1080p + 720p 를 나란히: 감싸는 상자에서 720p 위쪽 360줄이 어느 모니터에도 안 보인다.
+    const p = planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 1920, 0, 1280, 720)])!
+    expect(p.remote).toEqual({ width: 3200, height: 1080 })
+    expect(p.deadRatio).toBeCloseTo((1280 * 360) / (3200 * 1080), 3)
   })
 
   it('없는 id 는 무시한다(모니터를 뽑은 직후 등)', () => {
@@ -121,6 +130,10 @@ describe('펼치기 계획', () => {
 describe('작업표시줄·테두리·머리줄을 뺀 자리로 붙는다', () => {
   // 작업표시줄 48px 이 아래에 붙은 1920x1080 한 장.
   const withTaskbar = d(1, 0, 0, 1920, 1080, 1, { x: 0, y: 0, width: 1920, height: 1032 })
+  const twoWithTaskbar = [
+    withTaskbar,
+    d(2, 1920, 0, 1920, 1080, 1, { x: 1920, y: 0, width: 1920, height: 1032 })
+  ]
 
   it('★ 창은 작업 영역까지만 — 작업표시줄을 덮지 않는다', () => {
     const p = planSpanAll([withTaskbar], CHROME)!
@@ -140,33 +153,21 @@ describe('작업표시줄·테두리·머리줄을 뺀 자리로 붙는다', () 
   })
 
   it('★ 머리줄은 주 모니터 창에만 있다 — 보조 모니터는 내용 영역을 다 쓴다', () => {
-    const p = planSpan(
-      [
-        d(1, 0, 0, 1920, 1080, 1, { x: 0, y: 0, width: 1920, height: 1032 }),
-        d(2, 1920, 0, 1920, 1080, 1, { x: 1920, y: 0, width: 1920, height: 1032 })
-      ],
-      [1, 2],
-      CHROME
-    )!
+    const p = planSpan(twoWithTaskbar, [1, 2], CHROME)!
     const primary = p.monitors.find((m) => m.primary)!
     const other = p.monitors.find((m) => !m.primary)!
-    expect(other.slice.height - primary.slice.height).toBe(SPAN_HEADER_H)
-    // 주 모니터의 원격 화면은 머리줄만큼 아래에서 시작한다(그 띠는 어느 모니터에도 안 보인다).
-    expect(primary.slice.y).toBe(SPAN_HEADER_H)
+    // 주 모니터의 원격 화면만 머리줄만큼 짧다. 자리는 둘 다 맨 위에서 시작한다 —
+    // 아래로 밀면 그만큼이 아무 모니터에도 안 보이는 띠가 된다.
+    // (보조 쪽은 4의 배수로 내리며 ≤3px 이 더 깎일 수 있어 차이를 정확히 32로 못 박지 않는다.)
+    expect(primary.slice.height).toBe(primary.content.height - SPAN_HEADER_H)
+    expect(other.slice.height).toBeGreaterThan(primary.slice.height)
+    expect(primary.slice.y).toBe(0)
     expect(other.slice.y).toBe(0)
   })
 
-  it('★ 머리줄이 만든 띠는 죽은 영역으로 세지 않는다 — 흔한 2대 배치가 경고를 띄우면 안 된다', () => {
-    const p = planSpan(
-      [
-        d(1, 0, 0, 1920, 1080, 1, { x: 0, y: 0, width: 1920, height: 1032 }),
-        d(2, 1920, 0, 1920, 1080, 1, { x: 1920, y: 0, width: 1920, height: 1032 })
-      ],
-      [1, 2],
-      CHROME
-    )!
-    // 남는 것은 두 창 테두리 사이 16px 뿐이다(경고 문턱 2% 아래).
-    expect(p.deadRatio).toBeLessThan(0.02)
+  it('★ 흔한 2대 배치는 경고를 띄우지 않는다 — 머리줄 한 줄이 문턱을 넘으면 소음이다', () => {
+    // 남는 것은 주 모니터 아래 머리줄 한 줄뿐(경고 문턱 2% 아래).
+    expect(planSpan(twoWithTaskbar, [1, 2], CHROME)!.deadRatio).toBeLessThan(0.02)
   })
 
   it('배율이 다른 모니터에도 같은 DIP 테두리를 쓴다 — 물리 픽셀로는 배율만큼 두꺼워진다', () => {
@@ -241,54 +242,137 @@ describe('모니터별 좌표', () => {
   })
 })
 
-describe('원격에 알릴 배열', () => {
-  it('모니터당 5개 숫자로 평평하게 편다', () => {
-    expect(monitorLayoutArgs(planSpanAll(twoWide)!)).toEqual([0, 0, 1919, 1079, 1, 1920, 0, 3839, 1079, 0])
+// ── 🔴 2026-09-04 회귀: 사각형 사이에 틈이 생기면 서버가 배치를 통째로 버린다 ────────────────
+//
+// 준영님 실기: *"실제 전체화면에 펼쳐져. 수정전에는 듀얼모니터였는데 지금은 펼쳐져서 보여."*
+// 원인은 원격 사각형을 **물리 좌표에서** 만들면서 테두리 폭을 좌우에서 뺀 것이었다 —
+// 모니터2 right=-3, 모니터1 left=0 이 되어 2px 이 어느 모니터에도 안 속했다. RDP 는 모니터가
+// 맞닿아야 해서, 서버는 그 배치를 버리고 desktop_size 한 장으로 처리한다(= 펼쳐진 한 화면).
+//
+// 이제 크기만 창에서 가져오고 자리는 맞붙여 깐다. 아래 다섯이 그 계약이다.
+describe('🔴 원격 사각형은 맞붙는다 (준영님 실측 배치)', () => {
+  // DISPLAY1 이 주 모니터이고 DISPLAY2 가 **왼쪽**(음수 x)에 있으며 **y 가 4px 어긋나** 있다.
+  const real = [
+    d(1, 0, 0, 1920, 1080, 1, { x: 0, y: 0, width: 1920, height: 1032 }),
+    d(2, -1920, 4, 1920, 1080, 1, { x: -1920, y: 4, width: 1920, height: 1032 })
+  ]
+  const REAL_CHROME: SpanChrome = { frame: { left: 1, top: 31, right: 1, bottom: 1 }, header: SPAN_HEADER_H }
+  const plan = planSpan(real, [1, 2], REAL_CHROME)!
+  const sorted = [...plan.monitors].sort((a, b) => a.rdp.left - b.rdp.left)
+
+  it('★ ① 틈 0 · 겹침 0 — 이 하나가 틀리면 서버가 배치를 버린다', () => {
+    expect(sorted[0].rdp.right + 1).toBe(sorted[1].rdp.left)
+    expect(monitorRects(plan)).not.toBeNull() // 틈·겹침 검사를 포함한다
+  })
+
+  it('★ ② 주 모니터가 (0,0)', () => {
+    const primary = plan.monitors.find((m) => m.primary)!
+    expect(primary.id).toBe(1)
+    expect([primary.rdp.left, primary.rdp.top]).toEqual([0, 0])
+  })
+
+  it('★ ③ 바운딩 박스 == remote', () => {
+    const ms = plan.monitors
+    expect([
+      Math.max(...ms.map((m) => m.rdp.right)) - Math.min(...ms.map((m) => m.rdp.left)) + 1,
+      Math.max(...ms.map((m) => m.rdp.bottom)) - Math.min(...ms.map((m) => m.rdp.top)) + 1
+    ]).toEqual([plan.remote.width, plan.remote.height])
+  })
+
+  it('★ ④ 사각형 크기 == 그 창의 content 크기(주 모니터는 머리줄만큼 짧다)', () => {
+    for (const m of plan.monitors) {
+      expect(m.rdp.right - m.rdp.left + 1).toBe(m.content.width)
+      expect(m.rdp.bottom - m.rdp.top + 1).toBe(m.content.height - (m.primary ? SPAN_HEADER_H : 0))
+    }
+  })
+
+  it('★ ⑤ slice == 그 사각형(프레임버퍼 원점으로 옮긴 것) — 어긋나면 마우스가 딴 데를 찍는다', () => {
+    const minLeft = Math.min(...plan.monitors.map((m) => m.rdp.left))
+    const minTop = Math.min(...plan.monitors.map((m) => m.rdp.top))
+    for (const m of plan.monitors) {
+      expect(m.slice).toEqual({
+        x: m.rdp.left - minLeft,
+        y: m.rdp.top - minTop,
+        width: m.rdp.right - m.rdp.left + 1,
+        height: m.rdp.bottom - m.rdp.top + 1
+      })
+    }
+  })
+
+  it('세로 4px 어긋남은 따라가지 않는다 — 둘 다 맨 위에서 시작한다', () => {
+    expect(plan.monitors.map((m) => m.rdp.top)).toEqual([0, 0])
+  })
+})
+
+describe('원격에 알릴 사각형', () => {
+  it('사각형 목록을 그대로 돌려준다(주 모니터 표시 포함)', () => {
+    expect(monitorRects(planSpanAll(twoWide)!)).toEqual([
+      { left: 0, top: 0, right: 1919, bottom: 1079, primary: true },
+      { left: 1920, top: 0, right: 3839, bottom: 1079, primary: false }
+    ])
   })
 
   it('★ 16장을 넘으면 null — 서버가 거절하면 사유 없이 끊긴다', () => {
     const many = Array.from({ length: 17 }, (_, i) => d(i + 1, i * 1920, 0, 1920, 1080))
-    expect(monitorLayoutArgs(planSpanAll(many)!)).toBeNull()
+    expect(monitorRects(planSpanAll(many)!)).toBeNull()
   })
 
   it('★ 변이 200 미만이면 null — 단일 모니터로라도 붙는 편이 낫다', () => {
-    expect(monitorLayoutArgs(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 1920, 0, 100, 1080)])!)).toBeNull()
+    expect(monitorRects(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 1920, 0, 100, 1080)])!)).toBeNull()
   })
 
   it('변이 8192 를 넘으면 null', () => {
-    expect(monitorLayoutArgs(planSpanAll([d(1, 0, 0, 5000, 1080, 2)])!)).toBeNull()
+    expect(monitorRects(planSpanAll([d(1, 0, 0, 5000, 1080, 2)])!)).toBeNull()
   })
 
   it('한 장짜리도 정상 — 주 모니터 하나로 나간다', () => {
-    expect(monitorLayoutArgs(planSpanAll([d(1, 0, 0, 1920, 1080)])!)).toEqual([0, 0, 1919, 1079, 1])
+    expect(monitorRects(planSpanAll([d(1, 0, 0, 1920, 1080)])!)).toEqual([
+      { left: 0, top: 0, right: 1919, bottom: 1079, primary: true }
+    ])
   })
 
-  it('★ desktop_size 는 사각형들의 바운딩 박스와 같다 — 어긋나면 서버가 사유 없이 끊는다', () => {
-    const check = (plan: ReturnType<typeof planSpanAll>): void => {
-      const ms = plan!.monitors
-      const w = Math.max(...ms.map((m) => m.rdp.right)) - Math.min(...ms.map((m) => m.rdp.left)) + 1
-      const h = Math.max(...ms.map((m) => m.rdp.bottom)) - Math.min(...ms.map((m) => m.rdp.top)) + 1
-      expect([w, h]).toEqual([plan!.remote.width, plan!.remote.height])
-      expect(monitorLayoutArgs(plan!)).not.toBeNull()
+  it('★ 틈이 있으면 null — 이번 회귀를 이 함수가 못 잡았다(그래서 넣었다)', () => {
+    const plan = planSpanAll(twoWide)!
+    const gapped: SpanPlan = {
+      ...plan,
+      monitors: plan.monitors.map((m) => (m.primary ? m : { ...m, rdp: { ...m.rdp, left: m.rdp.left + 2 } }))
     }
-    check(planSpanAll(twoWide))
-    check(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, -1920, 0, 1920, 1080)]))
-    check(planSpanAll([d(1, 0, 0, 1365, 768), d(2, 1365, 0, 1366, 768)]))
-    check(
-      planSpanAll(
-        [
-          d(1, 0, 0, 1920, 1080, 1, { x: 0, y: 0, width: 1920, height: 1032 }),
-          d(2, 1920, 0, 1920, 1080, 1, { x: 1920, y: 0, width: 1920, height: 1032 })
-        ],
-        CHROME
-      )
-    )
+    expect(monitorRects(gapped)).toBeNull()
+  })
+
+  it('★ 겹치면 null — 같은 픽셀을 두 모니터가 그린다', () => {
+    const plan = planSpanAll(twoWide)!
+    const overlapped: SpanPlan = {
+      ...plan,
+      monitors: plan.monitors.map((m) => (m.primary ? m : { ...m, rdp: { ...m.rdp, left: m.rdp.left - 2 } }))
+    }
+    expect(monitorRects(overlapped)).toBeNull()
   })
 
   it('★ 바운딩 박스가 desktop_size 와 다르면 null — 640 하한에 걸린 작은 화면이 그렇다', () => {
     // 320x240 한 장: 원격은 640x640 으로 올라가는데 사각형은 320x240 이라 서로 안 맞는다.
     // 경계를 안 보내고 큰 화면 한 장으로 붙는다(접속 실패보다 낫다).
-    expect(monitorLayoutArgs(planSpanAll([d(1, 0, 0, 320, 240)])!)).toBeNull()
+    expect(monitorRects(planSpanAll([d(1, 0, 0, 320, 240)])!)).toBeNull()
+  })
+
+  it('★ 여러 배치에서 다섯 계약이 함께 선다', () => {
+    const check = (plan: SpanPlan | null): void => {
+      const ms = plan!.monitors
+      const rects: MonitorRect[] = monitorRects(plan!)! // null 이면 여기서 터진다 = 규칙 위반
+      expect(rects).toHaveLength(ms.length)
+      expect(
+        Math.max(...ms.map((m) => m.rdp.right)) - Math.min(...ms.map((m) => m.rdp.left)) + 1
+      ).toBe(plan!.remote.width)
+      for (const m of ms) {
+        expect(m.slice.width).toBe(m.rdp.right - m.rdp.left + 1)
+        expect(m.slice.height).toBe(m.rdp.bottom - m.rdp.top + 1)
+      }
+    }
+    check(planSpanAll(twoWide))
+    check(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, -1920, 0, 1920, 1080)]))
+    check(planSpanAll([d(1, 0, 0, 1365, 768), d(2, 1365, 0, 1366, 768)]))
+    check(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 0, 1080, 1920, 1080)])) // 세로로 쌓인 배치
+    check(planSpanAll([d(1, 0, 0, 1920, 1080), d(2, 1920, 0, 1280, 1024), d(3, 3200, 0, 1920, 1080)]))
   })
 })
 

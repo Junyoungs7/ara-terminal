@@ -54,7 +54,9 @@ export function RdpSpanWindow({ target }: { target: RdpSpanTarget }): JSX.Elemen
       .spanPlan(target.profileId)
       .then((r) => {
         if (!alive) return
-        setRects(r.plan ? monitorRectsOf(r.plan) : null)
+        // 규칙을 어긴 배치(틈·겹침·크기)면 null 이 온다 — 그때는 경계를 안 보내고 큰 화면 한 장으로
+        // 붙는다. 어긴 채로 보내면 서버가 조용히 배치를 버려 같은 그림이 되는데, 왜인지는 안 남는다.
+        setRects(r.plan ? monitorRects(r.plan) : null)
         if (!r.plan) return
         const primary = r.plan.monitors.find((m) => m.primary) ?? r.plan.monitors[0] ?? null
         setHost(primary)
