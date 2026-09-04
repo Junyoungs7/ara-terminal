@@ -71,7 +71,7 @@
 }
 .cheatsheet.open {
   display: flex;
-  animation: fade var(--dur-fade) ease;
+  animation: fade var(--dur-pop) ease;
 }
 @keyframes fade {
   from {
@@ -335,7 +335,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
-  animation: paletteIn 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  animation: paletteIn var(--dur-quick) var(--ease-pop);
 }
 .ctx-item {
   display: flex;
@@ -348,7 +348,7 @@
   color: var(--text-mid);
   cursor: pointer;
   white-space: nowrap;
-  transition: 0.1s;
+  transition: var(--dur-quick);
 }
 /* 터미널 메뉴 행 = 아이콘 + 라벨 + 단축키 힌트. 트리 메뉴는 라벨만 넣어 같은 컴포넌트를 공유한다. */
 .ctx-item .ci-ic {
@@ -426,4 +426,14 @@
    왼쪽으로 뒤집는다). 표면·행 스타일은 .ctx-menu/.ctx-item 그대로. */
 .ctx-submenu {
   z-index: 201;
+}
+
+/* ── §PRESS — 누름 반응(:active) ─────────────────────────────────────────
+   근거·규칙은 shell.css 맨 끝 §PRESS 한 곳에 적혀 있다. 여기 둘만 이 파일에 사는 항목이라
+   여기 있다 — interactions.css 는 shell.css **뒤에** 로드되므로(main.tsx) 순서도 맞는다.
+   둘 다 목록 행이라 축소 없이 밝기만 준다. `.ctx-item` 의 호버는 CSS 가 아니라 JS 가 붙이는
+   `.cur` 라서(ContextMenu.tsx) 명시도 다툼도 없다 — 그쪽은 배경, 이쪽은 밝기다. */
+.cb-row:active,
+.ctx-item:active:not(.disabled) {
+  filter: var(--press-dim);
 }

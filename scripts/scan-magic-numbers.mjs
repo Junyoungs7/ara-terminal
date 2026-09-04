@@ -130,6 +130,24 @@ const STYLES_BR = /border-radius\s*:\s*[^;]*\b[0-9.]+px/i
 // 쓴다 — 그 모순을 없앨지는 디자인 결정이라 값을 유지한 채 남겨 두었다(FINISH-M1 보고).
 const PILL = /border-radius\s*:\s*9{3,}px/i
 const STYLES_FS = /font-size\s*:\s*[^;]*\b[0-9.]+px/i
+// ── 지속시간 리터럴 (2026-09-04) ─────────────────────────────────────────────
+// font-size·border-radius 와 **같은 순서**로 켠다: 척도를 tokens.css 로 모은 **뒤** 가드를 건다.
+// 모으기 전 상태는 `transition`·`animation` 선언 92개에 토큰 5개였고, 0.12(18) · 0.15(8) ·
+// 0.14(8) · 0.13(4) · 0.1(8) 이 나란히 있었다 — 사람이 구분하지 못하는 네 값이라 **의도일 수
+// 없는** 흩어짐이다. 게다가 `0.12s` 와 `120ms` 두 표기가 섞여 어느 쪽으로 grep 해도 전부를
+// 못 찾았다. 지금은 --dur-quick(120ms) · --dur-pop(200ms) · --dur-drawer(280ms) 셋이다.
+//
+// ⚠️ **이 검사가 보는 것은 한 가지 모양뿐이다**: `transition:` 값이 **맨 숫자로 시작**하는 것
+// (`transition: 0.12s` · `transition: 120ms ease`). 그 모양이 흩어짐을 만든 저작 동작이고,
+// 지금 잡히는 것이 0곳이라 예외가 하나도 없다 — 예외 없는 게이트만 초록을 믿을 수 있다.
+//
+// ⚠️ **안 보는 것을 적어 둔다.** 속성을 명시한 것(`transition: transform 90ms …`)과 `animation:`
+// 은 통과한다. 일부러다 — 척도로 안 모이는 값이 거기 산다: 부팅 인사(.boot* — 0.25~1.6s 와
+// 지연 넷이 한 벌로 짜인 안무) · 게이지의 `width 0.3s linear`(폴링 사이를 잇는다) · 음성
+// 레벨 미터의 `90ms`(50ms 갱신 주기에 맞춘 값). 여기에 이름을 요구하면 게이트가 **없어야
+// 마땅한 토큰**을 요구하게 된다 — 위 border-radius 가 하루 만에 되돌아온 그 실패다.
+// 그쪽까지 덮으려면 값 목록이 아니라 `/* choreo */` 같은 **의도 표시**가 먼저 필요하다.
+const STYLES_DUR = /transition\s*:\s*[0-9.]+m?s\b|transition-duration\s*:\s*[^;]*[0-9]/i
 for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('.css') && !EXCLUDE.includes(n))) {
   const file = join('src/renderer/styles', name)
   readFileSync(file, 'utf8')
@@ -157,7 +175,39 @@ for (const name of readdirSync('src/renderer/styles').filter((n) => n.endsWith('
       if (RGBA.test(line) && !isComment) {
         violations.push(`${file}:${i + 1}  rgba 리터럴(tokens.css 에 알파 토큰을 둘 것)  → ${bare}`)
       }
+      if (STYLES_DUR.test(line) && !isComment) {
+        violations.push(
+          `${file}:${i + 1}  transition 지속시간 리터럴(--dur-quick·--dur-pop·--dur-drawer 를 쓸 것)  → ${bare}`
+        )
+      }
     })
+}
+
+// ── §PRESS 뒤에는 :hover 가 없어야 한다 (2026-09-04) ────────────────────────
+// 누름 반응(:active)은 shell.css·interactions.css **맨 끝**에 한 덩어리로 산다. `:active` 와
+// `:hover` 는 명시도가 같아 **뒤에 오는 쪽이 이기기** 때문이다. 누군가 그 아래에 `:hover`
+// 규칙을 하나 붙이면 그 자리만 조용히 안 눌린다 — 화면은 멀쩡해 보이고 아무도 모른다.
+// 주석으로 "여기 아래에 쓰지 마라"라고만 적어 두면 언젠가 깨진다. 그래서 센다.
+for (const name of ['shell.css', 'interactions.css']) {
+  const file = join('src/renderer/styles', name)
+  const src = readFileSync(file, 'utf8')
+  const at = src.indexOf('§PRESS')
+  if (at < 0) {
+    // 공허성 방지 — 표시가 사라지면 이 검사는 아무것도 안 지키면서 초록이 된다.
+    violations.push(`${file}  §PRESS 표시가 없다 — 누름 반응 블록이 사라졌거나 이름이 바뀌었다`)
+    continue
+  }
+  // 머리 주석이 닫히는 자리부터 본다 — 그 주석 안에서 `:hover` 를 **인용**하고 있어서
+  // (왜 순서가 중요한지를 적으려면 그 이름을 써야 한다) 거기서부터 세면 자기 자신에 걸린다.
+  const body = src.slice(src.indexOf('*/', at) + 2).replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const line of body.split('\n')) {
+    const bare = line.trim()
+    if (bare.includes(':hover')) {
+      violations.push(
+        `${file}  §PRESS 뒤의 :hover — 같은 명시도라 이 규칙이 누름을 이긴다(§PRESS 위로 옮겨라)  → ${bare}`
+      )
+    }
+  }
 }
 
 // tokens.css 도 **border-radius 만은** 검사한다(2026-08-28, #149). 이 파일은 색·척도의 정의부라
@@ -328,6 +378,6 @@ if (violations.length) {
   process.exit(1)
 }
 console.log(
-  `매직넘버 스캔 통과 (HEX/px 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
+  `매직넘버 스캔 통과 (HEX/px/맨 transition 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
     `대비 ${pairs.length}조합 전부 ${MIN_RATIO} 이상 — 가장 나쁜 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}`
 )

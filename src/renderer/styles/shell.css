@@ -149,7 +149,7 @@
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .tb-menu span:hover,
 .tb-menu span.open {
@@ -180,7 +180,7 @@
   font-size: var(--fs-md);
   font-weight: 700;
   font-family: var(--ui);
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .tb-help:hover {
   background: var(--bg-overlay);
@@ -320,7 +320,7 @@
   border: 0;
   border-radius: 50%;
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
   display: grid;
   place-items: center;
   position: relative;
@@ -340,7 +340,7 @@
   height: var(--tb-dot);
   opacity: 0;
   color: var(--on-dot);
-  transition: opacity 0.12s;
+  transition: opacity var(--dur-quick);
   pointer-events: none;
 }
 .tb-controls:hover .tb-ctl svg {
@@ -390,8 +390,8 @@
   flex-direction: column;
   min-height: 0;
   transition:
-    width 0.22s ease,
-    flex-basis 0.22s ease;
+    width var(--dur-pop) ease,
+    flex-basis var(--dur-pop) ease;
   overflow: hidden;
 }
 .sidebar.collapsed {
@@ -434,7 +434,7 @@
   background: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .sb-act:hover {
   background: var(--bg-overlay);
@@ -458,7 +458,7 @@
   border-radius: var(--radius-xs);
   color: var(--text-dim);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .tw-tool:hover {
   background: var(--bg-raised);
@@ -699,7 +699,7 @@
   cursor: default;
   white-space: nowrap;
   border-radius: var(--radius-sm);
-  transition: 0.1s;
+  transition: var(--dur-quick);
   /* 더블클릭하면 파일 이름이 드래그한 것처럼 파랗게 남았다(2026-08-22 준영님 제보 7번).
      이 목록에서 글자를 고를 일은 없다 — 이름 복사는 우클릭 메뉴가 한다. */
   user-select: none;
@@ -914,7 +914,7 @@
 .sftp-xfer .xfer-fill {
   height: 100%;
   background: var(--accent);
-  transition: width 0.12s;
+  transition: width var(--dur-quick);
 }
 /* 진행률을 알 수 없는 작업(재귀 삭제) — 좌우로 오가는 짧은 바. */
 .sftp-xfer .xfer-fill.indet {
@@ -1619,7 +1619,7 @@
   font-size: var(--fs-micro);
   font-weight: 400;
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .pbtn:hover {
   background: var(--bg-raised);
@@ -2131,7 +2131,7 @@
   background: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .lrail-item svg {
   width: var(--sb-icon);
@@ -2163,13 +2163,13 @@
   width: 6px;
   cursor: col-resize;
   z-index: 4;
-  transition: background 0.12s;
+  transition: background var(--dur-quick);
 }
 .sb-resizer:hover,
 .middle.resizing .sb-resizer {
   background: var(--accent-line);
 }
-/* 끄는 동안에는 폭 트랜지션을 끈다 — 0.22s ease 가 걸려 있으면 폭이 커서를 늦게 따라온다. */
+/* 끄는 동안에는 폭 트랜지션을 끈다 — .sidebar 의 --dur-pop 이 걸려 있으면 폭이 커서를 늦게 따라온다. */
 .middle.resizing .sidebar,
 .middle.resizing .sb-resizer {
   transition: none;
@@ -2232,7 +2232,7 @@
   max-width: 184px;
   min-width: 0;
   flex-shrink: 0;
-  transition: 0.12s;
+  transition: var(--dur-quick);
   font-family: var(--ui);
 }
 /* 긴 세션명은 탭을 밀어내지 않고 말줄임(R2.4). 전체 이름은 title 툴팁으로. */
@@ -2303,7 +2303,7 @@
   color: var(--text-dim);
   margin-left: var(--sp-hair);
   opacity: 0;
-  transition: 0.1s;
+  transition: var(--dur-quick);
   cursor: pointer;
   flex: none;
 }
@@ -2373,7 +2373,7 @@
   color: var(--text-dim);
   cursor: pointer;
   border-radius: var(--radius) var(--radius) 0 0;
-  transition: 0.12s;
+  transition: var(--dur-quick);
   flex-shrink: 0;
 }
 .tterm-add svg {
@@ -2395,7 +2395,7 @@
   color: var(--text-dim);
   cursor: pointer;
   border-left: 1px solid var(--line-soft);
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .tt-overflow-btn svg {
   width: 13px;
@@ -2418,7 +2418,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: 0.08s;
+  transition: var(--dur-quick);
 }
 .drop-preview.blocked {
   border-color: var(--err);
@@ -2766,7 +2766,7 @@
   border-radius: var(--radius-sm);
   color: var(--text-dim);
   opacity: 0;
-  transition: 0.1s;
+  transition: var(--dur-quick);
   cursor: pointer;
   flex: none;
 }
@@ -2801,7 +2801,7 @@
   color: var(--text-dim);
   font-size: var(--fs-sm);
   opacity: 0;
-  transition: 0.1s;
+  transition: var(--dur-quick);
   cursor: pointer;
   flex: none;
 }
@@ -2911,7 +2911,7 @@
   left: 2px;
   width: 1px;
   background: var(--line);
-  transition: 0.15s;
+  transition: var(--dur-quick);
 }
 .div-col:hover::before {
   background: var(--accent-line);
@@ -2931,7 +2931,7 @@
   top: 2px;
   height: 1px;
   background: var(--line);
-  transition: 0.15s;
+  transition: var(--dur-quick);
 }
 .div-row:hover::before,
 .div-row-r:hover::before {
@@ -3534,7 +3534,7 @@ button.sb-seg.upd:hover .val {
 .pod-caret svg {
   width: 12px;
   height: 12px;
-  transition: transform var(--dur-fade);
+  transition: transform var(--dur-quick);
 }
 .caret.closed svg,
 .tw.closed svg,
@@ -3658,7 +3658,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-hair);
   flex: none;
   opacity: 0;
-  transition: 0.1s;
+  transition: var(--dur-quick);
 }
 .srv-node:hover .rowact,
 .sess-node:hover .rowact,
@@ -3829,7 +3829,7 @@ button.sb-seg.upd:hover .val {
      0 이었다 — 앱이 두 제품처럼 보이던 가장 큰 원인. 뒷막은 페이드, 카드는 팝(§3.3 표 그대로).
      `fade`/`pop` 키프레임은 interactions.css 에 있다 — 키프레임은 문서 전역이라 여기서 닿는다
      (main.tsx 가 shell.css → interactions.css 순으로 둘 다 싣는다). */
-  animation: fade var(--dur-fade) ease;
+  animation: fade var(--dur-pop) ease;
 }
 .overlay.open .modal {
   animation: pop var(--dur-pop) var(--ease-pop);
@@ -3909,7 +3909,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--text-dim);
   cursor: pointer;
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .modal-hd .x svg,
 .drawer-hd .x svg,
@@ -3965,7 +3965,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-md);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .pl-add svg {
   width: 13px;
@@ -3986,7 +3986,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   border: 1px solid transparent;
   margin-bottom: var(--sp-2);
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .prof:hover {
   background: var(--bg-raised);
@@ -4110,7 +4110,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-base);
   padding: var(--sp-4) var(--sp-5);
   outline: none;
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .fld input:focus,
 .fld select:focus {
@@ -4129,7 +4129,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding-right: var(--sp-2);
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .pw-wrap:focus-within {
   border-color: var(--accent);
@@ -4206,7 +4206,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   /* 라벨은 한 줄로. 4칸짜리 세그먼트(F12 보존 기간)에서 "30 일"처럼 접히면 높이가 들쭉날쭉해진다. */
   white-space: nowrap;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .seg-ctl button svg {
   width: 14px;
@@ -4236,7 +4236,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   cursor: pointer;
   font-family: var(--ui);
-  transition: 0.13s;
+  transition: var(--dur-quick);
 }
 .btn-ghost:hover {
   border-color: var(--accent-line);
@@ -4291,7 +4291,7 @@ button.sb-seg.upd:hover .val {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-4);
-  transition: 0.13s;
+  transition: var(--dur-quick);
 }
 .btn svg {
   width: 14px;
@@ -4409,7 +4409,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   cursor: pointer;
   border-left: 2px solid transparent;
-  transition: 0.13s;
+  transition: var(--dur-quick);
 }
 .set-nav span:hover {
   background: var(--bg-overlay);
@@ -4486,7 +4486,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-canvas);
   position: relative;
   cursor: pointer;
-  transition: 0.15s;
+  transition: var(--dur-quick);
 }
 .set-toggle.on {
   background: var(--accent);
@@ -4500,7 +4500,7 @@ button.sb-seg.upd:hover .val {
   height: 15px;
   border-radius: 50%;
   background: var(--text-dim);
-  transition: 0.15s;
+  transition: var(--dur-quick);
 }
 .set-toggle.on .st-knob {
   left: 19px;
@@ -4548,7 +4548,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   cursor: pointer;
   background: var(--bg-canvas);
-  transition: 0.13s;
+  transition: var(--dur-quick);
 }
 .font-item:hover {
   border-color: var(--line-strong);
@@ -4566,7 +4566,7 @@ button.sb-seg.upd:hover .val {
   border: 2px solid var(--line-strong);
   flex: none;
   position: relative;
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .font-item.sel .radio {
   border-color: var(--accent);
@@ -4846,7 +4846,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-5);
   cursor: pointer;
   outline: none;
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .dd-btn:focus-visible,
 .dd.open .dd-btn {
@@ -4896,7 +4896,7 @@ button.sb-seg.upd:hover .val {
   height: 13px;
   color: var(--text-dim);
   flex: none;
-  transition: transform 0.14s;
+  transition: transform var(--dur-quick);
 }
 .dd.open .dd-btn svg {
   transform: rotate(180deg);
@@ -5363,7 +5363,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
   overflow: hidden;
-  transition: 0.14s;
+  transition: var(--dur-quick);
 }
 .mini-card:hover {
   border-color: var(--line-strong);
@@ -5930,7 +5930,7 @@ button.sb-seg.upd:hover .val {
   background: none;
   color: var(--text-dim);
   cursor: pointer;
-  transition: 0.12s;
+  transition: var(--dur-quick);
 }
 .act-item svg {
   width: 18px;
@@ -6475,7 +6475,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   gap: var(--sp-1);
   opacity: 0;
-  transition: 0.1s;
+  transition: var(--dur-quick);
   flex: none;
 }
 /* .wp-act .cc-b 는 위 `.rowact .cc-b` 묶음이 함께 그린다(M3). */
@@ -7735,7 +7735,7 @@ button.sb-seg.upd:hover .val {
   width: 11px;
   height: 11px;
   flex: none;
-  transition: transform var(--dur-fade);
+  transition: transform var(--dur-quick);
 }
 .bench-sec.shut svg {
   transform: rotate(-90deg);
@@ -8291,14 +8291,14 @@ button.sb-seg.upd:hover .val {
 .boot-mark {
   width: 68px;
   height: 68px;
-  animation: boot-mark 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation: boot-mark 0.9s var(--ease-drawer) both;
 }
 .boot-name {
   color: var(--text-hi);
   font-size: var(--fs-xl);
   font-weight: 650;
   /* 자간이 벌어지며 자리 잡는다 — 이 한 가지가 "부팅"처럼 보이게 하는 대부분이다. */
-  animation: boot-track 1s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  animation: boot-track 1s var(--ease-drawer) both;
   animation-delay: 0.1s;
 }
 .boot-hi {
@@ -8424,7 +8424,7 @@ button.sb-seg.upd:hover .val {
   padding-bottom: 168px;
   background: radial-gradient(ellipse 70% 55% at 50% 46%, var(--scrim), var(--scrim-deep));
   backdrop-filter: blur(4px);
-  animation: vo-in 0.22s ease-out both;
+  animation: vo-in var(--dur-pop) ease-out both;
 }
 @keyframes vo-in {
   from { opacity: 0; }
@@ -8448,7 +8448,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   background: linear-gradient(180deg, var(--accent-bright), var(--accent) 50%, var(--accent-bright));
   transform: scaleY(0.06);
-  transition: transform 90ms cubic-bezier(0.25, 0.9, 0.35, 1), opacity 260ms ease;
+  transition: transform 90ms var(--ease-drawer), opacity 260ms ease;
   will-change: transform;
 }
 /* 가장자리로 갈수록 흐리게 — 소리가 한가운데서 난다는 착시를 만든다.
@@ -8501,7 +8501,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   gap: var(--sp-5);
   margin-bottom: var(--sp-4);
-  animation: vo-up 0.24s ease-out both;
+  animation: vo-up var(--dur-pop) ease-out both;
 }
 @keyframes vo-up {
   from { opacity: 0; transform: translateY(6px); }
@@ -8607,7 +8607,7 @@ button.sb-seg.upd:hover .val {
   cursor: pointer;
   /* 쉬는 톤은 opacity 가 아니라 색이 낸다(§1.3). 호버가 이미 --text-hi 로 올리고 있어서
      .82 는 글자 대비만 5.09 → 3.84 로 깎고 있었을 뿐이다 — 신호는 색 전환이 그대로 낸다. */
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-quick), border-color var(--dur-quick);
 }
 .voice-chip:hover {
   border-color: var(--accent);
@@ -8648,9 +8648,146 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   background: var(--accent);
   transform: scaleY(0.12);
-  transition: transform 90ms cubic-bezier(0.25, 0.9, 0.35, 1);
+  transition: transform 90ms var(--ease-drawer);
 }
 @media (prefers-reduced-motion: reduce) {
   .vc-dot { animation: none; }
   .vc-bars span { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §PRESS — 누름 반응(:active).  2026-09-04
+   ══════════════════════════════════════════════════════════════════════════
+   Apple *Designing Fluid Interfaces* 의 첫 규칙: **"Respond on pointer-down, not on
+   release."** 이 저장소는 `:hover` 가 130곳인데 `:active` 가 **0곳**이었다 — 마우스를
+   올리면 반응하는데 **누르면 아무 일도 일어나지 않는** 상태다. 클릭이 끝나야(= 원격
+   명령이 돌아와야) 화면이 바뀌니, 느린 동작일수록 "눌리긴 한 건가" 가 된다.
+
+   **왜 파일 끝에 모아 두는가.** `:active` 는 `:hover` 와 명시도가 같아 **뒤에 오는 쪽이
+   이긴다.** 규칙마다 옆에 붙이면 그 순서를 예순 번 지켜야 하고, 한 번만 어긋나면 그
+   자리만 조용히 안 눌린다(어긋난 것을 알아챌 방법도 없다). 끝에 한 덩어리로 두면 순서를
+   파일 구조가 보장한다. 그 순서는 이제 scan:magic 이 센다(§PRESS 뒤의 `:hover` = 위반).
+   ⚠️ **그 게이트가 못 보는 것**: 순서가 아니라 **명시도**로 지는 경우다. §PRESS 위에
+   `.btn.foo:hover { filter: … }` 같은 (0,4,0) 규칙이 생기면 아래 `.btn:active`(0,3,0)가
+   같은 속성을 다투다 진다 — 화면은 멀쩡해 보이고 그 버튼만 안 눌린다. `.btn.pri`/`.btn.dgr`
+   이 지금 정확히 그 모양이라 아래에 따로 적혀 있다. **호버에 `filter`·`transform` 을 새로
+   걸 때는 여기 짝을 같은 명시도로 함께 적어라.**
+
+   **왜 배경 토큰이 아니라 `filter: brightness()` 인가.** "배경을 한 단 어둡게"를 배경
+   토큰으로 쓰려면 자리마다 **지금 배경이 무엇인지**를 알아야 한다 — 호버 배경만 해도
+   --bg-raised · --bg-overlay · --err-line · --accent-glow · --err-tint 다섯 갈래고,
+   테두리만 바뀌는 투명 배경도 많다. 한 자리라도 잘못 짚으면 누를 때 **밝아진다**(반대
+   방향이다). 밝기 한 단은 어느 배경 위에서도 방향이 같고, 규칙 하나로 끝나고, 새 색을
+   만들지 않는다(scan:magic 이 막는 HEX·rgba 가 아니다).
+   ⚠️ 그 대신 **투명 배경 버튼에서는 밝기가 할 일이 거의 없다** — 거기선 축소가 신호를 진다.
+
+   **버튼은 줄어들고 행은 안 줄어든다.** 목록·표의 한 줄이 눌릴 때마다 줄어들면 그 옆
+   줄들이 흔들려 표 전체가 떤다. 토글도 버튼과 같은 --press-scale 을 쓴다 — 0.96 과 0.97 은
+   구분되지 않고, 이 라운드가 고치는 병이 정확히 그 1% 흩어짐이다.
+
+   **움직임 줄이기**는 --press-scale 을 1 로 바꾸는 것으로 끝난다(tokens.css). 밝기는 끄지
+   않는다 — 그건 움직임이 아니라 색이고, "눌렸다"는 신호까지 뺄 이유는 없다.
+
+   ⚠️ 터미널·RDP 캔버스 안은 여기 없다 — 거긴 원격이 그리는 자리다.
+   ⚠️ 크기 손잡이(.sb-resizer · .bp-resizer · .lp-resizer · .div-* · .ara-grip)도 뺐다 —
+   그것들은 누르는 게 아니라 **끄는** 것이고, 끄는 동안의 표시는 이미 `.resizing` 이 한다. */
+
+/* 버튼·아이콘 버튼·칩·토글 — 줄어들고 어두워진다. */
+.tb-ctl:active,
+.tb-help:active,
+.sb-act:active,
+.tw-tool:active,
+.tw.on:active,
+.g-act:active,
+.g-x:active,
+.xfer-cancel:active,
+.exp-wbtn:active,
+.exp-tab-x:active,
+.bw-x:active,
+.pbtn:active:not(:disabled),
+.con-btn:active:not(:disabled),
+.con-app:active,
+.con-help:active,
+.ftb:active:not(:disabled),
+.lrail-item:active:not(:disabled),
+.tterm-add:active,
+.tt-overflow-btn:active,
+.ttab .tx:active,
+.bp-max:active,
+.bp-close:active,
+.pane-hd .px:active,
+.pane-hd .pmax:active,
+.rec-btn:active,
+.ts-btn:active,
+.sclear:active,
+.cc-b:active,
+.modal-hd .x:active,
+.drawer-hd .x:active,
+.cs-hd .x:active,
+.pl-add:active,
+.pw-eye:active,
+.btn-ghost:active,
+.btn:active:not(:disabled),
+/* .pri/.dgr 는 호버가 `filter: brightness(1.08)` 를 (0,4,0) 으로 걸고 있다 — 같은 속성을
+   다투므로 여기서도 같은 명시도로 적어야 누름이 이긴다. 위 `.btn:active` 는 (0,3,0) 이다. */
+.btn.pri:active:not(:disabled),
+.btn.dgr:active:not(:disabled),
+.mon-close:active,
+.ai-x:active,
+.ai-head-btn:active,
+.ai-code-btn:active:not(:disabled),
+.ai-chip:active:not(:disabled),
+.ai-ctx-badge:active,
+.rdp-opt-btn:active,
+.log-more:active,
+.mini-card:active,
+.ara-hist:active,
+.ara-ic:active,
+.ara-ask .pill:active,
+.ara-btn:active:not(:disabled),
+.ara-chip:active,
+.ara-menu button:active,
+.bench-x:active,
+.voice-chip:active,
+.vo-stop:active,
+.set-toggle:active:not(.locked) {
+  transform: scale(var(--press-scale));
+  filter: var(--press-dim);
+}
+
+/* 행·탭·목록 항목 — 어두워지기만 한다(줄어들면 표가 흔들린다). */
+.tb-menu span:active,
+.fcrumb .seg:active,
+.frow:active,
+.exp-tab:active,
+.exp-node:active,
+.bw-tab:active,
+.pw-tab:active,
+.ttab:active,
+.bp-tab:active,
+.sysm-tab:active,
+.dsk-dir:active,
+.srv-hd:active,
+.srv-node:active,
+.sess-node:active,
+.fav-node:active,
+.prof:active,
+.font-item:active,
+.set-nav span:active,
+.act-item:active,
+.pl-row:active,
+.wp-row:active,
+.ac-row:active,
+.bench-sec:active,
+.bench-row:active,
+/* 정렬 가능한 표 머리만. `.fixed` 는 정렬이 없어 호버도 색을 되돌린다. */
+.con-tbl th:active:not(.fixed),
+/* 표의 행은 <tr> 이고 배경도 <td> 에 칠한다 — 밝기도 칸에 건다. */
+.ptbl tr:active td,
+.con-row:active td,
+.svc-row:active td,
+.dsk-row:active td,
+.ctr-row:active td,
+.pod-row:active td {
+  filter: var(--press-dim);
 }
