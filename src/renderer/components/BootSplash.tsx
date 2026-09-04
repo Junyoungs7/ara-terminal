@@ -27,10 +27,19 @@ import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'
  * 화면에 머무는 시간.
  *
  * 1400 이었는데 **읽기 전에 지나갔다**(2026-08-31 준영님: "너무 빨리 지나가는데 2초로"). 매번 다른
- * 한 줄을 뽑아 놓고 못 읽게 하면 그 장치가 통째로 헛돈다 — 사라지는 350ms 를 빼면 실제로 읽을 수
- * 있던 시간은 1초 남짓이었다.
+ * 한 줄을 뽑아 놓고 못 읽게 하면 그 장치가 통째로 헛돈다 — 사라지는 시간(그땐 350ms, 지금은
+ * 아래 FADE_MS)을 빼면 실제로 읽을 수 있던 시간은 1초 남짓이었다.
  */
 export const SPLASH_MS = 2000
+
+/**
+ * 사라지는 데 걸리는 시간. **`shell.css` 의 `.boot.out` 트랜지션과 같은 값이어야 한다**(`--dur-pop`,
+ * 200ms) — 한쪽만 고치면 다 흐려지기 전에 언마운트되거나 이미 투명한 판이 남는다.
+ *
+ * 350ms `ease-in` 이었다(2026-09-04 모션 감사 A7 로 바꿨다). 들어오고 나가는 것은 `ease-out` 이고,
+ * `ease-in` 은 처음이 느려 사용자가 보고 있는 그 순간을 미룬다. 터미널까지 150ms 빨리 간다.
+ */
+const FADE_MS = 200
 
 /**
  * 이 창이 인사를 그릴 것인가. **본창만** 그린다.
@@ -74,7 +83,7 @@ const writeLast = (v: string): void => {
 }
 
 export function BootSplash({ name, onDone }: { name: string; onDone: () => void }): JSX.Element {
-  // 사라지는 중 — 즉시 언마운트하면 뚝 끊긴다(0.35초 동안 흐려진다).
+  // 사라지는 중 — 즉시 언마운트하면 뚝 끊긴다(FADE_MS 동안 흐려진다).
   const [leaving, setLeaving] = useState(false)
   // 뽑기는 **한 번만** — 렌더마다 다시 뽑으면 글자가 깜빡인다.
   const [greet] = useState<Greet>(() => {
@@ -99,7 +108,7 @@ export function BootSplash({ name, onDone }: { name: string; onDone: () => void 
 
   useEffect(() => {
     if (!leaving) return
-    const gone = setTimeout(onDone, 350)
+    const gone = setTimeout(onDone, FADE_MS)
     return () => clearTimeout(gone)
   }, [leaving, onDone])
 

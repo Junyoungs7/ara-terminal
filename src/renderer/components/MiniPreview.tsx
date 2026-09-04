@@ -97,7 +97,7 @@ export function MiniPreview({
   onSelect: (sessionId: string) => void
 }) {
   const [snaps, setSnaps] = useState<Record<string, TailSeg[][]>>({})
-  // 직전 틱 대비 출력이 바뀐 세션 — 카드가 잠깐 반짝인다("지금 뭔가 돌고 있다"를 한눈에).
+  // 직전 틱 대비 출력이 바뀐 세션 — 그동안 카드 테두리가 켜져 있다("지금 뭔가 돌고 있다"를 한눈에).
   const [live, setLive] = useState<Record<string, boolean>>({})
   const [hover, setHover] = useState<{ id: string; top: number } | null>(null)
   const prev = useRef<Record<string, string>>({})

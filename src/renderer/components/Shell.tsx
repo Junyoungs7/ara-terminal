@@ -23,6 +23,7 @@ import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
 import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
+import { holdTermResize } from '../terminal/resizeGate'
 import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { runUpdateAction, useUpdateState } from '../store/updateNotify'
@@ -424,6 +425,16 @@ export function Shell() {
 
   // R4.3 사이드바 폭 드래그. 라이브러리 없이 mousemove/mouseup 한 쌍만 쓴다. 끄는 동안은 preview 로
   // 화면만 바꾸고(저장 없음), 놓을 때 한 번만 영속한다 — 드래그마다 디스크를 때리지 않기 위해서다.
+  //
+  // 끄는 동안 xterm 재계산을 **붙든다**(2026-09-04, 모션 감사 A1). 사이드바 폭이 바뀌면 터미널 칸의
+  // 폭도 매 mousemove 마다 바뀌고, 열려 있는 모든 터미널이 `fit()` → pty `resize` 를 맞는다.
+  // 하단바·칸 경계와 같은 장치다(`resizeGate`).
+  //
+  // ⚠️ 여기는 `mouseup` 이라 **더 잘 놓친다** — OS 가 캡처를 뺏으면(Alt+Tab·UAC·잠금) Chromium 은
+  // mouseup 을 지어내지 않는다. 게이트가 안 풀리면 열려 있는 모든 터미널이 **영영** 안 맞춰지므로
+  // `blur` 를 여벌로 깐다(두 번 풀려도 안전하다 — `resizeGate` 의 `released` 플래그).
+  // 포인터 캡처로 바꾸지 않는 이유: 스모크(`tests/smoke-boot.cjs`)가 이 손잡이를 합성 `MouseEvent`
+  // 로 끄는데, Electron 이 만드는 포인터는 `pointerType` 이 비어 있어 캡처가 안 잡힌다.
   const startResize = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
@@ -431,18 +442,22 @@ export function Shell() {
       const startW = sidebar.width
       let width = startW
       setResizing(true)
+      const release = holdTermResize()
       const onMove = (ev: MouseEvent) => {
         width = clampSidebarWidth(startW + ev.clientX - startX)
         previewSidebar(width)
       }
       const onUp = () => {
+        release() // 놓을 때 밀린 fit 이 한 번 돈다
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
+        window.removeEventListener('blur', onUp)
         setResizing(false)
         updateSidebar({ width })
       }
       document.addEventListener('mousemove', onMove)
       document.addEventListener('mouseup', onUp)
+      window.addEventListener('blur', onUp)
     },
     [sidebar.width, previewSidebar, updateSidebar]
   )

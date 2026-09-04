@@ -126,9 +126,11 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
    * 비어 있어 **캡처가 안 잡힌다**(실측). 이 손잡이를 검사로 끌려면 Playwright 의 `page.mouse`
    * (CDP `Input.dispatchMouseEvent`)를 써야 한다 — 합성 `MouseEvent` 로는 아예 시작도 안 된다.
    *
-   * `.sb-resizer`(사이드바)는 mouse 로 남긴다: 게이트를 붙들지 않아 mouseup 을 놓쳐도 터미널이
-   * 망가지지 않고(`.resizing` 클래스가 남을 뿐), 스모크가 위 방식(합성 `MouseEvent`)으로 그쪽을
-   * 끈다(`tests/smoke-boot.cjs`) — 같이 바꾸면 이 라운드가 릴리스 하네스까지 건드리게 된다.
+   * `.sb-resizer`(사이드바)·칸 divider 도 2026-09-04 부터 같은 게이트를 붙든다(모션 감사 A1) —
+   * 그전에는 붙들지 않아 mouseup 을 놓쳐도 안전했다는 것이 mouse 로 남긴 이유였는데, 붙드는
+   * 순간 그 이유가 사라졌다. 그래서 그쪽은 **`window` 의 `blur` 를 여벌로** 깔아 같은 실패
+   * 모드를 막는다(캡처로 바꾸지는 않았다 — 스모크가 합성 `MouseEvent` 로 그 손잡이를 끈다,
+   * `tests/smoke-boot.cjs`. 바꾸면 릴리스 하네스까지 건드리게 된다).
    */
   const startResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return

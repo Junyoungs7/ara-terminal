@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { TerminalPane } from '../terminal/TerminalPane'
+import { holdTermResize } from '../terminal/resizeGate'
 import { RdpView } from './RdpView'
 import { IconClose } from './icons'
 import { StateDot } from './StateDot'
@@ -168,42 +169,49 @@ export function PaneGrid({
     [preview, replaceSession, showSession, onSplitDrop, sessions, onAdopt]
   )
 
-  // divider 드래그 — 그리드 전체 폭/높이에 대한 포인터 위치로 비율 재계산(6px 패딩 감안은 근사).
+  /** 지금 붙들고 있는 게이트. 끄는 도중 이 컴포넌트가 사라져도 풀 수 있게 밖에 둔다(BottomPanel 과 같은 장치). */
+  const heldRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => heldRef.current?.(), [])
+
+  /**
+   * divider 드래그 — 그리드 전체 폭/높이에 대한 포인터 위치로 비율 재계산(6px 패딩 감안은 근사).
+   *
+   * 끄는 동안 xterm 재계산을 **붙든다**(2026-09-04, 모션 감사 A1). 경계를 옮기면 레이아웃이 매
+   * pointermove 마다 바뀌고, 그때마다 열려 있는 **모든** 터미널의 ResizeObserver 가
+   * `fit()` → `term.resize()` → pty `resize` 를 흘린다 — 네 칸이면 초당 수백 번이다.
+   * 하단바 손잡이(`BottomPanel.startResize`)가 같은 이유로 진작 같은 장치를 쓰고 있었다.
+   * 화면은 그동안에도 1:1 로 따라온다 — 미루는 것은 xterm 의 재계산뿐이다.
+   *
+   * ⚠️ `pointerup` 은 **안 올 수 있다**(Alt+Tab·UAC·화면 잠금이 캡처를 뺏으면 Chromium 은 지어내지
+   * 않는다). 게이트가 안 풀리면 그때부터 모든 터미널이 **영영** 안 맞춰진다 — 앱을 껐다 켜야 낫는
+   * 고장이다. 그래서 `blur` 를 여벌로 깔고 언마운트에서도 푼다. 두 번 풀려도 안전하다
+   * (`resizeGate` 의 `released` 플래그). 일찍 풀려서 손해 보는 것은 그 드래그 한 번의 프레임뿐이다.
+   */
+  const startDividerDrag = useCallback((e: React.PointerEvent, apply: (ev: PointerEvent, r: DOMRect) => void) => {
+    e.preventDefault()
+    const grid = gridRef.current
+    if (!grid) return
+    const release = holdTermResize()
+    heldRef.current = release
+    const move = (ev: PointerEvent) => apply(ev, grid.getBoundingClientRect())
+    const up = () => {
+      release() // 놓을 때 밀린 fit 이 한 번 돈다
+      heldRef.current = null
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('blur', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('blur', up)
+  }, [])
   const dragCol = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault()
-      const grid = gridRef.current
-      if (!grid) return
-      const move = (ev: PointerEvent) => {
-        const r = grid.getBoundingClientRect()
-        setColRatio((ev.clientX - r.left) / r.width)
-      }
-      const up = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', up)
-      }
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', up)
-    },
-    [setColRatio]
+    (e: React.PointerEvent) => startDividerDrag(e, (ev, r) => setColRatio((ev.clientX - r.left) / r.width)),
+    [startDividerDrag, setColRatio]
   )
   const dragRow = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault()
-      const grid = gridRef.current
-      if (!grid) return
-      const move = (ev: PointerEvent) => {
-        const r = grid.getBoundingClientRect()
-        setRowRatio((ev.clientY - r.top) / r.height)
-      }
-      const up = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', up)
-      }
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', up)
-    },
-    [setRowRatio]
+    (e: React.PointerEvent) => startDividerDrag(e, (ev, r) => setRowRatio((ev.clientY - r.top) / r.height)),
+    [startDividerDrag, setRowRatio]
   )
 
   const empty = cells.length === 0
