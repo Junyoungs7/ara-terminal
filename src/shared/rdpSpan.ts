@@ -19,6 +19,17 @@
 //   · `content` = 창 내용 자리   = window − 제목 표시줄·테두리(**실측** — SpanChrome)
 //   · `canvas`  = 원격 화면 자리 = content − [옵션] 머리줄(주 모니터 창에만 있다)
 // 프레임버퍼(=원격 해상도)는 **canvas 들을 감싸는 상자**다. 이것이 desktop_size 와 같아야 한다.
+//
+// ── 2026-09-04 회귀: 원격 사각형을 물리 좌표에서 빼면 안 된다 ─────────────────────────────
+// 처음엔 `canvas` 의 **물리 화면 좌표**를 그대로 원격에 알렸다. 테두리 폭을 좌우에서 빼는 순간
+// 이웃한 두 모니터 사이에 **2px 틈**이 생겼고(준영님 배치 실측: 모니터2 right=-3, 모니터1 left=0),
+// RDP 는 모니터가 맞닿아야 해서 서버가 배치를 통째로 버리고 desktop_size 한 장으로 처리했다 —
+// 듀얼이던 화면이 "펼쳐진 한 화면"이 됐다.
+//
+// **원격 배치는 내 화면과 픽셀로 같을 필요가 없다.** 서버가 알아야 하는 것은 "몇 장이고, 각각 몇
+// 픽셀이며, 어떻게 이웃하는가" 뿐이다. 그래서 이제 **크기는 창 내용에서, 자리는 맞붙여** 깐다:
+// 물리 배치가 순서와 축만 정하고, 사각형은 틈 0·겹침 0 으로 이어 붙인다. 세로 어긋남(4px 같은 것)도
+// 따라가지 않는다 — 따라가 봐야 아무 모니터에도 안 보이는 띠만 생긴다.
 
 type Rect = { x: number; y: number; width: number; height: number }
 
@@ -150,61 +161,64 @@ export function planSpan(
       width: Math.max(0, win.width - chrome.frame.left - chrome.frame.right),
       height: Math.max(0, win.height - chrome.frame.top - chrome.frame.bottom)
     }
-    // 머리줄은 주 모니터 창에만 있다 — 거기서만 원격 화면이 그만큼 아래에서 시작한다.
+    // 머리줄은 주 모니터 창에만 있다 — 거기 원격 화면만 그만큼 짧다.
     const head = d.id === origin.id ? chrome.header : 0
-    const canvas = {
-      x: content.x,
-      y: content.y + head,
-      width: content.width,
-      height: Math.max(0, content.height - head)
-    }
-    return { d, window: win, content, canvas }
+    return { d, window: win, content, canvas: { width: content.width, height: Math.max(0, content.height - head) } }
   })
 
-  // 프레임버퍼 = 캔버스 사각형들을 감싸는 상자. 그 좌상단이 원격 화면의 (0,0) 이다.
-  const fx = Math.min(...boxes.map((b) => b.canvas.x))
-  const fy = Math.min(...boxes.map((b) => b.canvas.y))
-  const fw = Math.max(...boxes.map((b) => b.canvas.x + b.canvas.width)) - fx
-  const fh = Math.max(...boxes.map((b) => b.canvas.y + b.canvas.height)) - fy
-  const remote = { width: round4(px(fw)), height: round4(px(fh)) }
+  // 배치 축과 순서는 **물리 좌표**가 정한다(왼쪽 모니터가 원격에서도 왼쪽이어야 한다).
+  // ponytail: 격자(2x2) 배치는 한 줄로 편다 — 화면마다 제 몫은 그대로 보이고 이웃 관계만 어긋난다.
+  //           실사용에 없는 배치라 2차원 채우기를 짜지 않았다. 나오면 그때 붙인다.
+  const spread = (v: number[]): number => Math.max(...v) - Math.min(...v)
+  const horizontal = spread(picked.map((d) => d.bounds.x)) >= spread(picked.map((d) => d.bounds.y))
+  const ordered = [...boxes].sort((a, b) =>
+    horizontal ? a.d.bounds.x - b.d.bounds.x : a.d.bounds.y - b.d.bounds.y
+  )
 
-  // 슬라이스는 **누적 반올림이 아니라 구간 차**로 잰다 — 각각 반올림하면 마지막 모니터가 상자 밖으로
-  // 1px 삐져나간다. 4의 배수로 내리며 깎인 ≤3px 은 여기서 잘라, 감싸는 상자 = desktop_size 를 지킨다.
-  const sliceOf = (canvas: Rect): Rect => {
-    const x = px(canvas.x - fx)
-    const y = px(canvas.y - fy)
-    return {
-      x,
-      y,
-      width: Math.max(0, Math.min(px(canvas.x - fx + canvas.width) - x, remote.width - x)),
-      height: Math.max(0, Math.min(px(canvas.y - fy + canvas.height) - y, remote.height - y))
-    }
+  // 크기대로 **맞붙여** 깐다. 틈이 하나라도 있으면 서버가 배치를 버리고 큰 화면 한 장으로 처리한다.
+  let cursor = 0
+  const laid = ordered.map((b) => {
+    const width = px(b.canvas.width)
+    const height = px(b.canvas.height)
+    const rect = horizontal ? { left: cursor, top: 0, width, height } : { left: 0, top: cursor, width, height }
+    cursor += horizontal ? width : height
+    return { b, rect }
+  })
+
+  // 주 모니터가 원점(RDP 규칙). 왼쪽·위의 모니터는 이제 음수가 된다.
+  const originRect = laid.find((x) => x.b.d.id === origin.id)!.rect
+  for (const x of laid) {
+    x.rect.left -= originRect.left
+    x.rect.top -= originRect.top
   }
-  const originSlice = sliceOf(boxes.find((b) => b.d.id === origin.id)!.canvas)
 
-  const monitors: SpanMonitor[] = boxes.map((b) => {
-    const slice = sliceOf(b.canvas)
-    // 원격 좌표 = 슬라이스를 주 모니터 원점으로 옮긴 것. 두 좌표계를 따로 계산하면 언젠가 어긋난다.
-    const left = slice.x - originSlice.x
-    const top = slice.y - originSlice.y
+  // 프레임버퍼 = 사각형들을 감싸는 상자. 그 좌상단이 잘라오기 좌표의 (0,0) 이다.
+  const minLeft = Math.min(...laid.map((x) => x.rect.left))
+  const minTop = Math.min(...laid.map((x) => x.rect.top))
+  const remote = {
+    width: round4(Math.max(...laid.map((x) => x.rect.left + x.rect.width)) - minLeft),
+    height: round4(Math.max(...laid.map((x) => x.rect.top + x.rect.height)) - minTop)
+  }
+
+  const monitors: SpanMonitor[] = laid.map(({ b, rect }) => {
+    // 4의 배수로 내리며 깎인 ≤3px 은 바깥쪽 사각형에서 잘라 낸다 — 감싸는 상자 == desktop_size.
+    // 안쪽 변은 안 건드리므로 맞닿음은 그대로다.
+    const width = Math.max(0, Math.min(rect.width, minLeft + remote.width - rect.left))
+    const height = Math.max(0, Math.min(rect.height, minTop + remote.height - rect.top))
     return {
       id: b.d.id,
       primary: b.d.id === origin.id,
       // right/bottom 은 **포함** 좌표다 — 폭이 아니라 마지막 픽셀 번호라 1을 뺀다.
-      rdp: { left, top, right: left + slice.width - 1, bottom: top + slice.height - 1 },
-      slice,
+      rdp: { left: rect.left, top: rect.top, right: rect.left + width - 1, bottom: rect.top + height - 1 },
+      // 잘라오기 좌표 = 같은 사각형을 프레임버퍼 원점으로 옮긴 것. 크기가 어긋나면 마우스가 딴 데를 찍는다.
+      slice: { x: rect.left - minLeft, y: rect.top - minTop, width, height },
       window: b.window,
       content: b.content
     }
   })
 
-  // 죽은 영역은 **내용 영역**끼리 견준다(머리줄 제외 — 위 deadRatio 주석).
-  const cx = Math.min(...boxes.map((b) => b.content.x))
-  const cy = Math.min(...boxes.map((b) => b.content.y))
-  const cw = Math.max(...boxes.map((b) => b.content.x + b.content.width)) - cx
-  const ch = Math.max(...boxes.map((b) => b.content.y + b.content.height)) - cy
-  const boxArea = cw * ch
-  const covered = boxes.reduce((s, b) => s + b.content.width * b.content.height, 0)
+  const boxArea = remote.width * remote.height
+  const covered = monitors.reduce((s, m) => s + m.slice.width * m.slice.height, 0)
 
   return {
     remote,
@@ -214,40 +228,63 @@ export function planSpan(
   }
 }
 
+/** 원격에 알릴 모니터 사각형 하나. right/bottom 은 포함 좌표다(포크 wasm 의 `monitorLayout()` 모양). */
+export type MonitorRect = { left: number; top: number; right: number; bottom: number; primary?: boolean }
+
 /**
- * 원격에 보낼 평평한 배열 — 모니터당 [left, top, right, bottom, primary]. 공식 패키지의
- * `monitorLayout()` 이 받는 모양이다.
+ * 원격에 알릴 모니터 배치. **하나라도 규칙을 어기면 null** 을 돌려 호출측이 경계 없이 붙게 한다
+ * (펼치기는 되고 경계만 없는 상태 — 접속 실패나 조용한 오배치보다 낫다).
  *
- * 서버가 거절할 층위를 여기서 먼저 거른다(거절당하면 핸드셰이크 도중 조용히 끊길 뿐 사유를 안 준다):
+ * 서버가 거절할 층위를 여기서 먼저 거른다(거절당해도 사유를 안 주고 배치만 조용히 버린다):
  * 16장 초과 · 200 미만 또는 8192 초과 변 · 주 모니터가 원점이 아님 · 감싸는 상자가 desktop_size 와
- * 다름. 하나라도 걸리면 null 을 돌려 호출측이 **단일 모니터로 붙게** 한다(펼치기는 되고 경계만
- * 없는 상태 — 접속 실패보다 낫다).
+ * 다름 · **틈이나 겹침**.
+ *
+ * 마지막 항목이 2026-09-04 회귀의 정체다: 사각형 사이에 2px 틈이 생기자 서버가 배치를 버리고
+ * 큰 화면 한 장으로 처리해 듀얼이 "펼쳐진 한 화면"이 됐다. 지금은 planSpan 이 맞붙여 깔아 그럴 수
+ * 없지만, 그 계산을 고치는 사람이 다시 벌릴 수 있어 여기서 못 박는다.
+ * ponytail: "모두가 이웃을 하나 이상 가진다"까지만 본다 — 완전한 연결성 검사가 아니다(한 줄로
+ *           까는 한 그것으로 충분하고, 2차원 배치를 짜게 되면 그때 이 검사도 올려야 한다).
  */
-export function monitorLayoutArgs(plan: SpanPlan): number[] | null {
+export function monitorRects(plan: SpanPlan): MonitorRect[] | null {
   const MAX = 16
   const MIN_RECT = 200
   const MAX_RECT = 8192
-  if (plan.monitors.length === 0 || plan.monitors.length > MAX) return null
-  if (plan.monitors.filter((m) => m.primary).length !== 1) return null
+  const ms = plan.monitors
+  if (ms.length === 0 || ms.length > MAX) return null
+  if (ms.filter((m) => m.primary).length !== 1) return null
 
-  const flat: number[] = []
-  for (const m of plan.monitors) {
+  for (const m of ms) {
     const w = m.rdp.right - m.rdp.left + 1
     const h = m.rdp.bottom - m.rdp.top + 1
     if (w < MIN_RECT || w > MAX_RECT || h < MIN_RECT || h > MAX_RECT) return null
     if (m.primary && (m.rdp.left !== 0 || m.rdp.top !== 0)) return null
-    flat.push(m.rdp.left, m.rdp.top, m.rdp.right, m.rdp.bottom, m.primary ? 1 : 0)
   }
 
   // vendor/ara-multimonitor.patch: "desktop_size must equal the bounding box of these rectangles."
-  // 어긋나면 서버가 사유 없이 끊는다 — 여기서 잡아 경계 없이 붙는 쪽으로 떨어뜨린다.
-  const left = Math.min(...plan.monitors.map((m) => m.rdp.left))
-  const top = Math.min(...plan.monitors.map((m) => m.rdp.top))
-  const right = Math.max(...plan.monitors.map((m) => m.rdp.right))
-  const bottom = Math.max(...plan.monitors.map((m) => m.rdp.bottom))
+  const left = Math.min(...ms.map((m) => m.rdp.left))
+  const top = Math.min(...ms.map((m) => m.rdp.top))
+  const right = Math.max(...ms.map((m) => m.rdp.right))
+  const bottom = Math.max(...ms.map((m) => m.rdp.bottom))
   if (right - left + 1 !== plan.remote.width || bottom - top + 1 !== plan.remote.height) return null
 
-  return flat
+  // 겹치지 않고, 저마다 이웃이 있다(변이 딱 맞닿는다).
+  const rects = ms.map((m) => m.rdp)
+  const overlaps = (a: MonitorRect, b: MonitorRect): boolean =>
+    a.left <= b.right && b.left <= a.right && a.top <= b.bottom && b.top <= a.bottom
+  const touches = (a: MonitorRect, b: MonitorRect): boolean =>
+    ((a.right + 1 === b.left || b.right + 1 === a.left) && a.top <= b.bottom && b.top <= a.bottom) ||
+    ((a.bottom + 1 === b.top || b.bottom + 1 === a.top) && a.left <= b.right && b.left <= a.right)
+  for (const a of rects) {
+    let neighbour = false
+    for (const b of rects) {
+      if (a === b) continue
+      if (overlaps(a, b)) return null
+      if (touches(a, b)) neighbour = true
+    }
+    if (rects.length > 1 && !neighbour) return null
+  }
+
+  return ms.map((m) => ({ ...m.rdp, primary: m.primary }))
 }
 
 /** 모니터 전체를 펼치는 계획(기본 경로 — 모니터 고르기 UI 는 없다). */

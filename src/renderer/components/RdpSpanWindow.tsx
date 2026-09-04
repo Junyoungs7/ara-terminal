@@ -11,15 +11,9 @@
 // 나가는 길: 제목 표시줄의 [X] · Alt+F4 · Alt+Tab 으로 비켜 두기(kiosk 가 아니라 OS 가 처리한다).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RdpView } from './RdpView'
-import type { SpanMonitor, SpanPlan } from '@shared/rdpSpan'
+import { monitorRects, type MonitorRect, type SpanMonitor } from '@shared/rdpSpan'
 import { openMirror, type MirrorHandle } from '../store/rdpMirror'
 import type { RdpInputBridge } from './RdpView'
-
-/** 원격에 알릴 모니터 사각형(공식 패키지의 monitorLayout 이 받는 모양). */
-type MonitorRect = { left: number; top: number; right: number; bottom: number; primary?: boolean }
-
-const monitorRectsOf = (plan: SpanPlan): MonitorRect[] =>
-  plan.monitors.map((m) => ({ ...m.rdp, primary: m.primary }))
 
 export type RdpSpanTarget = { profileId: string; name: string; size: [number, number]; monitors: number }
 

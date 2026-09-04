@@ -459,28 +459,17 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                   />
                 </div>
                 <div className="pf-hint">{t('conn.rdp.secret.hint')}</div>
-                {/* 2026-09-04 준영님: [다중 모니터] 를 옵션 메뉴에서 여기로 옮겼다 — 그 서버를 어떻게
-                    쓰는지의 성질이지 접속할 때마다 고르는 것이 아니다. 세그먼트는 이 폼이 이미 쓰는
-                    컨트롤이고(유형·인증 방식), 첫 칸이 기본값이라는 규칙도 그대로다. */}
-                <div className="fld" style={{ marginTop: 16 }}>
-                  <label>{t('conn.field.multiMonitor')}</label>
-                  <div className="seg-ctl">
-                    <button
-                      type="button"
-                      className={form.multiMonitor ? '' : 'on'}
-                      onClick={() => setForm({ ...form, multiMonitor: false })}
-                    >
-                      {t('conn.rdp.multi.off')}
-                    </button>
-                    <button
-                      type="button"
-                      className={form.multiMonitor ? 'on' : ''}
-                      onClick={() => setForm({ ...form, multiMonitor: true })}
-                    >
-                      {t('conn.rdp.multi.on')}
-                    </button>
-                  </div>
-                </div>
+                {/* 2026-09-04 준영님: [다중 모니터] 를 옵션 메뉴에서 여기로 옮겼다. 그 서버를 어떻게
+                    쓰는지의 성질이지 접속할 때마다 고르는 것이 아니다. 켜고 끄는 값 하나에 선택지를
+                    둘 그리지 않는다 — 체크박스 하나(.fb-check 재사용). */}
+                <label className="fb-check" style={{ marginTop: 16 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.multiMonitor}
+                    onChange={(e) => setForm({ ...form, multiMonitor: e.target.checked })}
+                  />
+                  {t('conn.field.multiMonitor')}
+                </label>
                 <div className="pf-hint">{t('conn.rdp.multi.hint')}</div>
               </>
             )}

@@ -560,7 +560,7 @@ export function Shell() {
         selectSession(open.id)
         return true
       }
-      // 2026-09-04: 프로필이 [모니터 전체에 펼치기] 면 탭이 아니라 모니터마다 창 하나로 간다.
+      // 2026-09-04: 프로필이 [다중 모니터 사용] 면 탭이 아니라 모니터마다 창 하나로 간다.
       // 모니터가 한 장일 때만 탭으로 떨어진다(그때는 spanRdp 가 이유를 알린다) — 그 밖의 거절은
       // 이미 창이 있다는 뜻이라 탭까지 열면 같은 서버에 두 번 붙어 서버가 앞 세션을 끊는다.
       if (p.multiMonitor && (await spanRdp(profileId, p.name)) !== 'single') return true
@@ -969,7 +969,7 @@ export function Shell() {
         await save(
           p.type === 'rdp'
             ? // multiMonitor 를 다시 실어야 한다 — 저장은 통째 덮어쓰기라, 빼면 그룹 이름만 바꿔도
-              // 그 서버의 [모니터 전체에 펼치기] 가 조용히 꺼진다.
+              // 그 서버의 [다중 모니터 사용] 가 조용히 꺼진다.
               { id: p.id, type: 'rdp' as const, name: p.name, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: to }
             : {
                 id: p.id,
@@ -995,7 +995,7 @@ export function Shell() {
     (p: ConnectionProfile) =>
       save(
         p.type === 'rdp'
-          ? // 비밀번호만 빼고 그대로 베낀다 — [모니터 전체에 펼치기] 도 그 서버의 성질이므로 따라간다.
+          ? // 비밀번호만 빼고 그대로 베낀다 — [다중 모니터 사용] 도 그 서버의 성질이므로 따라간다.
             { type: 'rdp' as const, name: `${p.name} ${t('conn.menu.copySuffix')}`, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: p.group }
           : {
               type: 'ssh',

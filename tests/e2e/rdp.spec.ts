@@ -41,7 +41,7 @@ async function createRdpProfile(
   if (f.port) await field(page, '포트').fill(f.port)
   await field(page, '사용자').fill(f.username ?? 'dev')
   // 2026-09-04: [다중 모니터] 는 옵션 메뉴가 아니라 여기서 정한다(그 서버를 어떻게 쓰는지의 성질).
-  if (f.multiMonitor) await page.click('.prof-form .seg-ctl button:has-text("모니터 전체에 펼치기")')
+  if (f.multiMonitor) await page.check('.prof-form .fb-check input[type="checkbox"]')
   await page.click('.modal-ft .btn.pri')
   await expect(connModal(page)).toHaveCount(0, { timeout: 15_000 })
 }
@@ -221,7 +221,7 @@ test('RDPV-22 같은 서버를 두 번 펼치면 창이 늘지 않는다', async
   await expect.poll(() => spanWindows(ara.app).then((w) => w.length)).toBe(0)
 })
 
-// RDPV-23 모니터가 한 장이면 프로필이 [모니터 전체에 펼치기] 여도 보통 탭으로 열고 안내만 한다.
+// RDPV-23 모니터가 한 장이면 프로필이 [다중 모니터 사용] 이어도 보통 탭으로 열고 안내만 한다.
 // 2026-09-04: 진입점이 헤더 [다중 모니터] 버튼에서 **프로필 설정**으로 옮겨 갔다 — 창이 안 뜨는
 // 것만 보던 검사에 "그래서 탭으로 열렸다"를 더한다(아무 데도 안 열리면 그건 다른 고장이다).
 test('RDPV-23 모니터가 한 장이면 펼치지 않고 탭으로 연다', async ({ ara }) => {
@@ -235,9 +235,9 @@ test('RDPV-23 모니터가 한 장이면 펼치지 않고 탭으로 연다', asy
   expect(await spanWindows(ara.app)).toHaveLength(0)
 })
 
-// RDPV-29 프로필의 [모니터 전체에 펼치기] 가 저장되고 다시 열어도 그대로다 — 스키마를 안 올렸으므로
+// RDPV-29 프로필의 [다중 모니터 사용] 가 저장되고 다시 열어도 그대로다 — 스키마를 안 올렸으므로
 // (옛 앱이 워크스페이스를 못 읽는다) 이 선택 필드가 실제로 실려 나가는지 여기서 본다.
-test('RDPV-29 프로필의 [모니터 전체에 펼치기] 가 저장된다', async ({ ara }) => {
+test('RDPV-29 프로필의 [다중 모니터 사용] 가 저장된다', async ({ ara }) => {
   await createRdpProfile(ara.page, { name: 'rdp-multi', multiMonitor: true })
   const saved = await ara.page.evaluate(async () => {
     const list = await window.ev.profile.list()
@@ -250,5 +250,5 @@ test('RDPV-29 프로필의 [모니터 전체에 펼치기] 가 저장된다', as
   await srvNode(ara.page, 'rdp-multi').click({ button: 'right' })
   await ara.page.click('.ctx-menu .ctx-item[data-action="server.edit"]')
   await connModal(ara.page).waitFor()
-  await expect(ara.page.locator('.prof-form .seg-ctl button.on:has-text("모니터 전체에 펼치기")')).toBeVisible()
+  await expect(ara.page.locator('.prof-form .fb-check input[type="checkbox"]')).toBeChecked()
 })

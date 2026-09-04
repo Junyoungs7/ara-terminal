@@ -487,7 +487,6 @@ function AiSection({
         <div className="set-sec-t" data-sec="ai.cli">
           {t('settings.ai.cliSec')}
         </div>
-        <div className="set-sec-d">{t('settings.ai.cliSec.desc')}</div>
         <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       </>
     )
@@ -587,7 +586,6 @@ function AiSection({
       <div className="set-sec-t" data-sec="ai.cli" style={{ marginTop: 18 }}>
         {t('settings.ai.cliSec')}
       </div>
-      <div className="set-sec-d">{t('settings.ai.cliSec.desc')}</div>
       <AgentHookRow open={open} />
       <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       {/* 이 문장은 장식이 아니다 — 사내 배포에서 데이터 반출 고지가 화면에 없으면 안 된다(설계 §4.7).
