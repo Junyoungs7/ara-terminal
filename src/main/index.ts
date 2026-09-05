@@ -28,7 +28,6 @@ import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
-import { registerVoiceIpc } from './ipc/registerVoiceIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
 import type { AraToolGate } from './mcp/tools'
@@ -367,11 +366,11 @@ app.whenReady().then(async () => {
     )
   )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
-  // 2026-08-27 음성 모드 — 받아쓰기·읽어 주기. 같은 vault 를 쓰지만 **키는 여기서도 안 나간다**.
-  registerVoiceIpc({ vault: secrets, getCompatibleBaseUrl: () => aiPrefs().baseUrl ?? '' })
-  // 마이크 권한 — Electron 은 기본으로 **거절**한다(브라우저와 달리 물어보지도 않는다).
-  // 우리가 여는 것은 음성 모드 하나뿐이라 media 만 열고 나머지는 그대로 막는다.
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
+  // 권한 요청은 **전부 거절한다.** 마이크·카메라·위치·알림 중 우리가 쓰는 것은 하나도 없다
+  // (#140 에서 음성 모드를 걷은 뒤로 media 를 여는 자리가 없어졌다).
+  // ⚠️ 이 줄을 지우면 안 된다 — 핸들러가 없으면 Electron 은 요청을 **승인**한다(브라우저처럼
+  // 물어보지 않는다). 아라 브라우저 뷰도 같은 선을 따로 지킨다(BrowserService).
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(false))
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
   mcp = registerMcpIpc(

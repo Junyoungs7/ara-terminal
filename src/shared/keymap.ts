@@ -24,7 +24,6 @@ export type KeymapAction =
   | 'clipboard.paste'
   | 'ai.ask'
   | 'ai.toggle'
-  | 'voice.toggle'
   | 'ai.cli'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
@@ -40,7 +39,7 @@ export type KeymapAction =
   // (#67 이전에는 우클릭 자리의 8칸 격자 palette.smart 가 따로 있어 이름이 헷갈렸다. 지금은 하나다.)
   | 'palette.all'
 
-import { AI_ENTRY, VOICE } from './features'
+import { AI_ENTRY } from './features'
 
 export type KeymapCategory =
   | 'panel'
@@ -94,8 +93,6 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 메뉴바가 implemented 를 보고 자동으로 따라온다.
   { action: 'ai.ask', category: 'ai', labelKo: 'AI에게 질문', win: 'Ctrl+Shift+A', mac: 'Cmd+Shift+A', implemented: true },
   { action: 'ai.toggle', category: 'ai', labelKo: 'AI 창 토글', win: 'Alt+A', mac: 'Opt+A', implemented: true },
-  // 2026-08-27 음성 — Ctrl+Shift+V 는 붙여넣기다. AI 창(Alt+A)과 같은 갈래로 Alt+V 를 쓴다.
-  { action: 'voice.toggle', category: 'ai', labelKo: '음성으로 말하기', win: 'Alt+V', mac: 'Opt+V', implemented: true },
   // F27: AI CLI 한 번에 시작. Ctrl+Shift+L(Launch) — 미사용 Ctrl+Shift+* 조합이라 R3.8 정책 그대로다
   // (Ctrl+L 단독은 셸 화면 지우기라 건드리지 않는다).
   { action: 'ai.cli', category: 'ai', labelKo: 'AI CLI 시작', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+L', implemented: true },
@@ -131,10 +128,7 @@ const ALL_KEYS: readonly KeyBinding[] = [
  * (features.AI_ENTRY 참고 — 되살리면 저절로 돌아온다).
  */
 export const KEYMAP: readonly KeyBinding[] = ALL_KEYS.filter(
-  (k) =>
-    (AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')) &&
-    // 2026-08-28 음성은 숨김 — 치트시트에도 안 뜨고 matchBinding 도 안 걸린다.
-    (VOICE || k.action !== 'voice.toggle')
+  (k) => AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')
 )
 
 // 렌더러 공용 — 단축키 표기(⌘)와 OS 이름이 들어가는 라벨(Finder/탐색기)이 같은 판정을 쓴다.

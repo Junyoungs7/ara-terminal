@@ -95,12 +95,6 @@ export function ContextInteractions({
         onCheatsheetChange(true)
         return
       }
-      // Alt+V — 음성. 입력칸에 있을 때는 안 받는다(글 쓰다 마이크가 열리면 놀란다).
-      if (matchBinding(e, 'voice.toggle') && !inInput) {
-        e.preventDefault()
-        onAction('voice.toggle')
-        return
-      }
       if (matchBinding(e, 'commandBook.toggle')) {
         e.preventDefault()
         // 이름 그대로 **토글**이다. 예전엔 늘 true 라 같은 키를 다시 눌러도 안 닫혔다 —

@@ -407,15 +407,6 @@ export type InvokeContract = {
   // ── W3 F16 아라 (AI 어시스턴트) ──
   // 패널 마운트 시 대화 전량 인계(session:attach 와 같은 역할 — 대화의 주인은 main 이다).
   // ⚠️ 응답에 API 키는 존재하지 않는다(hasKey: boolean). **키를 반환하는 채널을 만들지 않는 것이 계약이다.**
-  /**
-   * 음성 모드(2026-08-27). **오디오와 글자만 오간다** — 키는 main 밖으로 안 나간다(ai:* 와 같은 선).
-   * 받아쓰기는 깨어난 뒤 담은 **클립 하나**를 보내는 것이고 상시 스트리밍이 아니다.
-   */
-  'voice:ready': { req: void; res: { ok: boolean; why?: 'noKey' } }
-  'voice:transcribe': { req: { audio: Uint8Array; mime: string }; res: { ok: true; text: string } | { ok: false; reason: string; message: string } }
-  /** 설치본에 실린 깨우기 말 모델. 없으면 ok:false — 그때 음성은 단축키로만 돈다. */
-  'voice:wakeModel': { req: void; res: { ok: true; bytes: Uint8Array } | { ok: false } }
-  'voice:speak': { req: { text: string; voice: string }; res: { ok: true; audio: Uint8Array; mime: string } | { ok: false; reason: string; message: string } }
   'ai:getState': { req: void; res: AiState }
   // 키 저장 + 검증(models.retrieve — GET 이라 토큰 과금 0). key:'' 는 삭제. 읽는 채널은 없다.
   'ai:setKey': { req: { key: string }; res: AiKeyResult }
@@ -897,13 +888,6 @@ export type EvApi = {
     save(sessionId: string): Promise<FileOpResult>
   }
   // W3 F16 아라. **getKey 가 없다는 것이 계약이다** — 저장한 키를 읽어 갈 창구가 표면에 존재하지 않는다.
-  /** 음성 모드 — 오디오와 글자만. 키를 읽는 함수는 여기에도 없다. */
-  voice: {
-    ready(): Promise<{ ok: boolean; why?: 'noKey' }>
-    transcribe(audio: Uint8Array, mime: string): Promise<{ ok: true; text: string } | { ok: false; reason: string; message: string }>
-    speak(text: string, voice: string): Promise<{ ok: true; audio: Uint8Array; mime: string } | { ok: false; reason: string; message: string }>
-    wakeModel(): Promise<{ ok: true; bytes: Uint8Array } | { ok: false }>
-  }
   ai: {
     getState(): Promise<AiState>
     setKey(key: string): Promise<AiKeyResult> // '' → 삭제

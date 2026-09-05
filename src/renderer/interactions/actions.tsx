@@ -18,8 +18,6 @@ import type { SortKey, SortSpec } from '../store/fileView'
 
 export type ActionId =
   | 'copy'
-  // 2026-08-27 음성 — 단축키(Alt+V)로 깨우는 말 없이 바로 듣는다. 우클릭 메뉴에는 없다.
-  | 'voice.toggle'
   | 'paste'
   | 'split.horizontal'
   | 'split.vertical'

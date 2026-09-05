@@ -1,4 +1,4 @@
-import { AI_ENTRY, VOICE } from '@shared/features'
+import { AI_ENTRY } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
@@ -24,7 +24,6 @@ import {
 import type { UpdateState } from '@shared/ipc'
 import type { AgentHookState, RemoteHookReport } from '@shared/agentStatus'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
-import { WAKE_WORDS } from '@shared/voice'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { LICENSES } from '../fonts/licenses'
@@ -45,11 +44,8 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-// 2026-08-28: 음성은 숨김(features.VOICE) — 목록에서 아예 빼서 탭도 본문도 안 생긴다.
-export const SETTINGS_SECTIONS = (
-  ['general', 'terminal', 'font', 'log', 'ai', 'voice', 'mcp', 'keys', 'about'] as const
-).filter((s) => VOICE || s !== 'voice') as readonly SettingsSectionAll[]
-type SettingsSectionAll = 'general' | 'terminal' | 'font' | 'log' | 'ai' | 'voice' | 'mcp' | 'keys' | 'about'
+export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'about'] as const
+type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
 // 미리보기·비교 스트립에 쓰는 실사용 한글 터미널 출력(알파벳 예시 금지 — 스펙 #3).
@@ -130,7 +126,7 @@ function Toggle({
   on: boolean
   label: string
   onChange: (v: boolean) => void
-  /** 조건이 안 갖춰져 켤 수 없는 스위치(2026-08-27 음성 — 키가 없을 때). 이유는 옆 문장이 말한다. */
+  /** 조건이 안 갖춰져 켤 수 없는 스위치. 이유는 옆 문장이 말한다. */
   disabled?: boolean
 }) {
   return (
@@ -318,79 +314,6 @@ function ModelPicker({ provider, value, onChange }: { provider: AiProvider; valu
 //
 // ⚠️ 저장된 키를 되읽어 표시하지 않는다. 마스킹된 형태(sk-ant-…)조차 그리지 않는다 —
 // 접두사 몇 글자도 로그·스크린샷으로 새어 나가면 의미가 있는 정보다(설계 §2). 프로바이더별로
-/**
- * [음성] — 말로 아라를 부르는 설정(2026-08-27 준영님).
- *
- * **키가 없으면 켤 수 없다.** 받아쓰기·읽어 주기가 둘 다 API 를 쓰기 때문인데, 스위치를 그냥
- * 회색으로 두면 "왜 안 되지"가 된다 — 잠근 채로 **왜 잠겼고 어디서 푸는지**를 그 자리에 적는다.
- */
-function VoiceSection({
-  prefs,
-  onPrefsChange
-}: {
-  prefs: UiPrefs
-  onPrefsChange: (patch: Partial<UiPrefs>) => void
-}) {
-  const [ready, setReady] = useState<boolean | null>(null)
-  useEffect(() => {
-    let alive = true
-    void window.ev?.voice
-      .ready()
-      .then((r) => alive && setReady(r.ok))
-      .catch(() => alive && setReady(false))
-    return () => {
-      alive = false
-    }
-  }, [])
-  const set = (patch: Partial<UiPrefs['voice']>): void => onPrefsChange({ voice: { ...prefs.voice, ...patch } })
-  const locked = ready === false
-
-  return (
-    <>
-      <Row label={t('settings.voice.on')} desc={t('settings.voice.on.desc')}>
-        <Toggle
-          on={prefs.voice.on && !locked}
-          label={t('settings.voice.on')}
-          disabled={locked}
-          onChange={(on) => set({ on })}
-        />
-      </Row>
-      {locked && <div className="voice-note">{t('settings.voice.noKey')}</div>}
-      <Row label={t('settings.voice.wake')} desc={t('settings.voice.wake.desc')}>
-        <select className="sel" value={prefs.voice.wake} onChange={(e) => set({ wake: e.target.value })}>
-          {WAKE_WORDS.map((w) => (
-            <option key={w} value={w}>
-              {w}
-            </option>
-          ))}
-        </select>
-      </Row>
-      <Row label={t('settings.voice.tts')} desc={t('settings.voice.tts.desc')}>
-        <select className="sel" value={prefs.voice.ttsVoice} onChange={(e) => set({ ttsVoice: e.target.value })}>
-          {TTS_VOICES.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.ko}
-            </option>
-          ))}
-        </select>
-      </Row>
-      <Row label={t('settings.voice.speak')} desc={t('settings.voice.speak.desc')}>
-        <Toggle on={prefs.voice.speakBack} label={t('settings.voice.speak')} onChange={(speakBack) => set({ speakBack })} />
-      </Row>
-      <div className="voice-note">{t('settings.voice.privacy')}</div>
-    </>
-  )
-}
-
-/** OpenAI 목소리. 한글 이름은 들어 본 인상이 아니라 **성별·톤**만 적는다(과장하지 않는다). */
-const TTS_VOICES = [
-  { id: 'alloy', ko: '차분한 중성' },
-  { id: 'nova', ko: '밝은 여성' },
-  { id: 'shimmer', ko: '부드러운 여성' },
-  { id: 'onyx', ko: '낮은 남성' },
-  { id: 'echo', ko: '담담한 남성' }
-] as const
-
 // vault 에 분리 저장되므로 hasKey 도 "현재 선택된 프로바이더"의 것만 보여준다.
 function AiSection({
   prefs,
@@ -1144,7 +1067,6 @@ export function SettingsDrawer({
           )}
 
           {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} />}
-          {section === 'voice' && <VoiceSection prefs={prefs} onPrefsChange={onPrefsChange} />}
 
           {section === 'mcp' && <McpSection ask={ask} />}
 

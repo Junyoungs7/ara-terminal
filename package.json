@@ -58,7 +58,6 @@
     "screenshot:f23": "electron-vite build && electron tests/f23-screenshot.cjs",
     "screenshot:w5": "electron-vite build && electron tests/w5-screenshot.cjs",
     "screenshot:fbmon": "electron-vite build && electron tests/fbmon-screenshot.cjs",
-    "voice:model": "node scripts/fetch-wake-model.mjs",
     "icons:svg": "node scripts/make-brand-svg.mjs",
     "icons:png": "electron scripts/make-icon-png.cjs",
     "icons:ico": "electron scripts/make-icon-ico.cjs",
@@ -98,7 +97,6 @@
     "electron-vite": "^2.3.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.0",
-    "vitest": "^2.0.5",
-    "vosk-browser": "^0.0.8"
+    "vitest": "^2.0.5"
   }
 }

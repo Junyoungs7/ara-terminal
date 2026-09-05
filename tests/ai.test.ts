@@ -9,7 +9,7 @@ import { ProviderError, type AiRequest, type ProviderAdapter } from '../src/main
 import { migrate } from '../src/main/workspace/migrations'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { splitBlocks, insertText } from '../src/renderer/components/aiBlocks'
-import { AI_PROVIDERS, DEFAULT_AI_MODEL, DEFAULT_VOICE, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
+import { AI_PROVIDERS, DEFAULT_AI_MODEL, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
 
 // ⚠️ 이 파일에는 실 API 호출이 없다. 영원히 없다(설계 §7). 전부 주입된 가짜 어댑터로 돈다.
 
@@ -368,7 +368,6 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         araCallName: '',
         araWelcomeSeen: true,
         bootSplash: false,
-    voice: DEFAULT_VOICE,
         uiScale: 'normal',
         sessionLogDir: '',
         appLogDir: '',

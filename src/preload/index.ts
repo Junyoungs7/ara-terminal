@@ -331,13 +331,6 @@ const api: EvApi = {
   },
   // W3 F16: 아라. 여기에 getKey 가 **없다** — 저장한 API 키를 렌더러로 되돌리는 창구를 만들지 않는다.
   // 채널명이 이 파일 안에만 있으므로 렌더러는 ipcRenderer 로 'ai:*' 를 직접 부를 수도 없다.
-  // 음성 모드 — 오디오(Uint8Array)와 글자만. 키를 읽는 채널은 계약에 없다.
-  voice: {
-    ready: () => ipcRenderer.invoke('voice:ready'),
-    transcribe: (audio: Uint8Array, mime: string) => ipcRenderer.invoke('voice:transcribe', { audio, mime }),
-    speak: (text: string, voice: string) => ipcRenderer.invoke('voice:speak', { text, voice }),
-    wakeModel: () => ipcRenderer.invoke('voice:wakeModel')
-  },
   ai: {
     getState: () => ipcRenderer.invoke('ai:getState'),
     setKey: (key: string) => ipcRenderer.invoke('ai:setKey', { key }),
