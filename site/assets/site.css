@@ -1086,7 +1086,11 @@ pre {
   font-size: 16px;
 }
 .doc li {
-  margin-bottom: 7px;
+  /* 7px 이던 값 — 줄 사이 13.6px(line-height 1.85 × 16px − 16px) 의 절반밖에 안 돼 여러 줄로
+     접히는 li 는 항목 경계가 줄바꿈과 구별 안 됐다(§4.1 "1번·2번이 붙어 보인다" 제보,
+     DOC-spacing-done.md 실측). 항목 사이가 줄 사이의 2배 이상이어야 하므로 최소 13.6px 이상
+     필요 — 14px 로 올린다(=위 .doc p 와 같은 값. 새 수치를 따로 만들지 않는다). */
+  margin-bottom: 14px;
 }
 .doc li::marker {
   color: var(--text-dim);
