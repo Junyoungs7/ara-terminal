@@ -21,6 +21,7 @@ import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
 import { anyWindowVisible } from './windows/visibleWindows'
+import { shouldLockSingleInstance, windowToRaise } from './windows/singleInstance'
 import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
 import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
 import { registerRemoteIpc } from './ipc/registerRemoteIpc'
@@ -226,6 +227,77 @@ app.on('browser-window-created', (_e, win) => {
   win.on('restore', syncTelemetryPolling)
   win.on('closed', syncTelemetryPolling)
 })
+
+/**
+ * 단일 인스턴스 잠금 (#176) — 두 번 눌러도 아라는 하나다.
+ *
+ * 둘이 뜨면 조용히 망가진다: 같은 `workspace.json`·같은 vault·같은 세션 로그를 두 프로세스가 쓰고
+ * (나중에 flush 한 쪽이 이긴다), MCP 고정 포트 39217 은 먼저 잡은 쪽이 가져간다.
+ *
+ * 🔴 **막는 코드다 — 실패 방향을 골라 뒀다.** 잠글 자리인가(shouldLockSingleInstance)와 무엇을 앞으로
+ * 가져오나(windowToRaise)는 순수 함수로 떼어 창 없이 검사한다(tests/singleInstance.test.ts).
+ * 그리고 `requestSingleInstanceLock` 자체가 던지면 **그냥 계속 부팅한다**(아래 catch 의 주석) —
+ * 인스턴스 둘은 불편이지만 안 켜지는 앱은 사고다.
+ *
+ * **자동 업데이트 재시작이 여기서 죽지 않는다**(그게 이 기능의 가장 무서운 오작동이다). 순서가
+ * 근거다: `quitAndInstall` 은 설치 프로그램을 **먼저 띄우고**(detached) 그다음 `app.quit()` 을 부르고
+ * (node_modules/electron-updater/out/BaseUpdater.js:13-23), 그 설치 프로그램의 첫 일이 우리를 기다려
+ * 없애는 것이다 — `--updated` 로 들어오면 CHECK_APP_RUNNING 이 A.R.A.exe 를 찾아 taskkill 하고
+ * **사라질 때까지 돈다**(app-builder-lib/templates/nsis/include/allowOnlyOneInstallerInstance.nsh:50-118).
+ * 새 프로세스는 그 뒤 설치가 끝나고 나서야 뜬다(installSection.nsh:85-108 · assistedInstaller.nsh:51-61).
+ * 잠금은 그 프로세스가 쥔 것이라 죽으면(정상 종료든 taskkill 이든) 함께 풀린다 — 파일에 남는 자물쇠가
+ * 아니다. 즉 "옛 프로세스가 락을 쥔 채 새 것이 뜨는" 창은 열리지 않는다.
+ *
+ * 왜 `app.quit()` 이 아니라 `app.exit(0)` 인가: 여기는 whenReady **본문이 아직 안 돈 자리**라
+ * store·sessions·리스너가 전부 undefined 다 — 정리할 것이 하나도 없다. app.quit() 로 가면 아무것도
+ * 안 쥔 프로세스가 before-quit 의 preventDefault + pty 배수를 지나야 끝난다(그 순서는 사고를 겪고 나온
+ * 것이라 건드리지 않는다). 잠금을 못 받았다는 것은 **명령줄이 이미 먼저 뜬 쪽에 전달됐다**는 뜻이므로
+ * (electron.d.ts 의 requestSingleInstanceLock 설명) 여기서 곧장 나가도 잃는 것이 없다.
+ */
+if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env['ARA_ALLOW_MULTI'] })) {
+  let primary = true
+  try {
+    primary = app.requestSingleInstanceLock()
+  } catch (e) {
+    // 🔴 **모르면 켠다.** primary 를 true 로 둔 채 계속 부팅한다 — 잠금 하나 때문에 앱을 못 켜는
+    // 것보다 두 개가 뜨는 것이 낫다.
+    logMainError('single instance lock', e)
+  }
+  if (!primary) {
+    app.exit(0)
+  } else {
+    /**
+     * 먼저 뜬 쪽이 받는다 — 그 창을 앞으로 가져온다.
+     *
+     * 종료 확인창은 걱정할 필요가 없다: 그 물음은 **본창 안에 그리는 모달**이라(win:closeAsk →
+     * Shell.tsx) 창을 올리면 같이 올라온다. 별도 OS 창이었다면 뒤에 숨어 "왜 안 꺼지지"가 됐을 자리다.
+     *
+     * argv 는 안 본다 — 우리는 명령줄 인자로 무엇도 열지 않는다(`grep -rn process.argv src/` → 0건).
+     * 인자로 프로필·파일을 여는 기능이 생기면 그때 이 자리에서 처리한다.
+     *
+     * 앞으로 안 나오면(윈도우의 SetForegroundWindow 제한 — SessionWindows.ts 의 topmost 주석) 그
+     * 처방은 alwaysOnTop 을 한 번 켰다 끄는 것이다. **미리 붙이지 않는다**: 켠 뒤 끄는 데 실패하면
+     * 그 창이 영영 다른 앱 위에 남는다. 여기는 사용자가 방금 아이콘을 누른 자리라 문서가 권하는
+     * restore→show→focus 로 먼저 간다 — 실기 제보가 오면 그때 바꾼다.
+     */
+    app.on('second-instance', () => {
+      const win = windowToRaise(mainWindow, BrowserWindow.getAllWindows())
+      // ponytail: 창이 하나도 없으면 무동작 — 여기서 createWindow() 를 부르면 **부팅 중에** 두 번째가
+      // 온 경우(whenReady 가 아직 창을 안 만든 순간) 본창이 두 개가 된다. 잠금이 막으려던 사고를
+      // 잠금이 다시 만드는 셈이다. 윈도우에서 창 0개는 이미 내려가는 중이다(window-all-closed → quit).
+      if (!win) return
+      try {
+        if (win.isMinimized()) win.restore()
+        // 본창은 ready-to-show 까지 숨어 있다(show: false) — 그 사이에 오면 focus() 만으로는 안 보인다.
+        if (!win.isVisible()) win.show()
+        win.focus()
+      } catch (e) {
+        // 파괴 레이스. 앞으로 못 가져와도 앱은 그대로 산다 — 여기서 던져 앱을 죽이지 않는다.
+        logMainError('second-instance raise', e)
+      }
+    })
+  }
+}
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
