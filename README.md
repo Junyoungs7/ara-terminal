@@ -22,6 +22,25 @@ npm run dev
 - `npm run scan:push` — `src/main`에서 `webContents.send`/`postMessage`를 직접 호출하는 코드를 잡는다. 창으로 나가는 push는 `util/windowPush.ts`의 헬퍼(isDestroyed 가드 포함)만 거쳐야 한다
 - `npm run build` — `electron-vite build`. main·preload·renderer 세 번들이 전부 컴파일되는지
 
+## pre-push 훅 (#186)
+
+밀기 직전 로컬에서 빠른 정적 검사만 자동으로 돈다: `typecheck`·`scan:magic`·`scan:i18n`·`scan:push`
+(넷을 병렬로 돌려 약 12~14초). 하나라도 빨간불이면 push 가 막힌다. `npm test`(단위 테스트)는
+훅에서 뺐다 — 전체 스위트가 47초+ 로 그 자체로 예산을 넘고, `mcp-server.test.ts`가 고정 포트
+39217을 써서 dev 가 떠 있으면 깨진다(아래 함정 1번). 릴리스 전엔 사람이 손으로 `npm test`를 돌려라.
+
+훅 파일은 `.githooks/pre-push`에 있고 커밋된다(`.git/hooks/`는 커밋 안 되므로 여기 둔다).
+**새로 클론했다면 한 번 켜야 한다**:
+
+```
+git config core.hooksPath .githooks
+```
+
+급하면 `git push --no-verify`로 건너뛸 수 있다(훅이 막지 않는다).
+
+이 훅이 못 잡는 것: `npm test`(단위 테스트 회귀) · `npm run build`(번들 컴파일 오류) · e2e · 스모크 ·
+실기동 화면 확인. 전부 배포 전 `docs/release-test.md` 대본으로 사람이 돌려야 한다.
+
 ## 🔴 함정 넷
 
 모르면 반드시 한 번씩 당한다.

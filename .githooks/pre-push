@@ -1,0 +1,41 @@
+#!/bin/sh
+# pre-push 게이트 (#186) — 밀기 직전 로컬에서 빠른 정적 검사만 돌리고, 빨간불이면 막는다.
+#
+# npm test 는 일부러 뺐다: 전체 스위트가 47초+ 로 이 게이트의 20초 예산을 그 자체로 넘고,
+# mcp-server.test.ts 가 고정 포트 39217 을 써서 dev 서버가 떠 있으면 깨진다(README 함정 1번).
+# 릴리스 전에는 반드시 사람이 손으로 `npm test` 를 돌려라.
+#
+# 급하면 `git push --no-verify` 로 건너뛸 수 있다(이 훅이 막지 않는다).
+
+set -u
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+
+t0=$(date +%s)
+
+npm run typecheck  >"$tmp/typecheck.log" 2>&1 &
+pid1=$!
+npm run scan:magic >"$tmp/magic.log"     2>&1 &
+pid2=$!
+npm run scan:i18n  >"$tmp/i18n.log"      2>&1 &
+pid3=$!
+npm run scan:push  >"$tmp/push.log"      2>&1 &
+pid4=$!
+
+fail=0
+
+wait "$pid1" || { echo ""; echo "== typecheck 실패 =="; cat "$tmp/typecheck.log"; fail=1; }
+wait "$pid2" || { echo ""; echo "== scan:magic 실패 =="; cat "$tmp/magic.log"; fail=1; }
+wait "$pid3" || { echo ""; echo "== scan:i18n 실패 =="; cat "$tmp/i18n.log"; fail=1; }
+wait "$pid4" || { echo ""; echo "== scan:push 실패 =="; cat "$tmp/push.log"; fail=1; }
+
+t1=$(date +%s)
+echo ""
+echo "pre-push 게이트: $((t1 - t0))초 (typecheck + scan:magic + scan:i18n + scan:push, npm test 제외)"
+
+if [ "$fail" = "1" ]; then
+  echo "빨간불 — 푸시를 막는다. 급하면 'git push --no-verify' 로 건너뛸 수 있다."
+  exit 1
+fi
+
+exit 0
