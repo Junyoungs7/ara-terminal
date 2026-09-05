@@ -6611,6 +6611,16 @@ button.sb-seg.upd:hover .val {
   /* 마우스를 따라다니지 않으므로 포인터 이벤트를 받을 이유가 없다 — 받으면 그 아래 버튼이 안 눌린다. */
   pointer-events: none;
   white-space: pre-wrap;
+  /* 🔴 `break-word` 로 바꾸지 마라 — 이 버그가 조용히 돌아온다.
+     글자는 이름 없는 **flex 항목**이다(store/tooltip.ts:154 가 createTextNode 로 넣는다). flex 항목은
+     제 min-content 아래로 안 줄어드는데, 띄어쓰기 없는 긴 경로 한 덩어리(배포 릴리스 디렉터리·해시)면
+     그 min-content 가 곧 덩어리 폭이다 → 위 max-width 는 상자만 380 에 묶고 글자는 뚫고 나온다.
+     placeTip 도 offsetWidth(380)로 자리를 잡아 보이는 폭과 어긋난다(준영님 제보 2026-09-05:
+     "텍스트가 튀어나와 사이즈에 맞지않게"). 표준이 둘을 가른다: `break-word` 가 만드는 줄바꿈 자리는
+     min-content 계산에 **안 들어가서** 항목이 그대로 안 줄어든다 — 눈으로는 비슷해 보이는 자리가 있어
+     바꿔 놓고 고친 줄 착각하기 쉽다. `word-break: break-all` 도 아니다(안 넘칠 때도 낱말을 끊는다).
+     회귀 가드: tests/tip-check.cjs 판정 F — 고치기 전 scrollW 617 vs clientW 378. */
+  overflow-wrap: anywhere;
 }
 .ara-tip.on {
   display: flex;

@@ -115,6 +115,10 @@ function probe(cfg) {
       host: true,
       on: h.classList.contains('on'),
       text: (h.textContent || '').slice(0, 90),
+      // 상자가 **자기 글자를 담고 있나**. 판정 F 가 보는 값이다 — 사각형(R)만으로는 안 보인다:
+      // 글자가 뚫고 나가도 상자의 getBoundingClientRect 는 얌전히 380 을 낸다.
+      sw: h.scrollWidth,
+      cw: h.clientWidth,
       r: R(h)
     }
   }
@@ -139,6 +143,13 @@ function probe(cfg) {
     '--log-level=info --log-target=journal-or-kmsg --show-status=auto ' +
     '--unit=multi-user.target --machine-id=8f3c21ab9d4e40f1b2c7'
   const SHORT_CMD = 'bash'
+  // F — **띄어쓰기 없는 긴 한 덩어리.** A 의 cmd 는 띄어쓰기가 많아 min-content 가 낱말 하나라
+  // 툴팁이 곱게 감쌌다(그래서 앞 라운드가 이 버그를 놓쳤다). 진짜 ps 출력의 경로는 이렇게 생겼다.
+  // ⚠️ 하이픈은 CSS 줄바꿈 자리다(`java-17-openjdk-…` 는 저절로 끊긴다) — 덩어리를 길게 만드는 건
+  // 하이픈 **없는** 구간이다. 배포 릴리스 디렉터리(타임스탬프+해시)가 실제로 그렇다.
+  const NOSPACE_CMD =
+    '/usr/lib/jvm/java-17-openjdk-17.0.9.0.9-2.el9.x86_64/bin/java -jar ' +
+    '/opt/verygood/erp/releases/20250903_141207_a9f3c21ab9d4e40f/lib/vgt_web_erp_boot_SNAPSHOT.jar'
 
   function cell(cls, txt) {
     const td = document.createElement('td')
@@ -232,6 +243,7 @@ function probe(cfg) {
         '원격에서 파일을 복사(Ctrl+C)하면 활성화됩니다 — 저장 위치를 골라 내려받습니다'
       )
     )
+    tbody.appendChild(row(9310, NOSPACE_CMD, 'nospace'))
     tbl.appendChild(thead)
     tbl.appendChild(tbody)
     wrap.appendChild(tbl)
@@ -280,7 +292,8 @@ function probe(cfg) {
       B: null,
       C: null,
       D: null,
-      E: null
+      E: null,
+      F: null
     }
 
     // ── A: 긴 cmd 로 셀이 잘린 줄 ──────────────────────────────────────────
@@ -372,6 +385,25 @@ function probe(cfg) {
       out.E = { measured: true, raw, tip: st }
     }
 
+    // ── F: 띄어쓰기 없는 긴 cmd — 글자가 상자를 뚫는가 ──────────────────────
+    // A~E 는 툴팁이 **어디에** 서는지를 봤다. F 는 상자가 **자기 글자를 담고 있는지**를 본다.
+    // 준영님 제보(2026-09-05): "호버 창을 넘어가서 나와. 텍스트가 튀어나와 사이즈에 맞지않게."
+    const nsTr = q('tr[data-tipcheck="nospace"]')
+    if (!nsTr) {
+      out.F = { measured: false, why: '합성 행을 못 찾았다' }
+    } else {
+      const nsTd = nsTr.querySelector('.ccmd')
+      const raw = {
+        td: { scrollW: nsTd.scrollWidth, clientW: nsTd.clientWidth, r: R(nsTd) },
+        cmd: nsTr.getAttribute('title') || nsTr.getAttribute('data-tip'),
+        // 가장 긴 **끊을 수 없는** 덩어리. 이게 380 을 넘어야 이 판정이 증상을 만든다 —
+        // 안 넘으면 F 가 초록이어도 아무것도 증명하지 않는다(그래서 판정문에 같이 적는다).
+        longestRun: Math.max(...(nsTr.getAttribute('title') || '').split(/\s+/).map((s) => s.length))
+      }
+      const st = await hover(nsTd)
+      out.F = { measured: true, raw, tip: st }
+    }
+
     // ── 인구조사(판정 아님) — 이 화면의 진짜 title 을 **전부** 하나씩 얹어 본다 ──────────
     // C·D 는 표본 둘이다. "툴팁 89곳이 죽었나"는 표본으로 답할 수 없어 세어 둔다.
     // 🔴 판정은 앱이 한다 — 여기서 pickCut 을 다시 구현하지 않는다(그러면 제 답을 제가 채점한다).
@@ -408,6 +440,7 @@ function probe(cfg) {
 // 재는 것과 판정하는 것을 갈라 둔다 — 원자료 JSON 만 보고도 이 판정을 다시 밟을 수 있어야 한다.
 const EDGE = 8 // tooltip.ts 의 상수. 소스와 같은 값을 안 쓰고 여기 박아 뒀다(기존 검사와 같은 방식).
 const GAP = 6
+const TIPMAX = 380 // shell.css `.ara-tip` 의 max-width. 여기도 베껴 놓은 값이라 CSS 가 바뀌면 조용히 낡는다.
 
 function judge(r) {
   const v = []
@@ -487,6 +520,27 @@ function judge(r) {
       'E',
       side === 'top' || side === 'bottom',
       `앵커(줄) ${a.w}x${a.h} @${a.x},${a.y} · 툴팁 ${t.w}x${t.h} @${t.x},${t.y} → ${side} · 가로가 줄 왼끝에 섰나 ${Math.abs(t.x - a.x) <= 1 ? '예' : '아니오(' + Math.round(t.x - a.x) + 'px 차)'}`
+    )
+  }
+
+  // F — 띄어쓰기 없는 긴 cmd. **글자가 상자 안에 있나.** A~E 와 보는 것이 다르다(자리가 아니라 담김).
+  if (!r.F || !r.F.measured) push('F', null, '못 쟀다: ' + ((r.F && r.F.why) || 'F 자체가 없다'))
+  else if (!r.F.tip.on)
+    push('F', false, `🔴 안 떴다 — 셀이 안 잘렸으면(scrollW ${r.F.raw.td.scrollW} vs clientW ${r.F.raw.td.clientW}) 합성 cmd 가 짧은 것이다`)
+  else {
+    const t = r.F.tip
+    const over = t.sw - t.cw
+    const fits = over <= 1
+    const capped = t.r.w <= TIPMAX
+    const inView = t.r.x >= 0 && t.r.right <= r.vw
+    push(
+      'F',
+      fits && capped && inView,
+      `상자 ${t.r.w}x${t.r.h} @${t.r.x},${t.r.y} · 글자 scrollW ${t.sw} vs clientW ${t.cw} → ` +
+        (fits ? '안 넘는다' : `🔴 ${over}px 삐져나온다`) +
+        ` · 폭<=${TIPMAX} ${capped ? '만족' : '위반'}` +
+        ` · 창 안 ${inView ? '만족' : `위반(left ${t.r.x} / right ${t.r.right} / vw ${r.vw})`}` +
+        ` · 끊을 수 없는 최장 덩어리 ${r.F.raw.longestRun}자`
     )
   }
 
