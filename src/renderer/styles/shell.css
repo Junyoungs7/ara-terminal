@@ -4993,13 +4993,44 @@ button.sb-seg.upd:hover .val {
 }
 
 /* ---------- 확인·경고 다이얼로그 (window.confirm/alert 대체) ---------- */
-/* 기존 .overlay/.modal/.modal-hd/.modal-ft 를 그대로 쓰고 폭·본문만 바꾼다. */
+/* 기존 .overlay/.modal/.modal-hd/.modal-ft 를 그대로 쓰고 폭만 바꾼다.
+   쓰는 자리는 **둘**이다: Dialog.tsx(확인·경고·입력·비밀번호 전부) · AiBootstrapModal.tsx
+   (`.modal.sm.ai-bootstrap`). 둘 다 머리 / `.dlg-body` / 바닥줄 3행 구조가 똑같다 —
+   그래서 아래 `.dlg-body` 규칙 하나가 양쪽에 함께 걸린다(자리마다 따로 걸지 않는다). */
 .modal.sm {
   width: 460px;
-  grid-template-rows: auto auto auto;
 }
-.modal.sm .modal-body {
-  display: block;
+/* 🔴 #181 — 여기가 두 번 실패한 자리다. 본문 스크롤은 `.modal` 의 `1fr` 트랙과 **한 쌍**이다.
+   고장의 뼈대: `.modal` 은 `max-height: 86vh` + `overflow: hidden` 이다(위 .modal). `max-height`
+   는 높이를 **확정하지 않는다** — 트랙을 잴 때 담을 높이가 미정이라 트랙이 내용 크기로 굳고, 그
+   뒤에 상자만 86vh 로 잘린다. 잘린 뒤 트랙을 다시 재지 않으므로 **넘친 쪽(=바닥줄)이 통째로
+   overflow:hidden 에 먹힌다.** 86vh 는 --ui-scale 을 타지 않는데 내용은 타서(tokens.css) 배율을
+   올리면 확실히 터진다.
+   실측(900×700 · --ui-scale 1.12 · `npx electron tests/modal-clip-probe.cjs`):
+     고치기 전 → 트랙 62.3 / 613.4 / 65.8 = 741px 을 600px 상자에. 바닥줄이 모달 밑변보다 140.5px,
+                 뷰포트보다 91.5px 아래 = **[만들기] 버튼에 못 닿는다**(.modal dy141)
+     고친 뒤   → 트랙 62.3 / 471.9 / 65.8 = 600px. 바닥줄 650 ≤ 밑변 651, 본문이 스크롤된다(dy0)
+   되돌리려는 사람이 밟을 함정 — 아래 넷은 **이미 재 봤고 안 된다**(위 하네스가 한 벌씩 얹어 잰다):
+     ① `.dlg-body { min-height: 0; overflow-y: auto }` 만 (2026-09 시도①):
+        적용은 됐는데(computed 가 min-height:0 · overflow-y:auto) dy141 그대로. `.dlg-body` 는
+        **애초에 넘치지 않는다**(client 613 = scroll 613) — 옛 `auto` 트랙이 달라는 높이를 다 줬으니까.
+        넘치는 상자는 `.dlg-body` 가 아니라 **`.modal` 자신**이다. 안 넘치는 요소에 스크롤을 걸면
+        아무 일도 안 일어난다. 누가 넘치는지 재기 전에 스크롤을 걸지 마라.
+     ② `grid-template-rows: auto minmax(0, auto) auto` (2026-09 시도②): 트랙이 613.359px 로
+        **한 비트도** 안 움직였다. 트랙의 *최대값*으로 쓴 `auto` 는 max-content 라
+        `minmax(0, auto)` = `auto` 다. 최소값만 0 으로 내려도 최대값이 내용 크기면 그 크기를 고른다.
+     ③ 트랙만 `1fr`(이 규칙 없이): 바닥줄에는 닿지만 본문 아래 123px 이 스크롤 없이 잘린다 —
+        마지막 입력칸을 못 본다. `.modal` dy 도 58 로 남는다.
+     ④ 이 규칙만(트랙이 `auto` 인 채로): 역시 dy141 그대로 — ①과 같은 이유다.
+   왜 `1fr` 이 이 규칙 **덕분에** 줄어드나: `1fr` = `minmax(auto, 1fr)` 이고 그 `auto` 최소값은
+   자식의 내용 기반 최소 크기다. 스크롤 컨테이너가 되면 그 값이 0 이 되어 트랙이 비로소 줄어든다.
+   그래서 `.modal.sm` 의 옛 `grid-template-rows: auto auto auto` 재정의를 **지웠다** — `.modal` 의
+   `auto 1fr auto` 를 그대로 쓴다(재정의를 지우기만 해도 안 된다: 실측 ③·④가 그 얘기다).
+   같이 지운 것: `.modal.sm .modal-body { display: block }` — `.modal-body` 를 그리는 곳은
+   ConnectionModal.tsx 하나뿐이고 거기엔 `.sm` 이 없다. **한 번도 맞은 적 없는 선택자**인데
+   Shell.tsx 의 주석이 그걸 해법으로 가리키고 있어서 다음 사람을 엉뚱한 클래스로 보냈다. */
+.modal.sm .dlg-body {
+  overflow-y: auto;
 }
 .modal.danger .mh-ico {
   background: var(--err-tint);

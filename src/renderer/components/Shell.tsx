@@ -64,14 +64,23 @@ import { t } from '../i18n'
 /**
  * 종료 확인에 보여 줄 세션 목록. **줄 수를 자른다.**
  *
- * 🔴 왜 자르는가: `.modal` 은 `max-height: 86vh` 에 `overflow: hidden` 이고 `.modal.sm` 의 본문에는
- * 스크롤이 없다(shell.css). 목록이 그 높이를 넘기면 **넘친 쪽이 잘리고 [종료] 버튼이 화면 밖으로
- * 밀린다** — 세션이 많을수록 확실히 일어나고, 그러면 아라를 끌 수가 없다(#181 이 같은 모양이다).
- * 목록을 짧게 두는 것은 취향이 아니라 **닫을 수 있게 하는 조건**이다.
+ * 왜 잘랐는가: `.modal` 은 `max-height: 86vh` 에 `overflow: hidden` 인데 `.modal.sm` 의 본문에
+ * 스크롤이 없었다. 목록이 그 높이를 넘기면 **넘친 쪽이 잘리고 [종료] 버튼이 화면 밖으로 밀려**
+ * 아라를 끌 수가 없었다. 목록을 짧게 두는 것은 취향이 아니라 **닫을 수 있게 하는 조건**이었다.
  *
  * 12줄인 근거: 900px 창의 86vh 는 774px, 머리·본문·바닥이 약 200px 을 먹고 한 줄이 약 24px 이라
- * 20줄쯤 들어간다. 노트북(600px)에서는 13줄이라 그 아래에 맞췄다. 이 값을 올리려면 shell.css
- * 쪽에 `.modal.sm .modal-body { overflow-y: auto }` 를 먼저 넣어야 한다 — 순서를 뒤집지 마라.
+ * 20줄쯤 들어간다. 노트북(600px)에서는 13줄이라 그 아래에 맞췄다.
+ *
+ * ✅ 선행은 끝났다(#181, 2026-09-05): shell.css 의 `.modal.sm .dlg-body { overflow-y: auto }` +
+ * `.modal` 의 `1fr` 트랙으로 본문이 스크롤된다. 실측(`npx electron tests/modal-clip-probe.cjs`
+ * 2부 · 900×700 · 배율 1.12 · 상세 30줄): 고치기 전에는 바닥줄이 모달 밑변보다 557.7px 아래로
+ * 밀려 **[종료]에 못 닿았고**, 고친 뒤에는 본문이 스크롤되고 바닥줄이 안에 들어온다.
+ * 그러니 이 상한은 이제 **닫을 수 있게 하는 조건이 아니라 읽기 좋기 위한 값**이다.
+ * 올려도 되지만 올리는 건 별건이다 — 올릴 때 저 하네스로 다시 재라.
+ * ⚠️ 옛 주석은 선행 조건을 `.modal.sm .modal-body` 라고 적어 뒀는데 **그런 요소는 없다**
+ * (`.modal-body` 는 ConnectionModal.tsx 뿐이고 거기엔 `.sm` 이 없다). 그 이름을 믿고 CSS 를
+ * 찾으면 아무것도 안 나온다 — 확인 다이얼로그의 본문 클래스는 `.dlg-body` 다. #181 이 왜 두 번
+ * 실패했는지는 shell.css 의 `.modal.sm .dlg-body` 주석에 실측으로 적어 뒀다.
  */
 const QUIT_LIST_MAX = 12
 function quitDetail(list: { serverKey: string; title: string }[]): { label: string; value: string }[] {
