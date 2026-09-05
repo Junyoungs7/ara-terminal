@@ -299,8 +299,12 @@ export class MainSessionManager implements ISessionManager {
     return true
   }
 
-  /** 그 창의 세션들 — 창이 닫힐 때 본창으로 되돌리려면 목록이 필요하다. */
-  sessionsOfWindow(winId: string): string[] {
+  /**
+   * 그 창의 세션들 — 창이 닫힐 때 본창으로 되돌리려면 목록이 필요하다.
+   * `undefined` 를 주면 **본창의 세션**이다(winIdOf·moveToWindow 와 같은 규칙) — 본창을 닫을 때
+   * 물어볼지 정하려면 그 수를 세야 한다(index.ts 의 close 핸들러).
+   */
+  sessionsOfWindow(winId: string | undefined): string[] {
     return [...this.handles.values()].filter((h) => h.meta.winId === winId).map((h) => h.meta.id)
   }
 

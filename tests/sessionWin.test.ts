@@ -1,7 +1,7 @@
 // F32 세션 창 해시 파싱 — 잘못 읽으면 본창이 두 번 뜨거나(같은 세션을 두 창이 그린다) 빈 창이 남는다.
 // 창을 여는 쪽(main)과 읽는 쪽(renderer)이 문자열 하나로 맞추는 자리라 순수 함수로 떼어 검증한다.
 import { describe, it, expect } from 'vitest'
-import { parseSessionWinHash, sessionWinHash } from '../src/shared/sessionWin'
+import { MAIN_WIN_ID, parseSessionWinHash, sessionWinHash, shouldAskBeforeQuit } from '../src/shared/sessionWin'
 import { usableBounds } from '../src/main/windows/SessionWindows'
 import { shouldShowBootSplash } from '../src/renderer/components/BootSplash'
 import { mergeMainSnapshot, nextActiveAfter } from '../src/renderer/store/sessions'
@@ -28,6 +28,49 @@ describe('세션 창 해시', () => {
     for (const id of ['w1abc', 'w 1', 'w&x=1', '한글창']) {
       expect(parseSessionWinHash(sessionWinHash(id))).toEqual({ winId: id })
     }
+  })
+})
+
+// ── 아라를 끌 때 물어본다 (2026-09-05) ───────────────────────────────────────
+//
+// 준영님: *"아라 끌때 세션이 떠있으면 종료할꺼냐고 물어보고 확인 누르면 닫자."*
+//
+// 🔴 여기서 틀리면 **앱이 영영 안 꺼진다.** 막는 코드라서 그렇다: `true` 가 잘못 나오면 main 이
+// close 를 preventDefault 하고 답을 기다리는데, 답할 사람이 없거나 그 답이 또 close 를 부르면
+// 교착이다. 그래서 판정만 순수 함수로 떼어 창 없이 검사한다(실기동은 준영님 PC 를 뺏는다).
+//
+// 반대 방향의 실패는 등급이 다르다 — 안 물어보면 불편이고, 안 닫히면 사고다.
+describe('아라 종료 확인', () => {
+  const live = { sessionCount: 2, quitting: false, rendererAlive: true }
+
+  it('세션이 있으면 묻는다', () => {
+    expect(shouldAskBeforeQuit(live)).toBe(true)
+  })
+
+  it('세션이 0개면 안 묻는다 — 빈 창 닫는 데 확인은 방해다', () => {
+    expect(shouldAskBeforeQuit({ ...live, sessionCount: 0 })).toBe(false)
+  })
+
+  it('★ 종료가 진행 중이면 안 묻는다 — 교착 가드. 이게 false 면 [종료]를 눌러도 안 꺼진다', () => {
+    // app.quit() → before-quit(여기서 quitting=true) → **그다음** 각 창의 close 가 온다.
+    // 그 close 를 또 막으면 확인 → app.quit() → 또 막힘의 무한 루프다.
+    expect(shouldAskBeforeQuit({ ...live, quitting: true })).toBe(false)
+  })
+
+  it('★ 이미 확인을 받았으면 안 묻는다 — 확인이 app.quit() 을 부르고 그것이 quitting 을 켠다', () => {
+    // "한 번만 묻는다"를 지키는 것이 별도 플래그가 아니라 위와 **같은** quitting 이다.
+    // 자동 업데이트 재시작(quitAndInstall → app.quit())이 덮이는 것도 같은 이유다.
+    expect(shouldAskBeforeQuit({ ...live, quitting: true, sessionCount: 5 })).toBe(false)
+  })
+
+  it('★ 렌더러가 죽었으면 안 묻는다 — 답할 사람이 없는데 막으면 못 닫는 창이 된다', () => {
+    expect(shouldAskBeforeQuit({ ...live, rendererAlive: false })).toBe(false)
+  })
+
+  it('★ 본창 센티널은 떼어낸 창의 id 와 절대 안 겹친다 — 겹치면 엉뚱한 창을 닫는다', () => {
+    // 떼어낸 창의 id 는 registerSessionWindowIpc 의 newWinId(): 'w' + base36 — 빌 수 없다.
+    expect(MAIN_WIN_ID).toBe('')
+    expect(parseSessionWinHash(sessionWinHash(MAIN_WIN_ID))).toBeNull() // 빈 winId = 본창
   })
 })
 

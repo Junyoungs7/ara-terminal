@@ -38,6 +38,7 @@ import { benchRows as buildBenchRows, hookRows, useAiWorkbench } from '../store/
 import { useAiQuietWatch } from '../store/aiQuietWatch'
 import { childrenOf, defaultTitle, type AiSessionState } from '@shared/aiSession'
 import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
+import { MAIN_WIN_ID } from '@shared/sessionWin'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, useGroupList } from '../store/groups'
 import { SHOWN_ACTIVITIES, type ActivityId } from '../store/activityBar'
@@ -59,6 +60,27 @@ import {
   type SessionType
 } from '@shared/types'
 import { t } from '../i18n'
+
+/**
+ * 종료 확인에 보여 줄 세션 목록. **줄 수를 자른다.**
+ *
+ * 🔴 왜 자르는가: `.modal` 은 `max-height: 86vh` 에 `overflow: hidden` 이고 `.modal.sm` 의 본문에는
+ * 스크롤이 없다(shell.css). 목록이 그 높이를 넘기면 **넘친 쪽이 잘리고 [종료] 버튼이 화면 밖으로
+ * 밀린다** — 세션이 많을수록 확실히 일어나고, 그러면 아라를 끌 수가 없다(#181 이 같은 모양이다).
+ * 목록을 짧게 두는 것은 취향이 아니라 **닫을 수 있게 하는 조건**이다.
+ *
+ * 12줄인 근거: 900px 창의 86vh 는 774px, 머리·본문·바닥이 약 200px 을 먹고 한 줄이 약 24px 이라
+ * 20줄쯤 들어간다. 노트북(600px)에서는 13줄이라 그 아래에 맞췄다. 이 값을 올리려면 shell.css
+ * 쪽에 `.modal.sm .modal-body { overflow-y: auto }` 를 먼저 넣어야 한다 — 순서를 뒤집지 마라.
+ */
+const QUIT_LIST_MAX = 12
+function quitDetail(list: { serverKey: string; title: string }[]): { label: string; value: string }[] {
+  const rows = list.slice(0, QUIT_LIST_MAX).map((s) => ({ label: s.serverKey || t('app.quit.local'), value: s.title }))
+  const rest = list.length - rows.length
+  // 잘랐다는 사실을 숨기지 않는다 — 안 보이는 세션도 함께 죽는다.
+  if (rest > 0) rows.push({ label: '', value: t('app.quit.more').replace('{n}', String(rest)) })
+  return rows
+}
 
 // 3행 그리드 앱 셸 (design-system §4.1): 타이틀바 / (사이드바+메인) / 상태바.
 export function Shell() {
@@ -199,6 +221,52 @@ export function Shell() {
   const updateSt = useUpdateState()
 
   const sessions = useSessions()
+
+  /**
+   * 아라를 끄려 하면 **살아 있는 세션을 이름으로 보여 주고 확인을 받는다**(2026-09-05 준영님:
+   * "아라 끌때 세션이 떠있으면 종료할꺼냐고 물어보고 확인 누르면 닫자").
+   *
+   * 배선은 떼어낸 창의 것과 같다(SessionWindow.tsx:74 가 정본): main 이 close 를 막고
+   * `win:closeAsk` 를 보내고, 여기서 물어 `confirmClose(MAIN_WIN_ID, …)` 로 답한다.
+   * 목록을 이름으로 나열하는 이유도 같다 — "세션 3개"로는 그게 지금 배포 돌리는 창인지 알 수 없다.
+   * 취소는 아무 답도 보내지 않는다: main 이 이미 닫기를 막아 뒀으므로 앱이 그대로 열려 있다.
+   *
+   * [본창으로 보내기]는 **여기 없다** — 갈 본창이 없다. 그래서 kill 은 늘 true 다.
+   *
+   * 🔴 **묻지 못하겠으면 닫는다.** ask 가 던지면(다이얼로그 슬롯이 무엇에 밀려나든) 확인을
+   * 받은 것으로 치고 종료한다 — 여기서 조용히 돌아서면 ✕ 를 눌러도 안 꺼지는 앱이 된다.
+   * main 은 이미 close 를 막아 뒀으니 그 실패를 되돌려 줄 사람이 이 자리밖에 없다.
+   */
+  const listRef = useRef(sessions.sessions)
+  listRef.current = sessions.sessions
+  // 물음이 떠 있는 동안 또 ✕ 를 눌러도 두 번 묻지 않는다(main 은 그 close 도 막아 뒀다 —
+  // 화면의 물음에 답하면 그대로 닫힌다). 취소하면 다시 false 라 다음 ✕ 는 또 묻는다.
+  const askingQuit = useRef(false)
+  useEffect(() => {
+    return window.ev?.window.onCloseAsk?.(() => {
+      if (askingQuit.current) return
+      askingQuit.current = true
+      void (async () => {
+        // 🔴 기본값이 "종료"다. 아래 물음이 던지면 이 값이 그대로 남아 앱이 닫힌다 —
+        // catch 로 받는 이유가 그것이다(finally 로 쓰면 예외가 confirmClose 를 건너뛴다).
+        let confirmed = true
+        try {
+          confirmed =
+            (await ask({
+              title: t('app.quit.title'),
+              message: t('app.quit.msg'),
+              detail: quitDetail(listRef.current),
+              tone: 'danger',
+              confirmLabel: t('app.quit.confirm')
+            })) === 'confirm'
+        } catch {
+          /* 못 물었다 → 위 기본값대로 종료한다 */
+        }
+        askingQuit.current = false
+        if (confirmed) await window.ev?.window.confirmClose(MAIN_WIN_ID, true)
+      })()
+    })
+  }, [ask])
 
   // 2026-08-24 준영님: "세션창 생기면 자동으로 하단바가 열리고 하단에 딱 붙어있게."
   // **첫 세션이 생길 때 한 번만** 연다(0개 → 1개). 세션을 열 때마다 열면, 방금 닫은 사람 앞에서

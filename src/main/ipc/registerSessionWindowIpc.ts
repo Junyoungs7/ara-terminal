@@ -9,7 +9,12 @@
 // 그 창의 세션 목록을 보여 주고: 확인하면 종료, [본창으로 보내기]면 되돌리기, 취소면 그대로.
 // 묻기 전의 기본값은 되돌리기였다 — 창 닫기는 실수로도 일어나고 그때 원격 작업이 통째로 끊기면
 // 되돌릴 방법이 없어서다. 그 탈출구는 지금도 버튼으로 남아 있다.
-import { BrowserWindow } from 'electron'
+//
+// 2026-09-05: **본창도 같은 채널을 탄다**(win:closeAsk → win:closeConfirm). 막고 물어보는 쪽은
+// index.ts 의 close 핸들러이고, 답을 받는 쪽은 여기 win:closeConfirm 의 MAIN_WIN_ID 분기다 —
+// 채널을 새로 파지 않고 창 식별만 갈랐다.
+import { app, BrowserWindow } from 'electron'
+import { MAIN_WIN_ID } from '@shared/sessionWin'
 import { handle } from './handle'
 import { pushSend } from '../util/windowPush'
 import { araWindowAt, forceCloseSessionWindow, openSessionWindow, sessionWindowOf } from '../windows/SessionWindows'
@@ -109,6 +114,23 @@ export function registerSessionWindowIpc(
    * kill 은 세션을 죽인다: 그 뒤 sessionsOfWindow 가 비므로 'closed' 의 reclaim 은 할 일이 없다.
    */
   handle('win:closeConfirm', ({ winId, kill }) => {
+    /**
+     * 본창의 답(2026-09-05 "아라 끌때 세션이 떠있으면 물어보고 확인 누르면 닫자").
+     * 물음이 "아라를 **종료**할까요?"였으므로 여기서 창만 닫으면 거짓말이 된다 — 떼어낸 창이
+     * 하나라도 떠 있으면 window-all-closed 가 안 와서 앱이 그대로 살고, 본창이 쥐던 세션은
+     * 그릴 창도 없이 main 에 남는다. 그래서 **앱을 끝낸다.**
+     *
+     * 세션 정리도 `kill` 도 여기서 하지 않는다 — `before-quit` 의 destroyAll 이 그 일을 이미 하고,
+     * 그 순서는 사고를 겪고 나온 것이라 건드리지 않는다(index.ts). 본창 물음에는 [본창으로
+     * 보내기]가 없어(갈 본창이 없다) kill 은 늘 true 다.
+     *
+     * 🔴 이 app.quit() 이 `before-quit` 을 부르고, 그것이 quitting 플래그를 켠다 — 그래서 곧이어
+     * 도착하는 본창 close 는 **다시 묻지 않는다**(index.ts 의 그 플래그가 없으면 여기서 교착).
+     */
+    if (winId === MAIN_WIN_ID) {
+      app.quit()
+      return { ok: true as const }
+    }
     if (kill) for (const id of sessions.sessionsOfWindow(winId)) sessions.destroy(id)
     else reclaim(winId)
     forceCloseSessionWindow(winId)

@@ -198,11 +198,15 @@ export type InvokeContract = {
    */
   'win:moveTo': { req: { sessionId: string; winId?: string }; res: { ok: boolean } }
   /**
-   * 떼어낸 창을 닫을 때의 답(2026-08-22 준영님 결정 "물어보고 세션 종료").
+   * 창을 닫을 때의 답(2026-08-22 준영님 결정 "물어보고 세션 종료").
    * main 이 창 닫기를 **막고** `win:closeAsk` 를 보내면, 그 창이 목록을 보여 주고 여기로 답한다.
    *   kill=true  → 이 창의 세션을 종료하고 닫는다
    *   kill=false → 본창으로 되돌리고 닫는다(실수로 닫았을 때의 탈출구)
    * 취소는 아무것도 부르지 않는다 — 창은 그대로 열려 있다.
+   *
+   * 2026-09-05: winId 가 `MAIN_WIN_ID`(빈 문자열, sessionWin.ts) 면 **본창의 답**이다 — 그때는
+   * 앱을 끝낸다(kill 은 늘 true. 본창에는 [본창으로 보내기]가 없다). 채널을 새로 파지 않고
+   * 창 식별만 그 값으로 갈랐다.
    */
   'win:closeConfirm': { req: { winId: string; kill: boolean }; res: { ok: true } }
   /**
@@ -601,9 +605,16 @@ export type EvApi = {
      * 떼어낸 창이 닫힐 때 남은 세션을 본창으로 되돌리는 일은 main 이 알아서 한다.
      */
     moveSession(sessionId: string, winId?: string): Promise<{ ok: boolean }>
-    /** 떼어낸 창의 닫기를 main 이 막고 물어 온다 — 그 창만 구독한다(본창에는 오지 않는다). */
+    /**
+     * 이 창의 닫기를 main 이 막고 물어 온다. **본창도 받는다**(2026-09-05 — 세션이 살아 있으면
+     * "아라를 종료할까요?"). 창마다 자기 것만 온다: 세션 창은 SessionWindow, 본창은 Shell.
+     */
     onCloseAsk(cb: () => void): () => void
-    /** 물어본 것에 답한다(kill=true 종료 / false 본창으로). 취소면 부르지 않는다. */
+    /**
+     * 물어본 것에 답한다(kill=true 종료 / false 본창으로). 취소면 부르지 않는다.
+     * 본창이 답할 때는 winId 에 `MAIN_WIN_ID`(빈 문자열, @shared/sessionWin) 를 준다 —
+     * 그때는 앱이 끝난다(kill 은 늘 true).
+     */
     confirmClose(winId: string, kill: boolean): Promise<{ ok: true }>
     /** 세션 소유 창이 바뀌었다 — 양쪽 창이 자기 탭바를 다시 그린다. */
     onSessionMoved(cb: (e: { sessionId: string; winId?: string }) => void): () => void

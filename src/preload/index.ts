@@ -81,7 +81,7 @@ const api: EvApi = {
       ipcRenderer.on('session:moved', listener)
       return () => ipcRenderer.removeListener('session:moved', listener)
     },
-    /** 떼어낸 창의 닫기 확인 — main 이 close 를 막고 물어 온다. */
+    /** 닫기 확인 — main 이 close 를 막고 물어 온다(떼어낸 창 · 2026-09-05 부터 본창도). */
     onCloseAsk: (cb: () => void) => {
       const listener = () => cb()
       ipcRenderer.on('win:closeAsk', listener)

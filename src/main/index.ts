@@ -46,6 +46,7 @@ import type { ForwardService } from './forward/PortForward'
 import type { RemoteConsoleService } from './remote/RemoteConsoleService'
 import { aiKeyVaultId, type AiPrefs, type AraSession } from './ai/AraSession'
 import { buildPersona, callNameOf } from '@shared/araPersona'
+import { shouldAskBeforeQuit } from '@shared/sessionWin'
 
 /**
  * 모델이 준 인자(JSON 문자열)를 게이트에 넘기고 답을 글로 되돌린다(2026-08-26).
@@ -91,6 +92,25 @@ let agent: AgentRuntime | null = null
 let araChat: AraRuntime | null = null
 let mainWindow: BrowserWindow | null = null
 
+/**
+ * 🔴 **종료가 이미 시작됐다** — 이 뒤로는 본창 닫기를 절대 막지 않는다(아래 createWindow 의 close).
+ *
+ * **이 플래그를 지우면 아라가 안 꺼진다.** 순서가 그렇게 돼 있다: `app.quit()` 은 `before-quit` 을
+ * 먼저 부르고 **그다음** 각 창을 닫는데, 그때 close 핸들러가 또 "종료할까요?"로 막으면
+ * 확인 → app.quit() → 또 막힘의 무한 교착이 된다. 사용자에게는 "종료를 눌러도 안 꺼진다"로 보인다.
+ *
+ * 덮는 경로(앞 셋은 전부 `before-quit` 을 지난다): 창 ✕ → window-all-closed → app.quit() ·
+ * 닫기 확인의 [종료](registerSessionWindowIpc 의 win:closeConfirm) ·
+ * **자동 업데이트 재시작**(electron-updater 의 quitAndInstall 이 `before-quit-for-update` 를 쏘고
+ * 곧바로 `app.quit()` 을 부른다 — node_modules/electron-updater/out/BaseUpdater.js:13-23) ·
+ * 윈도우 로그오프(`session-end` — 그것만 before-quit 을 안 지나서 창에 따로 걸어 둔다).
+ *
+ * 아래 ptyExitsDrained 와 같은 성격이지만 **막는 것이 다르다**: 그쪽은 정리를 두 번 하지 않게,
+ * 이쪽은 확인을 두 번 묻지 않게. 한쪽으로 합치지 마라 — ptyExitsDrained 는 배수가 끝난 뒤에야
+ * 켜지므로 그 사이에 오는 close 를 못 덮는다.
+ */
+let quitting = false
+
 function createWindow(): void {
   // F6: 저장된 창 크기·위치로 복원. 없으면 기본 크기(최초 실행).
   const bounds = store?.get().ui.window
@@ -114,6 +134,48 @@ function createWindow(): void {
   mainWindow = win
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
+  })
+
+  /**
+   * 윈도우 로그오프·재시작·종료(WM_ENDSESSION). **여기서는 묻지 않는다** — 사람은 이미 자리를
+   * 떠나기로 했고, 그때 뜬 모달은 아무도 못 보는 채로 OS 종료를 붙잡는다("A.R.A 이(가) 종료를
+   * 막고 있습니다"). `before-quit` 을 안 지나고 창 close 로 곧장 오는 길이라 플래그를 여기서도
+   * 켠다 — 이 이벤트는 WM_ENDSESSION 에서 오므로 그 close 보다 먼저 도착한다.
+   * (app 이 아니라 **BrowserWindow** 의 이벤트다 — app 에 걸면 타입부터 안 맞는다.)
+   */
+  win.on('session-end', () => {
+    quitting = true
+  })
+
+  /**
+   * 세션이 살아 있으면 **닫기 전에 물어본다**(2026-09-05 준영님: "아라 끌때 세션이 떠있으면
+   * 종료할꺼냐고 물어보고 확인 누르면 닫자").
+   *
+   * 떼어낸 창이 쓰던 길을 그대로 탄다 — IPC 를 새로 파지 않는다: 여기서 닫기를 막고
+   * `win:closeAsk` 를 보내면 렌더러(Shell.tsx)가 세션 목록을 보여 주고 `win:closeConfirm` 으로
+   * 답한다(registerSessionWindowIpc). 창 식별만 MAIN_WIN_ID 로 갈린다.
+   * 세는 것은 **본창의 세션만**이다(winId === undefined) — 떼어낸 창의 세션은 이 닫기로 안 죽는다.
+   *
+   * 🔴 **모르면 막지 않는다.** 아래 `catch` 와 `shouldAskBeforeQuit` 의 기본값이 그 규율이다:
+   * 세지 못하든 렌더러가 죽었든 무엇이 던지든 그냥 닫는다. 안 물어보는 실패는 불편이지만
+   * 안 닫히는 실패는 앱이 영영 안 꺼지는 사고다.
+   */
+  win.on('close', (e) => {
+    let ask = false
+    try {
+      ask = shouldAskBeforeQuit({
+        sessionCount: sessions?.sessionsOfWindow(undefined).length ?? 0,
+        quitting, // ← 교착 가드. 이 줄을 지우면 [종료]를 눌러도 앱이 안 꺼진다(선언부 주석)
+        // 답할 사람이 있는가. SessionWindows.ts 의 close 핸들러와 같은 확인이다 —
+        // isDestroyed 접근 자체가 던질 수 있어 통째로 try 안에 둔다(FIX-destroyed 패턴).
+        rendererAlive: !win.webContents.isDestroyed() && !win.webContents.isCrashed()
+      })
+    } catch {
+      return // 판단이 안 선다 → 막지 않는다
+    }
+    if (!ask) return
+    e.preventDefault()
+    pushSend(win.webContents, 'win:closeAsk', {})
   })
 
   // F6: 창 크기·위치 변경을 스냅샷에 반영(주기 flush 경로 재사용 — 별도 저장 경로 없음).
@@ -467,6 +529,10 @@ const quitStep = (name: string, fn: () => void): void => {
 
 app.on('before-quit', (e) => {
   exitTrace(ptyExitsDrained ? 'before-quit(2nd)' : 'before-quit(1st)')
+  // 🔴 **맨 앞이어야 한다.** 이 줄부터 본창 close 는 확인을 묻지 않는다 — 아래 정리가 끝나고
+  // 창이 닫히기 시작할 때 또 물으면 교착이다(선언부 주석). 아래 early return 보다도 앞이다:
+  // 2차 진입이라고 건너뛰면, 1차에서 던져 여기 다시 온 경우에 플래그가 안 켜진 채로 남는다.
+  quitting = true
   if (ptyExitsDrained) return
   // **정리보다 먼저 종료를 미룬다.** 예전엔 이 줄이 맨 끝이었다 — 그래서 정리 도중 무엇이든 던지면
   // 여기 닿지 못하고 앱이 그 자리에서 죽었다(위 quitStep 주석). 미루기를 앞세우고 정리를 전부
