@@ -38,29 +38,74 @@ export function splitTip(raw: string): TipParts {
 }
 
 export type Rect = { left: number; top: number; right: number; bottom: number; width: number; height: number }
-export type Placed = { x: number; y: number; side: 'left' | 'right' }
+export type Placed = { x: number; y: number; side: 'left' | 'right' | 'top' | 'bottom' }
 
 /**
  * 툴팁 자리 — **요소 기준**이다(커서 기준이 아니라). 커서에 가리지 않는 이유가 이것뿐이다.
  *
- * 좌우로 붙인다(2026-08-10 준영님 요청). 아래로 붙이면 세로로 늘어선 아이콘 바에서 **바로 밑
+ * 좌우를 먼저 본다(2026-08-10 준영님 요청). 아래로 붙이면 세로로 늘어선 아이콘 바에서 **바로 밑
  * 아이콘을 덮는다** — 그러면 다음 아이콘으로 마우스를 옮기는 길이 툴팁에 막힌 것처럼 보인다.
- * 좌우는 그 줄에 아무것도 없으니 무엇도 가리지 않는다.
+ * 좌우는 그 줄에 아무것도 없으니 무엇도 가리지 않는다. 이 우선순위를 뒤집지 마라.
  *
- * 고르는 규칙: 오른쪽에 들어가면 오른쪽, 아니면 왼쪽. 양쪽 다 좁으면 **넓은 쪽**에 붙이고 화면
- * 안으로 민다(어느 쪽이든 잘리느니 덜 잘리는 쪽이 낫다). 세로는 요소 가운데에 맞추고 화면 안으로 민다.
+ * 위/아래는 **좌우가 둘 다 안 되는 앵커**만을 위한 폴백이다(2026-09-05 준영님 제보). 표 한 줄처럼
+ * 패널 폭을 통째로 쓰는 앵커는 좌우 여유가 둘 다 tipW 에 못 미치는데, 예전엔 그래도 좌우 중 넓은
+ * 쪽에 붙이고 화면 안으로 밀었다 — 밀린 끝이 EDGE(8) 라 툴팁이 **화면 왼쪽 끝**에 가서 붙었다.
+ * 앵커에서 멀찍이 떨어진 곳에 뜨니 어느 줄의 설명인지 알 수 없었다. 아이콘 바는 앵커가 좁아
+ * 이 가지에 애초에 안 들어온다(회귀 가드가 tests/tooltip.test.ts 에 있다).
+ *
+ * 세로는 좌우로 붙일 땐 요소 가운데, 위/아래로 붙일 땐 요소 바로 바깥. 둘 다 화면 안으로 민다.
  */
 export function placeTip(anchor: Rect, tipW: number, tipH: number, viewW: number, viewH: number): Placed {
+  const clampX = (v: number): number => Math.min(Math.max(v, EDGE), Math.max(EDGE, viewW - tipW - EDGE))
+  const clampY = (v: number): number => Math.min(Math.max(v, EDGE), Math.max(EDGE, viewH - tipH - EDGE))
+
   const roomRight = viewW - anchor.right - GAP - EDGE
   const roomLeft = anchor.left - GAP - EDGE
-  const side: 'left' | 'right' = roomRight >= tipW || roomRight >= roomLeft ? 'right' : 'left'
 
+  if (roomRight < tipW && roomLeft < tipW) {
+    // 위를 먼저 보는 이유: 아래는 다음 줄(표에서는 바로 아래 행)을 덮는데, 마우스가 그리로 내려가는
+    // 중이라면 방금 뜬 툴팁이 길을 막는다. 위가 모자랄 때만 아래로 간다.
+    const side: 'top' | 'bottom' = anchor.top - GAP - EDGE >= tipH ? 'top' : 'bottom'
+    const rawY = side === 'top' ? anchor.top - GAP - tipH : anchor.bottom + GAP
+    // 가로는 앵커 왼쪽 끝에 맞춘다 — 넓은 앵커의 가운데에 맞추면 잘린 글자의 시작점에서 멀어진다.
+    return { x: clampX(anchor.left), y: clampY(rawY), side }
+  }
+
+  // 여기 왔다는 건 한쪽은 tipW 가 들어간다는 뜻이다 — 그러니 오른쪽이 안 되면 왼쪽은 반드시 된다.
+  const side: 'left' | 'right' = roomRight >= tipW ? 'right' : 'left'
   const rawX = side === 'right' ? anchor.right + GAP : anchor.left - GAP - tipW
-  const x = Math.min(Math.max(rawX, EDGE), Math.max(EDGE, viewW - tipW - EDGE))
+  return { x: clampX(rawX), y: clampY(anchor.top + anchor.height / 2 - tipH / 2), side }
+}
 
-  const centered = anchor.top + anchor.height / 2 - tipH / 2
-  const y = Math.min(Math.max(centered, EDGE), Math.max(EDGE, viewH - tipH - EDGE))
-  return { x, y, side }
+export type Measured = { text: string; scrollW: number; clientW: number }
+export type Pick =
+  | { kind: 'anchor'; index: number }
+  | { kind: 'skip' }
+  | { kind: 'asIs' }
+
+/**
+ * 이 `title` 을 띄울 것인가, 띄운다면 무엇에 붙일 것인가.
+ *
+ * 왜 필요한가(2026-09-05 준영님 제보): 화면에 다 보이는 글자에까지 툴팁이 떴다. `title` 이 그리는
+ * 글자와 같은 말이면 툴팁은 아무것도 더 알려 주지 않는다 — **잘렸을 때만** 값이 있다.
+ *
+ * 왜 DOM 을 안 받나: vitest 환경이 `node` 다(vitest.config.ts). 판단만 떼어 놓으면 jsdom 없이
+ * 검사할 수 있다. **여기에 Element 를 들이지 마라** — 들이는 순간 이 규칙은 검사 밖으로 나간다.
+ *
+ * 🔴 `asIs` 가 이 함수의 존재 이유다. `title` 대부분(89곳)은 아이콘 버튼의 이름이나 설명문이라
+ * 화면에 같은 글자가 아예 없다. 그것까지 `skip` 으로 묶으면 툴팁 기능을 통째로 죽인다.
+ *
+ * `+1` 여유는 서브픽셀 반올림 때문이다. 0 으로 두면 안 잘린 셀이 잘렸다고 나온다.
+ */
+export function pickCut(tip: string, cands: Measured[]): Pick {
+  const want = tip.trim()
+  let sawSame = false
+  for (let i = 0; i < cands.length; i++) {
+    if (cands[i].text.trim() !== want) continue
+    sawSame = true
+    if (cands[i].scrollW > cands[i].clientW + 1) return { kind: 'anchor', index: i }
+  }
+  return sawSame ? { kind: 'skip' } : { kind: 'asIs' }
 }
 
 let host: HTMLDivElement | null = null
@@ -87,6 +132,22 @@ function hide(): void {
 }
 
 function show(el: Element, raw: string): void {
+  // 🔴 재는 시점이 여기인 게 중요하다 — 450ms 지연이 **끝난 뒤**다. onOver 에서 재면 표 위를
+  // 마우스로 훑을 때마다 scrollWidth 가 강제 리플로를 부른다(행마다 한 번씩). 지금 그 소음이
+  // 없는 이유가 이 자리다. 여기로 내려온 요소는 사람이 450ms 머문 하나뿐이다.
+  //
+  // 자손까지 보는 이유: `title` 은 줄 전체(<tr>)에 붙는데 글자를 그리고 잘라 내는 건 그 안의
+  // 셀(<td>)이다(ProcessTable.tsx). 형제 표들도 같은 모양이라 el 만 재면 늘 "안 잘렸다"가 나온다.
+  const cands = [el, ...Array.from(el.querySelectorAll('*'))]
+  const pick = pickCut(
+    raw,
+    cands.map((c) => ({ text: c.textContent ?? '', scrollW: c.scrollWidth, clientW: c.clientWidth }))
+  )
+  // 다 보이는 글자다. host 를 안 켠다 — `title` 은 이미 data-tip 으로 옮겨졌으니 OS 툴팁도 안 뜬다.
+  if (pick.kind === 'skip') return
+  // 잘린 셀을 찾았으면 **그 셀**이 앵커다. 줄 전체를 앵커로 두면 폭이 패널만 해서 좌우에 자리가 없다.
+  const at = pick.kind === 'anchor' ? cands[pick.index] : el
+
   const h = ensureHost()
   const { text, key } = splitTip(raw)
   h.textContent = ''
@@ -101,7 +162,7 @@ function show(el: Element, raw: string): void {
   h.style.left = '-9999px'
   h.style.top = '0px'
   h.classList.add('on')
-  const r = el.getBoundingClientRect()
+  const r = at.getBoundingClientRect()
   const p = placeTip(r, h.offsetWidth, h.offsetHeight, window.innerWidth, window.innerHeight)
   h.style.left = `${Math.round(p.x)}px`
   h.style.top = `${Math.round(p.y)}px`

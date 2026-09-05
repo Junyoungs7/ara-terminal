@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { AI_ENTRY } from '../src/shared/features'
 import { KEYMAP } from '../src/shared/keymap'
 import { ACTIVITY_ITEMS } from '../src/shared/types'
-import { splitTip } from '../src/renderer/store/tooltip'
+import { pickCut, placeTip, splitTip } from '../src/renderer/store/tooltip'
 
 // #73(2026-08-14) — 액티비티 바 툴팁의 단축키가 KEYMAP 에서 나오는지.
 //
@@ -54,5 +54,38 @@ describe('액티비티 바 툴팁 단축키', () => {
     expect(splitTip(`미니 프리뷰 (${win})`)).toEqual({ text: '미니 프리뷰', key: win })
     // 단축키가 없는 항목은 꼬리표 없이 이름만 — 빈 괄호가 붙으면 안 된다.
     expect(splitTip('포트 모니터')).toEqual({ text: '포트 모니터', key: null })
+  })
+})
+
+// 2026-09-05 — "잘린 글자만 툴팁" 규칙(pickCut)과 "넓은 앵커는 위로"(placeTip) 를 넣으면서
+// 액티비티 바가 **두 규칙 모두의 사각지대**가 됐다. 여기서 그 둘을 지킨다:
+// 잘못하면 레일 툴팁이 통째로 안 뜨거나(pickCut), 다음 아이콘을 덮는다(placeTip).
+describe('액티비티 바는 두 규칙의 예외로 남는다', () => {
+  it('★ 아이콘뿐인 버튼은 asIs — skip 으로 묶으면 레일 툴팁이 전부 죽는다', () => {
+    // <button title="미니 프리뷰 (Ctrl+Shift+P)"><Eye /></button> — 글자를 그리는 자식이 없다.
+    // 화면에 같은 글자가 없으니 "다 보인다"고 판정할 근거 자체가 없다.
+    const win = KEYMAP.find((k) => k.action === 'preview.toggle')!.win
+    const btn = [
+      { text: '', scrollW: 34, clientW: 34 }, // <button>
+      { text: '', scrollW: 0, clientW: 0 } // <svg>
+    ]
+    expect(pickCut(`미니 프리뷰 (${win})`, btn)).toEqual({ kind: 'asIs' })
+  })
+
+  it('★ 레일 어디에 있어도 좌우 — 위/아래로 붙으면 다음 아이콘 가는 길이 막힌다', () => {
+    // 항목 수만큼 34px 간격으로 내려가며 전부 본다. 툴팁은 max-width 380 을 가정.
+    const rail = (top: number, left: number) => ({
+      left,
+      top,
+      right: left + 34,
+      bottom: top + 34,
+      width: 34,
+      height: 34
+    })
+    for (let i = 0; i < ACTIVITY_ITEMS.length + 1; i++) {
+      const top = 40 + i * 34
+      expect(placeTip(rail(top, 6), 380, 24, 1600, 900).side, `좌측 레일 ${i}`).toBe('right')
+      expect(placeTip(rail(top, 1560), 380, 24, 1600, 900).side, `우측 레일 ${i}`).toBe('left')
+    }
   })
 })
