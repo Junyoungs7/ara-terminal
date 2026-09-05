@@ -29,6 +29,7 @@ import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCl
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
+import { MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
 
 // 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] 추가).
@@ -1193,6 +1194,19 @@ export function SettingsDrawer({
                 <span className="v">v{version}</span>
               </Row>
 
+              {/* #175 — 배포 전엔 앱 어디에도 사용 설명서로 가는 길이 없었다. 정보 탭에 이미 버전·
+                  라이선스가 있으니 여기 한 행이 제일 싸다. 새 창이 아니라 OS 기본 브라우저로(이 앱은
+                  터미널이지 브라우저가 아니다) — app:openExternal 의 스킴 화이트리스트를 그대로 탄다. */}
+              <Row label={t('settings.manual.title')} desc={t('settings.manual.desc')}>
+                <button
+                  type="button"
+                  className="btn sec"
+                  data-action="manual.open"
+                  onClick={() => void window.ev?.app.openExternal(MANUAL_URL)}
+                >
+                  {t('settings.manual.open')}
+                </button>
+              </Row>
 
               {/* OFL 라이선스 고지 (GAP-OFL) */}
               <div className="set-sec-t">{t('settings.license.title')}</div>
