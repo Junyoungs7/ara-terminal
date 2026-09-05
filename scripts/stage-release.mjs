@@ -36,20 +36,37 @@ mkdirSync(out, { recursive: true })
 for (const f of need) copyFileSync(join(dist, f), join(out, f))
 
 /**
- * latest.yml — 없으면 **여기서 만든다.**
+ * latest.yml — electron-builder 것을 쓰되 **이 설치본을 가리킬 때만** 쓴다. 아니면 여기서 만든다.
  *
  * 원래는 electron-builder 가 써 준다. 그런데 이 PC 에서는 마지막 정리 단계(중간 산출물
  * `*.nsis.7z` 삭제)가 `EBUSY` 로 죽는다 — 방금 쓴 95MB 파일을 백신·DLP 가 잡고 있는 동안 지우려다
  * 나는 것으로, 설치본과 blockmap 은 **그 전에 이미 다 만들어진다.** 그 한 줄 때문에 배포 전체를
  * 멈추느니, electron-updater 가 실제로 읽는 값(버전·파일명·크기·sha512)을 직접 계산해 쓴다.
  * 형식은 electron-builder 의 generic provider 출력과 같다.
+ *
+ * 🔴 **존재만 보고 믿으면 안 된다**(2026-09-05 실제로 당했다). EBUSY 로 죽으면 latest.yml 도 다시
+ * 안 써지는데, `dist/` 에는 **지난 빌드 것이 그대로 남아 있다.** 그날 잰 값: 설치본은 09-05 16:29
+ * 99,728,447 바이트인데 latest.yml 은 09-04 17:01 의 99,724,136 바이트와 **다른 sha512** 를 광고하고
+ * 있었다. 그대로 올렸다면 모두의 자동 업데이트가 **95MB 를 다 받은 뒤** 체크섬에서 실패한다 —
+ * 앱은 "업데이트 실패"만 말하고 왜인지는 아무 데도 안 나온다.
+ *
+ * 그래서 셋(버전·크기·sha512)이 실제 파일과 맞을 때만 쓴다. 하나라도 어긋나면 낡은 것이므로 버린다.
+ * ⚠️ 이 확인을 "파일이 있나"로 되돌리지 마라. 조용히 틀리는 쪽이라 배포 뒤에야 드러난다.
  */
 const sha512 = (file) => createHash('sha512').update(readFileSync(file)).digest('base64')
-if (existsSync(join(dist, 'latest.yml'))) {
-  copyFileSync(join(dist, 'latest.yml'), join(out, 'latest.yml'))
+const target = join(out, exe)
+const hash = sha512(target)
+// 아래쪽 사람이 읽는 크기(`size` = "95.1 MB")와 이름이 겹치지 않게 — 여기는 바이트 그대로다.
+const exeBytes = statSync(target).size
+
+const builderYml = join(dist, 'latest.yml')
+const builderText = existsSync(builderYml) ? readFileSync(builderYml, 'utf8') : ''
+const builderFresh =
+  builderText.includes(`version: ${version}`) && builderText.includes(hash) && builderText.includes(`size: ${exeBytes}`)
+
+if (builderFresh) {
+  copyFileSync(builderYml, join(out, 'latest.yml'))
 } else {
-  const target = join(out, exe)
-  const hash = sha512(target)
   writeFileSync(
     join(out, 'latest.yml'),
     [
@@ -57,7 +74,7 @@ if (existsSync(join(dist, 'latest.yml'))) {
       'files:',
       `  - url: ${exe}`,
       `    sha512: ${hash}`,
-      `    size: ${statSync(target).size}`,
+      `    size: ${exeBytes}`,
       `path: ${exe}`,
       `sha512: ${hash}`,
       `releaseDate: '${new Date().toISOString()}'`,
@@ -65,7 +82,11 @@ if (existsSync(join(dist, 'latest.yml'))) {
     ].join('\n'),
     'utf8'
   )
-  console.log('latest.yml 을 직접 만들었습니다(electron-builder 가 남기지 않았습니다).')
+  console.log(
+    builderText
+      ? 'latest.yml 을 직접 만들었습니다(dist 의 것이 이 설치본과 안 맞습니다 — 지난 빌드 것).'
+      : 'latest.yml 을 직접 만들었습니다(electron-builder 가 남기지 않았습니다).'
+  )
 }
 
 const bytes = statSync(join(out, exe)).size
