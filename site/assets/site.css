@@ -360,6 +360,24 @@ pre {
   box-shadow: var(--shadow-hero);
 }
 
+/* 매뉴얼 캡처 — .shot 은 히어로용 원근 목업이라 여기엔 안 맞는다. 평범한 스크린샷 한 장 + 캡션. */
+.man-shot {
+  margin: 20px 0;
+}
+.man-shot img {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.man-shot figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 /* ── 제품 창 목업 (실제 토큰으로 그린 UI) ───────────────────────────── */
 .win {
   background: var(--bg-canvas);

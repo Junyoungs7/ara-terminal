@@ -117,6 +117,13 @@
               설정 → [AI] → <strong>[아라가 부를 이름]</strong>.
             </li>
           </ol>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-01-welcome.png"
+              alt="처음 뵙겠습니다 모달 — 가운데에 아라 마크와 인사말, 이름 입력칸(비어 있음), 아래 [나중에]·[시작하기] 두 버튼"
+            />
+            <figcaption>처음 켤 때 한 번만 묻습니다 — [나중에]로 건너뛰어도 됩니다</figcaption>
+          </figure>
           <p>
             그 뒤에 빈 화면과 탭 줄이 나옵니다. 탭 줄의 <strong>＋</strong> 를 누르면 로컬
             셸(PowerShell)이 열립니다.
@@ -158,6 +165,13 @@
               이것들은 따로 뜨므로 "한 번에 하나" 규칙 밖입니다.</li>
             <li><strong>맨 아래 하단바 토글</strong> — 아래 도구 패널을 통째로 여닫습니다.</li>
           </ul>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-02-layout.png"
+              alt="창 전체 — 왼쪽 사이드바(파일 트리 펼침), 가운데 터미널 탭, 아래 하단 패널(포트 모니터 탭 펼침), 오른쪽 아이콘 바"
+            />
+            <figcaption>다섯 자리 — 어디에 열리는지가 그 기능이 누구 것인지를 말합니다</figcaption>
+          </figure>
 
           <h3>맨 아래 상태 표시줄</h3>
           <p>지금 붙어 있는 호스트 · 작업 폴더 · 세션 개수 · 인코딩 · 버전이 적힙니다. 그리고 셋이 더.</p>
@@ -167,6 +181,13 @@
             <li><strong>오른쪽 끝 아이콘 줄</strong> — <strong>하단 도구 열 개를 여는 주 진입점</strong>입니다.
               누르면 그 도구가 아래에 펼쳐집니다.</li>
           </ul>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-03-statusbar.png"
+              alt="창 맨 아래 줄 — 호스트·경로·CPU 37%·MEM 사용량 막대, 오른쪽에 [AI 조종 중]·세션 수·인코딩·버전, 맨 끝에 하단바 토글 아이콘"
+            />
+            <figcaption>오른쪽 끝 아이콘 줄이 하단 도구 열 개를 여는 자리입니다</figcaption>
+          </figure>
 
           <h3>세션 점의 색</h3>
           <p>탭 · 분할 칸의 머리 · 미니 프리뷰에 작은 점이 붙습니다.</p>
@@ -264,6 +285,13 @@
             저장한 서버는 트리에서 <strong>더블클릭하면 새 세션으로 접속</strong>합니다. 한 번 클릭은 선택,
             펼치면 그 서버에 열려 있는 세션이 보입니다.
           </p>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-04-connection-modal.png"
+              alt="연결 관리자 모달 — 맨 위 SSH/RDP 세그먼트에서 RDP 가 눌린 상태, 포트 칸이 3389 로 바뀌어 있고 비밀번호 칸은 비어 있다"
+            />
+            <figcaption>[RDP]를 고르면 포트도 따라 바뀝니다</figcaption>
+          </figure>
 
           <h3>4.2 호스트 키 확인</h3>
           <p>처음 붙는 서버는 <strong>지문(SHA256)</strong>을 보여 주고 확인을 받습니다.</p>
@@ -452,6 +480,13 @@
             <tr><td><strong>세션 기록</strong></td><td>지금 세션에서 실행한 명령과 그 결과.</td></tr>
             <tr><td><strong>서버 로그</strong></td><td><strong>백그라운드로 도는 서버의 출력</strong>을 실시간으로 봅니다. 포트 번호(예: <code>8000</code>)나 로그 파일 경로를 넣으면 됩니다.</td></tr>
           </table>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-07-bottom-tabs.png"
+              alt="하단 패널이 열린 상태로 탭 열 개가 한 줄에 서 있고 [포트 모니터]가 선택돼 포트·프로세스 표가 떠 있다. 행 오른쪽에 [로그] 버튼이 보인다"
+            />
+            <figcaption>도구 열 개가 탭으로 섭니다 — 행마다 [로그]로 그 프로그램 출력을 바로 엽니다</figcaption>
+          </figure>
 
           <h3>서버 로그 — 볼 수 있을 때와 없을 때</h3>
           <p>
@@ -921,6 +956,13 @@
             <kbd>→</kbd> 로 받는 것은 <strong>커서가 줄 맨 끝에 있을 때만</strong>입니다. 줄 중간에서는
             그냥 커서 이동으로 셸에 전달됩니다.
           </p>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-13-completion.png"
+              alt="터미널에서 g 한 글자를 친 상태 — 회색 고스트로 git status 의 나머지가 이어 보이고, 그 아래 네 후보(git status·git log·grep·go build) 목록과 맨 아래 안내 줄이 떠 있다"
+            />
+            <figcaption>목록이 떠 있으면 Enter 는 실행이 아니라 고르기입니다</figcaption>
+          </figure>
         </section>
 
         <!-- 13 -->
@@ -955,6 +997,13 @@
             <li><strong>설정 → [일반] → 업데이트</strong> — 언제든 여기서 지금 상태를 보고
               <strong>[업데이트 확인]</strong> 으로 즉시 확인할 수 있습니다.</li>
           </ul>
+          <figure class="man-shot">
+            <img
+              src="assets/shots/shot-14-update.png"
+              alt="설정 → [일반] → 업데이트 줄 — “0.3.0 이(가) 나왔습니다 — [받기]를 누르세요” 문구와 [업데이트 확인]·[받기] 두 버튼이 나란히 있다"
+            />
+            <figcaption>알리는 것까지가 앱, 받는 것은 사람이 정합니다</figcaption>
+          </figure>
           <div class="note">
             <span>⚠️</span>
             <span>
