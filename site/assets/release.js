@@ -6,9 +6,9 @@
  * 이유: 파일을 직접 열어 봐도(file://) 그대로 보여야 하기 때문이다.
  */
 window.ARA_RELEASE = {
-  version: '1.0.0',
-  date: '2026-09-05',
-  file: 'A.R.A Setup 1.0.0.exe',
-  size: '95.1 MB',
+  version: '1.0.1',
+  date: '2026-09-06',
+  file: 'A.R.A Setup 1.0.1.exe',
+  size: '93.6 MB',
   os: 'Windows 10 / 11 (64비트)'
 }
