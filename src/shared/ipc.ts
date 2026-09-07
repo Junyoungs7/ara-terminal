@@ -151,6 +151,18 @@ export type InvokeContract = {
   'app:logPaths': { req: void; res: { sessionLogDir: string; appLogDir: string; defaultDir: string } }
   'app:hasCli': { req: { bin: string }; res: { found: boolean } }
   /**
+   * #190 진단 — Electron 이 아는 GPU 상태(`chrome://gpu` 의 Graphics Feature Status 그대로).
+   *
+   * 렌더러 쪽 프로브(`WEBGL_debug_renderer_info`)는 정책으로 막히면 빈 문자열을 주고, 그러면
+   * 우리 판정은 **"모른다"를 "멀쩡하다"로 읽는다**(webglChoice.ts 의 🔴 주석). 이 채널은
+   * 추측하지 않는 쪽의 답이라 제보자 PC 를 가르는 핵심 자료다. 키·값은 Chromium 이 정하므로
+   * 형을 우리가 굳히지 않는다(모르는 항목이 새로 생겨도 그대로 보여야 한다).
+   *
+   * `gl` 은 main 이 본 GPU 이름이다 — 확장이 막힌 PC 에서 **렌더러가 영영 알 수 없는 값**이라
+   * 이쪽이 없으면 제보를 받아도 그 PC 의 GPU 를 모른다. 핸들러 주석에 순서 함정도 함께 있다.
+   */
+  'app:gpuInfo': { req: void; res: GpuInfo }
+  /**
    * 자동 업데이트 (#98). 상태는 push(`update:state`)로도 오지만, 창이 늦게 뜨면 그 사이의 변화를
    * 놓치므로 **열릴 때 한 번 물어보는** 채널을 함께 둔다(AI·MCP 패널과 같은 규칙).
    */
@@ -508,6 +520,16 @@ export type UpdateState = {
   message?: string
 }
 
+/**
+ * #190 진단 — main 이 아는 GPU. `features` 는 `chrome://gpu` 의 Graphics Feature Status 그대로라
+ * 키·값을 우리가 굳히지 않는다(항목이 새로 생겨도 그대로 보여야 진단이 된다).
+ * `gl` 은 확장이 막힌 PC 에서 렌더러가 영영 알 수 없는 값이다 — 채널 주석에 순서 함정이 있다.
+ */
+export type GpuInfo = {
+  features: Record<string, string>
+  gl: { renderer: string; vendor: string; version: string }
+}
+
 export type InvokeChannel = keyof InvokeContract
 export type InvokeReq<C extends InvokeChannel> = InvokeContract[C]['req']
 export type InvokeRes<C extends InvokeChannel> = InvokeContract[C]['res']
@@ -581,6 +603,13 @@ export type EvApi = {
     hasCli(bin: string): Promise<boolean>
     /** 지금 쓰이는 기록 폴더 두 곳 + 기본 자리(설정 화면이 보여 준다). */
     logPaths(): Promise<{ sessionLogDir: string; appLogDir: string; defaultDir: string }>
+    /** #190 진단 — Electron 이 아는 GPU 상태·GPU 이름. 설정 [정보]가 보여 주고 복사해 준다. */
+    gpuInfo(): Promise<GpuInfo>
+    /**
+     * `ARA_NO_WEBGL` 의 **날값**(함수가 아니다 — xterm 이 만들어지는 그 순간 동기로 필요해서
+     * preload 가 값으로 건넨다. IPC 로는 그 시점을 못 맞춘다). 값 판정은 shouldUseWebgl 이 한다.
+     */
+    webglOptOut?: string | undefined
   }
   window: {
     minimize(): Promise<{ ok: true }>

@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { shouldUseWebgl, termRenderer, type WebglProbe } from './webglChoice'
 import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
@@ -100,19 +101,36 @@ const isMacUA = navigator.userAgent.includes('Mac')
 // 떨어진 환경에서는 DOM 렌더러보다 오히려 느리고, Electron 종료 시 GL 컨텍스트 정리에서 프로세스가
 // 접근 위반으로 죽는 사례가 있다(GPU 끈 E2E 하네스에서 재현). 그런 환경은 처음부터 DOM 으로 간다.
 // 프로브는 창당 한 번만 — 결과는 세션 수명 내내 변하지 않는다.
+//
+// 판정 자체는 webglChoice.ts 의 shouldUseWebgl 이 한다(창 없이 검사하려고 뗐다 — 그 구멍에 대한
+// 🔴 경고도 거기 있다). 여기 남은 것은 **브라우저에게 사실을 묻는 일**뿐이다.
 let webglUsable: boolean | null = null
 function canUseWebgl(): boolean {
   if (webglUsable !== null) return webglUsable
+  const probe: WebglProbe = { optOut: window.ev?.app?.webglOptOut, gl: false, renderer: '' }
   try {
-    const gl = document.createElement('canvas').getContext('webgl2')
-    if (!gl) return (webglUsable = false)
-    const dbg = gl.getExtension('WEBGL_debug_renderer_info')
-    const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : ''
-    gl.getExtension('WEBGL_lose_context')?.loseContext()
-    return (webglUsable = !/swiftshader|software|llvmpipe/i.test(renderer))
+    // 🔴 `ARA_NO_WEBGL=1` 이면 **GL 컨텍스트를 만들지도 않는다.** 만드는 것 자체가 이번 제보의
+    // 후보라(#190 — 아틀라스가 깨지는 것은 컨텍스트 로스트가 아니어서 폴백 핸들러가 안 걸린다)
+    // 탈출구가 프로브보다 앞이다. 이 스위치는 두 몫을 한다:
+    //   · **진단** — "WebGL 을 빼면 증상이 사라지나"를 가르는 유일한 방법이다(우리에게 그 PC 가 없다)
+    //   · **임시 처방** — 증상을 만난 사람에게 줄 손잡이가 지금 이것뿐이다. 원인이 확정되고
+    //     판정이 고쳐지면 그때 다시 볼 것이고, 그전에는 지우지 마라.
+    if (probe.optOut !== '1') {
+      const gl = document.createElement('canvas').getContext('webgl2')
+      probe.gl = !!gl
+      if (gl) {
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info')
+        probe.renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : ''
+        gl.getExtension('WEBGL_lose_context')?.loseContext()
+      }
+    }
   } catch {
-    return (webglUsable = false)
+    probe.gl = false
   }
+  // 프로브가 본 것을 [정보] 탭이 그대로 보여 준다 — 제보자 PC 와 비교할 기준이 이것이다.
+  termRenderer.gpu = probe.renderer
+  termRenderer.optOut = probe.optOut
+  return (webglUsable = shouldUseWebgl(probe))
 }
 
 type Props = {
@@ -418,13 +436,20 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     if (canUseWebgl()) {
       try {
         webgl = new WebglAddon()
-        webgl.onContextLoss(() => webgl?.dispose())
+        webgl.onContextLoss(() => {
+          webgl?.dispose()
+          // 폴백했으면 [정보]도 DOM 이라고 말해야 한다 — 프로브 값을 그대로 두면 화면이
+          // "WebGL" 이라고 거짓말을 하고, 제보와 비교할 기준이 거짓이 된다.
+          termRenderer.kind = 'dom'
+        })
         term.loadAddon(webgl)
       } catch (err) {
         webgl = null
         console.warn('[term] WebGL 렌더러 초기화 실패 — DOM 폴백', err)
       }
     }
+    // 프로브가 아니라 **결과**를 적는다(loadAddon 이 던지면 xterm 은 조용히 DOM 으로 돌아간다).
+    termRenderer.kind = webgl ? 'webgl' : 'dom'
     termRef.current = term
     // 포커스가 터미널을 떠나면 후보 목록을 걷는다(제보 10). 목록은 fixed 라 스스로 사라지지
     // 않는다 — 사이드바를 누르러 간 사이 화면에 떠 있으면 그냥 쓰레기다.

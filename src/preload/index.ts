@@ -54,6 +54,12 @@ const api: EvApi = {
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
     hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found),
     logPaths: () => ipcRenderer.invoke('app:logPaths'),
+    // #190 터미널 렌더러 진단. gpuInfo 는 main 이 아는 GPU 상태고, webglOptOut 은 **값**이다 —
+    // 프로브는 xterm 을 만드는 그 순간 동기로 판정해야 해서 IPC 로는 늦는다(TerminalPane 주석).
+    // sandbox 프리로드에도 process.env 는 있지만, 없더라도 **부팅이 멈추지 않게** typeof 로 본다:
+    // 이 파일이 던지면 창이 빈 화면으로 뜬다(사용자에게는 "앱이 안 켜진다"다).
+    gpuInfo: () => ipcRenderer.invoke('app:gpuInfo'),
+    webglOptOut: typeof process === 'undefined' ? undefined : process.env['ARA_NO_WEBGL'],
     // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
     updateState: () => ipcRenderer.invoke('update:get'),
     updateCheck: () => ipcRenderer.invoke('update:check'),

@@ -21,11 +21,13 @@ import {
   type McpState,
   type UiPrefs
 } from '@shared/types'
-import type { UpdateState } from '@shared/ipc'
+import type { GpuInfo, UpdateState } from '@shared/ipc'
 import type { AgentHookState, RemoteHookReport } from '@shared/agentStatus'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
+import { termRenderer } from '../terminal/webglChoice'
+import { writeClipboard } from '../store/clipboardWrite'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
 import { MANUAL_URL } from '@shared/links'
@@ -745,6 +747,65 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
   )
 }
 
+/**
+ * #190 터미널 렌더러 — **이 라운드는 고치는 행이 아니라 재는 행이다.**
+ *
+ * 2026-09-07 사내 제보(타이핑 딜레이 · tmux 로 빠르게 PgUp/PgDn 할 때 사각형이 깜빡인다)의 첫
+ * 후보가 WebGL 렌더러인데, 앱은 자기가 무엇으로 그리는지 화면에 한 글자도 안 보여 줬다 —
+ * 제보자 PC 가 진짜 GPU 를 쓰는지 소프트웨어 래스터라이저 위에 있는지 물어볼 방법조차 없었다.
+ * 그래서 셋을 한 줄에 모은다: **실제로 실린 렌더러**(프로브 값이 아니다) · 프로브가 읽은 GPU
+ * 이름 · main 이 아는 GPU 상태(`app:gpuInfo`).
+ *
+ * **복사 버튼이 이 행의 절반이다.** 스크린샷을 다시 청하는 왕복이 없어야 제보가 한 번에 끝난다 —
+ * 화면에는 요약만 두고(긴 GPU 이름이 줄을 밀지 않게 desc 로 흘린다), 붙여 줄 것에는 features
+ * 전체와 앱 버전·UA 까지 담는다. 형식을 손으로 짜지 않고 JSON 그대로 두는 이유도 그것이다 —
+ * 항목을 고르면 나중에 하나가 빠져도 아무도 모른다.
+ *
+ * 판정을 고치는 것은 이 라운드가 아니다(webglChoice.ts 의 🔴 주석 참고).
+ */
+function GpuRow({ open, version }: { open: boolean; version: string }) {
+  const [gpu, setGpu] = useState<GpuInfo | null>(null)
+  // AgentHookRow 와 같은 이유로 **열릴 때마다** 묻는다(#162 — 이 드로어는 언마운트되지 않으므로
+  // 마운트 한 번에 한 번은 곧 "기동 직후 한 번"이고, 그때는 터미널조차 아직 없다).
+  useEffect(() => {
+    if (!open) return
+    void window.ev?.app
+      ?.gpuInfo?.()
+      .then(setGpu)
+      .catch(() => {})
+  }, [open])
+  const unknown = t('settings.gpu.unknown')
+  const kind =
+    termRenderer.kind === null ? t('settings.gpu.noTerm') : termRenderer.kind === 'webgl' ? 'WebGL' : 'DOM'
+  // 프로브가 읽은 이름이 먼저다(판정이 그걸 보고 했으니까). 확장이 막혀 비면 main 이 본 이름으로
+  // 떨어진다 — 그 자리가 바로 이 라운드가 알고 싶은 PC 다. 둘 다 복사본에는 따로 들어간다.
+  const desc = t('settings.gpu.desc')
+    .replace('{gpu}', termRenderer.gpu || gpu?.gl.renderer || unknown)
+    .replace('{webgl2}', gpu?.features['webgl2'] ?? unknown)
+  return (
+    <Row label={t('settings.gpu.title')} desc={desc}>
+      <div className="ai-key-ctl">
+        <span className="v" data-field="gpu.renderer">
+          {kind}
+        </span>
+        <button
+          type="button"
+          className="btn sec"
+          data-action="gpu.copy"
+          onClick={() =>
+            void writeClipboard(
+              JSON.stringify({ version, ua: navigator.userAgent, renderer: termRenderer, gpu }, null, 2),
+              true
+            )
+          }
+        >
+          {t('settings.gpu.copy')}
+        </button>
+      </div>
+    </Row>
+  )
+}
+
 type Props = {
   open: boolean
   font: FontConfig
@@ -1129,6 +1190,8 @@ export function SettingsDrawer({
                   {t('settings.manual.open')}
                 </button>
               </Row>
+
+              <GpuRow open={open} version={version} />
 
               {/* OFL 라이선스 고지 (GAP-OFL) */}
               <div className="set-sec-t">{t('settings.license.title')}</div>

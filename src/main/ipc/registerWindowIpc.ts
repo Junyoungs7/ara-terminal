@@ -1,7 +1,7 @@
 // window 도메인 IPC 핸들러 (R2.6). 프레임리스 타이틀바의 신호등 버튼이 여기로 온다.
 // 창은 재생성될 수 있으므로 getter 로 지연 평가하고, 파괴된 창은 조용히 무시한다
 // (FIX-window-destroyed 패턴 — isDestroyed 접근 자체도 try 로 감싼다).
-import { BrowserWindow, clipboard, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, shell, type IpcMainInvokeEvent } from 'electron'
 import { openPortWindow } from '../windows/PortWindow'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
@@ -66,6 +66,40 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     if (!isSafeExternal(url)) return { ok: false }
     void shell.openExternal(url).catch(() => {})
     return { ok: true }
+  })
+
+  /**
+   * #190 GPU 상태. app:openExternal·clipboard:readFiles 와 같은 **"렌더러가 못 아는 것을 main 이
+   * 대신 답한다"** 자리다.
+   *
+   * 렌더러는 `WEBGL_debug_renderer_info` 로 GPU 이름을 물을 수밖에 없는데 그 확장은 정책으로
+   * 막히고, 막히면 우리 판정이 "모른다"를 "멀쩡하다"로 읽는다(webglChoice.ts 의 🔴 주석).
+   * 이쪽은 Chromium 이 실제로 무엇을 켰는지 그대로 답한다 — 사내 제보(타이핑 딜레이·스크롤
+   * 깜빡임)를 가를 자료가 이것이다. 키·값을 우리가 손보지 않는다: 모르는 항목이 생기면
+   * 그것까지 보여야 진단이 된다.
+   */
+  handle('app:gpuInfo', async () => {
+    // ⚠️ **순서가 답을 바꾼다.** GPU 프로세스가 보고하기 전에 `getGPUFeatureStatus()` 를 읽으면
+    // 전부 `disabled_*` 인 **자리값**이 온다 — 2026-09-07 이 PC 실측: 같은 실행 안에서 webgl 이
+    // `disabled_off` → (아래 getGPUInfo 호출) → `enabled` 로 바뀐다. 그 자리값을 제보로 받으면
+    // "이 PC 는 WebGL 이 꺼져 있다"는 거짓 결론으로 조사가 통째로 헛돈다. 그래서 먼저 끌어온다.
+    //
+    // 그리고 이 호출이 **렌더러가 못 보는 것을 답한다**: `WEBGL_debug_renderer_info` 가 정책으로
+    // 막힌 PC 에서는 렌더러 쪽 GPU 이름이 빈 문자열인데, 여기 glRenderer 는 그래도 나온다.
+    // 실패는 삼킨다 — features 만이라도 보내는 것이 아무것도 안 보내는 것보다 낫다.
+    const gl = { renderer: '', vendor: '', version: '' }
+    try {
+      // 형이 unknown 이다(Electron 타이핑) — 문자열인 것만 골라 넣는다.
+      const info = (await app.getGPUInfo('complete')) as { auxAttributes?: Record<string, unknown> }
+      const aux = info?.auxAttributes
+      const pick = (k: string): string => (typeof aux?.[k] === 'string' ? String(aux[k]) : '')
+      gl.renderer = pick('glRenderer')
+      gl.vendor = pick('glVendor')
+      gl.version = pick('glVersion')
+    } catch {
+      // 그대로 빈 문자열 — 화면은 "알 수 없음"으로 보여 준다.
+    }
+    return { features: { ...app.getGPUFeatureStatus() }, gl }
   })
 
   // F14: 클립보드에 담긴 파일 경로. 렌더러는 OS 클립보드의 파일 형식을 볼 수 없으므로(브라우저
