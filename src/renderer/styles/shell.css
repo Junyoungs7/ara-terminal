@@ -3529,6 +3529,19 @@ button.sb-seg.upd:hover .val {
   min-height: 0;
   flex: 1;
 }
+/* 🔴 이 테가 트리에서 **위치를 말하는 유일한 표시다.** 2026-09-08 에 서버 행의 선택 색을 걷었기
+   때문이다(ConnTree 선언부 주석 · store/profiles.ts). 맨 위(21행)의 전역 `:focus-visible` 만으로는
+   여기서 약하다는 제보를 받았다 — 행이 촘촘하고 좌우로 아이콘·배지·상태 점이 많아 얇은 테가 묻힌다.
+   그래서 트리에서만 배경 틴트를 얹어 **면적으로** 말하게 한다(--accent-glow 는 tokens.css:52 가
+   "포커스 링·활성 배경 틴트"용으로 이름 붙인 값이다).
+   ⚠️ 안쪽 offset 인 이유: 행이 서로 붙어 있어 바깥으로 빼면 위아래 이웃 행을 침범해 어느 행인지
+   더 헷갈린다. ⚠️ `:focus` 가 아니라 `:focus-visible` 이다 — 마우스로 눌렀을 때는 안 떠야 한다
+   (색을 걷은 이유가 "클릭했더니 색이 남는다"였다). */
+.tree [role='treeitem']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-glow);
+}
 .tree .empty {
   padding: var(--sp-7) var(--sp-5);
   font-size: var(--fs-md);
