@@ -40,7 +40,7 @@ const phase = process.argv[2] || 'run'
 const REPORT = join(ROOT, 'agent_talk', `doc-spacing-${phase}.json`)
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const FILES = ['site/manual.html', 'site/index.html']
+const FILES = ['site/manual.html', 'site/index.html', 'site/changelog.html']
 const WIDTHS = [1280, 820] // 태블릿·좁은 창일수록 더 많이 접힌다
 
 // ── 렌더러에서 도는 탐침 ────────────────────────────────────────────────────

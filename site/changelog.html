@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A.R.A 패치 내역</title>
+    <meta
+      name="description"
+      content="A.R.A(아라) 버전별 패치 내역 — 무엇이 추가되고, 무엇이 고쳐지고, 무엇을 걷어냈는지."
+    />
+    <link rel="icon" href="assets/ara-icon.svg" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script src="assets/release.js"></script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/ara-icon.svg" alt="" /><span>A.R.A</span></a>
+        <nav class="nav-links">
+          <a href="index.html#diff">무엇이 다른가</a>
+          <a href="manual.html">사용 설명서</a>
+          <a href="changelog.html" class="on">패치 내역</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+        <a class="btn btn-primary btn-sm" data-dl href="downloads/" download>내려받기</a>
+      </div>
+    </header>
+
+    <div class="wrap doc">
+      <!-- ── 목차 ─────────────────────────────────────────────────────── -->
+      <aside class="toc">
+        <div class="t">패치 내역</div>
+        <a href="#v1-0-1">1.0.1 — 2026-09-06</a>
+        <a href="#v1-0-0">1.0.0 — 2026-09-05</a>
+      </aside>
+
+      <!-- ── 본문 ─────────────────────────────────────────────────────── -->
+      <main>
+        <div class="doc-hd">
+          <h1>패치 내역</h1>
+          <p class="lead">
+            버전이 바뀔 때마다 무엇이 달라졌는지 적습니다. 지금 받으실 수 있는 버전은
+            <b data-rel="version">1.0.1</b> 입니다.
+          </p>
+        </div>
+
+        <!-- 1.0.1 -->
+        <section id="v1-0-1">
+          <h2>1.0.1 — 2026-09-06</h2>
+
+          <h3>걷어낸 것</h3>
+          <ul>
+            <li>쓰지 않던 음성 입력 기능을 코드에서 걷어냈습니다. 설치본이 가벼워졌습니다.</li>
+          </ul>
+
+          <h3>추가</h3>
+          <ul>
+            <li>아라를 두 번 실행해도 창이 하나만 뜹니다.</li>
+          </ul>
+
+          <h3>고침</h3>
+          <ul>
+            <li>좁은 창(작은 해상도 · 큰 글자 배율)에서 확인 창의 버튼이 화면 밖으로 밀려 눌리지 않던 문제를 고쳤습니다.</li>
+          </ul>
+        </section>
+
+        <!-- 1.0.0 -->
+        <section id="v1-0-0">
+          <h2>1.0.0 — 2026-09-05</h2>
+          <p>
+            첫 정식 판입니다. 그전에 <b>0.1.0</b>(2026-08-23)이 한 번 나갔지만 그 사이의 변경은 따로 적어 두지
+            않았습니다 — 지어내지 않고, 확인되는 것부터 적습니다.
+          </p>
+
+          <h3>추가</h3>
+          <ul>
+            <li>세션이 열려 있는 채로 아라를 끄면 확인을 묻고, 확인해야 종료됩니다.</li>
+            <li>설정 → [정보]에서 사용 설명서를 바로 엽니다.</li>
+            <li>사용 설명서에 화면 캡처를 넣었습니다.</li>
+          </ul>
+
+          <h3>고침</h3>
+          <ul>
+            <li>하단 패널에서 긴 글자에 마우스를 올리면 툴팁 글자가 상자 밖으로 삐져나오던 문제를 고쳤습니다.</li>
+            <li>잘린 글자에 마우스를 올렸을 때 툴팁이 화면 왼쪽 끝에 엉뚱하게 뜨던 문제와, 잘리지 않은 글자에도 툴팁이 뜨던 문제를 고쳤습니다.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <div class="wrap">
+        <span class="brand"><img src="assets/ara-icon.svg" alt="" style="width: 20px; height: 20px" />A.R.A</span>
+        <span class="muted">사내 배포용 · 베리굿투어</span>
+        <nav>
+          <a href="index.html">홈</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="assets/site.js"></script>
+  </body>
+</html>

@@ -24,6 +24,21 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = pkg.version
 const exe = `${pkg.productName} Setup ${version}.exe`
 
+/**
+ * changelog.html 이 이번 버전을 담고 있는지 — 경고만 하고 막지는 않는다.
+ *
+ * 손으로 갱신하는 문서는 낡는다(이 사이트가 실제로 90 커밋만큼 낡아 있던 적이 있다). 그래도
+ * 여기서 process.exit 는 안 쓴다: 이 스크립트의 본업은 설치본을 서버가 읽을 폴더로 옮기고
+ * sha512 가 맞는 latest.yml 을 쓰는 것이고(위 EBUSY 주석과 같은 결 — 급하면 실제 배포부터
+ * 나가야 한다), changelog 문구는 그 배포를 막을 이유가 못 된다. 지금은 경고 자체가 우회로라
+ * 따로 --skip 플래그를 안 둔다 — 만들면 그 플래그를 잊는 사람이 이 장치를 무의미하게 만든다.
+ */
+const changelogPath = join(root, 'site', 'changelog.html')
+const changelogText = existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : ''
+if (!changelogText.includes(version)) {
+  console.warn(`⚠️  site/changelog.html 에 버전 ${version} 이 없습니다 — 패치 내역을 적었는지 확인하세요.`)
+}
+
 const need = [exe, `${exe}.blockmap`]
 const missing = need.filter((f) => !existsSync(join(dist, f)))
 if (missing.length) {
