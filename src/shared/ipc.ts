@@ -125,7 +125,9 @@ export type InvokeContract = {
   // 설정 창이 여섯 값을 한 화면에서 바꾸는데 채널을 여섯 개로 늘릴 이유가 없다.
   'ui:setPrefs': { req: UiPrefs; res: { ok: true } }
   // R6 연결 그룹 목록. 프로필이 없는 빈 그룹은 파생으로 나오지 않아 여기 저장해야 살아남는다.
-  'ui:setGroups': { req: { groups: string[] }; res: { ok: true } }
+  // #193: 끌어다 정한 순서(order)·2단 중첩(parents)이 함께 온다. **둘 다 선택**이고, 안 주면
+  // main 이 기존 값을 그대로 둔다 — 그룹 이름만 고치는 옛 호출부가 순서를 지우면 안 된다.
+  'ui:setGroups': { req: { groups: string[]; order?: string[]; parents?: Record<string, string> }; res: { ok: true } }
   // 작업 프로필 목록(서버+폴더 즐겨찾기). 그룹 목록과 같은 형태 — 전체를 통째로 덮어쓴다.
   'ui:setWorkProfiles': { req: { list: WorkProfile[] }; res: { ok: true } }
   // F27 AI CLI 최근 목록. 작업 프로필과 같은 형태(전체를 통째로 덮어쓴다) — 상한은 렌더러가 지키고
@@ -581,7 +583,7 @@ export type EvApi = {
   }
   ui: {
     setPrefs(prefs: UiPrefs): Promise<{ ok: true }>
-    setGroups(groups: string[]): Promise<{ ok: true }>
+    setGroups(groups: string[], order?: string[], parents?: Record<string, string>): Promise<{ ok: true }>
     setWorkProfiles(list: WorkProfile[]): Promise<{ ok: true }>
     setAiCliRecent(list: AiCliRecent[]): Promise<{ ok: true }>
     setFont(font: FontConfig): Promise<{ ok: true }>

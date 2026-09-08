@@ -10,6 +10,7 @@ import type { DialogSpec, DialogResult } from './Dialog'
 import type { TreeActionId } from '../interactions/actions'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import { shownTab } from '../store/sidebar'
+import type { GroupLayout } from '../store/groups'
 import { t } from '../i18n'
 
 export type SidebarTab = 'conn' | 'file' | 'ai'
@@ -109,6 +110,10 @@ export function Sidebar({
   onTmuxQuery,
   workProfiles,
   onOpenWork,
+  groupLayout,
+  onMoveProfile,
+  onGroupLayout,
+  onNotice,
   cwdBy,
   onCloseSession,
   fileSession,
@@ -143,6 +148,11 @@ export function Sidebar({
   onTmuxQuery: (sessionId: string) => Promise<TmuxListResult>
   workProfiles?: WorkProfile[]
   onOpenWork?: (w: WorkProfile) => void
+  // #193 그룹 배치(순서·2단 중첩)와 드래그 결과. 저장하는 곳은 Shell 하나다 — 트리는 판정만 한다.
+  groupLayout?: GroupLayout
+  onMoveProfile?: (profileId: string, group: string | undefined) => void
+  onGroupLayout?: (next: GroupLayout) => void
+  onNotice?: (msg: string) => void
   // 세션 카드에 현재 작업 위치를 적고(세션이 여럿일 때 이름만으론 구분이 안 된다) ✕ 로 종료한다.
   cwdBy?: Record<string, string>
   onCloseSession?: (sessionId: string) => void
@@ -216,6 +226,10 @@ export function Sidebar({
           onTmuxQuery={onTmuxQuery}
           workProfiles={workProfiles}
           onOpenWork={onOpenWork}
+          groupLayout={groupLayout}
+          onMoveProfile={onMoveProfile}
+          onGroupLayout={onGroupLayout}
+          onNotice={onNotice}
           cwdBy={cwdBy}
           onCloseSession={onCloseSession}
         />

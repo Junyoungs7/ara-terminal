@@ -34,6 +34,37 @@ export function connDotClass(state: ConnState[string] | undefined): string {
   return 'off'
 }
 
+// 여기 있던 `serverRowActive` 는 2026-09-08 에 없앴다. 트리 서버 행에 **색으로 말할 상태가 하나도
+// 없어졌기** 때문이다 — 준영님: *"연결된 세션을 선택하면 그 해당 세션의 서버는 색상이 보이지
+// 않게. 단순히 진입점으로만."* 그리고 이어서 *"사람이 직접 서버를 클릭할때도 굳이 남길 필요는
+// 없을것 같아. (…) 상태dot은 남겨줘."*
+//
+// 그래서 지금 서버 행이 말하는 것은 둘뿐이다: **연결 여부는 상태 점**(위 connDotClass),
+// **키보드로 지금 어디인지는 전역 `:focus-visible`**(shell.css:21 — rowKeys 가 DOM 초점을 옮긴다).
+// ⚠️ 색을 되살리려거든 그 둘로 안 되는 이유를 먼저 적어라. 접속 상태를 다시 묶으면 한 서버에
+// 색이 둘이 된다(자식 세션 행 + 서버 행) — 2026-08-22 제보 2·3번이 그것이었다.
+
+/**
+ * 프로필 → 저장 입력. **조립은 여기 한 곳에서만 한다.**
+ *
+ * 저장은 통째 덮어쓰기다(ProfileStore.save) — 부르는 쪽이 필드를 하나 빠뜨리면 그 값이 조용히
+ * 사라진다. 그룹만 바꾸는 호출이 rdp 의 `multiMonitor` 를 안 실어서 [다중 모니터 사용]이 꺼지던
+ * 사고가 그것이라, 옮기기·복제·드래그가 전부 이 함수를 지나게 했다.
+ * 비밀은 싣지 않는다 — `secret` 미지정 저장은 vault 의 기존 비밀을 그대로 둔다(ProfileStore 계약).
+ */
+export function profileInput(p: ConnectionProfile, patch?: Partial<ProfileInput>): ProfileInput {
+  const base = { id: p.id, name: p.name, host: p.host, port: p.port, username: p.username, group: p.group }
+  return p.type === 'rdp'
+    ? { ...base, type: 'rdp', multiMonitor: p.multiMonitor, ...patch }
+    : {
+        ...base,
+        type: 'ssh',
+        authType: p.auth.type,
+        keyPath: p.auth.type === 'key' ? p.auth.keyPath : undefined,
+        ...patch
+      }
+}
+
 export function useProfiles() {
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
   const [conn, setConn] = useState<ConnState>({})

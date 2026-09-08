@@ -3599,6 +3599,39 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
 }
 
+/* ── #193 2단 중첩 그룹 (2026-09-08) ─────────────────────────────────────────
+   자식 그룹은 **들여쓰기 하나**로만 말한다 — 이 트리는 계층을 선·아이콘으로 다시 그리지 않는다
+   (세션 행의 "가지를 일부러 뺐다"와 같은 규칙). 상한이 2단이라 규칙도 한 벌이면 끝난다:
+   3단을 허용하려는 사람은 이 들여쓰기부터 척도로 만들어야 한다(단마다 곱해질 값이 없다).
+   들여쓰기 폭은 세 행이 **같은 8px**만큼 밀린다 — 서버 행과 그 아래 세션 행의 단차가 유지돼야
+   어느 서버의 세션인지 눈으로 이어진다. */
+.srv-group.sub .srv-hd,
+.srv-group.sub .srv-node {
+  padding-left: var(--sp-9);
+}
+.srv-group.sub .sess-node {
+  padding-left: calc(30px + var(--sp-4));
+}
+
+/* 놓을 자리 — **어디에 떨어지는지 안 보이면 드래그는 공포다.**
+   가장자리(위/아래) = 순서 바꾸기라 선으로, 가운데 = 그 안에 넣기라 면으로 말한다.
+   못 놓는 자리(2단 상한 초과 · "기타")는 붉게 두르고, 왜인지는 놓는 순간 토스트가 말한다 —
+   커서 옆에 글자를 띄울 자리가 없어 색만으로는 이유를 전할 수 없다. */
+.srv-hd.dz-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.srv-hd.dz-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.srv-hd.dz-into {
+  background: var(--accent-glow);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.srv-hd.dz-bad {
+  background: var(--err-tint);
+  box-shadow: inset 0 0 0 1px var(--err-line);
+}
+
 /* 행 공통 — 서버·세션·즐겨찾기가 같은 높이·같은 호버를 쓴다. */
 .srv-node,
 .sess-node,

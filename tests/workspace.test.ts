@@ -100,6 +100,20 @@ describe('WorkspaceStore', () => {
     expect(typeof written.savedAt).toBe('string')
   })
 
+  // #193: 그룹 배치(순서·2단 중첩)는 **준 것만** 덮어쓴다. 그룹 이름만 고치는 옛 호출부
+  // (group.new · group.rename)가 사용자가 끌어다 정한 순서를 조용히 지우면 안 된다.
+  it('그룹 배치는 준 것만 덮어쓴다 — 목록만 바꾸는 저장이 순서·중첩을 지우지 않는다', () => {
+    const store = new WorkspaceStore(path, '0.1.0')
+    store.setGroups(['운영', '결제'], { order: ['운영', '결제'], parents: { 결제: '운영' } })
+    store.setGroups(['운영', '결제', '신규']) // 배치 없이 목록만
+    expect(store.get().ui.groupOrder).toEqual(['운영', '결제'])
+    expect(store.get().ui.groupParents).toEqual({ 결제: '운영' })
+    // 빈 배열·빈 객체는 "지운다"는 뜻이다(undefined 와 구분한다) — 중첩을 전부 푸는 길이 있어야 한다.
+    store.setGroups(['운영', '결제'], { order: [], parents: {} })
+    expect(store.get().ui.groupOrder).toEqual([])
+    expect(store.get().ui.groupParents).toEqual({})
+  })
+
   // T1 BLOCKER-1 회귀: 렌더러가 삭제 전에 읽어 둔 상태를 뒤늦게 저장해도 main 소유 필드는 되살아나면 안 된다.
   // (프로필 삭제·호스트키 재설정·그룹 변경이 "껐다 켜도" 원복되던 버그.)
   it('뒤늦게 도착한 렌더러 저장이 main 소유 상태(프로필·호스트키·ui)를 되살리지 않는다', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown, MoreHorizontal, Star } from 'lucide-react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
@@ -6,7 +6,16 @@ import { connDotClass, type ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, tmuxMenuItem, type TreeActionId, type TreeMenuKind } from '../interactions/actions'
-import { matchProfile } from '../store/groups'
+import {
+  applyGroupDrop,
+  dropZone,
+  groupDropVerdict,
+  groupTree,
+  matchProfile,
+  parentGroupOf,
+  type DropPlace,
+  type GroupLayout
+} from '../store/groups'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import type { TmuxListResult } from '../../shared/tmuxList'
@@ -22,6 +31,12 @@ import type { TmuxListResult } from '../../shared/tmuxList'
 //  · **세션 표기**: 계정@호스트를 뺐다 — 서버 행에 이미 있어 중복이었고 이름과 겹쳐 읽혔다.
 //    남은 것은 번호 + 지금 폴더. 같은 서버의 세션을 실제로 가르는 정보가 그것뿐이다.
 //  · **호스트**: 행에서 빼고 툴팁으로 내렸다(목록에서 매번 필요한 값이 아니다).
+//
+// #193(2026-09-08) 두 가지가 붙었다:
+//  · **2단 중첩** — 그룹 안에 그룹 하나까지(상한 2단, 재귀 아님). 부모 관계는 그룹 **이름이 아니라**
+//    ui.groupParents 에 따로 산다(store/groups.ts 머리주석에 왜인지 적혀 있다).
+//  · **드래그** — 서버를 그룹 머리글에 놓으면 그 그룹으로, 그룹을 머리글 가운데에 놓으면 그 안으로,
+//    위/아래 가장자리에 놓으면 순서 바꾸기. 세션 행은 끌 수 없다(탭·패널 규약과 겹친다).
 //
 // 서버 노드 원클릭 = 선택(열린 세션이 있으면 그 세션으로 전환) / 더블클릭 = 새 세션 접속.
 // 원클릭이 접속이던 시절엔 더블클릭 한 번에 click·click·dblclick 이 모두 접속을 태워 세션이 3개 열렸다(R1.3).
@@ -59,7 +74,27 @@ type Props = {
   /** 작업 프로필(서버+폴더). 트리 최상단 [즐겨찾기] 그룹으로 올린다 — Ctrl+P 팝업에만 있으면 잊힌다. */
   workProfiles?: WorkProfile[]
   onOpenWork?: (w: WorkProfile) => void
+  /** #193 그룹 배치(끌어다 정한 순서 · 2단 중첩). 없으면 지금까지처럼 평평한 가나다순. */
+  groupLayout?: GroupLayout
+  /** #193 서버를 다른 그룹에 놓았다. undefined = 그룹에서 뺀다("기타"로 내려간다). */
+  onMoveProfile?: (profileId: string, group: string | undefined) => void
+  /** #193 그룹을 끌어 순서·중첩이 바뀌었다. 새 배치를 통째로 준다(저장은 상위가 한다). */
+  onGroupLayout?: (next: GroupLayout) => void
+  /** 못 놓는 자리에 놓았을 때 이유를 띄울 자리(메인 영역 토스트). 없으면 조용히 무시된다. */
+  onNotice?: (msg: string) => void
 }
+
+// #193 끌고 있는 것. **세션은 여기 없다** — 세션을 옮기는 규약은 탭·패널 쪽에 이미 있고
+// (win:detach · PaneGrid 의 splitDrop) 트리에서까지 끌리면 같은 몸짓이 두 가지를 뜻하게 된다.
+type Dragging = { kind: 'server'; id: string } | { kind: 'group'; name: string }
+
+/**
+ * 드래그 페이로드의 MIME. **`text/plain` 을 쓰면 안 된다** — 탭바와 PaneGrid 가 `text/plain` 을
+ * "세션 id" 로 읽어(TermTabbar.tsx:213 · PaneGrid.tsx:109) 서버 행을 터미널 위에 놓는 순간
+ * 엉뚱한 세션 이동으로 해석된다. 값 자체는 쓰지 않는다(끌고 있는 것은 React state 가 안다) —
+ * dragover 중에는 dataTransfer 의 **값**을 못 읽는 것이 규약이라 어차피 state 가 필요하다.
+ */
+const DND_MIME = 'application/x-ara-tree'
 
 // 상태 dot — 판정은 store/profiles.ts 의 connDotClass 하나가 한다(연결 관리자와 공유).
 const stDot = (state: ConnState[string] | undefined): string => 'st ' + connDotClass(state)
@@ -170,25 +205,44 @@ export function ConnTree({
   cwdBy,
   onCloseSession,
   workProfiles,
-  onOpenWork
+  onOpenWork,
+  groupLayout,
+  onMoveProfile,
+  onGroupLayout,
+  onNotice
 }: Props) {
   // #82: 트리 키보드 조작(↑↓ 이동 · →← 펼침 · Enter 실행). 접힘 상태의 주인은 이 컴포넌트라
   // 훅은 트위스티를 눌러 토글만 일으킨다.
   const treeRef = useRef<HTMLDivElement>(null)
   const treeKeys = useRowKeys(treeRef, { selector: '[role="treeitem"]', twisty: '.tw, .caret' })
+  // 접힘 상태는 **저장하지 않는다**(#193 에서 다시 물어 온 것 — 지금까지도 저장하지 않았다).
+  // 키가 그룹 **이름**이라 저장하면 이름 변경·삭제 때마다 유령 키가 남고, 그걸 걷는 코드가
+  // 배치(order·parents)와 따로 또 필요해진다. 얻는 것은 창을 다시 열었을 때의 접힘 한 겹뿐이다.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [menu, setMenu] = useState<
     { x: number; y: number; kind: TreeMenuKind; target: TreeTarget; tmuxSessionId?: string } | null
   >(null)
   // FB-monitor(F19 tmux 후속): 메뉴가 열릴 때 딱 한 번 조회한 세션 목록(폴링 아님).
   const [tmux, setTmux] = useState<{ sessionId: string; result: TmuxListResult | 'loading' } | null>(null)
-  // 원클릭 선택 상태(접속과 분리). 접속하면 activeProfileId 가 따라오므로 그때는 그 값으로 표시한다.
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  // 활성 세션이 바뀌면 클릭 선택은 수명을 다한다. 안 그러면 탭을 옮기거나 로컬 셸을 열어도 트리에는
-  // 아까 클릭한 서버가 계속 켜져 있다(2026-08-22 준영님 제보 — 로컬 셸 쪽은 제보 22번).
-  useEffect(() => setSelectedId(null), [activeSessionId])
+  // 서버 행에는 **선택 색이 없다**(2026-09-08 준영님 확정). 옛 판에는 둘이 있었다: 접속하면
+  // activeProfileId 를 따라 켜지는 색과, 원클릭으로 켜지는 색. 둘 다 걷었다 —
+  // *"사용자는 서버를 접속하기위해 클릭할뿐이니까 더블클릭만 할거고 원클릭은 굳이 필요 없다.
+  //   상태dot은 남겨줘."* 서버 행은 **진입점**이고, 연결 여부는 상태 점(connDotClass)이 말한다.
+  //
+  // ⚠️ 색을 되살리려는 사람에게 — 키보드로 트리를 훑을 때 지금 어디인지는 이미 보인다.
+  // rowKeys 가 roving tabindex 로 **DOM 초점**을 옮기고(store/rowKeys.ts:89 `el.focus()`),
+  // shell.css:21 의 전역 `:focus-visible` 이 그 자리에 테를 두른다. 마우스로 누를 때는 안 뜨므로
+  // "클릭했더니 색이 남는" 일도 없다. 선택 상태를 다시 만들 이유가 아니다.
   // R6 트리 검색어. 서버가 수십 개가 되면 스크롤보다 타이핑이 빠르다.
   const [query, setQuery] = useState('')
+  // #193 드래그. 끌고 있는 것과 지금 겨누고 있는 자리를 state 로 든다 — dragover 중에는
+  // dataTransfer 의 값을 못 읽는 규약이라(타입 목록만 보인다) 놓을 자리를 **미리 그리려면** 필요하다.
+  const [drag, setDrag] = useState<Dragging | null>(null)
+  const [over, setOver] = useState<{ group: string; place: DropPlace; bad?: 'depth' | 'none' } | null>(null)
+  const endDrag = (): void => {
+    setDrag(null)
+    setOver(null)
+  }
 
   // tmuxSessionId 가 있으면(=우클릭 대상이 SSH 세션과 연결됨) tmux 서브메뉴용 목록을 즉시 조회한다.
   const openCtx = (e: React.MouseEvent, kind: TreeMenuKind, target: TreeTarget, tmuxSessionId?: string) => {
@@ -217,10 +271,15 @@ export function ConnTree({
   }
   const localSessions = byServer.get(LOCAL_KEY) ?? []
 
-  // 그룹별 묶기. 순서는 상위(Shell)가 정한 groups 를 따르고, 그룹 미지정 프로필은 "기타"로 모은다.
+  // 그룹별 묶기. 그룹 미지정 프로필은 "기타"로 모은다.
   // 검색 중에는 걸린 프로필이 없는 그룹을 숨긴다 — 필터 결과가 빈 헤더 목록으로 보이지 않게.
   const none = t('conn.group.none')
-  const visible = profiles.filter((p) => matchProfile(p, query))
+  const layout = groupLayout ?? {}
+  // #193: 검색은 **부모 그룹 이름으로도** 걸린다. 자식 그룹에 들어간 서버도 사용자 머릿속에서는
+  // 여전히 "운영 안"이라, 부모 이름을 쳤는데 안 나오면 검색이 거짓말을 한다.
+  const visible = profiles.filter((p) =>
+    matchProfile(p, query, p.group ? parentGroupOf(p.group, groups, layout.parents) : undefined)
+  )
   const byGroup = new Map<string, ConnectionProfile[]>()
   for (const g of groups) byGroup.set(g, [])
   for (const p of visible) {
@@ -229,7 +288,211 @@ export function ConnTree({
     byGroup.get(g)!.push(p)
   }
   const searching = query.trim().length > 0
-  const sortedGroups = [...byGroup.entries()].filter(([, list]) => !searching || list.length > 0)
+  const listOf = (g: string): ConnectionProfile[] => byGroup.get(g) ?? []
+  // 2단 트리. 이름 목록은 화면에 그릴 것 그대로다 — 저장된 부모 관계에 **지금 없는 이름**이 있으면
+  // groupTree 가 무시하고 그 그룹을 최상위로 올린다(옛 앱이 지운 그룹의 흔적).
+  const nodes = groupTree([...byGroup.keys()], layout).flatMap((n) => {
+    // 검색 중 자식은 걸린 것만 남기고, 부모는 자기 것이 없어도 **걸린 자식이 있으면 남는다**
+    // (안 그러면 자식이 부모와 함께 사라져 검색 결과가 거짓이 된다).
+    const children = searching ? n.children.filter((c) => listOf(c).length > 0) : n.children
+    if (searching && listOf(n.name).length === 0 && children.length === 0) return []
+    return [{ name: n.name, children }]
+  })
+
+  // ── #193 드래그 ────────────────────────────────────────────────────────────
+  // 우클릭 메뉴는 그대로 둔다. 드래그는 **더하는 길**이지 대체가 아니다 — 키보드로만 쓰는 사람에게서
+  // 그룹 옮기기를 빼앗으면 안 된다(↑↓ 버튼을 안 만든 것과 같은 이유의 반대편).
+  const groupNames = [...byGroup.keys()]
+
+  /** 이 머리글 위에서 지금 무엇을 할 수 있나. null 이면 놓을 자리가 아니다(표시도 안 한다). */
+  const aimFor = (e: React.DragEvent, group: string): { place: DropPlace; bad?: 'depth' | 'none' } | null => {
+    if (!drag) return null
+    if (drag.kind === 'server') {
+      // 이미 그 그룹이면 놓을 것이 없다 — 표시를 띄우면 "되는데 아무 일도 안 나는" 자리가 된다.
+      const cur = profiles.find((x) => x.id === drag.id)?.group || none
+      return cur === group ? null : { place: 'into' }
+    }
+    const r = e.currentTarget.getBoundingClientRect()
+    const place = dropZone(e.clientY - r.top, r.height)
+    const v = groupDropVerdict(drag.name, group, place, groupNames, layout)
+    if (v.ok) return { place }
+    // 자기 자신 위는 잘못이 아니라 그냥 제자리다 — 빨갛게 칠하고 이유를 띄울 일이 아니다.
+    if (v.reason === 'self') return null
+    return { place, bad: v.reason }
+  }
+
+  const dragProps = (group: string): React.HTMLAttributes<HTMLDivElement> => ({
+    // "기타"는 그룹이 아니라 그룹 미지정 프로필이 모이는 자리다 — 끌 수도, 안에 넣을 수도 없다.
+    draggable: group !== none,
+    onDragStart: (e) => {
+      setDrag({ kind: 'group', name: group })
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData(DND_MIME, group)
+    },
+    onDragEnd: endDrag,
+    onDragOver: (e) => {
+      const aim = aimFor(e, group)
+      if (!aim) return // preventDefault 를 안 하면 커서가 "못 놓음"으로 바뀐다(main.tsx 전역 가드)
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setOver({ group, ...aim })
+    },
+    onDragLeave: (e) => {
+      // 자식 span 으로 들어갈 때도 dragleave 가 온다 — 그때 지우면 표시가 깜빡인다.
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+      setOver((o) => (o?.group === group ? null : o))
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const aim = aimFor(e, group)
+      const what = drag
+      endDrag()
+      if (!aim || !what) return
+      // 상한을 넘겼다 → 거부하고 **이유를 말한다.** 아무 일도 안 일어나면 사용자는 자기 손이
+      // 빗나간 줄 안다.
+      if (aim.bad) {
+        onNotice?.(t('conn.group.drop.' + aim.bad))
+        return
+      }
+      // 접힌 그룹 안에 놓았으면 펴 준다 — 안 그러면 방금 놓은 것이 **사라진 것처럼 보인다**
+      // (지운 줄 알고 다시 만드는 것이 그다음이다).
+      if (aim.place === 'into') setCollapsed((c) => ({ ...c, [group]: false }))
+      if (what.kind === 'server') onMoveProfile?.(what.id, group === none ? undefined : group)
+      else onGroupLayout?.(applyGroupDrop(what.name, group, aim.place, groupNames, layout))
+    }
+  })
+
+  /** 그룹 머리글 한 줄. sub = 부모 안에 든 2단 그룹(들여쓰기는 CSS `.srv-group.sub` 가 낸다). */
+  const groupHead = (group: string, count: number, sub: boolean): JSX.Element => {
+    const isCollapsed = collapsed[group]
+    // 놓을 자리를 **눈에 보이게** 한다. 어디에 떨어지는지 모르는 드래그는 공포다.
+    const aim = over?.group === group ? over : null
+    return (
+      <div
+        className={'srv-hd' + (sub ? ' sub' : '') + (aim ? (aim.bad ? ' dz-bad' : ' dz-' + aim.place) : '')}
+        role="treeitem"
+        tabIndex={-1}
+        aria-expanded={!isCollapsed}
+        onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
+        onContextMenu={(e) => openCtx(e, group === none ? 'groupNone' : 'group', { kind: 'group', group })}
+        {...dragProps(group)}
+      >
+        {/* 접히면 CSS 가 -90° 로 돌린다 — 글리프 둘을 갈아 끼우지 않는다(shell.css `.caret`). */}
+        <span className={'caret' + (isCollapsed ? ' closed' : '')}>
+          <ChevronDown />
+        </span>
+        {group} <span className="g-count">{count}</span>
+      </div>
+    )
+  }
+
+  /** 서버 한 줄 + 그 아래 열린 세션들. 최상위 그룹과 자식 그룹이 **같은 함수**를 쓴다. */
+  const serverRow = (p: ConnectionProfile): JSX.Element => {
+    // RDP 는 서버당 세션이 하나뿐이다(두 번째로 붙으면 기존 세션이 끊긴다) — SSH 처럼
+    // 자식 세션 목록으로 펼치지 않고 서버 카드에 "연결됨" 하나로만 표시한다.
+    const rdpSession = p.type === 'rdp' ? sessions.find((x) => x.profileId === p.id) : undefined
+    // 이 서버에서 열린 세션 — 서버 카드 **아래 자식 카드**로 붙는다(준영님 확정: 기존 계층 유지).
+    const sess = p.type === 'rdp' ? [] : (byServer.get(p.name) ?? [])
+    const nodeCollapsed = collapsed['node:' + p.id]
+    const live = Boolean(rdpSession) || sess.length > 0
+    const badge = typeBadge(p.type)
+    const card = (
+      <div
+        // 서버 행에는 `.active` 가 붙지 않는다 — 색으로 말할 상태가 없다(위 선언부 주석).
+        // 연결 여부는 왼쪽 상태 점, 키보드 위치는 전역 `:focus-visible` 이 맡는다.
+        className={'srv-node' + (live ? '' : ' off')}
+        role="treeitem"
+        tabIndex={-1}
+        // #193: 서버는 끌어서 그룹을 옮길 수 있다. 놓는 자리는 그룹 머리글뿐이다(dragProps).
+        draggable
+        onDragStart={(e) => {
+          setDrag({ kind: 'server', id: p.id })
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData(DND_MIME, p.id)
+        }}
+        onDragEnd={endDrag}
+        // 세션이 없는 서버는 펼칠 것이 없다 — aria-expanded 를 아예 안 준다(→/← 무시).
+        {...(sess.length > 0 ? { 'aria-expanded': !nodeCollapsed } : {})}
+        // `aria-selected` 도 뺐다 — 고를 수 없는 것에 "안 골랐음"을 매 행 읽어 주면 소음이다.
+        // 세션 행은 그대로 둔다(그쪽은 지금 보고 있는 세션이라는 **진짜 선택**이 있다).
+        // 호스트는 행에서 뺐다 — 목록에서 매번 필요한 값이 아니라 툴팁으로 내린다.
+        title={`${p.username ? p.username + '@' : ''}${p.host} · ${t('conn.tree.connect')}`}
+        onClick={(e) => {
+          // 더블클릭의 두 번째 click 은 흘려보낸다(접속은 onDoubleClick 한 번만).
+          if (e.detail > 1) return
+          // 선택 상태는 없어졌지만 **이 클릭은 남긴다** — 열린 세션이 있으면 그리로 전환하는
+          // 길이다(색이 아니라 이동). 세션이 없으면 아무 일도 안 한다: 접속은 더블클릭이다.
+          const focus = rdpSession ?? sess[0]
+          if (focus) onSelectSession(focus.id)
+        }}
+        onDoubleClick={() => onConnect(p.id)}
+        onContextMenu={(e) =>
+          openCtx(
+            e,
+            p.type === 'rdp' ? 'serverRdp' : 'server',
+            { kind: 'server', profileId: p.id },
+            sess.find((x) => x.type === 'ssh')?.id
+          )
+        }
+      >
+        {/* 트위스티 자리는 세션이 없어도 비워 둔다 — 안 그러면 서버마다 이름 시작점이 어긋난다. */}
+        {sess.length > 0 ? (
+          <span
+            className={'tw on' + (nodeCollapsed ? ' closed' : '')}
+            title={nodeCollapsed ? t('conn.tree.expand') : t('conn.tree.collapse')}
+            onClick={(e) => {
+              e.stopPropagation()
+              setCollapsed((c) => ({ ...c, ['node:' + p.id]: !c['node:' + p.id] }))
+            }}
+          >
+            {/* <button> 으로 안 만든다 — 부모 `.srv-node` 가 `role="treeitem"` 이라 중첩이 된다(M3 §4.1). */}
+            <ChevronDown />
+          </span>
+        ) : (
+          <span className="tw" />
+        )}
+        <span className={live ? 'st on' : stDot(conn[p.id])} />
+        <span className={'tbadge ' + badge.cls}>{badge.label}</span>
+        <span className="sname">{p.name}</span>
+        {/* 호버 인라인 버튼 — 우클릭 메뉴를 몰라도 손이 닿아야 한다(VS Code 트리 규칙).
+            2026-08-17 준영님 제보 ②: 여기 있던 [▸ 접속]을 뺐다. 접속하는 길이 이미
+            셋이고(더블클릭 · ⋯ 메뉴 · 즐겨찾기) 이 자리는 **바로 왼쪽 트위스티(▾)와
+            모양이 닮아** 펼치려다 새 세션을 여는 자리였다. 남기는 것은 ⋯ 하나. */}
+        <span className="rowact">
+          <span
+            className="cc-b"
+            title={t('conn.tree.more')}
+            onClick={(e) => openCtx(e, p.type === 'rdp' ? 'serverRdp' : 'server', { kind: 'server', profileId: p.id })}
+          >
+            {/* 크기는 `.rowact .cc-b svg`(11px)가 정한다 — 세션 행의 [닫기]와 같은 규칙. */}
+            <MoreHorizontal />
+          </span>
+        </span>
+      </div>
+    )
+    // 세션은 서버 행 아래 한 단 들여쓴 형제 행으로 붙는다.
+    return (
+      <div className="srv-group" data-server={p.name} key={p.id}>
+        {card}
+        {sess.length > 0 && !nodeCollapsed && (
+          <div className="sess-list">
+            {sess.map((x) => (
+              <SessRow
+                key={x.id}
+                s={x}
+                active={x.id === activeSessionId}
+                cwd={cwdBy?.[x.id]}
+                onSelect={onSelectSession}
+                onClose={onCloseSession}
+                onCtx={openCtx}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     // 빈 영역 우클릭 = 새 로컬 셸 / 새 연결 / 새 그룹. 자식 행들은 openCtx 가 전파를 끊는다.
@@ -310,135 +573,27 @@ export function ConnTree({
             ))}
         </div>
       )}
-      {sortedGroups.map(([group, list]) => {
-        const isCollapsed = collapsed[group]
+      {/* 2단 트리 — 최상위 그룹 · 그 안의 서버 · 그 아래 자식 그룹. **상한이 2단이라 재귀가 없다**
+          (준영님 확정). 늘리려는 사람에게: groupTree·canNest 의 상한 규칙부터 고쳐야 한다. */}
+      {nodes.map((node) => {
+        const own = listOf(node.name)
+        // 부모의 개수에는 자식 그룹 것도 센다 — 접으면 그 서버들도 함께 숨으므로, 자기 것만 세면
+        // 접힌 "운영 0" 밑에 서버 열두 대가 숨어 있는 꼴이 된다.
+        const count = own.length + node.children.reduce((n, c) => n + listOf(c).length, 0)
         return (
-          <div className="srv-group" key={group}>
-            <div
-              className="srv-hd"
-              role="treeitem"
-              tabIndex={-1}
-              aria-expanded={!isCollapsed}
-              onClick={() => setCollapsed((c) => ({ ...c, [group]: !c[group] }))}
-              onContextMenu={(e) => openCtx(e, group === none ? 'groupNone' : 'group', { kind: 'group', group })}
-            >
-              <span className={'caret' + (isCollapsed ? ' closed' : '')}>
-                <ChevronDown />
-              </span>
-              {group} <span className="g-count">{list.length}</span>
-            </div>
-            {!isCollapsed &&
-              list.map((p) => {
-                // RDP 는 서버당 세션이 하나뿐이다(두 번째로 붙으면 기존 세션이 끊긴다) — SSH 처럼
-                // 자식 세션 목록으로 펼치지 않고 서버 카드에 "연결됨" 하나로만 표시한다.
-                const rdpSession = p.type === 'rdp' ? sessions.find((x) => x.profileId === p.id) : undefined
-                // 이 서버에서 열린 세션 — 서버 카드 **아래 자식 카드**로 붙는다(준영님 확정: 기존 계층 유지).
-                const sess = p.type === 'rdp' ? [] : (byServer.get(p.name) ?? [])
-                const nodeCollapsed = collapsed['node:' + p.id]
-                // **세션 노드가 있으면 그쪽이 지금 자리를 말한다** (2026-08-22 준영님 제보 2번).
-                // SSH 서버는 접속하면 자식으로 세션 카드가 붙는데, 서버 카드까지 켜면 한 서버에
-                // 선택 색이 둘이 된다. RDP 는 자식이 없으므로(서버당 세션 하나) 카드가 그 역할을 한다.
-                const activeHere = rdpSession?.id === activeSessionId
-                const live = Boolean(rdpSession) || sess.length > 0
-                const badge = typeBadge(p.type)
-                // 선택 표시는 **하나**다(2026-08-22 준영님: "클릭 한 번 하면 사이드바에 2개의 서버가
-                // 선택된 것처럼 보여"). 예전엔 activeHere 와 클릭 선택을 OR 로 묶어서, 접속돼 있는 A 를
-                // 보면서 B 를 클릭하면 A(활성 세션)와 B(클릭)가 함께 켜졌다. 클릭이 있으면 그것만 켠다 —
-                // 접속이 끝나 activeSessionId 가 바뀌면 위 effect 가 클릭을 버려 다시 세션 기준으로 돌아온다.
-                // activeProfileId 는 더 이상 표시에 쓰지 않는다 (2026-08-22 준영님 제보 3번:
-                // "rdp 서버 탭 닫으면 해당 rdp 서버에 선택색이 계속 선택되어 있음"). 그 값은
-                // **마지막으로 접속을 시도한 프로필**이라 탭을 닫아도 남는다 — 지금 무엇을 보고
-                // 있는지와는 다른 이야기다. 클릭 선택(selectedId)이 그 자리를 이미 채운다.
-                const picked = selectedId !== null ? p.id === selectedId : activeHere
-                const card = (
-                  <div
-                    className={'srv-node' + (live ? '' : ' off') + (picked ? ' active' : '')}
-                    role="treeitem"
-                    tabIndex={-1}
-                    // 세션이 없는 서버는 펼칠 것이 없다 — aria-expanded 를 아예 안 준다(→/← 무시).
-                    {...(sess.length > 0 ? { 'aria-expanded': !nodeCollapsed } : {})}
-                    aria-selected={picked}
-                    // 호스트는 행에서 뺐다 — 목록에서 매번 필요한 값이 아니라 툴팁으로 내린다.
-                    title={`${p.username ? p.username + '@' : ''}${p.host} · ${t('conn.tree.connect')}`}
-                    onClick={(e) => {
-                      // 더블클릭의 두 번째 click 은 흘려보낸다(접속은 onDoubleClick 한 번만).
-                      if (e.detail > 1) return
-                      setSelectedId(p.id)
-                      const focus = rdpSession ?? sess[0]
-                      if (focus) onSelectSession(focus.id)
-                    }}
-                    onDoubleClick={() => {
-                      setSelectedId(p.id)
-                      onConnect(p.id)
-                    }}
-                    onContextMenu={(e) =>
-                      openCtx(
-                        e,
-                        p.type === 'rdp' ? 'serverRdp' : 'server',
-                        { kind: 'server', profileId: p.id },
-                        sess.find((x) => x.type === 'ssh')?.id
-                      )
-                    }
-                  >
-                    {/* 트위스티 자리는 세션이 없어도 비워 둔다 — 안 그러면 서버마다 이름 시작점이 어긋난다. */}
-                    {sess.length > 0 ? (
-                      <span
-                        className={'tw on' + (nodeCollapsed ? ' closed' : '')}
-                        title={nodeCollapsed ? t('conn.tree.expand') : t('conn.tree.collapse')}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setCollapsed((c) => ({ ...c, ['node:' + p.id]: !c['node:' + p.id] }))
-                        }}
-                      >
-                        {/* <button> 으로 안 만든다 — 부모 `.srv-node` 가 `role="treeitem"` 이라 중첩이 된다(M3 §4.1). */}
-                        <ChevronDown />
-                      </span>
-                    ) : (
-                      <span className="tw" />
-                    )}
-                    <span className={live ? 'st on' : stDot(conn[p.id])} />
-                    <span className={'tbadge ' + badge.cls}>{badge.label}</span>
-                    <span className="sname">{p.name}</span>
-                    {/* 호버 인라인 버튼 — 우클릭 메뉴를 몰라도 손이 닿아야 한다(VS Code 트리 규칙).
-                        2026-08-17 준영님 제보 ②: 여기 있던 [▸ 접속]을 뺐다. 접속하는 길이 이미
-                        셋이고(더블클릭 · ⋯ 메뉴 · 즐겨찾기) 이 자리는 **바로 왼쪽 트위스티(▾)와
-                        모양이 닮아** 펼치려다 새 세션을 여는 자리였다. 남기는 것은 ⋯ 하나. */}
-                    <span className="rowact">
-                      <span
-                        className="cc-b"
-                        title={t('conn.tree.more')}
-                        onClick={(e) =>
-                          openCtx(e, p.type === 'rdp' ? 'serverRdp' : 'server', { kind: 'server', profileId: p.id })
-                        }
-                      >
-                        {/* 크기는 `.rowact .cc-b svg`(11px)가 정한다 — 세션 행의 [닫기]와 같은 규칙. */}
-                        <MoreHorizontal />
-                      </span>
-                    </span>
+          <div className="srv-group" key={node.name}>
+            {groupHead(node.name, count, false)}
+            {!collapsed[node.name] && (
+              <>
+                {own.map((p) => serverRow(p))}
+                {node.children.map((child) => (
+                  <div className="srv-group sub" key={child}>
+                    {groupHead(child, listOf(child).length, true)}
+                    {!collapsed[child] && listOf(child).map((p) => serverRow(p))}
                   </div>
-                )
-                // 세션은 서버 행 아래 한 단 들여쓴 형제 행으로 붙는다.
-                return (
-                  <div className="srv-group" data-server={p.name} key={p.id}>
-                    {card}
-                    {sess.length > 0 && !nodeCollapsed && (
-                      <div className="sess-list">
-                        {sess.map((x) => (
-                          <SessRow
-                            key={x.id}
-                            s={x}
-                            active={x.id === activeSessionId}
-                            cwd={cwdBy?.[x.id]}
-                            onSelect={onSelectSession}
-                            onClose={onCloseSession}
-                            onCtx={openCtx}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                ))}
+              </>
+            )}
           </div>
         )
       })}

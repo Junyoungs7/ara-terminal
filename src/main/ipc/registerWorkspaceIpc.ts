@@ -35,8 +35,9 @@ export function registerWorkspaceIpc(
     onPrefs?.(prefs)
     return { ok: true } as const
   })
-  handle('ui:setGroups', ({ groups }) => {
-    store.setGroups(groups)
+  handle('ui:setGroups', ({ groups, order, parents }) => {
+    // #193: order·parents 는 선택이다 — 안 오면 store 가 기존 값을 그대로 둔다.
+    store.setGroups(Array.isArray(groups) ? groups : [], { order, parents })
     return { ok: true } as const
   })
   handle('ui:setWorkProfiles', ({ list }) => {

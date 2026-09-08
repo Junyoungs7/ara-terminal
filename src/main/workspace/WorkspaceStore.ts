@@ -119,9 +119,21 @@ export class WorkspaceStore {
     this.flush()
   }
 
-  // ── 연결 그룹 목록(R6). 빈 그룹은 프로필에서 파생되지 않으므로 여기에만 남는다. ──
-  setGroups(groups: string[]): void {
+  /**
+   * 연결 그룹 목록(R6). 빈 그룹은 프로필에서 파생되지 않으므로 여기에만 남는다.
+   *
+   * #193: 순서·2단 중첩이 함께 온다. **준 것만 덮어쓴다** — 안 준 것(undefined)은 그대로 둔다.
+   * 그룹 하나 만들거나 이름만 바꾸는 옛 호출부가 사용자가 끌어 놓은 순서를 조용히 지우면 안 된다.
+   * 값은 신뢰 경계 밖(렌더러)에서 오므로 형만 확인한다 — setWorkProfiles 와 같은 규칙.
+   */
+  setGroups(groups: string[], layout?: { order?: string[]; parents?: Record<string, string> }): void {
     this.snapshot.ui.groups = groups
+    if (Array.isArray(layout?.order)) this.snapshot.ui.groupOrder = layout.order.filter((n) => typeof n === 'string')
+    if (layout?.parents && typeof layout.parents === 'object') {
+      const clean: Record<string, string> = {}
+      for (const [child, parent] of Object.entries(layout.parents)) if (typeof parent === 'string') clean[child] = parent
+      this.snapshot.ui.groupParents = clean
+    }
     this.flush()
   }
 

@@ -41,7 +41,8 @@ const api: EvApi = {
   },
   ui: {
     setPrefs: (prefs: UiPrefs) => ipcRenderer.invoke('ui:setPrefs', prefs),
-    setGroups: (groups: string[]) => ipcRenderer.invoke('ui:setGroups', { groups }),
+    setGroups: (groups: string[], order?: string[], parents?: Record<string, string>) =>
+      ipcRenderer.invoke('ui:setGroups', { groups, order, parents }),
     setWorkProfiles: (list) => ipcRenderer.invoke('ui:setWorkProfiles', { list }),
     setAiCliRecent: (list) => ipcRenderer.invoke('ui:setAiCliRecent', { list }),
     setFont: (font) => ipcRenderer.invoke('ui:setFont', font),

@@ -24,7 +24,7 @@ import { useDialog } from './Dialog'
 import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
-import { useProfiles, connectErrorTitle, connectErrorMessage, type ConnectFailure } from '../store/profiles'
+import { useProfiles, connectErrorTitle, connectErrorMessage, profileInput, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { spanRdp } from '../store/rdpSpanOpen'
@@ -40,7 +40,7 @@ import { childrenOf, defaultTitle, type AiSessionState } from '@shared/aiSession
 import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
 import { MAIN_WIN_ID } from '@shared/sessionWin'
 import { SysMonitorPanel } from './SysMonitorPanel'
-import { groupsOf, noneGroup, useGroupList } from '../store/groups'
+import { groupsOf, noneGroup, removeFromLayout, renameInLayout, useGroupList, type GroupLayout } from '../store/groups'
 import { SHOWN_ACTIVITIES, type ActivityId } from '../store/activityBar'
 import type { TreeTarget } from './ConnTree'
 import { cdCommand } from './filePath'
@@ -357,8 +357,13 @@ export function Shell() {
   const { profiles, conn, lookup, save, remove, connect } = useProfiles()
 
   // R6 연결 그룹: 프로필에서 파생된 그룹 + 저장된 빈 그룹. 트리·연결 폼이 같은 목록을 쓴다.
-  const { stored: storedGroups, save: saveGroups } = useGroupList()
+  const { stored: storedGroups, layout: groupLayout, save: saveGroups } = useGroupList()
   const groups = groupsOf(profiles, storedGroups)
+  // #193: 드래그로 바뀐 배치(순서·2단 중첩). 그룹 목록 자체는 그대로 두고 배치만 다시 저장한다.
+  const saveGroupLayout = useCallback(
+    (next: GroupLayout) => saveGroups(storedGroups, next),
+    [saveGroups, storedGroups]
+  )
   // 마지막으로 접속한 프로필(트리 active 표시).
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null)
   // F7: 세션별 OSC7 cwd(터미널→SFTP 트리 동기 + 사이드바 세션 카드 표시).
@@ -1054,28 +1059,24 @@ export function Shell() {
 
   // R6: 그룹 안의 모든 프로필을 다른 그룹으로 옮긴다(이름 변경·그룹 삭제 공통).
   // 비밀은 건드리지 않는다 — secret 미지정 저장은 vault 의 기존 비밀을 그대로 둔다(ProfileStore 계약).
+  // 조립은 profileInput 하나가 한다(store/profiles.ts) — 저장이 통째 덮어쓰기라 필드를 빠뜨리면
+  // 그 값이 조용히 사라진다(rdp 의 multiMonitor 가 그렇게 꺼졌다).
   const moveGroup = useCallback(
     async (from: string, to: string | undefined) => {
       for (const p of profiles) {
         if (p.group !== from) continue
-        await save(
-          p.type === 'rdp'
-            ? // multiMonitor 를 다시 실어야 한다 — 저장은 통째 덮어쓰기라, 빼면 그룹 이름만 바꿔도
-              // 그 서버의 [다중 모니터 사용] 가 조용히 꺼진다.
-              { id: p.id, type: 'rdp' as const, name: p.name, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: to }
-            : {
-                id: p.id,
-                type: 'ssh',
-                name: p.name,
-                host: p.host,
-                port: p.port,
-                username: p.username,
-                authType: p.auth.type,
-                keyPath: p.auth.type === 'key' ? p.auth.keyPath : undefined,
-                group: to
-              }
-        )
+        await save(profileInput(p, { group: to }))
       }
+    },
+    [profiles, save]
+  )
+
+  // #193: 서버 한 대를 드래그로 다른 그룹에 놓았다. 그룹 이름만 바뀐다(비밀·다중 모니터 그대로).
+  const moveProfileToGroup = useCallback(
+    async (profileId: string, group: string | undefined) => {
+      const p = profiles.find((x) => x.id === profileId)
+      if (!p || p.group === group) return
+      await save(profileInput(p, { group }))
     },
     [profiles, save]
   )
@@ -1083,23 +1084,10 @@ export function Shell() {
   // 프로필 복제 — 비밀은 vault 밖으로 나오지 않으므로 복사하지 않는다(사본을 열어 재입력받는다).
   // 사이드바 트리 우클릭(server.duplicate) 과 FB-ui2 연결 관리자 좌측 목록 우클릭이 공유한다 —
   // 호출 후의 "그다음"(모달을 열지/이미 열린 폼을 갈아탈지)만 호출측이 다르게 정한다.
+  // 비밀번호만 빼고 그대로 베낀다 — [다중 모니터 사용] 도 그 서버의 성질이므로 따라간다.
+  // id 를 비우면 신규다(ProfileStore.save: `input.id ? 기존 : randomUUID()`).
   const duplicateProfile = useCallback(
-    (p: ConnectionProfile) =>
-      save(
-        p.type === 'rdp'
-          ? // 비밀번호만 빼고 그대로 베낀다 — [다중 모니터 사용] 도 그 서버의 성질이므로 따라간다.
-            { type: 'rdp' as const, name: `${p.name} ${t('conn.menu.copySuffix')}`, host: p.host, port: p.port, username: p.username, multiMonitor: p.multiMonitor, group: p.group }
-          : {
-              type: 'ssh',
-              name: `${p.name} ${t('conn.menu.copySuffix')}`,
-              host: p.host,
-              port: p.port,
-              username: p.username,
-              authType: p.auth.type,
-              keyPath: p.auth.type === 'key' ? p.auth.keyPath : undefined,
-              group: p.group
-            }
-      ),
+    (p: ConnectionProfile) => save(profileInput(p, { id: undefined, name: `${p.name} ${t('conn.menu.copySuffix')}` })),
     [save]
   )
 
@@ -1216,7 +1204,9 @@ export function Shell() {
           })
           if (!name || name === target.group) return
           await moveGroup(target.group, name)
-          saveGroups([...storedGroups.filter((g) => g !== target.group), name])
+          // #193: 순서·부모 관계도 새 이름을 따라가야 한다 — 안 따라가면 그 그룹이 목록 끝으로
+          // 튀고, 자식으로 넣어 둔 그룹들이 조용히 최상위로 올라온다.
+          saveGroups([...storedGroups.filter((g) => g !== target.group), name], renameInLayout(groupLayout, target.group, name))
           return
         }
         if (id === 'group.delete') {
@@ -1234,8 +1224,10 @@ export function Shell() {
           })
           if (r !== 'confirm') return
           // 프로필은 지우지 않는다 — 그룹만 없애고 "기타"로 내려보낸다.
+          // #193: **자식 그룹도 지우지 않는다** — 최상위로 올라온다(removeFromLayout). 프로필을
+          // 살려 주는 메뉴가 그룹만 통째로 지우면 같은 항목이 두 가지 무게를 갖는다.
           await moveGroup(target.group, undefined)
-          saveGroups(storedGroups.filter((g) => g !== target.group))
+          saveGroups(storedGroups.filter((g) => g !== target.group), removeFromLayout(groupLayout, target.group))
         }
         return
       }
@@ -1298,6 +1290,7 @@ export function Shell() {
       newLocal,
       groups,
       storedGroups,
+      groupLayout,
       saveGroups,
       moveGroup,
       runAiCliNow
@@ -1405,6 +1398,12 @@ export function Shell() {
           onSelectSession={selectSession}
           onTreeAction={(id, target) => void onTreeAction(id, target)}
           onTmuxQuery={(sessionId) => window.ev.tmux.list(sessionId)}
+          // #193 사이드바 드래그 — 서버를 그룹으로, 그룹 순서·2단 중첩. 거부 사유는 메인 영역
+          // 토스트로 말한다(사이드바에는 알림 자리가 없고, 새로 만들 만한 일도 아니다).
+          groupLayout={groupLayout}
+          onMoveProfile={(id, group) => void moveProfileToGroup(id, group)}
+          onGroupLayout={saveGroupLayout}
+          onNotice={(msg) => mainRef.current?.toast(msg)}
           cwdBy={cwdBy}
           onCloseSession={(id: string) => mainRef.current?.closeSession(id)}
           // F25: rdp 세션에는 파일 트리를 붙이지 않는다(SFTP·로컬 fs 대상이 아니다).
