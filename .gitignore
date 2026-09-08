@@ -62,3 +62,6 @@ site/downloads/*.yml
 #   npm --prefix video run tts && npm --prefix video run measure && npm --prefix video run render
 site/video/*.mp4
 video/public/vo/
+
+# 성능 계측용 빌드 산출물(tests/perf-*.cjs 가 만든다) — 21MB, 커밋 대상 아님
+out-perf/
