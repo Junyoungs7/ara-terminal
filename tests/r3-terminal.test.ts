@@ -124,6 +124,19 @@ describe('터미널 설정 기본값', () => {
     applyUiPrefs(uiOf()) // 다른 테스트에 새는 것 방지 — 기본값으로 되돌린다.
   })
 
+  /**
+   * #194 ④ 자동완성 스위치. 검사가 두 줄인 이유는 **필드가 없는 파일**과 **false 로 저장한 파일**이
+   * 다르기 때문이다: 선택 필드라 옛 스냅샷에는 아예 없고(= 지금까지 쓰던 사람), 그 사람의 터미널이
+   * 업데이트 한 번에 조용해지면 그것도 하자다. `?? true` 가 아니라 `!== false` 인 이유가 이것이다.
+   */
+  it('자동완성은 미지정이면 켬, 명시적 false 만 끈다', () => {
+    applyUiPrefs(uiOf())
+    expect(termPrefs.termCompletion).toBe(true)
+    applyUiPrefs(uiOf({ termCompletion: false }))
+    expect(termPrefs.termCompletion).toBe(false)
+    applyUiPrefs(uiOf()) // 다른 테스트로 새지 않게 되돌린다.
+  })
+
   it('스크롤백 슬라이더 범위는 1k–100k', () => {
     expect(SCROLLBACK_MIN).toBe(1000)
     expect(SCROLLBACK_MAX).toBe(100000)

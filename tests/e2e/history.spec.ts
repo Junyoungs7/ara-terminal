@@ -66,8 +66,8 @@ test('HIST-2 접두 입력에 인라인 고스트가 뜬다', async ({ ara }) =>
   await expect(ghost(page)).toHaveText('source-line')
 })
 
-// HIST-3 Tab 이면 고스트가 실제 입력이 된다
-test('HIST-3 Tab 으로 고스트를 채택한다', async ({ ara }) => {
+// HIST-3 → 면 고스트가 실제 입력이 된다 (#194 ⑤ 전에는 Tab 이었다 — 그 키는 셸에 돌려줬다)
+test('HIST-3 → 로 고스트를 채택한다', async ({ ara }) => {
   const { page } = ara
   const id = await newLocalShell(page)
   await focusTerminal(page)
@@ -76,13 +76,35 @@ test('HIST-3 Tab 으로 고스트를 채택한다', async ({ ara }) => {
 
   await page.keyboard.type('echo tab-', { delay: 25 })
   await expect(ghost(page)).toHaveText('accept-target', { timeout: 15_000 })
-  await page.keyboard.press('Tab')
+  // 커서가 줄 끝이라 → 가 고스트를 받는다(줄 가운데면 커서 이동으로 셸에 간다 — completionKeys).
+  await page.keyboard.press('ArrowRight')
   await expect(ghost(page)).toHaveCount(0)
   // 흐린 글자가 아니라 셸에 실제로 들어간 입력이다 — 그대로 실행하면 명령으로 동작한다.
   await page.keyboard.press('Enter')
   await expect
     .poll(async () => (await termText(page, id)).split('tab-accept-target').length, { timeout: 20_000 })
     .toBeGreaterThan(3)
+})
+
+// HIST-18 🔴 #194 ⑤ — 고스트가 **떠 있는데도** Tab 은 앱을 지나쳐 셸로 간다.
+// HIST-5·6 은 고스트가 **없을 때**의 통과를 본다. 이번에 바뀐 것은 있을 때라 검사를 따로 둔다.
+test('HIST-18 고스트가 떠 있어도 Tab 은 셸로 간다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const seen: string[] = []
+  const h = await ssh({ password: 'pw-hist18', onShellData: (d) => seen.push(d) })
+  const id = await connectNewSshProfile(page, { name: 'hist18', port: h.port, password: 'pw-hist18' })
+  await expect.poll(() => termText(page, id), { timeout: 25_000 }).toContain('원격 셸 준비 완료')
+
+  await focusTerminal(page)
+  await typeCommand(page, 'echo tabstays-source')
+  await expect.poll(() => termText(page, id), { timeout: 20_000 }).toContain('tabstays-source')
+
+  await page.keyboard.type('echo tabstays-', { delay: 25 })
+  await expect(ghost(page)).toHaveText('source', { timeout: 15_000 })
+  const before = seen.join('').length
+  await page.keyboard.press('Tab')
+  // 고스트를 먹지 않고 탭 문자가 그대로 pty 로 간다 — 셸의 파일 이름 완성이 살아 있다는 뜻이다.
+  await expect.poll(() => seen.join('').slice(before), { timeout: 10_000 }).toContain('\t')
 })
 
 // HIST-4 ESC 는 고스트만 지운다(내가 친 것은 남는다)
@@ -243,9 +265,9 @@ test('HIST-11 재기동 후에도 고스트가 그대로 뜬다', async ({ userD
   await expect(a2.page.locator('.term-ghost')).toHaveText('ghost-source', { timeout: 20_000 })
 })
 
-// HIST-16 후보가 둘 이상이면 **목록**이 뜬다 (2026-08-22 준영님 제보 10번 — "IDE 처럼").
-// 고스트 하나만으로는 "다른 후보가 있다"는 사실 자체가 안 보였다.
-test('HIST-16 후보 목록이 뜨고 ↓ 로 고른다', async ({ ara }) => {
+// HIST-16 후보가 둘 이상이면 **↓ 로** 목록을 연다 (2026-08-22 제보 10번 "IDE 처럼" + #194 ① 부를 때만).
+// 고스트 하나만으로는 "다른 후보가 있다"는 사실 자체가 안 보였는데, 저절로 뜨는 목록은 화면을 덮었다.
+test('HIST-16 ↓ 로 후보 목록을 열고 고른다', async ({ ara }) => {
   const { page } = ara
   const id = await newLocalShell(page)
   await focusTerminal(page)
@@ -255,18 +277,25 @@ test('HIST-16 후보 목록이 뜨고 ↓ 로 고른다', async ({ ara }) => {
 
   await page.keyboard.type('echo list-', { delay: 25 })
   const comp = page.locator('.term-comp')
+  // 고스트는 저절로 뜨지만 목록은 아직 없다(#194 ① — 여기서 뜨면 회귀다).
+  await expect(ghost(page)).toHaveText('beta', { timeout: 15_000 })
+  await expect(comp).toHaveCount(0)
+
+  // 첫 ↓ 가 목록을 연다. 고른 줄은 그대로 첫 후보(= 고스트가 가리키던 것)다.
+  await page.keyboard.press('ArrowDown')
   await expect(comp).toHaveCount(1, { timeout: 15_000 })
   await expect(comp.locator('.ci')).toHaveCount(2)
-  // 첫 줄 = 가장 최근 = beta. 고스트도 같은 것을 가리킨다(둘이 갈리면 Tab 이 딴 걸 넣는다).
+  // 첫 줄 = 가장 최근 = beta. 고스트도 같은 것을 가리킨다(둘이 갈리면 → 가 딴 걸 넣는다).
   await expect(comp.locator('.ci.on')).toHaveText('echo list-beta')
   await expect(ghost(page)).toHaveText('beta')
 
+  // 열린 뒤의 ↓ 는 후보를 옮긴다.
   await page.keyboard.press('ArrowDown')
   await expect(comp.locator('.ci.on')).toHaveText('echo list-alpha')
   await expect(ghost(page)).toHaveText('alpha')
 
-  // Tab 은 **고른 것**을 넣는다.
-  await page.keyboard.press('Tab')
+  // → 는 **고른 것**을 넣는다.
+  await page.keyboard.press('ArrowRight')
   await expect(comp).toHaveCount(0)
   await page.keyboard.press('Enter')
   await expect
@@ -274,7 +303,8 @@ test('HIST-16 후보 목록이 뜨고 ↓ 로 고른다', async ({ ara }) => {
     .toBeGreaterThan(3)
 })
 
-// HIST-17 후보가 하나뿐이면 목록은 안 뜬다 — 고스트가 이미 그 하나라 같은 말을 두 번 한다.
+// HIST-17 후보가 하나뿐이면 ↓ 를 눌러도 목록은 안 뜬다 — 고스트가 이미 그 하나라 같은 말을 두 번 한다.
+// (그 ↓ 는 앱이 안 가로채고 셸로 간다 — 셸 히스토리 탐색을 뺏지 않는다는 규칙 그대로다.)
 test('HIST-17 후보가 하나면 목록 없이 고스트만', async ({ ara }) => {
   const { page } = ara
   const id = await newLocalShell(page)
@@ -284,5 +314,7 @@ test('HIST-17 후보가 하나면 목록 없이 고스트만', async ({ ara }) =
 
   await page.keyboard.type('echo only-', { delay: 25 })
   await expect(ghost(page)).toHaveText('one-cand', { timeout: 15_000 })
+  await expect(page.locator('.term-comp')).toHaveCount(0)
+  await page.keyboard.press('ArrowDown')
   await expect(page.locator('.term-comp')).toHaveCount(0)
 })

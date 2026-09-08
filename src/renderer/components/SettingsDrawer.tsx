@@ -943,6 +943,15 @@ export function SettingsDrawer({
 
           {section === 'terminal' && (
             <>
+              {/* #194 ④ 자동완성 스위치. 지금까지 빠져나갈 길이 없었다 — 거슬리는 사람에게
+                  "끄세요" 라고 말할 수 있는 자리가 이 한 줄이다. 기본은 켬(기존 동작 유지). */}
+              <Row label={t('settings.termCompletion')} desc={t('settings.termCompletion.desc')}>
+                <Toggle
+                  on={prefs.termCompletion}
+                  label={t('settings.termCompletion')}
+                  onChange={(termCompletion) => onPrefsChange({ termCompletion })}
+                />
+              </Row>
               <Row label={t('settings.cursorStyle')} desc={t('settings.cursorStyle.desc')}>
                 <Seg
                   value={prefs.cursorStyle}

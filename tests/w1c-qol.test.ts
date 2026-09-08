@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   feedInput,
+  ghostEligible,
   ghostFor,
   ghostList,
   shouldRecord,
@@ -122,12 +123,29 @@ describe('F11 인라인 고스트(ghostFor)', () => {
   it('접두 일치하는 가장 최근 항목을 고른다', () => {
     expect(ghostFor(hist, 'npm')).toBe('npm run test')
     expect(ghostFor(hist, 'npm run b')).toBe('npm run build')
-    expect(ghostFor(hist, 'cd ')).toBe('cd /srv/서비스')
   })
 
   it('입력이 없거나 일치가 없으면 고스트도 없다', () => {
     expect(ghostFor(hist, '')).toBeNull()
     expect(ghostFor(hist, 'docker')).toBeNull()
+  })
+
+  /**
+   * 🔴 **뜻이 뒤집힌 검사다.** 여기 있던 줄은 `ghostFor(hist, 'cd ')` 가 `cd /srv/서비스` 를
+   * 준다고 못 박아 뒀다 — 그 동작이 바로 2026-09-08 준영님의 불편(*"작성할때 너무 불편한데"*)
+   * 이었다. `cd ` 까지만 쳤을 때 사람이 원하는 것은 **지금 여기 폴더**지 어제 간 폴더가 아니다.
+   * 지우지 않고 반대로 못 박는다: 그래야 되돌리는 사람이 "옛날엔 떴다"를 알고 되돌린다.
+   */
+  it('#194 ③ 공백으로 끝나면 안 뜬다 — `cd ` 에 어제 간 경로를 들이밀지 않는다', () => {
+    expect(ghostFor(hist, 'cd ')).toBeNull()
+    expect(ghostList(hist, 'cd ')).toEqual([])
+  })
+
+  it('#194 ③ 한 글자로는 안 뜬다 — `c` 는 히스토리 절반과 맞아 뜻이 없다', () => {
+    expect(ghostFor(['cd /srv', 'cat log'], 'c')).toBeNull()
+    // 두 글자부터 뜬다. 낱말이 아니라 **줄 전체** 길이가 기준이라 `cd w` 도 뜬다.
+    expect(ghostFor(['cd /srv'], 'cd')).toBe('cd /srv')
+    expect(ghostFor(['cd work/api'], 'cd w')).toBe('cd work/api')
   })
 
   it('이미 다 친 명령에는 고스트를 띄우지 않는다(더 보여 줄 것이 없다)', () => {
@@ -159,6 +177,15 @@ describe('F11 후보 목록(ghostList)', () => {
   it('입력이 없거나 일치가 없으면 빈 목록', () => {
     expect(ghostList(hist, '')).toEqual([])
     expect(ghostList(hist, 'docker')).toEqual([])
+  })
+
+  it('#194 ③ 문턱은 ghostEligible 하나가 정한다 — 목록과 고스트가 갈리지 않게', () => {
+    // TerminalPane 은 타이머를 걸기 전에 이 함수를 따로 부른다(안 뜰 입력엔 훑기도 안 한다).
+    // 두 자리의 판정이 갈리면 "고스트는 없는데 목록만 뜬다" 같은 상태가 생긴다.
+    expect(ghostEligible('c')).toBe(false)
+    expect(ghostEligible('cd ')).toBe(false)
+    expect(ghostEligible('cd')).toBe(true)
+    expect(ghostEligible('cd w')).toBe(true)
   })
 
   it('다 친 명령은 후보가 아니다(고스트와 같은 규칙)', () => {

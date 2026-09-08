@@ -293,13 +293,16 @@ app.whenReady().then(async () => {
   await wait(900)
 
   // ── ① F11: 인라인 고스트 자동완성 ──
+  // #194 ② 로 고스트는 **손을 멈추고 250ms 뒤**에 뜬다(에코가 늦으면 +45ms 씩 재시도). 700ms 는
+  // 그 위에 얹은 여유다 — 이 값을 250 아래로 줄이면 고스트를 읽기 전에 찍는다.
   await typeText(win, 'npm r')
-  await wait(400)
+  await wait(700)
   results.ghost = await ghostText(win)
   await capture(win, 'W1C-history-screenshot.png')
 
-  // Tab 채택 → 고스트가 실제 입력으로 바뀐다.
-  await pressKey(win, 'Tab')
+  // → 채택 → 고스트가 실제 입력으로 바뀐다(#194 ⑤ 전에는 Tab 이었다 — 그 키는 셸에 돌려줬다.
+  // 커서가 줄 끝이라 → 가 받는다. 결과 키 이름은 그대로 둔다 — 이 하네스의 결과를 읽는 눈이 있다).
+  await pressKey(win, 'Right')
   await wait(500)
   results.afterTabGhost = await ghostText(win)
   results.lineAfterTab = await js(win, `(() => {
@@ -436,7 +439,7 @@ app.whenReady().then(async () => {
   console.log('W1C 결과:', JSON.stringify(results, null, 1))
 
   const ok =
-    // F11 고스트: 'npm r' → 'npm run build' 의 나머지가 흐린 글자로 뜨고, Tab 이 그것을 실입력으로 만든다.
+    // F11 고스트: 'npm r' → 'npm run build' 의 나머지가 흐린 글자로 뜨고, → 가 그것을 실입력으로 만든다.
     results.ghost === 'un build' &&
     results.afterTabGhost === null &&
     (results.lineAfterTab || '').includes('npm run build') &&

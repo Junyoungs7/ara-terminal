@@ -11,7 +11,15 @@ import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
 import { notifyPasted, readClipboard, writeClipboard } from '../store/clipboardWrite'
-import { appendHistory, cachedHistory, feedInput, ghostList, loadHistory, shouldRecord } from '../store/history'
+import {
+  appendHistory,
+  cachedHistory,
+  feedInput,
+  ghostEligible,
+  ghostList,
+  loadHistory,
+  shouldRecord
+} from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { pastePaths } from '../components/filePath'
@@ -62,11 +70,24 @@ const BACKLOG_PAUSE = 4 // 미완료 write 4개 초과 시 pause
 const BACKLOG_RESUME = 1 // 1개 이하로 소진되면 resume
 // 시각 벨 번쩍임 지속(R5). 눈에 걸리되 작업을 방해하지 않는 길이.
 const BELL_FLASH_MS = 160
-// F11 고스트를 그리기 전에 기다리는 시간. 입력은 pty 를 돌아 에코로 와야 커서가 움직이므로,
-// 키를 누른 그 순간에 그리면 커서 위치가 한 칸 뒤처져 고스트가 어긋난다.
-const GHOST_DELAY_MS = 45
+/**
+ * **손이 멈춘 것**으로 볼 시간(#194 ②, 2026-09-08). 45ms 였다 — 사람 타이핑(보통 120~250ms/글자)
+ * 보다 빨라서 **치는 도중에** 제안이 끼어들었다. 250ms 는 다음 글자가 안 오는 순간을 고른다.
+ *
+ * ⚠️ 아래 GHOST_ECHO_MS 와 **다른 일**이다. 하나로 합치지 마라 — 합치면 둘 중 하나가 틀린 값이 된다.
+ */
+const GHOST_IDLE_MS = 250
+/**
+ * 에코를 기다리는 재시도 간격. 입력은 pty 를 돌아 에코로 와야 커서가 움직이므로, 그 전에 그리면
+ * 커서가 한 칸 뒤처져 고스트가 어긋난다. **이것은 사람을 기다리는 시간이 아니라 선로를 기다리는
+ * 시간이라** 위(GHOST_IDLE_MS)와 함께 올리면 안 된다 — 늦게 오는 에코를 더 늦게 잡을 뿐이다.
+ */
+const GHOST_ECHO_MS = 45
 // 에코를 기다리는 최대 횟수. 원격 SSH·conpty 가 밀릴 때 한두 번으로는 못 따라잡는다
-// (실측: 백스페이스를 연달아 보낸 뒤 첫 글자 에코가 100ms 넘게 늦는다). 총 대기 ≈ 0.4초.
+// (실측: 백스페이스를 연달아 보낸 뒤 첫 글자 에코가 100ms 넘게 늦는다).
+// 8 × 45ms ≈ 0.36초 — 그 실측이 정한 값이라 ②에서 지연을 올릴 때도 **그대로 뒀다**(줄이면 원격에서
+// 고스트가 어긋난다. e2e 시나리오 HIST-M1 이 이 0.4초를 전제로 적혀 있다).
+// 최악 총 대기 = 250 + 360 ≈ 0.61초, 보통은 250ms(에코가 제때 오면 첫 판에 그린다).
 const GHOST_RETRIES = 8
 /**
  * 목록에 보여 줄 후보 수(2026-08-22 준영님 제보 10번 "자동완성을 IDE 처럼 목록으로").
@@ -194,9 +215,11 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     let ghostMarker: IMarker | null = null
     let ghostTimer: ReturnType<typeof setTimeout> | null = null
 
-    // 지금 목록에 떠 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
+    // 지금 쥐고 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
+    // #194 ①: 후보가 있다고 목록이 떠 있는 것은 아니다. 떠 있는지는 compOpen 이 안다(= comp state).
     let compItems: string[] = []
     let compIndex = 0
+    let compOpen = false
 
     const clearGhost = () => {
       if (ghostTimer) {
@@ -211,7 +234,12 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       if (compItems.length > 0) {
         compItems = []
         compIndex = 0
-        setComp(null)
+        // 목록이 안 떠 있었으면 React 를 깨우지 않는다 — 이제 후보는 있어도 목록은 없는 것이
+        // 보통이라(#194 ①), 여기서 무조건 setComp 하면 키마다 헛 렌더가 한 번씩 돈다.
+        if (compOpen) {
+          compOpen = false
+          setComp(null)
+        }
       }
     }
 
@@ -249,6 +277,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
 
     /**
      * 후보 목록을 커서 아래(자리가 없으면 위)에 놓는다 — 제보 10번.
+     * #194 ①: **`↓` 를 눌렀을 때만** 불린다(전에는 타이핑 중 저절로 떴다). 화면을 덮는 것은
+     * 고스트가 아니라 이 목록이라, 부를 때만 여는 것으로 바꿨다.
      * 셀 크기는 xterm 내부값을 훔치지 않고 **화면 요소를 재서** 얻는다(`.xterm-screen` 의 폭은
      * 정확히 cols × 셀 폭이다). 좌표는 화면 기준(position:fixed) — 우클릭 메뉴와 같은 방식이라
      * 패널의 overflow 에 잘리지 않는다.
@@ -268,9 +298,10 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
        */
       const listH = items.length * COMP_ROW_H + COMP_CHROME_H
       const up = lineTop + cellH + listH > r.bottom
+      compOpen = true
       setComp({
         items,
-        index: 0,
+        index: compIndex,
         left: Math.round(r.left + term.buffer.active.cursorX * cellW),
         y: Math.round(up ? window.innerHeight - lineTop : lineTop + cellH),
         up
@@ -282,7 +313,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       if (!lineBuf) return
       // 에코가 아직 안 왔으면 커서가 한 칸 뒤처져 고스트가 어긋난다 — 한 번 더 기다린다.
       if (!lineBeforeCursor(sessionId).endsWith(lineBuf)) {
-        if (retry > 0) ghostTimer = setTimeout(() => renderGhost(retry - 1), GHOST_DELAY_MS)
+        if (retry > 0) ghostTimer = setTimeout(() => renderGhost(retry - 1), GHOST_ECHO_MS)
         return
       }
       const items = ghostList(cachedHistory(scope), lineBuf, COMP_MAX)
@@ -290,11 +321,16 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       compItems = items
       compIndex = 0
       drawGhost(items[0].slice(lineBuf.length))
-      // 하나뿐이면 목록을 띄우지 않는다 — 고스트가 곧 그 하나라서 목록은 같은 말을 두 번 한다.
-      if (items.length > 1) placeComp(items)
+      // #194 ①: 목록은 여기서 열지 않는다. 후보가 여럿이라는 사실은 쥐고만 있다가 `↓` 를 누르면
+      // openComp 가 연다 — 회색 고스트 한 줄은 방해가 적지만 목록은 화면을 덮기 때문이다.
     }
 
-    /** ↓/↑ 로 후보를 옮긴다. 고스트도 함께 바뀐다 — 지금 Tab 을 누르면 무엇이 들어올지가 그것이다. */
+    /** `↓` — 쥐고 있던 후보를 목록으로 편다. 후보가 하나면 부르지 않는다(고스트가 곧 그 하나다). */
+    const openComp = () => {
+      if (compItems.length > 1) placeComp(compItems)
+    }
+
+    /** ↓/↑ 로 후보를 옮긴다. 고스트도 함께 바뀐다 — 지금 `→` 를 누르면 무엇이 들어올지가 그것이다. */
     const moveComp = (delta: number) => {
       const n = compItems.length
       if (n === 0) return
@@ -305,8 +341,14 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
 
     const scheduleGhost = () => {
       clearGhost()
-      if (!lineBuf) return
-      ghostTimer = setTimeout(() => renderGhost(GHOST_RETRIES), GHOST_DELAY_MS)
+      /**
+       * 안 뜰 입력에는 **타이머조차 만들지 않는다**(#194 ③·곁들여). 여기서 걸러 내면 그 키는
+       * setTimeout 도, 250ms 뒤의 xterm 버퍼 읽기(lineBeforeCursor)도, 히스토리 훑기(ghostList)도
+       * 하지 않는다 — `cd ` 처럼 낱말이 빈 줄과 한 글자 접두가 매 키마다 그것을 다 하고 있었다.
+       * 판정은 ghostList 와 같은 함수를 쓴다(두 벌로 갈리면 한쪽만 고쳐진다).
+       */
+      if (!termPrefs.termCompletion || !ghostEligible(lineBuf)) return
+      ghostTimer = setTimeout(() => renderGhost(GHOST_RETRIES), GHOST_IDLE_MS)
     }
 
     /**
@@ -323,7 +365,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       return line ? line.translateToString(true, buf.cursorX) === '' : false
     }
 
-    // Tab 채택: 나머지를 셸에 실제로 입력한다(화면의 흐린 글자를 진짜 입력으로 바꾼다).
+    // 채택(`→`·목록의 Enter): 나머지를 셸에 실제로 입력한다(화면의 흐린 글자를 진짜 입력으로 바꾼다).
     // 우리가 보낸 입력은 term.onData 를 거치지 않으므로 줄 버퍼도 여기서 직접 맞춘다.
     const acceptGhost = () => {
       const suffix = ghostSuffix
@@ -343,8 +385,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       if (isAppShortcut(e)) return false
-      // F11: 고스트가 떠 있을 때만 Tab·→=채택 / ↓↑=고르기 / ESC=해제, 목록이 떴으면 Enter=고르기
-      // (그때 **친 그대로 실행하려면 ESC 를 먼저** 누른다 — completionKeys 의 Enter 항 참고).
+      // F11: 고스트가 떠 있을 때만 →=채택 / ↓=목록 열기 / 목록에서 ↑↓=고르기·Enter=고르기 / ESC=해제
+      // (#194: Tab 은 셸에 돌려줬다 — 파일 이름 완성이 히스토리 제안보다 자주 필요하다).
       // 무엇을 가로챌지는 completionKeys 가 정한다(순수 판정 — 여기는 그 결정을 실행만 한다).
       // 고스트가 없으면 셸의 자동완성·인터럽트·커서 이동을 그대로 통과시킨다(R3.8 정책).
       // isComposing: 한글을 조합하는 중이면 Enter 는 **글자를 확정하는 키**다(IME 가 먼저 가져간다).
@@ -354,6 +396,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
           key: e.key,
           ghost: true,
           items: compItems.length,
+          listOpen: compOpen,
           // 버퍼를 읽는 값이라 필요한 키에서만 잰다(키다운마다 줄을 훑을 이유가 없다).
           atLineEnd: e.key === 'ArrowRight' && atLineEnd()
         })
@@ -363,6 +406,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
           e.preventDefault()
           if (act === 'accept') acceptGhost()
           else if (act === 'dismiss') clearGhost()
+          else if (act === 'open') openComp()
           else moveComp(act === 'next' ? 1 : -1)
           return false
         }
@@ -640,9 +684,10 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
 
   return (
     <div className="term-pane" ref={hostRef}>
-      {/* F11 R2 후보 목록(제보 10) — 커서 옆에 뜨는 IDE 식 목록. 클릭 대상이 아니다:
-          손이 키보드에 있는 자리라 ↓↑ 로 고르고 Tab 으로 넣는다(마우스로 집으려면 터미널
-          포커스가 빠져 다음 글자를 놓친다). xterm 이 이 div 를 건드리지 않도록 형제로 둔다. */}
+      {/* F11 R2 후보 목록(제보 10) — 커서 옆에 뜨는 IDE 식 목록. #194 ① 이후로 **`↓` 를 눌러야**
+          열린다(타이핑 중에는 회색 고스트 한 줄뿐이다). 클릭 대상이 아니다: 손이 키보드에 있는
+          자리라 ↑↓ 로 고르고 →·Enter 로 넣는다(마우스로 집으려면 터미널 포커스가 빠져 다음 글자를
+          놓친다). xterm 이 이 div 를 건드리지 않도록 형제로 둔다. */}
       {comp && (
         <div
           className="term-comp"

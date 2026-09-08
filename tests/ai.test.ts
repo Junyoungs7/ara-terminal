@@ -376,6 +376,7 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         cursorStyle: 'block',
         cursorBlink: true,
         bell: 'off',
+        termCompletion: true,
         sessionLog: false,
         logRetentionDays: 30,
         aiProvider: provider,

@@ -937,32 +937,44 @@
 
           <h3>터미널 자동완성</h3>
           <p>
-            터미널에서 치기 시작하면 <strong>예전에 친 명령</strong> 중 이어질 만한 것을 회색 글씨로 미리
-            보여 주고, 후보가 여럿이면 목록으로 띄웁니다.
+            터미널에서 <strong>두 글자 이상</strong> 치고 손을 멈추면, <strong>예전에 친 명령</strong> 중
+            이어질 만한 것을 회색 글씨로 커서 뒤에 미리 보여 줍니다. 후보가 여럿일 때 그 목록은
+            <kbd>↓</kbd> 를 눌러야 열립니다 — 치는 동안 화면을 덮지 않습니다.
+          </p>
+          <table class="keys">
+            <tr><td><kbd>→</kbd></td><td>회색 글씨를 그대로 받기 (커서가 <b>줄 맨 끝</b>일 때만)</td></tr>
+            <tr><td><kbd>↓</kbd></td><td>후보 목록 열기 (후보가 둘 이상일 때)</td></tr>
+            <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>목록이 열린 뒤 — 후보 고르기</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>목록이 열려 있으면 고른 것을 줄에 넣기</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>닫기 — 그 뒤 <kbd>Enter</kbd> 는 친 그대로 실행</td></tr>
+          </table>
+          <div class="note">
+            <span>💡</span>
+            <span>
+              <b><kbd>Tab</kbd> 은 셸의 것입니다.</b> 앱이 가로채지 않으니 <code>cd Doc</code> +
+              <kbd>Tab</kbd> 같은 <b>파일 이름 완성</b>이 평소대로 동작합니다. 회색 글씨를 받는 키는
+              <kbd>→</kbd> 입니다.
+            </span>
+          </div>
+          <p>
+            공백으로 끝나는 줄(<code>cd </code>)이나 한 글자(<code>c</code>)에는 뜨지 않습니다 — 그 자리의
+            제안은 맞을 확률이 낮아 방해만 됩니다. 전부 끄려면
+            <b>설정 ▸ [터미널] ▸ 자동완성</b> 을 내리세요.
           </p>
           <div class="note warn">
             <span>⚠️</span>
             <span>
-              <b>목록이 떠 있는 동안 <kbd>Enter</kbd> 는 실행이 아니라 "고르기" 입니다.</b> IDE 와 같은
+              <b>목록이 열려 있는 동안 <kbd>Enter</kbd> 는 실행이 아니라 "고르기" 입니다.</b> IDE 와 같은
               감각으로 맞춘 것입니다. <b>친 그대로 실행하려면 <kbd>Esc</kbd> 로 목록을 닫고
-              <kbd>Enter</kbd></b> 를 누르세요.
+              <kbd>Enter</kbd></b> 를 누르세요. 목록을 열지 않았다면 <kbd>Enter</kbd> 는 늘 그대로 실행입니다.
             </span>
           </div>
-          <table class="keys">
-            <tr><td><kbd>Esc</kbd></td><td>목록을 닫습니다 — 그 뒤 <kbd>Enter</kbd> 는 친 그대로 실행</td></tr>
-            <tr><td><kbd>↑</kbd> / <kbd>↓</kbd></td><td>후보 고르기</td></tr>
-            <tr><td><kbd>Enter</kbd> · <kbd>Tab</kbd> · <kbd>→</kbd></td><td>고른 것을 줄에 넣기</td></tr>
-          </table>
-          <p>
-            <kbd>→</kbd> 로 받는 것은 <strong>커서가 줄 맨 끝에 있을 때만</strong>입니다. 줄 중간에서는
-            그냥 커서 이동으로 셸에 전달됩니다.
-          </p>
           <figure class="man-shot">
             <img
               src="assets/shots/shot-13-completion.png"
-              alt="터미널에서 g 한 글자를 친 상태 — 회색 고스트로 git status 의 나머지가 이어 보이고, 그 아래 네 후보(git status·git log·grep·go build) 목록과 맨 아래 안내 줄이 떠 있다"
+              alt="터미널에서 gi 두 글자를 치고 ↓ 를 누른 상태 — 회색 고스트로 git status 의 나머지가 이어 보이고, 그 아래 두 후보(git status·git log) 목록과 맨 아래 안내 줄이 떠 있다"
             />
-            <figcaption>목록이 떠 있으면 Enter 는 실행이 아니라 고르기입니다</figcaption>
+            <figcaption>목록은 ↓ 로 엽니다. 열려 있는 동안 Enter 는 실행이 아니라 고르기입니다</figcaption>
           </figure>
         </section>
 

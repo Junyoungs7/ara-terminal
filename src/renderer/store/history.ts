@@ -63,6 +63,28 @@ export function feedInput(buf: string, data: string): Feed {
   return { buf, commands }
 }
 
+/** 제안을 시작하는 최소 글자 수(#194 ③). 한 글자는 히스토리의 절반과 맞아 아무 뜻이 없다. */
+export const GHOST_MIN_PREFIX = 2
+
+/**
+ * 이 입력에 **제안을 띄울 자리인가**(#194 ③, 2026-09-08 준영님: *"작성할때 너무 불편한데"*).
+ *
+ * 두 가지만 본다:
+ *  · 공백으로 끝나면 지금 치는 낱말이 **비어 있다** → `cd ` 만 쳐도 히스토리의 아무 `cd` 나
+ *    들이밀던 것을 여기서 끊는다.
+ *  · 줄 전체가 두 글자 미만이면 → `c` 로는 안 뜬다.
+ *
+ * ⚠️ 문턱은 **줄 전체** 기준이지 마지막 낱말 기준이 아니다. `cd w` 는 떠야 하고 `c` 는 아니어야
+ * 한다는 것이 요청의 예시인데, 마지막 낱말(`w`)로 재면 `cd w` 가 함께 죽는다. 바꾸기 전에 그
+ * 두 예시를 먼저 통과시켜라(tests/w1c-qol.test.ts).
+ *
+ * `ghostList` 안에 두지 않고 뗀 이유는 부르는 쪽이다: TerminalPane 이 **타이머를 걸기 전에**
+ * 이것을 물어, 어차피 안 뜰 입력에는 지연 타이머도 xterm 버퍼 읽기도 히스토리 훑기도 만들지 않는다.
+ */
+export function ghostEligible(input: string): boolean {
+  return input.length >= GHOST_MIN_PREFIX && !/\s$/.test(input)
+}
+
 /**
  * 접두 일치 후보 — **최근 것부터**, 중복 없이, 최대 max 개
  * (2026-08-22 준영님 제보 10번: "자동완성이 IDE 처럼 목록으로 떴으면 좋겠어").
@@ -71,7 +93,7 @@ export function feedInput(buf: string, data: string): Feed {
  * 같은 줄이 세 개 뜨면 고를 것이 없는 목록이 된다(연속 중복만 appendHistory 가 막는다).
  */
 export function ghostList(entries: readonly string[], input: string, max = 6): string[] {
-  if (!input) return []
+  if (!ghostEligible(input)) return []
   const out: string[] = []
   const seen = new Set<string>()
   for (let i = entries.length - 1; i >= 0 && out.length < max; i--) {

@@ -8,6 +8,7 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_SCROLLBACK,
   DEFAULT_SESSION_LOG,
+  DEFAULT_TERM_COMPLETION,
   UI_SCALE_FACTOR,
   uiScaleOf,
   type UiPrefs,
@@ -43,7 +44,11 @@ export const termPrefs: Omit<
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
   cursorStyle: DEFAULT_CURSOR_STYLE,
   cursorBlink: DEFAULT_CURSOR_BLINK,
-  bell: DEFAULT_BELL
+  bell: DEFAULT_BELL,
+  // #194 ④ — 이 값은 xterm 옵션이 아니라 TerminalPane 이 **키를 칠 때마다** 읽는 값이다. 그래서
+  // 이미 열려 있는 터미널도 applyTermPrefsToAll 없이 따라온다(끈 순간 이미 그려져 있던 고스트
+  // 하나는 다음 키에서 걷힌다 — 그 키가 사람이 터미널을 다시 만지는 순간이라 그대로 뒀다).
+  termCompletion: DEFAULT_TERM_COMPLETION
 }
 
 // 스냅샷 ui(옵셔널 필드 다수) → 기본값이 채워진 확정 prefs. 설정 창·부트 복원이 공유한다.
@@ -56,6 +61,7 @@ export function prefsFrom(
     | 'cursorStyle'
     | 'cursorBlink'
     | 'bell'
+    | 'termCompletion'
     | 'sessionLog'
     | 'logRetentionDays'
     | 'sessionLogDir'
@@ -76,6 +82,8 @@ export function prefsFrom(
     cursorStyle: ui.cursorStyle ?? DEFAULT_CURSOR_STYLE,
     cursorBlink: ui.cursorBlink ?? DEFAULT_CURSOR_BLINK,
     bell: ui.bell ?? DEFAULT_BELL,
+    // #194 ④ 미지정이면 **켬** — 옛 스냅샷(필드 자체가 없다)은 지금까지의 동작을 그대로 잇는다.
+    termCompletion: ui.termCompletion !== false,
     // 기본 off — 사용자가 켜지 않으면 파일이 생기지 않는다(설계 §5.5 / 보안 체크리스트).
     sessionLog: ui.sessionLog ?? DEFAULT_SESSION_LOG,
     logRetentionDays: ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
@@ -108,4 +116,5 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   termPrefs.cursorStyle = prefs.cursorStyle
   termPrefs.cursorBlink = prefs.cursorBlink
   termPrefs.bell = prefs.bell
+  termPrefs.termCompletion = prefs.termCompletion
 }

@@ -174,6 +174,12 @@ export type CursorStyle = (typeof CURSOR_STYLES)[number]
 export const DEFAULT_CURSOR_STYLE: CursorStyle = 'block'
 export const DEFAULT_CURSOR_BLINK = true
 
+/**
+ * #194 ④ 터미널 자동완성(히스토리 고스트 + 후보 목록)을 켤까. **기본은 켬** — 지금까지의 동작이다.
+ * 끄면 고스트도 목록도 안 뜨고 `→`·`Esc`·`↓` 는 전부 셸의 것이 된다(가로챌 고스트가 없으므로).
+ */
+export const DEFAULT_TERM_COMPLETION = true
+
 // 벨(BEL, \x07). xterm 5 에는 소리·시각 벨 옵션이 없고 onBell 이벤트만 있으므로 시각 벨은
 // 패널을 한 번 번쩍이는 것으로 구현한다(소리는 사내 환경에서 원한 적이 없어 넣지 않는다).
 export const BELL_STYLES = ['off', 'visual'] as const
@@ -361,6 +367,8 @@ export type UiPrefs = {
   cursorStyle: CursorStyle
   cursorBlink: boolean
   bell: BellStyle
+  // #194 ④ 자동완성 켜기/끄기. 미지정 스냅샷은 prefsFrom 이 **켬**으로 채운다.
+  termCompletion: boolean
   // F12: 세션 로그 기록 여부·보존 기간. 전용 설정 채널을 만들지 않고 이 묶음에 얹는다.
   sessionLog: boolean
   logRetentionDays: number
@@ -411,6 +419,16 @@ export type UiState = {
   cursorStyle?: CursorStyle
   cursorBlink?: boolean
   bell?: BellStyle
+  /**
+   * #194 ④ 터미널 자동완성. **미지정 = 켬**(지금까지의 동작 — 아무도 설정을 건드리지 않은 파일이
+   * 갑자기 조용해지면 그것도 하자다). 명시적인 false 만 끈다.
+   *
+   * 🔴 선택 필드라 `SCHEMA_VERSION` 은 올리지 않았다 — 올리면 옛 앱이 워크스페이스를 **통째로**
+   *    못 읽어(migrations.ts:49 → null → 기본 스냅샷) 사용자 눈엔 프로필이 전부 사라진다.
+   *    옛 앱은 이 키를 모르는 채 그대로 두고 읽는다(WorkspaceStore 가 ui 를 통째로 보존한다).
+   *    RdpProfile.multiMonitor 와 같은 규칙이다.
+   */
+  termCompletion?: boolean
   /**
    * F23 [MCP]: 서버를 켜 둘까. **미지정 = 켬**(2026-08-26 준영님 지시: *"mcp는 무조건 기본으로
    * 켜지게"*). 이 앱에서 아라가 우리 도구를 쓰는 길이 MCP 하나뿐이라, 꺼진 채로 시작하면

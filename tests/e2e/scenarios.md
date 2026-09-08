@@ -365,9 +365,12 @@
 |----|------|------|------|-----------|--------|------|
 | HIST-1 | 명령 수집 | 로컬 셸 1개 | `echo 수집확인` 입력 후 Enter | userData `history.json` 의 `local` scope 에 남는다 | ✅ | PASS |
 | HIST-2 | 인라인 고스트 표시 | 히스토리에 `echo ghost-source-line` | `echo ghost-` 까지만 입력 | 커서 뒤에 흐린 글자로 나머지가 겹쳐 보인다 | ✅ | PASS |
-| HIST-3 | Tab 채택 | 고스트 표시 중 | `Tab` | 고스트가 사라지고 입력 줄이 완성된다(실제 셸 입력) | ✅ | PASS |
+| HIST-3 | → 채택 | 고스트 표시 중 · 커서가 줄 끝 | `→` | 고스트가 사라지고 입력 줄이 완성된다(실제 셸 입력) | ✅ | PASS |
 | HIST-4 | ESC 해제 | 고스트 표시 중 | `Esc` | 고스트만 사라지고 내가 친 접두는 남는다 | ✅ | PASS |
 | HIST-5·6 | 고스트 없으면 Tab·ESC 통과 | 일치 항목 없는 입력 | `Tab` / `Esc` | 앱이 가로채지 않고 pty 로 탭·ESC 가 그대로 간다 | ✅ | PASS |
+| HIST-18 | 🔴 #194 ⑤ 고스트가 **떠 있어도** Tab 은 셸의 것 | 고스트 표시 중 | `Tab` | pty 로 `\t` 가 그대로 간다(셸 파일 이름 완성이 산다) | ✅ | PASS |
+| HIST-19 | #194 ③ 문턱 | 히스토리에 `cd /srv/api` | `cd ` 까지만 · 그리고 `c` 한 글자 | 둘 다 고스트가 **안 뜬다**(공백으로 끝나거나 두 글자 미만) | 🧪 `tests/w1c-qol.test.ts` ghostEligible — 판정이 순수 함수다 | PASS |
+| HIST-20 | #194 ④ 끄는 스위치 | 설정 ▸ [터미널] ▸ 자동완성 off | 접두 입력 | 고스트도 목록도 안 뜬다. 미지정 스냅샷은 **켬** | 🧪 `tests/r3-terminal.test.ts` | PASS |
 | HIST-7 | 비밀번호 미수집 | 직전 출력이 `Password:` (에코 없음) | 비밀번호 입력 후 Enter | `history.json` 어디에도 남지 않는다 | ✅ | PASS |
 | HIST-8 | 오탐 없음 | 일반 프롬프트 | `echo password` 후 Enter | 정상적으로 기록된다(단어만 보고 버리지 않는다) | ✅ | PASS |
 | HIST-9 | 공백 시작 제외 | 로컬 셸 | ` echo 비밀유지` 후 Enter | 기록하지 않는다(셸 관례) | ✅ | PASS |

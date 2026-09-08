@@ -389,8 +389,15 @@ app.whenReady().then(async () => {
   await wait(1200)
   await js(win, `document.querySelector('.term-pane .xterm-helper-textarea')?.focus()`)
   await wait(200)
+  // #194: 한 글자로는 더 이상 안 뜬다(③ 두 글자 문턱). 'gi' 는 HISTORY.local 의 `git log …`·
+  // `git status` 둘과 맞아 고스트 + 후보 2가 된다. 700ms 는 250ms 지연 + 에코 재시도 여유다.
   await typeChar(win, 'g')
+  await typeChar(win, 'i')
   await wait(700)
+  // ①: 목록은 저절로 안 뜬다 — 설명서 그림이 목록을 보여 줘야 하므로 ↓ 로 연다.
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' })
+  await wait(400)
   results.ghost = await js(win, `document.querySelector('.term-ghost')?.textContent ?? null`)
   results.compCount = await js(win, `document.querySelectorAll('.term-comp .ci').length`)
   results.shot13 = await captureNoResize(win, 'shot-13-completion.png')
