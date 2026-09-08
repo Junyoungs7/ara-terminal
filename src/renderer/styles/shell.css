@@ -7374,6 +7374,15 @@ button.sb-seg.upd:hover .val {
   min-height: 0;
   position: relative;
 }
+/* 2026-09-08 준영님: *"드래그해서 복사하기도 불편"*. 본문은 손대지 않는다 — 계산된 값으로 재 보니
+   패널은 `user-select: auto` 였고(왼쪽 `.sidebar` 의 none 은 여기까지 안 온다) 사람 말·아라 말·
+   코드 모두 이미 잡혔다. 실제로 지저분했던 것은 **버튼**이다: 목록 끝까지 잡으려고 아래로 끌면
+   입력줄의 칩("Claude Code"·"계획 먼저")과 머리의 [새 대화]·[지난 대화] 글자가 딸려 들어온다.
+   버튼은 읽어서 복사하는 글이 아니다. 반대로 비용("$0.012 · 3턴")·상태줄·도구 요약은 글이라 남긴다 —
+   그래서 `.ara-panel` 통째가 아니라 `button` 만 끊는다. (입력칸은 textarea 라 안 걸린다.) */
+.ara-panel button {
+  user-select: none;
+}
 /* #154 파일·이미지를 끌어 온 중 — 파일 트리 드롭(.sftp-wrap.drag-over)과 **같은 표시**다.
    놓을 수 있는 자리는 앱 어디서나 같게 보여야 한다. */
 .ara-panel.drag-over {
@@ -8193,6 +8202,37 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
   color: var(--accent-bright);
+}
+/* 코드블록 복사(2026-09-08 준영님 제보 ①). 버튼은 `<pre>` **위 줄**에 앉는다 — 자리 후보가 둘이었다:
+   ① `<pre>` 안 우상단: 가로로 스크롤하는 것이 `<pre>` 자신이라 긴 명령을 밀면 버튼이 흘러나가 사라진다.
+   ② 감싼 칸의 우상단에 absolute: 안 사라지지만 **명령 위를 덮는다.** 실제로 찍어 보니(offscreen,
+      레일 폭 337px) 한 줄짜리 명령의 오른쪽 50px 을 가렸다 — 복사하라고 단 버튼이 복사할 것을 가린다.
+   그래서 흐름 안에 둔다. 세로 한 줄(약 18px)을 쓰는 대신 무엇도 가리지 않고, 가로로 밀어도 안 움직인다.
+   AiPanel·CommandBook 의 `.ai-code-hd` 가 이미 같은 판단을 한 자리다(클래스는 안 돌려 쓴다 — e2e 선택자). */
+.md-prewrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.md-copy {
+  align-self: flex-end;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-hair) var(--sp-3);
+  color: var(--text-lo);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  /* 코드를 드래그로 훑을 때 버튼 글자("복사")까지 딸려 들어가면 붙여넣은 명령이 망가진다(제보 ③).
+     아래 `.ara-panel button` 과 겹치지만 그쪽에 기대지 않는다 — `.md` 는 아라 패널 전용이 아니라
+     아무 데나 붙을 수 있는 조각이고, 그때 이 한 줄이 없으면 같은 사고가 조용히 되살아난다. */
+  user-select: none;
+  transition: var(--dur-quick);
+}
+.md-copy:hover {
+  background: var(--bg-overlay);
+  color: var(--text-hi);
 }
 /* 코드블록은 **가로로 스크롤**한다 — 줄바꿈으로 접으면 명령을 잘못 읽는다. */
 .md-pre {

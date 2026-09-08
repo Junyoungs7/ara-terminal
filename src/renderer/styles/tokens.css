@@ -134,7 +134,11 @@
   --t-purple-b: #e2c5ff;
   --t-cyan-b: #84e8ef;
 
-  /* 터미널 드래그 선택 배경 — 액센트 반투명(글자가 비쳐야 하므로 알파 필수) */
+  /* 드래그 선택 배경 — 액센트 반투명(글자가 비쳐야 하므로 알파 필수).
+     터미널(xterm 테마 `selectionBackground`)과 **앱 UI(`::selection`)가 같은 값을 쓴다** —
+     2026-09-08 준영님 *"드래그가 된지도 잘 안보여"* 전까지 앱 쪽만 `--accent-glow`(15%)였다.
+     그 토큰은 "포커스 링·활성 배경 틴트"용이라(위 R8 규칙) 선택 표시로 쓰기엔 너무 흐렸고,
+     같은 화면에서 터미널만 30% 로 진해 **한 앱 안에서 선택이 두 가지로 보였다.** */
   --sel-bg: rgba(201, 162, 109, 0.3);
 
   /* Radius (§3.1) — 2026-08-21 G: 각지게. IDE 관용구다(둥근 알약은 H 안의 것). */
@@ -351,9 +355,14 @@ body {
   text-rendering: optimizeLegibility;
   font-feature-settings: 'kern' 1;
 }
+/* 선택은 "지금 이만큼 잡혔다"를 한눈에 말해야 한다. 값의 근거와 옛 값은 `--sel-bg` 정의부에.
+   글자색도 터미널과 같은 `--text-hi` 다(xterm 의 `selectionForeground`).
+   실측 대비(--sel-bg 를 배경에 합성한 뒤 잰 값): canvas 위 6.9 · 가장 밝은 overlay 위 5.5.
+   ⚠️ `scan:magic` 의 24조합은 **`--text-*` × `--bg-*` 만** 본다 — 합성색인 이 짝은 안 든다.
+   여기 값을 건드리면 그 수를 손으로 다시 재라(게이트가 대신 봐 주지 않는다). */
 ::selection {
-  background: var(--accent-glow);
-  color: var(--accent-bright);
+  background: var(--sel-bg);
+  color: var(--text-hi);
 }
 ::-webkit-scrollbar {
   width: 6px;
