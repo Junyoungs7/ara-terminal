@@ -41,7 +41,7 @@ git config core.hooksPath .githooks
 이 훅이 못 잡는 것: `npm test`(단위 테스트 회귀) · `npm run build`(번들 컴파일 오류) · e2e · 스모크 ·
 실기동 화면 확인. 전부 배포 전 `docs/release-test.md` 대본으로 사람이 돌려야 한다.
 
-## 🔴 함정 넷
+## 🔴 함정 다섯
 
 모르면 반드시 한 번씩 당한다.
 
@@ -58,6 +58,21 @@ git config core.hooksPath .githooks
 4. **화면을 재는 하네스는 offscreen이다**(`tests/tip-check.cjs`·`tests/overflow-check.cjs`·
    `tests/doc-spacing-check.cjs`). 창을 띄우지 않는 것이 이 저장소의 규율이다 — 새 하네스를
    추가할 때도 따라라.
+
+5. **`npm run dist:win`이 `cpu-features` 에서 죽으면 그 폴더를 지워라.**
+   ```
+   rm -rf node_modules/cpu-features && npm run dist:win
+   ```
+   증상은 gyp/MSBuild 실패인데 컴파일 오류가 아니다 — npm 디버그 로그를 열면 진짜 문장이 나온다:
+   `error MSB6003: "CL.exe"을(를) 실행할 수 없습니다. …사용자가 매핑한 구역이 열려 있는 상태인
+   파일에서 수행할 수 없습니다.` 즉 **보안 프로그램(오피스키퍼)이 빌드 중간 파일을 물고 있다.**
+   같은 뿌리가 함정 2번의 EBUSY 다.
+
+   지워도 되는 이유: `cpu-features`는 ssh2 의 **선택적** 성능 최적화이고
+   (`node_modules/ssh2/lib/protocol/constants.js:7-8`이 `try { require('cpu-features')() } catch {}`),
+   **이 PC 에서 한 번도 빌드된 적이 없다**(`.node` 산출물 부재). 즉 줄곧 없이 돌아왔다.
+   ⚠️ `npm i`를 하면 되살아난다 — 그때 다시 지우면 된다. 근본은 `node_modules`가 DLP 예외로
+   빠지는 것이고, 그건 사람이 요청해야 한다.
 
 ## 배포
 
