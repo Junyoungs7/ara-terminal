@@ -25,6 +25,17 @@ export type AiCliId = 'claude' | 'codex' | 'gemini' | 'custom'
 /** 드롭다운 순서. Record 의 키 순서에 기대지 않는다. */
 export const AI_CLI_IDS: readonly AiCliId[] = ['claude', 'codex', 'gemini', 'custom']
 
+/**
+ * 저장값 → 이 표에 있는 CLI 인가. 없으면 null.
+ *
+ * `Session.aiCli`(스냅샷에 실린다)는 손으로 고칠 수 있는 파일에서 돌아온다 — 모르는 이름이
+ * `AI_CLIS[cli]` 로 들어가면 `undefined.bin` 이라 화면이 통째로 죽는다. 읽는 쪽에서 한 번 거른다
+ * (uiScaleOf·aiCliFlagsOf 와 같은 규칙: 저장값은 신뢰 경계 밖이다).
+ */
+export function aiCliOf(v: unknown): AiCliId | null {
+  return AI_CLI_IDS.includes(v as AiCliId) ? (v as AiCliId) : null
+}
+
 export type AiCliFlag = {
   id: string
   /** 실제로 명령줄에 붙는 인자. 화면은 id 만 다루고 이 값을 만지지 않는다. */
@@ -218,6 +229,36 @@ export function toggleFlag(cli: AiCliId, flags: readonly string[], id: string): 
     ? flags.filter((x) => spec.flags.find((f) => f.id === x)?.group !== target.group)
     : [...flags]
   return [...kept, id]
+}
+
+/** 직전 대화를 이어서 시작하는 플래그의 id. 표에 이 id 를 가진 CLI 만 "이어서"가 성립한다. */
+const CONTINUE_FLAG = 'continue'
+
+/**
+ * 이 CLI 는 **직전 대화를 이어서** 시작할 수 있나 (1.0.8 ② 끊김 카드).
+ *
+ * 지금은 claude(`-c`)뿐이다 — codex·gemini 에는 그런 플래그가 없다. 없는 기능을 있는 척하지
+ * 않으려고 **표에 물어본다**: 카드의 버튼 글자([이어서 시작]/[다시 시작])와 실제로 붙는 플래그가
+ * 같은 근거를 봐야 "이어서 시작을 눌렀는데 새 대화가 뜬다"가 안 생긴다.
+ */
+export function canResume(cli: AiCliId): boolean {
+  return AI_CLIS[cli].flags.some((f) => f.id === CONTINUE_FLAG)
+}
+
+/**
+ * 끊김 카드에서 되살릴 때 쓸 플래그 — **저장된 조합에서 "이어서"만 갈아 끼운다.**
+ *
+ * 🔴 `-r`(고르기)과 `-c`(직전 이어서)는 **배타**다(위 표의 group:'session' 주석). 그런데
+ * `resume`(-r)은 **기본값이 true** 라, 빼지 않으면 되살릴 때 반드시 둘 다 실린다 — claude 가
+ * 뒤엣것만 보거나 오류를 낸다. 그 처리를 여기서 하지 않고 호출측에 맡기면 화면마다 갈린다.
+ * 빼는 일은 `toggleFlag` 가 이미 안다(같은 group 을 걷어 낸다) — 규칙을 두 벌로 만들지 않는다.
+ *
+ * 이어서 시작할 수 없는 CLI(codex·gemini·custom)는 **저장된 조합 그대로** 다시 띄운다.
+ */
+export function resumeFlags(cli: AiCliId, saved: readonly string[]): string[] {
+  if (!canResume(cli)) return [...saved]
+  // 이미 켜져 있으면 toggleFlag 가 꺼 버린다 — 먼저 걷어 내고 한 번만 켠다.
+  return toggleFlag(cli, saved.filter((x) => x !== CONTINUE_FLAG), CONTINUE_FLAG)
 }
 
 export type LaunchOptions = {

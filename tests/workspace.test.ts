@@ -92,6 +92,36 @@ describe('WorkspaceStore', () => {
     expect(prefs).not.toHaveProperty('activityHidden')
   })
 
+  /**
+   * 1.0.8 ②: 세션에 `aiCli`(어떤 AI CLI 를 띄운 탭인가)가 붙었다. **선택 필드라 스키마를 올리지
+   * 않았다** — 올리면 옛 앱이 이 파일을 통째로 못 읽고(migrations 실패 → 기본 스냅샷) 사용자
+   * 눈에는 프로필이 전부 사라진다. 지금 팀에서 여러 버전이 같은 파일을 쓴다.
+   *
+   * 그래서 여기서 못 박는 것은 둘이다: ① 값이 디스크를 왕복한다(다음 부팅의 [이어서 시작] 카드는
+   * 이 값 하나에 걸려 있다) ② 그 대가로 schemaVersion 이 올라가지 않는다.
+   */
+  it('★ 세션의 aiCli 는 스키마를 올리지 않고 디스크를 왕복한다', () => {
+    const a = new WorkspaceStore(path, '0.1.0')
+    const before = a.get().schemaVersion
+    a.update({
+      sessions: [
+        { id: 's1', type: 'local', title: 'claude · OFA', serverKey: 'localhost', cwd: 'D:/AI/OFA', aiCli: 'claude' },
+        { id: 's2', type: 'local', title: '셸 1', serverKey: 'localhost' }
+      ],
+      layout: { type: 'pane', sessionId: 's1' },
+      tabGroups: []
+    })
+    a.flush()
+    const raw = JSON.parse(readFileSync(path, 'utf8'))
+    expect(raw.schemaVersion).toBe(before)
+    expect(raw.sessions[0].aiCli).toBe('claude')
+    // 셸 탭에는 아예 키가 없다 — 없는 것과 'claude' 를 구분해야 카드를 띄울지 정할 수 있다.
+    expect(raw.sessions[1].aiCli).toBeUndefined()
+
+    const b = new WorkspaceStore(path, '0.1.0')
+    expect(b.get().sessions.map((x) => x.aiCli)).toEqual(['claude', undefined])
+  })
+
   it('flush는 savedAt과 app.version을 갱신한다', () => {
     const store = new WorkspaceStore(path, '9.9.9')
     store.flush()

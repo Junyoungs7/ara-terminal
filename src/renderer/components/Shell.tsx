@@ -30,7 +30,7 @@ import { runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, aiCommandOf, type AiCommand } from '../../shared/aiCli'
+import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, aiCommandOf, resumeFlags, type AiCliId, type AiCommand } from '../../shared/aiCli'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { aiRuns, registerAiRun } from '../store/aiSessions'
@@ -178,7 +178,13 @@ export function Shell() {
   // 단축키 핸들러가 이 함수보다 위에서 선언돼 ref 로 잇는다(connectProfileRef 와 같은 이유 —
   // 선언 순서 때문이지 다른 이유는 없다).
   const runAiCliRef = useRef<
-    | ((cli?: 'claude' | 'codex' | 'gemini', atPath?: string, forSessionId?: string, forProfileId?: string) => void)
+    | ((
+        cli?: 'claude' | 'codex' | 'gemini',
+        atPath?: string,
+        forSessionId?: string,
+        forProfileId?: string,
+        resume?: boolean
+      ) => Promise<string | null>)
     | null
   >(null)
 
@@ -487,7 +493,7 @@ export function Shell() {
       } else if (matchBinding(e, 'ai.cli')) {
         // F27 진입점 ② — 아무것도 정해지지 않은 빈 창(마지막에 쓴 조합이 채워진다).
         e.preventDefault()
-        runAiCliRef.current?.()
+        void runAiCliRef.current?.()
       } else if (matchBinding(e, 'palette.all')) {
         // F31 통합 검색. 여기서 받는 이유는 프로필·즐겨찾기 목록이 이 컴포넌트에 있어서다.
         e.preventDefault()
@@ -763,14 +769,20 @@ export function Shell() {
    * [AI] 목록에 뜬다(F1 의 값이 거기 있다). 이 함수는 그 길을 안 지난다.
    */
   const runAiCliNow = useCallback(
-    (
+    async (
       cli?: 'claude' | 'codex' | 'gemini',
       atPath?: string,
       /** 어느 세션의 **자리**(서버·폴더)에서 띄울까. 그 세션 **안에서** 도는 것이 아니다. */
       forSessionId?: string,
       /** 세션 없이 서버만 아는 자리(트리의 서버 행·작업대 복구). 주면 그 서버로 새로 붙는다. */
-      forProfileId?: string
-    ) => {
+      forProfileId?: string,
+      /**
+       * 1.0.8 ②: 끊김 카드의 [이어서 시작] — **직전 대화를 이어서** 띄운다(claude 의 `-c`).
+       * 플래그를 여기서 손대지 않고 `resumeFlags` 에 맡긴다: `-r`/`-c` 가 배타라는 판정이
+       * 화면마다 갈리면 안 된다(그 함수의 주석 참고).
+       */
+      resume?: boolean
+    ): Promise<string | null> => {
       const sess = forSessionId
         ? sessions.sessions.find((x) => x.id === forSessionId)
         : forProfileId
@@ -781,7 +793,7 @@ export function Shell() {
         // 폴더를 모르는 세션(막 뜬 셸)에서는 아무 데서나 띄우지 않는다 — 어디서 도는지 모르는
         // AI 를 만드느니 안내하고 만다(창이 있던 시절에는 여기서 물었다).
         mainRef.current?.toast(t('aicli.noCwd'))
-        return
+        return null
       }
       // CLI 를 안 주면 마지막에 쓴 것. 그것도 없으면 claude(사내 기본).
       cli = cli ?? ((aiCliRecent.list[0]?.cli as 'claude' | 'codex' | 'gemini' | undefined) ?? 'claude')
@@ -791,15 +803,19 @@ export function Shell() {
       // 최근에 쓴 조합이 있으면 그대로, 없으면 **설정 [AI] 의 기본 플래그**(2026-08-20 · A-79).
       // 예전엔 여기가 `?? []` 라 처음 쓰는 사람에게 맨몸 `claude` 가 떴다 — 창을 없애면서
       // 플래그를 고를 자리가 사라진 것을 못 메운 자리였다.
-      const flags = last?.flags ?? aiCliFlags[cli] ?? []
+      const saved = last?.flags ?? aiCliFlags[cli] ?? []
+      // 되살리는 길이면 "이어서"로 갈아 끼운다(claude 뿐 — 나머지는 저장된 조합 그대로).
+      const flags = resume ? resumeFlags(cli, saved) : saved
       // D(#168): 셸에 밀어 넣을 한 줄이 아니라 **그 세션이 실행할 것**을 만든다(배열째 나른다).
       const argv = aiCommandOf({ cli, flags })
-      if (!argv) return
+      if (!argv) return null
       const engine = cli
       // 새 탭이 열리면 그때 기록한다 — 등록이 **새 세션 id** 를 가리켜야 [AI] 목록·작업대가 그 탭을
       // 찾는다(예전에는 명령을 밀어 넣은 그 세션이 곧 대상이라 이 순서가 필요 없었다).
       const remember = (sid: string): void => {
-        aiCliRecent.record({ profileId: target, path, cli: engine, flags })
+        // 최근 목록에는 **사용자가 고른 조합**(saved)을 남긴다 — 되살리며 우리가 끼운 `-c` 까지
+        // 기억하면, 카드에서 한 번 이어 시작한 뒤로 평소 시작까지 조용히 `-c` 가 된다.
+        aiCliRecent.record({ profileId: target, path, cli: engine, flags: saved })
         // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널의 "조용한 AI" 판정이 이 등록에 걸려 있다.
         registerAiRun({ sessionId: sid, cli: engine, path, startedAt: Date.now() })
         // #129: 여기가 **작업대를 만드는 유일한 문**이다(설계 §10.6 — 만들고 잊지 않는다).
@@ -814,10 +830,12 @@ export function Shell() {
       }
       if (profileId) {
         // 원격은 **새 커넥션의 exec 채널**이다 — 지금 붙어 있는 셸 탭은 건드리지 않는다.
+        // 세션 id 는 이 함수가 모른다(접속이 끝나야 생긴다 — remember 콜백이 받는다). 되살리기
+        // 카드가 원격을 다루지 않는 이유이기도 하다(1.0.8 ② 는 로컬 범위다).
         void connectProfileRef.current?.(profileId, undefined, undefined, remember, undefined, { argv, cwd: path })
-        return
+        return null
       }
-      void sessions
+      return sessions
         .restoreLocal({
           type: 'local',
           // 탭 이름은 무엇이 도는지 + 어디서인지. 셸 탭(`셸 3`)과 한눈에 갈린다.
@@ -826,15 +844,49 @@ export function Shell() {
           cwd: path,
           profileId: null,
           shell: undefined,
-          command: argv
+          command: argv,
+          // 1.0.8 ②: 이 탭에서 무엇이 돌았는지를 스냅샷까지 들려 보낸다 — 다음 부팅에 맨 셸이
+          // 아니라 [이어서 시작] 카드가 뜨는 유일한 단서다(shared/types.ts 의 Session.aiCli).
+          aiCli: engine
         })
         .then((sid) => {
-          if (sid) remember(sid)
+          if (!sid) return null
+          remember(sid)
+          /**
+           * 🔴 **띄운 것을 보여 준다**(2026-09-10 준영님 제보: *"해당 세션을 클릭하면 해당 창이
+           * 켜지긴 하는데 사용자에게 보이는 화면은 이전에 봤던 다른 세션창이야"*).
+           *
+           * `restoreLocal` → `adopt` → `touch` 는 **탭만** 활성으로 만든다(sessions.ts:190·179).
+           * 칸(pane)이 무엇을 그리는지는 `layout` 이 정하고, 그것을 바꾸는 것은 `showSession` 뿐이다
+           * (MainArea 의 `focusedSessionId` 도 `cell.sessionId` 를 먼저 본다) — 아무도 안 부르면
+           * 탭 이름만 바뀌고 화면은 옛 세션 그대로다.
+           *
+           * SSH 경로는 이 줄을 처음부터 갖고 있었다(:952 `selectSession(res.id)`) — **로컬 AI 만
+           * 빠져 있었다.** 원격 AI 는 그 SSH 경로를 지나서 멀쩡했고, 그래서 오래 안 드러났다.
+           */
+          selectSession(sid)
+          return sid
         })
     },
-    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags, bench]
+    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags, bench, selectSession]
   )
   runAiCliRef.current = runAiCliNow
+
+  /**
+   * 1.0.8 ②: 재시작 뒤 남은 **끊김 카드**의 [이어서 시작]/[다시 시작].
+   *
+   * 되살리는 길은 처음 띄울 때와 **같은 함수**(runAiCliNow)를 지난다 — openBench 와 같은 이유로,
+   * 두 벌로 갈리면 "처음엔 되는데 되살리면 플래그가 다르다"가 생긴다. 새 세션 id 를 돌려주는
+   * 이유는 카드 자리(placeholder)를 그 세션으로 갈아 끼워야 해서다(MainArea.retryRestore).
+   *
+   * `custom` 은 되살리지 않는다: 실행할 bin 을 스냅샷에 남기지 않으므로(남기면 손으로 고친 파일이
+   * 곧 실행 인자가 된다) 무엇을 띄울지 알 수 없다. 우리가 심는 값도 claude·codex·gemini 뿐이다.
+   */
+  const resumeAi = useCallback(
+    async (cli: AiCliId, cwd: string): Promise<string | null> =>
+      cli === 'custom' ? null : ((await runAiCliNow(cli, cwd, undefined, undefined, true)) ?? null),
+    [runAiCliNow]
+  )
 
   /**
    * #129 작업대를 연다 — **살아 있으면 그 탭으로, 아니면 그 자리에서 다시 띄운다.**
@@ -850,7 +902,7 @@ export function Shell() {
       const cli = b.engine === 'custom' ? 'claude' : b.engine
       // D(#168): 접속·세션 만들기까지 runAiCliNow 안에 있다 — 여기서 셸을 먼저 열면 쓰지도 않을
       // 탭이 하나 더 생긴다(예전에는 그 셸에 명령을 밀어 넣어야 해서 필요했다).
-      runAiCliRef.current?.(cli, b.cwd, undefined, b.kind === 'remote' ? (b.profileId ?? undefined) : undefined)
+      void runAiCliRef.current?.(cli, b.cwd, undefined, b.kind === 'remote' ? (b.profileId ?? undefined) : undefined)
     },
     [selectSession]
   )
@@ -1155,7 +1207,7 @@ export function Shell() {
           if (sess) duplicateSession(sess)
         } else if (id === 'aicli.start') {
           // 창이 없어졌다(2026-08-18) — 그 세션의 폴더에서 마지막에 쓴 CLI 로 바로 띄운다.
-          runAiCliNow(undefined, cwdBy[target.sessionId], target.sessionId)
+          void runAiCliNow(undefined, cwdBy[target.sessionId], target.sessionId)
         } else if (id === 'work.save') {
           const path = cwdBy[target.sessionId]
           // 폴더를 아직 모르는 세션(막 뜬 셸·RDP)은 저장할 위치가 없다 — 조용히 넘긴다.
@@ -1251,7 +1303,7 @@ export function Shell() {
           // 폴더는 **그 서버의 홈**이다(`~`). 갓 붙은 세션은 cwd 가 아직 안 왔고, 그걸 기다리느니
           // 홈에서 시작하는 편이 낫다 — 사용자는 CLI 안에서 옮겨 갈 수 있다. `~` 는 따옴표 밖에
           // 두는 규칙(aiCli.quotePosix)이 이미 있어서 그대로 펼쳐진다.
-          runAiCliRef.current?.(undefined, '~', undefined, p.id)
+          void runAiCliRef.current?.(undefined, '~', undefined, p.id)
           return
         case 'server.edit':
           openConnManager({ mode: 'select', profileId: p.id })
@@ -1416,7 +1468,7 @@ export function Shell() {
           onSaveWork={(absPath: string) => void saveWorkProfile(absPath)}
           // F27 진입점 ③ — 트리에서 고른 폴더가 그대로 채워진다. 대상 서버는 지금 그 트리가 보고 있는
           // 세션의 프로필이다(SSH 세션에서만 메뉴에 뜬다 — FileTree.canAiCli).
-          onAiCli={(absPath) => runAiCliNow(undefined, absPath)}
+          onAiCli={(absPath) => void runAiCliNow(undefined, absPath)}
           // #88 R1: 아라 연결점 — 작업대와 같은 동작이어야 한다(같은 트리, 같은 메뉴).
           onTerminalHere={(absPath) => {
             const pid = activeSession?.profileId
@@ -1458,7 +1510,7 @@ export function Shell() {
             }).then((r) => r === 'confirm' && bench.remove(b.id))
           }}
           onBenchSplit={(b) => void splitBench(b)}
-          onNewBench={() => runAiCliNow()}
+          onNewBench={() => void runAiCliNow()}
           onCdTerminal={(absPath) => {
             // 트리→터미널 동기: 로컬·SSH 모두 cd 전송(R7 — 로컬 셸도 파일 탭을 쓴다).
             if (activeSession) window.ev.session.input(activeSession.id, cdCommand(absPath))
@@ -1576,8 +1628,10 @@ export function Shell() {
           onDuplicateSession={duplicateSession}
           sshRestore={sshRestore}
           onOpenConnManager={() => openConnManager(null)}
-          onOpenAiCli={() => runAiCliNow()}
+          onOpenAiCli={() => void runAiCliNow()}
           onRunAiCli={runAiCliNow}
+          // 1.0.8 ②: 재시작 뒤 남은 끊김 카드에서 그 AI 를 되살린다(새 세션 id 를 돌려준다).
+          onResumeAi={resumeAi}
           activeCwd={activeCwd}
           ask={ask}
           onAskAi={(text) => {
@@ -1681,7 +1735,7 @@ export function Shell() {
           }}
           // D(#168): 작업대가 보고 있는 서버로 띄운다. 예전에는 활성 세션에 한 줄을 밀어 넣어
           // **다른 서버의 탭**에서 도는 일이 있었다 — 이제는 새 세션이라 대상을 정확히 말해야 한다.
-          onAiCli={(profileId, path) => runAiCliNow(undefined, path, undefined, profileId ?? undefined)}
+          onAiCli={(profileId, path) => void runAiCliNow(undefined, path, undefined, profileId ?? undefined)}
           onSaveWork={(profileId, path) => void saveWorkProfile(path, profileId)}
           onLaunch={(id, profileId, cwd) => {
             // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번

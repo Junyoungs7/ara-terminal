@@ -29,6 +29,7 @@ import { aiRuns } from '../store/aiSessions'
 import { setSessionState, useSessionStates } from '../store/sessionState'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
+import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
 import type { UiState } from '@shared/types'
@@ -72,6 +73,12 @@ type MainAreaProps = {
    * 플래그는 그 CLI 로 마지막에 시작할 때 쓴 값을 재사용한다(Shell 이 최근 목록을 갖고 있다).
    */
   onRunAiCli?: (cli: 'claude' | 'codex' | 'gemini') => void
+  /**
+   * 1.0.8 ②: 끊김 카드에서 그 AI 를 되살린다 — 성공하면 **새 세션 id**(카드 자리를 그것으로 갈아
+   * 끼운다). sshRestore 와 같은 결의 주입이다: 띄우는 일은 Shell 이 하고(플래그·최근 목록이 거기
+   * 있다), 화면 자리를 바꾸는 일은 여기서 한다.
+   */
+  onResumeAi?: (cli: AiCliId, cwd: string) => Promise<string | null>
   // R5 설정 창 [정보] 섹션에 찍을 앱 버전(Shell 이 app.getVersion 으로 이미 들고 있다).
   version: string
   // 활성 세션의 OSC7 cwd(Shell 이 구독). 저장 트리거로만 쓴다 — cwd 가 바뀌면 스냅샷의 세션 cwd 도
@@ -127,6 +134,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onOpenConnManager,
       onOpenAiCli,
       onRunAiCli,
+      onResumeAi,
       version,
       activeCwd,
       ask,
@@ -170,6 +178,35 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // F6 부분 복원(C-4): SSH 재접속 실패 패널. sessionId(placeholder) → 오류 정보. 재시도 버튼 렌더.
     const [restoreErrors, setRestoreErrors] = useState<Map<string, RestoreError>>(new Map())
     const restoredRef = useRef(false) // 부트 복원 1회 가드(StrictMode 이중 마운트 방지).
+    /**
+     * F6 부트 복원이 **끝났나**. 아래 `session:opened` 리스너의 자물쇠다.
+     *
+     * 🔴 이 가드가 없으면 부팅이 깨진다(2026-09-10 실측). `session:opened` 는 main 이
+     * `session:create` **응답보다 먼저** 보내는데도 렌더러에는 **늦게** 닿는다 — 복원 3개를 재 보니
+     * `layout.restore()` 가 끝난 **뒤에** 마지막 `opened` 가 배달됐다. 지금은 그 핸들러가 layout 을
+     * 안 건드려서 무해하지만, 리스너를 붙이는 순간 늦게 온 그것이 `showSession(마지막 세션)` 을
+     * 불러 **저장해 둔 칸 대신 "마지막으로 만든 세션"이 뜬다.**
+     *
+     * ⚠️ 읽기로는 반대 결론이 났던 자리다("복원이 마지막이라 이긴다"). 하네스를 실앱과 **같은
+     * 순서**로 고치고 나서야 뒤집혔다 — 순서가 다른 재현은 반증이 못 된다.
+     *
+     * 떼어낸 창은 복원 자체를 건너뛰므로(아래 `if (detachedWinId) return`) 처음부터 열어 둔다.
+     */
+    const [restoreDone, setRestoreDone] = useState(Boolean(detachedWinId))
+    /**
+     * 🔴 **복원이 만든 세션의 id.** 리스너는 이 집합에 든 것을 **언제 오든** 무시한다.
+     *
+     * `restoreDone` 만으로는 부족하다 — 그건 **시간**으로 거르는데 그 경계가 경합이다.
+     * `setRestoreDone(true)` 는 React 상태 갱신이라 리렌더 → 이펙트 부착까지 몇 틱이 걸리고,
+     * 늦게 배달된 `opened` 가 그 뒤에 오면 리스너가 이미 붙어 있다. **실측으로 졌다**
+     * (2026-09-10: 한 번은 `칸 ["new-2"]` 로 통과했다가 다음 판에서 `["new-3"]` 로 깨졌다 —
+     * 코드가 아니라 타이밍이 바뀐 것이다. **한 번 통과한 것을 통과로 읽으면 안 되는 부류다.**)
+     *
+     * 신원으로 거르면 타이밍이 안 걸린다. 둘을 함께 둔다:
+     *  · 이르게 오면 → `restoreDone` 이 아직 false 라 무시
+     *  · 늦게 오면   → 그 id 가 이 집합에 있어 무시
+     */
+    const restoredIds = useRef<Set<string>>(new Set())
     const uiRef = useRef<UiState | null>(null) // 로드한 ui(persist 시 유지).
     const [toast, setToast] = useState<string | null>(null)
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -269,6 +306,13 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       restoredRef.current = true
       let cancelled = false
       void (async () => {
+        /**
+         * ⚠️ **`finally` 로 켠다 — 출구를 세지 않는다.** 이 본문의 이른 return 이 다섯이고
+         * (스냅샷 없음·취소·복원할 것 없음·루프 안 취소·마지막 취소) 앞으로 더 생긴다.
+         * 하나라도 빠뜨리면 그 경우에만 리스너가 **영영 안 붙어** 원래 버그가 조용히 살아남는다 —
+         * 안 켜지는 실패가 안 꺼지는 실패보다 찾기 어렵다. 던져도 켜지는 것이 옳다.
+         */
+        try {
         const snap = await window.ev?.workspace.load().catch(() => null)
         if (!snap || cancelled) return
         // R3.1/R3.4/R5: 스크롤백·선택자동복사·커서는 xterm 생성 시점에 필요하다 — 세션을 되살리기
@@ -284,7 +328,45 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         let firstReal: string | null = null
         for (const item of plan.items) {
           if (cancelled) return
-          if (item.kind === 'local') {
+          /**
+           * 🔴 **칸에 설 자리가 있을 때만** 카드로 바꾼다(2026-09-10 실측으로 잡았다).
+           *
+           * 카드는 `PaneGrid` 의 슬롯 안에서만 그려진다 — 그 세션이 칸에 없었으면 placeholder 는
+           * **탭도 카드도 없이 사라진다**(하네스 ①: `tabs` 에 셸 하나, `stash` 도 빔).
+           * 배경 탭이던 AI 세션이 재시작 뒤 흔적도 없이 없어지는 것은 **원래 버그보다 나쁘다** —
+           * 전에는 맨 셸로라도 남았다. 탭을 조용히 지우는 것이 이 라운드의 목적이 아니다.
+           *
+           * 그래서 칸에 없던 AI 탭은 **예전처럼 셸로 되살린다.** 그 판이 좋아서가 아니라
+           * 없애는 것보다 낫기 때문이고, 다시 띄우는 길은 사이드바 [AI] 의 작업대 줄이 갖고 있다.
+           * (placeholder 를 탭으로도 세우는 것이 완전한 답인데, 그러면 SSH 복원 실패까지 같이
+           * 바뀐다 — 이 라운드의 범위가 아니다. 다음 라운드 항목으로 둔다.)
+           */
+          const aiCli = item.kind === 'local' && plan.panedIds.includes(item.oldId) ? aiCliOf(item.session.aiCli) : null
+          if (aiCli) {
+            /**
+             * 1.0.8 ②: **AI 세션은 셸로 되살리지 않는다**(2026-09-10 준영님 제보).
+             *
+             * 앱을 끄면 pty 와 그 안의 CLI 가 함께 죽는데, 그 자리에 맨 셸을 다시 띄우면 사용자에게는
+             * "AI 세션 탭인데 아무것도 없는 셸"로 보인다 — 무엇이 돌고 있었는지 단서가 하나도 없다.
+             * 그래서 SSH 실패와 **같은 모양의 placeholder** 를 둔다: 카드가 곧 "세션이 끊겼다"이고
+             * 버튼이 "이어서 시작"이다(새 컴포넌트를 만들지 않는다 — PaneGrid 의 .restore-err-card).
+             *
+             * ⚠️ 여기 오는 것은 **칸에 설 자리가 있는 AI 탭뿐**이다(위 `panedIds` 검사). 배경 탭은
+             *    카드를 그릴 자리가 없어 사라져 버리므로 예전대로 셸로 되살린다 — 그 판단의 근거는
+             *    위 주석에 있다.
+             */
+            const errId = nextErrorId()
+            errs.set(errId, {
+              sessionId: errId,
+              profileId: null,
+              title: item.session.title,
+              serverKey: item.session.serverKey,
+              reason: 'aiEnded',
+              aiCli,
+              ...(item.session.cwd ? { cwd: item.session.cwd } : {})
+            })
+            idMap.set(item.oldId, errId)
+          } else if (item.kind === 'local') {
             const id = await restoreLocal({
               type: 'local',
               title: item.session.title,
@@ -296,12 +378,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
               manualTitle: item.session.manualTitle
             })
             idMap.set(item.oldId, id)
+            restoredIds.current.add(id) // 만든 **즉시** 담는다 — 몰아 담으면 그 사이가 또 경합이다
             if (!firstReal) firstReal = id
           } else {
             // SSH: 프로필로 재접속. 실패(네트워크/인증/고아) 시 오류 패널(재시도) — 전체 실패 아님.
             const res = item.profileId && sshRestore ? await sshRestore(item.profileId) : { ok: false as const, reason: 'orphan' }
             if (res.ok) {
               idMap.set(item.oldId, res.id)
+              restoredIds.current.add(res.id)
               // 재접속은 프로필명으로 세션을 만든다. 사용자가 바꿔 둔 이름이 스냅샷에 있으면 그쪽이 우선(R2.1).
               // 자동(OSC) 제목이었다면 되씌우지 않는다 — 되씌우면 manualTitle 이 켜져 이후 갱신이 막힌다(R3.6).
               if (item.session.manualTitle && item.session.title) rename(res.id, item.session.title)
@@ -348,6 +432,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           .filter((a) => a.sessionId && a.winId && !errs.has(a.sessionId))
         if (assign.length > 0 && snap.windows && snap.windows.length > 0) {
           await window.ev?.window.restoreWindows(assign, snap.windows).catch(() => null)
+        }
+        } finally {
+          setRestoreDone(true)
         }
       })()
       return () => {
@@ -461,6 +548,42 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      * **떼어내기에만** 그게 없었다. 활성 탭을 옮기는 쪽 절반은 store/sessions.ts 의 nextActiveAfter 다.
      * 여기서 듣는 이유: 칸(layout)의 주인이 이 컴포넌트라 store 가 손댈 수 없다.
      */
+    /**
+     * 🔴 **세션이 생기면 칸에 올린다** — 다섯 자리가 여기 하나로 모인다(2026-09-10 준영님 제보:
+     * *"해당 세션을 클릭하면 해당 창이 켜지긴 하는데 화면은 이전에 봤던 다른 세션창이야"*).
+     *
+     * 전에는 **세션을 만드는 자리마다** `selectSession` 을 손으로 불렀고, 그래서 빠진 데가 다섯이었다:
+     * `Shell` 의 작업 프로필·AI CLI 로컬·[여기서 터미널 열기] 둘, 그리고 **아라가 MCP 로 연 세션**.
+     * 다섯 다 SSH 짝에는 그 호출이 있고 로컬/자동 짝에만 없었다 — 손으로 채우는 규칙이라 새 문이
+     * 생길 때마다 또 빠진다.
+     *
+     * **다섯이 이미 한 문을 지나고 있었다**: `MainSessionManager.register()` → `sink.opened`.
+     * 그러니 만드는 쪽마다 적을 것이 아니라 **듣는 쪽에서 한 번** 하면 된다. 앞으로 생길 문도 덮는다.
+     *
+     * 준영님 결정(2026-09-10): 아라가 연 세션도 **칸까지** 가져간다. 그전에는 탭은 뺏고 화면은
+     * 안 바꾸는 중간 상태였는데, 그건 고른 결과가 아니라 `adopt` 가 `touch` 를 품어서 생긴
+     * 부수 효과였다(커밋 1e2540e 는 **탭 목록**만 목표였다 — 포커스는 한 글자도 안 적혀 있다).
+     *
+     * ⚠️ 대가: 타이핑 중에 아라가 세션을 열면 **손 밑에서 칸이 바뀐다.** 내용은 안 잃는다
+     *    (배경 탭으로 남고 xterm 은 마운트를 유지한다) — 보이는 것만 바뀐다.
+     * ⚠️ **RDP 는 이 문을 안 지난다**(`openRdp` 는 렌더러 전용이라 `session:create` 를 안 탄다).
+     *    `Shell.tsx` 의 RDP `selectSession` 호출은 **남겨야 한다** — 지우면 RDP 가 다음 피해자다.
+     * ⚠️ 뒷단 세션은 없다(전수 확인): 만드는 문은 셋뿐이고 전부 사람이 요청한 것이며, 아라의 둘은
+     *    `writeAlways` 라 승인 창을 지난다. 포워딩은 세션이 아니고 SFTP·모니터링은 기존 세션을 쓴다.
+     */
+    const showPane = layout.showSession
+    useEffect(() => {
+      if (!restoreDone) return // 위 restoreDone 주석 — 이 줄이 없으면 F6 이 깨진다
+      const off = window.ev?.session.onOpened?.((m) => {
+        // 남의 창 세션은 건드리지 않는다(store/sessions.ts 의 편입 규칙과 **같은 기준**).
+        if ((m.winId ?? undefined) !== detachedWinId) return
+        // 복원이 만든 세션은 **언제 와도** 무시한다 — 칸은 layout.restore 가 정했다(위 주석).
+        if (restoredIds.current.has(m.id)) return
+        showPane(m.id)
+      })
+      return () => off?.()
+    }, [restoreDone, detachedWinId, showPane])
+
     const removePane = layout.removeSession
     useEffect(() => {
       const off = window.ev?.window.onSessionMoved?.(({ sessionId, winId: to }) => {
@@ -571,43 +694,71 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       [select, layout]
     )
 
+    // 그 자리의 오류 정보를 걷는다 — 되살렸거나(재시도·이어서 시작) 포기했거나(닫기).
+    const clearError = useCallback((errId: string) => {
+      setRestoreErrors((m) => {
+        const n = new Map(m)
+        n.delete(errId)
+        return n
+      })
+    }, [])
+
     // F6 부분 복원 재시도: 오류 패널의 프로필로 재접속 → 성공 시 placeholder 를 실 세션으로 교체.
+    // 1.0.8 ②: 끝난 AI 세션 자리도 같은 버튼을 쓴다(재접속 대신 그 CLI 를 다시 띄운다).
     const retryRestore = useCallback(
       async (errId: string) => {
         const err = restoreErrors.get(errId)
-        if (!err || !err.profileId || !sshRestore) return
+        if (!err) return
+        /**
+         * 1.0.8 ②: 끝난 AI 세션 자리 — 재접속이 아니라 **그 CLI 를 그 폴더에서 다시** 띄운다
+         * (claude 면 `-c` 로 직전 대화를 이어서). SSH 재시도와 이후 절차는 같다: 새 세션 id 로
+         * 카드 자리를 갈아 끼우고 오류를 걷는다.
+         *
+         * 🔴 먼저 이 칸에 초점을 준다. 띄우는 쪽(Shell.runAiCliNow)이 끝에 `selectSession` 을
+         *    부르는데, 그것이 **초점 칸**의 세션을 갈아 끼운다(layout.showSession) — 다른 칸이
+         *    초점이면 새 세션이 그 칸에 들어가고 아래 replaceSession 이 이 칸에도 넣어 같은 세션이
+         *    두 칸을 차지한다(렌더는 첫 칸에만 붙고 나머지가 빈다). 버튼을 누르면 mousedown 이
+         *    대개 이 칸을 잡지만, 그 우연에 기대지 않는다.
+         */
+        if (err.aiCli) {
+          const cell = layout.cells.find((c) => c.sessionId === errId)
+          if (cell) layout.focus(cell.id)
+          const id = err.cwd ? await onResumeAi?.(err.aiCli, err.cwd) : null
+          if (!id) {
+            showToast(t('restore.resumeFailed'))
+            return
+          }
+          layout.replaceSession(errId, id)
+          clearError(errId)
+          select(id)
+          return
+        }
+        if (!err.profileId || !sshRestore) return
         const res = await sshRestore(err.profileId)
         if (res.ok) {
           // 끊긴 세션이면 목록(탭)에도 남아 있다 — 함께 치운다. F6 복원 placeholder 는 목록에
           // 없으므로 이 줄이 아무 일도 하지 않는다(두 경로가 같은 코드를 쓸 수 있는 이유).
           if (list.some((x) => x.id === errId)) close(errId)
           layout.replaceSession(errId, res.id)
-          setRestoreErrors((m) => {
-            const n = new Map(m)
-            n.delete(errId)
-            return n
-          })
+          clearError(errId)
           select(res.id)
         } else {
           showToast(t('restore.retryFailed'))
         }
       },
-      [restoreErrors, sshRestore, layout, select, showToast, list, close]
+      [restoreErrors, sshRestore, layout, select, showToast, list, close, onResumeAi, clearError]
     )
 
     // 오류 패널 닫기: 재시도 포기 — 패널 제거 + 오류 정보 삭제.
+    // AI 끊김 카드도 같은 경로다: 세션이 아니라 자리이므로 칸만 사라진다(마지막 칸이면 빈 화면).
     const dismissError = useCallback(
       (errId: string) => {
         const cell = layout.cells.find((c) => c.sessionId === errId)
         if (cell) layout.closePane(cell.id)
         if (list.some((x) => x.id === errId)) close(errId)
-        setRestoreErrors((m) => {
-          const n = new Map(m)
-          n.delete(errId)
-          return n
-        })
+        clearError(errId)
       },
-      [layout, list, close]
+      [layout, list, close, clearError]
     )
 
     // 분할(R2.0): 새 패널에는 이미 열려 있는 배경 탭(패널 미배치 세션)을 최근 사용 순으로 올린다.

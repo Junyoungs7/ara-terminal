@@ -84,6 +84,25 @@ describe('MainSessionManager (node-pty)', () => {
     expect(mgr.snapshot().map((s) => s.id)).not.toContain(id)
   })
 
+  /**
+   * 1.0.8 ②: 이 탭에서 무엇이 돌았나(`aiCli`)가 세션 메타에 남아야 스냅샷에 실리고, 다음 부팅에
+   * 맨 셸이 아니라 [이어서 시작] 카드가 뜬다. **렌더러가 보낸 값**이라 표에 있는 이름만 받는다 —
+   * 모르는 이름이 그대로 남으면 카드를 그리는 쪽에서 `AI_CLIS[cli].bin` 이 터진다.
+   */
+  it('★ spec.aiCli 는 세션 메타로 남고, 표에 없는 이름은 버린다', async () => {
+    const c = collect()
+    const mgr = new MainSessionManager(c.sink)
+    const good = await mgr.create({ ...echoSpec(), aiCli: 'claude' })
+    const bogus = await mgr.create({ ...echoSpec(), aiCli: 'claude-code' as never })
+    const plain = await mgr.create(echoSpec())
+    const by = new Map(mgr.snapshot().map((x) => [x.id, x]))
+    expect(by.get(good)?.aiCli).toBe('claude')
+    expect(by.get(bogus)?.aiCli).toBeUndefined()
+    // 셸 탭에는 키 자체가 없다 — 없는 것과 'claude' 를 구분해야 카드를 띄울지 정할 수 있다.
+    expect('aiCli' in (by.get(plain) as object)).toBe(false)
+    mgr.destroyAll()
+  })
+
   it('pause/resume는 알 수 없는 id에도 예외를 던지지 않는다', () => {
     const mgr = new MainSessionManager(collect().sink)
     expect(() => mgr.pause('nope')).not.toThrow()

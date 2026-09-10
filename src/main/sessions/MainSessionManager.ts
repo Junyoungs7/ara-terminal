@@ -8,6 +8,7 @@ import type { SessionBackend } from './SessionBackend'
 import { PtyBackend } from './PtyBackend'
 import { SshBackend } from './ssh/SshBackend'
 import { parseOsc7Cwd } from './osc7'
+import { aiCliOf } from '@shared/aiCli'
 import type { Session } from '@shared/types'
 import type { HookSink } from '../agent/AgentHookServer'
 
@@ -81,7 +82,10 @@ export class MainSessionManager implements ISessionManager {
       serverKey: spec.serverKey,
       manualTitle: spec.manualTitle,
       // 부른 창이 곧 주인이다(안 주면 본창). 이게 없으면 떼어낸 창에서 연 탭의 출력이 본창으로 간다.
-      ...(spec.winId ? { winId: spec.winId } : {})
+      ...(spec.winId ? { winId: spec.winId } : {}),
+      // 1.0.8 ②: 이 탭에서 무엇이 돌았나. 렌더러가 보낸 값이라 표에 있는 이름만 받는다
+      // (그대로 스냅샷에 실려 다음 부팅의 [이어서 시작] 카드가 된다).
+      ...(aiCliOf(spec.aiCli) ? { aiCli: spec.aiCli } : {})
     }
     this.register(backend, meta)
     return meta.id

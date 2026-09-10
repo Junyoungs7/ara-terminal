@@ -10,6 +10,7 @@ import { rdpSessionState, sessionState, setSessionState } from '../store/session
 import type { PaneCell, useLayout } from '../store/layout'
 import type { Session } from '../store/sessions'
 import { paneDropZone, zoneRect, type DropZone, type Rect } from '../store/dropZone'
+import { AI_CLIS, canResume, type AiCliId } from '../../shared/aiCli'
 import { markTabDropHandled } from '../store/tabDetach'
 
 // F4a 분할 그리드 — 목업 variant-final-3 의 .pane-grid / .pane / .pane-hd / .div-* 를 그대로 재현하되
@@ -27,6 +28,14 @@ export type RestoreError = {
   title: string
   serverKey: string
   reason: string
+  /**
+   * 1.0.8 ②: 이 자리가 **끝난 AI 세션**이면 무엇이 돌았나(reason='aiEnded').
+   *
+   * 같은 카드가 세 상황을 그린다 — 복원 실패 · 쓰던 중 끊김 · AI 가 끝남. 앞의 둘은 서버 이야기라
+   * `serverKey`+`reason` 이 곧 부제지만, AI 는 **무엇을 어디서** 돌렸는지가 값이다.
+   */
+  aiCli?: AiCliId
+  cwd?: string
 }
 
 type Props = {
@@ -273,6 +282,8 @@ export function PaneGrid({
       {slots.map(({ key, cell, session, err }) => {
         // 패널에 없거나(배경 탭) 최대화로 가려진 세션 → 숨김. 마운트는 유지한다.
         const hidden = !cell || (maximizedId != null && maximizedId !== cell.id)
+        // 1.0.8 ②: 이 자리가 **끝난 AI 세션**인가 — 카드의 제목·부제·기본 버튼이 여기서 갈린다.
+        const ai = err?.reason === 'aiEnded' ? err.aiCli : undefined
         const style: React.CSSProperties = !cell
           ? { display: 'none' }
           : {
@@ -356,15 +367,23 @@ export function PaneGrid({
                       <path d="M10.3 3.9l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.1l-8-14a2 2 0 00-3.4 0z" />
                     </svg>
                   </div>
-                  {/* 같은 카드를 두 상황이 쓴다 — 부팅 복원 실패와, 쓰던 중에 끊긴 것.
-                      제목이 갈리지 않으면 "복원 실패"가 멀쩡히 쓰던 세션에 뜬다. */}
-                  <div className="rec-title">{t(err.reason === 'dropped' ? 'restore.dropped' : 'restore.failed')}</div>
+                  {/* 같은 카드를 세 상황이 쓴다 — 부팅 복원 실패, 쓰던 중에 끊긴 것, 그리고
+                      껐다 켜며 끝난 AI 세션(1.0.8 ②). 제목이 갈리지 않으면 "복원 실패"가 멀쩡히
+                      쓰던 세션에, 또는 그냥 끝난 AI 에 뜬다. */}
+                  <div className="rec-title">
+                    {t(ai ? 'restore.aiEnded' : err.reason === 'dropped' ? 'restore.dropped' : 'restore.failed')}
+                  </div>
+                  {/* AI 는 서버·사유가 아니라 **무엇을 어디서** 돌렸는지가 값이다. 긴 경로는
+                      `.rec-sub` 의 keep-all + anywhere 가 상자 안에서 접는다. */}
                   <div className="rec-sub">
-                    {err.serverKey} · {t('restore.reason.' + err.reason)}
+                    {ai
+                      ? [AI_CLIS[ai].bin, err.cwd].filter(Boolean).join(' · ')
+                      : `${err.serverKey} · ${t('restore.reason.' + err.reason)}`}
                   </div>
                   <div className="rec-actions">
                     <button type="button" className="rec-btn primary" onClick={() => onRetryRestore?.(err.sessionId)}>
-                      {t('restore.retry')}
+                      {/* 이어서 시작은 **claude 만** 된다(-c). 없는 기능을 있는 척하지 않는다. */}
+                      {t(ai ? (canResume(ai) ? 'restore.resume' : 'restore.restart') : 'restore.retry')}
                     </button>
                     <button type="button" className="rec-btn" onClick={() => onDismissError?.(err.sessionId)}>
                       {t('restore.dismiss')}
