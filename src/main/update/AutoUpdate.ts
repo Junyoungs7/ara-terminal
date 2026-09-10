@@ -143,7 +143,18 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
     install: () => {
       if (state.status !== 'ready') return
       try {
-        updater.quitAndInstall()
+        /**
+         * `(isSilent, isForceRunAfter)` — **둘 다 준다.** 인자를 안 주면 기본값이 `false` 라
+         * NSIS 설치 창이 화면에 뜬다(2026-09-10 준영님: *"창이 꺼지고 설치창이 나오는데
+         * 이렇게 하지말고 vscode 처럼 안되나"*). VS Code 도 윈도우에서는 설치 프로그램을 돌린다 —
+         * 다만 **화면 없이** 돌릴 뿐이다. 우리도 같은 모양으로 맞춘다.
+         *  · isSilent=true       → 설치 프로그램에 `/S`. 창이 안 뜬다
+         *  · isForceRunAfter=true → 설치가 끝나면 아라를 **다시 띄운다**(안 주면 꺼진 채로 끝난다)
+         *
+         * ⚠️ 실행 중인 바이너리를 못 덮어써서 **앱이 꺼지는 것 자체는 피할 수 없다.**
+         * "무중단 부분 패치"가 아니라 "설치 창을 안 보여 준다"가 여기서 할 수 있는 전부다.
+         */
+        updater.quitAndInstall(true, true)
       } catch (err) {
         onError('update install', err)
       }

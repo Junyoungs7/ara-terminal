@@ -5,7 +5,7 @@
 //  ② 상태 표시줄 버전 칸이 상태마다 무엇이 되나 — 특히 `error`·`checking` 이 **조용해야** 한다
 //     (사내망 밖 노트북이면 하루 네 번 확인마다 상태바가 빨개진다).
 import { describe, it, expect } from 'vitest'
-import { promptVersion, updateSeg } from '../src/renderer/store/updateNotify'
+import { promptVersion, readyVersion, updateSeg } from '../src/renderer/store/updateNotify'
 import type { UpdateState } from '../src/shared/ipc'
 
 describe('창을 띄우나 (promptVersion)', () => {
@@ -36,6 +36,40 @@ describe('창을 띄우나 (promptVersion)', () => {
 
   it('버전 없는 available 은 안 띄운다 — 스누즈할 열쇠가 없어 매번 다시 뜬다', () => {
     expect(promptVersion({ status: 'available' }, null)).toBeNull()
+  })
+})
+
+describe('다 받은 뒤 재시작을 묻나 (readyVersion)', () => {
+  it('다 받았으면 그 버전으로 묻는다', () => {
+    expect(readyVersion({ status: 'ready', version: '1.0.6' })).toBe('1.0.6')
+  })
+
+  it('★ ready 가 아니면 안 묻는다 — 받는 중에 재시작을 권하면 받던 것이 버려진다', () => {
+    const others: UpdateState[] = [
+      { status: 'idle' },
+      { status: 'checking' },
+      { status: 'available', version: '1.0.6' },
+      { status: 'downloading', version: '1.0.6', percent: 99 },
+      { status: 'error', message: 'x' },
+      { status: 'off' }
+    ]
+    for (const st of others) expect(readyVersion(st)).toBeNull()
+  })
+
+  it('버전 없는 ready 는 안 묻는다 — 무엇을 설치하는지 못 적는다', () => {
+    expect(readyVersion({ status: 'ready' } as UpdateState)).toBeNull()
+  })
+
+  it('★ 스누즈를 안 본다 — [받기]를 미뤘다가 나중에 받은 사람에게도 물어야 한다', () => {
+    // promptVersion 은 스누즈를 보고 조용해지지만, 이쪽은 **이미 받아 둔 상태**라 규칙이 다르다.
+    expect(promptVersion({ status: 'available', version: '1.0.6' }, '1.0.6')).toBeNull()
+    expect(readyVersion({ status: 'ready', version: '1.0.6' })).toBe('1.0.6')
+  })
+
+  it('★ 같은 판을 두 번 묻는다 — 받을까요, 그다음 껐다 켤까요', () => {
+    // 훅이 `상태:버전` 으로 기억하는 이유. 버전만으로 잡으면 둘째 물음이 사라진다.
+    expect(promptVersion({ status: 'available', version: '1.0.6' }, null)).toBe('1.0.6')
+    expect(readyVersion({ status: 'ready', version: '1.0.6' })).toBe('1.0.6')
   })
 })
 

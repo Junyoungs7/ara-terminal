@@ -61,6 +61,22 @@ export function promptVersion(st: UpdateState | null, snoozed: string | null): s
   return st.version === snoozed ? null : st.version
 }
 
+/**
+ * 다 받은 뒤 **재시작을 물을 버전**. 안 물으면 null. **순수 함수** — 검사는 tests/updateNotify.test.ts.
+ *
+ * 왜 따로 있나(2026-09-10 준영님): *"받기 누르면 다운 받고 바로 팝업이 떠서 지금 재시작할거냐?
+ * 또는 나중에 할꺼냐 팝업으로 선택 가능하게"*. 지금은 다 받아도 **설정 서랍 안에 [설치] 버튼이
+ * 조용히 생길 뿐**이라, 서랍을 안 열면 다 받은 줄도 모른다(`available` 이 겪은 것과 같은 병이다).
+ *
+ * `promptVersion` 과 **합치지 않는다.** 둘은 묻는 것이 다르다 — 저쪽은 *"받을까요"*, 이쪽은
+ * *"지금 껐다 켤까요"* 다. 그리고 스누즈 규칙이 다르다: 저쪽은 localStorage 로 판을 넘겨 기억하고,
+ * 이쪽은 **이번 실행 안에서만** 기억한다(다음에 켤 때는 이미 설치돼 있다 — autoInstallOnAppQuit).
+ */
+export function readyVersion(st: UpdateState | null): string | null {
+  if (!st || st.status !== 'ready' || !st.version) return null
+  return st.version
+}
+
 /** 상태 표시줄 버전 칸이 무엇이 되나(순수). */
 export type UpdateSeg = {
   /** 칸에 찍는 짧은 글자. 상태바는 좁다 — 긴 말은 전부 `title` 로 간다. */
@@ -162,12 +178,37 @@ export async function runUpdateAction(
  */
 export function useUpdatePrompt(enabled: boolean, ask?: (spec: DialogSpec) => Promise<DialogResult>): void {
   const st = useUpdateState()
+  /**
+   * 이번 실행에서 이미 물어본 것. **`상태:버전` 으로 잡는다** — 버전만으로 잡으면 같은 판을
+   * *"받을까요"* 로 한 번 물은 뒤 다 받고 나서 *"지금 껐다 켤까요"* 를 못 묻는다.
+   */
   const asked = useRef<string | null>(null)
   useEffect(() => {
     if (!enabled || !ask) return
+
+    // ① 다 받았다 → 지금 껐다 켤까요. 먼저 본다(같은 판이면 이쪽이 더 나중 단계다).
+    const ready = readyVersion(st)
+    if (ready && asked.current !== `ready:${ready}`) {
+      asked.current = `ready:${ready}`
+      void (async () => {
+        const r = await ask({
+          title: t('update.install.title'),
+          message: t('update.install.msg').replace('{v}', ready),
+          confirmLabel: t('settings.update.install'),
+          cancelLabel: t('update.prompt.later')
+        })
+        // [나중에]·ESC 는 **아무것도 안 하는 게 맞다** — 이미 받아 뒀고 `autoInstallOnAppQuit` 이
+        // 켜져 있어(main/update/AutoUpdate.ts) 그냥 끄기만 해도 종료할 때 조용히 설치된다.
+        // 그 사실은 위 update.install.msg 가 마지막 문장으로 말한다. 상태 표시줄에도 남는다.
+        if (r === 'confirm') void window.ev?.app?.updateInstall?.()
+      })()
+      return
+    }
+
+    // ② 새 버전이 있다 → 받을까요.
     const v = promptVersion(st, readSnoozed())
-    if (!v || asked.current === v) return
-    asked.current = v
+    if (!v || asked.current === `available:${v}`) return
+    asked.current = `available:${v}`
     void (async () => {
       const r = await ask({
         title: t('update.prompt.title').replace('{v}', v),

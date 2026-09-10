@@ -236,4 +236,13 @@ describe('사용자 조작', () => {
     svc.install()
     expect(updater.quitAndInstall).toHaveBeenCalledTimes(1)
   })
+
+  it('★ 설치 창을 띄우지 않고, 끝나면 다시 켠다 — (isSilent, isForceRunAfter) 둘 다 true', () => {
+    // 인자를 **안 주면** electron-updater 의 기본값이 `false` 라 NSIS 창이 화면에 뜬다.
+    // 그 기본값으로 돌아가는 회귀를 여기서 잡는다(2026-09-10 준영님 제보).
+    const { updater, svc } = setup()
+    updater.fire('update-downloaded', { version: '0.2.0' })
+    svc.install()
+    expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+  })
 })
