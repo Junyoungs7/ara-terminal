@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 // 컴팩트 컨텍스트 메뉴 (F4c — .sp-* 오버레이와 같은 표면·헤어라인·등장 애니메이션).
 // 앱 전체에서 이 컴포넌트 하나만 쓴다: 사이드바 트리 우클릭, 탭바 ＋ 메뉴.
@@ -88,6 +88,19 @@ type Props = {
 
 export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
   const [idx, setIdx] = useState(0)
+  /**
+   * 메뉴를 열기 **직전에** 포커스가 있던 자리. 고르지 않고 닫을 때 여기로 돌려준다.
+   *
+   * 왜 필요한가(2026-09-10 준영님 제보): *"터미널창에서 붙여넣기 위해 우클릭하고 붙여넣기
+   * 안하기 위해서 그냥 다시 터미널창을 클릭하면 터미널 창에 바로 텍스트가 작성되야하는데
+   * 작성이 안되서 다시 터미널 창을 클릭해야해."*
+   *
+   * 원인은 **backdrop 이 그 클릭을 먹는 것**이다. 메뉴가 열려 있는 동안 화면 전체를 덮는
+   * `.ctx-backdrop` 이 있고, 터미널을 누른 줄 알았던 그 mousedown 은 사실 backdrop 이 받는다.
+   * backdrop 은 focusable 이 아니라 크로미움이 포커스를 `<body>` 로 옮기고, 그 사이 backdrop 은
+   * 사라진다 — 터미널은 클릭당한 적이 없으니 포커스가 없다. 그래서 한 번 더 눌러야 했다.
+   */
+  const prevFocus = useRef<HTMLElement | null>(null)
   // FB-monitor(F19 tmux): 서브메뉴를 열고 있는 상위 항목 인덱스(마우스 호버로만 연다 — 중첩 1단계).
   const [subIdx, setSubIdx] = useState<number | null>(null)
 
@@ -98,6 +111,23 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
     }
   }, [open, x, y])
 
+  // 열리는 순간의 포커스를 잡아 둔다. x·y 는 안 본다 — 같은 메뉴를 옮겨 여는 동안(서브메뉴 등)
+  // 다시 잡으면 이미 body 로 넘어간 뒤라 돌려줄 자리를 잃는다.
+  useEffect(() => {
+    if (open) prevFocus.current = document.activeElement as HTMLElement | null
+  }, [open])
+
+  /**
+   * **고르지 않고** 닫는다 — backdrop 클릭 · 바깥 우클릭 · ESC.
+   * 항목을 고른 경우(onPick)는 여기 오지 않는다: 그 동작이 스스로 포커스를 옮길 수 있어
+   * (모달·입력칸을 여는 항목이 있다) 되돌리면 서로 싸운다.
+   */
+  const closeRestoring = useCallback(() => {
+    const el = prevFocus.current
+    onClose()
+    el?.focus?.()
+  }, [onClose])
+
   // ↑↓ 이동 / →로 서브메뉴 열기 · ←로 닫기 / Enter 실행(서브메뉴가 있으면 열기) / ESC 닫기.
   // 캡처 단계로 잡아 뒤쪽 전역 단축키(ESC 등)와 겹치지 않게 한다.
   useEffect(() => {
@@ -106,7 +136,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        onClose()
+        closeRestoring()
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         e.stopPropagation()
@@ -138,7 +168,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, items, idx, subIdx, onPick, onClose])
+  }, [open, items, idx, subIdx, onPick, onClose, closeRestoring])
 
   if (!open || items.length === 0) return null
   const pos = clampMenu(x, y, items.length, window.innerWidth, window.innerHeight)
@@ -149,10 +179,10 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
     <>
       <div
         className="ctx-backdrop"
-        onMouseDown={onClose}
+        onMouseDown={closeRestoring}
         onContextMenu={(e) => {
           e.preventDefault()
-          onClose()
+          closeRestoring()
         }}
       />
       <div className="ctx-menu open" style={{ left: pos.left, top: pos.top }} role="menu">

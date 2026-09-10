@@ -1,12 +1,37 @@
 // F8 터미널 링크 라우팅 — planLink 가 §3.2 규칙의 유일한 진실이므로 표 기반으로 전부 덮는다.
-// "OAuth 원클릭이 성립하는가"와 "로컬 셸의 동작이 그대로인가"가 여기서 갈린다.
+// "OAuth 원클릭이 성립하는가"와 "로컬 셸이 어디로 가는가"가 여기서 갈린다.
 import { describe, it, expect } from 'vitest'
 import { localUrl, planLink } from '../src/shared/linkTarget'
 
 describe('planLink — 로컬 셸', () => {
-  it('로컬 세션의 localhost 는 진짜 내 PC 다 — 기존 경로(external) 유지', () => {
-    expect(planLink('http://localhost:3000/', false)).toEqual({ kind: 'external', url: 'http://localhost:3000/' })
-    expect(planLink('http://127.0.0.1:8765/callback', false).kind).toBe('external')
+  /**
+   * 2026-09-10 에 뒤집었다. 전에는 로컬 세션이면 무조건 OS 브라우저였는데, 그 근거가
+   * **세션을 보고 URL 을 안 봤다** — 로컬 셸에서 찍히는 주소가 늘 내 PC 인 것이 아니다.
+   * 준영님 제보의 반례가 사내 배포 서버였다(`192.168.100.56:8899`).
+   */
+  it('★ 로컬 셸의 http/https 도 아라 브라우저로 간다 — 사내 주소가 반례였다', () => {
+    expect(planLink('http://192.168.100.56:8899/', false)).toEqual({
+      kind: 'inApp',
+      url: 'http://192.168.100.56:8899/'
+    })
+    expect(planLink('https://github.com/anthropics', false).kind).toBe('inApp')
+  })
+
+  it('로컬의 localhost 도 같다 — 포워딩은 안 탄다(내 PC 라 터널이 필요 없다)', () => {
+    expect(planLink('http://localhost:3000/', false).kind).toBe('inApp')
+    expect(planLink('http://127.0.0.1:8765/callback', false).kind).toBe('inApp')
+  })
+
+  it('★ http/https 가 아니면 로컬도 그대로 바깥으로 — 스킴 게이트가 최종 판정한다', () => {
+    expect(planLink('mailto:a@b.c', false).kind).toBe('external')
+    expect(planLink('file:///etc/passwd', false).kind).toBe('external')
+  })
+
+  it('★ 규칙이 SSH 와 같아졌다 — 어디서 눌렀든 Ctrl+클릭은 아라 브라우저다', () => {
+    // Ctrl+Alt+클릭(OS 브라우저)은 planLink 를 아예 안 거친다 — MainArea.openLink 의 external 분기.
+    for (const u of ['https://example.com/', 'http://10.0.0.5:8080/x']) {
+      expect(planLink(u, false).kind).toBe(planLink(u, true).kind)
+    }
   })
 })
 
@@ -82,11 +107,6 @@ describe('planLink — SSH 세션의 보통 링크는 내장 브라우저', () =
   it('포워딩이 필요 없는 https 도 내장 브라우저로 간다', () => {
     expect(planLink('https://github.com/anthropics', true).kind).toBe('inApp')
     expect(planLink('https://accounts.google.com/signin', true).kind).toBe('inApp')
-  })
-
-  it('로컬 셸의 링크는 그대로 OS 브라우저 — 진짜 내 PC 맥락이다', () => {
-    expect(planLink('https://github.com/anthropics', false).kind).toBe('external')
-    expect(planLink('http://localhost:3000', false).kind).toBe('external')
   })
 
   it('http/https 가 아니면 판단하지 않는다(스킴 게이트가 최종 판정)', () => {

@@ -64,8 +64,23 @@ export function planLink(url: string, isSsh: boolean): LinkPlan {
   } catch {
     return { kind: 'external', url } // 파싱 불가 → 기존 경로(거기서 스킴 게이트가 다시 막는다)
   }
-  // 로컬 셸의 localhost 는 진짜 내 PC 다. 현행 동작을 그대로 둔다.
-  if (!isSsh) return { kind: 'external', url }
+  /**
+   * 로컬 셸의 링크도 **내장 브라우저로 연다** (2026-09-10 준영님 제보: 배포 스크립트가 마지막에
+   * 찍는 주소를 눌렀는데 *"왜 아라 내부 브라우저로 안뜨는거야?"*).
+   *
+   * 전에는 여기서 곧장 OS 브라우저로 보냈고 그 근거를 *"로컬 셸의 localhost 는 진짜 내 PC 다"*
+   * 라고 적어 뒀다. **그 근거가 세션을 보고 URL 을 안 봤다.** 로컬 셸에서 찍히는 주소가 늘
+   * 내 PC 인 것이 아니다 — 사내 배포 서버(`192.168.100.56:8899`)가 그 반례고, 실제로 그것 때문에
+   * 제보가 왔다. 세션이 로컬인 것과 목적지가 로컬인 것은 다른 사실이다.
+   *
+   * 규칙을 SSH 쪽과 같게 맞춘다: **Ctrl+클릭 = 아라 브라우저 · Ctrl+Alt+클릭 = OS 브라우저.**
+   * 어디서 눌렀든 같으니 외울 것이 하나다. 크롬으로 열고 싶은 자리(로컬 dev 서버의 확장·개발자
+   * 도구)는 Alt 하나로 그대로 간다 — 길을 막은 것이 아니라 기본값을 바꾼 것이다.
+   *
+   * http/https 가 아니면 판단하지 않는다(아래 isHttp 와 같은 이유) — openExternal 의 스킴
+   * 게이트가 최종 판정한다. 로컬은 포워딩이 필요 없으므로 loopback·oauth 분기를 타지 않는다.
+   */
+  if (!isSsh) return isHttp(u) ? { kind: 'inApp', url } : { kind: 'external', url }
   // http/https 가 아니면 판단하지 않는다 — openExternal 의 스킴 게이트가 최종 판정한다.
   if (!isHttp(u)) return { kind: 'external', url }
   if (isLoopbackHost(u.hostname)) return { kind: 'loopback', port: portOf(u), url }
@@ -98,7 +113,7 @@ export function planLink(url: string, isSsh: boolean): LinkPlan {
    * 이어져야 쿠키·세션이 붙는다. OS 브라우저로 나가면 그 연결이 끊긴다.
    *
    * 보안은 오히려 좁아진다: 내장 브라우저는 preload 없음 · 전용 파티션 · 스킴 게이트를 이미 거친다.
-   * 로컬 셸의 링크는 위(!isSsh)에서 갈라져 그대로 OS 브라우저로 간다 — 그건 진짜 내 PC 맥락이다.
+   * 로컬 셸의 http/https 도 위(!isSsh)에서 같은 곳으로 간다 — 2026-09-10 에 규칙을 하나로 맞췄다.
    */
   return { kind: 'inApp', url }
 }
