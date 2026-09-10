@@ -177,7 +177,10 @@ env 에서 온다. 우리도 SSH 셸을 만들 때 `ARA_HOOK_PORT`·`ARA_PANE` �
 `확인 불가`)으로 그려 보니 **저장해 뒀지만 안 떠 있는 작업대가 전부 `확인 불가`** 로 갔다 —
 껐다 켠 직후 화면이 "확인 불가 3"으로 시작해 **고장 신호로 읽힌다.** 두 사실이 다르다:
 `unverifiable` 은 *"물어봤는데 대답이 없다"*, 안 떠 있는 작업대는 *"물어볼 프로세스가 없다"*.
-→ `쉬는 중` 을 다섯째로 뒀다. `확인 불가` 는 그래도 안 빈다 — **codex·gemini 는 훅이 없어서**
+→ `쉬는 중` 을 다섯째로 뒀다. `확인 불가` 는 그래도 안 빈다 — **gemini 는 훅이 없어서**
+🔴 **2026-09-10 정정: Codex 는 훅이 있다.** `~/.codex/hooks.json` 이고 Windows 명령까지 따로 둔다
+(paseo `terminal/agent-hooks/codex/codex.ts:3-31` — 코드로 확인). *"codex 는 훅이 없다"* 고 적은
+위 문장은 안 재고 쓴 것이다. F1 을 codex 로 넓힐 길이 열려 있다.
 떠 있어도 늘 거기 온다. 즉 다섯째 묶음은 어휘를 무르게 한 게 아니라 **둘을 갈라놓은 것**이다.
 
 **#151 에 딸리는 값**: 목록의 3번째 줄(마지막 활동)을 채우려면 상태 넷만으로는 안 된다 —
@@ -293,6 +296,19 @@ xterm 패치 하네스 · **`reliability-gates.jsonc`**(99개 게이트를 만�
 ## 6. 인가 모델 — **가져오면 안 된다. 우리 것이 더 강하다**
 
 우리 MCP 불변식: *AI 는 명령 문자열을 못 보낸다 — 고정 카탈로그의 `{id, args}` 만.*
+
+🔴 **2026-09-10 정정 — 이 한 줄은 카탈로그 전체의 성질이 아니다.** `server_run` 에만 해당한다.
+`tools.ts:387` 의 `session_input{ sessionId, data: z.string() }` 은 임의 문자열을 그대로 PTY 에 쓴다
+(`:392` `ctx.sessions.write`). `aisession_send`(`:299`)도 같다. 즉 **자유 문자열이 셸에 닿는 길은
+우리에게도 있다.** 위 문장을 그대로 인용해 "우리는 구조적으로 막혀 있다"고 말하면 틀린 안심이다.
+
+**우리의 진짜 우위는 둘이고, 둘 다 지킬 값이 있다:**
+1. **호출마다 등급 붙은 승인 게이트.** `sessionInput` 은 `readOnly`·`writeAlways` 와 **다른 등급**이다
+   (`approval.ts:23`). ⚠️ 다만 `autoAllow` 모드에서는 안 묻고 통과한다(`approval.ts:216`) —
+   그 모드가 곧 저쪽의 `bypassPermissions` 다. **어디까지 열어 둘지는 우리도 다시 봐야 한다.**
+2. 🔴 **에이전트가 승인을 대신하는 도구가 우리에겐 없다.** paseo 에는 있다 —
+   `set_agent_mode(agentId,"bypassPermissions")` 와 `respond_to_permission(…, allow)` 이고
+   구현에 호출자 검사가 없다(paseo-B). **이것이 두 제품을 가르는 진짜 선이다.**
 
 **Orca 에는 그 경계가 CLI 에 없다.** 명령 목록은 고정(~200개)이지만 그중 셋이 자유 문자열을 받는다:
 
@@ -415,20 +431,23 @@ xterm 패치 하네스 · **`reliability-gates.jsonc`**(99개 게이트를 만�
 의존이 순서를 강제한다. 크기는 S/M/L.
 
 **상태**: ✅ 끝남 · ◐ 절반(빠진 것을 칸에 적었다) · 빈칸 안 함.
+🔴 **2026-09-10 — ✅ 를 근거 없이 적지 않는다.** 준영님이 F9 를 짚으셨고, 다시 재 보니 **아홉 중 셋이
+틀렸다**(F9·M2·M3). 셋 다 *완료 보고서를 읽고* 적은 것이지 파일을 열어서 적은 게 아니다.
+→ **이제 ✅ 옆에는 `파일:줄` 이나 시험 이름을 반드시 붙인다.** 맨 ✅ 는 다음 사람에게 거짓말이다.
 *(2026-08-30 갱신 — 로드맵에 완료 칸이 없어 무엇이 남았는지 표에서 안 보였다.)*
 
 | # | 무엇 | 크기 | 의존 | 상태 |
 |---|---|---|---|---|
 | **P0. 마감** — "AI 가 만든 티" 없애기 (#153) |
-| M1 | 반경 수렴 + 스캐너 | S | — | ✅ |
-| M2 | 텍스트 글리프 → lucide SVG | S | — | ✅ |
-| M3 | 닫기·새로고침 버튼 수렴(`<span>`→`<button>`) | S | M1 | ✅ |
-| M4 | **Nerd Font 심볼** — `SymbolsNerdFontMono` 1.15MB·OFL·`unicode-range: U+E000-F8FF,…`. 서버의 starship·p10k 프롬프트가 네모로 나오던 것이 고쳐진다 | S | M1 | ✅ |
+| M1 | 반경 수렴 + 스캐너 | S | — | ◐ 스캐너는 있다(`scripts/scan-magic-numbers.mjs:19` 가 `border-radius` 를 본다). 다만 `border-radius: 999px` 가 shell.css 에 **6곳 남아 게이트를 통과한다** — 예외가 걸려 있다는 뜻이니 확인 필요 |
+| M2 | 텍스트 글리프 → lucide SVG | S | — | 🔴 **안 끝났다**(2026-09-10 재측정). `AraChatPanel.tsx:554,560` 이 `✓`/`✕` 를 **실제로 그리고 있고**, `Cheatsheet.tsx:85`·`CommandBook.tsx:185` 가 `✕ 로 닫기` 를 글자로 쓴다 |
+| M3 | 닫기·새로고침 버튼 수렴(`<span>`→`<button>`) | S | M1 | 🔴 **안 끝났다**(2026-09-10 재측정). 검색 지우기 `.sclear` 가 **여덟 곳 전부 아직 `<span onClick>`** (`ConnTree:519`·`ContainerTable:180`·`K8sPanel:232`·`LogPanel:156`·`PkgTable:131`·`PortMonitor:292`·`ProcessTable:220`·`ServiceTable:207`) + `FileTree.tsx:1329` 전송 취소. **키보드로 못 누른다** |
+| M4 | **Nerd Font 심볼** — `SymbolsNerdFontMono` 1.15MB·OFL·`unicode-range: U+E000-F8FF,…`. 서버의 starship·p10k 프롬프트가 네모로 나오던 것이 고쳐진다 | S | M1 | ✅ `resources/fonts/SymbolsNerdFontMono-Regular.woff2` + OFL 실재, `fonts.css:88` 이 참조 |
 | M5 | 간격 척도 — padding 이 1~14px 전부를 쓴다(지배값 8·10·6·4·12 = 251곳). 꼬리만 스냅, 변경 표로 검수 | M | M3 | ◐ 토큰을 `--ui-scale` 에 안 태웠다(#155) |
 | **P1. 에이전트 감독** — 저쪽의 핵심 |
-| F1 | **훅 기반 상태**(#151) — `forwardIn` 역터널 + SFTP 훅 설치. `idle>=60초` 를 걷어낸다 | M | — | ✅ 로컬(F1a)·원격(F1b) 둘 다. ⚠️ 원격은 서버가 `AcceptEnv` 를 열어 줘야 한다 |
+| F1 | **훅 기반 상태**(#151) — `forwardIn` 역터널 + SFTP 훅 설치. `idle>=60초` 를 걷어낸다 | M | — | ✅ `src/main/agent/claudeHooks.ts`·`remoteHooks.ts`. 로컬(F1a)·원격(F1b) 둘 다. ⚠️ 원격은 서버가 `AcceptEnv` 를 열어 줘야 한다 |
 | F2 | 타임스탬프 둘 · 알림 ID · `restoredUnconfirmed` · 알림만 디바운스 | S | F1 | ◐ `restoredUnconfirmed` 는 **타입만 있고 생산자가 없다** — 상태 영속화가 붙는 날 생긴다 |
-| F3 | 상태 어휘에 **"모른다"**(`unverifiable`) | S | F1 | ✅ |
+| F3 | 상태 어휘에 **"모른다"**(`unverifiable`) | S | F1 | ✅ src 28곳 |
 | F4 | 알림 규율 — 세션 경계 억제(접속·`/clear`·컴팩트가 만든 `done` 은 알림에서 뺀다) | S | F2 |
 | F5 | **CLI 사용량·레이트리밋** — Claude/Codex 남은 한도와 리셋 시각. 저쪽 폴백 사다리: OAuth `api/oauth/usage` → 키체인 재시도 → 자격증명 복구 → **숨은 PTY 로 `/usage` 를 쳐서 화면 긁기** | M | — |
 | **P2. AI 결과를 본다** — 우리에게 가장 큰 구멍 |
@@ -436,7 +455,7 @@ xterm 패치 하네스 · **`reliability-gates.jsonc`**(99개 게이트를 만�
 | F7 | **diff 줄 단위 코멘트 → 에이전트에게 되돌려주기** | M | F6 |
 | F8 | 이미지·PDF 미리보기(마크다운은 `md.tsx` 로 있다) | S | — |
 | **P3. 입력·탐색** |
-| F9 | **AI 대화에 파일·이미지 드래그**(#154) | S | — | ✅ #154. ~~`pasteFiles.ts` 단일 슬롯~~ 은 이미 고쳐져 있었다(`targets` 배열 + 포커스 기준) — 안 재고 적은 경고였다. 창 밖 파일을 아무 데나 떨구면 **앱이 그 파일로 통째로 바뀌던 것**도 같이 막았다 |
+| F9 | **AI 대화에 파일·이미지 드래그**(#154) | S | — | 🔴 **✅ 를 되돌린다**(2026-09-10, 준영님 제보 *"되지도 않았는데"*). 코드는 있다(`AraChatPanel.tsx:408-421` 드롭 · `:320` `intake()`)**만 아무도 파일을 놓아 본 적이 없다** — 커밋 `a77e6c2` 가 스스로 *"스모크는 창이 떠서 못 돌렸다 — 게이트 때 볼 것"* 이라 적어 뒀고 그 게이트를 안 돌았다. 붙은 시험 `tests/araChatItems.test.ts` 19줄은 `appendPaths()` **문자열 함수**만 본다. ⚠️ 그리고 **모양이 다르다**: 경로를 입력칸 draft 에 글자로 얹을 뿐 첨부 카드가 아니다(준영님 기대는 첨부 카드 — #188 과 한 작업) |
 | F10 | Quick open 확장 — 워크트리·파일·에이전트·명령 통합(팔레트가 이미 있다) | S | — |
 | F11 | → **P8 로 옮김.** 기록 프레이밍은 데몬이 화면 모델을 들고 있을 때 제 값을 한다 | — | — |
 | **P4. 워크트리·소스관리** |
@@ -451,9 +470,9 @@ xterm 패치 하네스 · **`reliability-gates.jsonc`**(99개 게이트를 만�
 | F18 | **Design Mode** — 브라우저에서 요소 클릭 → HTML·CSS·크롭 스크린샷을 프롬프트로. 우리도 `BrowserService` 가 있어 가능하다 | M | F9 |
 | F19 | **Computer Use** — 에이전트가 데스크톱 앱을 조종. 🔴 **제약: 자동화 대상에서 A.R.A 자신의 창을 제외한다.** 안 그러면 AI 가 **우리 승인 창을 스스로 눌러** 카탈로그·승인 게이트가 통째로 무의미해진다(저쪽 `agent-trust-presets.ts` 와 같은 부류의 사고) | L | F18 |
 | **P7. 규율** (아무 때나, 싸다) |
-| F20 | 래칫 테스트 — 첫 대상은 우리 카탈로그 쵸크포인트와 `child_process` | S | — | ✅ #156 — 허용목록이 0으로 시작한다 |
+| F20 | 래칫 테스트 — 첫 대상은 우리 카탈로그 쵸크포인트와 `child_process` | S | — | ✅ `tests/spawnBoundary.test.ts`. #156 — 허용목록이 0으로 시작한다 |
 | F21 | `max-lines` 축소전용 기준선 + `helpers`/`utils` 이름 금지 + 루트 가드 | S | — |
-| F22 | **Windows `.cmd` 인자 인코딩**(#152) — `shell:true` 제거 | M | — | ✅ #152 — `shell:true` 소비자 0 |
+| F22 | **Windows `.cmd` 인자 인코딩**(#152) — `shell:true` 제거 | M | — | ✅ #152 — src 의 `shell: true` 2건은 **둘 다 주석**(`ClaudeCliEngine.ts:110`·`registerAraIpc.ts:21`), 실코드 0 |
 | F23 | 한글 IME PTY 신원 가드 — 조합 시작에 PTY 를 잡고, 바뀌었으면 커밋을 거부한다 | S | — |
 | **P8. 로컬 터미널 데몬** (2026-08-28 채택 — 원격은 안 함) |
 | F24 | **node-pty 를 별도 Node 프로세스로.** 지금은 Electron 메인의 자식이라 **앱이 죽으면 터미널도 죽는다.** 데몬으로 빼면 앱 재시작·크래시를 넘어 재부착한다. 소켓 IPC · 시작 시 재부착 · 고아 정리가 필요하다 | **L** | — |

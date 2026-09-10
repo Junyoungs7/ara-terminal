@@ -214,6 +214,20 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     let ghostDeco: IDecoration | null = null
     let ghostMarker: IMarker | null = null
     let ghostTimer: ReturnType<typeof setTimeout> | null = null
+    /**
+     * 한글을 **조합하는 중**인가(IME). 고스트는 조합이 끝날 때까지 손을 뗀다.
+     *
+     * 왜 필요한가(2026-09-10 준영님 제보 — *"'안녕하세요' 를 치면 'ㅇ나ㅅㅇ' 이렇게 씹힌다,
+     * 창을 나갔다 들어오면 정상"*): GHOST_IDLE_MS 는 **손을 멈춘 시간**을 재는데, 한글은 글자마다
+     * 멈춘다. `안` 을 확정하면 onData → scheduleGhost 가 250ms 타이머를 걸고, 그 사이 사람은
+     * `녕` 을 **조합하기 시작**한다. 250ms 뒤 renderGhost 가 조합 한가운데서 데코레이션을
+     * 등록·해제하며 xterm 을 다시 그리게 한다. 로마자는 조합이 없어 이 창이 아예 안 열린다 —
+     * **한글에서만 나는 이유가 그것이다.**
+     *
+     * ⚠️ `attachCustomKeyEventHandler` 의 `e.isComposing` 으로는 못 막는다. 그건 **키가 올 때**의
+     * 판정이고, 여기서 문제가 되는 것은 **키 없이 타이머가 스스로 깨는 것**이다.
+     */
+    let composing = false
 
     // 지금 쥐고 있는 후보들(키 핸들러가 읽는다 — state 는 이 명령형 코드에서 낡는다).
     // #194 ①: 후보가 있다고 목록이 떠 있는 것은 아니다. 떠 있는지는 compOpen 이 안다(= comp state).
@@ -310,6 +324,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
 
     const renderGhost = (retry: number) => {
       ghostTimer = null
+      // 조합이 시작되기 **전에** 걸린 타이머가 조합 한가운데서 깨는 길이 남아 있다(scheduleGhost 의
+      // 가드는 그 뒤에 걸린 것만 막는다). 재시도도 걸지 않는다 — compositionend 가 다시 부른다.
+      if (composing) return
       if (!lineBuf) return
       // 에코가 아직 안 왔으면 커서가 한 칸 뒤처져 고스트가 어긋난다 — 한 번 더 기다린다.
       if (!lineBeforeCursor(sessionId).endsWith(lineBuf)) {
@@ -348,6 +365,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
        * 판정은 ghostList 와 같은 함수를 쓴다(두 벌로 갈리면 한쪽만 고쳐진다).
        */
       if (!termPrefs.termCompletion || !ghostEligible(lineBuf)) return
+      // 조합 중에는 타이머조차 만들지 않는다 — compositionend 가 다시 부른다.
+      if (composing) return
       ghostTimer = setTimeout(() => renderGhost(GHOST_RETRIES), GHOST_IDLE_MS)
     }
 
@@ -500,6 +519,18 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     const textarea = term.textarea
     const onBlur = () => clearGhost()
     textarea?.addEventListener('blur', onBlur)
+    // IME 조합 경계. 시작하면 떠 있던 고스트까지 걷는다(조합 글자 위에 흐린 글자가 겹치면
+    // 무엇을 치고 있는지 안 보인다). 끝나면 그때 다시 잰다.
+    const onCompStart = (): void => {
+      composing = true
+      clearGhost()
+    }
+    const onCompEnd = (): void => {
+      composing = false
+      scheduleGhost()
+    }
+    textarea?.addEventListener('compositionstart', onCompStart)
+    textarea?.addEventListener('compositionend', onCompEnd)
 
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
     // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
@@ -658,6 +689,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       if (bellTimer) clearTimeout(bellTimer)
       clearGhost()
       textarea?.removeEventListener('blur', onBlur)
+      textarea?.removeEventListener('compositionstart', onCompStart)
+      textarea?.removeEventListener('compositionend', onCompEnd)
       offPaste()
       unregisterTerm(sessionId)
       try {
