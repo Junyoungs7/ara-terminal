@@ -341,32 +341,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
            * (placeholder 를 탭으로도 세우는 것이 완전한 답인데, 그러면 SSH 복원 실패까지 같이
            * 바뀐다 — 이 라운드의 범위가 아니다. 다음 라운드 항목으로 둔다.)
            */
-          const aiCli = item.kind === 'local' && plan.panedIds.includes(item.oldId) ? aiCliOf(item.session.aiCli) : null
-          if (aiCli) {
-            /**
-             * 1.0.8 ②: **AI 세션은 셸로 되살리지 않는다**(2026-09-10 준영님 제보).
-             *
-             * 앱을 끄면 pty 와 그 안의 CLI 가 함께 죽는데, 그 자리에 맨 셸을 다시 띄우면 사용자에게는
-             * "AI 세션 탭인데 아무것도 없는 셸"로 보인다 — 무엇이 돌고 있었는지 단서가 하나도 없다.
-             * 그래서 SSH 실패와 **같은 모양의 placeholder** 를 둔다: 카드가 곧 "세션이 끊겼다"이고
-             * 버튼이 "이어서 시작"이다(새 컴포넌트를 만들지 않는다 — PaneGrid 의 .restore-err-card).
-             *
-             * ⚠️ 여기 오는 것은 **칸에 설 자리가 있는 AI 탭뿐**이다(위 `panedIds` 검사). 배경 탭은
-             *    카드를 그릴 자리가 없어 사라져 버리므로 예전대로 셸로 되살린다 — 그 판단의 근거는
-             *    위 주석에 있다.
-             */
-            const errId = nextErrorId()
-            errs.set(errId, {
-              sessionId: errId,
-              profileId: null,
-              title: item.session.title,
-              serverKey: item.session.serverKey,
-              reason: 'aiEnded',
-              aiCli,
-              ...(item.session.cwd ? { cwd: item.session.cwd } : {})
-            })
-            idMap.set(item.oldId, errId)
-          } else if (item.kind === 'local') {
+          if (item.kind === 'local') {
             const id = await restoreLocal({
               type: 'local',
               title: item.session.title,
@@ -380,6 +355,36 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             idMap.set(item.oldId, id)
             restoredIds.current.add(id) // 만든 **즉시** 담는다 — 몰아 담으면 그 사이가 또 경합이다
             if (!firstReal) firstReal = id
+            /**
+             * 🔴 **AI 세션은 셸 위에 카드를 얹는다**(1.0.9 — 1.0.8 의 방향을 뒤집었다).
+             *
+             * 앱을 끄면 pty 와 그 안의 CLI 가 함께 죽는다. 그 자리에 맨 셸만 띄우면 "AI 탭인데
+             * 아무것도 없는 셸"이라 무엇이 돌고 있었는지 단서가 없다(준영님 원 제보).
+             *
+             * 1.0.8 은 셸을 **안 띄우고** placeholder 로 뒀는데 실기에서 거의 안 떴다 —
+             * 카드는 `PaneGrid` 의 **칸 안에서만** 그려지고 AI 탭은 보통 배경 탭이다
+             * (준영님 스냅샷 실측: `aiCli=claude` 세션이 칸 밖에 있었다). 칸에 없으면 탭까지
+             * 사라져서 `panedIds` 로 좁혔더니, 이번엔 카드가 뜨는 경우가 거의 없어졌다.
+             *
+             * 그래서 **세션은 예전대로 만들고**(탭이 남는다) 그 **실 세션 id 에 오류를 얹는다** —
+             * `PaneGrid` 의 "쓰던 중 끊김" 갈래(`err && session`)가 터미널 **위에** 카드를 그린다.
+             * 그 배선은 2026-08-14 부터 있던 것이라 여기서 재사용만 한다.
+             *  · 배경 탭이어도 그 탭을 누르면 카드가 보인다
+             *  · 사라지는 탭이 없다
+             *  · [닫기]를 누르면 카드만 걷히고 **그 아래 셸이 그대로 남는다**
+             */
+            const aiCli = aiCliOf(item.session.aiCli)
+            if (aiCli) {
+              errs.set(id, {
+                sessionId: id,
+                profileId: null,
+                title: item.session.title,
+                serverKey: item.session.serverKey,
+                reason: 'aiEnded',
+                aiCli,
+                ...(item.session.cwd ? { cwd: item.session.cwd } : {})
+              })
+            }
           } else {
             // SSH: 프로필로 재접속. 실패(네트워크/인증/고아) 시 오류 패널(재시도) — 전체 실패 아님.
             const res = item.profileId && sshRestore ? await sshRestore(item.profileId) : { ok: false as const, reason: 'orphan' }
@@ -730,6 +735,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           }
           layout.replaceSession(errId, id)
           clearError(errId)
+          // 1.0.9: `errId` 가 이제 **실 세션**이다(카드가 셸 위에 얹힌다) — 그 셸은 여기서 끝난다.
+          // 안 닫으면 [이어서 시작] 한 번에 빈 셸 탭이 하나씩 쌓인다. 아래 SSH 갈래가 같은 이유로
+          // 같은 줄을 갖고 있다(placeholder 면 목록에 없어 아무 일도 안 한다 — 두 경로가 같은 코드를
+          // 쓸 수 있는 이유).
+          if (list.some((x) => x.id === errId)) close(errId)
           select(id)
           return
         }
@@ -750,15 +760,31 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     )
 
     // 오류 패널 닫기: 재시도 포기 — 패널 제거 + 오류 정보 삭제.
-    // AI 끊김 카드도 같은 경로다: 세션이 아니라 자리이므로 칸만 사라진다(마지막 칸이면 빈 화면).
+    // ⚠️ 1.0.9: AI 카드는 **실 세션 위에 얹힌 것**이라 여기 오면 안 된다 — 칸을 지우면 멀쩡한
+    //    셸까지 사라진다. 그쪽은 아래 dismissError 가 세션 유무로 갈라 카드만 걷는다.
     const dismissError = useCallback(
       (errId: string) => {
+        /**
+         * 🔴 **살아 있는 세션 위의 카드는 카드만 걷는다**(1.0.9).
+         *
+         * 두 종류가 이 함수를 함께 쓴다:
+         *  · 부팅 복원 실패 placeholder — 세션이 **없다**. 칸을 지우는 것이 곧 치우는 것이다
+         *  · 실 세션 위에 얹힌 카드(AI 끝남 · SSH 쓰던 중 끊김) — 세션이 **있다.**
+         *    칸을 지우면 **멀쩡한 셸까지 사라진다** — [닫기]를 누른 사람은 카드를 치운 것이지
+         *    터미널을 닫은 것이 아니다(닫기는 탭의 ✕ 가 한다)
+         *
+         * 세션 유무가 그 둘을 정확히 가른다. `PaneGrid` 도 같은 기준으로 카드를 대신 그릴지
+         * 위에 얹을지 정한다(`err && !session` vs `err && session`) — **두 곳이 같은 축을 본다.**
+         */
+        if (list.some((x) => x.id === errId)) {
+          clearError(errId)
+          return
+        }
         const cell = layout.cells.find((c) => c.sessionId === errId)
         if (cell) layout.closePane(cell.id)
-        if (list.some((x) => x.id === errId)) close(errId)
         clearError(errId)
       },
-      [layout, list, close, clearError]
+      [layout, list, clearError]
     )
 
     // 분할(R2.0): 새 패널에는 이미 열려 있는 배경 탭(패널 미배치 세션)을 최근 사용 순으로 올린다.

@@ -122,7 +122,18 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
    * 항목을 고른 경우(onPick)는 여기 오지 않는다: 그 동작이 스스로 포커스를 옮길 수 있어
    * (모달·입력칸을 여는 항목이 있다) 되돌리면 서로 싸운다.
    */
-  const closeRestoring = useCallback(() => {
+  const closeRestoring = useCallback((e?: { preventDefault: () => void }) => {
+    /**
+     * 🔴 **기본 동작을 먼저 막는다**(2026-09-10 재제보: *"우클릭 후 다시 터미널창 클릭하면
+     * 터미널 한번에 안눌림"* — 1.0.7 의 포커스 되돌리기만으로는 안 됐다).
+     *
+     * 아래 `el.focus()` 는 **mousedown 핸들러 안**에서 도는데, 포커스를 `<body>` 로 옮기는 것은
+     * 그 핸들러가 끝난 **뒤에 일어나는 기본 동작**이다. 그래서 되돌려 놔도 브라우저가 곧바로
+     * 다시 빼앗아 갔다 — 순서를 안 보고 고친 자리다.
+     * `preventDefault` 로 그 기본 동작 자체를 막으면 **포커스가 애초에 안 움직인다.**
+     * `focus()` 는 그래도 남긴다 — ESC 경로에는 막을 기본 동작이 없다.
+     */
+    e?.preventDefault()
     const el = prevFocus.current
     onClose()
     el?.focus?.()
@@ -179,11 +190,8 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
     <>
       <div
         className="ctx-backdrop"
-        onMouseDown={closeRestoring}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          closeRestoring()
-        }}
+        onMouseDown={(e) => closeRestoring(e)}
+        onContextMenu={(e) => closeRestoring(e)}
       />
       <div className="ctx-menu open" style={{ left: pos.left, top: pos.top }} role="menu">
         {items.map((it, i) => (

@@ -534,22 +534,70 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
 
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
     // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
+    /**
+     * 파일이 이 터미널로 들어왔다 — 붙여넣기와 드롭이 **같은 함수를 지난다.**
+     *
+     * 하는 일: 원격이면 [파일] 탭 큐로 업로드하고, 아니면 **경로를 입력칸에 넣는다.**
+     * 🔴 실행하지 않는다 — `pastePaths` 는 꼬리 개행을 안 붙인다(`filePath.ts:46`).
+     *    떨군 사람이 읽고 Enter 를 눌러야 실행된다. AI CLI 에게는 그 경로가 곧 첨부다.
+     */
+    const takeFiles = (files: readonly File[]): boolean => {
+      const paths = filePaths(files)
+      // 텍스트 붙여넣기는 xterm 이 자기 textarea 로 처리한다(bracketed paste 포함) — 넘긴다.
+      if (paths.length === 0) return false
+      // 원격이라도 [파일] 탭이 그 세션에 붙어 있지 않으면 큐가 없다 → 경로 붙여넣기로 폴백.
+      if (!local && uploadFiles(sessionId, paths)) return true
+      window.ev.session.input(sessionId, pastePaths(paths))
+      // 원격인데 업로드로 못 넘어갔다면 **기대와 다르게 동작한 것**이다 — 조용히 넘기지 않는다
+      // (2026-08-16). 업로더 슬롯이 하나뿐이라 작업대를 열면 이쪽이 밀려나 "됐다 안 됐다" 한다.
+      if (!local) notifyPasteFallback(t('paste.noQueue'))
+      return true
+    }
+
+    // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
+    // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
     const offPaste = registerPasteTarget({
       el: host,
       allowEditable: true, // xterm 의 숨은 textarea 가 곧 터미널이다
-      onFiles: (files) => {
-        const paths = filePaths(files)
-        // 텍스트 붙여넣기는 xterm 이 자기 textarea 로 처리한다(bracketed paste 포함) — 넘긴다.
-        if (paths.length === 0) return false
-        // 원격이라도 [파일] 탭이 그 세션에 붙어 있지 않으면 큐가 없다 → 경로 붙여넣기로 폴백.
-        if (!local && uploadFiles(sessionId, paths)) return true
-        window.ev.session.input(sessionId, pastePaths(paths))
-        // 원격인데 업로드로 못 넘어갔다면 **기대와 다르게 동작한 것**이다 — 조용히 넘기지 않는다
-        // (2026-08-16). 업로더 슬롯이 하나뿐이라 작업대를 열면 이쪽이 밀려나 "됐다 안 됐다" 한다.
-        if (!local) notifyPasteFallback(t('paste.noQueue'))
-        return true
-      }
+      onFiles: takeFiles
     })
+
+    /**
+     * 🔴 **터미널에 파일을 끌어다 놓는다**(1.0.9, 준영님 요청: *"실제 ai cli 세션창에 파일을
+     * 드래그하면 올려달라는거였어. orca가 그렇게 동작할거야."*).
+     *
+     * 그동안 터미널은 받는 자리가 아니었다 — `main.tsx` 의 전역 가드(#154)가 "여기 못 놓는다"고
+     * 커서로 말할 뿐이었다. 그 가드는 **`preventDefault` 안 한 드롭만** 가로채므로, 여기서
+     * 받겠다고 말하면 그쪽은 물러난다(그 파일이 창을 통째로 갈아 끼우는 사고도 그대로 막힌다).
+     *
+     * xterm 이 아니라 `host` 에 건다: xterm 의 화면 요소는 자기가 다시 그리고, 우리는 그 위에
+     * 리스너를 얹을 자리가 없다. `host` 는 우리 것이고 이벤트는 버블로 올라온다.
+     *
+     * ⚠️ **파일만 받는다.** 탭 드래그는 `text/plain` 에 세션 id 를 싣는데 그것까지 받으면
+     *    터미널이 "여기 놓을 수 있다"고 거짓말한다(아라 패널·파일 트리가 같은 검사를 한다).
+     */
+    const onDragOver = (e: DragEvent): void => {
+      if (!e.dataTransfer?.types.includes('Files')) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      host.classList.add('drag-over')
+    }
+    const onDragLeave = (e: DragEvent): void => {
+      // 자식 요소 사이를 지날 때도 dragleave 가 온다 — 진짜로 벗어났을 때만 표시를 걷는다.
+      if (e.relatedTarget instanceof Node && host.contains(e.relatedTarget)) return
+      host.classList.remove('drag-over')
+    }
+    const onDrop = (e: DragEvent): void => {
+      host.classList.remove('drag-over')
+      if (!e.dataTransfer?.types.includes('Files')) return
+      e.preventDefault()
+      takeFiles([...e.dataTransfer.files])
+      // 떨군 뒤에는 바로 칠 수 있어야 한다 — 드롭은 포커스를 주지 않는다.
+      term.focus()
+    }
+    host.addEventListener('dragover', onDragOver)
+    host.addEventListener('dragleave', onDragLeave)
+    host.addEventListener('drop', onDrop)
     fitRef.current = fit
     registerTerm(sessionId, { term, fit, search }) // 선택 복사(F4c)·폰트 적용(F5)·검색(R3.2)
 
@@ -691,6 +739,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       textarea?.removeEventListener('blur', onBlur)
       textarea?.removeEventListener('compositionstart', onCompStart)
       textarea?.removeEventListener('compositionend', onCompEnd)
+      host.removeEventListener('dragover', onDragOver)
+      host.removeEventListener('dragleave', onDragLeave)
+      host.removeEventListener('drop', onDrop)
       offPaste()
       unregisterTerm(sessionId)
       try {

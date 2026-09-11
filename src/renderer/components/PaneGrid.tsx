@@ -420,16 +420,27 @@ export function PaneGrid({
                       <path d="M10.3 3.9l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.1l-8-14a2 2 0 00-3.4 0z" />
                     </svg>
                   </div>
-                  <div className="rec-title">{t('restore.dropped')}</div>
+                  {/**
+                   * 1.0.9: **AI 세션은 끊긴 게 아니라 끝난 것**이다 — 문구도 버튼도 갈린다.
+                   *
+                   * 왜 여기(오버레이)까지 오나: 1.0.8 은 AI 탭을 placeholder 로만 바꿨는데 카드는
+                   * **칸 안에서만** 그려진다. AI 탭은 보통 배경 탭이라(준영님 스냅샷 실측: AI 세션이
+                   * 칸 밖) **카드가 거의 안 떴다.** 이제 셸은 예전대로 되살려 **탭을 남기고**,
+                   * 그 위에 이 카드를 얹는다 — 배경 탭이든 칸이든 같은 카드가 보인다.
+                   * 위쪽 placeholder 갈래와 문구·버튼을 **같은 규칙**으로 둔다(두 벌로 갈리면 한쪽만 낡는다).
+                   */}
+                  <div className="rec-title">{t(ai ? 'restore.aiEnded' : 'restore.dropped')}</div>
                   <div className="rec-sub">
-                    {err.serverKey} · {t('restore.reason.' + err.reason)}
+                    {ai
+                      ? [AI_CLIS[ai].bin, err.cwd].filter(Boolean).join(' · ')
+                      : `${err.serverKey} · ${t('restore.reason.' + err.reason)}`}
                   </div>
                   <div className="rec-actions">
                     {/* 프로필이 없으면 되살릴 방법이 없다 — 버튼을 내주지 않는다(눌러도 안 되는
                         버튼보다 없는 편이 낫다). 사유는 위 문구가 이미 말한다. */}
-                    {err.profileId && (
+                    {(ai || err.profileId) && (
                       <button type="button" className="rec-btn primary" onClick={() => onRetryRestore?.(err.sessionId)}>
-                        {t('restore.reconnect')}
+                        {t(ai ? (canResume(ai) ? 'restore.resume' : 'restore.restart') : 'restore.reconnect')}
                       </button>
                     )}
                     <button type="button" className="rec-btn" onClick={() => onDismissError?.(err.sessionId)}>

@@ -1,7 +1,7 @@
 {
   "name": "ara",
   "productName": "A.R.A",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A.R.A — AI Terminal",
   "author": "VERYGOOD",
   "license": "MIT",
@@ -40,6 +40,7 @@
     "w2:bundle": "node scripts/bundle-w2-harness.mjs",
     "screenshot:w2": "electron-vite build && npm run w2:bundle && electron tests/w2-screenshot.cjs",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "probe:aisess": "electron-vite build && node tests/aisess-probe-run.mjs",
     "site:stage": "node scripts/stage-release.mjs",
     "site:deploy": "node scripts/deploy-site.mjs",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",

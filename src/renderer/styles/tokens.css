@@ -245,7 +245,7 @@
      (stackFor() 가 조립하는 값과 같아야 한다 — 'ARA Nerd Font Symbols' 는 PUA 전용
      unicode-range 페이스라 항상 맨 앞에 붙는다. FINISH-M4). */
   --mono: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
-  --term: 'ARA Nerd Font Symbols', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
+  --term: 'ARA Nerd Font Symbols', 'ARA Narrow Enclosed', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace;
 
   /* 터미널 본문 크기·행간 (§2.2, 10–20px 슬라이더) + 셸 치수 (§4.1) */
   /* --tt(크기)·--tl(행간)은 F5 폰트 설정이 workspace.json ui.font 에서 하이드레이트.
