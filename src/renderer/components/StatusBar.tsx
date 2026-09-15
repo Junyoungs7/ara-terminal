@@ -126,7 +126,7 @@ export function StatusBar({
    */
   update?: UpdateState | null
   /** 위 칸을 눌렀을 때. `ready` 의 확인 받기는 호출측(runUpdateAction)이 한다. */
-  onUpdateAction?: (action: 'download' | 'install') => void
+  onUpdateAction?: (action: 'download' | 'install' | 'check') => void
 }) {
   const m = statusModel(session, profile, conn, cwd, stats, history)
   const u = updateSeg(update ?? null, version)
@@ -189,9 +189,15 @@ export function StatusBar({
             /* 설정 서랍의 [받기]·[설치] 와 **다른 이름**이다 — 같은 동작이라도 자리가 다르면
                선택자도 달라야 한다(안 그러면 e2e 가 엉뚱한 버튼을 누른다). 붙여 만들지 않는 이유는
                따로 있다: 점으로 끝나는 리터럴은 scan-i18n 이 키 접두어로 삼는다. */
-            data-action={u.action === 'download' ? 'statusbar.update.download' : 'statusbar.update.install'}
+            data-action={
+              u.action === 'download'
+                ? 'statusbar.update.download'
+                : u.action === 'check'
+                  ? 'statusbar.update.check'
+                  : 'statusbar.update.install'
+            }
             title={u.title}
-            onClick={() => onUpdateAction?.(u.action as 'download' | 'install')}
+            onClick={() => onUpdateAction?.(u.action as 'download' | 'install' | 'check')}
           >
             {verBody}
           </button>

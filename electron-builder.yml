@@ -1,5 +1,5 @@
 appId: com.verygood.ara
-productName: A.R.A
+productName: ARA
 directories:
   output: dist
   buildResources: resources

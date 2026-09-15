@@ -5,7 +5,7 @@
 //  ② 상태 표시줄 버전 칸이 상태마다 무엇이 되나 — 특히 `error`·`checking` 이 **조용해야** 한다
 //     (사내망 밖 노트북이면 하루 네 번 확인마다 상태바가 빨개진다).
 import { describe, it, expect } from 'vitest'
-import { promptVersion, readyVersion, updateSeg } from '../src/renderer/store/updateNotify'
+import { checkToast, justUpdated, promptVersion, readyVersion, updateSeg } from '../src/renderer/store/updateNotify'
 import type { UpdateState } from '../src/shared/ipc'
 
 describe('창을 띄우나 (promptVersion)', () => {
@@ -73,16 +73,80 @@ describe('다 받은 뒤 재시작을 묻나 (readyVersion)', () => {
   })
 })
 
-describe('상태 표시줄 버전 칸 (updateSeg)', () => {
-  const plain = { text: 'v0.9.9', title: '', action: null, tone: null }
+describe('새 판으로 넘어왔나 (justUpdated)', () => {
+  it('버전이 달라졌으면 알린다', () => {
+    expect(justUpdated('1.0.9', '1.1.0')).toBe(true)
+  })
 
-  it('★ 조용한 상태 넷은 예전 그대로 — 버전만 보이고 눌리지 않는다', () => {
+  it('🔴 처음 깐 사람에게는 안 알린다 — 업데이트한 적이 없다', () => {
+    expect(justUpdated(null, '1.1.0')).toBe(false)
+    expect(justUpdated('', '1.1.0')).toBe(false)
+  })
+
+  it('같은 판을 다시 켠 것은 업데이트가 아니다', () => {
+    expect(justUpdated('1.1.0', '1.1.0')).toBe(false)
+  })
+
+  it('★ 되돌아간 경우도 알린다 — 판이 바뀐 것은 사실이다', () => {
+    // 옛 판을 손으로 깔아 되돌리는 일이 있다. "달라졌다"는 그때도 참이고, 말해 주는 편이 낫다.
+    expect(justUpdated('1.1.0', '1.0.9')).toBe(true)
+  })
+})
+
+describe('확인 결과 토스트 (checkToast)', () => {
+  const checking: UpdateState = { status: 'checking' }
+
+  it('사람이 눌러 확인했고 최신이면 말한다', () => {
+    expect(checkToast(checking, { status: 'idle' }, true)).toBeTruthy()
+  })
+
+  it('🔴 주기 확인(사람이 안 누름)에는 안 뜬다 — 하루 네 번 토스트는 방해다', () => {
+    expect(checkToast(checking, { status: 'idle' }, false)).toBeNull()
+  })
+
+  it('🔴 checking 을 안 지났으면 안 뜬다 — 상태는 여러 이유로 다시 온다', () => {
+    expect(checkToast({ status: 'idle' }, { status: 'idle' }, true)).toBeNull()
+    expect(checkToast(null, { status: 'idle' }, true)).toBeNull()
+  })
+
+  it('새 판이 있으면 버전을 말한다', () => {
+    const m = checkToast(checking, { status: 'available', version: '1.1.0' }, true)
+    expect(m).toContain('1.1.0')
+  })
+
+  it('버전 없는 available 은 말하지 않는다 — 무엇이 나왔는지 못 적는다', () => {
+    expect(checkToast(checking, { status: 'available' }, true)).toBeNull()
+  })
+
+  it('실패도 말한다 — 눌렀는데 아무 반응이 없으면 안 된다', () => {
+    expect(checkToast(checking, { status: 'error', message: 'ENOTFOUND' }, true)).toBeTruthy()
+  })
+
+  it('★ 이미 받는 중이거나 준비된 상태는 확인의 결과가 아니다', () => {
+    expect(checkToast(checking, { status: 'downloading', version: '1.1.0', percent: 3 }, true)).toBeNull()
+    expect(checkToast(checking, { status: 'ready', version: '1.1.0' }, true)).toBeNull()
+  })
+})
+
+describe('상태 표시줄 버전 칸 (updateSeg)', () => {
+  /**
+   * 1.0.10 에 `action` 이 `'check'` 로 바뀌었다(준영님 요청 — 버전 칸을 눌러 바로 확인).
+   * `text`·`tone` 은 그대로다: **색은 "지금 할 일이 있다"를 뜻하고**, 최신인 상태는 할 일이 없다.
+   */
+  const plain = { text: 'v0.9.9', action: 'check', tone: null }
+
+  it('★ 조용한 넷은 글자도 색도 예전 그대로 — 다만 이제 눌러서 확인한다', () => {
     // error 가 여기 있는 것이 요점이다: 사내망 밖에서 상태바가 빨개지면 안 된다.
-    expect(updateSeg(null, '0.9.9')).toEqual(plain)
-    expect(updateSeg({ status: 'off' }, '0.9.9')).toEqual(plain)
-    expect(updateSeg({ status: 'idle' }, '0.9.9')).toEqual(plain)
-    expect(updateSeg({ status: 'checking' }, '0.9.9')).toEqual(plain)
-    expect(updateSeg({ status: 'error', message: 'ENOTFOUND' }, '0.9.9')).toEqual(plain)
+    for (const st of [null, { status: 'off' }, { status: 'idle' }, { status: 'error', message: 'ENOTFOUND' }] as (UpdateState | null)[]) {
+      expect(updateSeg(st, '0.9.9')).toMatchObject(plain)
+    }
+  })
+
+  it('★ 확인하는 동안에는 누를 수 없다 — 두 번 누르면 두 번 확인한다', () => {
+    const s = updateSeg({ status: 'checking' }, '0.9.9')
+    expect(s.action).toBeNull()
+    expect(s.tone).toBeNull() // 확인 중에 색이 붙으면 "할 일이 있다"로 읽힌다
+    expect(s.text).not.toBe(plain.text) // 무언가 하고 있다는 것은 글자가 말한다
   })
 
   it('available — 새 버전을 짧게 말하고 누르면 받는다', () => {
@@ -118,8 +182,8 @@ describe('상태 표시줄 버전 칸 (updateSeg)', () => {
   })
 
   it('버전 없는 available·ready 는 조용히 넘어간다(설정 서랍이 말한다)', () => {
-    expect(updateSeg({ status: 'available' }, '0.9.9')).toEqual(plain)
-    expect(updateSeg({ status: 'ready' }, '0.9.9')).toEqual(plain)
+    expect(updateSeg({ status: 'available' }, '0.9.9')).toMatchObject(plain)
+    expect(updateSeg({ status: 'ready' }, '0.9.9')).toMatchObject(plain)
   })
 
   it('진행률이 없어도 0% 로 그린다 — 누른 사람이 반응을 봐야 한다', () => {

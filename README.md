@@ -1,4 +1,4 @@
-# A.R.A
+# ARA
 
 사내 배포용 Windows 터미널(Electron). SSH·RDP·SFTP 접속과 로컬 셸을 한 창에서 다루고,
 우측에 Claude Code(또는 API 키)를 붙여 서버 작업을 시킬 수 있다. **사내망 전용** —

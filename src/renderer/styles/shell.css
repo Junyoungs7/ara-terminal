@@ -3092,6 +3092,65 @@
   pointer-events: none;
 }
 
+/* ── #198 업데이트 진행 카드 ── 받는 동안·끄기 직전. 토스트와 같은 재질·같은 층이되
+   **자리가 다르다**: 토스트는 가운데서 잠깐 스치고, 이 카드는 우하단에 한동안 머문다.
+   ⚠️ `pointer-events: none` 을 토스트에서 그대로 가져온다 — 이 카드는 누를 것이 없고,
+   터미널 위에 떠 있으므로 클릭을 먹으면 그 아래를 못 쓴다. */
+.upd-card {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  min-width: 260px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--accent-line);
+  color: var(--text-hi);
+  font-family: var(--ui);
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 40;
+  pointer-events: none;
+}
+.upd-logo {
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+}
+.upd-body {
+  flex: 1 1 auto;
+  min-width: 0; /* 긴 버전 문자열이 카드를 늘리지 않게 — flex 자식의 기본 min-width 는 auto 다 */
+}
+.upd-title {
+  font-size: var(--fs-md);
+  color: var(--accent-bright);
+}
+.upd-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  word-break: keep-all; /* 한글은 낱말 한가운데서 갈리면 안 읽힌다 */
+  overflow-wrap: anywhere;
+}
+.upd-bar {
+  margin-top: var(--sp-4);
+  height: var(--sp-3);
+  background: var(--bg-canvas);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.upd-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-pop) var(--ease-drawer); /* 넘김 없이 감속만 — 진행률이 튀면 안 된다 */
+}
+.upd-pct {
+  flex: 0 0 auto;
+  font-family: var(--term);
+  font-size: var(--fs-md);
+  color: var(--accent-bright);
+}
+
 /* ── R3.2 터미널 검색 바 ── 패널 그리드 우상단 인라인 오버레이(모달 아님, 터미널 계속 보임).
    .main 기준 절대 배치라 탭바 높이만큼 내려야 탭·설정 버튼을 가리지 않는다. */
 .term-search {

@@ -77,14 +77,49 @@ export function readyVersion(st: UpdateState | null): string | null {
   return st.version
 }
 
+/**
+ * 방금 **새 판으로 넘어왔나** — 설치가 끝나고 다시 뜬 직후 한 번만 알린다. **순수 함수.**
+ *
+ * ⚠️ **저장값이 없으면 안 띄운다.** 처음 깐 사람에게 "업데이트되었습니다"는 거짓말이다 —
+ * 그 사람은 업데이트한 적이 없다. 값이 없을 때는 조용히 지금 버전을 적어 두기만 한다(호출측).
+ */
+export function justUpdated(lastSeen: string | null, current: string): boolean {
+  return lastSeen !== null && lastSeen !== '' && lastSeen !== current
+}
+
+/** 마지막으로 **본** 버전. 스누즈와 같은 이유로 localStorage 다(설정이 아니라 잠깐의 기억). */
+const SEEN_KEY = 'ara.update.seenVersion'
+
+export const readSeenVersion = (): string | null => {
+  try {
+    return localStorage.getItem(SEEN_KEY)
+  } catch {
+    return null // 저장소가 막힌 판 — 조용한 쪽으로 떨어진다(안 띄운다)
+  }
+}
+
+export const writeSeenVersion = (v: string): void => {
+  try {
+    localStorage.setItem(SEEN_KEY, v)
+  } catch {
+    /* 못 기억해도 앱은 돈다 */
+  }
+}
+
 /** 상태 표시줄 버전 칸이 무엇이 되나(순수). */
 export type UpdateSeg = {
   /** 칸에 찍는 짧은 글자. 상태바는 좁다 — 긴 말은 전부 `title` 로 간다. */
   text: string
   /** 툴팁. 할 말이 없으면 빈 문자열. */
   title: string
-  /** 누르면 무엇을 하나. null 이면 예전처럼 표시 전용 칸이다. */
-  action: 'download' | 'install' | null
+  /**
+   * 누르면 무엇을 하나. null 이면 표시 전용 칸이다.
+   *
+   * `'check'` 가 1.0.10 에 생겼다(준영님: *"우측 하단에 버전을 누르면 최신버전입니다 토스트로
+   * 뜨고, 업데이트할 버전이 있으면 이걸로도 버전 체크해서 업데이트가 가능하게"*).
+   * 그전에는 **새 판이 있을 때만** 눌렸다 — 평소엔 버전을 보려고 설정을 열어야 했다.
+   */
+  action: 'download' | 'install' | 'check' | null
   /** CSS 가 색을 고르는 열쇠. **색만으로 말하지 않는다**(§6) — 위 `text` 가 같은 것을 글자로 말한다. */
   tone: 'available' | 'downloading' | 'ready' | null
 }
@@ -97,7 +132,14 @@ export type UpdateSeg = {
  * 흔들려 봐야 사람이 할 일이 없다.
  */
 export function updateSeg(st: UpdateState | null, version: string): UpdateSeg {
-  const plain: UpdateSeg = { text: `v${version}`, title: '', action: null, tone: null }
+  /**
+   * 평소 모습 — **누르면 지금 확인한다.**
+   *
+   * ⚠️ `tone` 은 그대로 `null` 이다. 색은 "지금 할 일이 있다"를 뜻하고(§6), 최신인 상태는 할 일이
+   * 없다 — 늘 색이 있으면 그 색이 아무 말도 안 하게 된다. 눌리는 것과 색은 다른 축이다.
+   */
+  const plain: UpdateSeg = { text: `v${version}`, title: t('statusbar.update.check.title'), action: 'check', tone: null }
+  // 상태를 아직 모른다(부팅 직후) — 그래도 누르면 확인한다.
   if (!st) return plain
   // 받는 중에는 버전 없이도 할 말이 있다(진행률). 누를 것은 없다 — 취소는 만들지 않았다.
   if (st.status === 'downloading') {
@@ -108,6 +150,10 @@ export function updateSeg(st: UpdateState | null, version: string): UpdateSeg {
       action: null,
       tone: 'downloading'
     }
+  }
+  // 확인하는 동안에는 **누를 수 없다** — 두 번 누르면 두 번 확인한다.
+  if (st.status === 'checking') {
+    return { text: t('settings.update.checking'), title: '', action: null, tone: null }
   }
   // 버전을 모르면 할 말이 "새 게 있다" 뿐이라 상태바에서는 조용히 넘어간다(설정 서랍이 말한다).
   if (!st.version) return plain
@@ -148,11 +194,55 @@ export function useUpdateState(): UpdateState | null {
  * 좁은 상태바에서 실수로 스친 클릭에 하던 일이 날아가면 안 된다(파괴적 동작 규칙). `available` 은
  * 받기만 시작하고 하던 일을 안 건드리므로 곧장 간다.
  */
+/**
+ * 방금 끝난 확인의 **결과 문구**. 안 띄우면 null. **순수 함수** — 검사는 tests/updateNotify.test.ts.
+ *
+ * 왜 이렇게 좁나(준영님 요청: 버전 칸을 누르면 토스트):
+ *  · **사람이 누른 확인에만 띄운다.** 6시간 주기 확인에도 띄우면 하루 네 번 토스트가 뜬다 —
+ *    그건 기능이 아니라 방해다. 그래서 `asked` 를 호출측이 세운다
+ *  · **`checking` → 다른 상태로 바뀌는 순간에만** 띄운다. 상태가 올 때마다 띄우면 같은 결과를
+ *    여러 번 말한다(상태는 여러 이유로 다시 온다)
+ *  · `available` 은 여기서 **말만 한다** — 받는 것은 상태바 칸이 `↑ 있음` 으로 바뀌어 받는다.
+ *    토스트에 버튼을 만들지 않는다(토스트는 글자만 그리는 물건이다)
+ */
+/**
+ * 설치를 시작한다 — **끄기 직전 한 박자 알리고** 부른다(#198).
+ *
+ * `quitAndInstall` 은 부르는 순간 창을 가져간다. 그 전에 `onInstalling()` 이 카드를 세우고,
+ * **한 프레임 뒤에** 실제 설치를 부른다 — 안 그러면 카드가 그려질 틈이 없다.
+ * ⚠️ 기다리는 시간은 "그릴 만큼"이다. 길면 사용자가 멈춘 줄 안다.
+ * 🔴 설치가 **시작된 뒤에는** 우리가 그릴 수 있는 것이 없다(프로세스가 사라진다) — 이 한 박자가
+ *    이 구조에서 보여 줄 수 있는 전부다.
+ */
+function startInstall(onInstalling?: () => void): void {
+  onInstalling?.()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => void window.ev?.app?.updateInstall?.())
+  })
+}
+
+export function checkToast(prev: UpdateState | null, next: UpdateState | null, asked: boolean): string | null {
+  if (!asked) return null
+  if (prev?.status !== 'checking') return null // 사람이 누른 그 확인이 끝나는 순간만
+  if (!next) return null
+  if (next.status === 'idle') return t('statusbar.update.toast.latest')
+  if (next.status === 'available' && next.version) return t('statusbar.update.toast.found').replace('{v}', next.version)
+  if (next.status === 'error') return t('settings.update.error')
+  // downloading·ready·checking·off — 확인의 결과가 아니거나(이미 받는 중) 할 말이 없다.
+  return null
+}
+
 export async function runUpdateAction(
-  action: 'download' | 'install',
+  action: 'download' | 'install' | 'check',
   version: string,
-  ask: (spec: DialogSpec) => Promise<DialogResult>
+  ask: (spec: DialogSpec) => Promise<DialogResult>,
+  onInstalling?: () => void
 ): Promise<void> {
+  // 확인은 묻지 않는다 — 아무것도 안 바꾸고 하던 일을 안 건드린다.
+  if (action === 'check') {
+    void window.ev?.app?.updateCheck?.()
+    return
+  }
   if (action === 'download') {
     void window.ev?.app?.updateDownload?.()
     return
@@ -163,7 +253,7 @@ export async function runUpdateAction(
     tone: 'danger',
     confirmLabel: t('settings.update.install')
   })
-  if (r === 'confirm') void window.ev?.app?.updateInstall?.()
+  if (r === 'confirm') startInstall(onInstalling)
 }
 
 /**
@@ -176,7 +266,11 @@ export async function runUpdateAction(
  * 상태가 여러 번 와도(6시간마다 다시 확인한다) 창은 한 버전에 한 번이다. 스누즈는 껐다 켜도
  * 살지만 `asked` 는 이번 실행 안의 기억이라 [받기] 를 누른 뒤 다시 묻는 것도 여기서 막힌다.
  */
-export function useUpdatePrompt(enabled: boolean, ask?: (spec: DialogSpec) => Promise<DialogResult>): void {
+export function useUpdatePrompt(
+  enabled: boolean,
+  ask?: (spec: DialogSpec) => Promise<DialogResult>,
+  onInstalling?: () => void
+): void {
   const st = useUpdateState()
   /**
    * 이번 실행에서 이미 물어본 것. **`상태:버전` 으로 잡는다** — 버전만으로 잡으면 같은 판을
@@ -200,7 +294,7 @@ export function useUpdatePrompt(enabled: boolean, ask?: (spec: DialogSpec) => Pr
         // [나중에]·ESC 는 **아무것도 안 하는 게 맞다** — 이미 받아 뒀고 `autoInstallOnAppQuit` 이
         // 켜져 있어(main/update/AutoUpdate.ts) 그냥 끄기만 해도 종료할 때 조용히 설치된다.
         // 그 사실은 위 update.install.msg 가 마지막 문장으로 말한다. 상태 표시줄에도 남는다.
-        if (r === 'confirm') void window.ev?.app?.updateInstall?.()
+        if (r === 'confirm') startInstall(onInstalling)
       })()
       return
     }
@@ -220,5 +314,5 @@ export function useUpdatePrompt(enabled: boolean, ask?: (spec: DialogSpec) => Pr
       // [나중에]·ESC — 그 버전으로는 다시 안 묻는다. 상태 표시줄에는 계속 남는다.
       else writeSnoozed(v)
     })()
-  }, [enabled, ask, st])
+  }, [enabled, ask, st, onInstalling])
 }

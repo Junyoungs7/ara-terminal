@@ -26,7 +26,7 @@ import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
 import { useProfiles, connectErrorTitle, connectErrorMessage, profileInput, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
-import { runUpdateAction, useUpdateState } from '../store/updateNotify'
+import { checkToast, runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
@@ -234,6 +234,20 @@ export function Shell() {
   // 켤 때 한 번 뜨는 창은 MainArea 가 띄운다 — 부팅 인사·호칭 묻기와 안 겹치게 하려면 그 둘의
   // 열림 상태가 필요한데 그건 저쪽에만 있다(prefs 의 주인이 MainArea 다).
   const updateSt = useUpdateState()
+  /**
+   * 상태바 버전 칸으로 **사람이** 확인을 눌렀나 — 그 확인이 끝날 때만 토스트를 띄운다.
+   * 6시간 주기 확인에도 띄우면 하루 네 번 토스트가 뜬다(그건 기능이 아니라 방해다).
+   * 판정은 `checkToast` 가 하고 여기는 **직전 상태를 들고 있는 일**만 한다.
+   */
+  const askedCheck = useRef(false)
+  const prevUpdateSt = useRef<typeof updateSt>(null)
+  useEffect(() => {
+    const msg = checkToast(prevUpdateSt.current, updateSt, askedCheck.current)
+    prevUpdateSt.current = updateSt
+    if (!msg) return
+    askedCheck.current = false // 한 번 말했으면 끝 — 다음 확인은 다시 눌러야 한다
+    mainRef.current?.toast(msg)
+  }, [updateSt])
 
   const sessions = useSessions()
 
@@ -1774,7 +1788,11 @@ export function Shell() {
         sessionCount={sessions.sessions.length}
         stats={telemetry.stats}
         update={updateSt}
-        onUpdateAction={(a) => void runUpdateAction(a, updateSt?.version ?? '', ask)}
+        onUpdateAction={(a) => {
+          // 확인은 결과를 토스트로 돌려줘야 한다 — 눌렀는데 아무 반응이 없으면 안 된다.
+          if (a === 'check') askedCheck.current = true
+          void runUpdateAction(a, updateSt?.version ?? '', ask)
+        }}
       >
         <McpIndicator getSessionTitle={(id) => sessions.sessions.find((s) => s.id === id)?.title ?? id} />
       </StatusBar>

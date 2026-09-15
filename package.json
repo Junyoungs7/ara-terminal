@@ -1,8 +1,8 @@
 {
   "name": "ara",
-  "productName": "A.R.A",
-  "version": "1.0.9",
-  "description": "A.R.A — AI Terminal",
+  "productName": "ARA",
+  "version": "1.0.10",
+  "description": "ARA — AI Terminal",
   "author": "VERYGOOD",
   "license": "MIT",
   "main": "./out/main/index.js",

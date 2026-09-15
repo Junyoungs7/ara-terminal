@@ -16,7 +16,14 @@ import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
 import { BootSplash, shouldShowBootSplash } from './BootSplash'
-import { useUpdatePrompt } from '../store/updateNotify'
+import {
+  justUpdated,
+  readSeenVersion,
+  useUpdatePrompt,
+  useUpdateState,
+  writeSeenVersion
+} from '../store/updateNotify'
+import { UpdateProgress } from './UpdateProgress'
 
 /**
  * #139: 이 창에서 부팅 인사를 이미 지났나. **모듈 변수**인 이유 — MainArea 는 떼어낸 창마다
@@ -502,7 +509,25 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      * 사람에게 인사가 다시 안 뜬다) 그 사이엔 "안 떠 있다"와 "아직 모른다"가 같은 얼굴이다 —
      * #138 이 prefsLoaded 를 둔 것과 같은 이유다.
      */
-    useUpdatePrompt(!detachedWinId && prefsLoaded && !splashOpen && !welcomeOpen, ask)
+    /**
+     * #198 업데이트가 일어나고 있다는 표시. **본창에서만** — 떼어낸 창마다 뜨면 셋이 동시에 뜬다
+     * (`useUpdatePrompt` 와 같은 자물쇠를 쓴다).
+     */
+    const updSt = useUpdateState()
+    const [installing, setInstalling] = useState(false)
+    const onInstalling = useCallback(() => setInstalling(true), [])
+    useUpdatePrompt(!detachedWinId && prefsLoaded && !splashOpen && !welcomeOpen, ask, onInstalling)
+
+    /**
+     * 설치가 끝나고 **다시 뜬 직후** 한 번 알린다. 저장값이 없으면(처음 깐 사람) 조용히 적어만 둔다 —
+     * 업데이트한 적 없는 사람에게 "업데이트되었습니다"는 거짓말이다.
+     */
+    useEffect(() => {
+      if (detachedWinId || !version) return
+      const seen = readSeenVersion()
+      if (justUpdated(seen, version)) showToast(t('update.done.toast').replace('{v}', version))
+      if (seen !== version) writeSeenVersion(version)
+    }, [detachedWinId, version, showToast])
 
     // 새 로컬 셸: 세션 생성 → 포커스 패널에 표시(패널이 없으면 첫 패널 생성).
     // "activeId 가 있으면 패널을 만든다"는 이펙트로 처리하면 layout 이 매 렌더 새 객체라 이펙트가 매 렌더 돌고,
@@ -1284,6 +1309,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         {!allPanesRdp(layout.panes) && bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
         {toast && <div className="pane-toast">{toast}</div>}
+        {/* 받는 동안 · 끄기 직전 — 우하단에 뜨고 아무것도 가리지 않는다(모달이 아니다). */}
+        {!detachedWinId && (installing || updSt?.status === 'downloading') && (
+          <UpdateProgress
+            phase={installing ? 'installing' : 'downloading'}
+            version={updSt?.version ?? ''}
+            percent={updSt?.status === 'downloading' ? (updSt.percent ?? 0) : 0}
+          />
+        )}
         <ContextInteractions
           onAction={onAction}
           // 제보 11·32: SSH 세션일 때만 tmux 항목이 붙는다(조회도 그때만 나간다).

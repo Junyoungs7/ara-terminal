@@ -69,6 +69,30 @@ async function runGate(gate: AraToolGate, name: string, argsJson: string): Promi
   return `"${name}" 이라는 도구가 없습니다. ara_tools 로 목록을 보세요.`
 }
 
+/**
+ * 🔴 **사용자 데이터 폴더를 이름에서 떼어 낸다** (#199 1단계, 1.0.10).
+ *
+ * Electron 은 `userData` 를 `productName` 에서 만든다 — 지금은 `%APPDATA%\A.R.A` 다.
+ * 준영님 요청으로 제품명을 `ARA` 로 바꿀 텐데(*"윈도우에서 검색으로 찾기 어렵다"*), 그냥 바꾸면
+ * 앱이 `%APPDATA%\ARA` 를 보고 **거긴 비어 있다**:
+ * **프로필·저장한 호스트키·설정·탭 레이아웃이 전부 사라진 것처럼 보인다.**
+ *
+ * 그래서 이름을 바꾸기 **전에** 이 줄을 먼저 낸다. 이 판은 이름이 그대로라 사용자에겐 아무 일도
+ * 일어나지 않고, 다음 판에서 이름을 바꿔도 앱은 **여전히 이 폴더**를 본다.
+ *
+ * **왜 옮기지 않고 고정하나**: 폴더를 복사하는 이전은 실패할 자리가 많다(권한·오피스키퍼 잠금·
+ * 중간에 꺼짐·부분 복사). **안 옮기는 것이 가장 안전한 이전이다.** 대가는 폴더 이름이 옛것으로
+ * 남는 것뿐이고 사용자 눈에 안 보인다.
+ *
+ * ⚠️ **`whenReady` 앞이어야 한다** — 그 뒤엔 이미 여러 경로가 굳는다. 모듈 최상단에 두는 이유다.
+ * ⚠️ 이 문자열을 `productName` 에서 **읽지 않는다.** 읽으면 이름을 바꾸는 순간 같이 바뀌어
+ *    이 장치가 통째로 무의미해진다 — 리터럴인 것이 요점이다.
+ * ⚠️ 새 PC 에 처음 까는 사람은 `A.R.A` 폴더가 새로 만들어진다. 이상해 보이지만 그게 맞다 —
+ *    한 이름으로 통일돼야 다음 판에서 또 갈리지 않는다.
+ */
+const LEGACY_USER_DATA = 'A.R.A'
+app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA))
+
 let store: WorkspaceStore
 let history: HistoryStore
 let sessions: MainSessionManager
