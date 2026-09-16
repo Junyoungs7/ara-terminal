@@ -11,7 +11,19 @@ import type { AiCommand } from '@shared/aiCli'
 // 남겨 스냅샷에 실린다 — 재시작 뒤 그 탭을 맨 셸이 아니라 [이어서 시작] 카드로 되살리는 단서다.
 export type SessionSpec = Pick<
   Session,
-  'type' | 'shell' | 'profileId' | 'cwd' | 'serverKey' | 'title' | 'manualTitle' | 'winId' | 'aiCli'
+  | 'type'
+  | 'shell'
+  | 'profileId'
+  | 'cwd'
+  | 'serverKey'
+  | 'title'
+  | 'manualTitle'
+  | 'winId'
+  | 'aiCli'
+  // 복원이 **저장해 둔 치수**로 pty 를 연다(`Session.cols` 주석 — 안 주면 80×24 로 열려 첫
+  // 프롬프트가 접힌다). 새 세션은 안 준다: 그때는 렌더러가 sizeOf 로 지금 칸을 잰다.
+  | 'cols'
+  | 'rows'
 > & {
   /**
    * D(#168) **이 세션의 프로세스가 곧 이 CLI 다.** 주면 셸을 열지 않는다.

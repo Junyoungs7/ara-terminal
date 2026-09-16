@@ -138,11 +138,21 @@ export class PtyBackend implements SessionBackend {
     // "AttachConsole failed" stderr + conhost 창이 화면에 뜨고 fork/flush 타이머 때문에 정리가 지연됐다.
     // conpty.dll 경로는 fork 없이 인프로세스로 종료해 창·지연을 제거한다(VS Code 기본 경로).
     const winOpts = win ? { useConpty: true as const, useConptyDll: true as const } : {}
+    /**
+     * 복원이 넘겨 준 **그 세션의 마지막 치수**. 없으면 예전대로 80×24 다.
+     *
+     * 안 쓰면 첫 프롬프트가 80칸에서 접힌다(2026-09-16 준영님 제보 — `Session.cols` 주석).
+     * 마운트 직후 resize 가 따라잡지만 **이미 찍힌 줄은 안 고쳐진다.**
+     * ⚠️ 값을 그대로 믿지 않는다 — 스냅샷은 손으로 고칠 수 있는 파일이다. 1 미만·비정상은 버린다.
+     */
+    const okSize = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 1 && n <= 2000
+    const cols = okSize(spec.cols) ? spec.cols : 80
+    const rows = okSize(spec.rows) ? spec.rows : 24
     try {
       this.pty = ptySpawn(file, args, {
         name: 'xterm-256color',
-        cols: 80,
-        rows: 24,
+        cols,
+        rows,
         cwd: spec.cwd || process.env['HOME'] || process.env['USERPROFILE'] || process.cwd(),
         env,
         ...winOpts
@@ -154,8 +164,8 @@ export class PtyBackend implements SessionBackend {
       if (win && file !== 'cmd.exe') {
         this.pty = ptySpawn('cmd.exe', cmd ? (aiArgv('other', cmd) ?? []) : [], {
           name: 'xterm-256color',
-          cols: 80,
-          rows: 24,
+          cols,
+          rows,
           cwd: spec.cwd || process.cwd(),
           env: base,
           ...winOpts

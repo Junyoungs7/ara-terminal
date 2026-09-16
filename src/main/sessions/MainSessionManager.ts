@@ -257,6 +257,9 @@ export class MainSessionManager implements ISessionManager {
     const h = this.handles.get(id)
     if (!h || cols < 1 || rows < 1) return
     h.backend.resize(cols, rows)
+    // 복원이 이 값으로 pty 를 연다(`Session.cols` 주석) — snapshot() 이 meta 를 그대로 싣는다.
+    h.meta.cols = cols
+    h.meta.rows = rows
   }
 
   pause(id: string): void {

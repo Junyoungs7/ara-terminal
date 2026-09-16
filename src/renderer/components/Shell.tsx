@@ -999,7 +999,16 @@ export function Shell() {
        * D(#168) 주면 이 세션은 **셸이 아니라 그 AI CLI 로** 열린다(그래서 startPath 도 안 쓴다 —
        * 폴더는 명령에 실려 간다). 안 주면 지금까지의 셸 탭 그대로다.
        */
-      aiCommand?: { argv: AiCommand; cwd: string }
+      aiCommand?: { argv: AiCommand; cwd: string },
+      /**
+       * 복원·재접속인가(2026-09-16). 주면 둘을 바꾼다:
+       *  · [파일] 탭으로 넘기지 않는다 — 복원은 사용자가 방금 서버를 고른 것이 아니라 **있던 것을
+       *    되살리는** 일이라 보던 화면을 갈아 치우면 안 된다
+       *  · `size` 가 있으면 **그 치수로** 연다. 복원 시점에는 칸에 xterm 이 없어 `sizeOf` 가 null 이고,
+       *    그러면 main 이 80×24 로 열어 **첫 프롬프트가 접힌다**(준영님 제보). 저장된 값이 정답이다.
+       * 둘은 늘 같이 다니므로 한 인자로 묶었다 — 인자를 또 하나 늘리지 않는다.
+       */
+      restore?: { size?: { cols: number; rows: number } }
     ): Promise<boolean> => {
       const target = await lookup(profileId)
       if (target?.type === 'rdp') return openRdpProfile(profileId)
@@ -1008,7 +1017,8 @@ export function Shell() {
       // 그 칸은 지금 activeId 의 xterm 이 쓰고 있다 — 그 치수가 곧 이 세션의 치수다.
       // 접속 전에 실어 보내면 원격 셸의 첫 프롬프트·배너부터 제 폭으로 온다. 모르면(칸이 비었거나
       // RDP 면) 안 보내고, main 이 80×24 로 연 뒤 마운트 직후 resize 가 따라잡는다(예전 동작).
-      const res = await connect(profileId, acceptHostKey, password, sizeOf(sessions.activeId) ?? undefined, aiCommand)
+      const size = restore?.size ?? sizeOf(sessions.activeId) ?? undefined
+      const res = await connect(profileId, acceptHostKey, password, size, aiCommand)
       if (res.ok) {
         const p = await lookup(profileId)
         const name = p?.name ?? 'ssh'
@@ -1021,7 +1031,7 @@ export function Shell() {
         // 접속하면 바로 원격 파일이 보이게 [파일] 탭으로 넘긴다 — 접속 직후 하는 일이 대개 그거다.
         // 부팅 복원은 이 경로를 안 타므로 저장해 둔 탭이 그대로 살아난다(F6).
         // D(#168) AI 세션은 예외다: 그 탭을 연 이유가 CLI 라, 파일 화면으로 덮으면 방금 띄운 것이 가려진다.
-        if (!aiCommand) revealFiles()
+        if (!aiCommand && !restore) revealFiles()
         return true
       }
       if (res.reason === 'hostKeyNew') {
@@ -1037,7 +1047,7 @@ export function Shell() {
           confirmLabel: t('conn.hostkey.trustBtn'),
           cancelLabel: t('dlg.cancel')
         })
-        if (r === 'confirm') return await connectProfile(profileId, true, startPath, onSession, password, aiCommand)
+        if (r === 'confirm') return await connectProfile(profileId, true, startPath, onSession, password, aiCommand, restore)
         return false
       }
       // 저장해 둔 비밀번호가 없다(또는 vault 에서 사라졌다). 예전엔 여기서 "연결 관리자에서 다시
@@ -1056,7 +1066,7 @@ export function Shell() {
           cancelLabel: t('dlg.cancel')
         })
         if (!pw) return false
-        return await connectProfile(profileId, acceptHostKey, startPath, onSession, pw, aiCommand)
+        return await connectProfile(profileId, acceptHostKey, startPath, onSession, pw, aiCommand, restore)
       }
       await showConnectFailure(profileId, res)
       return false
@@ -1097,20 +1107,42 @@ export function Shell() {
 
   // F6 복원·재시도용 SSH 재접속: 프로필로 접속 → 성공 시 세션 편입 + 새 id 반환, 실패 시 사유.
   // 복원은 사용자 프롬프트 없이 진행하되, 호스트키 불일치(MITM)는 F3 정책대로 차단(오류로 반환).
+  /**
+   * 부팅 복원 · 끊긴 세션 [다시 접속] 이 쓰는 재접속.
+   *
+   * 🔴 **2026-09-16 준영님 제보로 두 구멍을 메웠다**: *"세션이 끊기면 다시 접속 버튼을 눌러도
+   * 재접속에 실패했다고 계속 나온다. putty 로는 접속이 된다."* · *"껐다 키면 처음 경로가
+   * 줄바꿈되어 나온다."* 둘 다 이 함수가 `connect()` 를 **맨손으로** 부르고 있어서였다:
+   *
+   *  ① **복구 경로가 없었다.** 정상 접속(`connectProfile`)은 실패 사유를 보고 되묻는다 —
+   *     호스트키 첫 접속이면 지문을 보여 주고 승낙을 받고, 저장된 비밀번호가 없으면 그 자리에서
+   *     받는다. 여기는 그 분기가 **하나도 없어서** 어느 쪽이든 그냥 실패였다.
+   *     putty 가 되는 이유가 그것이다 — putty 는 물어본다.
+   *  ② **치수를 안 넘겼다.** `connect` 에 `size` 를 안 주면 main 이 **80×24** 로 연다.
+   *     그래서 복원된 세션의 **첫 프롬프트가 80칸에서 접힌다**(그 뒤 마운트 resize 가 따라잡지만
+   *     이미 찍힌 줄은 그대로다). `connectProfile` 은 처음부터 `sizeOf` 를 넘기고 있었다.
+   *
+   * ⚠️ **두 벌을 만들지 않는다.** 복구는 `connectProfile` 이 이미 하고 있으므로 그쪽에 태운다 —
+   *    그 함수가 성공 시 `adopt`·`selectSession` 까지 하므로 여기서는 **새로 생긴 세션 id 만**
+   *    받아 돌려주면 된다(`onSession` 콜백이 그 창구다).
+   * ⚠️ `revealFiles`(접속하면 [파일] 탭으로) 는 복원에서 원치 않는다 — `connectProfile` 은
+   *    `aiCommand` 가 있을 때만 그것을 건너뛴다. 복원도 건너뛰어야 하므로 플래그를 하나 더 준다.
+   */
   const sshRestore = useCallback(
-    async (profileId: string): Promise<{ ok: true; id: string } | { ok: false; reason: string }> => {
-      setActiveProfileId(profileId)
-      const res = await connect(profileId)
-      if (res.ok) {
-        const p = profiles.find((x) => x.id === profileId)
-        const name = p?.name ?? 'ssh'
-        // 스냅샷에 사용자가 바꿔 둔 이름이 있으면 복원 쪽(MainArea)이 곧바로 rename 으로 덮어쓴다(R2.1).
-        sessions.adopt(res.id, res.title ?? name, name, 'ssh', profileId)
-        return { ok: true, id: res.id }
-      }
-      return { ok: false, reason: res.reason }
+    async (
+      profileId: string,
+      size?: { cols: number; rows: number }
+    ): Promise<{ ok: true; id: string } | { ok: false; reason: string }> => {
+      let newId: string | null = null
+      const ok = await connectProfileRef.current?.(profileId, undefined, undefined, (id) => {
+        newId = id
+      }, undefined, undefined, { ...(size ? { size } : {}) })
+      if (ok && newId) return { ok: true, id: newId }
+      // 사유는 `connectProfile` 이 이미 화면으로 말했다(호스트키 창·비밀번호 창·실패 안내).
+      // 여기서 또 토스트를 내면 같은 실패를 두 번 말한다 — 호출측이 그것을 보고 조용히 넘어간다.
+      return { ok: false, reason: 'shown' }
     },
-    [connect, profiles, sessions]
+    []
   )
 
   // 세션 복제(F4c 우클릭 메뉴): ssh 세션은 같은 프로필로 새 접속(connectProfile 재사용).

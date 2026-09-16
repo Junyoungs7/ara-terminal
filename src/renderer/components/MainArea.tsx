@@ -70,7 +70,7 @@ type MainAreaProps = {
   // ssh 세션 복제(같은 프로필 재접속). local 은 MainArea.open() 으로 처리. Shell 이 주입(F4c).
   onDuplicateSession?: (session: Session) => void
   // F6: 프로필로 SSH 재접속(복원·재시도). Shell 이 주입 — 성공 시 새 세션 id 반환.
-  sshRestore?: (profileId: string) => Promise<SshRestoreResult>
+  sshRestore?: (profileId: string, size?: { cols: number; rows: number }) => Promise<SshRestoreResult>
   // 탭바 ＋ 메뉴·빈 상태의 "SSH 연결…" → 연결 관리자 열기(Shell 소유).
   onOpenConnManager?: () => void
   // F27: 탭바 ＋ 메뉴의 "AI CLI 시작…" → 그 창 열기(창 상태도 Shell 소유 — onAskAi 와 같은 이유).
@@ -357,7 +357,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
               profileId: null,
               shell: item.session.shell,
               // 사용자가 바꿔 둔 이름은 재스폰 후에도 셸 OSC 제목에서 지켜 준다(R3.6).
-              manualTitle: item.session.manualTitle
+              manualTitle: item.session.manualTitle,
+              // 마지막으로 쓰던 치수로 연다 — 안 주면 80×24 라 첫 프롬프트가 접힌다
+              // (2026-09-16 준영님 제보 · `Session.cols` 주석). 없으면 옛 스냅샷이니 예전 동작.
+              ...(item.session.cols && item.session.rows
+                ? { cols: item.session.cols, rows: item.session.rows }
+                : {})
             })
             idMap.set(item.oldId, id)
             restoredIds.current.add(id) // 만든 **즉시** 담는다 — 몰아 담으면 그 사이가 또 경합이다
@@ -394,7 +399,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             }
           } else {
             // SSH: 프로필로 재접속. 실패(네트워크/인증/고아) 시 오류 패널(재시도) — 전체 실패 아님.
-            const res = item.profileId && sshRestore ? await sshRestore(item.profileId) : { ok: false as const, reason: 'orphan' }
+            // 저장해 둔 치수로 연다 — 없으면(옛 스냅샷) 예전대로 main 이 80×24 로 열고 마운트
+            // 직후 resize 가 따라잡는다. `Session.cols` 주석에 왜 그것이 부족한지 적혀 있다.
+            const savedSize =
+              item.session.cols && item.session.rows ? { cols: item.session.cols, rows: item.session.rows } : undefined
+            const res =
+              item.profileId && sshRestore
+                ? await sshRestore(item.profileId, savedSize)
+                : { ok: false as const, reason: 'orphan' }
             if (res.ok) {
               idMap.set(item.oldId, res.id)
               restoredIds.current.add(res.id)

@@ -55,7 +55,16 @@ if (typeof window !== 'undefined') {
  */
 export function sizeOf(sessionId: string | null): { cols: number; rows: number } | null {
   const e = sessionId ? terms.get(sessionId) : null
-  return e ? { cols: e.term.cols, rows: e.term.rows } : null
+  if (e) return { cols: e.term.cols, rows: e.term.rows }
+  /**
+   * 없으면 null — 예전 그대로다. **아무 터미널의 치수로 떨어지지 않는다**(2026-09-16 에 그렇게
+   * 해 봤다가 걷었다): 분할 중이면 남의 칸 폭이라 틀린 값이고, 부팅 복원 때는 떠 있는 xterm 이
+   * 아예 없어 **어차피 안 도는 길**이었다. 추측값을 넣으면 "대충 맞는데 가끔 틀린" 자리가 생긴다.
+   *
+   * 복원의 정답은 추측이 아니라 **저장해 둔 값**이다 — `Session.cols`(main 이 resize 때마다 적는다)를
+   * 복원이 그대로 실어 보낸다. 여기는 **새 세션이 지금 칸에 뜨는 경우**만 답하면 된다.
+   */
+  return null
 }
 
 export function getSelection(sessionId: string): string {

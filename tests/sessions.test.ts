@@ -241,6 +241,35 @@ describe('세션 이름 (R2.1 rename · 중복 서버 구분)', () => {
  * 세션 생성 경로는 `register()` 하나로 모인다(로컬 create · SSH adopt 공통). 알림을 거기 두는
  * 이유가 그것이다 — 만드는 자리마다 알림을 흩으면 **다음에 생기는 경로**가 또 빠뜨린다.
  */
+describe('복원이 쓸 터미널 치수 (2026-09-16 — 첫 프롬프트가 접히던 것)', () => {
+  /**
+   * 제보: *"껐다 키면 기존 세션 연결이 되는데 처음 경로 나올 때 경로가 줄바꿈되어 나온다."*
+   * 원인: 복원은 xterm 이 없는 순간에 pty 를 여는데 치수를 안 주면 **80×24** 라 첫 프롬프트가
+   * 80칸에서 접힌다. 마운트 뒤 resize 가 따라잡아도 **이미 찍힌 줄은 안 고쳐진다.**
+   * 고침: main 이 resize 때마다 meta 에 적고, 복원이 그 값으로 연다.
+   */
+  it('🔴 resize 하면 그 치수가 스냅샷에 남는다 — 복원이 읽을 유일한 출처다', async () => {
+    const mgr = new MainSessionManager(collect().sink)
+    const id = await mgr.create(echoSpec())
+    mgr.resize(id, 137, 41)
+    const snap = mgr.snapshot().find((x) => x.id === id)
+    expect(snap?.cols).toBe(137)
+    expect(snap?.rows).toBe(41)
+    mgr.destroy(id)
+  })
+
+  it('말도 안 되는 치수는 안 남긴다 — pty 가 거절하는 값을 적어 두면 다음 부팅이 그걸 쓴다', async () => {
+    const mgr = new MainSessionManager(collect().sink)
+    const id = await mgr.create(echoSpec())
+    mgr.resize(id, 100, 30)
+    mgr.resize(id, 0, 30) // 1 미만은 resize 자체가 무시한다
+    const snap = mgr.snapshot().find((x) => x.id === id)
+    expect(snap?.cols).toBe(100)
+    expect(snap?.rows).toBe(30)
+    mgr.destroy(id)
+  })
+})
+
 describe('세션이 생겼다는 알림(화면이 아는 유일한 길)', () => {
   it('★ create 가 sink.opened 로 메타를 통째로 알린다(id 만으로는 탭을 못 그린다)', async () => {
     const c = collect()
