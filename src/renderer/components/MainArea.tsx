@@ -42,7 +42,17 @@ import type { DialogResult, DialogSpec } from './Dialog'
 import type { UiState } from '@shared/types'
 
 // SSH 복원 결과 — Shell 의 connectProfile 을 감싼다. 성공 시 새 세션 id, 실패 시 사유.
-export type SshRestoreResult = { ok: true; id: string } | { ok: false; reason: string }
+/**
+ * SSH 재접속 결과.
+ *
+ * 🔴 실패 사유가 **닫힌 목록**이다(`RestoreError['reason']` 과 같은 축) + `'shown'` 하나.
+ * `'shown'` 은 **화면 문구가 아니라 신호**다 — `connectProfile` 이 이미 호스트키 창·비밀번호 창·
+ * 실패 안내로 말했으니 호출측은 **조용히 넘어가라**는 뜻이다. 그래서 카드에도 토스트에도 닿으면
+ * 안 되고, 두 호출측이 각각 그것을 거른다(안 걸렀던 것이 1.0.11 의 결함이었다).
+ */
+export type SshRestoreResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: RestoreError['reason'] | 'shown' }
 
 // 메인 영역: 터미널 탭바(서버 그룹) + 분할 그리드(F4a). 세션별 xterm 은 마운트 유지, 표시만 토글.
 // 탭바·트리·패널이 sessions 스토어 하나를 공유(이중 상태 금지, F4b).
@@ -406,7 +416,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             const res =
               item.profileId && sshRestore
                 ? await sshRestore(item.profileId, savedSize)
-                : { ok: false as const, reason: 'orphan' }
+                : ({ ok: false, reason: 'orphan' } as const)
             if (res.ok) {
               idMap.set(item.oldId, res.id)
               restoredIds.current.add(res.id)
@@ -421,7 +431,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
                 profileId: item.profileId,
                 title: item.session.title,
                 serverKey: item.session.serverKey,
-                reason: res.reason
+                /**
+                 * 🔴 `'shown'` 은 **화면에 그릴 사유가 아니다**(Shell.sshRestore 주석 참고) —
+                 * 카드가 `t('restore.reason.' + reason)` 으로 그리는데 그 키가 없어서
+                 * **`restore.reason.shown` 이 글자 그대로 찍힌다.** 이미 사용자가 그 실패를
+                 * 화면에서 봤으니(비밀번호 창·호스트키 창) 카드는 일반 사유로 돌아간다.
+                 * 1.0.11 이 만든 회귀이고 배포 전에 잡았다.
+                 */
+                reason: res.reason === 'shown' ? 'dropped' : res.reason
               })
               idMap.set(item.oldId, errId)
             }
@@ -789,7 +806,15 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           layout.replaceSession(errId, res.id)
           clearError(errId)
           select(res.id)
-        } else {
+        } else if (res.reason !== 'shown') {
+          /**
+           * 🔴 **`'shown'` 이면 조용히 넘어간다**(1.0.11 에서 계약만 적고 여기를 안 고쳤다).
+           *
+           * 재접속은 이제 `connectProfile` 을 지나고, 그쪽이 **실패를 이미 화면으로 말한다**
+           * (호스트키 창 · 비밀번호 창 · 실패 안내). 여기서 또 토스트를 내면 **같은 실패를 두 번**
+           * 말하고, 더 나쁘게는 **사용자가 비밀번호 창을 스스로 취소한 경우에도**
+           * *"재접속에 실패했습니다 — 잠시 후 다시 시도하세요"* 가 뜬다. 취소는 실패가 아니다.
+           */
           showToast(t('restore.retryFailed'))
         }
       },

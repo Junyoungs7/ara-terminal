@@ -16,7 +16,7 @@ import type {
   SftpXferResult
 } from '@shared/ipc'
 import { friendly } from '../util/fsError'
-import { invalidName } from '../fs/LocalFs'
+import { invalidName, nthName } from '../fs/LocalFs'
 import { readRemoteText, writeRemoteText } from '../editor/textIO'
 import { shQuote } from '../telemetry/LogTail'
 
@@ -324,12 +324,45 @@ export class SftpService {
     } catch (e) {
       return { ok: false, canceled: false, message: (e as Error).message, cleaned: false }
     }
-    const remotePath = posix.join(remoteDir, basename(localPath))
+    /**
+     * 🔴 **서버 파일을 조용히 덮어쓰지 않는다**(2026-09-16 점검에서 잡았다).
+     *
+     * `sftp.createWriteStream(path)` 는 옵션을 안 주면 flags 가 `'w'` 다 —
+     * **있으면 잘라 쓴다**(`node_modules/ssh2/lib/protocol/SFTP.js:3852` 원문 확인).
+     * 같은 이름이 서버에 있으면 **경고도 확인도 없이 내용이 날아갔다.**
+     *
+     * 반대편 로컬은 같은 규칙을 네 곳에서 지키고 있었다 — `LocalFs.freeName` 의 주석이
+     * *"조용한 덮어쓰기는 조용한 삭제와 같다"* 다. **한 앱 안에서 규칙이 정반대였고,
+     * 더 위험한 쪽(서버)이 무방비였다.**
+     *
+     * 이름 규칙은 `nthName` 을 **그대로 쓴다**(`보고서 (2).xlsx`) — 두 벌로 만들면 로컬과
+     * 서버에서 다른 이름이 나온다.
+     */
+    const remotePath = await this.freeRemotePath(sftp, remoteDir, basename(localPath))
     const read = createReadStream(localPath)
     const write = sftp.createWriteStream(remotePath)
     const cleanupRemote = () =>
       new Promise<boolean>((resolve) => sftp.unlink(remotePath, (err) => resolve(!err)))
     return this.pump(transferId, read, write, total, () => sftp.end(), remotePath, cleanupRemote)
+  }
+
+  /**
+   * `dir` 안에서 비어 있는 이름을 찾는다 — 로컬 `freeName` 의 서버 판.
+   *
+   * `stat` 이 **성공하면 있는 것**이고 실패하면 없는 것이다. 권한 때문에 실패하는 경우도
+   * "없다"로 읽히는데, 그러면 업로드가 그 이름으로 시도했다가 **서버가 거절한다** —
+   * 조용히 덮어쓰는 것보다 낫다(실패는 화면에 그대로 나온다).
+   * 1000 까지만 찾는다(로컬과 같은 상한). 그 지경이면 쓰기에서 실패하는 편이 낫다.
+   */
+  private freeRemotePath(sftp: SFTPWrapper, dir: string, name: string): Promise<string> {
+    const exists = (p: string) => new Promise<boolean>((resolve) => sftp.stat(p, (err) => resolve(!err)))
+    return (async () => {
+      for (let n = 1; n <= 1000; n++) {
+        const candidate = posix.join(dir, nthName(name, n))
+        if (!(await exists(candidate))) return candidate
+      }
+      return posix.join(dir, name)
+    })()
   }
 
   // 서버 A → 서버 B. SFTP 에는 서버 간 전송 op 가 없어 데이터는 어차피 우리를 거치지만,

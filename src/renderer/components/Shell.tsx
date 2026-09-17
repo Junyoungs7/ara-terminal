@@ -2,7 +2,7 @@ import { AI_ENTRY, ARA_CHAT } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
-import { MainArea, type MainAreaHandle } from './MainArea'
+import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
 import { MiniPreview } from './MiniPreview'
 import { AiPanel } from './AiPanel'
 import { AraChatPanel } from './AraChatPanel'
@@ -1129,17 +1129,23 @@ export function Shell() {
    *    `aiCommand` 가 있을 때만 그것을 건너뛴다. 복원도 건너뛰어야 하므로 플래그를 하나 더 준다.
    */
   const sshRestore = useCallback(
-    async (
-      profileId: string,
-      size?: { cols: number; rows: number }
-    ): Promise<{ ok: true; id: string } | { ok: false; reason: string }> => {
+    async (profileId: string, size?: { cols: number; rows: number }): Promise<SshRestoreResult> => {
       let newId: string | null = null
       const ok = await connectProfileRef.current?.(profileId, undefined, undefined, (id) => {
         newId = id
       }, undefined, undefined, { ...(size ? { size } : {}) })
       if (ok && newId) return { ok: true, id: newId }
-      // 사유는 `connectProfile` 이 이미 화면으로 말했다(호스트키 창·비밀번호 창·실패 안내).
-      // 여기서 또 토스트를 내면 같은 실패를 두 번 말한다 — 호출측이 그것을 보고 조용히 넘어간다.
+      /**
+       * 사유는 `connectProfile` 이 **이미 화면으로 말했다**(호스트키 창·비밀번호 창·실패 안내).
+       *
+       * 🔴 `'shown'` 은 **화면 문구가 아니라 호출측에게 주는 신호**다 — `restore.reason.shown`
+       * 같은 i18n 키가 없고, 있으면 안 된다. 부팅 복원 카드는 `t('restore.reason.' + reason)` 으로
+       * 사유를 그리므로(`PaneGrid.tsx`) **이 값이 거기 닿으면 키 문자열이 그대로 찍힌다.**
+       * 그래서 두 호출측이 각각 이것을 걸러야 한다:
+       *   · `retryRestore` — 토스트를 안 낸다(같은 실패를 두 번 말하지 않는다)
+       *   · 부팅 복원 — 카드에 담지 않는다(`errs.set` 앞에서 거른다)
+       * 1.0.11 이 이 계약을 **글로만 적고 호출측을 안 고쳐서** 그 둘이 다 새어 나왔다.
+       */
       return { ok: false, reason: 'shown' }
     },
     []

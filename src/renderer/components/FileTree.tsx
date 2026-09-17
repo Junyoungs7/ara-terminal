@@ -550,14 +550,23 @@ export function FileTree({
       await runQueue(
         files.map((f) => ({
           label: `${t('sftp.downloading')} ${f.name}`,
-          run: (transferId: string) =>
-            window.ev.sftp.download({
+          run: async (transferId: string) => {
+            /**
+             * 🔴 **내 PC 파일을 조용히 덮어쓰지 않는다**(2026-09-16 점검).
+             *
+             * 위 기본 경로(다운로드 폴더)는 처음부터 `freeName` 을 쓰는데 **여기만 빠져 있었다** —
+             * 50줄 차이로 같은 동작이 규칙이 달랐다. 위치를 직접 고른 쪽이 오히려 위험하다:
+             * 사용자가 **자기 작업 폴더**를 고르는 자리다.
+             */
+            const name = await window.ev.fs.freeName(dir, f.name)
+            return window.ev.sftp.download({
               sessionId: sid,
               transferId,
               remotePath: joinPath(path, f.name),
-              localPath: joinPath(dir, f.name),
+              localPath: joinPath(dir, name),
               size: f.size
             })
+          }
         }))
       )
     },

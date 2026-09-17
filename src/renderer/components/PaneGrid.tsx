@@ -27,7 +27,28 @@ export type RestoreError = {
   profileId: string | null
   title: string
   serverKey: string
-  reason: string
+  /**
+   * 🔴 **문자열이 아니라 닫힌 목록이다**(2026-09-16). 이 값은 `t('restore.reason.' + reason)` 으로
+   * 화면 문구가 되므로 **`ko.json` 에 키가 없는 값이 들어오면 키 문자열이 그대로 찍힌다.**
+   *
+   * 1.0.11 이 실제로 그랬다 — `sshRestore` 가 신호용으로 쓰는 `'shown'` 이 여기까지 흘러
+   * 카드에 `restore.reason.shown` 이 글자 그대로 나왔다. 그때 `reason: string` 이라 **타입이
+   * 아무 말도 안 했다.** 목록으로 바꾸면 그 대입이 컴파일에서 막힌다 —
+   * **스캐너를 새로 만들 것 없이 typecheck 가 게이트다.**
+   *
+   * 값을 늘릴 때는 `ko.json` 의 `restore.reason.<이름>` 도 같이 만든다(`aiEnded` 는 제목·부제를
+   * 따로 그리므로 그 키가 없어도 된다 — 아래 렌더가 갈라 놓았다).
+   */
+  reason:
+    | 'dropped'
+    | 'noProfile'
+    | 'network'
+    | 'auth'
+    | 'orphan'
+    | 'orphanSecret'
+    | 'hostKeyMismatch'
+    | 'hostKeyNew'
+    | 'aiEnded'
   /**
    * 1.0.8 ②: 이 자리가 **끝난 AI 세션**이면 무엇이 돌았나(reason='aiEnded').
    *
