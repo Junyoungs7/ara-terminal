@@ -27,6 +27,7 @@ import { holdTermResize } from '../terminal/resizeGate'
 import { useProfiles, connectErrorTitle, connectErrorMessage, profileInput, type ConnectFailure } from '../store/profiles'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { checkToast, runUpdateAction, useUpdateState } from '../store/updateNotify'
+import { primeCwd } from '../store/cwdPrime'
 import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
@@ -450,6 +451,23 @@ export function Shell() {
       .split(',')
       .filter(Boolean)
       .map((id) => window.ev?.session.onCwd(id, (info) => setCwdBy((m) => ({ ...m, [id]: info.cwd }))))
+    /**
+     * 🔴 **main 이 이미 아는 cwd 를 먼저 받아 온다**(2026-09-17 준영님 제보: *"D 드라이브로 옮겨서
+     * 쓰던 세션창이 켜진 상태에서 종료하고 다시 들어가면 세션창에는 D 경로인데 좌측 사이드바는
+     * C:/users/사용자로 되어 있다"*).
+     *
+     * `cwdBy` 는 지금까지 **OSC7 이벤트로만** 채워졌다 — 즉 **셸이 다음에 경로를 알려 줄 때까지**
+     * 비어 있다. 복원 직후가 정확히 그 순간이다: 터미널은 저장된 cwd(D:)로 떠 있는데 파일 트리는
+     * 그 값을 몰라 홈을 그린다. **화면 둘이 서로 다른 곳을 가리킨다.**
+     *
+     * main 은 그 값을 **늘 최신으로 들고 있다**(`MainSessionManager` 가 스폰 cwd 로 시작해
+     * OSC7 이 올 때마다 `meta.cwd` 를 갱신한다 — `:124`·`:145`). 새로 추적할 것이 없고
+     * **읽어 오기만** 하면 된다 — cwd 의 주인은 계속 main 하나다.
+     *
+     * ⚠️ **이미 아는 것은 덮지 않는다.** 이벤트로 받은 값이 더 최신이다(이 요청이 도는 사이에
+     *    OSC7 이 먼저 닿을 수 있다). 빈 자리만 채운다.
+     */
+    void window.ev?.session.list().then((list) => setCwdBy((m) => primeCwd(m, list)))
     return () => offs.forEach((off) => off?.())
   }, [sessionIds])
   const activeCwd = activeId ? (cwdBy[activeId] ?? null) : null
