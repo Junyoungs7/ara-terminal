@@ -1021,5 +1021,12 @@
   "update.card.keepWorking": "받는 동안에도 하던 일은 그대로 하시면 됩니다",
   "update.card.installing": "업데이트를 설치하고 있습니다",
   "update.card.reopens": "잠시 후 아라가 저절로 다시 열립니다",
-  "update.done.toast": "{v} 로 업데이트되었습니다"
+  "update.done.toast": "{v} 로 업데이트되었습니다",
+  "update.done.title": "ARA 가 {v} 로 업데이트되었습니다",
+  "update.done.msg": "무엇이 달라졌는지 패치 내역에서 볼 수 있습니다.",
+  "update.done.notes": "패치 내역 보기",
+  "update.done.notesFailed": "패치 내역을 열지 못했습니다 — 사내망에 연결되어 있는지 확인해 주세요.",
+  "settings.notes.title": "패치 내역",
+  "settings.notes.desc": "판마다 무엇이 추가되고 무엇이 고쳐졌는지 봅니다.",
+  "settings.notes.open": "패치 내역 보기"
 }

@@ -30,7 +30,7 @@ import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
-import { MANUAL_URL } from '@shared/links'
+import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
 
 // 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] 추가).
@@ -1197,6 +1197,22 @@ export function SettingsDrawer({
                   onClick={() => void window.ev?.app.openExternal(MANUAL_URL)}
                 >
                   {t('settings.manual.open')}
+                </button>
+              </Row>
+
+              {/* 1.0.12 패치 내역. **아라 브라우저로 연다** — 업데이트 직후 뜨는 창과 같은 자리여야
+                  하고(준영님: *"창 하나 띄워서 거기서도 보여주는 건"*), 그 창이 아라 안에서 연다.
+                  ⚠️ 바로 위 [사용 설명서]는 **OS 브라우저**다(그 주석의 판단 — 이 앱은 터미널이지
+                     브라우저가 아니다). 두 줄이 다른 곳으로 여는 것이 지금 상태이고, 어느 쪽으로
+                     통일할지는 준영님 몫으로 남겼다. 조용히 한쪽을 바꾸지 않는다. */}
+              <Row label={t('settings.notes.title')} desc={t('settings.notes.desc')}>
+                <button
+                  type="button"
+                  className="btn sec"
+                  data-action="notes.open"
+                  onClick={() => void window.ev?.browser?.open(CHANGELOG_URL)}
+                >
+                  {t('settings.notes.open')}
                 </button>
               </Row>
 

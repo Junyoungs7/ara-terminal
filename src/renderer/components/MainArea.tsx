@@ -36,6 +36,7 @@ import { aiRuns } from '../store/aiSessions'
 import { setSessionState, useSessionStates } from '../store/sessionState'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
+import { CHANGELOG_URL } from '../../shared/links'
 import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
@@ -552,11 +553,34 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      * 업데이트한 적 없는 사람에게 "업데이트되었습니다"는 거짓말이다.
      */
     useEffect(() => {
-      if (detachedWinId || !version) return
+      if (detachedWinId || !version || !ask) return
       const seen = readSeenVersion()
-      if (justUpdated(seen, version)) showToast(t('update.done.toast').replace('{v}', version))
+      const updated = justUpdated(seen, version)
+      // 🔴 **먼저 적어 둔다.** 아래가 await 를 타므로, 여기서 안 적으면 그 사이 이펙트가 다시 돌아
+      // 같은 창을 두 번 띄운다(StrictMode 이중 마운트가 그 경로다).
       if (seen !== version) writeSeenVersion(version)
-    }, [detachedWinId, version, showToast])
+      if (!updated) return
+      void (async () => {
+        /**
+         * 1.0.12: 업데이트 직후 **창으로** 알리고 패치 내역을 연다(준영님: *"vscode 처럼
+         * 업데이트하면 창 하나 띄워서 거기서도 보여주는 건 어때?"* · 자동으로 띄우기로 확정).
+         *
+         * 그전에는 토스트 한 줄이라 **놓치면 끝**이었다. 무엇이 바뀌었는지 보려면 사이트를
+         * 따로 찾아가야 했다.
+         * ⚠️ 패치 내역은 **사이트 페이지를 연다** — 앱에 베껴 넣지 않는다(`CHANGELOG_URL` 주석).
+         */
+        const r = await ask({
+          title: t('update.done.title').replace('{v}', version),
+          message: t('update.done.msg'),
+          confirmLabel: t('update.done.notes'),
+          cancelLabel: t('dlg.close')
+        })
+        if (r !== 'confirm') return
+        // 사내망 밖이면 안 열린다 — **조용히 넘어가지 않는다.** 실패는 화면이 말해야 한다.
+        const opened = await window.ev?.browser?.open(CHANGELOG_URL).catch(() => null)
+        if (!opened) showToast(t('update.done.notesFailed'))
+      })()
+    }, [detachedWinId, version, showToast, ask])
 
     // 새 로컬 셸: 세션 생성 → 포커스 패널에 표시(패널이 없으면 첫 패널 생성).
     // "activeId 가 있으면 패널을 만든다"는 이펙트로 처리하면 layout 이 매 렌더 새 객체라 이펙트가 매 렌더 돌고,
