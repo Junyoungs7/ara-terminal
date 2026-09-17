@@ -585,8 +585,21 @@ export function FileTree({
           run: (transferId: string) => window.ev.sftp.upload({ sessionId: sid, transferId, localPath, remoteDir: dir })
         }))
       )
+      /**
+       * 🔴 **올리고 나면 목록을 다시 읽는다**(2026-09-17 준영님: *"파일을 업로드하면 사용자가
+       * 직접 새로고침 버튼을 눌러야 하는데 자동으로 새로고침되게 수정해줘"*).
+       *
+       * 형제 경로인 서버↔서버 복사는 처음부터 `refresh()` 로 끝나고 있었다 — **업로드만 빠져
+       * 있었다.** #201 점검이 찾던 그 부류다(같은 일을 하는 길이 둘인데 한쪽만 온전하다).
+       *
+       * ⚠️ **`refresh()` 가 아니라 `load(dir)` 다.** 올린 곳은 `target.current` 이고 그것은 화면이
+       *    보고 있는 `path` 와 **다를 수 있다** — 탭이 숨어 있으면 터미널의 OSC7 cwd 다(위 주석).
+       *    그때 `refresh()` 는 **올린 곳이 아닌 폴더**를 다시 읽어, 새 파일이 안 보이는 채로
+       *    "새로고침했다"가 된다. 올린 곳을 열어 주는 것이 사용자가 기대하는 결과다.
+       */
+      await load(dir, true)
     },
-    [sid, backend, runQueue]
+    [sid, backend, runQueue, load]
   )
 
   // F14: 터미널 Ctrl+V(파일) → 이 큐. 원격 세션일 때만 등록하고, 세션이 바뀌면 즉시 갈아 끼운다
