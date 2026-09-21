@@ -76,4 +76,13 @@ export function registerWorkspaceIpc(
     history.append(scope, command)
     return { ok: true } as const
   })
+  // #204 [명령 기록 지우기]. 목록은 통 이름과 줄 수만 준다 — 화면이 내용을 그리지 않는다.
+  handle('history:scopes', () => ({ path: history.path, scopes: history.scopes() }))
+  handle('history:clear', ({ scope }) => {
+    // 렌더러가 보낸 값은 신뢰 경계 밖이다. 문자열이 아니면 "전부"로 읽지 않고 아무것도 안 지운다 —
+    // 잘못 온 요청이 통 하나 대신 전부를 날리는 쪽으로 기울면 안 된다.
+    if (scope !== undefined && typeof scope !== 'string') return { ok: true } as const
+    history.clear(scope)
+    return { ok: true } as const
+  })
 }

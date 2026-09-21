@@ -167,12 +167,17 @@ undefined → `main/index.ts:353` 의 폴백으로 **본창**. 그 창엔 그 �
 → 계획: `docs/plan-ai-history.md`
 
 할 것 셋(넷째는 API 전환 때):
-1. AI 세션을 **별도 scope + 메모리 전용**으로(디스크에 안 남고 그 세션 동안 제안은 된다)
-2. 설정에 **[명령 기록 지우기]**(scope 별) — 지금은 파일을 손으로 여는 것 말고 길이 없다
-3. `isPasswordPrompt` 를 `shared/` 로(② 가 같은 규칙을 쓴다)
+1. ✅ AI 세션을 **별도 scope + 메모리 전용**으로 — `historyScope`/`isEphemeralScope`
+   (`src/renderer/store/history.ts`). ⚠️ **우리 문으로 띄운 것만** 갈린다(`Session.aiCli`) —
+   터미널에 손으로 `claude` 를 치면 그 세션은 여전히 `'local'` 이다(그 함수 주석에 이유가 있다)
+2. ✅ 설정 [명령 기록] — 통별 줄 수 + [지우기]/[전부 지우기](`HistoryStore.scopes/clear`)
+3. ~~`isPasswordPrompt` 를 `shared/` 로~~ — **4번 안으로 옮겼다.** 지금은 두 번째 호출자가
+   없다: 그 함수를 쓸 곳이 4번의 `redact` 인데 그게 미뤄져 있어, 지금 옮기면 **쓰는 사람 없는
+   shared 수출**이 하나 생긴다
 4. 🔴 **API 전환 라운드에서**: 도구 기록의 `redact` 표(`full|shape|none`, 타입 강제) +
-   메모리(전문)/디스크(가림) 분리. **지금 하지 않는다** — `apiChatLog.ts` 가 아직 도구를 안 남겨
-   가릴 대상이 없고, "도구 기록을 남긴다"와 **같은 커밋**이어야 기록만 먼저 생기지 않는다.
+   메모리(전문)/디스크(가림) 분리 **+ 그때 `isPasswordPrompt` 를 `shared/` 로 옮긴다**(3번).
+   **지금 하지 않는다** — `apiChatLog.ts` 가 아직 도구를 안 남겨 가릴 대상이 없고,
+   "도구 기록을 남긴다"와 **같은 커밋**이어야 기록만 먼저 생기지 않는다.
 
 ⚠️ 준영님이 `history.json` 은 **그대로 두기로** 하셨다(2026-09-21).
 

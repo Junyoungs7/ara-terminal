@@ -3,6 +3,7 @@
 //
 // ⚠️ 비밀번호는 어디에도 남기지 않는다: 커밋 시점의 프롬프트 줄이 비밀번호 프롬프트면 그 입력은
 // 캐시·IPC·디스크 어느 쪽으로도 가지 않고 버려진다(shouldRecord).
+import type { AiCliId } from '@shared/aiCli'
 
 // scope 당 상한. main 의 HistoryStore 와 같은 값을 쓴다 — 렌더러 캐시가 더 길게 들고 있으면
 // 재시작 전후로 고스트 결과가 달라진다.
@@ -111,6 +112,32 @@ export function ghostFor(entries: readonly string[], input: string): string | nu
   return ghostList(entries, input, 1)[0] ?? null
 }
 
+// ── scope 고르기 ──
+
+/**
+ * 이 세션의 히스토리 통. 규칙을 한 곳에만 둔다 — TerminalPane 의 삼항식을 여기로 옮겼다.
+ *
+ * AI CLI 세션은 자기 통(`ai:*`)으로 간다. 그 통은 **디스크에 안 남는다**(isEphemeralScope).
+ * 이유는 두 가지다: ① Claude·Codex 에 친 문장은 명령이 아니라 **글**이라, 거기 그냥 친
+ * 비밀번호를 명령줄 마스킹(maskSecrets)이 알아볼 수 없다 ② 셸 고스트 목록이 더러워진다 —
+ * *"우선 1~7을 먼저 작업해줘"* 가 `cd` 옆에 뜬다.
+ *
+ * ⚠️ **우리 문으로 띄운 세션만** 이 갈래를 탄다. `Session.aiCli` 는 AI CLI 버튼으로 연 세션에만
+ * 채워지므로(`MainSessionManager.ts:88`), 사용자가 로컬 터미널에 손으로 `claude` 를 치면 그
+ * 세션은 여전히 `'local'` 이고 그 대화는 디스크로 간다. 그 구멍은 알고 남겨 둔 것이다 —
+ * 🔴 살아 있는 신호로 scope 를 바꾸면 **세션 도중에 통이 갈라지고**(그때까지 쌓은 제안이 딴 통에
+ * 남는다) xterm effect 가 재실행되어 **스크롤백이 증발한다.** 그 대가가 더 크다.
+ */
+export function historyScope(s: { local: boolean; serverKey: string; aiCli?: AiCliId }): string {
+  if (s.aiCli) return `ai:${s.aiCli}`
+  return s.local ? 'local' : s.serverKey
+}
+
+/** 디스크에 안 남기는 통인가. `ai:` 접두가 그 표시다(main 은 이 접두를 아예 못 본다). */
+export function isEphemeralScope(scope: string): boolean {
+  return scope.startsWith('ai:')
+}
+
 // ── scope 별 캐시 ──
 // 고스트 매칭은 키 입력마다 도는 경로라 IPC 왕복을 둘 수 없다. scope 당 한 번만 load 하고
 // 이후 append 는 캐시와 디스크(main)에 동시에 반영한다.
@@ -124,6 +151,8 @@ export function cachedHistory(scope: string): readonly string[] {
 export function loadHistory(scope: string): Promise<string[]> {
   const done = cache.get(scope)
   if (done) return Promise.resolve(done)
+  // 메모리 전용 통은 디스크에 있을 수가 없다 — 물어보지 않는다(빈 목록에서 시작한다).
+  if (isEphemeralScope(scope)) return Promise.resolve([])
   let p = loading.get(scope)
   if (!p) {
     p = (window.ev?.history?.load(scope) ?? Promise.resolve([]))
@@ -146,11 +175,30 @@ export function appendHistory(scope: string, command: string): void {
   list.push(command)
   if (list.length > HISTORY_MAX) list.splice(0, list.length - HISTORY_MAX)
   cache.set(scope, list)
+  // 메모리 전용 통은 여기서 끝난다 — 이 한 줄이 "AI 에 친 문장이 디스크로 안 간다"의 전부다.
+  if (isEphemeralScope(scope)) return
   void window.ev?.history?.append(scope, command).catch(() => {})
 }
 
-// 테스트 전용 — 모듈 캐시를 비운다(vitest 간 상태 누수 방지).
+/**
+ * 모듈 캐시에서 버린다(scope 를 안 주면 전부).
+ *
+ * 🔴 **디스크를 지웠으면 반드시 이것도 부른다.** 안 부르면 지운 것이 두 길로 되살아난다:
+ *  ① 고스트가 캐시에 남은 **지운 명령을 계속 제안**한다
+ *  ② 그 세션에서 다음 명령을 치는 순간 `appendHistory` 가 **살아남은 캐시 위에** 덧붙여
+ *     main 으로 보내고, 디스크에 옛 줄이 그대로 돌아온다
+ */
+export function forgetCachedScope(scope?: string): void {
+  if (scope === undefined) {
+    cache.clear()
+    loading.clear()
+    return
+  }
+  cache.delete(scope)
+  loading.delete(scope)
+}
+
+// 테스트 전용 — 모듈 캐시를 비운다(vitest 간 상태 누수 방지). 두 벌로 두지 않는다.
 export function resetHistoryCache(): void {
-  cache.clear()
-  loading.clear()
+  forgetCachedScope()
 }

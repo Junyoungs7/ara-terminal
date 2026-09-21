@@ -28,13 +28,14 @@ import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCl
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
+import { forgetCachedScope } from '../store/history'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
 
-// 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] 추가).
-// 좌측 nav 8섹션: 일반 / 터미널 / 폰트 / 로그 / AI / MCP / 단축키 / 정보.
+// 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] → #204 [명령 기록] 추가).
+// 좌측 nav 9섹션: 일반 / 터미널 / 폰트 / 로그 / AI / MCP / 단축키 / 명령 기록 / 정보.
 // 표면은 목업 variant-final-2 의 .drawer 를 그대로 쓰고, .set-nav 만 가로 탭에서 세로 열로 바꿨다
 // (섹션이 1개에서 5개로 늘어 가로로는 라벨이 눌린다). 새 모달 프레임워크는 쓰지 않는다.
 //
@@ -46,7 +47,7 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
 type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
@@ -806,6 +807,77 @@ function GpuRow({ open, version }: { open: boolean; version: string }) {
   )
 }
 
+/**
+ * [명령 기록] 섹션 (#204). **지울 길**을 준다 — 지금까지는 `history.json` 을 손으로 여는 것
+ * 말고는 없었다.
+ *
+ * 🔴 **내용은 그리지 않는다.** 통 이름과 줄 수뿐이다. 프롬프트에 그냥 친 비밀번호가 여기 섞여
+ * 있을 수 있는데(그것이 이 기능이 생긴 이유다), 지우자고 그 줄들을 화면에 한 번 더 펼치면
+ * 문제를 옮겨 놓는 것밖에 안 된다. 직접 보실 분을 위해 파일 자리만 한 줄 적는다.
+ *
+ * ⚠️ `ai:*` 통은 이 목록에 **안 나온다** — 디스크에 간 적이 없어 main 이 그 이름을 모른다.
+ *    그래서 "지울 것이 없다"는 사실을 아래 안내 한 줄로 대신 말한다.
+ */
+function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<DialogResult>; open: boolean }) {
+  const [info, setInfo] = useState<{ path: string; scopes: { scope: string; count: number }[] } | null>(null)
+
+  const refresh = (): Promise<void> =>
+    window.ev?.history?.scopes().then(setInfo).catch(() => {}) ?? Promise.resolve()
+  // 드로어는 언마운트되지 않으므로(열림 클래스만 토글) 열릴 때마다 다시 센다 — 그사이 쌓인 줄이 있다.
+  useEffect(() => {
+    if (open) void refresh()
+  }, [open])
+
+  /**
+   * scope 를 안 주면 전부 지운다.
+   *
+   * 🔴 되돌릴 수 없어 **무엇을 지우는지 이름으로** 확인받는다(`MainArea.destroySessions` 와 같은 모양).
+   * 확인 다이얼로그가 없으면(하네스) 아예 지우지 않는다 — 조용히 지르는 쪽으로 기울지 않는다.
+   * 🔴 디스크를 지운 **뒤 렌더러 캐시도 버린다.** 안 그러면 고스트가 지운 명령을 계속 제안하고,
+   *    다음 명령 한 줄에 캐시 전체가 디스크로 되살아난다(forgetCachedScope 주석).
+   */
+  const wipe = async (scope?: string): Promise<void> => {
+    const targets = scope ? [scope] : (info?.scopes ?? []).map((s) => s.scope)
+    if (targets.length === 0 || !ask) return
+    const r = await ask({
+      title: t('settings.hist.clear.title'),
+      message: t('settings.hist.clear.msg'),
+      detail: targets.map((s) => ({ label: t('settings.hist.clear.target'), value: s })),
+      tone: 'danger',
+      confirmLabel: t('settings.hist.clear.confirm'),
+      cancelLabel: t('dlg.cancel')
+    })
+    if (r !== 'confirm') return
+    await window.ev?.history?.clear(scope).catch(() => {})
+    forgetCachedScope(scope)
+    await refresh()
+  }
+
+  const scopes = info?.scopes ?? []
+  return (
+    <>
+      <div className="set-note">{t('settings.hist.note')}</div>
+      {scopes.length === 0 && <div className="set-note">{t('settings.hist.empty')}</div>}
+      {scopes.map((s) => (
+        <Row key={s.scope} label={s.scope} desc={`${s.count}${t('settings.hist.lines')}`}>
+          <button type="button" className="btn sec" data-action="hist.clear" onClick={() => void wipe(s.scope)}>
+            {t('settings.hist.clear')}
+          </button>
+        </Row>
+      ))}
+      {scopes.length > 0 && (
+        <Row label={t('settings.hist.clearAll')} desc={t('settings.hist.clearAll.desc')}>
+          <button type="button" className="btn sec" data-action="hist.clearAll" onClick={() => void wipe()}>
+            {t('settings.hist.clearAll')}
+          </button>
+        </Row>
+      )}
+      <div className="set-note">{t('settings.hist.ai')}</div>
+      {info && <div className="set-note">{t('settings.hist.path')} {info.path}</div>}
+    </>
+  )
+}
+
 type Props = {
   open: boolean
   font: FontConfig
@@ -1179,6 +1251,8 @@ export function SettingsDrawer({
               })}
             </>
           )}
+
+          {section === 'history' && <HistorySection ask={ask} open={open} />}
 
           {section === 'about' && (
             <>

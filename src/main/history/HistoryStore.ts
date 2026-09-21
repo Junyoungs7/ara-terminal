@@ -16,7 +16,9 @@ export class HistoryStore {
   private data: HistoryFile
   private timer: NodeJS.Timeout | null = null
 
-  constructor(private readonly path: string) {
+  // path 가 공개인 이유: 설정 화면이 "여기에 쌓입니다"를 한 줄로 적는다. 그 자리가 어디인지
+  // 아는 것은 main 뿐이고, 같은 경로를 IPC 쪽에서 다시 조립하면 둘이 갈라진다.
+  constructor(readonly path: string) {
     cleanupTemp(path)
     const raw = readJsonWithBackup<unknown>(path, null)
     this.data = isHistoryFile(raw) ? raw : {}
@@ -40,6 +42,26 @@ export class HistoryStore {
     if (list.length > HISTORY_MAX) list.splice(0, list.length - HISTORY_MAX)
     if (this.timer) return
     this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
+  }
+
+  /**
+   * 통 목록과 줄 수. 설정 화면이 "무엇이 얼마나 쌓였나"를 보여 준다 — **내용은 주지 않는다.**
+   * 지우려면 무엇이 있는지는 봐야 하지만, 그걸 보여 주자고 비밀을 한 화면 더 그릴 이유는 없다.
+   */
+  scopes(): { scope: string; count: number }[] {
+    return Object.entries(this.data).map(([scope, list]) => ({ scope, count: list.length }))
+  }
+
+  /**
+   * 통 하나(또는 scope 를 안 주면 전부)를 버린다.
+   *
+   * 🔴 **즉시 flush 한다.** 5초 디바운스에 맡기면 사용자가 [지우기]를 누르고 바로 앱을 꺼도
+   * 파일에 그대로 남는다 — 지웠다고 믿는데 안 지워진 것이 이 기능의 최악이다.
+   */
+  clear(scope?: string): void {
+    if (scope === undefined) this.data = {}
+    else delete this.data[scope]
+    this.flush()
   }
 
   // 디바운스 타이머에서도 불리므로 던지지 않는다: 여기서 예외가 나면 붙잡을 호출자가 없어

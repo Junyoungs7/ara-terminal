@@ -427,6 +427,7 @@ export function PaneGrid({
                   active={!hidden && cell?.id === focusedId}
                   local={session?.type !== 'ssh'}
                   serverKey={session?.serverKey ?? 'local'}
+                  aiCli={session?.aiCli}
                   onTitle={onTitle}
                   onLink={onLink}
                 />

@@ -17,6 +17,7 @@ import {
   feedInput,
   ghostEligible,
   ghostList,
+  historyScope,
   loadHistory,
   shouldRecord
 } from '../store/history'
@@ -24,6 +25,7 @@ import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { pastePaths } from '../components/filePath'
 import { isAppShortcut } from '../../shared/keymap'
+import type { AiCliId } from '../../shared/aiCli'
 import { t } from '../i18n'
 import '@xterm/xterm/css/xterm.css'
 
@@ -161,6 +163,9 @@ type Props = {
   // F11 히스토리 scope — SSH 는 서버별(serverKey), 로컬은 'local'. 서버마다 쓰는 명령이 달라서
   // 한 통에 섞으면 고스트가 남의 서버 명령을 물어 온다.
   serverKey: string
+  // #204: 이 탭에서 돌고 있는 AI CLI. 있으면 히스토리가 메모리 전용 통으로 간다 —
+  // 판정은 historyScope 하나가 한다(거기 주석에 이 갈래의 한계도 적혀 있다).
+  aiCli?: AiCliId
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 rename 한 세션이면 상위(MainArea)가 무시한다.
   onTitle?: (sessionId: string, title: string) => void
   // F8: Ctrl+클릭한 URL. 라우팅(포워딩·내장 브라우저·OS 브라우저)은 MainArea 가 한다 —
@@ -173,7 +178,7 @@ type Props = {
 // 마운트해 두고 표시 위치만 바꾸므로(패널의 세션이 바뀌어도 언마운트되지 않는다) 스크롤백이 보존된다.
 // 그래도 xterm 이 새로 만들어지는 경우(세션 신규·앱 재기동·StrictMode 이중 마운트)는 남으므로,
 // mount 직후 session.attach 로 main 의 재생 버퍼를 받아 화면을 되살린다.
-export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onLink }: Props) {
+export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTitle, onLink }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -207,7 +212,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
     // ── F11 인라인 고스트 자동완성 ──
     // 히스토리 scope 를 미리 읽어 둔다(키 입력마다 IPC 왕복을 둘 수 없다). 고스트는 xterm 데코레이션
     // (공개 API)으로 그린다 — 터미널에 실제로 써 넣으면 셸의 화면 갱신과 싸우게 된다.
-    const scope = local ? 'local' : serverKey
+    const scope = historyScope({ local, serverKey, aiCli })
     void loadHistory(scope)
     let lineBuf = '' // 사용자가 지금 줄에 친 내용(입력 스트림에서 재구성)
     let ghostSuffix = '' // 화면에 떠 있는 나머지 — 비어 있으면 Tab·ESC 는 셸로 그대로 간다
@@ -754,7 +759,9 @@ export function TerminalPane({ sessionId, active, local, serverKey, onTitle, onL
       fitRef.current = null
     }
     // local·serverKey 는 세션 수명 동안 불변이라 재실행을 유발하지 않는다.
-  }, [sessionId, local, serverKey])
+    // aiCli 도 같다 — 세션을 만들 때 한 번 정해지고 살아 있는 동안 안 바뀐다(그래서 히스토리
+    // 통이 세션 도중에 갈리지 않는다. 바뀌게 만들면 여기서 xterm 이 다시 만들어져 스크롤백이 증발한다).
+  }, [sessionId, local, serverKey, aiCli])
 
   // 탭이 활성화될 때 fit + 포커스(숨김→표시 시 xterm 크기 0이었던 문제 보정).
   useEffect(() => {

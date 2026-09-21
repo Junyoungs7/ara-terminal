@@ -443,6 +443,11 @@ export type InvokeContract = {
   'fs:saveBytes': { req: { dir: string; sub?: string; name: string; bytes: Uint8Array }; res: FileOpResult }
   'history:load': { req: { scope: string }; res: { entries: string[] } }
   'history:append': { req: { scope: string; command: string }; res: { ok: true } }
+  // #204: 쌓인 통 목록 — **줄 수만** 준다(내용을 화면에 그리지 않는다). path 는 "직접 열어
+  // 보시라"고 적을 파일 자리다.
+  'history:scopes': { req: void; res: { path: string; scopes: { scope: string; count: number }[] } }
+  // scope 를 안 주면 전부. 되돌릴 수 없어 화면이 먼저 확인을 받는다.
+  'history:clear': { req: { scope?: string }; res: { ok: true } }
   // ── W4 F23 MCP 조종 모드 (설계 §6) ──
   'mcp:getState': { req: void; res: McpState }
   'mcp:setEnabled': { req: { enabled: boolean }; res: { ok: true; port?: number } }
@@ -849,9 +854,12 @@ export type EvApi = {
     readText(): Promise<string>
   }
   // F11 명령어 히스토리. scope = SSH 는 serverKey, 로컬은 'local'.
+  // AI CLI 세션(`ai:*`)은 여기 없다 — 디스크로 안 가므로 main 이 그 통을 본 적이 없다.
   history: {
     load(scope: string): Promise<string[]>
     append(scope: string, command: string): Promise<{ ok: true }>
+    scopes(): Promise<{ path: string; scopes: { scope: string; count: number }[] }>
+    clear(scope?: string): Promise<{ ok: true }>
   }
   /**
    * F1a 에이전트 상태 — **CLI 가 훅으로 말해 준 것**. 화면은 받아 그릴 뿐 만들지 않는다.

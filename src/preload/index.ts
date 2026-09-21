@@ -323,7 +323,9 @@ const api: EvApi = {
   history: {
     load: (scope: string) =>
       ipcRenderer.invoke('history:load', { scope }).then((r: { entries: string[] }) => r.entries),
-    append: (scope: string, command: string) => ipcRenderer.invoke('history:append', { scope, command })
+    append: (scope: string, command: string) => ipcRenderer.invoke('history:append', { scope, command }),
+    scopes: () => ipcRenderer.invoke('history:scopes'),
+    clear: (scope?: string) => ipcRenderer.invoke('history:clear', { scope })
   },
   // W2 F8: 포트 포워딩. 인자가 포트 번호뿐이라 렌더러가 임의 호스트를 지목할 방법이 없다.
   forward: {
