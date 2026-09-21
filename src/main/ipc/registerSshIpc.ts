@@ -37,7 +37,13 @@ export async function connectByProfile(
    * D(#168) 주면 이 세션은 **셸이 아니라 이 AI CLI 로** 열린다. 신뢰 경계 밖 값이라 여기서
    * 다시 본다(MCP 는 이 인자를 주지 않는다 — `ssh_connect` 스키마에 자리가 없다).
    */
-  aiCommand?: { argv: unknown; cwd: string }
+  aiCommand?: { argv: unknown; cwd: string },
+  /**
+   * 부른 창(F32). `session:create` 의 `spec.winId` 와 같은 뜻인데 **SSH 에만 그 짝이 없었다** —
+   * 그래서 떼어낸 창에서 재접속하면 새 세션이 본창에 떴다(출력·탭 전부 저쪽으로).
+   * 안 주면 undefined = 본창이다(MCP `ssh_connect` 는 화면이 없으니 주지 않는다).
+   */
+  winId?: string
 ): Promise<SshConnectResult> {
   const profile = profiles.get(profileId)
   if (!profile) return { ok: false, reason: 'network', message: '프로필을 찾을 수 없습니다.' }
@@ -86,7 +92,8 @@ export async function connectByProfile(
       title,
       serverKey: profile.name,
       cwd: undefined,
-      shell: undefined
+      shell: undefined,
+      ...(winId ? { winId } : {})
     },
     paneId
   )
@@ -179,8 +186,8 @@ export function registerSshIpc(
   ws: WorkspaceStore,
   sessions: MainSessionManager
 ): void {
-  handle('ssh:connect', ({ profileId, acceptHostKey, password, size, aiCommand }): Promise<SshConnectResult> =>
-    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, aiCommand)
+  handle('ssh:connect', ({ profileId, acceptHostKey, password, size, aiCommand, winId }): Promise<SshConnectResult> =>
+    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, aiCommand, winId)
   )
 
   handle('conn:test', ({ input }): Promise<ConnTestResult> => testProfile(profiles, ws, input))

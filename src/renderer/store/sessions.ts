@@ -236,12 +236,17 @@ export function useSessions(winId?: string) {
     [adopt]
   )
 
-  // 탭 닫기 = 세션 종료(pty/ssh 정리 + 레지스트리에서 제거).
-  const close = useCallback((id: string) => {
-    // rdp 는 main 에 세션이 없다(릴레이는 RdpView 가 정리한다).
-    if (!id.startsWith('rdp:')) void window.ev.session.destroy(id)
+  /**
+   * 이 창의 목록에서 뺀다 — **끄지는 않는다.** `close` 에서 `session.destroy` 한 줄만 뺀 것이다.
+   *
+   * 왜 갈랐나(#201 B): main 이 `session:closed` 를 쏘는 시점에 그 세션은 **이미 없다**. 거기서
+   * `close` 를 부르면 없는 세션에 destroy 를 한 번 더 보내고, 그렇다고 치우는 절차를 그쪽에 또
+   * 적으면 두 벌이 된다 — 점 상태 버리기·mru·다음 활성 탭 고르기가 갈리면 한쪽만 안 고치는
+   * 날이 온다. 그래서 **`close` 가 이 함수를 부른다.**
+   */
+  const forget = useCallback((id: string) => {
     // 점의 상태도 함께 버린다(#166). 탭이 빠지는 길은 여럿이지만(✕·칸 닫기·오류 카드 [닫기]·
-    // 재접속) **전부 이 함수를 지난다** — 흩어 놓으면 한 길만 안 지운다.
+    // 재접속·아라의 session_destroy) **전부 이 함수를 지난다** — 흩어 놓으면 한 길만 안 지운다.
     forgetSessionState(id)
     // 지우기 **전에** 읽는다 — 이 세션이 활성이었다면 기록의 맨 앞이 자기 자신이고, 그 다음이
     // "직전에 보던 탭"이다(nextActiveAfter 가 자기 자신은 건너뛴다).
@@ -252,6 +257,16 @@ export function useSessions(winId?: string) {
       return t.filter((x) => x.id !== id)
     })
   }, [])
+
+  // 탭 닫기 = 세션 종료(pty/ssh 정리 + 레지스트리에서 제거).
+  const close = useCallback(
+    (id: string) => {
+      // rdp 는 main 에 세션이 없다(릴레이는 RdpView 가 정리한다).
+      if (!id.startsWith('rdp:')) void window.ev.session.destroy(id)
+      forget(id)
+    },
+    [forget]
+  )
 
   const select = useCallback((id: string) => touch(id), [touch])
 
@@ -325,6 +340,22 @@ export function useSessions(winId?: string) {
     })
     return () => off?.()
   }, [winId, adopt])
+
+  /**
+   * 그 짝 — main 에서 세션이 **없어졌다**(#201 B). 아라가 MCP `session_destroy` 로 끈 탭이
+   * 여기로 온다. 그전에는 짝이 아예 없어서, 아라가 끈 세션의 탭·점이 화면에 그대로 남았다.
+   *
+   * 위 편입과 **같은 모양**이어야 한다: 끄는 쪽마다 적으면 새 문이 생길 때 또 빠진다
+   * (1.0.8 이 `selectSession` 다섯 자리를 `session:opened` 리스너 하나로 모은 것과 같은 이유).
+   * `close` 가 아니라 `forget` 인 이유는 그 함수 주석에 있다 — 이미 없는 세션이다.
+   */
+  useEffect(() => {
+    const off = window.ev?.session.onClosed?.((m) => {
+      if ((m.winId ?? undefined) !== winId) return
+      forget(m.id)
+    })
+    return () => off?.()
+  }, [winId, forget])
 
   // 소유 창이 바뀌면(떼어내기·되돌리기·그 창이 닫힘) 사본을 맞춘다. 본창은 "돌아온 세션"을
   // 여기서 처음 알고, 떼어낸 창은 "내 세션이 아니게 됐다"를 안다.

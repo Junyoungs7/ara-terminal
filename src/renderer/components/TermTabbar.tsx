@@ -30,9 +30,11 @@ type Props = {
   onClose: (id: string) => void
   onNew: () => void
   // ＋ 메뉴의 "SSH 연결…" — 연결 관리자 열기(로컬 셸 발견성 대응, 2026-08-03 피드백).
-  onNewSsh: () => void
+  // **없으면 그 줄을 안 그린다**(#201 A-4): 떼어낸 창엔 연결 관리자가 없어 눌러도 아무 일이
+  // 없었다. 그래서 옵셔널이다 — 판정은 핸들러의 존재 여부 하나뿐이다.
+  onNewSsh?: () => void
   // F27 진입점 ① — ＋ 메뉴의 "AI CLI 시작…". 아무것도 정해지지 않은 채로 창이 열린다.
-  onAiCli: () => void
+  onAiCli?: () => void
   // R2.1/R2.2: 인라인 편집 중인 탭 id(없으면 null) + 편집 시작/확정. value=null 은 취소(ESC).
   editingId: string | null
   onStartEdit: (id: string) => void
@@ -296,6 +298,19 @@ export function TermTabbar({
     />
   )
 
+  /**
+   * ＋ 메뉴의 줄 → 그 줄이 부르는 함수. **그리는 것과 고르는 것의 단일 출처**다(#201 A-4).
+   *
+   * 없는 값(undefined)은 곧 "이 창엔 그 기능이 없다"라서 아래에서 항목째 빠진다 — 떼어낸 창의
+   * [SSH 연결…] 이 눌러도 아무 일이 없던 자리다. 갈래를 if/else 로 적던 것을 이 표로 바꾼 이유:
+   * 그리는 쪽과 부르는 쪽이 갈리면 한쪽만 고치는 날이 온다.
+   */
+  const addActions: Partial<Record<TreeActionId, (() => void) | undefined>> = {
+    'local.new': onNew,
+    'ssh.open': onNewSsh,
+    'aicli.start': onAiCli
+  }
+
   // 오버플로 드롭다운 항목 — 탭과 **같은 점**(상태) + 활성 탭엔 "현재" 힌트. 서버는 행의 title 로.
   const overflowItems: MenuItem[] = sessions.map((s) => ({
     id: s.id,
@@ -362,12 +377,12 @@ export function TermTabbar({
         open={addMenu !== null}
         x={addMenu?.x ?? 0}
         y={addMenu?.y ?? 0}
-        items={treeMenu('add')}
+        // 핸들러가 없는 줄은 뺀다(#201 A-4). 고르는 쪽과 그리는 쪽이 **같은 표**를 보므로
+        // 항목이 늘어도 "메뉴엔 있는데 안 되는" 줄이 다시 생기지 않는다.
+        items={treeMenu('add').filter((m) => addActions[m.id as TreeActionId])}
         onPick={(id) => {
           setAddMenu(null)
-          if (id === 'local.new') onNew()
-          else if (id === 'aicli.start') onAiCli()
-          else onNewSsh()
+          addActions[id as TreeActionId]?.()
         }}
         onClose={() => setAddMenu(null)}
       />

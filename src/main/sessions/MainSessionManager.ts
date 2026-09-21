@@ -280,6 +280,10 @@ export class MainSessionManager implements ISessionManager {
     const h = this.handles.get(id)
     if (!h) return
     if (h.timer) clearTimeout(h.timer)
+    // 🔴 **지우기 전에** 알린다(#201 B). 라우터는 `winIdOf(id)` 로 보낼 창을 찾는데, 핸들이
+    //    사라진 뒤엔 그 값을 못 찾아 본창으로 떨어진다 — 떼어낸 창이 자기 탭이 닫힌 것을 못 받는다.
+    //    (`onExit` 이 바로 그 순서로 되어 있어 [프로세스 종료] 줄이 본창에 찍힌다 — #201 B-4.)
+    this.sink.closed?.(h.meta)
     this.handles.delete(id)
     h.backend.kill()
   }

@@ -103,13 +103,15 @@ const api: EvApi = {
   },
   ssh: {
     // aiCommand: D(#168) 셸 대신 그 AI CLI 를 프로세스로 여는 세션. 안 주면 지금까지와 같다.
+    // winId: 부른 창(떼어낸 창의 재접속·복제). 안 주면 본창 — 지금까지와 같다.
     connect: (
       profileId: string,
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      aiCommand?: { argv: AiCommand; cwd: string }
-    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, aiCommand }),
+      aiCommand?: { argv: AiCommand; cwd: string },
+      winId?: string
+    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, aiCommand, winId }),
     forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
     test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },
@@ -293,6 +295,12 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, meta: Session) => cb(meta)
       ipcRenderer.on('session:opened', listener)
       return () => ipcRenderer.removeListener('session:opened', listener)
+    },
+    // 그 짝 — 세션 소멸 알림. 같은 모양이어야 한다(만들기만 알리면 한쪽만 온전한 길이 된다).
+    onClosed: (cb: (meta: Session) => void) => {
+      const listener = (_e: IpcRendererEvent, meta: Session) => cb(meta)
+      ipcRenderer.on('session:closed', listener)
+      return () => ipcRenderer.removeListener('session:closed', listener)
     }
   },
   // 아라가 "이거 보세요" 하고 화면 아래 패널을 여는 길(2026-08-26).

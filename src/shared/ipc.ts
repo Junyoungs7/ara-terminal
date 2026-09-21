@@ -247,6 +247,8 @@ export type InvokeContract = {
   // 선택 인자다 — 화면이 없는 호출자(MCP ssh_connect)는 안 주고, 그러면 지금까지와 똑같이 동작한다.
   // aiCommand: D(#168) 주면 이 세션은 셸이 아니라 **그 AI CLI 가 프로세스인 채로** 열린다.
   // 안 주면 지금까지와 똑같다 — 사용자의 셸 탭은 이 필드를 절대 채우지 않는다.
+  // winId: **부른 창**이다(`session:create` 의 `spec.winId` 와 같은 뜻 — 안 주면 본창).
+  // 이게 없어서 떼어낸 창에서 재접속하면 새 세션이 본창에 떴다: SSH 만 그 짝이 없었다.
   'ssh:connect': {
     req: {
       profileId: string
@@ -254,6 +256,7 @@ export type InvokeContract = {
       password?: string
       size?: { cols: number; rows: number }
       aiCommand?: { argv: AiCommand; cwd: string }
+      winId?: string
     }
     res: SshConnectResult
   }
@@ -656,13 +659,15 @@ export type EvApi = {
      * password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용).
      * size 는 셸을 열 치수(#158) — 안 주면 80×24 로 연다.
      * aiCommand 는 D(#168) — 주면 셸이 아니라 그 AI CLI 가 이 세션의 프로세스다.
+     * winId 는 부른 창(안 주면 본창) — 떼어낸 창에서 붙은 세션이 본창에 뜨지 않게 한다.
      */
     connect(
       profileId: string,
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      aiCommand?: { argv: AiCommand; cwd: string }
+      aiCommand?: { argv: AiCommand; cwd: string },
+      winId?: string
     ): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
     /** [접속 테스트] — 저장하지 않고 폼 값으로 붙어 본다(ssh=인증까지, rdp=도달까지). */
@@ -820,6 +825,16 @@ export type EvApi = {
      * 아라가 MCP 로 붙인 SSH 가 여기로 온다. 창은 `meta.winId` 가 자기 것일 때만 탭을 그린다.
      */
     onOpened(cb: (meta: Session) => void): () => void
+    /**
+     * 세션이 **없어졌다**(`session:closed`). 위 `onOpened` 의 짝이다 — 화면이 자기가 닫지 않은
+     * 세션이 사라진 것을 아는 유일한 길이고, 아라의 MCP `session_destroy` 가 여기로 온다.
+     * 창은 `meta.winId` 가 자기 것일 때만 치운다(편입 규칙과 **같은 기준**).
+     *
+     * main 은 `closed` → `kill()` → (백엔드) `exit` 순으로 쏜다 — 같은 창으로 가는 같은 경로라
+     * 순서가 지켜진다. 그래서 받는 쪽은 여기서 "사용자가 닫았다" 표시를 남겨 두면 뒤따라 올
+     * exit 이 [재접속] 카드를 띄우지 않는다.
+     */
+    onClosed(cb: (meta: Session) => void): () => void
   }
   /**
    * 화면 아래 패널을 열라는 알림(`ui:panel`). 아라가 `panel_show` 로 부른다 — 결과가 수백 줄일 때

@@ -59,6 +59,21 @@ export interface SessionSink {
    * 다시 판다(F26 서버 콘솔이 이미 그 자리에 있다). 생성 경로는 register() 하나로 모인다.
    */
   opened?(meta: Session): void
+  /**
+   * 세션을 **없앴다**(`destroy`). 위 `opened` 의 짝이다 — 만들 때만 알리고 없앨 때 안 알리면
+   * 한쪽만 온전한 길이 된다(#201 B).
+   *
+   * 없어서 무슨 일이 났나: 아라가 MCP `session_destroy` 로 탭을 끄면 화면이 그것을 영영 모른다 —
+   * 탭·칸·상태점이 그대로 남고, SSH 면 `closedByUser` 표시가 없어 뒤따르는 exit 이
+   * **"연결이 끊겼습니다" 재접속 카드**를 띄운다. 아라가 **일부러** 끈 세션에 그렇다
+   * (그 도구의 설명은 *"탭을 닫는 것과 같습니다"* 다).
+   *
+   * 🔴 **핸들을 지우기 전에** 부른다 — 라우터가 `winIdOf(id)` 로 보낼 창을 찾는데 핸들이
+   *    사라진 뒤엔 그 값이 없어 본창으로 떨어진다(떼어낸 창이 못 받는다).
+   * ⚠️ `destroyAll()`(앱 종료)도 이 길을 지난다. 창이 닫히는 중일 수 있어 받는 쪽은 죽은
+   *    webContents 를 견뎌야 한다 — `pushSend` 가 이미 그것을 삼킨다(util/windowPush.ts).
+   */
+  closed?(meta: Session): void
 }
 
 export interface ISessionManager {

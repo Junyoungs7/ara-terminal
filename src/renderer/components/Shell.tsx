@@ -25,6 +25,7 @@ import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
 import { useProfiles, connectErrorTitle, connectErrorMessage, profileInput, type ConnectFailure } from '../store/profiles'
+import { connectWithRecovery } from '../store/sshConnect'
 import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { checkToast, runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { primeCwd } from '../store/cwdPrime'
@@ -1036,58 +1037,36 @@ export function Shell() {
       // 접속 전에 실어 보내면 원격 셸의 첫 프롬프트·배너부터 제 폭으로 온다. 모르면(칸이 비었거나
       // RDP 면) 안 보내고, main 이 80×24 로 연 뒤 마운트 직후 resize 가 따라잡는다(예전 동작).
       const size = restore?.size ?? sizeOf(sessions.activeId) ?? undefined
-      const res = await connect(profileId, acceptHostKey, password, size, aiCommand)
-      if (res.ok) {
-        const p = await lookup(profileId)
-        const name = p?.name ?? 'ssh'
-        // 탭 이름은 main 이 정한다(같은 서버 다중 세션은 ·2, ·3 — R2.1). serverKey 는 그룹 키라 프로필명 그대로.
-        // profileId 를 함께 실어야 파일 탐색기가 "이 서버 탭"에 붙일 세션을 찾을 수 있다(이름은 바뀔 수 있다).
-        sessions.adopt(res.id, res.title ?? name, name, 'ssh', profileId)
-        selectSession(res.id) // 접속 즉시 포커스 패널에 SSH 표시(트리·탭·패널 동기).
-        onSession?.(res.id)
-        if (startPath) window.ev.session.input(res.id, cdCommand(startPath))
-        // 접속하면 바로 원격 파일이 보이게 [파일] 탭으로 넘긴다 — 접속 직후 하는 일이 대개 그거다.
-        // 부팅 복원은 이 경로를 안 타므로 저장해 둔 탭이 그대로 살아난다(F6).
-        // D(#168) AI 세션은 예외다: 그 탭을 연 이유가 CLI 라, 파일 화면으로 덮으면 방금 띄운 것이 가려진다.
-        if (!aiCommand && !restore) revealFiles()
-        return true
-      }
-      if (res.reason === 'hostKeyNew') {
-        const p = await lookup(profileId)
-        const r = await ask({
-          title: t('conn.hostkey.title'),
-          message: t('conn.hostkey.new'),
-          detail: [
-            { label: t('conn.fail.server'), value: p ? `${p.username}@${res.hostId}` : res.hostId },
-            { label: t('conn.hostkey.alg'), value: res.algorithm },
-            { label: t('conn.hostkey.fp'), value: res.fingerprint }
-          ],
-          confirmLabel: t('conn.hostkey.trustBtn'),
-          cancelLabel: t('dlg.cancel')
-        })
-        if (r === 'confirm') return await connectProfile(profileId, true, startPath, onSession, password, aiCommand, restore)
-        return false
-      }
-      // 저장해 둔 비밀번호가 없다(또는 vault 에서 사라졌다). 예전엔 여기서 "연결 관리자에서 다시
-      // 입력하세요"로 끝났는데, 그러면 **비밀번호를 저장하지 않고 쓰는 길이 아예 없다** — RDP 는
-      // 접속할 때 물어보는 화면(rdp-creds)이 있는데 SSH 에는 없었다(준영님 제보 18번).
-      // 여기서 받아 이번 접속에만 쓴다. 저장은 하지 않는다 — 저장하려면 연결 관리자의 [저장]이다.
-      // password 를 이미 들고 온 재시도라면 이 분기로 다시 오지 않는다(main 이 그 값을 우선한다).
-      if (res.reason === 'orphanSecret') {
-        const p = await lookup(profileId)
-        const pw = await askText({
-          title: t('conn.pw.title'),
-          message: t('conn.pw.msg'),
-          detail: p ? [{ label: t('conn.fail.server'), value: `${p.username}@${p.host}:${p.port}` }] : [],
-          input: { placeholder: t('conn.pw.placeholder'), password: true },
-          confirmLabel: t('conn.pw.connect'),
-          cancelLabel: t('dlg.cancel')
-        })
-        if (!pw) return false
-        return await connectProfile(profileId, acceptHostKey, startPath, onSession, pw, aiCommand, restore)
-      }
-      await showConnectFailure(profileId, res)
-      return false
+      /**
+       * 🔴 **되묻는 절차는 여기 없다** — `store/sshConnect.ts` 한 벌뿐이다(#201 A-1).
+       *
+       * 호스트키 첫 접속 확인 · 저장된 비밀번호 없을 때 그 자리에서 받기 · 그 밖의 실패 안내가
+       * 예전엔 이 함수 안에 있었고, 그래서 떼어낸 창에는 **하나도 없었다**(그 창은 이 함수를
+       * 못 부른다). 같은 것을 저쪽에도 쓰면 두 벌이 되므로 공통부를 빼고 창마다 다른 것만
+       * 주입한다 — `showFailure` 가 그것이다(본창은 실패 후 연결 관리자를 열 수 있다).
+       *
+       * 아래 남은 것은 전부 **본창만의 뒷일**이다: 탭 편입 · 초점 · 작업 프로필의 `cd` ·
+       * 접속 직후 [파일] 탭으로.
+       */
+      const res = await connectWithRecovery(
+        { connect, lookup, ask, askText, showFailure: showConnectFailure },
+        profileId,
+        { acceptHostKey, password, size, aiCommand }
+      )
+      if (!res.ok) return false
+      const p = await lookup(profileId)
+      const name = p?.name ?? 'ssh'
+      // 탭 이름은 main 이 정한다(같은 서버 다중 세션은 ·2, ·3 — R2.1). serverKey 는 그룹 키라 프로필명 그대로.
+      // profileId 를 함께 실어야 파일 탐색기가 "이 서버 탭"에 붙일 세션을 찾을 수 있다(이름은 바뀔 수 있다).
+      sessions.adopt(res.id, res.title ?? name, name, 'ssh', profileId)
+      selectSession(res.id) // 접속 즉시 포커스 패널에 SSH 표시(트리·탭·패널 동기).
+      onSession?.(res.id)
+      if (startPath) window.ev.session.input(res.id, cdCommand(startPath))
+      // 접속하면 바로 원격 파일이 보이게 [파일] 탭으로 넘긴다 — 접속 직후 하는 일이 대개 그거다.
+      // 부팅 복원은 이 경로를 안 타므로 저장해 둔 탭이 그대로 살아난다(F6).
+      // D(#168) AI 세션은 예외다: 그 탭을 연 이유가 CLI 라, 파일 화면으로 덮으면 방금 띄운 것이 가려진다.
+      if (!aiCommand && !restore) revealFiles()
+      return true
     },
     [connect, lookup, sessions, selectSession, ask, askText, showConnectFailure, revealFiles]
   )

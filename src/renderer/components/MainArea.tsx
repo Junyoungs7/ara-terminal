@@ -676,6 +676,35 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       return () => off?.()
     }, [detachedWinId, removePane])
 
+    /**
+     * 🔴 **세션이 없어지면 칸을 치운다** — 위 `session:opened` 의 짝이다(#201 B).
+     *
+     * 아라가 MCP `session_destroy` 로 탭을 끄면(그 도구 설명은 *"탭을 닫는 것과 같습니다"* 다)
+     * 그전에는 화면이 그것을 영영 몰랐다: 칸이 빈 자리로 남고, SSH 면 아래 `onExit` 감시가
+     * **"연결이 끊겼습니다" [재접속] 카드**를 띄웠다 — 아라가 **일부러** 끈 세션에.
+     *
+     * ⚠️ **순서가 성립하는 근거**(지우지 말 것): main 은 `closed` → `kill()` → (백엔드) `exit`
+     *    순으로 쏜다. 본창에서는 둘이 **같은 webContents 로 가는 같은 경로**라 그 순서가
+     *    지켜지고, 그래서 여기서 표시를 남기면 뒤에 오는 exit 이
+     *    `closedByUser.current.delete(s.id)` 에 걸려 조용히 지나간다.
+     *    이 근거를 안 적으면 다음 사람이 순서를 바꾼다.
+     * ⚠️ **떼어낸 창에서는 exit 이 여기로 오지 않는다**(#201 B-4, 이번 라운드에서 안 고쳤다):
+     *    `closed` 는 핸들을 지우기 **전에** 쏴서 소유 창으로 가지만, `exit` 은 지운 **뒤에**
+     *    `getWebContents(id)` 를 부르므로 `winIdOf` 가 undefined 가 되어 본창으로 떨어진다
+     *    (`MainSessionManager.ts:130-131` · `main/index.ts:353`). 그러니 이 창에서 이 표시는
+     *    지금은 아무것도 막지 않는다 — B-4 를 고치는 날 필요해질 보험으로 남긴다.
+     * ⚠️ 사용자가 ✕ 로 닫는 길은 이미 `destroySessions` 가 같은 표시를 남긴다 — Set 이라 두 번
+     *    넣어도 무해하다. **그 길을 지우지 마라**(확인 다이얼로그가 거기 있다).
+     */
+    useEffect(() => {
+      const off = window.ev?.session.onClosed?.((m) => {
+        if ((m.winId ?? undefined) !== detachedWinId) return
+        closedByUser.current.add(m.id)
+        removePane(m.id)
+      })
+      return () => off?.()
+    }, [detachedWinId, removePane])
+
     // F6 지속: 세션/레이아웃/활성 탭 변경 시 스냅샷을 저장한다(기존 30s 디바운스 flush 경로 재사용).
     // 세션 메타(cwd/profileId/type)의 진실은 main(session.list) — 렌더러가 중복 보관하지 않는다.
     // 오류 패널(placeholder)은 실제 세션이 아니므로 layout 에서 빼고 저장한다.
@@ -1340,8 +1369,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onSelect={activateSession}
           onClose={closeTab}
           onNew={() => void openLocal()}
-          onNewSsh={() => onOpenConnManager?.()}
-          onAiCli={() => onOpenAiCli?.()}
+          /* 없으면 ＋ 메뉴에서 그 줄이 빠진다(위 caps 와 같은 규칙) — 감싸지 않고 그대로 넘긴다. */
+          onNewSsh={onOpenConnManager}
+          onAiCli={onOpenAiCli}
           editingId={editingId}
           onStartEdit={startEdit}
           onCommitEdit={commitEdit}
@@ -1382,6 +1412,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onAction={onAction}
           // 제보 11·32: SSH 세션일 때만 tmux 항목이 붙는다(조회도 그때만 나간다).
           activeIsSsh={list.find((s2) => s2.id === focusedSessionId())?.type === 'ssh'}
+          /* #201 A-4: **핸들러가 없으면 그 항목을 안 그린다.** 떼어낸 창(F32)에는 아라도 연결
+             트리도 없어서 그 셋이 눌러도 아무 일이 없었다 — 없는 기능은 메뉴에서 뺀다.
+             판정은 prop 의 존재 여부다(새 플래그를 만들지 않는다 — 다음 prop 도 이 규칙을 탄다). */
+          caps={{ askAi: Boolean(onAskAi), runAiCli: Boolean(onRunAiCli), saveLog: Boolean(onOpenLog) }}
           cheatsheetOpen={cheatsheetOpen}
           onCheatsheetChange={setCheatsheetOpen}
           commandBookOpen={commandBookOpen}

@@ -45,6 +45,12 @@ export function registerSessionIpc(
     // 받는 쪽 adopt 가 같은 id 를 두 번 넣지 않는다(어느 쪽이 먼저 도착해도 탭은 하나다).
     opened(meta) {
       pushSend(getWebContents(meta.id), 'session:opened', meta)
+    },
+    // 세션이 없어졌다 → 그 창이 탭·칸·상태점을 치운다. `opened` 와 **같은 모양**이어야 한다
+    // (끄는 쪽마다 적으면 새 문이 생길 때 또 빠진다 — 1.0.8 이 만들기를 리스너 하나로 모은 이유).
+    // meta 는 핸들을 지우기 전에 받은 것이라 `winId` 가 살아 있다(MainSessionManager.destroy).
+    closed(meta) {
+      pushSend(getWebContents(meta.id), 'session:closed', meta)
     }
   })
 

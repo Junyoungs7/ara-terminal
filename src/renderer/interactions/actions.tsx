@@ -164,8 +164,12 @@ function hintFor(id: ActionId): string | undefined {
  *
  * 이름은 짧게. 이 메뉴는 **터미널 위에서** 열리므로 "이 칸 닫기(세션 종료)" 처럼 무엇을 닫는지
  * 설명할 필요가 없다 — 누른 자리가 곧 대상이다.
+ *
+ * `caps`: **그 일을 할 핸들러가 이 창에 있나**(#201 A-4). 없으면 항목을 아예 안 넣는다.
+ * 안 주면 전부 보인다 — 본창은 넷 다 배선돼 있다.
  */
-export function terminalMenu(tmux?: TmuxListResult | 'loading'): MenuItem[] {
+export function terminalMenu(tmux?: TmuxListResult | 'loading', caps?: TerminalMenuCaps): MenuItem[] {
+  const has = (k: keyof TerminalMenuCaps): boolean => caps?.[k] ?? true
   const plain = (a: ContextAction): MenuItem => {
     const hint = hintFor(a.id)
     return {
@@ -178,6 +182,8 @@ export function terminalMenu(tmux?: TmuxListResult | 'loading'): MenuItem[] {
   }
   const out: MenuItem[] = []
   for (const a of CONTEXT_ACTIONS) {
+    if (a.id === 'ai.ask' && !has('askAi')) continue
+    if (a.id === 'log.save' && !has('saveLog')) continue
     out.push(plain(a))
     // 붙여넣기 다음에 묶음 둘을 끼운다 — 클립보드(늘 쓰는 것)를 맨 위에 남기려는 순서다.
     if (a.id === 'paste') {
@@ -190,12 +196,14 @@ export function terminalMenu(tmux?: TmuxListResult | 'loading'): MenuItem[] {
           { id: 'split.vertical', label: '세로', hint: hintFor('split.vertical') }
         ]
       })
-      out.push({
-        id: 'aicli.run',
-        label: 'AI 실행',
-        icon: ICON_AI,
-        submenu: AI_CLIS.map((c) => ({ id: `aicli.run.${c.id}`, label: c.label }))
-      })
+      if (has('runAiCli')) {
+        out.push({
+          id: 'aicli.run',
+          label: 'AI 실행',
+          icon: ICON_AI,
+          submenu: AI_CLIS.map((c) => ({ id: `aicli.run.${c.id}`, label: c.label }))
+        })
+      }
       /**
        * tmux (2026-08-22 준영님 제보 11·32 — "tmux 를 GUI 기능으로").
        *
@@ -224,6 +232,26 @@ const ICON_AI = svg(
     <path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15z" />
   </>
 )
+
+/**
+ * 터미널 우클릭 메뉴에서 **이 창이 실제로 할 수 있는 일**.
+ *
+ * 왜 있나: 떼어낸 창(F32)에는 아라도 연결 트리도 없다 — 그건 결정이고 옳다. 문제는 그 결정이
+ * **화면에 반영되지 않아** 메뉴에는 그대로 뜨고 눌러도 아무 일이 없었다는 것이다(#201 A).
+ * 바로 위 MENUBAR 주석이 같은 사고를 적어 뒀다: *'Tools' 는 넣을 기능이 없어 지웠다 — 빈 메뉴를
+ * 남기는 것이 "눌러도 반응 없음"의 원인이었다.*
+ *
+ * 🔴 부르는 쪽은 **핸들러의 존재 여부**로 채운다(`Boolean(onAskAi)`) — 새 플래그를 발명하지
+ *    않는다. 그래야 prop 이 하나 더 늘어도 같은 규칙이 저절로 따라간다.
+ */
+export type TerminalMenuCaps = {
+  /** [아라에게 묻기] — `onAskAi` */
+  askAi?: boolean
+  /** [AI 실행 ▸ …] — `onRunAiCli` */
+  runAiCli?: boolean
+  /** [로그] — `onOpenLog` */
+  saveLog?: boolean
+}
 
 /** 우클릭에서 바로 띄울 CLI. 목록의 주인은 shared/aiCli.ts 다 — 여기는 표시 순서만 정한다. */
 const AI_CLIS: readonly { id: 'claude' | 'codex' | 'gemini'; label: string }[] = [

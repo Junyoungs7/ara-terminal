@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Cheatsheet } from './Cheatsheet'
 import { CommandBook } from './CommandBook'
 import { ContextMenu } from './ContextMenu'
-import { terminalMenu, type ActionId } from './actions'
+import { terminalMenu, type ActionId, type TerminalMenuCaps } from './actions'
 import { matchBinding } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
@@ -30,6 +30,11 @@ type Props = {
   activeSessionId: string | null
   /** 그 세션이 SSH 인가 — tmux 항목을 붙일지 정한다(로컬 셸엔 원격 tmux 가 없다). */
   activeIsSsh?: boolean
+  /**
+   * 이 창이 할 수 있는 일(#201 A-4). 핸들러가 없는 항목은 메뉴에 넣지 않는다 —
+   * 떼어낸 창의 [아라에게 묻기]·[AI 실행] 이 눌러도 아무 일이 없던 자리다.
+   */
+  caps?: TerminalMenuCaps
   gridSelector?: string
 }
 
@@ -44,6 +49,7 @@ export function ContextInteractions({
   commandBookQuery,
   activeSessionId,
   activeIsSsh,
+  caps,
   gridSelector = '.pane-grid'
 }: Props) {
   const [list, setList] = useState<Anchor | null>(null)
@@ -122,7 +128,7 @@ export function ContextInteractions({
         open={!!list}
         x={list?.x ?? 0}
         y={list?.y ?? 0}
-        items={terminalMenu(tmux ?? undefined)}
+        items={terminalMenu(tmux ?? undefined, caps)}
         onPick={(id) => runAction(id as ActionId)}
         onClose={closeMenu}
       />

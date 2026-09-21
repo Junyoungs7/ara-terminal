@@ -7,6 +7,10 @@
 //
 // **꺼야 하는 것 둘**(detachedWinId 가 끈다): 부트 복원(또 돌면 세션이 두 벌) · 스냅샷 저장
 // (이 창은 세션 일부만 보므로 그대로 저장하면 본창 것이 사라진다). MainArea 머리주석 참고.
+//
+// **안 넣는 것 하나**(#201 A-5): `onResumeAi` — 끊김 카드의 [이어서 시작]. AI CLI 플래그와 최근
+// 목록이 Shell 에 있고 F32 가 이 창에서 AI 를 뺐다. 게다가 이 창은 부트 복원을 안 하므로
+// `PaneGrid` 의 `aiEnded` 카드가 뜰 일도 거의 없다 — 안 넘기면 그 버튼이 아예 안 그려진다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MainArea, type MainAreaHandle } from './MainArea'
 import { BottomPanel } from './BottomPanel'
@@ -18,6 +22,10 @@ import { useDialog } from './Dialog'
 import { StatusBar } from './StatusBar'
 import { TitleBar } from './TitleBar'
 import { useSessions } from '../store/sessions'
+import { connectErrorMessage, connectErrorTitle, useProfiles, type ConnectFailure } from '../store/profiles'
+import { connectWithRecovery } from '../store/sshConnect'
+import { sizeOf } from '../terminal/termRegistry'
+import type { SshRestoreResult } from './MainArea'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
 import { BOTTOM_IDS, type BottomId } from '@shared/types'
@@ -32,6 +40,8 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   const sessions = useSessions(target.winId)
   const mainRef = useRef<MainAreaHandle>(null)
   const { ask, askText, node: dialogNode } = useDialog()
+  // 프로필은 main 이 갖고 IPC 로 준다 — 렌더러 아무 창에서나 읽는다(연결 트리가 없는 것과 무관하다).
+  const { profiles, lookup, connect } = useProfiles()
   const [bottom, setBottom] = useState<BottomId | null>(null)
   // [서버 로그] 탭이 세션마다 보고 있는 파일(본창 Shell.logPaths 와 같은 규칙).
   const [logPaths, setLogPaths] = useState<Record<string, string>>({})
@@ -95,6 +105,84 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
     })
   }, [ask, target.winId])
 
+  /**
+   * 접속 실패 안내 — **이 창 몫의 얇은 것**(#201 A-2).
+   *
+   * 본창의 `Shell.showConnectFailure` 에는 갈래가 둘 더 있다: 인증 실패면 [비밀번호 다시 입력]
+   * (연결 관리자를 연다), 호스트키 불일치면 [호스트키 재설정]. **이 창엔 연결 관리자가 없다** —
+   * 그래서 그 갈래를 뺀 것만 준다. 창마다 다른 것은 주입하고 같은 것(되묻는 순서)만 공유한다.
+   *
+   * ⚠️ **"어차피 못 여니 조용히"는 안 된다.** 사유를 안 보여 주면 이번 제보와 같은 병이 된다
+   *    (눌렀는데 아무 일도 안 남). 못 고쳐 주더라도 무엇이 막았는지는 말한다.
+   */
+  const showFailure = useCallback(
+    async (profileId: string, res: ConnectFailure) => {
+      const p = await lookup(profileId)
+      const detail: { label: string; value: string }[] = []
+      if (p) detail.push({ label: t('conn.fail.server'), value: `${p.username}@${p.host}:${p.port}` })
+      if ('message' in res) detail.push({ label: t('conn.fail.detail'), value: res.message })
+      // 지문 둘은 불일치의 **본문**이다 — 얇게 만든다고 이걸 빼면 사람이 판단할 근거가 사라진다.
+      if (res.reason === 'hostKeyMismatch') {
+        detail.push({ label: t('conn.hostkey.saved'), value: res.knownFingerprint })
+        detail.push({ label: t('conn.hostkey.received'), value: res.fingerprint })
+      }
+      await ask({
+        title: connectErrorTitle(res),
+        message: connectErrorMessage(res),
+        detail,
+        ...(res.reason === 'hostKeyMismatch' ? { tone: 'danger' as const } : {}),
+        confirmLabel: t('dlg.ok'),
+        cancelLabel: null
+      })
+    },
+    [ask, lookup]
+  )
+
+  /**
+   * [다시 접속] — 끊긴 SSH 를 되살린다(#201 A-2). **이 창에 없던 기능이다**: prop 을 안 넘겨
+   * `MainArea` 가 `if (!err.profileId || !sshRestore) return` 으로 조용히 빠져나갔다 —
+   * 버튼은 있는데 눌러도 토스트조차 안 떴다.
+   *
+   * 🔴 `winId` 를 싣는다. 안 실으면 새 세션이 **본창에** 뜬다(main 은 안 주면 본창으로 잡는다) —
+   *    이 창에서 되살렸는데 저쪽에 나타나는 것이 A 의 진짜 첫 번째 결함이었다.
+   * 🔴 실패는 `'shown'` 이다 — **화면 문구가 아니라 신호**(MainArea.tsx 의 `SshRestoreResult` 주석).
+   *    `connectWithRecovery` 가 이미 화면으로 말했으니 호출측은 조용히 넘어가라는 뜻이고,
+   *    `restore.reason.shown` 이라는 i18n 키는 없고 있으면 안 된다.
+   */
+  const sshRestore = useCallback(
+    async (profileId: string, size?: { cols: number; rows: number }): Promise<SshRestoreResult> => {
+      const res = await connectWithRecovery(
+        { connect, lookup, ask, askText, showFailure },
+        profileId,
+        { size, winId: target.winId }
+      )
+      if (!res.ok) return { ok: false, reason: 'shown' }
+      const p = await lookup(profileId)
+      const name = p?.name ?? 'ssh'
+      sessions.adopt(res.id, res.title ?? name, name, 'ssh', profileId)
+      mainRef.current?.activateSession(res.id)
+      return { ok: true, id: res.id }
+    },
+    [connect, lookup, ask, askText, showFailure, sessions, target.winId]
+  )
+
+  /**
+   * 탭 [복제] — 같은 서버로 하나 더 붙는다. **이 창에서는 로컬 PowerShell 이 열렸다**(prop 을
+   * 안 넘겨 `MainArea.duplicateSession` 의 `else void openLocal()` 로 빠졌다) — 안 되는 것보다
+   * 나쁘다, 다른 일을 했다.
+   *
+   * 프로필을 **이름으로** 찾는 것은 `Shell.duplicateSession` 과 같은 규칙이다(serverKey = 프로필명).
+   * 접속은 위 `sshRestore` 를 그대로 지난다 — 이 창에서 SSH 가 새로 뜨는 길을 둘로 만들지 않는다.
+   * 치수는 지금 보고 있는 칸에서 잰다(#158 — 안 재면 첫 프롬프트가 80칸에서 접힌다).
+   */
+  const duplicateSession = useCallback(
+    (session: { serverKey: string }) => {
+      const p = profiles.find((x) => x.name === session.serverKey)
+      if (p) void sshRestore(p.id, sizeOf(sessions.activeId) ?? undefined)
+    },
+    [profiles, sshRestore, sessions.activeId]
+  )
+
   const winTitle = activeSession ? `${activeSession.serverKey} — ${activeSession.title}` : t('app.name')
 
   return (
@@ -111,6 +199,10 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
           version={version}
           ask={ask}
           askText={askText}
+          sshRestore={sshRestore}
+          onDuplicateSession={duplicateSession}
+          // 본창은 Shell 이 openBottom('log') 로 같은 탭을 연다 — 이 창에도 그 탭이 실재한다.
+          onOpenLog={() => setBottom('log')}
           bottom={
             <BottomPanel
               tab={bottom}
