@@ -57,20 +57,39 @@
 서버 업로드 덮어쓰기 · 다운로드 위치 지정 덮어쓰기 · `restore.reason.shown` 회귀 ·
 취소해도 뜨던 "재접속 실패" 토스트.
 
-### 🟠 A. 떼어낸 창 배선 — **기능이 죽어 있거나 다른 일을 한다** (M)
-`SessionWindow.tsx` 가 `MainArea` 에 넘기지 않는 것들. 확인함(grep 0).
-- **[다시 접속] 이 죽어 있다** — `sshRestore` 미전달. 토스트조차 없다. **#201 원 제보보다 나쁘다**
-- **SSH 탭 [복제] 가 로컬 PowerShell 을 연다** — `onDuplicateSession` 미전달 → else 가지로 빠진다.
-  안 되는 게 아니라 **다른 일을 한다**
-- 메뉴 항목 넷이 무반응(`onRunAiCli`·`onAskAi`·`onOpenLog`·`onOpenConnManager`) —
-  `actions.tsx:518` 이 Tools 메뉴를 지우며 금지한 그 상태
-⚠️ 한 자리에서 같이 고쳐야 한다. 그리고 **"안 넘긴 것이 결정인지 누락인지"** 를 항목마다 적는다.
+### ✅ A. 떼어낸 창 배선 — 고쳤다 (2026-09-21)
+🔴 **제보보다 앞에 결함이 하나 더 있었다**: `ssh:connect` 에 `winId` 가 없어서
+(`session:create` 의 `spec.winId` 와 달리 SSH 에만 그 짝이 없었다) 배선만 했으면
+**떼어낸 창에서 되살린 세션이 본창에 떴다.** 그것부터 고치고 나머지를 얹었다.
+- 되묻는 절차를 **공유 모듈로 추출** — `store/sshConnect.ts`. `Shell.connectProfile` 도
+  그것을 쓰도록 고쳤다(두 벌을 만들지 않았다 — 그게 이 라운드의 본체다)
+- [다시 접속]·[복제]·[로그] 배선 — `SessionWindow.tsx`
+- 아라·연결 관리자 항목 넷은 **없는 게 맞다**(F32) → **메뉴에서 감춘다.** 판정은 핸들러의
+  존재 여부(`TerminalMenuCaps`) — 새 플래그를 만들지 않아 앞으로 늘 prop 도 같은 규칙을 탄다
+- `onResumeAi` 는 안 넣었다(이유는 `SessionWindow.tsx` 머리주석)
 
-### 🟠 B. 세션을 없앨 때 알리는 짝이 없다 (M)
-만들 때는 `session:opened` 브로드캐스트가 있는데 **`session:closed` 는 0건**(양성 대조 확인).
-→ 아라가 `session_destroy` 로 끄면 탭·칸·상태점이 안 치워지고, SSH 면 `closedByUser` 표시가 없어
-**아라가 일부러 끈 세션에 "연결이 끊겼습니다" 카드**가 뜬다. 도구 설명은 *"탭을 닫는 것과 같습니다"* 다.
-⚠️ 1.0.8 에서 `session:opened` 리스너 하나로 만들기를 모았다 — **없애기도 같은 모양**이 맞다.
+### ✅ B. 세션을 없앨 때 알리는 짝 — 고쳤다 (2026-09-21)
+`SessionSink.closed` → `session:closed`. `destroy()` 가 **핸들을 지우기 전에** 쏜다
+(지운 뒤엔 `winIdOf` 가 비어 본창으로 떨어진다 — B-4 가 바로 그 증상이다).
+듣는 쪽은 `session:opened` 리스너 **옆에** 짝으로 뒀다(`store/sessions.ts` 탭 · `MainArea` 칸).
+`close()` 가 새 `forget()` 을 부르게 해 치우는 절차를 한 벌로 뒀다.
+
+### 🟠 A-2. 같은 병이 더 나쁜 모양으로 남아 있다 (M) — **다음 라운드**
+`SessionWindow.tsx` 가 `ServerTool` 에 `onAskAi={() => {}}`·`onOpenExplorer={() => {}}` 를 넘긴다.
+그 둘은 `ProcessTable.tsx:201`·`ServiceTable.tsx:188` 의 **확인 다이얼로그 뒤에** 불리고
+`DiskTable.tsx:283` 의 버튼이 부른다 → **"예"를 눌렀는데 아무 일도 안 난다.**
+빈 메뉴보다 나쁘다(사람이 이미 결정을 했다). A 와 같은 병이지만 고치려면 넷의 prop 을
+옵셔널로 바꿔 **버튼 자체를 감춰야** 한다(`ServerTool`·`ProcessTable`·`ServiceTable`·`DiskTable`).
+
+### 🟠 B-4. `session:exit` 이 **본창으로 떨어진다** (M) — 이번 라운드에서 **안 고쳤다**
+B 를 배선하며 코드로 확인했다(2026-09-21). `MainSessionManager.ts:130-131` 이 **핸들을 지운 다음**
+`sink.exit` 을 부른다 → `registerSessionIpc.ts:39` 의 `getWebContents(id)` → `winIdOf(id)` 가
+undefined → `main/index.ts:353` 의 폴백으로 **본창**. 그 창엔 그 세션의 구독자가 없다
+(`TerminalPane.tsx:676` 은 자기 창에서만 `session:exit:{id}` 를 듣는다).
+→ **떼어낸 창에서 탭을 닫으면 `[프로세스 종료 — code N]` 한 줄이 그 창에 안 찍힌다.**
+🔴 핫 경로의 순서 변경이라(`flush`·`log.close`·`handles.delete` 사이) 따로 재야 한다.
+같은 이유로 `MainArea` 의 `closed` 리스너가 남기는 `closedByUser` 표시는 떼어낸 창에서 **지금은
+아무것도 막지 않는다** — B-4 를 고치는 날 필요해지는 보험이다(그 자리 주석에 적어 뒀다).
 
 ### 🟡 C. 문구가 사유를 버리거나 틀린 원인을 지목한다 (전부 S)
 - `PkgTable.tsx:94` 만 `r.reason` 을 버리고 *"서버가 응답하지 않거나 셸이 제한돼 있습니다"* 라고
@@ -142,20 +161,41 @@ paseo: `docs/analysis/PASEO-C.md` 의 12축 80항목 + 새 항목 P1~P20).
 **paseo 쪽**: `skills/` 6종의 **규율**(코드 없이 옮길 수 있고 전부 S) · `operation-permissions.ts` 의
 *"새 RPC 에 권한을 안 적을 수가 없게"* 타입 강제 · `relay/crypto.ts` 181줄.
 
-### #192 쿠버네티스 — kubectl 전환 — **미결 없음. 착수 가능**
-다른 개발자 피드백. **아직 시작 안 했다** — `k8s.list` 는 여전히 `crictl` 이다
-(`shared/remoteCatalog.ts:1241`). `kubectl` 은 "설치된 도구 목록"에만 나온다.
+### #202 플러그인 마켓 — **분석 끝. P0(표준 정하기)이 다음**
+준영님(2026-09-21): *"사내에서 만든 웹을 전부 아라를 통해서만 접속하게 해야 한다고 하더라고."*
+→ 분석: `docs/plan-plugin-market.md`
 
-준영님 확정(2026-09-16):
-- **(a) crictl 탭과 kubectl 탭을 둘 다 둔다** — 보는 것이 다르다. [컨테이너]=노드에 붙은 낮은 층,
-  [쿠버네티스]=클러스터 관점. crictl 없는 서버에서는 지금처럼 그 탭이 조용히 빈다.
-- **(b) 아라에게 exec 를 주지 않는다** — 목록·describe·yaml 같은 **읽기만**. exec 는 파드 안에서
-  임의 명령을 돌리는 길이라, 우리 카탈로그가 막아 온 "자유 문자열 실행"이 그대로 열린다.
-  🔴 그러면 `k8s.exec` 는 **MCP 도구 표에 넣지 않는다**(있으면 `writeAlways` 라도 문이 생긴다).
+준영님 확정으로 설계가 절반이 됐다: **① 플러그인은 아라의 무엇에도 안 닿는다**(능력 체계·전용
+preload 통째로 불필요) · **② 등록은 누구나, 공개는 검토 후**(레지스트리를 리포에 두면 PR 이 곧
+검토 — 서명 불필요) · **③ `kind:web` 부터**(받는 게 없어 해시 검증 불필요) ·
+**④ 뜨는 자리는 사이드바 버튼 → 아라 브라우저 탭**(플러그인은 세션이 아니다 — 세션 창이 셋이면
+어디 붙을지 답이 없다).
 
-나머지 모양: 기본 `-n vgt-erp` · 셀렉트는 `vgt-` 접두 네임스페이스 · [전체]=`-A` ·
-파드 세부는 **describe + yaml** · exec 는 **사람만**, 보통 터미널 탭으로 열고 열 때
-namespace/pod/container 를 이름으로 확인. 복원 안 함(파드는 덧없다).
+🔴 **Electron 앱은 못 붙인다**(남의 Node 코드를 아라 권한으로 돌리는 일이다). 화면은 이미 웹이므로
+사내 서버에 올리면 그 순간 `kind:web` 이다 — 대부분 그 길로 간다.
+
+곁가지: `BrowserService.ts:63` 의 `setWindowOpenHandler` 가 지금 **보던 탭을 갈아치운다.**
+사내 결재 팝업에서 거부보다 나쁘다 — 새 탭으로 고치면 플러그인 없이도 이득이다.
+
+남은 질문: 첫 시스템 셋이 무엇인가 · 사내 SSO 를 공유하나(파티션 결정) · 사이드바 자리.
+
+### ✅ #192 쿠버네티스 — kubectl 전환 — 했다 (2026-09-21)
+다른 개발자 피드백. 준영님 확정대로 **[컨테이너]=docker·podman·crictl**(노드에 붙은 낮은 층),
+**[쿠버네티스]=kubectl**(클러스터 관점). 기본 `-n vgt-erp` · 셀렉트는 `vgt-` 접두 · [전체]=`-A` ·
+파드 행을 누르면 `[개요][describe][YAML]` 로 펼쳐진다.
+
+🔴 **`k8s.exec` 는 `COMMANDS` 에 없다 — 그게 "아라에게 exec 를 주지 않는다"의 실제 구현이다.**
+`server_run` 의 `cmdId` 가 `z.string()`(`mcp/tools.ts:653`)이라 **표에 있으면 곧 아라의 도구다** —
+도구 설명에 안 적어도 부를 수 있다. 사람의 길은 `buildK8sExec()`, 표를 안 지나는 순수 함수이고
+확인 다이얼로그가 ns·pod·container 를 이름으로 보여 준 뒤 터미널에 명령줄을 보낸다.
+시험이 `isCmdId('k8s.exec') === false` 로 그 결정을 잠갔다.
+
+⚠️ **지시서가 두 군데 틀렸고 에이전트가 잡았다**: ① `createdAt` 을 초로 적었는데 계약은 **ms** 다
+(안 고쳤으면 모든 파드가 57살로 떴다) ② crictl 을 조작 줄이 **있는** 탭으로 옮기면서
+`[정지]`·`[제거]`·`[접속]` 이 crictl 노드에서 **종료코드 0 · 빈 출력 = 성공으로 읽히는 무음 no-op**
+가 됐다 — `ctrActions(row, runtime)` 이 crictl 이면 `[]` 를 돌려주게 뿌리에서 막았다.
+
+⚠️ **e2e 셋(CON-25b/25d/25e)을 다시 썼지만 돌려 보지 못했다**(e2e 금지) — 실기 확인 항목이다.
 
 ### #188 터미널 드래그 → "이것에 질문하기" → 아라 첨부
 ⚠️ 터미널에 비밀이 찍혀 있을 수 있다 — 선택 범위를 사람이 보고 보내는 모양이어야 한다.
@@ -183,6 +223,8 @@ namespace/pod/container 를 이름으로 확인. 복원 안 함(파드는 덧없
 | — | `claude -c` 가 대화 없는 폴더에서 | 실행해 본 적이 없다. 겪으면 그때 답이 정해진다 |
 | — | **`npm test` 가 간헐적으로 중간에 죽는다** | 2026-09-17 실측: 5회 중 1회가 721개에서 `Unhandled Errors` 로 멈춘다. 재현이 안 돼 원인 미상 — 게이트 신뢰도 문제라 언젠가 잡아야 한다 |
 | — | 나눔고딕코딩의 박스 선 2배 폭 | 그 폰트를 고르면 표가 깨진다(1.0.9 실측). `ARA Narrow Enclosed` 로는 못 고친다 |
+| #192 | **docker·crictl 이 둘 다 있는 노드에서 crictl 이 감춰진다** | #192 에서 crictl 을 [컨테이너] 탭 맨 뒤에 붙였다. `ctr.list` 는 여전히 "먼저 답을 준 하나"가 이기는 구조라(`shared/remoteCatalog.ts` parseCtrList), 둘 다 있으면 docker 가 이긴다. 흔한 두 경우(쿠버 노드·개발 PC)는 맞는다. 둘 다 보이게 하려면 `parseCtrList` 가 런타임 하나만 돌려주는 구조부터 바뀌고 렌더러까지 따라온다 |
+| #192 | `kubectl top` — 파드 CPU·메모리 | `kubectl get pods` 에는 자원이 없어 [쿠버네티스] 탭의 CPU·메모리 칸이 `—`(모름)다. `top` 은 metrics-server 가 깔린 클러스터에서만 되므로 "없으면 조용히 빈 칸"을 먼저 설계해야 한다 |
 
 ---
 
