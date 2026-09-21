@@ -14,10 +14,23 @@
 // 커버 범위: 실 MainSessionManager + 실 PtyBackend 로 진짜 로컬 pty 를 띄우고 죽인 뒤 종료하는 경로.
 //
 // 셸 기본값이 cmd.exe 인 이유 — 정직하게: 이 결함과 **별개로**, powershell 세션을 kill 하면 약
-// 13~25% 확률로 프로세스가 0xC0000005 로 죽는 두 번째 문제가 있다(배수를 넣어도 그대로다).
-// 그건 아직 원인을 특정하지 못했고 이 가드의 대상이 아니다 — 여기서 같이 빨개지면 정작 고친 것이
-// 회귀했는지를 못 읽는다. 재현은 `ARA_SHUTDOWN_SHELL` 을 비우고(= PtyBackend 기본 셸) 돌리면 된다:
+// 13~25% 확률로 프로세스가 비정상 종료하는 두 번째 문제가 있다(배수를 넣어도 그대로다).
+// 이 가드의 대상이 아니다 — 여기서 같이 빨개지면 정작 고친 것이 회귀했는지를 못 읽는다.
+// 재현은 `ARA_SHUTDOWN_SHELL` 을 비우고(= PtyBackend 기본 셸) 돌리면 된다:
 //   ARA_SHUTDOWN_SHELL= ARA_SHUTDOWN_RUNS=15 node tests/shutdown-smoke.cjs
+//
+// 🔴 **2026-09-21: 그 두 번째 문제의 원인을 찾았다**(준영님 제보 —
+//    `Assertion failed! … conpty.node … remove_pty_baton`, 세션 떼어낸 뒤 종료).
+//    `node_modules/node-pty/src/win/conpty.cc:106` 이 **pty 마다 자기 네이티브 스레드에서**
+//      assert(remove_pty_baton(baton->id));
+//    를 부르는데, 그 함수가 고치는 `ptyHandles` 는 **잠금 없는 전역 std::vector** 다(:65).
+//    여러 pty 가 거의 동시에 죽으면 `remove_if`+`erase` 가 겹쳐 하나가 false 를 받고 어설션이
+//    터진다. `destroyAll()` 이 세션을 연달아 kill 하는 것이 정확히 그 조건이고, **세션이 많을수록
+//    확률이 오른다** — 그래서 간헐적이고, 그래서 배수를 넣어도 안 사라졌다(배수는 *기다리는*
+//    장치지 *겹치지 않게 하는* 장치가 아니다).
+//    ⚠️ 우리 코드의 결함이 아니다. 완화는 **kill 을 겹치지 않게 하는 것**(하나씩 죽이고 그 exit
+//    콜백을 받은 뒤 다음) — 값은 세션 수 × ~15ms 다. 아직 안 했다: `before-quit` 순서는 사고를
+//    겪고 나온 것이라 고치려면 이 하네스로 충분한 표본을 재고 들어가야 한다(#203).
 // 자세한 실측은 agent_talk/FIX-shutdown-done.md §"남은 것".
 // 부모(node)·자식(electron) 양쪽에서 걸리도록 분기 **앞**에 둔다 — 자식만 걸면 부모의 예외가
 // 그대로 새고, 부모만 걸면 정작 창을 띄우는 자식이 무방비다.

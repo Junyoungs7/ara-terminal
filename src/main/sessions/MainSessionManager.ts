@@ -276,14 +276,17 @@ export class MainSessionManager implements ISessionManager {
     h.backend.resume()
   }
 
-  destroy(id: string): void {
+  /**
+   * @param notify 화면에 알릴 것인가. **종료 중에는 false** — 아래 `destroyAll` 주석을 보라.
+   */
+  destroy(id: string, notify = true): void {
     const h = this.handles.get(id)
     if (!h) return
     if (h.timer) clearTimeout(h.timer)
     // 🔴 **지우기 전에** 알린다(#201 B). 라우터는 `winIdOf(id)` 로 보낼 창을 찾는데, 핸들이
     //    사라진 뒤엔 그 값을 못 찾아 본창으로 떨어진다 — 떼어낸 창이 자기 탭이 닫힌 것을 못 받는다.
     //    (`onExit` 이 바로 그 순서로 되어 있어 [프로세스 종료] 줄이 본창에 찍힌다 — #201 B-4.)
-    this.sink.closed?.(h.meta)
+    if (notify) this.sink.closed?.(h.meta)
     this.handles.delete(id)
     h.backend.kill()
   }
@@ -325,7 +328,22 @@ export class MainSessionManager implements ISessionManager {
     return b instanceof SshBackend ? b.sshClient() : null
   }
 
+  /**
+   * 앱 종료 정리(`before-quit`). 🔴 **여기서는 화면에 알리지 않는다.**
+   *
+   * 2026-09-21 준영님 제보로 잡았다 — #201 B 를 넣은 뒤 종료가 위태로워졌다. 알리면 이렇게 된다:
+   *   `destroyAll` → 렌더러가 `session:closed` 를 받음 → 탭·칸을 치움 → `cells` 가 바뀌어
+   *   **`MainArea.persist()` 가 돈다** → `session.list()` 는 방금 비웠으니 **빈 스냅샷을 저장**한다.
+   * 경합이라 어떤 날은 무사하고 어떤 날은 **재시작했을 때 세션이 하나도 안 돌아온다.**
+   * 간헐적 데이터 유실이라 크래시보다 나쁘다(조용하고, 재현이 안 되고, 사용자만 겪는다).
+   *
+   * 알릴 이유도 없다: 이 함수는 **앱이 사라지는 중**에만 불린다(`index.ts` before-quit 한 곳).
+   * 치울 화면이 곧 없어지는데 치우라고 알리는 것이 애초에 잘못이었다.
+   *
+   * ⚠️ 낱개 `destroy(id)` 는 **계속 알린다** — 그게 #201 B 의 목적 전부다(아라의 `session_destroy`·
+   *    떼어낸 창 닫기의 [세션 종료]). 그쪽은 앱이 살아 있고 화면이 사실을 알아야 한다.
+   */
   destroyAll(): void {
-    for (const id of [...this.handles.keys()]) this.destroy(id)
+    for (const id of [...this.handles.keys()]) this.destroy(id, false)
   }
 }

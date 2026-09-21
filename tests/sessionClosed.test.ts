@@ -90,13 +90,41 @@ describe('#201 B — destroy 가 closed 를 쏜다', () => {
     expect(calls.filter((c) => c.startsWith('closed:'))).toEqual(['closed:a'])
   })
 
-  it('destroyAll(앱 종료)도 세션 수만큼 closed 를 쏜다 — 종료 경로가 이 문을 함께 지난다', () => {
+  /**
+   * 🔴 **처음엔 이 시험이 정반대를 지켰다**("destroyAll 도 세션 수만큼 쏜다"). 그게 틀렸다 —
+   * 준영님이 2026-09-21 실기에서 종료가 위태로운 것을 잡아 주셨고, 코드를 따라가 보니 이렇다:
+   *
+   *   destroyAll → 렌더러가 `session:closed` 수신 → 탭·칸 치움 → `cells` 변경 →
+   *   `MainArea.persist()` 실행 → `session.list()` 는 **방금 비운 목록** → **빈 스냅샷 저장**
+   *
+   * 경합이라 어떤 날은 무사하고 어떤 날은 **재시작에 세션이 하나도 안 돌아온다.** 조용하고,
+   * 재현이 안 되고, 사용자만 겪는다 — 크래시보다 나쁜 부류다.
+   *
+   * ⚠️ 이 시험을 "일관성 있게" 되돌리지 마라. 낱개 `destroy` 와 `destroyAll` 은 **다른 일**이다:
+   *    앞은 앱이 살아 있고 화면이 사실을 알아야 하고, 뒤는 화면이 곧 사라진다.
+   */
+  it('🔴 destroyAll(앱 종료)은 **알리지 않는다** — 알리면 종료 중에 빈 스냅샷이 저장된다', () => {
     const { mgr, closed, add } = rig()
     add('a', 'win-2')
     add('b')
     add('c')
     mgr.destroyAll()
-    expect(closed.map((m) => m.id)).toEqual(['a', 'b', 'c'])
-    expect(mgr.snapshot()).toEqual([])
+    expect(closed).toEqual([]) // ← 이 줄이 본체다
+    expect(mgr.snapshot()).toEqual([]) // 그래도 정리는 전부 된다
+  })
+
+  it('★ 그래도 죽이기는 전부 한다 — 안 알린다고 pty 가 살아남으면 고아가 된다', () => {
+    const { mgr, calls, add } = rig()
+    add('a')
+    add('b')
+    mgr.destroyAll()
+    expect(calls).toEqual(['kill:a', 'kill:b'])
+  })
+
+  it('낱개 destroy 는 **계속 알린다** — #201 B 의 목적이 그것이다(아라의 session_destroy)', () => {
+    const { mgr, closed, add } = rig()
+    add('a')
+    mgr.destroy('a')
+    expect(closed.map((m) => m.id)).toEqual(['a'])
   })
 })

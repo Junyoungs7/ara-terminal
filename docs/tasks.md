@@ -91,6 +91,24 @@ undefined → `main/index.ts:353` 의 폴백으로 **본창**. 그 창엔 그 �
 같은 이유로 `MainArea` 의 `closed` 리스너가 남기는 `closedByUser` 표시는 떼어낸 창에서 **지금은
 아무것도 막지 않는다** — B-4 를 고치는 날 필요해지는 보험이다(그 자리 주석에 적어 뒀다).
 
+### 🟠 #203. 종료할 때 conpty 어설션 — **원인은 찾았고 완화는 안 했다** (M)
+준영님 제보(2026-09-21): SSH 를 새 창으로 뗀 뒤 아라를 끄면
+`Assertion failed! … conpty.node … remove_pty_baton`.
+
+**우리 결함이 아니다.** `node_modules/node-pty/src/win/conpty.cc:106` 이 **pty 마다 자기 네이티브
+스레드에서** `assert(remove_pty_baton(baton->id))` 를 부르는데, 그 함수가 고치는 `ptyHandles` 는
+**잠금 없는 전역 `std::vector`** 다(`:65`). 여러 pty 가 거의 동시에 죽으면 `remove_if`+`erase` 가
+겹쳐 하나가 `false` 를 받고 어설션이 터진다. `destroyAll()` 이 연달아 kill 하는 것이 그 조건이고
+**세션이 많을수록 확률이 오른다.**
+
+이것이 `tests/shutdown-smoke.cjs` 가 *"powershell 이면 13~25%, 원인 미상"* 이라고 적어 둔 그 문제다 —
+배수(`drainKilledPtys`)가 못 고친 이유도 설명된다: 배수는 **기다리는** 장치지 **겹치지 않게 하는**
+장치가 아니다. 2026-09-21 실측 재현 — powershell 15회 중 1회 실패(`ARA_SHUTDOWN_SHELL=`).
+
+**완화안**: kill 을 겹치지 않게 한다(하나 죽이고 그 exit 콜백을 받은 뒤 다음). 값은 세션 수 × ~15ms.
+🔴 `before-quit` 순서는 사고를 겪고 나온 것이라, 고치기 전에 `smoke:shutdown` 으로 **충분한 표본**을
+재고(30회 이상, 전후 비교) 들어간다.
+
 ### 🟡 C. 문구가 사유를 버리거나 틀린 원인을 지목한다 (전부 S)
 - `PkgTable.tsx:94` 만 `r.reason` 을 버리고 *"서버가 응답하지 않거나 셸이 제한돼 있습니다"* 라고
   **틀린 원인 둘을 지목**. 형제 `ctrShared.tsx:117` 는 2026-08-28 감사에서 고쳤다 — **이 패널만 안 받았다**
