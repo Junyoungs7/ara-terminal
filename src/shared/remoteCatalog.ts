@@ -37,8 +37,17 @@ export type CmdId =
   | "git.worktree.add"
   | "git.worktree.remove"
   | "ctr.list"
-  // 2026-08-24: 쿠버 노드는 **탭이 따로다** — crictl 로 목록·파드·자원을 한 왕복에 받는다.
+  // #192(2026-09-21): 쿠버 탭은 **kubectl** 이다 — 클러스터가 아는 파드를 본다.
+  // crictl 은 노드의 containerd 라 docker·podman 과 같은 층이어서 ctr.list 로 옮겼다.
+  //
+  // 🔴 **`k8s.exec` 는 여기 없고, 만들지 않는다.** `server_run` 의 `cmdId` 는 자유 문자열이라
+  // (mcp/tools.ts) 이 표에 올라온 id 는 그 순간 아라가 부를 수 있는 도구가 된다 — 도구 설명에
+  // 안 적어도 마찬가지다. 준영님 확정(2026-09-16): 아라에게는 읽기만. 파드 안으로 들어가는 길은
+  // 사람이 터미널에서 친다(buildK8sExec — 표를 안 지난다).
   | "k8s.list"
+  | "k8s.ns"
+  | "k8s.describe"
+  | "k8s.yaml"
   // F28 R2: 컨테이너 상태 바꾸기·지우기 / 이미지 지우기. 전부 확인 다이얼로그를 거친다.
   | "ctr.action"
   | "ctr.rmi"
@@ -188,6 +197,38 @@ export function validImageRef(v: unknown): string | null {
 }
 
 /**
+ * 쿠버 이름(#192). RFC1123 이 허용하는 글자만이라 **셸 메타문자가 하나도 없다** —
+ * 인용 없이 명령줄에 붙여도 안전하다(validUnit·validImageRef 와 같은 근거).
+ * 대문자·점(레이블)·`/`·`..` 은 전부 여기서 떨어진다.
+ */
+function rfc1123(v: unknown, max: number, dots: boolean): string | null {
+  if (typeof v !== "string" || v.length === 0 || v.length > max) return null;
+  const re = dots
+    ? /^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$/
+    : /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+  return re.test(v) ? v : null;
+}
+
+/** 네임스페이스·컨테이너 이름 — DNS 레이블(63자). `*`(전체)는 여기서 통과하지 못한다. */
+export function validNsName(v: unknown): string | null {
+  return rfc1123(v, 63, false);
+}
+
+/** 파드 이름 — DNS 서브도메인(253자, 점 허용). 레플리카셋 해시가 붙어 레이블보다 길다. */
+export function validPodName(v: unknown): string | null {
+  return rfc1123(v, 253, true);
+}
+
+/**
+ * 기본 네임스페이스(준영님 확정 2026-09-16). 화면과 명령이 **같은 값 하나**를 본다 —
+ * 두 벌이면 셀렉트는 vgt-erp 를 고른 척하는데 명령은 다른 데를 보는 상태가 된다.
+ */
+export const K8S_DEFAULT_NS = "vgt-erp";
+
+/** 셀렉트에 올릴 네임스페이스 — 준영님 확정: `vgt-` 로 시작하는 것만. */
+export const K8S_NS_PREFIX = "vgt-";
+
+/**
  * 컨테이너 런타임.
  *
  * 2026-08-24 준영님 제보로 crictl(쿠버 노드의 containerd CLI)이 들어왔다가, 같은 날 **탭이 갈렸다**:
@@ -197,11 +238,21 @@ export function validImageRef(v: unknown): string | null {
  * 호스트에서 빈 목록이 된다 — 한 명령으로 둘 다 맞출 수 없다.
  *
  * 준영님: **쿠버는 탭을 따로 낸다.** 한 서버에 도커와 쿠버가 같이 깔린 경우가 있고, 그때 "먼저
- * 찾은 하나"를 고르면 나머지가 통째로 안 보인다. 컨테이너 탭은 docker·podman 만, 쿠버네티스 탭은
- * crictl 만 본다 — 둘 다 있으면 둘 다 각자의 탭에 뜬다.
+ * 찾은 하나"를 고르면 나머지가 통째로 안 보인다. 둘 다 있으면 둘 다 각자의 탭에 뜬다.
+ *
+ * #192(2026-09-21) — **탭을 가르는 기준이 "런타임 이름"에서 "보는 층"으로 바뀌었다.**
+ * crictl 은 노드의 containerd 를 보므로 docker·podman 과 **같은 층**이다(이 노드에 실제로 떠
+ * 있는 것). 클러스터가 아는 파드는 kubectl 이 본다. 그래서 crictl 은 컨테이너 탭(ctr.list)으로
+ * 옮기고 쿠버 탭은 kubectl 이 됐다.
+ *
+ * 🔴 **대가**: ctr.list 는 지금도 "먼저 답을 준 하나"가 이기는 구조라(아래 parseCtrList),
+ * docker 와 crictl 이 **둘 다** 있는 노드에서는 crictl 이 감춰진다(crictl 을 맨 뒤에 둬서
+ * 쿠버 노드·개발 PC 라는 흔한 두 경우는 맞지만, 둘 다인 노드는 아니다). 둘 다 보이게 하려면
+ * parseCtrList 가 런타임 하나만 돌려주는 구조부터 바뀌어야 해서 렌더러까지 따라온다 —
+ * docs/tasks.md 보류 표에 올려 뒀다.
  */
 const CTR_BINS = ["docker", "podman"] as const;
-const ALL_RUNTIMES = ["docker", "podman", "crictl"] as const;
+const ALL_RUNTIMES = ["docker", "podman", "crictl", "kubectl"] as const;
 export type CtrRuntime = (typeof ALL_RUNTIMES)[number] | "none";
 
 function ctrCmd(args: string): string {
@@ -268,11 +319,38 @@ const wrapSudo = (script: string, sudo: boolean): string =>
  * bash 가 없는 이미지(alpine 등)가 흔해 먼저 있는지 보고 없으면 sh 로 떨어진다.
  * 런타임은 `command -v` 두 개로 그 자리에서 고른다 — 터미널에는 우리 셸 상태가 없다.
  */
+/** 안에서 띄울 셸 — bash 가 없는 이미지(alpine 등)가 흔하다. 두 exec 가 같은 줄을 쓴다. */
+const SHELL_PICK = `sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'`;
+
 export function buildCtrExec(id: unknown): string | null {
   const cid = validCtrId(id);
   if (cid === null) return null;
   const pick = CTR_BINS.map((b) => `command -v ${b}`).join(" || ");
-  return `$(${pick}) exec -it ${cid} sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'`;
+  return `$(${pick}) exec -it ${cid} ${SHELL_PICK}`;
+}
+
+/**
+ * 파드 안으로 들어가는 명령(#192). 위 buildCtrExec 와 **같은 길**이다 — 터미널(`session.input`)로
+ * 간다.
+ *
+ * 🔴 **이 함수는 COMMANDS 에 없다. 그게 이 설계의 전부다.** `server_run` 의 `cmdId` 는 자유
+ * 문자열이라(mcp/tools.ts) 표에 `k8s.exec` 를 하나 올리는 순간 아라가 그것을 부를 수 있다 —
+ * 도구 설명에 안 적어도 `isCmdId` 만 통과하면 된다. 준영님 확정(2026-09-16): **아라에게 exec 를
+ * 주지 않는다.** 그래서 exec 는 표 밖의 문자열 조립으로만 두고, 부르는 자리(K8sPanel)가
+ * 사람에게 확인을 받는다. 여기에 `k8s.exec` 를 만들면 그 결정이 그 자리에서 무효가 된다.
+ *
+ * 이름 셋은 RFC1123 이라 셸 메타문자가 없다 — 인용 없이 붙여도 안전하다.
+ */
+export function buildK8sExec(
+  ns: unknown,
+  pod: unknown,
+  container: unknown,
+): string | null {
+  const n = validNsName(ns);
+  const p = validPodName(pod);
+  const c = validNsName(container);
+  if (n === null || p === null || c === null) return null;
+  return `kubectl exec -it ${p} -n ${n} -c ${c} -- ${SHELL_PICK}`;
 }
 
 const q = (path: string): string => `'${path}'`;
@@ -734,6 +812,140 @@ export function parseCrictlPods(out: string): CtrPodInfo[] {
   return pods;
 }
 
+/**
+ * `kubectl get pods <-n ns|-A> -o json` (#192).
+ *
+ * **새 타입을 만들지 않는다** — 화면(K8sPanel.groupPods)이 이미 CtrRow + CtrPodInfo 로 파드를
+ * 묶고 있어서, 새 모양을 들이면 groupPods·podRank·ageText 가 두 벌이 된다.
+ *
+ * 🔴 **자원(cpuNs·memBytes)은 채우지 않는다.** `get pods` 에는 없고 `kubectl top` 은
+ * metrics-server 가 깔린 클러스터에서만 된다. 0 을 넣으면 "안 쓰는 중"이라는 거짓말이 된다 —
+ * 비워 두면 화면이 `—`(모름)를 그린다(CtrPodGroup 주석의 규칙).
+ */
+export function parseKubectlPods(out: string): {
+  rows: CtrRow[];
+  pods: CtrPodInfo[];
+} {
+  const items = (jsonOf(out) as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) return { rows: [], pods: [] };
+  const rows: CtrRow[] = [];
+  const pods: CtrPodInfo[] = [];
+  for (const raw of items) {
+    const p = raw as {
+      metadata?: { name?: unknown; namespace?: unknown; creationTimestamp?: unknown };
+      status?: { phase?: unknown; containerStatuses?: unknown };
+    };
+    const str = (v: unknown): string => (typeof v === "string" ? v : "");
+    const name = str(p?.metadata?.name);
+    if (name === "") continue;
+    const ns = str(p?.metadata?.namespace);
+    const key = ns ? `${ns}/${name}` : name;
+    const born = isoToMs(p?.metadata?.creationTimestamp);
+    const cs = Array.isArray(p?.status?.containerStatuses)
+      ? (p.status.containerStatuses as unknown[])
+      : [];
+    pods.push({
+      key,
+      ns,
+      name,
+      // 파드가 Running 이고 컨테이너가 전부 ready 여야 ready 다 — 하나라도 아니면 이 화면을 여는 이유다.
+      state:
+        str(p?.status?.phase) === "Running" &&
+        cs.length > 0 &&
+        cs.every((c) => (c as { ready?: unknown })?.ready === true)
+          ? "ready"
+          : "notready",
+      ...(born !== null ? { createdAt: born } : {}),
+    });
+    // 컨테이너 상태가 아직 없는 파드(스케줄 못 받은 Pending 등)도 **한 줄은 낸다.**
+    // groupPods 는 컨테이너 행으로만 파드를 만들기 때문에, 안 내면 정작 제일 아픈 파드가
+    // 표에서 통째로 사라진다.
+    if (cs.length === 0) {
+      rows.push({
+        id: `${key}/-`,
+        name,
+        image: "",
+        state: str(p?.status?.phase).toLowerCase(),
+        status: key,
+        ports: "",
+        ...(ns ? { ns } : {}),
+        pod: name,
+        restarts: 0,
+        ...(born !== null ? { createdAt: born } : {}),
+      });
+      continue;
+    }
+    for (const rawC of cs) {
+      const c = rawC as {
+        name?: unknown;
+        ready?: unknown;
+        restartCount?: unknown;
+        image?: unknown;
+        containerID?: unknown;
+        state?: Record<string, unknown>;
+      };
+      const cname = str(c?.name);
+      if (cname === "") continue;
+      // `containerd://<64hex>` 의 뒷부분. 아직 안 뜬 컨테이너는 이 칸이 없으므로 파드 경로로
+      // 대신한다 — **id 가 겹치면 표의 행이 합쳐진다**(화면이 id 를 key 로 쓴다).
+      const cid = str(c?.containerID).split("://").pop() ?? "";
+      const started = isoToMs(
+        (c?.state?.running as { startedAt?: unknown } | undefined)?.startedAt ??
+          (c?.state?.terminated as { startedAt?: unknown } | undefined)?.startedAt,
+      );
+      rows.push({
+        id: cid !== "" ? cid : `${key}/${cname}`,
+        name: cname,
+        image: str(c?.image),
+        state: containerState(c?.state),
+        // 셋째 칸은 crictl 과 같게 `네임스페이스/파드` — 컨테이너 표의 검색이 그 칸을 본다.
+        status: key,
+        ports: "",
+        ...(ns ? { ns } : {}),
+        pod: name,
+        restarts: num(c?.restartCount) ?? 0,
+        ...(started !== null ? { createdAt: started } : {}),
+      });
+    }
+  }
+  return { rows, pods };
+}
+
+/**
+ * `status.containerStatuses[].state` 는 `{running|terminated|waiting: {…}}` 중 하나다.
+ * docker 와 **같은 낱말**로 맞춘다 — 화면의 `state === 'running'` 판정과 정렬이 한 규칙으로 돈다.
+ */
+function containerState(state: Record<string, unknown> | undefined): string {
+  if (state?.running) return "running";
+  if (state?.terminated) return "exited";
+  if (state?.waiting) return "waiting";
+  return "";
+}
+
+/**
+ * kubectl 의 시각은 **ISO 문자열**이다(`"2026-09-20T01:02:03Z"`) — crictl 의 나노초와 다르다.
+ * `CtrRow.createdAt` 은 epoch **ms** 이므로(K8sPanel.age 가 `Date.now() - ms` 로 센다) ms 로 맞춘다.
+ */
+function isoToMs(v: unknown): number | null {
+  if (typeof v !== "string" || v === "") return null;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * `kubectl get namespaces -o name` → `namespace/kube-system` 줄들.
+ * **RFC1123 을 통과한 이름만** 남긴다 — 오류 출력(`Error from server …`)이 섞여 와도 셀렉트에
+ * 오르지 않고, 셀렉트가 고른 값은 그대로 다시 명령줄에 들어가므로 여기가 그 값의 관문이다.
+ */
+export function parseNamespaces(out: string): string[] {
+  const names: string[] = [];
+  for (const raw of out.split("\n")) {
+    const ns = validNsName(raw.replace(/\r$/, "").trim().replace(/^namespace\//, ""));
+    if (ns !== null) names.push(ns);
+  }
+  return names;
+}
+
 /** `crictl stats -o json` — 컨테이너별 CPU 누적·메모리. 없으면 빈 표(자원 칸만 비고 목록은 산다). */
 export function parseCrictlStats(
   out: string,
@@ -814,11 +1026,17 @@ export type CtrList = {
  */
 export function parseCtrList(out: string): CtrList {
   const all = ctrSections(out);
+  // kubectl 은 **한 토막에 파드와 컨테이너가 같이 온다**(`items[].status.containerStatuses`) —
+  // crictl 처럼 곁들인 `pods` 토막이 따로 오지 않는다. 그래서 한 번만 읽고 둘로 나눠 쓴다.
+  const kubeSec = all.find((s) => s.runtime === "kubectl");
+  const kube = kubeSec ? parseKubectlPods(kubeSec.body) : null;
   // `pods`·`stats` 는 런타임이 아니라 **곁들여 온 자료**다 — 고르기에 끼워 넣으면 "행 0개짜리
   // 실패한 런타임"으로 오해받는다.
-  const pods = parseCrictlPods(
-    all.find((s) => s.runtime === ("pods" as CtrRuntime))?.body ?? "",
-  );
+  const pods =
+    kube?.pods ??
+    parseCrictlPods(
+      all.find((s) => s.runtime === ("pods" as CtrRuntime))?.body ?? "",
+    );
   const stats = parseCrictlStats(
     all.find((s) => s.runtime === ("stats" as CtrRuntime))?.body ?? "",
   );
@@ -830,7 +1048,11 @@ export function parseCtrList(out: string): CtrList {
     )
     .map((s) => {
       const rows =
-        s.runtime === "crictl" ? parseCrictl(s.body) : parseContainers(s.body);
+        s.runtime === "kubectl"
+          ? (kube?.rows ?? [])
+          : s.runtime === "crictl"
+            ? parseCrictl(s.body)
+            : parseContainers(s.body);
       // 행이 0 인데 출력은 있다 = **우리가 못 읽은 것**이다. 오류 문구든, 경고든, 처음 보는 형식이든
       // 화면에 그대로 올린다 — 조용히 "0개"로 뭉개면 무엇이 잘못됐는지 알 길이 사라진다(이 표가
       // 세 라운드나 "컨테이너가 없습니다"만 보여 준 이유가 정확히 이것이다).
@@ -880,18 +1102,24 @@ export function parseCtrList(out: string): CtrList {
 
 /**
  * "컨테이너가 진짜 0개"인 출력인가. 여기 해당하지 않는데 행이 없으면 우리가 못 읽은 것이다.
- * docker·podman 은 빈 출력, crictl 은 `{"containers":[]}` 가 정상적인 0개다.
+ * docker·podman 은 빈 출력, crictl 은 `{"containers":[]}`, kubectl 은 `{"items":[]}` 가 0개다.
+ *
+ * kubectl 갈래가 왜 필요한가(#192): 기본이 `-n vgt-erp` 인데 그 네임스페이스가 없는 클러스터가
+ * 있다. kubectl 은 `Error from server (NotFound): namespaces "vgt-erp" not found` 를 뱉는데,
+ * JSON 이 아니니 여기서 false 가 되고 화면이 그 문장을 이유로 보여 준다 — "파드가 0개"로
+ * 뭉개면 사람이 네임스페이스를 잘못 골랐다는 것을 알 길이 없다.
  */
 function ctrLooksEmpty(runtime: CtrRuntime, body: string): boolean {
   const t = body.trim();
   if (t === "") return true;
-  if (runtime !== "crictl") return false;
+  if (runtime !== "crictl" && runtime !== "kubectl") return false;
   const s = t.indexOf("{");
   const e = t.lastIndexOf("}");
   if (s < 0 || e <= s) return false;
+  const field = runtime === "crictl" ? "containers" : "items";
   try {
-    const d = JSON.parse(t.slice(s, e + 1)) as { containers?: unknown };
-    return Array.isArray(d.containers) && d.containers.length === 0;
+    const d = JSON.parse(t.slice(s, e + 1)) as Record<string, unknown>;
+    return Array.isArray(d[field]) && (d[field] as unknown[]).length === 0;
   } catch {
     return false;
   }
@@ -1020,6 +1248,37 @@ export type CmdSpec = {
  */
 const PS_CMD =
   "ps -eo pid=,user=,pcpu=,pmem=,rss=,stat=,etimes=,args= --sort=-pcpu 2>/dev/null | head -300";
+
+/**
+ * `args.ns` → kubectl 의 네임스페이스 스위치(#192). 검증 실패면 null 이고 명령은 조립되지 않는다.
+ *
+ * 셋뿐이다:
+ *  · 없음 → **기본 `-n vgt-erp`**(준영님 확정)
+ *  · `'*'` → **`-A`**. `-n` 을 그냥 빼는 게 아니다 — 빼면 kubectl 이 **현재 컨텍스트의 기본
+ *    네임스페이스**를 쓴다. 그건 "전체"가 아니라 "어딘지 모를 한 군데"다.
+ *  · 그 밖 → RFC1123 을 통과한 이름만.
+ */
+function k8sNsFlag(args: unknown): string | null {
+  const v = (args as { ns?: unknown } | null)?.ns;
+  // **안 준 것만** 기본값이다. `ns: null` 은 "고르지 않음"이 아니라 네임스페이스가 아닌 값이라
+  // 거절한다 — 표의 규칙을 못 지난 값에 기본값을 대신 끼워 넣으면, 부른 쪽이 의도한 적 없는
+  // 네임스페이스를 조회하게 된다.
+  if (v === undefined) return `-n ${K8S_DEFAULT_NS}`;
+  if (v === "*") return "-A";
+  const ns = validNsName(v);
+  return ns === null ? null : `-n ${ns}`;
+}
+
+/** describe·yaml 의 공통 관문 — 둘 다 `{ns, pod}` 를 받고 둘 다 `'*'` 를 거절한다. */
+function k8sPodCmd(
+  args: unknown,
+  make: (ns: string, pod: string) => string,
+): string | null {
+  const a = args as { ns?: unknown; pod?: unknown } | null;
+  const ns = validNsName(a?.ns);
+  const pod = validPodName(a?.pod);
+  return ns === null || pod === null ? null : make(ns, pod);
+}
 
 export const COMMANDS: Record<CmdId, CmdSpec> = {
   "ps.list": { build: () => PS_CMD },
@@ -1210,10 +1469,16 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
   // 없으면 `none` 이 온다. crictl 은 Go 템플릿이 없어 JSON 으로 받는다(형태가 아예 다르다).
   //
   // `-a` 로 멈춘 것까지 보여 준다: 컨테이너 화면을 여는 이유의 절반이 "왜 안 떠 있지"다.
+  //
+  // #192(2026-09-21): **crictl 이 여기로 왔다** — 노드의 containerd 를 보므로 docker·podman 과
+  // 같은 층이다(쿠버 탭은 kubectl 이 됐다). **맨 뒤**에 두는 것이 이 순서의 전부다: 쿠버 노드는
+  // docker 가 없어 crictl 이 잡히고, 개발 PC 는 crictl 이 없어 docker 가 잡힌다.
+  // 🔴 둘 다 깔린 노드에서는 crictl 이 감춰진다(ALL_RUNTIMES 주석 · docs/tasks.md 보류 표).
   "ctr.list": {
     // 권한이 없으면(docker 그룹 밖) stderr 가 그대로 올라온다 — 숨기지 않는다. 여기 `\t` 는
     // 셸이 아니라 **docker 의 Go 템플릿**이 푼다 — pkg.probe 의 echo 문제와 다른 자리다.
     build: (args) => {
+      const sudo = ctrSudo(args);
       const ps = `ps -a --no-trunc --format '{{.ID}}\\t{{.Names}}\\t{{.Image}}\\t{{.State}}\\t{{.Status}}\\t{{.Ports}}'`;
       // "답을 받았다"의 판정은 **행이 있느냐**로 한다. 출력이 비지 않았다는 것만으로 멈추면
       // 경고 한 줄(루트리스 podman 의 `WARN[0000] …` 같은)에 걸려 다음 런타임을 묻지 않는다.
@@ -1222,34 +1487,63 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
         CTR_BINS.map(
           (b) =>
             `if [ -z "$d" ] && command -v ${b} >/dev/null 2>&1; then f=1; printf '${CTR_MARK}${b}\\n'; ` +
-            elevatable(`${b} ${ps}`, ctrSudo(args)) +
+            elevatable(`${b} ${ps}`, sudo) +
             `case "$o" in *'\t'*) d=1 ;; esac; fi; `,
         ).join("") +
+        // crictl 은 행 표식이 탭이 아니라 JSON 의 `"id"` 다. 답을 받았으면 파드(준비 상태·나이)와
+        // 자원(CPU 누적·메모리)을 같은 왕복에 이어 받는다 — 화면이 셋을 한 번에 쓴다.
+        `if [ -z "$d" ] && command -v crictl >/dev/null 2>&1; then f=1; printf '${CTR_MARK}crictl\\n'; C=crictl; ` +
+        elevatable("crictl ps -a -o json", sudo, "; C='sudo -n crictl'") +
+        `case "$o" in *'"id"'*) d=1; ` +
+        `printf '${CTR_MARK}pods\\n'; $C pods -o json 2>&1; ` +
+        `printf '${CTR_MARK}stats\\n'; $C stats -o json 2>&1 ;; esac; fi; ` +
         `[ -z "$f" ] && printf '${CTR_MARK}none\\n' ; true`;
-      return wrapSudo(script, ctrSudo(args));
+      return wrapSudo(script, sudo);
     },
   },
 
   /**
-   * 2026-08-24 준영님: **쿠버는 탭이 따로다.** 한 서버에 도커와 쿠버가 같이 깔려 있으면 "먼저 찾은
-   * 하나"를 고르는 방식은 나머지를 통째로 감춘다 — 각자의 탭에서 각자 뜬다.
+   * #192(2026-09-21) 쿠버 목록 — **kubectl 이다.** 다른 개발자 피드백: "쿠버네티스 명령어를
+   * kubectl 로 변경, `-n vgt-erp` 로 하게끔". 여기는 **클러스터가 아는 파드**를 본다
+   * (노드에 실제로 떠 있는 컨테이너는 컨테이너 탭의 crictl 몫이다).
    *
-   * 모니터링이 목적이라 한 왕복에 **셋**을 묻는다: 목록(ps) · 파드(pods, 준비 상태·나이) ·
-   * 자원(stats, CPU 누적·메모리). 목록이 막혔으면 나머지를 물어도 같은 벽이라 건너뛴다.
    * 조작은 없다 — 이 탭에는 정지·제거 버튼 자체가 없다(kubelet 이 되살리므로 의미도 없다).
+   * 자원(CPU·메모리)도 없다: `get pods` 가 안 주고 `kubectl top` 은 metrics-server 가 있어야
+   * 한다(후속 — docs/tasks.md).
+   *
+   * 🔴 `wrapSudo`/`elevatable` 을 **그대로 태운다.** isPrivileged 가 이 셋(ctr.list·k8s.list·
+   * app.trace)을 보고 승인을 요구한다 — 여기서 빼면 아라가 승인 없이 원격 root 를 돌린다.
    */
   "k8s.list": {
     build: (args) => {
+      const ns = k8sNsFlag(args);
+      if (ns === null) return null;
       const sudo = ctrSudo(args);
       const script =
-        `if command -v crictl >/dev/null 2>&1; then printf '${CTR_MARK}crictl\\n'; C=crictl; ` +
-        elevatable("crictl ps -a -o json", sudo, "; C='sudo -n crictl'") +
-        `case "$o" in *'"id"'*) ` +
-        `printf '${CTR_MARK}pods\\n'; $C pods -o json 2>&1; ` +
-        `printf '${CTR_MARK}stats\\n'; $C stats -o json 2>&1 ;; esac; ` +
+        `if command -v kubectl >/dev/null 2>&1; then printf '${CTR_MARK}kubectl\\n'; ` +
+        elevatable(`kubectl get pods ${ns} -o json`, sudo) +
         `else printf '${CTR_MARK}none\\n'; fi ; true`;
       return wrapSudo(script, sudo);
     },
+  },
+
+  /**
+   * 셀렉트에 올릴 네임스페이스 목록. `-o name` 이라 `namespace/kube-system` 줄로 온다.
+   * 권한이 없는 계정이 흔해서(네임스페이스 목록은 클러스터 전역 권한이다) **실패해도 탭은 산다** —
+   * 화면이 셀렉트를 감추고 기본 네임스페이스로만 조회한다.
+   */
+  "k8s.ns": { build: () => "kubectl get namespaces -o name 2>&1" },
+
+  /**
+   * 파드 하나의 세부. 준영님 확정: **describe + yaml**(exec 는 사람이 터미널에서).
+   * 폴링에 태우지 않는다 — 화면이 탭을 누를 때 한 번만 부른다(5초마다 yaml 을 다시 받으면
+   * 스크롤이 튄다). `-A`(전체)는 여기 없다: 파드 하나를 보는 명령에 "전체"라는 대상은 없다.
+   */
+  "k8s.describe": {
+    build: (args) => k8sPodCmd(args, (ns, pod) => `kubectl describe pod ${pod} -n ${ns} 2>&1`),
+  },
+  "k8s.yaml": {
+    build: (args) => k8sPodCmd(args, (ns, pod) => `kubectl get pod ${pod} -n ${ns} -o yaml 2>&1`),
   },
 
   // F28 R2 컨테이너 조작(준영님 요청 2026-08-13 — "도커 데스크톱처럼"). 전부 확인 다이얼로그를 거치고,

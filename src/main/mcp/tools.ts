@@ -638,9 +638,14 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
         '서버 상태를 정해진 명령으로 조회하거나 조작합니다. **결과가 표로 정리돼 돌아옵니다** — ' +
         '터미널에 직접 명령을 치지 마세요(사용자 화면이 지저분해지고 출력을 글자로 파싱해야 합니다). ' +
         'cmdId 목록: ps.list(프로세스) ps.kill svc.list(서비스) svc.action disk.usage disk.du ' +
-        'sys.overview(배포판·커널·가동시간) pkg.probe(설치된 프로그램) ctr.list(컨테이너) ctr.action ctr.rmi ' +
-        'k8s.list which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove ' +
+        'sys.overview(배포판·커널·가동시간) pkg.probe(설치된 프로그램) ctr.list(컨테이너 — docker·podman·crictl) ctr.action ctr.rmi ' +
+        'k8s.list(쿠버 파드) k8s.ns k8s.describe k8s.yaml which.cli(그 CLI 가 깔려 있나) git.worktree.add git.worktree.remove ' +
         'app.trace app.pipe. ' +
+        '**쿠버네티스**(k8s.*)는 kubectl 로 읽습니다. `k8s.list` 는 네임스페이스를 `args.ns` 로 고릅니다 — ' +
+        '안 주면 `vgt-erp`, `"*"` 면 전체(-A), 그 밖에는 `k8s.ns` 가 준 이름 중 하나입니다. ' +
+        '파드 하나를 자세히 볼 때는 `k8s.describe{ns, pod}` · `k8s.yaml{ns, pod}` 입니다. ' +
+        '**파드 안에서 명령을 돌리는 도구는 없습니다(exec 는 사람이 터미널에서 합니다).** ' +
+        'session_input 으로 대신 치지 마세요 — 그렇게 하지 않기로 정한 것입니다. ' +
         '**백그라운드로 도는 서버의 로그를 찾을 때**(2026-08-27): `app.trace{port}` 로 그 포트를 듣는 ' +
         '프로세스의 출력이 어디로 가는지 봅니다. 결과 kind 에 따라 — ' +
         'file 이면 그 path 를 log_read 로 읽으면 되고, ' +

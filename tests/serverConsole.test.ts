@@ -491,6 +491,22 @@ describe('컨테이너 버튼 — 런타임이 없는 명령은 내주지 않는
   it('★ 쿠버 탭에는 조작이 없다 — 이 함수는 도커·포드먼 전용이다', () => {
     expect(ctrActions(row('paused'))).toEqual(['unpause', 'stop'])
   })
+
+  /**
+   * ★ #192(2026-09-21) — **crictl 이 컨테이너 탭으로 오면서 이 규칙이 다시 필요해졌다.**
+   *
+   * `ctr.action` 이 조립하는 명령은 docker·podman 만 찾는다(`ctrCmd`). crictl 뿐인 노드에서는
+   * `if …; elif …; fi` 가 어느 갈래도 안 타서 **종료코드 0 · 빈 출력**으로 돌아오고,
+   * ContainerTable.act() 가 그걸 성공으로 읽는다 — 눌렀는데 아무 일도 안 일어나는데 화면은
+   * 조용하다. 그래서 런타임을 보고 버튼을 통째로 잠근다.
+   */
+  it('★ crictl 노드에서는 조작 버튼이 하나도 안 열린다 — 조용한 no-op 을 막는다', () => {
+    expect(ctrActions(row('running'), 'crictl')).toEqual([])
+    expect(ctrActions(row('exited'), 'crictl')).toEqual([])
+    // docker·podman 은 그대로다(고치면서 기능을 죽이지 않았다).
+    expect(ctrActions(row('running'), 'docker')).toEqual(['stop', 'pause', 'restart'])
+    expect(ctrActions(row('exited'), 'podman')).toEqual(['start', 'rm'])
+  })
 })
 
 // 2026-08-24 준영님 요청 — 패키지 탭도 다른 탭처럼 표(.con-tbl)로. 열 머리를 눌러 정렬한다.

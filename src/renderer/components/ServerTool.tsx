@@ -64,8 +64,10 @@ export function ServerTool({ id, active, sessionId, isSsh, server, ask, onAskAi,
       return <PkgTable sessionId={sessionId} active={active} />
     case 'ctr':
       return <ContainerTable sessionId={sessionId} active={active} server={server} ask={ask} onSendInput={onSendInput} />
-    // 쿠버는 조작이 없다 — ask·onSendInput 을 넘기지 않는 것이 그 사실을 타입으로 못박는다.
+    // 쿠버는 **조작이 없다**(정지·제거 버튼 자체가 없다 — kubelet 이 되살린다).
+    // #192 에서 둘만 내려간다: 파드 안으로 들어가기 전 확인창(ask)과 그 명령줄을 터미널로
+    // 보내는 창구(onSendInput). exec 가 카탈로그를 안 지나는 것이 이 배선의 요점이다.
     case 'k8s':
-      return <K8sPanel sessionId={sessionId} active={active} server={server} />
+      return <K8sPanel sessionId={sessionId} active={active} server={server} ask={ask} onSendInput={onSendInput} />
   }
 }

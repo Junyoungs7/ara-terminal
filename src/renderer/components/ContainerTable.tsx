@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { buildCtrExec, sortContainers, type CtrAction, type CtrRow } from '@shared/remoteCatalog'
+import { buildCtrExec, sortContainers, type CtrAction, type CtrRow, type CtrRuntime } from '@shared/remoteCatalog'
 import type { DialogResult, DialogSpec } from './Dialog'
 import { IconClose, IconRefresh } from './icons'
 import { BlockedBox, useCtrList } from './ctrShared'
@@ -16,7 +16,12 @@ import { t } from '../i18n'
 // F27 AI CLI 실행과 같은 `session.input` 으로 터미널에 보낸다.
 //
 // 2026-08-24: **쿠버는 여기 없다.** 탭이 갈렸다(K8sPanel) — 한 서버에 도커와 쿠버가 같이 깔린
-// 경우 "먼저 찾은 런타임 하나"를 고르는 구조가 나머지를 통째로 감췄다. 이 표는 docker·podman 만 본다.
+// 경우 "먼저 찾은 런타임 하나"를 고르는 구조가 나머지를 통째로 감췄다.
+//
+// #192(2026-09-21): **crictl 은 여기로 왔다.** 탭을 가르는 기준이 런타임 이름이 아니라 **보는
+// 층**으로 바뀌었다 — crictl 은 이 노드의 containerd 를 보므로 docker·podman 과 한 탭이고,
+// 클러스터가 아는 파드는 [쿠버네티스] 탭의 kubectl 이 본다. 이 표는 노드에 실제로 떠 있는 것만 본다.
+// ⚠️ 조작은 여전히 **docker·podman 전용**이다 — 아래 `cri` 주석이 그 이유를 적어 뒀다.
 
 export function filterCtrs(rows: readonly CtrRow[], q: string): CtrRow[] {
   const s = q.trim().toLowerCase()
@@ -32,9 +37,10 @@ export function filterCtrs(rows: readonly CtrRow[], q: string): CtrRow[] {
  *  · 돌고 있으면 시작할 수 없고, 멈춰 있으면 멈추거나 일시정지할 수 없다.
  *  · 일시정지된 컨테이너는 재개만 된다(그 상태에서 stop 은 도커도 거절한다).
  *  · **제거는 멈춘 것만.** `rm -f` 를 쓰지 않기로 했으니 돌고 있으면 먼저 멈추게 한다.
+ *  · 🔴 **crictl 이면 하나도 없다**(#192 — 아래 컴포넌트의 `cri` 주석이 이유를 적어 뒀다).
  */
-export function ctrActions(row: CtrRow | null): CtrAction[] {
-  if (!row) return []
+export function ctrActions(row: CtrRow | null, runtime?: CtrRuntime): CtrAction[] {
+  if (!row || runtime === 'crictl') return []
   if (row.state === 'paused') return ['unpause', 'stop']
   if (row.state === 'running') return ['stop', 'pause', 'restart']
   return ['start', 'rm']
@@ -93,7 +99,17 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
   const shown = useMemo(() => sortCtrs(filterCtrs(feed.rows, q), sort), [feed.rows, q, sort])
   // 목록이 폴링으로 갈리므로 선택은 id 로만 들고 행은 매번 다시 찾는다(사라진 컨테이너는 null).
   const row = selected === null ? null : (feed.rows.find((r) => r.id === selected) ?? null)
-  const can = ctrActions(row)
+  /**
+   * 🔴 #192(2026-09-21) — **crictl 이 이 탭으로 왔다. 조작은 따라오지 않았다.**
+   *
+   * `ctrCmd`·`buildCtrExec` 는 docker·podman 만 찾는다. crictl 뿐인 노드에서 그 명령은
+   * `if …; elif …; fi` 의 어느 갈래도 안 타고 **종료코드 0 · 빈 출력**으로 돌아온다 —
+   * 아래 act() 가 그걸 성공으로 읽어 "눌렀는데 아무 일도 안 일어남"이 된다(가장 조용한 실패다).
+   * CRI 에 없는 명령도 있다(`pause`). 애초에 쿠버는 조작할 물건이 아니다 — kubelet 이 되살린다.
+   * 그래서 **버튼을 잠근다**: 눌러 봐야 거절당할 버튼은 내주지 않는다(이 파일의 원래 규칙).
+   */
+  const cri = feed.runtime === 'crictl'
+  const can = ctrActions(row, feed.runtime)
 
   const fail = async (title: string, name: string, why: string): Promise<void> => {
     await ask({
@@ -251,7 +267,7 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
 
       {/* 조작 줄. 고르기 전에는 전부 잠겨 있고, 고른 컨테이너 상태에 맞는 것만 열린다. */}
       <div className="con-toolbar ctr-acts">
-        <span className="con-sect">{row ? row.name : t('console.ctr.pick')}</span>
+        <span className="con-sect">{cri ? t('console.ctr.pick.cri') : row ? row.name : t('console.ctr.pick')}</span>
         <span className="sb-tab-spacer" />
         {(['start', 'stop', 'pause', 'unpause', 'restart'] as const).map((a) => (
           <button
@@ -269,7 +285,7 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
           type="button"
           className="con-btn"
           data-action="ctr.attach"
-          disabled={row?.state !== 'running'}
+          disabled={cri || row?.state !== 'running'}
           onClick={attach}
         >
           {t('console.ctr.attach')}
@@ -287,7 +303,7 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
           type="button"
           className="con-btn danger"
           data-action="ctr.rmi"
-          disabled={!row}
+          disabled={cri || !row}
           onClick={() => void removeImage()}
         >
           {t('console.ctr.rmi.btn')}

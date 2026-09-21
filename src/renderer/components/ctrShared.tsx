@@ -88,10 +88,19 @@ export type CtrFeed = {
 }
 
 /**
- * 목록 가져오기 한 벌. cmd 만 다르다 — 컨테이너 탭은 `ctr.list`(docker·podman),
- * 쿠버네티스 탭은 `k8s.list`(crictl + 파드 + 자원).
+ * 목록 가져오기 한 벌. cmd 만 다르다 — 컨테이너 탭은 `ctr.list`(docker·podman·crictl + 파드 + 자원),
+ * 쿠버네티스 탭은 `k8s.list`(kubectl).
+ *
+ * `ns` 는 **k8s.list 전용**이다(#192). 객체가 아니라 문자열 하나로 받는 이유: 이 값은 load 의
+ * 의존성이라, 객체로 받으면 부모가 memo 를 빠뜨린 순간 렌더마다 새 함수가 되어 폴링이 재설정된다.
  */
-export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean, server?: string): CtrFeed {
+export function useCtrList(
+  cmd: CmdId,
+  sessionId: string | null,
+  active: boolean,
+  server?: string,
+  ns?: string
+): CtrFeed {
   const [rows, setRows] = useState<CtrRow[]>([])
   const [pods, setPods] = useState<CtrPodInfo[]>([])
   const [runtime, setRuntime] = useState<CtrRuntime>('docker')
@@ -110,8 +119,9 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
 
   const load = useCallback(() => {
     if (!sessionId) return
+    const args = { ...(ns !== undefined ? { ns } : {}), ...(elevate ? { sudo: true } : {}) }
     void window.ev?.remote
-      ?.run(sessionId, cmd, elevate ? { sudo: true } : undefined)
+      ?.run(sessionId, cmd, Object.keys(args).length > 0 ? args : undefined)
       .then((r) => {
         setLoaded(true)
         if (!r?.ok) {
@@ -153,7 +163,12 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
                 : // 런타임을 아예 못 찾은 것과 찾았는데 실패한 것은 다음 수가 다르다(깔거나 · 고치거나).
                   t(cmd === 'k8s.list' ? 'console.k8s.none.runtime' : 'console.ctr.none.runtime'),
             raw: list.reason ?? '',
-            detail: false,
+            // 2026-08-24 규칙은 "런타임 속사정은 화면에 안 쓴다"(`cannot clone: Invalid argument`
+            // 같은 것). 그런데 #192 의 kubectl 은 **사람 말로 답한다** —
+            // `Error from server (NotFound): namespaces "vgt-erp" not found` 는 고를 값이
+            // 틀렸다는 뜻이고, 그 문장이 안 보이면 셀렉트를 어떻게 고쳐야 할지 알 수 없다.
+            // 권한 벽은 예외다(그쪽은 이미 사람 말로 끝난다 — 준영님 문구).
+            detail: cmd === 'k8s.list' && !root && list.reason !== null,
             canElevate: !elevate && root
           })
           return
@@ -181,7 +196,7 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
         setLoaded(true)
         setNote(remoteError({ out: '', err: 'exec' }, 0))
       })
-  }, [cmd, sessionId, elevate, srvKey])
+  }, [cmd, sessionId, elevate, srvKey, ns])
 
   // 세션이 바뀌면 이전 서버 목록을 즉시 버린다(F26 CON-8c 규칙).
   //
@@ -198,7 +213,10 @@ export function useCtrList(cmd: CmdId, sessionId: string | null, active: boolean
     setCpu(new Map())
     setLoaded(false)
     prevCpu.current = null
-  }, [sessionId, active])
+    // ns 도 여기 있다(#192): 네임스페이스를 바꾸면 **이전 네임스페이스의 파드를 즉시 버린다.**
+    // 안 버리면 다음 한 바퀴(5초)까지 남의 파드가 남아 있고, 그 사이에 [터미널에서 열기]를
+    // 누르면 지금 고른 네임스페이스로 없는 파드에 붙는다.
+  }, [sessionId, active, ns])
 
   useEffect(() => {
     if (!active || !sessionId) return

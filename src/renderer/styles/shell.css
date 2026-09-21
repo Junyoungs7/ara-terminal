@@ -7307,6 +7307,101 @@ button.sb-seg.upd:hover .val {
   word-break: break-all;
 }
 
+/* ── #192 쿠버네티스 탭 — 네임스페이스 셀렉트 · 파드 세부 ──────────────────── */
+/* 목업 라운드 없이 **기존 스타일 그대로**다(준영님 확정) — 새 디자인 언어를 만들지 않는다.
+   고정폭 본문은 로그 뷰어(.log-text)와 같은 토큰·같은 규칙을 쓰되 **클래스는 자기 것**을 둔다:
+   모양이 같다고 남의 선택자를 돌려 쓰면 로그 쪽을 고칠 때 이 화면이 같이 움직인다. */
+.k8s-ns {
+  width: 150px;
+  flex: none;
+}
+/* 툴바 안이라 한 줄 높이에 맞춘다(.con-btn 과 같은 24px). */
+.k8s-ns .dd-btn {
+  min-height: 24px;
+  padding: 0 var(--sp-4);
+}
+/* 세부 칸은 표의 행 규칙(26px 고정 · nowrap · 잘라내기)에서 빠져나와야 한다 — 여기만 글이 길다. */
+.pod-detail td {
+  height: auto;
+  white-space: normal;
+  overflow: visible;
+  padding: var(--sp-3) var(--sp-5) var(--sp-4) var(--sp-5);
+}
+.pd-tabs {
+  display: flex;
+  gap: var(--sp-2);
+}
+.pd-tab {
+  min-height: 22px;
+  padding: 0 var(--sp-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+.pd-tab:hover {
+  color: var(--text-hi);
+}
+.pd-tab.on {
+  border-color: var(--line);
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+/* describe·yaml 본문. 화면을 통째로 잡아먹지 않게 높이를 묶고 안에서 스크롤한다. */
+.pd-text {
+  margin: var(--sp-3) 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-mid);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre;
+}
+.pd-note {
+  margin-top: var(--sp-3);
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+.pd-note.bad {
+  color: var(--err);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+.pd-acts {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+/* 컨테이너 줄의 [터미널에서 열기] — [준비] 칸이 자식 줄에서는 비어 있어 그 자리를 쓴다.
+   글자 라벨은 84px 칸에 안 들어가므로 아이콘 하나 + title 로 둔다(.sb-act 와 같은 결). */
+.pd-exec {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.pd-exec svg {
+  width: 13px;
+  height: 13px;
+}
+.pd-exec:hover {
+  background: var(--bg-overlay);
+  color: var(--accent-bright);
+}
+
 /* 조작 줄은 목록 아래에 고정한다 — 표가 길어져도 버튼이 화면 밖으로 밀려나지 않게. */
 .ctr-acts {
   flex: none;

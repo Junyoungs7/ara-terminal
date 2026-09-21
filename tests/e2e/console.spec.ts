@@ -975,23 +975,61 @@ const K8S_STATS = JSON.stringify({
   ]
 })
 
+// #192(2026-09-21): **이 탭의 자료원이 crictl → kubectl 로 바뀌었다.** crictl 은 노드의
+// containerd 라 [컨테이너] 탭으로 옮겼고(아래 CON-25d·25e 가 그쪽을 본다), 여기는 클러스터가
+// 아는 파드를 본다. 파드로 묶어 보여 주는 규칙 자체는 그대로다 — 자료가 오는 길만 갈렸다.
+const KUBE_JSON = JSON.stringify({
+  items: [
+    {
+      metadata: { name: 'coredns-5d78c9869d-4x2qp', namespace: 'vgt-erp', creationTimestamp: '2026-09-20T01:00:00Z' },
+      status: {
+        phase: 'Running',
+        containerStatuses: [
+          {
+            name: 'coredns',
+            ready: true,
+            restartCount: 0,
+            image: 'reg.local/coredns:1.0',
+            containerID: 'containerd://' + K8S_CTR,
+            state: { running: { startedAt: '2026-09-20T01:00:10Z' } }
+          },
+          {
+            name: 'istio-proxy',
+            ready: true,
+            restartCount: 0,
+            image: 'reg.local/istio-proxy:1.0',
+            containerID: 'containerd://' + K8S_SIDE,
+            state: { running: { startedAt: '2026-09-20T01:00:12Z' } }
+          }
+        ]
+      }
+    },
+    {
+      metadata: { name: 'api-7d9f6b8c4-h2k9l', namespace: 'vgt-erp', creationTimestamp: '2026-09-19T00:00:00Z' },
+      status: {
+        phase: 'Running',
+        containerStatuses: [
+          {
+            name: 'api',
+            ready: false,
+            restartCount: 7,
+            image: 'reg.local/api:1.0',
+            containerID: 'containerd://' + K8S_SICK,
+            state: { terminated: { startedAt: '2026-09-19T00:00:05Z', exitCode: 1 } }
+          }
+        ]
+      }
+    }
+  ]
+})
+
 test('CON-25b★ 쿠버 탭은 파드로 묶여 뜨고 아픈 파드가 위로 · 조작 줄이 없다', async ({ ara, ssh }) => {
   const h = await ssh({
     password: 'pw25b',
     execHandler: (command: string, stream) => {
-      // docker·podman 이 없는 서버 — 셸이 crictl 가지로 떨어져 목록·파드·자원을 잇달아 내는 모양.
-      if (command.includes('ps -a')) {
-        stream.write(
-          `ARA-CTR crictl
-WARN[0000] runtime connect using default endpoints
-${K8S_JSON}
-` +
-            `ARA-CTR pods
-${K8S_PODS}
-ARA-CTR stats
-${K8S_STATS}`
-        )
-      }
+      // kubectl 이 있는 서버. 네임스페이스 목록(`get namespaces`)에는 답하지 않는다 —
+      // 그때 셀렉트를 감추고 기본 네임스페이스로만 조회하는 것이 설계다.
+      if (command.includes('get pods')) stream.write(`ARA-CTR kubectl\n${KUBE_JSON}`)
       stream.exit(0)
       stream.end()
     }
@@ -1003,7 +1041,7 @@ ${K8S_STATS}`
   const podRows = ara.page.locator('.pod-row')
   await expect(podRows).toHaveCount(2, { timeout: 20_000 })
   // 아픈 파드(컨테이너가 죽었고 재시작 7회)가 맨 위.
-  await expect(podRows.first()).toHaveAttribute('data-pod', 'prod/api-7d9f6b8c4-h2k9l')
+  await expect(podRows.first()).toHaveAttribute('data-pod', 'vgt-erp/api-7d9f6b8c4-h2k9l')
   await expect(podRows.first()).toHaveClass(/bad/)
   await expect(podRows.first().locator('.cready')).toHaveText('0/1 준비')
   await expect(podRows.first().locator('.crst')).toHaveText('7')
@@ -1011,7 +1049,8 @@ ${K8S_STATS}`
   await expect(ara.page.locator('.ctr-row.k8s')).toHaveCount(1)
   await podRows.nth(1).click()
   await expect(ara.page.locator('.ctr-row.k8s')).toHaveCount(3)
-  await expect(ara.page.locator('.pod-row').nth(1).locator('.cmem2')).toHaveText('60M')
+  // 🔴 kubectl get pods 에는 자원이 없다 — 0 이 아니라 **모름**(`—`)이어야 한다.
+  await expect(ara.page.locator('.pod-row').nth(1).locator('.cmem2')).toHaveText('—')
 
   // 2026-08-24 준영님: "쿠버는 모니터링이니까 하단 컨테이너 컨트롤하는 한줄은 제거해줘."
   // 잠긴 버튼을 놓는 대신 **줄 자체를 만들지 않는다** — 컨테이너를 멈춰도 kubelet 이 되살린다.
@@ -1032,7 +1071,8 @@ test('CON-25d 컨테이너 목록이 막히면 서버가 준 이유가 그대로
     }
   })
   await openConsole(ara.page, 'c25d', h.port, 'pw25d')
-  await openBottomTool(ara.page, 'k8s')
+  // #192: crictl 은 [컨테이너] 탭의 것이다 — 권한 벽 안내는 두 탭이 같은 코드를 쓴다(ctrShared).
+  await openBottomTool(ara.page, 'ctr')
   // **사람 말 한 줄로 끝난다**(2026-08-24 준영님) — 런타임 속사정은 화면에 안 쌓이고 title 에만.
   const why = ara.page.locator('.ctr-block .cb-why')
   await expect(why).toHaveText('이 계정은 권한이 없습니다.', { timeout: 20_000 })
@@ -1055,7 +1095,8 @@ test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고
         cmds.push(command)
         const sudo = command.startsWith('sudo -S')
         if (sudo && !allow) stream.write('Sorry, try again.')
-        else if (sudo) stream.write([`${MARK}crictl`, K8S_JSON, `${MARK}pods`, K8S_PODS].join('\n'))
+        else if (sudo)
+          stream.write([`${MARK}crictl`, K8S_JSON, `${MARK}pods`, K8S_PODS, `${MARK}stats`, K8S_STATS].join('\n'))
         else stream.write([`${MARK}crictl`, 'level=fatal msg="connect: permission denied"'].join('\n'))
       }
       stream.exit(0)
@@ -1063,7 +1104,8 @@ test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고
     }
   })
   await openConsole(ara.page, 'c25e', h.port, 'pw25e')
-  await openBottomTool(ara.page, 'k8s')
+  // #192: crictl 은 [컨테이너] 탭으로 옮겼다. 권한 올리기 자체는 두 탭이 공유한다.
+  await openBottomTool(ara.page, 'ctr')
 
   // 처음에는 권한 벽 + 버튼. sudo 는 아직 한 번도 안 나갔다.
   const btn = ara.page.locator('.con-btn[data-action="ctr.elevate"]')
@@ -1078,10 +1120,15 @@ test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고
   await ara.page.waitForTimeout(6000) // 폴링 한 바퀴 이상
   expect(cmds.filter((c) => c.startsWith('sudo -S')).length).toBe(after)
 
-  // 이번엔 통과 → 파드 목록이 뜬다.
+  // 이번엔 통과 → 목록이 뜬다. #192 로 이 탭은 [컨테이너]라 파드 묶음이 아니라 **컨테이너 줄**이다.
   allow = true
   await btn.click()
-  await expect(ara.page.locator('.pod-row')).toHaveCount(2, { timeout: 20_000 })
+  await expect(ara.page.locator('.ctr-row')).toHaveCount(3, { timeout: 20_000 })
+  // 🔴 crictl 목록에는 조작이 열리지 않는다 — ctr.action 은 docker·podman 만 찾는다(조용한 no-op 방지).
+  await ara.page.locator('.ctr-row').first().click()
+  for (const a of ['ctr.stop', 'ctr.restart', 'ctr.rm', 'ctr.attach', 'ctr.rmi']) {
+    await expect(ara.page.locator(`.con-btn[data-action="${a}"]`)).toBeDisabled()
+  }
 })
 
 // CON-34★ 첫 세션이 생기면 하단바가 **스스로 열린다**(2026-08-24 준영님).

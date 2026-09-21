@@ -648,8 +648,8 @@ describe('쿠버네티스 노드(crictl)', () => {
   it('셸은 행 표식(탭 · "id")을 봤을 때만 다음 런타임을 건너뛴다', () => {
     const cmd = buildCommand('ctr.list', null)!.cmd
     expect(cmd).toContain(`*'\t'*) d=1`) // docker·podman 은 우리 형식의 탭
-    // crictl 은 쿠버 탭의 것이고, 거기서는 JSON 의 id 가 표식이다(2026-08-24 탭 분리).
-    expect(buildCommand('k8s.list', null)!.cmd).toContain(`*'"id"'*`)
+    // #192: crictl 이 컨테이너 탭으로 왔다 — 같은 스크립트 안이고, 표식만 JSON 의 id 다.
+    expect(cmd).toContain(`*'"id"'*`)
   })
 
   it('전부 성공했는데 비어 있으면 첫 런타임으로 "0개"라고 말한다(안내가 아니다)', () => {
@@ -660,7 +660,8 @@ describe('쿠버네티스 노드(crictl)', () => {
   })
 
   it('★ 소켓 권한에 막히면 프롬프트가 뜰 수 없는 sudo -n 으로 한 번만 더 시도한다', () => {
-    const cmd = buildCommand('k8s.list', null)!.cmd
+    // #192: crictl 은 컨테이너 탭(ctr.list)의 것이다 — 권한 올리기 조각은 그대로 따라왔다.
+    const cmd = buildCommand('ctr.list', null)!.cmd
     expect(cmd).toContain('sudo -n crictl ps -a -o json')
     expect(cmd).toContain('*ermission*')
     // sudo 도 실패하면 원래 이유를 지킨다 — "a password is required" 는 원인이 아니라 우리 시도다.
@@ -682,18 +683,31 @@ describe('쿠버네티스 노드(crictl)', () => {
     expect(parseCtrList(rows).unavailable).toBe(false)
   })
 
-  it('★ 쿠버 탭은 crictl 만, 컨테이너 탭은 docker·podman 만 본다(둘 다 깔린 서버에서 하나를 감추지 않는다)', () => {
-    const k8s = buildCommand('k8s.list', null)!.cmd
-    expect(k8s).toContain('command -v crictl')
-    expect(k8s).toContain('crictl ps -a -o json')
-    expect(k8s).toContain(`${CTR_MARK}none`)
-    expect(k8s).not.toContain('docker')
+  // #192(2026-09-21) — **탭을 가르는 기준이 바뀌었다.** 런타임 이름이 아니라 보는 층이다:
+  // crictl 은 노드의 containerd 라 docker·podman 과 한 탭이고, 클러스터가 아는 파드는 kubectl 이다.
+  it('★ 컨테이너 탭은 노드 런타임 셋, 쿠버 탭은 kubectl 하나(층이 다른 둘을 한 표에 섞지 않는다)', () => {
     const ctr = buildCommand('ctr.list', null)!.cmd
     expect(ctr).toContain('command -v docker')
     expect(ctr).toContain('command -v podman')
+    expect(ctr).toContain('command -v crictl')
+    expect(ctr).toContain('crictl ps -a -o json')
+    const k8s = buildCommand('k8s.list', null)!.cmd
+    expect(k8s).toContain('command -v kubectl')
+    expect(k8s).toContain('kubectl get pods')
+    expect(k8s).toContain(`${CTR_MARK}none`)
+    expect(k8s).not.toContain('crictl')
+    expect(k8s).not.toContain('docker')
     // 조작·접속은 도커 쪽 사슬만 탄다 — 쿠버 탭에는 조작 자체가 없다.
     expect(buildCommand('ctr.action', { id: 'a'.repeat(12), action: 'stop' })!.cmd).not.toContain('crictl')
     expect(buildCtrExec('a'.repeat(12))!).not.toContain('crictl')
+  })
+
+  // crictl 이 맨 뒤인 것이 설계다: 쿠버 노드(docker 없음)는 crictl 이, 개발 PC(crictl 없음)는
+  // docker 가 잡힌다. 🔴 둘 다 있으면 crictl 이 감춰진다 — 그 한계는 주석·tasks.md 에 적혀 있다.
+  it('★ crictl 은 docker·podman 뒤에 온다 — 그 순서가 두 흔한 노드를 동시에 맞춘다', () => {
+    const ctr = buildCommand('ctr.list', null)!.cmd
+    expect(ctr.indexOf('command -v docker')).toBeLessThan(ctr.indexOf('command -v crictl'))
+    expect(ctr.indexOf('command -v podman')).toBeLessThan(ctr.indexOf('command -v crictl'))
   })
 })
 
@@ -861,7 +875,8 @@ describe('쿠버 노드 모니터링 자료', () => {
   })
 
   it('목록·파드·자원을 한 왕복으로 가져온다(목록이 열렸을 때만)', () => {
-    const cmd = buildCommand('k8s.list', null)!.cmd
+    // #192: crictl 세 구간은 컨테이너 탭(ctr.list)으로 통째로 옮겨 왔다.
+    const cmd = buildCommand('ctr.list', null)!.cmd
     expect(cmd).toContain('$C pods -o json')
     expect(cmd).toContain('$C stats -o json')
     // 성공한 손(맨손이냐 sudo 냐)을 이어서 쓴다 — 목록만 sudo 로 열리고 나머지가 막히면 안 된다.
@@ -886,7 +901,8 @@ describe('컨테이너 권한 올리기 — 명령 조립', () => {
       // 안쪽에는 sudo 가 없다(명령마다 부르면 비밀번호도 그만큼 필요하다).
       expect(cmd.slice("sudo -S -p '' sh -c '".length)).not.toContain('sudo ')
     }
-    expect(buildCommand('k8s.list', { sudo: true })!.cmd).toContain('crictl ps -a -o json')
+    expect(buildCommand('ctr.list', { sudo: true })!.cmd).toContain('crictl ps -a -o json')
+    expect(buildCommand('k8s.list', { sudo: true })!.cmd).toContain('kubectl get pods')
   })
 
   it('작은따옴표 탈출이 정확하다 — 셸이 스크립트를 통째로 한 인자로 받는다', () => {
@@ -928,6 +944,10 @@ describe('권한 올리기 — 누가 판단하는가(AUDIT-R1)', () => {
     'git.worktree.remove': { path: '/srv/app', dest: '/srv/app-fix1' },
     'ctr.list': null,
     'k8s.list': null,
+    // #192: 쿠버 읽기 셋. sudo 를 안 쓰는 명령이라 아래 WRAPPED 에는 없다.
+    'k8s.ns': null,
+    'k8s.describe': { ns: 'vgt-erp', pod: 'api-7d9f-x2k' },
+    'k8s.yaml': { ns: 'vgt-erp', pod: 'api-7d9f-x2k' },
     'ctr.action': { id: 'a'.repeat(12), action: 'stop' },
     'ctr.rmi': { image: 'nginx:1.24' },
     'app.trace': { port: 8000 },
