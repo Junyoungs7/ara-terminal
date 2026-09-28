@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ARA 오류 신고</title>
+    <meta name="description" content="ARA(아라) 오류 신고 — 접수된 신고와 처리 상태." />
+    <link rel="icon" href="assets/ara-icon.svg" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script src="assets/release.js"></script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/ara-icon.svg" alt="" /><span>ARA</span></a>
+        <nav class="nav-links">
+          <a href="index.html#diff">무엇이 다른가</a>
+          <a href="manual.html">사용 설명서</a>
+          <a href="changelog.html">패치 내역</a>
+          <a href="reports.html" class="on">오류 신고</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+        <a class="btn btn-primary btn-sm" data-dl href="downloads/" download>내려받기</a>
+      </div>
+    </header>
+
+    <div class="wrap doc rp">
+      <main>
+        <div class="doc-hd">
+          <h1>오류 신고</h1>
+          <p class="lead">아라 안의 <b>[오류 신고]</b> 로 들어온 신고와 처리 상태입니다.</p>
+        </div>
+        <!-- 목록·상세는 assets/reports.js 가 해시(#r-…)를 보고 채운다 -->
+        <div id="reports"></div>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <div class="wrap">
+        <span class="brand"><img src="assets/ara-icon.svg" alt="" style="width: 20px; height: 20px" />ARA</span>
+        <span class="muted">사내 배포용 · 베리굿투어</span>
+        <nav>
+          <a href="index.html">홈</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="assets/site.js"></script>
+    <script src="assets/reports.js"></script>
+  </body>
+</html>

@@ -43,6 +43,7 @@
     "probe:aisess": "electron-vite build && node tests/aisess-probe-run.mjs",
     "site:stage": "node scripts/stage-release.mjs",
     "site:deploy": "node scripts/deploy-site.mjs",
+    "reports:deploy": "node scripts/deploy-reports.mjs",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "screenshot:ux1": "electron-vite build && electron tests/fix-ux1-screenshot.cjs",
     "screenshot:r1": "electron-vite build && electron tests/r1-screenshot.cjs",
