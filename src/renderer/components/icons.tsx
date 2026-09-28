@@ -92,6 +92,8 @@ export const IconEyeOff = () =>
       <path d="M9.6 9.6a3.4 3.4 0 004.8 4.8M3 3l18 18" />
     </>
   )
+// 터미널(>_). 파일 트리의 [터미널도 여기로] 버튼(2026-09-28 — 자동 cd 를 끄고 버튼으로 바꿨다).
+export const IconTerminal = () => line(<path d="M4 17l6-5-6-5M12 19h8" />)
 export const IconPlus = () => line(<path d="M12 5v14M5 12h14" />)
 // 탭바 오버플로 드롭다운 버튼(FB-tabs).
 export const IconChevronDown = () => line(<path d="M6 9l6 6 6-6" />)

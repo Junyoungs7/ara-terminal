@@ -23,6 +23,7 @@ import {
   IconPencil,
   IconRefresh,
   IconSearch,
+  IconTerminal,
   IconTrash,
   IconUp,
   IconUpload
@@ -401,14 +402,24 @@ export function FileTree({
     [load]
   )
 
-  // 폴더 진입 + 터미널에 cd 전송(트리→터미널 동기).
+  /**
+   * 폴더 진입. 🔴 **터미널에는 아무것도 보내지 않는다**(2026-09-28 준영님 제보).
+   *
+   * 예전엔 여기서 `onCdTerminal` 로 활성 세션에 `cd …⏎` 를 쳤다(트리→터미널 동기). 그런데 아라는
+   * 그 세션에서 **셸이 프롬프트에 서 있는지 모른다** — 셸 통합은 폴더(OSC7)만 알려 주고 "기다리는
+   * 중" 표시는 없으며, SSH 는 그 폴더도 /proc 에서 읽을 뿐 원격 셸에 표시를 심을 자리가 없다.
+   * 그래서 claude·codex 가 돌던 탭에서는 그 `cd` 가 **AI 에게 프롬프트로 들어가 AI 가 움직였다.**
+   * vim·mysql·tail -f 도 같은 입력을 받는다.
+   *
+   * 준영님 결정: 자동은 끄고 **버튼으로**(아래 [터미널도 여기로]). 반대 방향(터미널에서 cd →
+   * 트리가 따라감)은 출력을 읽기만 하므로 위험이 없어 그대로 둔다.
+   * ⚠️ 여기에 `onCdTerminal` 를 다시 넣지 마라 — `tests/treeNoAutoCd.test.ts` 가 막는다.
+   */
   const enterDir = useCallback(
     (name: string) => {
-      const next = joinPath(path, name)
-      void load(next)
-      onCdTerminal?.(next)
+      void load(joinPath(path, name))
     },
-    [load, path, onCdTerminal]
+    [load, path]
   )
 
   // 조작 결과 공통 처리: 실패는 트리 상단 오류줄, 성공은 목록 갱신.
@@ -1095,6 +1106,19 @@ export function FileTree({
             한 번 읽으면 그만인 글이라 새로고침 옆 물음표 뒤로 넣는다(하단 표들과 같은 방식).
             안내가 필요한 상태(cwd 이벤트를 한 번도 못 받은 원격 셸)에서만 나타난다. */}
         {backend.remote && !autoSynced && <HelpTip text={t('sftp.bestEffort')} />}
+        {/* [터미널도 여기로] — 사람이 누를 때만 활성 세션에 cd 를 보낸다(위 enterDir 주석).
+            배선이 없는 자리(작업대)에서는 그리지 않는다 — 눌러도 아무 일 없는 버튼을 두지 않는다. */}
+        {onCdTerminal && (
+          <button
+            type="button"
+            className="sb-act"
+            data-action="file.cdTerminal"
+            title={t('file.cdTerminal')}
+            onClick={() => onCdTerminal(path)}
+          >
+            <IconTerminal />
+          </button>
+        )}
         <button type="button" className="sb-act" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
         </button>
