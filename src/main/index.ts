@@ -92,7 +92,21 @@ async function runGate(gate: AraToolGate, name: string, argsJson: string): Promi
  *    한 이름으로 통일돼야 다음 판에서 또 갈리지 않는다.
  */
 const LEGACY_USER_DATA = 'A.R.A'
-app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA))
+/**
+ * 🔴 **`--user-data-dir` 을 준 실행은 건드리지 않는다**(2026-09-28 발견).
+ *
+ * 1.0.10 에서 이 줄을 무조건 걸었더니 e2e·스모크 하네스가 주는 `--user-data-dir=<임시 폴더>` 를
+ * **덮어썼다.** 그래서 1.0.10 이후 하네스는 전부 **준영님의 실제 데이터 폴더**로 떴다 — 실제
+ * workspace 를 복원해 **실제 운영 서버(KVT)에 다시 접속**했고, 시험용 프로필·호스트키가 실제
+ * 저장소에 쌓였다. `tests/e2e/fixtures.ts:5` 가 약속한 격리("실사용 workspace.json/vault 를 건드리지
+ * 않는다")가 이 한 줄로 조용히 깨져 있었다.
+ *
+ * 스위치가 있으면 Electron 이 이미 그 경로를 userData 로 잡는다 — 우리가 할 일은 **그것을 존중하는 것**뿐이다.
+ * ⚠️ 이 조건을 지우지 마라 — `tests/userDataPath.test.ts` 가 막는다.
+ */
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA))
+}
 
 let store: WorkspaceStore
 let history: HistoryStore

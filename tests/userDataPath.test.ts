@@ -40,6 +40,19 @@ describe('#199 userData 를 제품명에서 떼어 냈나', () => {
     expect(line).not.toContain('productName')
   })
 
+  it('🔴 --user-data-dir 을 준 실행은 덮어쓰지 않는다 — 하네스 격리가 이 조건 하나에 달려 있다', () => {
+    /**
+     * 2026-09-28: 1.0.10 에서 setPath 를 **무조건** 걸었더니 하네스의 `--user-data-dir=<임시>` 가
+     * 덮여 e2e 가 준영님의 **실제 데이터로 떠서 실제 운영 서버에 접속**했다. setPath 는 반드시
+     * 그 스위치가 **없을 때만** 불려야 한다.
+     */
+    const at = mainSrc.indexOf("app.setPath('userData'")
+    const guard = mainSrc.lastIndexOf("if (!app.commandLine.hasSwitch('user-data-dir'))", at)
+    expect(guard).toBeGreaterThan(-1)
+    // 가드와 setPath 사이에 다른 문장이 끼지 않았다(가드가 정말 그 줄을 감싼다)
+    expect(mainSrc.slice(guard, at)).toMatch(/^if \(!app\.commandLine\.hasSwitch\('user-data-dir'\)\) \{\s*$/)
+  })
+
   it('whenReady 보다 먼저 부른다 — 그 뒤엔 경로가 이미 굳는다', () => {
     const setPathAt = mainSrc.indexOf("app.setPath('userData'")
     const readyAt = mainSrc.indexOf('app.whenReady()')
