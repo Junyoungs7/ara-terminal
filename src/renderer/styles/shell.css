@@ -5155,6 +5155,53 @@ button.sb-seg.upd:hover .val {
 .modal.ai-bootstrap {
   width: 520px;
 }
+/* #206 오류 신고 — .modal.sm 을 재사용하되 캡처 미리보기가 읽힐 만큼 넓게. 칸은 연결 관리자 .fld 그대로. */
+.modal.bug-report {
+  width: 600px;
+}
+.bug-report .fld textarea {
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-base);
+  padding: var(--sp-4) var(--sp-5);
+  outline: none;
+  resize: vertical;
+}
+.bug-report .fld textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.br-note {
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--text-lo);
+}
+.br-warn {
+  color: var(--err);
+}
+.br-cap {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.br-log {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 /* 체크박스 — 네이티브 checkbox(별도 토글 위젯을 만들지 않는다), accent-color 만 테마에 맞춘다.
    F24 피드백 폼에서 왔지만 그 기능은 2026-08-13 에 걷어냈고, 클래스는 디스크 창(가상 FS 보기)이
    이어서 쓴다. */

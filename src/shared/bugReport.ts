@@ -1,0 +1,44 @@
+// 오류 신고(#206) — main 과 렌더러가 같이 쓰는 모양. 서버와의 계약은 docs/bug-report-api.md 가 정본이다.
+
+/** 서버가 받는 첨부 이름 — 계약의 허용 목록 그대로(그 밖은 서버가 400). */
+export const REPORT_ATTACHMENTS = ['capture.png', 'main-error.log', 'renderer-errors.json', 'settings.json'] as const
+export type ReportAttachmentName = (typeof REPORT_ATTACHMENTS)[number]
+
+/** 렌더러 오류 한 건(링버퍼 원소). 마스킹은 **보낼 때** main 이 건다. */
+export type RendererError = { at: number; message: string; stack: string }
+
+/**
+ * `report:prepare` 의 답 — 신고 창이 **보내기 전에 보여 줄 것**.
+ * capture 는 PNG base64(찍지 못했으면 null). log 는 이미 마스킹된 꼬리다.
+ */
+export type ReportPrepared = { capture: string | null; log: string; settings: string }
+
+/**
+ * `report:send` 요청. 첨부는 **체크된 것만** 싣는다(없으면 안 보낸다).
+ * capture·log 는 미리보기로 받은 것을 그대로 돌려준다 — 보여 준 것과 보내는 것이 같아야 한다.
+ * settings 는 켬/끔만 받는다: 내용은 main 이 허용 목록으로 다시 만든다(렌더러가 끼워 넣을 자리가 없다).
+ * 🔴 기기 ID 는 여기 없다 — main 만 알고 main 이 싣는다.
+ */
+export type ReportSendReq = {
+  title: string
+  what: string
+  happened: string
+  expected: string
+  name: string
+  gpu: string
+  capture?: string
+  log?: string
+  rendererErrors?: RendererError[]
+  settings?: boolean
+}
+
+/**
+ * 결과. 실패는 **자동으로 다시 보내지 않는다**(DLP 규칙 — 막히면 알리고 멈춘다).
+ * server: 서버가 준 `error` 문장(그대로 보여 준다). network: 닿지 못함. http: 문장 없는 거절.
+ * tampered: 서버가 받은 해시가 보낸 것과 다른 첨부 이름(사내 보안 프로그램이 바꿨을 수 있다).
+ */
+export type ReportSendResult =
+  | { ok: true; id: string; number: number; tampered: string[] }
+  | { ok: false; reason: 'server'; error: string }
+  | { ok: false; reason: 'network' }
+  | { ok: false; reason: 'http'; status: number }

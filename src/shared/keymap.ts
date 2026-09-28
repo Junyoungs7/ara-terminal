@@ -38,6 +38,8 @@ export type KeymapAction =
   // F31: 통합 검색(커맨드 팔레트) — 앱 전체 기능·프로필을 이름으로 찾는 곳.
   // (#67 이전에는 우클릭 자리의 8칸 격자 palette.smart 가 따로 있어 이름이 헷갈렸다. 지금은 하나다.)
   | 'palette.all'
+  // #206 오류 신고 — 창을 먼저 찍고 신고 창을 연다.
+  | 'report.open'
 
 import { AI_ENTRY } from './features'
 
@@ -119,7 +121,10 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // F31 통합 검색. **Ctrl+Shift+P 가 아니라 F1 이다** — 그 조합은 이미 미니 프리뷰가 쓰고 있고,
   // 쓰던 사람 손버릇을 빼앗을 이유가 없다. F1 은 VS Code 에서도 같은 팔레트를 여는 키이고
   // (Show All Commands), F-키는 셸 충돌 정책이 열어 둔 자리다.
-  { action: 'palette.all', category: 'search', labelKo: '통합 검색', win: 'F1', mac: 'F1', implemented: true }
+  { action: 'palette.all', category: 'search', labelKo: '통합 검색', win: 'F1', mac: 'F1', implemented: true },
+  // #206 오류 신고. F1(통합 검색)과 겹치지 않는다 — modifiersMatch 가 Ctrl·Shift 까지 같아야 맞춘다.
+  // 메뉴바가 없는 떼어낸 창에서는 이 키가 유일한 입구다(SessionWindow). F-키라 R3.8 정책 안이다.
+  { action: 'report.open', category: 'help', labelKo: '오류 신고…', win: 'Ctrl+Shift+F1', mac: 'Cmd+Shift+F1', implemented: true }
 ] as const
 
 /**

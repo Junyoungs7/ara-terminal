@@ -52,8 +52,10 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
     const help = menuBarItems(MENUBAR.findIndex((m) => m.title === '도움말'))
     // W3sat F18: commandBook.toggle 은 action 항목(단축키 있음, KEYMAP 파생 라벨) — 나머지는
     // 단축키 없는 command 항목(i18n 라벨, 힌트 없음)이라는 이 테스트의 취지는 그대로 유지한다.
-    expect(help.map((i) => i.id)).toEqual(['help.cheatsheet', 'commandBook.toggle', 'help.about'])
-    for (const i of help.filter((x) => x.id !== 'commandBook.toggle')) {
+    // #206: report.open 도 action 항목이다(Ctrl+Shift+F1).
+    expect(help.map((i) => i.id)).toEqual(['help.cheatsheet', 'commandBook.toggle', 'report.open', 'help.about'])
+    expect(help.find((i) => i.id === 'report.open')?.hint).toBe('Ctrl+Shift+F1')
+    for (const i of help.filter((x) => x.id !== 'commandBook.toggle' && x.id !== 'report.open')) {
       expect(i.label).not.toContain('menu.')
       expect(i.hint).toBeUndefined()
     }

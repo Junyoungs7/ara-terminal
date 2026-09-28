@@ -9,10 +9,14 @@ import { isPortWinHash } from '@shared/portWin'
 import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
 import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
+import { installErrorRing } from './store/errorRing'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/shell.css'
 import './styles/interactions.css'
+
+// #206 렌더러 오류 링버퍼 — **가장 먼저** 건다(아래 무엇이 던지든 기록되게). 모든 창이 이 파일을 지난다.
+installErrorRing()
 
 // 보조 창(편집기·다중 모니터 RDP)은 같은 번들을 해시로 갈라 쓴다(별도 진입점·별도 preload 없음 —
 // 폰트·토큰·CSS 재사용). Shell 을 그리기 **전에** 갈라야 한다: Shell 의 세션 복원 이펙트가 보조 창에서

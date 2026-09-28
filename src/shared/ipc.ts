@@ -29,6 +29,7 @@ import type {
   McpActivity,
   WorkProfile
 } from './types'
+import type { ReportPrepared, ReportSendReq, ReportSendResult } from './bugReport'
 import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliRecent, AiCommand } from './aiCli'
 import type { BrowserTabView } from './browserWin'
@@ -164,6 +165,12 @@ export type InvokeContract = {
    * 이쪽이 없으면 제보를 받아도 그 PC 의 GPU 를 모른다. 핸들러 주석에 순서 함정도 함께 있다.
    */
   'app:gpuInfo': { req: void; res: GpuInfo }
+  /**
+   * #206 오류 신고. prepare 는 **부른 창을 찍고** 보낼 것을 모아 미리보기로 준다 — 신고 창은 이 답을
+   * 받은 **뒤에** 연다(먼저 열면 신고 창이 찍힌다). send 는 main 이 서버로 POST 한다(렌더러 CSP 밖).
+   */
+  'report:prepare': { req: void; res: ReportPrepared }
+  'report:send': { req: ReportSendReq; res: ReportSendResult }
   /**
    * 자동 업데이트 (#98). 상태는 push(`update:state`)로도 오지만, 창이 늦게 뜨면 그 사이의 변화를
    * 놓치므로 **열릴 때 한 번 물어보는** 채널을 함께 둔다(AI·MCP 패널과 같은 규칙).
@@ -620,6 +627,11 @@ export type EvApi = {
      * preload 가 값으로 건넨다. IPC 로는 그 시점을 못 맞춘다). 값 판정은 shouldUseWebgl 이 한다.
      */
     webglOptOut?: string | undefined
+  }
+  /** #206 오류 신고 — 찍고 모으기(신고 창보다 먼저) · 보내기(자동 재시도 없음). */
+  report: {
+    prepare(): Promise<ReportPrepared>
+    send(req: ReportSendReq): Promise<ReportSendResult>
   }
   window: {
     minimize(): Promise<{ ok: true }>

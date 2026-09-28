@@ -16,3 +16,10 @@ export const MANUAL_URL = 'http://192.168.100.56:8899/manual.html'
  * 뜻이라 그 직후에는 대개 열린다. 안 열리면 **조용히 넘어가지 않고 사유를 말한다.**
  */
 export const CHANGELOG_URL = 'http://192.168.100.56:8899/changelog.html'
+
+/**
+ * 오류 신고 서버(#206 — docs/bug-report-api.md). `ara-site` 와 **다른 컨테이너**다: 그쪽은 자동
+ * 업데이트 채널이라 신고 서버가 죽어도 살아야 하고, 배포마다 지워져 신고가 날아간다(기획 §1).
+ * 부르는 쪽은 main 뿐이다 — 렌더러 CSP 는 이 주소를 막는다.
+ */
+export const REPORTS_API = 'http://192.168.100.56:8897'

@@ -19,6 +19,7 @@ import { LogPanel } from './LogPanel'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { ServerTool } from './ServerTool'
 import { useDialog } from './Dialog'
+import { useBugReport } from './BugReportModal'
 import { StatusBar } from './StatusBar'
 import { TitleBar } from './TitleBar'
 import { useSessions } from '../store/sessions'
@@ -32,6 +33,7 @@ import { BOTTOM_IDS, type BottomId } from '@shared/types'
 import { AppLogPanel } from './AppLogPanel'
 import type { SessionWinTarget } from '@shared/sessionWin'
 import { t } from '../i18n'
+import { matchBinding } from '../../shared/keymap'
 
 // 해시 계약은 shared 에 있다(main 도 같은 문자열로 창을 연다) — 여기서는 그대로 다시 내보낸다.
 export { parseSessionWinHash, type SessionWinTarget } from '@shared/sessionWin'
@@ -40,6 +42,18 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   const sessions = useSessions(target.winId)
   const mainRef = useRef<MainAreaHandle>(null)
   const { ask, askText, node: dialogNode } = useDialog()
+  // #206 오류 신고 — 이 창엔 메뉴바가 없어서 **단축키가 유일한 입구**다. 찍히는 것은 이 창이다
+  // (main 이 부른 창을 찍는다). 터미널이 이 키를 삼키지 않는 것은 KEYMAP 의 isAppShortcut 덕이다.
+  const bugReport = useBugReport()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchBinding(e, 'report.open')) return
+      e.preventDefault()
+      void bugReport.open()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [bugReport.open])
   // 프로필은 main 이 갖고 IPC 로 준다 — 렌더러 아무 창에서나 읽는다(연결 트리가 없는 것과 무관하다).
   const { profiles, lookup, connect } = useProfiles()
   const [bottom, setBottom] = useState<BottomId | null>(null)
@@ -318,6 +332,7 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
         history={sysHistory}
       />
       {dialogNode}
+      {bugReport.node}
     </div>
   )
 }

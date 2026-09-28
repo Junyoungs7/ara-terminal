@@ -21,6 +21,7 @@ import { WorkbenchView } from './WorkbenchView'
 import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
+import { useBugReport } from './BugReportModal'
 import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
@@ -228,6 +229,8 @@ export function Shell() {
 
   // 앱 전역 확인/경고 다이얼로그(window.confirm/alert 대체). 한 인스턴스를 모두가 공유한다.
   const dialog = useDialog()
+  // #206 오류 신고. open() 이 창을 먼저 찍고 그다음 신고 창을 연다(순서는 훅 안에 있다).
+  const bugReport = useBugReport()
   const ask = dialog.ask
   const askText = dialog.askText
 
@@ -531,11 +534,14 @@ export function Shell() {
         // F31 통합 검색. 여기서 받는 이유는 프로필·즐겨찾기 목록이 이 컴포넌트에 있어서다.
         e.preventDefault()
         setPaletteOpen((o) => !o)
+      } else if (matchBinding(e, 'report.open')) {
+        e.preventDefault()
+        void bugReport.open()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar])
+  }, [openConnManager, updateSidebar, bugReport.open])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -1862,6 +1868,7 @@ export function Shell() {
         onDelete={(id) => void deleteWorkProfile(id)}
       />
       {dialog.node}
+      {bugReport.node}
     </div>
   )
 }

@@ -27,6 +27,7 @@ import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
 import { registerRemoteIpc } from './ipc/registerRemoteIpc'
 import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { registerUpdateIpc } from './ipc/registerUpdateIpc'
+import { registerReportIpc } from './ipc/registerReportIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
@@ -405,6 +406,8 @@ app.whenReady().then(async () => {
   registerLocalCliIpc()
   // #98 자동 업데이트 — 본창으로만 알린다(떼어낸 창에 같은 배너를 두 번 띄울 이유가 없다).
   registerUpdateIpc(mainWc)
+  // #206 오류 신고 — 찍기·모으기·보내기(렌더러는 서버에 직접 닿지 않는다).
+  registerReportIpc(sessions, store)
   registerEditorIpc(sftpService, sessions, () => mainWindow)
   // 포트 모니터 독립 창은 세션을 **소유하지 않는다** — 그래서 getWebContents 로는 안 잡힌다.
   // 포트 목록은 읽기 화면이라 소유 창과 **함께** 받으면 된다(채널명이 이미 세션별로 갈려 있다).

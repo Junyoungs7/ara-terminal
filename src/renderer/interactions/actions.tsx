@@ -642,6 +642,9 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
     items: [
       { command: 'help.cheatsheet' },
       { action: 'commandBook.toggle' },
+      // #206: 단축키가 있어 command 가 아니라 action 이다(설정과 같은 이유 — 실행 경로가 keydown 하나).
+      // 통합 검색(F1)은 KEYMAP 에서 이 항목을 저절로 가져간다.
+      { action: 'report.open' },
       { command: 'help.about' }
     ]
   }
