@@ -2,7 +2,7 @@ import { AI_ENTRY } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
-import { KEYMAP, isMac, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, isMac, matchBinding, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import type { SortKey, SortSpec } from '../store/fileView'
 
@@ -122,7 +122,7 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = ALL_CONTEXT_ACTIONS.fil
 
 // 터미널 우클릭 메뉴 항목. CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 금지) — 모양만 세로 리스트다.
 // #67 이후 이 리스트가 유일한 모양이다(라디얼·팔레트 제거). 단축키 힌트는 keymap 단일 소스에서 온다.
-// ActionId 6개(split×2/session.duplicate/log.save/ai.ask/pane.close)는 KeymapAction 과 이름이 같다.
+// ActionId 9개(split×2/session.duplicate/log.save/ai.ask/pane.close/aicli.run×3)는 KeymapAction 과 이름이 같다.
 // (2026-08-16: 여기 `navigator.userAgent.includes('Mac')` 로 **두 번째** mac 판정이 있었다.
 //  keymap 은 `navigator.platform` 을 본다 — 두 판정이 어긋나면 단축키 동작과 표기가 갈린다.
 //  판정은 shared/keymap.ts 의 isMac() 하나만 쓴다.)
@@ -201,7 +201,10 @@ export function terminalMenu(tmux?: TmuxListResult | 'loading', caps?: TerminalM
           id: 'aicli.run',
           label: 'AI 실행',
           icon: ICON_AI,
-          submenu: AI_CLIS.map((c) => ({ id: `aicli.run.${c.id}`, label: c.label }))
+          submenu: AI_CLIS.map((c) => {
+            const hint = hintFor(`aicli.run.${c.id}`)
+            return { id: `aicli.run.${c.id}`, label: c.label, ...(hint ? { hint } : {}) }
+          })
         })
       }
       /**
@@ -253,12 +256,21 @@ export type TerminalMenuCaps = {
   saveLog?: boolean
 }
 
-/** 우클릭에서 바로 띄울 CLI. 목록의 주인은 shared/aiCli.ts 다 — 여기는 표시 순서만 정한다. */
-const AI_CLIS: readonly { id: 'claude' | 'codex' | 'gemini'; label: string }[] = [
+/**
+ * 우클릭에서 바로 띄울 CLI. 목록의 주인은 shared/aiCli.ts 다 — 여기는 표시 순서만 정한다.
+ * R14: 단축키 Alt+1·2·3 도 이 순서다(tests/aiCliKeys.test.ts 가 KEYMAP 과 맞춰 본다).
+ */
+export const AI_CLIS: readonly { id: 'claude' | 'codex' | 'gemini'; label: string }[] = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
   { id: 'gemini', label: 'Gemini' }
 ]
+
+/** 눌린 키가 AI CLI 실행 단축키(Alt+1·2·3)면 그 메뉴 id. 실행은 메뉴와 같은 onAction 이 한다. */
+export function aiCliRunOfKey(e: KeyboardEvent): ActionId | null {
+  const c = AI_CLIS.find((x) => matchBinding(e, `aicli.run.${x.id}`))
+  return c ? `aicli.run.${c.id}` : null
+}
 
 // ── 트리·탭바 컨텍스트 메뉴 액션 (F4c 레지스트리와 같은 파일 = 단일 출처) ──
 // 위 CONTEXT_ACTIONS 가 터미널 그리드 액션을 담당하듯, 아래는 사이드바 트리·탭바 ＋ 메뉴의 액션이다.
@@ -468,7 +480,7 @@ export function fileMenu(ctx: {
   canTerminal?: boolean
   /** #88 R1: 고른 것을 아라 입력창에 얹는다. */
   canAskAi?: boolean
-  /** #88 R2 로컬 전용 — 잘라내기(이동)·새 파일·[탐색기에서 보기]. 원격은 현행 유지다. */
+  /** #88 R2 로컬 전용 — 잘라내기(이동)·[탐색기에서 보기]. (새 파일은 #201 F 에서 원격에도 열었다.) */
   local?: boolean
   /** #88 R2 보기 상태. 라벨이 지금 무엇이 켜져 있는지를 말한다(체크 표시 대신 ✓·↑↓ 글리프). */
   sort?: SortSpec
@@ -496,7 +508,7 @@ export function fileMenu(ctx: {
   if (ctx.count > 0) ids.push('file.copy')
   ids.push('file.paste')
   ids.push('file.mkdir')
-  if (ctx.local) ids.push('file.newFile')
+  ids.push('file.newFile') // 원격에도(형제 점검 F — SftpService.makeFile, 있는 파일은 안 건드린다)
   ids.push('file.view')
   // ── 아라 연결점(#88 R1) — 대상은 **지금 보고 있는 폴더**다(선택과 무관).
   //    [AI CLI 시작]도 여기 합류한다: 폴더를 골랐으면 그 폴더, 아니면 보고 있는 폴더.

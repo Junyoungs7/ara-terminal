@@ -106,9 +106,13 @@ export function AraChatPanel({
    */
   const [chatsOpen, setChatsOpen] = useState(false)
   const [chats, setChats] = useState<AraChatRow[]>([])
+  // 읽기 실패(#201 C). 전에는 실패도 빈 배열로 접어 "아직 지난 대화가 없습니다"라고 했다 —
+  // 대화는 파일로 남아 있는데 없어진 줄 알게 된다(2026-08-28 에 세 패널에서 고친 그 부류).
+  const [chatsFailed, setChatsFailed] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
   const loadChats = async (): Promise<void> => {
     const r = await window.ev?.ara.chats().catch(() => null)
+    setChatsFailed(!r)
     setChats(r?.items ?? [])
   }
   // 지금 이어 가는 대화 id — 목록에서 그 줄을 표시한다(어디에 있는지 모르면 목록이 미궁이 된다).
@@ -481,7 +485,7 @@ export function AraChatPanel({
               </button>
             </div>
             <div className="ac-list">
-              {chats.length === 0 && <div className="ac-empty">{t('ara.chats.none')}</div>}
+              {chats.length === 0 && <div className="ac-empty">{t(chatsFailed ? 'ara.chats.readFail' : 'ara.chats.none')}</div>}
               {chats.map((c) => (
                 <div className={'ac-row' + (c.id === resumeId ? ' on' : '')} key={c.id} data-chat={c.id}>
                   {renaming === c.id ? (

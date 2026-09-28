@@ -7,8 +7,8 @@ import { EDIT_MAX_BYTES, looksBinary } from '@shared/textFile'
 import { friendly } from '../util/fsError'
 
 // 바이트 → 편집기 결과. 규칙 판정은 여기 한 곳에서만 한다.
-export function toEditorText(bytes: Buffer): EditorReadResult {
-  if (bytes.length > EDIT_MAX_BYTES) return { ok: false, message: tooBig(bytes.length) }
+export function toEditorText(bytes: Buffer, remote = false): EditorReadResult {
+  if (bytes.length > EDIT_MAX_BYTES) return { ok: false, message: tooBig(bytes.length, remote) }
   if (looksBinary(bytes)) return { ok: false, message: '텍스트 파일이 아닙니다(바이너리로 보입니다).' }
   const text = bytes.toString('utf8')
   // 원본이 CRLF 면 저장할 때 되돌린다 — 안 그러면 줄바꿈만 바뀐 커밋이 파일 전체 diff 로 잡힌다.
@@ -20,16 +20,19 @@ export function fromEditorText(text: string, eol: 'lf' | 'crlf'): Buffer {
   return Buffer.from(eol === 'crlf' ? text.replace(/\n/g, '\r\n') : text, 'utf8')
 }
 
-function tooBig(bytes: number): string {
+// 권하는 다음 걸음은 **그 자리에 실제로 있는 메뉴**여야 한다(#201 F). 로컬 파일 우클릭엔 [서버 로그 보기]가
+// 없는데(원격 tail 전용) 전에는 로컬에도 "tail 로 보기를 쓰세요"라고 했다. 로컬엔 [연결 프로그램으로 열기]가 있다.
+export function tooBig(bytes: number, remote: boolean): string {
   const mb = (EDIT_MAX_BYTES / 1024 / 1024).toFixed(0)
-  return `편집기로 열기엔 너무 큽니다(${(bytes / 1024 / 1024).toFixed(1)}MB · 상한 ${mb}MB). tail 로 보기를 쓰세요.`
+  const next = remote ? '[서버 로그 보기]를 쓰세요' : '[연결 프로그램으로 열기]를 쓰세요'
+  return `편집기로 열기엔 너무 큽니다(${(bytes / 1024 / 1024).toFixed(1)}MB · 상한 ${mb}MB). ${next}.`
 }
 
 export async function readLocalText(path: string): Promise<EditorReadResult> {
   try {
     const s = await stat(path)
     if (!s.isFile()) return { ok: false, message: '파일이 아닙니다.' }
-    if (s.size > EDIT_MAX_BYTES) return { ok: false, message: tooBig(s.size) }
+    if (s.size > EDIT_MAX_BYTES) return { ok: false, message: tooBig(s.size, false) }
     return toEditorText(await readFile(path))
   } catch (e) {
     return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
@@ -53,10 +56,10 @@ export function readRemoteText(sftp: SFTPWrapper, path: string): Promise<EditorR
     sftp.stat(path, (statErr, st) => {
       if (statErr) return resolve({ ok: false, message: friendly(statErr as NodeJS.ErrnoException) })
       if (st && !st.isFile()) return resolve({ ok: false, message: '파일이 아닙니다.' })
-      if (st && st.size > EDIT_MAX_BYTES) return resolve({ ok: false, message: tooBig(st.size) })
+      if (st && st.size > EDIT_MAX_BYTES) return resolve({ ok: false, message: tooBig(st.size, true) })
       sftp.readFile(path, (err, buf) => {
         if (err) return resolve({ ok: false, message: friendly(err as NodeJS.ErrnoException) })
-        resolve(toEditorText(buf))
+        resolve(toEditorText(buf, true))
       })
     })
   })

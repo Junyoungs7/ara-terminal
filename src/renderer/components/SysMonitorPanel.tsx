@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { DiskUsage, HostStats, RemoteStats } from '@shared/types'
 import { IconClose } from './icons'
+import { humanSize } from './filePath'
 import { t } from '../i18n'
 import { sparkArea, sparkPoints, useHostStats, useRemoteDisks, type Sample } from '../store/sysMonitor'
 
@@ -18,10 +19,12 @@ import { sparkArea, sparkPoints, useHostStats, useRemoteDisks, type Sample } fro
 
 type Tab = 'local' | 'panel'
 
+/**
+ * 단위 규칙은 `humanSize` 하나다(#201 E). 전에는 이 파일이 두 번째 규칙을 따로 들고 있어서 같은
+ * 디스크가 [디스크] 에선 `1.5M`, 여기선 `2M` 으로 찍혔다(1536KB 실측). DiskTable 의 `kb()` 와 같은 식.
+ */
 function kbToHuman(kb: number): string {
-  if (kb >= 1024 * 1024) return `${(kb / 1024 / 1024).toFixed(1)}G`
-  if (kb >= 1024) return `${Math.round(kb / 1024)}M`
-  return `${kb}K`
+  return humanSize(kb * 1024)
 }
 
 /** nvidia-smi 는 MiB 로 준다 — 화면 표기는 메모리·디스크와 같은 함수를 타야 단위가 안 갈린다. */

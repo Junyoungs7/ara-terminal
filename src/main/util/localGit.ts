@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { branchFor, parseWorktreeOut, validWorktreeName, worktreePath, type WorktreeResult } from '@shared/gitWorktree'
 
 /**
@@ -29,6 +30,9 @@ export async function isGitRepo(dir: string): Promise<boolean> {
 export async function addWorktree(parentPath: string, rawName: string): Promise<WorktreeResult> {
   const name = validWorktreeName(rawName)
   if (name === null) return { ok: false, reason: 'git', message: '이름에 쓸 수 없는 글자가 있습니다.' }
+  // 폴더가 없는 것과 저장소가 아닌 것을 가른다(#201 F) — 원격(`ARA-WT no-such-dir`)은 가르는데 로컬은
+  // 폴더가 없어도 rev-parse 실패를 "저장소 아님"으로 말해, 사용자가 엉뚱한 곳을 봤다.
+  if (!existsSync(parentPath)) return { ok: false, reason: 'noDir', message: parentPath }
   if (!(await isGitRepo(parentPath))) return { ok: false, reason: 'notRepo', message: parentPath }
   const dest = worktreePath(parentPath, name, process.platform === 'win32' ? '\\' : '/')
   const r = await git(['worktree', 'add', '-b', branchFor(name), dest], parentPath)

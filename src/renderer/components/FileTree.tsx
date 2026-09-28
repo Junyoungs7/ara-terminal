@@ -44,7 +44,7 @@ import {
 } from './fileIcons'
 import { crumbs, humanSize, joinPath, relTime } from './filePath'
 import { DEFAULT_SORT, EMPTY_HISTORY, nextSort, pushHistory, viewEntries, type SortSpec } from '../store/fileView'
-import { setUploader } from '../store/uploadBus'
+import { registerUploader } from '../store/uploadBus'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { t } from '../i18n'
@@ -142,6 +142,7 @@ type Backend = {
   list(path: string): Promise<FileListResult>
   rename(path: string, name: string): Promise<FileOpResult>
   mkdir(dir: string, name: string): Promise<FileOpResult>
+  newFile(dir: string, name: string): Promise<FileOpResult>
   remove(paths: string[], opId: string): Promise<FileOpResult>
   // 진행 중 작업 취소(전송·재귀 삭제 공통 id). 로컬 삭제는 취소 지점이 없어 no-op.
   cancel(opId: string): void
@@ -156,6 +157,7 @@ function backendFor(session: ActiveFileSession): Backend | null {
       list: (p) => window.ev.sftp.list(sid, p),
       rename: (p, n) => window.ev.sftp.rename(sid, p, n),
       mkdir: (d, n) => window.ev.sftp.mkdir(sid, d, n),
+      newFile: (d, n) => window.ev.sftp.newFile(sid, d, n),
       remove: (paths, opId) => window.ev.sftp.remove(sid, opId, paths),
       cancel: (opId) => void window.ev.sftp.cancel(opId)
     }
@@ -165,6 +167,7 @@ function backendFor(session: ActiveFileSession): Backend | null {
     list: (p) => window.ev.fs.list(p),
     rename: (p, n) => window.ev.fs.rename(p, n),
     mkdir: (d, n) => window.ev.fs.mkdir(d, n),
+    newFile: (d, n) => window.ev.fs.newFile(d, n),
     // #89: 로컬은 **휴지통**으로 간다(원격은 영구 — 서버에 휴지통이 없다). 확인 문구가 그 차이를 말한다.
     remove: (paths) => window.ev.fs.trash(paths),
     // ponytail: 로컬 삭제는 동기에 가까워 취소 지점이 없다. 느린 네트워크 드라이브가 문제가 되면
@@ -617,8 +620,7 @@ export function FileTree({
   // (등록이 남아 있으면 이전 서버로 올라간다).
   useEffect(() => {
     if (!sid || !backend?.remote) return
-    setUploader({ sessionId: sid, upload: (paths) => void uploadPaths(paths), reveal: () => onReveal?.() })
-    return () => setUploader(null)
+    return registerUploader({ sessionId: sid, upload: (paths) => void uploadPaths(paths), reveal: () => onReveal?.() })
   }, [sid, backend, uploadPaths, onReveal])
 
   const pickAndUpload = useCallback(async () => {
@@ -649,8 +651,10 @@ export function FileTree({
     applyOp(await backend.mkdir(path, name))
   }, [backend, path, askText, applyOp])
 
-  // #88 R2 새 파일. 로컬 전용 — SFTP 쪽에는 "빈 파일 만들기" 계약이 없고, 원격은 현행 유지다.
+  // #88 R2 새 파일. #201 F 에서 원격에도 — 빈 파일 하나 만들려고 터미널로 가서 `touch` 를 쳐야 했다.
+  // 양쪽 다 `'wx'`(있는 파일을 0바이트로 날리지 않는다).
   const newFile = useCallback(async () => {
+    if (!backend) return
     const name = await askText({
       title: t('file.newFile.title'),
       message: t('file.newFile.msg'),
@@ -659,8 +663,8 @@ export function FileTree({
       cancelLabel: t('dlg.cancel')
     })
     if (!name) return
-    applyOp(await window.ev.fs.newFile(path, name))
-  }, [path, askText, applyOp])
+    applyOp(await backend.newFile(path, name))
+  }, [backend, path, askText, applyOp])
 
   const removeSelected = useCallback(async () => {
     if (!backend) return
@@ -942,6 +946,16 @@ export function FileTree({
   // 오기 때문에(실측) React 의 onPaste 로는 못 받는다.
   //   · 파일이 있으면 → 업로드/복사. **여러 개가 다 온다**(예전 clipboard API 는 첫 개만, A-3).
   //   · 없으면 → 앱 안에서 복사한 항목 붙여넣기(pasteHere).
+  // 밖에서 들어온 파일을 지금 폴더에 놓는다 — 원격이면 업로드, 로컬이면 복사. 붙여넣기와 드롭이
+  // **같은 함수**를 지난다(#201 D: 드롭만 원격 갈래뿐이라 로컬 트리엔 놓을 수 없었다).
+  const putFiles = useCallback(
+    (paths: string[]) => {
+      if (backend?.remote) void uploadPaths(paths)
+      else void window.ev.fs.copy(paths, target.current).then(applyOp)
+    },
+    [backend, uploadPaths, applyOp]
+  )
+
   useEffect(() => {
     const el = dropRef.current
     if (!el) return
@@ -953,27 +967,27 @@ export function FileTree({
           void pasteHere()
           return true
         }
-        if (backend?.remote) void uploadPaths(paths)
-        else void window.ev.fs.copy(paths, target.current).then(applyOp)
+        putFiles(paths)
         return true
       }
     })
-  }, [backend, uploadPaths, applyOp, pasteHere])
+  }, [putFiles, pasteHere])
 
-  // OS 파일탐색기 → 트리 드롭 업로드(SFTP 전용). Electron: File.path 로 로컬 경로 확보.
+  // OS 파일탐색기 → 트리 드롭. 원격=업로드 · 로컬=복사(붙여넣기와 같은 putFiles).
+  // 경로는 정본 `filePaths()` 로 뽑는다(#201 E) — 전에는 같은 식을 손으로 다시 써서, `File.path` 가
+  // `webUtils.getPathForFile` 로 옮겨 가는 날 정본만 고쳐지고 여기는 조용히 빈 배열이 될 자리였다.
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       dropRef.current?.classList.remove('drag-over')
-      if (!backend?.remote) return
-      const paths = [...e.dataTransfer.files].map((f) => (f as File & { path?: string }).path).filter((p): p is string => Boolean(p))
-      void uploadPaths(paths)
+      const paths = filePaths([...e.dataTransfer.files])
+      if (paths.length > 0) putFiles(paths)
     },
-    [backend, uploadPaths]
+    [putFiles]
   )
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
-      if (!backend?.remote) return
+      if (!backend) return
       // **파일 드래그만 받는다** (2026-08-22 준영님 제보 19번: "탭 드래그하여 좌측 사이드바에
       // 가져가면 왜 영역이 잡혀?"). 탭 드래그는 `text/plain` 에 세션 id 를 싣는데, 여기서
       // preventDefault 를 무조건 부르면 그것도 "여기에 놓을 수 있다"로 보인다.
@@ -1199,12 +1213,10 @@ export function FileTree({
             <IconFolderPlus />
             <span>{t('conn.menu.file.mkdir')}</span>
           </button>
-          {!backend.remote && (
-            <button type="button" className="ftb" title={t('file.newFile')} onClick={() => void newFile()}>
-              <IconFilePlus />
-              <span>{t('file.newFile')}</span>
-            </button>
-          )}
+          <button type="button" className="ftb" title={t('file.newFile')} onClick={() => void newFile()}>
+            <IconFilePlus />
+            <span>{t('file.newFile')}</span>
+          </button>
           <span className="ftsep" />
           <button type="button" className="ftb" disabled={sel.length === 0} title={t('file.copy')} onClick={() => copySelection()}>
             <IconCopy />

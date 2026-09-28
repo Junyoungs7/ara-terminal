@@ -195,6 +195,17 @@ describe('ara-reports 서버', () => {
     expect((await json(r)).error).toBeTruthy()
   })
 
+  it('R14 관리자 확인: 맞으면 200 {ok:true} · 틀리거나 없으면 403 · GET 만', async () => {
+    const check = (h: Record<string, string> = {}, method = 'GET') => fetch(base + '/api/admin/check', { method, headers: h })
+    const ok = await check(admin)
+    expect(ok.status).toBe(200)
+    expect(await json(ok)).toEqual({ ok: true })
+    expect((await check({ Authorization: 'Bearer wrong' })).status).toBe(403)
+    expect((await check()).status).toBe(403)
+    expect((await check({ 'X-ARA-Device': DEV })).status).toBe(403)
+    expect((await check(admin, 'POST')).status).toBe(405)
+  })
+
   it('CORS: 사이트 출처만 연다', async () => {
     const pre = await fetch(base + '/api/reports', {
       method: 'OPTIONS',
@@ -227,6 +238,10 @@ describe('ara-reports 서버', () => {
       expect((await patch(`/api/reports/${id}`, { status: 'closed' }, h)).status).toBe(403)
     }
     expect((await fetch(`${base}/api/reports/${id}/files/capture.png`, { headers: { Authorization: 'Bearer ' } })).status).toBe(403)
+    // R14: 확인 API 도 빈 비밀번호 설정에선 늘 403 — 사이트가 "관리자로 보는 중"을 못 띄운다
+    for (const h of [{}, { Authorization: 'Bearer ' }, admin]) {
+      expect((await fetch(base + '/api/admin/check', { headers: h })).status).toBe(403)
+    }
     expect((await json(await fetch(`${base}/api/reports/${id}`))).status).toBe('fixed')
   })
 })

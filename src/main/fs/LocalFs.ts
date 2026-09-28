@@ -13,12 +13,15 @@ const RESERVED_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i
 
 // 이름 입력 검증(신뢰 경계): 렌더러가 보낸 새 이름으로 디렉토리를 벗어날 수 없게 한다.
 // 경로 구분자·상위 참조를 막으면 join(dir, name) 이 항상 dir 하위에 머무른다.
-export function invalidName(name: string): string | null {
+// local=false(SFTP): 장치명 규칙은 **이 PC(Windows)** 의 것이라 원격엔 걸지 않는다(#201 F) — 리눅스
+// 서버에서 `aux` 폴더를 못 만들었다. 서버가 Windows 면 서버가 스스로 거절하고 그 사유가 뜬다.
+// 구분자·`..` 검사는 양쪽 다 필요하다(경로 탈출).
+export function invalidName(name: string, local = true): string | null {
   const n = (name ?? '').trim()
   if (!n) return '이름을 입력하세요.'
   if (n === '.' || n === '..') return '사용할 수 없는 이름입니다.'
   if (/[\\/]/.test(n)) return '이름에 경로 구분자를 쓸 수 없습니다.'
-  if (RESERVED_DEVICE_NAME.test(n)) return 'Windows 예약 장치명은 사용할 수 없습니다.'
+  if (local && RESERVED_DEVICE_NAME.test(n)) return 'Windows 예약 장치명은 사용할 수 없습니다.'
   return null
 }
 

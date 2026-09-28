@@ -129,7 +129,11 @@ export class MainSessionManager implements ISessionManager {
       this.flush(id) // 종료 전 잔여 출력 방출
       this.log?.close(id) // 남은 꼬리를 흘려보내고 파일을 닫는다
       this.handles.delete(id)
-      this.sink.exit(id, exitCode, signal)
+      // #201 B-4: 핸들은 방금 지웠고(`destroy()` 길이면 kill 전에 이미 지워졌다) 라우터의 `winIdOf(id)` 는
+      // 비어 본창으로 떨어진다. 창은 **이 클로저의 meta** 로 알린다 — 핸들의 meta 와 같은 객체라
+      // moveToWindow 가 옮긴 값이 그대로 살아 있다. 지우는 순서를 뒤로 미는 대신 이렇게 한 이유:
+      // destroy() 길은 순서를 어떻게 바꿔도 이미 지워진 뒤라 못 고친다.
+      this.sink.exit(id, exitCode, signal, meta.winId)
     })
     // 스트림을 다 건 뒤에 알린다 — 받은 창이 곧바로 attach 해도 출력이 이미 흐르고 있어야 한다.
     this.sink.opened?.(meta)
@@ -292,7 +296,7 @@ export class MainSessionManager implements ISessionManager {
     if (h.timer) clearTimeout(h.timer)
     // 🔴 **지우기 전에** 알린다(#201 B). 라우터는 `winIdOf(id)` 로 보낼 창을 찾는데, 핸들이
     //    사라진 뒤엔 그 값을 못 찾아 본창으로 떨어진다 — 떼어낸 창이 자기 탭이 닫힌 것을 못 받는다.
-    //    (`onExit` 이 바로 그 순서로 되어 있어 [프로세스 종료] 줄이 본창에 찍힌다 — #201 B-4.)
+    //    (뒤따르는 `onExit` 은 이미 지워진 뒤에 도착한다 — 그래서 그쪽은 클로저의 meta.winId 로 알린다, #201 B-4.)
     if (notify) this.sink.closed?.(h.meta)
     this.handles.delete(id)
     h.backend.kill()

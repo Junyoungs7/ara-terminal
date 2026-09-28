@@ -7,7 +7,7 @@ import { pickBackgroundSession, type Session, type useSessions } from '../store/
 import { useLayout, toLayoutNode, allPanesRdp, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import { ContextInteractions } from '../interactions/ContextInteractions'
-import type { ActionId } from '../interactions/actions'
+import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
@@ -668,6 +668,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         if (restoredIds.current.has(m.id)) return
         showPane(m.id)
       })
+      // R14 탐색기에서 `아라` — 리스너를 붙인 **뒤에** 부른다(main 이 만든 셸의 opened 를 이 리스너가 받아
+      // 칸에 올린다). 본창만: 떼어낸 창은 새 세션의 주인이 아니다. main 쪽은 한 번만 연다(openHere.ts).
+      if (!detachedWinId) window.ev?.app.openLaunchDir?.().catch(() => null)
       return () => off?.()
     }, [restoreDone, detachedWinId, showPane])
 
@@ -692,11 +695,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      *    지켜지고, 그래서 여기서 표시를 남기면 뒤에 오는 exit 이
      *    `closedByUser.current.delete(s.id)` 에 걸려 조용히 지나간다.
      *    이 근거를 안 적으면 다음 사람이 순서를 바꾼다.
-     * ⚠️ **떼어낸 창에서는 exit 이 여기로 오지 않는다**(#201 B-4, 이번 라운드에서 안 고쳤다):
-     *    `closed` 는 핸들을 지우기 **전에** 쏴서 소유 창으로 가지만, `exit` 은 지운 **뒤에**
-     *    `getWebContents(id)` 를 부르므로 `winIdOf` 가 undefined 가 되어 본창으로 떨어진다
-     *    (`MainSessionManager.ts:130-131` · `main/index.ts:353`). 그러니 이 창에서 이 표시는
-     *    지금은 아무것도 막지 않는다 — B-4 를 고치는 날 필요해질 보험으로 남긴다.
+     * ⚠️ 떼어낸 창에서도 이제 exit 이 **이 창으로 온다**(#201 B-4, 1.0.14 에서 고쳤다 — 예전엔
+     *    핸들을 지운 뒤 창을 찾아 본창으로 떨어졌다). `sink.exit` 이 지우기 전의 winId 를 함께
+     *    넘기고 registerSessionIpc 가 그 창을 찾는다. 그래서 이 표시가 떼어낸 창에서도 **실제로**
+     *    뒤따르는 exit 의 [재접속] 카드를 막는다 — 이제 보험이 아니라 본업이다.
      * ⚠️ 사용자가 ✕ 로 닫는 길은 이미 `destroySessions` 가 같은 표시를 남긴다 — Set 이라 두 번
      *    넣어도 무해하다. **그 길을 지우지 마라**(확인 다이얼로그가 거기 있다).
      */
@@ -939,12 +941,18 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     const adoptSession = useCallback(
       async (sessionId: string, overId?: string) => {
         const r = await window.ev?.window.moveSession(sessionId, detachedWinId).catch(() => null)
-        if (!r?.ok) return
+        // RDP 거절은 말한다(#201 C) — 밖으로 끌면 TermTabbar 가 "RDP 는 분리할 수 없다"고 하는데, 같은
+        // 한계가 이쪽(합치기)에선 침묵이었다. RDP 는 main 에 세션이 없어 늘 거절된다(id 가 `rdp:` 로
+        // 시작 — sessions.openRdp). 그 밖의 거절은 여전히 조용하다: 탭이 아닌 텍스트가 떨어진 경우다(TermTabbar.drop).
+        if (!r?.ok) {
+          if (sessionId.startsWith('rdp:')) showToast(t('tab.move.fail'))
+          return
+        }
         select(sessionId)
         layout.showSession(sessionId)
         if (overId) reorder(sessionId, overId)
       },
-      [detachedWinId, select, layout, reorder]
+      [detachedWinId, select, layout, reorder, showToast]
     )
 
     const splitDrop = useCallback(
@@ -999,13 +1007,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
          */
         const targets = ids.map((id) => listRef.current.find((s) => s.id === id)).filter((s): s is Session => !!s)
         if (targets.length === 0) return
-        const ssh = targets.filter((s) => s.type === 'ssh')
-        const message =
-          ssh.length === 0
-            ? t('session.close.local')
-            : ssh.length === targets.length
-              ? t('session.close.ssh')
-              : `${t('session.close.ssh')}\n${t('session.close.local')}` // 섞여 있으면 둘 다 알린다
+        // 종류마다 제 문구, 섞여 있으면 있는 것 전부(#201 C) — RDP 가 로컬 갈래로 떨어져
+        // "셸이 종료되고…"라고 했다. RDP 에는 셸이 없다.
+        const message = (['ssh', 'rdp', 'local'] as const)
+          .filter((k) => targets.some((s) => s.type === k))
+          .map((k) => t('session.close.' + k))
+          .join('\n')
         {
           const r = await ask?.({
             title: t('session.close.title'),
@@ -1278,6 +1285,14 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           e.preventDefault()
           setSettingsOpen(true)
         } else {
+          // R14 Alt+1·2·3 — 우클릭 [AI 실행 ▸ …] 과 같은 onAction 길. 떼어낸 창엔 onRunAiCli 가 없어
+          // 아무 일도 안 한다(메뉴를 감추는 TerminalMenuCaps.runAiCli 와 같은 판정).
+          const run = onRunAiCli ? aiCliRunOfKey(e) : null
+          if (run) {
+            e.preventDefault()
+            void onAction(run)
+            return
+          }
           const n = matchNumber(e, 'tab.byNumber')
           if (n) {
             e.preventDefault()
@@ -1305,7 +1320,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       toggleTerminal,
       list,
       activateSession,
-      onAction
+      onAction,
+      onRunAiCli
     ])
 
     /**

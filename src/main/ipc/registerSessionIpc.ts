@@ -8,6 +8,16 @@ import type { SendChannel } from '@shared/ipc'
 import { handle } from './handle'
 import { MainSessionManager } from '../sessions/MainSessionManager'
 import { pushSend, pushMessage } from '../util/windowPush'
+import { sessionWindowOf } from '../windows/SessionWindows'
+
+// 떼어낸 창의 webContents. 파괴 레이스에선 게터 접근 자체가 던진다(main/index.ts 라우터와 같은 가드).
+function ownerWc(winId: string): WebContents | null {
+  try {
+    return sessionWindowOf(winId)?.webContents ?? null
+  } catch {
+    return null
+  }
+}
 
 function on<C extends SendChannel>(channel: C, fn: (payload: unknown) => void): void {
   ipcMain.on(channel, (_e, payload) => fn(payload))
@@ -32,10 +42,12 @@ export function registerSessionIpc(
       // Uint8Array를 message 인자로 전달(백프레셔 메커니즘 3, 단일 복사).
       pushMessage(getWebContents(id), `session:data:${id}`, chunk)
     },
-    exit(id, exitCode, signal) {
+    exit(id, exitCode, signal, winId) {
       // F8: 창이 이미 죽었어도 포워딩 리스너는 반드시 접어야 한다 — 알림 전에 정리한다.
       onExit?.(id)
-      pushSend(getWebContents(id), `session:exit:${id}`, { id, exitCode, signal })
+      // #201 B-4: `getWebContents(id)` 는 여기서 늘 본창이다(핸들이 이미 없다) — 매니저가 지우기 전에
+      // 받아 둔 winId 로 창을 고른다. 그 창이 닫혔으면 라우터와 같이 본창으로 떨어진다.
+      pushSend((winId && ownerWc(winId)) || getWebContents(id), `session:exit:${id}`, { id, exitCode, signal })
     },
     // F7: OSC7 cwd 변경 → SFTP 트리 자동 이동(터미널→트리 동기).
     cwd(id, cwd) {

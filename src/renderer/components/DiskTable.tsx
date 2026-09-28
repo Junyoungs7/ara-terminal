@@ -98,14 +98,18 @@ type Props = {
   sessionId: string | null
   /** 숨은 탭은 원격에 명령을 보내지 않는다(active=false → unwatch). */
   active: boolean
-  /** 지금 보는 경로를 파일 탐색기 창에서 연다(기존 탐색기 진입점 재사용 — 새 창을 만들지 않는다). */
-  onOpenExplorer: (path: string) => void
+  /** 지금 보는 경로를 파일 탐색기 창에서 연다(기존 탐색기 진입점 재사용 — 새 창을 만들지 않는다).
+   *  없으면 버튼이 없다(#201 A-2 — 떼어낸 창엔 작업대가 없다). */
+  onOpenExplorer?: (path: string) => void
 }
 
 export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Element {
   const [disks, setDisks] = useState<DiskRow[]>([])
   // #68: df 읽기 실패 사유(아래 err 는 du 전용이라 이름을 나눈다).
   const [dfErr, setDfErr] = useState<string | null>(null)
+  // 한 바퀴라도 답이 왔나(#201 C). 성공 + 0줄이면 remoteError 가 null 이라, 이걸 안 보면
+  // "불러오는 중"이 **영영** 남았다(형제 ctrShared 의 loaded 와 같은 3상태: 로딩/없음/목록).
+  const [loaded, setLoaded] = useState(false)
   const [showVirtual, setShowVirtual] = useState(false)
   // mount: 위 표에서 고른 파일시스템. path: 지금 파고든 위치(mount 이거나 그 아래).
   const [mount, setMount] = useState<string | null>(null)
@@ -122,6 +126,7 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
   useEffect(() => {
     setDisks([])
     setDfErr(null)
+    setLoaded(false)
     setMount(null)
     setPath(null)
     setDirs([])
@@ -140,6 +145,7 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
       const parsed = parseDf(d.out)
       // #68: 행이 하나라도 나왔으면 성공. 아니면 사유를 그대로 띄운다(예전엔 "불러오는 중"에서 멈췄다).
       setDfErr(remoteError(d, parsed.length))
+      setLoaded(true)
       if (parsed.length > 0) setDisks(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'disk.usage')
@@ -241,7 +247,7 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
           </tbody>
         </table>
         {disks.length === 0 && dfErr && <div className="con-empty bad">{dfErr}</div>}
-        {disks.length === 0 && !dfErr && <div className="con-empty">{t('console.disk.loading')}</div>}
+        {disks.length === 0 && !dfErr && <div className="con-empty">{t(loaded ? 'console.disk.none' : 'console.disk.loading')}</div>}
         {disks.length > 0 && shown.length === 0 && <div className="con-empty">{t('console.disk.none')}</div>}
       </div>
       </div>
@@ -275,15 +281,17 @@ export function DiskTable({ sessionId, active, onOpenExplorer }: Props): JSX.Ele
         >
           <IconRefresh />
         </button>
-        <button
-          type="button"
-          className="con-btn"
-          data-action="disk.explorer"
-          disabled={!path}
-          onClick={() => path && onOpenExplorer(path)}
-        >
-          {t('console.disk.open')}
-        </button>
+        {onOpenExplorer && (
+          <button
+            type="button"
+            className="con-btn"
+            data-action="disk.explorer"
+            disabled={!path}
+            onClick={() => path && onOpenExplorer(path)}
+          >
+            {t('console.disk.open')}
+          </button>
+        )}
       </div>
 
       <div className="con-tblwrap dsk-dirs">

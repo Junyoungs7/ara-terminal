@@ -29,8 +29,10 @@
 //    확률이 오른다** — 그래서 간헐적이고, 그래서 배수를 넣어도 안 사라졌다(배수는 *기다리는*
 //    장치지 *겹치지 않게 하는* 장치가 아니다).
 //    ⚠️ 우리 코드의 결함이 아니다. 완화는 **kill 을 겹치지 않게 하는 것**(하나씩 죽이고 그 exit
-//    콜백을 받은 뒤 다음) — 값은 세션 수 × ~15ms 다. 아직 안 했다: `before-quit` 순서는 사고를
-//    겪고 나온 것이라 고치려면 이 하네스로 충분한 표본을 재고 들어가야 한다(#203).
+//    콜백을 받은 뒤 다음) — `PtyBackend.killInTurn`(#203, 2026-09-28). before-quit 순서는 안 건드렸다.
+//    실측(powershell, 세션 8개): 전 7/200 실패 → 후 0/200. 배수 경과 중앙값 29ms → 139ms(최대 244ms).
+//    세션 4개는 전 2/30 → 후 0/30 — 이쪽은 표본이 작아 증거가 약하다(agent_talk/R14-A-done.md).
+//    그래서 이제 기본 셸을 powershell 로 돌려도 초록이어야 한다. 빨개지면 줄 세우기가 깨진 것이다.
 // 자세한 실측은 agent_talk/FIX-shutdown-done.md §"남은 것".
 // 부모(node)·자식(electron) 양쪽에서 걸리도록 분기 **앞**에 둔다 — 자식만 걸면 부모의 예외가
 // 그대로 새고, 부모만 걸면 정작 창을 띄우는 자식이 무방비다.
@@ -39,7 +41,8 @@ require('./_harnessGuard.cjs')
 const DEFAULT_SHELL = process.platform === 'win32' ? 'cmd.exe' : undefined
 const RUNS = Number(process.env.ARA_SHUTDOWN_RUNS || 10)
 const CONTROL_RUNS = Number(process.env.ARA_SHUTDOWN_CONTROL_RUNS || 3)
-const SESSIONS_PER_RUN = 4
+// 세션 수가 어설션 확률을 올린다(#203) — 조건을 바꿔 재려고 환경변수로 받는다.
+const SESSIONS_PER_RUN = Number(process.env.ARA_SHUTDOWN_SESSIONS || 4)
 const CHILD_TIMEOUT_MS = 30000
 
 // ── 부모(node): 자식 electron 을 반복 실행해 종료 코드를 센다 ────────────────────────────────
@@ -128,6 +131,10 @@ app.whenReady().then(async () => {
   sessions.destroyAll()
   const t0 = Date.now()
   if (process.env.ARA_SHUTDOWN_NODRAIN !== '1') await drainKilledPtys()
+  // 대조군: #203 부터 kill 은 줄을 서서 **한 마이크로태스크 뒤에** 일어난다(PtyBackend.killInTurn).
+  // 그냥 exit 하면 죽인 pty 가 하나도 없어 대조군이 결함을 못 만든다(실측: powershell 0/3).
+  // 한 턴 양보해 첫 pty 를 죽인 뒤 곧장 끝낸다 — "kill 하고 exit 을 안 기다림" 이 그대로 재현된다.
+  else await new Promise((r) => setImmediate(r))
   // 배수 경과를 동기로 파일에 남긴다 — Windows 의 파이프 stderr 는 비동기 flush 라 즉시 종료하면
   // 사라진다(fix-destroyed-smoke.cjs 주석과 같은 함정).
   if (process.env.ARA_SHUTDOWN_LOG) {

@@ -1,6 +1,7 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
 import { app, BrowserWindow, session } from 'electron'
-import { join, isAbsolute } from 'node:path'
+import { join, isAbsolute, basename, dirname } from 'node:path'
+import { tmpdir } from 'node:os'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
@@ -12,6 +13,7 @@ import { registerSessionWindowIpc } from './ipc/registerSessionWindowIpc'
 import { registerProfileIpc } from './ipc/registerProfileIpc'
 import { registerSshIpc } from './ipc/registerSshIpc'
 import { registerRdpIpc, stopAllRdpRelays } from './ipc/registerRdpIpc'
+import { cleanupRdpClip, registerRdpClipIpc } from './rdp/rdpClipboard'
 import { closeAllRdpSpanWindows } from './rdp/RdpWindows'
 import { closeAllSessionWindows, sessionWindowOf } from './windows/SessionWindows'
 import { registerSftpIpc } from './ipc/registerSftpIpc'
@@ -22,6 +24,8 @@ import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
 import { anyWindowVisible } from './windows/visibleWindows'
 import { shouldLockSingleInstance, windowToRaise } from './windows/singleInstance'
+import { createOpenHere, folderToOpen } from './windows/openHere'
+import { handle } from './ipc/handle'
 import { registerSessionLogIpc } from './ipc/registerSessionLogIpc'
 import { registerTelemetryIpc } from './ipc/registerTelemetryIpc'
 import { registerRemoteIpc } from './ipc/registerRemoteIpc'
@@ -130,6 +134,8 @@ let mcp: McpRuntime | null = null
 let agent: AgentRuntime | null = null
 let araChat: AraRuntime | null = null
 let mainWindow: BrowserWindow | null = null
+// R14 탐색기에서 `아라` — 단일 인스턴스 잠금을 쥔 실행에서만 채워진다(아래 second-instance 블록).
+let openHere: ReturnType<typeof createOpenHere> | null = null
 
 /**
  * 🔴 **종료가 이미 시작됐다** — 이 뒤로는 본창 닫기를 절대 막지 않는다(아래 createWindow 의 close).
@@ -306,6 +312,18 @@ if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env
     app.exit(0)
   } else {
     /**
+     * R14 탐색기 주소창 `아라` — 그 폴더에서 로컬 셸 하나(windows/openHere.ts). 잠금을 쥔 설치본에서만
+     * 켠다: dev·하네스는 작업 폴더가 저장소라, 켜면 띄울 때마다 셸이 하나씩 붙는다.
+     * 만드는 길은 MCP 의 session_create 와 같다(main 이 만들고 `session:opened` 가 칸을 잡는다).
+     */
+    const skip = { exeDir: dirname(process.execPath), winDir: process.env['SystemRoot'], tmpDir: tmpdir() }
+    openHere = createOpenHere((dir) => {
+      void sessions
+        ?.create({ type: 'local', profileId: null, cwd: dir, serverKey: 'localhost', title: basename(dir) || dir })
+        .catch((e) => logMainError('open here', e))
+    })
+    openHere.arrive(folderToOpen(process.cwd(), skip))
+    /**
      * 먼저 뜬 쪽이 받는다 — 그 창을 앞으로 가져온다.
      *
      * 종료 확인창은 걱정할 필요가 없다: 그 물음은 **본창 안에 그리는 모달**이라(win:closeAsk →
@@ -313,13 +331,14 @@ if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env
      *
      * argv 는 안 본다 — 우리는 명령줄 인자로 무엇도 열지 않는다(`grep -rn process.argv src/` → 0건).
      * 인자로 프로필·파일을 여는 기능이 생기면 그때 이 자리에서 처리한다.
+     * 대신 **작업 폴더**는 본다(R14 — 탐색기 주소창 `아라`, 아래 끝의 openHere).
      *
      * 앞으로 안 나오면(윈도우의 SetForegroundWindow 제한 — SessionWindows.ts 의 topmost 주석) 그
      * 처방은 alwaysOnTop 을 한 번 켰다 끄는 것이다. **미리 붙이지 않는다**: 켠 뒤 끄는 데 실패하면
      * 그 창이 영영 다른 앱 위에 남는다. 여기는 사용자가 방금 아이콘을 누른 자리라 문서가 권하는
      * restore→show→focus 로 먼저 간다 — 실기 제보가 오면 그때 바꾼다.
      */
-    app.on('second-instance', () => {
+    app.on('second-instance', (_e, _argv, workingDirectory) => {
       const win = windowToRaise(mainWindow, BrowserWindow.getAllWindows())
       // ponytail: 창이 하나도 없으면 무동작 — 여기서 createWindow() 를 부르면 **부팅 중에** 두 번째가
       // 온 경우(whenReady 가 아직 창을 안 만든 순간) 본창이 두 개가 된다. 잠금이 막으려던 사고를
@@ -334,9 +353,15 @@ if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env
         // 파괴 레이스. 앞으로 못 가져와도 앱은 그대로 산다 — 여기서 던져 앱을 죽이지 않는다.
         logMainError('second-instance raise', e)
       }
+      // R14: 그 폴더에 셸 하나 — **본창을 올렸을 때만.** 새 세션은 winId 없이 본창 몫이라, 본창이 없는데
+      // 만들면 그릴 창 없는 pty 가 남는다. 경로가 수상하면(상대·없는 폴더·설치 폴더) 창만 올리고 끝.
+      if (win === mainWindow) openHere?.arrive(folderToOpen(workingDirectory, skip))
     })
   }
 }
+// 렌더러(본창 MainArea)가 부트 복원을 끝냈다는 신호 — 기다리던 폴더가 있으면 지금 연다.
+// 잠금이 없는 실행(dev·하네스)은 openHere 가 없어 늘 빈손이다. 핸들러는 늘 건다(없으면 invoke 가 main 로그에 오류를 찍는다).
+handle('app:openLaunchDir', () => ({ opened: openHere?.ready() ?? false }))
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
@@ -415,6 +440,7 @@ app.whenReady().then(async () => {
   registerProfileIpc(profiles)
   registerSshIpc(profiles, store, sessions)
   registerRdpIpc(profiles, getWebContents)
+  registerRdpClipIpc()
   const sftpService = registerSftpIpc(sessions, getWebContents)
   registerFsIpc()
   registerLocalCliIpc()
@@ -676,6 +702,8 @@ app.on('before-quit', (e) => {
   quitStep('rdpSpanWindows', () => closeAllRdpSpanWindows())
   quitStep('sessionWindows', () => closeAllSessionWindows())
   quitStep('rdpRelays', () => stopAllRdpRelays())
+  // #205 원격에서 받아 클립보드에 올려 둔 임시 파일 — 종료 때 치운다(rdpClipboard.ts 의 수명 규칙).
+  quitStep('rdpClip', () => cleanupRdpClip())
   exitTrace('services-stopped')
   // 정리는 여기까지 전부 끝났다. 남은 건 죽인 pty 의 exit 콜백이 메인 루프에 도착하기를 기다리는 것뿐
   // (실측 14~16ms, 상한 500ms). 그 뒤 다시 quit 하면 위 early return 으로 곧장 종료된다.

@@ -34,6 +34,8 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # R14: 탐색기 주소창 `아라`/`ara` — App Paths 두 이름을 걸고 제거 때 지운다(이유는 파일 머리주석).
+  include: resources/installer.nsh
 mac:
   target: dmg
   # mac 은 PNG 그대로 — .icns 는 한 장에서 잘 나온다(Windows 와 달리 여기서 깨진 적 없다).

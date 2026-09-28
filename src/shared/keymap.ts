@@ -25,6 +25,11 @@ export type KeymapAction =
   | 'ai.ask'
   | 'ai.toggle'
   | 'ai.cli'
+  // R14: 우클릭 [AI 실행 ▸ …] 을 키 하나로. 이름을 **ActionId 와 똑같이** 둔다 — 메뉴 힌트가 저절로 붙는다
+  // (actions.tsx 의 hintFor 가 같은 이름을 KEYMAP 에서 찾는다).
+  | 'aicli.run.claude'
+  | 'aicli.run.codex'
+  | 'aicli.run.gemini'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
   | 'preview.toggle'
@@ -98,6 +103,14 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // F27: AI CLI 한 번에 시작. Ctrl+Shift+L(Launch) — 미사용 Ctrl+Shift+* 조합이라 R3.8 정책 그대로다
   // (Ctrl+L 단독은 셸 화면 지우기라 건드리지 않는다).
   { action: 'ai.cli', category: 'ai', labelKo: 'AI CLI 시작', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+L', implemented: true },
+  // R14(준영님 확정): Alt+1·2·3 = Claude·Codex·Gemini. 순서는 actions.tsx 의 AI_CLIS 표를 따른다(시험이 문다).
+  // 대가: bash/리드라인은 Alt+숫자를 **반복 횟수 인자**(`Alt+3 x` = xxx)로 쓴다 — 아라 터미널에선 그걸 잃는다.
+  // Ctrl+1-9 처럼 범위 표기(Alt+1-3) 대신 셋을 따로 둔다 — 범위는 dispatchAction 이 못 쏴서 통합 검색(F1)에서
+  // 실행이 안 되고 메뉴 힌트도 못 단다.
+  // ponytail: mac 의 Opt+숫자는 e.key 가 '¡' 같은 기호로 와서 안 맞는다. mac 배포가 생기면 e.code 로 승격.
+  { action: 'aicli.run.claude', category: 'ai', labelKo: 'Claude Code 실행', win: 'Alt+1', mac: 'Opt+1', implemented: true },
+  { action: 'aicli.run.codex', category: 'ai', labelKo: 'Codex 실행', win: 'Alt+2', mac: 'Opt+2', implemented: true },
+  { action: 'aicli.run.gemini', category: 'ai', labelKo: 'Gemini 실행', win: 'Alt+3', mac: 'Opt+3', implemented: true },
   // Ctrl+B 는 tmux prefix 이자 리드라인 커서 왼쪽 이동이었다. VS Code 탐색기 관례(Ctrl+Shift+E)로 옮기고 배선한다.
   { action: 'fileTree.toggle', category: 'view', labelKo: '파일 트리 토글', win: 'Ctrl+Shift+E', mac: 'Cmd+Shift+E', implemented: true },
   { action: 'sidebar.collapse', category: 'view', labelKo: '사이드바 접기', win: 'Ctrl+Shift+B', mac: 'Cmd+Shift+B', implemented: true },

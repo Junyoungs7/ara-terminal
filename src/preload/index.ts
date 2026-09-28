@@ -50,6 +50,7 @@ const api: EvApi = {
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    openLaunchDir: () => ipcRenderer.invoke('app:openLaunchDir'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', { url }),
     // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 두 가지(셸 문법 · CLI 존재).
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
@@ -132,7 +133,9 @@ const api: EvApi = {
       const listener = (_: unknown, e: { relayId: string; reason: string }) => cb(e)
       ipcRenderer.on('rdp:relayClosed', listener)
       return () => ipcRenderer.removeListener('rdp:relayClosed', listener)
-    }
+    },
+    clipPut: (files: { name: string; bytes: Uint8Array }[]) => ipcRenderer.invoke('rdpClip:put', { files }),
+    clipReadLocal: () => ipcRenderer.invoke('rdpClip:readLocal')
   },
   fs: {
     list: (path: string) => ipcRenderer.invoke('fs:list', { path }),
@@ -166,6 +169,7 @@ const api: EvApi = {
     rename: (sessionId: string, path: string, name: string) =>
       ipcRenderer.invoke('sftp:rename', { sessionId, path, name }),
     mkdir: (sessionId: string, dir: string, name: string) => ipcRenderer.invoke('sftp:mkdir', { sessionId, dir, name }),
+    newFile: (sessionId: string, dir: string, name: string) => ipcRenderer.invoke('sftp:newFile', { sessionId, dir, name }),
     remove: (sessionId: string, opId: string, paths: string[]) =>
       ipcRenderer.invoke('sftp:remove', { sessionId, opId, paths }),
     copyRemote: (sessionId: string, paths: string[], destDir: string) =>

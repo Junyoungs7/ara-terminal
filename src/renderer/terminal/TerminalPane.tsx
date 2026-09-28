@@ -554,7 +554,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
       if (!local && uploadFiles(sessionId, paths)) return true
       window.ev.session.input(sessionId, pastePaths(paths))
       // 원격인데 업로드로 못 넘어갔다면 **기대와 다르게 동작한 것**이다 — 조용히 넘기지 않는다
-      // (2026-08-16). 업로더 슬롯이 하나뿐이라 작업대를 열면 이쪽이 밀려나 "됐다 안 됐다" 한다.
+      // (2026-08-16). 슬롯은 이제 세션별이라(#201 B-2) 여기 오는 것은 그 세션에 원격 트리가 없을 때뿐이다.
       if (!local) notifyPasteFallback(t('paste.noQueue'))
       return true
     }

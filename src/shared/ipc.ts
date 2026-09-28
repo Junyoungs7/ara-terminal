@@ -140,6 +140,9 @@ export type InvokeContract = {
   // 경쟁하지 않는다(그쪽은 세션·레이아웃 담당).
   'ui:setSidebar': { req: SidebarState; res: { ok: true } }
   'app:getVersion': { req: void; res: string }
+  // R14 탐색기에서 `아라`: 본창이 부트 복원을 끝냈다고 알린다 → 기다리던 폴더가 있으면 main 이 거기서
+  // 로컬 셸을 연다(`session:opened` 로 칸을 잡는다). opened = 열었나. main/windows/openHere.ts 참고.
+  'app:openLaunchDir': { req: void; res: { opened: boolean } }
   // R3.3: 터미널 안 URL 을 기본 브라우저로 연다. 렌더러가 shell 모듈을 직접 쓰지 못하므로 main 경유이며,
   // main 이 http/https 만 통과시킨다(file:·custom scheme 로 임의 프로그램 실행 금지).
   'app:openExternal': { req: { url: string }; res: { ok: boolean } }
@@ -300,6 +303,18 @@ export type InvokeContract = {
   'rdp:closeSpan': { req: { profileId: string }; res: { ok: true } }
   // 다중 모니터 창이 뜬 뒤 자기 계획(모니터별 좌표)을 받아 간다.
   'rdp:spanPlan': { req: { profileId: string }; res: { plan: SpanPlan | null } }
+  // #205 RDP 파일 ↔ 윈도우 클립보드(CF_HDROP). main/rdp/rdpClipboard.ts 가 PowerShell 로 다리를 놓는다.
+  // put: 원격에서 받은 바이트 → 임시 폴더 → 클립보드. readLocal: 탐색기 복사 → 바이트(합계 100MB 상한).
+  'rdpClip:put': {
+    req: { files: { name: string; bytes: Uint8Array }[] }
+    res: { ok: true; paths: string[] } | { ok: false; message: string }
+  }
+  'rdpClip:readLocal': {
+    req: void
+    res:
+      | { ok: true; files: { path: string; name: string; bytes: Uint8Array; lastModified: number }[] }
+      | { ok: false; message: string; tooBig?: true }
+  }
   // fs 도메인 (R7). 로컬 세션의 [파일] 탭. sftp:* 와 같은 계약 형태 — sessionId 만 없다.
   // path '.' 는 홈 디렉토리. rename/mkdir 의 name 은 경로 구분자를 포함할 수 없다(디렉토리 탈출 금지).
   'fs:list': { req: { path: string }; res: FileListResult }
@@ -354,6 +369,7 @@ export type InvokeContract = {
   // R7 원격 파일 조작 — fs:* 와 같은 형태(+sessionId). remove 는 opId 로 취소할 수 있다(sftp:cancel).
   'sftp:rename': { req: { sessionId: string; path: string; name: string }; res: FileOpResult }
   'sftp:mkdir': { req: { sessionId: string; dir: string; name: string }; res: FileOpResult }
+  'sftp:newFile': { req: { sessionId: string; dir: string; name: string }; res: FileOpResult }
   'sftp:remove': { req: { sessionId: string; opId: string; paths: string[] }; res: FileOpResult }
   // 같은 서버 안 복사. SFTP 에 서버측 copy op 가 없어 원격에서 `cp -a` 를 돌린다(경로는 인용된다).
   'sftp:copyRemote': { req: { sessionId: string; paths: string[]; destDir: string }; res: FileOpResult }
@@ -606,6 +622,8 @@ export type EvApi = {
   }
   app: {
     getVersion(): Promise<string>
+    /** R14: 부트 복원이 끝났다 — 탐색기가 넘긴 폴더가 있으면 거기서 셸 하나(main 이 연다). */
+    openLaunchDir(): Promise<{ opened: boolean }>
     // R3.3: 기본 브라우저로 URL 열기(http/https 만). 차단되면 ok:false.
     openExternal(url: string): Promise<{ ok: boolean }>
     /** #90: 이 PC 기본 셸의 조립 규칙(`&&` 가 되는지). AI CLI 시작이 미리보기·전송에 함께 쓴다. */
@@ -708,11 +726,19 @@ export type EvApi = {
     /** 릴레이가 실패로 끝났을 때 그 사유(TCP·TLS·프로토콜). 클라이언트 오류는 "general error" 뿐이라
      *  이 채널이 없으면 원인을 알 수 없다. */
     onRelayClosed(cb: (e: { relayId: string; reason: string }) => void): () => void
+    /** #205 원격에서 받은 파일을 윈도우 클립보드에 올린다(탐색기 Ctrl+V). */
+    clipPut(files: { name: string; bytes: Uint8Array }[]): Promise<{ ok: true; paths: string[] } | { ok: false; message: string }>
+    /** #205 탐색기에서 복사한 파일을 바이트째. 합계 100MB 를 넘으면 tooBig. */
+    clipReadLocal(): Promise<
+      | { ok: true; files: { path: string; name: string; bytes: Uint8Array; lastModified: number }[] }
+      | { ok: false; message: string; tooBig?: true }
+    >
   }
   sftp: {
     list(sessionId: string, path: string): Promise<FileListResult>
     rename(sessionId: string, path: string, name: string): Promise<FileOpResult>
     mkdir(sessionId: string, dir: string, name: string): Promise<FileOpResult>
+    newFile(sessionId: string, dir: string, name: string): Promise<FileOpResult>
     remove(sessionId: string, opId: string, paths: string[]): Promise<FileOpResult>
     copyRemote(sessionId: string, paths: string[], destDir: string): Promise<FileOpResult>
     download(req: { sessionId: string; transferId: string; remotePath: string; localPath: string; size: number }): Promise<SftpXferResult>

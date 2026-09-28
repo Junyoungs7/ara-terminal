@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRowKeys } from '../store/rowKeys'
 import { parseSystemctl, systemdMissing, type SvcAction, type SvcRow } from '@shared/remoteCatalog'
 import { maskSecrets } from '@shared/maskSecrets'
+import { AI_ENTRY } from '@shared/features'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { IconRefresh, IconClose } from './icons'
 import { t } from '../i18n'
@@ -80,7 +81,8 @@ type Props = {
   /** 숨은 탭은 원격에 명령을 보내지 않는다(active=false → unwatch). */
   active: boolean
   ask: (spec: DialogSpec) => Promise<DialogResult>
-  onAskAi: (text: string) => void
+  /** 없으면 버튼이 없다(#201 A-2 — 떼어낸 창). */
+  onAskAi?: (text: string) => void
 }
 
 const COLS: { key: SvcSortKey; cls: string }[] = [
@@ -97,8 +99,11 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
   const gridRef = useRef<HTMLDivElement>(null)
   const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
   const [rows, setRows] = useState<SvcRow[]>([])
-  // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
+  // #68: 읽기 실패 사유. null 이면 정상(0줄이 로딩인지 없음인지는 아래 loaded 가 가른다).
   const [err, setErr] = useState<string | null>(null)
+  // 한 바퀴라도 답이 왔나(#201 C). 성공 + 0줄이면 remoteError 가 null 이라, 이걸 안 보면
+  // "불러오는 중"이 **영영** 남았다(형제 ctrShared 의 loaded 와 같은 3상태: 로딩/없음/목록).
+  const [loaded, setLoaded] = useState(false)
   const [missing, setMissing] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SvcSort>(DEFAULT_SVC_SORT)
@@ -111,6 +116,7 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
     setSelected(null)
     setMissing(false)
     setErr(null)
+    setLoaded(false)
   }, [sessionId])
 
   useEffect(() => {
@@ -123,6 +129,7 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
       setMissing(parsed.length === 0 && systemdMissing(d.out))
       // 행이 하나라도 나왔으면 성공이다 — 행이 있는 채로 오류를 띄우지 않는다(remoteState 규칙).
       setErr(remoteError(d, parsed.length))
+      setLoaded(true)
       if (parsed.length > 0) setRows(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'svc.list')
@@ -176,7 +183,7 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
   }
 
   const askAra = async (): Promise<void> => {
-    if (!row) return
+    if (!row || !onAskAi) return
     const text = svcContext(row)
     const r = await ask({
       title: t('console.svc.ask.title'),
@@ -213,9 +220,13 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
         <button type="button" className="con-btn" data-action="svc.refresh" title={t('sftp.refresh')} onClick={refresh}>
           <IconRefresh />
         </button>
-        <button type="button" className="con-btn" data-action="svc.ask" disabled={!row} onClick={() => void askAra()}>
-          {t('console.svc.ask.btn')}
-        </button>
+        {/* 아라 대화가 숨겨진 판이거나(features.AI_ENTRY) 떼어낸 창이면 없다 — ps 표와 같은 규칙.
+            이 표만 AI_ENTRY 를 안 보고 있었다. */}
+        {AI_ENTRY && onAskAi && (
+          <button type="button" className="con-btn" data-action="svc.ask" disabled={!row} onClick={() => void askAra()}>
+            {t('console.svc.ask.btn')}
+          </button>
+        )}
         {ACTIONS.map((a) => (
           <button
             key={a}
@@ -280,7 +291,7 @@ export function ServiceTable({ sessionId, active, server, ask, onAskAi }: Props)
             </tbody>
           </table>
           {rows.length === 0 && err && <div className="con-empty bad">{err}</div>}
-          {rows.length === 0 && !err && <div className="con-empty">{t('console.svc.loading')}</div>}
+          {rows.length === 0 && !err && <div className="con-empty">{t(loaded ? 'console.svc.none' : 'console.svc.loading')}</div>}
           {rows.length > 0 && visible.length === 0 && <div className="con-empty">{t('console.svc.noMatch')}</div>}
         </div>
       )}

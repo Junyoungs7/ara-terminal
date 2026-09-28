@@ -24,8 +24,9 @@ const checked = (subs: readonly { id: string; icon?: unknown }[]): string[] =>
   subs.filter((s) => (s.icon as ReactElement | undefined)?.type === Check).map((s) => s.id)
 
 describe('RDP [옵션] 리스트 — 다섯이 전부 있다', () => {
-  it('★ 접속 중: 해상도 · 키 변환 · 파일 받기 · 보내기 · 단축키', () => {
-    expect(ids(rdpOptionItems(base))).toEqual(['res', 'keys', 'recv', 'send', 'combo'])
+  // #205: [파일 받기] 는 클립보드로 받고, 폴더를 골라 받는 옛 동작은 [폴더에 저장] 으로 남는다.
+  it('★ 접속 중: 해상도 · 키 변환 · 파일 받기 · 폴더에 저장 · 보내기 · 단축키', () => {
+    expect(ids(rdpOptionItems(base))).toEqual(['res', 'keys', 'recv', 'recvSave', 'send', 'combo'])
   })
 
   it('안 붙었으면 파일·단축키는 없다 — 보낼 것도 받을 것도 없다(버튼 시절과 같은 조건)', () => {
@@ -85,6 +86,11 @@ describe('못 하는 것 — 왜 못 하는지 말한다', () => {
     const recv = rdpOptionItems({ ...base, recvCount: 3 }).find((i) => i.id === 'recv')
     expect(recv?.disabled).toBe(false)
     expect(recv?.hint).toBe('3개')
+  })
+
+  it('[폴더에 저장] 도 받을 파일이 있을 때만 켜진다 — 같은 수를 본다', () => {
+    expect(rdpOptionItems({ ...base, recvCount: 0 }).find((i) => i.id === 'recvSave')?.disabled).toBe(true)
+    expect(rdpOptionItems({ ...base, recvCount: 2 }).find((i) => i.id === 'recvSave')?.disabled).toBe(false)
   })
 
   it('하는 것에는 현재값 자리가 비어 있다 — 값과 동작이 모양으로 갈린다', () => {

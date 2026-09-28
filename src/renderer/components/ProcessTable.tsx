@@ -87,8 +87,8 @@ type Props = {
   /** 숨은 탭은 원격에 명령을 보내지 않는다(탐색기의 숨은 트리가 파일시스템을 읽지 않는 것과 같은 규칙). */
   active: boolean
   ask: (spec: DialogSpec) => Promise<DialogResult>
-  /** 아라 패널로 보낼 텍스트. 누를 때만 보낸다(기본 꺼짐이 아니라 명시적 제스처). */
-  onAskAi: (text: string) => void
+  /** 아라 패널로 보낼 텍스트. 누를 때만 보낸다(기본 꺼짐이 아니라 명시적 제스처). 없으면 버튼이 없다(#201 A-2). */
+  onAskAi?: (text: string) => void
 }
 
 const COLS: { key: ProcSortKey; cls: string }[] = [
@@ -104,8 +104,11 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
   const gridRef = useRef<HTMLDivElement>(null)
   const gridKeys = useRowKeys(gridRef, { selector: '[role="row"]' })
   const [rows, setRows] = useState<ProcRow[]>([])
-  // #68: 읽기 실패 사유. null 이면 정상(행이 0 이어도 로딩으로 본다).
+  // #68: 읽기 실패 사유. null 이면 정상(0줄이 로딩인지 없음인지는 아래 loaded 가 가른다).
   const [err, setErr] = useState<string | null>(null)
+  // 한 바퀴라도 답이 왔나(#201 C). 성공 + 0줄이면 remoteError 가 null 이라, 이걸 안 보면
+  // "불러오는 중"이 **영영** 남았다(형제 ctrShared 의 loaded 와 같은 3상태: 로딩/없음/목록).
+  const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<ProcSort>(DEFAULT_SORT)
   const [selected, setSelected] = useState<number | null>(null)
@@ -116,6 +119,7 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
     setRows([])
     setSelected(null)
     setErr(null)
+    setLoaded(false)
   }, [sessionId])
 
   // 구독 = (이 탭이 보이는 동안) 2.5초마다 한 바퀴. 탭을 닫거나 창을 닫으면 unwatch 가 나간다.
@@ -126,6 +130,7 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
       const parsed = parsePs(d.out)
       // 행이 하나라도 나왔으면 성공이다 — 행이 있는 채로 오류를 띄우지 않는다(remoteState 규칙).
       setErr(remoteError(d, parsed.length))
+      setLoaded(true)
       if (parsed.length > 0) setRows(parsed)
     })
     void window.ev?.remote.watch(sessionId, 'ps.list')
@@ -189,7 +194,7 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
 
   // 보낼 내용을 먼저 보여 주고, 확인했을 때만 아라 패널로 넘긴다(AI-15 컨텍스트 칩과 같은 규칙).
   const askAra = async (): Promise<void> => {
-    if (!row) return
+    if (!row || !onAskAi) return
     const text = procContext(row)
     const r = await ask({
       title: t('console.ps.ask.title'),
@@ -227,7 +232,7 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
           <IconRefresh />
         </button>
         {/* 아라 대화가 숨겨진 판에서는 이 버튼도 없다 — 눌러도 갈 곳이 없다(features.AI_ENTRY). */}
-        {AI_ENTRY && (
+        {AI_ENTRY && onAskAi && (
           <button type="button" className="con-btn" data-action="ps.ask" disabled={!row} onClick={() => void askAra()}>
             {t('console.ps.ask.btn')}
           </button>
@@ -286,7 +291,7 @@ export function ProcessTable({ sessionId, active, server, ask, onAskAi }: Props)
           </tbody>
         </table>
         {rows.length === 0 && err && <div className="con-empty bad">{err}</div>}
-        {rows.length === 0 && !err && <div className="con-empty">{t('console.ps.loading')}</div>}
+        {rows.length === 0 && !err && <div className="con-empty">{t(loaded ? 'console.ps.none' : 'console.ps.loading')}</div>}
         {rows.length > 0 && visible.length === 0 && <div className="con-empty">{t('console.ps.noMatch')}</div>}
       </div>
     </div>

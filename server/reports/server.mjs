@@ -285,6 +285,13 @@ function send(res, status, body) {
 async function route(req, res) {
   const url = new URL(req.url, 'http://x')
   const parts = url.pathname.split('/').filter(Boolean) // ['api','reports',id?,sub?,name?]
+  // R14: 로그인 순간에 비밀번호가 맞는지 — 사이트가 이걸 먼저 불러 틀리면 저장하지 않는다.
+  // 빈 비밀번호 설정이면 isAdmin 이 늘 false 라 늘 403 이다. ponytail: 대입 시도 제한은 없다(PATCH 도 같은 문이다).
+  if (url.pathname === '/api/admin/check') {
+    if (req.method !== 'GET') throw new HttpError(405, '허용되지 않는 요청입니다.')
+    if (!isAdmin(req)) throw new HttpError(403, '관리자 비밀번호가 맞지 않습니다.')
+    return send(res, 200, { ok: true })
+  }
   if (parts[0] !== 'api' || parts[1] !== 'reports' || parts.length > 5) throw new HttpError(404, '없는 주소입니다.')
 
   if (parts.length === 2) {

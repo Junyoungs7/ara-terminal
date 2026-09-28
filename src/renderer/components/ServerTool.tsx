@@ -41,9 +41,14 @@ type Props = {
    */
   server?: string
   ask: (spec: DialogSpec) => Promise<DialogResult>
-  onAskAi: (text: string) => void
-  /** 디스크 표의 [탐색기로 열기]. */
-  onOpenExplorer: (path: string) => void
+  /**
+   * 🔴 **없으면 그 버튼을 안 그린다**(#201 A-2) — 떼어낸 창은 아라도 작업대도 없어 안 넘긴다.
+   * 전에는 빈 함수를 받아 확인창의 "예" 뒤에 아무 일도 안 일어났다(사람이 이미 결정한 뒤라
+   * 빈 메뉴보다 나쁘다). 판정은 핸들러의 존재 여부 — `TerminalMenuCaps` 와 같은 규칙이다.
+   */
+  onAskAi?: (text: string) => void
+  /** 디스크 표의 [탐색기로 열기]. 없으면 버튼이 없다(위와 같은 규칙). */
+  onOpenExplorer?: (path: string) => void
   /** 컨테이너 접속(`docker exec -it`)은 대화형이라 exec 채널로 못 한다 — 터미널로 보낸다. */
   onSendInput: (text: string) => void
 }

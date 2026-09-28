@@ -3,6 +3,8 @@ import type { SessionSpec } from '../../main/sessions/ISessionManager'
 import type { SessionType } from '@shared/types'
 import type { AiCliId } from '@shared/aiCli'
 import { forgetSessionState } from './sessionState'
+import { sizeOf } from '../terminal/termRegistry'
+import { usableSize } from '@shared/termSize'
 
 // 렌더러 세션 레지스트리 — 트리·탭·패널이 공유하는 단일 소스(이중 상태 금지, F4b).
 // 세션의 홈은 탭이다: 탭 닫기 = 세션 종료, 패널 닫기 = detach(세션 유지, 탭에 남음).
@@ -26,6 +28,18 @@ export type Session = {
    */
   aiCli?: AiCliId
 }
+/**
+ * 새 로컬 세션에 **지금 칸의 치수**를 싣는다(#201 D). SSH 는 `Shell.connectProfile` 이 처음부터
+ * `sizeOf` 를 실었는데 로컬은 아무도 안 재서 pty 가 80×24 로 열렸다 — 깊은 폴더의 첫 프롬프트가
+ * 80칸에서 접혀 두 줄로 찍혔다(준영님 SSH 제보와 같은 기전). 로컬 문 둘(`open`·`restoreLocal`)이
+ * 모두 여기를 지난다. 이미 치수를 들고 온 스펙(부팅 복원)은 건드리지 않는다.
+ * 거르는 문턱은 `usableSize` 하나 — 새 문턱을 만들지 않는다.
+ */
+export function withSize(spec: SessionSpec, size: { cols: number; rows: number } | null): SessionSpec {
+  if (spec.cols !== undefined || spec.rows !== undefined) return spec
+  return size && usableSize(size.cols, size.rows) ? { ...spec, ...size } : spec
+}
+
 // 하위호환 별칭(기존 import 유지).
 export type Tab = Session
 
@@ -166,6 +180,21 @@ export function pickBackgroundSession(
 let seq = 0
 
 /**
+ * 새 로컬 셸의 이름 — 쓰이지 않은 가장 작은 `셸 N`(#201 D).
+ *
+ * 전에는 모듈 지역 `seq` 를 올렸는데, 재시작하면 복원된 탭이 스냅샷 제목(`셸 1`·`셸 2`)을 되찾고
+ * `seq` 는 0 에서 다시 시작해 ＋ 한 번에 **`셸 1` 이 두 개**가 됐다. SSH·MCP 는 main 의 `nextTitle` 이
+ * 중복을 걷는다 — 이쪽도 같은 규칙(닫힌 번호는 다시 쓴다)을 **main 의 전체 목록**에 대고 건다.
+ * ⚠️ 이름 **모양**은 그대로 뒀다(`셸 N`). MCP 가 여는 `셸`·`셸·2` 와 모양을 합치는 것은 탭 이름이
+ *    바뀌는 일이라 따로 정한다.
+ * ponytail: ＋ 를 목록 응답보다 빨리 두 번 누르면 같은 번호가 나올 수 있다 — 드물고 이름만 겹친다.
+ */
+export function freeShellTitle(used: Iterable<string>): string {
+  const taken = new Set(used)
+  for (let n = 1; ; n++) if (!taken.has(`셸 ${n}`)) return `셸 ${n}`
+}
+
+/**
  * @param winId 이 창의 id. undefined 면 **본창** — winId 가 없는 세션만 본다.
  *
  * 왜 창마다 목록이 다른가: 세션은 한 창에만 있다(두 창에서 같은 세션을 그리면 xterm 인스턴스가
@@ -178,6 +207,8 @@ export function useSessions(winId?: string) {
   const listRef = useRef<Session[]>(sessions)
   listRef.current = sessions
   const [activeId, setActiveId] = useState<string | null>(null)
+  const activeRef = useRef(activeId)
+  activeRef.current = activeId
   // 최근 사용 순(앞이 최신). 분할이 배경 세션을 고를 때(R2.0), 그리고 탭이 빠진 자리를 채울 때
   // (nextActiveAfter) 쓴다. setState 업데이터 안에서 읽어야 해서 listRef 와 같은 사본을 둔다 —
   // 클로저의 mru 는 알림이 도착한 시점의 낡은 값이다.
@@ -206,10 +237,11 @@ export function useSessions(winId?: string) {
   )
 
   const open = useCallback(async () => {
-    seq += 1
+    // 떼어낸 창의 세션까지 봐야 한다 — 이 창의 목록은 일부다. 못 읽으면 이 창 것만으로 거른다.
+    const all = await window.ev.session.list().catch(() => [])
     const spec: SessionSpec = {
       type: 'local',
-      title: `셸 ${seq}`,
+      title: freeShellTitle([...all, ...listRef.current].map((x) => x.title)),
       serverKey: 'localhost',
       cwd: undefined,
       profileId: null,
@@ -217,7 +249,7 @@ export function useSessions(winId?: string) {
       // 이 창이 주인이다 — 안 주면 main 이 본창 것으로 잡아 출력이 저쪽으로 간다.
       ...(winId ? { winId } : {})
     }
-    const { id } = await window.ev.session.create(spec)
+    const { id } = await window.ev.session.create(withSize(spec, sizeOf(activeRef.current)))
     adopt(id, spec.title, spec.serverKey, 'local')
     return id
   }, [adopt, winId])
@@ -239,7 +271,7 @@ export function useSessions(winId?: string) {
   // ssh 세션은 여기서 만들지 않는다(connectProfile 경로가 만든 뒤 adopt).
   const restoreLocal = useCallback(
     async (spec: SessionSpec): Promise<string> => {
-      const { id } = await window.ev.session.create(spec)
+      const { id } = await window.ev.session.create(withSize(spec, sizeOf(activeRef.current)))
       // spec.aiCli 를 함께 넘긴다 — 이 문으로 들어온 AI CLI 탭이 히스토리 통을 가른다(#204).
       adopt(id, spec.title, spec.serverKey, 'local', undefined, spec.aiCli)
       return id

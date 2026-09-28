@@ -288,9 +288,8 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
                     server={activeSession?.type === 'ssh' ? activeSession.serverKey : undefined}
                     ask={ask}
                     // 이 창에는 아라도 작업대도 없다(준영님 확정 구성) — 그 둘로 가는 길은
-                    // 본창에 있다. 여기서 흉내 내지 않고 아무 일도 하지 않는다.
-                    onAskAi={() => {}}
-                    onOpenExplorer={() => {}}
+                    // 본창에 있다. onAskAi·onOpenExplorer 를 **안 넘긴다** → 표가 그 버튼을 안 그린다
+                    // (#201 A-2). 빈 함수를 넘기면 확인창 "예" 뒤에 아무 일도 안 일어난다.
                     onSendInput={(text: string) => {
                       const sid = activeSession?.id
                       if (sid) window.ev?.session.input(sid, text)

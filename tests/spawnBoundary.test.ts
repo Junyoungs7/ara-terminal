@@ -112,13 +112,19 @@ const CHILD_PROCESS_IMPORT =
  * 그래서 이 목록은 "네 번째가 생기면 **혼자 정하지 말고 여기서 이야기하자**"는 뜻이다.
  *  · ClaudeCliEngine — 유일하게 셸(cmd.exe)을 지나야 하는 자리(`.cmd` 셔임). 인코딩이 여기 산다.
  *  · localCli · localGit — `execFile` 로 인자를 배열째 넘긴다(인용이라는 개념 자체가 없다).
+ *  · rdpClipboard(#205, 2026-09-28 넷째로 들어왔다) — 윈도우 클립보드의 파일 형식(CF_HDROP)은 Electron 이
+ *    못 다뤄 `powershell.exe` 를 부른다. 같은 규칙을 지킨다: `execFile` + 인자 배열 · 스크립트는 **고정 상수**를
+ *    `-EncodedCommand` 로 · 파일명(원격이 정한 값 — 신뢰 경계 밖)은 **환경변수의 JSON 으로만** 가고 명령
+ *    문자열에는 한 글자도 안 들어간다(`tests/rdpClipBridge.test.ts` 가 그걸 잰다). 다섯째가 오면 그때는
+ *    Orca 처럼 래퍼 하나로 모을 때다.
  * `tests/`·`scripts/` 는 이 규칙 밖이다. 검사가 프로세스를 띄우는 것은 정상이고, 목록에 넣으면
  * 새 스모크를 쓸 때마다 늘어나 **의미가 닳는다.** 그쪽도 `shell: true` 는 위에서 그대로 막는다.
  */
 const CHILD_PROCESS_ALLOW = [
   'src/main/ai/engine/ClaudeCliEngine.ts',
   'src/main/util/localCli.ts',
-  'src/main/util/localGit.ts'
+  'src/main/util/localGit.ts',
+  'src/main/rdp/rdpClipboard.ts'
 ]
 
 describe('스폰 경계 래칫', () => {

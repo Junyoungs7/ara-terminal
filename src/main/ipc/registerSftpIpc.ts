@@ -21,6 +21,7 @@ export function registerSftpIpc(
   // R7 원격 파일 조작(로컬 fs:* 와 같은 형태). 삭제는 opId 로 취소 가능(sftp:cancel).
   handle('sftp:rename', ({ sessionId, path, name }) => service.rename(sessionId, path, name))
   handle('sftp:mkdir', ({ sessionId, dir, name }) => service.mkdir(sessionId, dir, name))
+  handle('sftp:newFile', ({ sessionId, dir, name }) => service.makeFile(sessionId, dir, name))
   handle('sftp:remove', ({ sessionId, opId, paths }) => service.remove(sessionId, opId, paths))
   handle('sftp:copyRemote', ({ sessionId, paths, destDir }) =>
     Array.isArray(paths) && paths.every((p) => typeof p === 'string' && p) && typeof destDir === 'string' && destDir

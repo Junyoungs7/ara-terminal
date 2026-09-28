@@ -70,7 +70,9 @@
     opts = opts || {}
     var headers = {}
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
-    if (opts.admin && pw()) headers.Authorization = 'Bearer ' + pw()
+    // opts.pw: 아직 저장하지 않은 비밀번호로 한 번 묻는다(로그인 확인 — adminBar).
+    var key = opts.pw || (opts.admin && pw())
+    if (key) headers.Authorization = 'Bearer ' + key
     return fetch(API + path, {
       method: opts.method || 'GET',
       headers: headers,
@@ -243,7 +245,8 @@
     )
   }
 
-  // [관리자 로그인] — 비밀번호를 확인하는 API 는 없다. 저장만 하고, 틀리면 다음 요청의 error 가 알려 준다.
+  // [관리자 로그인] — 서버에 먼저 묻는다(GET /api/admin/check). 맞을 때만 저장한다: 전에는 확인 API 가 없어
+  // 틀린 비밀번호도 저장돼 첫 요청이 403 을 받기 전까지 "관리자로 보는 중"이 떴다(R14).
   function adminBar(id) {
     var bar = el('div', 'rp-admin')
     if (pw()) {
@@ -265,15 +268,28 @@
     input.placeholder = '관리자 비밀번호'
     input.autocomplete = 'current-password'
     var go = el('button', 'btn btn-ghost btn-sm', '관리자 로그인')
+    var msg = el('div')
     form.appendChild(input)
     form.appendChild(go)
+    form.appendChild(msg)
     form.onsubmit = function (ev) {
       ev.preventDefault()
       if (!input.value) return
-      try {
-        sessionStorage.setItem(PW_KEY, input.value)
-      } catch (e) {}
-      showDetail(id)
+      go.disabled = true
+      api('/api/admin/check', { pw: input.value }).then(
+        function () {
+          try {
+            sessionStorage.setItem(PW_KEY, input.value)
+          } catch (e) {}
+          showDetail(id)
+        },
+        function (e) {
+          // 서버 문장 그대로("관리자 비밀번호가 맞지 않습니다." · 닿지 못함) — 저장하지 않는다
+          go.disabled = false
+          msg.textContent = ''
+          msg.appendChild(fail(e.message))
+        }
+      )
     }
     bar.appendChild(form)
     return bar

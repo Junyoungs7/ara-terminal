@@ -50,3 +50,18 @@ describe('#201 A-1 — 되묻는 절차가 한 벌인가', () => {
     expect(shared).toMatch(/conn\.pw\.connect/)
   })
 })
+
+describe('#201 A-2 — 떼어낸 창이 빈 함수를 넘기지 않는다', () => {
+  // 빈 함수는 확인창 "예" 뒤에 아무 일도 안 하게 만든다. 없으면 표가 버튼을 안 그린다.
+  it('★ SessionWindow 에 `={() => {}}` 가 없다', () => {
+    expect(sessionWindow).not.toMatch(/=\{\(\) => \{\}\}/)
+    expect(sessionWindow).not.toMatch(/\bonAskAi=\{/)
+    expect(sessionWindow).not.toMatch(/\bonOpenExplorer=\{/)
+  })
+
+  it('★ 표들이 핸들러가 없으면 버튼을 안 그린다', () => {
+    expect(src('src/renderer/components/ProcessTable.tsx')).toMatch(/AI_ENTRY && onAskAi && \(/)
+    expect(src('src/renderer/components/ServiceTable.tsx')).toMatch(/AI_ENTRY && onAskAi && \(/)
+    expect(src('src/renderer/components/DiskTable.tsx')).toMatch(/\{onOpenExplorer && \(/)
+  })
+})

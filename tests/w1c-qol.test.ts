@@ -19,7 +19,7 @@ import {
   resetHistoryCache,
   HISTORY_MAX
 } from '../src/renderer/store/history'
-import { setUploader, uploadFiles } from '../src/renderer/store/uploadBus'
+import { clearUploaders, registerUploader, uploadFiles } from '../src/renderer/store/uploadBus'
 import { pastePaths } from '../src/renderer/components/filePath'
 import { HistoryStore } from '../src/main/history/HistoryStore'
 import {
@@ -399,12 +399,12 @@ describe('F14 로컬 세션 경로 붙여넣기(pastePaths)', () => {
 
 // ── F14: 터미널 → 전송 큐 인계 ──
 describe('F14 업로드 인계(uploadBus)', () => {
-  beforeEach(() => setUploader(null))
+  beforeEach(() => clearUploaders())
 
   it('등록된 세션이면 큐로 넘기고 [파일] 탭을 펼친다', () => {
     const got: string[][] = []
     let revealed = 0
-    setUploader({ sessionId: 'ssh-1', upload: (p) => got.push(p), reveal: () => revealed++ })
+    registerUploader({ sessionId: 'ssh-1', upload: (p) => got.push(p), reveal: () => revealed++ })
     expect(uploadFiles('ssh-1', ['/tmp/a.txt'])).toBe(true)
     expect(got).toEqual([['/tmp/a.txt']])
     expect(revealed).toBe(1)
@@ -412,14 +412,33 @@ describe('F14 업로드 인계(uploadBus)', () => {
 
   it('다른 세션이면 넘기지 않는다 — 엉뚱한 서버로 올리지 않는다', () => {
     let called = 0
-    setUploader({ sessionId: 'ssh-1', upload: () => called++, reveal: () => {} })
+    registerUploader({ sessionId: 'ssh-1', upload: () => called++, reveal: () => {} })
     expect(uploadFiles('ssh-2', ['/tmp/a.txt'])).toBe(false)
     expect(called).toBe(0)
   })
 
   it('등록이 없거나 파일이 없으면 false — 호출측이 텍스트 붙여넣기로 폴백한다', () => {
     expect(uploadFiles('ssh-1', ['/tmp/a.txt'])).toBe(false)
-    setUploader({ sessionId: 'ssh-1', upload: () => {}, reveal: () => {} })
+    registerUploader({ sessionId: 'ssh-1', upload: () => {}, reveal: () => {} })
     expect(uploadFiles('ssh-1', [])).toBe(false)
+  })
+
+  it('★ #201 B-2 — 트리가 둘(다른 세션)이면 **터미널의 세션** 쪽으로 간다. 나중 등록이 앞 것을 못 밀어낸다', () => {
+    const got: string[] = []
+    registerUploader({ sessionId: 'side', upload: () => got.push('side'), reveal: () => {} })
+    registerUploader({ sessionId: 'bench', upload: () => got.push('bench'), reveal: () => {} })
+    expect(uploadFiles('side', ['/a'])).toBe(true)
+    expect(uploadFiles('bench', ['/a'])).toBe(true)
+    expect(got).toEqual(['side', 'bench'])
+  })
+
+  it('같은 세션에 트리가 둘이면 나중 쪽이 받고, 그쪽이 빠지면 먼저 쪽이 다시 받는다', () => {
+    const got: string[] = []
+    registerUploader({ sessionId: 's', upload: () => got.push('first'), reveal: () => {} })
+    const off = registerUploader({ sessionId: 's', upload: () => got.push('second'), reveal: () => {} })
+    uploadFiles('s', ['/a'])
+    off()
+    uploadFiles('s', ['/a'])
+    expect(got).toEqual(['second', 'first'])
   })
 })

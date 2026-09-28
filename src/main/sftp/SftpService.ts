@@ -208,9 +208,9 @@ export class SftpService {
   }
 
   // ── R7 원격 파일 조작 (로컬 fs 와 같은 계약) ──
-  // 이름 변경. 새 이름 검증은 로컬과 같은 규칙(경로 구분자 금지 = 디렉토리 탈출 금지).
+  // 이름 변경. 새 이름 검증은 로컬과 같은 규칙(경로 구분자 금지 = 디렉토리 탈출 금지). 장치명만 뺀다(invalidName 주석).
   async rename(sessionId: string, path: string, name: string): Promise<FileOpResult> {
-    const bad = invalidName(name)
+    const bad = invalidName(name, false)
     if (bad) return { ok: false, message: bad }
     return this.withSftp(sessionId, (sftp) =>
       sftpOp((cb) => sftp.rename(path, posix.join(posix.dirname(path), name.trim()), cb))
@@ -218,9 +218,27 @@ export class SftpService {
   }
 
   async mkdir(sessionId: string, dir: string, name: string): Promise<FileOpResult> {
-    const bad = invalidName(name)
+    const bad = invalidName(name, false)
     if (bad) return { ok: false, message: bad }
     return this.withSftp(sessionId, (sftp) => sftpOp((cb) => sftp.mkdir(posix.join(dir, name.trim()), cb)))
+  }
+
+  /**
+   * 빈 파일(#201 F — 로컬 `makeFile` 의 짝). 🔴 **있는 파일을 건드리지 않는다**(업로드 덮어쓰기 사고와 같은 부류).
+   *  ① 먼저 stat 으로 있는지 본다 — OpenSSH 는 EXCL 거절을 "Failure" 한 단어로 돌려줘 사유가 안 읽힌다.
+   *  ② 그 사이에 생긴 파일은 플래그가 막는다: `'ax'` = APPEND|CREAT|WRITE|EXCL. `'wx'` 가 아닌 이유 —
+   *     ssh2 의 `'wx'` 에는 **TRUNC 가 같이 켜진다**(SFTP.js stringFlagMap). EXCL 을 무시하는 서버를 만나면
+   *     그대로 0바이트가 된다. APPEND 는 무시당해도 쓰는 것이 없어 내용이 남는다.
+   */
+  async makeFile(sessionId: string, dir: string, name: string): Promise<FileOpResult> {
+    const bad = invalidName(name, false)
+    if (bad) return { ok: false, message: bad }
+    const target = posix.join(dir, name.trim())
+    return this.withSftp(sessionId, async (sftp) => {
+      const there = await new Promise<boolean>((res) => sftp.stat(target, (err) => res(!err)))
+      if (there) return { ok: false as const, message: '같은 이름이 이미 있습니다.' }
+      return sftpOp((cb) => sftp.open(target, 'ax', (err, handle) => (err ? cb(err) : sftp.close(handle, cb))))
+    })
   }
 
   // 삭제. SFTP 에는 재귀 삭제 op 가 없어 직접 내려가며 unlink → rmdir 한다.

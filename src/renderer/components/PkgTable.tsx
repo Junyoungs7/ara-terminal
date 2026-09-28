@@ -84,6 +84,9 @@ export function PkgTable({ sessionId, active }: { sessionId: string | null; acti
   const [showMissing, setShowMissing] = useState(false)
   const [sort, setSort] = useState<PkgSort>(DEFAULT_PKG_SORT)
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
+  // 실패 사유(#201 C). 전에는 `r.reason` 을 버리고 "서버가 응답하지 않거나 셸이 제한돼 있습니다"로
+  // **없는 원인 둘을 지목**했다 — SSH 가 끊겨도 그렇게 말했다. 형제 표(DiskTable·ctrShared)와 같은 사전.
+  const [err, setErr] = useState('')
 
   const load = useCallback(() => {
     if (!sessionId) return
@@ -92,13 +95,17 @@ export function PkgTable({ sessionId, active }: { sessionId: string | null; acti
       ?.run(sessionId, 'pkg.probe')
       .then((r) => {
         if (!r?.ok) {
+          setErr(t('console.err.' + (r?.reason ?? 'exec')))
           setState('error')
           return
         }
         setRows(parsePkgProbe(r.out))
         setState('idle')
       })
-      .catch(() => setState('error'))
+      .catch(() => {
+        setErr(t('console.err.exec'))
+        setState('error')
+      })
   }, [sessionId])
 
   // 세션이 바뀌면 이전 서버의 목록을 즉시 버린다(F26 R1 CON-8c 와 같은 규칙 — 다른 서버 내용을
@@ -195,7 +202,7 @@ export function PkgTable({ sessionId, active }: { sessionId: string | null; acti
               ))}
           </tbody>
         </table>
-        {state === 'error' && <div className="con-empty bad">{t('console.pkg.error')}</div>}
+        {state === 'error' && <div className="con-empty bad">{err}</div>}
         {state === 'loading' && rows.length === 0 && <div className="con-empty">{t('console.pkg.loading')}</div>}
         {state === 'idle' && shown.length === 0 && <div className="con-empty">{t('console.pkg.none')}</div>}
       </div>

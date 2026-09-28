@@ -779,7 +779,8 @@ export function Shell() {
           : await window.ev?.ara.worktreeAdd(b.cwd, clean)
       if (!r) return
       if (!r.ok) {
-        mainRef.current?.toast(r.reason === 'notRepo' ? t('bench.split.notRepo') : r.message)
+        // noDir 도 제 문구로(#201 F) — 원격은 표식 원문(`ARA-WT no-such-dir`)이 그대로 나갔다.
+        mainRef.current?.toast(r.reason === 'git' ? r.message : t('bench.split.' + r.reason))
         return
       }
       bench.addChild(b, r.path, branchFor(clean))

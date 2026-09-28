@@ -98,10 +98,49 @@ function exitReported(pty: IPty): boolean {
   return (pty as unknown as { _agent?: { _exitCode?: number } })._agent?._exitCode !== undefined
 }
 
+// ── 차례로 죽이기(#203) ─────────────────────────────────────────────────────────────────────
+// 배수는 **기다리는** 장치지 **겹치지 않게 하는** 장치가 아니다. conpty.cc 의 exit 스레드는 pty 마다
+// 따로 돌며 잠금 없는 전역 벡터(`ptyHandles`)에서 자기 항목을 지우고 `assert` 한다(:106) — 여럿이
+// 거의 동시에 죽으면 그 erase 가 겹쳐 `Assertion failed! … remove_pty_baton` 으로 앱이 죽는다.
+// 그래서 kill 을 줄 세운다: 하나 죽이고, 그 exit 이 메인 루프에 도착한 것(`exitReported`)을 본 뒤 다음.
+// 그 스레드는 erase 를 **끝낸 다음에** exit 을 올리므로(같은 파일 :105-107) 도착을 보면 겹칠 수 없다.
+//
+// 여기 두는 이유: 로컬 pty 를 죽이는 길은 `PtyBackend.kill()` 하나다 — 종료(`destroyAll`)만 줄 세우면
+// 탭 여럿을 연달아 닫는 길이 같은 구멍으로 남는다. SSH 는 이 줄을 안 선다(pty 가 아니다).
+// 값: pty 하나당 실측 ~15ms. 줄이 비어 있어도 kill 은 한 마이크로태스크 뒤에 일어난다.
+//
+// 상한은 배수와 같은 성격이다 — 안 오면 기다리다 넘어간다. 한 번이라도 상한에 닿으면 신호가 죽은
+// 것으로 보고(`_exitCode` 이름이 바뀌었을 때) 그 뒤로는 안 기다린다: 안 그러면 세션 8개가 종료를
+// 24초 붙잡는다. 그때는 예전(연달아 kill)과 같아진다 — 더 나빠지지 않는다.
+let killQueue: Promise<void> = Promise.resolve()
+let exitSignalDead = false
+
+export function killInTurn(kill: () => void, reported: () => boolean, capMs = EXIT_DRAIN_CAP_MS): Promise<void> {
+  killQueue = killQueue.then(async () => {
+    try {
+      kill()
+    } catch {
+      return // 이미 종료 — 기다릴 exit 이 없다
+    }
+    if (exitSignalDead) return
+    const deadline = Date.now() + capMs
+    while (!reported()) {
+      if (Date.now() >= deadline) {
+        exitSignalDead = true
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, EXIT_DRAIN_POLL_MS))
+    }
+  })
+  return killQueue
+}
+
 // 종료 직전에 한 번 부른다(main/index.ts before-quit). kill 한 pty 의 exit 콜백이 전부 메인 루프에
 // 도착할 때까지(또는 상한까지) 기다린다.
 // 죽인 pty 가 없으면(POSIX·세션 0개) 즉시 끝난다 — 종료가 이유 없이 느려지지 않게.
 export async function drainKilledPtys(): Promise<void> {
+  // 줄에 선 kill 부터 끝낸다 — destroyAll 은 동기라 여기 올 때 아직 안 죽은 pty 가 있다.
+  await killQueue
   if (killedPtys.size === 0) return
   const deadline = Date.now() + EXIT_DRAIN_CAP_MS
   while (killedPtys.size > 0 && Date.now() < deadline) {
@@ -208,13 +247,17 @@ export class PtyBackend implements SessionBackend {
     this.pty.resume()
   }
   kill(): void {
-    try {
-      this.pty.kill()
-      // 종료 배수 대상으로 등록(위 주석). 로컬 pty 를 죽이는 경로는 여기 하나뿐이다.
-      if (process.platform === 'win32') killedPtys.add(this.pty)
-    } catch {
-      // 이미 종료: 무시.
-    }
+    const win = process.platform === 'win32'
+    // 줄 세워 죽인다(#203, 위 killInTurn). 이미 종료면 kill 이 던지고 줄은 곧장 다음으로 간다.
+    // POSIX 는 conpty 가 아니라 기다릴 신호(`_agent`)도 겹칠 벡터도 없다 — 서기만 하고 안 기다린다.
+    void killInTurn(
+      () => {
+        this.pty.kill()
+        // 종료 배수 대상으로 등록(위 주석). 로컬 pty 를 죽이는 경로는 여기 하나뿐이다.
+        if (win) killedPtys.add(this.pty)
+      },
+      win ? () => exitReported(this.pty) : () => true
+    )
   }
   onData(cb: (data: string) => void): void {
     this.pty.onData(cb)
