@@ -10,6 +10,7 @@ import { SshBackend } from './ssh/SshBackend'
 import { parseOsc7Cwd } from './osc7'
 import { aiCliOf } from '@shared/aiCli'
 import type { Session } from '@shared/types'
+import { usableSize } from '@shared/termSize'
 import type { HookSink } from '../agent/AgentHookServer'
 
 // 백프레셔 메커니즘 1: flush당 상한 바이트. 초과 시 즉시 flush.
@@ -255,7 +256,13 @@ export class MainSessionManager implements ISessionManager {
 
   resize(id: string, cols: number, rows: number): void {
     const h = this.handles.get(id)
-    if (!h || cols < 1 || rows < 1) return
+    /**
+     * 🔴 쓸 수 없는 치수는 **pty 에도 저장값에도 안 넘긴다**(2026-09-28 — `shared/termSize.ts` 주석).
+     * 창이 작아진 한순간(최소화 등)의 9×4 가 그대로 기록돼 다음 부팅에 9칸 pty 로 되살아났다.
+     * 여기서 거르면 두 피해가 함께 막힌다: 도는 프로그램(AI CLI 등)이 9칸으로 다시 그리는 것과,
+     * 그 값이 스냅샷에 남는 것. 화면이 제 크기로 돌아오면 ResizeObserver 가 제 치수를 다시 보낸다.
+     */
+    if (!h || !usableSize(cols, rows)) return
     h.backend.resize(cols, rows)
     // 복원이 이 값으로 pty 를 연다(`Session.cols` 주석) — snapshot() 이 meta 를 그대로 싣는다.
     h.meta.cols = cols

@@ -1,5 +1,6 @@
 // ssh 도메인 IPC 핸들러 (계획서 §C F3). 프로필 조회→비밀 복호(vault)→호스트키 TOFU→연결→세션 편입.
 // 실패는 구조화된 SshConnectResult로 반환(예외 던지지 않음): 고아 secretRef/호스트키/인증 구분.
+import { usableSize } from '@shared/termSize'
 import net from 'node:net'
 import { randomUUID } from 'node:crypto'
 import type { ConnTestResult, SshConnectResult } from '@shared/ipc'
@@ -76,7 +77,8 @@ export async function connectByProfile(
     acceptHostKey,
     onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
     ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {}),
-    ...(size && size.cols > 0 && size.rows > 0 ? { size } : {}),
+    // 쓸 만한 치수만 넘긴다(`shared/termSize.ts`) — 옛 스냅샷의 9×4 로 원격 셸을 열지 않는다.
+    ...(size && usableSize(size.cols, size.rows) ? { size } : {}),
     ...(argv && aiCwd ? { aiCommand: { argv, cwd: aiCwd } } : {})
   })
 

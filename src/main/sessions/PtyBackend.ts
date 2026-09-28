@@ -1,4 +1,5 @@
 // PtyBackend — node-pty를 SessionBackend로 감싸는 어댑터 (로컬 셸).
+import { usableSize } from '@shared/termSize'
 import { basename } from 'node:path'
 import { spawn as ptySpawn, type IPty } from 'node-pty'
 import type { SessionBackend } from './SessionBackend'
@@ -145,9 +146,10 @@ export class PtyBackend implements SessionBackend {
      * 마운트 직후 resize 가 따라잡지만 **이미 찍힌 줄은 안 고쳐진다.**
      * ⚠️ 값을 그대로 믿지 않는다 — 스냅샷은 손으로 고칠 수 있는 파일이다. 1 미만·비정상은 버린다.
      */
-    const okSize = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 1 && n <= 2000
-    const cols = okSize(spec.cols) ? spec.cols : 80
-    const rows = okSize(spec.rows) ? spec.rows : 24
+    // 쓸 만한 치수가 아니면(옛 스냅샷의 9×4 등) 기본값으로 연다 — 마운트 직후 resize 가 따라잡는다.
+    const sized = usableSize(spec.cols, spec.rows)
+    const cols = sized ? (spec.cols as number) : 80
+    const rows = sized ? (spec.rows as number) : 24
     try {
       this.pty = ptySpawn(file, args, {
         name: 'xterm-256color',

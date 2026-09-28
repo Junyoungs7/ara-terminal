@@ -37,6 +37,7 @@ import { setSessionState, useSessionStates } from '../store/sessionState'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
 import { CHANGELOG_URL } from '../../shared/links'
+import { usableSize } from '../../shared/termSize'
 import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
@@ -371,7 +372,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
               manualTitle: item.session.manualTitle,
               // 마지막으로 쓰던 치수로 연다 — 안 주면 80×24 라 첫 프롬프트가 접힌다
               // (2026-09-16 준영님 제보 · `Session.cols` 주석). 없으면 옛 스냅샷이니 예전 동작.
-              ...(item.session.cols && item.session.rows
+              // 🔴 쓸 만할 때만(`shared/termSize.ts`) — 9×4 가 저장돼 있어 첫 줄이 9칸에서 접혔다(#2 신고).
+              ...(usableSize(item.session.cols, item.session.rows)
                 ? { cols: item.session.cols, rows: item.session.rows }
                 : {})
             })
@@ -413,7 +415,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 저장해 둔 치수로 연다 — 없으면(옛 스냅샷) 예전대로 main 이 80×24 로 열고 마운트
             // 직후 resize 가 따라잡는다. `Session.cols` 주석에 왜 그것이 부족한지 적혀 있다.
             const savedSize =
-              item.session.cols && item.session.rows ? { cols: item.session.cols, rows: item.session.rows } : undefined
+              usableSize(item.session.cols, item.session.rows)
+                ? { cols: item.session.cols as number, rows: item.session.rows as number }
+                : undefined
             const res =
               item.profileId && sshRestore
                 ? await sshRestore(item.profileId, savedSize)
