@@ -12,6 +12,14 @@
   // 사이트(8899)와 같은 호스트의 8897. 교차 출처라 서버가 CORS 를 연다.
   var API = location.protocol + '//' + location.hostname + ':8897'
   var PW_KEY = 'ara-reports-admin' // sessionStorage 만 — 탭을 닫으면 사라져야 한다
+
+  /** 문자열 → UTF-8 바이트 → base64. btoa 는 라틴 문자만 받으므로 바이트로 먼저 바꾼다. */
+  function b64utf8(s) {
+    var bytes = new TextEncoder().encode(s)
+    var bin = ''
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+    return btoa(bin)
+  }
   var UNREACHABLE = '신고 서버에 닿지 못했습니다.'
 
   var STATUS = {
@@ -72,7 +80,8 @@
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
     // opts.pw: 아직 저장하지 않은 비밀번호로 한 번 묻는다(로그인 확인 — adminBar).
     var key = opts.pw || (opts.admin && pw())
-    if (key) headers.Authorization = 'Bearer ' + key
+    // UTF-8 → base64 로 싣는다 — 브라우저는 한글 같은 글자를 헤더에 못 싣는다(서버 bearerPassword 주석).
+    if (key) headers.Authorization = 'Bearer b64:' + b64utf8(key)
     return fetch(API + path, {
       method: opts.method || 'GET',
       headers: headers,

@@ -244,4 +244,23 @@ describe('ara-reports 서버', () => {
     }
     expect((await json(await fetch(`${base}/api/reports/${id}`))).status).toBe('fixed')
   })
+
+  it('🔴 비밀번호가 비었으면 확인 API 가 "설정되지 않았습니다"로 말한다 — 틀림과 가른다', async () => {
+    // 위 시험이 빈 비밀번호로 다시 띄워 둔 상태다.
+    const r = await fetch(base + '/api/admin/check', { headers: admin })
+    expect(r.status).toBe(403)
+    expect((await json(r)).error).toContain('설정되지 않았습니다')
+  })
+
+  it('🔴 한글이 든 비밀번호도 된다 — 사이트는 b64: 로 싣는다(브라우저는 한글을 헤더에 못 싣는다)', async () => {
+    const KO = '아라관리자!@#'
+    await stop()
+    await start({ ARA_REPORTS_ADMIN_PW: KO })
+    const b64 = (s: string) => 'Bearer b64:' + Buffer.from(s, 'utf8').toString('base64')
+    const check = (h: Record<string, string>) => fetch(base + '/api/admin/check', { headers: h })
+    expect((await check({ Authorization: b64(KO) })).status).toBe(200)
+    expect((await check({ Authorization: b64('아라관리자') })).status).toBe(403)
+    const wrong = await check({ Authorization: b64('틀림') })
+    expect((await json(wrong)).error).toContain('맞지 않습니다')
+  })
 })

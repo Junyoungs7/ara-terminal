@@ -65,10 +65,27 @@ function safeEqual(a, b) {
   return x.length === y.length && crypto.timingSafeEqual(x, y)
 }
 
+/**
+ * Authorization 값 → 비밀번호. 사이트는 `Bearer b64:<UTF-8 의 base64>` 로 보낸다(2026-09-29).
+ * 🔴 이유: 브라우저는 **라틴 문자 밖의 글자(한글 등)를 헤더에 못 싣는다** — fetch 가 보내기도 전에
+ * 거절한다. 그래서 한글이 든 관리 비밀번호로는 영영 로그인이 안 됐다(준영님 제보). 인코딩하면 어떤
+ * 글자든 된다. 옛 모양(`Bearer <원문>`)도 그대로 받는다 — 라틴 글자뿐인 비밀번호는 전처럼 통한다.
+ */
+function bearerPassword(header) {
+  const m = /^Bearer (.+)$/.exec(header ?? '')
+  if (!m) return null
+  if (!m[1].startsWith('b64:')) return m[1]
+  try {
+    return Buffer.from(m[1].slice(4), 'base64').toString('utf8')
+  } catch {
+    return null
+  }
+}
+
 function isAdmin(req) {
   if (!ADMIN_PW) return false // 🔴 빈 비밀번호로 열리는 문은 없다
-  const m = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')
-  return !!m && safeEqual(m[1], ADMIN_PW)
+  const pw = bearerPassword(req.headers.authorization)
+  return pw !== null && safeEqual(pw, ADMIN_PW)
 }
 
 const isReporter = (req, r) => {
@@ -289,6 +306,10 @@ async function route(req, res) {
   // 빈 비밀번호 설정이면 isAdmin 이 늘 false 라 늘 403 이다. ponytail: 대입 시도 제한은 없다(PATCH 도 같은 문이다).
   if (url.pathname === '/api/admin/check') {
     if (req.method !== 'GET') throw new HttpError(405, '허용되지 않는 요청입니다.')
+    // "설정 안 됨"과 "틀림"을 가른다 — 같은 403 이면 배포 때 비밀번호가 안 실린 것을 밖에서 알 길이 없다
+    // (2026-09-29 준영님: 맞는 비밀번호인데 안 된다). 사내 전용이라 이 구분이 새는 것의 값은 작다.
+    if (!ADMIN_PW)
+      throw new HttpError(403, '관리 비밀번호가 설정되지 않았습니다 — 신고 서버를 배포할 때 ARA_REPORTS_ADMIN_PW 를 넣어 주세요.')
     if (!isAdmin(req)) throw new HttpError(403, '관리자 비밀번호가 맞지 않습니다.')
     return send(res, 200, { ok: true })
   }
