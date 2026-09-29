@@ -74,8 +74,11 @@ export type MainAreaHandle = {
    * 2026-08-18: Shell 도 한 줄 안내가 필요해졌다(AI CLI 창을 없애면서 — 폴더를 모르는 세션에서
    * 그냥 넘어가면 "눌렀는데 아무 일도 안 남"이 된다). 토스트 구현을 Shell 에 또 만들지 않는다.
    */
-  toast: (msg: string) => void
+  toast: (msg: string, action?: ToastAction) => void
 }
+
+/** R16: 토스트에 버튼 하나 — [내 신고] 새 소식의 [보기]. 버튼이 있으면 좀 더 오래 머문다. */
+export type ToastAction = { label: string; run: () => void }
 
 type MainAreaProps = {
   sessions: ReturnType<typeof useSessions>
@@ -227,7 +230,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
      */
     const restoredIds = useRef<Set<string>>(new Set())
     const uiRef = useRef<UiState | null>(null) // 로드한 ui(persist 시 유지).
-    const [toast, setToast] = useState<string | null>(null)
+    const [toast, setToast] = useState<{ msg: string; action?: ToastAction } | null>(null)
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
     // F18 명령어 북 — 치트시트와 같은 오케스트레이터(ContextInteractions)가 열림 상태를 함께 관리.
@@ -242,10 +245,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     const { font, update: updateFont } = useFont()
     const { prefs, update: updatePrefs } = useUiPrefs()
 
-    const showToast = useCallback((msg: string) => {
-      setToast(msg)
+    const showToast = useCallback((msg: string, action?: ToastAction) => {
+      setToast({ msg, action })
       if (toastTimer.current) clearTimeout(toastTimer.current)
-      toastTimer.current = setTimeout(() => setToast(null), 2200)
+      toastTimer.current = setTimeout(() => setToast(null), action ? 8000 : 2200)
     }, [])
 
     // 다중 모니터 RDP 안내(모니터 한 장·이미 열림·죽은 영역)를 여기 토스트로 보낸다 —
@@ -1420,7 +1423,23 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             떼어낸 창도 여기를 지난다(SessionWindow 가 같은 prop 으로 넘긴다) — 두 창이 같게 논다. */}
         {!allPanesRdp(layout.panes) && bottom}
         <TerminalSearch open={searchOpen} sessionId={focusedSessionId()} onClose={() => setSearchOpen(false)} />
-        {toast && <div className="pane-toast">{toast}</div>}
+        {toast && (
+          <div className={'pane-toast' + (toast.action ? ' has-act' : '')}>
+            {toast.msg}
+            {toast.action && (
+              <button
+                type="button"
+                className="btn sec toast-act"
+                onClick={() => {
+                  toast.action?.run()
+                  setToast(null)
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
+          </div>
+        )}
         {/* 받는 동안 · 끄기 직전 — 우하단에 뜨고 아무것도 가리지 않는다(모달이 아니다). */}
         {!detachedWinId && (installing || updSt?.status === 'downloading') && (
           <UpdateProgress

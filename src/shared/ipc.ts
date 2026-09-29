@@ -29,7 +29,14 @@ import type {
   McpActivity,
   WorkProfile
 } from './types'
-import type { ReportPrepared, ReportSendReq, ReportSendResult } from './bugReport'
+import type {
+  MyReportsResult,
+  ReportDetailResult,
+  ReportPrepared,
+  ReportReplyResult,
+  ReportSendReq,
+  ReportSendResult
+} from './bugReport'
 import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliRecent, AiCommand } from './aiCli'
 import type { BrowserTabView } from './browserWin'
@@ -187,6 +194,10 @@ export type InvokeContract = {
    */
   'report:prepare': { req: void; res: ReportPrepared }
   'report:send': { req: ReportSendReq; res: ReportSendResult }
+  /** R16 [내 신고] — main 이 기기 헤더를 실어 서버에 묻는다(렌더러는 신고 id 만 안다). */
+  'report:mine': { req: void; res: MyReportsResult }
+  'report:detail': { req: { id: string }; res: ReportDetailResult }
+  'report:reply': { req: { id: string; body: string }; res: ReportReplyResult }
   /**
    * 자동 업데이트 (#98). 상태는 push(`update:state`)로도 오지만, 창이 늦게 뜨면 그 사이의 변화를
    * 놓치므로 **열릴 때 한 번 물어보는** 채널을 함께 둔다(AI·MCP 패널과 같은 규칙).
@@ -671,6 +682,10 @@ export type EvApi = {
   report: {
     prepare(): Promise<ReportPrepared>
     send(req: ReportSendReq): Promise<ReportSendResult>
+    /** R16 — 내 신고 목록(+ 한 번 알릴 새 소식) · 상세(읽음 처리) · 답글. */
+    mine(): Promise<MyReportsResult>
+    detail(id: string): Promise<ReportDetailResult>
+    reply(id: string, body: string): Promise<ReportReplyResult>
   }
   window: {
     minimize(): Promise<{ ok: true }>

@@ -106,6 +106,21 @@ const publicList = (r) => ({
   fixedIn: r.fixedIn
 })
 
+/**
+ * R16 `GET /api/mine` 한 줄 — 신고한 아라가 새 댓글·상태 변경을 알아채는 데 쓴다.
+ * lastAdminCommentAt: 관리자 코멘트만 센다(신고자 자신의 답글은 "새 것"이 아니다).
+ */
+const publicMine = (r) => ({
+  id: r.id,
+  number: r.number,
+  title: r.title,
+  status: r.status,
+  fixedIn: r.fixedIn,
+  updatedAt: r.updatedAt,
+  lastAdminCommentAt: r.comments.filter((c) => c.author === 'admin').pop()?.at ?? null,
+  comments: r.comments.length
+})
+
 const publicDetail = (r) => ({
   id: r.id,
   number: r.number,
@@ -312,6 +327,17 @@ async function route(req, res) {
       throw new HttpError(403, '관리 비밀번호가 설정되지 않았습니다 — 신고 서버를 배포할 때 ARA_REPORTS_ADMIN_PW 를 넣어 주세요.')
     if (!isAdmin(req)) throw new HttpError(403, '관리자 비밀번호가 맞지 않습니다.')
     return send(res, 200, { ok: true })
+  }
+  // R16: 이 기기가 올린 신고만. 헤더가 없으면 400 — 빈 값으로 "전부"나 "아무거나"가 나오는 길을 만들지 않는다.
+  if (url.pathname === '/api/mine') {
+    if (req.method !== 'GET') throw new HttpError(405, '허용되지 않는 요청입니다.')
+    const d = req.headers['x-ara-device']
+    if (typeof d !== 'string' || d === '') throw new HttpError(400, 'X-ARA-Device 헤더가 필요합니다.')
+    const list = [...reports.values()]
+      .filter((r) => isReporter(req, r))
+      .sort((a, b) => b.number - a.number)
+      .map(publicMine)
+    return send(res, 200, list)
   }
   if (parts[0] !== 'api' || parts[1] !== 'reports' || parts.length > 5) throw new HttpError(404, '없는 주소입니다.')
 

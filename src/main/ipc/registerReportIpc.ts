@@ -6,6 +6,7 @@ import { REPORTS_API } from '@shared/links'
 import { mainErrorLogPath } from '../log/MainErrorLog'
 import { detachedWindowStates } from '../windows/SessionWindows'
 import { buildReport, deviceId, logTail, postReport, safeSettings, sessionShape } from '../report/BugReport'
+import { checkMine, fetchDetail, postReply, recordSent } from '../report/MyReports'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 
@@ -26,8 +27,8 @@ export function registerReportIpc(sessions: MainSessionManager, store: Workspace
     return { capture, log: logTail(mainErrorLogPath()), settings: safeSettings(store.get().ui) }
   })
 
-  handle('report:send', (req) =>
-    postReport(
+  handle('report:send', async (req) => {
+    const r = await postReport(
       REPORTS_API,
       buildReport(req, {
         deviceId: deviceId(app.getPath('userData')),
@@ -38,5 +39,14 @@ export function registerReportIpc(sessions: MainSessionManager, store: Workspace
         settings: safeSettings(store.get().ui)
       })
     )
-  )
+    // R16: 보낸 적이 있어야 [내 신고] 폴링이 시작된다(MyReports.ts 머리 주석).
+    if (r.ok) recordSent(app.getPath('userData'), r.id)
+    return r
+  })
+
+  // R16 [내 신고]. 폴링 주기는 본창(useMyReports)이 쥔다 — 켤 때 한 번 + 10분마다 이 채널을 부른다.
+  const ud = () => app.getPath('userData')
+  handle('report:mine', () => checkMine(REPORTS_API, deviceId(ud()), ud()))
+  handle('report:detail', ({ id }) => fetchDetail(REPORTS_API, deviceId(ud()), ud(), id))
+  handle('report:reply', ({ id, body }) => postReply(REPORTS_API, deviceId(ud()), id, body))
 }

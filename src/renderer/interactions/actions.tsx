@@ -565,6 +565,8 @@ export type MenuCommandId =
   | 'font.zoomOut'
   | 'help.cheatsheet'
   | 'help.about'
+  // R16: 내가 보낸 신고의 댓글·상태를 본다. 새 소식이 있으면 TitleBar 가 라벨에 개수를 붙인다.
+  | 'help.myReports'
   // 2026-08-13 감사: 우측 바에만 있던 패널 다섯이 메뉴에도 통합 검색(F1)에도 없어서
   // "콘솔"·"포트"를 쳐도 안 나왔다. 팔레트가 MENUBAR 를 그대로 읽으므로 여기 올리면
   // **메뉴와 검색이 한 번에** 해결된다(팔레트 쪽은 손댈 것이 없다).
@@ -659,6 +661,7 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       // #206: 단축키가 있어 command 가 아니라 action 이다(설정과 같은 이유 — 실행 경로가 keydown 하나).
       // 통합 검색(F1)은 KEYMAP 에서 이 항목을 저절로 가져간다.
       { action: 'report.open' },
+      { command: 'help.myReports' },
       { command: 'help.about' }
     ]
   }

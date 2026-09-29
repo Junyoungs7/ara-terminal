@@ -42,3 +42,47 @@ export type ReportSendResult =
   | { ok: false; reason: 'server'; error: string }
   | { ok: false; reason: 'network' }
   | { ok: false; reason: 'http'; status: number }
+
+// ── R16 [내 신고] — 신고한 PC 가 관리자 댓글·상태 변경을 받아 본다 ─────────────────────────
+// 🔴 기기 ID 는 여기 어디에도 없다 — main 이 헤더에 싣고, 렌더러는 신고 id 로만 말한다.
+
+/** 실패 모양 — ReportSendResult 의 실패 셋과 같다(화면이 같은 문장으로 그린다). */
+export type ReportFail = Exclude<ReportSendResult, { ok: true }>
+
+/** 서버 `GET /api/mine` 한 줄 + fresh(관리자 댓글·상태·고친 판이 마지막으로 본 뒤 바뀌었다). */
+export type MyReportItem = {
+  id: string
+  number: number
+  title: string
+  status: string
+  fixedIn: string | null
+  updatedAt: number
+  lastAdminCommentAt: number | null
+  comments: number
+  fresh: boolean
+}
+
+/** 토스트로 한 번 알릴 것. 같은 변화는 두 번 오지 않는다(main 이 기억한다). */
+export type MyReportNews = { id: string; number: number; kind: 'comment' | 'status'; status: string; fixedIn: string | null }
+
+/** `report:mine`. 이 PC 가 보낸 신고가 없으면 서버에 묻지 않고 빈 목록이다. 닿지 못하면 ok:false(조용히). */
+export type MyReportsResult = { ok: true; items: MyReportItem[]; news: MyReportNews[] } | { ok: false }
+
+export type ReportComment = { at: number; author: 'admin' | 'reporter'; body: string }
+
+/** `report:detail` — 서버 상세 중 화면이 쓰는 것만. 첨부·env 는 싣지 않는다. */
+export type ReportDetail = {
+  id: string
+  number: number
+  title: string
+  what: string
+  happened: string
+  expected: string
+  status: string
+  fixedIn: string | null
+  createdAt: number
+  comments: ReportComment[]
+}
+
+export type ReportDetailResult = { ok: true; report: ReportDetail } | ReportFail
+export type ReportReplyResult = { ok: true; comment: ReportComment } | ReportFail

@@ -24,7 +24,8 @@ import { t } from '../i18n'
 export function TitleBar({
   onCommand,
   omni,
-  title
+  title,
+  reportNews = 0
 }: {
   /** 없으면 메뉴바·[?] 를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
@@ -33,6 +34,8 @@ export function TitleBar({
   omni?: React.ReactNode
   /** 세션 창의 제목(서버 — 세션). 본창은 안 쓴다(로고가 그 자리다). */
   title?: string
+  /** R16: 새 소식이 있는 내 신고 수. 0 보다 크면 [내 신고] 가 든 메뉴 제목에 빨간 점, 항목 라벨에 개수. */
+  reportNews?: number
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(버튼 왼쪽 아래).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -69,6 +72,9 @@ export function TitleBar({
             onMouseEnter={(e) => open && openAt(i, e.currentTarget)}
           >
             {m.title}
+            {reportNews > 0 && m.items.some((e) => 'command' in e && e.command === 'help.myReports') && (
+              <i className="tb-news" role="img" aria-label={t('report.news.dot')} />
+            )}
           </span>
         ))}
       </div>
@@ -112,7 +118,15 @@ export function TitleBar({
         open={open !== null}
         x={open?.x ?? 0}
         y={open?.y ?? 0}
-        items={open ? menuBarItems(open.index) : []}
+        items={
+          open
+            ? menuBarItems(open.index).map((it) =>
+                it.id === 'help.myReports' && reportNews > 0
+                  ? { ...it, label: t('menu.help.myReports.new').replace('{n}', String(reportNews)) }
+                  : it
+              )
+            : []
+        }
         onPick={(id) => {
           const entry = open ? MENUBAR[open.index].items.find((e) => ('action' in e ? e.action : e.command) === id) : undefined
           setOpen(null)

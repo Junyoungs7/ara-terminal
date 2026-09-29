@@ -5,7 +5,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -19,9 +19,9 @@ let dir: string
 let proc: ChildProcess | null = null
 let base = ''
 
-function start(env: Record<string, string> = {}): Promise<void> {
+function start(env: Record<string, string> = {}, server = SERVER): Promise<void> {
   return new Promise((ok, fail) => {
-    const p = spawn(process.execPath, [SERVER], {
+    const p = spawn(process.execPath, [server], {
       env: { ...process.env, ARA_REPORTS_PORT: '0', ARA_REPORTS_DIR: dir, ARA_REPORTS_ADMIN_PW: PW, ...env },
       stdio: ['ignore', 'pipe', 'pipe']
     })
@@ -86,6 +86,21 @@ async function text(r: Response) {
   return t
 }
 const json = async (r: Response) => JSON.parse(await text(r))
+
+/**
+ * R16 `/api/mine` 의 두 약속 — 남의 신고가 안 나온다 · 기기 ID 가 안 나온다. 어긋난 것을 문장으로 돌려준다
+ * (빈 배열이면 지킨 것). 위반을 심은 서버에도 같은 함수를 대서 이 검사가 헛돌지 않는지 잰다.
+ */
+async function mineProblems(dev: string, mineIds: string[]): Promise<string[]> {
+  const r = await fetch(base + '/api/mine', { headers: { 'X-ARA-Device': dev } })
+  const raw = await text(r)
+  const out: string[] = []
+  if (r.status !== 200) out.push(`상태 ${r.status}`)
+  if (raw.includes(dev) || raw.includes('deviceId')) out.push('기기 ID 가 나왔다')
+  const ids = (JSON.parse(raw) as { id: string }[]).map((x) => x.id)
+  if (JSON.stringify(ids) !== JSON.stringify(mineIds)) out.push(`목록이 다르다: ${ids.join(',')}`)
+  return out
+}
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ara-reports-'))
@@ -195,6 +210,44 @@ describe('ara-reports 서버', () => {
     expect((await json(r)).error).toBeTruthy()
   })
 
+  it('R16 /api/mine: 내 것만 · 기기 ID 없음 · 헤더 없으면 400', async () => {
+    const all = await json(await fetch(base + '/api/reports'))
+    const otherId = all.find((x: { number: number }) => x.number === 2).id
+    expect(await mineProblems(DEV, [id])).toEqual([])
+    expect(await mineProblems(OTHER, [otherId])).toEqual([])
+    expect(await mineProblems('dev-nobody', [])).toEqual([])
+    const mine = await json(await fetch(base + '/api/mine', { headers: { 'X-ARA-Device': DEV } }))
+    expect(Object.keys(mine[0]).sort()).toEqual(
+      ['comments', 'fixedIn', 'id', 'lastAdminCommentAt', 'number', 'status', 'title', 'updatedAt'].sort()
+    )
+    const detail = await json(await fetch(`${base}/api/reports/${id}`))
+    const adminAt = detail.comments.filter((c: { author: string }) => c.author === 'admin').pop().at
+    expect(mine[0]).toMatchObject({ number: 1, status: 'fixed', fixedIn: '1.0.13', comments: 2, lastAdminCommentAt: adminAt })
+    for (const h of [{}, { 'X-ARA-Device': '' }] as Record<string, string>[]) {
+      const r = await fetch(base + '/api/mine', { headers: h })
+      expect(r.status).toBe(400)
+      expect(typeof (await json(r)).error).toBe('string')
+    }
+    expect((await fetch(base + '/api/mine', { method: 'POST', headers: { 'X-ARA-Device': DEV } })).status).toBe(405)
+  })
+
+  it('R16 /api/mine: 내 답글은 lastAdminCommentAt 을 안 바꾸고, PATCH 는 updatedAt 을 바꾼다', async () => {
+    const get = async () => (await json(await fetch(base + '/api/mine', { headers: { 'X-ARA-Device': DEV } })))[0]
+    const before = await get()
+    await new Promise((r) => setTimeout(r, 5))
+    expect((await post(`/api/reports/${id}/comments`, { body: '고맙습니다' }, { 'X-ARA-Device': DEV })).status).toBe(201)
+    const afterReply = await get()
+    expect(afterReply.lastAdminCommentAt).toBe(before.lastAdminCommentAt)
+    expect(afterReply.comments).toBe(before.comments + 1)
+    await new Promise((r) => setTimeout(r, 5))
+    expect((await patch(`/api/reports/${id}`, { status: 'investigating' }, admin)).status).toBe(200)
+    const afterPatch = await get()
+    expect(afterPatch.status).toBe('investigating')
+    expect(afterPatch.updatedAt).toBeGreaterThan(afterReply.updatedAt)
+    // 뒤 시험들이 기대하는 상태로 되돌린다
+    expect((await patch(`/api/reports/${id}`, { status: 'fixed' }, admin)).status).toBe(200)
+  })
+
   it('R14 관리자 확인: 맞으면 200 {ok:true} · 틀리거나 없으면 403 · GET 만', async () => {
     const check = (h: Record<string, string> = {}, method = 'GET') => fetch(base + '/api/admin/check', { method, headers: h })
     const ok = await check(admin)
@@ -262,5 +315,27 @@ describe('ara-reports 서버', () => {
     expect((await check({ Authorization: b64('아라관리자') })).status).toBe(403)
     const wrong = await check({ Authorization: b64('틀림') })
     expect((await json(wrong)).error).toContain('맞지 않습니다')
+  })
+
+  it('🔴 위반 심기: /api/mine 이 기기 ID 를 싣거나 남의 신고를 내면 mineProblems 가 문다', async () => {
+    const src = readFileSync(SERVER, 'utf8')
+    const leak = src.replace('const publicMine = (r) => ({', 'const publicMine = (r) => ({ deviceId: r.deviceId,')
+    const everyone = src.replace('.filter((r) => isReporter(req, r))', '.filter(() => true)')
+    expect(leak).not.toBe(src)
+    expect(everyone).not.toBe(src)
+    const all = await json(await fetch(base + '/api/reports'))
+    const one = all.find((x: { number: number }) => x.number === 1).id
+    for (const [name, bad, want] of [
+      ['leak', leak, '기기 ID 가 나왔다'],
+      ['everyone', everyone, '목록이 다르다']
+    ] as const) {
+      const f = join(dir, `server-${name}.mjs`)
+      writeFileSync(f, bad)
+      await stop()
+      await start({}, f)
+      const problems = await mineProblems(DEV, [one])
+      expect(problems.some((p) => p.startsWith(want))).toBe(true)
+      rmSync(f)
+    }
   })
 })

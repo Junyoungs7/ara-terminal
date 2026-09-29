@@ -347,7 +347,10 @@ const api: EvApi = {
   // #206 오류 신고. prepare 가 부른 창을 찍는다 — 신고 창은 그 답을 받은 뒤에 연다.
   report: {
     prepare: () => ipcRenderer.invoke('report:prepare'),
-    send: (req) => ipcRenderer.invoke('report:send', req)
+    send: (req) => ipcRenderer.invoke('report:send', req),
+    mine: () => ipcRenderer.invoke('report:mine'),
+    detail: (id) => ipcRenderer.invoke('report:detail', { id }),
+    reply: (id, body) => ipcRenderer.invoke('report:reply', { id, body })
   },
   // W2 F12: 세션 로그 폴더 열기.
   sessionLog: {

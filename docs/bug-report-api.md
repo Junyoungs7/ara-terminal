@@ -83,6 +83,19 @@
 관리자만. `{ "status"?: …, "fixedIn"?: "1.0.13" | null }` → 200 `{ report }`.
 `fixedIn` 은 `^\d+\.\d+\.\d+$` 만.
 
+### `GET /api/mine` — 이 기기가 올린 신고 (R16)
+`X-ARA-Device` 헤더 필수 — 없거나 빈 값이면 **400**. 그 기기가 올린 것만, 최신이 위:
+```jsonc
+[{ "id": "…", "number": 1, "title": "…", "status": "fixed", "fixedIn": "1.0.15",
+   "updatedAt": 1790000000000, "lastAdminCommentAt": 1790000000000, "comments": 3 }]
+```
+- `lastAdminCommentAt` 은 **관리자 코멘트만** 센다(신고자 자신의 답글은 아라에서 "새 것"이 아니다). 없으면 `null`
+- `updatedAt` 은 코멘트(누구든)·PATCH 때 바뀐다. `comments` 는 개수
+- 🔴 다른 기기의 신고는 절대 안 나온다 · `deviceId` 필드는 없다(`publicMine` 한 곳에서 만든다)
+- 아라는 main 이 부른다: 이 PC 가 신고를 한 번이라도 보냈을 때만(`userData/my-reports.json` 의 `sent`), 켤 때 한 번 + 10분마다.
+  새 것 = 관리자 코멘트가 마지막으로 본 시각(서버 시계)보다 뒤 · 상태나 `fixedIn` 이 본 것과 다름. 상세(`GET /api/reports/:id`)를
+  열면 읽음으로 적는다. 답글은 `POST /api/reports/:id/comments`(신고자) 그대로다
+
 ### `GET /api/admin/check` — 관리자 비밀번호 확인 (R14)
 관리자면 200 `{ "ok": true }`, 아니면 403. 서버에 비밀번호가 비어 있으면 **늘 403**. 사이트의 [관리자 로그인]이
 이걸 먼저 부르고 200 일 때만 `sessionStorage` 에 저장한다(틀린 비밀번호로 "관리자로 보는 중"이 뜨지 않게).

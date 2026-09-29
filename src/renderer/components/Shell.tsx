@@ -22,6 +22,7 @@ import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
 import { useBugReport } from './BugReportModal'
+import { useMyReports } from './MyReportsModal'
 import { useSessions } from '../store/sessions'
 import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
@@ -231,6 +232,8 @@ export function Shell() {
   const dialog = useDialog()
   // #206 오류 신고. open() 이 창을 먼저 찍고 그다음 신고 창을 연다(순서는 훅 안에 있다).
   const bugReport = useBugReport()
+  // R16 [내 신고] — 켤 때 + 10분마다 새 소식을 묻고, 있으면 토스트 [보기] + 메뉴바 [도움말] 빨간 점.
+  const myReports = useMyReports((msg, action) => mainRef.current?.toast(msg, action))
   const ask = dialog.ask
   const askText = dialog.askText
 
@@ -605,6 +608,9 @@ export function Shell() {
         case 'help.cheatsheet':
           mainRef.current?.openCheatsheet()
           return
+        case 'help.myReports':
+          myReports.open()
+          return
         case 'ai.bootstrap':
           if (!AI_ENTRY) return // 아라 대화가 꺼진 판에서는 갈 곳이 없다(features.ts)
           setBootstrapOpen(true)
@@ -655,7 +661,7 @@ export function Shell() {
           return
       }
     },
-    [ask, version]
+    [ask, version, myReports.open]
   )
 
   // 연결 실패를 사유별 커스텀 다이얼로그로 보여준다(네이티브 alert 금지).
@@ -1455,6 +1461,7 @@ export function Shell() {
     <div className="app">
       <TitleBar
         onCommand={onMenuCommand}
+        reportNews={myReports.unread}
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
         // (dispatchAction / 메뉴 명령 / connectProfile) — 팔레트 전용 배선을 만들지 않는다.
         omni={
@@ -1870,6 +1877,7 @@ export function Shell() {
       />
       {dialog.node}
       {bugReport.node}
+      {myReports.node}
     </div>
   )
 }

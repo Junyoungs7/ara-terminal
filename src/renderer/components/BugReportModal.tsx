@@ -3,7 +3,7 @@ import { t } from '../i18n'
 import { IconClose } from './icons'
 import { recentErrors } from '../store/errorRing'
 import { termRenderer } from '../terminal/webglChoice'
-import type { ReportPrepared, ReportSendResult } from '@shared/bugReport'
+import type { ReportFail, ReportPrepared, ReportSendResult } from '@shared/bugReport'
 
 // 오류 신고(#206) — 기획 docs/plan-bug-report.md §2·§3·§4, 계약 docs/bug-report-api.md.
 // 껍데기는 Dialog 의 `.overlay/.modal/.modal-hd/.dlg-body/.modal-ft` 그대로(AiBootstrapModal 과 같은 결) —
@@ -41,6 +41,13 @@ export function useBugReport(): { open: () => Promise<void>; node: JSX.Element |
 
   const close = useCallback(() => setPrepared(null), [])
   return { open, node: prepared ? <BugReportModal prepared={prepared} onClose={close} /> : null }
+}
+
+/** 실패 한 문장 — 신고 창과 [내 신고] 창이 같이 쓴다. 서버 문장은 그대로, 나머지는 우리 문장. */
+export function failText(f: ReportFail): string {
+  if (f.reason === 'server') return f.error
+  if (f.reason === 'http') return t('report.fail.http').replace('{status}', String(f.status))
+  return t('report.fail.network')
 }
 
 type Checks = { capture: boolean; log: boolean; errors: boolean; settings: boolean }
@@ -81,14 +88,7 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
     setResult(r)
   }
 
-  const fail =
-    result && !result.ok
-      ? result.reason === 'server'
-        ? result.error
-        : result.reason === 'http'
-          ? t('report.fail.http').replace('{status}', String(result.status))
-          : t('report.fail.network')
-      : null
+  const fail = result && !result.ok ? failText(result) : null
 
   const check = (k: keyof Checks, label: string) => (
     <label className="fb-check">

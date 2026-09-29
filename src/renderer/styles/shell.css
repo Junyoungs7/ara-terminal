@@ -5159,7 +5159,8 @@ button.sb-seg.upd:hover .val {
 .modal.bug-report {
   width: 600px;
 }
-.bug-report .fld textarea {
+.bug-report .fld textarea,
+.my-reports .fld textarea {
   background: var(--bg-canvas);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -5170,7 +5171,8 @@ button.sb-seg.upd:hover .val {
   outline: none;
   resize: vertical;
 }
-.bug-report .fld textarea:focus {
+.bug-report .fld textarea:focus,
+.my-reports .fld textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
@@ -5218,6 +5220,110 @@ button.sb-seg.upd:hover .val {
   width: 14px;
   height: 14px;
   cursor: pointer;
+}
+/* R16 [내 신고] — .modal.sm 을 재사용하되 목록 | 상세 두 칸이 들어가게 넓게. 입력칸은 신고 창 .fld 결 그대로. */
+.modal.my-reports {
+  width: 780px;
+}
+.my-reports .dlg-body.mr-body {
+  grid-template-columns: 220px 1fr;
+  align-items: start;
+}
+.mr-list {
+  display: grid;
+  gap: var(--sp-2);
+  padding-right: var(--sp-5);
+  border-right: 1px solid var(--line);
+}
+.mr-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-mid);
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+.mr-item:hover {
+  background: var(--bg-overlay);
+}
+.mr-item.on {
+  background: var(--bg-overlay);
+  border-color: var(--accent-line);
+  color: var(--text-hi);
+}
+.mr-item-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-meta {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+/* 새 소식 점 — 제목 옆 글자(aria-label)와 함께 읽힌다. 메뉴바 [도움말] 의 점(.tb-news)과 같은 색. */
+.mr-new,
+.tb-news {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--err);
+  vertical-align: middle;
+}
+.tb-news {
+  margin-left: var(--sp-2);
+}
+.mr-detail {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+.mr-detail h3 {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text-hi);
+}
+.mr-text {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--text-mid);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.mr-cmt {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.mr-cmt.admin {
+  border-color: var(--accent-line);
+}
+.mr-cmt-hd {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.mr-cmt.admin .mr-cmt-hd b {
+  color: var(--accent-bright);
+}
+/* 토스트에 버튼이 붙을 때(R16 [보기]) — 그때만 눌린다. 글자만인 토스트는 그대로 클릭을 흘려보낸다. */
+.pane-toast.has-act {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  pointer-events: auto;
 }
 .dlg-body {
   padding: var(--sp-8) var(--sp-9);
