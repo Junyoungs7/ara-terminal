@@ -25,7 +25,8 @@ const ID_RE = /^r-\d{8}-\d{4,}$/
 const TIMEOUT_MS = 10_000
 
 type Seen = { at: number; status: string; fixedIn: string | null; toasted?: string }
-type MineState = { sent: string[]; seen: Record<string, Seen> }
+// probed — 1.0.15 이하에서 보낸 신고는 sent 에 없다. 그래서 **처음 한 번은** sent 가 비어도 묻고, 나온 것을 sent 로 들인다.
+type MineState = { sent: string[]; seen: Record<string, Seen>; probed?: boolean }
 type ServerMine = Omit<MyReportItem, 'fresh'>
 
 /** 본 적 없는 신고의 기준 — 막 보낸 모습. 이보다 달라졌으면 새 것이다. */
@@ -36,7 +37,8 @@ export function readMineState(userData: string): MineState {
     const v = JSON.parse(readFileSync(join(userData, MY_REPORTS_FILE), 'utf8')) as Partial<MineState>
     return {
       sent: Array.isArray(v.sent) ? v.sent.filter((x) => typeof x === 'string') : [],
-      seen: v.seen && typeof v.seen === 'object' ? v.seen : {}
+      seen: v.seen && typeof v.seen === 'object' ? v.seen : {},
+      probed: v.probed === true
     }
   } catch {
     return { sent: [], seen: {} } // 없거나 깨졌다 — 처음부터
@@ -84,7 +86,7 @@ export async function checkMine(
   fetchImpl: typeof fetch = fetch
 ): Promise<MyReportsResult> {
   const st = readMineState(userData)
-  if (st.sent.length === 0) return { ok: true, items: [], news: [] }
+  if (st.sent.length === 0 && st.probed) return { ok: true, items: [], news: [] }
   let list: ServerMine[]
   try {
     const res = await fetchImpl(`${api}/api/mine`, { headers: headers(device), signal: AbortSignal.timeout(TIMEOUT_MS) })
@@ -99,6 +101,11 @@ export async function checkMine(
   const items: MyReportItem[] = []
   const news: MyReportNews[] = []
   let changed = false
+  if (!st.probed) {
+    st.probed = true
+    for (const i of list) if (!st.sent.includes(String(i.id))) st.sent.push(String(i.id))
+    changed = true
+  }
   for (const i of list) {
     const item: MyReportItem = {
       id: String(i.id),

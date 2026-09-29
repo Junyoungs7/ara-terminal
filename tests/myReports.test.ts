@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { checkMine, fetchDetail, MY_REPORTS_FILE, newsKind, postReply, recordSent } from '../src/main/report/MyReports'
+import { checkMine, fetchDetail, MY_REPORTS_FILE, newsKind, postReply, readMineState, recordSent } from '../src/main/report/MyReports'
 
 const ADMIN = 'r16-test-only-pw'
 const DEVICE = '22222222-3333-4444-8555-666666666666'
@@ -67,12 +67,25 @@ const counted: typeof fetch = (input, init) => {
 describe('R16 내 신고 — main ↔ 진짜 서버', () => {
   let mine = ''
 
-  it('보낸 신고가 없으면 서버에 묻지 않는다', async () => {
+  it('신고한 적 없는 PC 는 처음 한 번만 묻고, 그 뒤로는 묻지 않는다', async () => {
+    const empty = mkdtempSync(join(tmpdir(), 'ara-mine-ud0-'))
+    const NOBODY = '44444444-3333-4444-8555-666666666666'
+    calls = 0
+    expect(await checkMine(api, NOBODY, empty, counted)).toEqual({ ok: true, items: [], news: [] })
+    expect(await checkMine(api, NOBODY, empty, counted)).toEqual({ ok: true, items: [], news: [] })
+    expect(calls).toBe(1)
+    rmSync(empty, { recursive: true, force: true })
+  })
+
+  it('1.0.15 이하에서 보낸(기록 없는) 신고도 처음 물을 때 들인다', async () => {
     mine = await send(DEVICE, '내 신고')
     await send(OTHER, '남의 신고')
     calls = 0
-    expect(await checkMine(api, DEVICE, ud, counted)).toEqual({ ok: true, items: [], news: [] })
-    expect(calls).toBe(0)
+    const r = await checkMine(api, DEVICE, ud, counted)
+    expect(calls).toBe(1)
+    expect(r.ok && r.items.map((i) => i.id)).toEqual([mine])
+    expect(readMineState(ud).sent).toEqual([mine])
+    calls = 0
   })
 
   it('보낸 뒤: 내 것만 나오고, 막 보낸 것은 새 것이 아니다', async () => {
