@@ -68,3 +68,13 @@ describe('복원이 저장값을 거른다 — 옛 스냅샷에 이미 9×4 가 
     expect(src).not.toMatch(/item\.session\.cols && item\.session\.rows/)
   })
 })
+
+describe('🔴 화면(xterm)도 쓸 수 없는 크기로는 맞추지 않는다 — 오류 신고 #4', () => {
+  // 탐색기 `아라` 로 연 셸이 칸이 정해지기 전에 마운트되어 xterm 이 9칸으로 맞춰졌고, 윈도우 로컬은
+  // 줄을 다시 접지 않아 프롬프트가 9칸에서 접힌 채 남았다. main 은 거르지만 xterm 은 따로 막아야 한다.
+  const pane = readFileSync(join(__dirname, '..', 'src/renderer/terminal/TerminalPane.tsx'), 'utf8')
+  it('fit() 을 부르는 자리가 전부 usableSize 판정 뒤에 있다', () => {
+    const bare = pane.split('\n').filter((l) => /\bfit(Ref\.current)?\.fit\(\)/.test(l) && !/canFit\(\)|usableSize\(/.test(l))
+    expect(bare).toEqual([])
+  })
+})
