@@ -153,6 +153,7 @@ const api: EvApi = {
     mkdirp: (path: string) => ipcRenderer.invoke('fs:mkdirp', { path }),
     copy: (paths: string[], destDir: string) => ipcRenderer.invoke('fs:copy', { paths, destDir }),
     downloadsDir: () => ipcRenderer.invoke('fs:downloadsDir').then((r: { dir: string }) => r.dir),
+    downloadTarget: () => ipcRenderer.invoke('fs:downloadTarget'),
     freeName: (dir: string, name: string) =>
       ipcRenderer.invoke('fs:freeName', { dir, name }).then((r: { name: string }) => r.name),
     saveBytes: (req: { dir: string; sub?: string; name: string; bytes: Uint8Array }) =>
@@ -176,6 +177,7 @@ const api: EvApi = {
       ipcRenderer.invoke('sftp:copyRemote', { sessionId, paths, destDir }),
     download: (req) => ipcRenderer.invoke('sftp:download', req),
     upload: (req) => ipcRenderer.invoke('sftp:upload', req),
+    downloadDir: (req) => ipcRenderer.invoke('sftp:downloadDir', req),
     copyBetween: (req) => ipcRenderer.invoke('sftp:copyBetween', req),
     cancel: (transferId: string) => ipcRenderer.invoke('sftp:cancel', { transferId }),
     pickSavePath: (defaultName: string) =>

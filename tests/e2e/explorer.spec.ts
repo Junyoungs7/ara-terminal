@@ -765,7 +765,8 @@ test('FM-6★ 원격 메뉴에는 로컬 전용 항목이 없다', async ({ ara,
     const menu = page.locator('.ctx-menu')
     await expect(menu.locator('[data-action="file.paste"]')).toBeVisible()
     await expect(menu.locator('[data-action="file.cut"]')).toHaveCount(0)
-    await expect(menu.locator('[data-action="file.newFile"]')).toHaveCount(0)
+    // [새 파일]은 1.0.14 부터 원격에도 있다(형제 점검 F — 있는 이름은 거절, 내용을 비우지 않는 'ax').
+    await expect(menu.locator('[data-action="file.newFile"]')).toBeVisible()
     await expect(menu.locator('[data-action="file.reveal"]')).toHaveCount(0)
     // 보기(정렬·숨김)는 원격에도 있다 — 목록을 어떻게 볼지는 화면의 문제라 백엔드와 무관하다.
     await expect(menu.locator('[data-action="file.view"]')).toBeVisible()

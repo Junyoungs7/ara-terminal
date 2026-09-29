@@ -86,7 +86,20 @@ export type SftpXferResult =
   | { ok: false; canceled: boolean; message: string; cleaned: boolean }
 
 // 전송 진행 이벤트(sftp:progress:{transferId}). transferred/total 바이트.
-export type SftpProgress = { transferId: string; transferred: number; total: number }
+// files/fileTotal 은 폴더째 받기(R15)에서만 온다 — 받은 파일 수 / 전체 파일 수.
+export type SftpProgress = { transferId: string; transferred: number; total: number; files?: number; fileTotal?: number }
+
+/**
+ * R15(신고 #3) 폴더째 받기 결과.
+ *  · confirm — 받기 **전에** 세어 보니 크다(1GB 또는 5,000개 초과). 아무것도 쓰지 않았다 — 사람에게 묻고
+ *    confirmed:true 로 다시 부른다.
+ *  · ok — localPath 는 새로 만든 폴더(같은 이름이 있으면 `이름 (2)`). skipped 는 못 받은 파일 수,
+ *    skippedNames 는 그중 앞의 몇 개. links 는 따라가지 않은 심볼릭 링크 수.
+ */
+export type SftpDirResult =
+  | { ok: true; localPath: string; files: number; links: number; skipped: number; skippedNames: string[] }
+  | { ok: false; confirm: { files: number; bytes: number } }
+  | { ok: false; canceled: boolean; message: string; cleaned: boolean }
 
 // SSH 연결 결과(계획서 §C F3). 성공/호스트키확인필요/실패를 구조화(예외 대신 판별 유니온).
 export type SshConnectResult =
@@ -340,6 +353,9 @@ export type InvokeContract = {
   'fs:reveal': { req: { path: string }; res: FileOpResult }
   // #92: 원격 파일을 받는 기본 폴더(OS 다운로드 폴더).
   'fs:downloadsDir': { req: void; res: { dir: string } }
+  // R15: [파일] 탭이 받는 곳 — 설정 [다운로드 폴더]를 푼다. 저장된 폴더가 사라졌으면 missing 에 그 경로
+  // (dir 은 OS 다운로드 폴더). 아라 캡처는 이것이 아니라 위 downloadsDir 을 그대로 쓴다.
+  'fs:downloadTarget': { req: void; res: { dir: string; missing?: string } }
   // #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다.
   'fs:freeName': { req: { dir: string; name: string }; res: { name: string } }
   // W4sat F20: 로컬↔로컬 패널 간 복사(재귀).
@@ -377,6 +393,11 @@ export type InvokeContract = {
   // transferId는 진행 이벤트·취소용(호출측이 생성). 결과는 취소/부분정리 포함 구조화.
   'sftp:download': { req: { sessionId: string; transferId: string; remotePath: string; localPath: string; size: number }; res: SftpXferResult }
   'sftp:upload': { req: { sessionId: string; transferId: string; localPath: string; remoteDir: string }; res: SftpXferResult }
+  // R15: 원격 폴더 remotePath 를 localDir 아래에 통째로. 취소는 sftp:cancel(transferId).
+  'sftp:downloadDir': {
+    req: { sessionId: string; transferId: string; remotePath: string; localDir: string; confirmed?: boolean }
+    res: SftpDirResult
+  }
   // 서버 A → 서버 B. 디스크를 거치지 않고 두 SFTP 스트림을 main 에서 직접 잇는다.
   // 두 세션 id 가 같으면 거절한다 — 같은 서버는 sftp:copyRemote(exec cp)가 네트워크를 안 탄다.
   'sftp:copyBetween': {
@@ -743,6 +764,14 @@ export type EvApi = {
     copyRemote(sessionId: string, paths: string[], destDir: string): Promise<FileOpResult>
     download(req: { sessionId: string; transferId: string; remotePath: string; localPath: string; size: number }): Promise<SftpXferResult>
     upload(req: { sessionId: string; transferId: string; localPath: string; remoteDir: string }): Promise<SftpXferResult>
+    /** R15: 원격 폴더를 localDir 아래에 통째로(크면 confirm 이 먼저 온다). */
+    downloadDir(req: {
+      sessionId: string
+      transferId: string
+      remotePath: string
+      localDir: string
+      confirmed?: boolean
+    }): Promise<SftpDirResult>
     /** 서버 A → 서버 B(디스크 경유 없음). 같은 서버면 copyRemote 를 쓴다. */
     copyBetween(req: {
       srcSessionId: string
@@ -831,6 +860,8 @@ export type EvApi = {
     reveal(path: string): Promise<FileOpResult>
     /** #92: 원격 파일을 받는 기본 폴더(OS 다운로드 폴더). */
     downloadsDir(): Promise<string>
+    /** R15: [파일] 탭이 받는 곳(설정 [다운로드 폴더]). 저장된 폴더가 사라졌으면 missing. */
+    downloadTarget(): Promise<{ dir: string; missing?: string }>
     /** #92: dir 안에서 비어 있는 이름(`보고서 (2).xlsx`). 덮어쓰기를 피한다. */
     freeName(dir: string, name: string): Promise<string>
     /** #90: 중간 단계까지 만든다(mkdir -p). 원격의 ensureRemoteDir 에 대응하는 로컬 경로. */

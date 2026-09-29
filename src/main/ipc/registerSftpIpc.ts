@@ -31,6 +31,10 @@ export function registerSftpIpc(
   handle('sftp:download', ({ sessionId, transferId, remotePath, localPath, size }) =>
     service.download(sessionId, transferId, remotePath, localPath, size)
   )
+  // R15 폴더째 받기. 경로 검사(절대경로만)는 서비스가 한다 — 시험이 거기서 문다.
+  handle('sftp:downloadDir', ({ sessionId, transferId, remotePath, localDir, confirmed }) =>
+    service.downloadDir(sessionId, transferId, remotePath, localDir, confirmed === true)
+  )
   handle('sftp:upload', ({ sessionId, transferId, localPath, remoteDir }) =>
     service.upload(sessionId, transferId, localPath, remoteDir)
   )

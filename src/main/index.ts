@@ -442,7 +442,7 @@ app.whenReady().then(async () => {
   registerRdpIpc(profiles, getWebContents)
   registerRdpClipIpc()
   const sftpService = registerSftpIpc(sessions, getWebContents)
-  registerFsIpc()
+  registerFsIpc(() => store.get().ui.downloadDir)
   registerLocalCliIpc()
   // #98 자동 업데이트 — 본창으로만 알린다(떼어낸 창에 같은 배너를 두 번 띄울 이유가 없다).
   registerUpdateIpc(mainWc)

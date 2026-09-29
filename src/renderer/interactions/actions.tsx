@@ -491,6 +491,8 @@ export function fileMenu(ctx: {
     if (ctx.isDir) {
       ids.push('file.open')
       if (ctx.canAiCli) ids.push('file.aicli')
+      // R15(신고 #3): 원격 폴더는 하위 구조째 받는다.
+      if (ctx.canDownload) ids.push('file.download', 'file.downloadAs')
     } else {
       // 편집기가 먼저다 — 원격과 같은 조작이고, 텍스트가 아니면 [연결 프로그램]이 바로 아래 있다.
       ids.push('file.edit')

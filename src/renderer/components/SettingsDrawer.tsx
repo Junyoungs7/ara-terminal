@@ -235,19 +235,30 @@ function DirRow({
   label,
   desc,
   value,
-  onChange
+  onChange,
+  resolve
 }: {
   label: string
   desc: string
   value: string
   onChange: (next: string) => void
+  /** 지금 실제로 쓰이는 자리를 main 에게 묻는다. 없으면 기록 폴더 둘(logPaths) 중 하나. */
+  resolve?: () => Promise<string>
 }) {
   const [effective, setEffective] = useState('')
   useEffect(() => {
-    void window.ev?.app
-      ?.logPaths?.()
-      .then((p) => setEffective(label === t('settings.dir.session') ? p.sessionLogDir : p.appLogDir))
+    const ask =
+      resolve ??
+      (() =>
+        window.ev.app
+          .logPaths()
+          .then((p) => (label === t('settings.dir.session') ? p.sessionLogDir : p.appLogDir)))
+    void Promise.resolve()
+      .then(ask)
+      .then(setEffective)
       .catch(() => {})
+    // resolve 는 렌더마다 새 함수라 의존성에서 뺀다 — 값이 바뀔 때만 다시 묻는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, label])
   return (
     <Row label={label} desc={desc}>
@@ -1009,6 +1020,19 @@ export function SettingsDrawer({
                   <span className="v">{prefs.scrollback.toLocaleString('ko-KR')}</span>
                 </div>
               </Row>
+              {/* R15(신고 #3): "설정에 저장할 폴더를 지정하는 부분이 없음". 받는 곳은 [파일] 탭의 일이라
+                  [로그] 가 아니라 여기다. 사라진 폴더는 받을 때 묻는다(FileTree.download). */}
+              <DirRow
+                label={t('settings.dir.download')}
+                desc={t('settings.dir.download.desc')}
+                value={prefs.downloadDir}
+                onChange={(downloadDir) => onPrefsChange({ downloadDir })}
+                resolve={() =>
+                  window.ev.fs
+                    .downloadTarget()
+                    .then((r) => (r.missing ? `${r.missing} — ${t('settings.dir.missing')}` : r.dir))
+                }
+              />
               <UpdateRow />
             </>
           )}

@@ -3,10 +3,11 @@
 // 실패는 예외 대신 구조화 결과로 반환(트리 영역에 표시, 크래시 금지) — SftpService 와 같은 규칙.
 import { readdir, stat, rename, mkdir, cp, rm, open, access } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join, resolve, basename, extname, sep } from 'node:path'
+import { dirname, join, resolve, basename, extname, sep, isAbsolute } from 'node:path'
 import { shell } from 'electron'
 import type { FileEntry, FileListResult, FileOpResult } from '@shared/ipc'
 import { friendly } from '../util/fsError'
+import { WIN_BAD_CHARS } from './saveBytes'
 
 // Windows 예약 장치명(D4) — 확장자를 붙여도 여전히 그 디바이스를 가리킨다(예: con.txt).
 const RESERVED_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i
@@ -232,4 +233,39 @@ export async function freeName(dir: string, name: string): Promise<string> {
     }
   }
   return name
+}
+
+/**
+ * R15(신고 #3) 원격 이름 → **이 PC 에서 쓸 수 있는 이름.** 거절이 아니라 바꾼다 — 폴더째 받을 때
+ * `a:b.log` 하나 때문에 폴더 전체가 멈추면 안 된다. 리눅스에선 전부 정상인 이름이다.
+ *  · 못 쓰는 글자와 구분자 → `_`
+ *  · 끝의 점·공백 → `_` — Windows 가 **조용히 떼어 내서** `a.` 와 `a` 가 같은 파일이 된다(덮어쓰기)
+ *  · 빈 이름·예약 장치명(`CON`) → 앞에 `_` — 판정은 `invalidName` 그대로(새 규칙을 만들지 않는다)
+ * 바꾼 결과가 서로 부딪히는 것(`a:b` 와 `a_b`, 대소문자만 다른 두 이름)은 부르는 쪽의 `freeName` 이 막는다.
+ */
+export function localName(name: string): string {
+  const n = name
+    .replace(new RegExp(WIN_BAD_CHARS.source, 'g'), '_')
+    .replace(/[\\/]/g, '_')
+    .replace(/[. ]+$/, (m) => '_'.repeat(m.length))
+  return invalidName(n) ? '_' + n : n
+}
+
+/**
+ * R15(신고 #3) 받는 곳 — 설정 [다운로드 폴더]를 풀어 쓴다. 값은 렌더러가 저장한 것이라 신뢰 경계 밖이다
+ * (`main/index.ts` 의 `dirPref` 와 같은 규칙: 절대경로만).
+ *
+ * 🔴 **저장된 폴더가 사라졌으면(USB 를 뺐다) 조용히 다른 데 쓰지 않는다** — `missing` 으로 알려
+ * 화면이 사람에게 묻게 한다. 기본 자리로 가는 것은 그다음이다. 설정값은 지우지 않는다(USB 는 다시 꽂힌다).
+ */
+export async function downloadTarget(pref: unknown, fallback: string): Promise<{ dir: string; missing?: string }> {
+  if (typeof pref !== 'string' || !pref) return { dir: fallback }
+  if (isAbsolute(pref)) {
+    try {
+      if ((await stat(pref)).isDirectory()) return { dir: pref }
+    } catch {
+      /* 없다 — 아래에서 알린다 */
+    }
+  }
+  return { dir: fallback, missing: pref }
 }

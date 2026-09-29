@@ -371,6 +371,7 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         uiScale: 'normal',
         sessionLogDir: '',
         appLogDir: '',
+        downloadDir: '',
         scrollback: 10000,
         copyOnSelect: true,
         cursorStyle: 'block',

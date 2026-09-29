@@ -413,6 +413,11 @@ export type UiPrefs = {
    */
   sessionLogDir: string
   appLogDir: string
+  /**
+   * R15(신고 #3) [파일] 탭이 원격 파일을 받는 폴더. 빈 문자열 = OS 다운로드 폴더(지금까지의 동작).
+   * 신뢰 경계 밖이라 main 이 절대경로·실제 폴더인지 본다(`LocalFs.downloadTarget`).
+   */
+  downloadDir: string
   // W5: 아라가 쓸 프로바이더 + 프로바이더별 모델(4개 전부 확정값 — aiModelsOf 가 채운다).
   // API 키는 여기 없다 — 키는 프로바이더별로 vault 에만 있고(`ai.apiKey.<provider>`) 이 묶음은
   // workspace.json 으로 간다. baseUrl 은 compatible 전용, 비밀이 아니라(사용자가 직접 보는 값) vault 대상이 아니다.
@@ -484,6 +489,8 @@ export type UiState = {
   // 2026-08-23: 기록을 쌓을 폴더(빈 값 = 기본 자리). UiPrefs 의 같은 이름 주석 참고.
   sessionLogDir?: string
   appLogDir?: string
+  // R15: [파일] 탭이 받는 폴더(빈 값 = OS 다운로드). 🔴 선택 필드라 SCHEMA_VERSION 은 그대로다(termCompletion 주석).
+  downloadDir?: string
   // W5 [AI]: 아라가 쓸 프로바이더 + 프로바이더별 모델. 미지정 필드는 aiProviderOf/aiModelsOf 가
   // 기본값으로 채운다. 키는 여기 없다(vault 전용, 프로바이더별로 분리 저장).
   aiProvider?: AiProvider

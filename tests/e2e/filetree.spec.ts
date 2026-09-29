@@ -150,14 +150,22 @@ test('FILE-2 터미널에서 cd 하면 트리가 그 폴더로 이동한다', as
 // FILE-3 폴더 더블클릭 = 진입 + 터미널도 함께 cd(트리→터미널)
 // BLOCKER-2 회귀 감시: cd 를 LF 로 보내면 conpty/PowerShell 이 줄을 실행하지 않아 cwd 가 그대로다
 //   (셸은 `>>` 연속 입력에 빠진다). 개행 문자 계약은 tests/filepath.test.ts 의 cdCommand 가 함께 지킨다.
-test('FILE-3 폴더를 더블클릭하면 진입하고 터미널도 따라간다', async ({ ara }) => {
+// ⚠️ 2026-09-28 바뀌었다: 폴더 진입은 **진입만** 한다. 자동 cd 가 AI CLI 탭에 프롬프트로 들어갔기
+// 때문이다(아라는 셸이 프롬프트에 서 있는지 모른다). 터미널은 [터미널도 여기로] 를 눌러야 따라간다 —
+// 위 BLOCKER-2 개행 감시는 그 버튼 경로로 옮겼다.
+test('FILE-3 폴더를 더블클릭하면 진입만 하고, 버튼을 눌러야 터미널이 따라간다', async ({ ara }) => {
   const dir = makeWorkdir()
   writeFileSync(join(dir, '문서', '설계.md'), '# 설계\n')
   await openFileTabAt(ara.page, dir)
+  const cwd = ara.page.locator('.statusbar .sb-seg.cwd .val')
   await row(ara.page, '문서/').dblclick()
   await expect(row(ara.page, '설계.md')).toBeVisible()
-  // 터미널도 같은 폴더로 이동했는지는 상태바 cwd 로 확인한다.
-  await expect(ara.page.locator('.statusbar .sb-seg.cwd .val')).toContainText('문서', { timeout: 20_000 })
+  // 🔴 저절로 따라가면 안 된다 — 잠깐 기다려도 터미널은 그대로다.
+  await ara.page.waitForTimeout(1500)
+  await expect(cwd).not.toContainText('문서')
+  // 버튼을 누르면 따라간다(개행 계약 — 실행까지 돼야 cwd 가 바뀐다).
+  await ara.page.click('.sftp-path-bar [data-action="file.cdTerminal"]')
+  await expect(cwd).toContainText('문서', { timeout: 20_000 })
 })
 
 // FILE-4 상위 폴더 버튼 + 브레드크럼으로 되돌아간다
@@ -170,8 +178,9 @@ test('FILE-4 상위 폴더·브레드크럼으로 이동한다', async ({ ara })
   await expect(row(ara.page, '문서/')).toBeVisible()
   // 브레드크럼 마지막 세그먼트 = 현재 폴더. 하나 앞 세그먼트를 누르면 상위로 간다.
   const segs = ara.page.locator('.fcrumb .seg')
+  // count() 는 기다리지 않는다 — 함께 돌리면 다시 그리는 한순간에 0 을 읽었다(2026-09-29, 단독 3/3 통과).
+  await expect.poll(() => segs.count(), { timeout: 10_000 }).toBeGreaterThan(1)
   const count = await segs.count()
-  expect(count).toBeGreaterThan(1)
   await segs.nth(count - 2).click()
   await expect.poll(async () => (await names(ara.page)).length, { timeout: 15_000 }).toBeGreaterThan(0)
 })

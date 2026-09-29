@@ -21,6 +21,7 @@ const DEFAULT_PREFS: UiPrefs = {
   logRetentionDays: DEFAULT_LOG_RETENTION_DAYS,
   sessionLogDir: '',
   appLogDir: '',
+  downloadDir: '',
   aiProvider: DEFAULT_AI_PROVIDER,
   aiModels: aiModelsOf(undefined),
   aiCompatibleBaseUrl: '',

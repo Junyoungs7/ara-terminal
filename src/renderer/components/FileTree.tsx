@@ -134,7 +134,8 @@ function rowIcon(kind: RowKind, name: string): JSX.Element {
 }
 
 // 전송·삭제 큐 항목. pct=null 은 진행률을 알 수 없는 작업(재귀 삭제).
-type QueueItem = { id: string; label: string; pct: number | null }
+// files = 폴더째 받기(R15)의 "받은 수/전체 수". 파일 하나짜리 전송에는 없다.
+type QueueItem = { id: string; label: string; pct: number | null; files?: string }
 
 // 로컬 fs / 원격 SFTP 공통 백엔드. remote=true 인 쪽만 전송(다운·업로드)을 갖는다.
 type Backend = {
@@ -465,7 +466,8 @@ export function FileTree({
         if (canceled.current.has(item.id)) continue
         const off = window.ev.sftp.onProgress(item.id, (p: SftpProgress) => {
           const pct = p.total > 0 ? Math.min(100, Math.round((p.transferred / p.total) * 100)) : 0
-          setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct } : x)))
+          const files = p.fileTotal ? `${p.files ?? 0}/${p.fileTotal}` : undefined
+          setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct, files } : x)))
         })
         const res = await jobs[i].run(item.id)
         off()
@@ -504,17 +506,77 @@ export function FileTree({
   // 위치를 고르고 싶으면 우클릭 [다른 위치에 받기] — 아래 askWhere=true 가 예전 경로 그대로다.
   // andOpen: 받고 나서 **연결 프로그램으로 연다**(2026-08-22 준영님 제보 25번 — 원격 파일도
   // 로컬과 같은 손이 되게. "다운로드 경로에 다운로드되며 열리게" 하자는 준영님 안 그대로다).
+  //
+  // R15(신고 #3): **폴더도 받는다**(하위 구조째 — main 의 downloadDir). 전에는 폴더를 고르면 아래
+  // 첫 줄의 파일 거르기에서 조용히 빠져 **아무 일도 안 일어났다**(메뉴에도 [다운로드]가 없었다).
+  // 받는 곳은 설정 [다운로드 폴더] — 비었으면 OS 다운로드 폴더(fs.downloadTarget).
   const download = useCallback(
     async (targets: FileEntry[], askWhere = false, andOpen = false) => {
       if (!session || !backend?.remote) return
       const files = targets.filter((e) => e.type === 'file')
-      if (files.length === 0) return
+      const dirs = targets.filter((e) => e.type === 'dir')
+      if (files.length === 0 && dirs.length === 0) return
       const sid = session.id
+      // 폴더 하나 = 큐 항목 하나. 크면 main 이 쓰기 전에 confirm 을 돌려준다 — 여기서 묻고 다시 부른다.
+      const dirJobs = (dir: string) =>
+        dirs.map((d) => ({
+          label: `${t('sftp.downloading')} ${d.name}/`,
+          run: async (transferId: string): Promise<SftpXferResult> => {
+            const req = { sessionId: sid, transferId, remotePath: joinPath(path, d.name), localDir: dir }
+            let r = await window.ev.sftp.downloadDir(req)
+            if (!r.ok && 'confirm' in r) {
+              const yes = await ask({
+                title: t('sftp.dir.big.title'),
+                message: t('sftp.dir.big.msg'),
+                detail: [
+                  { label: t('sftp.dir.big.path'), value: req.remotePath },
+                  { label: t('sftp.dir.big.files'), value: r.confirm.files.toLocaleString('ko-KR') },
+                  { label: t('sftp.dir.big.size'), value: humanSize(r.confirm.bytes) }
+                ],
+                confirmLabel: t('sftp.download'),
+                cancelLabel: t('dlg.cancel')
+              })
+              if (yes !== 'confirm') return { ok: true }
+              r = await window.ev.sftp.downloadDir({ ...req, confirmed: true })
+            }
+            if (!r.ok) return 'confirm' in r ? { ok: true } : r
+            setGot({ name: d.name, localPath: r.localPath })
+            // 못 받은 것을 삼키지 않는다 — 권한 없는 파일 하나로 전체를 멈추지 않는 대신 끝에 밝힌다.
+            if (r.skipped > 0 || r.links > 0) {
+              const parts: string[] = []
+              if (r.skipped > 0)
+                parts.push(
+                  t('sftp.dir.skipped').replace('{n}', String(r.skipped)) +
+                    ' — ' +
+                    r.skippedNames.join(', ') +
+                    (r.skipped > r.skippedNames.length ? ' …' : '')
+                )
+              if (r.links > 0) parts.push(t('sftp.dir.links').replace('{n}', String(r.links)))
+              setError(parts.join(' · '))
+            }
+            return { ok: true }
+          }
+        }))
       // 묻지 않는 길: 받는 곳에 빈 이름을 잡아 바로 받는다. 덮어쓰기는 하지 않는다(freeName).
       if (!askWhere) {
-        const dir = await window.ev.fs.downloadsDir()
-        await runQueue(
-          files.map((f) => ({
+        const target = await window.ev.fs.downloadTarget()
+        // 🔴 설정한 폴더가 사라졌으면(USB) 조용히 기본 자리로 가지 않는다 — 어디로 갈지 먼저 말한다.
+        if (target.missing) {
+          const r = await ask({
+            title: t('sftp.dir.missing.title'),
+            message: t('sftp.dir.missing.msg'),
+            detail: [
+              { label: t('sftp.dir.missing.was'), value: target.missing },
+              { label: t('sftp.dir.missing.now'), value: target.dir }
+            ],
+            confirmLabel: t('sftp.download'),
+            cancelLabel: t('dlg.cancel')
+          })
+          if (r !== 'confirm') return
+        }
+        const dir = target.dir
+        await runQueue([
+          ...files.map((f) => ({
             label: `${t('sftp.downloading')} ${f.name}`,
             run: async (transferId: string) => {
               const name = await window.ev.fs.freeName(dir, f.name)
@@ -536,12 +598,13 @@ export function FileTree({
               }
               return r
             }
-          }))
-        )
+          })),
+          ...dirJobs(dir)
+        ])
         return
       }
       // 여러 개면 받을 폴더를 한 번만 고른다(파일마다 저장 대화상자를 띄우지 않는다).
-      if (files.length === 1) {
+      if (files.length === 1 && dirs.length === 0) {
         const localPath = await window.ev.sftp.pickSavePath(files[0].name)
         if (!localPath) return
         await runQueue([
@@ -561,8 +624,8 @@ export function FileTree({
       }
       const dir = await window.ev.sftp.pickSaveDir()
       if (!dir) return
-      await runQueue(
-        files.map((f) => ({
+      await runQueue([
+        ...files.map((f) => ({
           label: `${t('sftp.downloading')} ${f.name}`,
           run: async (transferId: string) => {
             /**
@@ -581,10 +644,11 @@ export function FileTree({
               size: f.size
             })
           }
-        }))
-      )
+        })),
+        ...dirJobs(dir)
+      ])
     },
-    [session, backend, path, runQueue]
+    [session, backend, path, runQueue, ask]
   )
 
   // 올릴 곳은 target.current — 트리가 보여 주는 디렉토리이자, 탭이 숨어 있을 때는 터미널의
@@ -1391,7 +1455,11 @@ export function FileTree({
               <div className="xfer-bar">
                 <div className={'xfer-fill' + (item.pct === null ? ' indet' : '')} style={item.pct === null ? undefined : { width: `${item.pct}%` }} />
               </div>
-              {item.pct !== null && <span className="xfer-pct">{item.pct}%</span>}
+              {item.pct !== null && (
+                <span className="xfer-pct">
+                  {item.pct}%{item.files ? ` · ${item.files}` : ''}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -1405,7 +1473,8 @@ export function FileTree({
           ...fileMenu({
             count: sel.length,
             isDir: sel.length === 1 && selectedEntries()[0]?.type === 'dir',
-            canDownload: backend.remote && selFiles > 0,
+            // R15: 폴더도 받는다(하위 구조째). 전엔 파일이 하나라도 있어야 떴다.
+            canDownload: backend.remote && sel.length > 0,
             // #89: 로컬 파일 하나일 때만. 원격은 실체가 이 PC 에 없어 OS 가 열 수 없다.
             canOpenWith: !backend.remote && selFiles === 1 && sel.length === 1,
             canTail: backend.remote && Boolean(onTailFile),

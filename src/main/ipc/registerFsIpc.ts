@@ -3,12 +3,13 @@
 // (경로 탈출 방지는 LocalFs.invalidName 이 이름 입력에서 막는다 — 경로 자체는 사용자가 트리에서 고른 것).
 import { dialog, app, shell } from 'electron'
 import { handle } from './handle'
-import { list, renameEntry, makeDir, makeFile, makeDirP, moveEntries, drives, trash, copyEntries, freeName } from '../fs/LocalFs'
+import { list, renameEntry, makeDir, makeFile, makeDirP, moveEntries, drives, trash, copyEntries, freeName, downloadTarget } from '../fs/LocalFs'
 import { saveBytes } from '../fs/saveBytes'
 
 const badPath = { ok: false as const, message: '잘못된 경로입니다.' }
 
-export function registerFsIpc(): void {
+// downloadDirPref: 설정 [다운로드 폴더](ui.downloadDir) — 저장소를 여기로 끌어오지 않고 읽는 함수만 받는다.
+export function registerFsIpc(downloadDirPref: () => string | undefined = () => undefined): void {
   // 설정의 기록 폴더 고르기. **경로를 렌더러가 지어낼 수 없다** — 사용자가 고른 것만 돌려준다.
   handle('fs:pickDir', async () => {
     const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
@@ -50,6 +51,8 @@ export function registerFsIpc(): void {
   })
   // #92: 받는 곳. 설정 항목은 만들지 않았다 — 값이 하나뿐이면 설정이 아니다(필요해지면 UiPrefs 로).
   handle('fs:downloadsDir', () => ({ dir: app.getPath('downloads') }))
+  // R15(신고 #3): 위 주석의 "필요해지면"이 왔다 — 값이 사람마다 다르다는 신고. 검사는 downloadTarget 이 한다.
+  handle('fs:downloadTarget', () => downloadTarget(downloadDirPref(), app.getPath('downloads')))
   // #92: 덮어쓰기 없이 받기 위한 빈 이름. 조립 규칙은 LocalFs.nthName(순수 함수)에 있다.
   handle('fs:freeName', async ({ dir, name }) =>
     typeof dir === 'string' && dir && typeof name === 'string' && name

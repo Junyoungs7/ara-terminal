@@ -97,14 +97,83 @@ export function clipboardSignature(src: { paths?: readonly string[]; text?: stri
  *  · 우리가 이미 알린 것과 같으면 다시 알리지 않는다 — 알리는 순간 원격의 복사를 빼앗는다.
  *  · 원격이 방금 우리에게 준 것과 같으면 알리지 않는다(에코) — 원격 텍스트를 로컬 클립보드에
  *    써 넣기 때문에, 그걸 그대로 되돌려 보내면 주인이 무의미하게 뒤집힌다.
+ *  · 원격 파일을 받는 중이면 알리지 않는다(receiving).
  */
 export function shouldAnnounceClipboard(
   sig: string | null,
   announced: string | null,
-  fromRemote: string | null
+  fromRemote: string | null,
+  /** 원격 파일을 자동으로 받는 중(R15). 그 사이 로컬 클립보드는 옛 것이라 알리면 원격의 복사를 빼앗는다. */
+  receiving = false
 ): boolean {
-  if (!sig) return false
+  if (!sig || receiving) return false
   return sig !== announced && sig !== fromRemote
+}
+
+// ── 원격 → 로컬 자동 받기(R15 · 준영님 결정 "mobaxterm 처럼 누르지 않게") ─────────────────
+// 원격이 파일을 복사하면 버튼 없이 받아 윈도우 클립보드에 올린다. 자동이라 상한을 둔다 — 원격에서
+// 원격으로 옮기려고 누른 Ctrl+C 도 전부 로컬로 내려받기 때문이다. 값은 로컬→원격 상한
+// (main/rdp/rdpClipboard.ts 의 LOCAL_TO_REMOTE_MAX)과 같게 두었다. 그 모듈은 electron 을 끌고 와
+// 여기서 가져올 수 없다.
+export const RDP_AUTO_RECV_MAX = 100 * 1024 * 1024
+
+/**
+ * files-available 로 온 목록을 자동으로 받나(순수 — 단위 테스트 대상).
+ *  · 폴더가 하나라도 섞이면(isDirectory · 폴더 안 파일 path) 통째로 수동이다 — 클립보드로 받는 길은
+ *    평평한 파일만 올린다(receiveFiles 주석). 폴더만 빼고 나머지를 자동으로 올리면 붙여넣은 결과가
+ *    복사한 것과 조용히 달라진다.
+ *  · 합계가 상한을 넘으면 수동이다(같음은 자동 — 로컬→원격 overLimit 과 같은 경계).
+ */
+export function autoReceivePlan(
+  files: readonly { size: number; path?: string; isDirectory?: boolean }[]
+): 'auto' | 'folder' | 'tooBig' | 'none' {
+  if (files.length === 0) return 'none'
+  if (files.some((f) => f.isDirectory || f.path)) return 'folder'
+  return files.reduce((a, f) => a + f.size, 0) > RDP_AUTO_RECV_MAX ? 'tooBig' : 'auto'
+}
+
+/**
+ * 우리가 로컬 클립보드에 올린 파일 묶음의 지문. 되먹임을 막는 **하나뿐인** 지문이다 — 올린 쪽
+ * (clipPut 결과), 포커스 동기화(Electron 이 주는 첫 경로 하나), paste 이벤트(전체 목록)가 모두 이걸로
+ * 맞춰 본다. 첫 경로만 쓰는 이유는 Electron 의 싼 검사가 첫 경로밖에 못 읽어서다(util/clipboardFiles.ts).
+ */
+/** 경로 묶음의 지문 — 순서가 달라도 같은 묶음이다(paste 이벤트와 PowerShell 이 순서를 같게 준다는 보장이 없다). */
+export const pathsSig = (paths: readonly string[]): string | null => clipboardSignature({ paths: [...paths].sort() })
+
+export const ownFilesSig = (paths: readonly string[]): string | null => clipboardSignature({ paths: paths.slice(0, 1) })
+
+/**
+ * 원격이 파일을 새로 복사했을 때(files-available) 적을 기록(순수 — 단위 테스트 대상). 그 순간의 로컬
+ * 클립보드 지문을 **이미 본 것**으로 둔다 — 포커스 동기화(announced)와 paste(seen) 양쪽에. 비우면(옛 동작)
+ * 다음 포커스가 옛 로컬 파일을 "새 복사"로 보고 원격의 복사를 빼앗는다. 로컬에서 실제로 새로 복사해
+ * 지문이 바뀌어야 다시 알린다.
+ */
+export function afterRemoteCopy(localSig: string | null): { announced: string | null; seen: string | null } {
+  return { announced: localSig, seen: localSig }
+}
+
+/**
+ * 캔버스의 paste 이벤트로 온 로컬 파일을 원격에 알리나(순수 — 단위 테스트 대상). 파일이 하나도 없는
+ * 붙여넣기는 부르는 쪽이 먼저 거른다.
+ *  · 우리가 원격에서 받아 올린 파일이면 안 알린다(되먹임 — 원격 파일이 원격으로 되돌아간다).
+ *  · 원격이 복사하던 순간 로컬에 이미 있던 파일(seen)이면 안 알린다 — 원격 안에서 Ctrl+C → Ctrl+V 할 때
+ *    옛 로컬 파일이 원격의 복사를 빼앗는다(자동으로 못 받은 경우: 상한·폴더·실패).
+ *  · 원격 파일을 받는 중이면 안 알린다 — 그 사이 로컬 클립보드는 아직 **옛 로컬 파일**이다.
+ *    원격 안에서 Ctrl+C → Ctrl+V 하는 동안 옛 로컬 파일이 원격 클립보드를 빼앗는다.
+ *  · 이미 알린 묶음(locked)이거나, 알린 묶음을 원격이 아직 가져가는 중이면(uploading) 안 알린다 —
+ *    다시 알리면 provider 가 앞의 것을 supersede 해 **붙여넣기 중인 전송이 끊긴다.** uploading 은
+ *    경로 문자열 비교(locked)가 어긋나도(PowerShell FullName ↔ File.path) 자물쇠가 풀리지 않게 한다.
+ */
+export function shouldUploadPasted(
+  paths: readonly string[],
+  s: { locked: string | null; fromRemote: string | null; seen?: string | null; receiving: boolean; uploading: boolean }
+): boolean {
+  if (s.receiving || s.uploading) return false
+  // 경로가 없는 항목(캡처 도구가 넣은 비트맵을 Chromium 이 File 로 준 것 등)은 지문을 못 만든다 — 막지 않는다.
+  if (paths.length === 0) return true
+  const own = ownFilesSig(paths)
+  if (own === s.fromRemote || own === s.seen) return false
+  return pathsSig(paths) !== s.locked
 }
 
 export function pickClipboardText(items: readonly RdpClipItem[]): string | null {

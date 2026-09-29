@@ -30,10 +30,15 @@ import {
   defaultRdpKeyMode,
   fixedResolution,
   rdpButtonOf,
+  afterRemoteCopy,
+  autoReceivePlan,
   clipboardSignature,
+  ownFilesSig,
+  pathsSig,
   pickClipboardText,
   remapKeyCode,
   shouldAnnounceClipboard,
+  shouldUploadPasted,
   resLabel,
   resolveSize,
   scancodeOf,
@@ -53,8 +58,15 @@ const COMBO_LABEL: Record<string, string> = {
 // 고른 항목에만 체크. 안 고른 항목도 빈 칸을 넘겨 라벨 왼쪽 줄을 맞춘다(.ci-ic 가 폭을 잡는다).
 const check = (on: boolean): JSX.Element => (on ? <Check /> : <span />)
 
-/** 경로 묶음의 지문 — 순서가 달라도 같은 묶음이다(paste 이벤트와 PowerShell 이 순서를 같게 준다는 보장이 없다). */
-const pathsSig = (paths: readonly string[]): string | null => clipboardSignature({ paths: [...paths].sort() })
+/**
+ * 지금 로컬 클립보드의 지문(포커스 동기화와 원격 복사 때의 스냅숏이 같은 모양을 쓴다). 경로는 Electron 의
+ * 싼 검사라 첫 경로 하나뿐이고, 파일이 없을 때만 텍스트를 읽는다(파일 우선 — clipboardSignature).
+ */
+async function readLocalClip(): Promise<{ paths: string[]; text: string; sig: string | null }> {
+  const paths = (await window.ev.clipboard.readFiles().catch(() => ({ paths: [] as string[] }))).paths
+  const text = paths.length === 0 ? await readClipboard() : ''
+  return { paths, text, sig: clipboardSignature({ paths, text }) }
+}
 
 /** 옵션 버튼과 그 아래 메뉴 사이 간격(Dropdown 의 목록 배치와 같은 값). */
 const MENU_GAP = 4
@@ -217,6 +229,7 @@ type RdpProvider = {
   on(ev: string, cb: (...a: never[]) => void): void
   downloadFile(f: RdpFileInfo, i: number): { transferId: number; completion: Promise<Blob> }
   uploadFiles(files: unknown[]): unknown
+  isUploadInProgress(): boolean
   showFilePicker(o?: { multiple?: boolean }): Promise<File[]>
   handleDrop(e: unknown): Promise<unknown[]>
   handleDragOver(e: unknown): void
@@ -377,6 +390,29 @@ export function RdpView({
   // 하나로 만든 싼 지문이라 paste 이벤트의 전체 목록과 맞춰 볼 수 없다. 같은 묶음을 두 번 알리면
   // provider 가 앞의 것을 supersede 해 **붙여넣기 중인 전송이 끊긴다** — 그걸 막는 자물쇠다.
   const localFilesRef = useRef<string | null>(null)
+  // 원격 파일을 자동으로 받는 중인 수(R15). 0 이 아니면 로컬 클립보드는 아직 **옛 로컬 것**이다 —
+  // 포커스·paste 가 그걸 원격에 알리면 원격의 복사를 빼앗는다. 복사가 겹치면 받기도 겹쳐서 수로 센다.
+  const receivingRef = useRef(0)
+  // 원격이 마지막으로 파일을 복사한 순간의 로컬 클립보드 지문(files-available 주석). paste 이벤트가 이걸
+  // 보고 옛 로컬 파일을 원격 안의 Ctrl+V 에 끼워 넣지 않는다. announcedRef 와 따로 두는 이유: 알린 묶음이
+  // 실패하면 paste 가 다시 알려야 하는데(provider 'error'), 그 판정까지 이 기록이 막으면 안 된다.
+  const seenLocalRef = useRef<string | null>(null)
+  // 파일 목록을 알리고 원격의 답(format-list-response)을 기다리는 중인가. 텍스트를 알려도 같은 답이
+  // 오므로, 이게 없으면 텍스트의 답이 파일 상태 줄을 덮는다.
+  const awaitingAnswerRef = useRef(false)
+
+  // 원격 클립보드에 파일을 **알리는** 한 곳(R15). paste 이벤트·포커스·드롭·[파일 보내기] 넷이 모두 지난다.
+  // "알렸다"는 우리가 보냈다는 뜻일 뿐이고 원격이 받아들였는지는 format-list-response 가 말한다 — 그래서
+  // 상태 줄을 단계로 남긴다: 알림 → 원격 수락/거절 → 내용 요청(보내는 중 n%) → 보냄. 원격 붙여넣기가
+  // 안 될 때 **줄이 어디서 멈췄나**가 원인을 가른다. 오류 신고의 화면 캡처에 이 줄이 실린다.
+  const advertise = useCallback((files: unknown[], n: number) => {
+    const provider = providerRef.current
+    if (!provider) return
+    awaitingAnswerRef.current = true
+    setXfer({ label: t('rdp.file.announced').replace('{n}', String(n)), pct: null })
+    // 마지막에 부른다 — 알리기부터 실패하면 provider 가 곧바로 error 를 쏘는데, 그 줄이 위 줄에 덮이면 안 된다.
+    provider.uploadFiles(files)
+  }, [])
 
   // 고른 항목 → 실제 픽셀. 다중 모니터 창에서는 모니터 배치가 크기를 정하므로 라벨을 무시한다.
   const sizeOf = useCallback(
@@ -424,16 +460,23 @@ export function RdpView({
       onFiles: (files) => {
         const provider = providerRef.current
         if (!provider || files.length === 0) return false
-        // 포커스 때 이미 알린 묶음이면 다시 알리지 않는다(localFilesRef 주석 — 다시 알리면 전송이 끊긴다).
-        const sig = pathsSig(filePaths(files))
-        if (sig && sig === localFilesRef.current) return true
-        provider.uploadFiles(files)
-        localFilesRef.current = sig
-        setXfer({ label: t('rdp.file.announced').replace('{n}', String(files.length)), pct: 100 })
+        // 이미 알린 묶음·원격이 가져가는 중인 묶음·우리가 원격에서 받아 올린 파일은 다시 알리지 않는다
+        // (shouldUploadPasted 주석). 알리지 않아도 true — 캔버스의 붙여넣기는 원격의 몫이다.
+        const paths = filePaths(files)
+        const upload = shouldUploadPasted(paths, {
+          locked: localFilesRef.current,
+          fromRemote: fromRemoteRef.current,
+          seen: seenLocalRef.current,
+          receiving: receivingRef.current > 0,
+          uploading: provider.isUploadInProgress()
+        })
+        if (!upload) return true
+        localFilesRef.current = pathsSig(paths)
+        advertise(files, files.length)
         return true
       }
     })
-  }, [])
+  }, [advertise])
 
   // 릴레이 쪽 실패는 클라이언트엔 "general error" 로만 보인다 — main 이 올려 주는 실제 사유를
   // 받아 두었다가 오류 화면에 함께 보여준다(이게 없으면 원인을 알 방법이 없다).
@@ -485,22 +528,44 @@ export function RdpView({
         const provider = new mod.RdpFileTransferProvider({ chunkSize: 64 * 1024 }) as unknown as RdpProvider
         providerRef.current = provider
         for (const ext of provider.getBuilderExtensions()) builder.extension(ext as never)
-        // 원격이 파일을 복사하면 목록이 올라온다 — 바로 받지 않고 헤더에 버튼만 띄운다
-        // (사용자가 원격에서 Ctrl+C 했다고 로컬 디스크에 파일이 쏟아지면 안 된다).
+        // 원격이 파일을 복사하면 목록이 올라온다 — 목록만 적어 두고, 받는 것은 아래 자동 받기 effect 가 한다
+        // (R15 · 상한 100MB · 폴더 제외. 예전엔 [파일 받기] 를 눌러야 받았다).
         provider.on('files-available', ((files: RdpFileInfo[]) => {
-          // 원격이 방금 파일을 복사했다 = 지금 클립보드 주인은 원격이다. 우리가 알렸던 기록은
-          // 무효가 됐으므로 지운다(로컬에서 새로 복사하면 그때 다시 알려 주인을 되찾는다).
-          announcedRef.current = null
+          // 원격이 방금 파일을 복사했다 = 지금 클립보드 주인은 원격이다. 이 순간의 로컬 클립보드는
+          // **이미 본 것**으로 적는다 — 예전엔 announcedRef 를 지워서, 자동으로 못 받았을 때(상한·폴더·실패)
+          // 캔버스를 누르기만 해도 옛 로컬 파일이 원격 클립보드를 빼앗았다(방금 원격에서 복사한 것이 조용히
+          // 사라진다). 이제 로컬 클립보드가 **실제로 바뀐 뒤에만** 다시 알린다. 텍스트의 fromRemoteRef 와 같은 원리다.
+          // 대가: 같은 파일을 로컬에서 다시 복사하면 지문이 같아 알아채지 못한다(paste 길의 두 번째 Ctrl+V 가 받는다).
+          // 스냅숏은 IPC 한 번 뒤에 적힌다 — 그 틈(수 ms)의 포커스는 옛 기록으로 판정된다.
           localFilesRef.current = null
+          void readLocalClip().then(({ sig }) => {
+            const rec = afterRemoteCopy(sig)
+            announcedRef.current = rec.announced
+            seenLocalRef.current = rec.seen
+          })
           setRemoteFiles(files)
         }) as never)
         provider.on('download-progress', ((p: { fileName: string; percentage: number }) =>
           setXfer({ label: `${t('rdp.file.receiving')} ${p.fileName}`, pct: p.percentage })) as never)
         provider.on('upload-progress', ((p: { fileName: string; percentage: number }) =>
           setXfer({ label: `${t('rdp.file.sending')} ${p.fileName}`, pct: p.percentage })) as never)
-        provider.on('error', ((e: { message: string }) => {
-          setXfer(null)
-          setError(e.message)
+        // 원격의 답 — true=받아들임(CB_RESPONSE_OK), false=거절. 파일을 알리고 기다리던 답일 때만 적는다.
+        // ⚠️ 텍스트를 알린 직후 파일을 알리면 텍스트의 답이 파일의 답으로 읽힐 수 있다(드물다 — 둘 다 사용자 동작이다).
+        provider.on('format-list-response', ((ok: boolean) => {
+          if (!awaitingAnswerRef.current) return
+          awaitingAnswerRef.current = false
+          setXfer({ label: t(ok ? 'rdp.file.accepted' : 'rdp.file.rejected'), pct: null })
+        }) as never)
+        provider.on('upload-complete', ((f: File) =>
+          setXfer({ label: `${t('rdp.file.sent')} ${f.name}`, pct: null })) as never)
+        // 전송 실패는 **상태 줄에** 적는다. 예전엔 setError 로 갔는데 그 글은 오류 화면(phase='error')에서만
+        // 보여서, 붙어 있는 동안의 실패(원격 거절 · 60초 안에 요청 없음 · 원격 클립보드 바뀜)가 전부 사라졌다.
+        provider.on('error', ((e: { message: string; direction?: string }) => {
+          awaitingAnswerRef.current = false
+          // 알린 묶음이 죽었다 — 자물쇠를 풀어 다음 Ctrl+V 의 paste 이벤트가 다시 알릴 수 있게 한다. 안 풀면
+          // 그 묶음은 다시 복사할 때까지 안 간다(provider 는 실패한 묶음을 retained 로 남기지 않는다).
+          if (e.direction === 'upload') localFilesRef.current = null
+          setXfer({ label: `${t('rdp.file.xferFail')} ${e.message}`, pct: null })
         }) as never)
         builder.username(relay.username)
         builder.password(secret)
@@ -698,16 +763,17 @@ export function RdpView({
     // 그사이 paste 이벤트가 같은 묶음을 먼저 알렸으면 다시 알리지 않는다(localFilesRef 주석).
     const filesSig = pathsSig(res.files.map((f) => f.path))
     if (filesSig === localFilesRef.current) return
-    // IPC 로 건너온 Uint8Array 는 타입상 SharedArrayBuffer 일 수도 있어 BlobPart 로 안 받아진다 — 실제로는
-    // 구조적 복제가 만든 평범한 ArrayBuffer 다.
-    provider.uploadFiles(
-      res.files.map((f) => new File([f.bytes as Uint8Array<ArrayBuffer>], f.name, { lastModified: f.lastModified }))
-    )
     localFilesRef.current = filesSig
     // 우리가 주인을 가져갔으므로 원격의 파일 목록은 더 이상 유효하지 않다.
     setRemoteFiles([])
-    setXfer({ label: t('rdp.file.announced').replace('{n}', String(res.files.length)), pct: 100 })
-  }, [])
+    // IPC 로 건너온 Uint8Array 는 타입상 SharedArrayBuffer 일 수도 있어 BlobPart 로 안 받아진다 — 실제로는
+    // 구조적 복제가 만든 평범한 ArrayBuffer 다. 드롭이 주는 File 과 모양이 같다(이름·크기·lastModified —
+    // provider 의 normalizeToDroppedFiles 가 둘을 같은 DroppedFile 로 편다).
+    advertise(
+      res.files.map((f) => new File([f.bytes as Uint8Array<ArrayBuffer>], f.name, { lastModified: f.lastModified })),
+      res.files.length
+    )
+  }, [advertise])
 
   // 로컬 텍스트를 원격에 올린다(조건 없이). 부르는 자리는 둘이다 — 채널이 준비될 때(forceClipboardUpdate)와
   // 포커스 동기화(syncClipboardToRemote). 원격이 붙여넣는 순간에 불리는 경로는 아니다 — 원격은 이미 받아 둔
@@ -729,8 +795,9 @@ export function RdpView({
     }
   }, [])
 
-  // 원격 → 로컬. 원격에서 Ctrl+C 했다고 바로 받지 않는다(로컬 디스크에 파일이 쏟아지면 안 된다) —
-  // 사용자가 [파일 받기] 를 눌러야 받는다. 하나씩 순차로 받는다 — 동시에 받으면 원격 클립보드 락이
+  // 원격 → 로컬. R15 부터 'clip' 은 원격이 복사하면 **자동으로** 받는다(아래 effect · 준영님 결정
+  // "mobaxterm 처럼 누르지 않게"). 합계 100MB 를 넘거나 폴더가 섞이면 자동으로 받지 않고 [파일 받기]·
+  // [폴더에 저장] 으로 떨어진다(autoReceivePlan). 하나씩 순차로 받는다 — 동시에 받으면 원격 클립보드 락이
   // 만료되며 뒤쪽이 실패한다(패키지 문서의 lock expired 안내).
   //
   // #205 받는 곳이 둘이다:
@@ -739,21 +806,26 @@ export function RdpView({
   //    클립보드에 올리려면 폴더 구조를 임시 폴더에 다시 세워 폴더째 올려야 하는데, 그 조립은 아직 없다.
   //    평평하게 펴서 올리면 같은 이름이 부딪히고 구조가 조용히 사라진다. 그건 'dir' 이 한다.
   //  · 'dir' — 저장 폴더를 골라 그 자리에 쓴다(옛 동작 그대로 · 하위 폴더 유지).
-  const receiveFiles = useCallback(
-    async (to: 'clip' | 'dir') => {
-      const provider = providerRef.current
-      const files = remoteFiles.filter((f) => !f.isDirectory && (to === 'dir' || !f.path))
-      if (!provider) return
-      if (files.length === 0) {
-        if (to === 'clip' && remoteFiles.length > 0) setXfer({ label: t('rdp.file.clipFolder'), pct: null })
-        return
-      }
-      const dir = to === 'dir' ? await window.ev.sftp.pickSaveDir() : null
-      if (to === 'dir' && !dir) return
+  //
+  // 실패는 상태 줄에 적는다(예전엔 setError 라 붙어 있는 동안 보이지 않았다 — provider 'error' 주석).
+  const receiveFiles = useCallback(async (to: 'clip' | 'dir', list: RdpFileInfo[]) => {
+    const provider = providerRef.current
+    const files = list.filter((f) => !f.isDirectory && (to === 'dir' || !f.path))
+    if (!provider) return
+    if (files.length === 0) {
+      if (to === 'clip' && list.length > 0) setXfer({ label: t('rdp.file.clipFolder'), pct: null })
+      return
+    }
+    const dir = to === 'dir' ? await window.ev.sftp.pickSaveDir() : null
+    if (to === 'dir' && !dir) return
+    // 받는 동안 로컬 클립보드는 아직 옛 것이다 — 포커스·paste 가 그걸 원격에 알리지 못하게 잠근다(receivingRef).
+    receivingRef.current++
+    try {
       const got: { name: string; bytes: Uint8Array }[] = []
+      let fail: string | null = null
       for (const f of files) {
         try {
-          const blob = await provider.downloadFile(f, remoteFiles.indexOf(f)).completion
+          const blob = await provider.downloadFile(f, list.indexOf(f)).completion
           const bytes = new Uint8Array(await blob.arrayBuffer())
           if (!dir) {
             got.push({ name: f.name, bytes })
@@ -761,27 +833,39 @@ export function RdpView({
           }
           const res = await window.ev.fs.saveBytes({ dir, sub: f.path, name: f.name, bytes })
           if (!res.ok) {
-            setError(res.message)
+            fail = res.message
             break
           }
         } catch (e) {
-          setError((e as Error).message)
+          fail = (e as Error).message
           break
         }
       }
-      setXfer(null)
       setRemoteFiles([])
-      if (dir || got.length !== files.length) return
       // 🔴 실패하면 다시 시도하지 않는다 — DLP 가 막았을 수 있다. 사유를 그대로 보인다.
+      if (fail !== null) return setXfer({ label: `${t('rdp.file.xferFail')} ${fail}`, pct: null })
+      if (dir) return setXfer(null)
       const res = await window.ev.rdp.clipPut(got)
       if (!res.ok) return setXfer({ label: `${t('rdp.file.clipFail')} ${res.message}`, pct: null })
-      // 방금 우리가 올린 것이 다음 포커스 때 "로컬에서 새로 복사한 파일"로 보여 원격에 되돌아가지 않게
-      // (에코) 지문을 남긴다. Electron 이 읽는 것은 첫 경로 하나라 그 모양으로 맞춘다(syncClipboardToRemote).
-      fromRemoteRef.current = clipboardSignature({ paths: res.paths.slice(0, 1) })
+      // 되먹임 고리를 끊는 지문. 방금 우리가 올린 것이 다음 포커스·Ctrl+V 때 "로컬에서 새로 복사한 파일"로
+      // 보여 원격에 되돌아가지 않게 한다 — 동기화·paste 두 길이 모두 이 지문(ownFilesSig)으로 맞춰 본다.
+      // 자물쇠(receivingRef)를 풀기 **전에** 적는다 — 풀린 뒤 한 틈이라도 지문이 비면 그 틈에 되돌아간다.
+      fromRemoteRef.current = ownFilesSig(res.paths)
       setXfer({ label: t('rdp.file.clipped').replace('{n}', String(res.paths.length)), pct: null })
-    },
-    [remoteFiles]
-  )
+    } finally {
+      receivingRef.current--
+    }
+  }, [])
+
+  // 자동 받기(R15). 원격이 파일을 복사하면(files-available → remoteFiles) 버튼 없이 받아 로컬 클립보드에
+  // 올린다. 상한·폴더에 걸리면 받지 않고 한 줄로 알린다 — 그때는 [옵션] 의 [파일 받기]·[폴더에 저장] 이 남는다.
+  // 받고 나면 receiveFiles 가 목록을 비우므로 이 effect 는 빈 목록으로 한 번 더 돌고 그냥 끝난다.
+  useEffect(() => {
+    const plan = autoReceivePlan(remoteFiles)
+    if (plan === 'none') return
+    if (plan === 'auto') void receiveFiles('clip', remoteFiles)
+    else setXfer({ label: t(plan === 'folder' ? 'rdp.file.autoFolder' : 'rdp.file.autoTooBig'), pct: null })
+  }, [remoteFiles, receiveFiles])
 
   // 로컬 → 원격. 여기서 하는 일은 "원격 클립보드에 이 파일들이 있다"고 알리는 것까지다 —
   // 실제 바이트는 사용자가 원격에서 붙여넣을 때 원격이 요청하고 provider 가 조각내 보낸다.
@@ -790,9 +874,8 @@ export function RdpView({
     if (!provider) return
     const picked = await provider.showFilePicker({ multiple: true }).catch(() => [])
     if (picked.length === 0) return
-    provider.uploadFiles(picked)
-    setXfer({ label: t('rdp.file.announced').replace('{n}', String(picked.length)), pct: 100 })
-  }, [])
+    advertise(picked, picked.length)
+  }, [advertise])
 
   // 로컬 클립보드 → 원격(포커스 시). **정말 바뀐 로컬 복사만** 알린다 — 무조건 알리면 원격에서
   // 방금 복사한 파일을 덮어써서 [원격 파일 받기] 가 깨진다(준영님 질문으로 드러난 실제 결함).
@@ -810,10 +893,8 @@ export function RdpView({
   const syncClipboardToRemote = useCallback(async () => {
     if (!sessionRef.current) return
     // 경로만 먼저 읽는다(싸다) — 바이트는 정말 알릴 때만 읽는다.
-    const paths = (await window.ev.clipboard.readFiles().catch(() => ({ paths: [] as string[] }))).paths
-    const text = paths.length === 0 ? await readClipboard() : ''
-    const sig = clipboardSignature({ paths, text })
-    if (!shouldAnnounceClipboard(sig, announcedRef.current, fromRemoteRef.current)) return
+    const { paths, text, sig } = await readLocalClip()
+    if (!shouldAnnounceClipboard(sig, announcedRef.current, fromRemoteRef.current, receivingRef.current > 0)) return
 
     if (paths.length > 0) return announceLocalFiles(sig)
     await pushTextToRemote(text)
@@ -829,9 +910,8 @@ export function RdpView({
     e.preventDefault()
     const dropped = await provider.handleDrop(e.nativeEvent as unknown).catch(() => [])
     if (dropped.length === 0) return
-    provider.uploadFiles(dropped)
-    setXfer({ label: t('rdp.file.announced').replace('{n}', String(dropped.length)), pct: 100 })
-  }, [])
+    advertise(dropped, dropped.length)
+  }, [advertise])
 
   // 브라우저 이벤트 → RDP 입력. 세션이 붙어 있을 때만 보낸다.
   const sendEvents = useCallback((make: (m: RdpMod) => unknown[]) => {
@@ -985,8 +1065,8 @@ export function RdpView({
       const m = RDP_KEY_MODES.find((x) => x === id.slice('keys:'.length))
       if (m) setKeyMode(m)
     } else if (id.startsWith('combo:')) sendCombo(id.slice('combo:'.length))
-    else if (id === 'recv') void receiveFiles('clip')
-    else if (id === 'recvSave') void receiveFiles('dir')
+    else if (id === 'recv') void receiveFiles('clip', remoteFiles)
+    else if (id === 'recvSave') void receiveFiles('dir', remoteFiles)
     else if (id === 'send') void sendFiles()
   }
 

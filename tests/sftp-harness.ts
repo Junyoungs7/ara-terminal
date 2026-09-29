@@ -123,6 +123,8 @@ export function serveSftp(sftp: any, root: string): void {
   })
 
   sftp.on('OPEN', (reqid: number, filename: string, flags: number) => {
+    // R15: 이름이 `noread` 로 시작하는 파일은 목록엔 보이지만 열리지 않는다(권한 없는 파일 흉내).
+    if (/(^|[\\/])noread[^\\/]*$/.test(filename)) return sftp.status(reqid, STATUS_CODE.PERMISSION_DENIED)
     const rp = real(filename)
     const mode = flagsToString(flags) || (flags & OPEN_MODE.WRITE ? 'w' : 'r')
     try {

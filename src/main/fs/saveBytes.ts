@@ -11,6 +11,12 @@ import type { FileOpResult } from '@shared/ipc'
 // main 은 렌더러를 신뢰하지 않는다.
 export const SAVE_BYTES_MAX = 2 * 1024 * 1024 * 1024
 
+/**
+ * Windows 가 파일 이름에 못 쓰는 글자. 폴더째 받기의 `LocalFs.localName` 도 이 집합을 쓴다 —
+ * 한 앱에 두 벌이면 한쪽만 고쳐지는 날이 온다(R15).
+ */
+export const WIN_BAD_CHARS = /[<>:"|?*\u0000-\u001f]/
+
 /** 파일명 → 안전한 basename. 경로 구분자·상위 참조·빈 이름은 거른다. */
 export function safeBase(name: unknown): string | null {
   if (typeof name !== 'string') return null
@@ -19,7 +25,7 @@ export function safeBase(name: unknown): string | null {
   // 예약 문자는 경로 조각을 떼기 **전에** 본다. 뒤에 검사하면 'a:b' 가 조용히 'b' 로 바뀐다 —
   // win32 basename 이 `a:` 를 드라이브 접두로 읽기 때문이다(단위 테스트가 잡아낸 실제 동작).
   // 역슬래시와 슬래시는 여기서 빼 둔다 — 그건 아래에서 정당하게 떼어 낸다.
-  if (/[<>:"|?*\u0000-\u001f]/.test(trimmed)) return null
+  if (WIN_BAD_CHARS.test(trimmed)) return null
   // basename 으로 디렉토리 부분을 떼어 내고, 그래도 구분자가 남으면(이상한 입력) 거절한다.
   const base = basename(trimmed.replace(/\\/g, '/'))
   if (!base || base === '.' || base === '..' || /[\\/]/.test(base)) return null

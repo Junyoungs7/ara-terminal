@@ -30,6 +30,7 @@ export const termPrefs: Omit<
   | 'logRetentionDays'
   | 'sessionLogDir'
   | 'appLogDir'
+  | 'downloadDir'
   | 'aiProvider'
   | 'aiModels'
   | 'aiCompatibleBaseUrl'
@@ -66,6 +67,7 @@ export function prefsFrom(
     | 'logRetentionDays'
     | 'sessionLogDir'
     | 'appLogDir'
+    | 'downloadDir'
     | 'aiProvider'
     | 'aiModels'
     | 'aiCompatibleBaseUrl'
@@ -90,6 +92,8 @@ export function prefsFrom(
     // 빈 문자열 = 기본 자리(userData/logs). main 이 그 뜻으로 읽는다.
     sessionLogDir: ui.sessionLogDir ?? '',
     appLogDir: ui.appLogDir ?? '',
+    // R15: 빈 문자열 = OS 다운로드 폴더. 형이 이상하면(손상 스냅샷) 빈 값으로 — 검사는 main 이 한 번 더 한다.
+    downloadDir: typeof ui.downloadDir === 'string' ? ui.downloadDir : '',
     // 손상·구버전 스냅샷은 aiProviderOf/aiModelsOf 가 기본값으로 내린다(main 이 같은 함수로 다시 클램프한다).
     aiProvider: aiProviderOf(ui.aiProvider),
     aiModels: aiModelsOf(ui.aiModels),
