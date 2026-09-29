@@ -271,3 +271,15 @@ describe('🔴 캡처가 신고 창보다 먼저', () => {
     expect(captureBeforeOpen(bad)).toBe(false)
   })
 })
+
+// 오류 신고 #6: 바깥 클릭으로 닫히면 써 둔 글이 사라진다.
+describe('신고 창은 바깥 클릭으로 닫히지 않는다', () => {
+  const src = readFileSync('src/renderer/components/BugReportModal.tsx', 'utf8')
+  const closesOnBackdrop = (s: string): boolean => /className="overlay open"\s+onClick=/.test(s)
+  it('지금 소스는 지킨다', () => expect(closesOnBackdrop(src)).toBe(false))
+  it('바깥 클릭 닫기를 되살린 소스는 문다', () => {
+    const bad = src.replace('<div className="overlay open">', '<div className="overlay open" onClick={onClose}>')
+    expect(bad).not.toBe(src)
+    expect(closesOnBackdrop(bad)).toBe(true)
+  })
+})

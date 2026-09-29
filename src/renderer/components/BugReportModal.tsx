@@ -98,7 +98,8 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
   )
 
   return (
-    <div className="overlay open" onClick={(e) => e.target === e.currentTarget && !sending && onClose()}>
+    // 오류 신고 #6: 바깥을 눌러도 닫지 않는다 — 써 둔 글이 한 번의 클릭에 사라졌다. [×]·[취소]·Esc 로만 닫는다.
+    <div className="overlay open">
       <div
         className="modal sm bug-report"
         role="dialog"
