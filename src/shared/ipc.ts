@@ -201,7 +201,7 @@ export type InvokeContract = {
   'session:rename': { req: { id: string; title: string }; res: { ok: true } }
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 rename 한 세션(manualTitle)에는 적용하지 않는다 —
   // applied=false 면 렌더러도 탭 라벨을 그대로 둔다.
-  'session:autoTitle': { req: { id: string; title: string }; res: { applied: boolean } }
+  'session:autoTitle': { req: { id: string; title: string }; res: { applied: boolean; title?: string } }
   // xterm 생성 직후 재생 버퍼를 인계받고 라이브 스트림을 연다(세션 전환·재마운트 후 스크롤백 복구).
   'session:attach': { req: { id: string }; res: { backlog: Uint8Array } }
   // window 도메인 (R2.6). 프레임리스 타이틀바의 신호등 버튼이 실제로 창을 조작한다.
@@ -853,7 +853,7 @@ export type EvApi = {
     destroy(id: string): Promise<{ ok: true }>
     list(): Promise<Session[]>
     rename(id: string, title: string): Promise<{ ok: true }>
-    autoTitle(id: string, title: string): Promise<{ applied: boolean }>
+    autoTitle(id: string, title: string): Promise<{ applied: boolean; title?: string }>
     // onData 구독 직후 호출 — 지금까지의 출력(backlog)을 받고 그 다음부터 라이브 이벤트가 온다.
     attach(id: string): Promise<{ backlog: Uint8Array }>
     pause(id: string): void

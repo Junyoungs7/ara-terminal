@@ -80,7 +80,11 @@ export function registerSessionIpc(
     mgr.rename(id, title)
     return { ok: true } as const
   })
-  handle('session:autoTitle', ({ id, title }) => ({ applied: mgr.autoTitle(id, title) }))
+  handle('session:autoTitle', ({ id, title }) => {
+    // main 이 제목을 다듬을 수 있다(tidyShellTitle) — 화면은 돌려준 값을 그린다.
+    const applied = mgr.autoTitle(id, title)
+    return applied === null ? { applied: false } : { applied: true, title: applied }
+  })
   handle('session:attach', ({ id }) => ({ backlog: mgr.attach(id) }))
 
   on('session:input', (p) => {

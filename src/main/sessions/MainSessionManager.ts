@@ -28,6 +28,21 @@ export function isShellPathTitle(title: string): boolean {
   return SHELL_PATH_TITLE.test(title.trim())
 }
 
+/**
+ * 콘솔이 붙이는 `<실행파일 경로>.exe - <명령>` 제목에서 **명령만** 남긴다(2026-09-29 준영님).
+ *
+ * PowerShell 탭에서 `cmd` 를 치고 `cd ..` 하면 윈도우가 제목을
+ * `C:\WINDOWS\System32\WindowsPowerShell1.0\powershell.exe - cd ..` 로 보낸다 — cmd 가 그 콘솔 창의
+ * 제목 앞부분을 물려받기 때문이다. 그대로 탭에 올리면 셸은 cmd 인데 탭은 **PowerShell 로 돌아간 것처럼**
+ * 보였다. 앞의 경로는 사람에게 아무 정보가 아니고 틀린 인상만 준다 — 뒤의 명령이 곧 "지금 무엇을 하나"다.
+ * 그 모양이 아니면 그대로 돌려준다(셸이 일부러 세운 `deploy@web-01: ~/svc` 같은 제목은 안 건드린다).
+ */
+const CONSOLE_CMD_TITLE = /^(?:[A-Za-z]:)?\S*[\\/][^\\/]+\.exe - (.+)$/i
+export function tidyShellTitle(title: string): string {
+  const m = CONSOLE_CMD_TITLE.exec(title.trim())
+  return m ? m[1].trim() : title
+}
+
 type Handle = {
   backend: SessionBackend
   meta: Session
@@ -236,11 +251,13 @@ export class MainSessionManager implements ISessionManager {
 
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 이름을 바꾼 세션은 건드리지 않는다.
   // 적용 여부를 돌려줘 렌더러 탭 라벨과 어긋나지 않게 한다.
-  autoTitle(id: string, title: string): boolean {
+  /** 받아들인 제목을 돌려준다(다듬은 뒤의 값 — 탭은 **이 값**을 그려야 main 과 어긋나지 않는다). 거절이면 null. */
+  autoTitle(id: string, raw: string): string | null {
     const h = this.handles.get(id)
-    if (!h || !title || h.meta.manualTitle || isShellPathTitle(title)) return false
+    const title = raw ? tidyShellTitle(raw) : raw
+    if (!h || !title || h.meta.manualTitle || isShellPathTitle(title)) return null
     h.meta.title = title
-    return true
+    return title
   }
 
   // 같은 서버로 여러 번 접속하면 탭 이름이 전부 같아 구분이 안 된다(R2.1).

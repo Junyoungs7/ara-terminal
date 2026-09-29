@@ -33,7 +33,7 @@ describe('R3.6 자동 탭 제목 (OSC 0/2)', () => {
   it('사용자가 rename 하지 않은 세션은 셸 제목을 받아들인다', async () => {
     const mgr = new MainSessionManager(silentSink)
     const id = await mgr.create(spec('셸 1'))
-    expect(mgr.autoTitle(id, 'deploy@web-01: ~/서비스')).toBe(true)
+    expect(mgr.autoTitle(id, 'deploy@web-01: ~/서비스')).toBe('deploy@web-01: ~/서비스')
     expect(mgr.snapshot().find((s) => s.id === id)?.title).toBe('deploy@web-01: ~/서비스')
     mgr.destroyAll()
   })
@@ -42,7 +42,7 @@ describe('R3.6 자동 탭 제목 (OSC 0/2)', () => {
     const mgr = new MainSessionManager(silentSink)
     const id = await mgr.create(spec('셸 1'))
     mgr.rename(id, '결제 배포')
-    expect(mgr.autoTitle(id, 'bash')).toBe(false)
+    expect(mgr.autoTitle(id, 'bash')).toBeNull()
     expect(mgr.snapshot().find((s) => s.id === id)?.title).toBe('결제 배포')
     mgr.destroyAll()
   })
@@ -50,7 +50,7 @@ describe('R3.6 자동 탭 제목 (OSC 0/2)', () => {
   it('복원된 세션도 manualTitle 을 이어받는다(재시작 후에도 이름이 지켜진다)', async () => {
     const mgr = new MainSessionManager(silentSink)
     const id = await mgr.create(spec('결제 배포', true))
-    expect(mgr.autoTitle(id, 'bash')).toBe(false)
+    expect(mgr.autoTitle(id, 'bash')).toBeNull()
     expect(mgr.snapshot().find((s) => s.id === id)?.manualTitle).toBe(true)
     mgr.destroyAll()
   })
@@ -59,19 +59,19 @@ describe('R3.6 자동 탭 제목 (OSC 0/2)', () => {
   it('셸 실행 파일 경로 제목은 무시한다(conpty 시작 제목)', async () => {
     const mgr = new MainSessionManager(silentSink)
     const id = await mgr.create(spec('셸 1'))
-    expect(mgr.autoTitle(id, 'C:\\WINDOWS\\SYSTEM32\\cmd.exe')).toBe(false)
-    expect(mgr.autoTitle(id, 'powershell.exe')).toBe(false)
+    expect(mgr.autoTitle(id, 'C:\\WINDOWS\\SYSTEM32\\cmd.exe')).toBeNull()
+    expect(mgr.autoTitle(id, 'powershell.exe')).toBeNull()
     expect(mgr.snapshot().find((s) => s.id === id)?.title).toBe('셸 1')
     // 셸이 의도적으로 세운 제목은 그대로 통과한다.
-    expect(mgr.autoTitle(id, 'deploy@web-01: ~/서비스')).toBe(true)
+    expect(mgr.autoTitle(id, 'deploy@web-01: ~/서비스')).toBe('deploy@web-01: ~/서비스')
     mgr.destroyAll()
   })
 
   it('빈 제목·없는 세션은 무시한다', async () => {
     const mgr = new MainSessionManager(silentSink)
     const id = await mgr.create(spec('셸 1'))
-    expect(mgr.autoTitle(id, '')).toBe(false)
-    expect(mgr.autoTitle('없는-세션', 'x')).toBe(false)
+    expect(mgr.autoTitle(id, '')).toBeNull()
+    expect(mgr.autoTitle('없는-세션', 'x')).toBeNull()
     mgr.destroyAll()
   })
 })

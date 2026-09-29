@@ -1122,7 +1122,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       (sessionId: string, title: string) => {
         void window.ev?.session
           .autoTitle(sessionId, title)
-          .then(({ applied }) => applied && applyTitle(sessionId, title))
+          // main 이 다듬은 값(`…\powershell.exe - cd ..` → `cd ..`)을 그린다 — 원문을 그리면 main 과 갈린다.
+          .then(({ applied, title: shown }) => applied && applyTitle(sessionId, shown ?? title))
           .catch(() => {}) // autoTitle 미지원 하네스 — 제목 갱신만 건너뛴다.
       },
       [applyTitle]
