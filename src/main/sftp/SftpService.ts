@@ -379,7 +379,11 @@ export class SftpService {
     })
     let root = ''
     try {
-      const plan = await scanRemoteDir(sftp, remoteDir, rec)
+      // 신고 #8: 파일이 많은 폴더는 **세는 동안**이 가장 길다(폴더마다 readdir 왕복). 여기서 아무것도 안
+      // 보내면 큐가 0% 에 멎어 "진행이 안 뜬다"가 된다 — 센 파일 수를 scanning 으로 흘린다.
+      const plan = await scanRemoteDir(sftp, remoteDir, rec, (n) =>
+        this.progress({ transferId: opId, transferred: 0, total: 0, files: n, scanning: true })
+      )
       if (rec.canceled) return canceledResult('')
       const bytes = plan.files.reduce((n, f) => n + f.size, 0)
       if (!confirmed && (plan.files.length > DIR_CONFIRM_FILES || bytes > DIR_CONFIRM_BYTES)) {
@@ -675,7 +679,12 @@ type DirPlan = {
  * 원격 트리를 내려가며 센다. readdir 이 주는 attrs 는 **lstat** 이라(list 주석) 링크는 링크로 보인다 —
  * 그래서 따라가지 않는 판정이 공짜다. 하위 폴더 하나를 못 읽으면 건너뛰고 계속, 맨 위를 못 읽으면 실패.
  */
-export async function scanRemoteDir(sftp: SFTPWrapper, remoteDir: string, rec: { canceled: boolean }): Promise<DirPlan> {
+export async function scanRemoteDir(
+  sftp: SFTPWrapper,
+  remoteDir: string,
+  rec: { canceled: boolean },
+  onScan: (files: number) => void = () => {} // 폴더 하나를 다 읽을 때마다 지금까지 센 파일 수
+): Promise<DirPlan> {
   const plan: DirPlan = { dirs: [], files: [], links: 0, skipped: [] }
   const readdir = (p: string) =>
     new Promise<{ filename: string; attrs: Stats }[]>((resolve, reject) =>
@@ -701,6 +710,7 @@ export async function scanRemoteDir(sftp: SFTPWrapper, remoteDir: string, rec: {
       } else if (attrs.isFile()) plan.files.push({ rel: r, size: attrs.size })
       else plan.skipped.push(r)
     }
+    onScan(plan.files.length)
   }
   await walk('')
   // 읽지 못한 폴더는 만들지 않는다 — 빈 폴더가 "받았다"로 보인다.

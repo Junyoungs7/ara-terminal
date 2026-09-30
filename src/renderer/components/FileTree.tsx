@@ -465,6 +465,12 @@ export function FileTree({
         const item = items[i]
         if (canceled.current.has(item.id)) continue
         const off = window.ev.sftp.onProgress(item.id, (p: SftpProgress) => {
+          // 신고 #8: 폴더째 받기는 세는 동안이 길다 — 그동안은 흐르는 막대 + 센 파일 수.
+          if (p.scanning) {
+            const files = t('sftp.dir.scanning').replace('{n}', (p.files ?? 0).toLocaleString('ko-KR'))
+            setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct: null, files } : x)))
+            return
+          }
           const pct = p.total > 0 ? Math.min(100, Math.round((p.transferred / p.total) * 100)) : 0
           const files = p.fileTotal ? `${p.files ?? 0}/${p.fileTotal}` : undefined
           setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct, files } : x)))
@@ -1455,10 +1461,12 @@ export function FileTree({
               <div className="xfer-bar">
                 <div className={'xfer-fill' + (item.pct === null ? ' indet' : '')} style={item.pct === null ? undefined : { width: `${item.pct}%` }} />
               </div>
-              {item.pct !== null && (
+              {item.pct !== null ? (
                 <span className="xfer-pct">
                   {item.pct}%{item.files ? ` · ${item.files}` : ''}
                 </span>
+              ) : (
+                item.files && <span className="xfer-pct">{item.files}</span>
               )}
             </div>
           ))}

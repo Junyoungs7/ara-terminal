@@ -136,13 +136,13 @@ describe('R15 폴더째 받기 (ssh2 하네스)', () => {
 
   it('취소하면 만들던 폴더를 통째로 치운다(C-4 폴더판)', async () => {
     writeFileSync(join(remoteRoot, '배포', 'big.log'), Buffer.alloc(4 * 1024 * 1024, 0x41))
-    // 첫 진행 이벤트에서 끊는다 — 진행 중인 fastGet 이 채널 종료로 끊겨야 한다.
+    // 받기의 첫 진행 이벤트에서 끊는다 — 진행 중인 파일 전송이 끊겨야 한다(세는 중 이벤트는 건너뛴다).
     const client = backend!.sshClient()
     let fired = false
     const svc: SftpService = new SftpService(
       (sid) => (sid === 'sid' ? client : null),
-      () => {
-        if (!fired) {
+      (p) => {
+        if (!fired && !p.scanning) {
           fired = true
           svc.cancel('d6')
         }
@@ -156,9 +156,54 @@ describe('R15 폴더째 받기 (ssh2 하네스)', () => {
     expect(readdirSync(localDir)).toEqual([])
   })
 
+  // 신고 #8: 파일이 많은 폴더는 세는 동안이 가장 길다. 그동안 아무 이벤트도 없으면 큐가 0% 에 멎어
+  // "진행이 안 뜬다"가 된다 — 세는 중에도 같은 transferId 로 센 수가 흘러야 한다.
+  it('🔴 세는 동안에도 진행이 온다 — 받기 전에, 같은 transferId 로, 센 파일 수가 늘며', async () => {
+    for (let d = 0; d < 5; d++) {
+      mkdirSync(join(remoteRoot, '배포', `묶음${d}`))
+      for (let i = 0; i < 4; i++) writeFileSync(join(remoteRoot, '배포', `묶음${d}`, `f${i}.txt`), 'x')
+    }
+    const progress: SftpProgress[] = []
+    const r = await service(progress).downloadDir('sid', 'd8', '/배포', localDir)
+    expect(r.ok).toBe(true)
+    const scans = progress.filter((p) => p.scanning)
+    const firstXfer = progress.findIndex((p) => !p.scanning)
+    expect(scans.length).toBeGreaterThan(1) // 폴더마다 한 번 — 끝에 한 번만이 아니다
+    expect(progress.slice(0, scans.length).every((p) => p.scanning)).toBe(true) // 전부 받기보다 먼저
+    expect(firstXfer).toBe(scans.length)
+    expect(scans.every((p) => p.transferId === 'd8')).toBe(true)
+    const counts = scans.map((p) => p.files ?? -1)
+    expect(counts).toEqual([...counts].sort((a, b) => a - b)) // 줄지 않는다
+    expect(counts[counts.length - 1]).toBe(23) // 기존 3 + 20
+  })
+
+  it('세는 중에 취소하면 아무것도 만들지 않고 끝난다', async () => {
+    const client = backend!.sshClient()
+    const svc: SftpService = new SftpService(
+      (sid) => (sid === 'sid' ? client : null),
+      (p) => p.scanning && svc.cancel('d9')
+    )
+    const r = await svc.downloadDir('sid', 'd9', '/배포', localDir)
+    expect(r).toMatchObject({ ok: false, canceled: true, cleaned: true })
+    expect(readdirSync(localDir)).toEqual([])
+  })
+
   it('받는 자리가 절대경로가 아니면 거절한다(렌더러 값은 신뢰 경계 밖)', async () => {
     const r = await service().downloadDir('sid', 'd7', '/배포', 'relative\\dir')
     expect(r).toMatchObject({ ok: false, message: '잘못된 경로입니다.' })
+  })
+})
+
+// ⚠️ 소스를 읽는 시험이다 — 화면에 실제로 뜨는지는 실기 항목. 신고 #8 의 렌더러 쪽 두 줄을 지킨다.
+describe('신고 #8 — 전송 큐가 세는 중 이벤트를 보여 준다(FileTree 소스)', () => {
+  const src = readFileSync(join(__dirname, '..', 'src/renderer/components/FileTree.tsx'), 'utf8')
+  it('runQueue 가 scanning 이면 흐르는 막대(pct null) + 센 수로 바꾼다', () => {
+    const at = src.indexOf('const runQueue = useCallback(')
+    const body = src.slice(at, src.indexOf('\n  )', at))
+    expect(body).toMatch(/if \(p\.scanning\) \{[\s\S]*?pct: null, files[\s\S]*?return/)
+  })
+  it('pct 가 null 이어도 files 글자는 그린다', () => {
+    expect(src).toContain("item.files && <span className=\"xfer-pct\">{item.files}</span>")
   })
 })
 

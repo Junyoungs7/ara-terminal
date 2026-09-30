@@ -120,6 +120,7 @@
   "sftp.dir.big.path": "원격 폴더",
   "sftp.dir.big.files": "파일 수",
   "sftp.dir.big.size": "합계 크기",
+  "sftp.dir.scanning": "세는 중 · 파일 {n}개",
   "sftp.dir.skipped": "{n}개를 못 받았습니다",
   "sftp.dir.links": "심볼릭 링크 {n}개는 따라가지 않았습니다",
   "sftp.dir.missing.title": "다운로드 폴더가 없습니다",

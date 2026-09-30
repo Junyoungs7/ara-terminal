@@ -94,7 +94,15 @@ export type SftpXferResult =
 
 // 전송 진행 이벤트(sftp:progress:{transferId}). transferred/total 바이트.
 // files/fileTotal 은 폴더째 받기(R15)에서만 온다 — 받은 파일 수 / 전체 파일 수.
-export type SftpProgress = { transferId: string; transferred: number; total: number; files?: number; fileTotal?: number }
+// scanning: 폴더째 받기가 아직 **세는 중**(신고 #8) — 그때 files 는 지금까지 센 파일 수다.
+export type SftpProgress = {
+  transferId: string
+  transferred: number
+  total: number
+  files?: number
+  fileTotal?: number
+  scanning?: boolean
+}
 
 /**
  * R15(신고 #3) 폴더째 받기 결과.
