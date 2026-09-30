@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
-import { registerTerm, remeasureAll, sizeOf, unregisterTerm } from '../src/renderer/terminal/termRegistry'
+import { applyFontToAll, registerTerm, remeasureAll, sizeOf, unregisterTerm } from '../src/renderer/terminal/termRegistry'
 
 // 2026-08-31 실측: 번들 폰트는 `font-display: swap` 이라 파일이 오기 전에는 스택의 **다음 폰트**로
 // 그려진다. xterm 은 `term.open()` 때 딱 한 번 셀을 재고 `document.fonts` 를 보지 않으므로,
@@ -32,6 +32,7 @@ function fakeTerm(size: number): { term: Terminal; writes: number[] } {
 }
 
 const noopAddons = { search: {} as SearchAddon }
+const OK = () => ({ cols: 80, rows: 24 })
 
 describe('폰트가 늦게 온 뒤의 셀 재측정 (remeasureAll)', () => {
   beforeEach(() => {
@@ -41,7 +42,7 @@ describe('폰트가 늦게 온 뒤의 셀 재측정 (remeasureAll)', () => {
   it('★ fontSize 를 실제로 바꿨다가 되돌린다 — 같은 값만 넣으면 xterm 이 다시 재지 않는다', () => {
     const { term, writes } = fakeTerm(14)
     let fitted = 0
-    registerTerm('a', { term, fit: { fit: () => (fitted += 1) } as unknown as FitAddon, ...noopAddons })
+    registerTerm('a', { term, fit: { proposeDimensions: OK, fit: () => (fitted += 1) } as unknown as FitAddon, ...noopAddons })
 
     remeasureAll()
 
@@ -57,17 +58,36 @@ describe('폰트가 늦게 온 뒤의 셀 재측정 (remeasureAll)', () => {
     registerTerm('a', {
       term: a.term,
       fit: {
+        proposeDimensions: OK,
         fit: () => {
           throw new Error('숨김 패널 — clientWidth 0')
         }
       } as unknown as FitAddon,
       ...noopAddons
     })
-    registerTerm('b', { term: b.term, fit: { fit: () => (bFitted += 1) } as unknown as FitAddon, ...noopAddons })
+    registerTerm('b', { term: b.term, fit: { proposeDimensions: OK, fit: () => (bFitted += 1) } as unknown as FitAddon, ...noopAddons })
 
     expect(() => remeasureAll()).not.toThrow()
     expect(bFitted).toBe(1)
     expect(b.writes).toEqual([17, 16])
+  })
+
+  // 오류 신고 #10(1.0.17): 폰트가 부팅 중에 도착하면 이 fit 이 레이아웃 전의 작은 호스트에서 돌아
+  // xterm 을 9칸으로 만들었다(FitAddon 은 max(2, …) 를 내놓지 undefined 를 안 준다). pty 는 main 이
+  // 걸러 139 로 멀쩡한데 화면만 9칸 — 프롬프트가 `PS D:\AI\` / `deadeye>` 로 접히고 커서가 8열에 선다.
+  it('★ 쓸 수 없는 크기(9×4)로는 remeasureAll·applyFontToAll 이 fit 하지 않는다', () => {
+    const { term } = fakeTerm(14)
+    let fitted = 0
+    const fit = { proposeDimensions: () => ({ cols: 9, rows: 4 }), fit: () => (fitted += 1) }
+    registerTerm('c', { term, fit: fit as unknown as FitAddon, ...noopAddons })
+
+    remeasureAll()
+    applyFontToAll('JetBrains Mono', 14, 1.3)
+    expect(fitted).toBe(0)
+
+    fit.proposeDimensions = () => ({ cols: 139, rows: 18 }) // 레이아웃이 잡히면 맞춘다
+    remeasureAll()
+    expect(fitted).toBe(1)
   })
 
   it('열린 터미널이 없으면 아무 일도 없다', () => {

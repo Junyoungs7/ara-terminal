@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { shouldUseWebgl, termRenderer, type WebglProbe } from './webglChoice'
-import { lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
+import { fitIfUsable, lineBeforeCursor, registerTerm, unregisterTerm } from './termRegistry'
 import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
@@ -26,7 +26,6 @@ import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { pastePaths } from '../components/filePath'
 import { isAppShortcut } from '../../shared/keymap'
 import type { AiCliId } from '../../shared/aiCli'
-import { usableSize } from '../../shared/termSize'
 import { t } from '../i18n'
 import '@xterm/xterm/css/xterm.css'
 
@@ -715,13 +714,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
      * **줄을 다시 접지 않으므로**, 그 순간 찍힌 프롬프트가 9칸에서 접힌 채 굳었다.
      * 쓸 만한 크기가 나올 때까지 기본값(80×24)으로 두고 기다린다 — ResizeObserver 가 곧 다시 부른다.
      */
-    const canFit = (): boolean => {
-      const d = fit.proposeDimensions()
-      return !!d && usableSize(d.cols, d.rows)
-    }
-
     // 초기 fit + pty에 초기 크기 전달.
-    if (canFit()) fit.fit()
+    fitIfUsable(fit)
     void window.ev.session.resize(sessionId, term.cols, term.rows)
 
     // 컨테이너 리사이즈 관찰 → fit.
@@ -729,7 +723,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
     // pty resize IPC 가 나가고, 분할해 둔 칸 수만큼 곱해진다. 놓으면 한 번에 따라잡는다.
     // doFit 은 이 effect 안에서 한 번만 만들어지므로 게이트의 대기 Set 에 중복으로 쌓이지 않는다.
     const doFit = (): void => {
-      if (host.clientWidth > 0 && host.clientHeight > 0 && canFit()) fit.fit()
+      if (host.clientWidth > 0 && host.clientHeight > 0) fitIfUsable(fit)
     }
     const ro = new ResizeObserver(() => whenResizeAllowed(doFit))
     ro.observe(host)
@@ -781,9 +775,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
   // 탭이 활성화될 때 fit + 포커스(숨김→표시 시 xterm 크기 0이었던 문제 보정).
   useEffect(() => {
     if (active && fitRef.current && hostRef.current?.clientWidth) {
-      // 위 canFit 과 같은 규칙 — 쓸 수 없는 크기로는 맞추지 않는다(오류 신고 #4).
-      const d = fitRef.current.proposeDimensions()
-      if (d && usableSize(d.cols, d.rows)) fitRef.current.fit()
+      // 쓸 수 없는 크기로는 맞추지 않는다(오류 신고 #4·#10 — termRegistry.fitIfUsable).
+      fitIfUsable(fitRef.current)
       termRef.current?.focus()
     }
     // 이 패널이 숨으면 후보 목록도 걷는다 — 안 그러면 다른 패널 위에 남는다(fixed 라서).

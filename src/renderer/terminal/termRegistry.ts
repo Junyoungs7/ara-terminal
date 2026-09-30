@@ -2,11 +2,27 @@ import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { CursorStyle } from '@shared/types'
+import { usableSize } from '../../shared/termSize'
 
 // 세션별 xterm 인스턴스 레지스트리 — 우클릭 메뉴 '복사'(F4c) + F5 폰트 실시간 적용 + R3.2 검색.
 // TerminalPane 이 mount 시 등록, unmount 시 해제. UI 상태가 아니므로 스토어가 아닌 모듈 맵으로 관리.
 type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon }
 const terms = new Map<string, Entry>()
+
+/**
+ * 🔴 **xterm 을 맞추는 모든 길이 지나는 곳**(2026-09-30 오류 신고 #10).
+ *
+ * FitAddon 은 칸이 아무리 작아도 undefined 가 아니라 `max(2, …)` 를 내놓는다 — 부팅 중 레이아웃이
+ * 잡히기 전의 호스트에서는 9칸이 나온다. 1.0.15 는 TerminalPane 의 fit 셋만 막았고, 폰트가 늦게
+ * 도착할 때 부르는 `remeasureAll`(JetBrains Mono 처럼 번들 웹폰트일 때만 뜬다)은 **그대로 fit 했다.**
+ * main 은 9칸 resize 를 버리므로 pty·저장값은 139 로 멀쩡한데 **xterm 만 9칸**이 되어, 셸의 프롬프트가
+ * 9칸에서 접히고 커서는 8열(= cols-1)로 눌린다. windowsMode 라 넓어져도 다시 펴지지 않는다.
+ * 새 fit 호출은 반드시 이 함수로 — 한쪽만 막으면 또 샌다.
+ */
+export function fitIfUsable(fit: FitAddon): void {
+  const d = fit.proposeDimensions()
+  if (d && usableSize(d.cols, d.rows)) fit.fit()
+}
 
 export function registerTerm(sessionId: string, entry: Entry): void {
   terms.set(sessionId, entry)
@@ -214,7 +230,7 @@ export function applyFontToAll(fontFamily: string, fontSize: number, lineHeight:
     term.options.fontSize = fontSize
     term.options.lineHeight = lineHeight
     try {
-      fit.fit() // 셀 치수 변화 → cols/rows 재계산. term.onResize 가 pty resize 를 전파.
+      fitIfUsable(fit) // 셀 치수 변화 → cols/rows 재계산. term.onResize 가 pty resize 를 전파.
     } catch {
       // 숨김 패널(clientWidth 0) 등에서 fit 실패 무시 — 표시 시 ResizeObserver 가 재fit.
     }
@@ -263,7 +279,7 @@ export function remeasureAll(): void {
     term.options.fontSize = size + 1
     term.options.fontSize = size
     try {
-      fit.fit()
+      fitIfUsable(fit)
     } catch {
       // 위와 같은 이유(숨김 패널) — 한 칸이 실패해도 나머지는 맞춘다.
     }
