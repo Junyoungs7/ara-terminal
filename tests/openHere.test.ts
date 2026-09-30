@@ -84,17 +84,21 @@ describe('배선 — 설치 스크립트와 second-instance', () => {
     expect(read('electron-builder.yml')).toMatch(/include: resources\/installer\.nsh/)
   })
 
-  // 신고 #4·#5: 주소창은 App Paths 보다 **바탕화면 항목**을 먼저 본다. 바로가기 이름이 App Paths 이름과
-  // 같으면(대소문자 무관) 바로가기가 설치 폴더를 작업 폴더로 띄워 셸이 안 열린다.
-  const clashes = (yml: string): boolean => {
-    const name = (yml.match(/^\s*shortcutName:\s*(.+?)\s*$/m)?.[1] ?? yml.match(/^productName:\s*(.+?)\s*$/m)?.[1] ?? '').toLowerCase()
-    return ['ara', '아라'].includes(name)
+  // 신고 #4·#5: 주소창은 App Paths 보다 **바탕화면 항목**을 먼저 본다 → 바탕화면 바로가기는 `ara`·`아라` 와 달라야 한다.
+  // 반대로 시작 메뉴 바로가기는 `ARA` 여야 윈도우 검색에서 `ara` 로 찾힌다(준영님). 둘을 installer.nsh 가 가른다.
+  const RENAME = String.raw`Rename "$DESKTOP\${SHORTCUT_NAME}.lnk" "$DESKTOP\A.R.A.lnk"`
+  const UNINSTALL = '${IfNot} ${isKeepShortcuts}\n    Delete "$DESKTOP\\A.R.A.lnk"'
+  const ok = (yml: string, nsh: string): boolean => {
+    const menu = yml.match(/^\s*shortcutName:\s*(.+?)\s*$/m)?.[1]
+    return menu === 'ARA' && nsh.replace(/\r\n/g, '\n').includes(RENAME) && nsh.replace(/\r\n/g, '\n').includes(UNINSTALL)
   }
-  it('★ 바탕화면 바로가기 이름이 `ara`·`아라` 와 겹치지 않는다', () => {
+  it('★ 시작 메뉴는 ARA(검색) · 바탕화면은 A.R.A(주소창) · 진짜 제거 때만 지운다', () => {
     const yml = read('electron-builder.yml')
-    expect(clashes(yml)).toBe(false)
-    expect(clashes(yml.replace(/^\s*shortcutName:.*$/m, ''))).toBe(true) // 빼면 productName ARA 로 돌아가 문다
-    expect(clashes(yml.replace(/shortcutName:.*$/m, 'shortcutName: ARA'))).toBe(true)
+    const nsh = read('resources/installer.nsh')
+    expect(ok(yml, nsh)).toBe(true)
+    expect(ok(yml.replace(/shortcutName:.*$/m, 'shortcutName: A.R.A'), nsh)).toBe(false) // 검색에서 안 찾힌다
+    expect(ok(yml, nsh.replace(RENAME, ''))).toBe(false) // 바탕화면이 ARA 로 남아 주소창이 잡는다
+    expect(ok(yml, nsh.replace('${IfNot} ${isKeepShortcuts}', ''))).toBe(false) // 업데이트 때 아이콘이 사라진다
   })
 
   it('second-instance 가 workingDirectory 를 검증해서 본창일 때만 넘긴다 · 잠금은 그대로', () => {

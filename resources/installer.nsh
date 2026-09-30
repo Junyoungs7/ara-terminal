@@ -19,10 +19,23 @@
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\아라.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\ara.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+  ; 신고 #4·#5: 탐색기 주소창은 App Paths 보다 **바탕화면 항목**을 먼저 본다. 바탕화면에 `ARA.lnk` 가 있으면
+  ; `ara` 가 그 바로가기(작업 폴더 = 설치 폴더)로 떠서 openHere 가 셸을 안 연다. 그래서 바탕화면 것만 `A.R.A`.
+  ; 시작 메뉴는 `ARA` 그대로 — 윈도우 검색은 거기를 보고, `ara` 로 찾혀야 한다(주소창은 시작 메뉴를 안 본다).
+  ; 업데이트는 shortcuts 를 그대로 두거나(옛 이름 → ARA.lnk 로 되돌린 뒤) 여기로 온다 — 둘 다 이 한 번의 Rename 이 정리한다.
+  ${If} ${FileExists} "$DESKTOP\${SHORTCUT_NAME}.lnk"
+    Delete "$DESKTOP\A.R.A.lnk"
+    Rename "$DESKTOP\${SHORTCUT_NAME}.lnk" "$DESKTOP\A.R.A.lnk"
+  ${EndIf}
 !macroend
 
 ; 업데이트도 옛 버전의 제거를 먼저 지난다 — 여기서 지워도 새 설치의 customInstall 이 곧바로 다시 건다.
 !macro customUnInstall
   DeleteRegKey SHELL_CONTEXT "${ARA_APP_PATHS}\아라.exe"
   DeleteRegKey SHELL_CONTEXT "${ARA_APP_PATHS}\ara.exe"
+  ; 이름을 바꾼 바탕화면 바로가기는 electron-builder 가 모른다 — 진짜 제거일 때만 지운다
+  ; (업데이트는 --keep-shortcuts 로 온다. 거기서 지우면 새 설치가 다시 만들지 않아 아이콘이 사라진다).
+  ${IfNot} ${isKeepShortcuts}
+    Delete "$DESKTOP\A.R.A.lnk"
+  ${EndIf}
 !macroend
