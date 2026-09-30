@@ -84,6 +84,19 @@ describe('배선 — 설치 스크립트와 second-instance', () => {
     expect(read('electron-builder.yml')).toMatch(/include: resources\/installer\.nsh/)
   })
 
+  // 신고 #4·#5: 주소창은 App Paths 보다 **바탕화면 항목**을 먼저 본다. 바로가기 이름이 App Paths 이름과
+  // 같으면(대소문자 무관) 바로가기가 설치 폴더를 작업 폴더로 띄워 셸이 안 열린다.
+  const clashes = (yml: string): boolean => {
+    const name = (yml.match(/^\s*shortcutName:\s*(.+?)\s*$/m)?.[1] ?? yml.match(/^productName:\s*(.+?)\s*$/m)?.[1] ?? '').toLowerCase()
+    return ['ara', '아라'].includes(name)
+  }
+  it('★ 바탕화면 바로가기 이름이 `ara`·`아라` 와 겹치지 않는다', () => {
+    const yml = read('electron-builder.yml')
+    expect(clashes(yml)).toBe(false)
+    expect(clashes(yml.replace(/^\s*shortcutName:.*$/m, ''))).toBe(true) // 빼면 productName ARA 로 돌아가 문다
+    expect(clashes(yml.replace(/shortcutName:.*$/m, 'shortcutName: ARA'))).toBe(true)
+  })
+
   it('second-instance 가 workingDirectory 를 검증해서 본창일 때만 넘긴다 · 잠금은 그대로', () => {
     const main = read('src/main/index.ts')
     expect(main).toMatch(/app\.on\('second-instance', \(_e, _argv, workingDirectory\)/)

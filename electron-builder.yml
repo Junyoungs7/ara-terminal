@@ -36,6 +36,10 @@ nsis:
   allowToChangeInstallationDirectory: true
   # R14: 탐색기 주소창 `아라`/`ara` — App Paths 두 이름을 걸고 제거 때 지운다(이유는 파일 머리주석).
   include: resources/installer.nsh
+  # 신고 #4·#5: 바로가기 이름이 `ARA` 면 탐색기 주소창의 `ara` 가 App Paths 보다 **바탕화면 항목**을 먼저 잡아
+  # 바로가기(작업 폴더 = 설치 폴더)로 뜬다 → openHere 가 "아이콘 실행"으로 보고 셸을 안 연다.
+  # 그래서 `ara`·`아라` 와 겹치지 않는 이름. 업데이트 때 옛 `ARA.lnk` 는 electron-builder 가 새 이름으로 바꾼다.
+  shortcutName: A.R.A
 mac:
   target: dmg
   # mac 은 PNG 그대로 — .icns 는 한 장에서 잘 나온다(Windows 와 달리 여기서 깨진 적 없다).
