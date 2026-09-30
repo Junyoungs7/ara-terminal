@@ -3,7 +3,8 @@ import { t } from '../i18n'
 import { IconClose } from './icons'
 import { recentErrors } from '../store/errorRing'
 import { termRenderer } from '../terminal/webglChoice'
-import type { ReportFail, ReportPrepared, ReportSendResult } from '@shared/bugReport'
+import { imageMime, PASTE_BYTES_MAX, PASTE_MAX } from '@shared/bugReport'
+import type { PastedImage, ReportFail, ReportPrepared, ReportSendResult } from '@shared/bugReport'
 
 // 오류 신고(#206) — 기획 docs/plan-bug-report.md §2·§3·§4, 계약 docs/bug-report-api.md.
 // 껍데기는 Dialog 의 `.overlay/.modal/.modal-hd/.dlg-body/.modal-ft` 그대로(AiBootstrapModal 과 같은 결) —
@@ -50,6 +51,53 @@ export function failText(f: ReportFail): string {
   return t('report.fail.network')
 }
 
+/**
+ * 오류 신고 #9 — 붙여 넣은(끌어다 놓은) 파일 중 넣을 수 있는 것. 종류는 **매직 바이트로** 가른다
+ * (파일 이름·type 은 믿지 않는다). 못 넣은 것이 있으면 마지막 이유 하나를 돌려준다(안내 문구).
+ * room = 더 넣을 수 있는 장수. 검사: tests/bugReport.test.ts(가짜 paste 이벤트).
+ */
+export async function takeImages(
+  files: readonly Blob[],
+  room: number
+): Promise<{ added: PastedImage[]; error: 'count' | 'size' | 'type' | null }> {
+  const added: PastedImage[] = []
+  let error: 'count' | 'size' | 'type' | null = null
+  for (const f of files) {
+    if (added.length >= room) {
+      error = 'count'
+      break
+    }
+    if (f.size > PASTE_BYTES_MAX) {
+      error = 'size'
+      continue
+    }
+    const b = new Uint8Array(await f.arrayBuffer())
+    const mime = imageMime(b)
+    if (!mime) {
+      error = 'type'
+      continue
+    }
+    let bin = ''
+    for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode(...b.subarray(i, i + 0x8000))
+    added.push({ mime, base64: btoa(bin) })
+  }
+  return { added, error }
+}
+
+/**
+ * 이 paste 를 이미지로 받을까. 클립보드에 이미지 파일이 없으면 아니다. 글 입력칸에 글자(text/plain)도
+ * 함께 왔으면 **글자 붙여넣기가 이긴다** — 엑셀 셀 복사는 글자와 그림을 같이 싣는다.
+ */
+export function pastedFiles(e: { target: unknown; clipboardData: DataTransfer | null }): File[] {
+  const dt = e.clipboardData
+  if (!dt) return []
+  const files = [...dt.files].filter((f) => f.type.startsWith('image/'))
+  const t = e.target as { tagName?: string } | null
+  const inField = t?.tagName === 'INPUT' || t?.tagName === 'TEXTAREA'
+  if (inField && dt.types.includes('text/plain')) return []
+  return files
+}
+
 type Checks = { capture: boolean; log: boolean; errors: boolean; settings: boolean }
 
 function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClose: () => void }): JSX.Element {
@@ -61,6 +109,15 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
   const [checks, setChecks] = useState<Checks>({ capture: true, log: true, errors: true, settings: true })
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<ReportSendResult | null>(null)
+  const [images, setImages] = useState<PastedImage[]>([])
+  const [imgErr, setImgErr] = useState<'count' | 'size' | 'type' | null>(null)
+  const addImages = async (files: readonly Blob[]) => {
+    if (!files.length) return
+    const r = await takeImages(files, PASTE_MAX - images.length)
+    // 두 번 빠르게 붙여도 상한을 넘지 않게 여기서 한 번 더 자른다.
+    setImages((cur) => [...cur, ...r.added].slice(0, PASTE_MAX))
+    setImgErr(r.error)
+  }
   // 창이 열린 순간의 것 — 신고 창을 다루다 난 오류가 섞이지 않게.
   const errors = useMemo(() => recentErrors(), [])
   const logLines = prepared.log ? prepared.log.split('\n').length : 0
@@ -81,7 +138,8 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
         ...(checks.capture && prepared.capture ? { capture: prepared.capture } : {}),
         ...(checks.log && prepared.log ? { log: prepared.log } : {}),
         ...(checks.errors && errors.length ? { rendererErrors: errors } : {}),
-        ...(checks.settings && prepared.settings ? { settings: true } : {})
+        ...(checks.settings && prepared.settings ? { settings: true } : {}),
+        ...(images.length ? { images } : {})
       })
       .catch((): ReportSendResult => ({ ok: false, reason: 'network' }))
     setSending(false)
@@ -109,6 +167,25 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
         onKeyDown={(e) => {
           e.stopPropagation()
           if (e.key === 'Escape' && !sending) onClose()
+        }}
+        // #9 Ctrl+V 로 클립보드 이미지를 첨부한다(창 안 어디서든). 글자 붙여넣기는 pastedFiles 가 비켜 준다.
+        onPaste={(e) => {
+          if (result?.ok) return
+          const files = pastedFiles(e)
+          if (!files.length) return
+          e.preventDefault()
+          void addImages(files)
+        }}
+        // 끌어다 놓기도 같은 길. dragover 에서 막아야 main.tsx 의 빗나간 드롭 막이가 비켜 준다.
+        onDragOver={(e) => {
+          if (result?.ok || !e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDrop={(e) => {
+          if (result?.ok || !e.dataTransfer.files.length) return
+          e.preventDefault()
+          void addImages([...e.dataTransfer.files])
         }}
       >
         <div className="modal-hd">
@@ -175,6 +252,41 @@ function BugReportModal({ prepared, onClose }: { prepared: ReportPrepared; onClo
                   )}
                 </div>
               )}
+              <div className="fld" data-field="report.images">
+                <span className="br-note">
+                  {t('report.img.hint')
+                    .replace('{max}', String(PASTE_MAX))
+                    .replace('{mb}', String(PASTE_BYTES_MAX / 1024 / 1024))}
+                </span>
+                {images.length > 0 && (
+                  <div className="br-thumbs">
+                    {images.map((img, i) => (
+                      <div className="br-thumb" key={i}>
+                        <img alt={t('report.img.alt').replace('{n}', String(i + 1))} src={`data:${img.mime};base64,${img.base64}`} />
+                        <button
+                          type="button"
+                          className="br-thumb-x"
+                          aria-label={t('report.img.remove')}
+                          title={t('report.img.remove')}
+                          onClick={() => {
+                            setImages((cur) => cur.filter((_, j) => j !== i))
+                            setImgErr(null)
+                          }}
+                        >
+                          <IconClose />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {imgErr && (
+                  <span className="br-warn">
+                    {t(`report.img.${imgErr}`)
+                      .replace('{max}', String(PASTE_MAX))
+                      .replace('{mb}', String(PASTE_BYTES_MAX / 1024 / 1024))}
+                  </span>
+                )}
+              </div>
               {prepared.log && (
                 <div className="fld">
                   {check('log', t('report.a.log').replace('{n}', String(logLines)))}

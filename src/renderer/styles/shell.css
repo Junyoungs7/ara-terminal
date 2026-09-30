@@ -5190,6 +5190,41 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
+/* 오류 신고 #9 — 붙여 넣은 이미지 썸네일 + [×]. [×] 는 .modal-hd .x 를 작게 따르되 이름은 따로(.x 선택자와 안 겹치게). */
+.br-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+.br-thumb {
+  position: relative;
+}
+.br-thumb img {
+  display: block;
+  height: 72px;
+  max-width: 160px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.br-thumb-x {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+  cursor: pointer;
+}
+.br-thumb-x svg {
+  width: 11px;
+  height: 11px;
+}
 .br-log {
   margin: 0;
   max-height: 120px;

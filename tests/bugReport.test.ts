@@ -18,6 +18,8 @@ import {
 import { installErrorRing, recentErrors, RENDERER_ERRORS_MAX } from '../src/renderer/store/errorRing'
 import type { Session, UiState } from '../src/shared/types'
 import type { ReportSendReq } from '../src/shared/bugReport'
+import { PASTE_BYTES_MAX } from '../src/shared/bugReport'
+import { pastedFiles, takeImages } from '../src/renderer/components/BugReportModal'
 
 const dirs: string[] = []
 const tmp = (): string => {
@@ -281,5 +283,57 @@ describe('신고 창은 바깥 클릭으로 닫히지 않는다', () => {
     const bad = src.replace('<div className="overlay open">', '<div className="overlay open" onClick={onClose}>')
     expect(bad).not.toBe(src)
     expect(closesOnBackdrop(bad)).toBe(true)
+  })
+})
+
+// 오류 신고 #9 — 붙여 넣은 이미지. 창을 띄우지 않고 가짜 paste 이벤트로 잰다(클립보드를 건드리지 않는다).
+describe('#9 붙여 넣은 이미지', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+  const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 4, 5])
+  const file = (b: Buffer, type = 'image/png', name = 'image.png') => new File([new Uint8Array(b)], name, { type })
+  const clip = (files: File[], types = ['Files']) => ({ files, types }) as unknown as DataTransfer
+  const b64 = (b: Buffer) => b.toString('base64')
+
+  it('가짜 paste: 이미지만 가져가고, 입력칸에 글자가 함께 오면 글자 붙여넣기가 이긴다', () => {
+    const img = file(PNG)
+    const txt = file(Buffer.from('a'), 'text/plain', 'a.txt')
+    expect(pastedFiles({ target: { tagName: 'DIV' }, clipboardData: clip([img, txt]) })).toEqual([img])
+    expect(pastedFiles({ target: { tagName: 'TEXTAREA' }, clipboardData: clip([img]) })).toEqual([img])
+    expect(pastedFiles({ target: { tagName: 'TEXTAREA' }, clipboardData: clip([img], ['Files', 'text/plain']) })).toEqual([])
+    expect(pastedFiles({ target: { tagName: 'INPUT' }, clipboardData: clip([], ['text/plain']) })).toEqual([])
+    expect(pastedFiles({ target: null, clipboardData: null })).toEqual([])
+  })
+
+  it('종류는 매직 바이트로 — 이름·type 이 png 여도 속이 아니면 뺀다 · 5MB · 3장', async () => {
+    const r = await takeImages([file(PNG), file(JPG, 'image/jpeg'), file(Buffer.from('<html>'), 'image/png')], 3)
+    expect(r.added).toEqual([
+      { mime: 'image/png', base64: b64(PNG) },
+      { mime: 'image/jpeg', base64: b64(JPG) }
+    ])
+    expect(r.error).toBe('type')
+    const big = await takeImages([file(Buffer.concat([PNG, Buffer.alloc(PASTE_BYTES_MAX)]))], 3)
+    expect(big).toEqual({ added: [], error: 'size' })
+    const full = await takeImages([file(PNG), file(PNG)], 1)
+    expect(full.added).toHaveLength(1)
+    expect(full.error).toBe('count')
+  })
+
+  it('main 이 이름을 붙이고 다시 잰다 — paste-N.png|jpg, 가짜·넘치는 것은 버린다, 해시 대조에 들어간다', () => {
+    const images = [
+      { mime: 'image/png' as const, base64: b64(PNG) },
+      { mime: 'image/png' as const, base64: b64(Buffer.from('<html>')) }, // 렌더러를 속여 넘어온 것
+      { mime: 'image/jpeg' as const, base64: b64(JPG) },
+      { mime: 'image/png' as const, base64: b64(Buffer.concat([PNG, Buffer.alloc(PASTE_BYTES_MAX)])) },
+      { mime: 'image/png' as const, base64: b64(PNG) },
+      { mime: 'image/png' as const, base64: b64(PNG) }
+    ]
+    const b = buildReport(req({ images }), ctx())
+    const body = JSON.parse(b.body) as { attachments: { name: string; mime: string }[] }
+    expect(body.attachments.map((a) => [a.name, a.mime])).toEqual([
+      ['paste-1.png', 'image/png'],
+      ['paste-2.jpg', 'image/jpeg'],
+      ['paste-3.png', 'image/png']
+    ])
+    expect(tamperedOf(b.sent, {})).toEqual(['paste-1.png', 'paste-2.jpg', 'paste-3.png'])
   })
 })

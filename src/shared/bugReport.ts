@@ -4,6 +4,22 @@
 export const REPORT_ATTACHMENTS = ['capture.png', 'main-error.log', 'renderer-errors.json', 'settings.json'] as const
 export type ReportAttachmentName = (typeof REPORT_ATTACHMENTS)[number]
 
+/**
+ * 오류 신고 #9 — 사용자가 붙여 넣은(끌어다 놓은) 이미지. 사용자가 고른 것이라 **그대로** 보낸다.
+ * 서버 이름은 main 이 정한다(`paste-1.png`~`paste-3.jpg`) — 렌더러가 이름을 고를 자리가 없다.
+ */
+export const PASTE_MAX = 3
+export const PASTE_BYTES_MAX = 5 * 1024 * 1024
+export type PastedImage = { mime: 'image/png' | 'image/jpeg'; base64: string }
+
+/** 매직 바이트로만 가른다(파일 이름·type 은 믿지 않는다). 서버 server.mjs 의 imageMime 과 같은 규칙. */
+export function imageMime(b: Uint8Array): PastedImage['mime'] | null {
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  if (b.length >= PNG.length && PNG.every((v, i) => b[i] === v)) return 'image/png'
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  return null
+}
+
 /** 렌더러 오류 한 건(링버퍼 원소). 마스킹은 **보낼 때** main 이 건다. */
 export type RendererError = { at: number; message: string; stack: string }
 
@@ -30,6 +46,8 @@ export type ReportSendReq = {
   log?: string
   rendererErrors?: RendererError[]
   settings?: boolean
+  /** 붙여 넣은 이미지(#9). main 이 매직 바이트·크기·개수를 다시 재고 이름을 붙인다. */
+  images?: PastedImage[]
 }
 
 /**

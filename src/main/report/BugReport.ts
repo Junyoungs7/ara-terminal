@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { maskSecrets } from '@shared/maskSecrets'
 import type { Session, UiState } from '@shared/types'
+import { imageMime, PASTE_BYTES_MAX, PASTE_MAX } from '@shared/bugReport'
 import type { ReportAttachmentName, ReportSendReq, ReportSendResult } from '@shared/bugReport'
 
 export const DEVICE_ID_FILE = 'device-id'
@@ -116,6 +117,14 @@ export function buildReport(req: ReportSendReq, ctx: ReportContext): { body: str
     sent.set('renderer-errors.json', Buffer.from(JSON.stringify(masked, null, 2)))
   }
   if (req.settings) sent.set('settings.json', Buffer.from(ctx.settings))
+  // #9 붙여 넣은 이미지 — 렌더러가 잰 것을 다시 잰다(매직 바이트 · 5MB · 3장). 이름은 여기서만 붙는다.
+  let n = 0
+  for (const img of req.images ?? []) {
+    const bytes = Buffer.from(img.base64, 'base64')
+    const mime = imageMime(bytes)
+    if (!mime || bytes.length > PASTE_BYTES_MAX || n >= PASTE_MAX) continue
+    sent.set(`paste-${++n}.${mime === 'image/png' ? 'png' : 'jpg'}`, bytes)
+  }
 
   const body = JSON.stringify({
     title: req.title,
@@ -127,7 +136,7 @@ export function buildReport(req: ReportSendReq, ctx: ReportContext): { body: str
     env: { version: ctx.version, os: ctx.os, electron: ctx.electron, gpu: req.gpu, sessions: ctx.sessions },
     attachments: [...sent].map(([name, bytes]) => ({
       name,
-      mime: MIME[name as ReportAttachmentName],
+      mime: MIME[name as ReportAttachmentName] ?? imageMime(bytes),
       base64: bytes.toString('base64')
     }))
   })

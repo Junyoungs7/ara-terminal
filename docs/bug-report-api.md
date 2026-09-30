@@ -35,7 +35,7 @@
 
 ### `POST /api/reports` — 신고
 ```jsonc
-// 요청 (Content-Type: application/json, 본문 상한 12MB)
+// 요청 (Content-Type: application/json, 본문 상한 40MB — 넘으면 413)
 {
   "title": "떼어낸 창에서 재접속이 안 됨",      // 1~200자, 필수
   "what": "SSH 탭을 새 창으로 뺀 뒤 …",         // 무엇을 했나, 0~5000자
@@ -51,15 +51,26 @@
     { "name": "capture.png",          "mime": "image/png",        "base64": "…" },
     { "name": "main-error.log",       "mime": "text/plain",       "base64": "…" },
     { "name": "renderer-errors.json", "mime": "application/json", "base64": "…" },
-    { "name": "settings.json",        "mime": "application/json", "base64": "…" }
+    { "name": "settings.json",        "mime": "application/json", "base64": "…" },
+    { "name": "paste-1.png",          "mime": "image/png",        "base64": "…" },  // #9 붙여 넣은 이미지
+    { "name": "paste-2.jpg",          "mime": "image/jpeg",       "base64": "…" }
   ]
 }
 // 응답 201
 { "id": "r-20260928-0001", "number": 1,
   "hashes": { "capture.png": "<sha256 hex>", "main-error.log": "…" } }   // 🔴 받은 그대로의 해시
 ```
-- 첨부 이름은 **위 넷만** 받는다(허용 목록). 그 밖은 400 — 파일명으로 폴더를 벗어나지 못하게
-- 아라는 `hashes` 를 **자기가 보낸 것과 대조**한다(DLP 가 바꿨는지 — 기획 §4)
+- 첨부 이름은 **고정 넷**(`capture.png`·`main-error.log`·`renderer-errors.json`·`settings.json`) +
+  **붙여 넣은 이미지**(#9) 뿐이다. 그 밖은 400 — 파일명이 곧 디스크 경로라 폴더를 벗어나지 못하게
+- 붙여 넣은 이미지(#9, 2026-09-30): 이름은 정규식 `^paste-[1-3]\.(png|jpg)$` 하나로만 받는다
+  (`/`·`..`·대문자 확장자·다른 번호는 400). mime 은 이름에 묶인다(`.png`→`image/png`, `.jpg`→`image/jpeg`).
+  🔴 **내용도 매직 바이트로 다시 잰다**(PNG `89 50 4E 47 0D 0A 1A 0A` · JPEG `FF D8 FF`) — 이름만 png 인 html 은 400.
+  한 장 **5MB** 이하 · **최대 3장**(같은 번호 `paste-1.png`+`paste-1.jpg` 도 400). 이름은 아라 main 이 붙인다(렌더러는 못 고른다)
+- 본문 상한 40MB 인 이유: 캡처(수 MB) + 5MB × 3 이 base64(×4/3)로 실린다. 12MB 에서 올렸다
+- 하위 호환: 옛 아라(1.0.16 이하)는 고정 넷만 보낸다 — 그대로 받는다. 새 아라가 **옛 서버**에 이미지를 붙여 보내면
+  옛 서버가 400 "받을 수 없는 첨부 이름" 으로 거절한다(서버를 먼저 올린다)
+- 사이트는 첨부를 mime 으로 그린다(`image/*` 면 그림) — 붙인 이미지도 [보기]로 그대로 보인다
+- 아라는 `hashes` 를 **자기가 보낸 것과 대조**한다(DLP 가 바꿨는지 — 기획 §4). 붙인 이미지도 같이 대조한다
 
 ### `GET /api/reports?status=open` — 목록(공개)
 ```jsonc

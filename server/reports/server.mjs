@@ -18,7 +18,8 @@ const DIR = process.env.ARA_REPORTS_DIR || '/data/reports'
 const ADMIN_PW = process.env.ARA_REPORTS_ADMIN_PW || ''
 const ORIGINS = new Set(['http://192.168.100.56:8899', process.env.ARA_REPORTS_ORIGIN].filter(Boolean))
 
-const BODY_MAX = 12 * 1024 * 1024
+// #9 붙여 넣은 이미지(5MB × 3)가 캡처와 함께 base64(×4/3)로 실린다 — 12MB 에서 올렸다.
+const BODY_MAX = 40 * 1024 * 1024
 const STATUSES = ['open', 'investigating', 'fixed', 'closed', 'wontrepro', 'intended', 'duplicate']
 // 첨부 이름은 여기서만 나온다 — 파일명이 곧 디스크 경로라 허용 목록 밖은 받지 않는다(경로 조작 차단).
 // mime 도 이름에 묶는다: 요청의 mime 을 믿으면 text/html 로 저장해 이 출처에서 스크립트를 띄울 수 있다.
@@ -27,6 +28,19 @@ const ATTACH = {
   'main-error.log': 'text/plain',
   'renderer-errors.json': 'application/json',
   'settings.json': 'application/json'
+}
+// #9 사용자가 붙여 넣은 이미지. 이름은 이 정규식 하나로만 — `/`·`..`·다른 확장자가 들어갈 틈이 없다.
+// 내용은 매직 바이트로 다시 잰다(이름만 png 인 html 을 받지 않는다).
+const PASTE_RE = /^paste-[1-3]\.(png|jpg)$/
+const PASTE_BYTES_MAX = 5 * 1024 * 1024
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+/** 매직 바이트 → mime. 아라 src/shared/bugReport.ts 의 imageMime 과 같은 규칙. */
+const imageMime = (b) =>
+  b.subarray(0, 8).equals(PNG_SIG) ? 'image/png' : b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'image/jpeg' : null
+function attachMime(name) {
+  if (Object.hasOwn(ATTACH, name)) return ATTACH[name]
+  const m = PASTE_RE.exec(name)
+  return m ? (m[1] === 'png' ? 'image/png' : 'image/jpeg') : null
 }
 const ID_RE = /^r-\d{8}-\d{4,}$/
 const RATE_MAX = 5
@@ -147,13 +161,14 @@ class HttpError extends Error {
 
 function readJson(req, max) {
   return new Promise((resolve, reject) => {
-    if (Number(req.headers['content-length']) > max) return reject(new HttpError(413, '보낸 내용이 너무 큽니다(12MB 상한).'))
+    const tooBig = `보낸 내용이 너무 큽니다(${Math.round(max / 1024 / 1024) || 1}MB 상한).`
+    if (Number(req.headers['content-length']) > max) return reject(new HttpError(413, tooBig))
     const chunks = []
     let size = 0
     // 넘치면 답은 바로 하고 나머지는 흘려보낸다(소켓을 끊으면 413 이 상대에게 닿지 않는다).
     req.on('data', (c) => {
       size += c.length
-      if (size > max) reject(new HttpError(413, '보낸 내용이 너무 큽니다(12MB 상한).'))
+      if (size > max) reject(new HttpError(413, tooBig))
       else chunks.push(c)
     })
     req.on('end', () => {
@@ -203,15 +218,22 @@ function decodeAttachments(list) {
   const seen = new Set()
   return list.map((a) => {
     const name = a?.name
-    if (typeof name !== 'string' || !Object.hasOwn(ATTACH, name)) throw new HttpError(400, '받을 수 없는 첨부 이름입니다.')
-    if (seen.has(name)) throw new HttpError(400, `첨부 ${name} 이(가) 두 번 들어 있습니다.`)
-    seen.add(name)
-    if (a.mime !== ATTACH[name]) throw new HttpError(400, `첨부 ${name} 의 형식은 ${ATTACH[name]} 이어야 합니다.`)
+    const mime = typeof name === 'string' ? attachMime(name) : null
+    if (!mime) throw new HttpError(400, '받을 수 없는 첨부 이름입니다.')
+    // paste-1.png 와 paste-1.jpg 를 같이 받으면 3장 상한이 6장이 된다 — 번호로 센다.
+    const key = PASTE_RE.test(name) ? name.split('.')[0] : name
+    if (seen.has(key)) throw new HttpError(400, `첨부 ${name} 이(가) 두 번 들어 있습니다.`)
+    seen.add(key)
+    if (a.mime !== mime) throw new HttpError(400, `첨부 ${name} 의 형식은 ${mime} 이어야 합니다.`)
     if (typeof a.base64 !== 'string') throw new HttpError(400, `첨부 ${name} 의 내용이 없습니다.`)
     const bytes = Buffer.from(a.base64, 'base64')
     // Buffer.from 은 틀린 글자를 조용히 버린다 — 되돌려 인코딩해 같아야 온전한 base64 다.
     if (bytes.toString('base64') !== a.base64) throw new HttpError(400, `첨부 ${name} 의 base64 를 읽을 수 없습니다.`)
-    return { name, mime: ATTACH[name], bytes }
+    if (PASTE_RE.test(name)) {
+      if (bytes.length > PASTE_BYTES_MAX) throw new HttpError(400, `첨부 ${name} 이(가) 5MB 를 넘습니다.`)
+      if (imageMime(bytes) !== mime) throw new HttpError(400, `첨부 ${name} 의 내용이 ${mime} 가 아닙니다.`)
+    }
+    return { name, mime, bytes }
   })
 }
 

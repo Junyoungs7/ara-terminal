@@ -102,6 +102,46 @@ async function mineProblems(dev: string, mineIds: string[]): Promise<string[]> {
   return out
 }
 
+// #9 붙여 넣은 이미지 — 진짜 시그니처를 단 가짜 그림.
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const pastePng = Buffer.concat([PNG_SIG, Buffer.from('붙인 png')])
+const pasteJpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('붙인 jpg')])
+const att = (name: string, mime: string, bytes: Buffer) => ({ name, mime, base64: b64(bytes) })
+
+/**
+ * #9 붙인 이미지의 약속 — 받을 것은 받고(201·해시·mime), 이름 규칙·mime·매직 바이트·5MB·중복 번호를
+ * 어긴 것은 400. 어긋난 것을 문장으로 돌려준다(빈 배열 = 지킴). 위반을 심은 서버에도 같은 함수를 댄다.
+ */
+async function pasteProblems(): Promise<string[]> {
+  const out: string[] = []
+  let k = 0
+  const send = (attachments: unknown[]) => post('/api/reports', report({ deviceId: `dev-paste-${k++}`, attachments }))
+  const good = await send([att('paste-1.png', 'image/png', pastePng), att('paste-2.jpg', 'image/jpeg', pasteJpg)])
+  if (good.status !== 201) out.push(`정상 붙이기가 ${good.status}`)
+  else {
+    const g = await json(good)
+    if (g.hashes['paste-1.png'] !== sha(pastePng) || g.hashes['paste-2.jpg'] !== sha(pasteJpg)) out.push('해시가 다르다')
+    const f = await fetch(`${base}/api/reports/${g.id}/files/paste-2.jpg`, { headers: admin })
+    if (f.headers.get('content-type') !== 'image/jpeg') out.push(`jpg 의 mime ${f.headers.get('content-type')}`)
+  }
+  const bad: [string, unknown[]][] = [
+    ...['paste-4.png', 'paste-0.png', 'paste-1.gif', 'paste-1.PNG', 'xpaste-1.png', 'paste-1.png ', '../paste-1.png', 'paste-1.png/../x', 'paste-12.png'].map(
+      (n): [string, unknown[]] => [`이름 ${n}`, [att(n, 'image/png', pastePng)]]
+    ),
+    ['mime 어긋남', [att('paste-1.png', 'image/jpeg', pastePng)]],
+    ['html 을 png 이름으로', [att('paste-1.png', 'image/png', Buffer.from('<html><script>x</script></html>'))]],
+    ['png 를 jpg 이름으로', [att('paste-1.jpg', 'image/jpeg', pastePng)]],
+    ['5MB 넘음', [att('paste-1.png', 'image/png', Buffer.concat([PNG_SIG, Buffer.alloc(5 * 1024 * 1024)]))]],
+    ['같은 번호 둘', [att('paste-1.png', 'image/png', pastePng), att('paste-1.jpg', 'image/jpeg', pasteJpg)]]
+  ]
+  for (const [label, list] of bad) {
+    const r = await send(list)
+    if (r.status !== 400) out.push(`${label} → ${r.status}`)
+    else await json(r)
+  }
+  return out
+}
+
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ara-reports-'))
   await start()
@@ -200,6 +240,26 @@ describe('ara-reports 서버', () => {
     // 첨부 파일 경로로 폴더 밖을 못 읽는다
     const r = await fetch(`${base}/api/reports/${id}/files/..%2F..%2Fx`, { headers: admin })
     expect(r.status).toBe(404)
+  })
+
+  it('#9 붙인 이미지: paste-1~3.png|jpg 만 · mime · 매직 바이트 · 5MB · 번호 중복', async () => {
+    expect(await pasteProblems()).toEqual([])
+  })
+
+  it('#9 본문 상한은 40MB — 캡처 + 5MB × 3 이 base64 로 들어간다', async () => {
+    const big = Buffer.concat([PNG_SIG, Buffer.alloc(5 * 1024 * 1024 - 8)])
+    const r = await post(
+      '/api/reports',
+      report({
+        deviceId: 'dev-big',
+        attachments: [
+          att('capture.png', 'image/png', Buffer.alloc(4 * 1024 * 1024)),
+          ...[1, 2, 3].map((n) => att(`paste-${n}.png`, 'image/png', big))
+        ]
+      })
+    )
+    expect(r.status).toBe(201)
+    await json(r)
   })
 
   it('분당 6번째 신고는 429', async () => {
@@ -335,6 +395,26 @@ describe('ara-reports 서버', () => {
       await start({}, f)
       const problems = await mineProblems(DEV, [one])
       expect(problems.some((p) => p.startsWith(want))).toBe(true)
+      rmSync(f)
+    }
+  })
+
+  it('🔴 위반 심기: 이름 규칙을 풀거나 매직 바이트 검사를 빼면 pasteProblems 가 문다', async () => {
+    const src = readFileSync(SERVER, 'utf8')
+    const loose = src.replace('/^paste-[1-3]', '/paste-[1-9]').replace('(png|jpg)$/', '(png|jpg)/')
+    const noMagic = src.replace('if (imageMime(bytes) !== mime)', 'if (false)')
+    const noSize = src.replace('if (bytes.length > PASTE_BYTES_MAX)', 'if (false)')
+    for (const [name, bad, want] of [
+      ['loose', loose, '이름 '],
+      ['nomagic', noMagic, 'html 을 png 이름으로'],
+      ['nosize', noSize, '5MB 넘음']
+    ] as const) {
+      expect(bad).not.toBe(src)
+      const f = join(dir, `server-${name}.mjs`)
+      writeFileSync(f, bad)
+      await stop()
+      await start({}, f)
+      expect((await pasteProblems()).some((p) => p.startsWith(want))).toBe(true)
       rmSync(f)
     }
   })
