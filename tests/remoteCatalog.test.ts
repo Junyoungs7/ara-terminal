@@ -950,6 +950,8 @@ describe('권한 올리기 — 누가 판단하는가(AUDIT-R1)', () => {
     'k8s.yaml': { ns: 'vgt-erp', pod: 'api-7d9f-x2k' },
     'ctr.action': { id: 'a'.repeat(12), action: 'stop' },
     'ctr.rmi': { image: 'nginx:1.24' },
+    'ctr.ports': { id: 'a'.repeat(12) },
+    'ctr.run': { image: 'redis:8-alpine', name: 'cache', ports: ['8512:6379'] },
     'app.trace': { port: 8000 },
     'app.pipe': { pane: 'dev:0.1', port: 8000 }
   }

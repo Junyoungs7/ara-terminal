@@ -1,9 +1,29 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { buildCtrExec, sortContainers, type CtrAction, type CtrRow, type CtrRuntime } from '@shared/remoteCatalog'
+import {
+  buildCtrExec,
+  parseCtrList,
+  sortContainers,
+  type CtrAction,
+  type CtrRow,
+  type CtrRuntime
+} from '@shared/remoteCatalog'
+import {
+  conflictChoice,
+  findConflicts,
+  isPortClash,
+  needsStop,
+  parsePortsProbe,
+  parseRunForm,
+  uniqueCtrs,
+  type Conflicts,
+  type HostPort,
+  type RunForm
+} from '@shared/ctrConflict'
 import type { DialogResult, DialogSpec } from './Dialog'
 import { IconClose, IconRefresh } from './icons'
 import { BlockedBox, useCtrList } from './ctrShared'
+import { CtrRunDialog, EMPTY_RUN } from './CtrRunDialog'
 import { t } from '../i18n'
 
 // F28 컨테이너 — 준영님 확인(2026-08-12): 사내에 **도커가 깔린 서버가 있고 SSH 도 된다.**
@@ -95,6 +115,9 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<CtrSort>(DEFAULT_CTR_SORT)
   const [selected, setSelected] = useState<string | null>(null)
+  const [runOpen, setRunOpen] = useState(false)
+  const [runDraft, setRunDraft] = useState<RunForm>(EMPTY_RUN)
+  const [runErr, setRunErr] = useState<{ field: keyof RunForm; line?: string } | null>(null)
 
   const shown = useMemo(() => sortCtrs(filterCtrs(feed.rows, q), sort), [feed.rows, q, sort])
   // 목록이 폴링으로 갈리므로 선택은 id 로만 들고 행은 매번 다시 찾는다(사라진 컨테이너는 null).
@@ -126,9 +149,107 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
     })
   }
 
-  const act = async (action: CtrAction): Promise<void> => {
-    if (!row || !sessionId) return
+  // ── 오류 신고 #11: 포트·이름 사전 확인 ─────────────────────────────────────
+  // 확인을 못 하면(명령 실패·런타임 문구가 낯섦) **예전처럼 그냥 진행한다** — 사전 확인이
+  // 막는 쪽으로 틀리면 시작 자체를 못 하게 된다. 판정은 전부 shared/ctrConflict.ts(순수).
+
+  /** 지금 목록 — 폴링 표는 5초 늦을 수 있어 새로 읽는다. 못 읽으면 표에 있는 것. */
+  const freshRows = async (): Promise<CtrRow[]> => {
+    if (!sessionId) return feed.rows
+    const r = await window.ev?.remote.run(sessionId, 'ctr.list')
+    if (r?.ok) {
+      const l = parseCtrList(r.out)
+      if (!l.unavailable) return l.rows
+    }
+    return feed.rows
+  }
+
+  const probe = async (id?: string): Promise<ReturnType<typeof parsePortsProbe> | null> => {
+    if (!sessionId) return null
+    const r = await window.ev?.remote.run(sessionId, 'ctr.ports', id ? { id } : undefined)
+    return r?.ok ? parsePortsProbe(r.out) : null
+  }
+
+  const portLabel = (p: HostPort): string => `${p.ip ? p.ip + ':' : ''}${p.port}/${p.proto}`
+
+  /** 충돌 다이얼로그. 컨테이너만 막고 있으면 [정지하고 …][제거하고 …][취소], 프로세스가 끼면 안내만. */
+  const askClash = async (c: Conflicts, verb: 'start' | 'run'): Promise<'none' | 'stop' | 'rm' | 'abort'> => {
+    const choice = conflictChoice(c)
+    if (choice === 'none') return 'none'
+    const one = c.ctrs.length === 1 && c.procs.length === 0 ? c.ctrs[0] : null
+    const detail = [
+      ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
+      ...c.ctrs.map((x) => ({ label: portLabel(x.port), value: `${x.name} (${x.image})` })),
+      ...c.procs.map((p) => ({
+        label: portLabel(p.port),
+        value: p.proc
+          ? t('console.ctr.clash.proc').replace('{name}', p.proc).replace('{pid}', String(p.pid ?? '?'))
+          : t('console.ctr.clash.procUnknown')
+      }))
+    ]
+    if (choice === 'info') {
+      await ask({
+        title: t('console.ctr.clash.title'),
+        message: t('console.ctr.clash.procMsg'),
+        detail,
+        confirmLabel: t('dlg.ok'),
+        cancelLabel: null
+      })
+      return 'abort'
+    }
     const r = await ask({
+      title: t('console.ctr.clash.title'),
+      message: one
+        ? t('console.ctr.clash.one')
+            .replace('{port}', String(one.port.port))
+            .replace('{name}', one.name)
+            .replace('{image}', one.image)
+        : t('console.ctr.clash.many'),
+      detail,
+      tone: 'danger',
+      altLabel: t('console.ctr.clash.stop.' + verb),
+      confirmLabel: t('console.ctr.clash.rm.' + verb),
+      cancelLabel: t('dlg.cancel')
+    })
+    return r === 'alt' ? 'stop' : r === 'confirm' ? 'rm' : 'abort'
+  }
+
+  /** 막고 있는 컨테이너를 멈추거나(그리고) 지운다. 하나라도 실패하면 그 이유를 보이고 false. */
+  const clear = async (list: readonly { id: string; name: string; state: string }[], mode: 'stop' | 'rm'): Promise<boolean> => {
+    if (!sessionId) return false
+    for (const x of list) {
+      const steps: CtrAction[] = [...(needsStop(x.state) ? (['stop'] as const) : []), ...(mode === 'rm' ? (['rm'] as const) : [])]
+      for (const action of steps) {
+        const res = await window.ev?.remote.run(sessionId, 'ctr.action', { id: x.id, action })
+        if (res?.ok && res.code === 0) continue
+        feed.reload()
+        await fail(t('console.ctr.act.failTitle'), x.name, res?.ok ? res.out.trim() : t('console.err.' + (res?.reason ?? 'exec')))
+        return false
+      }
+    }
+    return true
+  }
+
+  /** [시작] 전 확인. 'go' = 막는 것 없음(평소 확인창으로), 'cleared' = 사람이 이미 고름(확인창 생략). */
+  const precheckStart = async (target: CtrRow): Promise<'go' | 'cleared' | 'abort'> => {
+    const pre = await probe(target.id)
+    if (!pre?.bindings || pre.bindings.length === 0) return 'go'
+    const c = findConflicts(pre.bindings, await freshRows(), pre.listeners, [target.id])
+    const pick = await askClash(c, 'start')
+    if (pick === 'none') return 'go'
+    if (pick === 'abort') return 'abort'
+    return (await clear(uniqueCtrs(c.ctrs), pick)) ? 'cleared' : 'abort'
+  }
+
+  const act = async (action: CtrAction, opts: { confirmed?: boolean; retried?: boolean } = {}): Promise<void> => {
+    if (!row || !sessionId) return
+    let confirmed = opts.confirmed === true
+    if (action === 'start' && !confirmed) {
+      const pre = await precheckStart(row)
+      if (pre === 'abort') return
+      confirmed = pre === 'cleared'
+    }
+    const r = confirmed ? 'confirm' : await ask({
       title: t('console.ctr.act.title.' + action),
       message: t('console.ctr.act.msg.' + action),
       detail: [
@@ -147,6 +268,19 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
     if (res?.ok && res.code === 0) {
       if (action === 'rm') setSelected(null)
       return
+    }
+    // 사전 확인과 시작 사이에 누가 그 포트를 잡았다(경합) — 같은 다이얼로그로 안내하고 한 번만 다시 시작한다.
+    if (action === 'start' && !opts.retried && res?.ok && isPortClash(res.out)) {
+      const pre = await probe(row.id)
+      if (pre?.bindings && pre.bindings.length > 0) {
+        const c = findConflicts(pre.bindings, await freshRows(), pre.listeners, [row.id])
+        const pick = await askClash(c, 'start')
+        if (pick === 'abort') return
+        if (pick !== 'none') {
+          if (await clear(uniqueCtrs(c.ctrs), pick)) await act('start', { confirmed: true, retried: true })
+          return
+        }
+      }
     }
     await fail(t('console.ctr.act.failTitle'), row.name, res?.ok ? res.out.trim() : t('console.err.' + (res?.reason ?? 'exec')))
   }
@@ -167,6 +301,80 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
     if (res?.ok && res.code === 0) return
     // 흔한 실패가 "이 이미지를 쓰는 컨테이너가 남아 있다"이다 — 런타임 문장을 그대로 보여 준다.
     await fail(t('console.ctr.rmi.failTitle'), row.image, res?.ok ? res.out.trim() : t('console.err.' + (res?.reason ?? 'exec')))
+  }
+
+  // ── 오류 신고 #11: [새 컨테이너] ────────────────────────────────────────────
+  // 창을 닫고 확인 다이얼로그를 차례로 띄운 뒤, [취소]면 쓰던 그대로 다시 연다.
+  // 지우는 일은 **모든 질문에 답을 받은 뒤에** 한꺼번에 한다 — 이름 질문에서 [제거] 를 눌렀는데
+  // 포트 질문에서 [취소] 하면 옛 컨테이너만 사라진 채 끝나면 안 된다.
+  const createChecked = async (): Promise<void> => {
+    if (!sessionId) return
+    const p = parseRunForm(runDraft)
+    if (!p.ok) {
+      setRunErr({ field: p.field, line: p.line })
+      return
+    }
+    setRunErr(null)
+    setRunOpen(false)
+    const reopen = (): void => setRunOpen(true)
+    const rows = await freshRows()
+    const same = p.args.name ? rows.find((r) => r.name === p.args.name) : undefined
+    if (same) {
+      const r = await ask({
+        title: t('console.ctr.dup.title'),
+        message: t('console.ctr.dup.msg'),
+        detail: [
+          ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
+          { label: t('console.ctr.col.name'), value: same.name },
+          { label: t('console.ctr.col.image'), value: same.image },
+          { label: t('console.ctr.act.state'), value: same.status }
+        ],
+        tone: 'danger',
+        confirmLabel: t('console.ctr.dup.rm'),
+        cancelLabel: t('dlg.cancel')
+      })
+      if (r !== 'confirm') return reopen()
+    }
+    let clash: Conflicts = { ctrs: [], procs: [] }
+    let pick: 'none' | 'stop' | 'rm' | 'abort' = 'none'
+    if (p.want.length > 0) {
+      // ss 를 못 읽어도 컨테이너끼리의 충돌은 목록만으로 안다.
+      const pre = await probe()
+      clash = findConflicts(p.want, rows, pre?.listeners ?? [], same ? [same.id] : [])
+      pick = await askClash(clash, 'run')
+      if (pick === 'abort') return reopen()
+    }
+    if (same && !(await clear([same], 'rm'))) return reopen()
+    if (pick === 'stop' || pick === 'rm') {
+      if (!(await clear(uniqueCtrs(clash.ctrs), pick))) return reopen()
+    }
+    const res = await window.ev?.remote.run(sessionId, 'ctr.run', p.args)
+    feed.reload()
+    const label = p.args.name ?? p.args.image
+    if (res?.ok && res.code === 0) {
+      // 이미지를 받았으면 진행 줄이 앞에 붙는다 — id 는 마지막 줄이다.
+      const id = res.out.trim().split('\n').pop()?.trim() ?? ''
+      setRunDraft(EMPTY_RUN) // 비밀값이 든 env 를 화면 상태에 남기지 않는다
+      await ask({
+        title: t('console.ctr.run.done'),
+        message: t('console.ctr.run.doneMsg'),
+        detail: [
+          ...(server ? [{ label: t('conn.fail.server'), value: server }] : []),
+          { label: t('console.ctr.col.name'), value: label },
+          { label: 'ID', value: id.slice(0, 12) }
+        ],
+        confirmLabel: t('dlg.ok'),
+        cancelLabel: null
+      })
+      return
+    }
+    const why = res?.ok
+      ? res.out.trim()
+      : res?.reason === 'timeout'
+        ? t('console.ctr.run.timeout')
+        : t('console.err.' + (res?.reason ?? 'exec'))
+    await fail(t('console.ctr.run.failTitle'), label, why)
+    reopen()
   }
 
   const attach = (): void => {
@@ -199,10 +407,34 @@ export function ContainerTable({ sessionId, active, server, ask, onSendInput }: 
           )}
         </div>
         <span className="con-count">{shown.length}</span>
+        <button
+          type="button"
+          className="con-btn"
+          data-action="ctr.new"
+          disabled={cri || !sessionId}
+          onClick={() => setRunOpen(true)}
+        >
+          {t('console.ctr.run.btn')}
+        </button>
         <button type="button" className="con-btn" data-action="ctr.refresh" title={t('sftp.refresh')} onClick={feed.reload}>
           <IconRefresh />
         </button>
       </div>
+
+      {runOpen && (
+        <CtrRunDialog
+          value={runDraft}
+          server={server}
+          error={runErr}
+          onChange={setRunDraft}
+          onSubmit={() => void createChecked()}
+          onClose={() => {
+            setRunOpen(false)
+            setRunErr(null)
+            setRunDraft(EMPTY_RUN) // 닫으면 버린다 — env 에 비밀값이 있을 수 있다
+          }}
+        />
+      )}
 
       {feed.note && <div className="con-note">{feed.note}</div>}
 

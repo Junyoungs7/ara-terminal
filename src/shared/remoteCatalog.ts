@@ -51,6 +51,11 @@ export type CmdId =
   // F28 R2: 컨테이너 상태 바꾸기·지우기 / 이미지 지우기. 전부 확인 다이얼로그를 거친다.
   | "ctr.action"
   | "ctr.rmi"
+  // 오류 신고 #11(2026-10-08): 시작·새로 만들기 전에 **그 호스트 포트를 누가 쓰나**(읽기).
+  | "ctr.ports"
+  // 오류 신고 #11: 새 컨테이너(`run -d`). 🔴 **사람 전용**(HUMAN_ONLY) — 추가 명령이 컨테이너 안에서
+  // 도는 자유 인자라, server_run 이 부를 수 있으면 아라가 임의 실행 채널을 하나 얻는다.
+  | "ctr.run"
   /**
    * 백그라운드로 도는 서버의 **로그가 어디 있나**(2026-08-27 준영님 요청).
    *
@@ -186,6 +191,97 @@ const CTR_ACTIONS: readonly CtrAction[] = [
 export function validCtrAction(v: unknown): CtrAction | null {
   return CTR_ACTIONS.includes(v as CtrAction) ? (v as CtrAction) : null;
 }
+
+// ── 오류 신고 #11: 새 컨테이너 조립(ctr.run) ──────────────────────────────────
+// 렌더러가 보내는 것은 **구조화된 값**이고 문자열은 여기서 만든다. 셸에 그대로 붙는 값(이름·포트·
+// 재시작 정책·이미지)은 메타문자를 하나도 허용하지 않는 정규식으로, 자유 글자(env 값·추가 인자)는
+// 작은따옴표 인용(sqEscape)으로만 들어간다.
+
+/** 컨테이너 이름 — docker 규칙(`[a-zA-Z0-9][a-zA-Z0-9_.-]+`) 그대로. 셸 메타문자가 없다. */
+export function validCtrName(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(v) ? v : null;
+}
+
+/** 포트 매핑 한 줄 — `[IPv4:]호스트:컨테이너[/tcp|udp|sctp]`. 범위·임의 포트는 받지 않는다. */
+export function validPortSpec(
+  v: unknown,
+): { ip: string; host: number; ctr: number; proto: string } | null {
+  if (typeof v !== "string") return null;
+  const m = /^(?:(\d{1,3}(?:\.\d{1,3}){3}):)?(\d{1,5}):(\d{1,5})(?:\/(tcp|udp|sctp))?$/.exec(v);
+  if (!m) return null;
+  const host = Number(m[2]);
+  const ctr = Number(m[3]);
+  if (host < 1 || host > 65535 || ctr < 1 || ctr > 65535) return null;
+  return { ip: m[1] ?? "", host, ctr, proto: m[4] ?? "tcp" };
+}
+
+/** 환경변수 한 줄 — 키는 정규식, 값은 인용으로. 제어문자(개행·NUL)는 값에도 못 들어온다. */
+export function validEnvLine(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 4096) return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\0\r\n]/.test(v)) return null;
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(v) ? v : null;
+}
+
+export const CTR_RESTARTS = ["no", "always", "unless-stopped", "on-failure"] as const;
+export type CtrRestart = (typeof CTR_RESTARTS)[number];
+
+export type CtrRunArgs = {
+  image: string;
+  name?: string;
+  ports?: string[];
+  env?: string[];
+  restart?: CtrRestart;
+  /** 이미지 뒤에 붙는 인자. 공백으로 나눠 **낱낱이 인용**한다. */
+  cmd?: string;
+};
+
+/**
+ * `run -d …` 의 인자 부분. 하나라도 틀리면 null — 부분 조립은 없다.
+ * ponytail: 추가 인자는 공백으로만 나눈다(따옴표로 묶은 "a b" 는 두 낱말이 된다). 필요해지면 그때 토크나이저.
+ */
+export function buildCtrRunArgs(args: unknown): string | null {
+  const a = args as Partial<Record<keyof CtrRunArgs, unknown>> | null;
+  const image = validImageRef(a?.image);
+  if (image === null) return null;
+  const parts = ["run", "-d"];
+  if (a?.name !== undefined && a.name !== "") {
+    const name = validCtrName(a.name);
+    if (name === null) return null;
+    parts.push("--name", name);
+  }
+  const list = (v: unknown): unknown[] | null =>
+    v === undefined ? [] : Array.isArray(v) && v.length <= 64 ? v : null;
+  const ports = list(a?.ports);
+  const env = list(a?.env);
+  if (ports === null || env === null) return null;
+  for (const p of ports) {
+    if (validPortSpec(p) === null) return null;
+    parts.push("-p", p as string);
+  }
+  for (const e of env) {
+    const ok = validEnvLine(e);
+    if (ok === null) return null;
+    parts.push("-e", `'${sqEscape(ok)}'`);
+  }
+  if (a?.restart !== undefined && a.restart !== "no") {
+    if (!CTR_RESTARTS.includes(a.restart as CtrRestart)) return null;
+    parts.push("--restart", a.restart as string);
+  }
+  parts.push(image);
+  if (a?.cmd !== undefined) {
+    if (typeof a.cmd !== "string" || a.cmd.length > 4096) return null;
+    // eslint-disable-next-line no-control-regex
+    if (/[\0\r\n]/.test(a.cmd)) return null;
+    for (const w of a.cmd.trim().split(/\s+/)) if (w !== "") parts.push(`'${sqEscape(w)}'`);
+  }
+  return parts.join(" ");
+}
+
+/** ctr.ports 출력의 두 칸 — 그 컨테이너의 PortBindings(JSON) / 이 호스트의 리스너(ss). */
+export const PORTS_PB = "ARA-PB";
+export const PORTS_SS = "ARA-SS";
 
 /**
  * 이미지 참조(`nginx:1.24-alpine` · `reg.사내:5000/team/app@sha256:…`).
@@ -1237,7 +1333,18 @@ export type CmdSpec = {
   build: (args: unknown) => string | null;
   /** 원격 상태를 바꾸는 명령. 호출측은 확인 다이얼로그 없이 부르면 안 된다. */
   write?: true;
+  /**
+   * exec 상한(ms). 없으면 서비스 기본값(10초). `docker stop` 은 기본 유예만 10초라 그 상한에
+   * 걸려 "실패"로 보였고, `run` 은 이미지를 받는 동안 몇십 초가 간다(오류 신고 #11).
+   */
+  timeoutMs?: number;
 };
+
+/**
+ * **사람만** 부를 수 있는 명령(오류 신고 #11). MCP `server_run` 이 이 집합을 보고 거절한다 —
+ * k8s.exec 를 표에 두지 않은 것과 같은 이유다: 표에 있으면 아라가 부를 수 있다.
+ */
+export const HUMAN_ONLY: ReadonlySet<CmdId> = new Set<CmdId>(["ctr.run"]);
 
 /**
  * ps 는 CPU 내림차순으로 받아 온다 — 화면에서 다시 정렬하더라도 첫 화면이 쓸모 있어야 한다.
@@ -1557,6 +1664,34 @@ export const COMMANDS: Record<CmdId, CmdSpec> = {
       if (id === null || action === null) return null;
       return ctrCmd(`${action} ${id}`);
     },
+    timeoutMs: 30000,
+  },
+
+  // 오류 신고 #11 — 포트 사전 확인. id 가 오면 그 컨테이너의 바인딩(멈춘 컨테이너는 ps 의 Ports 가
+  // 비어 있어 inspect 로만 안다)을, 그리고 이 호스트의 리스너를 같은 왕복에 받는다. ss 가 없으면 빈 칸.
+  "ctr.ports": {
+    build: (args) => {
+      const raw = (args as { id?: unknown } | null)?.id;
+      const id = raw === undefined ? null : validCtrId(raw);
+      if (raw !== undefined && id === null) return null;
+      return [
+        `printf '${PORTS_PB}\\n'`,
+        ...(id ? [ctrCmd(`inspect --format '{{json .HostConfig.PortBindings}}' ${id}`)] : []),
+        `printf '${PORTS_SS}\\n'`,
+        "{ ss -Hltunp 2>/dev/null || ss -ltunp 2>/dev/null; }",
+        "true",
+      ].join(" ; ");
+    },
+  },
+
+  // 오류 신고 #11 — 새 컨테이너. 🔴 HUMAN_ONLY. 화면이 사전 확인(이름·포트)을 거친 뒤에만 부른다.
+  "ctr.run": {
+    write: true,
+    build: (args) => {
+      const run = buildCtrRunArgs(args);
+      return run === null ? null : ctrCmd(run);
+    },
+    timeoutMs: 120000,
   },
 
   // 이미지 지우기. 쓰고 있는 컨테이너가 남아 있으면 런타임이 거절한다 — 강제(-f)하지 않는다.
@@ -1607,7 +1742,7 @@ export function isPrivileged(id: unknown, args: unknown): boolean {
 export function buildCommand(
   id: unknown,
   args: unknown,
-): { cmd: string; write: boolean; sudo: boolean } | null {
+): { cmd: string; write: boolean; sudo: boolean; timeoutMs?: number } | null {
   if (!isCmdId(id)) return null;
   const spec = COMMANDS[id];
   const cmd = spec.build(args);
@@ -1623,5 +1758,10 @@ export function buildCommand(
   // 약속한 불변식("`sudo -S` 를 붙인 그 명령에만")을 코드가 안 지키고 있었다(2026-08-28 감사).
   return /[\0\r\n]/.test(cmd)
     ? null
-    : { cmd, write: spec.write === true, sudo: cmd.startsWith(SUDO_WRAP) };
+    : {
+        cmd,
+        write: spec.write === true,
+        sudo: cmd.startsWith(SUDO_WRAP),
+        ...(spec.timeoutMs ? { timeoutMs: spec.timeoutMs } : {}),
+      };
 }

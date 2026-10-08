@@ -5160,7 +5160,8 @@ button.sb-seg.upd:hover .val {
   width: 600px;
 }
 .bug-report .fld textarea,
-.my-reports .fld textarea {
+.my-reports .fld textarea,
+.ctr-run .fld textarea {
   background: var(--bg-canvas);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -5172,9 +5173,21 @@ button.sb-seg.upd:hover .val {
   resize: vertical;
 }
 .bug-report .fld textarea:focus,
-.my-reports .fld textarea:focus {
+.my-reports .fld textarea:focus,
+.ctr-run .fld textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* 오류 신고 #11 [새 컨테이너] 창 — 껍데기·칸은 신고 창과 같고 폭만 다르다. 칸 아래 형식 오류 한 줄. */
+.modal.ctr-run {
+  width: 560px;
+}
+.ctr-run .dlg-body {
+  overflow-y: auto;
+}
+.ctr-run-err {
+  font-size: var(--fs-md);
+  color: var(--err);
 }
 .br-note {
   font-size: var(--fs-md);

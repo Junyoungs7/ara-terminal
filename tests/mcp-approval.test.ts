@@ -450,4 +450,22 @@ describe('server_run 등급 — 권한 올리기는 승인을 받는다', () => 
     await pending
     expect(ran).toEqual(['app.trace']) // 사람이 승인한 뒤에야 나간다
   })
+
+  // 오류 신고 #11: ctr.run 은 추가 인자가 컨테이너 안에서 도는 자유 인자라 **사람 전용**이다.
+  // 승인 창까지도 안 간다 — 감사 로그가 args 를 적는데 거기 env 비밀값이 실려 오기 때문이다.
+  it('★ ctr.run 은 아라가 부를 수 없다 — 승인 창도, 실행도, 감사 기록도 없다', async () => {
+    const c = collector()
+    const mgr = new McpApprovalManager(c.emit, createAuditLog(dir))
+    const ran: string[] = []
+    const gate = buildGate(mgr, ran)
+    const r = await gate.call('server_run', {
+      sessionId: 's1',
+      cmdId: 'ctr.run',
+      args: { image: 'redis:8-alpine', env: ['REDIS_PASSWORD=not-a-real-secret'] }
+    })
+    expect(r.isError).toBe(true)
+    expect(ran).toEqual([])
+    expect(c.approvalRequests).toHaveLength(0)
+    expect(JSON.stringify(readAuditLines(dir))).not.toContain('not-a-real-secret')
+  })
 })

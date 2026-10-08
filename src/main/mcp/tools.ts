@@ -28,7 +28,7 @@ import type { BrowserService } from '../browser/BrowserTabs'
 import type { RemoteConsoleService } from '../remote/RemoteConsoleService'
 import type { SessionLogService } from '../log/SessionLog'
 import type { HistoryStore } from '../history/HistoryStore'
-import { isPrivileged, type CmdId } from '@shared/remoteCatalog'
+import { HUMAN_ONLY, isPrivileged, type CmdId } from '@shared/remoteCatalog'
 import { GROUPS as G, groupLines, type ToolGroup as TG } from '@shared/araTools'
 import { readFileWindow } from '../log/readSessionLog'
 import { fetchTmuxSessions } from '../telemetry/TmuxSessions'
@@ -658,6 +658,11 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
       inputSchema: { sessionId: z.string(), cmdId: z.string(), args: z.record(z.string(), z.unknown()).optional() }
     },
     async ({ sessionId, cmdId, args }) =>
+      // 오류 신고 #11: 사람 전용(ctr.run — 컨테이너 안에서 도는 자유 인자)은 승인 창까지도 안 간다.
+      // g() 앞에서 끊는 이유: 감사 로그가 args 를 적는데 거기 env 비밀값이 실려 온다.
+      HUMAN_ONLY.has(cmdId as CmdId)
+        ? fail('이 명령은 화면에서 사람이 직접 실행합니다(아라는 부를 수 없습니다).')
+        :
       // 등급은 표가 정한다 — 쓰기 명령(kill·systemctl·rmi)만 승인을 받는다.
       g(
         sessionId,

@@ -71,7 +71,7 @@ export function createRemoteConsoleService(
     // 스크립트의 stdin 으로 SSH 비밀번호를 보냈다(그 스크립트가 stdin 을 안 읽어 새지 않았을 뿐).
     // 이제 판단 근거가 우리가 만든 명령 문자열이라 렌더러가 흔들 수 없다.
     const pw = built.sudo ? getSudoPw(sessionId) : null
-    return exec(client, built.cmd, pw)
+    return exec(client, built.cmd, pw, built.timeoutMs)
   }
 
   function unwatch(sessionId: string, id: CmdId): void {
@@ -139,7 +139,7 @@ export function createRemoteConsoleService(
 
 // 명령 한 번. stdout 과 stderr 를 **한 버퍼에** 모은다 — 카탈로그의 쓰기 명령은 이미 `2>&1` 로 합쳐
 // 오지만, 합치지 않는 명령이 나중에 늘어도 "권한이 없습니다"가 화면에서 사라지지 않게 한다.
-function exec(client: Client, cmd: string, stdin: string | null = null): Promise<RunResult> {
+function exec(client: Client, cmd: string, stdin: string | null = null, timeoutMs = EXEC_TIMEOUT_MS): Promise<RunResult> {
   return new Promise((resolve) => {
     // 끊긴 커넥션에서 ssh2 는 콜백이 아니라 **동기로 던진다**(SshBackend.withSftp 주석과 같은 사실).
     // 안 잡으면 이 Promise 가 reject 되고 → IPC 가 reject 되고 → 화면은 이유 없는 실패를 받는다.
@@ -171,7 +171,7 @@ function exec(client: Client, cmd: string, stdin: string | null = null): Promise
         timer = setTimeout(() => {
           stream.close()
           finish({ ok: false, reason: 'timeout' })
-        }, EXEC_TIMEOUT_MS)
+        }, timeoutMs)
         const add = (c: Buffer): void => {
           out += c.toString('utf8')
         }
