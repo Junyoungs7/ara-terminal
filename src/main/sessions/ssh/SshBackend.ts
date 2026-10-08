@@ -1,6 +1,7 @@
 // SshBackend — ssh2 Client + shell() 채널을 SessionBackend로 감싼다 (원격 셸).
 // 연결(auth·호스트키 검증)은 connectSsh()에서 끝나고, 준비된 Client+Channel을 여기서 스트림으로 흘린다.
 import { readFile } from 'node:fs/promises'
+import { StringDecoder } from 'node:string_decoder'
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
 import type { SessionBackend } from '../SessionBackend'
 import type { KnownHost, SshProfile } from '@shared/types'
@@ -464,15 +465,21 @@ export class SshBackend implements SessionBackend {
     }
   }
   onData(cb: (data: string) => void): void {
-    // stdout + stderr 모두 터미널로. Buffer → utf8 문자열(멀티바이트 경계는 매니저 배칭이 바이트로 보존).
+    // stdout + stderr 모두 터미널로. Buffer → utf8 문자열.
+    // 🔴 2026-10-08 오류 신고 #12("한글이 간헐적으로 깨진다"): 예전엔 청크마다 `d.toString('utf8')` 했다.
+    //    SSH 패킷 경계는 UTF-8 글자를 가리지 않아 한글(3바이트)이 두 청크로 갈리면 양쪽이 U+FFFD(�)
+    //    가 되고, 매니저는 그 깨진 **문자열**을 다시 바이트로 바꿀 뿐이라 되살릴 수 없었다("매니저
+    //    배칭이 보존한다"던 옛 주석은 틀렸다). 스트림마다 StringDecoder 가 잘린 꼬리를 다음 청크로 넘긴다.
+    //    stdout·stderr 는 따로 잘리므로 디코더도 따로다.
     // 여기서만 lastData 를 찍는다 — 별도 리스너를 달면 그 순간 스트림이 흐르기 시작해(flowing mode)
     // 매니저가 붙기 전 도착한 출력이 터미널에 안 보이고 사라진다.
-    const tap = (d: Buffer) => {
+    const tap = (dec: StringDecoder) => (d: Buffer) => {
       this.scheduleCwd()
-      cb(d.toString('utf8'))
+      const s = dec.write(d)
+      if (s) cb(s)
     }
-    this.channel.on('data', tap)
-    this.channel.stderr.on('data', tap)
+    this.channel.on('data', tap(new StringDecoder('utf8')))
+    this.channel.stderr.on('data', tap(new StringDecoder('utf8')))
   }
   onExit(cb: (exitCode: number, signal?: number) => void): void {
     // 둘 다 거는 이유: 셸이 스스로 끝나면 채널만 닫히고(`exit`), 네트워크가 끊기면 채널 close 없이
