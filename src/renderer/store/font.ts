@@ -20,7 +20,7 @@ const DEFAULT_FONT: FontConfig = { term: 'Nanum Gothic Coding', sizePx: 14, line
 // — 그게 준영님이 지적하신 "개발용 티"의 8할이었다.
 //
 // 지금 글꼴은 셋으로 갈린다:
-//   --ui   Pretendard          크롬 전부. 고정. 설정에 없다
+//   --ui   SUIT                크롬 전부. 고정. 설정에 없다
 //   --mono 나눔고딕코딩         경로·명령·로그·에디터·키 표기. **고정.** 설정에 없다
 //   --term 사용자 선택          터미널 본문 **전용**. 설정 [폰트]가 이것만 바꾼다
 //

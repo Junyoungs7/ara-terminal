@@ -20,7 +20,7 @@
 .sp-search svg {
   width: 13px;
   height: 13px;
-  color: var(--text-dim);
+  color: var(--text-lo);
   flex: none;
 }
 .sp-search input {
@@ -39,7 +39,7 @@
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
   padding: var(--sp-hair) var(--sp-2);
@@ -80,7 +80,7 @@
   max-height: 88vh;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   animation: pop var(--dur-pop) var(--ease-pop);
@@ -92,19 +92,12 @@
    키프레임은 문서 전역이라 정의 위치와 무관하게 닿는다. 지우거나 이름을 바꾸면 모달도 같이 죽는다. */
 @keyframes pop {
   from {
-    transform: scale(0.97) translateY(8px);
+    transform: var(--pop-from); /* reduced-motion 이면 none — tokens.css */
     opacity: 0;
   }
   to {
     transform: none;
     opacity: 1;
-  }
-}
-/* 움직임을 줄여 달라고 한 사람에게는 치트시트도 그대로 나타난다(shell.css 의 모달 규칙과 같은 결). */
-@media (prefers-reduced-motion: reduce) {
-  .cheatsheet.open,
-  .cs-card {
-    animation: none;
   }
 }
 .cs-hd {
@@ -202,7 +195,7 @@
   box-shadow: inset 0 -1px 0 var(--line);
 }
 .cs-sep {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   font-family: var(--mono);
@@ -252,7 +245,7 @@
   width: 68px;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .cb-cmd {
   flex: none;
@@ -323,7 +316,7 @@
   width: 224px;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-3);
   /* ContextMenu.tsx 의 EDGE(14) 두 배 — 좌표 계산과 이 상한이 어긋나면 한쪽이 가장자리에 붙는다. */
@@ -356,7 +349,7 @@
   place-items: center;
   width: 14px;
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ctx-item .ci-ic svg {
   width: 13px;
@@ -375,7 +368,7 @@
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
   padding: var(--sp-hair) var(--sp-2);
@@ -386,7 +379,7 @@
    아래 토큰을 쓴다. 2026-08-16 실측: 아래 자리들이 대비 1.82~2.96 까지 내려가 있었다(하한 3.5).
    "추후 지원"·"비활성"·"화면에 없음"은 전부 **읽혀야 뜻이 있는** 라벨이다. */
 .ctx-item.dim .ci-lbl {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ctx-item.dim .ci-ic {
   opacity: 0.55;
@@ -414,7 +407,7 @@
   display: grid;
   place-items: center;
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ctx-item .ci-sub-arrow svg {
   width: 12px;

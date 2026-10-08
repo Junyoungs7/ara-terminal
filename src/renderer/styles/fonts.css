@@ -36,7 +36,10 @@
   src: url('../../../resources/fonts/D2Coding-Regular.ttf') format('truetype');
 }
 
-/* 라틴 모노(리거처) — JetBrains Mono, 가변축 wght — SIL OFL */
+/* 라틴 모노(리거처) — JetBrains Mono, 가변축 wght — SIL OFL.
+   `100 800` 은 오류가 아니다 — 이 TTF 는 이름만 Regular 이고 fvar wght 100–800 을 가진 가변 폰트다
+   (2026-10-08 fontTools 로 확인). jarvis-v2 의 JetBrainsMono-Variable.woff2(40KB)로 갈지 않은 이유:
+   그쪽은 cmap 229자 서브셋이라(이쪽 976자) 박스 그리기·화살표가 빠져 터미널에서 두부가 된다. */
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
@@ -45,20 +48,17 @@
   src: url('../../../resources/fonts/JetBrainsMono-Regular.ttf') format('truetype');
 }
 
-/* UI 폰트 — Pretendard (orioncactus/pretendard) — SIL OFL. 변경 불가(터미널만 사용자 선택). */
+/* UI 폰트 — SUIT Variable (sunn-us/SUIT) — SIL OFL. 변경 불가(터미널만 사용자 선택).
+   2026-10-08 family-core 1단계: Pretendard Regular/Bold(woff2 두 벌 1.56MB)를 **가변 한 벌**
+   (0.62MB)로 갈았다. 가변이라 400·500·600·700 이 전부 진짜 굵기로 그려진다 — 정적 두 벌
+   시절엔 500·600 이 400/700 으로 반올림됐다. ⚠️ 이 파일은 완성형 한글 2,668자 서브셋이다
+   (Pretendard 는 11,172자 전부). 그 밖의 드문 음절은 --ui 스택 뒤의 OS 글꼴(맑은 고딕)로 그려진다. */
 @font-face {
-  font-family: 'Pretendard';
+  font-family: 'SUIT';
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('../../../resources/fonts/Pretendard-Regular.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Pretendard';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('../../../resources/fonts/Pretendard-Bold.woff2') format('woff2');
+  src: url('../../../resources/fonts/SUIT-Variable.woff2') format('woff2');
 }
 
 /* ------------------------------------------------------------------------

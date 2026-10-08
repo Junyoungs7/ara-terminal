@@ -14,6 +14,18 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 
 ---
 
+> **2026-10-08 family-core 1단계 — 아라·Jarvis 공용 디자인 시스템의 첫 단계.** 준영님 승인.
+> 이번에 바뀐 것(값만 — 토큰 **이름**은 그대로, 역할 이름으로 바꾸는 것은 2단계에서 Jarvis 와 조율):
+> 1. **UI 글꼴 → SUIT Variable**(§2.1). Pretendard 정적 두 벌(1.56MB) → 가변 한 벌(0.62MB, wght 100–900).
+> 2. **글자 대비 4.5 · 비텍스트 3.0**(§1.3·§1.4). hi·mid·lo 는 모든 배경에서 ≥4.5,
+>    `--text-dim` 은 placeholder·disabled 전용(3.5 유지). 액센트·포커스 링·의미색 × 배경 ≥3.0.
+>    `scan:magic` 이 셋 다 계산하고, dim 이 다른 자리에 쓰이면 세운다.
+> 3. **오프셋 포커스 링**(§1.4·§6). 15% 글로우(약 1.3:1) → 불투명 액센트 2px + 바깥 2px 틈.
+> 4. **모션**(§3.3). `--ease-pop` 오버슈트(1.2) 제거 → 임계 감쇠. 120/200/150/280.
+>    reduced-motion 은 tokens.css 한 곳에서 지속시간 토큰을 줄이고 이동을 지운다.
+> 5. **반경 4px 격자**(§3.1). 행·칩 4 / 컨트롤 6 / 패널·메뉴 8 / 모달·카드 12 / 알약.
+> 6. **라이트 테마는 보류**(준영님: 지금 필요 없음). 다크 전용 그대로다.
+
 > **⚠️ 2026-08-21 전면 개정 — G(Fleet) 채택.** 아래 §1~§3 의 값은 이 날짜로 갈아 끼웠다.
 > 준영님이 목업 다섯 중 **G(IDE 워크스테이션 · JetBrains Fleet 계열)** 를 고르셨다
 > (`mockups/redesign/G-fleet.html` · 비교 페이지 `mockups/redesign/index.html`).
@@ -22,7 +34,7 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 > 1. **표면이 따뜻한 회색 다크**(#1e1e20)가 됐다. 남색기를 뺐다 — 그 파랑기가 "터미널
 >    팔레트"로 읽히던 원인이다. 깊이는 선이 아니라 **면의 밝기 차이**로 만든다.
 > 2. **액센트가 시안 → 뮤트 앰버**(#c9a26d). 하루 종일 보는 화면이라 네온을 버렸다.
-> 3. **크롬 글꼴이 터미널에서 분리됐다.** `--ui`(Pretendard) 고정 · `--mono` 고정 ·
+> 3. **크롬 글꼴이 터미널에서 분리됐다.** `--ui`(그때 Pretendard, 2026-10-08 부터 SUIT) 고정 · `--mono` 고정 ·
 >    `--term` 만 사용자 설정. 그전엔 `--mono === --term` 이라 사이드바·설정·표까지
 >    코딩용 고정폭이었고, 그게 "개발용 티"의 8할이었다.
 >
@@ -98,10 +110,17 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 |---|---|---|---|---|---|
 | `--text-hi` | `#e0dfde` | 12.5:1 | 11.7:1 | 9.4:1 | 1차 텍스트 (제목, 활성 값) |
 | `--text-mid` | `#b5b3b0` | 8.0:1 | 7.5:1 | 6.0:1 | 2차 텍스트 (본문, 메뉴, 노드명) |
-| `--text-lo` | `#9d9b96` | 6.0:1 | 5.6:1 | 4.5:1 | 뮤트 (비활성 탭 라벨, 세션 노드) — **불투명** |
-| `--text-dim` | `#8a8883` | 4.7:1 | 4.4:1 | **3.5:1** | 페인트 (라벨, 메타, placeholder, 캐럿) |
+| `--text-lo` | `#a3a19c` | 6.5:1 | 6.1:1 | 4.85:1 | 뮤트 (라벨, 메타, 비활성 탭 라벨, 세션 노드, 캐럿) — **불투명** |
+| `--text-dim` | `#8a8883` | 4.7:1 | 4.4:1 | **3.5:1** | **placeholder · `:disabled` · 고스트 자동완성 전용** |
 
-> **하한**: 본문·보조 ≥ 4.5:1, 최약체 ≥ 3.5:1.
+> **2026-10-08 family-core: 글자는 4.5, dim 은 글자 단이 아니다.** lo 를 `#9d9b96`(overlay 4.51 —
+> 하한에 0.01 붙어 있었다) → `#a3a19c` 로 올렸고, dim 을 쓰던 155곳 중 placeholder·disabled·고스트
+> 18곳만 남기고 137곳을 lo 로 올렸다(호버가 lo 로 가던 두 자리 `.srv-hd`·`.bench-sec` 는 mid 로).
+> 램프는 사실상 **세 단 + 비활성 한 단**이다.
+> **하한**: hi·mid·lo ≥ 4.5:1(모든 배경), dim ≥ 3.5:1(WCAG 가 대비를 요구하지 않는 자리라 유지).
+> `scan:magic` 이 dim 을 쓰는 규칙의 **선택자**에 placeholder·disabled·ghost 가 없으면 세운다 —
+> `.foo.off` 처럼 클래스로 끈 자리는 이름으로 못 알아보니 `:disabled` 를 쓰거나 lo 로 올려라.
+> ⚠️ 아래 인용은 2026-08-31 기록이다(그때 하한은 3.5 였다).
 > `--text-dim` 의 가장 나쁜 짝은 **overlay 에서 3.54** — 하한 바로 위다. 표면을 한 칸이라도
 > 올리면 깨지므로 `--bg-*` 를 건드릴 때는 이 램프를 같이 옮겨야 한다.
 > **이 표를 손으로 믿지 마라.** 낡은 채로 다섯 달을 조용히 통과한 것이 이번 결함의 정체다.
@@ -112,17 +131,25 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 > 같은 날 `.bench-sec .hint`(`오래 멈춘 순`)가 `dim × .75` 로 **2.57** 까지 내려가 있었다.
 > 아이콘 글리프만 흐리게 할 때는 `.ri.future .ri-icon svg` 처럼 **글리프에만** 건다 — 텍스트 라벨은 살린다.
 
-### 1.4 액센트 — 단일 시안 (Single Accent)
+### 1.4 액센트 — 단일 앰버 (Single Accent)
 
-**시안 하나만** 주 액센트로 쓴다. 퍼플/그린 남발 금지.
+**뮤트 앰버 하나만** 주 액센트로 쓴다(2026-08-21 G 에서 시안을 버렸다 — 이 절의 옛 제목·값이
+시안으로 남아 있던 것을 2026-10-08 에 바로잡았다). 퍼플/그린 남발 금지.
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
 | `--accent` | `#c9a26d` | 주 액센트 (포커스, 활성 인디케이터, 로고, 폴더 아이콘) |
 | `--accent-bright` | `#d8bc96` | 밝은 변형 (호버 텍스트, 강조 라벨, 브랜드명 b) |
 | `--accent-deep` | `#b68543` | 딥 변형 (그라디언트 하단, 게이지 시작색) |
-| `--accent-glow` | `rgba(56,189,248,0.16)` | **상태 표시 전용** 틴트 — 포커스 링, 활성/선택 배경, 헤더 아이콘 칩 |
-| `--accent-line` | `rgba(56,189,248,0.35)` | 액센트 테두리 (포커스 패널 링, 선택 프로필 border) |
+| `--accent-glow` | `rgba(201,162,109,0.15)` | **상태 표시 전용** 틴트 — 활성/선택 배경, 트리 포커스 행 배경, 헤더 아이콘 칩. **포커스 링이 아니다**(2026-10-08) |
+| `--accent-line` | `rgba(201,162,109,0.4)` | 액센트 테두리 (포커스 패널 링, 선택 프로필 border, hover 테두리) |
+| `--focus-ring` | `2px solid var(--focus-ring-color)` | 키보드 포커스 링(outline). `--focus-ring-offset: 2px`(바깥 틈) · `--focus-ring-inset: -2px`(행이 붙은 자리) |
+| `--focus-ring-color` | `var(--accent)` | 링 색 — 불투명. 배경 대비 5.29(overlay)~7.62(abyss) |
+
+> **비텍스트 하한 3.0(2026-10-08, WCAG 1.4.11)**: `--accent` · `--focus-ring-color` · `--ok` · `--warn` ·
+> `--err` × 모든 `--bg-*`. 가장 나쁜 짝은 `--err × --bg-overlay = 3.69`. `scan:magic` 이 30조합을 잰다.
+> ⚠️ `--err` 를 **글자**로 쓰는 자리(오류 문구)는 raised 4.19 · overlay 3.69 라 글자 4.5 에 못 미친다 —
+> 의미색은 아직 글자 게이트 밖이다(2단계 과제).
 
 **글로우 사용 규칙 (R8 — 2026-08-04, 축소 불가)**
 
@@ -133,7 +160,7 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 > - 로고·브랜드 마크 글로우
 > - 모달·메뉴 표면에 얹는 액센트 광륜(`0 0 80px -30px var(--accent-glow)` 류)
 >
-> 허용: 포커스 링 `0 0 0 3px var(--accent-glow)` · 포커스 패널 링 `0 0 0 1px var(--accent-line)`(번짐 0) ·
+> 허용: 포커스 링 `--focus-ring`(불투명 outline — 2026-10-08 전엔 `0 0 0 3px var(--accent-glow)` 였고 대비 약 1.3:1 이라 바꿨다) · 포커스 패널 링 `0 0 0 1px var(--accent-line)`(번짐 0) ·
 > 활성/선택 배경 틴트 · 시각 벨(BEL) 순간 플래시.
 
 ### 1.5 시맨틱 (Semantic — v1 유지)
@@ -185,7 +212,7 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 
 | 부가 토큰 | 값 | 용도 |
 |---|---|---|
-| `--sel-bg` | `rgba(56,189,248,0.28)` | 터미널 드래그 선택 배경(글자가 비쳐야 하므로 알파 필수) |
+| `--sel-bg` | `rgba(201,162,109,0.3)` | 터미널 드래그 선택 배경(글자가 비쳐야 하므로 알파 필수) |
 | `--accent-bright` | `#d8bc96` | 커서 색. 커서 위 글자(`cursorAccent`)는 `--bg-terminal` |
 
 > 이 표가 xterm 테마의 단일 출처다. `TerminalPane.ansiTheme()` 이 CSS 변수를 읽어 그대로 주입한다 —
@@ -199,10 +226,23 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 
 | 변수 | 스택 | 용도 |
 |---|---|---|
-| `--ui` | `'Pretendard Variable', 'Pretendard', -apple-system, 'Segoe UI', sans-serif` | 모든 UI 텍스트 (메뉴, 라벨, 버튼, 노드명) |
+| `--ui` | `'SUIT', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif` | 모든 UI 텍스트 (메뉴, 라벨, 버튼, 노드명). **고정** — 설정에 없다 |
 | `--mono` | **고정** `'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace` | 경로·명령줄·로그 본문·에디터·키 표기·API 키 — *격자에 맞아야 뜻이 사는* 27곳. **터미널 설정을 따라가지 않는다**(2026-08-21) |
-| `--term` | `'ARA Nerd Font Symbols', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace` (기본값 — 설정에서 바꿀 수 있음) | 터미널 본문 (한글 고정폭 정렬) |
+| `--term` | `'ARA Nerd Font Symbols', 'ARA Narrow Enclosed', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace` (기본값 — 설정에서 바꿀 수 있음) | 터미널 본문 (한글 고정폭 정렬) |
 
+> **2026-10-08 family-core — UI 글꼴 SUIT Variable.** `resources/fonts/SUIT-Variable.woff2`(0.62MB,
+> wght 100–900 가변, OFL — `OFL-SUIT.txt`). Pretendard Regular/Bold(1.56MB)와 그 @font-face 는 지웠다
+> → 설치본에서 **약 0.93MB 감소**. 가변이라 500·600 이 진짜 굵기로 그려진다(정적 두 벌 시절엔
+> 400/700 으로 반올림). ⚠️ 이 파일은 **완성형 2,668자 서브셋**이다(Pretendard 는 11,172자).
+> 앱 문자열의 한글은 전부 들어 있지만(실측) 사용자가 입력한 드문 음절과 일부 기호
+> (— – ‹ › ⌘ ⇧ ⌥ ⏎ ✗ ≠ 등)는 스택 뒤의 Segoe UI·맑은 고딕이 그린다 — 그래서 둘을 명시했다.
+> JetBrains Mono 는 정적 TTF 처럼 보이지만 **wght 100–800 가변**이라(fontTools 로 확인)
+> `font-weight: 100 800` 이 맞다. jarvis-v2 의 woff2(40KB)는 cmap 229자 서브셋이라 터미널
+> 박스 그리기가 빠져 갈지 않았다.
+> 사이트(`site/assets`)와 홍보 영상(`video/`)은 아직 Pretendard 다 — 별도 라운드.
+
+> **⚠️ 아래 UI-font 문단은 2026-08-21 에 뒤집혔다**(`--mono` 는 고정, `--term` 만 설정을 따른다 —
+> 위 표). 역사로 남긴다.
 > **UI-font (2026-08-04, 준영님 확정 요구): `--mono`는 항상 `--term`과 같은 값이다.**
 > `store/font.ts`의 `bindCssVars`가 설정에서 고른 터미널 폰트로 `--term`·`--mono`를 함께
 > 갱신한다(새 상태·새 IPC 없이 기존 경로 확장). 즉 설정에서 터미널 폰트를 바꾸면 사이드바·
@@ -218,7 +258,7 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 >
 > **금지**: Arial, Roboto, Inter, Space Grotesk, 시스템 기본 sans 단독 사용.
 > **한글 정렬**: 터미널은 반드시 `--term`(나눔고딕코딩 우선). 한글 전각을 영문 2칸으로 정렬한다.
-> **CDN**: Pretendard = `cdn.jsdelivr.net/gh/orioncactus/pretendard` (Variable subset, 공식 jsDelivr), JetBrains Mono + 나눔고딕코딩 = Google Fonts, D2Coding = `cdn.jsdelivr.net/gh/joungkyun/font-d2coding` (폴백). 로드 실패 시 `monospace` 폴백.
+> **CDN 금지** — 전부 `resources/fonts/` 번들(@font-face, `styles/fonts.css`). 사내망 오프라인에서도 뜬다.
 >
 > **UI-font4(2026-08-05) — "전부 로컬 번들" 원칙의 명시적 예외: 한글만 OS 시스템 폰트로.**
 > 준영님이 Tabby 터미널의 한글이 더 잘 보인다고 지목 — 소스 코드로 원인을 확정했다(Tabby
@@ -357,14 +397,15 @@ font-size: 13.5px; /* 바디 기본. 12 → 13 → 13.5px (2026-08-03 가독성 
 
 ## 3. 스페이싱 · Radius · 모션
 
-### 3.1 Radius (4단)
+### 3.1 Radius (4px 격자 — 2026-10-08 family-core)
 
 | 토큰 | 값 | 용도 |
 |---|---|---|
-| `--radius-lg` | `8px` | 패널, 모달, 드로어, 프리뷰 박스 |
-| `--radius` | `6px` | 탭 그룹 상단, 입력 필드, 버튼, 프로필 행, 세그먼트 컨트롤, **떠 있는 목록의 껍데기**(우클릭 메뉴·자동완성) |
-| `--radius-sm` | `4px` | 트리 행, 아이콘 버튼, 칩, **떠 있는 목록의 행** |
-| `--radius-xs` | `3px` | 작은 kbd·단축키 배지, 타입 배지(SSH/RDP/SYS), 두께 6px 이하의 막대·트랙 |
+| `--radius-xl` | `12px` | **모달·카드** — `.modal` · 치트시트 `.cs-card` · 업데이트 카드 `.upd-card` (2026-10-08 신설) |
+| `--radius-lg` | `8px` | 패널, 드로어, 프리뷰 박스, **떠 있는 메뉴의 껍데기**(우클릭 메뉴 · 드롭다운 목록 · 팔레트 · MCP 팝오버 · 아라 메뉴 · 패널 토스트 — 2026-10-08 에 6→8) |
+| `--radius` | `6px` | 컨트롤 — 입력 필드, 버튼, 프로필 행, 세그먼트 컨트롤 |
+| `--radius-sm` | `4px` | 행·칩 — 트리 행, 아이콘 버튼, 칩, 떠 있는 목록의 행 |
+| `--radius-xs` | `4px` | (2026-10-08 3→4 스냅 — `--radius-sm` 과 같은 값. 이름 정리는 2단계) kbd·타입 배지, 6px 이하 막대·트랙 |
 | (원형) | `50%` | 상태 dot, 라디오, 트래픽 라이트 |
 | (알약) | `999px` | 토글 스위치, 칩, 개수 배지 — **척도가 아니라 관용구**(아래 참고) |
 
@@ -453,22 +494,29 @@ v4 밀도를 계승 — 여백은 촘촘하되 리듬은 일정하게. **리듬�
 
 고임팩트 순간에만. 장식적 애니메이션 금지.
 
-**시간은 셋뿐이다.** 그 사이 값을 쓰지 마라 — 사람이 구분하지 못한다.
+**시간은 넷뿐이다**(2026-10-08 family-core — 퇴장을 더했다). 그 사이 값을 쓰지 마라 — 사람이 구분하지 못한다.
 
-| 토큰 | 값 | 쓰는 곳 |
-|---|---|---|
-| `--dur-quick` | `120ms` | **누름** · 호버 · 포커스 · 캐럿 회전 |
-| `--dur-pop` | `200ms` | 오버레이 페이드 · 모달·팝오버 등장 · 사이드바 접기 |
-| `--dur-drawer` | `280ms` | 드로어 슬라이드 |
-| `--ease-pop` | `cubic-bezier(.2,.9,.3,1.2)` | 살짝 넘겼다 앉는다 |
-| `--ease-drawer` | `cubic-bezier(.3,.9,.3,1)` | 넘김 없이 감속만 |
+| 토큰 | 값 | reduced-motion | 쓰는 곳 |
+|---|---|---|---|
+| `--dur-quick` | `120ms` | `0ms` | **누름** · 호버 · 포커스 · 캐럿 회전 |
+| `--dur-pop` (= `--dur-enter`) | `200ms` | `120ms` | 등장 — 오버레이 페이드 · 모달·팝오버 · 사이드바 접기 |
+| `--dur-exit` | `150ms` | `0ms` | 퇴장 — 부팅 인사(`BootSplash.tsx` `FADE_MS` 와 짝) |
+| `--dur-drawer` | `280ms` | `0ms` | 드로어 슬라이드 |
+| `--ease-pop` | `cubic-bezier(.2,.8,.2,1)` | — | **임계 감쇠** — 넘기지 않는다(2026-10-08 전엔 y 1.2 오버슈트) |
+| `--ease-drawer` | `cubic-bezier(.3,.9,.3,1)` | — | 넘김 없이 감속만 |
+| `--pop-from` | `scale(.97) translateY(8px)` | `none` | 모달·치트시트 등장의 출발 자세 |
+
+> **reduced-motion 은 tokens.css 한 곳에서 한다**(2026-10-08). 위 표의 오른쪽 열이 전부다 —
+> 이동은 지우고(`--pop-from: none`, `--press-scale: 1`) 등장은 짧은 페이드만 남긴다. 그래서
+> 캐럿·모달·드로어·치트시트의 개별 `@media` 블록 넷을 지웠다. 남은 블록(진행 막대 · 탭 깜빡임 ·
+> 스피너 · 생각 중 점 셋 · 부팅 인사)은 **키프레임 반복**이라 지속시간 토큰으로는 못 끈다.
 
 | 상황 | 값 |
 |---|---|
 | **누름 (`:active`)** | 버튼·칩·토글 `scale(.97)` + `brightness(.9)` · 행·탭·표 행은 **밝기만** |
-| 모달 등장 | `pop` — scale .97→1, translateY 8→0 |
+| 모달 등장 | `pop` — `--pop-from`(scale .97 · translateY 8) → none |
 | 커서 깜빡임 | `blink 1.15s step-end infinite` |
-| 포커스 링 | `box-shadow 0 0 0 3px var(--accent-glow)` (즉시) |
+| 포커스 링 | `outline: var(--focus-ring); outline-offset: var(--focus-ring-offset)` (즉시, `:focus-visible` 에만) |
 
 > **2026-09-04 개정 — 누름 반응이 0곳이었다.** `:hover` 가 130곳인데 `:active` 는 **하나도
 > 없었다.** 마우스를 올리면 반응하는데 **누르면 아무 일도 안 났다**(Apple *Designing Fluid
@@ -513,9 +561,9 @@ v4 밀도를 계승 — 여백은 촘촘하되 리듬은 일정하게. **리듬�
 
 ```
 ┌──────────────────────────────────────────────┐
-│ 타이틀바 (전체 폭, 32px)                       │
+│ 타이틀바 (전체 폭, 36px)                       │
 ├──────────┬───────────────────────────────────┤
-│▣│ 사이드바 │ 터미널 탭바 (터미널 영역 위에만, 34px) │
+│▣│ 사이드바 │ 터미널 탭바 (터미널 영역 위에만, 32px) │
 │▣│ 풀하이트 ├───────────────────────────────────┤
 │ │ 패널 하나 │ 4분할 터미널 영역 (2×2)             │
 │↑│          │                                   │
@@ -526,7 +574,7 @@ v4 밀도를 계승 — 여백은 촘촘하되 리듬은 일정하게. **리듬�
 
 ```css
 /* 앱 셸 3행 그리드 */
-.app { display: grid; grid-template-rows: 32px 1fr 26px; height: 100vh; }
+.app { display: grid; grid-template-rows: var(--row-titlebar) 1fr var(--row-statusbar); height: 100vh; } /* 36 · 26 */
 
 /* 미들 = 좌측 레일 + 사이드바 + 메인 (Flex) */
 .middle { --lrail-w: 40px; display: flex; min-height: 0; overflow: hidden; }
@@ -538,17 +586,17 @@ v4 밀도를 계승 — 여백은 촘촘하되 리듬은 일정하게. **리듬�
 
 /* 메인 영역: flex column — 탭바 위, 터미널 아래 */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.term-tabbar { height: 34px; flex: none; }   /* 터미널 영역 위에만 */
+.term-tabbar { height: var(--row-tabbar); flex: none; }   /* 32px — 터미널 영역 위에만 */
 .pane-grid { flex: 1; min-height: 0; }
 ```
 
 | 영역 | 높이/폭 | 비고 |
 |---|---|---|
-| **타이틀바** | `32px` | 로고 + 브랜드 + PRO 배지 + 인라인 메뉴바 + 클럭 + 트래픽 라이트 |
-| **터미널 탭바** | `40px`(FB-tabs, 34px→) | 터미널 영역 상단에만. 평평한 개별 탭(그룹 래퍼 없음) + 오버플로 시 우측 드롭다운 |
+| **타이틀바** | `36px` (`--row-titlebar`, 배율을 탄다) | 로고 + 브랜드 + PRO 배지 + 인라인 메뉴바 + 클럭 + 트래픽 라이트 |
+| **터미널 탭바** | `32px` (`--row-tabbar` — G 에서 FB-tabs 의 40 을 되돌렸다. 이 칸이 40 으로 낡아 있던 것을 2026-10-08 에 바로잡았다) | 터미널 영역 상단에만. 평평한 개별 탭(그룹 래퍼 없음) + 오버플로 시 우측 드롭다운 |
 | **좌측 레일** | `40px` | `[연결]`·`[파일]` 아이콘. 사이드바의 여닫이(§4.5) |
 | **사이드바** | `264px` (기본, 접힘 가능) | 레일이 고른 패널 하나 — 동시 스택 X, JS 토글 |
-| **상태바** | `26px` | 호스트 + CPU/MEM/GPU/DISK 게이지 + NET 스파크라인 + LOAD |
+| **상태바** | `26px` (`--row-statusbar`) | 호스트 + CPU/MEM/GPU/DISK 게이지 + NET 스파크라인 + LOAD |
 | **패널 헤더** | `32px` | dot + 타이틀 + 호스트 + 칩 + 분할/닫기 버튼 |
 | **패널 푸터** | `24px` | 인코딩/개행/버전/커서위치 (mono) |
 
@@ -866,7 +914,7 @@ function switchSbTab(tab) {
 - **탭 dot = 서버 색 단서**: `groupColor(serverKey)` — 로컬은 `--accent`, 원격은 서버명 해시로 고른
   고정 팔레트 색. 같은 서버의 SSH 다중 세션은 main 이 이름에 `·2`/`·3` 을 붙여(R2.1) 텍스트로도 구분된다.
 - **탭 크기**(FB-tabs, 확대): 패딩 `0 14px`(11px→), gap 7px(6px→), 폰트 13px(12px→),
-  높이 = 탭바(`--row-tabbar` 40px, 34px→) 꽉 채움. `max-width` 184px(168px→), 넘으면 라벨 말줄임.
+  높이 = 탭바(`--row-tabbar` 32px — G 판 값) 꽉 채움. `max-width` 184px(168px→), 넘으면 라벨 말줄임.
 - **활성 탭**(R8): `--bg-terminal` 배경(터미널 면과 같은 색) + 상단 2px `--accent` 인디케이터(불투명) +
   하단 헤어라인을 탭 폭만큼 끊어 터미널 면과 이어 붙임. 하단 발광 바는 폐기.
 - **오버플로 드롭다운**(FB-tabs): 탭 스크롤 폭이 보이는 폭을 넘으면(`isTabOverflowing`) 탭 스크롤 영역
@@ -904,7 +952,7 @@ function switchSbTab(tab) {
 
 ### 5.4 폼 (Form)
 
-- 입력: `--bg-canvas` 배경 + `--line` 테두리, 포커스 시 `--accent` 테두리 + `--accent-glow` 3px 링.
+- 입력: `--bg-canvas` 배경 + `--line` 테두리, `:focus-visible` 에 `--focus-ring-color` 테두리 + `--focus-ring` 오프셋 링(2026-10-08 전엔 `--accent-glow` 3px).
 - 값 텍스트 = `--mono`. 라벨 = `--ui` 11px `--text-mid`.
 - 2열 그리드(`1fr 1fr`), 전폭 필드는 `.col-2`(`grid-column:span 2`).
 - `select`: 커스텀 caret(인라인 SVG data-uri).
@@ -945,7 +993,8 @@ function switchSbTab(tab) {
 ## 6. 접근성 · 구현 규칙
 
 - 상태는 색 + 형태(dot 위치/아이콘)로 이중 표현. 색맹 대비.
-- 포커스 링은 항상 `--accent-glow` 3px — 키보드 내비 가시성 확보.
+- 포커스 링은 항상 `--focus-ring` — **불투명 액센트 2px + 바깥 2px 틈**(outline + offset, 틈으로는 놓인 표면이 비친다). 배경 대비 ≥3:1(실측 5.29~7.62). 행이 붙은 자리(트리·RDP 칸)는 `--focus-ring-inset`. 입력처럼 테두리가 없는 안쪽 칸은 껍데기가 `:has(:focus-visible)` 로 그린다(`.pw-wrap` · `.tb-omni` · `.ara-box`). 2026-10-08 전엔 `--accent-glow` 3px(약 1.3:1)라 키보드 위치가 안 보였다.
+- **라이트 테마 없음**(2026-10-08 준영님 — 지금 필요 없음). 다크 전용. 토큰은 `--on-accent` 처럼 짝으로 둬 나중에 갈아 끼울 수 있게만 한다.
 - `Esc` 로 모달·드로어 닫기, 모달 배경 클릭 닫기.
 - 아이콘은 **인라인 SVG**만(§8.4). 이모지·유니코드 글리프는 UI 요소로 쓰지 않는다(폰트 폴백 편차).
 - 모든 색·폰트·radius·모션 값은 **CSS 변수 경유**. 컴포넌트에 매직 넘버 금지.

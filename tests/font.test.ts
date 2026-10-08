@@ -132,7 +132,7 @@ describe('UI-font4: 한글 시스템 폴백(KR System) — Tabby 재현 (agent_t
 describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사용자 설정 (2026-08-21)', () => {
   // 2026-08-04 에는 정반대였다: `--mono === --term` 이 확정 요구였고, 사용자가 터미널 폰트를
   // 바꾸면 앱 화면 전체가 따라 바뀌었다. 그 결과가 "개발용 티"였고 준영님이 뒤집으셨다.
-  //   --ui   Pretendard   크롬 전부.            고정 · 설정에 없다
+  //   --ui   SUIT         크롬 전부.            고정 · 설정에 없다
   //   --mono 나눔고딕코딩  경로·명령·로그·에디터. 고정 · 설정에 없다
   //   --term 사용자 선택   터미널 본문 전용
   //
@@ -168,7 +168,7 @@ describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사�
 
   it('★ --mono 에는 KR System 을 넣지 않는다 — 로그·에디터 본문에서 열이 밀린다', () => {
     // 'KR System' 은 한글을 맑은 고딕(비례 폰트)으로 그린다. UI 라벨에서는 그게 이득이었지만
-    // (UI-font4) 지금 UI 는 Pretendard 다. --mono 가 남은 자리는 경로·로그·에디터라
+    // (UI-font4) 지금 UI 는 SUIT 다(2026-10-08 전엔 Pretendard). --mono 가 남은 자리는 경로·로그·에디터라
     // **한글도 고정폭이어야** 열이 맞는다.
     const css = readFileSync(join(__dirname, '../src/renderer/styles/tokens.css'), 'utf8')
     const mono = /--mono:\s*([^;]+);/.exec(css)?.[1]?.trim()
@@ -181,7 +181,7 @@ describe('글꼴 셋의 역할 분리 — 시스템 고정 · 터미널만 사�
   it('--ui 는 비례 폰트다 — 크롬에 고정폭이 다시 새어 들어오지 않게', () => {
     const css = readFileSync(join(__dirname, '../src/renderer/styles/tokens.css'), 'utf8')
     const ui = /--ui:\s*([^;]+);/.exec(css)?.[1]?.trim()
-    expect(ui).toMatch(/^'Pretendard'/)
+    expect(ui).toMatch(/^'SUIT'/)
     expect(ui).not.toContain('monospace')
     expect(ui).not.toContain('Coding')
   })

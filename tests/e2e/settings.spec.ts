@@ -126,7 +126,7 @@ test('SET-8 [단축키]의 tmux 사용법 보기가 명령어 북을 tmux 카테
 //
 // 규칙이 뒤집힌 자리다. UI-font 시절에는 `--mono === --term` 이라 사이드바 세션명까지 코딩용
 // 고정폭으로 바뀌었고, 이 검사도 그것을 확인했다. G 에서 **크롬 글꼴을 분리**했다(design-system §2:
-// "그게 개발용 티의 8할이었다") — 이제 `--ui`(Pretendard) 고정이고 사용자가 고르는 것은 `--term` 뿐이다.
+// "그게 개발용 티의 8할이었다") — 이제 `--ui`(SUIT, 2026-10-08 전엔 Pretendard) 고정이고 사용자가 고르는 것은 `--term` 뿐이다.
 test('SET-9★ 폰트 설정은 터미널만 바꾸고 사이드바 글꼴은 그대로다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)

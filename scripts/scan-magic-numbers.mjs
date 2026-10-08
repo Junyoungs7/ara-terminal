@@ -275,10 +275,19 @@ for (const file of walkAll('src/renderer')) {
 // ⚠️ 주석을 먼저 걷는다. tokens.css 주석은 "왜 이 값이면 안 되는가"를 적느라 배경 HEX 를
 // 인용하고 있어서, 안 걷으면 주석 속 색이 토큰으로 잡힌다(위 HEX 검사가 isComment 를 두는 것과
 // 같은 이유다).
-const MIN_RATIO = 3.5
+// 2026-10-08 family-core: 하한을 **글자 4.5(WCAG AA 본문)** 로 올렸다. 단 --text-dim 은 글자 단이
+// 아니라 placeholder·disabled 전용이라(WCAG 가 대비를 요구하지 않는 자리) 옛 하한 3.5 를 유지한다 —
+// 그 대신 아래 "dim 용도" 검사가 그 단이 다른 자리에 새지 않는지를 본다.
+const MIN_RATIO = 4.5
+const DIM_TOKEN = '--text-dim'
+const DIM_MIN_RATIO = 3.5
+// 비텍스트(WCAG 1.4.11) — 액센트·포커스 링·의미색이 배경 위에서 **모양으로** 읽혀야 하는 하한.
+const NONTEXT_MIN_RATIO = 3.0
+const NONTEXT_TOKENS = ['--accent', '--focus-ring-color', '--ok', '--warn', '--err']
 // 공허성 방지 — 위 MIN_TSX/MIN_CSS 와 같은 규칙. 접두사를 바꾸거나 램프를 다른 파일로 옮기면
 // 조합이 0이 되어 "위반 없음"으로 초록이 된다. 지금 4×6=24 조합이라 하한을 절반쯤에 둔다.
 const MIN_PAIRS = 12
+const MIN_NONTEXT_PAIRS = 15 // 지금 5×6=30
 const TOKENS_SRC = readFileSync(join('src/renderer/styles', 'tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 const relLum = (hex) =>
   [1, 3, 5]
@@ -290,6 +299,18 @@ const contrast = (a, b) => {
   return (hi + 0.05) / (lo + 0.05)
 }
 const grab = (re) => [...TOKENS_SRC.matchAll(re)].map((m) => [m[1], m[2]])
+// :root 안의 **선언이 아닌 것** (2026-10-08). 주석을 `/*` 없이 열면 그 글자부터 다음 `*/` 까지가
+// 깨진 선언 하나가 되어 **바로 뒤 토큰을 삼킨다** — 브라우저는 조용히 버린다. 실제로 이 라운드에
+// `--text-hi` 가 그렇게 사라져 본문 글자가 배경색이 됐는데, 위 정규식은 여전히 `--text-hi: #…` 를
+// 찾아 대비를 "통과"로 쟀다. 그래서 :root 본문의 문장마다 `--이름:` 으로 시작하는지 본다.
+for (const m of TOKENS_SRC.matchAll(/:root\s*\{([^}]*)\}/g)) {
+  for (const stmt of m[1].split(';')) {
+    const t = stmt.trim()
+    if (t && !/^--[A-Za-z0-9_-]+\s*:/.test(t)) {
+      violations.push(`src/renderer/styles/tokens.css  :root 안에 선언이 아닌 글자 — 열리지 않은 주석? → ${t.slice(0, 60)}`)
+    }
+  }
+}
 const ramp = grab(/(--text-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)
 const surfaces = grab(/(--bg-[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\b/g)
 const pairs = ramp.flatMap(([tn, tv]) => surfaces.map(([bn, bv]) => [tn, bn, contrast(tv, bv)]))
@@ -300,13 +321,45 @@ if (pairs.length < MIN_PAIRS) {
   )
   process.exit(1)
 }
-for (const [tn, bn, r] of pairs.filter(([, , r]) => r < MIN_RATIO)) {
+const floorOf = (tn) => (tn === DIM_TOKEN ? DIM_MIN_RATIO : MIN_RATIO)
+for (const [tn, bn, r] of pairs.filter(([tn, , r]) => r < floorOf(tn))) {
   violations.push(
-    `src/renderer/styles/tokens.css  대비 ${r.toFixed(2)} < ${MIN_RATIO} — ${tn} 을 ${bn} 위에 얹으면 안 읽힌다` +
+    `src/renderer/styles/tokens.css  대비 ${r.toFixed(2)} < ${floorOf(tn)} — ${tn} 을 ${bn} 위에 얹으면 안 읽힌다` +
       ' (opacity 로 덮지 말고 램프의 명도를 올려라)'
   )
 }
-const worst = pairs.reduce((a, b) => (a[2] <= b[2] ? a : b))
+const textPairs = pairs.filter(([tn]) => tn !== DIM_TOKEN)
+const worst = textPairs.reduce((a, b) => (a[2] <= b[2] ? a : b))
+
+// 비텍스트 쌍(2026-10-08). `--focus-ring-color: var(--accent)` 처럼 별칭이면 끝까지 따라가 HEX 를 얻는다.
+// 못 풀면(rgba·없는 토큰) **조용히 빼지 않고** 위반으로 적는다 — 빠진 쌍은 검사된 쌍처럼 보인다.
+const tokenVal = Object.fromEntries(grab(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g).map(([n, v]) => [n, v.trim()]))
+const resolveHex = (name, depth = 0) => {
+  const v = tokenVal[name]
+  if (!v || depth > 5) return null
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v
+  const m = /^var\(\s*(--[a-z0-9-]+)\s*\)$/.exec(v)
+  return m ? resolveHex(m[1], depth + 1) : null
+}
+const nontextPairs = []
+for (const tn of NONTEXT_TOKENS) {
+  const hex = resolveHex(tn)
+  if (!hex) {
+    violations.push(`src/renderer/styles/tokens.css  비텍스트 대비 검사 불가 — ${tn} 이 6자리 HEX 로 풀리지 않는다`)
+    continue
+  }
+  for (const [bn, bv] of surfaces) nontextPairs.push([tn, bn, contrast(hex, bv)])
+}
+if (nontextPairs.length < MIN_NONTEXT_PAIRS) {
+  console.error(`비텍스트 대비 검사가 공허하다: ${nontextPairs.length}조합(하한 ${MIN_NONTEXT_PAIRS}). 토큰 이름을 확인하라.`)
+  process.exit(1)
+}
+for (const [tn, bn, r] of nontextPairs.filter(([, , r]) => r < NONTEXT_MIN_RATIO)) {
+  violations.push(
+    `src/renderer/styles/tokens.css  비텍스트 대비 ${r.toFixed(2)} < ${NONTEXT_MIN_RATIO} — ${tn} 이 ${bn} 위에서 모양으로 안 읽힌다`
+  )
+}
+const worstNontext = nontextPairs.reduce((a, b) => (a[2] <= b[2] ? a : b))
 
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
@@ -348,6 +401,7 @@ if (braceErrors.length) {
 const TEXT_DECL = /(?:^|[;{])\s*(?:color|font(?:-[a-z]+)?)\s*:/
 const FADE_DECL = /(?:^|[;{])\s*opacity\s*:\s*(0?\.\d+)\s*(?:;|$)/
 let ruleCount = 0
+let dimRules = 0
 for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
   const file = join(STYLES_DIR, name)
   const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
@@ -356,6 +410,17 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
     if (at < 0) continue
     ruleCount++
     const body = chunk.slice(at + 1)
+    // dim 용도 (2026-10-08): --text-dim 은 placeholder·disabled(+ 터미널 고스트 자동완성) 전용이다.
+    // 선택자 **이름**으로 판정한다 — `.foo.off` 처럼 클래스로 끈 자리는 못 알아본다(그런 자리는
+    // `:disabled` 를 쓰거나 --text-lo 로 올려라). 판정 기준이 선택자 글자라는 한계를 여기 적어 둔다.
+    if (body.includes(`var(${DIM_TOKEN})`)) {
+      dimRules++
+      const selText = chunk.slice(0, at)
+      if (!/placeholder|disabled|ghost/.test(selText)) {
+        const sel = selText.split(/\r?\n/).filter((x) => x.trim()).slice(-2).join(' ').trim()
+        violations.push(`${file}  --text-dim 은 placeholder·disabled 전용 — ${sel} (글자면 --text-lo 를 쓸 것)`)
+      }
+    }
     const fade = body.match(FADE_DECL)
     // `opacity: 0`(숨김)·`1`(복원)은 감쇠가 아니라 스위치다. 0<n<1 만 본다(`0.0` 포함해서 거른다).
     if (!fade || Number(fade[1]) <= 0) continue
@@ -368,6 +433,12 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
   }
 }
 // 공허성 방지 — 위 MIN_PAIRS 와 같은 규칙. 파서가 깨져 규칙을 0개로 읽으면 조용히 초록이 된다.
+// dim 용도 검사의 양성 대조 — placeholder 규칙이 최소 몇 개는 dim 을 써야 정상이다(지금 18).
+// 0 이면 "위반 없음"이 아니라 토큰 이름이 바뀌었거나 파서가 못 읽은 것이다.
+if (dimRules < 5) {
+  console.error(`dim 용도 검사가 공허하다: --text-dim 을 쓰는 규칙 ${dimRules}개(하한 5). 토큰 이름·파서를 확인하라.`)
+  process.exit(1)
+}
 if (ruleCount < 300) {
   console.error(`이중 감쇠 검사가 공허하다: 규칙 ${ruleCount}개만 읽혔다(하한 300). CSS 파서를 고쳐라.`)
   process.exit(1)
@@ -379,5 +450,7 @@ if (violations.length) {
 }
 console.log(
   `매직넘버 스캔 통과 (HEX/px/맨 transition 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
-    `대비 ${pairs.length}조합 전부 ${MIN_RATIO} 이상 — 가장 나쁜 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}`
+    `글자 대비 ${pairs.length}조합 통과(글자 ${MIN_RATIO} · ${DIM_TOKEN} ${DIM_MIN_RATIO}) — 가장 나쁜 글자 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}\n` +
+    `비텍스트 대비 ${nontextPairs.length}조합 전부 ${NONTEXT_MIN_RATIO} 이상 — 가장 나쁜 짝 ${worstNontext[0]} × ${worstNontext[1]} = ${worstNontext[2].toFixed(2)}\n` +
+    `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled`
 )

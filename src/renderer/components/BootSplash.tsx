@@ -33,13 +33,13 @@ import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'
 export const SPLASH_MS = 2000
 
 /**
- * 사라지는 데 걸리는 시간. **`shell.css` 의 `.boot.out` 트랜지션과 같은 값이어야 한다**(`--dur-pop`,
- * 200ms) — 한쪽만 고치면 다 흐려지기 전에 언마운트되거나 이미 투명한 판이 남는다.
+ * 사라지는 데 걸리는 시간. **`shell.css` 의 `.boot.out` 트랜지션과 같은 값이어야 한다**(`--dur-exit`,
+ * 150ms — 2026-10-08 전엔 `--dur-pop` 200ms) — 한쪽만 고치면 다 흐려지기 전에 언마운트되거나 이미 투명한 판이 남는다.
  *
  * 350ms `ease-in` 이었다(2026-09-04 모션 감사 A7 로 바꿨다). 들어오고 나가는 것은 `ease-out` 이고,
  * `ease-in` 은 처음이 느려 사용자가 보고 있는 그 순간을 미룬다. 터미널까지 150ms 빨리 간다.
  */
-const FADE_MS = 200
+const FADE_MS = 150
 
 /**
  * 이 창이 인사를 그릴 것인가. **본창만** 그린다.

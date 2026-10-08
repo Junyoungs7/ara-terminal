@@ -17,10 +17,12 @@
    대표적으로 사이드바 [연결]/[파일] (지금은 .lrail-item). #71·#82 로 클릭 요소 38곳에 키보드 접근을
    넣어 놓고 **그 키보드가 지금 어디 있는지는 안 보였다.**
    `:focus-visible` 이라 마우스 클릭에는 안 뜬다. 개별 규칙(.dd-btn·.modal .btn 등)이 뒤에 있어
-   그쪽이 이긴다 — 이건 바닥값이다. */
+   그쪽이 이긴다 — 이건 바닥값이다.
+   2026-10-08(family-core): 링 모양은 tokens.css `--focus-ring*` 한 곳에서 정한다 — 불투명 액센트
+   2px 를 바깥 2px 띄워 그린다(그 틈으로 놓인 표면이 비친다). 개별 규칙도 전부 이 토큰을 쓴다. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 
@@ -217,6 +219,12 @@
 .tb-omni:focus-within {
   border-color: var(--accent-line);
 }
+/* 안쪽 input 은 테두리가 없어 링도 껍데기가 그린다(.pw-wrap 과 같은 구조). */
+.tb-omni:has(input:focus-visible) {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 .tb-omni svg {
   flex: none;
   width: 12px;
@@ -237,7 +245,7 @@
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0 var(--sp-2);
@@ -253,7 +261,7 @@
   flex-direction: column;
   max-height: 60vh;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -266,7 +274,7 @@
 }
 .cp-group {
   padding: var(--sp-3) var(--sp-6) var(--sp-2);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.4px;
@@ -316,7 +324,7 @@
   border-top: 1px solid var(--line);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 
 .tb-controls {
@@ -446,7 +454,7 @@
   border-radius: var(--radius-sm);
   border: none;
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -470,7 +478,7 @@
   border: none;
   background: none;
   border-radius: var(--radius-xs);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -525,7 +533,7 @@
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 경로 전용 줄 (2026-08-22 제보 12번). 아이콘 줄 아래에 따로 앉는다 — 사이드바(280px)에서
    브레드크럼이 아이콘들과 한 칸을 나눠 쓰다 눌리지 않을 만큼 짓눌리던 것을 자리로 푼다. */
@@ -554,8 +562,9 @@
   border-color: var(--line-strong);
 }
 .fpath-box:focus-visible {
-  border-color: var(--accent);
-  outline: none;
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* R7 브레드크럼 — 세그먼트 클릭으로 상위 이동. 길면 왼쪽부터 잘리게 스크롤(끝=현재 폴더가 보여야 한다). */
 .fcrumb {
@@ -590,7 +599,7 @@
 /* 구분자 `/` 도 글자다 — §1.3 이중 감쇠 금지. dim × .7 은 canvas 위에서 3.00 이었다.
    세그먼트(--text-lo)보다 조용해야 하는 것은 맞고, 그건 이미 한 단계 아래 토큰이 낸다(4.70). */
 .fcrumb .sepr {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 경로 직접 입력 — .fpath-box 와 같은 자리를 쓴다(줄이 늘었다 줄었다 하지 않게 높이를 맞춘다). */
 .fpath-in {
@@ -612,7 +621,7 @@
   width: var(--sb-hit);
   height: var(--sb-hit);
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .sftp-path-bar .sb-act:hover {
@@ -684,7 +693,7 @@
   overflow: hidden;
 }
 .fstat .fs-dim {
-  color: var(--text-dim);
+  color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -743,7 +752,7 @@
   flex: none;
   display: grid;
   place-items: center;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .frow .fi svg {
   width: var(--sb-icon);
@@ -759,7 +768,7 @@
   flex: none;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
 .frow .fsz {
@@ -768,7 +777,7 @@
   text-align: right;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
 .frow.dir {
@@ -779,7 +788,7 @@
 }
 /* 끊긴 심볼릭 링크 — 대상이 없으니 들어갈 수도, 내려받을 수도 없다. 흐리게 + 취소선. */
 .frow.broken .fn {
-  color: var(--text-dim);
+  color: var(--text-lo);
   text-decoration: line-through;
 }
 .frow.broken .fi {
@@ -860,7 +869,7 @@
   border: none;
   background: none;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .sftp-got .g-x:hover {
@@ -910,7 +919,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .sftp-xfer .xfer-cancel svg {
@@ -961,7 +970,7 @@
   margin-top: var(--sp-2);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
 }
 
@@ -1017,7 +1026,7 @@
   width: 28px;
   height: 22px;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   cursor: pointer;
   position: relative;
@@ -1106,7 +1115,7 @@
   width: 15px;
   height: 15px;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .exp-tab-x:hover {
   background: var(--err-line);
@@ -1119,7 +1128,7 @@
 .exp-tab.add {
   border-color: transparent;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   padding: 0 var(--sp-5);
 }
@@ -1143,7 +1152,7 @@
 }
 .exp-grp {
   padding: var(--sp-5) var(--sp-6) var(--sp-2);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.5px;
@@ -1175,7 +1184,7 @@
   display: grid;
   place-items: center;
   font-size: var(--fs-md);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .exp-node .ic svg {
   width: 13px;
@@ -1281,7 +1290,7 @@
   right: 6px;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .con-app.ext:hover .ext-mark {
   color: var(--accent-bright);
@@ -1406,7 +1415,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text-dim);
+  background: var(--text-lo);
   flex: none;
 }
 .bw-dot.load {
@@ -1416,7 +1425,7 @@
 .bw-x {
   display: grid;
   place-items: center;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   padding: 0 var(--sp-1);
   cursor: pointer;
@@ -1524,7 +1533,7 @@
   padding: var(--sp-3) var(--sp-5);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   white-space: nowrap;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line-strong);
@@ -1571,7 +1580,7 @@
   text-overflow: ellipsis;
 }
 .ptbl .pt-proc.unk {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ptbl .pt-pid {
   width: 74px;
@@ -1588,7 +1597,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -1596,7 +1605,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-dim);
+  background: var(--text-lo);
   flex: none;
 }
 .pstate.on {
@@ -1613,7 +1622,7 @@
   color: var(--ok);
 }
 .pdest.none {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .pwarn {
   color: var(--warn);
@@ -1636,7 +1645,7 @@
   font-size: var(--fs-micro);
   font-weight: 500;
   line-height: 1.5;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 표 안 동작 버튼. **`.btn` 을 물려받지 않는다** — 그건 모달용이라 패딩 8/16 · 굵기 600 ·
    그라디언트라서 26px 행에 들어가면 표가 아니라 폼처럼 보인다(2026-08-21 제보).
@@ -1744,7 +1753,7 @@
   flex: none;
   width: 16px;
   height: 16px;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .con-field .sclear svg {
@@ -1753,7 +1762,7 @@
 }
 .con-count {
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -1838,7 +1847,7 @@
   padding: var(--sp-3) var(--sp-5);
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   white-space: nowrap;
@@ -1989,7 +1998,7 @@
    한 눈에 이어진다. 위는 항목 수가 적으니 자리를 적게 주고, 남는 높이는 아래가 가져간다. */
 .con-sect {
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -2066,7 +2075,7 @@
   place-items: center;
   width: var(--sb-icon);
   height: var(--sb-icon);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .dsk-dir .sz {
   flex: none;
@@ -2136,7 +2145,7 @@
 .ftcount {
   margin-left: auto;
   padding-right: var(--sp-2);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -2166,7 +2175,7 @@
   border-radius: var(--radius-sm);
   border: none;
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -2339,7 +2348,7 @@
   width: 14px;
   height: 14px;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-left: var(--sp-hair);
   opacity: 0;
   transition: var(--dur-quick);
@@ -2398,7 +2407,7 @@
    은은하게 흐려 "이 탭은 지금 화면에 없다"만 암시한다(border 트릭은 .active::before/::after 와
    충돌하므로 건드리지 않는다 — active+detached 조합에서도 상단 그룹색 바는 그대로 보인다). */
 .ttab.offscreen .tlabel {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* dot 은 글리프라 opacity 를 남긴다 — §1.3 이 금지한 것은 **텍스트** 위의 이중 감쇠다. */
 .ttab.offscreen .tdot {
@@ -2409,7 +2418,7 @@
   place-items: center;
   width: 32px;
   margin: var(--sp-3) 0 0 var(--sp-hair);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   border-radius: var(--radius) var(--radius) 0 0;
   transition: var(--dur-quick);
@@ -2431,7 +2440,7 @@
   place-items: center;
   width: 30px;
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   border-left: 1px solid var(--line-soft);
   transition: var(--dur-quick);
@@ -2514,13 +2523,13 @@
   justify-content: center;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .pe-keys kbd {
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-xs);
@@ -2704,7 +2713,7 @@
   width: 26px;
   height: 22px;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .bp-max:hover {
@@ -2804,7 +2813,7 @@
   height: 16px;
   margin-left: auto;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   opacity: 0;
   transition: var(--dur-quick);
   cursor: pointer;
@@ -2838,7 +2847,7 @@
   height: 16px;
   margin-left: auto;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   opacity: 0;
   transition: var(--dur-quick);
@@ -3086,7 +3095,7 @@
   font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-4) var(--sp-7);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   z-index: 40;
   pointer-events: none;
@@ -3109,7 +3118,7 @@
   color: var(--text-hi);
   font-family: var(--ui);
   padding: var(--sp-5) var(--sp-6);
-  border-radius: var(--radius);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   z-index: 40;
   pointer-events: none;
@@ -3128,7 +3137,7 @@
 }
 .upd-sub {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--text-lo);
   word-break: keep-all; /* 한글은 낱말 한가운데서 갈리면 안 읽힌다 */
   overflow-wrap: anywhere;
 }
@@ -3249,7 +3258,7 @@
   background: var(--line);
 }
 .sb-seg .lbl {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.4px;
@@ -3263,7 +3272,7 @@
 }
 /* 세션이 없을 때는 초록(연결됨) 톤을 쓰지 않는다 — 유휴는 유휴로 읽혀야 한다. */
 .sb-seg.host.idle .val {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 활성 SSH 세션 연결 상태 dot (R4.2). 트리 서버 노드와 같은 색 규약. */
 .sb-dot {
@@ -3271,7 +3280,7 @@
   height: 6px;
   border-radius: 50%;
   flex: none;
-  background: var(--text-dim);
+  background: var(--text-lo);
 }
 .sb-dot.connected {
   background: var(--ok);
@@ -3467,7 +3476,7 @@ button.sb-seg.upd:hover .val {
   max-width: 360px;
   background: var(--bg-surface);
   border: 1px solid var(--purple-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--sp-5);
   z-index: 40;
@@ -3505,7 +3514,7 @@ button.sb-seg.upd:hover .val {
 }
 .mcp-pop-row .mode {
   flex: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .mcp-pop-row .mode.autoAllow {
   color: var(--purple);
@@ -3546,7 +3555,7 @@ button.sb-seg.upd:hover .val {
 .sb-search .field svg {
   width: var(--sb-icon);
   height: var(--sb-icon);
-  color: var(--text-dim);
+  color: var(--text-lo);
   flex: none;
 }
 .sb-search .field input {
@@ -3571,7 +3580,7 @@ button.sb-seg.upd:hover .val {
   height: 16px;
   flex: none;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .sb-search .field .sclear:hover {
@@ -3597,8 +3606,8 @@ button.sb-seg.upd:hover .val {
    더 헷갈린다. ⚠️ `:focus` 가 아니라 `:focus-visible` 이다 — 마우스로 눌렀을 때는 안 떠야 한다
    (색을 걷은 이유가 "클릭했더니 색이 남는다"였다). */
 .tree [role='treeitem']:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-inset);
   background: var(--accent-glow);
 }
 .tree .empty {
@@ -3621,7 +3630,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-5) var(--sp-2);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.4px;
@@ -3629,7 +3638,7 @@ button.sb-seg.upd:hover .val {
   user-select: none;
 }
 .srv-hd:hover {
-  color: var(--text-lo);
+  color: var(--text-mid);
 }
 /* ── 펼침 캐럿 (M3 · 준영님 "지금껀 잘 안 보여") ──
    `▸`/`▾`(U+25B8/25BE)는 **Pretendard 에 없다**(M2 가 cmap 을 파싱해 실측했다) — Windows 기본
@@ -3663,13 +3672,6 @@ button.sb-seg.upd:hover .val {
 .tw.closed svg,
 .pod-caret.closed svg {
   transform: rotate(-90deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .caret svg,
-  .tw svg,
-  .pod-caret svg {
-    transition: none;
-  }
 }
 /* 묶음 안 개수 — 보조 단(11px)이다. opacity 는 여전히 금지다.
    머리글에서 물려받은 dim 에 .75 를 곱해 surface 위에서 3.10 이었다. 걷으면 4.41.
@@ -3777,7 +3779,7 @@ button.sb-seg.upd:hover .val {
 /* 트위스티 — 세션이 있는 서버만. 자리는 늘 차지해 이름 왼쪽 줄이 흔들리지 않는다
    (세션이 없는 서버는 `<span class="tw">` 빈 것으로 폭만 잡는다 — 위 캐럿 규칙이 그 폭을 준다). */
 .tw {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .tw.on:hover {
   color: var(--text-hi);
@@ -3793,7 +3795,7 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
   letter-spacing: 0.3px;
   border: 1px solid var(--line);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .tbadge.ssh {
   color: var(--accent-bright);
@@ -3833,7 +3835,7 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   border-radius: var(--radius-xs);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 .rowact .cc-b:hover,
@@ -3898,7 +3900,7 @@ button.sb-seg.upd:hover .val {
 .sess-node .sess-cwd {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -3921,7 +3923,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-weight: 500;
   border: 1px solid var(--line);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 고른 세션은 배지도 함께 밝아진다 — 예전 아이콘이 하던 일이다(.sicon.active). */
 .sess-node.active .sess-type {
@@ -3961,7 +3963,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -3993,13 +3995,6 @@ button.sb-seg.upd:hover .val {
 .overlay.open .modal {
   animation: pop var(--dur-pop) var(--ease-pop);
 }
-/* 움직임을 줄여 달라고 한 사람에게는 등장 모션을 끈다 — 창은 그대로 나타난다. */
-@media (prefers-reduced-motion: reduce) {
-  .overlay.open,
-  .overlay.open .modal {
-    animation: none;
-  }
-}
 /* 열릴 때 창이 포커스를 받는다(Dialog.tsx 주석 — 확인 버튼이 같은 타건에 눌리는 것을 막는다).
    프로그램이 준 포커스라 테두리는 그리지 않는다: 사람이 탭으로 온 것이 아니다. */
 .modal:focus {
@@ -4011,7 +4006,7 @@ button.sb-seg.upd:hover .val {
   max-height: 86vh;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -4066,7 +4061,7 @@ button.sb-seg.upd:hover .val {
   border: 0;
   background: none;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -4099,7 +4094,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-2) var(--sp-3) var(--sp-4);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
    `.prof-list` 가 통째로 스크롤되는 칸이라 sticky 로 바닥에 붙인다 — 배경을 깔아 두지 않으면
@@ -4195,7 +4190,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4231,7 +4226,7 @@ button.sb-seg.upd:hover .val {
 .pf-sec-t {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-bottom: var(--sp-6);
   display: flex;
   align-items: center;
@@ -4273,10 +4268,11 @@ button.sb-seg.upd:hover .val {
   outline: none;
   transition: var(--dur-quick);
 }
-.fld input:focus,
-.fld select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+.fld input:focus-visible,
+.fld select:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .fld input::placeholder {
   color: var(--text-dim);
@@ -4292,9 +4288,10 @@ button.sb-seg.upd:hover .val {
   padding-right: var(--sp-2);
   transition: var(--dur-quick);
 }
-.pw-wrap:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+.pw-wrap:has(.pw-input:focus-visible) {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* 안쪽 칸은 **어느 자리에 놓이든** 같아야 한다: 껍데기가 테두리를 갖고 이 칸은 남은 폭을 채운다.
    `.fld input` / `.rdp-creds input` / `.dlg-input` 이 자리마다 이미 있어서 태그 선택자로는
@@ -4324,7 +4321,7 @@ button.sb-seg.upd:hover .val {
   background: none;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .pw-eye:hover {
@@ -4523,12 +4520,8 @@ button.sb-seg.upd:hover .val {
 }
 /* 500px 슬라이드는 이 앱에서 가장 큰 단일 움직임인데 reduced-motion 이 이 자리를 놓치고 있었다
    (2026-09-04, 모션 감사 A5). 옵션을 켠 사람에게 부팅 인사만 조용해지고 매일 여닫는 서랍은
-   그대로 미끄러졌다. 서랍은 붙었다 떨어졌다 할 뿐이고 자리는 그대로다 — 뜻이 안 죽는다. */
-@media (prefers-reduced-motion: reduce) {
-  .drawer {
-    transition: none;
-  }
-}
+   그대로 미끄러졌다. 서랍은 붙었다 떨어졌다 할 뿐이고 자리는 그대로다 — 뜻이 안 죽는다.
+   2026-10-08: 그 처리는 이제 tokens.css 가 한다(reduced-motion 에서 --dur-drawer: 0ms). */
 .drawer-hd {
   display: flex;
   align-items: center;
@@ -4673,7 +4666,7 @@ button.sb-seg.upd:hover .val {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--text-dim);
+  background: var(--text-lo);
   transition: var(--dur-quick);
 }
 .set-toggle.on .st-knob {
@@ -4694,7 +4687,7 @@ button.sb-seg.upd:hover .val {
 .set-sec-t {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin: var(--sp-2) 0 var(--sp-5);
 }
 /* UI-font: 섹션 제목 바로 아래 보조 설명 한 줄(터미널 폰트가 UI 전체에도 적용된다는 안내). */
@@ -4798,7 +4791,7 @@ button.sb-seg.upd:hover .val {
 .fc-title {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   margin-bottom: var(--sp-5);
 }
 .fc-strip {
@@ -4821,7 +4814,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -4863,7 +4856,7 @@ button.sb-seg.upd:hover .val {
 .fp-controls label {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   letter-spacing: 0.4px;
 }
 .fp-controls .row {
@@ -4917,7 +4910,7 @@ button.sb-seg.upd:hover .val {
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
 }
 .preview-box .pb-hd .sb-dot {
@@ -4953,7 +4946,7 @@ button.sb-seg.upd:hover .val {
   color: var(--accent-bright);
 }
 .pv-ln.pv-dim {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .pv-ln.pv-err {
   color: var(--err);
@@ -4980,7 +4973,7 @@ button.sb-seg.upd:hover .val {
 .license-row .lic-meta {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
   margin-top: var(--sp-1);
 }
@@ -5024,10 +5017,13 @@ button.sb-seg.upd:hover .val {
   outline: none;
   transition: var(--dur-quick);
 }
-.dd-btn:focus-visible,
 .dd.open .dd-btn {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.dd-btn:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .dd-btn .dd-val {
   flex: 1;
@@ -5065,12 +5061,12 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   cursor: pointer;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .dd-btn svg {
   width: 13px;
   height: 13px;
-  color: var(--text-dim);
+  color: var(--text-lo);
   flex: none;
   transition: transform var(--dur-quick);
 }
@@ -5084,7 +5080,7 @@ button.sb-seg.upd:hover .val {
   z-index: 120;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-2);
   max-height: 240px;
@@ -5172,11 +5168,12 @@ button.sb-seg.upd:hover .val {
   outline: none;
   resize: vertical;
 }
-.bug-report .fld textarea:focus,
-.my-reports .fld textarea:focus,
-.ctr-run .fld textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+.bug-report .fld textarea:focus-visible,
+.my-reports .fld textarea:focus-visible,
+.ctr-run .fld textarea:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* 오류 신고 #11 [새 컨테이너] 창 — 껍데기·칸은 신고 창과 같고 폭만 다르다. 칸 아래 형식 오류 한 줄. */
 .modal.ctr-run {
@@ -5396,8 +5393,10 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-base);
   outline: none;
 }
-.dlg-input:focus {
-  border-color: var(--accent-line);
+.dlg-input:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .dlg-detail {
   display: grid;
@@ -5416,7 +5415,7 @@ button.sb-seg.upd:hover .val {
 .dlg-row .dlg-k {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .dlg-row .dlg-v {
   font-family: var(--ui);
@@ -5435,11 +5434,11 @@ button.sb-seg.upd:hover .val {
 /* 기본 확인 버튼은 열릴 때 포커스를 받는다(Enter 즉시 실행). 브라우저 기본 노란 링 대신
    디자인 시스템 링으로 — 포커스 표시는 유지한다(접근성). */
 .modal.sm .btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .modal.sm .btn.dgr:focus-visible {
-  box-shadow: 0 0 0 3px var(--err-line);
+  outline-color: var(--err);
 }
 
 
@@ -5456,7 +5455,7 @@ button.sb-seg.upd:hover .val {
 .pmon-title {
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   letter-spacing: 0.3px;
 }
 .pmon-count {
@@ -5553,7 +5552,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   border: 0;
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   padding: var(--sp-1);
 }
@@ -5599,9 +5598,10 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-md);
 }
-.ap-box:focus {
-  outline: none;
-  border-color: var(--accent-line);
+.ap-box:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .ap-head .ts-btn {
   flex: none;
@@ -5667,7 +5667,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   letter-spacing: 0.3px;
 }
 .lv-dot {
@@ -5747,7 +5747,7 @@ button.sb-seg.upd:hover .val {
   padding: 0 var(--sp-5);
   background: var(--bg-canvas);
   border-bottom: 1px solid var(--line);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -6055,7 +6055,7 @@ button.sb-seg.upd:hover .val {
 }
 .ai-code-lang {
   flex: 1;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -6104,7 +6104,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: inherit;
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -6195,9 +6195,10 @@ button.sb-seg.upd:hover .val {
   line-height: 1.5;
   padding: var(--sp-4) var(--sp-5);
 }
-.ai-input:focus {
-  outline: none;
-  border-color: var(--purple-line);
+.ai-input:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* hi × .55 는 4.57 로 하한을 넘기긴 했다 — 그래도 걷는다. §1.3 은 수치가 아니라 **방법**을
    금지하고(글자 위에 opacity 를 곱하지 않는다), 바로 옆 .ai-chip·.ai-code-btn 과 같은 판단이
@@ -6207,7 +6208,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-dim);
 }
 .ai-usage {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   padding-top: var(--sp-3);
@@ -6237,9 +6238,10 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   padding: var(--sp-3) var(--sp-4);
 }
-.ai-key-input:focus {
-  outline: none;
-  border-color: var(--purple-line);
+.ai-key-input:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .ai-key-state {
   display: flex;
@@ -6286,13 +6288,13 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 아라 패널 상단 — 현재 프로바이더·모델(무엇이 답하고 있는지). */
 .ai-active-badge {
   flex: none;
   max-width: 130px;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   font-family: var(--ui);
@@ -6340,7 +6342,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   border: none;
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -6385,7 +6387,7 @@ button.sb-seg.upd:hover .val {
   font-weight: 600;
 }
 .rdp-state {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .rdp-body {
   position: relative;
@@ -6428,7 +6430,7 @@ button.sb-seg.upd:hover .val {
 .rdp-sec {
   margin-left: var(--sp-3);
   font-family: var(--mono);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .rdp-msg {
   color: var(--text-mid);
@@ -6545,7 +6547,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 파일을 끌고 들어왔을 때 — 놓을 수 있다는 표시. */
 .rdp-body.dropping {
@@ -6584,8 +6586,8 @@ button.sb-seg.upd:hover .val {
 /* 비밀번호 칸은 우리 UI 다 — OS 강조색(사용자 PC 는 주황) 대신 우리 파란색으로 고정한다. */
 .rdp-creds input:focus,
 .rdp-creds input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-inset);
 }
 
 /* ── 편집기 창(노트) ──
@@ -6619,7 +6621,7 @@ button.sb-seg.upd:hover .val {
 }
 .ed-state {
   margin-left: auto;
-  color: var(--text-dim);
+  color: var(--text-lo);
   white-space: nowrap;
 }
 .ed-save {
@@ -6694,7 +6696,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-hair) var(--sp-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   white-space: nowrap;
@@ -6732,7 +6734,7 @@ button.sb-seg.upd:hover .val {
 }
 .log-hits {
   margin-bottom: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -6771,7 +6773,7 @@ button.sb-seg.upd:hover .val {
 
 /* 로그 뷰어에서 "여기가 파일 처음"임을 알리는 구분선(더 거슬러 갈 곳이 없다는 뜻). */
 .lv-top {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 
 /* 포트 번호 구간 입력(최소–최대). 좁은 패널이라 두 칸을 짧게 두고 사이에 대시만 둔다. */
@@ -6791,11 +6793,13 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   outline: none;
 }
-.pmon-span .pspan:focus {
-  border-color: var(--accent);
+.pmon-span .pspan:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .pspan-dash {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 .pmon-use {
@@ -6879,7 +6883,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7124,7 +7128,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
 }
 .sysm-mlabel {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -7186,7 +7190,7 @@ button.sb-seg.upd:hover .val {
   margin: var(--sp-3) 0 var(--sp-5);
 }
 .sysm-sec {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   margin: var(--sp-6) 0 var(--sp-3);
@@ -7210,7 +7214,7 @@ button.sb-seg.upd:hover .val {
   white-space: nowrap;
 }
 .sysm-dpct {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -7238,7 +7242,7 @@ button.sb-seg.upd:hover .val {
   background: var(--err);
 }
 .sysm-dsub {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -7340,11 +7344,11 @@ button.sb-seg.upd:hover .val {
   width: 104px;
 }
 /* "없음" 행. **opacity 를 곱하지 않는다**(§1.3 금지 — 이중 감쇠): 바탕 --text-mid(9.9:1) 에
-   0.45 를 곱하면 실효 2.5:1 로 최약체 하한 3.5 를 깬다. 한 단계 아래 토큰(--text-dim, 5.0:1)을 쓴다.
+   0.45 를 곱하면 실효 2.5:1 로 최약체 하한 3.5 를 깬다. 한 단계 아래 토큰을 쓴다(2026-10-08 부터 --text-lo — dim 은 placeholder·disabled 전용).
    `.con-tbl` 을 앞에 붙인 이유: 아래 `.con-tbl td.pkg-bin`/`.pkg-ver` 가 같은 명시도라 이 규칙을
    이긴다(옛 opacity 는 색과 무관해서 그래도 먹혔다). 한 단계 올려 네 칸 모두에 걸리게 한다. */
 .con-tbl .pkg-row.missing td {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .con-tbl td.pkg-bin {
   color: var(--text-hi);
@@ -7354,7 +7358,7 @@ button.sb-seg.upd:hover .val {
 }
 .con-tbl td.pkg-path,
 .con-tbl td.pkg-date {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .con-tbl td.pkg-date {
   text-align: right;
@@ -7366,7 +7370,7 @@ button.sb-seg.upd:hover .val {
    (씌웠더니 머리와 몸통의 열이 어긋나 표가 통째로 무너졌다). 색·선택 표시만 남긴다. */
 .ctr-row.down .ctr-name,
 .ctr-row.down .cimg {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* 조작 대상 고르기 — 선택 표시는 프로세스·서비스·디스크 표와 **같은 한 규칙**이다
    (위 `.con-row.sel td, …, .ctr-row.sel td`). 여기에 따로 두지 않는다: 예전에는 이 주석이
@@ -7405,7 +7409,7 @@ button.sb-seg.upd:hover .val {
   height: calc(18px * var(--ui-scale));
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   cursor: help;
@@ -7421,7 +7425,7 @@ button.sb-seg.upd:hover .val {
   cursor: default;
 }
 .con-tbl th.fixed:hover {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .con-tbl th.cports {
   width: 24%;
@@ -7467,7 +7471,7 @@ button.sb-seg.upd:hover .val {
   color: var(--accent);
 }
 .pod-ns {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .pod-name {
   color: var(--text-hi);
@@ -7538,7 +7542,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-md);
   cursor: pointer;
@@ -7568,7 +7572,7 @@ button.sb-seg.upd:hover .val {
 }
 .pd-note {
   margin-top: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-md);
 }
 .pd-note.bad {
@@ -7591,7 +7595,7 @@ button.sb-seg.upd:hover .val {
   border: none;
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .pd-exec svg {
@@ -7614,7 +7618,7 @@ button.sb-seg.upd:hover .val {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text-dim);
+  background: var(--text-lo);
 }
 .ctr-dot.on {
   background: var(--ok);
@@ -7823,7 +7827,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-weight: 500;
   border: 1px solid var(--line);
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .modal.ara-chats .sess-type.cc {
   color: var(--accent);
@@ -7852,7 +7856,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -7905,7 +7909,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   min-width: 0;
   text-align: right;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   font-family: var(--mono);
@@ -7920,7 +7924,7 @@ button.sb-seg.upd:hover .val {
   background: transparent;
   border: 0;
   padding: var(--sp-2);
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: pointer;
 }
 .ara-ic:hover {
@@ -7993,14 +7997,14 @@ button.sb-seg.upd:hover .val {
   cursor: pointer;
 }
 .ara-fold .hd .caret {
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ara-fold .hd .n {
   color: var(--text-mid);
 }
 .ara-fold .hd .st {
   margin-left: auto;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   font-family: var(--mono);
@@ -8032,7 +8036,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
 }
 .ara-fold .in .l .v {
-  color: var(--text-dim);
+  color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8083,7 +8087,7 @@ button.sb-seg.upd:hover .val {
 }
 .ara-ask .meta {
   margin-top: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -8115,9 +8119,10 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
   font: var(--fs-md) / 1.5 var(--ui);
 }
-.ara-input:focus {
-  outline: none;
-  border-color: var(--accent);
+.ara-input:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .ara-input:disabled {
   color: var(--text-dim);
@@ -8129,7 +8134,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-3);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 .ara-bar .sp {
   margin-left: auto;
@@ -8152,7 +8157,7 @@ button.sb-seg.upd:hover .val {
   background: var(--accent);
 }
 .ara-dot.off {
-  background: var(--text-dim);
+  background: var(--text-lo);
 }
 .ara-btn {
   border: 1px solid var(--line-strong);
@@ -8267,7 +8272,7 @@ button.sb-seg.upd:hover .val {
   background: transparent;
   border: 0;
   text-align: left;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font: var(--fs-micro) var(--ui);
   cursor: pointer;
 }
@@ -8275,7 +8280,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-1);
 }
 .bench-sec:hover {
-  color: var(--text-lo);
+  color: var(--text-mid);
 }
 .bench-sec svg {
   width: 11px;
@@ -8294,7 +8299,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-hair) var(--sp-3);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
 }
 /* `오래 멈춘 순` — **한글이다.** 2026-08-31 준영님이 안 읽힌다고 짚은 두 자리 중 하나이고,
    여기는 규칙을 둘 깨고 있었다: 옛 10.5px 단은 tokens.css §척도가 **숫자·라틴 전용**으로
@@ -8336,7 +8341,7 @@ button.sb-seg.upd:hover .val {
 }
 .bench-row.dead .bench-name,
 .bench-row.dead .bench-name .t {
-  color: var(--text-dim);
+  color: var(--text-lo);
   cursor: default;
 }
 .bench-dot {
@@ -8344,7 +8349,7 @@ button.sb-seg.upd:hover .val {
   height: 7px;
   border-radius: 50%;
   flex: none;
-  background: var(--text-dim);
+  background: var(--text-lo);
 }
 .bench-dot.ok {
   background: var(--ok);
@@ -8356,7 +8361,7 @@ button.sb-seg.upd:hover .val {
   background: var(--err);
 }
 .bench-dot.off {
-  background: var(--text-dim);
+  background: var(--text-lo);
   opacity: 0.6;
 }
 /* 확인 불가 = **속 빈 원.** 점선을 쓰지 않는다 — 7px 에서 점 네댓 개로 뭉개져 "약간 부드러운
@@ -8395,14 +8400,14 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   color: var(--text-hi);
 }
-/* 오른쪽 경과 열 — 화면에서 가장 어둡다. 명도가 --text-dim 에서 바닥나므로 넷째 칸은
+/* 오른쪽 경과 열 — 화면에서 가장 어둡다. 명도가 --text-lo 에서 바닥나므로(dim 은 placeholder·disabled 전용) 넷째 칸은
    크기가 진다. 보조 단(11px)이다 — A 판에서 그 아래 단(10.5)이 사라져 한글 하한 단서도 없어졌다. */
 .bench-name .ago {
   flex: none;
   margin-left: auto;
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
 /* 2번째 줄은 점 폭(7) + 간격(8) 만큼 들어가 제목과 왼쪽을 맞춘다. 오른쪽은 액션 자리로
@@ -8482,7 +8487,7 @@ button.sb-seg.upd:hover .val {
   background: transparent;
   border: 0;
   border-radius: var(--radius-xs);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   padding: 0;
   cursor: pointer;
@@ -8541,7 +8546,7 @@ button.sb-seg.upd:hover .val {
   cursor: help;
 }
 .md-img {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-style: italic;
 }
 .md-quote {
@@ -8634,8 +8639,10 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-lg);
   padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);
 }
-.ara-box:focus-within {
-  border-color: var(--accent);
+.ara-box:has(.ara-input:focus-visible) {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* ⚠️ **부모에 건 opacity 는 자손 전체에 곱해진다** — AUDIT-R4 의 `td { opacity:.45 }` 와 같은 병이다.
    여기 안에는 textarea 가 있고 꺼진 동안 그건 .ara-input:disabled(--text-dim)라, 이 한 줄이
@@ -8690,7 +8697,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   margin-top: var(--sp-3);
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
 }
@@ -8707,7 +8714,7 @@ button.sb-seg.upd:hover .val {
   min-width: 190px;
   background: var(--bg-overlay);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: var(--sp-2);
   z-index: 5;
   display: flex;
@@ -8840,9 +8847,10 @@ button.sb-seg.upd:hover .val {
   font: var(--fs-xl) var(--ui);
   text-align: center;
 }
-.wc-input:focus {
-  outline: none;
-  border-color: var(--accent);
+.wc-input:focus-visible {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* 어떻게 불릴지 미리 보여 준다 — 넣기 전에 알면 고쳐 쓰게 된다. */
 .wc-prev {
@@ -8872,10 +8880,10 @@ button.sb-seg.upd:hover .val {
    보고 있는 바로 그 순간을 미루고**, 350ms 는 UI 상한(300ms)도 넘었다. `shell.css` 에서 `ease-in`
    이 쓰인 유일한 자리이기도 했다(나머지는 왕복 모션의 `ease-in-out` 이라 맞다).
    ⚠️ `BootSplash.tsx` 의 언마운트 타이머와 **짝이다** — 한쪽만 고치면 사라지기 전에 언마운트되거나
-   빈 화면이 남는다. 지금은 둘 다 200ms(`--dur-pop`). */
+   빈 화면이 남는다. 지금은 둘 다 150ms(`--dur-exit`, 2026-10-08 — 퇴장은 등장보다 짧다). */
 .boot.out {
   opacity: 0;
-  transition: opacity var(--dur-pop) ease-out;
+  transition: opacity var(--dur-exit) ease-out;
   pointer-events: none;
 }
 /* 가운데에서 번지는 빛 — 배 한 척이 어둠에서 떠오르는 느낌. */
@@ -8921,7 +8929,7 @@ button.sb-seg.upd:hover .val {
 }
 /* 출처 — 있는 것만 그린다. 지어낸 출처를 박아 두면 그게 사내에 그대로 퍼진다. */
 .boot-by {
-  color: var(--text-dim);
+  color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
   animation: boot-up 0.7s ease-out both;
