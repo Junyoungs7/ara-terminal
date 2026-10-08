@@ -2645,6 +2645,11 @@
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
+/* 1.0.22 QA: 부모 .bp-tabscroll 이 overflow-x:auto(→ y 도 auto)라 바깥 링이 위·아래로 4px 잘려 `( )` 로
+   보였다. 트리 행처럼 안쪽으로 그린다. */
+.bp-tab:focus-visible {
+  outline-offset: var(--focus-ring-inset);
+}
 /* 아라가 "여기 보세요" 하고 연 탭(2026-08-26). 패널만 조용히 열리면 사용자는 답만 읽고 화면이
    바뀐 걸 모른다 — 몇 초만 눈에 띄게 하고 사라진다(계속 깜빡이면 그게 더 거슬린다). */
 .bp-tab.flash {
@@ -3551,6 +3556,13 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: var(--sp-3) var(--sp-5);
+}
+/* 1.0.22 QA: 안쪽 input 이 outline:none 이라 포커스가 와도 아무 표시가 없었다(연결·포트 모니터·프로필 검색).
+   .tb-omni·.pw-wrap 과 같은 구조 — 링은 껍데기가 그린다. */
+.sb-search .field:has(input:focus-visible) {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .sb-search .field svg {
   width: var(--sb-icon);
@@ -5052,10 +5064,18 @@ button.sb-seg.upd:hover .val {
    포커스 링이 두 겹 그려졌다: 껍데기(.dd.open .dd-btn)에 하나, 안쪽 입력 박스에 또 하나.
    안쪽 것은 패딩 박스(0 10px 안쪽)에 맞춰 그려져 라운드가 어긋나 보인다. 링은 껍데기만 그린다. */
 .dd-btn .dd-input,
-.dd-btn .dd-input:focus {
+.dd-btn .dd-input:focus,
+.dd-btn .dd-input:focus-visible {
   border: none;
   border-radius: 0;
   box-shadow: none;
+  /* 1.0.22 QA: `.fld input:focus-visible` 의 outline 이 여기까지 와 두 겹이 다시 났다 — 링은 껍데기가 그린다. */
+  outline: none;
+}
+.dd-btn:has(.dd-input:focus-visible) {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .dd-btn .dd-caret {
   display: grid;
