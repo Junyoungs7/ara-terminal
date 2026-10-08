@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { SidebarState } from '@shared/types'
+import { isBottomId, type BottomId, type SidebarState } from '@shared/types'
 
 // R4.3 사이드바 상태 단일 소스. ui.sidebar{width,collapsed,activeTab} 스키마는 F1부터 있었지만
 // 아무도 읽지 않는 죽은 필드였고 폭은 CSS 고정이었다. useFont 와 같은 형태로:
@@ -81,6 +81,34 @@ export function revealAiTab(args: {
   return { patch: go ? { activeTab: 'ai' } : null, known }
 }
 
+/**
+ * workspace.json 의 ui.sidebar(손으로 고쳤거나 옛 앱이 쓴 값)를 화면 상태로. 파일은 신뢰 경계 밖이다 —
+ * 모르는 탭·범위 밖 폭·모르는 하단 탭은 기본값으로 눌러 담는다.
+ */
+export function hydrateSidebar(s: Partial<SidebarState>): SidebarState {
+  // FB-ui2: 옛 스냅샷의 activeTab='monitor'(이관 전 세 번째 탭)는 conn 으로 되돌린다 —
+  // 안 그러면 두 탭 다 active 매치가 안 돼 사이드바가 빈 채로 뜬다.
+  const activeTab = s.activeTab === 'file' || s.activeTab === 'ai' ? s.activeTab : 'conn'
+  const next: SidebarState = {
+    ...DEFAULT_SIDEBAR,
+    ...s,
+    collapsed: s.collapsed === true,
+    activeTab,
+    width: clampSidebarWidth(typeof s.width === 'number' ? s.width : DEFAULT_SIDEBAR.width)
+  }
+  // #13: null(접힘)·알려진 탭만 남긴다. 그 밖은 "저장된 적 없음"으로 — 옛 동작으로 돌아간다.
+  if (!(s.bottom === null || (typeof s.bottom === 'string' && isBottomId(s.bottom as BottomId)))) delete next.bottom
+  return next
+}
+
+/**
+ * #13 첫 세션이 생길 때 하단 패널을 무엇으로 열까. 지난번에 **접고 끝냈으면(null) 열지 않는다** —
+ * 사용자가 끈 것을 앱이 되돌리면 안 된다. 저장된 적 없으면(undefined) 옛 동작(보던 탭 = fallback).
+ */
+export function bootBottom(saved: BottomId | null | undefined, fallback: BottomId): BottomId | null {
+  return saved === null ? null : (saved ?? fallback)
+}
+
 export function useSidebar() {
   const [sidebar, setSidebar] = useState<SidebarState>(DEFAULT_SIDEBAR)
   // ① 자동 전환의 기억 둘. 상태가 아니라 **판정 재료**라 ref 다 — 바뀌었다고 다시 그릴 것이 없다.
@@ -91,19 +119,21 @@ export function useSidebar() {
   const cur = useRef(sidebar)
   cur.current = sidebar
 
+  // #13: 하이드레이트가 끝났나. 하단 패널 저장·첫 세션 자동 열기가 이걸 기다린다 — 그 전에 돌면
+  // 기본값(저장된 적 없음)으로 판정하고, 저장된 "접힘"을 덮어쓴다.
+  const [loaded, setLoaded] = useState(false)
+
   // 초기 하이드레이트. 옛 스냅샷에 sidebar 가 없거나 폭이 범위 밖이면 기본값으로 눌러 담는다.
   useEffect(() => {
-    window.ev?.workspace
+    if (!window.ev) return setLoaded(true)
+    window.ev.workspace
       .load()
       .then((snap) => {
         const s = snap.ui.sidebar
-        if (!s) return
-        // FB-ui2: 옛 스냅샷의 activeTab='monitor'(이관 전 세 번째 탭)는 conn 으로 되돌린다 —
-        // 안 그러면 두 탭 다 active 매치가 안 돼 사이드바가 빈 채로 뜬다.
-        const activeTab = s.activeTab === 'file' || s.activeTab === 'ai' ? s.activeTab : 'conn'
-        setSidebar({ ...DEFAULT_SIDEBAR, ...s, activeTab, width: clampSidebarWidth(s.width ?? DEFAULT_SIDEBAR.width) })
+        if (s) setSidebar(hydrateSidebar(s))
       })
       .catch(() => {})
+      .finally(() => setLoaded(true))
   }, [])
 
   // 갱신 + 영속. 함수형 patch 를 받는 이유: 접기 토글이 단축키 이펙트 안에서 현재 값을 필요로 한다.
@@ -143,5 +173,5 @@ export function useSidebar() {
   // 드래그 중(매 mousemove)에는 저장하지 않고 화면만 바꾼다 — 놓을 때 update 로 한 번 저장한다.
   const preview = useCallback((width: number) => setSidebar((prev) => ({ ...prev, width })), [])
 
-  return { sidebar, update, preview, revealAi }
+  return { sidebar, loaded, update, preview, revealAi }
 }

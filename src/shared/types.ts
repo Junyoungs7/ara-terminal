@@ -439,7 +439,18 @@ export type UiPrefs = {
 // W1 F9: 'monitor'(포트 모니터) 탭이 세 번째로 붙었었다.
 // FB-ui2: 모니터를 우측 액티비티 바로 이관하면서 사이드바에는 다시 conn/file 두 탭만 남았다.
 // 옛 스냅샷에 'monitor' 가 남아 있을 수 있어 읽는 쪽(store/sidebar.ts)이 그 값을 conn 으로 되돌린다.
-export type SidebarState = { collapsed: boolean; activeTab: 'conn' | 'file' | 'ai'; width: number }
+export type SidebarState = {
+  collapsed: boolean
+  activeTab: 'conn' | 'file' | 'ai'
+  width: number
+  /**
+   * #13(2026-10-08): 하단 도구 패널 — 탭 이름 = 그 탭으로 열려 있었다, null = 접혀 있었다,
+   * 미지정 = 저장된 적 없음(옛 동작: 첫 세션이 생기면 [포트]로 연다). 사이드바와 같은 툴윈도우
+   * 접힘이라 새 채널 대신 ui:setSidebar 에 얹었다.
+   * 🔴 선택 필드라 `SCHEMA_VERSION` 은 그대로다(UiState.termCompletion 주석).
+   */
+  bottom?: BottomId | null
+}
 
 export type UiState = {
   sidebar: SidebarState
