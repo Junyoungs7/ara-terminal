@@ -17,11 +17,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const { safeWc } = require('./_harnessGuard.cjs')
 const { join } = require('node:path')
-const { writeFileSync, mkdirSync } = require('node:fs')
+const { writeFileSync, mkdirSync, mkdtempSync } = require('node:fs')
+const { tmpdir } = require('node:os')
 const pty = require('node-pty')
 
 app.commandLine.appendSwitch('disable-gpu')
 app.disableHardwareAcceleration()
+// 🔴 실제 %APPDATA%/A.R.A 를 건드리지 않는다 — 매번 새 임시 프로필
+app.setPath('userData', mkdtempSync(join(tmpdir(), 'ara-manual-shots-')))
 
 const ROOT = join(__dirname, '..')
 const OUT = join(ROOT, 'out')
@@ -36,9 +39,9 @@ const VERSION = require(join(ROOT, 'package.json')).version
 const bumpPatch = (v) => { const p = v.split('.'); p[2] = String(Number(p[2]) + 1); return p.join('.') }
 const NEXT_VERSION = bumpPatch(VERSION) // 업데이트 알림용 "다음 버전" — 지금 버전보다 낮으면 안 된다
 
-// ── 합성 데이터 — 사내 서버명·IP 는 허용(사이트가 사내망 전용), 사람 이름·이메일·전화번호·
+// ── 합성 데이터 — IP 는 RFC 5737 문서용 주소(192.0.2.x), 사람 이름·이메일·전화번호·
 // 주민번호 모양·실제 비밀번호는 한 글자도 없다 ──
-const PROFILE = { id: 'p1', name: '배포서버', host: '10.20.30.15', port: 22, username: 'deploy', group: '운영', auth: { type: 'password', secretRef: { store: 'vault', key: 'p1' } } }
+const PROFILE = { id: 'p1', name: '배포서버', host: '192.0.2.15', port: 22, username: 'deploy', group: '운영', auth: { type: 'password', secretRef: { store: 'vault', key: 'p1' } } }
 const SRV_CWD = '/srv/배포'
 const SRV_ENTRIES = [
   { name: 'releases', type: 'dir', size: 0, mtime: Date.now() },

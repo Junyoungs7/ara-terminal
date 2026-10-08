@@ -77,7 +77,7 @@ const TELEMETRY_MS = 2500 // 제품과 같은 값(LocalTelemetry/RemoteTelemetry
 
 // ── 합성 데이터 ─────────────────────────────────────────────────────────────
 const PROFILE = {
-  id: 'p1', name: '배포서버', host: '10.20.30.15', port: 22, username: 'deploy', group: '운영',
+  id: 'p1', name: '배포서버', host: '192.0.2.15', port: 22, username: 'deploy', group: '운영',
   auth: { type: 'password', secretRef: { store: 'vault', key: 'p1' } }
 }
 // 실사용 최악값에 가깝게 — 유휴 서버도 리슨 포트가 이 정도는 된다.

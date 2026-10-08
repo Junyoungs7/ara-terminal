@@ -32,7 +32,7 @@ let lastClip = null
 const PROFILE = {
   id: 'p1',
   name: '배포서버',
-  host: '10.20.30.15',
+  host: '192.0.2.15',
   port: 22,
   username: 'deploy',
   group: '운영',
@@ -122,7 +122,7 @@ const tick = (n) =>
 
 // 좁은 레일에서 반드시 가로로 넘치는 한 줄 — 실제 제보 상황(긴 명령)과 같은 모양.
 const LONG_CMD =
-  'docker run --rm -it -v /srv/배포/releases:/data -e NODE_OPTIONS=--max-old-space-size=4096 --network host ghcr.io/verygood/deploy-runner:2026.09 bash -lc "npm ci && npm run build && rsync -az --delete dist/ deploy@10.20.30.15:/srv/배포/current/"'
+  'docker run --rm -it -v /srv/배포/releases:/data -e NODE_OPTIONS=--max-old-space-size=4096 --network host ghcr.io/verygood/deploy-runner:2026.09 bash -lc "npm ci && npm run build && rsync -az --delete dist/ deploy@192.0.2.15:/srv/배포/current/"'
 
 const results = {}
 
