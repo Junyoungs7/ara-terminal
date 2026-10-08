@@ -3919,6 +3919,21 @@ button.sb-seg.upd:hover .val {
   direction: rtl;
   text-align: left;
 }
+/* `direction: rtl` 로 앞을 자르는 경로 칸 다섯 곳 — 그대로 두면 bidi 가 맨 앞 `/`(방향 없는 글자)를 오른쪽
+   끝으로 보내 `/srv/배포` 가 `srv/배포/` 로 보인다(1.0.22 QA). 양끝에 LRM 을 세워 글자 순서는 왼→오로 묶고,
+   잘리는 쪽(앞)은 rtl 그대로 둔다. */
+.set-dir-path::before,
+.set-dir-path::after,
+.sess-node .sess-cwd::before,
+.sess-node .sess-cwd::after,
+.fav-node .fav-p::before,
+.fav-node .fav-p::after,
+.wp-path::before,
+.wp-path::after,
+.ara-hd .cwd::before,
+.ara-hd .cwd::after {
+  content: '\200E';
+}
 .sess-node.active .sess-cwd {
   color: var(--accent-bright);
 }
