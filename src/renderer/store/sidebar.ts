@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isBottomId, type BottomId, type SidebarState } from '@shared/types'
+import { cleanConnCollapsed, isBottomId, type BottomId, type SidebarState } from '@shared/types'
 
 // R4.3 사이드바 상태 단일 소스. ui.sidebar{width,collapsed,activeTab} 스키마는 F1부터 있었지만
 // 아무도 읽지 않는 죽은 필드였고 폭은 CSS 고정이었다. useFont 와 같은 형태로:
@@ -98,7 +98,36 @@ export function hydrateSidebar(s: Partial<SidebarState>): SidebarState {
   }
   // #13: null(접힘)·알려진 탭만 남긴다. 그 밖은 "저장된 적 없음"으로 — 옛 동작으로 돌아간다.
   if (!(s.bottom === null || (typeof s.bottom === 'string' && isBottomId(s.bottom as BottomId)))) delete next.bottom
+  // #13 연결 트리 접힘: 모양·크기만 남긴다. 없으면 키도 없다(옛 파일 = 전부 펼침).
+  if ('connCollapsed' in s) next.connCollapsed = cleanConnCollapsed(s.connCollapsed)
   return next
+}
+
+/**
+ * #13 하이드레이트 경합. `workspace.load()` 가 끝나기 전에 update 가 불리면 그 결과는
+ * DEFAULT_SIDEBAR 위에 얹힌 값이다 — 그걸 저장하면 디스크의 접힘이 기본값으로 덮인다.
+ * 그래서 로드 전에는 **저장하지 않고 patch 만 모아 두었다가**, 로드가 끝나면 하이드레이트 값 위에
+ * 다시 얹고 그때 한 번 저장한다.
+ */
+export function sidebarPersist(save: (s: SidebarState) => void) {
+  let loaded = false
+  let pending: Partial<SidebarState> | null = null
+  return {
+    /** update 가 바꾼 결과. 같은 delta 를 두 번 받아도(StrictMode) 결과가 같다. */
+    changed(next: SidebarState, delta: Partial<SidebarState>): void {
+      if (loaded) save(next)
+      else pending = { ...pending, ...delta }
+    },
+    /** 로드 끝. 화면에 둘 값을 돌려준다. 두 번째 호출부터는(StrictMode 이중 이펙트) base 그대로. */
+    hydrated(base: SidebarState): SidebarState {
+      loaded = true
+      if (!pending) return base
+      const next = { ...base, ...pending }
+      pending = null
+      save(next)
+      return next
+    }
+  }
 }
 
 /**
@@ -122,34 +151,39 @@ export function useSidebar() {
   // #13: 하이드레이트가 끝났나. 하단 패널 저장·첫 세션 자동 열기가 이걸 기다린다 — 그 전에 돌면
   // 기본값(저장된 적 없음)으로 판정하고, 저장된 "접힘"을 덮어쓴다.
   const [loaded, setLoaded] = useState(false)
+  // 하네스(ui:setSidebar 미배선)에서 unhandled rejection 이 나지 않게 삼킨다.
+  const [persist] = useState(() => sidebarPersist((s) => void window.ev?.ui.setSidebar(s).catch(() => {})))
 
   // 초기 하이드레이트. 옛 스냅샷에 sidebar 가 없거나 폭이 범위 밖이면 기본값으로 눌러 담는다.
   useEffect(() => {
-    if (!window.ev) return setLoaded(true)
+    if (!window.ev) {
+      persist.hydrated(DEFAULT_SIDEBAR)
+      return setLoaded(true)
+    }
     window.ev.workspace
       .load()
-      .then((snap) => {
-        const s = snap.ui.sidebar
-        if (s) setSidebar(hydrateSidebar(s))
+      .then((snap) => snap.ui.sidebar)
+      .catch(() => undefined)
+      .then((s) => {
+        setSidebar(persist.hydrated(s ? hydrateSidebar(s) : DEFAULT_SIDEBAR))
+        setLoaded(true)
       })
-      .catch(() => {})
-      .finally(() => setLoaded(true))
-  }, [])
+  }, [persist])
 
   // 갱신 + 영속. 함수형 patch 를 받는 이유: 접기 토글이 단축키 이펙트 안에서 현재 값을 필요로 한다.
   const update = useCallback((patch: Partial<SidebarState> | ((prev: SidebarState) => Partial<SidebarState>)) => {
     setSidebar((prev) => {
-      const next = { ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }
+      const delta = typeof patch === 'function' ? patch(prev) : patch
+      const next = { ...prev, ...delta }
       // ① 자동 전환이 이걸 뺏지 않게, **[AI] 아닌 것으로 바꾼** 순간을 기억한다. 손으로 고른 것
       // (레일·단축키)만이 아니라 앱이 보여 주기로 한 것(붙여넣기 업로드 → [파일])도 같이 센다 —
       // 둘 다 "지금 사용자 눈이 거기 있다"는 뜻이고, 뺏으면 안 되는 이유가 같다.
       // 같은 prev 를 두 번 봐도 결과가 같아(멱등) StrictMode 이중 호출이 문제되지 않는다.
       if (next.activeTab !== prev.activeTab && next.activeTab !== 'ai') switchedAt.current = Date.now()
-      // 하네스(ui:setSidebar 미배선)에서 unhandled rejection 이 나지 않게 삼킨다.
-      window.ev?.ui.setSidebar(next).catch(() => {})
+      persist.changed(next, delta)
       return next
     })
-  }, [])
+  }, [persist])
 
   /**
    * ① AI 가 목록에 새로 떴다 — 사이드바를 [AI] 로. 판정은 `revealAiTab` 혼자 한다.

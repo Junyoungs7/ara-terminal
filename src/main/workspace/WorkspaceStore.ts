@@ -3,7 +3,7 @@
 // 저장: 30초 디바운스 주기 flush + before-quit 동기 flush 이중화. atomic + .bak.
 import type {
   DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile, AiCliRecent } from '@shared/types'
-import { SCHEMA_VERSION } from '@shared/types'
+import { cleanConnCollapsed, SCHEMA_VERSION } from '@shared/types'
 import { aiSessionsOf } from '@shared/aiSession'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
@@ -176,7 +176,10 @@ export class WorkspaceStore {
 
   // ── 사이드바 폭·접힘·활성 탭(R4.3). 드래그 중이 아니라 놓았을 때만 오므로 저빈도 → 즉시 flush. ──
   setSidebar(sidebar: SidebarState): void {
-    this.snapshot.ui.sidebar = sidebar
+    // #13 connCollapsed 는 렌더러(신뢰 경계 밖)에서 온다 — 모양·크기만 남긴다.
+    const next = { ...sidebar }
+    if ('connCollapsed' in next) next.connCollapsed = cleanConnCollapsed(next.connCollapsed)
+    this.snapshot.ui.sidebar = next
     this.flush()
   }
 

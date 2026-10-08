@@ -1531,6 +1531,9 @@ export function Shell() {
           onMoveProfile={(id, group) => void moveProfileToGroup(id, group)}
           onGroupLayout={saveGroupLayout}
           onNotice={(msg) => mainRef.current?.toast(msg)}
+          // #13 연결 트리 접힘 — 사이드바 접힘과 같은 자리(ui.sidebar)에 저장한다.
+          connCollapsed={sidebar.connCollapsed}
+          onConnCollapsed={(connCollapsed) => updateSidebar({ connCollapsed })}
           cwdBy={cwdBy}
           onCloseSession={(id: string) => mainRef.current?.closeSession(id)}
           // F25: rdp 세션에는 파일 트리를 붙이지 않는다(SFTP·로컬 fs 대상이 아니다).

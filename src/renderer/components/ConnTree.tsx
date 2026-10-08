@@ -82,6 +82,9 @@ type Props = {
   onGroupLayout?: (next: GroupLayout) => void
   /** 못 놓는 자리에 놓았을 때 이유를 띄울 자리(메인 영역 토스트). 없으면 조용히 무시된다. */
   onNotice?: (msg: string) => void
+  /** #13 접어 둔 노드(true 만). 주인은 Shell 의 useSidebar — 재시작 후에도 남는다. */
+  connCollapsed?: Record<string, true>
+  onConnCollapsed?: (next: Record<string, true>) => void
 }
 
 // #193 끌고 있는 것. **세션은 여기 없다** — 세션을 옮기는 규약은 탭·패널 쪽에 이미 있고
@@ -209,16 +212,24 @@ export function ConnTree({
   groupLayout,
   onMoveProfile,
   onGroupLayout,
-  onNotice
+  onNotice,
+  connCollapsed,
+  onConnCollapsed
 }: Props) {
   // #82: 트리 키보드 조작(↑↓ 이동 · →← 펼침 · Enter 실행). 접힘 상태의 주인은 이 컴포넌트라
   // 훅은 트위스티를 눌러 토글만 일으킨다.
   const treeRef = useRef<HTMLDivElement>(null)
   const treeKeys = useRowKeys(treeRef, { selector: '[role="treeitem"]', twisty: '.tw, .caret' })
-  // 접힘 상태는 **저장하지 않는다**(#193 에서 다시 물어 온 것 — 지금까지도 저장하지 않았다).
-  // 키가 그룹 **이름**이라 저장하면 이름 변경·삭제 때마다 유령 키가 남고, 그걸 걷는 코드가
-  // 배치(order·parents)와 따로 또 필요해진다. 얻는 것은 창을 다시 열었을 때의 접힘 한 겹뿐이다.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // #13(2026-10-08 오류 신고): 접힘을 **저장한다**(ui.sidebar.connCollapsed). #193 때는 유령 키가
+  // 싫어 안 했지만, 재시작마다 다 펼쳐지는 쪽이 신고로 왔다. 유령 키(지운·바꾼 그룹 이름)는 걷지
+  // 않는다 — 접힌 것만(true) 담고 CONN_COLLAPSED_MAX 로 상한을 둬 무한히 자라지 않게 한 것으로 끝.
+  // 검색은 접힘을 건드리지 않는다(일시 펼침 없음) — 그래서 저장되는 것은 손으로 접고 편 것뿐이다.
+  const collapsed: Record<string, boolean> = connCollapsed ?? {}
+  const setCollapsed = (fn: (c: Record<string, boolean>) => Record<string, boolean>): void => {
+    const next: Record<string, true> = {}
+    for (const [k, v] of Object.entries(fn(collapsed))) if (v) next[k] = true
+    onConnCollapsed?.(next)
+  }
   const [menu, setMenu] = useState<
     { x: number; y: number; kind: TreeMenuKind; target: TreeTarget; tmuxSessionId?: string } | null
   >(null)

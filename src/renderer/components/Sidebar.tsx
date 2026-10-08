@@ -114,6 +114,8 @@ export function Sidebar({
   onMoveProfile,
   onGroupLayout,
   onNotice,
+  connCollapsed,
+  onConnCollapsed,
   cwdBy,
   onCloseSession,
   fileSession,
@@ -153,6 +155,8 @@ export function Sidebar({
   onMoveProfile?: (profileId: string, group: string | undefined) => void
   onGroupLayout?: (next: GroupLayout) => void
   onNotice?: (msg: string) => void
+  connCollapsed?: Record<string, true>
+  onConnCollapsed?: (next: Record<string, true>) => void
   // 세션 카드에 현재 작업 위치를 적고(세션이 여럿일 때 이름만으론 구분이 안 된다) ✕ 로 종료한다.
   cwdBy?: Record<string, string>
   onCloseSession?: (sessionId: string) => void
@@ -230,6 +234,8 @@ export function Sidebar({
           onMoveProfile={onMoveProfile}
           onGroupLayout={onGroupLayout}
           onNotice={onNotice}
+          connCollapsed={connCollapsed}
+          onConnCollapsed={onConnCollapsed}
           cwdBy={cwdBy}
           onCloseSession={onCloseSession}
         />

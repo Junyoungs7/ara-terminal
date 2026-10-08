@@ -450,6 +450,27 @@ export type SidebarState = {
    * 🔴 선택 필드라 `SCHEMA_VERSION` 은 그대로다(UiState.termCompletion 주석).
    */
   bottom?: BottomId | null
+  /**
+   * #13(2026-10-08): 연결 트리에서 **접어 둔** 노드(그룹 이름 · `__fav` · `__local` · `node:<id>`).
+   * 접힌 것만 담는다(true). 펼침이 기본이라 없는 키 = 펼침. 사이드바 접힘과 같은 툴윈도우 상태라
+   * 같은 채널(ui:setSidebar)에 얹었다. 🔴 선택 필드 — `SCHEMA_VERSION` 그대로.
+   */
+  connCollapsed?: Record<string, true>
+}
+
+/** connCollapsed 상한. 지운 그룹 이름이 남아도 무한히 자라지 않게 — 넘치면 앞(오래된 것)을 버린다. */
+export const CONN_COLLAPSED_MAX = 500
+
+/**
+ * connCollapsed 를 신뢰 경계 밖(파일·렌더러)에서 받을 때. `true` 인 문자열 키만, 최대
+ * CONN_COLLAPSED_MAX 개(뒤쪽 = 최근 것을 남긴다). 읽는 쪽(store/sidebar.ts)과 쓰는 쪽(WorkspaceStore)이 같이 쓴다.
+ */
+export function cleanConnCollapsed(v: unknown): Record<string, true> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+  const keys = Object.keys(v).filter((k) => k.length <= 300 && (v as Record<string, unknown>)[k] === true)
+  const out: Record<string, true> = {}
+  for (const k of keys.slice(-CONN_COLLAPSED_MAX)) out[k] = true
+  return out
 }
 
 export type UiState = {
