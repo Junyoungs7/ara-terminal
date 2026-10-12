@@ -33,6 +33,70 @@ export type AiRun = {
   exitedAt?: number
 }
 
+/**
+ * 이 탭에서 **지금 AI 가 돈다고 아는가.** 참이면 그 셸에 명령을 쳐 넣으면 셸이 아니라
+ * **AI 의 질문 칸**에 들어간다(`cd … && claude` 가 질문으로 전송된다).
+ *
+ * 근거는 둘뿐이다 — 아라에는 "셸이 프롬프트에 서 있나"를 말해 주는 신호(OSC 133·전경 프로세스
+ * 이름)가 **없다**(osc7.ts 는 cwd 만 싣는다). 그래서 vim·빌드가 돌고 있는 셸은 못 가린다:
+ *  · 훅 상태가 하나라도 있다 — `unverifiable` 도 포함한다(`/clear` 는 SessionEnd 만 쏘고 프로세스는
+ *    산다). 내려간 CLI 의 상태는 `forgetAiSession` 이 이미 지웠다.
+ *  · 우리가 띄운 실행 기록이 아직 안 내려갔다 — 훅 첫 마디 전의 claude, 훅이 없는 codex·gemini.
+ *    ponytail: codex·gemini 는 종료 신호가 없어 한 번 띄운 셸은 계속 "도는 중"이다 → 다음 실행은
+ *    새 탭으로 간다. 남의 질문 칸에 치는 것보다 탭 하나 더가 싸다. 그 CLI 에 훅이 생기면 풀린다.
+ */
+export function aiBusyIn(sessionId: string, runs: readonly AiRun[], statuses: readonly AgentStatus[]): boolean {
+  if (statuses.some((s) => s.sessionId === sessionId)) return true
+  const run = runs.find((r) => r.sessionId === sessionId)
+  return run !== undefined && run.exitedAt === undefined
+}
+
+/** AI CLI 를 어디서 띄우나. `place` 는 서버(profileId) 또는 `local` — 최근 목록·작업대 기록의 키다. */
+export type AiLaunchPlan =
+  | { kind: 'type'; sessionId: string; place: string }
+  | { kind: 'newLocal'; place: string }
+  | { kind: 'newRemote'; place: string }
+
+/**
+ * 2026-10-12 준영님 결정(대안): **새 AI 세션을 띄우지 않고 그 셸에 친다.** Ctrl+C 로 끝내면 같은
+ * 셸로 돌아오고(#15), 셸 기동을 기다릴 일도 없다.
+ *
+ *  · 후보(우클릭한 세션 · 단축키면 활성 세션)가 **그 자리**(서버·로컬)의 셸이고 AI 가 안 돌면 → 거기 친다
+ *  · AI 가 돌거나 RDP 거나 다른 서버면 → 같은 자리에 **보통 새 탭**을 열고 거기 친다
+ *
+ * `want` 는 부르는 쪽이 자리를 정했을 때(작업대·트리의 서버 행)의 값이다. 없으면 후보의 자리.
+ * 자리를 모르면(후보 없음·RDP 인데 자리도 안 줌) null — 아무 데서나 띄우지 않는다.
+ */
+export function planAiLaunch(
+  cand: { id: string; type: string; profileId?: string | null } | undefined,
+  want: string | undefined,
+  busy: boolean,
+  local: string
+): AiLaunchPlan | null {
+  const candPlace = !cand ? undefined : cand.type === 'local' ? local : cand.type === 'ssh' ? (cand.profileId ?? undefined) : undefined
+  const place = want ?? candPlace
+  if (!place) return null
+  if (cand && candPlace === place && !busy) return { kind: 'type', sessionId: cand.id, place }
+  return place === local ? { kind: 'newLocal', place } : { kind: 'newRemote', place }
+}
+
+/**
+ * 작업대 줄 ↔ 탭. 같은 폴더·같은 CLI 를 띄운 **살아 있는 탭**의 실행 기록.
+ * `live`(훅 상태)를 주면 AI 가 **지금** 그 탭에서 도는 것만 — 셸은 AI 보다 오래 살아서, 안 거르면
+ * AI 가 내려간 셸을 가리킨 채 줄이 `확인 불가` 로 굳는다. 거른 줄은 `쉬는 중` 이 된다.
+ * 다시 띄울 때는 `live` 없이 불러 **그 셸**을 찾는다 — 누를 때마다 새 탭이 쌓이지 않는다.
+ */
+export function benchRunOf(
+  b: { cwd: string; engine: string },
+  runs: readonly AiRun[],
+  alive: ReadonlySet<string>,
+  live?: readonly AgentStatus[]
+): AiRun | undefined {
+  return runs.find(
+    (r) => alive.has(r.sessionId) && r.path === b.cwd && r.cli === b.engine && (!live || aiBusyIn(r.sessionId, runs, live))
+  )
+}
+
 /** 훅이 말해 준 상태 넷 + 세션이 사라진 자리. */
 export type AiState = AgentState | 'gone'
 
@@ -211,7 +275,11 @@ export function useAiSessions(active: boolean) {
     const t = setInterval(() => void tick(), POLL_MS)
     const offAgent = subscribeAgent(() => void tick())
     // 사용자가 끝낸 세션의 **제거**는 상태와 다른 창구로 온다(shared/ipc.ts 의 `agent.onExit`).
-    const offExit = window.ev?.agent.onExit(forgetAiSession)
+    // 셸은 남는다 — 스냅샷의 AI 표시만 걷는다(안 걷으면 다음 부팅에 끝난 AI 의 [이어서 시작] 카드가 뜬다).
+    const offExit = window.ev?.agent.onExit((id) => {
+      forgetAiSession(id)
+      void window.ev?.session.setAiCli(id, null)
+    })
     listeners.add(tick)
     return () => {
       clearInterval(t)

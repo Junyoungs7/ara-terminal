@@ -32,7 +32,6 @@ import { UpdateProgress } from './UpdateProgress'
 let bootSplashShown = false
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
-import { aiRuns } from '../store/aiSessions'
 import { setSessionState, useSessionStates } from '../store/sessionState'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
@@ -100,7 +99,8 @@ type MainAreaProps = {
    * 끼운다). sshRestore 와 같은 결의 주입이다: 띄우는 일은 Shell 이 하고(플래그·최근 목록이 거기
    * 있다), 화면 자리를 바꾸는 일은 여기서 한다.
    */
-  onResumeAi?: (cli: AiCliId, cwd: string) => Promise<string | null>
+  /** sessionId: 카드가 얹힌 셸 — 거기 친다(2026-10-12). 돌려준 id 가 같으면 갈아 끼울 것이 없다. */
+  onResumeAi?: (cli: AiCliId, cwd: string, sessionId?: string) => Promise<string | null>
   // R5 설정 창 [정보] 섹션에 찍을 앱 버전(Shell 이 app.getVersion 으로 이미 들고 있다).
   version: string
   // 활성 세션의 OSC7 cwd(Shell 이 구독). 저장 트리거로만 쓴다 — cwd 가 바뀌면 스냅샷의 세션 cwd 도
@@ -775,13 +775,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         .map((s) =>
           window.ev?.session.onExit(s.id, () => {
             if (closedByUser.current.delete(s.id)) return // 사용자가 닫은 것 — 조용히 보낸다
-            // D(#168) **AI 탭은 끊긴 게 아니라 끝난 것이다.** 그 세션의 프로세스가 곧 CLI 라
-            // (셸이 아니다) CLI 가 나가면 세션도 나간다 — 정상 종료다. 여기에 [재접속] 을 내면
-            // 거짓말이고, 눌러도 돌아오는 것은 AI 가 아니라 맨 셸이다. TerminalPane 의
-            // `[프로세스 종료 — code N]` 한 줄이 맞는 결과다(나간 것을 조용히 지우지 않는다).
-            // 대가: 이 탭이 **진짜로** 네트워크 때문에 끊겨도 카드가 안 뜬다. 다시 띄우는 자리는
-            // 작업대(#129)이고, 그 줄이 이 세션을 이미 알고 있다.
-            if (aiRuns().some((r) => r.sessionId === s.id)) return
+            // (D(#168) 의 "AI 탭은 끝난 것" 예외는 2026-10-12 에 걷었다 — AI 는 이제 셸 안에서 돌고,
+            // 셸이 끊긴 것은 AI 가 돌았든 아니든 끊긴 것이다.)
             // 탭의 점도 함께 바뀐다(#166) — 칸 머리는 아래 오류 카드로 이미 알지만 탭은
             // restoreErrors 를 안 본다. 두 자리가 같은 사실을 다르게 그리면 그게 다음 제보다.
             setSessionState(s.id, 'lost')
@@ -844,9 +839,16 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         if (err.aiCli) {
           const cell = layout.cells.find((c) => c.sessionId === errId)
           if (cell) layout.focus(cell.id)
-          const id = err.cwd ? await onResumeAi?.(err.aiCli, err.cwd) : null
+          // 카드 아래 셸이 살아 있으면 그 셸에 친다(2026-10-12 — AI 는 셸 안에서 돈다).
+          const here = list.some((x) => x.id === errId) ? errId : undefined
+          const id = err.cwd ? await onResumeAi?.(err.aiCli, err.cwd, here) : null
           if (!id) {
             showToast(t('restore.resumeFailed'))
+            return
+          }
+          if (id === errId) {
+            clearError(errId)
+            select(id)
             return
           }
           layout.replaceSession(errId, id)

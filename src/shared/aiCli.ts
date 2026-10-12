@@ -380,11 +380,8 @@ export function buildRemoteAiCommand(cmd: AiCommand, path: string): string | nul
  * 화면의 "보낼 명령" 미리보기와 실제 전송 문자열은 **이 함수의 같은 반환값**이다 —
  * 셸이 갈리면 미리보기도 갈려야 한다(PowerShell 대상인데 `cd … &&` 를 보여 주면 거짓말이다).
  *
- * ⚠️ **D(#168)이 마지막 제품 소비자를 가져갔다**(Shell.runAiCliNow 가 위 ②로 옮겼다). 지금 이
- * 함수를 부르는 것은 `tests/aiCli.test.ts` 뿐이다 — 그 검사가 지키는 인용 규칙(`cdThen`)은
- * `buildRemoteAiCommand` 가 그대로 쓰므로 값이 남아 있다. 걷어내려면 `LaunchShell` 의
- * powershell·cmd 갈래와 `app:launchShell` IPC(이미 부르는 화면이 없다)까지 함께 가야 한다 —
- * 이 라운드의 일이 아니다. 새로 부르지 마라: 세션을 띄우는 길은 ②다.
+ * 2026-10-12: **다시 제품 경로다** — Shell.runAiCliNow 가 이 한 줄을 그 셸에 친다(D(#168) 의
+ * "새 AI 세션"을 되돌렸다). 로컬 셸 종류는 `app:launchShell`(PtyBackend.defaultLaunchShell)이 정한다.
  */
 export function buildLaunch(o: LaunchOptions): string | null {
   const cmd = aiCommandOf(o)

@@ -12,7 +12,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { request as httpRequest } from 'node:http'
 import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
 import { HOOK_PANE_HEADER, HOOK_TOKEN_HEADER } from '../src/main/agent/claudeHooks'
-import { aiRuns, forgetAiRun, forgetAiSession, registerAiRun, viewsOf } from '../src/renderer/store/aiSessions'
+import { aiRuns, benchRunOf, forgetAiRun, forgetAiSession, registerAiRun, viewsOf } from '../src/renderer/store/aiSessions'
 import { benchRows, groupRows, hookRows } from '../src/renderer/store/aiWorkbench'
 import type { AiSessionState } from '../src/shared/aiSession'
 import type { Session } from '../src/shared/types'
@@ -181,13 +181,12 @@ describe('저장된 작업대 — Ctrl+D 뒤에도 그 탭을 잃지 않는다',
     lastUsedAt: 1_700_000_000_000
   }
 
-  /** Shell.tsx 가 하는 그대로: 살아 있는 탭 중 폴더·CLI 가 맞는 실행 기록을 찾는다. */
+  /** Shell.tsx 가 하는 그대로(`benchRunOf` — AI 가 **지금** 도는 탭만). */
   const rowsOf = (alive: readonly Session[], statuses: Parameters<typeof viewsOf>[2]) => {
     const live = new Set(alive.map((s) => s.id))
     const seen = new Map(viewsOf(aiRuns(), alive, statuses).map((v) => [v.run.sessionId, v]))
     return benchRows([bench], {
-      sessionOf: (b) =>
-        aiRuns().find((r) => live.has(r.sessionId) && r.path === b.cwd && r.cli === b.engine)?.sessionId ?? null,
+      sessionOf: (b) => benchRunOf(b, aiRuns(), live, statuses)?.sessionId ?? null,
       seen: (sid) => seen.get(sid) ?? null,
       serverOf: () => '로컬',
       pathExists: () => true,
@@ -199,7 +198,10 @@ describe('저장된 작업대 — Ctrl+D 뒤에도 그 탭을 잃지 않는다',
     for (const r of aiRuns()) forgetAiRun(r.sessionId)
   })
 
-  it('★ 탭이 살아 있으면 `확인 불가` 다 — `쉬는 중` 이 아니다', async () => {
+  // 2026-10-12: AI 가 이제 **셸 안에서** 돈다(Shell.runAiCliNow). 셸은 AI 보다 오래 살아서, 옛 규칙
+  // (탭이 살아 있으면 `확인 불가`)대로면 AI 가 끝난 셸을 가리킨 줄이 영영 `확인 불가` 로 굳는다.
+  // 이제는 `쉬는 중` 이고, 눌러도 새 탭이 아니라 **그 셸**에 다시 친다(Shell.openBench → benchRunOf).
+  it('★ AI 가 내려가면 셸이 살아 있어도 `쉬는 중` — 다시 띄우는 자리는 그 셸이다', async () => {
     const { port, server, exited } = await serve()
     registerAiRun({ sessionId: 'pane-1', cli: 'claude', path: 'D:/work/app', startedAt: Date.now() })
     await postHook(port, 'pane-1', 'PreToolUse')
@@ -211,10 +213,11 @@ describe('저장된 작업대 — Ctrl+D 뒤에도 그 탭을 잃지 않는다',
     for (const id of exited) forgetAiSession(id)
 
     const rows = rowsOf([shell('pane-1')], server.statuses())
-    // ① 묶음이 고정된다: 탭이 살아 있는 한 `확인 불가` 다.
-    expect(groupRows(rows).map((g) => g.id)).toEqual(['unverifiable'])
-    // ② 그리고 누르면 **그 탭으로 간다** — 새로 띄우지 않는다(`onOpen` 이 sessionId 를 받는다).
-    expect(rows[0]!.sessionId).toBe('pane-1')
+    // ① 셸은 남았지만 AI 는 없다 → `쉬는 중`.
+    expect(groupRows(rows).map((g) => g.id)).toEqual(['idle'])
+    expect(rows[0]!.sessionId).toBeNull()
+    // ② 누르면 **그 셸**에 다시 친다 — 새 탭이 쌓이지 않는다(실행 기록은 지우지 않았다).
+    expect(benchRunOf(bench, aiRuns(), new Set(['pane-1']))?.sessionId).toBe('pane-1')
   })
 
   it('탭까지 닫히면 그때는 `쉬는 중` 이다 — 저장된 작업대의 제자리', async () => {

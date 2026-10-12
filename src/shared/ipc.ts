@@ -38,7 +38,7 @@ import type {
   ReportSendResult
 } from './bugReport'
 import type { AgentHookState, AgentStatus } from './agentStatus'
-import type { AiCliRecent, AiCommand } from './aiCli'
+import type { AiCliId, AiCliRecent, AiCommand } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
@@ -231,6 +231,8 @@ export type InvokeContract = {
   // 탭 이름 변경(R2.1). main 의 meta.title 이 진실이라(persist 가 session:list 를 저장한다)
   // 여기서 갱신해야 재시작 후에도 이름이 남는다.
   'session:rename': { req: { id: string; title: string }; res: { ok: true } }
+  // 이 셸에서 지금 어느 AI CLI 가 도나(null = 내려갔다). 스냅샷에 실려 재시작 뒤 [이어서 시작] 카드의 단서가 된다.
+  'session:setAiCli': { req: { id: string; aiCli: AiCliId | null }; res: { ok: true } }
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 rename 한 세션(manualTitle)에는 적용하지 않는다 —
   // applied=false 면 렌더러도 탭 라벨을 그대로 둔다.
   'session:autoTitle': { req: { id: string; title: string }; res: { applied: boolean; title?: string } }
@@ -907,6 +909,7 @@ export type EvApi = {
     destroy(id: string): Promise<{ ok: true }>
     list(): Promise<Session[]>
     rename(id: string, title: string): Promise<{ ok: true }>
+    setAiCli(id: string, aiCli: AiCliId | null): Promise<{ ok: true }>
     autoTitle(id: string, title: string): Promise<{ applied: boolean; title?: string }>
     // onData 구독 직후 호출 — 지금까지의 출력(backlog)을 받고 그 다음부터 라이브 이벤트가 온다.
     attach(id: string): Promise<{ backlog: Uint8Array }>

@@ -16,7 +16,7 @@ import type {
   UpdateState
 } from '@shared/ipc'
 import type { AgentStatus } from '@shared/agentStatus'
-import type { AiCommand, LaunchShell } from '@shared/aiCli'
+import type { AiCliId, AiCommand, LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
 import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
@@ -273,6 +273,7 @@ const api: EvApi = {
     destroy: (id: string) => ipcRenderer.invoke('session:destroy', { id }),
     list: (): Promise<Session[]> => ipcRenderer.invoke('session:list'),
     rename: (id: string, title: string) => ipcRenderer.invoke('session:rename', { id, title }),
+    setAiCli: (id: string, aiCli: AiCliId | null) => ipcRenderer.invoke('session:setAiCli', { id, aiCli }),
     autoTitle: (id: string, title: string) => ipcRenderer.invoke('session:autoTitle', { id, title }),
     attach: (id: string) => ipcRenderer.invoke('session:attach', { id }),
     pause: (id: string) => ipcRenderer.send('session:pause', { id }),

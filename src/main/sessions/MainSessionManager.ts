@@ -249,6 +249,16 @@ export class MainSessionManager implements ISessionManager {
     h.meta.manualTitle = true
   }
 
+  // 셸에 쳐 넣은 AI CLI 가 도는 동안만 남긴다 — 스냅샷에 실려 다음 부팅의 [이어서 시작] 카드가 된다.
+  // 렌더러가 보낸 값이라 표에 있는 이름만 받고, 그 밖의 값(null 포함)은 지운다.
+  setAiCli(id: string, aiCli: unknown): void {
+    const h = this.handles.get(id)
+    if (!h) return
+    const v = aiCliOf(aiCli)
+    if (v) h.meta.aiCli = v
+    else delete h.meta.aiCli
+  }
+
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 이름을 바꾼 세션은 건드리지 않는다.
   // 적용 여부를 돌려줘 렌더러 탭 라벨과 어긋나지 않게 한다.
   /** 받아들인 제목을 돌려준다(다듬은 뒤의 값 — 탭은 **이 값**을 그려야 main 과 어긋나지 않는다). 거절이면 null. */
