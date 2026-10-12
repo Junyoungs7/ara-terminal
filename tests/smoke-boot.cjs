@@ -900,7 +900,7 @@ const checks = []
     const nanumLoaded = document.fonts.check('13px "Nanum Gothic Coding"')
     const d2Loaded = document.fonts.check('13px "D2Coding"')
     const jbLoaded = document.fonts.check('13px "JetBrains Mono"')
-    const pretendardLoaded = document.fonts.check('13px "SUIT"')
+    const pretendardLoaded = document.fonts.check('13px "Pretendard"')
     // @font-face src 가 로컬 assets(번들)인지 — CDN(http) 참조가 없어야 함.
     const faces = [...document.fonts].map(f => f.family)
     // R5→FB-ui2: 설정 창 열기 — 탭바 버튼도, 타이틀바 기어도 사라졌으므로 우측 액티비티 바(진입점 ①)를 쓴다.
@@ -969,7 +969,7 @@ const checks = []
   checks.push(['번들 나눔고딕코딩 로드(오프라인)', f5.nanumLoaded === true])
   checks.push(['번들 D2Coding 로드(오프라인)', f5.d2Loaded === true])
   checks.push(['번들 JetBrains Mono 로드(오프라인)', f5.jbLoaded === true])
-  checks.push(['번들 SUIT(UI) 로드(오프라인)', f5.pretendardLoaded === true])
+  checks.push(['번들 Pretendard(UI) 로드(오프라인)', f5.pretendardLoaded === true])
   checks.push(['설정 창 열림(우측 액티비티 바)', f5.drawerOpen === true])
   checks.push([
     // F23 이 [MCP] 섹션을 추가하면서 여기 어서션 갱신을 빠뜨려 8섹션인데 7섹션을 기대하고 있었다 — 정리.

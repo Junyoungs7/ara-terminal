@@ -16,7 +16,9 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 
 > **2026-10-08 family-core 1단계 — 아라·Jarvis 공용 디자인 시스템의 첫 단계.** 준영님 승인.
 > 이번에 바뀐 것(값만 — 토큰 **이름**은 그대로, 역할 이름으로 바꾸는 것은 2단계에서 Jarvis 와 조율):
-> 1. **UI 글꼴 → SUIT Variable**(§2.1). Pretendard 정적 두 벌(1.56MB) → 가변 한 벌(0.62MB, wght 100–900).
+> 1. **UI 글꼴 → Pretendard Variable**(§2.1). Pretendard 정적 두 벌(1.56MB) → 가변 한 벌(2.06MB, wght 45–920).
+>    처음엔 SUIT Variable(0.62MB)로 갔으나 **2026-10-12 준영님 요청으로 Pretendard Variable 로 되돌림**
+>    (신고 #14 — 라틴 소문자 t 모양).
 > 2. **글자 대비 4.5 · 비텍스트 3.0**(§1.3·§1.4). hi·mid·lo 는 모든 배경에서 ≥4.5,
 >    `--text-dim` 은 placeholder·disabled 전용(3.5 유지). 액센트·포커스 링·의미색 × 배경 ≥3.0.
 >    `scan:magic` 이 셋 다 계산하고, dim 이 다른 자리에 쓰이면 세운다.
@@ -34,7 +36,7 @@ A.R.A는 **variant-4의 프로 고밀도 레이아웃**(얇은 chrome, 정보 �
 > 1. **표면이 따뜻한 회색 다크**(#1e1e20)가 됐다. 남색기를 뺐다 — 그 파랑기가 "터미널
 >    팔레트"로 읽히던 원인이다. 깊이는 선이 아니라 **면의 밝기 차이**로 만든다.
 > 2. **액센트가 시안 → 뮤트 앰버**(#c9a26d). 하루 종일 보는 화면이라 네온을 버렸다.
-> 3. **크롬 글꼴이 터미널에서 분리됐다.** `--ui`(그때 Pretendard, 2026-10-08 부터 SUIT) 고정 · `--mono` 고정 ·
+> 3. **크롬 글꼴이 터미널에서 분리됐다.** `--ui`(Pretendard — 2026-10-08~11 만 SUIT) 고정 · `--mono` 고정 ·
 >    `--term` 만 사용자 설정. 그전엔 `--mono === --term` 이라 사이드바·설정·표까지
 >    코딩용 고정폭이었고, 그게 "개발용 티"의 8할이었다.
 >
@@ -226,20 +228,21 @@ bright 는 같은 hue 를 **명도 +12~15% · 채도 −10%** 로 파생해, `ls
 
 | 변수 | 스택 | 용도 |
 |---|---|---|
-| `--ui` | `'SUIT', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif` | 모든 UI 텍스트 (메뉴, 라벨, 버튼, 노드명). **고정** — 설정에 없다 |
+| `--ui` | `'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif` | 모든 UI 텍스트 (메뉴, 라벨, 버튼, 노드명). **고정** — 설정에 없다 |
 | `--mono` | **고정** `'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace` | 경로·명령줄·로그 본문·에디터·키 표기·API 키 — *격자에 맞아야 뜻이 사는* 27곳. **터미널 설정을 따라가지 않는다**(2026-08-21) |
 | `--term` | `'ARA Nerd Font Symbols', 'ARA Narrow Enclosed', 'KR System', 'Nanum Gothic Coding', 'D2Coding', 'JetBrains Mono', 'Consolas', monospace` (기본값 — 설정에서 바꿀 수 있음) | 터미널 본문 (한글 고정폭 정렬) |
 
-> **2026-10-08 family-core — UI 글꼴 SUIT Variable.** `resources/fonts/SUIT-Variable.woff2`(0.62MB,
-> wght 100–900 가변, OFL — `OFL-SUIT.txt`). Pretendard Regular/Bold(1.56MB)와 그 @font-face 는 지웠다
-> → 설치본에서 **약 0.93MB 감소**. 가변이라 500·600 이 진짜 굵기로 그려진다(정적 두 벌 시절엔
-> 400/700 으로 반올림). ⚠️ 이 파일은 **완성형 2,668자 서브셋**이다(Pretendard 는 11,172자).
-> 앱 문자열의 한글은 전부 들어 있지만(실측) 사용자가 입력한 드문 음절과 일부 기호
-> (— – ‹ › ⌘ ⇧ ⌥ ⏎ ✗ ≠ 등)는 스택 뒤의 Segoe UI·맑은 고딕이 그린다 — 그래서 둘을 명시했다.
+> **UI 글꼴 Pretendard Variable.** `resources/fonts/PretendardVariable.woff2`(2.06MB, npm pretendard
+> 1.3.9 의 `dist/web/variable` 전체판, wght 45–920 가변, 한글 11,172자 전부, OFL — `OFL-Pretendard.txt`).
+> 2026-10-08 family-core 에서 SUIT Variable(0.62MB, 완성형 2,668자 서브셋)로 갈았다가
+> **2026-10-12 준영님 요청으로 Pretendard Variable 로 되돌림**(신고 #14 — 라틴 소문자 t 모양).
+> 정적 Regular/Bold 두 벌로 돌아가지 않았다 — 그 시절엔 500·600 이 400/700 으로 반올림됐다.
+> 가변 한 벌이라 400·500·600·700 이 전부 진짜 굵기다. Pretendard 에 없는 기호(⌘ ⇧ ⌥ ⏎ 등)는
+> 스택 뒤의 Segoe UI·맑은 고딕이 그린다 — 그래서 둘을 명시했다.
 > JetBrains Mono 는 정적 TTF 처럼 보이지만 **wght 100–800 가변**이라(fontTools 로 확인)
 > `font-weight: 100 800` 이 맞다. jarvis-v2 의 woff2(40KB)는 cmap 229자 서브셋이라 터미널
 > 박스 그리기가 빠져 갈지 않았다.
-> 사이트(`site/assets`)와 홍보 영상(`video/`)은 아직 Pretendard 다 — 별도 라운드.
+> 사이트(`site/assets`)도 같은 파일을 쓴다. 홍보 영상(`video/`)은 처음부터 Pretendard 였다.
 
 > **⚠️ 아래 UI-font 문단은 2026-08-21 에 뒤집혔다**(`--mono` 는 고정, `--term` 만 설정을 따른다 —
 > 위 표). 역사로 남긴다.

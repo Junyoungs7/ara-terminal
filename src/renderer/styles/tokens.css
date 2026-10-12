@@ -267,9 +267,9 @@
   --press-dim: brightness(0.9);
 
   /* 폰트 (§2.1) — 전부 resources/fonts/ 번들(@font-face, styles/fonts.css). CDN 금지. */
-  /* 2026-10-08 family-core: Pretendard → SUIT Variable(fonts.css). SUIT 서브셋에 없는 드문 음절·
-     기호(— ⌘ ⇧ 등)는 Segoe UI/맑은 고딕이 받는다 — 그래서 둘을 명시한다. */
-  --ui: 'SUIT', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  /* 2026-10-12 Pretendard Variable(fonts.css, 2026-10-08~11 은 SUIT). Pretendard 에 없는
+     기호(⌘ ⇧ 등)는 Segoe UI/맑은 고딕이 받는다 — 그래서 둘을 명시한다. */
+  --ui: 'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
   /* --mono — **고정.** 크롬 안에서 고정폭이어야 하는 27곳이 쓴다(경로·명령줄·로그 본문·
      에디터·키 표기·API 키). 2026-08-21 부터 터미널 선택을 따라가지 않는다: 그 자리들은
      터미널이 아니라 **앱 화면**이고, 화면 글꼴이 설정에 따라 흔들리면 레이아웃도 흔들린다.

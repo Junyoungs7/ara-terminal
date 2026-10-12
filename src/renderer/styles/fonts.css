@@ -48,17 +48,17 @@
   src: url('../../../resources/fonts/JetBrainsMono-Regular.ttf') format('truetype');
 }
 
-/* UI 폰트 — SUIT Variable (sunn-us/SUIT) — SIL OFL. 변경 불가(터미널만 사용자 선택).
-   2026-10-08 family-core 1단계: Pretendard Regular/Bold(woff2 두 벌 1.56MB)를 **가변 한 벌**
-   (0.62MB)로 갈았다. 가변이라 400·500·600·700 이 전부 진짜 굵기로 그려진다 — 정적 두 벌
-   시절엔 500·600 이 400/700 으로 반올림됐다. ⚠️ 이 파일은 완성형 한글 2,668자 서브셋이다
-   (Pretendard 는 11,172자 전부). 그 밖의 드문 음절은 --ui 스택 뒤의 OS 글꼴(맑은 고딕)로 그려진다. */
+/* UI 폰트 — Pretendard Variable (orioncactus/pretendard 1.3.9) — SIL OFL. 변경 불가(터미널만 사용자 선택).
+   2026-10-08 SUIT Variable 로 갈았다가 2026-10-12 준영님 요청으로 되돌렸다(신고 #14 — 라틴 소문자 t 모양).
+   정적 Regular/Bold 두 벌이 아니라 **가변 한 벌**(wght 45–920, 2.06MB, 한글 11,172자 전부)이다 —
+   두 벌 시절엔 500·600 이 400/700 으로 반올림됐다. 서브셋판(dynamic-subset)이 아니라 전체판이라
+   드문 음절도 이 글꼴로 그려진다. */
 @font-face {
-  font-family: 'SUIT';
+  font-family: 'Pretendard';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 45 920;
   font-display: swap;
-  src: url('../../../resources/fonts/SUIT-Variable.woff2') format('woff2');
+  src: url('../../../resources/fonts/PretendardVariable.woff2') format('woff2');
 }
 
 /* ------------------------------------------------------------------------

@@ -5,15 +5,15 @@
    외부 CDN 을 쓰지 않는다 — 사내망에서 인터넷 없이 열려야 한다.
    ========================================================================== */
 
-/* SUIT Variable: 앱이 번들한 것과 같은 파일(resources/fonts/SUIT-Variable.woff2, OFL — fonts/OFL-SUIT.txt).
-   가변 글꼴 하나로 100~900 을 다 낸다. 사내망 오프라인에서도 뜬다. KS X 1001 2,350자만 담겨 있어
-   드문 음절은 --ui 스택 뒤의 맑은 고딕으로 그려진다(앱 fonts.css 와 같다). */
+/* Pretendard Variable: 앱이 번들한 것과 같은 파일(resources/fonts/PretendardVariable.woff2, OFL —
+   fonts/OFL-Pretendard.txt). 가변 글꼴 하나로 45~920 을 다 내고 한글 11,172자를 전부 담았다.
+   사내망 오프라인에서도 뜬다(앱 fonts.css 와 같다). */
 @font-face {
-  font-family: 'SUIT';
+  font-family: 'Pretendard';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 45 920;
   font-display: swap;
-  src: url('fonts/SUIT-Variable.woff2') format('woff2');
+  src: url('fonts/PretendardVariable.woff2') format('woff2');
 }
 
 :root {
@@ -63,7 +63,7 @@
   --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
   --shadow-hero: 0 60px 140px -40px rgba(0, 0, 0, 0.95);
 
-  --ui: 'SUIT', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  --ui: 'Pretendard', -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif;
   --mono: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
 
   --page: 1160px;

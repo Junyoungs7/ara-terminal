@@ -66,7 +66,7 @@ const COMPARE_ROWS: { label: string; source: string; stack: string; note?: strin
   { label: '나눔고딕코딩', source: '번들 · OFL', stack: "'Nanum Gothic Coding', monospace", best: true },
   { label: 'D2Coding', source: '번들 · OFL', stack: "'D2Coding', monospace" },
   { label: 'JetBrains Mono', source: '번들 · OFL', stack: "'JetBrains Mono', monospace", note: '한글은 폴백 렌더' },
-  { label: 'SUIT', source: '번들 · UI', stack: "'SUIT', sans-serif", note: '비고정폭 — UI 전용' }
+  { label: 'Pretendard', source: '번들 · UI', stack: "'Pretendard', sans-serif", note: '비고정폭 — UI 전용' }
 ]
 
 const COMPARE_TEXT = '✔ 배포 완료: 백업_20260731.sql (성공) · ⚠ 결제/승인 retry 3/3'
@@ -1104,7 +1104,7 @@ export function SettingsDrawer({
               </Row>
 
               {/* 터미널 폰트 선택(라디오) — 2026-08-21 부터 **--term 하나만** 바꾼다.
-                  앱 화면 글꼴(--ui SUIT · --mono 나눔고딕코딩)은 고정이고 설정에 없다. */}
+                  앱 화면 글꼴(--ui Pretendard · --mono 나눔고딕코딩)은 고정이고 설정에 없다. */}
               <div className="set-sec-t">{t('settings.pick.title')}</div>
               <div className="set-sec-d">{t('settings.pick.desc')}</div>
               <div className="font-list">

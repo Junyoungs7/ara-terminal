@@ -19,9 +19,9 @@ export const LICENSES: FontLicense[] = [
     source: 'Google Fonts'
   },
   {
-    name: 'SUIT',
-    copyright: 'Copyright (c) 2022, SUNN',
-    source: 'sunn-us/SUIT'
+    name: 'Pretendard',
+    copyright: 'Copyright (c) 2021, Kil Hyung-jin',
+    source: 'orioncactus/pretendard'
   },
   // FINISH-M6(2026-08-30): FINISH-M4 가 심볼 폰트를 번들에 실으면서(styles/fonts.css 의
   // 'ARA Nerd Font Symbols' @font-face + resources/fonts/OFL-SymbolsNerdFontMono.txt) 이 표만
