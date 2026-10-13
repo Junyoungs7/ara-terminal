@@ -21,7 +21,23 @@
  */
 export const CLEAR_LINE = '\x05\x15'
 
-/** 줄을 비우고 명령을 **즉시 실행**한다(개행 포함). */
+/**
+ * 오류 신고 #16(1.0.25): 위 두 글자는 **readline(posix)** 의 키다. PowerShell(PSReadLine 윈도우 모드)·cmd 는
+ * 묶여 있지 않아 글자로 들어가 `^E^USet-Location` 이 되고 명령을 못 찾았다. 거기서 줄 비우기는 Esc 하나다
+ * (PSReadLine 윈도우 모드 = RevertLine, cmd/conhost = 줄 지우기).
+ * 🔴 **Esc 는 따로, 잠깐 뒤에 명령을 보낸다.** 같은 쓰기에 붙이면 ConPTY 가 `ESC W` 를 Alt+W 로 읽어
+ * 줄이 안 지워지고 첫 글자를 먹는다(2026-10-13 node-pty + powershell 실측: 붙이면 실패, 80ms 띄우면 성공).
+ * ponytail: PSReadLine 을 Emacs 모드로 바꾼 사람에게 Esc 는 Meta 접두다 — 그런 설정이 보이면 그때 셸 설정을 읽는다.
+ */
+export const CLEAR_LINE_WIN = '\x1b'
+export const WIN_CLEAR_GAP_MS = 80
+
+/** 줄을 비우고 명령을 **즉시 실행**한다(개행 포함). posix(원격 셸·tmux) 전용 — 윈도우 셸은 `commandChunks`. */
 export function commandLine(command: string): string {
   return CLEAR_LINE + command + '\r'
+}
+
+/** 셸에 맞춰 보낼 조각들. 조각 사이는 `WIN_CLEAR_GAP_MS` 를 띄운다(윈도우 셸의 Esc 때문). */
+export function commandChunks(command: string, shell: 'posix' | 'powershell' | 'cmd'): string[] {
+  return shell === 'posix' ? [commandLine(command)] : [CLEAR_LINE_WIN, command + '\r']
 }

@@ -35,7 +35,7 @@ import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
 import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, buildLaunch, resumeFlags, type AiCliId, type AiCommand } from '../../shared/aiCli'
-import { commandLine } from '../../shared/shellInput'
+import { commandChunks, WIN_CLEAR_GAP_MS } from '../../shared/shellInput'
 import { agentStatuses } from '../store/agentStatus'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
@@ -877,8 +877,11 @@ export function Shell() {
       const line = buildLaunch({ cli: engine, flags, path, shell })
       if (!line) return null
       const send = (sid: string): void => {
-        // 치던 줄을 비우고 보낸다(shellInput.commandLine — 반쯤 친 명령 뒤에 이어붙지 않게).
-        window.ev?.session.input(sid, commandLine(line))
+        // 치던 줄을 비우고 보낸다(shellInput.commandChunks — 반쯤 친 명령 뒤에 이어붙지 않게. 윈도우 셸은 Esc 를 따로).
+        commandChunks(line, shell).forEach((c, i) => {
+          if (i === 0) window.ev?.session.input(sid, c)
+          else setTimeout(() => window.ev?.session.input(sid, c), WIN_CLEAR_GAP_MS * i)
+        })
         // 최근 목록에는 **사용자가 고른 조합**(saved)을 남긴다 — 되살리며 우리가 끼운 `-c` 까지
         // 기억하면, 카드에서 한 번 이어 시작한 뒤로 평소 시작까지 조용히 `-c` 가 된다.
         aiCliRecent.record({ profileId: target, path, cli: engine, flags: saved })

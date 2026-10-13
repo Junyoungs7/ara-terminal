@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { aiBusyIn, aiRuns, benchRunOf, forgetAiRun, forgetAiSession, planAiLaunch, registerAiRun } from '../src/renderer/store/aiSessions'
 import { benchRows, groupRows } from '../src/renderer/store/aiWorkbench'
 import { AI_CLI_LOCAL, buildLaunch } from '../src/shared/aiCli'
-import { commandLine } from '../src/shared/shellInput'
+import { commandChunks, commandLine } from '../src/shared/shellInput'
 import type { AgentStatus } from '../src/shared/agentStatus'
 import type { AiSessionState } from '../src/shared/aiSession'
 
@@ -73,14 +73,20 @@ describe('치는 줄 = buildLaunch', () => {
     expect(buildLaunch({ ...o, shell: 'cmd' })).toMatch(/^cd \/d .* && claude --dangerously-skip-permissions$/)
     expect(buildLaunch({ ...o, path: '~/x', shell: 'posix' })).toBe("cd ~/'x' && claude --dangerously-skip-permissions")
     // 줄을 비우고 친다(반쯤 친 명령 뒤에 이어붙지 않게).
-    expect(commandLine(ps!)).toBe('\x05\x15' + ps + '\r')
+    // #16: 윈도우 셸에 readline 키(^E^U)를 보내면 글자로 들어가 명령을 못 찾는다. 윈도우 셸은 Esc 를
+    // **따로** 보낸다(같은 쓰기에 붙이면 ConPTY 가 Alt+글자로 읽는다 — 2026-10-13 실측), 그다음 명령.
+    expect(commandChunks(ps!, 'powershell')).toEqual(['\x1b', ps + '\r'])
+    expect(commandChunks('dir', 'cmd')).toEqual(['\x1b', 'dir\r'])
+    expect(commandChunks('ls', 'posix')).toEqual(['\x05\x15ls\r'])
+    expect(commandLine('ls')).toBe('\x05\x15ls\r')
+    expect(commandChunks(ps!, 'powershell').join('')).not.toMatch(/[\x05\x15]/)
   })
 
   it('Shell.runAiCliNow 는 그 한 줄을 그 셸에 친다 — 새 AI pty(command) 를 만들지 않는다', () => {
     const src = readFileSync(join(__dirname, '..', 'src/renderer/components/Shell.tsx'), 'utf8')
     const fn = src.slice(src.indexOf('const runAiCliNow = useCallback('), src.indexOf('runAiCliRef.current = runAiCliNow'))
     expect(fn).toMatch(/const line = buildLaunch\(\{ cli: engine, flags, path, shell \}\)/)
-    expect(fn).toMatch(/window\.ev\?\.session\.input\(sid, commandLine\(line\)\)/)
+    expect(fn).toMatch(/commandChunks\(line, shell\)\.forEach/)
     expect(fn).toMatch(/planAiLaunch\(/)
     expect(fn).not.toMatch(/command:/)
     expect(fn).not.toMatch(/aiCommandOf/)
