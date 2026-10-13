@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Cheatsheet } from './Cheatsheet'
 import { CommandBook } from './CommandBook'
 import { ContextMenu } from './ContextMenu'
-import { terminalMenu, type ActionId, type TerminalMenuCaps } from './actions'
+import { terminalMenu, wantsTerminalMenu, type ActionId, type TerminalMenuCaps } from './actions'
 import { matchBinding } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 
@@ -64,8 +64,7 @@ export function ContextInteractions({
   // 우클릭 → 커서 위치에 메뉴 전개. gridSelector 안에서만 반응.
   useEffect(() => {
     const onCtx = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null
-      if (!target || !target.closest(gridSelector)) return
+      if (!wantsTerminalMenu(e.target as HTMLElement | null, gridSelector)) return
       e.preventDefault()
       setList({ x: e.clientX, y: e.clientY })
       if (!activeIsSsh || !activeSessionId) {

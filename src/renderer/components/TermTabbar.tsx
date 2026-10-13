@@ -390,7 +390,7 @@ export function TermTabbar({
         open={tabMenu !== null}
         x={tabMenu?.x ?? 0}
         y={tabMenu?.y ?? 0}
-        items={treeMenu('tab')}
+        items={treeMenu(sessions.find((x) => x.id === tabMenu?.id)?.type === 'rdp' ? 'tabRdp' : 'tab')}
         onPick={(id) => {
           const target = tabMenu?.id
           setTabMenu(null)

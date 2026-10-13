@@ -168,6 +168,16 @@ function hintFor(id: ActionId): string | undefined {
  * `caps`: **그 일을 할 핸들러가 이 창에 있나**(#201 A-4). 없으면 항목을 아예 안 넣는다.
  * 안 주면 전부 보인다 — 본창은 넷 다 배선돼 있다.
  */
+/**
+ * 이 우클릭에 터미널 메뉴를 띄우나. 그리드 안이어도 **RDP 칸이면 아니다** — 원격 화면의 오른쪽
+ * 클릭은 원격 윈도우의 것이다(2026-10-13 준영님: "RDP 에서 우클릭하면 SSH 우클릭 리스트가 뜬다").
+ * ContextInteractions 가 window 에 contextmenu 를 걸어서, 캔버스의 React preventDefault 로는
+ * 이 메뉴가 안 막혔다(막는 건 브라우저 기본 메뉴뿐). 버튼 자체는 RdpView 의 mousedown/up 이 보낸다.
+ */
+export function wantsTerminalMenu(target: { closest(sel: string): unknown } | null, gridSelector: string): boolean {
+  return !!target && !!target.closest(gridSelector) && !target.closest('.rdp-view')
+}
+
 export function terminalMenu(tmux?: TmuxListResult | 'loading', caps?: TerminalMenuCaps): MenuItem[] {
   const has = (k: keyof TerminalMenuCaps): boolean => caps?.[k] ?? true
   const plain = (a: ContextAction): MenuItem => {
@@ -343,6 +353,9 @@ const TREE_MENUS = {
   // F32: [새 창으로] 는 탭에서만 연다 — 트리 세션 행에도 붙일 수 있지만, 창을 떼는 조작은
   // 탭을 잡고 하는 것이 자연스럽다(브라우저·IDE 가 다 그렇다).
   tab: ['session.rename', 'session.duplicate', 'session.detach', 'session.close', 'session.closeOthers'],
+  // RDP 탭: [복제]는 RDP 를 복제하지 못하고 새 로컬 셸을 열었고(MainArea.duplicateSession 은 ssh 만),
+  // [새 창으로]는 "RDP 는 분리할 수 없습니다" 안내만 띄웠다 — 누를 수 있는데 안 되는 항목을 뺀다.
+  tabRdp: ['session.rename', 'session.close', 'session.closeOthers'],
   // R6: 그룹 이름 변경(그룹 내 프로필 일괄 갱신) / 삭제(프로필은 "기타"로 이동).
   group: ['group.newConn', 'group.rename', 'group.delete'],
   // "기타"는 그룹이 아니라 그룹 미지정 프로필이 모이는 자리다 — 이름을 바꾸거나 지울 대상이 없다.
