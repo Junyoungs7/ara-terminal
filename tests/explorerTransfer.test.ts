@@ -86,13 +86,13 @@ describe('planCrossPanelTransfer — 원격↔원격(다른 서버)', () => {
   })
 })
 
-// 폴더는 어느 방향이든 스트림으로 못 옮긴다(파일 하나 = 스트림 하나). 그냥 넘기면 EISDIR 이
-// 전송 오류로 튀어나와 사용자가 원인을 알 수 없다 — planner 가 걸러 호출측이 안내하게 한다.
+// 서버↔서버는 폴더를 스트림으로 못 옮긴다(파일 하나 = 스트림 하나) — planner 가 걸러 호출측이 안내하게 한다.
+// 로컬→원격은 업로드가 폴더를 통째로 올리므로(SftpService.upload, #18 #19) 거르지 않는다.
 describe('planCrossPanelTransfer — 폴더 거르기', () => {
-  it('로컬→원격 업로드에서 폴더를 뺀다', () => {
+  it('로컬→원격 업로드는 폴더도 넘긴다 — 업로드가 폴더를 통째로 올린다(#18 #19)', () => {
     const plan = planCrossPanelTransfer(local('/a'), remote('s1', '/b'), [file('x.txt'), dir('sub')], 'copy')
     if (plan.kind !== 'localToRemote') throw new Error('localToRemote 여야 한다')
-    expect(plan.files.map((f) => f.name)).toEqual(['x.txt'])
+    expect(plan.files.map((f) => f.name)).toEqual(['x.txt', 'sub'])
   })
   it('로컬↔로컬은 폴더를 그대로 둔다 — fs.copy 가 재귀 복사한다', () => {
     const plan = planCrossPanelTransfer(local('/a'), local('/b'), [file('x.txt'), dir('sub')], 'copy')

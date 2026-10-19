@@ -68,9 +68,8 @@ export function planCrossPanelTransfer(
       kind: 'localToRemote',
       mode,
       sessionId: dest.session!.id,
-      // 폴더는 뺀다. 업로드는 스트림 하나가 파일 하나라 디렉토리 경로를 넘기면 EISDIR 이
-      // 전송 오류로 튀어나오고 사용자는 원인을 알 수 없다 — 호출측이 안내로 분기하게 한다.
-      files: targets.filter((f) => f.type === 'file').map((f) => ({ localPath: joinPath(src.path, f.name), name: f.name })),
+      // 폴더도 넘긴다 — 업로드(SftpService.upload)가 폴더면 통째로 올린다(오류 신고 #18 #19).
+      files: targets.map((f) => ({ localPath: joinPath(src.path, f.name), name: f.name })),
       remoteDir: dest.path
     }
   }

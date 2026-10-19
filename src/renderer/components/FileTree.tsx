@@ -835,8 +835,6 @@ export function FileTree({
     const plan = planCrossPanelTransfer({ session: fileClip.session, path: fileClip.dir }, { session, path: dir }, fileClip.entries, 'copy')
     if (plan.kind === 'local') return applyOp(await window.ev.fs.copy(plan.paths, plan.destDir))
     if (plan.kind === 'localToRemote') {
-      // 폴더는 업로드 스트림이 다루지 못한다(파일 하나 = 스트림 하나) — planner 가 걸러 준다.
-      if (plan.files.length === 0) return setError(t('file.paste.dirOnly'))
       return void uploadPaths(plan.files.map((f) => f.localPath))
     }
     if (plan.kind === 'remoteToRemote') {
