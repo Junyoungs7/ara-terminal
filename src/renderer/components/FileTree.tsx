@@ -26,7 +26,8 @@ import {
   IconTerminal,
   IconTrash,
   IconUp,
-  IconUpload
+  IconUpload,
+  IconFolderUpload
 } from './icons'
 import {
   IconAud,
@@ -314,10 +315,12 @@ export function FileTree({
 
   const load = useCallback(
     // fromHist: 뒤로/앞으로로 온 이동. 이력에 다시 쌓지 않는다(쌓으면 뒤로가 제자리를 맴돈다).
-    async (p: string, fromHist = false) => {
+    // keepError: 전송 큐가 끝나고 다시 읽을 때 — 방금 띄운 실패 문구를 걷어 가지 않는다(신고 #18/#19:
+    // "깜박이고 끝"은 이 새로고침이 문구를 그 자리에서 지운 것이었다).
+    async (p: string, fromHist = false, keepError = false) => {
       if (!backend) return
       setLoading(true)
-      setError(null)
+      if (!keepError) setError(null)
       const res = await backend.list(p).catch((e: Error) => ({ ok: false as const, message: e.message }))
       setLoading(false)
       setSel([])
@@ -461,6 +464,7 @@ export function FileTree({
       if (jobs.length === 0) return
       const items: QueueItem[] = jobs.map((j) => ({ id: newId('x-'), label: j.label, pct: 0 }))
       setQueue(items)
+      setError(null) // 지난 문구는 여기서 걷는다 — 끝의 새로고침은 이번 실패 문구를 남긴다
       for (let i = 0; i < jobs.length; i++) {
         const item = items[i]
         if (canceled.current.has(item.id)) continue
@@ -485,9 +489,9 @@ export function FileTree({
         }
       }
       setQueue([])
-      refresh()
+      void load(path, true, true)
     },
-    [refresh]
+    [load, path]
   )
 
   // 큐 항목 취소: 진행 중이면 main 에 취소 요청, 대기 중이면 루프가 건너뛴다.
@@ -681,7 +685,7 @@ export function FileTree({
        *    그때 `refresh()` 는 **올린 곳이 아닌 폴더**를 다시 읽어, 새 파일이 안 보이는 채로
        *    "새로고침했다"가 된다. 올린 곳을 열어 주는 것이 사용자가 기대하는 결과다.
        */
-      await load(dir, true)
+      await load(dir, true, true)
     },
     [sid, backend, runQueue, load]
   )
@@ -693,10 +697,13 @@ export function FileTree({
     return registerUploader({ sessionId: sid, upload: (paths) => void uploadPaths(paths), reveal: () => onReveal?.() })
   }, [sid, backend, uploadPaths, onReveal])
 
-  const pickAndUpload = useCallback(async () => {
-    const paths = await window.ev.sftp.pickUploadPaths()
-    await uploadPaths(paths)
-  }, [uploadPaths])
+  const pickAndUpload = useCallback(
+    async (dir = false) => {
+      const paths = await window.ev.sftp.pickUploadPaths(dir)
+      await uploadPaths(paths)
+    },
+    [uploadPaths]
+  )
 
   // ── 파일 조작 ──
   const commitRename = useCallback(
@@ -849,7 +856,7 @@ export function FileTree({
             })
         }))
       )
-      return refresh()
+      return // 다시 읽기는 runQueue 가 한다(실패 문구를 남긴 채로)
     }
     setError(
       t(
@@ -860,7 +867,7 @@ export function FileTree({
             : 'file.paste.empty'
       )
     )
-  }, [backend, uploadPaths, applyOp, session, runQueue, refresh])
+  }, [backend, uploadPaths, applyOp, session, runQueue])
 
   // ── 우클릭 메뉴 ──
   const openMenu = useCallback(
@@ -1182,8 +1189,13 @@ export function FileTree({
           </select>
         )}
         {backend.remote && (
-          <button type="button" className="sb-act" title={t('sftp.upload')} onClick={pickAndUpload}>
+          <button type="button" className="sb-act" title={t('sftp.upload')} onClick={() => void pickAndUpload()}>
             <IconUpload />
+          </button>
+        )}
+        {backend.remote && (
+          <button type="button" className="sb-act" title={t('sftp.uploadDir')} onClick={() => void pickAndUpload(true)}>
+            <IconFolderUpload />
           </button>
         )}
         {/* 2026-08-24 준영님: 자동 동기 안내가 **줄 하나를 상주로 잡아먹고** 있었다.

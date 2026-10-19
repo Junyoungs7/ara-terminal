@@ -183,8 +183,8 @@ const api: EvApi = {
     pickSavePath: (defaultName: string) =>
       ipcRenderer.invoke('sftp:pickSavePath', { defaultName }).then((r: { path: string | null }) => r.path),
     pickSaveDir: () => ipcRenderer.invoke('sftp:pickSaveDir').then((r: { path: string | null }) => r.path),
-    pickUploadPaths: () =>
-      ipcRenderer.invoke('sftp:pickUploadPaths').then((r: { paths: string[] }) => r.paths),
+    pickUploadPaths: (dir?: boolean) =>
+      ipcRenderer.invoke('sftp:pickUploadPaths', { dir }).then((r: { paths: string[] }) => r.paths),
     onProgress: (transferId: string, cb: (p: SftpProgress) => void) => {
       const ch = `sftp:progress:${transferId}`
       const listener = (_e: IpcRendererEvent, p: SftpProgress) => cb(p)

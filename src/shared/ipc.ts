@@ -431,7 +431,7 @@ export type InvokeContract = {
   'sftp:pickSavePath': { req: { defaultName: string }; res: { path: string | null } }
   // 다중 다운로드는 파일마다 저장 대화상자를 띄우지 않고 받을 폴더를 한 번만 고른다.
   'sftp:pickSaveDir': { req: void; res: { path: string | null } }
-  'sftp:pickUploadPaths': { req: void; res: { paths: string[] } }
+  'sftp:pickUploadPaths': { req: { dir?: boolean } | void; res: { paths: string[] } }
   // W1 텔레메트리(F9/F10). SSH 세션당 exec 채널 하나로 폴링하고, 구독이 0이 되면 멈춘다.
   // 구독 단위는 세션이라 start 를 두 번 불러도 폴러는 하나다.
   'telemetry:start': { req: { sessionId: string }; res: { ok: true } }
@@ -813,7 +813,7 @@ export type EvApi = {
     // 다중 다운로드용 저장 폴더 선택. 취소 시 null.
     pickSaveDir(): Promise<string | null>
     // 업로드할 로컬 파일 선택(드래그가 불가한 환경 폴백). 취소 시 null.
-    pickUploadPaths(): Promise<string[]>
+    pickUploadPaths(dir?: boolean): Promise<string[]> // dir: 폴더 고르기(Windows 는 한 대화상자에서 둘 다 못 고른다)
     // sftp:progress:{transferId} 구독. 해지 함수 반환.
     onProgress(transferId: string, cb: (p: SftpProgress) => void): () => void
   }

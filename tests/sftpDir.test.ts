@@ -188,6 +188,28 @@ describe('R15 폴더째 받기 (ssh2 하네스)', () => {
     expect(readdirSync(localDir)).toEqual([])
   })
 
+  // 신고 #18/#19: 폴더를 놓으면 파일 하나로 읽다가 실패했다. 진입점이 모두 upload() 로 오므로 그 길로 잰다.
+  it('🔴 폴더를 올리면 하위 구조째 — 빈 폴더까지, 같은 이름 원격 폴더는 그대로 두고 새 이름으로', async () => {
+    const src = join(localDir, 'a')
+    mkdirSync(join(src, 'b'), { recursive: true })
+    mkdirSync(join(src, 'e'))
+    writeFileSync(join(src, 'b', 'c.txt'), 'see')
+    writeFileSync(join(src, 'd.txt'), 'dee')
+    mkdirSync(join(remoteRoot, 'a'))
+    writeFileSync(join(remoteRoot, 'a', 'd.txt'), '원래 것')
+    const progress: SftpProgress[] = []
+    const r = await service(progress).upload('sid', 'u1', src, '/')
+    expect(r).toEqual({ ok: true })
+    const up = join(remoteRoot, 'a (2)')
+    expect(readFileSync(join(up, 'b', 'c.txt'), 'utf8')).toBe('see')
+    expect(readFileSync(join(up, 'd.txt'), 'utf8')).toBe('dee')
+    expect(readdirSync(join(up, 'e'))).toEqual([])
+    expect(readdirSync(join(remoteRoot, 'a'))).toEqual(['d.txt']) // 있던 폴더는 그대로
+    expect(readFileSync(join(remoteRoot, 'a', 'd.txt'), 'utf8')).toBe('원래 것')
+    const last = progress[progress.length - 1]
+    expect(last).toMatchObject({ transferId: 'u1', files: 2, fileTotal: 2, transferred: 6, total: 6 })
+  })
+
   it('받는 자리가 절대경로가 아니면 거절한다(렌더러 값은 신뢰 경계 밖)', async () => {
     const r = await service().downloadDir('sid', 'd7', '/배포', 'relative\\dir')
     expect(r).toMatchObject({ ok: false, message: '잘못된 경로입니다.' })

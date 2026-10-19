@@ -56,9 +56,11 @@ export function registerSftpIpc(
     const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     return { path: res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0] }
   })
-  // 업로드 파일 선택(드래그 불가 환경 폴백). 취소 시 빈 배열.
-  handle('sftp:pickUploadPaths', async () => {
-    const res = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+  // 업로드 파일 선택(드래그 불가 환경 폴백). 취소 시 빈 배열. dir: 폴더 고르기(신고 #18/#19).
+  handle('sftp:pickUploadPaths', async (req) => {
+    const res = await dialog.showOpenDialog({
+      properties: [req?.dir ? 'openDirectory' : 'openFile', 'multiSelections']
+    })
     return { paths: res.canceled ? [] : res.filePaths }
   })
 

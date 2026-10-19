@@ -106,6 +106,7 @@
   "sftp.path.edit": "경로 직접 입력",
   "sftp.refresh": "새로고침",
   "sftp.upload": "파일 업로드",
+  "sftp.uploadDir": "폴더 업로드",
   "sftp.download": "다운로드",
   "sftp.cancel": "전송 취소",
   "sftp.empty": "빈 폴더입니다",

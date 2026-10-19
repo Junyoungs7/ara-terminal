@@ -1,8 +1,8 @@
 // SftpService — 활성 SSH 세션의 ssh2 커넥션에서 sftp 서브시스템을 재사용한다(새 연결 금지, §C.0).
 // 계획서 §C F7: 디렉토리 리스팅(폴더 우선) / 스트림 업·다운로드(진행률·백프레셔) / 취소 + 부분 파일 정리(C-4).
 // 실패는 예외 대신 구조화 결과로 반환 → 트리 영역에 표시(앱 크래시 금지).
-import { createReadStream, createWriteStream } from 'node:fs'
-import { unlink, stat as fsStat, mkdir, rm } from 'node:fs/promises'
+import { createReadStream, createWriteStream, type Dirent } from 'node:fs'
+import { unlink, stat as fsStat, mkdir, rm, readdir as fsReaddir } from 'node:fs/promises'
 import { basename, isAbsolute, join, posix } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 import type { Client, SFTPWrapper, Stats } from 'ssh2'
@@ -452,8 +452,12 @@ export class SftpService {
     let sftp: SFTPWrapper
     let total = 0
     try {
+      const st = await fsStat(localPath)
+      // 신고 #18/#19: 폴더를 놓으면 파일 하나로 읽다가 실패했다 — 진입점(드롭·붙여넣기·대화상자·MCP)이
+      // 모두 여기로 오므로 갈림길도 여기 하나다.
+      if (st.isDirectory()) return this.uploadDir(sessionId, transferId, localPath, remoteDir)
       sftp = await this.sftp(sessionId)
-      total = (await fsStat(localPath)).size
+      total = st.size
     } catch (e) {
       return { ok: false, canceled: false, message: (e as Error).message, cleaned: false }
     }
@@ -477,6 +481,77 @@ export class SftpService {
     const cleanupRemote = () =>
       new Promise<boolean>((resolve) => sftp.unlink(remotePath, (err) => resolve(!err)))
     return this.pump(transferId, read, write, total, () => sftp.end(), remotePath, cleanupRemote)
+  }
+
+  /**
+   * 신고 #18/#19 폴더째 올리기: 로컬 localDir → remoteDir 아래 새 폴더. downloadDir 의 거울이다.
+   *  · 원격 폴더 이름은 freeRemotePath — 같은 이름이 있으면 `이름 (2)` 로 **새로** 만든다(섞지 않는다).
+   *  · 심볼릭 링크·파일도 폴더도 아닌 것은 따라가지 않고 건너뛴다. 파일 하나가 실패해도 계속, 끝에 밝힌다.
+   *  · 취소하면 만들던 원격 폴더를 통째로 지운다(방금 만든 빈 이름이라 남의 것이 없다).
+   *  · 큰 폴더 확인은 없다 — 사람이 직접 고른 폴더다.
+   */
+  async uploadDir(sessionId: string, opId: string, localDir: string, remoteDir: string): Promise<SftpXferResult> {
+    const rec: Transfer = { canceled: false, abort: () => {} }
+    this.transfers.set(opId, rec)
+    let sftp: SFTPWrapper
+    try {
+      sftp = await this.sftp(sessionId)
+    } catch (e) {
+      this.transfers.delete(opId)
+      return { ok: false, canceled: false, message: (e as Error).message, cleaned: false }
+    }
+    const sub = `${opId}:file`
+    rec.abort = () => this.cancel(sub)
+    const remoteMkdir = (p: string) =>
+      new Promise<void>((resolve, reject) => sftp.mkdir(p, (err) => (err ? reject(err) : resolve())))
+    const clear = async (root: string): Promise<boolean> =>
+      !root || (await this.removeOne(sftp, root, { canceled: false, abort: () => {} })).ok
+    let root = ''
+    try {
+      const plan = await scanLocalDir(localDir, rec)
+      if (rec.canceled) return { ok: false, canceled: true, message: '전송이 취소되었습니다.', cleaned: true }
+      const bytes = plan.files.reduce((n, f) => n + f.size, 0)
+      root = await this.freeRemotePath(sftp, remoteDir, basename(localDir) || 'upload')
+      await remoteMkdir(root)
+      for (const d of plan.dirs) await remoteMkdir(posix.join(root, d)) // 부모가 먼저 온다
+      const skippedNames = [...plan.skipped]
+      let done = 0
+      let got = 0
+      const fileTotal = plan.files.length
+      for (const f of plan.files) {
+        if (rec.canceled) break
+        const remote = posix.join(root, f.rel)
+        const r = await this.pump(
+          sub,
+          createReadStream(join(localDir, f.rel)),
+          sftp.createWriteStream(remote),
+          f.size,
+          () => {}, // 채널은 폴더가 끝날 때 한 번 닫는다(finally)
+          remote,
+          (p) => new Promise<boolean>((resolve) => sftp.unlink(p, (err) => resolve(!err))),
+          (n) => this.progress({ transferId: opId, transferred: done + n, total: bytes, files: got, fileTotal })
+        )
+        if (rec.canceled) break
+        if (r.ok) got++
+        else skippedNames.push(f.rel)
+        done += f.size
+        this.progress({ transferId: opId, transferred: done, total: bytes, files: got, fileTotal })
+      }
+      if (rec.canceled) return { ok: false, canceled: true, message: '전송이 취소되었습니다.', cleaned: await clear(root) }
+      // 못 올린 것을 삼키지 않는다 — 결과 형식(SftpXferResult)에 자리가 없어 실패 문구로 밝힌다.
+      if (skippedNames.length > 0) {
+        const more = skippedNames.length > 5 ? ' …' : ''
+        const message = `${skippedNames.length}개를 올리지 못했습니다 — ${skippedNames.slice(0, 5).join(', ')}${more}`
+        return { ok: false, canceled: false, message, cleaned: true }
+      }
+      return { ok: true }
+    } catch (e) {
+      const cleaned = rec.canceled || root ? await clear(root) : false
+      return { ok: false, canceled: rec.canceled, message: friendly(e as NodeJS.ErrnoException), cleaned }
+    } finally {
+      this.transfers.delete(opId)
+      sftp.end()
+    }
   }
 
   /**
@@ -714,6 +789,39 @@ export async function scanRemoteDir(
   }
   await walk('')
   // 읽지 못한 폴더는 만들지 않는다 — 빈 폴더가 "받았다"로 보인다.
+  plan.dirs = plan.dirs.filter((d) => !plan.skipped.includes(d + '/'))
+  return plan
+}
+
+/**
+ * 로컬 트리를 내려가며 센다(scanRemoteDir 의 거울). withFileTypes 의 Dirent 는 lstat 판정이라 링크는
+ * 링크로 보인다 — 따라가지 않는다(건너뛴 것으로 센다). 하위 폴더를 못 읽으면 건너뛰고, 맨 위를 못 읽으면 실패.
+ */
+async function scanLocalDir(localDir: string, rec: { canceled: boolean }): Promise<Omit<DirPlan, 'links'>> {
+  const plan: Omit<DirPlan, 'links'> = { dirs: [], files: [], skipped: [] }
+  const walk = async (rel: string): Promise<void> => {
+    if (rec.canceled) return
+    let list: Dirent[]
+    try {
+      list = await fsReaddir(rel ? join(localDir, rel) : localDir, { withFileTypes: true })
+    } catch (e) {
+      if (!rel) throw e
+      plan.skipped.push(rel + '/')
+      return
+    }
+    for (const d of list) {
+      const r = rel ? `${rel}/${d.name}` : d.name
+      if (d.isDirectory()) {
+        plan.dirs.push(r)
+        await walk(r)
+      } else if (d.isFile()) {
+        const size = await fsStat(join(localDir, r)).then((s) => s.size, () => -1)
+        if (size < 0) plan.skipped.push(r)
+        else plan.files.push({ rel: r, size })
+      } else plan.skipped.push(r) // 링크·소켓 등
+    }
+  }
+  await walk('')
   plan.dirs = plan.dirs.filter((d) => !plan.skipped.includes(d + '/'))
   return plan
 }
