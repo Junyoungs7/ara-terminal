@@ -24,7 +24,7 @@ import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { AI_MODELS_BY_PROVIDER, AI_PROVIDER_LABELS, type AiProvider } from '@shared/types'
 import type { AraTarget } from '@shared/araPersona'
-import { statusSegs, type AraContext, type AraLimits, type AraUsage } from '../store/araUsage'
+import { statusSegs, usageTitle, type AraContext, type AraLimits, type AraUsage } from '../store/araUsage'
 import { t } from '../i18n'
 
 // #125 아라 대화 v2 — **관제실**(설계 §9). 우측 레일의 그 자리에 산다.
@@ -907,8 +907,8 @@ export function AraChatPanel({
           <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />
           {t('ara.phase.' + phase)}
         </div>
-        {/* 상태줄(v3 #21) — 5시간 │ 주간 │ 맥락 │ 이번 대화. 좁으면 초기화 시간·대화 칸이 접힌다(CSS). */}
-        <div className="ara-us" data-field="ara.usage">
+        {/* 상태줄(#25) — 늘 한 줄: 5H ▬ 25% (2h38m) │ 주간 │ 맥락. 이번 대화 토큰·비용은 툴팁. 좁으면 CSS 가 막대를 접고 말줄임. */}
+        <div className="ara-us" data-field="ara.usage" title={segs[0]?.key === 'text' ? undefined : usageTitle(usage) || undefined}>
           {segs.map((g, i) => (
             <span className={'seg ' + g.key} key={g.key} data-seg={g.key}>
               {i > 0 && <i className="sep" />}
@@ -921,7 +921,7 @@ export function AraChatPanel({
                   <span className="v">{g.pct}%</span>
                 </>
               )}
-              {g.note && <span className={g.pct === null ? 'v' : 'rs'}>{g.pct === null ? g.note : `· ${g.note}`}</span>}
+              {g.note && <span className={g.pct === null ? 'v' : 'rs'}>{g.pct === null ? g.note : ` (${g.note})`}</span>}
             </span>
           ))}
         </div>

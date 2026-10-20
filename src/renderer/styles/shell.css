@@ -8875,12 +8875,10 @@ button.sb-seg.upd:hover .val {
   background: var(--err);
   color: var(--bg-canvas);
 }
-/* 상태줄(v3 #21) — 입력칸 밑 한 줄. 5시간(금)·주간(진한 금)·맥락(세이지) 막대. 좁으면 줄바꿈. */
+/* 상태줄(#25) — 입력칸 밑 **늘 한 줄**. 5H(금)·주간(진한 금)·맥락(세이지) 막대.
+   줄바꿈하지 않는다 — 좁으면(340px 미만) 주간·맥락 막대를 접고, 그래도 넘치면 말줄임.
+   칸은 inline 이어야 text-overflow 가 글자 단위로 자른다(inline-flex 는 통째 사라진다). */
 .ara-us {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-1) var(--sp-5);
   margin-top: var(--sp-3);
   padding-top: var(--sp-3);
   border-top: 1px solid var(--line);
@@ -8888,29 +8886,27 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-.ara-us .seg {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ara-us .sep {
+  display: inline-block;
   width: 1px;
   height: 10px;
-  margin-right: var(--sp-3);
+  margin: 0 var(--sp-3);
+  vertical-align: middle;
   background: var(--line-strong);
 }
 .ara-us .v {
   color: var(--text-mid);
 }
-.ara-us .seg.text {
-  white-space: normal;
-}
 .ara-us .mb {
   display: inline-block;
-  width: 34px;
+  width: 24px;
   height: 4px;
+  margin: 0 var(--sp-2);
+  vertical-align: middle;
   border-radius: 999px;
   background: var(--line-strong);
   overflow: hidden;
@@ -8926,16 +8922,14 @@ button.sb-seg.upd:hover .val {
 .ara-us .ctx .mb i {
   background: var(--ok);
 }
-/* 좁으면 덜 중요한 것부터 접는다 — 초기화 시간, 이번 대화, 구분선(목업 320px).
-   기준은 340px: 기본 폭 360px 은 다 보이고(줄바꿈 허용), 최소 폭 320px 쪽에서 접힌다. */
 @container (max-width: 340px) {
-  .ara-us .rs,
-  .ara-us .seg.conv,
-  .ara-us .sep {
+  .ara-us .week .mb,
+  .ara-us .ctx .mb {
     display: none;
   }
-  .ara-us {
-    gap: var(--sp-1) var(--sp-4);
+  .ara-us .week .v,
+  .ara-us .ctx .v {
+    margin-left: var(--sp-2);
   }
 }
 /* 상태는 입력칸 아래 아주 얇게. */

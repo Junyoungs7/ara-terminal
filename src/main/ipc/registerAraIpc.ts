@@ -10,6 +10,7 @@ import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
 import { araModelOf } from '@shared/aiModels'
+import { araLimitsOf } from '@shared/aiEngine'
 import type { AraTarget } from '@shared/araPersona'
 import { listAraChats, listApiChats, projectDir, readChatMessages } from '../ai/araChats'
 import { chatPath } from '../ai/apiChatLog'
@@ -70,7 +71,15 @@ export function registerAraIpc(
     ...deps,
     activeSession: () => active,
     savedModel: () => araModelOf(ws.get().ui.araModel),
-    emit: (e) => pushSend(getWebContents(), 'ara:event', e)
+    emit: (e) => {
+      // #24-1 한도는 Claude Code 가 답할 때만 온다 — 받은 것을 저장해 두고, 대화를 열면 곧바로 다시 보낸다.
+      if (e.t === 'limits') ws.setAraLimits({ five: e.five, week: e.week })
+      pushSend(getWebContents(), 'ara:event', e)
+      if (e.t === 'opened') {
+        const l = araLimitsOf(ws.get().ui.araLimits)
+        if (l) pushSend(getWebContents(), 'ara:event', { t: 'limits', ...l })
+      }
+    }
   })
 
   handle('ara:active', ({ active: next }) => {

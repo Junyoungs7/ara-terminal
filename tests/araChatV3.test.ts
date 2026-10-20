@@ -1,8 +1,8 @@
-// 아라 채팅 v3(2026-10-20, B안) — 맥락 파싱(#21), 상태줄 문구(#21), 선택지 표식(#23).
+// 아라 채팅 v3(2026-10-20, B안) — 맥락 파싱(#21), 상태줄 문구(#21·#25), 선택지 표식(#23), 저장 한도(#24-1), 새 세션 규칙(#24-2).
 import { describe, it, expect } from 'vitest'
-import { parseStreamJson } from '../src/shared/aiEngine'
+import { araLimitsOf, parseStreamJson } from '../src/shared/aiEngine'
 import { reduceChat, riskyChoice, splitChoices } from '../src/renderer/store/araChatItems'
-import { statusSegs } from '../src/renderer/store/araUsage'
+import { statusSegs, untilText, usageTitle } from '../src/renderer/store/araUsage'
 import { buildPersona } from '../src/shared/araPersona'
 
 describe('stream-json — 맥락', () => {
@@ -42,13 +42,31 @@ describe('stream-json — 맥락', () => {
 describe('상태줄 문구', () => {
   const now = 1_000_000_000_000
   const limits = { five: { pct: 42, resetsAt: now + 130 * 60_000 }, week: { pct: 17, resetsAt: now + (6 * 24 + 1) * 3_600_000 } }
-  it('한도 있음 — 5시간 · 주간(초기화) · 맥락 · 이번 대화 순서, 라벨은 풀어 쓴다', () => {
+  it('한 줄 칸 — 5H · 주간 · 맥락, 남은 시간은 짧은 꼴', () => {
     const s = statusSegs('cli', limits, { input: 40000, output: 2100, costUsd: 0.4211 }, { used: 530000, window: 1000000 }, now)
-    expect(s.map((g) => g.key)).toEqual(['five', 'week', 'ctx', 'conv'])
-    expect(s[0]).toEqual({ key: 'five', label: '5시간', pct: 42, note: '2시간 10분 뒤 초기화' })
-    expect(s[1]).toEqual({ key: 'week', label: '주간', pct: 17, note: '6일 1시간 뒤 초기화' })
-    expect(s[2]).toEqual({ key: 'ctx', label: '맥락', pct: 53, note: '' })
-    expect(s[3]).toEqual({ key: 'conv', label: '이번 대화', pct: null, note: '42.1k 토큰 · $0.42' })
+    expect(s).toEqual([
+      { key: 'five', label: '5H', pct: 42, note: '2h10m' },
+      { key: 'week', label: '주간', pct: 17, note: '6d1h' },
+      { key: 'ctx', label: '맥락', pct: 53, note: '' }
+    ])
+  })
+  it('짧은 시간 꼴 — 분만 · 시간+분 · 일+시간, 지났으면 빈 글', () => {
+    expect(untilText(now + 45 * 60_000, now)).toBe('45m')
+    expect(untilText(now + 158 * 60_000, now)).toBe('2h38m')
+    expect(untilText(now + (5 * 24 + 4) * 3_600_000, now)).toBe('5d4h')
+    expect(untilText(now - 1, now)).toBe('')
+  })
+  it('이번 대화 토큰·비용은 칸이 아니라 툴팁 글', () => {
+    expect(usageTitle({ input: 40000, output: 2100, costUsd: 0.4211 })).toBe('이번 대화 42.1k 토큰 · $0.42')
+    expect(usageTitle({ input: 980, output: 0, costUsd: null })).toBe('이번 대화 980 토큰')
+    expect(usageTitle(null)).toBe('')
+  })
+  it('resetsAt 이 지난 창은 0% · 괄호 없음(초기화됨)', () => {
+    const old = { five: { pct: 80, resetsAt: now - 1 }, week: { pct: 30, resetsAt: now + 60_000 } }
+    expect(statusSegs('cli', old, null, null, now)).toEqual([
+      { key: 'five', label: '5H', pct: 0, note: '' },
+      { key: 'week', label: '주간', pct: 30, note: '1m' }
+    ])
   })
   it('맥락 값이 하나라도 없으면 칸을 숨긴다', () => {
     expect(statusSegs('cli', limits, null, { used: 5, window: null }, now).map((g) => g.key)).toEqual(['five', 'week'])
@@ -62,6 +80,19 @@ describe('상태줄 문구', () => {
   it('API 모드는 한도가 와 있어도 토큰 줄', () => {
     const s = statusSegs('api', limits, { input: 10100, output: 2300, costUsd: null }, null, now)
     expect(s).toEqual([{ key: 'text', label: '', pct: null, note: '이번 대화 12.4k 토큰 (입력 10.1k · 출력 2.3k)' }])
+  })
+})
+
+describe('저장한 한도(ui.araLimits) 검사', () => {
+  it('정상 값은 그대로, 한쪽만 깨졌으면 그쪽만 null', () => {
+    const ok = { five: { pct: 25, resetsAt: 1700000000000 }, week: { pct: 22, resetsAt: null } }
+    expect(araLimitsOf(ok)).toEqual(ok)
+    expect(araLimitsOf({ five: { pct: 'x', resetsAt: 1 }, week: { pct: 22, resetsAt: null } })).toEqual({ five: null, week: { pct: 22, resetsAt: null } })
+  })
+  it('깨진 값은 무시(null)', () => {
+    for (const bad of [undefined, null, 'x', 1, {}, { five: null, week: null }, { five: { pct: 120, resetsAt: 1 } }, { five: { pct: 5, resetsAt: 'soon' } }, { week: { pct: 5 } }]) {
+      expect(araLimitsOf(bad)).toBeNull()
+    }
   })
 })
 
@@ -100,5 +131,10 @@ describe('선택지 표식', () => {
   it('페르소나가 표식 형식을 시킨다(두 엔진 모두)', () => {
     expect(buildPersona('준영')).toContain('[[선택: 삭제 진행 | 취소]]')
     expect(buildPersona('준영', [], false)).toContain('[[선택: 삭제 진행 | 취소]]')
+  })
+  it('페르소나 — 요청 없이 새 세션을 만들지 않고, 맞지 않으면 선택지로 묻는다(#24-2)', () => {
+    const p = buildPersona('준영')
+    expect(p).toContain('새 탭·새 세션을 명시적으로 요청하지 않는 한 session_create 로 새 세션을 만들지 않습니다')
+    expect(p).toContain('[[선택: 여기서 실행 | 새 탭에서 실행 | 취소]]')
   })
 })

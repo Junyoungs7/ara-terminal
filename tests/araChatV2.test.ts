@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { parseStreamJson } from '../src/shared/aiEngine'
 import { araModelOf, araModelLabel } from '../src/shared/aiModels'
 import { stripTarget, targetLine } from '../src/shared/araPersona'
-import { usageLine, untilText, kTok } from '../src/renderer/store/araUsage'
+import { usageLine, kTok } from '../src/renderer/store/araUsage'
 import { McpApprovalManager, type ApprovalEmit } from '../src/main/mcp/approval'
 import { createAuditLog } from '../src/main/mcp/auditLog'
 import { buildAraTools, type ToolCtx } from '../src/main/mcp/tools'
@@ -50,25 +50,14 @@ describe('stream-json — 한도와 토큰', () => {
 })
 
 describe('사용량 줄', () => {
-  const now = 1_000_000_000_000
-  it('한도가 있으면 % 와 초기화까지 남은 시간', () => {
-    const u = usageLine('cli', { five: { pct: 42, resetsAt: now + 130 * 60_000 }, week: { pct: 18, resetsAt: null } }, null, now)
-    expect(u.left).toBe('5시간 42% · 2시간 10분 뒤 초기화')
-    expect(u.right).toBe('주간 18%')
-    expect(u.bars).toEqual({ five: 42, week: 18 })
-  })
   it('한도가 없으면 이번 대화 토큰 · 추정 비용, 첫 메시지 전에는 —', () => {
-    expect(usageLine('cli', null, null, now).left).toBe('—')
-    const u = usageLine('cli', null, { input: 30000, output: 8200, costUsd: 0.4123 }, now)
-    expect(u.left).toBe('한도 확인 불가 · 이번 대화 38.2k 토큰')
-    expect(u.right).toBe('약 $0.41 (추정)')
+    expect(usageLine('cli', null)).toBe('—')
+    expect(usageLine('cli', { input: 30000, output: 8200, costUsd: 0.4123 })).toBe('한도 확인 불가 · 이번 대화 38.2k 토큰 · 약 $0.41 (추정)')
   })
   it('API 모드는 입력·출력 토큰', () => {
-    expect(usageLine('api', null, { input: 10100, output: 2300, costUsd: null }, now).left).toBe('이번 대화 12.4k 토큰 (입력 10.1k · 출력 2.3k)')
+    expect(usageLine('api', { input: 10100, output: 2300, costUsd: null })).toBe('이번 대화 12.4k 토큰 (입력 10.1k · 출력 2.3k)')
   })
-  it('남은 시간 — 한 시간 안쪽은 분만, 지났으면 빈 글', () => {
-    expect(untilText(now + 10 * 60_000, now)).toBe('10분 뒤 초기화')
-    expect(untilText(now - 1, now)).toBe('')
+  it('kTok 경계', () => {
     expect(kTok(980)).toBe('980')
     expect(kTok(999_950)).toBe('1.0M')
   })

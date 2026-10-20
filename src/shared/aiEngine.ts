@@ -51,6 +51,22 @@ export type AiEngineEvent =
 
 export type AiLimit = { pct: number; resetsAt: number | null }
 
+/** 저장해 둔 한도(ui.araLimits)의 모양 검사(#24-1). 둘 다 없거나 깨졌으면 null — 화면은 '—' 로 남는다. */
+export function araLimitsOf(v: unknown): { five: AiLimit | null; week: AiLimit | null } | null {
+  const one = (x: unknown): AiLimit | null => {
+    const o = x as { pct?: unknown; resetsAt?: unknown } | null
+    if (!o || typeof o !== 'object') return null
+    if (typeof o.pct !== 'number' || !Number.isFinite(o.pct) || o.pct < 0 || o.pct > 100) return null
+    if (o.resetsAt !== null && (typeof o.resetsAt !== 'number' || !Number.isFinite(o.resetsAt))) return null
+    return { pct: o.pct, resetsAt: o.resetsAt }
+  }
+  const r = v as { five?: unknown; week?: unknown } | null
+  if (!r || typeof r !== 'object') return null
+  const five = one(r.five)
+  const week = one(r.week)
+  return five || week ? { five, week } : null
+}
+
 /** 엔진 하나. 대화 하나가 이걸 하나 쥔다. */
 export type AiEngine = {
   send(text: string): void
