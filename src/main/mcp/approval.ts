@@ -14,7 +14,8 @@ import {
   type McpSessionState,
   type McpActivity
 } from '@shared/types'
-import type { AuditLog, AuditOutcome } from './auditLog'
+import type { AuditLog, AuditOutcome, AuditReason } from './auditLog'
+import { isDangerousInput } from '@shared/dangerousCommand'
 
 // session_create/ssh_connect 처럼 아직 존재하지 않는 세션을 만드는 툴의 승인 요청 표시용 예약 id.
 // list()에서 제외한다 — 렌더러 세션 목록에 유령 항목을 만들지 않는다.
@@ -226,15 +227,23 @@ export class McpApprovalManager {
     tool: string,
     cls: ToolClass,
     argsSummary: string,
-    caller: Caller
-  ): Promise<{ allow: boolean; outcome: AuditOutcome }> {
+    caller: Caller,
+    input: string | undefined
+  ): Promise<{ allow: boolean; outcome: AuditOutcome; reason?: AuditReason }> {
     if (!this.checkRate(sessionId ?? NEW_SESSION)) return { allow: false, outcome: 'rateLimited' }
     if (cls === 'readOnly') return { allow: true, outcome: 'auto' }
     if (sessionId !== null) {
       const mode = this.modeOf(sessionId)
       if (mode === 'readOnly') return { allow: false, outcome: 'denied' }
       if (cls === 'sessionInput' && mode === 'autoAllow') return { allow: true, outcome: 'auto' }
-      if (this.isAraTargetInput(sessionId, tool, caller)) return { allow: true, outcome: 'auto' }
+      if (this.isAraTargetInput(sessionId, tool, caller)) {
+        // 위험 명령(sudo·rm -rf·DROP TABLE …)만은 지금 보는 세션이어도 승인 창으로 보낸다(2026-10-20 준영님).
+        if (input === undefined || !isDangerousInput(input)) return { allow: true, outcome: 'auto', reason: 'araTarget' }
+        const decision = await this.requestApproval(sessionId, tool, argsSummary)
+        return decision === 'approved'
+          ? { allow: true, outcome: 'approved', reason: 'dangerous' }
+          : { allow: false, outcome: decision, reason: 'dangerous' }
+      }
       // D2: sessionId===null(session_create/ssh_connect)만 인계의 보호를 벗어나 있었다 — 기존 세션은
       // 이미 handback() 이 readOnly 로 만들어 위 분기에서 걸린다.
     } else if (this.handedBack) {
@@ -251,9 +260,11 @@ export class McpApprovalManager {
     cls: ToolClass,
     argsSummary: string,
     exec: () => Promise<T>,
-    caller: Caller = 'external'
+    caller: Caller = 'external',
+    /** session_input 의 원문(마스킹 전) — 위험 명령 검사용. 기록·화면에는 나가지 않는다. */
+    input?: string
   ): Promise<{ ok: true; result: T } | { ok: false; message: string }> {
-    const authz = await this.authorize(sessionId, tool, cls, argsSummary, caller)
+    const authz = await this.authorize(sessionId, tool, cls, argsSummary, caller, input)
     const mode = this.sessions.get(sessionId ?? NEW_SESSION)?.mode ?? DEFAULT_MODE
 
     let auditFailed = false
@@ -265,6 +276,8 @@ export class McpApprovalManager {
         args: argsSummary,
         mode,
         outcome: authz.outcome,
+        caller,
+        ...(authz.reason ? { reason: authz.reason } : {}),
         resultSummary: authz.allow ? `실행: ${tool}` : denyMessage(authz.outcome)
       })
     } catch {

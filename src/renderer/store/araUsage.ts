@@ -9,9 +9,11 @@ export type AraLimits = { five: AiLimit | null; week: AiLimit | null }
 /** 이번 대화 사용량. costUsd 는 Claude Code 의 누적값(마지막 값) — 더하지 않는다. */
 export type AraUsage = { input: number; output: number; costUsd: number | null }
 
-/** 12400 → "12.4k", 980 → "980". */
+/** 12400 → "12.4k", 980 → "980", 999950 → "1.0M"(반올림이 1000.0k 가 되는 경계). */
 export function kTok(n: number): string {
-  return n < 1000 ? String(n) : `${(n / 1000).toFixed(1)}k`
+  if (n < 1000) return String(n)
+  const k = (n / 1000).toFixed(1)
+  return Number(k) < 1000 ? `${k}k` : `${(n / 1_000_000).toFixed(1)}M`
 }
 
 /** 초기화까지 남은 시간 — "2시간 10분" · "10분". 이미 지났거나 모르면 빈 문자열. */

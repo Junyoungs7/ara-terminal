@@ -128,7 +128,9 @@ async function gated(
   caller: Caller
 ): Promise<ToolResult> {
   const argsSummary = maskSecrets(JSON.stringify(argsForLog))
-  const r = await approval.runTool(sessionId, tool, cls, argsSummary, exec, caller)
+  // session_input 은 원문을 따로 넘긴다 — 지금 보는 세션이어도 위험 명령이면 묻는다(approval.ts).
+  const input = tool === 'session_input' && typeof argsForLog.data === 'string' ? argsForLog.data : undefined
+  const r = await approval.runTool(sessionId, tool, cls, argsSummary, exec, caller, input)
   return r.ok ? r.result : fail(r.message)
 }
 

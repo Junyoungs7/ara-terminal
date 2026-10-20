@@ -166,7 +166,8 @@ export function parseStreamJson(line: string): AiEngineEvent[] {
       const u = (m.usage ?? null) as Record<string, unknown> | null
       const tokens = u
         ? {
-            input: (num(u.input_tokens) ?? 0) + (num(u.cache_creation_input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0),
+            // 캐시 읽기(cache_read)는 뺀다 — 매 턴 대화 전체를 다시 읽어 숫자만 부풀린다.
+            input: (num(u.input_tokens) ?? 0) + (num(u.cache_creation_input_tokens) ?? 0),
             output: num(u.output_tokens) ?? 0
           }
         : null

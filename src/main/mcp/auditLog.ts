@@ -10,6 +10,8 @@ import { maskSecrets } from '@shared/maskSecrets'
 import type { McpSessionMode } from '@shared/types'
 
 export type AuditOutcome = 'auto' | 'approved' | 'denied' | 'timeout' | 'rateLimited'
+/** 'araTarget' = 지금 보는 세션이라 묻지 않음, 'dangerous' = 지금 보는 세션이지만 위험 명령이라 물음. */
+export type AuditReason = 'araTarget' | 'dangerous'
 
 export type AuditRecord = {
   seq: number
@@ -19,6 +21,9 @@ export type AuditRecord = {
   args: string
   mode: McpSessionMode
   outcome: AuditOutcome
+  /** 누가 불렀나('ara' = 아라 채팅, 'external' = 외부 MCP 클라이언트). */
+  caller?: 'ara' | 'external'
+  reason?: AuditReason
   resultSummary: string
 }
 
@@ -33,7 +38,17 @@ function dateStamp(d: Date): string {
 
 export type AuditLog = {
   // 기록 — seq/args/resultSummary 마스킹은 여기서 채운다. 쓰기 실패 시 던진다(fail-closed).
-  write(rec: { at: number; sessionId: string; tool: string; args: string; mode: McpSessionMode; outcome: AuditOutcome; resultSummary: string }): void
+  write(rec: {
+    at: number
+    sessionId: string
+    tool: string
+    args: string
+    mode: McpSessionMode
+    outcome: AuditOutcome
+    caller?: 'ara' | 'external'
+    reason?: AuditReason
+    resultSummary: string
+  }): void
   // 보존 스윕. 삭제한 파일 수를 돌려준다(테스트용) — F12 SessionLogService.sweep() 과 같은 계약.
   sweep(retentionDays: number): number
   dir: string
@@ -59,6 +74,8 @@ export function createAuditLog(dir: string): AuditLog {
         tool: rec.tool,
         mode: rec.mode,
         outcome: rec.outcome,
+        ...(rec.caller ? { caller: rec.caller } : {}),
+        ...(rec.reason ? { reason: rec.reason } : {}),
         // 기록 직전 마스킹(F12·F16 과 같은 자리, 같은 함수) — 원문이 파일에 잠깐도 닿지 않는다.
         args: maskSecrets(rec.args),
         resultSummary: maskSecrets(rec.resultSummary)

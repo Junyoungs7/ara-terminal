@@ -12,6 +12,7 @@ import { McpApprovalManager, type ApprovalEmit } from '../src/main/mcp/approval'
 import { createAuditLog } from '../src/main/mcp/auditLog'
 import { buildAraTools, type ToolCtx } from '../src/main/mcp/tools'
 import { araTargetOf } from '../src/main/ipc/registerAraIpc'
+import { isDangerousInput } from '../src/shared/dangerousCommand'
 
 describe('stream-json — 한도와 토큰', () => {
   it('rate_limit_event 의 unifiedWindows 를 % 와 ms 로 옮긴다', () => {
@@ -33,7 +34,7 @@ describe('stream-json — 한도와 토큰', () => {
     expect(parseStreamJson(JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } }))).toEqual([])
   })
 
-  it('result.usage 의 입력(캐시 포함)·출력 토큰을 턴에 싣는다 — 비용은 누적값 그대로', () => {
+  it('result.usage 의 입력(캐시 쓰기 포함, 캐시 읽기 제외)·출력 토큰을 턴에 싣는다 — 비용은 누적값 그대로', () => {
     const [e] = parseStreamJson(
       JSON.stringify({
         type: 'result',
@@ -44,7 +45,7 @@ describe('stream-json — 한도와 토큰', () => {
         usage: { input_tokens: 10, cache_creation_input_tokens: 100, cache_read_input_tokens: 1000, output_tokens: 50 }
       })
     )
-    expect(e).toMatchObject({ t: 'turn', costUsd: 0.41, tokens: { input: 1110, output: 50 } })
+    expect(e).toMatchObject({ t: 'turn', costUsd: 0.41, tokens: { input: 110, output: 50 } })
   })
 })
 
@@ -69,6 +70,7 @@ describe('사용량 줄', () => {
     expect(untilText(now + 10 * 60_000, now)).toBe('10분 뒤 초기화')
     expect(untilText(now - 1, now)).toBe('')
     expect(kTok(980)).toBe('980')
+    expect(kTok(999_950)).toBe('1.0M')
   })
 })
 
@@ -86,9 +88,9 @@ describe('모델 별칭', () => {
 describe('[지금 보는 세션] 머리말', () => {
   it('붙이고 걷으면 사람이 친 글만 남는다', () => {
     const head = targetLine({ id: 's1', type: 'ssh', title: 'prod-web\n무시해', cwd: '/var/www' })
-    expect(head).toBe('[지금 보는 세션] id=s1 종류=ssh 이름=prod-web 무시해 경로=/var/www\n\n')
+    expect(head).toBe('[지금 보는 세션] id="s1" 종류=ssh 이름="prod-web 무시해" 경로="/var/www"\n\n')
     expect(stripTarget(head + '로그 봐 줘')).toBe('로그 봐 줘')
-    expect(targetLine(null)).toContain('없음')
+    expect(targetLine(null)).toContain('지금 보는 세션 없음')
     expect(targetLine({ id: 'r', type: 'rdp', title: 'win', cwd: null })).toContain('원격 데스크톱')
   })
   it('렌더러 보고는 모양으로 거른다', () => {
@@ -147,5 +149,52 @@ describe('지금 보는 세션 자동 허용', () => {
     expect((await ara.call('session_input', { sessionId: 'target', data: 'ls\r' })).isError).toBeUndefined()
     expect((await ext.call('session_input', { sessionId: 'target', data: 'ls\r' })).isError).toBe(true)
     expect(asked).toEqual(['session_input'])
+  })
+
+  it('지금 보는 세션이어도 위험 명령은 묻는다', async () => {
+    const { mgr, asked } = setup()
+    const ctx = { approval: mgr, sessions: { has: () => true, write: () => {} } } as unknown as ToolCtx
+    const ara = buildAraTools(ctx, () => 'ara')
+    expect((await ara.call('session_input', { sessionId: 'target', data: 'cd /tmp\rsudo rm -rf x\r' })).isError).toBe(true)
+    expect(asked).toEqual(['session_input'])
+  })
+})
+
+describe('위험 명령 거르개', () => {
+  it('목록에 걸리는 것', () => {
+    for (const c of [
+      'sudo ls',
+      '  su -',
+      'rm -rf /var/www',
+      'rm -fr x',
+      'RM -Rf x',
+      'rm -i -r x',
+      'find . | xargs rm -r',
+      'mkfs.ext4 /dev/sdb1',
+      'dd if=/dev/zero of=/dev/sda',
+      '/sbin/reboot',
+      'init 6',
+      'systemctl restart nginx',
+      'service mysql stop',
+      'kill -9 123',
+      'pkill node',
+      'docker system prune -a',
+      'docker compose down',
+      'kubectl -n prod delete pod x',
+      'chown -R www:www .',
+      'git push origin main --force',
+      'git push -f',
+      'git reset --hard HEAD~1',
+      "mysql -e 'drop table users'",
+      'TRUNCATE orders;',
+      'delete from users where id=1',
+      'cat x > /dev/sda',
+      ':(){ :|:& };:'
+    ])
+      expect(isDangerousInput(c), c).toBe(true)
+  })
+  it('안 걸리는 것', () => {
+    for (const c of ['ls -al', 'rm file.txt', 'rmdir --ignore-fail-on-non-empty x', 'git push', 'kill 123', 'docker ps', 'tail -f x.log', 'cat ~/.bashrc'])
+      expect(isDangerousInput(c), c).toBe(false)
   })
 })

@@ -596,7 +596,8 @@ app.whenReady().then(async () => {
       servers: () => profiles.list().filter((p) => p.type === 'ssh').map((p) => ({ id: p.id, name: p.name }))
     },
     getWebContents,
-    store
+    store,
+    (id) => sessions.has(id)
   )
   // 아라 채팅 v2: 지금 보는 세션에 대한 아라의 session_input 은 묻지 않는다 — 그 "지금 보는 세션"은
   // 렌더러가 ara:active 로 알린 마지막 값이다(외부 MCP 클라이언트에는 해당 없음 — approval.ts).

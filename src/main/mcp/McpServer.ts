@@ -53,6 +53,8 @@ export type McpServerHandle = {
   port(): number
   connectedCount(): number
   disconnectClient(): void
+  /** 지금 연결이 아라 전용 토큰으로 열린 것이면 끊는다(아라 대화를 닫을 때 — 외부 클라이언트는 건드리지 않는다). */
+  disconnectSelf(): void
   // 포트가 실제로 반환된 뒤에 resolve 된다(setEnabled(false)→true 재토글, 테스트의 재시작 경합 방지).
   stop(): Promise<void>
 }
@@ -240,6 +242,9 @@ export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: numbe
     },
     disconnectClient() {
       void transport?.close()
+    },
+    disconnectSelf() {
+      if (selfConn) void transport?.close()
     },
     stop
   }

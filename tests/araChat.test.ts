@@ -31,10 +31,11 @@ function memVault(): TokenVault & { map: Map<string, string>; delete(key: string
   }
 }
 
-function fakeServer(o: { enabled?: boolean; port?: number } = {}): McpServerHandle & { enabledCalls: number } {
+function fakeServer(o: { enabled?: boolean; port?: number } = {}): McpServerHandle & { enabledCalls: number; selfDrops: number } {
   let on = o.enabled ?? false
   const h = {
     enabledCalls: 0,
+    selfDrops: 0,
     setEnabled: async (v: boolean) => {
       h.enabledCalls += 1
       on = v
@@ -44,6 +45,9 @@ function fakeServer(o: { enabled?: boolean; port?: number } = {}): McpServerHand
     port: () => (on ? (o.port ?? 39217) : 0),
     connectedCount: () => 0,
     disconnectClient: () => {},
+    disconnectSelf: () => {
+      h.selfDrops += 1
+    },
     stop: async () => {}
   }
   return h
@@ -176,8 +180,9 @@ describe('아라 대화 한 벌', () => {
     const seen: AraChatEvent[] = []
     const eng = fakeEngine()
     const vault = memVault()
+    const srv = fakeServer({ enabled: true })
     const chat = createAraChat({
-      server: fakeServer({ enabled: true }),
+      server: srv,
       vault,
       activeSession: () => (o.session ? { id: 's1', title: 'sess', ...o.session } : null),
       lastLocalCwd: () => o.lastLocal ?? null,
@@ -185,7 +190,7 @@ describe('아라 대화 한 벌', () => {
       emit: (e) => seen.push(e),
       makeEngine: () => eng
     })
-    return { chat, eng, seen, vault }
+    return { chat, eng, seen, vault, srv }
   }
 
   it('열면 폴더와 MCP 물림 여부를 알린다', async () => {
@@ -270,12 +275,14 @@ describe('아라 대화 한 벌', () => {
    * 주운 쪽이 **재시작을 넘어 영원히** 우리 MCP 서버에 들어올 수 있다. 파일과 토큰을 함께 죽인다.
    */
   it('★ 닫으면 토큰 자체를 무효로 만든다 — 파일만 지워서는 그 토큰이 계속 통한다', async () => {
-    const { chat, vault } = setup({ session: { type: 'local', cwd: local } })
+    const { chat, vault, srv } = setup({ session: { type: 'local', cwd: local } })
     vault.set(MCP_TOKEN_VAULT_KEY, hashToken('사용자-토큰'))
     await chat.open()
     expect(vault.get(MCP_SELF_TOKEN_VAULT_KEY)).toMatch(/^[0-9a-f]{64}$/)
     chat.close()
     expect(vault.get(MCP_SELF_TOKEN_VAULT_KEY)).toBeNull()
+    // 그 토큰으로 열린 연결도 함께 끊는다 — 안 끊으면 다음 대화의 Claude Code 가 409 로 못 붙는다.
+    expect(srv.selfDrops).toBe(1)
     // 사용자 토큰은 건드리지 않는다 — 외부 클라이언트에 넣어 둔 것이 조용히 끊기면 안 된다.
     expect(vault.get(MCP_TOKEN_VAULT_KEY)).toBe(hashToken('사용자-토큰'))
   })

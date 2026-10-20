@@ -193,8 +193,13 @@ export function createAraChat(deps: AraChatDeps): AraChat {
     // 토큰이 든 임시 파일을 지우고(cleanup), **그 토큰 자체도 무효로 만든다**. 파일만 지우면
     // vault 의 해시가 남아 그 토큰이 계속 통한다 — 2026-08-28 감사 전까지 삭제자가 없어서
     // 한 번 발급된 아라 토큰이 재시작을 넘어 영원히 유효했다.
+    // 열린 연결도 끊는다 — 요청마다 토큰을 다시 보므로 토큰을 지우면 그 연결은 401 만 받는데, 연결 칸(단일)은
+    // 그대로 차 있어 다음 대화의 Claude Code 가 409 로 못 붙는다. 대화 수명 = 토큰 수명 = 연결 수명.
     handoff?.cleanup()
-    if (handoff) clearStaleSelfToken(deps.vault)
+    if (handoff) {
+      clearStaleSelfToken(deps.vault)
+      deps.server.disconnectSelf()
+    }
     handoff = null
     persona?.cleanup()
     persona = null

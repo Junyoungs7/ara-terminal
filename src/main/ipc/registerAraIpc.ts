@@ -60,7 +60,9 @@ export function registerAraIpc(
   deps: Omit<AraChatDeps, 'emit' | 'activeSession' | 'savedModel'>,
   getWebContents: () => WebContents | null,
   /** 대화 이름 저장소(2026-08-26). AraChat 은 이걸 모른다 — 이름은 화면의 일이라 여기서만 다룬다. */
-  ws: WorkspaceStore
+  ws: WorkspaceStore,
+  /** main 이 아는 세션인가(RDP 는 main 원장에 없어 모양만 본다). 모르는 id 는 "대상 없음"으로 읽는다. */
+  hasSession: (id: string) => boolean
 ): AraRuntime {
   // 아라 채팅 v2: 지금 보는 세션. 렌더러가 탭이 바뀔 때마다 알린다(main 원장에는 "어느 탭을 보나"가 없다).
   let active: AraTarget | null = null
@@ -72,7 +74,8 @@ export function registerAraIpc(
   })
 
   handle('ara:active', ({ active: next }) => {
-    active = araTargetOf(next)
+    const t = araTargetOf(next)
+    active = t && (t.type === 'rdp' || hasSession(t.id)) ? t : null
     return { ok: true } as const
   })
 
