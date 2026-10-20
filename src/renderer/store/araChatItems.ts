@@ -81,8 +81,9 @@ export function reduceChat(items: ChatItem[], e: AiEngineEvent): ChatItem[] {
       return [...items, { k: 'note', id: nextId(), text: e.message, tone: 'bad' }]
 
     // 턴 끝과 종료는 화면 아래 상태줄이 말한다 — 목록에 줄을 하나 더 쌓지 않는다.
-    // 한도는 머리의 사용량 줄이 말한다(araUsage.ts).
+    // 한도·맥락은 입력칸 밑 상태줄이 말한다(araUsage.ts statusSegs).
     case 'limits':
+    case 'context':
     case 'turn':
     case 'permission':
     case 'exit':
@@ -149,4 +150,21 @@ export function appendPaths(draft: string, paths: readonly string[]): string {
  */
 export function clipFileName(name: string, at: number): string {
   return `${at}-${(name || 'image.png').replace(/[^\w.\-가-힣]/g, '_')}`
+}
+
+/**
+ * 아라 채팅 v3 #23 — 확인 질문 끝 줄의 선택지 표식 `[[선택: 삭제 진행 | 취소]]`(araPersona.ts 가 시킨다).
+ * 끝 줄에 있고 2~4개·각 1~20자일 때만 표식이다. 아니면 choices 가 null 이고 글은 그대로 둔다(깨진 표식은 글).
+ */
+export function splitChoices(text: string): { body: string; choices: string[] | null } {
+  const m = /(?:^|\n)[ \t]*\[\[선택:([^\]\n]*)\]\]\s*$/.exec(text)
+  if (!m) return { body: text, choices: null }
+  const choices = m[1].split('|').map((c) => c.trim())
+  if (choices.length < 2 || choices.length > 4 || choices.some((c) => c === '' || c.length > 20)) return { body: text, choices: null }
+  return { body: text.slice(0, m.index).replace(/\s+$/, ''), choices }
+}
+
+/** 되돌리기 어려워 보이는 선택 — 경고색으로 그린다(승인은 여전히 위험 명령 게이트가 한다). */
+export function riskyChoice(c: string): boolean {
+  return /삭제|제거|지우|지움|폐기|초기화|포맷|drop|delete|remove|truncate|destroy|\brm\b/i.test(c)
 }

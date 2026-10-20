@@ -36,7 +36,7 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
   //    v2: 시작 안내 줄은 없다 — 폴더는 경로 줄이, 엔진·모델은 선택기가 말한다.
   await expect(panel.locator('.ara-note')).toHaveCount(0)
   await expect(panel.locator('.ara-path')).toHaveCount(0) // 아라 폴더 + 대상 없음 → 보일 경로가 없다
-  await expect(panel.locator('.ara-ustrip')).toHaveText('—')
+  await expect(panel.locator('[data-field="ara.usage"]')).toHaveText('—')
 
   // ② 보낸 말은 즉시 뜬다(답을 기다리는 동안 화면이 비면 안 된다).
   const input = panel.locator('.ara-input')
@@ -56,9 +56,9 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
 
   // ④ 글과 비용·턴. 비용은 "이 대화가 얼마 썼나"라 늘 보여야 한다(설계 §4-4).
   await expect(panel.locator('.ara-ai')).toContainText('받은 말: 세션 목록 좀 봐 줘')
-  // v2: 비용은 머리 아래 사용량 줄(한도가 없으면 이번 대화 토큰 · 추정 비용).
-  await expect(panel.locator('.ara-ustrip')).toContainText('한도 확인 불가')
-  await expect(panel.locator('.ara-ustrip')).toContainText('$0.01')
+  // v3: 비용은 입력칸 밑 상태줄(한도가 없으면 이번 대화 토큰 · 추정 비용).
+  await expect(panel.locator('[data-field="ara.usage"]')).toContainText('한도 확인 불가')
+  await expect(panel.locator('[data-field="ara.usage"]')).toContainText('$0.01')
 })
 
 test('ARA2-2 [중지]는 도는 동안에만 눌린다 · 닫았다 열어도 대화가 남는다', async ({ ara }) => {

@@ -16,13 +16,17 @@ export function kTok(n: number): string {
   return Number(k) < 1000 ? `${k}k` : `${(n / 1_000_000).toFixed(1)}M`
 }
 
-/** 초기화까지 남은 시간 — "2시간 10분" · "10분". 이미 지났거나 모르면 빈 문자열. */
+/** 초기화까지 남은 시간 — "6일 1시간" · "2시간 10분" · "10분". 이미 지났거나 모르면 빈 문자열. */
 export function untilText(resetsAt: number | null, now: number): string {
   if (resetsAt === null || resetsAt <= now) return ''
   const min = Math.ceil((resetsAt - now) / 60_000)
   const h = Math.floor(min / 60)
   const m = min % 60
-  const hm = h > 0 ? t('ara.use.hm').replace('{h}', String(h)).replace('{m}', String(m)) : t('ara.use.m').replace('{m}', String(m))
+  const hm =
+    h >= 24
+      ? t('ara.use.dh').replace('{d}', String(Math.floor(h / 24))).replace('{h}', String(h % 24))
+      : h > 0
+        ? t('ara.use.hm').replace('{h}', String(h)).replace('{m}', String(m)) : t('ara.use.m').replace('{m}', String(m))
   return t('ara.use.reset').replace('{t}', hm)
 }
 
@@ -56,4 +60,46 @@ export function usageLine(
     right: usage.costUsd === null ? '' : t('ara.use.cost').replace('{c}', usage.costUsd.toFixed(2)),
     bars: null
   }
+}
+
+/** 맥락 — 지금 맥락에 든 토큰(used) ÷ 모델 창(window). 둘 다 와야 칸이 생긴다. */
+export type AraContext = { used: number | null; window: number | null }
+
+/**
+ * 아라 채팅 v3 상태줄(#21, B안) — 입력칸 밑 한 줄의 칸들.
+ * `5시간 ▬ 42% · 2시간 10분 뒤 초기화 │ 주간 ▬ 17% · … │ 맥락 ▬ 53% │ 이번 대화 42.1k 토큰 · $0.42`.
+ * 한도가 없거나 API 모드면 usageLine 의 대체 글을 한 칸(key 'text')으로 쓴다.
+ * pct 가 있는 칸만 막대를 그린다. 좁은 폭에서 `note`(초기화)와 'conv' 칸은 화면이 접는다.
+ */
+export type UsageSeg = { key: 'five' | 'week' | 'ctx' | 'conv' | 'text'; label: string; pct: number | null; note: string }
+
+export function statusSegs(
+  engine: 'cli' | 'api',
+  limits: AraLimits | null,
+  usage: AraUsage | null,
+  ctx: AraContext | null,
+  now: number
+): UsageSeg[] {
+  const out: UsageSeg[] = []
+  const lim = engine === 'cli' && limits && (limits.five || limits.week) ? limits : null
+  if (lim) {
+    if (lim.five) out.push({ key: 'five', label: t('ara.use.k.five'), pct: lim.five.pct, note: untilText(lim.five.resetsAt, now) })
+    if (lim.week) out.push({ key: 'week', label: t('ara.use.k.week'), pct: lim.week.pct, note: untilText(lim.week.resetsAt, now) })
+  } else {
+    const u = usageLine(engine, limits, usage, now)
+    out.push({ key: 'text', label: '', pct: null, note: u.right ? `${u.left} · ${u.right}` : u.left })
+  }
+  if (ctx && ctx.used !== null && ctx.window) {
+    out.push({ key: 'ctx', label: t('ara.use.k.ctx'), pct: Math.min(100, Math.round((ctx.used / ctx.window) * 100)), note: '' })
+  }
+  if (lim && usage) {
+    const n = kTok(usage.input + usage.output)
+    out.push({
+      key: 'conv',
+      label: t('ara.use.k.conv'),
+      pct: null,
+      note: usage.costUsd === null ? t('ara.use.conv').replace('{n}', n) : t('ara.use.convCost').replace('{n}', n).replace('{c}', usage.costUsd.toFixed(2))
+    })
+  }
+  return out
 }

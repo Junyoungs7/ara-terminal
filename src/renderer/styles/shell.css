@@ -7767,6 +7767,8 @@ button.sb-seg.upd:hover .val {
   flex-direction: column;
   min-height: 0;
   position: relative;
+  /* v3: 상태줄(.ara-us)이 패널 폭에 반응한다(@container). */
+  container-type: inline-size;
 }
 /* 2026-09-08 준영님: *"드래그해서 복사하기도 불편"*. 본문은 손대지 않는다 — 계산된 값으로 재 보니
    패널은 `user-select: auto` 였고(왼쪽 `.sidebar` 의 none 은 여기까지 안 온다) 사람 말·아라 말·
@@ -7909,10 +7911,11 @@ button.sb-seg.upd:hover .val {
 .ara-ic.sm {
   padding: var(--sp-1) var(--sp-4);
 }
-/* ── 아라 채팅 v2 머리(A 안 — agent_talk/MOCKUP-ara-chat-v2.html). 한 줄에 대상 세션 … 선택기·아이콘. */
+/* ── 아라 채팅 v3 머리(B 안 — agent_talk/MOCKUP-ara-chat-v3.html). 대상 이름·배지 … 아이콘 셋.
+   좁아지면 **이름만** 말줄임 — 아이콘(.ara-ic)은 flex:none 이라 320px 에서도 사라지지 않는다(#22). */
 .ara-tgt {
-  /* min-width 는 auto(= 점 + 이름 최소 3em + 배지) — 좁아지면 선택기(.ara-pick)가 먼저 줄어든다. */
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -7945,17 +7948,19 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-xs);
   padding: 0 var(--sp-2);
 }
-/* 엔진·모델 선택기 — "Claude Code · Opus ▾". 메뉴는 아래로 연다(머리가 맨 위다). */
+/* 엔진·모델 선택기 — "Claude Code · Opus ▾". v3 B안: 입력칸 위 줄(계획 먼저 옆)이라 메뉴는 **위로** 연다.
+   좁으면 이 칩이 줄며 모델 이름이 말줄임된다. */
 .ara-pick {
   position: relative;
   flex: 0 1 auto;
   min-width: 0;
+  max-width: 220px;
 }
 .ara-sel {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  max-width: 220px;
+  max-width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--bg-raised);
@@ -8005,8 +8010,8 @@ button.sb-seg.upd:hover .val {
 }
 .ara-pick-menu {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
   width: 264px;
   z-index: 5;
   display: flex;
@@ -8100,50 +8105,8 @@ button.sb-seg.upd:hover .val {
   white-space: nowrap;
   direction: rtl;
 }
-/* 사용량 — 얇은 막대 둘(5시간 · 주간, 2:1)과 한 줄 글. 한도를 못 얻으면 막대 자리는 선 하나다. */
-.ara-uline {
-  flex: none;
-  display: flex;
-  gap: 2px;
-  height: 3px;
-  background: var(--bg-canvas);
-}
-.ara-uline.none {
-  height: 1px;
-  background: var(--line);
-}
-.ara-uline .ub {
-  flex: 1;
-  background: var(--line-strong);
-  overflow: hidden;
-}
-.ara-uline .ub:first-child {
-  flex: 2;
-}
-.ara-uline .ub i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.ara-uline .ub i.w {
-  background: var(--accent-deep);
-}
-.ara-ustrip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-2) var(--sp-6) var(--sp-3) var(--sp-5);
-  color: var(--text-lo);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  border-bottom: 1px solid var(--line);
-}
-.ara-ustrip .r {
-  margin-left: auto;
-}
 .ara-ic {
+  flex: none;
   display: flex;
   align-items: center;
   background: transparent;
@@ -8288,7 +8251,8 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   margin-top: var(--sp-3);
 }
-.ara-ask .pill {
+.ara-ask .pill,
+.ara-choices .pill {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -8300,15 +8264,38 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
   cursor: pointer;
 }
-.ara-ask .pill:hover {
+.ara-ask .pill:hover,
+.ara-choices .pill:hover {
   border-color: var(--accent);
   color: var(--accent-bright);
 }
-.ara-ask .pill .num {
+.ara-ask .pill .num,
+.ara-choices .pill .num {
   color: var(--accent);
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
+}
+/* #23 선택지(v3) — 마지막 아라 말 끝의 [[선택: …]] 표식이 알약이 된다. 되돌리기 어려운 선택은 경고색. */
+.ara-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.ara-choices .pill {
+  white-space: nowrap;
+}
+.ara-choices .pill.danger,
+.ara-choices .pill.danger .num {
+  color: var(--err);
+}
+.ara-choices .pill.danger {
+  border-color: color-mix(in srgb, var(--err) 55%, transparent);
+}
+.ara-ai.risky {
+  border-left: 2px solid var(--err);
+  padding-left: var(--sp-5);
 }
 .ara-ask .meta {
   margin-top: var(--sp-3);
@@ -8888,6 +8875,69 @@ button.sb-seg.upd:hover .val {
   background: var(--err);
   color: var(--bg-canvas);
 }
+/* 상태줄(v3 #21) — 입력칸 밑 한 줄. 5시간(금)·주간(진한 금)·맥락(세이지) 막대. 좁으면 줄바꿈. */
+.ara-us {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-5);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ara-us .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  white-space: nowrap;
+}
+.ara-us .sep {
+  width: 1px;
+  height: 10px;
+  margin-right: var(--sp-3);
+  background: var(--line-strong);
+}
+.ara-us .v {
+  color: var(--text-mid);
+}
+.ara-us .seg.text {
+  white-space: normal;
+}
+.ara-us .mb {
+  display: inline-block;
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.ara-us .mb i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ara-us .week .mb i {
+  background: var(--accent-deep);
+}
+.ara-us .ctx .mb i {
+  background: var(--ok);
+}
+/* 좁으면 덜 중요한 것부터 접는다 — 초기화 시간, 이번 대화, 구분선(목업 320px).
+   기준은 340px: 기본 폭 360px 은 다 보이고(줄바꿈 허용), 최소 폭 320px 쪽에서 접힌다. */
+@container (max-width: 340px) {
+  .ara-us .rs,
+  .ara-us .seg.conv,
+  .ara-us .sep {
+    display: none;
+  }
+  .ara-us {
+    gap: var(--sp-1) var(--sp-4);
+  }
+}
 /* 상태는 입력칸 아래 아주 얇게. */
 .ara-st {
   display: flex;
@@ -9267,6 +9317,7 @@ button.sb-seg.upd:hover .val {
 .mini-card:active,
 .ara-ic:active,
 .ara-ask .pill:active,
+.ara-choices .pill:active,
 .ara-btn:active:not(:disabled),
 .ara-chip:active,
 .ara-sel:active,

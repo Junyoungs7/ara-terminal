@@ -40,6 +40,12 @@ export type AiEngineEvent =
    * 계정 값이라 대화가 바뀌어도 유효하다 — 화면이 마지막 값을 기억한다.
    */
   | { t: 'limits'; five: AiLimit | null; week: AiLimit | null }
+  /**
+   * 맥락(컨텍스트 창) 사용량(아라 채팅 v3 #21). 실측 2.1.300: `assistant.message.usage` 의
+   * input·cache_read·cache_creation 합이 지금 맥락에 든 토큰(`used`), `result.modelUsage[*].contextWindow`
+   * 가 창 크기(`window`)다. 두 값은 서로 다른 줄로 오므로 한쪽만 실린다 — 화면이 마지막 값을 합친다.
+   */
+  | { t: 'context'; used?: number; window?: number }
   | { t: 'error'; message: string }
   | { t: 'exit'; code: number | null }
 
@@ -100,6 +106,15 @@ function resultBrief(content: unknown): string {
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
+/** result.modelUsage 의 contextWindow — 모델이 여럿이면 가장 큰 창. 없으면 사건을 안 낸다. */
+function ctxWindow(mu: unknown): AiEngineEvent[] {
+  if (!mu || typeof mu !== 'object') return []
+  const ws = Object.values(mu as Record<string, unknown>)
+    .map((v) => num((v as Record<string, unknown> | null)?.contextWindow))
+    .filter((v): v is number => v !== null && v > 0)
+  return ws.length > 0 ? [{ t: 'context', window: Math.max(...ws) }] : []
+}
+
 /**
  * 줄 하나 → 사건 여럿(한 줄에 도구 호출이 여러 개 실릴 수 있다).
  * JSON 이 아니거나 모르는 타입이면 **빈 배열**이다 — 던지지 않는다.
@@ -142,6 +157,12 @@ export function parseStreamJson(line: string): AiEngineEvent[] {
           })
         }
       }
+      // 맥락 사용량 — 하위 에이전트(parent_tool_use_id 있음)의 말은 그쪽 맥락이라 뺀다.
+      const u = (m.message as { usage?: Record<string, unknown> } | undefined)?.usage
+      if (u && !str(m.parent_tool_use_id)) {
+        const used = (num(u.input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0) + (num(u.cache_creation_input_tokens) ?? 0)
+        if (used > 0) out.push({ t: 'context', used })
+      }
       return out
     }
 
@@ -179,7 +200,8 @@ export function parseStreamJson(line: string): AiEngineEvent[] {
           turns: num(m.num_turns) ?? 0,
           text: str(m.result) ?? '',
           ...(tokens ? { tokens } : {})
-        }
+        },
+        ...ctxWindow(m.modelUsage)
       ]
     }
 

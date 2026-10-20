@@ -13,6 +13,8 @@ import {
   pushMine,
   reduceChat,
   remainText,
+  riskyChoice,
+  splitChoices,
   type ChatItem
 } from '../store/araChatItems'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
@@ -22,7 +24,7 @@ import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { AI_MODELS_BY_PROVIDER, AI_PROVIDER_LABELS, type AiProvider } from '@shared/types'
 import type { AraTarget } from '@shared/araPersona'
-import { usageLine, type AraLimits, type AraUsage } from '../store/araUsage'
+import { statusSegs, type AraContext, type AraLimits, type AraUsage } from '../store/araUsage'
 import { t } from '../i18n'
 
 // #125 아라 대화 v2 — **관제실**(설계 §9). 우측 레일의 그 자리에 산다.
@@ -98,12 +100,14 @@ export function AraChatPanel({
   // 아라 채팅 v2 사용량. 한도는 **계정 값**이라 새 대화를 열어도 남긴다 — 이번 대화 사용량만 'opened' 에서 비운다.
   const [limits, setLimits] = useState<AraLimits | null>(null)
   const [usage, setUsage] = useState<AraUsage | null>(null)
+  // 맥락(v3 #21) — 이 대화의 것이라 'opened' 에서 비운다.
+  const [ctx, setCtx] = useState<AraContext | null>(null)
   // #136 계획 먼저 — 켜면 아라가 **아무것도 건드리지 않고** 계획만 낸다(실측으로 확인한 모드).
   // planReady = 그 계획이 나왔다(턴이 끝났다) → 승인 줄을 세운다.
   const [planOn, setPlanOn] = useState(false)
   // #137 고른 모델. 빈 문자열 = 사용자의 ~/.claude 기본값.
   const [model, setModel] = useState('')
-  // 엔진·모델 선택기 메뉴(A 안 — 머리 오른쪽).
+  // 엔진·모델 선택기 메뉴(v3 B안 — 입력칸 위 줄, 메뉴는 위로 연다).
   const [pickOpen, setPickOpen] = useState(false)
   const pickRef = useRef<HTMLDivElement>(null)
   const pickBtnRef = useRef<HTMLButtonElement>(null)
@@ -207,11 +211,16 @@ export function AraChatPanel({
         setEngine(e.engine)
         if (e.model !== undefined) setModel(e.model)
         setUsage(null)
+        setCtx(null)
         setPhase('idle')
         return
       }
       if (e.t === 'limits') {
         setLimits({ five: e.five, week: e.week })
+        return
+      }
+      if (e.t === 'context') {
+        setCtx((c) => ({ used: e.used ?? c?.used ?? null, window: e.window ?? c?.window ?? null }))
         return
       }
       if (e.t === 'noEngine') {
@@ -488,7 +497,10 @@ export function AraChatPanel({
     model: apiModel,
     models: [...AI_MODELS_BY_PROVIDER[apiProvider], ...(apiModel && !AI_MODELS_BY_PROVIDER[apiProvider].includes(apiModel) ? [apiModel] : [])]
   }
-  const use = usageLine(engine, limits, usage, now)
+  const segs = statusSegs(engine, limits, usage, ctx, now)
+  // #23 선택지 — **마지막 항목이 아라의 말**이고 지금 말을 보낼 수 있을 때만 버튼이 된다.
+  const lastAi = items[items.length - 1]
+  const choicesFor = lastAi?.k === 'ai' && phase === 'idle' && !ask ? lastAi.id : null
   // 경로 줄: 지금 보는 세션의 경로가 먼저다(목업 A). 없으면(RDP·대상 없음·아직 모름) 아라의 작업 폴더.
   const pathText = active?.cwd ?? null
 
@@ -515,114 +527,16 @@ export function AraChatPanel({
     >
       {/* 폭 조절 손잡이 — 왼쪽 가장자리. 사이드바 리사이저와 같은 자리·같은 동작이다. */}
       <div className="ara-grip" onMouseDown={onDragDown} title={t('ara.width')} />
-      {/* 아라 채팅 v2 — 준영님이 고른 **A 안**(agent_talk/MOCKUP-ara-chat-v2.html, 2026-10-20).
-          한 줄에 [대상 세션] … [엔진·모델 선택기] [새 대화] [지난 대화], 그 아래 경로 줄과 얇은 사용량 줄. */}
+      {/* 아라 채팅 v3 — 준영님이 고른 **B 안**(agent_talk/MOCKUP-ara-chat-v3.html, 2026-10-20, #20 #22).
+          머리에는 [대상 이름 + 종류 배지] … [새 대화] [지난 대화] [닫기]만. 아이콘은 줄지 않고 이름만 말줄임.
+          엔진·모델 선택기는 입력칸 위 줄로, 사용량은 입력칸 밑 상태줄로 내려갔다. */}
       <div className="ara-hd">
         <span className="ara-tgt" title={t('ara.target.tip')} data-field="ara.target">
           <i className={'dot' + (active ? '' : ' off')} />
           <span className="nm">{active ? active.title : t('ara.target.none')}</span>
           {active && <span className="typ">{t('ara.target.' + active.type)}</span>}
         </span>
-        <div className="ara-pick" ref={pickRef}>
-          <button
-            type="button"
-            ref={pickBtnRef}
-            className={'ara-sel' + (pickOpen ? ' open' : '')}
-            title={t('ara.pick.tip')}
-            aria-haspopup="menu"
-            aria-expanded={pickOpen}
-            data-action="ara.pick"
-            onClick={() => setPickOpen((v) => !v)}
-          >
-            <i className={'e' + (engine === 'api' ? ' api' : '')} />
-            <span className="en">{engine === 'api' ? t('ara.pick.api') : t('ara.engine.cli')}</span>
-            <span className="md">{engine === 'api' ? `${providerShort(api.provider)} · ${api.model}` : araModelLabel(model)}</span>
-            <ChevronDown className="car" />
-          </button>
-          {pickOpen && (
-            <div className="ara-pick-menu" role="menu" ref={pickMenuRef} onKeyDown={onPickKey}>
-              <div className="grp">{t('ara.pick.engine')}</div>
-              {(['cli', 'api'] as const).map((eng) => (
-                <button
-                  type="button"
-                  key={eng}
-                  role="menuitemradio"
-                  aria-checked={engine === eng}
-                  className={'it' + (engine === eng ? ' on' : '')}
-                  data-engine={eng}
-                  onClick={() => (engine === eng ? closePick() : void newChat(eng))}
-                >
-                  <i className={'e' + (eng === 'api' ? ' api' : '')} />
-                  <span className="l">{t(eng === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}</span>
-                  <span className="h">{t(eng === 'api' ? 'ara.pick.api.hint' : 'ara.pick.cli.hint')}</span>
-                </button>
-              ))}
-              <div className="warn">{t('ara.pick.warn')}</div>
-              <div className="sep" />
-              <div className="grp">
-                {t('ara.pick.model').replace('{e}', engine === 'api' ? AI_PROVIDER_LABELS[api.provider] : t('ara.engine.cli'))}
-              </div>
-              {engine === 'cli'
-                ? ARA_MODELS.map((m) => (
-                    <button
-                      type="button"
-                      key={m.id || 'default'}
-                      role="menuitemradio"
-                      aria-checked={m.id === model}
-                      className={'it' + (m.id === model ? ' on' : '')}
-                      data-model={m.id || 'default'}
-                      onClick={() => {
-                        closePick()
-                        void window.ev?.ara.model(m.id)
-                      }}
-                    >
-                      <span className="chk">{m.id === model ? '✓' : ''}</span>
-                      <span className="l">{m.label}</span>
-                      <span className="h">{m.hint}</span>
-                    </button>
-                  ))
-                : api.models.map((m) => (
-                    <button
-                      type="button"
-                      key={m}
-                      role="menuitemradio"
-                      aria-checked={m === api.model}
-                      className={'it' + (m === api.model ? ' on' : '')}
-                      data-model={m}
-                      onClick={() => {
-                        closePick()
-                        onApiModel?.(api.provider, m)
-                      }}
-                    >
-                      <span className="chk">{m === api.model ? '✓' : ''}</span>
-                      <span className="l">{m}</span>
-                    </button>
-                  ))}
-              {/* 작업 폴더 바꾸기 — 경로 줄은 표시 전용이다(보이는 값은 대상 세션 경로라 누르는 동작과 어긋났다).
-                  API 엔진은 폴더 없이 돈다. */}
-              {engine === 'cli' && (
-                <>
-                  <div className="sep" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="it"
-                    data-action="ara.cwd.change"
-                    title={cwd && !home ? cwd : undefined}
-                    onClick={() => {
-                      closePick()
-                      void pickFolder()
-                    }}
-                  >
-                    <span className="chk" />
-                    <span className="l">{t('ara.cwd.change')}</span>
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-        {/* 새 대화·지난 대화 — A 안은 아이콘이다(좁은 머리 한 줄). 이름은 title·aria-label 이 말한다. */}
+        {/* 새 대화·지난 대화 — 아이콘이다(좁은 머리 한 줄). 이름은 title·aria-label 이 말한다. */}
         <button type="button" className="ara-ic" title={t('ara.chats.new')} aria-label={t('ara.chats.new')} data-action="ara.chats.new" onClick={() => void newChat()}>
           <IconPlus />
         </button>
@@ -643,23 +557,6 @@ export function AraChatPanel({
           </span>
         </div>
       )}
-      {/* 사용량 — 한도 % 우선, 못 얻으면 이번 대화 토큰·추정 비용(준영님 결정). */}
-      <div className={'ara-uline' + (use.bars ? '' : ' none')}>
-        {use.bars && (
-          <>
-            <div className="ub">
-              <i style={{ width: `${use.bars.five}%` }} />
-            </div>
-            <div className="ub">
-              <i className="w" style={{ width: `${use.bars.week}%` }} />
-            </div>
-          </>
-        )}
-      </div>
-      <div className="ara-ustrip" data-field="ara.usage">
-        <span className="use">{use.left}</span>
-        {use.right && <span className="use r">{use.right}</span>}
-      </div>
 
       {chatsOpen && (
         /**
@@ -741,9 +638,30 @@ export function AraChatPanel({
               {it.text}
             </div>
           ) : it.k === 'ai' ? (
-            <div className="ara-ai" key={it.id}>
-              <Markdown text={it.text} />
-            </div>
+            (() => {
+              // 선택지 표식은 어느 말에서든 걷는다(지난 대화 복원 포함). 버튼은 마지막 말에만.
+              const { body, choices } = splitChoices(it.text)
+              const shown = choices && it.id === choicesFor ? choices : null
+              return (
+                <div className={'ara-ai' + (shown?.some(riskyChoice) ? ' risky' : '')} key={it.id}>
+                  <Markdown text={body} />
+                  {shown && (
+                    <div className="ara-choices" data-field="ara.choices">
+                      {shown.map((c, i) => (
+                        <button type="button" className={'pill' + (riskyChoice(c) ? ' danger' : '')} key={c + i} onClick={() => send(c)}>
+                          <span className="num">{i + 1}</span>
+                          {c}
+                        </button>
+                      ))}
+                      <button type="button" className="pill" onClick={() => inputRef.current?.focus()}>
+                        <span className="num">{shown.length + 1}</span>
+                        {t('ara.choice.other')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })()
           ) : it.k === 'note' ? (
             <div className={'ara-note' + (it.tone === 'bad' ? ' bad' : '')} key={it.id}>
               {it.text}
@@ -822,8 +740,107 @@ export function AraChatPanel({
       )}
 
       <div className="ara-compose">
-        {/* 메타 줄 — 계획 먼저. 엔진·모델·비용은 아라 채팅 v2 에서 머리(선택기·사용량 줄)로 올라갔다. */}
+        {/* 메타 줄 — 엔진·모델 선택기(v3 B안, 메뉴는 위로) + 계획 먼저. */}
         <div className="ara-bar">
+          <div className="ara-pick" ref={pickRef}>
+            <button
+              type="button"
+              ref={pickBtnRef}
+              className={'ara-sel' + (pickOpen ? ' open' : '')}
+              title={t('ara.pick.tip')}
+              aria-haspopup="menu"
+              aria-expanded={pickOpen}
+              data-action="ara.pick"
+              onClick={() => setPickOpen((v) => !v)}
+            >
+              <i className={'e' + (engine === 'api' ? ' api' : '')} />
+              <span className="en">{engine === 'api' ? t('ara.pick.api') : t('ara.engine.cli')}</span>
+              <span className="md">{engine === 'api' ? `${providerShort(api.provider)} · ${api.model}` : araModelLabel(model)}</span>
+              <ChevronDown className="car" />
+            </button>
+            {pickOpen && (
+              <div className="ara-pick-menu" role="menu" ref={pickMenuRef} onKeyDown={onPickKey}>
+                <div className="grp">{t('ara.pick.engine')}</div>
+                {(['cli', 'api'] as const).map((eng) => (
+                  <button
+                    type="button"
+                    key={eng}
+                    role="menuitemradio"
+                    aria-checked={engine === eng}
+                    className={'it' + (engine === eng ? ' on' : '')}
+                    data-engine={eng}
+                    onClick={() => (engine === eng ? closePick() : void newChat(eng))}
+                  >
+                    <i className={'e' + (eng === 'api' ? ' api' : '')} />
+                    <span className="l">{t(eng === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}</span>
+                    <span className="h">{t(eng === 'api' ? 'ara.pick.api.hint' : 'ara.pick.cli.hint')}</span>
+                  </button>
+                ))}
+                <div className="warn">{t('ara.pick.warn')}</div>
+                <div className="sep" />
+                <div className="grp">
+                  {t('ara.pick.model').replace('{e}', engine === 'api' ? AI_PROVIDER_LABELS[api.provider] : t('ara.engine.cli'))}
+                </div>
+                {engine === 'cli'
+                  ? ARA_MODELS.map((m) => (
+                      <button
+                        type="button"
+                        key={m.id || 'default'}
+                        role="menuitemradio"
+                        aria-checked={m.id === model}
+                        className={'it' + (m.id === model ? ' on' : '')}
+                        data-model={m.id || 'default'}
+                        onClick={() => {
+                          closePick()
+                          void window.ev?.ara.model(m.id)
+                        }}
+                      >
+                        <span className="chk">{m.id === model ? '✓' : ''}</span>
+                        <span className="l">{m.label}</span>
+                        <span className="h">{m.hint}</span>
+                      </button>
+                    ))
+                  : api.models.map((m) => (
+                      <button
+                        type="button"
+                        key={m}
+                        role="menuitemradio"
+                        aria-checked={m === api.model}
+                        className={'it' + (m === api.model ? ' on' : '')}
+                        data-model={m}
+                        onClick={() => {
+                          closePick()
+                          onApiModel?.(api.provider, m)
+                        }}
+                      >
+                        <span className="chk">{m === api.model ? '✓' : ''}</span>
+                        <span className="l">{m}</span>
+                      </button>
+                    ))}
+                {/* 작업 폴더 바꾸기 — 경로 줄은 표시 전용이다(보이는 값은 대상 세션 경로라 누르는 동작과 어긋났다).
+                    API 엔진은 폴더 없이 돈다. */}
+                {engine === 'cli' && (
+                  <>
+                    <div className="sep" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="it"
+                      data-action="ara.cwd.change"
+                      title={cwd && !home ? cwd : undefined}
+                      onClick={() => {
+                        closePick()
+                        void pickFolder()
+                      }}
+                    >
+                      <span className="chk" />
+                      <span className="l">{t('ara.cwd.change')}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={'ara-chip plan' + (planOn ? ' on' : '')}
@@ -889,6 +906,24 @@ export function AraChatPanel({
         <div className="ara-st">
           <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />
           {t('ara.phase.' + phase)}
+        </div>
+        {/* 상태줄(v3 #21) — 5시간 │ 주간 │ 맥락 │ 이번 대화. 좁으면 초기화 시간·대화 칸이 접힌다(CSS). */}
+        <div className="ara-us" data-field="ara.usage">
+          {segs.map((g, i) => (
+            <span className={'seg ' + g.key} key={g.key} data-seg={g.key}>
+              {i > 0 && <i className="sep" />}
+              {g.label && <span className="k">{g.label}</span>}
+              {g.pct !== null && (
+                <>
+                  <span className="mb">
+                    <i style={{ width: `${g.pct}%` }} />
+                  </span>
+                  <span className="v">{g.pct}%</span>
+                </>
+              )}
+              {g.note && <span className={g.pct === null ? 'v' : 'rs'}>{g.pct === null ? g.note : `· ${g.note}`}</span>}
+            </span>
+          ))}
         </div>
       </div>
     </div>
