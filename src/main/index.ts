@@ -563,8 +563,6 @@ app.whenReady().then(async () => {
     {
       server: mcp.server,
       vault: secrets,
-      // 활성 세션은 화면이 open() 에 실어 보낸다(main 원장에는 "어느 탭을 보고 있나"가 없다).
-      activeSession: () => null,
       lastLocalCwd: () => sessions.snapshot().find((x) => x.type === 'local' && x.cwd)?.cwd ?? null,
       // 아무것도 못 고를 때 가는 자리 — **묻지 않기 위해** 있다(2026-08-25 준영님 결정).
       // 홈 디렉터리를 쓰지 않는다: 그 폴더를 프로젝트로 여긴 검색 도구가 집 전체를 훑는다.
@@ -600,6 +598,9 @@ app.whenReady().then(async () => {
     getWebContents,
     store
   )
+  // 아라 채팅 v2: 지금 보는 세션에 대한 아라의 session_input 은 묻지 않는다 — 그 "지금 보는 세션"은
+  // 렌더러가 ara:active 로 알린 마지막 값이다(외부 MCP 클라이언트에는 해당 없음 — approval.ts).
+  mcp.approval.setAraTarget(() => araChat?.active()?.id ?? null)
   registerWindowIpc(() => mainWindow)
   /**
    * F1a 훅 기반 에이전트 상태 — **창을 만들기 전에** 포트를 잡는다.

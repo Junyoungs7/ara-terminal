@@ -33,7 +33,7 @@ import { GROUPS as G, groupLines, type ToolGroup as TG } from '@shared/araTools'
 import { readFileWindow } from '../log/readSessionLog'
 import { fetchTmuxSessions } from '../telemetry/TmuxSessions'
 import { connectByProfile } from '../ipc/registerSshIpc'
-import { McpApprovalManager, type ToolClass } from './approval'
+import { McpApprovalManager, type Caller, type ToolClass } from './approval'
 import type { AskUserManager } from './askUser'
 
 export type ToolCtx = {
@@ -124,10 +124,11 @@ async function gated(
   tool: string,
   cls: ToolClass,
   argsForLog: Record<string, unknown>,
-  exec: () => Promise<ToolResult>
+  exec: () => Promise<ToolResult>,
+  caller: Caller
 ): Promise<ToolResult> {
   const argsSummary = maskSecrets(JSON.stringify(argsForLog))
-  const r = await approval.runTool(sessionId, tool, cls, argsSummary, exec)
+  const r = await approval.runTool(sessionId, tool, cls, argsSummary, exec, caller)
   return r.ok ? r.result : fail(r.message)
 }
 
@@ -168,7 +169,11 @@ export type AraToolGate = {
   readonly doors: readonly { name: string; description: string; parameters: Record<string, unknown> }[]
 }
 
-export function buildAraTools(ctx: ToolCtx): AraToolGate {
+/**
+ * `caller` — 이 게이트를 누가 쓰나(아라 채팅 v2). API 엔진 게이트는 늘 'ara', MCP 는 연결이 아라 전용
+ * 토큰으로 열렸을 때만 'ara' 다(McpServer). 'ara' 만 지금 보는 세션에 묻지 않고 칠 수 있다(approval.ts).
+ */
+export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'external'): AraToolGate {
   const TOOLS = new Map<string, ToolDef>()
 
   /**
@@ -200,7 +205,7 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
     cls: ToolClass,
     args: Record<string, unknown>,
     exec: () => Promise<ToolResult>
-  ) => gated(ctx.approval, sessionId, tool, cls, args, exec)
+  ) => gated(ctx.approval, sessionId, tool, cls, args, exec, caller())
 
   // ssh_connect 와 session_create(type:'ssh') 가 같은 문을 쓴다. **없는 프로필을 먼저 거른다** —
   // 그래야 "찾을 수 없다"에 등록된 목록을 실어 보낼 수 있다(그 안내가 없으면 모델이 파일을 뒤진다).
@@ -936,8 +941,8 @@ export function buildAraTools(ctx: ToolCtx): AraToolGate {
  * MCP 서버에 문 둘을 건다. **실행은 게이트가 하고 여기는 등록만** 한다 —
  * 같은 게이트를 API 엔진도 쓰기 때문이다(2026-08-26).
  */
-export function registerMcpTools(server: McpServer, ctx: ToolCtx): AraToolGate {
-  const gate = buildAraTools(ctx)
+export function registerMcpTools(server: McpServer, ctx: ToolCtx, caller: () => Caller = () => 'external'): AraToolGate {
+  const gate = buildAraTools(ctx, caller)
   const [toolsDoor, callDoor] = gate.doors
   server.registerTool(
     'ara_tools',

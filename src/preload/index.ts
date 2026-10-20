@@ -393,6 +393,8 @@ const api: EvApi = {
     ) =>
       ipcRenderer.invoke('ara:open', o),
     send: (text: string) => ipcRenderer.invoke('ara:send', { text }),
+    setActive: (active: { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null } | null) =>
+      ipcRenderer.invoke('ara:active', { active }),
     planMode: (on: boolean) => ipcRenderer.invoke('ara:planMode', { on }),
     chats: () => ipcRenderer.invoke('ara:chats'),
     renameChat: (id: string, name: string) => ipcRenderer.invoke('ara:renameChat', { id, name }),

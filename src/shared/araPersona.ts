@@ -38,6 +38,32 @@ export function honorific(name: string): string {
   return /[님씨]$/.test(n) ? n : `${n}님`
 }
 
+/**
+ * 지금 보는 세션(아라 채팅 v2, 2026-10-20). 렌더러가 활성 탭이 바뀔 때마다 main 에 알린다.
+ * 채팅은 이 세션을 **대상**으로 쓰고, 이 세션에 대한 session_input 은 묻지 않고 실행된다(approval.ts).
+ */
+export type AraTarget = { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null }
+
+const TARGET_HEAD = '[지금 보는 세션]'
+/** 한 줄 클램프 — 탭 이름·경로는 사람이 정한 글자라 줄바꿈으로 머리말 밖을 쓰지 못하게 한다. */
+const oneLine = (v: string, n: number): string => v.replace(/[\r\n\t]+/g, ' ').trim().slice(0, n)
+
+/**
+ * 매 사용자 메시지 앞에 붙는 머리말(모델만 본다 — 화면 기록에서는 stripTarget 이 걷는다).
+ * 끝의 빈 줄까지가 머리말이다.
+ */
+export function targetLine(t: AraTarget | null): string {
+  if (!t) return `${TARGET_HEAD} 없음 — 열려 있는 세션이 없습니다\n\n`
+  const name = oneLine(t.title, 60)
+  if (t.type === 'rdp') return `${TARGET_HEAD} 종류=rdp 이름=${name} — 원격 데스크톱이라 글자 입력·읽기 도구를 쓸 수 없습니다\n\n`
+  return `${TARGET_HEAD} id=${oneLine(t.id, 80)} 종류=${t.type} 이름=${name}${t.cwd ? ` 경로=${oneLine(t.cwd, 300)}` : ''}\n\n`
+}
+
+/** 머리말을 걷는다(기록·제목에 사람이 친 글만 남게). */
+export function stripTarget(text: string): string {
+  return text.startsWith(TARGET_HEAD) ? text.replace(/^\[지금 보는 세션\][^\n]*\n\n?/, '') : text
+}
+
 /** 프롬프트에 실을 서버 한 줄. 비밀도 호스트도 넣지 않는다 — 붙는 데 필요한 건 이 둘뿐이다. */
 export type PersonaServer = { id: string; name: string }
 
@@ -161,6 +187,8 @@ ${groupLines()}
   }
 
 ## 일하는 방식
+- 메시지 맨 앞의 \`[지금 보는 세션]\` 줄은 프로그램이 붙인 것입니다(사용자가 지금 화면에서 보고 있는 탭).
+  **사용자가 대상을 말하지 않으면 지금 보는 세션을 씁니다** — 세션 목록을 다시 뒤지거나 어느 세션인지 묻지 않습니다.
 - 서버·파일·포트가 필요하면 도구를 **그냥 씁니다.** 무엇을 쓸지 미리 설명하지 마세요 — 화면이 이미 보여 줍니다.
 - 추측하면 안 되는 갈림길에서는 **되묻습니다**(어느 서버인지, 정말 지울지).
 - 되돌리기 어려운 일은 무엇을 할지 한 줄로 알리고 확인을 받은 뒤에 합니다.

@@ -515,6 +515,12 @@ export type UiState = {
    * 그쪽 것을 읽기만 하고 우리 형식으로 다시 저장하지 않는다 — 두 벌이 되면 언젠가 어긋난다.
    */
   araChatNames?: Record<string, string>
+  /**
+   * 아라 채팅 v2(2026-10-20): 마지막에 고른 엔진·Claude Code 모델. 다음에 열 때 그대로 연다.
+   * 모델은 araModelOf 로 다시 클램프한다(낡은 버전 ID 는 기본값으로). 선택 필드라 SCHEMA_VERSION 그대로.
+   */
+  araEngine?: 'cli' | 'api'
+  araModel?: string
   // F12 [로그]: 세션 로그 기록·보존 기간. 미지정이면 꺼짐 / 30일.
   sessionLog?: boolean
   logRetentionDays?: number

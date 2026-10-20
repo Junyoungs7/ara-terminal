@@ -103,25 +103,35 @@ export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: numbe
   let mcp: SdkMcpServer | null = null
   let boundPort = bindPort
 
-  function authOk(req: IncomingMessage): boolean {
+  // 지금 연결이 아라 전용 토큰으로 열렸나(아라 채팅 v2). 이 연결의 도구 호출만 caller='ara' 다 —
+  // 지금 보는 세션에 묻지 않고 칠 수 있는 것은 아라 채팅뿐이고, 외부 클라이언트(사용자 토큰)는 그대로 묻는다.
+  let selfConn = false
+
+  /** 어느 토큰과 맞았나. 'self' = 아라 전용, 'user' = 사용자가 외부 클라이언트에 넣은 것, null = 실패. */
+  function authKind(req: IncomingMessage): 'user' | 'self' | null {
     // 받아 주는 토큰은 둘이다: 사용자 것과 아라 것(위 MCP_SELF_TOKEN_VAULT_KEY 참고).
     // 둘 다 없으면 아무도 못 들어온다 — 인증 없는 경로는 만들지 않는다.
-    const expected = [MCP_TOKEN_VAULT_KEY, MCP_SELF_TOKEN_VAULT_KEY]
-      .map((k) => (vault.has(k) ? vault.get(k) : null))
-      .filter((h): h is string => typeof h === 'string' && h.length > 0)
-    if (expected.length === 0) return false
     const header = req.headers['authorization']
-    if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false
+    if (typeof header !== 'string' || !header.startsWith('Bearer ')) return null
     const token = header.slice('Bearer '.length).trim()
-    if (token.length === 0) return false
+    if (token.length === 0) return null
     const got = hashToken(token)
     // 비교는 각 해시마다 상수시간이다. 어느 쪽과 맞았는지만 갈리고 비밀은 새지 않는다.
-    return expected.some((h) => safeEqualHex(got, h))
+    const match = (k: string): boolean => {
+      const h = vault.has(k) ? vault.get(k) : null
+      return typeof h === 'string' && h.length > 0 && safeEqualHex(got, h)
+    }
+    if (match(MCP_SELF_TOKEN_VAULT_KEY)) return 'self'
+    if (match(MCP_TOKEN_VAULT_KEY)) return 'user'
+    return null
   }
 
   async function onRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // 인증 전에는 initialize 핸드셰이크조차 진행하지 않는다 — 툴 목록도 인증 전엔 새어나가지 않는다.
-    if (!authOk(req)) return rpcError(res, 401, -32001, '인증되지 않았습니다.')
+    const kind = authKind(req)
+    if (!kind) return rpcError(res, 401, -32001, '인증되지 않았습니다.')
+    // 아라 연결에는 아라 토큰으로만 말을 건다 — 사용자 토큰을 쥔 쪽이 그 연결에 끼어들어 'ara' 권한을 빌리지 못하게.
+    if (transport && selfConn && kind !== 'self') return rpcError(res, 401, -32001, '인증되지 않았습니다.')
 
     if (req.method === 'POST') {
       let body: unknown
@@ -140,13 +150,15 @@ export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: numbe
           return
         }
         const server = new SdkMcpServer({ name: 'ara-terminal', version: '1.0.0' })
-        registerMcpTools(server, ctx)
+        const isSelf = kind === 'self'
+        registerMcpTools(server, ctx, () => (isSelf ? 'ara' : 'external'))
         const t = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() })
         t.onclose = () => {
           if (transport === t) transport = null
           if (mcp === server) mcp = null
         }
         transport = t
+        selfConn = isSelf
         mcp = server
         await server.connect(t)
         await t.handleRequest(req, res, body)

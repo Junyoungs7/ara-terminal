@@ -64,8 +64,9 @@ export function registerMcpIpc(
     askDone: (askId: string) => push('mcp:askDone', { askId })
   })
   const ctx: ToolCtx = { ...deps, approval, ask }
-  // 게이트를 여기서 한 번 만든다 — MCP 서버와 API 엔진이 **같은 것**을 쓴다.
-  const gate = buildAraTools(ctx)
+  // 게이트를 여기서 한 번 만든다 — API 엔진이 쓴다(MCP 서버는 연결마다 같은 표로 따로 만든다).
+  // 이 게이트를 부르는 것은 아라 채팅(API 엔진)뿐이라 caller 는 늘 'ara' 다.
+  const gate = buildAraTools(ctx, () => 'ara')
   const server = createMcpServer(ctx, vault, bindPort)
 
   handle('mcp:getState', () => state())

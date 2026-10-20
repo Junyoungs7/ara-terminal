@@ -165,6 +165,13 @@ export class WorkspaceStore {
     this.flush()
   }
 
+  /** 아라 채팅 v2: 고른 엔진·모델 저장. 준 것만 덮어쓴다(값 검사는 registerAraIpc 가 먼저 한다). */
+  setAraPick(p: { engine?: 'cli' | 'api'; model?: string }): void {
+    if (p.engine !== undefined) this.snapshot.ui.araEngine = p.engine
+    if (p.model !== undefined) this.snapshot.ui.araModel = p.model
+    this.flush()
+  }
+
   /**
    * F23 MCP 서버 on/off (2026-08-26). **기본은 켬** — 미지정과 false 를 구분하려고 저장한다.
    * 저장하지 않으면 사용자가 끈 것이 재시작 때마다 되살아나 "껐는데 왜 또 켜지지"가 된다.

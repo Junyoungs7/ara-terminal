@@ -10,6 +10,7 @@ import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
 import { araModelOf } from '@shared/aiModels'
+import type { AraTarget } from '@shared/araPersona'
 import { listAraChats, listApiChats, projectDir, readChatMessages } from '../ai/araChats'
 import { chatPath } from '../ai/apiChatLog'
 import { existsSync } from 'node:fs'
@@ -33,26 +34,60 @@ export function validResumeId(v: unknown): string | null {
   return typeof v === 'string' && NAME_OK.test(v) ? v : null
 }
 
-export type AraRuntime = { chat: AraChat }
+/**
+ * 렌더러가 알린 활성 세션을 모양으로 거른다(신뢰 경계 밖). 모양이 아니면 null — "대상 없음"으로 읽힌다.
+ */
+export function araTargetOf(v: unknown): AraTarget | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  if (typeof o.id !== 'string' || o.id === '' || o.id.length > 200) return null
+  if (o.type !== 'local' && o.type !== 'ssh' && o.type !== 'rdp') return null
+  return {
+    id: o.id,
+    type: o.type,
+    title: typeof o.title === 'string' ? o.title.slice(0, 200) : '',
+    cwd: typeof o.cwd === 'string' && o.cwd !== '' ? o.cwd.slice(0, 1000) : null
+  }
+}
+
+export type AraRuntime = {
+  chat: AraChat
+  /** 지금 보는 세션(렌더러의 마지막 보고). 승인 게이트가 자동 허용 대상을 여기서 본다. */
+  active: () => AraTarget | null
+}
 
 export function registerAraIpc(
-  deps: Omit<AraChatDeps, 'emit'>,
+  deps: Omit<AraChatDeps, 'emit' | 'activeSession' | 'savedModel'>,
   getWebContents: () => WebContents | null,
   /** 대화 이름 저장소(2026-08-26). AraChat 은 이걸 모른다 — 이름은 화면의 일이라 여기서만 다룬다. */
   ws: WorkspaceStore
 ): AraRuntime {
+  // 아라 채팅 v2: 지금 보는 세션. 렌더러가 탭이 바뀔 때마다 알린다(main 원장에는 "어느 탭을 보나"가 없다).
+  let active: AraTarget | null = null
   const chat = createAraChat({
     ...deps,
+    activeSession: () => active,
+    savedModel: () => araModelOf(ws.get().ui.araModel),
     emit: (e) => pushSend(getWebContents(), 'ara:event', e)
   })
 
-  handle('ara:open', ({ cwd, resumeId, active, engine }) => {
+  handle('ara:active', ({ active: next }) => {
+    active = araTargetOf(next)
+    return { ok: true } as const
+  })
+
+  handle('ara:open', ({ cwd, resumeId, active: a, engine }) => {
     const rid = validResumeId(resumeId)
+    // 엔진을 안 주면 **지난번에 고른 것**(아라 채팅 v2). 사람이 고른 것(이어 열기 제외)만 저장한다 —
+    // 지난 대화를 열 때는 그 대화의 엔진을 따르는 것이지 사람이 엔진을 바꾼 것이 아니다.
+    const picked = engine === 'api' || engine === 'cli' ? engine : null
+    if (picked && !rid) ws.setAraPick({ engine: picked })
+    const eng = picked ?? ws.get().ui.araEngine ?? 'cli'
     return chat.open({
       ...(cwd ? { cwd } : {}),
       ...(rid ? { resumeId: rid } : {}),
-      ...(active === undefined ? {} : { active }),
-      ...(engine === 'api' ? { engine: 'api' as const } : {})
+      ...(a === undefined ? {} : { active: a }),
+      ...(eng === 'api' ? { engine: 'api' as const } : {})
     })
   })
   handle('ara:send', ({ text }) => {
@@ -68,7 +103,9 @@ export function registerAraIpc(
     return { ok: true } as const
   })
   handle('ara:model', ({ model }) => {
-    chat.setModel(araModelOf(model))
+    const m = araModelOf(model)
+    ws.setAraPick({ model: m })
+    chat.setModel(m)
     return { ok: true } as const
   })
   handle('ara:interrupt', () => {
@@ -136,5 +173,5 @@ export function registerAraIpc(
     return { ok: true } as const
   })
 
-  return { chat }
+  return { chat, active: () => active }
 }

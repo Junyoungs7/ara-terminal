@@ -242,7 +242,7 @@ describe('실증 — 아라 MCP 물리기 + 권한 관찰(#124)', () => {
       const chat = createAraChat({
         server,
         vault,
-        activeSession: () => ({ type: 'local', cwd: dir }),
+        activeSession: () => ({ id: 's1', type: 'local', title: 'local', cwd: dir }),
         lastLocalCwd: () => dir,
         araCwd: () => dir,
         emit: (e) => {

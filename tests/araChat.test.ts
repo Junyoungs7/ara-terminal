@@ -179,7 +179,7 @@ describe('아라 대화 한 벌', () => {
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
       vault,
-      activeSession: () => o.session ?? null,
+      activeSession: () => (o.session ? { id: 's1', title: 'sess', ...o.session } : null),
       lastLocalCwd: () => o.lastLocal ?? null,
       araCwd: () => araHome,
       emit: (e) => seen.push(e),
@@ -191,7 +191,7 @@ describe('아라 대화 한 벌', () => {
   it('열면 폴더와 MCP 물림 여부를 알린다', async () => {
     const { chat, seen } = setup({ session: { type: 'local', cwd: local } })
     expect(await chat.open()).toEqual({ ok: true })
-    expect(seen).toEqual([{ t: 'opened', cwd: local, withMcp: true, engine: 'cli' }])
+    expect(seen).toEqual([{ t: 'opened', cwd: local, withMcp: true, engine: 'cli', model: '' }])
     expect(chat.isOpen()).toBe(true)
   })
 
@@ -199,14 +199,14 @@ describe('아라 대화 한 벌', () => {
     const { chat, seen } = setup({ session: { type: 'ssh', cwd: '/srv' } })
     expect(await chat.open()).toEqual({ ok: true })
     // home: true 가 붙는다 — 화면은 이 경로를 감춘다(#137, 아래 '작업 폴더 표시' 참고).
-    expect(seen).toEqual([{ t: 'opened', cwd: araHome, withMcp: true, engine: 'cli', home: true }])
+    expect(seen).toEqual([{ t: 'opened', cwd: araHome, withMcp: true, engine: 'cli', model: '', home: true }])
     expect(chat.isOpen()).toBe(true)
   })
 
   it('사용자가 고른 폴더가 규칙을 이긴다', async () => {
     const { chat, seen } = setup({ session: { type: 'ssh', cwd: '/srv' } })
     await chat.open({ cwd: local })
-    expect(seen[0]).toEqual({ t: 'opened', cwd: local, withMcp: true, engine: 'cli' })
+    expect(seen[0]).toEqual({ t: 'opened', cwd: local, withMcp: true, engine: 'cli', model: '' })
   })
 
   it('★ 권한 요청은 대기열에 담긴다 — 화면이 늦게 붙어도 잃지 않는다', async () => {
@@ -305,7 +305,7 @@ describe('엔진이 없을 때 · 폴백 (#126)', () => {
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
       vault: memVault(),
-      activeSession: () => ({ type: 'local', cwd: local }),
+      activeSession: () => ({ id: 's1', type: 'local', title: 'local', cwd: local }),
       lastLocalCwd: () => local,
       araCwd: () => local,
       emit: (e) => seen.push(e),
@@ -366,7 +366,7 @@ describe('계획 먼저 (#136)', () => {
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
       vault: memVault(),
-      activeSession: () => ({ type: 'local', cwd: local }),
+      activeSession: () => ({ id: 's1', type: 'local', title: 'local', cwd: local }),
       lastLocalCwd: () => local,
       araCwd: () => local,
       emit: (e) => seen.push(e),
@@ -442,7 +442,7 @@ describe('모델 고르기 (#137)', () => {
     const chat = createAraChat({
       server: fakeServer({ enabled: true }),
       vault: memVault(),
-      activeSession: () => ({ type: 'local', cwd: local }),
+      activeSession: () => ({ id: 's1', type: 'local', title: 'local', cwd: local }),
       lastLocalCwd: () => local,
       araCwd: () => local,
       emit: (e) => seen.push(e),

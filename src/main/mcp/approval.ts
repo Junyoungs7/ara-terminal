@@ -21,6 +21,10 @@ import type { AuditLog, AuditOutcome } from './auditLog'
 export const NEW_SESSION = '(new)'
 
 export type ToolClass = 'readOnly' | 'sessionInput' | 'writeAlways'
+/** 누가 불렀나. 'ara' = 아라 채팅(API 엔진 게이트 · 아라 전용 토큰으로 붙은 MCP 연결), 그 밖은 'external'. */
+export type Caller = 'ara' | 'external'
+/** 사람이 그 세션에 친 뒤 아라의 자동 입력을 멈추는 시간. */
+export const HUMAN_PAUSE_MS = 10_000
 
 const DEFAULT_MODE: McpSessionMode = 'approval'
 const RATE_WINDOW_MS = 60_000
@@ -57,6 +61,13 @@ export class McpApprovalManager {
   // 공격(다이얼로그 폭탄)에 그대로 노출된다. 인계 중에는 이 툴들을 다이얼로그 없이 즉시 거부한다.
   // 해제는 사용자가 UI에서 명시적으로 조종을 재개할 때만(resumeControl) — 조용히 풀리지 않는다.
   private handedBack = false
+  /**
+   * 아라 채팅 v2(2026-10-20 준영님 결정): **지금 보는 세션**(렌더러가 알린 활성 탭)에 대한 session_input 은
+   * 묻지 않는다 — 단 **아라 채팅이 부른 것**(caller='ara')에만. 외부 MCP 클라이언트는 그대로 묻는다.
+   */
+  private araTarget: () => string | null = () => null
+  // 사람이 그 세션에 친 마지막 시각. 친 직후 잠시는 자동 실행을 멈춘다(손이 핸들을 잡았다).
+  private readonly humanAt = new Map<string, number>()
 
   // approvalTimeoutMs: 테스트 seam(ARA_AI_FAKE 와 같은 관행) — 2분 실시간 대기 없이 타임아웃 경로를
   // 검증하기 위함이다. 프로덕션 호출자는 넘기지 않는다(항상 MCP_APPROVAL_TIMEOUT_MS).
@@ -120,6 +131,7 @@ export class McpApprovalManager {
   // 사람이 타이핑하면(registerSessionIpc의 session:input) 그 세션의 autoAllow 를 즉시 해제한다(설계 §3.3).
   // "손이 핸들을 잡으면 오토파일럿이 풀린다" — 조용히 재개되지 않는다(사람이 다시 켜야 한다).
   onHumanInput(sessionId: string): void {
+    this.humanAt.set(sessionId, Date.now())
     const e = this.sessions.get(sessionId)
     if (!e || e.mode !== 'autoAllow') return
     e.mode = 'approval'
@@ -151,7 +163,21 @@ export class McpApprovalManager {
   // 안 지우면 상태바 인디케이터(mcp:getState → sessions)에 이미 닫힌 세션이 유령으로 계속 남는다.
   // registerSessionIpc 의 onExit 훅(F8 포워딩 정리와 같은 자리)에서 호출한다.
   forget(sessionId: string): void {
+    this.humanAt.delete(sessionId)
     if (this.sessions.delete(sessionId)) this.emit.stateChanged()
+  }
+
+  /** 지금 보는 세션 id 를 알려 주는 함수(registerAraIpc 가 렌더러 보고를 들고 있다). */
+  setAraTarget(fn: () => string | null): void {
+    this.araTarget = fn
+  }
+
+  /** 아라 채팅이 지금 보는 세션에 치는 것인가 — 묻지 않고 실행할 유일한 갈래. */
+  private isAraTargetInput(sessionId: string, tool: string, caller: Caller): boolean {
+    if (caller !== 'ara' || tool !== 'session_input') return false
+    if (sessionId !== this.araTarget()) return false
+    const h = this.humanAt.get(sessionId)
+    return h === undefined || Date.now() - h >= HUMAN_PAUSE_MS
   }
 
   // D2: 인계 해제 — 사용자가 UI에서 명시적으로 눌러야만 호출된다(mcp:resumeControl). 개별 세션의
@@ -206,7 +232,8 @@ export class McpApprovalManager {
     sessionId: string | null,
     tool: string,
     cls: ToolClass,
-    argsSummary: string
+    argsSummary: string,
+    caller: Caller
   ): Promise<{ allow: boolean; outcome: AuditOutcome }> {
     if (!this.checkRate(sessionId ?? NEW_SESSION)) return { allow: false, outcome: 'rateLimited' }
     if (cls === 'readOnly') return { allow: true, outcome: 'auto' }
@@ -214,6 +241,7 @@ export class McpApprovalManager {
       const mode = this.modeOf(sessionId)
       if (mode === 'readOnly') return { allow: false, outcome: 'denied' }
       if (cls === 'sessionInput' && mode === 'autoAllow') return { allow: true, outcome: 'auto' }
+      if (this.isAraTargetInput(sessionId, tool, caller)) return { allow: true, outcome: 'auto' }
       // D2: sessionId===null(session_create/ssh_connect)만 인계의 보호를 벗어나 있었다 — 기존 세션은
       // 이미 handback() 이 readOnly 로 만들어 위 분기에서 걸린다.
     } else if (this.handedBack) {
@@ -229,9 +257,10 @@ export class McpApprovalManager {
     tool: string,
     cls: ToolClass,
     argsSummary: string,
-    exec: () => Promise<T>
+    exec: () => Promise<T>,
+    caller: Caller = 'external'
   ): Promise<{ ok: true; result: T } | { ok: false; message: string }> {
-    const authz = await this.authorize(sessionId, tool, cls, argsSummary)
+    const authz = await this.authorize(sessionId, tool, cls, argsSummary, caller)
     const mode = this.sessions.get(sessionId ?? NEW_SESSION)?.mode ?? DEFAULT_MODE
 
     let auditFailed = false

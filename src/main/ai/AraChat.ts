@@ -19,7 +19,7 @@ import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault, type SessionTools } from './AraSession'
 import { hasLocalCli } from '../util/localCli'
 import { clearStaleSelfToken, pickEngineCwd, prepareAraMcp, writePersona, type AraMcpHandoff, type SelfTokenVault } from './engine/araMcp'
-import { buildPersona, type PersonaServer } from '@shared/araPersona'
+import { buildPersona, targetLine, type AraTarget, type PersonaServer } from '@shared/araPersona'
 
 /** 엔진을 띄울 때 주는 것 — 주입 seam(makeEngine)과 진짜 생성자가 같은 모양을 쓴다. */
 export type ClaudeEngineArgs = {
@@ -38,9 +38,12 @@ export type AraChatDeps = {
   /**
    * 지금 보고 있는 세션(작업 폴더를 여기서 고른다 — §3.3).
    * **활성 세션을 아는 것은 렌더러다**(main 의 세션 원장에는 "어느 탭을 보고 있나"가 없다) —
-   * 그래서 화면이 open() 에 실어 보내고, 이 함수는 그게 없을 때의 대비다.
+   * 화면이 탭이 바뀔 때마다 `ara:active` 로 알리고(아라 채팅 v2), 이 함수가 그 마지막 보고를 돌려준다.
+   * 매 메시지 앞의 [지금 보는 세션] 머리말도 이것으로 만든다.
    */
-  activeSession: () => { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+  activeSession: () => AraTarget | null
+  /** 저장된 Claude Code 모델(아라 채팅 v2). 열 때마다 읽는다 — 없으면 지금 값 그대로. */
+  savedModel?: () => string
   /** 마지막으로 쓴 로컬 폴더(없으면 null → 아라 폴더로 떨어진다). */
   lastLocalCwd: () => string | null
   /**
@@ -65,7 +68,8 @@ export type AraChatDeps = {
   apiChatDir?: () => string
   /**
    * B 엔진에 쥐여 줄 도구(2026-08-26 준영님 요청). MCP 와 **같은 게이트**라 인자 검증·승인 창·
-   * 감사 로그가 그대로 붙는다. 없으면 도구 없이 대화만 한다(옛 동작).
+   * 감사 로그가 그대로 붙는다. 이 게이트로 부르면 caller='ara' 라 지금 보는 세션 입력은 묻지 않는다.
+   * MCP 서버 객체가 없을 때(시험 등)만 null 이고, 그때는 도구 없이 대화만 한다.
    */
   apiTools?: () => SessionTools | null
   /** 사용자 호칭(#138). 빈 문자열이면 기본 호칭으로 부른다. */
@@ -90,7 +94,7 @@ export type AraChatEvent =
    * `home: true` 면 그 폴더는 **아라 폴더**(고를 것이 없어 떨어진 자리)라 화면이 경로를 감춘다 —
    * `…\AppData\…ra-home` 은 사람에게 아무것도 알려 주지 않는다(2026-08-25 준영님).
    */
-  | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind; home?: true }
+  | { t: 'opened'; cwd: string | null; withMcp: boolean; engine: AraEngineKind; home?: true; model?: string }
   /** 이 PC 에 `claude` 가 없다 — 설치하든지 API 키로 가든지(설계 §5). */
   | { t: 'noEngine' }
   /** 닫혔다. */
@@ -202,7 +206,7 @@ export function createAraChat(deps: AraChatDeps): AraChat {
       // 다시 열면 앞의 것을 내린다 — 두 프로세스가 같은 대화를 물면 답이 섞인다.
       if (engine) teardown()
 
-      // ── B 엔진(API 키). 도구가 없으니 작업 폴더도 MCP 도 의미가 없다 — 그 둘을 통째로 건너뛴다.
+      // ── B 엔진(API 키). 작업 폴더도 MCP 설정 파일도 필요 없다 — 도구는 같은 게이트를 함수로 직접 부른다(apiTools).
       if (o.engine === 'api') {
         if (!deps.api) {
           deps.emit({ t: 'error', message: 'API 키 엔진을 쓸 수 없습니다.' })
@@ -247,6 +251,8 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         return { ok: false, noEngine: true }
       }
 
+      // 저장된 모델(아라 채팅 v2) — 앱을 껐다 켜도 고른 모델로 연다.
+      if (deps.savedModel) model = deps.savedModel()
       // MCP 를 못 물려도 대화는 시작한다 — Claude Code 기본 기능은 그대로 산다(§3.2).
       handoff = await prepareAraMcp(deps.server, deps.vault)
       // 말투(#138) — 못 써도 대화는 시작한다(말투가 없을 뿐이다).
@@ -273,12 +279,15 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         cwd,
         withMcp: handoff !== null,
         engine: 'cli',
+        model,
         ...(cwd === deps.araCwd() ? { home: true as const } : {})
       })
       return { ok: true }
     },
 
-    send: (text) => engine?.send(text),
+    // 아라 채팅 v2: 매 메시지 앞에 [지금 보는 세션] 머리말을 붙인다 — 모델은 "어느 세션?"을 묻지 않고
+    // 그 세션을 대상으로 잡는다. 화면 기록에서는 araChats.stripTarget 이 걷는다(사람이 친 글만 보이게).
+    send: (text) => engine?.send(targetLine(deps.activeSession()) + text),
 
     setPlanMode(on) {
       if (planMode === on) return

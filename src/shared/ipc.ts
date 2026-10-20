@@ -537,6 +537,8 @@ export type InvokeContract = {
     res: { ok: boolean; needCwd?: boolean; noEngine?: boolean }
   }
   'ara:send': { req: { text: string }; res: { ok: true } }
+  /** 아라 채팅 v2: 지금 보는 세션(활성 탭). 바뀔 때마다 온다 — null 이면 대상 없음. main 이 모양을 거른다. */
+  'ara:active': { req: { active: { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null } | null }; res: { ok: true } }
   /**
    * #128 AI 세션(작업대) 목록 저장. workspace:save 와 따로인 이유는 types.ts 의 aiSessions 주석 참고 —
    * 그 페이로드는 세 필드 화이트리스트로 막혀 있고 여기는 주인이 다르다.
@@ -997,6 +999,8 @@ export type EvApi = {
       engine?: 'cli' | 'api'
     }): Promise<{ ok: boolean; needCwd?: boolean; noEngine?: boolean }>
     send(text: string): Promise<{ ok: true }>
+    /** 아라 채팅 v2: 지금 보는 세션을 main 에 알린다. */
+    setActive(active: { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null } | null): Promise<{ ok: true }>
     planMode(on: boolean): Promise<{ ok: true }>
     /** #128 작업대 목록 저장(아라 대화와 다른 물건이지만 같은 ara 표면에 둔다). */
     saveSessions(list: unknown): Promise<{ ok: true }>

@@ -14,6 +14,7 @@
 import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { stripTarget } from '@shared/araPersona'
 
 export type AraChatRow = {
   /** Claude Code 세션 id = 파일 이름. `--resume` 에 그대로 넘긴다. */
@@ -48,7 +49,8 @@ export function projectDir(cwd: string, home = homedir()): string {
 
 /** 제목으로 쓸 만큼만 다듬는다 — 목록 한 줄에 들어가야 한다. */
 export function titleOf(raw: string): string {
-  const one = raw.replace(/\s+/g, ' ').trim()
+  // 아라 채팅 v2: 메시지 앞의 [지금 보는 세션] 머리말은 모델 몫이다 — 제목은 사람이 친 글로.
+  const one = stripTarget(raw).replace(/\s+/g, ' ').trim()
   return one.length > 60 ? one.slice(0, 60) + '…' : one
 }
 
@@ -178,7 +180,8 @@ export function readChatMessages(path: string, limit = 200): ChatMessage[] {
     if (rec.type !== 'user' && rec.type !== 'assistant') continue
     const c = rec.message?.content
     if (typeof c === 'string') {
-      if (c.trim()) out.push({ role: rec.type, text: c })
+      const t = rec.type === 'user' ? stripTarget(c) : c
+      if (t.trim()) out.push({ role: rec.type, text: t })
       continue
     }
     if (!Array.isArray(c)) continue
@@ -190,7 +193,8 @@ export function readChatMessages(path: string, limit = 200): ChatMessage[] {
       .map((x) => x.text as string)
       .join('')
       .trim()
-    if (text) out.push({ role: rec.type, text })
+    const shown = rec.type === 'user' ? stripTarget(text) : text
+    if (shown) out.push({ role: rec.type, text: shown })
   }
   // 아주 긴 대화는 뒤에서부터 자른다 — 되살리는 것은 "이어서 보기" 지 전체 사본이 아니다.
   return out.length > limit ? out.slice(-limit) : out
