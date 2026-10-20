@@ -12,11 +12,12 @@ import { appendTurn, readTurns } from '../apiChatLog'
  * `AiEngine` 로 옮겨 담는 얇은 층이다. #123 에서 사건 모양을 하나로 맞춰 둔 이유가 이것이다.
  *
  * **A 엔진과 같지 않다. 그 차이를 숨기지 않는다:**
- *  · 도구가 **없다** — 파일을 읽지도, 명령을 돌리지도, 아라 도구(MCP)를 쓰지도 못한다.
- *    `ready.tools` 를 빈 배열로 올리므로 화면 첫 줄이 "도구 0개"라고 말한다.
+ *  · 도구는 **아라 도구뿐이다**(2026-08-26~) — MCP 와 같은 게이트(`ara_tools`·`ara_call`)를 함수로
+ *    부른다. Claude Code 의 기본 도구(로컬 파일 읽기·셸 명령)는 없다. 게이트가 없으면 `ready.tools` 가
+ *    빈 배열이라 화면 첫 줄이 "도구 없이 대화만"이라고 말한다.
  *  · **돈이 다르다** — 구독이 아니라 API 키(콘솔 결제)다.
  *  · 비용을 원화·달러로 못 준다(`turn.costUsd = null`) — 어댑터가 주는 것은 토큰 수뿐이다.
- *    거짓 숫자를 지어내느니 비우는 편이 낫다.
+ *    거짓 숫자를 지어내느니 비우는 편이 낫다. 토큰은 턴마다 `turn.tokens` 로 올린다.
  */
 export function createApiEngine(opts: {
   vault: KeyVault
@@ -47,6 +48,7 @@ export function createApiEngine(opts: {
   }
 
   const started = new Map<string, number>()
+  let seen = { input: 0, output: 0 }
   const session = new AraSession(
     opts.vault,
     opts.getPrefs,
@@ -64,7 +66,11 @@ export function createApiEngine(opts: {
       if (opts.dir) appendTurn(opts.dir, chatId, 'assistant', text)
       // 실패는 오류로, 정상 종료·중단은 턴 끝으로. 중단은 사람이 누른 것이라 오류가 아니다.
       if (!e.ok && e.reason !== 'canceled') emit({ t: 'error', message: e.message })
-      emit({ t: 'turn', costUsd: null, ms: at ? Date.now() - at : 0, turns: 1, text: '' })
+      // 세션의 usage 는 누적값이다 — 이 턴 몫만 뺀다(CLI 엔진의 turn.tokens 와 같은 뜻).
+      const u = session.getState().usage
+      const tokens = { input: u.input - seen.input, output: u.output - seen.output }
+      seen = u
+      emit({ t: 'turn', costUsd: null, ms: at ? Date.now() - at : 0, turns: 1, text: '', tokens })
     },
       // 화면이 "무엇을 하고 있나" 를 보여 준다 — CLI 엔진의 도구 묶음과 같은 사건이다.
       tool: (name, args) => emit({ t: 'tool', id: `${name}-${Date.now()}`, name, brief: brief(name, args) })
@@ -88,7 +94,7 @@ export function createApiEngine(opts: {
       const { turnId } = session.send({ text })
       started.set(turnId, Date.now())
     },
-    // 권한 왕복이 없는 판이다 — 도구가 없으니 승인할 것도 없고 모드도 없다.
+    // 권한 왕복이 없는 판이다 — 도구 승인은 게이트(approval.ts)가 화면 승인 창으로 직접 묻는다. 모드도 없다.
     respondPermission: () => {},
     setMode: () => {},
     setModel: () => {},

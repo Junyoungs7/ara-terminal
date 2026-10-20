@@ -5,7 +5,8 @@
 //   1. API 키는 이 파일 밖으로 나가지 않는다. get 하는 메서드가 없고, getState 는 hasKey 만 준다.
 //      프로바이더별로 vault 키를 분리한다(`ai.apiKey.<provider>`) — 전환해도 재입력이 필요 없다.
 //   2. 컨텍스트는 buildRequestCore 를 지나며 마스킹된 뒤에만 네트워크로 나간다(프로바이더 무관).
-//   3. 아라가 명령을 실행하는 경로가 없다 — 텍스트만 낸다(tool use 미배선).
+//   3. 아라가 명령을 실행하는 경로는 **도구 게이트 하나뿐**이다(tools 를 줄 때만 — 아라 채팅 B 엔진).
+//      인자 검증·승인·감사 로그는 MCP 와 같은 게이트(mcp/tools.ts·approval.ts)가 한다. 안 주면 텍스트만 낸다.
 import { maskSecrets } from '@shared/maskSecrets'
 import type { AiEnd, AiEnv, AiProvider, AiState, AiTurn } from '@shared/types'
 import { buildRequestCore } from './prompt'

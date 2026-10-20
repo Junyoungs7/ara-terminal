@@ -28,10 +28,22 @@ export type AiEngineEvent =
    * 왕복 배선은 #124 다. 여기서는 **모양만** 정해 둔다.
    */
   | { t: 'permission'; requestId: string; tool: string; brief: string }
-  /** 한 턴이 끝났다 — 비용·시간·턴 수. */
-  | { t: 'turn'; costUsd: number | null; ms: number; turns: number; text: string }
+  /**
+   * 한 턴이 끝났다 — 비용·시간·턴 수·토큰.
+   * `costUsd` 는 Claude Code 의 `total_cost_usd` 그대로다 — **프로세스 누적값**이다(2.1.300 바이너리:
+   * `total_cost_usd: costLedger.totalCostUSD()`). 더하면 이중 계산이 된다 — 마지막 값을 쓴다.
+   * `tokens` 는 **이 턴 것**이다(result.usage 는 질의 하나의 값). 입력은 캐시 읽기·쓰기를 포함한다.
+   */
+  | { t: 'turn'; costUsd: number | null; ms: number; turns: number; text: string; tokens?: { input: number; output: number } }
+  /**
+   * 구독 한도(Claude Code `rate_limit_event`). pct 는 0~100, resetsAt 은 ms.
+   * 계정 값이라 대화가 바뀌어도 유효하다 — 화면이 마지막 값을 기억한다.
+   */
+  | { t: 'limits'; five: AiLimit | null; week: AiLimit | null }
   | { t: 'error'; message: string }
   | { t: 'exit'; code: number | null }
+
+export type AiLimit = { pct: number; resetsAt: number | null }
 
 /** 엔진 하나. 대화 하나가 이걸 하나 쥔다. */
 export type AiEngine = {
@@ -150,16 +162,43 @@ export function parseStreamJson(line: string): AiEngineEvent[] {
       return out
     }
 
-    case 'result':
+    case 'result': {
+      const u = (m.usage ?? null) as Record<string, unknown> | null
+      const tokens = u
+        ? {
+            input: (num(u.input_tokens) ?? 0) + (num(u.cache_creation_input_tokens) ?? 0) + (num(u.cache_read_input_tokens) ?? 0),
+            output: num(u.output_tokens) ?? 0
+          }
+        : null
       return [
         {
           t: 'turn',
           costUsd: num(m.total_cost_usd),
           ms: num(m.duration_ms) ?? 0,
           turns: num(m.num_turns) ?? 0,
-          text: str(m.result) ?? ''
+          text: str(m.result) ?? '',
+          ...(tokens ? { tokens } : {})
         }
       ]
+    }
+
+    // 구독 한도(실측 2026-10-20, 2.1.300). unifiedWindows 가 없는 모양은 버린다 — 화면이 대체 표시로 간다.
+    case 'rate_limit_event': {
+      const w = ((m.rate_limit_info as Record<string, unknown> | undefined)?.unifiedWindows ?? null) as Record<
+        string,
+        Record<string, unknown> | undefined
+      > | null
+      if (!w || typeof w !== 'object') return []
+      const lim = (x: Record<string, unknown> | undefined): AiLimit | null => {
+        const u = num(x?.utilization)
+        if (u === null) return null
+        const r = num(x?.resetsAt)
+        return { pct: Math.round(Math.min(1, Math.max(0, u)) * 100), resetsAt: r === null ? null : r * 1000 }
+      }
+      const five = lim(w.five_hour)
+      const week = lim(w.seven_day)
+      return five || week ? [{ t: 'limits', five, week }] : []
+    }
 
     // 권한 요청은 control 채널로 온다(#124 에서 왕복을 잇는다).
     case 'control_request': {
