@@ -18,6 +18,7 @@ import { maskSecrets } from '@shared/maskSecrets'
 import type { SshConnectResult } from '@shared/ipc'
 import { stripAnsi, normalizeCr, newStripState } from '../log/SessionLog'
 import { capContext } from '../ai/prompt'
+import { renderScreen } from '../sessions/screenText'
 import { invalidName } from '../fs/LocalFs'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
@@ -335,8 +336,10 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
     'session',
     {
       description:
-        '그 탭의 최근 터미널 출력을 읽습니다(사용자가 화면에서 보고 있는 것과 같은 내용). ' +
+        '그 탭의 **지금 화면 그대로**를 읽습니다(사용자가 보는 것과 같은 글 — 지나간 출력 위쪽도 조금 붙습니다). ' +
+        'Claude Code·vim·top 같은 전체 화면 앱도 지금 그려진 모습 그대로 보입니다. ' +
         '명령을 보낸 뒤 결과를 보려면 session_input 다음에 잠깐 두고 이걸 부르세요 — ' +
+        '화면이 아직 바뀌는 중이면(실행 중·그리는 중) 몇 초 두고 다시 읽으세요. ' +
         '길면 앞이 잘립니다(최근 것부터 남습니다).',
       inputSchema: { sessionId: z.string() },
       annotations: { readOnlyHint: true }
@@ -344,8 +347,9 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
     async ({ sessionId }) =>
       g(sessionId, 'session_read', 'readOnly', { sessionId }, async () => {
         if (!ctx.sessions.has(sessionId)) return fail('세션을 찾을 수 없습니다.')
-        const raw = Buffer.from(ctx.sessions.peek(sessionId)).toString('utf8')
-        const text = normalizeCr(stripAnsi(raw, newStripState()))
+        // #27: ANSI 만 걷으면 다시 그리는 앱(Claude Code 등)이 조각난다 — 그려진 화면을 읽는다.
+        const s = ctx.sessions.snapshot().find((x) => x.id === sessionId)
+        const text = await renderScreen(ctx.sessions.peek(sessionId), s?.cols ?? 80, s?.rows ?? 24)
         return ok(capContext(maskSecrets(text))) // D1: 마스킹을 먼저(절단 경계에서 비밀이 새는 것을 막는다)
       })
   )

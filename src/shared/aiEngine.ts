@@ -67,6 +67,44 @@ export function araLimitsOf(v: unknown): { five: AiLimit | null; week: AiLimit |
   return five || week ? { five, week } : null
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/**
+ * `claude -p "/usage" --output-format json` 의 출력 → 한도(신고 #26). 모델을 부르지 않는 로컬 명령이라
+ * 대화를 열자마자 한도를 채울 수 있다. 실측 2.1.300 `result` 글:
+ *   `Current session: 37% used · resets Oct 20, 6:29pm (Asia/Seoul)`
+ *   `Current week (all models): 24% used · resets Oct 25, 7:59pm (Asia/Seoul)`
+ * 재설정 시각은 **이 PC 지역 시간**으로 읽고, 연도는 now 기준 가장 가까운 미래다(지났으면 다음 해).
+ * 시각을 못 읽으면 resetsAt null(% 만), 둘 다 못 읽으면 null — 구독이 아니면 글이 다를 수 있다.
+ * JSON 이 아니면 글 그대로 읽는다.
+ */
+export function parseUsageOutput(out: string, now: Date = new Date()): { five: AiLimit | null; week: AiLimit | null } | null {
+  let text = out
+  for (const line of out.split('\n')) {
+    try {
+      const j = JSON.parse(line) as { result?: unknown }
+      if (typeof j?.result === 'string') text = j.result
+    } catch {
+      /* JSON 줄이 아니다 */
+    }
+  }
+  const one = (label: string): AiLimit | null => {
+    const m = new RegExp(`${label}:\\s*(\\d+(?:\\.\\d+)?)%\\s*used([^\\n]*)`, 'i').exec(text)
+    if (!m) return null
+    const pct = Math.min(100, Math.round(Number(m[1])))
+    const t = /resets\s+([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i.exec(m[2])
+    const mon = t ? MONTHS.indexOf(t[1].toLowerCase()) : -1
+    if (!t || mon < 0) return { pct, resetsAt: null }
+    const h = (Number(t[3]) % 12) + (t[5].toLowerCase() === 'pm' ? 12 : 0)
+    const at = (y: number): number => new Date(y, mon, Number(t[2]), h, Number(t[4] ?? 0)).getTime()
+    const y = now.getFullYear()
+    return { pct, resetsAt: at(y) >= now.getTime() ? at(y) : at(y + 1) }
+  }
+  const five = one('Current session')
+  const week = one('Current week \\(all models\\)')
+  return five || week ? { five, week } : null
+}
+
 /** 엔진 하나. 대화 하나가 이걸 하나 쥔다. */
 export type AiEngine = {
   send(text: string): void

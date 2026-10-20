@@ -142,6 +142,46 @@ function realSpawn(bin: string, args: string[], cwd: string): EngineProc {
   return p as unknown as EngineProc
 }
 
+/**
+ * 한도 조회 한 번(신고 #26) — `claude -p "/usage" --output-format json`. **모델을 부르지 않는다**
+ * (실측 2.1.300: total_cost_usd 0 · num_turns 0). 띄우는 방식은 엔진과 같다(cmd.exe + #152 인코딩).
+ *
+ * `--setting-sources project,local` = 사용자 설정(=사용자 훅)을 건너뛴다. 2026-10-20 실측: 같은 글·같은
+ * 구독 인증으로 18~20초 → 5~14초. `--bare` 는 인증을 API 키로만 받아 구독 글이 안 나와 못 쓴다.
+ * stdin 은 닫는다 — 열어 두면 CLI 가 "no stdin data" 로 3초를 더 기다린다(실측).
+ * 실패·시간 초과는 null(호출자가 조용히 넘긴다).
+ */
+export function runClaudeUsage(cwd: string, bin = 'claude', timeoutMs = 30_000): Promise<string | null> {
+  const args = ['-p', '/usage', '--output-format', 'json', '--setting-sources', 'project,local']
+  return new Promise((resolve) => {
+    let out = ''
+    const p =
+      process.platform === 'win32'
+        ? spawn(process.env.ComSpec || 'cmd.exe', cmdExeArgs(bin, args), {
+            cwd,
+            windowsVerbatimArguments: true,
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'ignore']
+          })
+        : spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
+    const timer = setTimeout(() => {
+      p.kill()
+      resolve(null)
+    }, timeoutMs)
+    p.stdout?.on('data', (c) => {
+      out = (out + String(c)).slice(-200_000)
+    })
+    p.on('error', () => {
+      clearTimeout(timer)
+      resolve(null)
+    })
+    p.on('exit', (code) => {
+      clearTimeout(timer)
+      resolve(code === 0 ? out : null)
+    })
+  })
+}
+
 export function createClaudeEngine(opts: ClaudeEngineOpts): AiEngine {
   const listeners = new Set<(e: AiEngineEvent) => void>()
   const emit = (e: AiEngineEvent): void => {

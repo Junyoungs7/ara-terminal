@@ -182,3 +182,12 @@ describe('도구 없는 판(API 키)', () => {
     }
   })
 })
+
+describe('#28 선택지는 드물게', () => {
+  it('되돌리기 어려운 일·진짜 갈래에만 달고, 화면으로 알 수 있는 건 session_read 로 직접 본다', () => {
+    const t = buildPersona('준영')
+    expect(t).toContain('선택지는 드물게 씁니다')
+    expect(t).toContain('화면에서 확인할 수 있는 것은 사람에게 묻지 않습니다')
+    expect(t).toContain('session_read 로 직접 읽어 확인합니다')
+  })
+})

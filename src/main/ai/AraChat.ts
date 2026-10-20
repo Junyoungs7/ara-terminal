@@ -11,9 +11,9 @@
  *     사람의 답을 그대로 프로세스에 돌려준다(§3.4).
  *  ③ **닫으면 흔적이 없다.** 프로세스를 내리고 토큰이 든 임시 설정 파일을 지운다.
  */
-import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
+import { parseUsageOutput, type AiEngine, type AiEngineEvent, type AiLimit } from '@shared/aiEngine'
 import type { McpServerHandle } from '../mcp/McpServer'
-import { createClaudeEngine } from './engine/ClaudeCliEngine'
+import { createClaudeEngine, runClaudeUsage } from './engine/ClaudeCliEngine'
 import { createFakeEngine } from './engine/FakeEngine'
 import { createApiEngine } from './engine/ApiEngine'
 import { isFakeAi, type AiPrefs, type KeyVault, type SessionTools } from './AraSession'
@@ -56,6 +56,11 @@ export type AraChatDeps = {
   emit: (e: AraChatEvent) => void
   /** 테스트 주입 — 없으면 진짜 claude 를 띄운다. */
   makeEngine?: (o: ClaudeEngineArgs) => AiEngine
+  /**
+   * 한도 조회(신고 #26 — `claude -p "/usage"`, 모델 호출 없음). 테스트 주입 — 없으면 진짜 엔진일 때만
+   * runClaudeUsage 를 쓴다(가짜 엔진·주입 엔진이면 안 돈다).
+   */
+  probeUsage?: (cwd: string) => Promise<{ five: AiLimit | null; week: AiLimit | null } | null>
   /**
    * B 엔진(API 키)이 쓸 것들 — `claude` 가 없는 PC 의 폴백(설계 §5, #126).
    * 없으면 폴백을 못 연다(그 사실을 화면에 그대로 알린다 — 조용히 A 로 되돌리지 않는다).
@@ -167,11 +172,29 @@ export function createAraChat(deps: AraChatDeps): AraChat {
   // 목록을 어느 폴더에서 찾을지 — open() 이 고른 값을 그대로 기억한다.
   let lastCwd: string | null = null
   const waiting = new Map<string, { requestId: string; tool: string; brief: string }>()
+  // 한도 조회(#26): 진행 중이면 또 안 돌린다. liveSeq 는 실응답 rate_limit_event 가 올 때마다 는다 —
+  // 조회 사이에 실값이 왔으면 그게 더 정확하니 조회 결과로 덮지 않는다.
+  let probing = false
+  let liveSeq = 0
+  const probe = (fn: NonNullable<AraChatDeps['probeUsage']>): void => {
+    if (probing) return
+    probing = true
+    const seq = liveSeq
+    fn(deps.araCwd())
+      .then((l) => {
+        if (l && seq === liveSeq) deps.emit({ t: 'limits', ...l })
+      })
+      .catch(() => {})
+      .finally(() => {
+        probing = false
+      })
+  }
 
   /** 엔진 사건 → 이 층의 규칙 → 화면. **두 엔진이 같은 배선을 쓴다**(그러라고 모양을 맞췄다). */
   const wire = (e0: AiEngine): void => {
     offEvent = e0.onEvent((e) => {
       if (e.t === 'ready' && e.sessionId) sessionId = e.sessionId
+      if (e.t === 'limits') liveSeq++
       // 권한 요청은 대기열에 담는다 — 화면이 늦게 붙어도 잃지 않는다.
       if (e.t === 'permission') waiting.set(e.requestId, { requestId: e.requestId, tool: e.tool, brief: e.brief })
       // 프로세스가 죽었으면 이 층도 함께 정리한다(고아·유령 대기열 금지).
@@ -287,6 +310,18 @@ export function createAraChat(deps: AraChatDeps): AraChat {
         model,
         ...(cwd === deps.araCwd() ? { home: true as const } : {})
       })
+      // 열자마자 한도를 채운다(#26) — 저장값이 없으면 첫 답 전까지 '—' 였다. 뒤에서 한 번.
+      const usage =
+        deps.probeUsage ??
+        (real
+          ? async (dir: string) => {
+              const out = await runClaudeUsage(dir)
+              const l = out === null ? null : parseUsageOutput(out)
+              if (!l) console.warn('[ara] /usage 한도를 못 읽었다 — 첫 답의 한도를 기다린다')
+              return l
+            }
+          : null)
+      if (usage) probe(usage)
       return { ok: true }
     },
 
