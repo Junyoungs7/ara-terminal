@@ -257,13 +257,13 @@ export const AI_PROVIDER_HOSTS: Record<Exclude<AiProvider, 'compatible'>, string
 // 날짜 접미사 없는 별칭이 API 계약이다(`claude-sonnet-5-2026xxxx` 는 404). 나머지는 추천값일 뿐이라
 // 낡아도(신모델 출시) 기능이 깨지지 않는다 — 자유 입력이 항상 열려 있다.
 export const AI_MODELS_BY_PROVIDER: Record<AiProvider, readonly string[]> = {
-  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5'],
+  anthropic: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'],
   openai: ['gpt-5.1', 'gpt-4.1', 'gpt-4o-mini'],
   google: ['gemini-2.5-pro', 'gemini-2.5-flash'],
   compatible: [] // 사용자 게이트웨이마다 모델명이 다르다 — 추천 목록 없이 자유 입력만.
 }
 export const DEFAULT_AI_MODEL_BY_PROVIDER: Record<AiProvider, string> = {
-  anthropic: 'claude-sonnet-5',
+  anthropic: AI_MODELS_BY_PROVIDER.anthropic[0],
   openai: AI_MODELS_BY_PROVIDER.openai[0],
   google: AI_MODELS_BY_PROVIDER.google[0],
   compatible: ''
