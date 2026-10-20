@@ -23,8 +23,6 @@ export const NEW_SESSION = '(new)'
 export type ToolClass = 'readOnly' | 'sessionInput' | 'writeAlways'
 /** 누가 불렀나. 'ara' = 아라 채팅(API 엔진 게이트 · 아라 전용 토큰으로 붙은 MCP 연결), 그 밖은 'external'. */
 export type Caller = 'ara' | 'external'
-/** 사람이 그 세션에 친 뒤 아라의 자동 입력을 멈추는 시간. */
-export const HUMAN_PAUSE_MS = 10_000
 
 const DEFAULT_MODE: McpSessionMode = 'approval'
 const RATE_WINDOW_MS = 60_000
@@ -66,8 +64,6 @@ export class McpApprovalManager {
    * 묻지 않는다 — 단 **아라 채팅이 부른 것**(caller='ara')에만. 외부 MCP 클라이언트는 그대로 묻는다.
    */
   private araTarget: () => string | null = () => null
-  // 사람이 그 세션에 친 마지막 시각. 친 직후 잠시는 자동 실행을 멈춘다(손이 핸들을 잡았다).
-  private readonly humanAt = new Map<string, number>()
 
   // approvalTimeoutMs: 테스트 seam(ARA_AI_FAKE 와 같은 관행) — 2분 실시간 대기 없이 타임아웃 경로를
   // 검증하기 위함이다. 프로덕션 호출자는 넘기지 않는다(항상 MCP_APPROVAL_TIMEOUT_MS).
@@ -131,7 +127,6 @@ export class McpApprovalManager {
   // 사람이 타이핑하면(registerSessionIpc의 session:input) 그 세션의 autoAllow 를 즉시 해제한다(설계 §3.3).
   // "손이 핸들을 잡으면 오토파일럿이 풀린다" — 조용히 재개되지 않는다(사람이 다시 켜야 한다).
   onHumanInput(sessionId: string): void {
-    this.humanAt.set(sessionId, Date.now())
     const e = this.sessions.get(sessionId)
     if (!e || e.mode !== 'autoAllow') return
     e.mode = 'approval'
@@ -163,7 +158,6 @@ export class McpApprovalManager {
   // 안 지우면 상태바 인디케이터(mcp:getState → sessions)에 이미 닫힌 세션이 유령으로 계속 남는다.
   // registerSessionIpc 의 onExit 훅(F8 포워딩 정리와 같은 자리)에서 호출한다.
   forget(sessionId: string): void {
-    this.humanAt.delete(sessionId)
     if (this.sessions.delete(sessionId)) this.emit.stateChanged()
   }
 
@@ -175,9 +169,8 @@ export class McpApprovalManager {
   /** 아라 채팅이 지금 보는 세션에 치는 것인가 — 묻지 않고 실행할 유일한 갈래. */
   private isAraTargetInput(sessionId: string, tool: string, caller: Caller): boolean {
     if (caller !== 'ara' || tool !== 'session_input') return false
-    if (sessionId !== this.araTarget()) return false
-    const h = this.humanAt.get(sessionId)
-    return h === undefined || Date.now() - h >= HUMAN_PAUSE_MS
+    // 사람이 그 세션에 막 쳤어도 멈추지 않는다(2026-10-20 준영님: 제거).
+    return sessionId === this.araTarget()
   }
 
   // D2: 인계 해제 — 사용자가 UI에서 명시적으로 눌러야만 호출된다(mcp:resumeControl). 개별 세션의

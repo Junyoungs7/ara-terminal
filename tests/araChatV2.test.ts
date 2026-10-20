@@ -8,7 +8,7 @@ import { parseStreamJson } from '../src/shared/aiEngine'
 import { araModelOf, araModelLabel } from '../src/shared/aiModels'
 import { stripTarget, targetLine } from '../src/shared/araPersona'
 import { usageLine, untilText, kTok } from '../src/renderer/store/araUsage'
-import { McpApprovalManager, HUMAN_PAUSE_MS, type ApprovalEmit } from '../src/main/mcp/approval'
+import { McpApprovalManager, type ApprovalEmit } from '../src/main/mcp/approval'
 import { createAuditLog } from '../src/main/mcp/auditLog'
 import { buildAraTools, type ToolCtx } from '../src/main/mcp/tools'
 import { araTargetOf } from '../src/main/ipc/registerAraIpc'
@@ -132,17 +132,11 @@ describe('지금 보는 세션 자동 허용', () => {
     expect(asked).toEqual(['session_input', 'aisession_send', 'session_destroy', 'session_input', 'session_input'])
   })
 
-  it('사람이 그 세션에 막 쳤으면 잠시 묻는다', async () => {
+  it('사람이 그 세션에 막 쳤어도 멈추지 않는다', async () => {
     const { mgr, asked, run } = setup()
     mgr.onHumanInput('target')
-    expect((await run('target', 'session_input', 'sessionInput', 'ara')).ok).toBe(false)
-    expect(asked).toEqual(['session_input'])
-    vi.useFakeTimers({ now: Date.now() + HUMAN_PAUSE_MS + 1, toFake: ['Date'] })
-    try {
-      expect((await run('target', 'session_input', 'sessionInput', 'ara')).ok).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect((await run('target', 'session_input', 'sessionInput', 'ara')).ok).toBe(true)
+    expect(asked).toEqual([])
   })
 
   it('게이트의 caller 가 그대로 전달된다(API 엔진 게이트 = ara, 기본 = external)', async () => {
