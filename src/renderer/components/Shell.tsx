@@ -63,7 +63,10 @@ import {
   type McpApprovalDecision,
   type McpApprovalRequest,
   type RailId,
-  type SessionType
+  type SessionType,
+  type AiProvider,
+  aiProviderOf,
+  aiModelsOf
 } from '@shared/types'
 import { t } from '../i18n'
 
@@ -207,6 +210,11 @@ export function Shell() {
   // 설정 [AI] 의 CLI 기본 플래그. settingsActive 와 같은 미러다(prefs 의 주인은 MainArea) —
   // 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
   const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
+  // 아라 채팅 v2: API 모드 공급자·모델 — 같은 미러(채팅 선택기가 ready 추론 대신 설정 값을 쓴다).
+  const [aiApi, setAiApi] = useState<{ provider: AiProvider; model: string }>(() => {
+    const p = aiProviderOf(undefined)
+    return { provider: p, model: aiModelsOf(undefined)[p] }
+  })
   // W4sat F20: 탐색기 전체화면 모드. .middle 은 언마운트하지 않는다(display:none 만) — 터미널
   // 세션·레이아웃이 살아 있어야 나갈 때 보존된다(스펙 요구사항). 미니 프리뷰·아라 패널과 같은 규칙으로
   // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
@@ -1741,6 +1749,7 @@ export function Shell() {
           onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
           onAiCliFlags={setAiCliFlags}
+          onAiApi={setAiApi}
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}
         />
@@ -1770,6 +1779,7 @@ export function Shell() {
               open={aiOpen}
               onClose={() => closeRail('ai')}
               active={araTarget}
+              apiPick={aiApi}
               prefill={aiPrefill}
               // API 모드의 모델은 설정 ui.aiModels[provider] 다 — 선택기에서 바꾸면 그 설정을 고친다(주인은 MainArea).
               onApiModel={(provider, model) => mainRef.current?.setAiModel(provider, model)}

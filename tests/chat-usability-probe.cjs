@@ -342,8 +342,8 @@ app.whenReady().then(async () => {
         pre: of('.ara-panel .md-pre'),
         note: of('.ara-panel .ara-note'),
         copyBtn: of('.ara-panel .md-copy'),
-        headBtn: of('.ara-panel .ara-hd .ara-hist'),
-        chip: of('.ara-panel .ara-chip')
+        headBtn: of('.ara-panel .ara-hd .ara-ic'),
+        chip: of('.ara-panel .ara-chip.plan')
       }
     })()`
   )

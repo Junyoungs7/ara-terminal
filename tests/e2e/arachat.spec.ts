@@ -23,8 +23,8 @@ async function openAra(ara: Ara): Promise<void> {
     ipcMain.handle('fs:pickDir', () => ({ dir }))
   }, process.cwd())
   await ara.page.click('.activity-bar .act-item[data-activity="ai"]')
-  // 세션이 없으니 아라 폴더에서 열린다 — 머리에는 경로 대신 [폴더 고르기]가 뜬다(#137).
-  await expect(ara.page.locator('.ara-panel .ara-path .cwd.home')).toBeVisible()
+  // 세션이 없으니 아라 폴더에서 열린다 — 경로 줄은 표시 전용이라 아라 폴더면 감춘다. 열렸다 = 입력칸이 산다.
+  await expect(ara.page.locator('.ara-panel .ara-input')).toBeEnabled()
 }
 
 test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶음·글·비용이 차례로 뜬다', async ({ ara }) => {
@@ -35,7 +35,7 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
   // ① 열자마자 붙는다 — 사람이 [시작]을 한 번 더 누르게 하지 않는다.
   //    v2: 시작 안내 줄은 없다 — 폴더는 경로 줄이, 엔진·모델은 선택기가 말한다.
   await expect(panel.locator('.ara-note')).toHaveCount(0)
-  await expect(panel.locator('.ara-path .cwd')).toBeVisible()
+  await expect(panel.locator('.ara-path')).toHaveCount(0) // 아라 폴더 + 대상 없음 → 보일 경로가 없다
   await expect(panel.locator('.ara-ustrip')).toHaveText('—')
 
   // ② 보낸 말은 즉시 뜬다(답을 기다리는 동안 화면이 비면 안 된다).
@@ -190,10 +190,13 @@ test('ARA2-4 폴더를 묻지 않는다 · 머리의 폴더를 눌러 옮긴다'
       return { ok: true }
     })
   })
-  await panel.locator('.ara-path .cwd').click()
-  const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { cwd?: string }[] }).__opens)
-  expect(opens).toHaveLength(1)
+  // 작업 폴더 바꾸기는 선택기 메뉴 맨 아래(경로 줄은 표시 전용). 엔진은 지금 것 그대로 넘긴다.
+  await panel.locator('.ara-sel').click()
+  await panel.locator('.ara-pick-menu [data-action="ara.cwd.change"]').click()
+  await expect.poll(() => ara.app.evaluate(() => (globalThis as unknown as { __opens: unknown[] }).__opens.length)).toBe(1)
+  const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { cwd?: string; engine?: string }[] }).__opens)
   expect(opens[0].cwd).toBe(process.cwd()) // openAra 가 fs:pickDir 을 저장소 루트로 스텁해 뒀다
+  expect(opens[0].engine).toBe('cli')
 })
 
 

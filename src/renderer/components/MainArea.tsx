@@ -130,6 +130,8 @@ type MainAreaProps = {
    * prefs 의 주인이 여기라, 실행하는 쪽(Shell.runAiCliNow)에 값을 올려 준다.
    */
   onAiCliFlags?: (flags: Record<string, string[]>) => void
+  /** 아라 채팅 v2: API 모드 공급자·모델(설정 ui.aiProvider · ui.aiModels) 미러 — 채팅 선택기가 쓴다. */
+  onAiApi?: (a: { provider: AiProvider; model: string }) => void
   /** #78: 터미널 **아래** 패널(포트·세션 기록). 상태의 주인은 Shell 이라 다 만들어진 노드를 받는다
       — 타이틀바가 통합 검색(omni)을 받는 것과 같은 방식이다. .main 안에 있어야 폭이 아니라
       세로를 먹는다(레일과 달리 터미널 80칸에 영향이 없다). */
@@ -169,6 +171,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onCommandBookOpenChange,
       onRevealFiles,
       onAiCliFlags,
+      onAiApi,
       bottom,
       detachedWinId
     },
@@ -518,6 +521,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onAiCliFlags?.(prefs.aiCliFlags)
     }, [prefs.aiCliFlags, onAiCliFlags])
+
+    useEffect(() => {
+      onAiApi?.({ provider: prefs.aiProvider, model: prefs.aiModels[prefs.aiProvider] })
+    }, [prefs.aiProvider, prefs.aiModels, onAiApi])
 
     // #138: 스냅샷을 한 번이라도 읽었나. "안 지났다"와 "아직 안 읽었다"를 갈라야 한다 —
     // 기본값이 false 라 로드 전에 판정하면 이미 지난 사람에게도 매번 뜬다.

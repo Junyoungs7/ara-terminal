@@ -4126,7 +4126,7 @@ button.sb-seg.upd:hover .val {
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
    `.prof-list` 가 통째로 스크롤되는 칸이라 sticky 로 바닥에 붙인다 — 배경을 깔아 두지 않으면
    아래로 지나가는 행이 글자에 겹쳐 읽힌다. */
-/* 아이콘 + 글자 버튼(M2 §5 ⑤) — 옛 `.ara-hist` 가 쓰던 문법. `justify-content` 를 함께 주는 이유:
+/* 아이콘 + 글자 버튼(M2 §5 ⑤). `justify-content` 를 함께 주는 이유:
    지금 가운데 정렬은 <button> 의 UA `text-align: center` 가 해 주고 있는데, flex 로 바꾸는 순간
    그게 안 먹는다(안 주면 글자가 왼쪽으로 붙는다). 6px 은 이 파일에서 가장 흔한 간격이다(36곳). */
 .pl-add {
@@ -7911,8 +7911,8 @@ button.sb-seg.upd:hover .val {
 }
 /* ── 아라 채팅 v2 머리(A 안 — agent_talk/MOCKUP-ara-chat-v2.html). 한 줄에 대상 세션 … 선택기·아이콘. */
 .ara-tgt {
+  /* min-width 는 auto(= 점 + 이름 최소 3em + 배지) — 좁아지면 선택기(.ara-pick)가 먼저 줄어든다. */
   flex: 1;
-  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -7931,7 +7931,7 @@ button.sb-seg.upd:hover .val {
   background: var(--text-lo);
 }
 .ara-tgt .nm {
-  min-width: 0;
+  min-width: 3em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7948,7 +7948,7 @@ button.sb-seg.upd:hover .val {
 /* 엔진·모델 선택기 — "Claude Code · Opus ▾". 메뉴는 아래로 연다(머리가 맨 위다). */
 .ara-pick {
   position: relative;
-  flex: none;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .ara-sel {
@@ -8090,9 +8090,6 @@ button.sb-seg.upd:hover .val {
 .ara-path .cwd {
   flex: 1;
   min-width: 0;
-  border: 0;
-  background: none;
-  padding: 0;
   text-align: left;
   color: var(--text-lo);
   font-family: var(--ui);
@@ -8102,10 +8099,6 @@ button.sb-seg.upd:hover .val {
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
-  cursor: pointer;
-}
-.ara-path .cwd:hover {
-  color: var(--text-hi);
 }
 /* 사용량 — 얇은 막대 둘(5시간 · 주간, 2:1)과 한 줄 글. 한도를 못 얻으면 막대 자리는 선 하나다. */
 .ara-uline {
@@ -8410,10 +8403,6 @@ button.sb-seg.upd:hover .val {
 }
 
 
-/* 아라 폴더일 때는 경로 대신 할 일을 적는다 — 경로가 아니므로 rtl 도 아니다. */
-.ara-path .cwd.home {
-  direction: ltr;
-}
 
 /* #136 계획 승인 — 입력칸 바로 위. 지금 정할 일이라 목록에 쌓지 않는다. */
 .ara-plan {
