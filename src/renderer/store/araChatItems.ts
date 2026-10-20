@@ -70,13 +70,19 @@ export function reduceChat(items: ChatItem[], e: AiEngineEvent): ChatItem[] {
       return items
     }
 
+    // 시작 안내 줄은 **그리지 않는다**(아라 채팅 v2, 2026-10-20 준영님). 엔진·모델은 머리의 선택기가,
+    // 폴더는 경로 줄이 늘 보여 준다. 그리고 ready 는 한 번만 오지 않는다 — Claude Code 는 모델·권한 모드를
+    // 바꿀 때마다 `init` 을 다시 보낸다(aiEngine.ts permissionModeLine·modelLine 주석) — 그래서 같은 줄이 겹쳤다.
+    // 오류·폴백 안내(noEngine 등)는 'error' 쪽이라 그대로 보인다.
     case 'ready':
-      return [...items, { k: 'note', id: nextId(), text: noteReady(e.cwd, e.tools.length, e.model), tone: 'plain' }]
+      return items
 
     case 'error':
       return [...items, { k: 'note', id: nextId(), text: e.message, tone: 'bad' }]
 
     // 턴 끝과 종료는 화면 아래 상태줄이 말한다 — 목록에 줄을 하나 더 쌓지 않는다.
+    // 한도는 머리의 사용량 줄이 말한다(araUsage.ts).
+    case 'limits':
     case 'turn':
     case 'permission':
     case 'exit':
@@ -104,23 +110,6 @@ export function dropAsk(items: ChatItem[], askId: string): ChatItem[] {
 export function openAsk(items: ChatItem[]): AskRequest | null {
   for (let i = items.length - 1; i >= 0; i--) if (items[i].k === 'ask') return (items[i] as { req: AskRequest }).req
   return null
-}
-
-function noteReady(cwd: string | null, tools: number, model: string | null): string {
-  /**
-   * 폴더가 없는 판 = API 키 엔진(#126).
-   *
-   * **"폴더가 없다 = 도구가 없다" 가 아니다**(2026-08-26 준영님 제보 — 도구를 3개 썼는데도 머리에
-   * "도구 없이 대화만 합니다" 가 떠 있었다). API 엔진에 function calling 을 붙인 뒤로 그 둘은
-   * 갈라졌다: 폴더는 여전히 없지만(작업 폴더 개념이 없다) 도구는 쥐고 있다. **숫자를 보고 정한다.**
-   */
-  if (cwd === null) {
-    return tools > 0 ? `${model ?? 'API'} · 도구 ${tools}개` : `${model ?? 'API'} · 도구 없이 대화만 합니다`
-  }
-  // 아라 폴더(고를 것이 없어 떨어진 자리)는 경로를 적지 않는다 — `…\A.R.A\ara-home` 은
-  // 사람에게 아무것도 알려 주지 않고 줄만 길어진다(2026-08-25 준영님, 머리 쪽과 같은 판단).
-  if (/[\/]ara-home$/.test(cwd)) return `준비됐습니다 · 도구 ${tools}개`
-  return `${cwd} 에서 시작했습니다 · 도구 ${tools}개`
 }
 
 /**

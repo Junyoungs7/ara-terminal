@@ -17,9 +17,12 @@ import {
 } from '../store/araChatItems'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { joinPath } from './filePath'
-import { IconClose, IconRefresh, IconHistory, IconPencil, IconPlus } from './icons'
+import { IconClose, IconHistory, IconPencil, IconPlus } from './icons'
 import { Markdown } from './md'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
+import { AI_MODELS_BY_PROVIDER, AI_PROVIDER_LABELS, aiProviderOf, type AiProvider } from '@shared/types'
+import type { AraTarget } from '@shared/araPersona'
+import { usageLine, type AraLimits, type AraUsage } from '../store/araUsage'
 import { t } from '../i18n'
 
 // #125 아라 대화 v2 — **관제실**(설계 §9). 우측 레일의 그 자리에 산다.
@@ -57,6 +60,9 @@ async function saveClipFile(f: File): Promise<{ path: string } | { error: string
   return { path: joinPath(joinPath(dir, PASTE_SUB), name) }
 }
 
+/** 선택기에 쓰는 짧은 공급자 이름("Anthropic Claude" → "Anthropic"). */
+const providerShort = (p: AiProvider): string => AI_PROVIDER_LABELS[p].split(' ')[0]
+
 /** 상태줄에 뜨는 지금 상황. */
 type Phase = 'closed' | 'opening' | 'idle' | 'working'
 
@@ -64,11 +70,15 @@ export function AraChatPanel({
   open,
   onClose,
   active,
+  onApiModel,
   prefill
 }: {
   open: boolean
   onClose: () => void
-  active: { type: 'local' | 'ssh' | 'rdp'; cwd: string | null } | null
+  /** 지금 보는 세션(아라 채팅 v2) — 채팅의 대상. Shell 이 main 에도 같은 값을 알린다. */
+  active: AraTarget | null
+  /** API 모드 모델 바꾸기 — 설정 ui.aiModels[provider] 를 고친다(주인은 MainArea). */
+  onApiModel?: (provider: AiProvider, model: string) => void
   /**
    * 바깥에서 얹어 주는 말(#127) — 우클릭 [아라에게 묻기]·프로세스 표·부트스트랩이 여기로 온다.
    * `at` 이 함께 오는 이유: 같은 문자열을 다시 골라도 새 요청인 줄 알아야 한다.
@@ -82,13 +92,19 @@ export function AraChatPanel({
   const [home, setHome] = useState(false)
   // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
   const [engine, setEngine] = useState<'cli' | 'api'>('cli')
-  const [cost, setCost] = useState<{ usd: number; turns: number } | null>(null)
+  // 아라 채팅 v2 사용량. 한도는 **계정 값**이라 새 대화를 열어도 남긴다 — 이번 대화 사용량만 'opened' 에서 비운다.
+  const [limits, setLimits] = useState<AraLimits | null>(null)
+  const [usage, setUsage] = useState<AraUsage | null>(null)
+  // ready 가 알려 준 모델. API 엔진은 `공급자/모델` 모양이다 — 선택기가 여기서 공급자·모델을 읽는다.
+  const [readyModel, setReadyModel] = useState<string | null>(null)
   // #136 계획 먼저 — 켜면 아라가 **아무것도 건드리지 않고** 계획만 낸다(실측으로 확인한 모드).
   // planReady = 그 계획이 나왔다(턴이 끝났다) → 승인 줄을 세운다.
   const [planOn, setPlanOn] = useState(false)
   // #137 고른 모델. 빈 문자열 = 사용자의 ~/.claude 기본값.
   const [model, setModel] = useState('')
-  const [modelOpen, setModelOpen] = useState(false)
+  // 엔진·모델 선택기 메뉴(A 안 — 머리 오른쪽).
+  const [pickOpen, setPickOpen] = useState(false)
+  const pickRef = useRef<HTMLDivElement>(null)
   // #137 폭. 고정 360px 이 좁다는 제보 — 왼쪽 가장자리를 끌어 넓힌다(세션 동안 유지).
   const [width, setWidth] = useState(360)
   const drag = useRef<{ x: number; w: number } | null>(null)
@@ -143,13 +159,17 @@ export function AraChatPanel({
     )
     await window.ev?.ara.open({ resumeId: row.id, engine: row.engine, ...(row.engine === 'cli' && cwd ? { cwd } : {}), active })
   }
-  /** 새 대화 — 이어 가던 것을 놓고 빈 판에서 시작한다(resumeId 없이 다시 연다). */
-  const newChat = async (): Promise<void> => {
+  /**
+   * 새 대화 — 이어 가던 것을 놓고 빈 판에서 시작한다(resumeId 없이 다시 연다).
+   * 엔진을 바꿀 때도 여기로 온다(선택기 경고 그대로 — 두 엔진은 기록 형식이 달라 문맥이 안 넘어간다).
+   */
+  const newChat = async (eng: 'cli' | 'api' = engine): Promise<void> => {
     setChatsOpen(false)
+    setPickOpen(false)
     setItems([])
     setResumeId(null)
     setPhase('opening')
-    await window.ev?.ara.open({ ...(cwd ? { cwd } : {}), engine, active })
+    await window.ev?.ara.open({ ...(cwd ? { cwd } : {}), engine: eng, active })
   }
   const saveName = async (id: string, name: string): Promise<void> => {
     setRenaming(null)
@@ -182,9 +202,16 @@ export function AraChatPanel({
         // 감추면서 누를 자리까지 없애면 폴더를 바꿀 길이 사라진다.
         setHome(e.home === true)
         setEngine(e.engine)
+        if (e.model !== undefined) setModel(e.model)
+        setUsage(null)
         setPhase('idle')
         return
       }
+      if (e.t === 'limits') {
+        setLimits({ five: e.five, week: e.week })
+        return
+      }
+      if (e.t === 'ready') setReadyModel(e.model)
       if (e.t === 'noEngine') {
         // 이제 여기서 멈추지 않는다 — main 이 곧바로 API 엔진으로 다시 열고 'opened' 를 보낸다.
         // 우리는 **왜 넘어갔는지**만 한 줄 남긴다(조용히 바꾸지 않는다는 약속이 이 줄이다).
@@ -209,7 +236,13 @@ export function AraChatPanel({
         setPhase('idle')
         // 계획 모드에서 턴이 끝났다 = 계획이 나왔다. 이제 사람이 정한다.
         setPlanReady(planOnRef.current)
-        setCost((c) => ({ usd: (c?.usd ?? 0) + (e.costUsd ?? 0), turns: (c?.turns ?? 0) + e.turns }))
+        // 토큰은 턴 값이라 더하고, 비용은 Claude Code 의 **누적값**이라 마지막 값으로 바꾼다
+        // (전에는 누적값을 다시 더해 턴이 갈수록 부풀었다 — aiEngine.ts 의 turn 주석).
+        setUsage((u) => ({
+          input: (u?.input ?? 0) + (e.tokens?.input ?? 0),
+          output: (u?.output ?? 0) + (e.tokens?.output ?? 0),
+          costUsd: e.costUsd ?? u?.costUsd ?? null
+        }))
       }
       if (e.t === 'text' || e.t === 'tool') setPhase('working')
       setItems((cur) => reduceChat(cur, e))
@@ -257,6 +290,22 @@ export function AraChatPanel({
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [ask])
+  // 한도 초기화까지 남은 시간("2시간 10분 뒤")을 다시 그리는 시계 — 분 단위라 30초면 충분하다.
+  const hasLimits = limits !== null
+  useEffect(() => {
+    if (!hasLimits) return
+    const id = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [hasLimits])
+  // 선택기 메뉴 바깥을 누르면 닫는다.
+  useEffect(() => {
+    if (!pickOpen) return
+    const down = (ev: MouseEvent): void => {
+      if (!pickRef.current?.contains(ev.target as Node)) setPickOpen(false)
+    }
+    window.addEventListener('mousedown', down)
+    return () => window.removeEventListener('mousedown', down)
+  }, [pickOpen])
 
   // 얹어 주는 말. at 이 바뀔 때만 반응한다(같은 선택을 다시 골라도 새 요청이다).
   const prefillAt = prefill?.at
@@ -403,6 +452,20 @@ export function AraChatPanel({
   // 닫혀도 **컴포넌트는 살아 있다**(대화 목록·엔진 유지). 훅 뒤에서 그리기만 접는다.
   if (!open) return null
 
+  // API 엔진의 공급자·모델 — ready 의 `공급자/모델` 에서 읽는다. 목록은 설정 화면의 추천 목록과 같다
+  // (그 밖의 이름은 설정 서랍에서 자유 입력 — 여기서 또 받으면 입력칸이 두 자리가 된다).
+  const slash = readyModel?.indexOf('/') ?? -1
+  const apiProvider = aiProviderOf(slash > 0 ? readyModel?.slice(0, slash) : undefined)
+  const apiModel = slash > 0 ? (readyModel?.slice(slash + 1) ?? '') : ''
+  const api = {
+    provider: apiProvider,
+    model: apiModel,
+    models: [...AI_MODELS_BY_PROVIDER[apiProvider], ...(apiModel && !AI_MODELS_BY_PROVIDER[apiProvider].includes(apiModel) ? [apiModel] : [])]
+  }
+  const use = usageLine(engine, limits, usage, now)
+  // 경로 줄: 지금 보는 세션의 경로가 먼저다(목업 A). 없으면(RDP·대상 없음·아직 모름) 아라의 작업 폴더.
+  const pathText = active?.cwd ?? null
+
   return (
     <div
       className={'ara-panel' + (dropping ? ' drag-over' : '')}
@@ -426,38 +489,128 @@ export function AraChatPanel({
     >
       {/* 폭 조절 손잡이 — 왼쪽 가장자리. 사이드바 리사이저와 같은 자리·같은 동작이다. */}
       <div className="ara-grip" onMouseDown={onDragDown} title={t('ara.width')} />
+      {/* 아라 채팅 v2 — 준영님이 고른 **A 안**(agent_talk/MOCKUP-ara-chat-v2.html, 2026-10-20).
+          한 줄에 [대상 세션] … [엔진·모델 선택기] [새 대화] [지난 대화], 그 아래 경로 줄과 얇은 사용량 줄. */}
       <div className="ara-hd">
-        <span className="t">{t('ara.title')}</span>
-        {/* 폴더는 **묻지 않는다**(2026-08-25) — 늘 어딘가에서 돌고, 여기를 누르면 바꾼다.
-            아라를 특정 폴더에 매어 두는 물건으로 만들지 않기 위해서다. */}
-        {cwd && (
+        <span className="ara-tgt" title={t('ara.target.tip')} data-field="ara.target">
+          <i className={'dot' + (active ? '' : ' off')} />
+          <span className="nm">{active ? active.title : t('ara.target.none')}</span>
+          {active && <span className="typ">{t('ara.target.' + active.type)}</span>}
+        </span>
+        <div className="ara-pick" ref={pickRef}>
           <button
             type="button"
-            className={'cwd' + (home ? ' home' : '')}
-            title={home ? t('ara.cwd.change') : `${t('ara.cwd.change')}\n${cwd}`}
-            onClick={() => void pickFolder()}
+            className={'ara-sel' + (pickOpen ? ' open' : '')}
+            title={t('ara.pick.tip')}
+            aria-expanded={pickOpen}
+            data-action="ara.pick"
+            onClick={() => setPickOpen((v) => !v)}
           >
-            {home ? t('ara.cwd.pick') : cwd}
+            <i className={'e' + (engine === 'api' ? ' api' : '')} />
+            <span className="en">{engine === 'api' ? t('ara.pick.api') : t('ara.engine.cli')}</span>
+            <span className="md">{engine === 'api' ? `${providerShort(api.provider)} · ${api.model}` : araModelLabel(model)}</span>
+            <ChevronDown className="car" />
           </button>
-        )}
-        {/* 지난 대화(2026-08-26). 아이콘만 두니 무엇인지 안 읽혔다(준영님: *"잘 보이지않는데"*) —
-            **글자로 쓴다.** 좁은 레일이라도 이 버튼은 이름값을 한다. */}
-        {/* 새 대화(2026-08-26 준영님 요청). 이어 가던 것을 놓고 **빈 판**에서 시작한다 —
-            resumeId 를 비우고 다시 여는 것이 전부다. */}
-        <button type="button" className="ara-hist" title={t('ara.chats.new')} data-action="ara.chats.new" onClick={() => void newChat()}>
+          {pickOpen && (
+            <div className="ara-pick-menu" role="menu">
+              <div className="grp">{t('ara.pick.engine')}</div>
+              {(['cli', 'api'] as const).map((eng) => (
+                <button
+                  type="button"
+                  key={eng}
+                  className={'it' + (engine === eng ? ' on' : '')}
+                  data-engine={eng}
+                  onClick={() => (engine === eng ? setPickOpen(false) : void newChat(eng))}
+                >
+                  <i className={'e' + (eng === 'api' ? ' api' : '')} />
+                  <span className="l">{t(eng === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}</span>
+                  <span className="h">{t(eng === 'api' ? 'ara.pick.api.hint' : 'ara.pick.cli.hint')}</span>
+                </button>
+              ))}
+              <div className="warn">{t('ara.pick.warn')}</div>
+              <div className="sep" />
+              <div className="grp">
+                {t('ara.pick.model').replace('{e}', engine === 'api' ? AI_PROVIDER_LABELS[api.provider] : t('ara.engine.cli'))}
+              </div>
+              {engine === 'cli'
+                ? ARA_MODELS.map((m) => (
+                    <button
+                      type="button"
+                      key={m.id || 'default'}
+                      className={'it' + (m.id === model ? ' on' : '')}
+                      data-model={m.id || 'default'}
+                      onClick={() => {
+                        setPickOpen(false)
+                        void window.ev?.ara.model(m.id)
+                      }}
+                    >
+                      <span className="chk">{m.id === model ? '✓' : ''}</span>
+                      <span className="l">{m.label}</span>
+                      <span className="h">{m.hint}</span>
+                    </button>
+                  ))
+                : api.models.map((m) => (
+                    <button
+                      type="button"
+                      key={m}
+                      className={'it' + (m === api.model ? ' on' : '')}
+                      data-model={m}
+                      onClick={() => {
+                        setPickOpen(false)
+                        setReadyModel(`${api.provider}/${m}`)
+                        onApiModel?.(api.provider, m)
+                      }}
+                    >
+                      <span className="chk">{m === api.model ? '✓' : ''}</span>
+                      <span className="l">{m}</span>
+                    </button>
+                  ))}
+            </div>
+          )}
+        </div>
+        {/* 새 대화·지난 대화 — A 안은 아이콘이다(좁은 머리 한 줄). 이름은 title·aria-label 이 말한다. */}
+        <button type="button" className="ara-ic" title={t('ara.chats.new')} aria-label={t('ara.chats.new')} data-action="ara.chats.new" onClick={() => void newChat()}>
           <IconPlus />
-          <span>{t('ara.chats.new')}</span>
         </button>
-        <button type="button" className="ara-hist" title={t('ara.chats')} data-action="ara.chats" onClick={() => void openChats()}>
+        <button type="button" className="ara-ic" title={t('ara.chats')} aria-label={t('ara.chats')} data-action="ara.chats" onClick={() => void openChats()}>
           <IconHistory />
-          <span>{t('ara.chats')}</span>
         </button>
-        <button type="button" className="ara-ic" title={t('ara.restart')} onClick={() => void start({ ...(cwd ? { cwd } : {}), engine })}>
-          <IconRefresh />
-        </button>
-        <button type="button" className="ara-ic" title={t('mon.close')} onClick={onClose}>
+        <button type="button" className="ara-ic" title={t('mon.close')} aria-label={t('mon.close')} onClick={onClose}>
           <IconClose />
         </button>
+      </div>
+      {/* 경로 — 하단바 경로(.sb-seg.cwd .val)와 같은 글꼴. 지금 보는 세션의 경로를 보이고, 없으면 아라의
+          작업 폴더를 보인다. 누르면 아라의 작업 폴더를 바꾼다(묻지 않고 늘 어딘가에서 돈다 — 2026-08-25). */}
+      {(pathText || cwd) && (
+        <div className="ara-path">
+          <span className="lbl">{t('ara.path')}</span>
+          <button
+            type="button"
+            className={'cwd' + (pathText ? '' : home ? ' home' : '')}
+            title={`${t('ara.cwd.change')}${cwd && !home ? `
+${cwd}` : ''}`}
+            onClick={() => void pickFolder()}
+          >
+            {pathText ?? (home ? t('ara.cwd.pick') : cwd)}
+          </button>
+        </div>
+      )}
+      {/* 사용량 — 한도 % 우선, 못 얻으면 이번 대화 토큰·추정 비용(준영님 결정). */}
+      <div className={'ara-uline' + (use.bars ? '' : ' none')}>
+        {use.bars && (
+          <>
+            <div className="ub">
+              <i style={{ width: `${use.bars.five}%` }} />
+            </div>
+            <div className="ub">
+              <i className="w" style={{ width: `${use.bars.week}%` }} />
+            </div>
+          </>
+        )}
+      </div>
+      <div className="ara-ustrip" data-field="ara.usage">
+        <span className="use">{use.left}</span>
+        {use.right && <span className="use r">{use.right}</span>}
       </div>
 
       {chatsOpen && (
@@ -621,55 +774,8 @@ export function AraChatPanel({
       )}
 
       <div className="ara-compose">
-        {/* 메타 줄 — 무엇으로 도는지·무슨 모델인지·계획 먼저인지, 그리고 비용.
-            **입력칸 위**다: ChatGPT·Claude 가 모델 고르기를 입력 근처에 두는 것과 같은 자리다. */}
+        {/* 메타 줄 — 계획 먼저. 엔진·모델·비용은 아라 채팅 v2 에서 머리(선택기·사용량 줄)로 올라갔다. */}
         <div className="ara-bar">
-          {/* 엔진 스위치 — claude 가 없으면 main 이 알아서 API 로 넘기고 여기가 그쪽으로 옮겨져 있다. */}
-          <button
-            type="button"
-            className={'ara-chip eng' + (engine === 'api' ? ' on' : '')}
-            aria-pressed={engine === 'api'}
-            title={t(engine === 'api' ? 'ara.engine.tip.api' : 'ara.engine.tip.cli')}
-            onClick={() => void start({ ...(cwd ? { cwd } : {}), engine: engine === 'api' ? 'cli' : 'api' })}
-          >
-            {t(engine === 'api' ? 'ara.engine.api' : 'ara.engine.cli')}
-          </button>
-
-          {/* #137 모델 고르기 — **도는 중에 바뀐다**(실측: set_model 이 먹는다). API 키 모드에는
-              이 스위치가 없다: 그쪽 모델은 설정 [AI] 에서 고르고, 여기서 또 고르면 두 자리가 된다. */}
-          {engine === 'cli' && (
-            <div className="ara-model">
-              <button
-                type="button"
-                className={'ara-chip' + (model ? ' on' : '')}
-                aria-expanded={modelOpen}
-                title={t('ara.model.tip')}
-                onClick={() => setModelOpen((v) => !v)}
-              >
-                {araModelLabel(model)}
-              </button>
-              {modelOpen && (
-                <div className="ara-menu" role="menu">
-                  {ARA_MODELS.map((m) => (
-                    <button
-                      type="button"
-                      key={m.id || 'default'}
-                      className={m.id === model ? 'on' : ''}
-                      data-model={m.id || 'default'}
-                      onClick={() => {
-                        setModelOpen(false)
-                        void window.ev?.ara.model(m.id)
-                      }}
-                    >
-                      <span className="l">{m.label}</span>
-                      <span className="h">{m.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           <button
             type="button"
             className={'ara-chip plan' + (planOn ? ' on' : '')}
@@ -679,12 +785,6 @@ export function AraChatPanel({
           >
             {t('ara.plan')}
           </button>
-          <span className="sp" />
-          {cost && (
-            <span className="c">
-              ${cost.usd.toFixed(3)} · {t('ara.turns').replace('{n}', String(cost.turns))}
-            </span>
-          )}
         </div>
 
         {/* 입력칸 — **보내기·중지 버튼이 같은 줄 안**에 있다(2026-08-25 준영님, 상용 서비스 배치).
@@ -695,7 +795,13 @@ export function AraChatPanel({
             className="ara-input"
             rows={1}
             value={draft}
-            placeholder={ask ? t('ara.answerFirst') : t('ara.placeholder')}
+            placeholder={
+              ask
+                ? t('ara.answerFirst')
+                : active && active.type !== 'rdp'
+                  ? t('ara.placeholder.target').replace('{name}', active.title)
+                  : t('ara.placeholder')
+            }
             disabled={!CAN_TYPE.has(phase)}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {

@@ -64,16 +64,11 @@ describe('접기 규칙', () => {
     expect(run({ t: 'toolResult', id: '없음', ok: true, brief: '' })).toEqual([])
   })
 
-  it('시작하면 어디서 도는지 한 줄로 알린다 — 아라가 어느 폴더에 있는지 모르면 안 된다', () => {
-    const items = run({ t: 'ready', sessionId: 's', model: 'm', cwd: 'D:\\AI\\OFA', tools: ['a', 'b'] })
-    expect(items[0]).toMatchObject({ k: 'note', tone: 'plain' })
-    expect((items[0] as { text: string }).text).toContain('D:\\AI\\OFA')
-    expect((items[0] as { text: string }).text).toContain('2개')
-  })
-
-  it('폴더가 없는 판(API 키 엔진)은 **무엇을 못 하는지**를 말한다', () => {
-    const items = run({ t: 'ready', sessionId: null, model: 'anthropic/claude-sonnet-4', cwd: null, tools: [] })
-    expect((items[0] as { text: string }).text).toBe('anthropic/claude-sonnet-4 · 도구 없이 대화만 합니다')
+  it('시작 안내 줄은 그리지 않는다(v2 — 엔진·모델은 선택기, 폴더는 경로 줄이 말한다)', () => {
+    expect(run({ t: 'ready', sessionId: 's', model: 'm', cwd: 'D:\\AI\\OFA', tools: ['a', 'b'] })).toEqual([])
+    expect(run({ t: 'ready', sessionId: null, model: 'openai/gpt-5.1', cwd: null, tools: ['x', 'y'] })).toEqual([])
+    // 한도 사건도 목록에 쌓지 않는다(머리의 사용량 줄이 말한다).
+    expect(run({ t: 'limits', five: { pct: 1, resetsAt: null }, week: null })).toEqual([])
   })
 
   it('오류는 눈에 띄는 줄로, 턴·종료는 목록에 쌓지 않는다(상태줄이 말한다)', () => {

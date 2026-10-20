@@ -24,7 +24,7 @@ async function openAra(ara: Ara): Promise<void> {
   }, process.cwd())
   await ara.page.click('.activity-bar .act-item[data-activity="ai"]')
   // 세션이 없으니 아라 폴더에서 열린다 — 머리에는 경로 대신 [폴더 고르기]가 뜬다(#137).
-  await expect(ara.page.locator('.ara-panel .ara-hd .cwd.home')).toBeVisible()
+  await expect(ara.page.locator('.ara-panel .ara-path .cwd.home')).toBeVisible()
 }
 
 test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶음·글·비용이 차례로 뜬다', async ({ ara }) => {
@@ -33,9 +33,10 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
   const panel = page.locator('.ara-panel')
 
   // ① 열자마자 붙는다 — 사람이 [시작]을 한 번 더 누르게 하지 않는다.
-  //    첫 줄은 "어디서 도는지"다(아라가 어느 폴더에 있는지 모르면 안 된다).
-  await expect(panel.locator('.ara-note').first()).toContainText('도구 3개')
-  await expect(panel.locator('.ara-hd .cwd')).toBeVisible()
+  //    v2: 시작 안내 줄은 없다 — 폴더는 경로 줄이, 엔진·모델은 선택기가 말한다.
+  await expect(panel.locator('.ara-note')).toHaveCount(0)
+  await expect(panel.locator('.ara-path .cwd')).toBeVisible()
+  await expect(panel.locator('.ara-ustrip')).toHaveText('—')
 
   // ② 보낸 말은 즉시 뜬다(답을 기다리는 동안 화면이 비면 안 된다).
   const input = panel.locator('.ara-input')
@@ -55,8 +56,9 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
 
   // ④ 글과 비용·턴. 비용은 "이 대화가 얼마 썼나"라 늘 보여야 한다(설계 §4-4).
   await expect(panel.locator('.ara-ai')).toContainText('받은 말: 세션 목록 좀 봐 줘')
-  await expect(panel.locator('.ara-bar .c')).toContainText('1턴')
-  await expect(panel.locator('.ara-bar .c')).toContainText('$0.012')
+  // v2: 비용은 머리 아래 사용량 줄(한도가 없으면 이번 대화 토큰 · 추정 비용).
+  await expect(panel.locator('.ara-ustrip')).toContainText('한도 확인 불가')
+  await expect(panel.locator('.ara-ustrip')).toContainText('$0.01')
 })
 
 test('ARA2-2 [중지]는 도는 동안에만 눌린다 · 닫았다 열어도 대화가 남는다', async ({ ara }) => {
@@ -153,9 +155,9 @@ test('ARA2-5★ claude 가 없으면 **알리고 API 로 넘어간다** · 스�
   // 입력칸은 잠기지 않는다 — API 로 대화는 된다.
   await expect(panel.locator('.ara-input')).toBeEnabled()
 
-  // 스위치가 그 자리에 있고, 누르면 Claude Code 로 되돌리려 한다(배선으로 확인).
-  const eng = panel.locator('.ara-chip.eng')
-  await expect(eng).toHaveText('Claude Code') // 아직 opened 가 안 왔으니 표시는 cli 다
+  // 선택기 메뉴의 엔진 항목 — 지금과 다른 엔진을 고르면 새 대화로 다시 연다(배선으로 확인).
+  const sel = panel.locator('.ara-sel')
+  await expect(sel.locator('.en')).toHaveText('Claude Code') // 아직 opened 가 안 왔으니 표시는 cli 다
   await ara.app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('ara:open')
     ;(globalThis as unknown as { __opens: unknown[] }).__opens = []
@@ -164,7 +166,8 @@ test('ARA2-5★ claude 가 없으면 **알리고 API 로 넘어간다** · 스�
       return { ok: true }
     })
   })
-  await eng.click()
+  await sel.click()
+  await panel.locator('.ara-pick-menu [data-engine="api"]').click()
   const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { engine?: string }[] }).__opens)
   expect(opens).toHaveLength(1)
   expect(opens[0].engine).toBe('api') // cli 표시 상태에서 누르면 api 를 요청한다
@@ -187,7 +190,7 @@ test('ARA2-4 폴더를 묻지 않는다 · 머리의 폴더를 눌러 옮긴다'
       return { ok: true }
     })
   })
-  await panel.locator('.ara-hd .cwd').click()
+  await panel.locator('.ara-path .cwd').click()
   const opens = await ara.app.evaluate(() => (globalThis as unknown as { __opens: { cwd?: string }[] }).__opens)
   expect(opens).toHaveLength(1)
   expect(opens[0].cwd).toBe(process.cwd()) // openAra 가 fs:pickDir 을 저장소 루트로 스텁해 뒀다
@@ -230,12 +233,12 @@ test('ARA2-7★ 모델을 고른다 · 폭을 끌어 넓힌다 · 답변이 마�
   const panel = page.locator('.ara-panel')
 
   // ① 모델 — 기본은 "고르지 않음"(사용자의 ~/.claude 그대로). 고르면 그 이름이 칩에 박힌다.
-  const chip = panel.locator('.ara-model .ara-chip')
-  await expect(chip).toHaveText('기본')
-  await chip.click()
-  await panel.locator('.ara-menu [data-model="claude-haiku-4-5-20251001"]').click()
-  await expect(panel.locator('.ara-menu')).toHaveCount(0)
-  await expect(chip).toHaveText('Haiku 4.5') // main 이 알려 준 값이다(화면이 짐작하지 않는다)
+  const chip = panel.locator('.ara-sel .md')
+  await expect(chip).toHaveText('기본값')
+  await panel.locator('.ara-sel').click()
+  await panel.locator('.ara-pick-menu [data-model="haiku"]').click()
+  await expect(panel.locator('.ara-pick-menu')).toHaveCount(0)
+  await expect(chip).toHaveText('Haiku') // main 이 알려 준 값이다(화면이 짐작하지 않는다)
 
   // ② 폭 — 고정이 아니다. 왼쪽 손잡이를 끌면 넓어진다.
   const before = (await panel.boundingBox())!.width

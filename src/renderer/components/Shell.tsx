@@ -494,6 +494,16 @@ export function Shell() {
   }, [sessionIds])
   const activeCwd = activeId ? (cwdBy[activeId] ?? null) : null
 
+  // 아라 채팅 v2: **지금 보는 세션**을 main 에 알린다(바뀔 때마다). 채팅은 이 세션을 대상으로 쓰고,
+  // 아라가 이 세션에 치는 것은 묻지 않는다(approval.ts) — 그래서 패널이 닫혀 있어도 늘 맞춰 둔다.
+  const araTarget = useMemo(
+    () => (activeSession ? { id: activeSession.id, type: activeSession.type, title: activeSession.title, cwd: activeCwd } : null),
+    [activeSession?.id, activeSession?.type, activeSession?.title, activeCwd] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  useEffect(() => {
+    window.ev?.ara.setActive(araTarget).catch(() => {})
+  }, [araTarget])
+
   // R4.4: 창 타이틀(OS 작업표시줄·Alt+Tab)이 활성 세션을 반영한다. Electron 은 기본적으로 페이지 제목을
   // 창 제목으로 쓰므로 document.title 만 바꾸면 된다 — 별도 IPC 를 만들 이유가 없다.
   const activeTitle = activeSession?.title
@@ -1759,8 +1769,10 @@ export function Shell() {
             <AraChatPanel
               open={aiOpen}
               onClose={() => closeRail('ai')}
-              active={activeSession ? { type: activeSession.type, cwd: activeCwd } : null}
+              active={araTarget}
               prefill={aiPrefill}
+              // API 모드의 모델은 설정 ui.aiModels[provider] 다 — 선택기에서 바꾸면 그 설정을 고친다(주인은 MainArea).
+              onApiModel={(provider, model) => mainRef.current?.setAiModel(provider, model)}
             />
           )
         ) : (

@@ -40,7 +40,7 @@ import { usableSize } from '../../shared/termSize'
 import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
-import type { UiState } from '@shared/types'
+import type { AiProvider, UiState } from '@shared/types'
 
 // SSH 복원 결과 — Shell 의 connectProfile 을 감싼다. 성공 시 새 세션 id, 실패 시 사유.
 /**
@@ -74,6 +74,8 @@ export type MainAreaHandle = {
    * 그냥 넘어가면 "눌렀는데 아무 일도 안 남"이 된다). 토스트 구현을 Shell 에 또 만들지 않는다.
    */
   toast: (msg: string, action?: ToastAction) => void
+  /** 아라 채팅 v2: 채팅 선택기에서 API 모델을 바꾼다 — 설정 ui.aiModels[provider] 를 고친다(prefs 주인이 여기다). */
+  setAiModel: (provider: AiProvider, model: string) => void
 }
 
 /** R16: 토스트에 버튼 하나 — [내 신고] 새 소식의 [보기]. 버튼이 있으면 좀 더 오래 머문다. */
@@ -1107,9 +1109,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         },
         openCheatsheet: () => setCheatsheetOpen(true),
         zoomFont,
-        toast: showToast
+        toast: showToast,
+        setAiModel: (provider: AiProvider, model: string) => updatePrefs({ aiModels: { ...prefs.aiModels, [provider]: model } })
       }),
-      [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast]
+      [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast, updatePrefs, prefs.aiModels]
     )
 
     // FB-ui2(FB-0005): 지금 어떤 패널에도 배치되지 않은(detach) 세션 id 집합 — 탭바가 그 탭을

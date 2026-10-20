@@ -3930,8 +3930,8 @@ button.sb-seg.upd:hover .val {
 .fav-node .fav-p::after,
 .wp-path::before,
 .wp-path::after,
-.ara-hd .cwd::before,
-.ara-hd .cwd::after {
+.ara-path .cwd::before,
+.ara-path .cwd::after {
   content: '\200E';
 }
 .sess-node.active .sess-cwd {
@@ -4126,7 +4126,7 @@ button.sb-seg.upd:hover .val {
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
    `.prof-list` 가 통째로 스크롤되는 칸이라 sticky 로 바닥에 붙인다 — 배경을 깔아 두지 않으면
    아래로 지나가는 행이 글자에 겹쳐 읽힌다. */
-/* 아이콘 + 글자 버튼(M2 §5 ⑤) — `.ara-hist` 가 이미 쓰는 문법. `justify-content` 를 함께 주는 이유:
+/* 아이콘 + 글자 버튼(M2 §5 ⑤) — 옛 `.ara-hist` 가 쓰던 문법. `justify-content` 를 함께 주는 이유:
    지금 가운데 정렬은 <button> 의 UA `text-align: center` 가 해 주고 있는데, flex 로 바꾸는 순간
    그게 안 먹는다(안 주면 글자가 왼쪽으로 붙는다). 6px 은 이 파일에서 가장 흔한 간격이다(36곳). */
 .pl-add {
@@ -7808,7 +7808,6 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-4);
   padding: 0 var(--sp-3) 0 var(--sp-5);
   background: var(--bg-canvas);
-  border-bottom: 1px solid var(--line);
 }
 /* 지난 대화 목록(2026-08-26). **팝업이다** — 처음엔 패널 머리 아래에 펼쳤는데 좁은 레일에서
    대화를 밀어내며 반쪽만 보였다(준영님 제보). 고르는 화면이 고를 것을 가리면 안 된다. */
@@ -7910,48 +7909,246 @@ button.sb-seg.upd:hover .val {
 .ara-ic.sm {
   padding: var(--sp-1) var(--sp-4);
 }
-/* 머리의 [지난 대화] — 아이콘만 두니 무엇인지 안 읽혔다(준영님 제보). 글자를 함께 둔다. */
-.ara-hist {
+/* ── 아라 채팅 v2 머리(A 안 — agent_talk/MOCKUP-ara-chat-v2.html). 한 줄에 대상 세션 … 선택기·아이콘. */
+.ara-tgt {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-lo);
-  font-family: var(--ui);
-  font-size: var(--fs-md);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ara-hist:hover {
-  color: var(--text-hi);
-  background: var(--bg-overlay);
-}
-.ara-hist svg {
-  width: 13px;
-  height: 13px;
-}
-.ara-hd .t {
+  gap: var(--sp-3);
   color: var(--text-hi);
   font-size: var(--fs-md);
   font-weight: 600;
+}
+.ara-tgt .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
   flex: none;
 }
-/* 작업 폴더는 늘 보인다 — 아라가 어디서 일하는지 모르면 안 된다(목업 각주). 길면 앞을 자른다. */
-.ara-hd .cwd {
-  flex: 1;
+.ara-tgt .dot.off {
+  background: var(--text-lo);
+}
+.ara-tgt .nm {
   min-width: 0;
-  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ara-tgt .typ {
+  flex: none;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-lo);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  padding: 0 var(--sp-2);
+}
+/* 엔진·모델 선택기 — "Claude Code · Opus ▾". 메뉴는 아래로 연다(머리가 맨 위다). */
+.ara-pick {
+  position: relative;
+  flex: none;
+  min-width: 0;
+}
+.ara-sel {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 220px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  padding: var(--sp-1) var(--sp-4);
+  font-family: var(--ui);
+  cursor: pointer;
+}
+.ara-sel:hover,
+.ara-sel.open {
+  border-color: var(--accent-line);
+}
+.ara-sel .e,
+.ara-pick-menu .it .e {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  flex: none;
+}
+.ara-sel .e.api,
+.ara-pick-menu .it .e.api {
+  background: var(--purple);
+}
+.ara-sel .en {
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ara-sel .md {
+  min-width: 0;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ara-sel .car {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-lo);
+}
+.ara-sel.open .car {
+  transform: rotate(180deg);
+}
+.ara-pick-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 264px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-2);
+}
+.ara-pick-menu .grp {
   color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 500;
-  font-family: var(--mono);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+}
+.ara-pick-menu .it {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: var(--sp-3) var(--sp-4);
+  font-family: var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+.ara-pick-menu .it:hover {
+  background: var(--bg-raised);
+}
+.ara-pick-menu .it.on {
+  background: var(--accent-glow);
+}
+.ara-pick-menu .it .l {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+}
+.ara-pick-menu .it.on .l {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+/* 메뉴 바탕이 overlay 라 dim 은 대비가 모자란다 — lo(`.set-dir-tag` 과 같은 예외). */
+.ara-pick-menu .it .h {
+  margin-left: auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.ara-pick-menu .it .chk {
+  width: 12px;
+  flex: none;
+  color: var(--accent-bright);
+  font-size: var(--fs-micro);
+}
+.ara-pick-menu .warn {
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--warn);
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+}
+.ara-pick-menu .sep {
+  height: 1px;
+  background: var(--line-strong);
+  margin: var(--sp-2) 0;
+}
+/* 경로 줄 — **하단바 경로(.sb-seg.cwd .val)와 같은 글꼴·크기**(--ui · --fs-md, 준영님 요청). 앞을 자른다. */
+.ara-path {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-6) var(--sp-3) var(--sp-5);
+  background: var(--bg-canvas);
+}
+.ara-path .lbl {
+  flex: none;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.ara-path .cwd {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: var(--text-lo);
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
+  cursor: pointer;
+}
+.ara-path .cwd:hover {
+  color: var(--text-hi);
+}
+/* 사용량 — 얇은 막대 둘(5시간 · 주간, 2:1)과 한 줄 글. 한도를 못 얻으면 막대 자리는 선 하나다. */
+.ara-uline {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  height: 3px;
+  background: var(--bg-canvas);
+}
+.ara-uline.none {
+  height: 1px;
+  background: var(--line);
+}
+.ara-uline .ub {
+  flex: 1;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.ara-uline .ub:first-child {
+  flex: 2;
+}
+.ara-uline .ub i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ara-uline .ub i.w {
+  background: var(--accent-deep);
+}
+.ara-ustrip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-6) var(--sp-3) var(--sp-5);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--line);
+}
+.ara-ustrip .r {
+  margin-left: auto;
 }
 .ara-ic {
   display: flex;
@@ -8178,9 +8375,6 @@ button.sb-seg.upd:hover .val {
 .ara-compose .ara-bar {
   margin: 0 var(--sp-1) var(--sp-4);
 }
-.ara-bar .c {
-  font-family: var(--mono);
-}
 .ara-dot {
   width: 5px;
   height: 5px;
@@ -8216,19 +8410,8 @@ button.sb-seg.upd:hover .val {
 }
 
 
-/* 머리의 작업 폴더는 **버튼**이다 — 눌러서 바꾼다(묻지 않는 대신 언제든 옮긴다). */
-.ara-hd .cwd {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-.ara-hd .cwd:hover {
-  color: var(--text-mid);
-}
-/* 아라 폴더일 때는 경로 대신 할 일을 적는다 — 경로가 아니므로 등폭·rtl 도 아니다. */
-.ara-hd .cwd.home {
-  font-family: var(--ui);
+/* 아라 폴더일 때는 경로 대신 할 일을 적는다 — 경로가 아니므로 rtl 도 아니다. */
+.ara-path .cwd.home {
   direction: ltr;
 }
 
@@ -8264,16 +8447,6 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
 }
 .ara-chip.on {
-  border-color: var(--accent);
-  color: var(--accent-bright);
-}
-/* 엔진 스위치는 켜짐/꺼짐이 아니라 **둘 중 하나**다 — 어느 쪽이든 테두리를 준다(꺼진 것처럼
-   보이면 "Claude Code 가 안 붙었나" 로 읽힌다). API 쪽만 금색으로 눈에 걸리게 둔다. */
-.ara-chip.eng {
-  border-color: var(--line-strong);
-  color: var(--text-mid);
-}
-.ara-chip.eng.on {
   border-color: var(--accent);
   color: var(--accent-bright);
 }
@@ -8737,51 +8910,6 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
 }
 
-/* 모델 고르기 — 칩을 누르면 위로 뜬다(입력칸이 아래라 아래로 열 자리가 없다). */
-.ara-model {
-  position: relative;
-  flex: none;
-}
-.ara-menu {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 0;
-  min-width: 190px;
-  background: var(--bg-overlay);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-2);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-}
-.ara-menu button {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-hair);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: var(--sp-3) var(--sp-4);
-  text-align: left;
-  cursor: pointer;
-}
-.ara-menu button:hover {
-  background: var(--bg-raised);
-}
-.ara-menu button.on .l {
-  color: var(--accent-bright);
-}
-.ara-menu .l {
-  color: var(--text-hi);
-  font-size: var(--fs-md);
-}
-/* `.ara-menu` 의 바탕이 overlay 다 — dim 이면 3.54. lo = 4.51 (`.set-dir-tag` 과 같은 예외). */
-.ara-menu .h {
-  color: var(--text-lo);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-}
 
 
 /* ── #137 표 — 좁은 레일에서도 표는 표다. 넘치면 **가로로 스크롤**한다(칸을 접지 않는다). */
@@ -9148,12 +9276,12 @@ button.sb-seg.upd:hover .val {
 .rdp-opt-btn:active,
 .log-more:active,
 .mini-card:active,
-.ara-hist:active,
 .ara-ic:active,
 .ara-ask .pill:active,
 .ara-btn:active:not(:disabled),
 .ara-chip:active,
-.ara-menu button:active,
+.ara-sel:active,
+.ara-pick-menu .it:active,
 .bench-x:active,
 .set-toggle:active:not(.locked) {
   transform: scale(var(--press-scale));
