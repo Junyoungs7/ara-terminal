@@ -198,6 +198,25 @@ describe('사용자 조작', () => {
     expect(svc.state()).toEqual({ status: 'idle' })
   })
 
+  it('★ 받아 둔 채로도 다시 확인해 더 새 버전을 받는다 — ready 는 가드가 아니다', () => {
+    const { updater, svc } = setup()
+    updater.fire('update-downloaded', { version: '1.0.27' })
+    svc.check()
+    expect(svc.state().status).toBe('checking')
+    // 최신이거나 실패하면 받아 둔 것으로 돌아간다([다시 시작]이 사라지지 않는다)
+    updater.fire('update-not-available', {})
+    expect(svc.state()).toEqual({ status: 'ready', version: '1.0.27' })
+    svc.check()
+    updater.fire('error', new Error('ECONNREFUSED'))
+    expect(svc.state()).toEqual({ status: 'ready', version: '1.0.27' })
+    // 더 새 버전이 있으면 받는다
+    svc.check()
+    updater.fire('update-available', { version: '1.0.28' })
+    svc.download()
+    updater.fire('update-downloaded', { version: '1.0.28' })
+    expect(svc.state()).toEqual({ status: 'ready', version: '1.0.28' })
+  })
+
   it('★ [받기]는 새 버전을 찾아 둔 상태에서만 받는다', () => {
     const { updater, svc } = setup()
     svc.download() // idle

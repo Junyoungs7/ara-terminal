@@ -100,13 +100,16 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
    * — 여기서 나오는 오류는 전부 네트워크 그물이라 스택에 읽을 것이 없다.
    */
   let lastLogged: string | null = null
+  /** 받아 둔 버전(종료할 때 설치된다). 그 뒤 다시 확인해도 잊지 않는다. */
+  let downloaded: UpdateState | null = null
   const fail = (where: string, err: unknown): void => {
     const message = reason(err)
     if (message !== lastLogged) {
       lastLogged = message
       onError(where, message)
     }
-    set({ status: 'error', message })
+    // 받아 둔 것이 있으면 재확인 실패는 로그만 — 설치 대기는 그대로 살아 있다.
+    set(downloaded ?? { status: 'error', message })
   }
 
   updater.on('checking-for-update', () => set({ status: 'checking' }))
@@ -115,11 +118,15 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
   // [확인] 버튼이 프로세스 수명 내내 잠긴다). 받기는 download() 가 시작한다.
   updater.on('update-available', (info) => set({ status: 'available', version: version(info) }))
   // 최신이면 idle 로 돌아간다 — "확인했고 받을 게 없다"를 별도 상태로 두지 않는다(화면에 쓸 말이 같다).
-  updater.on('update-not-available', () => set({ status: 'idle' }))
+  // 받아 둔 것이 있으면 그 상태로 돌아간다 — 다시 확인했다고 [다시 시작]이 사라지면 안 된다.
+  updater.on('update-not-available', () => set(downloaded ?? { status: 'idle' }))
   updater.on('download-progress', (p) =>
     set({ status: 'downloading', version: state.version, percent: percentOf(p) })
   )
-  updater.on('update-downloaded', (info) => set({ status: 'ready', version: version(info) ?? state.version }))
+  updater.on('update-downloaded', (info) => {
+    downloaded = { status: 'ready', version: version(info) ?? state.version }
+    set(downloaded)
+  })
   updater.on('error', (err) => fail('update', err))
 
   return {
@@ -127,7 +134,9 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
     check: () => {
       // 'available' 은 **넣지 않는다** — 새 버전을 찾아 두고 안 받은 채로도 다시 확인할 수 있어야 한다
       // (그 사이 더 새 버전이 올라올 수 있고, 무엇보다 여기 넣으면 [확인] 버튼이 영영 죽는다).
-      if (state.status === 'checking' || state.status === 'downloading' || state.status === 'ready') return
+      // 'ready' 도 넣지 않는다 — 1.0.27 을 받아 둔 채 1.0.28 이 나오면 확인이 조용히 무시돼
+      // 1.0.27 에 갇혔다(2026-10-20 준영님).
+      if (state.status === 'checking' || state.status === 'downloading') return
       lastLogged = null // 새 회차 — 같은 사유라도 이번 실패는 다시 적는다
       set({ status: 'checking' })
       // 실패는 'error' 이벤트로도 오지만, 던지는 경로(주소 자체가 잘못된 경우)도 여기서 받는다.
