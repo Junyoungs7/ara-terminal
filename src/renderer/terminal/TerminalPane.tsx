@@ -510,6 +510,19 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
           // "WebGL" 이라고 거짓말을 하고, 제보와 비교할 기준이 거짓이 된다.
           termRenderer.kind = 'dom'
         })
+        // 오류 신고 #17(tmux 안 AI 화면 글자 깨짐) — addon-webgl 0.18 의 글자 그림(아틀라스)이 가득 차
+        // 페이지를 합칠 때 두 버그가 난다: ① 페이지 판 번호가 칸마다 따로라 우연히 같으면 텍스처를 다시
+        // 안 올린다 ② 그리는 도중 합쳐지면 다음 프레임까지 옛 좌표가 남는다(tmux 처럼 제자리 다시 그리기는
+        // 다음 프레임이 안 와서 그대로 남는다). 옵션이 바뀌면 xterm 이 텍스처를 전부 다시 올리고 화면을 다시
+        // 그린다 — 합쳐질 때만 오는 이 사건에 아무 영향 없는 옵션을 두 번 뒤집어 그것만 일으킨다.
+        // headless 재현(agent_talk/webgl-atlas-repro-done.md): 틀린 칸 90~679 → 0.
+        // ponytail: 우회책. upstream PR #5883(addon-webgl 0.20 / xterm 6.1)으로 올리면 지운다.
+        // 0.18 의 typings 에는 빠졌지만 실제로 있는 사건이다(WebglAddon.ts _onRemoveTextureAtlasCanvas — 합칠 때만 온다).
+        ;(webgl as WebglAddon & { onRemoveTextureAtlasCanvas: (cb: () => void) => unknown }).onRemoveTextureAtlasCanvas(() => {
+          const o = term.options
+          o.altClickMovesCursor = !o.altClickMovesCursor
+          o.altClickMovesCursor = !o.altClickMovesCursor
+        })
         term.loadAddon(webgl)
       } catch (err) {
         webgl = null
