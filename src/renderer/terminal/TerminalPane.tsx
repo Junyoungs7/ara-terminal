@@ -496,6 +496,35 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
       )
     )
     term.open(host)
+    // 오류 신고 #29·#30 — 마우스 추적이 꺼진 화면에서 Shift+드래그는 xterm 5.5 가 "기존 선택 늘리기"로
+    // 읽어(SelectionService _handleIncrementalClick), **화면에 안 보이는 마지막 클릭 자리**에서 선택을 시작한다.
+    // Ctrl+C 뒤엔 그 자리마저 지워져 아무것도 안 잡힌다. 추적이 꺼져 있을 때만 Shift 를 뗀 클릭으로 다시
+    // 보내 늘 새 선택이 되게 한다(추적이 켜져 있으면 Shift 는 xterm 이 "선택 강제"로 쓰므로 그대로 둔다).
+    // 대가: 일반 화면에서 Shift+클릭으로 선택을 늘리는 동작은 없어진다.
+    const onShiftDown = (e: MouseEvent): void => {
+      if (!e.isTrusted || !e.shiftKey || e.button !== 0 || term.modes.mouseTrackingMode !== 'none') return
+      e.stopPropagation()
+      e.preventDefault()
+      e.target?.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          detail: e.detail,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          screenX: e.screenX,
+          screenY: e.screenY,
+          button: 0,
+          buttons: e.buttons,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          metaKey: e.metaKey,
+          shiftKey: false
+        })
+      )
+    }
+    host.addEventListener('mousedown', onShiftDown, true)
     // R3.4 WebGL 렌더러 — 실패(드라이버 없음·headless)나 컨텍스트 로스트 시 DOM 렌더러로 되돌린다.
     // dispose 만 하면 xterm 이 자동으로 DOM 폴백을 쓰므로 별도 재생성은 없다.
     // 언마운트 때 term.dispose() 보다 먼저 GL 컨텍스트를 끊어야 한다 — 순서가 뒤바뀌면 창을 닫는
@@ -764,6 +793,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, aiCli, onTit
       if (bellTimer) clearTimeout(bellTimer)
       clearGhost()
       textarea?.removeEventListener('blur', onBlur)
+      host.removeEventListener('mousedown', onShiftDown, true)
       textarea?.removeEventListener('compositionstart', onCompStart)
       textarea?.removeEventListener('compositionend', onCompEnd)
       host.removeEventListener('dragover', onDragOver)
