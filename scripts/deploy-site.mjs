@@ -11,7 +11,7 @@
  *
  *   ARA_DEPLOY_PW='…' npm run site:deploy
  *
- * 웹 서버는 **이미 그 서버에 있는 caddy:2-alpine 컨테이너**를 쓴다. 새로 설치할 것도, sudo 도,
+ * 웹 서버는 **caddy 공식 이미지(버전은 아래 IMAGE)**를 쓴다. 새로 설치할 것도, sudo 도,
  * 방화벽 손질도 필요 없다(도커가 게시한 포트는 이 호스트에서 이미 여럿 쓰이고 있다).
  * caddy 를 고른 이유: 정적 파일 서버인데 **Range 요청을 제대로 받는다** — electron-updater 가
  * 업데이트를 **바뀐 조각만** 받는 경로(blockmap)가 그 위에서 돈다. python -m http.server 는
@@ -89,12 +89,20 @@ conn.on('ready', async () => {
     }
     sftp.end()
 
+    // 🔴 버전을 박는다 — 떠다니는 `caddy:2-alpine` 은 처음 받은 이미지가 남아 보안 패치를 놓친다
+    //    (2026-10-26, deploy-reports.mjs 와 같은 이유). 올릴 때 github.com/caddyserver/caddy/releases 최신으로.
+    //    `caddy:2-alpine` 태그 자체는 서버의 다른 프로젝트(vgt-work)도 쓰므로 지우지 않는다.
+    const IMAGE = 'caddy:2.11.7-alpine'
+    // 이미지를 먼저 받는다 — 지운 뒤에 받으면 받는 동안 업데이트 채널이 내려가 있다.
+    const pull = await exec(`docker pull -q ${IMAGE}`)
+    if (pull.code !== 0) throw new Error('이미지 받기 실패: ' + pull.out)
+
     // 컨테이너는 매번 지우고 다시 만든다 — 상태가 없다(읽기 전용 마운트 하나가 전부).
     await exec(`docker rm -f ${NAME} 2>/dev/null; true`)
     const run = await exec(
       `docker run -d --name ${NAME} --restart unless-stopped -p ${PORT}:80 ` +
         // 이 이미지에는 ENTRYPOINT 가 없다(CMD 만 있다) — 실행할 명령을 통째로 준다.
-        `-v ${ROOT}:/srv:ro caddy:2-alpine caddy file-server --root /srv --listen :80`
+        `-v ${ROOT}:/srv:ro ${IMAGE} caddy file-server --root /srv --listen :80`
     )
     if (run.code !== 0) throw new Error('컨테이너 기동 실패: ' + run.out)
 
