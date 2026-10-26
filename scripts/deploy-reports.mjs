@@ -24,6 +24,10 @@ const APP = '/data/jun/ARA-reports-app' // 서버 코드(읽기 전용 마운트
 const DATA = '/data/jun/ARA-reports' // 🔴 신고 저장소 — 지우지 않는다
 const PORT = process.env.ARA_REPORTS_PORT || '8897'
 const NAME = 'ara-reports' // 컨테이너 이름
+// 🔴 버전을 박는다 — `node:22-alpine` 처럼 떠다니는 태그는 처음 받은 이미지가 서버에 남아 보안 패치를
+//    놓친다(2026-10-26: v22.23.3 로 남아 10-20 보안 릴리스를 못 받음). 올릴 때 https://nodejs.org/dist/index.json
+//    에서 security:true 인 최신 LTS 로 바꾼다.
+const IMAGE = 'node:24.22.1-alpine'
 const LOCAL = join(process.cwd(), 'server', 'reports', 'server.mjs')
 
 if (!process.env.ARA_DEPLOY_PW) {
@@ -64,6 +68,10 @@ conn.on('ready', async () => {
     sftp.end()
     console.log(`server.mjs → ${USER}@${HOST}:${APP}`)
 
+    // 이미지를 먼저 받는다 — 지운 뒤에 받으면 받는 동안 신고 서버가 내려가 있다.
+    const pull = await exec(`docker pull -q ${IMAGE}`)
+    if (pull.code !== 0) throw new Error('이미지 받기 실패: ' + pull.out)
+
     // 컨테이너는 지우고 다시 만든다 — 그래도 신고는 남는다.
     // 🔴 ara-site 와 다른 점: ara-site 는 **무상태**(읽기 전용 마운트 하나)라 지워도 잃을 게 없지만,
     //    이 컨테이너는 쓰기를 받는다. 신고는 컨테이너 안이 아니라 호스트의 DATA 볼륨에 쓰이므로
@@ -76,7 +84,7 @@ conn.on('ready', async () => {
         `docker run -d --name ${NAME} --restart unless-stopped -p ${PORT}:8897 ` +
         `-v ${APP}:/app:ro -v ${DATA}:/data/reports ` +
         `-e ARA_REPORTS_DIR=/data/reports -e ARA_REPORTS_PORT=8897 -e ARA_REPORTS_ADMIN_PW ` +
-        `node:22-alpine node /app/server.mjs`,
+        `${IMAGE} node /app/server.mjs`,
       ADMIN_PW
     )
     if (run.code !== 0) throw new Error('컨테이너 기동 실패: ' + run.out)
