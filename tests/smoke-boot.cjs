@@ -973,8 +973,9 @@ const checks = []
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
     // 정의부는 SettingsDrawer.tsx SETTINGS_SECTIONS. [명령 기록]이 빠져 있던 것도 함께 맞췄다(2.0 3단계 [기능] 추가).
-    '좌측 nav 10섹션(일반/터미널/폰트/기능/로그/AI/MCP/단축키/명령 기록/정보)',
-    f5.navSections.join(',') === 'general,terminal,font,features,log,ai,mcp,keys,history,about'
+    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션.
+    '좌측 nav 11섹션(일반/모양/터미널/폰트/기능/로그/AI/MCP/단축키/명령 기록/정보)',
+    f5.navSections.join(',') === 'general,look,terminal,font,features,log,ai,mcp,keys,history,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
@@ -1615,7 +1616,7 @@ const checks = []
   checks.push(['R3.8: 치트시트가 새로 배선된 검색·클립보드·파일 트리를 싣는다', r2.csHasR3 === true])
   checks.push(['R2.5: 치트시트가 되살린 단축키를 싣는다', r2.csHasRevived === true])
   checks.push(['R2.5: 치트시트 행 15개 이상 유지', r2.csRows >= 15])
-  checks.push(['R2.6: 신호등 3개에 글리프 아이콘', r2.ctlGlyphs === 3])
+  checks.push(['R2.6: 창 버튼 3개에 글리프 아이콘(4단계: 얇은 선 − □ ×)', r2.ctlGlyphs === 3])
   checks.push(['R2.6: window.ev.window API 존재', r2.hasWindowApi === true])
   checks.push([
     'R2.6: 신호등 클릭이 창 IPC 를 호출한다(무반응 해소)',
@@ -2181,7 +2182,8 @@ const checks = []
   const winTitle = win.getTitle()
 
   checks.push(['R4.2: 하드코딩 localhost 제거(활성 세션 실데이터)', r4b.localBar.val !== 'localhost'])
-  checks.push(['R4.2: 로컬 세션은 셸 이름 표시', r4b.localBar.label === '셸' && r4b.localBar.val.length > 0])
+  // 2.0 4단계: 호스트 칸 라벨(셸·호스트·상태)을 뺐다 — 값만 남는다(시안 Z-final).
+  checks.push(['R4.2: 로컬 세션은 셸 이름 표시(라벨 없이 값만)', r4b.localBar.label === '' && r4b.localBar.val.length > 0])
   checks.push(['R4.2: 로컬 세션 cwd 표시(OSC7 경로 재사용)', r4b.localBar.cwd === '/srv/서비스/로그'])
   checks.push(['R4.2: SSH 세션은 user@host:port + 연결 dot', /^deploy@10\.9\.9\.9:22/.test(r4b.sshBar.val) && r4b.sshBar.dot.includes('connected')])
   checks.push(['R4.2: 세션 전환 시 상태바 갱신', r4b.localBar.val !== r4b.sshBar.val])
