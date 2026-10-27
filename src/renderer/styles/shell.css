@@ -4581,15 +4581,18 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
+/* 2.0 주 버튼 — `--accent-deep` 단색 + 흰 글자(시안 Z-final, 대비 4.20). 1.x 의 액센트 그라디언트 +
+   어두운 글자는 버렸다: 흰 글은 밝은 `--accent` 위에서 2.86 이라 바탕을 deep 으로 내린다. */
 .btn.pri {
-  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-  color: var(--on-accent);
+  background: var(--accent-deep);
+  color: var(--on-accent-deep);
   box-shadow:
     var(--shadow-sm),
     inset 0 1px 0 var(--edge-hi);
 }
+/* 흰 글자라 밝히면 대비가 떨어진다(1.08 배 → 3.68) — 호버는 살짝 **어둡게**. */
 .btn.pri:hover:not(:disabled) {
-  filter: brightness(1.08);
+  filter: brightness(0.92);
 }
 /* 채운 버튼도 같다. `.pri` 는 특히 나빴다: --on-accent(어두운 글자) × .5 가 액센트 면과 **같이**
    어두워져 그라디언트 아래쪽에서 2.33 — 라벨이 사라지는데 버튼은 여전히 앰버라 눌러 보게 된다.
