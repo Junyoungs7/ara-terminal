@@ -160,7 +160,7 @@
   color: var(--text-mid);
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .tb-menu span:hover,
@@ -185,7 +185,7 @@
   color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .tb-chat svg {
@@ -223,7 +223,7 @@
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   font-size: var(--fs-md);
   font-weight: 500;
   font-family: var(--ui);
@@ -322,7 +322,7 @@
   gap: var(--sp-5);
   min-height: 26px;
   padding: 0 var(--sp-6);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .cp-item.on {
   background: var(--bg-overlay);
@@ -386,7 +386,7 @@
   border: 0;
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
   display: grid;
   place-items: center;
@@ -486,7 +486,7 @@
   border: none;
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .sb-act:hover {
@@ -510,7 +510,7 @@
   background: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .tw-tool:hover {
@@ -587,7 +587,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-canvas);
-  cursor: text;
+  cursor: var(--cur-text, text);
 }
 .fpath-box:hover {
   border-color: var(--line-strong);
@@ -616,7 +616,7 @@
 }
 .fcrumb .seg {
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-radius: var(--radius);
   padding: 0 var(--sp-1);
 }
@@ -653,7 +653,7 @@
   height: var(--sb-hit);
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sftp-path-bar .sb-act:hover {
   background: var(--bg-overlay);
@@ -670,7 +670,7 @@
 .sftp-path-bar .sb-act[disabled],
 .sftp-path-bar button.sb-act:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   pointer-events: none;
 }
 .sftp-path-bar button.sb-act {
@@ -705,7 +705,7 @@
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .fstat {
   flex: none;
@@ -751,7 +751,7 @@
   padding: 2.5px var(--sp-4);
   font-size: var(--fs-md);
   color: var(--text-mid);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   white-space: nowrap;
   border-radius: var(--radius);
   transition: var(--dur-quick);
@@ -812,7 +812,7 @@
   font-variant-numeric: tabular-nums;
 }
 .frow.dir {
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .frow.dir .fn {
   color: var(--accent);
@@ -886,7 +886,7 @@
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sftp-got .g-act:hover {
   background: var(--bg-overlay);
@@ -901,7 +901,7 @@
   background: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sftp-got .g-x:hover {
   background: var(--bg-overlay);
@@ -951,7 +951,7 @@
   place-items: center;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sftp-xfer .xfer-cancel svg {
   width: 11px;
@@ -1059,7 +1059,7 @@
   border-radius: var(--radius);
   color: var(--text-lo);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   position: relative;
 }
 /* #72: 클릭 표적을 점 밖으로 넓힌다 — 타이틀바 .tb-ctl 이 #62 에서 같은 방식으로 고쳐졌는데
@@ -1107,7 +1107,7 @@
   background: var(--bg-surface);
   color: var(--text-lo);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .exp-tab:hover {
   color: var(--text-mid);
@@ -1195,7 +1195,7 @@
   padding: var(--sp-3) var(--sp-6);
   color: var(--text-mid);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   white-space: nowrap;
 }
 .exp-node:hover {
@@ -1304,7 +1304,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-surface);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .con-app:hover {
   border-color: var(--accent-line);
@@ -1416,7 +1416,7 @@
   border-right: 1px solid var(--line);
   color: var(--text-lo);
   font-size: var(--fs-md);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   user-select: none;
 }
 .bw-tab:hover {
@@ -1459,7 +1459,7 @@
   color: var(--text-lo);
   font-size: var(--fs-md);
   padding: 0 var(--sp-1);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .bw-x svg {
   width: 12px;
@@ -1502,7 +1502,7 @@
   font-size: var(--fs-md);
   color: var(--text-lo);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pw-tab .dot {
   width: 6px;
@@ -1691,7 +1691,7 @@
   font-family: var(--ui);
   font-size: var(--fs-md);
   font-weight: 400;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .pbtn:hover {
@@ -1785,7 +1785,7 @@
   width: 16px;
   height: 16px;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .con-field .sclear svg {
   width: 10px;
@@ -1811,7 +1811,7 @@
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .con-btn:hover:not(:disabled) {
   border-color: var(--line-strong);
@@ -1826,7 +1826,7 @@
 .con-btn.danger:disabled {
   color: var(--text-dim);
   border-color: var(--line);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .con-btn.danger {
   color: var(--err);
@@ -1882,7 +1882,7 @@
   font-size: var(--fs-micro);
   font-weight: 500;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   user-select: none;
 }
 .con-tbl th:hover {
@@ -1931,7 +1931,7 @@
 .con-row,
 .svc-row,
 .dsk-row {
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .con-row:hover td,
 .svc-row:hover td,
@@ -2094,7 +2094,7 @@
   gap: var(--sp-5);
   padding: var(--sp-2) var(--sp-4);
   border-bottom: 1px solid var(--line-soft);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .dsk-dir:hover {
   background: var(--bg-raised);
@@ -2148,7 +2148,7 @@
   color: var(--text-mid);
   font-family: inherit;
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ftb:hover:not(:disabled) {
   background: var(--bg-raised);
@@ -2157,7 +2157,7 @@
 /* dim 은 이미 있었다 — 거기 .45 를 또 곱해 surface 위 1.96 이었다(§1.3). 색만 남긴다: 4.41. */
 .ftb:disabled {
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .ftb.danger:hover:not(:disabled) {
   background: var(--err-line);
@@ -2208,7 +2208,7 @@
   border: none;
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .lrail-item svg {
@@ -2242,7 +2242,7 @@
    못 누르는 것과 안 보이는 것은 다르다(툴팁에 이유가 적혀 있어 읽혀야 뜻이 있다). */
 .lrail-item:disabled {
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 
 /* 사이드바 폭 드래그 손잡이 (R4.3). 경계선 바로 안쪽에 둔다. `.middle` 기준 absolute 이므로
@@ -2253,7 +2253,7 @@
   bottom: 0;
   left: calc(var(--lrail-w) + var(--sidebar-w) - 5px);
   width: 6px;
-  cursor: col-resize;
+  cursor: var(--cur-ew, col-resize);
   z-index: 4;
   transition: background var(--dur-quick);
 }
@@ -2269,7 +2269,7 @@
   transition: none;
 }
 .middle.resizing {
-  cursor: col-resize;
+  cursor: var(--cur-ew, col-resize);
   user-select: none;
 }
 
@@ -2320,7 +2320,7 @@
   font-size: var(--fs-base);
   color: var(--text-lo);
   white-space: nowrap;
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   position: relative;
   max-width: 184px;
   min-width: 0;
@@ -2396,7 +2396,7 @@
   margin-left: var(--sp-hair);
   opacity: 0;
   transition: var(--dur-quick);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   flex: none;
 }
 /* 비활성 탭의 × 는 호버에서만(오클릭으로 남의 세션을 죽이지 않게). 활성 탭은 상시 흐리게. */
@@ -2463,7 +2463,7 @@
   width: 32px;
   margin: var(--sp-3) 0 0 var(--sp-hair);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-radius: var(--radius) var(--radius) 0 0;
   transition: var(--dur-quick);
   flex-shrink: 0;
@@ -2485,7 +2485,7 @@
   width: 30px;
   flex: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-left: 1px solid var(--line-soft);
   transition: var(--dur-quick);
 }
@@ -2682,7 +2682,7 @@
   color: var(--text-lo);
   padding: var(--sp-2) var(--sp-5);
   border-radius: 0;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   white-space: nowrap;
   flex: none;
 }
@@ -2764,7 +2764,7 @@
   height: 22px;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .bp-max:hover {
   background: var(--bg-overlay);
@@ -2898,7 +2898,7 @@
   border: 1px solid var(--line);
   background: var(--bg-overlay);
   color: var(--text-hi);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .restore-err-card .rec-btn.primary {
   border-color: var(--accent-line);
@@ -2911,7 +2911,7 @@
 /* divider — hover 시 시안 라인 + col/row-resize 커서 (목업 그대로). */
 .div-col {
   background: transparent;
-  cursor: col-resize;
+  cursor: var(--cur-ew, col-resize);
   position: relative;
 }
 .div-col::before {
@@ -3164,7 +3164,7 @@
   border: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ts-btn svg {
   width: 14px;
@@ -3293,7 +3293,7 @@
   color: inherit;
 }
 button.sb-seg.upd {
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 /* 받을 것이 생겼다 / 받아 뒀다 — 둘 다 사람이 누를 차례라 같은 강조색을 쓴다. */
 .sb-seg.upd.available .val,
@@ -3437,7 +3437,7 @@ button.sb-seg.upd:hover .val {
   background: none;
   font: inherit;
   color: var(--purple);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sb-seg.mcp .lbl {
   color: var(--purple);
@@ -3565,7 +3565,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sb-search .field .sclear:hover {
   background: var(--bg-overlay);
@@ -3618,7 +3618,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.4px;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   user-select: none;
 }
 .srv-hd:hover {
@@ -3712,7 +3712,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-size: var(--fs-md);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   position: relative;
 }
 .srv-node:hover,
@@ -4061,7 +4061,7 @@ button.sb-seg.upd:hover .val {
   background: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .modal-hd .x svg,
@@ -4117,7 +4117,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .pl-add svg {
@@ -4135,7 +4135,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-5);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   border-radius: var(--radius);
   border: 1px solid transparent;
   margin-bottom: var(--sp-2);
@@ -4321,7 +4321,7 @@ button.sb-seg.upd:hover .val {
   border: none;
   border-radius: var(--radius);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pw-eye:hover {
   background: var(--bg-raised);
@@ -4336,7 +4336,7 @@ button.sb-seg.upd:hover .val {
 }
 .fld select {
   appearance: none;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .seg-ctl {
   display: flex;
@@ -4360,7 +4360,7 @@ button.sb-seg.upd:hover .val {
      (비밀번호/개인키 · 7·30·90일)까지 이유 없이 작아지므로 **여백을 한 단 내려** 버튼당 4px 을
      되샀다 — 세 칸이면 12px, 네 칸이면 16px 이다. */
   padding: var(--sp-3) var(--sp-4);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -4396,7 +4396,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   padding: 0 var(--sp-6);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   font-family: var(--ui);
   transition: var(--dur-quick);
 }
@@ -4448,7 +4448,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-8);
   font-size: var(--fs-base);
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   font-family: var(--ui);
   display: inline-flex;
   align-items: center;
@@ -4494,7 +4494,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
   color: var(--text-dim);
   box-shadow: none;
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 
 /* ============================================================
@@ -4576,7 +4576,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   padding: var(--sp-4) var(--sp-5);
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-left: 2px solid transparent;
   transition: var(--dur-quick);
 }
@@ -4654,7 +4654,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   background: var(--bg-canvas);
   position: relative;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .set-toggle.on {
@@ -4715,7 +4715,7 @@ button.sb-seg.upd:hover .val {
   /* 프로필 행(.prof)과 같은 "고를 수 있는 목록 행"이고 같은 설정 서랍 안에 있다 —
      그쪽이 --radius 라 여기도 맞춘다(10px 자작값이 나란히 놓였을 때 눈에 걸리던 자리). */
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   background: var(--bg-canvas);
   transition: var(--dur-quick);
 }
@@ -4892,7 +4892,7 @@ button.sb-seg.upd:hover .val {
   box-shadow:
     0 0 0 3px var(--accent-glow),
     var(--shadow-knob);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 
 /* 실사용 한글 미리보기 */
@@ -5015,7 +5015,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-base);
   padding: var(--sp-4) var(--sp-5);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   outline: none;
   transition: var(--dur-quick);
 }
@@ -5070,7 +5070,7 @@ button.sb-seg.upd:hover .val {
 .dd-btn .dd-caret {
   display: grid;
   place-items: center;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   color: var(--text-lo);
 }
 .dd-btn svg {
@@ -5102,7 +5102,7 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-base);
   color: var(--text-mid);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .dd-opt.cur {
   font-weight: 500;
@@ -5239,7 +5239,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   background: var(--bg-overlay);
   color: var(--text-hi);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .br-thumb-x svg {
   width: 11px;
@@ -5268,13 +5268,13 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-4);
   font-size: var(--fs-md);
   color: var(--text-mid);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .fb-check input[type='checkbox'] {
   accent-color: var(--accent);
   width: 14px;
   height: 14px;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 /* R16 [내 신고] — .modal.sm 을 재사용하되 목록 | 상세 두 칸이 들어가게 넓게. 입력칸은 신고 창 .fld 결 그대로. */
 .modal.my-reports {
@@ -5304,7 +5304,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .mr-item:hover {
   background: var(--bg-overlay);
@@ -5563,7 +5563,7 @@ button.sb-seg.upd:hover .val {
   border: 0;
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   padding: var(--sp-1);
 }
 .mon-close svg,
@@ -5780,7 +5780,7 @@ button.sb-seg.upd:hover .val {
   font-family: inherit;
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-4);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ai-head-btn:hover {
   color: var(--text-hi);
@@ -5905,7 +5905,7 @@ button.sb-seg.upd:hover .val {
   font-family: inherit;
   font-size: var(--fs-md);
   padding: var(--sp-1) var(--sp-3);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ai-code-btn:hover:not(:disabled) {
   color: var(--text-hi);
@@ -5918,7 +5918,7 @@ button.sb-seg.upd:hover .val {
 /* lo × .4 = canvas(.ai-code-hd 바탕) 위 2.08. 한 칸 아래 토큰으로: 4.70. */
 .ai-code-btn:disabled {
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .ai-code-body {
   margin: 0;
@@ -5946,7 +5946,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-weight: 500;
   padding: var(--sp-2) 0 0;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ai-ctx-badge svg {
   width: 12px;
@@ -5996,7 +5996,7 @@ button.sb-seg.upd:hover .val {
   font-family: inherit;
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ai-chip:hover:not(:disabled) {
   color: var(--text-hi);
@@ -6012,7 +6012,7 @@ button.sb-seg.upd:hover .val {
 /* lo × .4 = surface 위 2.04 → dim 4.41. */
 .ai-chip:disabled {
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .ai-input-row {
   display: flex;
@@ -6117,7 +6117,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   font-size: var(--fs-md);
   color: var(--text-mid);
 }
@@ -6163,7 +6163,7 @@ button.sb-seg.upd:hover .val {
   border: none;
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
 .act-item svg {
@@ -6277,7 +6277,7 @@ button.sb-seg.upd:hover .val {
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 /* 오류 원문(backtrace)은 길고 줄바꿈이 의미를 갖는다 — 접히지 않게 그대로 보여준다. */
 .rdp-trace {
@@ -6307,7 +6307,7 @@ button.sb-seg.upd:hover .val {
   font-family: inherit;
   font-size: var(--fs-md);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .rdp-opt-btn:hover {
   color: var(--text-hi);
@@ -6452,13 +6452,13 @@ button.sb-seg.upd:hover .val {
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   flex: none;
 }
 .ed-save:disabled {
   background: var(--bg-raised);
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .ed-area {
   flex: 1;
@@ -6505,7 +6505,7 @@ button.sb-seg.upd:hover .val {
   top: 0;
   bottom: 0;
   width: 5px;
-  cursor: col-resize;
+  cursor: var(--cur-ew, col-resize);
   z-index: 2;
 }
 .lp-resizer:hover {
@@ -6546,7 +6546,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   color: var(--text-mid);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .log-more:hover {
   color: var(--text-hi);
@@ -6582,13 +6582,13 @@ button.sb-seg.upd:hover .val {
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   flex: none;
 }
 .log-dl:disabled {
   background: var(--bg-raised);
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 
 /* 로그 뷰어에서 "여기가 파일 처음"임을 알리는 구분선(더 거슬러 갈 곳이 없다는 뜻). */
@@ -6649,7 +6649,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-5);
   border-radius: var(--radius);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .wp-row.cur {
   background: var(--accent-glow);
@@ -6824,7 +6824,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-raised);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pl-row:hover {
   border-color: var(--accent-line);
@@ -6905,7 +6905,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .sysm-tab:hover {
   color: var(--text-hi);
@@ -7128,7 +7128,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-size: var(--fs-md);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .con-note {
   color: var(--text-mid);
@@ -7196,7 +7196,7 @@ button.sb-seg.upd:hover .val {
    (위 `.con-row.sel td, …, .ctr-row.sel td`). 여기에 따로 두지 않는다: 예전에는 이 주석이
    "같은 선택 표시"라고 적혀 있는데 값은 달랐다. */
 .ctr-row {
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ctr-row:hover,
 .pod-row:hover {
@@ -7242,7 +7242,7 @@ button.sb-seg.upd:hover .val {
 
 /* 정렬하지 않는 열은 손 모양도 강조도 주지 않는다 — 눌러도 아무 일 없는 머리는 거짓 신호다. */
 .con-tbl th.fixed {
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .con-tbl th.fixed:hover {
   color: var(--text-lo);
@@ -7282,7 +7282,7 @@ button.sb-seg.upd:hover .val {
 }
 /* 파드 줄 — 누르면 접힌다. 아픈 파드는 줄 전체로 티가 나야 한다(점 하나로는 60줄에서 안 보인다). */
 .pod-row {
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pod-caret {
   color: var(--text-mid);
@@ -7365,7 +7365,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pd-tab:hover {
   color: var(--text-hi);
@@ -7416,7 +7416,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   background: none;
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .pd-exec svg {
   width: 13px;
@@ -7565,7 +7565,7 @@ button.sb-seg.upd:hover .val {
   top: 0;
   bottom: 0;
   width: 5px;
-  cursor: col-resize;
+  cursor: var(--cur-ew, col-resize);
   z-index: 2;
 }
 .ara-grip:hover {
@@ -7618,7 +7618,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-5) var(--sp-5);
   border: none;
   background: none;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   text-align: left;
   font-family: var(--ui);
 }
@@ -7736,7 +7736,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
   padding: var(--sp-1) var(--sp-4);
   font-family: var(--ui);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-sel:hover,
 .ara-sel.open {
@@ -7809,7 +7809,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-3) var(--sp-4);
   font-family: var(--ui);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-pick-menu .it:hover {
   background: var(--bg-raised);
@@ -7883,7 +7883,7 @@ button.sb-seg.upd:hover .val {
   border: 0;
   padding: var(--sp-2);
   color: var(--text-lo);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-ic:hover {
   color: var(--text-hi);
@@ -7952,7 +7952,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   font-size: var(--fs-md);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-fold .hd .caret {
   color: var(--text-lo);
@@ -8032,7 +8032,7 @@ button.sb-seg.upd:hover .val {
   font: var(--fs-md) var(--ui);
   color: var(--text-hi);
   background: var(--bg-raised);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-ask .pill:hover,
 .ara-choices .pill:hover {
@@ -8145,7 +8145,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   padding: var(--sp-2) var(--sp-5);
   font: var(--fs-md) var(--ui);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-btn.p {
   border-color: var(--accent);
@@ -8156,7 +8156,7 @@ button.sb-seg.upd:hover .val {
 }
 .ara-btn:disabled {
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 
 
@@ -8187,7 +8187,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font: var(--fs-micro) var(--ui);
   padding: var(--sp-hair) var(--sp-4);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-chip:hover {
   color: var(--text-mid);
@@ -8228,7 +8228,7 @@ button.sb-seg.upd:hover .val {
   text-align: left;
   color: var(--text-lo);
   font: var(--fs-micro) var(--ui);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .bench-group:first-child .bench-sec {
   margin-top: var(--sp-1);
@@ -8296,7 +8296,7 @@ button.sb-seg.upd:hover .val {
 .bench-row.dead .bench-name,
 .bench-row.dead .bench-name .t {
   color: var(--text-lo);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .bench-dot {
   width: 7px;
@@ -8337,7 +8337,7 @@ button.sb-seg.upd:hover .val {
   text-align: left;
   color: var(--text-mid);
   font: var(--fs-md) var(--ui);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .bench-name .l1 {
   display: flex;
@@ -8444,7 +8444,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-size: var(--fs-micro);
   padding: 0;
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .bench-x svg {
   width: 11px;
@@ -8540,7 +8540,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   /* 코드를 드래그로 훑을 때 버튼 글자("복사")까지 딸려 들어가면 붙여넣은 명령이 망가진다(제보 ③).
      아래 `.ara-panel button` 과 겹치지만 그쪽에 기대지 않는다 — `.md` 는 아라 패널 전용이 아니라
      아무 데나 붙을 수 있는 조각이고, 그때 이 한 줄이 없으면 같은 사고가 조용히 되살아난다. */
@@ -8629,7 +8629,7 @@ button.sb-seg.upd:hover .val {
   border-radius: 50%;
   background: var(--accent);
   color: var(--bg-canvas);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
 }
 .ara-send svg {
   width: 15px;
@@ -8639,7 +8639,7 @@ button.sb-seg.upd:hover .val {
 .ara-send:disabled {
   background: var(--bg-overlay);
   color: var(--text-dim);
-  cursor: default;
+  cursor: var(--cur-arrow, default);
 }
 .ara-send.stop {
   background: var(--err);
@@ -8991,6 +8991,106 @@ button.sb-seg.upd:hover .val {
 .set-toggle.locked {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ── 마우스 커서 테마 (2.0 4단계, 설정 › 모양) ──
+   테마를 고르면 루트에 data-cursor 와 --cur-* 다섯이 붙는다(renderer/cursorThemes.ts). 이 파일의
+   `cursor:` 는 전부 `var(--cur-hand, pointer)` 꼴이라 시스템 기본이면 표준값 그대로다. 아래는
+   **테마일 때만** 걸리는 자리 — 커서를 따로 적지 않은 요소는 본문을 물려받고, 입력칸·xterm 은
+   UA·xterm.css 가 정한 I-빔을 테마 것으로 바꾼다. */
+:root[data-cursor] body {
+  cursor: var(--cur-arrow, default);
+}
+:root[data-cursor] :is(textarea, input:not([type]), input[type='text'], input[type='password'], input[type='search'], input[type='number']) {
+  cursor: var(--cur-text, text);
+}
+:root[data-cursor] .xterm {
+  cursor: var(--cur-text, text);
+}
+:root[data-cursor] .xterm .xterm-viewport,
+:root[data-cursor] .xterm.enable-mouse-events {
+  cursor: var(--cur-arrow, default);
+}
+:root[data-cursor] .xterm.xterm-cursor-pointer,
+:root[data-cursor] .xterm .xterm-cursor-pointer {
+  cursor: var(--cur-hand, pointer);
+}
+/* 설정 › 모양 › 마우스 커서 — 고르기 카드(시안 Z-cursor). 견본 칸에 올리면 그 커서가 된다. */
+.cur-legend,
+.cur-smp {
+  display: flex;
+  gap: var(--sp-3);
+  flex: none;
+}
+.cur-legend {
+  justify-content: flex-end;
+  padding: var(--sp-4) var(--sp-6) var(--sp-2) 0;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.cur-legend span,
+.cur-smp span {
+  width: 44px;
+  text-align: center;
+}
+.cur-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.cur-opt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-5) var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-canvas);
+  cursor: var(--cur-hand, pointer);
+}
+.cur-opt:hover {
+  border-color: var(--line-strong);
+}
+.cur-opt.on {
+  border-color: var(--accent);
+}
+.cur-opt input {
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: var(--cur-hand, pointer);
+}
+.cur-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.cur-nm {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-hi);
+}
+.cur-ds {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.cur-badge {
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.cur-smp span {
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--bg-terminal);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

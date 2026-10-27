@@ -234,7 +234,7 @@
   align-items: baseline;
   gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-2);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   border-radius: var(--radius);
 }
 .cb-row:hover {
@@ -339,7 +339,7 @@
   font-size: var(--fs-md);
   font-weight: 400;
   color: var(--text-mid);
-  cursor: pointer;
+  cursor: var(--cur-hand, pointer);
   white-space: nowrap;
   transition: var(--dur-quick);
 }
@@ -398,7 +398,7 @@
 }
 /* FB-monitor(F19 tmux): 정보 전용 행(로딩·미설치·세션 없음 안내) — 클릭·호버 하이라이트 없음. */
 .ctx-item.disabled {
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   color: var(--text-dim);
 }
 /* 서브메뉴를 여는 상위 행. 여기만 **회전하지 않는 ChevronRight** 다(M3) — 펼침 상태가 아니라

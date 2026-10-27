@@ -5,6 +5,7 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_SESSION_LOG,
   DEFAULT_UI_SCALE,
+  DEFAULT_MOUSE_CURSOR,
   type UiPrefs
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
@@ -17,6 +18,7 @@ import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
 const DEFAULT_PREFS: UiPrefs = {
   uiScale: DEFAULT_UI_SCALE,
+  mouseCursor: DEFAULT_MOUSE_CURSOR,
   ...termPrefs,
   sessionLog: DEFAULT_SESSION_LOG,
   logRetentionDays: DEFAULT_LOG_RETENTION_DAYS,

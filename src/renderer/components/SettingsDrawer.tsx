@@ -9,6 +9,8 @@ import {
   AI_PROVIDER_LABELS,
   AI_PROVIDERS,
   UI_SCALES,
+  MOUSE_CURSORS,
+  DEFAULT_MOUSE_CURSOR,
   CURSOR_STYLES,
   BELL_STYLES,
   LOG_RETENTION_OPTIONS,
@@ -31,6 +33,7 @@ import { writeClipboard } from '../store/clipboardWrite'
 import { forgetCachedScope } from '../store/history'
 import { LICENSES } from '../fonts/licenses'
 import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
+import { CURSOR_KINDS, cursorSrc, cursorValue } from '../cursorThemes'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
 
@@ -47,7 +50,7 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'features', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
 type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
@@ -1034,6 +1037,45 @@ export function SettingsDrawer({
                 }
               />
               <UpdateRow />
+            </>
+          )}
+
+          {/* 2.0 4단계 — 모양 › 마우스 커서(시안 Z-cursor). 견본 칸에 마우스를 올리면 그 커서가 된다. */}
+          {section === 'look' && (
+            <>
+              <div className="set-sec-t">{t('settings.mouseCursor')}</div>
+              <div className="set-note">{t('settings.mouseCursor.desc')}</div>
+              <div className="cur-legend" aria-hidden>
+                {CURSOR_KINDS.map((k) => (
+                  <span key={k}>{t('mouseCursor.kind.' + k)}</span>
+                ))}
+              </div>
+              <div className="cur-list" role="radiogroup" aria-label={t('settings.mouseCursor')}>
+                {MOUSE_CURSORS.map((c) => (
+                  <label key={c} className={'cur-opt' + (prefs.mouseCursor === c ? ' on' : '')} data-value={c}>
+                    <input
+                      type="radio"
+                      name="mouse-cursor"
+                      checked={prefs.mouseCursor === c}
+                      onChange={() => onPrefsChange({ mouseCursor: c })}
+                    />
+                    <span className="cur-tx">
+                      <span className="cur-nm">
+                        {t('mouseCursor.' + c)}
+                        {c === DEFAULT_MOUSE_CURSOR && <span className="cur-badge">{t('settings.mouseCursor.default')}</span>}
+                      </span>
+                      <span className="cur-ds">{t('mouseCursor.' + c + '.desc')}</span>
+                    </span>
+                    <span className="cur-smp">
+                      {CURSOR_KINDS.map((k) => (
+                        <span key={k} style={{ cursor: cursorValue(c, k) }} title={t('mouseCursor.kind.' + k)}>
+                          {c !== 'system' && <img src={cursorSrc(c, k)} alt="" />}
+                        </span>
+                      ))}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </>
           )}
 

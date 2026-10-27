@@ -191,6 +191,17 @@ export function uiScaleOf(v: unknown): UiScale {
   return UI_SCALES.includes(v as UiScale) ? (v as UiScale) : DEFAULT_UI_SCALE
 }
 
+/**
+ * 2.0 4단계 설정 › 모양 › 마우스 커서(시안 Z-cursor). `system` 이면 앱이 커서를 하나도 안 그린다 —
+ * Windows 설정의 커서가 그대로다. 나머지는 아라 창 안에서만 바뀐다(renderer/cursorThemes.ts).
+ */
+export const MOUSE_CURSORS = ['system', 'mac', 'thin', 'dot', 'big'] as const
+export type MouseCursor = (typeof MOUSE_CURSORS)[number]
+export const DEFAULT_MOUSE_CURSOR: MouseCursor = 'system'
+export function mouseCursorOf(v: unknown): MouseCursor {
+  return MOUSE_CURSORS.includes(v as MouseCursor) ? (v as MouseCursor) : DEFAULT_MOUSE_CURSOR
+}
+
 // 터미널 동작 기본값(R3.1/R3.4). R5 설정 창 [일반]·[터미널] 섹션이 이 값들을 노출한다.
 // 옛 스냅샷에는 필드가 없으므로 읽는 쪽이 ?? 로 이 상수를 쓴다(스키마 버전 올릴 일 아님 —
 // 전부 옵셔널이라 v3 파일이 그대로 읽힌다. 버전만 올리는 no-op 스텝은 파일을 다시 쓸 뿐이다).
@@ -330,6 +341,8 @@ export function isBottomId(id: string): id is BottomId {
 export type UiPrefs = {
   // UI-font5: UI 글자·행 높이 배율. 터미널 글자는 별개(F5 ui.font).
   uiScale: UiScale
+  /** 2.0 4단계 마우스 커서 테마. mouseCursorOf 가 클램프한 확정값. */
+  mouseCursor: MouseCursor
   scrollback: number
   copyOnSelect: boolean
   cursorStyle: CursorStyle
@@ -415,6 +428,8 @@ export type UiState = {
   locale: string
   // UI-font5 [일반]: UI 글자·행 높이 배율 이름. 미지정이면 normal. uiScaleOf 가 클램프한다.
   uiScale?: string
+  // 2.0 4단계 마우스 커서 테마 이름. 미지정이면 system. mouseCursorOf 가 클램프한다.
+  mouseCursor?: string
   // 스크롤백 줄 수 / 드래그 선택 즉시 복사(X11·PuTTY 관례). 미지정이면 위 기본값.
   scrollback?: number
   copyOnSelect?: boolean

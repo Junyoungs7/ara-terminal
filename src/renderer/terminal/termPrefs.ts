@@ -11,12 +11,14 @@ import {
   DEFAULT_TERM_COMPLETION,
   UI_SCALE_FACTOR,
   uiScaleOf,
+  mouseCursorOf,
   type UiPrefs,
   type UiState
 } from '@shared/types'
 import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
 import { featuresOf } from '@shared/features'
+import { applyMouseCursor } from '../cursorThemes'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -27,6 +29,7 @@ import { featuresOf } from '@shared/features'
 export const termPrefs: Omit<
   UiPrefs,
   | 'uiScale'
+  | 'mouseCursor'
   | 'sessionLog'
   | 'logRetentionDays'
   | 'sessionLogDir'
@@ -59,6 +62,7 @@ export function prefsFrom(
   ui: Pick<
     UiState,
     | 'uiScale'
+    | 'mouseCursor'
     | 'scrollback'
     | 'copyOnSelect'
     | 'cursorStyle'
@@ -82,6 +86,7 @@ export function prefsFrom(
 ): UiPrefs {
   return {
     uiScale: uiScaleOf(ui.uiScale),
+    mouseCursor: mouseCursorOf(ui.mouseCursor),
     scrollback: ui.scrollback ?? DEFAULT_SCROLLBACK,
     copyOnSelect: ui.copyOnSelect ?? DEFAULT_COPY_ON_SELECT,
     cursorStyle: ui.cursorStyle ?? DEFAULT_CURSOR_STYLE,
@@ -118,6 +123,7 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   // DOM 접근만 건너뛴다(테스트를 위해 함수를 쪼개지 않는다).
   if (typeof document !== 'undefined') {
     document.documentElement.style.setProperty('--ui-scale', String(UI_SCALE_FACTOR[prefs.uiScale]))
+    applyMouseCursor(prefs.mouseCursor)
   }
   termPrefs.scrollback = prefs.scrollback
   termPrefs.copyOnSelect = prefs.copyOnSelect
