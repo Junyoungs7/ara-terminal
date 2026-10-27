@@ -41,7 +41,7 @@
   font-weight: 500;
   color: var(--text-lo);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
 }
 .sp-empty {
@@ -235,7 +235,7 @@
   gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-2);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 .cb-row:hover {
   background: var(--bg-overlay);
@@ -277,7 +277,7 @@
   font-size: var(--fs-micro);
   font-weight: 500;
   padding: var(--sp-hair) var(--sp-3);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   border: 1px solid var(--line);
   color: var(--text-lo);
@@ -316,7 +316,7 @@
   width: 224px;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-3);
   /* ContextMenu.tsx 의 EDGE(14) 두 배 — 좌표 계산과 이 상한이 어긋나면 한쪽이 가장자리에 붙는다. */
@@ -335,7 +335,7 @@
   align-items: center;
   gap: var(--sp-5);
   padding: var(--sp-3) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font-size: var(--fs-md);
   font-weight: 400;
   color: var(--text-mid);
@@ -370,7 +370,7 @@
   font-weight: 500;
   color: var(--text-lo);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
   flex: none;
 }

@@ -158,7 +158,7 @@
   font-size: var(--fs-md);
   color: var(--text-mid);
   padding: var(--sp-2) var(--sp-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: var(--dur-quick);
 }
@@ -219,7 +219,7 @@
   height: calc(20px * var(--ui-scale));
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   color: var(--text-lo);
   cursor: pointer;
@@ -297,7 +297,7 @@
   flex-direction: column;
   max-height: 60vh;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--bg-surface);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -496,7 +496,7 @@
   height: 20px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: none;
   background: none;
   color: var(--text-lo);
@@ -522,7 +522,7 @@
   place-items: center;
   border: none;
   background: none;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
@@ -599,7 +599,7 @@
   height: 24px;
   padding: 0 var(--sp-4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
   cursor: text;
 }
@@ -631,7 +631,7 @@
 .fcrumb .seg {
   color: var(--text-lo);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: 0 var(--sp-1);
 }
 .fcrumb .seg:hover {
@@ -653,7 +653,7 @@
   height: 24px;
   padding: 0 var(--sp-3);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
   font-family: var(--mono);
@@ -665,7 +665,7 @@
   place-items: center;
   width: var(--sb-hit);
   height: var(--sb-hit);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -702,7 +702,7 @@
   height: 22px;
   padding: 0 var(--sp-3);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
   font-family: var(--ui);
@@ -714,7 +714,7 @@
   height: 22px;
   padding: 0 var(--sp-1);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-mid);
   font-family: var(--ui);
@@ -767,7 +767,7 @@
   color: var(--text-mid);
   cursor: default;
   white-space: nowrap;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   transition: var(--dur-quick);
   /* 더블클릭하면 파일 이름이 드래그한 것처럼 파랗게 남았다(2026-08-22 준영님 제보 7번).
      이 목록에서 글자를 고를 일은 없다 — 이름 복사는 우클릭 메뉴가 한다. */
@@ -848,7 +848,7 @@
   min-width: 0;
   background: var(--bg-canvas);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
@@ -899,7 +899,7 @@
   font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
 }
 .sftp-got .g-act:hover {
@@ -913,7 +913,7 @@
   height: 20px;
   border: none;
   background: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -963,7 +963,7 @@
   height: 16px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -978,7 +978,7 @@
 .sftp-xfer .xfer-bar {
   height: 4px;
   background: var(--bg-canvas);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .sftp-xfer .xfer-fill {
@@ -1031,7 +1031,7 @@
   min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -1070,7 +1070,7 @@
   place-items: center;
   width: 28px;
   height: 22px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   font-size: var(--fs-md);
   cursor: pointer;
@@ -1117,7 +1117,7 @@
   padding: 0 var(--sp-5);
   border: 1px solid var(--line);
   border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: 0;
   background: var(--bg-surface);
   color: var(--text-lo);
   font-size: var(--fs-md);
@@ -1159,7 +1159,7 @@
   flex: none;
   width: 15px;
   height: 15px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
 }
 .exp-tab-x:hover {
@@ -1316,7 +1316,7 @@
   gap: var(--sp-4);
   padding: var(--sp-7) var(--sp-3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-surface);
   cursor: pointer;
 }
@@ -1686,7 +1686,7 @@
   order: -1;
   padding: 0 var(--sp-3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   font-size: var(--fs-micro);
   font-weight: 500;
   line-height: 1.5;
@@ -1699,7 +1699,7 @@
   height: 20px;
   padding: 0 var(--sp-5);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-surface);
   color: var(--text-mid);
   font-family: var(--ui);
@@ -1779,7 +1779,7 @@
   min-height: 24px;
   padding: 0 var(--sp-2) 0 var(--sp-4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-abyss);
 }
 .con-field input {
@@ -1820,7 +1820,7 @@
   min-height: 24px;
   padding: 0 var(--sp-5);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-raised);
   color: var(--text-mid);
   font-family: var(--ui);
@@ -1985,7 +1985,7 @@
   width: 40px;
   height: 5px;
   margin-right: var(--sp-3);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--line);
   vertical-align: middle;
   overflow: hidden;
@@ -2157,7 +2157,7 @@
   min-height: 24px;
   padding: 0 var(--sp-4);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: none;
   color: var(--text-mid);
   font-family: inherit;
@@ -2405,7 +2405,7 @@
   place-items: center;
   width: 14px;
   height: 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   margin-left: var(--sp-hair);
   opacity: 0;
@@ -2438,7 +2438,7 @@
   width: 118px;
   background: var(--bg-canvas);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-base);
@@ -2519,7 +2519,7 @@
   pointer-events: none;
   border: 2px dashed var(--accent);
   background: var(--accent-glow);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -2591,7 +2591,7 @@
   color: var(--text-lo);
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-3);
   margin-right: var(--sp-2);
 }
@@ -2695,7 +2695,7 @@
   font-size: var(--fs-md);
   color: var(--text-lo);
   padding: var(--sp-2) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   cursor: pointer;
   white-space: nowrap;
   flex: none;
@@ -2776,7 +2776,7 @@
   place-items: center;
   width: 26px;
   height: 22px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -2908,7 +2908,7 @@
   font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-3) var(--sp-7);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--bg-overlay);
   color: var(--text-hi);
@@ -3024,7 +3024,7 @@
   height: 22px;
   line-height: 22px;
   padding: 0 var(--sp-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   white-space: pre;
   overflow: hidden;
@@ -3091,7 +3091,7 @@
 }
 .upd-logo {
   flex: 0 0 auto;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 .upd-body {
   flex: 1 1 auto;
@@ -3111,7 +3111,7 @@
   margin-top: var(--sp-4);
   height: var(--sp-3);
   background: var(--bg-canvas);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .upd-fill {
@@ -3176,7 +3176,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -3387,14 +3387,14 @@ button.sb-seg.upd:hover .val {
   width: 40px;
   height: 4px;
   background: var(--bg-overlay);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   flex: none;
 }
 .gauge .bar i {
   display: block;
   height: 100%;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   transition: width 0.3s linear;
 }
 .gauge .bar.cpu i {
@@ -3434,7 +3434,7 @@ button.sb-seg.upd:hover .val {
   height: 4px;
   flex: none;
   overflow: hidden;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--bg-overlay);
 }
 .sb-mbar i {
@@ -3471,7 +3471,7 @@ button.sb-seg.upd:hover .val {
   max-width: 360px;
   background: var(--bg-surface);
   border: 1px solid var(--purple-line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   padding: var(--sp-5);
   z-index: 40;
@@ -3581,7 +3581,7 @@ button.sb-seg.upd:hover .val {
   width: 16px;
   height: 16px;
   flex: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -3791,7 +3791,7 @@ button.sb-seg.upd:hover .val {
 .tbadge {
   flex: none;
   padding: var(--sp-hair) var(--sp-3);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -3836,7 +3836,7 @@ button.sb-seg.upd:hover .val {
   height: 19px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius);
   color: var(--text-lo);
   font-size: var(--fs-md);
 }
@@ -3935,7 +3935,7 @@ button.sb-seg.upd:hover .val {
   width: 34px;
   padding: var(--sp-hair) 0;
   text-align: center;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -4077,7 +4077,7 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   border: 0;
   background: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
@@ -4337,7 +4337,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   cursor: pointer;
 }
@@ -4593,7 +4593,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   color: var(--text-lo);
   padding: var(--sp-4) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
   border-left: 2px solid transparent;
   transition: var(--dur-quick);
@@ -4982,7 +4982,7 @@ button.sb-seg.upd:hover .val {
 .license-row {
   padding: var(--sp-4) var(--sp-6);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
 }
 .license-row .lic-name {
@@ -5108,7 +5108,7 @@ button.sb-seg.upd:hover .val {
   z-index: 120;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-2);
   max-height: 240px;
@@ -5116,7 +5116,7 @@ button.sb-seg.upd:hover .val {
 }
 .dd-opt {
   padding: var(--sp-4) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font-family: var(--ui);
   font-size: var(--fs-base);
   color: var(--text-mid);
@@ -5254,7 +5254,7 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-overlay);
   color: var(--text-hi);
   cursor: pointer;
@@ -5318,7 +5318,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-3) var(--sp-4);
   background: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
@@ -5414,7 +5414,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-6);
   background: var(--bg-canvas);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: var(--sp-4) var(--sp-5);
   color: var(--text-hi);
   font-family: var(--ui);
@@ -5621,7 +5621,7 @@ button.sb-seg.upd:hover .val {
   padding: 0 var(--sp-4);
   background: var(--bg-abyss);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
@@ -5793,7 +5793,7 @@ button.sb-seg.upd:hover .val {
 .ai-head-btn {
   background: transparent;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   font-family: inherit;
   font-size: var(--fs-md);
@@ -5918,7 +5918,7 @@ button.sb-seg.upd:hover .val {
 .ai-code-btn {
   background: transparent;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-lo);
   font-family: inherit;
   font-size: var(--fs-md);
@@ -6043,7 +6043,7 @@ button.sb-seg.upd:hover .val {
   resize: none;
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-family: inherit;
   font-size: var(--fs-md);
@@ -6087,7 +6087,7 @@ button.sb-seg.upd:hover .val {
   min-width: 0;
   background: var(--bg-canvas);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--mono);
   font-size: var(--fs-md);
@@ -6177,7 +6177,7 @@ button.sb-seg.upd:hover .val {
   min-height: 32px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: none;
   background: none;
   color: var(--text-lo);
@@ -6279,19 +6279,19 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-5);
   background: var(--bg-canvas);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-hi);
   font-size: var(--fs-md);
 }
 /* 눈 토글이 붙으면 테두리는 껍데기(.pw-wrap)가 갖는다 — 안쪽 칸은 .pw-input 공통 규칙이 그린다. */
 .rdp-creds .pw-wrap {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 .rdp-go {
   padding: var(--sp-4) var(--sp-6);
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
@@ -6320,7 +6320,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-2) var(--sp-4);
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-mid);
   font-family: inherit;
   font-size: var(--fs-md);
@@ -6371,7 +6371,7 @@ button.sb-seg.upd:hover .val {
 .rx-track {
   flex: 1;
   height: 4px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   overflow: hidden;
 }
@@ -6466,7 +6466,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-2) var(--sp-6);
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
@@ -6561,7 +6561,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-3) 0;
   background: var(--bg-raised);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--text-mid);
   font-size: var(--fs-md);
   cursor: pointer;
@@ -6596,7 +6596,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-2) var(--sp-6);
   background: var(--accent);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--bg-abyss);
   font-size: var(--fs-md);
   font-weight: 500;
@@ -6666,7 +6666,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
 }
 .wp-row.cur {
@@ -6710,7 +6710,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
   padding: 0 var(--sp-3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   color: var(--text-mid);
   font-size: var(--fs-md);
   white-space: nowrap;
@@ -6790,7 +6790,7 @@ button.sb-seg.upd:hover .val {
   max-width: 380px;
   padding: var(--sp-3) var(--sp-5);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-raised);
   color: var(--text-hi);
   box-shadow: var(--shadow-sm);
@@ -6820,7 +6820,7 @@ button.sb-seg.upd:hover .val {
   margin-left: var(--sp-4);
   padding: var(--sp-hair) var(--sp-3);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--accent-glow);
   color: var(--accent);
   /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이다. 보조 단(11px) — 하한과 같은 값이라 여유는 없다. */
@@ -6840,7 +6840,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-4) var(--sp-5);
   margin-bottom: var(--sp-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-raised);
   cursor: pointer;
 }
@@ -7065,7 +7065,7 @@ button.sb-seg.upd:hover .val {
 .sysm-dbar {
   height: 5px;
   margin: var(--sp-2) 0 var(--sp-1);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   overflow: hidden;
 }
@@ -7431,7 +7431,7 @@ button.sb-seg.upd:hover .val {
   display: grid;
   place-items: center;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: none;
   color: var(--text-lo);
   cursor: pointer;
@@ -7618,7 +7618,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 .modal.ara-chats .ac-row:hover {
   background: var(--bg-overlay);
@@ -7647,7 +7647,7 @@ button.sb-seg.upd:hover .val {
   width: 34px;
   padding: var(--sp-hair) 0;
   text-align: center;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   font-size: var(--fs-micro);
   font-weight: 500;
   border: 1px solid var(--line);
@@ -7690,7 +7690,7 @@ button.sb-seg.upd:hover .val {
   margin: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
   font-family: var(--ui);
@@ -7733,7 +7733,7 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
   color: var(--text-lo);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   padding: 0 var(--sp-2);
 }
 /* 엔진·모델 선택기 — "Claude Code · Opus ▾". v3 B안: 입력칸 위 줄(계획 먼저 옆)이라 메뉴는 **위로** 연다.
@@ -7764,7 +7764,7 @@ button.sb-seg.upd:hover .val {
 .ara-pick-menu .it .e {
   width: 8px;
   height: 8px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: var(--accent);
   flex: none;
 }
@@ -7806,7 +7806,7 @@ button.sb-seg.upd:hover .val {
   flex-direction: column;
   background: var(--bg-overlay);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   padding: var(--sp-2);
 }
@@ -7822,7 +7822,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-4);
   width: 100%;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: transparent;
   padding: var(--sp-3) var(--sp-4);
   font-family: var(--ui);
@@ -7924,8 +7924,8 @@ button.sb-seg.upd:hover .val {
   align-self: flex-end;
   max-width: 86%;
   background: var(--bg-overlay);
-  /* 오른쪽 아래만 각지다 — 말풍선 꼬리 대신이다. 척도의 맨 아래 칸을 쓴다(옛 2px). */
-  border-radius: var(--radius) var(--radius) var(--radius-xs) var(--radius);
+  /* 오른쪽 아래만 각지다 — 말풍선 꼬리 대신이다(design-system-v2 §3 — 16, 꼬리 쪽 한 모서리 4). */
+  border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-sm) var(--radius-bubble);
   padding: var(--sp-3) var(--sp-5);
   color: var(--text-hi);
   font-size: var(--fs-md);
@@ -8160,7 +8160,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   background: var(--bg-surface);
   color: var(--text-hi);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: var(--sp-2) var(--sp-5);
   font: var(--fs-md) var(--ui);
   cursor: pointer;
@@ -8288,7 +8288,7 @@ button.sb-seg.upd:hover .val {
 .bench-row {
   position: relative;
   padding: var(--sp-3) var(--sp-2) var(--sp-3) var(--sp-4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }
 .bench-row:hover {
   background: var(--bg-surface);
@@ -8405,7 +8405,7 @@ button.sb-seg.upd:hover .val {
   text-overflow: ellipsis;
   white-space: nowrap;
   background: var(--bg-surface);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
 }
 .bench-name .cli {
@@ -8458,7 +8458,7 @@ button.sb-seg.upd:hover .val {
   height: var(--sb-hit);
   background: transparent;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius);
   color: var(--text-lo);
   font-size: var(--fs-micro);
   padding: 0;
@@ -8553,7 +8553,7 @@ button.sb-seg.upd:hover .val {
   align-self: flex-end;
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: var(--sp-hair) var(--sp-3);
   color: var(--text-lo);
   font-family: var(--ui);
@@ -8608,7 +8608,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-bubble);
   padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);
 }
 .ara-box:has(.ara-input:focus-visible) {
@@ -8825,7 +8825,7 @@ button.sb-seg.upd:hover .val {
   width: 100%;
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: var(--sp-4) var(--sp-5);
   color: var(--text-hi);
   font: var(--fs-xl) var(--ui);

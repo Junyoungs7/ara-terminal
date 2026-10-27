@@ -180,15 +180,9 @@
   --radius-lg: 8px;
   --radius: 6px;
   --radius-sm: 4px;
-  /* --radius-xs — 2026-08-28(#149) **새 값이 아니라 이름이다.** 척도가 셋이던 동안 실제 코드에는
-     `3px` 이 **열여섯 곳**에 박혀 있었다: kbd·단축키 배지·타입 배지(SSH/RDP/SYS)·20px 아이콘 버튼·
-     4~5px 두께의 게이지 막대. 전부 "sm(4px)조차 과한 자리"라는 같은 판단이었는데, 이름이 없으니
-     매번 손으로 적었고 그 옆에 1·2·5·7px 이 하나씩 따라 붙었다(긴 꼬리 = 척도가 없다는 증거).
-     그래서 값은 그대로 두고 이름만 붙인다 — 이 토큰을 넣는 커밋에서 화면은 한 픽셀도 안 바뀐다.
-     ⚠️ 막대·트랙에도 이걸 쓴다. 두께가 6px 이하라 브라우저가 반지름을 두께의 절반으로 깎아
-     어차피 끝이 동그래진다 — 알약(999px)을 새로 늘리지 않고 같은 모양을 얻는 자리다.
-     2026-10-08: 3 → **4**(4px 격자 스냅). 이제 --radius-sm 과 값이 같다 — 이름은 2단계에서 합친다. */
-  --radius-xs: 4px;
+  /* 2.0 4단계(2026-10-27): 옛 --radius-xs(4px, --radius-sm 과 같은 값 — "이름은 2단계에서 합친다")를
+     sm 으로 합치고 그 칸에 말풍선·채팅 입력 상자 16 을 넣었다(design-system-v2 §3). 토큰 수는 그대로 다섯. */
+  --radius-bubble: 16px;
 
   /* 간격 (§3.2) — 2026-08-30(#153/M5). **발명한 척도가 아니라 있던 척도다.**
      padding·margin·gap 의 px 727개를 세어 보니 **521개(72%)가 이미 짝수**였고 8·6·10·4 넷만으로
@@ -443,7 +437,7 @@ th {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--line-strong);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--bg-overlay);
