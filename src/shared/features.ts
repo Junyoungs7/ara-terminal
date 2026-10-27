@@ -1,3 +1,5 @@
+import type { KeymapAction } from './keymap'
+
 /**
  * 기능 스위치 — **끄는 자리를 한 곳으로 모은다.**
  *
@@ -51,3 +53,65 @@ export const AI_ENTRY = AI_CHAT || ARA_CHAT
 // 음성 모드(말로 아라 부르기)는 **없다** — 2026-09-05 준영님 결정으로 코드째 걷었다(#140).
 // 마이크·받아쓰기·읽어 주기를 한 번도 소리로 확인하지 못한 채 반 년을 숨긴 플래그로 들고 있었고,
 // 그동안 vosk-browser 5.5MB 가 못 쓰는 채로 설치본에 실렸다. 되살릴 계획은 없다.
+
+/**
+ * 2.0 3단계 — **사용자가 고르는 기능 표시**(설정 › 기능). 위 상수들과 같은 방식이다: 코드는 그대로 두고
+ * **진입점만**(하단 패널 탭 · 메뉴바 · 좌측 레일) 막는다. 단축키와 통합 검색은 숨겨도 늘 실행되고,
+ * 실행한 그 순간에는 보인다(하단 탭은 BottomPanel 이 "열린 탭은 목록에 없어도 그린다"로 이미 그렇게 한다).
+ *
+ * `hidden` = 기본 숨김(0단계 "덜어낼 기능 후보" 표, 2026-10-27 준영님 결정).
+ * `key` = 이 기능을 여는 KEYMAP 액션, `menu` = 메뉴바 명령 id — 메뉴·검색에서 이 기능을 알아보는 열쇠이자
+ * 설정 화면의 단축키 칸이다. **이 표에 단축키를 새로 만들지 않는다**(없으면 빈칸).
+ *
+ * 브라우저 창은 여기 없다: 따로 여는 자리가 없고(포트 [열기]·터미널 링크가 그 결과로 띄운다)
+ * 숨길 진입점이 없다 — 스위치를 달면 눌러도 아무 일 없는 스위치가 된다.
+ */
+export type FeatureId =
+  | 'monitor'
+  | 'sys'
+  | 'ps'
+  | 'svc'
+  | 'disk'
+  | 'pkg'
+  | 'ctr'
+  | 'log'
+  | 'pastlog'
+  | 'explorer'
+  | 'cmdbook'
+  | 'k8s'
+  | 'applog'
+  | 'console'
+
+export type Feature = { id: FeatureId; hidden?: true; key?: KeymapAction; menu?: string }
+
+export const FEATURES: readonly Feature[] = [
+  { id: 'monitor', menu: 'panel.ports' },
+  { id: 'sys', menu: 'panel.sysmon' },
+  { id: 'ps', menu: 'panel.ps' },
+  { id: 'svc', menu: 'panel.svc' },
+  { id: 'disk', menu: 'panel.disk' },
+  { id: 'pkg', menu: 'panel.pkg' },
+  { id: 'ctr', menu: 'panel.ctr' },
+  { id: 'log', menu: 'panel.log', key: 'log.save' },
+  { id: 'pastlog', menu: 'panel.pastlog' },
+  { id: 'explorer', key: 'explorer.toggle' },
+  { id: 'cmdbook', key: 'commandBook.toggle' },
+  { id: 'k8s', menu: 'panel.k8s', hidden: true },
+  { id: 'applog', menu: 'panel.applog', hidden: true },
+  { id: 'console', menu: 'panel.console', hidden: true }
+]
+
+export type FeatureShown = Record<FeatureId, boolean>
+
+/** 저장된 값(신뢰 경계 밖 — 손으로 고친 파일·옛 파일) → 기능마다 보이나. 모르는 값은 기본으로. */
+export function featuresOf(raw: unknown): FeatureShown {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  return Object.fromEntries(
+    FEATURES.map((f) => [f.id, typeof r[f.id] === 'boolean' ? r[f.id] : !f.hidden])
+  ) as FeatureShown
+}
+
+/** 메뉴·검색 항목 id(KEYMAP 액션 또는 메뉴 명령) → 그 항목이 여는 기능. 없으면 스위치 밖(늘 보임). */
+export function featureOf(entryId: string): Feature | undefined {
+  return FEATURES.find((f) => f.key === entryId || f.menu === entryId)
+}

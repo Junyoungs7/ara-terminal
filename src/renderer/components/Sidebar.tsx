@@ -1,4 +1,5 @@
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
+import type { FeatureShown } from '@shared/features'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { ConnTree, type TreeTarget } from './ConnTree'
@@ -69,6 +70,7 @@ export function SidebarRail({
   collapsed,
   fileEnabled,
   onPick,
+  features,
   explorerOpen,
   onExplorer,
   bottomOpen,
@@ -81,6 +83,8 @@ export function SidebarRail({
   /** 세션이 없으면 파일 트리가 읽을 파일시스템이 없다 — 못 누르게 막고 이유를 툴팁에 적는다. */
   fileEnabled: boolean
   onPick: (tab: SidebarTab) => void
+  /** 2.0 설정 › 기능 — 끈 탐색기·지난 세션은 레일에서 뺀다(단축키·검색으로는 열린다). 없으면 전부. */
+  features?: FeatureShown
   /** 2.0: 우측 액티비티 바가 없어지며 왼쪽으로 온 셋 — 탐색기 창 · 하단 패널(서버 도구) · 설정. */
   explorerOpen: boolean
   onExplorer: () => void
@@ -129,10 +133,11 @@ export function SidebarRail({
     <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
       {tab('conn', TAB_ICON.conn)}
       {tab('file', TAB_ICON.file)}
-      {tool('explorer', explorerOpen, railTip(t('wb.title'), 'explorer.toggle'), onExplorer, () => <Compass />)}
+      {(features?.explorer !== false || explorerOpen) &&
+        tool('explorer', explorerOpen, railTip(t('wb.title'), 'explorer.toggle'), onExplorer, () => <Compass />)}
       {tab('ai', TAB_ICON.ai)}
       {tool('bottombar', bottomOpen, t('bottom.bar.toggle'), onBottom, () => <Wrench />)}
-      {tab('past', () => <History />)}
+      {(features?.pastlog !== false || (!collapsed && active === 'past')) && tab('past', () => <History />)}
       <div className="lrail-spacer" />
       {tool('settings', settingsOpen, railTip(t('settings.open'), 'settings.open'), onSettings, () => <SlidersHorizontal />)}
     </div>

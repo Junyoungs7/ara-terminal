@@ -9,6 +9,7 @@ import {
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
 import { aiCliFlagsOf } from '../../shared/aiCli'
+import { featuresOf } from '@shared/features'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
 // R5 터미널 동작 설정 단일 소스(useFont·useSidebar 와 같은 형태):
@@ -28,7 +29,8 @@ const DEFAULT_PREFS: UiPrefs = {
   aiCliFlags: aiCliFlagsOf(undefined),
   araCallName: '',
   araWelcomeSeen: false,
-  bootSplash: true
+  bootSplash: true,
+  features: featuresOf(undefined)
 }
 
 export function useUiPrefs() {

@@ -41,6 +41,7 @@ import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
 import type { AiProvider, UiState } from '@shared/types'
+import type { FeatureId, FeatureShown } from '@shared/features'
 
 // SSH 복원 결과 — Shell 의 connectProfile 을 감싼다. 성공 시 새 세션 id, 실패 시 사유.
 /**
@@ -76,6 +77,8 @@ export type MainAreaHandle = {
   toast: (msg: string, action?: ToastAction) => void
   /** 아라 채팅 v2: 채팅 선택기에서 API 모델을 바꾼다 — 설정 ui.aiModels[provider] 를 고친다(prefs 주인이 여기다). */
   setAiModel: (provider: AiProvider, model: string) => void
+  /** 2.0 통합 검색 Ctrl+Enter — 숨긴 기능을 설정에서 켠다(prefs 의 주인이 여기다). */
+  showFeature: (id: FeatureId) => void
 }
 
 /** R16: 토스트에 버튼 하나 — [내 신고] 새 소식의 [보기]. 버튼이 있으면 좀 더 오래 머문다. */
@@ -132,6 +135,8 @@ type MainAreaProps = {
   onAiCliFlags?: (flags: Record<string, string[]>) => void
   /** 아라 채팅 v2: API 모드 공급자·모델(설정 ui.aiProvider · ui.aiModels) 미러 — 채팅 선택기가 쓴다. */
   onAiApi?: (a: { provider: AiProvider; model: string }) => void
+  /** 2.0 설정 › 기능 미러 — 하단 탭·메뉴·레일을 거르는 Shell 이 쓴다(onAiCliFlags 와 같은 형태). */
+  onFeatures?: (f: FeatureShown) => void
   /** #78: 터미널 **아래** 패널(포트·세션 기록). 상태의 주인은 Shell 이라 다 만들어진 노드를 받는다
       — 타이틀바가 통합 검색(omni)을 받는 것과 같은 방식이다. .main 안에 있어야 폭이 아니라
       세로를 먹는다(레일과 달리 터미널 80칸에 영향이 없다). */
@@ -172,6 +177,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onRevealFiles,
       onAiCliFlags,
       onAiApi,
+      onFeatures,
       bottom,
       detachedWinId
     },
@@ -521,6 +527,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onAiCliFlags?.(prefs.aiCliFlags)
     }, [prefs.aiCliFlags, onAiCliFlags])
+
+    useEffect(() => {
+      onFeatures?.(prefs.features)
+    }, [prefs.features, onFeatures])
 
     useEffect(() => {
       onAiApi?.({ provider: prefs.aiProvider, model: prefs.aiModels[prefs.aiProvider] })
@@ -1117,9 +1127,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         openCheatsheet: () => setCheatsheetOpen(true),
         zoomFont,
         toast: showToast,
-        setAiModel: (provider: AiProvider, model: string) => updatePrefs({ aiModels: { ...prefs.aiModels, [provider]: model } })
+        setAiModel: (provider: AiProvider, model: string) => updatePrefs({ aiModels: { ...prefs.aiModels, [provider]: model } }),
+        showFeature: (id: FeatureId) => updatePrefs({ features: { ...prefs.features, [id]: true } })
       }),
-      [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast, updatePrefs, prefs.aiModels]
+      [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast, updatePrefs, prefs.aiModels, prefs.features]
     )
 
     // FB-ui2(FB-0005): 지금 어떤 패널에도 배치되지 않은(detach) 세션 id 집합 — 탭바가 그 탭을

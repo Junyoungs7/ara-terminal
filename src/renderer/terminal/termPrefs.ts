@@ -16,6 +16,7 @@ import {
 } from '@shared/types'
 import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
+import { featuresOf } from '@shared/features'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -40,6 +41,7 @@ export const termPrefs: Omit<
   | 'araCallName'
   | 'araWelcomeSeen'
   | 'bootSplash'
+  | 'features'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -75,6 +77,7 @@ export function prefsFrom(
     | 'araCallName'
     | 'araWelcomeSeen'
     | 'bootSplash'
+    | 'features'
   >
 ): UiPrefs {
   return {
@@ -103,7 +106,8 @@ export function prefsFrom(
     araCallName: callNameOf(ui.araCallName),
     araWelcomeSeen: ui.araWelcomeSeen === true,
     // 미지정이면 **켬** — 처음 쓰는 사람에게 한 번은 보여 주고, 싫으면 끄게 한다.
-    bootSplash: ui.bootSplash !== false
+    bootSplash: ui.bootSplash !== false,
+    features: featuresOf(ui.features)
   }
 }
 

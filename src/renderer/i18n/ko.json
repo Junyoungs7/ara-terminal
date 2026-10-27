@@ -574,6 +574,8 @@
   "menu.panel.disk": "디스크",
   "menu.panel.pkg": "패키지",
   "menu.panel.ctr": "컨테이너",
+  "menu.panel.k8s": "쿠버네티스",
+  "menu.panel.applog": "서버 로그",
   "menu.panel.pastlog": "지난 세션",
   "menu.help.about": "ARA 정보",
   "menu.help.myReports": "내 신고",

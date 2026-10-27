@@ -1,4 +1,4 @@
-import { AI_ENTRY } from '@shared/features'
+import { AI_ENTRY, featureOf, type FeatureShown } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
@@ -592,6 +592,9 @@ export type MenuCommandId =
   | 'panel.disk'
   | 'panel.pkg'
   | 'panel.ctr'
+  // 2.0 3단계: 기본 숨김인 두 탭도 통합 검색(F1)에서 찾아 열 수 있어야 한다 — 검색이 이 표를 읽는다.
+  | 'panel.k8s'
+  | 'panel.applog'
   | 'panel.pastlog'
   // F17: 단축키 없는 진입점(패널 상단 버튼이 또 하나 있다 — AiPanel.onOpenBootstrap).
   | 'ai.bootstrap'
@@ -650,7 +653,9 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       { command: 'panel.disk' },
       { command: 'panel.pkg' },
       { command: 'panel.ctr' },
+      { command: 'panel.k8s' },
       { command: 'panel.log' },
+      { command: 'panel.applog' },
       // 우측 레일.
       { command: 'panel.pastlog' },
       { action: 'sidebar.collapse' },
@@ -696,10 +701,14 @@ export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] 
 const MENU_DANGER: ReadonlySet<string> = new Set(['app.quit', 'pane.close'])
 
 // 최상위 메뉴 인덱스 → ContextMenu 항목. keymap 항목은 라벨·힌트를 KEYMAP 에서, 명령 항목은 i18n 에서.
-export function menuBarItems(index: number): MenuItem[] {
+// shown: 2.0 설정 › 기능 — 끈 기능의 항목은 메뉴에서 빠진다(통합 검색에는 남는다 — palette.ts).
+export function menuBarItems(index: number, shown?: FeatureShown): MenuItem[] {
   const menu = MENUBAR[index]
   if (!menu) return []
-  return menu.items.map((e) => {
+  return menu.items.filter((e) => {
+    const f = featureOf('action' in e ? e.action : e.command)
+    return !f || !shown || shown[f.id]
+  }).map((e) => {
     const id = 'action' in e ? e.action : e.command
     const hint = 'action' in e ? comboOf(e.action) : undefined
     const label =

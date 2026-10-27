@@ -2,6 +2,7 @@
 import type { AiCliId, AiCliRecent } from './aiCli'
 import type { AiSessionState } from './aiSession'
 import type { AiLimit } from './aiEngine'
+import type { FeatureShown } from './features'
 export type { AiCliRecent }
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
@@ -433,6 +434,8 @@ export type UiPrefs = {
   araWelcomeSeen: boolean
   /** #139 켤 때 인사 화면. 매일 켜는 사람에게는 셋째 날부터 방해라 끌 수 있다. */
   bootSplash: boolean
+  /** 2.0 설정 › 기능 — 기능마다 진입점을 보일까(features.ts FEATURES). featuresOf 가 채운 확정값. */
+  features: FeatureShown
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -579,6 +582,8 @@ export type UiState = {
   araWelcomeSeen?: boolean
   /** #139 부팅 인사. 미지정이면 켬. */
   bootSplash?: boolean
+  /** 2.0 설정 › 기능. 미지정 기능은 기본값(features.ts). 🔴 선택 필드 — SCHEMA_VERSION 그대로. */
+  features?: Partial<FeatureShown>
   // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
   // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
   // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.

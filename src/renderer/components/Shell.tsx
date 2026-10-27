@@ -1,4 +1,4 @@
-import { AI_ENTRY, ARA_CHAT } from '@shared/features'
+import { AI_ENTRY, ARA_CHAT, featuresOf, type FeatureShown } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
@@ -53,6 +53,7 @@ import { buildTmuxInput } from '../../shared/tmux'
 import {
   MCP_AUTO_ALLOW_MINUTES,
   isBottomId,
+  BOTTOM_IDS,
   type BottomId,
   type ConnectionProfile,
   type WorkProfile,
@@ -198,6 +199,8 @@ export function Shell() {
   // 설정 [AI] 의 CLI 기본 플래그. settingsActive 와 같은 미러다(prefs 의 주인은 MainArea) —
   // 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
   const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
+  // 2.0 설정 › 기능 — 같은 미러(주인은 MainArea 의 prefs). 끈 기능은 하단 탭·메뉴·레일에서 빠진다.
+  const [features, setFeatures] = useState<FeatureShown>(() => featuresOf(undefined))
   // 아라 채팅 v2: API 모드 공급자·모델 — 같은 미러(채팅 선택기가 ready 추론 대신 설정 값을 쓴다).
   const [aiApi, setAiApi] = useState<{ provider: AiProvider; model: string }>(() => {
     const p = aiProviderOf(undefined)
@@ -645,6 +648,12 @@ export function Shell() {
           return
         case 'panel.ctr':
           toggleBottom('ctr')
+          return
+        case 'panel.k8s':
+          toggleBottom('k8s')
+          return
+        case 'panel.applog':
+          toggleBottom('applog')
           return
         case 'panel.pastlog':
           // 2.0: [지난 세션]은 왼쪽 사이드바 안이다(우측 레일 폐지).
@@ -1427,6 +1436,7 @@ export function Shell() {
       <TitleBar
         onCommand={onMenuCommand}
         reportNews={myReports.unread}
+        features={features}
         // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
         chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
@@ -1464,6 +1474,7 @@ export function Shell() {
           collapsed={sidebar.collapsed}
           fileEnabled={!!activeSession && activeSession.type !== 'rdp'}
           onPick={(tab) => updateSidebar((s) => nextSidebar(s, tab))}
+          features={features}
           explorerOpen={explorerOpen}
           onExplorer={() => setExplorerOpen((o) => !o)}
           bottomOpen={bottom !== null}
@@ -1574,8 +1585,9 @@ export function Shell() {
               onTab={setBottom}
               onClose={() => setBottom(null)}
               flash={panelFlash}
-              // 탭 목록·순서는 BOTTOM_IDS 다 — BottomPanel 의 기본값이라 여기서 넘기지 않는다
-              // (2026-08-30: 설정에서 끄고 옮기던 기능이 없어져 걸러 낼 것이 없다).
+              // 순서는 BOTTOM_IDS, 2.0 설정 › 기능에서 끈 탭은 뺀다. 끈 탭을 단축키·검색으로 열면
+              // BottomPanel 이 그 탭만 임시로 앞에 그린다(열린 탭은 목록에 없어도 그린다).
+              ids={BOTTOM_IDS.filter((id) => features[id])}
               server={activeSession?.type === 'ssh' ? (activeSession?.serverKey ?? '') : ''}
             >
               {(id, active) =>
@@ -1684,6 +1696,7 @@ export function Shell() {
           onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
           onAiCliFlags={setAiCliFlags}
+          onFeatures={setFeatures}
           onAiApi={setAiApi}
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}

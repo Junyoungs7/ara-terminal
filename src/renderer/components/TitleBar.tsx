@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { BrandOrb } from './BrandOrb'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
+import type { FeatureShown } from '@shared/features'
 import { dispatchAction, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
 
@@ -26,7 +27,8 @@ export function TitleBar({
   omni,
   title,
   reportNews = 0,
-  chat
+  chat,
+  features
 }: {
   /** 없으면 메뉴바·[?] 를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
@@ -39,6 +41,8 @@ export function TitleBar({
   reportNews?: number
   /** 2.0: 오른쪽 [채팅] 버튼 — 아라 채팅 열고 닫기(단축키 ai.toggle 과 같은 동작). 없으면 안 그린다(세션 창). */
   chat?: { open: boolean; onToggle: () => void }
+  /** 2.0 설정 › 기능 — 끈 기능은 메뉴에서 뺀다. 없으면 전부. */
+  features?: FeatureShown
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(버튼 왼쪽 아래).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -143,7 +147,7 @@ export function TitleBar({
         y={open?.y ?? 0}
         items={
           open
-            ? menuBarItems(open.index).map((it) =>
+            ? menuBarItems(open.index, features).map((it) =>
                 it.id === 'help.myReports' && reportNews > 0
                   ? { ...it, label: t('menu.help.myReports.new').replace('{n}', String(reportNews)) }
                   : it
