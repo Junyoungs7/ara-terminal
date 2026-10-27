@@ -2273,7 +2273,6 @@
   height: 100%;
   font-size: var(--fs-base);
   color: var(--text-lo);
-  border-right: 1px solid var(--line);
   white-space: nowrap;
   cursor: default;
   position: relative;
@@ -2294,11 +2293,10 @@
   background: var(--bg-raised);
   color: var(--text-mid);
 }
-/* 활성 탭(R2.4 구조 + R8.2 시각 마감): 터미널과 같은 바닥색 + 그룹색 상단 인디케이터 +
-   아래 헤어라인 끊기로 터미널 면과 이어 붙인다. 하단 발광 바는 없앴다 — 대비는 배경과
-   인디케이터로 충분하고, 빛나는 바가 "네온" 인상의 절반이었다. */
+/* 2.0 활성 탭 — Vercel 형 **2px 네온 블루 밑줄** + 아래쪽 은은한 번짐(시안 Z-final `.tab.on`).
+   바탕은 탭바 그대로다(1.x 는 터미널 바닥색 + 그룹색 윗줄이었다). 분할 창 활성 표시와 겹치지 않게
+   창 쪽에는 선을 넣지 않는다(.pane 덮개 주석). */
 .ttab.active {
-  background: var(--bg-terminal);
   color: var(--text-hi);
   font-weight: 500;
 }
@@ -2307,19 +2305,19 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;
+  bottom: 0;
   height: 2px;
-  background: var(--group-clr, var(--accent));
+  background: var(--accent);
 }
-/* 탭바 하단 경계선을 활성 탭 폭만큼 지워 탭이 터미널 면과 한 덩어리로 읽히게 한다. */
 .ttab.active::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: var(--bg-terminal);
+  left: var(--sp-4);
+  right: var(--sp-4);
+  bottom: 0;
+  height: 6px;
+  background: radial-gradient(60% 100% at 50% 100%, var(--accent-glow), transparent);
+  pointer-events: none;
 }
 /* 세션 점 — **뜻은 여기 하나가** 정한다(#166, store/sessionState.ts).
    자리 클래스(.tdot·.pdot·.mini-dot)는 이제 붙잡을 손잡이일 뿐이고 색과 크기는 상태가 정한다:
@@ -2486,7 +2484,8 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-  padding: var(--sp-3);
+  /* 2.0: 세션 창 = 화면. 바깥 여백 없이 탭바 바로 아래에 붙는다. */
+  padding: 0;
   display: grid;
   gap: 0;
   background: var(--bg-terminal);
@@ -2769,23 +2768,25 @@
   min-height: 0;
   min-width: 0;
   background: var(--bg-terminal);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+  /* 비활성 덮개(::after)의 기준 상자. */
+  position: relative;
 }
-/* 포커스 패널: 발광 없이 액센트 헤어라인 링 하나로(상태 표시만 남긴다). */
-.pane.focused {
-  border-color: var(--accent-line);
-  box-shadow:
-    var(--shadow-sm),
-    0 0 0 1px var(--accent-line);
+/* 2.0 분할 창 활성 표시 — **비활성 창만 어둡게.** 활성 창에는 테두리·링·발광을 넣지 않는다
+   (탭 밑줄과 겹친다, 준영님 2026-10-27). 창이 둘 이상일 때만 — 하나면 어둡게 할 상대가 없다.
+   클릭은 그대로 아래로 간다(pointer-events:none) — 누르면 그 창이 활성이 된다. */
+.pane-grid:has(> .pane ~ .pane) > .pane:not(.focused)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--pane-dim);
+  pointer-events: none;
+  z-index: 5;
 }
+/* 2.0: 세션 창 머리줄 없음 — 탭 바로 아래가 터미널이다(시안 Z-final). 이름·닫기는 탭이, 최대화는
+   Ctrl+Up·메뉴가 맡는다. 마크업·끌어 옮기기 코드는 3단계 정리 때 함께 본다. */
 .pane-hd {
-  display: flex;
+  display: none;
   align-items: center;
   gap: var(--sp-4);
   padding: 0 var(--sp-5);
@@ -2970,8 +2971,8 @@
 .div-col::before {
   content: '';
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   left: 2px;
   width: 1px;
   background: var(--line);
@@ -2990,8 +2991,8 @@
 .div-row-r::before {
   content: '';
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  right: 0;
   top: 2px;
   height: 1px;
   background: var(--line);
@@ -6611,8 +6612,8 @@ button.sb-seg.upd:hover .val {
 }
 /* 2026-09-01 준영님 제보 ③: 원격 화면 **위에는 우리 표시를 얹지 않는다.** 여기 있던 강조색
    링(outline-offset:-2px 이라 캔버스 안쪽에 그려졌다)이 원격 데스크톱 픽셀을 덮어 화면이
-   어긋나 보였다. 포커스가 어느 칸에 있는지는 바깥 `.pane.focused` 링이 이미 말한다 —
-   **그건 그대로 둔다**(터미널 칸에서는 필요하다). 끄지 않으면 전역 `:focus-visible` 바닥값이
+   어긋나 보였다. 포커스가 어느 칸에 있는지는 2.0 부터 **비활성 칸 덮개**(.pane 덮개)와 탭 밑줄이
+   말한다(바깥 `.pane.focused` 링은 2.0 에서 없앴다). 끄지 않으면 전역 `:focus-visible` 바닥값이
    대신 걸리므로 명시적으로 끈다. */
 .rdp-canvas:focus,
 .rdp-canvas:focus-visible {
