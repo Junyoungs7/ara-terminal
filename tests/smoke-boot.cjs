@@ -424,9 +424,9 @@ const checks = []
   checks.push(['.sidebar 렌더', r.hasSidebar])
   checks.push(['.term-tabbar 렌더', r.hasTabbar])
   checks.push(['.statusbar 렌더', r.hasStatusbar])
-  // FB-ui2: [모니터] 탭이 우측 액티비티 바로 이관되며 사이드바는 2개(연결·파일)가 됐고,
-  // #129 가 [작업대](ai)를 넣어 다시 3개가 됐다 — 정의부는 Sidebar.tsx 의 `['conn','file','ai']`.
-  checks.push(['좌측 레일 아이콘 3개(연결·파일·작업대)', r.sbTabs === 3])
+  // 2.0: 우측 액티비티 바가 없어지며 레일이 7개가 됐다 — 정의부는 Sidebar.tsx SidebarRail.
+  // 탐색기·지난 세션은 설정 › 기능에서 끌 수 있다(기본 켜짐 — 이 하네스는 기본 설정이다).
+  checks.push(['좌측 레일 아이콘 7개(연결·파일·탐색기·AI·서버 도구·지난 세션·설정)', r.sbTabs === 7])
   checks.push(['브랜드=A.R.A', r.brandName.includes('A.R.A')])
   checks.push(['3행 그리드', /px .+ px/.test(r.gridRows) || r.gridRows.split(' ').length === 3])
 
@@ -818,7 +818,7 @@ const checks = []
     const tabbarToolsGone = !document.querySelector('.term-tabbar .tterm-tools') && !document.querySelector('.cs-open-btn')
     // FB-ui2: 타이틀바 기어(.tb-gear)는 제거됐다 — 대신 우측 액티비티 바에 설정 아이콘이 있다.
     const gearGoneFromTitlebar = !document.querySelector('.titlebar .tb-gear')
-    const settingsInActivityBar = !!document.querySelector('.act-item[data-activity="settings"]')
+    const settingsInActivityBar = !!document.querySelector('.lrail-item[data-activity="settings"]')
     grid?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 400, clientY: 400 }))
     await wait(400)
     const stillList = !!document.querySelector('.ctx-menu') && !document.querySelector('.radial-menu, .smart-palette')
@@ -868,7 +868,7 @@ const checks = []
   checks.push(['R1.4: 탭바 우클릭 스타일 토글 버튼 제거', f4c.toggleGone === true])
   checks.push(['R5: 탭바 폰트·단축키 버튼 제거(설정으로 통합)', f4c.tabbarToolsGone === true])
   checks.push(['FB-ui2: 타이틀바 기어 제거', f4c.gearGoneFromTitlebar === true])
-  checks.push(['FB-ui2: 우측 액티비티 바에 설정 아이콘', f4c.settingsInActivityBar === true])
+  checks.push(['2.0: 좌측 레일에 설정 아이콘', f4c.settingsInActivityBar === true])
   checks.push(['#67: 우클릭은 리스트 하나뿐(라디얼·팔레트 DOM 자체가 없다)', f4c.stillList === true])
   checks.push(['#67: Ctrl+K 는 앱 키가 아니다(셸로 통과)', f4c.ctrlKFree === true])
   checks.push(['터미널 입력 중 ? 는 셸로(치트시트 안 열림)', f4c.csBlockedWhileTyping === true])
@@ -904,7 +904,7 @@ const checks = []
     // @font-face src 가 로컬 assets(번들)인지 — CDN(http) 참조가 없어야 함.
     const faces = [...document.fonts].map(f => f.family)
     // R5→FB-ui2: 설정 창 열기 — 탭바 버튼도, 타이틀바 기어도 사라졌으므로 우측 액티비티 바(진입점 ①)를 쓴다.
-    document.querySelector('.act-item[data-activity="settings"]')?.click()
+    document.querySelector('.lrail-item[data-activity="settings"]')?.click()
     await wait(350)
     const drawerOpen = !!document.querySelector('.drawer.open')
     // 좌측 nav 8섹션(W2 [로그] · W3 [AI] · F23 [MCP] 추가) → [폰트] 로 전환해야 아래 폰트 UI 가 보인다.
@@ -970,11 +970,11 @@ const checks = []
   checks.push(['번들 D2Coding 로드(오프라인)', f5.d2Loaded === true])
   checks.push(['번들 JetBrains Mono 로드(오프라인)', f5.jbLoaded === true])
   checks.push(['번들 Pretendard(UI) 로드(오프라인)', f5.pretendardLoaded === true])
-  checks.push(['설정 창 열림(우측 액티비티 바)', f5.drawerOpen === true])
+  checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
-    // F23 이 [MCP] 섹션을 추가하면서 여기 어서션 갱신을 빠뜨려 8섹션인데 7섹션을 기대하고 있었다 — 정리.
-    'R5+W2+W3+F23: 좌측 nav 8섹션(일반/터미널/폰트/로그/AI/MCP/단축키/정보)',
-    f5.navSections.join(',') === 'general,terminal,font,log,ai,mcp,keys,about'
+    // 정의부는 SettingsDrawer.tsx SETTINGS_SECTIONS. [명령 기록]이 빠져 있던 것도 함께 맞췄다(2.0 3단계 [기능] 추가).
+    '좌측 nav 10섹션(일반/터미널/폰트/기능/로그/AI/MCP/단축키/명령 기록/정보)',
+    f5.navSections.join(',') === 'general,terminal,font,features,log,ai,mcp,keys,history,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
@@ -1459,14 +1459,8 @@ const checks = []
     key({ key: 'ArrowUp', ctrlKey: true })
     await wait(400)
     const restored = visiblePanes() === panesNow
-    // 칸 헤더는 dot + 제목 + ×(세션 종료) 뿐이다 — R3.9 에서 걷어낸 타입 칩·분할·최대화 도구는
-    // 돌아오면 안 되고, ×는 준영님 요청으로 되살렸다(탭 ×와 같은 경로).
-    const headerBare =
-      document.querySelectorAll('.pane-grid .pane .pane-hd .ptools, .pane-grid .pane .pane-hd .chip').length === 0 &&
-      document.querySelectorAll('.pane-grid .pane .pane-hd .pdot').length > 0 &&
-      document.querySelectorAll('.pane-grid .pane .pane-hd .ptitle').length > 0 &&
-      document.querySelectorAll('.pane-grid .pane .pane-hd .px').length ===
-        document.querySelectorAll('.pane-grid .pane').length
+    // 2.0: 칸 머리줄(.pane-hd)은 없다 — 탭 바로 아래가 터미널이다(제목·×는 탭, 최대화는 Ctrl+↑).
+    const headerBare = document.querySelectorAll('.pane-grid .pane .pane-hd').length === 0
 
     // Ctrl+Tab / Ctrl+Shift+Tab 탭 순환(R3.8 재배치 — Ctrl+]/[ 는 셸에 돌려줬다).
     const activeText = () => document.querySelector('.term-tabbar .ttab.active .tlabel')?.textContent || ''
@@ -1585,7 +1579,7 @@ const checks = []
   checks.push(['R2.0: 세로 분할 = 좌·우 배치(2열 1행)', r2.vCols === 3 && r2.vRows === 1])
   checks.push(['R2.5: Ctrl+↑ 최대화(보이는 패널 1개)', r2.maximized === true])
   checks.push(['R2.5: Ctrl+↑ 재입력 → 원복', r2.restored === true])
-  checks.push(['칸 헤더 = dot + 제목 + ×(칩·분할·최대화 도구는 없음)', r2.headerBare === true])
+  checks.push(['2.0: 칸 머리줄(.pane-hd) 없음', r2.headerBare === true])
   checks.push(['R2.5: Ctrl+Tab / Ctrl+Shift+Tab 탭 순환', r2.tabCycle === true])
   checks.push(['R2.5: Ctrl+1 탭 번호 이동', r2.byNumber === true])
   checks.push(['R2.5: Ctrl+Shift+D 세션 복제', r2.duplicated === true])
