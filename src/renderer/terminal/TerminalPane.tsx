@@ -36,33 +36,33 @@ function readVar(name: string): string {
 
 // R3.5 ANSI 16색 — design-system §1.6 팔레트를 xterm 테마로 옮긴다. 8 normal 은 문서의 토큰 그대로,
 // 8 bright 는 같은 색상의 밝은 파생(--t-*-b)이다. black/white 는 표면·텍스트 토큰을 재사용해
-// 터미널 배경과 한 계열로 유지한다. 폴백 HEX 는 CSS 가 아직 없는 순간(테스트 하네스)용 최후 수단.
+// 터미널 배경과 한 계열로 유지한다. 2.0: 전경은 --text-hi, white(7)는 --t-fg — 시안 Z-final 의 ANSI 16색. 폴백 HEX 는 CSS 가 아직 없는 순간(테스트 하네스)용 최후 수단.
 function ansiTheme(): ITheme {
   const v = (name: string, fallback: string) => readVar(name) || fallback
   return {
-    background: v('--bg-terminal', '#0e1219'),
-    foreground: v('--t-fg', '#cdd6e4'),
-    cursor: v('--accent-bright', '#7dd3fc'),
+    background: v('--bg-terminal', '#15171a'),
+    foreground: v('--text-hi', '#e4e7eb'),
+    cursor: v('--accent', '#3d9bff'),
     // 커서 위 글자색 — 배경과 같게 둬야 블록 커서 안 글자가 읽힌다.
-    cursorAccent: v('--bg-terminal', '#0e1219'),
-    selectionBackground: v('--sel-bg', 'rgba(201,162,109,0.3)'),
-    selectionForeground: v('--text-hi', '#e8edf5'),
-    black: v('--t-black', '#3b4653'),
-    red: v('--t-red', '#ff7b72'),
-    green: v('--t-green', '#7ee787'),
-    yellow: v('--t-yellow', '#e3b341'),
-    blue: v('--t-blue', '#79c0ff'),
-    magenta: v('--t-purple', '#d2a8ff'),
-    cyan: v('--t-cyan', '#56d4dd'),
-    white: v('--t-fg', '#cdd6e4'),
-    brightBlack: v('--t-gray', '#6e7a8a'),
-    brightRed: v('--t-red-b', '#ffa198'),
-    brightGreen: v('--t-green-b', '#a2f2ab'),
-    brightYellow: v('--t-yellow-b', '#f2cc60'),
-    brightBlue: v('--t-blue-b', '#a5d6ff'),
-    brightMagenta: v('--t-purple-b', '#e2c5ff'),
-    brightCyan: v('--t-cyan-b', '#84e8ef'),
-    brightWhite: v('--text-hi', '#e8edf5')
+    cursorAccent: v('--bg-terminal', '#15171a'),
+    selectionBackground: v('--sel-bg', 'rgba(61,155,255,0.25)'),
+    selectionForeground: v('--text-hi', '#e4e7eb'),
+    black: v('--t-black', '#1d2024'),
+    red: v('--t-red', '#e0766e'),
+    green: v('--t-green', '#6bbf8a'),
+    yellow: v('--t-yellow', '#e2c35f'),
+    blue: v('--t-blue', '#3d9bff'),
+    magenta: v('--t-purple', '#c08cf0'),
+    cyan: v('--t-cyan', '#4fc4d0'),
+    white: v('--t-fg', '#b2b9c1'),
+    brightBlack: v('--t-gray', '#5c6570'),
+    brightRed: v('--t-red-b', '#ff8f86'),
+    brightGreen: v('--t-green-b', '#86d9a3'),
+    brightYellow: v('--t-yellow-b', '#f2d27a'),
+    brightBlue: v('--t-blue-b', '#74b6ff'),
+    brightMagenta: v('--t-purple-b', '#d8acff'),
+    brightCyan: v('--t-cyan-b', '#7fe0e9'),
+    brightWhite: v('--text-hi', '#e4e7eb')
   }
 }
 

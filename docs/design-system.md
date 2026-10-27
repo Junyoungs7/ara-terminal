@@ -1,5 +1,7 @@
 # A.R.A — 디자인 시스템
 
+> **2.0 은 [design-system-v2.md](design-system-v2.md) 를 본다.** 이 문서는 1.x 기준이다.
+
 > **앱 이름**: **A.R.A** (아라, AI Remote Agent — 구 OFA Terminal → E.V. → A.R.A. 2026-08-02 최종 확정)
 > **근거**: variant-4 layout × variant-1 style — 사용자 확정 **2026-08-02**
 > **기준 목업 v1**: `mockups/variant-final.html`
