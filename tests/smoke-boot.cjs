@@ -305,6 +305,20 @@ function registerF7Stub() {
   ipcMain.handle('fs:newFile', () => ({ ok: true }))
   // #92: 받는 곳도 막는다. 안 막으면 다운로드가 실제 다운로드 폴더로 떨어진다.
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
+  // 클립보드 — 제품은 2026-08-31(cec8689) 쓰기를, 2026-09-02 읽기를 main IPC 로 옮겼다
+  // (store/clipboardWrite.ts). 이 하네스는 그 채널이 없어 렌더러에서 navigator.clipboard 를 가로채던
+  // R3.1 검사가 그 뒤로 줄곧 실패했다(가로챈 API 를 제품이 더는 부르지 않는다).
+  // **메모리 안의 가짜**로 받는다 — 사용자의 OS 클립보드를 건드리지 않는다(하네스 규칙).
+  // 렌더러는 window.ev.clipboard.writeText/readText 로 이 값을 넣고 읽어 판정한다.
+  // (Ctrl+V 검사만 webContents.paste() 라 OS 클립보드를 빌린다 — 그건 아래에서 따로 되돌린다.)
+  let fakeClip = ''
+  ipcMain.handle('clipboard:writeText', (_e, text) => {
+    if (typeof text !== 'string') return { ok: false }
+    fakeClip = text
+    return { ok: true }
+  })
+  ipcMain.handle('clipboard:readText', () => fakeClip)
+  ipcMain.handle('clipboard:readFiles', () => ({ paths: [] }))
 }
 
 // GPU/샌드박스가 CI/헤드리스에서 막히는 것 방지 (검증 목적 한정)
@@ -427,7 +441,9 @@ const checks = []
   // 2.0: 우측 액티비티 바가 없어지며 레일이 7개가 됐다 — 정의부는 Sidebar.tsx SidebarRail.
   // 탐색기·지난 세션은 설정 › 기능에서 끌 수 있다(기본 켜짐 — 이 하네스는 기본 설정이다).
   checks.push(['좌측 레일 아이콘 7개(연결·파일·탐색기·AI·서버 도구·지난 세션·설정)', r.sbTabs === 7])
-  checks.push(['브랜드=A.R.A', r.brandName.includes('A.R.A')])
+  // 1.0.10(5e3c3c6, 2026-09-15): 앱 이름이 A.R.A → ARA 로 바뀌었다(i18n app.name — Windows 검색에서
+  // 찾기 어렵다는 제보). 타이틀바는 그 키를 그린다. 'ARA' 는 'A.R.A' 의 부분 문자열이 아니라 옛 값이면 실패한다.
+  checks.push(['브랜드=ARA', r.brandName === 'ARA'])
   checks.push(['3행 그리드', /px .+ px/.test(r.gridRows) || r.gridRows.split(' ').length === 3])
 
   // F2: window.ev.session API 존재 + 세션 생성→에코 라운드트립(한글 무결).
@@ -601,7 +617,9 @@ const checks = []
     // 서버 단서는 탭 툴팁의 글자로 옮겼다.
     const sshTab = document.querySelectorAll('.term-tabbar .ttab')[localTabsBefore]
     const sshTabDot = sshTab ? sshTab.querySelector('.tdot') : null
-    const sshDotState = sshTabDot ? /\bsdot (on|connecting|lost)\b/.test(sshTabDot.className) : false
+    // ⚠️ 이 코드는 바깥 템플릿 리터럴 안이다 — 정규식의 \b 를 \\b 로 써야 렌더러에 \b 로 닿는다.
+    //    한 겹이면 백스페이스(U+0008)가 되어 늘 false 였다(#166 이후 줄곧 실패하던 원인).
+    const sshDotState = sshTabDot ? /\\bsdot (on|connecting|lost)\\b/.test(sshTabDot.className) : false
     const sshDotTip = sshTabDot ? (sshTabDot.getAttribute('title') || '') : ''
     const sshTabTip = sshTab ? (sshTab.getAttribute('title') || '') : ''
     // 트리(S1): 서버 행 아래 세션 행(.sess-list .sess-node) 렌더.
@@ -992,8 +1010,9 @@ const checks = []
   checks.push(['W5: 프로바이더 세그먼트 4종(anthropic/openai/google/compatible)', f5.aiProviders.join(',') === 'anthropic,openai,google,compatible'])
   if (AI_ENTRY)
     checks.push([
-      'W5: 기본 프로바이더(anthropic) 모델 추천 칩 3종(sonnet-5/opus-5/haiku-4.5) — 자유 입력도 항상 허용',
-      f5.aiModels.join(',') === 'claude-sonnet-5,claude-opus-5,claude-haiku-4-5'
+      // 6564c8b(2026-10-20): 추천 목록을 현재 모델로 바꿨다 — 정의부 shared/types.ts AI_MODELS_BY_PROVIDER.
+      'W5: 기본 프로바이더(anthropic) 모델 추천 칩 4종(sonnet-5-5/opus-5-5/haiku-5-5/fable-5-1) — 자유 입력도 항상 허용',
+      f5.aiModels.join(',') === 'claude-sonnet-5-5,claude-opus-5-5,claude-haiku-5-5,claude-fable-5-1'
     ])
   checks.push([
     'F16 ★: window.ev.ai 표면에 getKey 부재 (키를 읽어 갈 창구 없음)',
@@ -1278,8 +1297,13 @@ const checks = []
     // ① 세션 A 출력 → 같은 패널에서 B 로 전환 → A 복귀 → A 버퍼 보존.
     const idA = await openSession('R1-A')
     echo(idA, 'R1버퍼A')
-    await wait(1200)
-    const aVisible = /R1버퍼A/.test(shown())
+    // 2.0 5단계: 고정 1200ms → 최대 8초 폴링. 재로드 직후 **첫** 셸(cmd.exe/conpty)만 이 창 안에 출력이
+    // 안 닿아 이 한 줄만 실패했다 — 같은 버퍼가 바로 아래 aKept·aBuf 에서는 보인다(늦게 닿았을 뿐).
+    // 걸린 시간을 남겨 둔다: 8초를 넘기면 그때는 하네스가 아니라 제품 쪽 지연을 의심한다.
+    const aT0 = Date.now()
+    let aVisible = false
+    while (Date.now() - aT0 < 8000 && !(aVisible = /R1버퍼A/.test(shown()))) await wait(200)
+    const aVisibleMs = Date.now() - aT0
     const idB = await openSession('R1-B')
     echo(idB, 'R1버퍼B')
     await wait(1200)
@@ -1355,12 +1379,13 @@ const checks = []
     const panesAfterMenuLocal = paneCount()
 
     return {
-      aVisible, bVisible, aKept, aBuf, aPaneVisible, tabLabels, bKept, panesAfterSplit, splitKept,
+      aVisible, aVisibleMs, bVisible, aKept, aBuf, aPaneVisible, tabLabels, bKept, panesAfterSplit, splitKept,
       panesBeforeLast, panesAfterLast, emptyState,
       dblBefore, dblAfter, sidebarMenu, tabsBeforeMenuLocal, tabsAfterMenuLocal, panesAfterMenuLocal
     }
   })()`)
 
+  console.log(`R1① 첫 셸 출력이 보이기까지 ${r1.aVisibleMs}ms`)
   checks.push(['R1①: 세션 A 출력이 패널에 보인다', r1.aVisible === true])
   checks.push(['R1①: 같은 패널에서 세션 B 로 전환', r1.bVisible === true])
   checks.push(['R1①: A 로 복귀 시 A 버퍼 보존', r1.aKept === true && r1.aBuf === true])
@@ -1715,20 +1740,22 @@ const checks = []
     document.querySelector('.term-tabbar .ttab[data-session-id="' + sid + '"]')?.click()
     await wait(600)
 
-    // ── R3.1 클립보드 ── 실 OS 클립보드는 창이 숨김이라 권한이 없다. API 를 가로채 배선을 검증한다.
-    const clip = { wrote: [], read: '붙여넣기_한글_테스트' }
-    navigator.clipboard.writeText = async (t) => { clip.wrote.push(t) }
-    navigator.clipboard.readText = async () => clip.read
+    // ── R3.1 클립보드 ── 제품은 main IPC(window.ev.clipboard)로 읽고 쓴다. 하네스 main 의 메모리 가짜가
+    // 그 채널을 받는다(registerF7Stub) — 같은 통로로 비우고 넣고 읽어 배선을 검증한다.
+    const clipSet = (t) => window.ev.clipboard.writeText(t)
+    const clipGet = () => window.ev.clipboard.readText()
+    await clipSet('')
     window.__evTerm(sid).selectAll()
     await wait(150)
     key({ key: 'c', ctrlKey: true, shiftKey: true }); await wait(400)
-    const copyKeyWrote = clip.wrote.length > 0
+    const copyKeyWrote = (await clipGet()).length > 0
     // 선택 즉시 복사(기본 on): 선택이 있는 상태로 터미널에서 mouseup → 한 번 더 복사된다.
-    clip.wrote.length = 0
+    await clipSet('')
     document.querySelector('.pane.focused .term-pane')?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
     await wait(300)
-    const copyOnSelectWrote = clip.wrote.length > 0
+    const copyOnSelectWrote = (await clipGet()).length > 0
     // 붙여넣기: 클립보드 → 세션 입력 → 셸이 되받아 출력.
+    await clipSet('붙여넣기_한글_테스트')
     key({ key: 'v', ctrlKey: true, shiftKey: true }); await wait(1500)
     const pasteReached = (window.__evTerm(sid)?.text() || '').includes('붙여넣기_한글_테스트')
 
@@ -1893,14 +1920,13 @@ const checks = []
       }
       return false
     }
-    window.__clip = { wrote: [], read: '한글_붙여넣기_CtrlV' }
-    navigator.clipboard.writeText = async (t) => { window.__clip.wrote.push(t) }
-    navigator.clipboard.readText = async () => window.__clip.read
+    // 제품은 main IPC 로 쓴다(store/clipboardWrite.ts) — 하네스의 메모리 가짜를 비우고 다시 읽는다.
+    await window.ev.clipboard.writeText('')
     window.__evTerm('${r3a.sid}').selectAll()
     await wait(150)
     ${termKey('c')}
     await wait(400)
-    return { wrote: window.__clip.wrote.length, selectionLeft: window.__evTerm('${r3a.sid}').getSelection().length }
+    return { wrote: (await window.ev.clipboard.readText()).length, selectionLeft: window.__evTerm('${r3a.sid}').getSelection().length }
   })()`)
   const sigintDuringCopy = INPUTS.some((i) => i.data.includes('\x03'))
 
@@ -2106,7 +2132,8 @@ const checks = []
     const cheatsheetOpen = !!document.querySelector('.cheatsheet.open')
     await closeMenu()
     await openTop('도움말'); await pick('help.about')
-    const aboutOpen = (document.querySelector('.dlg-overlay .modal h2')?.textContent || '').includes('A.R.A')
+    // 1.0.10: about.title 'A.R.A 정보' → 'ARA 정보'(앱 이름 변경, 5e3c3c6).
+    const aboutOpen = (document.querySelector('.dlg-overlay .modal h2')?.textContent || '').includes('ARA 정보')
     document.querySelector('.dlg-overlay .modal-ft .btn.pri')?.click(); await wait(250)
     const aboutClosed = !document.querySelector('.dlg-overlay')
 
@@ -2188,7 +2215,8 @@ const checks = []
   checks.push(['R4.2: SSH 세션은 user@host:port + 연결 dot', /^deploy@10\.9\.9\.9:22/.test(r4b.sshBar.val) && r4b.sshBar.dot.includes('connected')])
   checks.push(['R4.2: 세션 전환 시 상태바 갱신', r4b.localBar.val !== r4b.sshBar.val])
   checks.push(['R4.2: 우측에 세션 수·인코딩·버전', r4b.sshBar.segs.length === 3 && r4b.sshBar.segs.some((s) => s.includes('UTF-8')) && r4b.sshBar.segs.some((s) => /v\d/.test(s))])
-  checks.push(['R4.4: 창 타이틀이 활성 세션 반영', /^A\.R\.A — .+/.test(r4b.sshTitle) && r4b.localTitle !== r4b.sshTitle])
+  // 1.0.10: 창 제목 = `${t('app.name')} — 세션`(Shell.tsx) 이고 app.name 이 ARA 가 됐다(5e3c3c6).
+  checks.push(['R4.4: 창 타이틀이 활성 세션 반영', /^ARA — .+/.test(r4b.sshTitle) && r4b.localTitle !== r4b.sshTitle])
   checks.push(['R4.4: OS 창 제목이 문서 제목을 따라간다(작업표시줄·Alt+Tab)', winTitle === r4b.sshTitle])
 
   // ── R4.3 사이드바 폭 드래그 + 상태 영속 ──
@@ -2266,7 +2294,8 @@ const checks = []
   checks.push(['세션이 없으면 [파일] 탭은 비활성', r4d.fileTabDisabled === true])
   checks.push(['R4.3: 저장된 활성 탭은 그대로(file) — 접속하면 돌아온다', r4d.savedTab === 'file'])
   checks.push(['R4.3: 재시작 후 접힘 상태 유지(펼침)', r4d.collapsed === false])
-  checks.push(['R4.4: 세션이 없으면 창 타이틀은 앱 이름만', r4d.title === 'A.R.A'])
+  // 1.0.10: 앱 이름 ARA(5e3c3c6). index.html 의 <title>A.R.A</title> 는 Shell 이 뜨기 전 잠깐만 보인다.
+  checks.push(['R4.4: 세션이 없으면 창 타이틀은 앱 이름만', r4d.title === 'ARA'])
 
   // ── R5 어서션 ── 설정 창 5섹션 / 신규 설정 3종 즉시 적용·영속 / 라디얼 복원 / 커서·벨.
   const r5 = await win.webContents.executeJavaScript(`(async () => {
