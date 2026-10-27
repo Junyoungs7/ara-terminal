@@ -400,6 +400,14 @@ if (braceErrors.length) {
 // `color:` 는 선언 처음에만 — `background: …` / `transition: color .15s` 는 콜론이 없어 안 걸린다.
 const TEXT_DECL = /(?:^|[;{])\s*(?:color|font(?:-[a-z]+)?)\s*:/
 const FADE_DECL = /(?:^|[;{])\s*opacity\s*:\s*(0?\.\d+)\s*(?:;|$)/
+// ── 굵기 두 단 (2026-10-27, 2.0 4단계) ─────────────────────────────────────
+// design-system-v2 §2: 400/500 두 단, 600 은 브랜드 `A.R.A` 글자(타이틀바·부팅 인사)만.
+// 600 이상(·bold·bolder)을 쓰는 규칙은 선택자가 허용 목록에 있어야 한다. @font-face 의 굵기는
+// 글꼴 파일의 범위 선언이지 칠하는 굵기가 아니라 뺀다.
+// ⚠️ 못 보는 것: UA 기본 bold(b·strong·h*·th) — tokens.css 의 리셋 한 줄이 맡는다 — 와 TSX 인라인 style.
+const HEAVY_DECL = /(?:^|[;{\s])font-weight\s*:\s*(?:[6-9]00|bold|bolder)\b/
+const HEAVY_OK = /\.tb-name|\.boot-name|@font-face/
+let heavyAllowed = 0
 let ruleCount = 0
 let dimRules = 0
 for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
@@ -410,6 +418,14 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
     if (at < 0) continue
     ruleCount++
     const body = chunk.slice(at + 1)
+    if (HEAVY_DECL.test(body)) {
+      const selText = chunk.slice(0, at)
+      if (HEAVY_OK.test(selText)) heavyAllowed++
+      else {
+        const sel = selText.split(/\r?\n/).filter((x) => x.trim()).slice(-2).join(' ').trim()
+        violations.push(`${file}  굵기 600 이상은 브랜드(.tb-name·.boot-name)만 — ${sel} (400/500 을 쓸 것)`)
+      }
+    }
     // dim 용도 (2026-10-08): --text-dim 은 placeholder·disabled(+ 터미널 고스트 자동완성) 전용이다.
     // 선택자 **이름**으로 판정한다 — `.foo.off` 처럼 클래스로 끈 자리는 못 알아본다(그런 자리는
     // `:disabled` 를 쓰거나 --text-lo 로 올려라). 판정 기준이 선택자 글자라는 한계를 여기 적어 둔다.
@@ -439,6 +455,11 @@ if (dimRules < 5) {
   console.error(`dim 용도 검사가 공허하다: --text-dim 을 쓰는 규칙 ${dimRules}개(하한 5). 토큰 이름·파서를 확인하라.`)
   process.exit(1)
 }
+// 굵기 검사의 양성 대조 — 브랜드 600 두 곳이 안 잡히면 파서나 선택자 이름이 바뀐 것이다.
+if (heavyAllowed < 2) {
+  console.error(`굵기 검사가 공허하다: 허용 목록 규칙 ${heavyAllowed}개(하한 2 — .tb-name·.boot-name). 선택자·파서를 확인하라.`)
+  process.exit(1)
+}
 if (ruleCount < 300) {
   console.error(`이중 감쇠 검사가 공허하다: 규칙 ${ruleCount}개만 읽혔다(하한 300). CSS 파서를 고쳐라.`)
   process.exit(1)
@@ -452,5 +473,6 @@ console.log(
   `매직넘버 스캔 통과 (HEX/px/맨 transition 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
     `글자 대비 ${pairs.length}조합 통과(글자 ${MIN_RATIO} · ${DIM_TOKEN} ${DIM_MIN_RATIO}) — 가장 나쁜 글자 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}\n` +
     `비텍스트 대비 ${nontextPairs.length}조합 전부 ${NONTEXT_MIN_RATIO} 이상 — 가장 나쁜 짝 ${worstNontext[0]} × ${worstNontext[1]} = ${worstNontext[2].toFixed(2)}\n` +
-    `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled`
+    `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled\n` +
+    `굵기 600 이상 ${heavyAllowed}규칙 전부 허용 목록(브랜드·@font-face)`
 )

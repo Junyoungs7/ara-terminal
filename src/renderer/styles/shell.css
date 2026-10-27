@@ -483,7 +483,7 @@
   padding: 0 var(--sp-2);
   font-family: var(--ui);
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
   white-space: nowrap;
 }
@@ -1058,7 +1058,7 @@
 }
 .exp-tname {
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
 }
 .exp-wbtn {
@@ -2566,7 +2566,7 @@
 }
 .pane-empty h2 {
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
 }
 .pane-empty p {
@@ -2881,7 +2881,7 @@
 .restore-err-card .rec-title {
   color: var(--text-hi);
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
 }
 .restore-err-card .rec-sub {
   color: var(--text-mid);
@@ -3477,7 +3477,7 @@ button.sb-seg.upd:hover .val {
   z-index: 40;
 }
 .mcp-pop-hd {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
   margin-bottom: var(--sp-3);
 }
@@ -4052,7 +4052,7 @@ button.sb-seg.upd:hover .val {
 }
 .modal-hd h2 {
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-hi);
 }
 .modal-hd p {
@@ -4177,7 +4177,7 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   flex: none;
   background: var(--bg-overlay);
   color: var(--accent);
@@ -4566,7 +4566,7 @@ button.sb-seg.upd:hover .val {
 }
 .drawer-hd h2 {
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
 }
 .drawer-hd p {
   font-size: var(--fs-md);
@@ -4700,7 +4700,7 @@ button.sb-seg.upd:hover .val {
 }
 .set-keys .sk-title {
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--accent-bright);
   margin-bottom: var(--sp-3);
 }
@@ -5566,7 +5566,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 /* ── 패널 머리 닫기 (M3) ──
@@ -5787,7 +5787,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 .ai-head-btn {
@@ -6222,7 +6222,7 @@ button.sb-seg.upd:hover .val {
 }
 .rdp-name {
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
 }
 .rdp-state {
   color: var(--text-lo);
@@ -7709,7 +7709,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 .ara-tgt .dot {
   width: 6px;
@@ -7782,7 +7782,7 @@ button.sb-seg.upd:hover .val {
   min-width: 0;
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7841,7 +7841,7 @@ button.sb-seg.upd:hover .val {
 }
 .ara-pick-menu .it.on .l {
   color: var(--accent-bright);
-  font-weight: 600;
+  font-weight: 500;
 }
 /* 메뉴 바탕이 overlay 라 dim 은 대비가 모자란다 — lo(`.set-dir-tag` 과 같은 예외). */
 .ara-pick-menu .it .h {
@@ -8491,7 +8491,7 @@ button.sb-seg.upd:hover .val {
 .md h5,
 .md h6 {
   color: var(--text-hi);
-  font-weight: 600;
+  font-weight: 500;
   font-size: var(--fs-xl);
 }
 .md h1 {
@@ -8810,7 +8810,7 @@ button.sb-seg.upd:hover .val {
 .wc-t {
   color: var(--text-hi);
   font-size: var(--fs-xl);
-  font-weight: 600;
+  font-weight: 500;
   margin-bottom: var(--sp-4);
 }
 .wc-d {

@@ -412,6 +412,19 @@ body {
   text-rendering: optimizeLegibility;
   font-feature-settings: 'kern' 1;
 }
+/* 2.0 굵기는 400/500 두 단(design-system-v2 §2). UA 기본 bold(700)가 강조·제목·표 머리에
+   척도 밖의 단을 몰래 만들지 않게 여기서 500 으로 묶는다. 600 은 브랜드 글자뿐(scan:magic 이 센다). */
+b,
+strong,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+th {
+  font-weight: 500;
+}
 /* 선택은 "지금 이만큼 잡혔다"를 한눈에 말해야 한다. 값의 근거와 옛 값은 `--sel-bg` 정의부에.
    글자색도 터미널과 같은 `--text-hi` 다(xterm 의 `selectionForeground`).
    실측 대비(--sel-bg 를 배경에 합성한 뒤 잰 값): canvas 위 6.9 · 가장 밝은 overlay 위 5.5.
