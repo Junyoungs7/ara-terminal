@@ -37,14 +37,6 @@ export const IconLinkFile = () =>
       <path d="M9 17l6-5M12 12h3v3" />
     </>
   )
-// 미니 프리뷰 — 작은 화면 여러 장이 겹친 모양(세션 썸네일 목록).
-export const IconPreview = () =>
-  line(
-    <>
-      <rect x="3" y="4" width="12" height="9" rx="1.5" />
-      <rect x="9" y="11" width="12" height="9" rx="1.5" />
-    </>
-  )
 export const IconRefresh = () => line(<path d="M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16" />)
 // 지난 대화 목록(2026-08-26) — 되감는 화살표 + 시계바늘.
 export const IconHistory = () =>

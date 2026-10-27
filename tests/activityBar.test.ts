@@ -34,7 +34,6 @@ describe('액티비티 바 항목 정의', () => {
       // 무엇이 무엇인지 바에서 한눈에 갈린다(그쪽은 내가 친 것, 이쪽은 서버가 뱉는 것).
       'applog',
       'pastlog',
-      'preview',
       'explorer',
       // 2026-08-22 제보 9번 — 명령어 북이 아이콘으로 올라왔다.
       'cmdbook',
@@ -93,7 +92,6 @@ describe('활성 판정(isActivityOpen)', () => {
     log: true,
     applog: false,
     pastlog: false,
-    preview: false,
     explorer: false,
     // 2026-08-22 제보 9번: 명령어 북이 액티비티 항목이 됐다(설정과 같은 부류 — 오버레이).
     cmdbook: false,

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
-import { MiniPreview } from './MiniPreview'
 import { AiPanel } from './AiPanel'
 import { AraChatPanel } from './AraChatPanel'
 import { AiBootstrapModal } from './AiBootstrapModal'
@@ -147,7 +146,6 @@ export function Shell() {
   if (bottom) lastBottom.current = bottom
   const toggleBottomBar = useCallback(() => setBottom((cur) => (cur ? null : lastBottom.current)), [])
 
-  const previewOpen = rail === 'preview'
   const aiOpen = rail === 'ai'
   // #125: 아라 대화를 **한 번이라도 열었나**. 아래 렌더 참고 — 첫 열림 전까지는 붙이지 않는다.
   const araEver = useRef(false)
@@ -524,9 +522,6 @@ export function Shell() {
         // 넘겼는데, 그러면 같은 패널을 여닫는 규칙이 자리마다 달라진다 — 규칙은 하나여야 한다.
         e.preventDefault()
         updateSidebar((s) => nextSidebar(s, 'file'))
-      } else if (matchBinding(e, 'preview.toggle')) {
-        e.preventDefault()
-        toggleRail('preview')
       } else if (matchBinding(e, 'ai.toggle')) {
         // 패널 열림 상태가 여기 있으므로 토글도 여기서 받는다. ai.ask(선택 프리필)는 선택 텍스트를
         // 아는 MainArea 가 받아 onAskAi 로 올려 준다 — 같은 상태를 두 곳에서 쓰기 위한 분담이다.
@@ -1702,12 +1697,6 @@ export function Shell() {
           onAiApi={setAiApi}
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}
-        />
-        <MiniPreview
-          open={previewOpen}
-          sessions={sessions.sessions}
-          activeId={sessions.activeId}
-          onSelect={selectSession}
         />
         {/* #125 아라 대화 v2 — 같은 자리(ai 레일). **처음 열 때까지 붙이지 않는다**: 마운트하는
             순간 claude 프로세스가 뜨는데(≈20초) 앱 부팅마다 그걸 띄울 이유가 없다. 한 번 열면

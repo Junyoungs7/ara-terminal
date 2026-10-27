@@ -317,7 +317,6 @@ export type ActivityId =
   | 'applog'
   // #86: 지난 세션 기록 — **우측**이다. 세션 목록은 세로 카드라 레일에 맞고, 우리 기능이다.
   | 'pastlog'
-  | 'preview'
   | 'explorer'
   // 2026-08-22 준영님 제보 9번: "명령어 북 기능을 책 아이콘을 사용하여 우측 사이드바 기능에 추가."
   // 레일도 하단도 아니다 — 설정(settings)처럼 **오버레이를 여는 버튼**이다(isRailId·isBottomId 둘 다 false).
@@ -349,7 +348,6 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
   'log',
   'applog',
   'pastlog',
-  'preview',
   'explorer',
   'cmdbook',
   'settings'
@@ -363,7 +361,7 @@ export const ACTIVITY_ITEMS: readonly ActivityId[] = [
 // #132(2026-08-25): [AI 세션] 레일을 뺐다. 그 목록은 **사이드바 [AI] 작업대**로 갔고(왼쪽이 목록
 // 자리다), 조용함 감시는 화면 없이 계속 돈다(store/aiQuietWatch.ts) — 화면과 함께 지우면 그
 // 기능의 목적("안 보고 있어도 알아챈다")이 사라진다.
-export const RAIL_IDS = ['ai', 'pastlog', 'preview'] as const
+export const RAIL_IDS = ['ai', 'pastlog'] as const
 export type RailId = (typeof RAIL_IDS)[number]
 
 export function isRailId(id: ActivityId): id is RailId {

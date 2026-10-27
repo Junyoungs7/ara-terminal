@@ -7,7 +7,7 @@ import {
   type ActivityOpenState
 } from '../store/activityBar'
 import { isBottomId } from '@shared/types'
-import { IconAra, IconMonitor, IconLog, IconPreview, IconFolder, IconGear } from './icons'
+import { IconAra, IconMonitor, IconLog, IconFolder, IconGear } from './icons'
 import { t } from '../i18n'
 import { KEYMAP, type KeymapAction } from '../../shared/keymap'
 
@@ -38,7 +38,6 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
   applog: () => <ScrollText />,
   // #86: 지난 세션 — 시계 되감기. [세션 기록](현재)과 글리프를 달리해 둘을 가른다.
   pastlog: () => <History />,
-  preview: IconPreview,
   explorer: IconFolder,
   // 2026-08-22 준영님 제보 9번 — "책 아이콘을 사용하여". 명령어 북은 읽는 자료라 책이 맞다.
   cmdbook: () => <BookOpen />,
@@ -53,7 +52,6 @@ const ICONS: Record<ActivityId, () => JSX.Element> = {
 const ACTIVITY_KEY: Partial<Record<ActivityId, KeymapAction>> = {
   ai: 'ai.toggle',
   log: 'log.save',
-  preview: 'preview.toggle',
   explorer: 'explorer.toggle',
   cmdbook: 'commandBook.toggle',
   settings: 'settings.open'
@@ -88,7 +86,6 @@ export const ACTIVITY_TITLE_KEY: Record<ActivityId, string> = {
   log: 'log.title',
   applog: 'applog.title',
   pastlog: 'pastlog.title',
-  preview: 'preview.title',
   explorer: 'wb.title',
   cmdbook: 'cmdbook.title',
   settings: 'settings.open'

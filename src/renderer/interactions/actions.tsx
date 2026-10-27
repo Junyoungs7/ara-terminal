@@ -661,7 +661,6 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       { action: 'sidebar.collapse' },
       { action: 'fileTree.toggle' },
       { action: 'explorer.toggle' },
-      { action: 'preview.toggle' },
       { action: 'ai.toggle' },
       { command: 'font.zoomIn' },
       { command: 'font.zoomOut' }

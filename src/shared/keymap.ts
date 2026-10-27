@@ -32,7 +32,6 @@ export type KeymapAction =
   | 'aicli.run.gemini'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
-  | 'preview.toggle'
   | 'explorer.toggle'
   | 'log.save'
   | 'connection.manager'
@@ -114,8 +113,6 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // Ctrl+B 는 tmux prefix 이자 리드라인 커서 왼쪽 이동이었다. VS Code 탐색기 관례(Ctrl+Shift+E)로 옮기고 배선한다.
   { action: 'fileTree.toggle', category: 'view', labelKo: '파일 트리 토글', win: 'Ctrl+Shift+E', mac: 'Cmd+Shift+E', implemented: true },
   { action: 'sidebar.collapse', category: 'view', labelKo: '사이드바 접기', win: 'Ctrl+Shift+B', mac: 'Cmd+Shift+B', implemented: true },
-  // F15 미니 프리뷰(우측 레일). Ctrl+P 단독은 리드라인 이전 명령이라 Shift 를 얹는다.
-  { action: 'preview.toggle', category: 'view', labelKo: '미니 프리뷰', win: 'Ctrl+Shift+P', mac: 'Cmd+Shift+P', implemented: true },
   // W4sat F20: 파일 탐색기 전체화면 2패널 모드. Ctrl+O 단독은 리드라인에 바인딩이 없어 자유롭지만
   // R3.8 정책(단일 Ctrl+문자 금지)을 그대로 지켜 Shift 를 얹는다.
   { action: 'explorer.toggle', category: 'view', labelKo: '탐색기 모드', win: 'Ctrl+Shift+O', mac: 'Cmd+Shift+O', implemented: true },
@@ -131,8 +128,8 @@ const ALL_KEYS: readonly KeyBinding[] = [
   { action: 'settings.open', category: 'view', labelKo: '설정', win: 'Ctrl+,', mac: 'Cmd+,', implemented: true },
   // W3sat F18: 명령어 북(검색형 치트시트). Ctrl+Shift+* 미사용 조합.
   { action: 'commandBook.toggle', category: 'help', labelKo: '명령어 북', win: 'Ctrl+Shift+K', mac: 'Cmd+Shift+K', implemented: true },
-  // F31 통합 검색. **Ctrl+Shift+P 가 아니라 F1 이다** — 그 조합은 이미 미니 프리뷰가 쓰고 있고,
-  // 쓰던 사람 손버릇을 빼앗을 이유가 없다. F1 은 VS Code 에서도 같은 팔레트를 여는 키이고
+  // F31 통합 검색. **Ctrl+Shift+P 가 아니라 F1 이다** — 그때 그 조합은 미니 프리뷰가 쓰고 있었다
+  // (2.0 에서 미니 프리뷰를 지워 Ctrl+Shift+P 는 지금 비어 있다). F1 은 VS Code 에서도 같은 팔레트를 여는 키이고
   // (Show All Commands), F-키는 셸 충돌 정책이 열어 둔 자리다.
   { action: 'palette.all', category: 'search', labelKo: '통합 검색', win: 'F1', mac: 'F1', implemented: true },
   // #206 오류 신고. F1(통합 검색)과 겹치지 않는다 — modifiersMatch 가 Ctrl·Shift 까지 같아야 맞춘다.

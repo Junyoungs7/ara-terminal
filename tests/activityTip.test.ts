@@ -18,7 +18,6 @@ import { pickCut, placeTip, splitTip } from '../src/renderer/store/tooltip'
 const ACTIVITY_KEY = {
   ai: 'ai.toggle',
   log: 'log.save',
-  preview: 'preview.toggle',
   explorer: 'explorer.toggle',
   settings: 'settings.open'
 } as const
@@ -36,9 +35,9 @@ describe('액티비티 바 툴팁 단축키', () => {
     }
   })
 
-  it('★ 단축키가 있는 항목이 다섯이고, 셋은 예전에 빠져 있던 것이다', () => {
-    expect(Object.keys(ACTIVITY_KEY).sort()).toEqual(['ai', 'explorer', 'log', 'preview', 'settings'])
-    for (const id of ['preview', 'explorer', 'log'] as const) {
+  it('★ 단축키가 있는 항목이 넷이고, 둘은 예전에 빠져 있던 것이다', () => {
+    expect(Object.keys(ACTIVITY_KEY).sort()).toEqual(['ai', 'explorer', 'log', 'settings'])
+    for (const id of ['explorer', 'log'] as const) {
       expect(ACTIVITY_KEY[id]).toBeTruthy()
     }
   })
@@ -50,8 +49,8 @@ describe('액티비티 바 툴팁 단축키', () => {
   })
 
   it('만들어진 문구를 splitTip 이 이름과 뱃지로 가른다', () => {
-    const win = KEYMAP.find((k) => k.action === 'preview.toggle')!.win
-    expect(splitTip(`미니 프리뷰 (${win})`)).toEqual({ text: '미니 프리뷰', key: win })
+    const win = KEYMAP.find((k) => k.action === 'explorer.toggle')!.win
+    expect(splitTip(`탐색기 (${win})`)).toEqual({ text: '탐색기', key: win })
     // 단축키가 없는 항목은 꼬리표 없이 이름만 — 빈 괄호가 붙으면 안 된다.
     expect(splitTip('포트 모니터')).toEqual({ text: '포트 모니터', key: null })
   })
@@ -64,7 +63,7 @@ describe('액티비티 바는 두 규칙의 예외로 남는다', () => {
   it('★ 아이콘뿐인 버튼은 asIs — skip 으로 묶으면 레일 툴팁이 전부 죽는다', () => {
     // <button title="미니 프리뷰 (Ctrl+Shift+P)"><Eye /></button> — 글자를 그리는 자식이 없다.
     // 화면에 같은 글자가 없으니 "다 보인다"고 판정할 근거 자체가 없다.
-    const win = KEYMAP.find((k) => k.action === 'preview.toggle')!.win
+    const win = KEYMAP.find((k) => k.action === 'explorer.toggle')!.win
     const btn = [
       { text: '', scrollW: 34, clientW: 34 }, // <button>
       { text: '', scrollW: 0, clientW: 0 } // <svg>
