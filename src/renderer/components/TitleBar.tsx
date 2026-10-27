@@ -115,8 +115,8 @@ export function TitleBar({
         </button>
       )}
       <div className="tb-quick">
-        {/* FB-ui2(FB-0006): 아라·기어 아이콘을 우측 액티비티 바로 옮겼다(중복 진입점 정리 —
-            메뉴(File>설정)·단축키(Alt+A, Ctrl+,)는 그대로 유지, ActivityBar.tsx 참고). */}
+        {/* FB-ui2(FB-0006): 아라·기어 아이콘은 여기 없다 — 채팅은 위 [채팅] 버튼, 설정은 좌측 레일·
+            메뉴(파일>설정)·단축키(Alt+A, Ctrl+,)가 맡는다. */}
         {onCommand && (
           <div className="tb-help" title={t('titlebar.help')} onClick={() => onCommand('help.cheatsheet')}>
             ?

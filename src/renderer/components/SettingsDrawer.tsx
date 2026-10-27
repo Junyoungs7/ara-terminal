@@ -998,7 +998,7 @@ export function SettingsDrawer({
               {/* 2026-08-30 준영님 결정: [우측 아이콘 바] 행이 여기 있었다(순서 ↑↓ + 숨김 토글).
                   *"그냥 우측 아이콘바 설정하는건 제거하자. 더 별로다"* — 순서 배열이 하나인데 그리는
                   화면이 둘(레일·하단 탭줄)이라 슬롯 경계를 넘는 ↑↓ 는 눌러도 화면이 안 바뀌었다.
-                  이제 순서는 shared/types.ts 의 ACTIVITY_ITEMS 하나가 정한다. */}
+                  2.0 에서 우측 바가 없어졌고, 기능을 끄고 켜는 자리는 [기능] 칸이다. */}
               <Row label={t('settings.copyOnSelect')} desc={t('settings.copyOnSelect.desc')}>
                 <Toggle
                   on={prefs.copyOnSelect}

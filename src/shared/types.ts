@@ -296,77 +296,16 @@ export function aiModelsOf(raw: unknown): Record<AiProvider, string> {
 // 설정으로 노출하지 않는다(값이 바뀌지 않는 것에 설정을 만들지 않는다).
 export const AI_CONTEXT_LINES = 120
 
-// 우측 액티비티 바 항목(FB-ui2).
-// #91(2026-08-16): 'console' 이 사라졌다 — 서버 콘솔 창이 [서버 작업대](explorer)에 흡수됐다.
-//
-// #84(2026-08-16): 서버 콘솔의 도구 다섯(ps·svc·disk·pkg·ctr)이 여기 합류했다 — 하단 탭이
-// 되면서 액티비티 항목이 됐고, 그 덕에 **끄고 켜고 순서 바꾸기가 공짜로 따라왔다**(설정에 이미 있다).
-export type ActivityId =
-  | 'ai'
-  | 'monitor'
-  | 'sys'
-  | 'ps'
-  | 'svc'
-  | 'disk'
-  | 'pkg'
-  | 'ctr'
-  // 2026-08-24 준영님: 쿠버는 컨테이너와 **다른 탭**이다(한 서버에 둘 다 깔릴 수 있다).
-  | 'k8s'
-  | 'log'
-  // 2026-08-27 준영님: 원격 로그 뷰어가 하단바를 덮어 "로그를 보면서 하단바를 못 쓴다" → 탭으로 내렸다.
-  | 'applog'
-  // #86: 지난 세션 기록 — **우측**이다. 세션 목록은 세로 카드라 레일에 맞고, 우리 기능이다.
-  | 'pastlog'
-  | 'explorer'
-  // 2026-08-22 준영님 제보 9번: "명령어 북 기능을 책 아이콘을 사용하여 우측 사이드바 기능에 추가."
-  // 레일도 하단도 아니다 — 설정(settings)처럼 **오버레이를 여는 버튼**이다(isRailId·isBottomId 둘 다 false).
-  | 'cmdbook'
-  | 'settings'
-
-/**
- * **화면에 나오는 순서의 유일한 정의부다**(2026-08-30 FINISH-M7). 설정 [우측 아이콘 바]가
- * 없어지면서 순서를 바꿀 자리는 이 배열뿐이다 — 여기를 고치면 그것이 곧 사용자 화면이다.
- * 레일은 이 순서에서 `isBottomId` 아닌 것, 하단 탭줄은 `BOTTOM_IDS` 순서다.
- *
- * 지금 순서를 읽는 법(그대로 두기로 한 근거):
- *  · 레일 — 대화 · 지난 세션 · 미니 프리뷰 ｜ 작업대 · 명령어 북 · 설정.
- *    앞 셋이 옆에 붙는 패널(RAIL_IDS), 뒤 셋이 창·오버레이라 그 경계에 구분선이 하나 그어진다.
- *  · 하단 — 둘씩 짝이다: 포트·시스템(지금 상태) / 프로세스·서비스(돌고 있는 것) /
- *    디스크·패키지(깔려 있는 것) / 컨테이너·쿠버 / 세션 기록·서버 로그(둘 다 로그, 붙어 있어야
- *    무엇이 무엇인지 갈린다).
- */
-export const ACTIVITY_ITEMS: readonly ActivityId[] = [
-  'ai',
-  'monitor',
-  'sys',
-  'ps',
-  'svc',
-  'disk',
-  'pkg',
-  'ctr',
-  'k8s',
-  'log',
-  'applog',
-  'pastlog',
-  'explorer',
-  'cmdbook',
-  'settings'
-] as const
-
 // 어디에 열리나 — **내용이 정한다**(#83, 2026-08-15 준영님 확정. docs/design-system.md §4.8).
 //   서버 것 → 아래 · 아라(우리) 것 → 오른쪽. 모양(가로/세로)은 2순위, 예외는 문서에 적는다.
 //
 // 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는다.** #79(2026-08-14)부터 한 번에 하나만 열린다.
-// 여섯이었는데 셋만 남았다: 대화(ai)·지난 세션(pastlog)·미니 프리뷰(preview) — 전부 우리 기능이다.
+// 여섯이었는데 2.0 에서 대화(ai) 하나만 남았다 — 지난 세션은 왼쪽 사이드바로, 미니 프리뷰는 삭제.
 // #132(2026-08-25): [AI 세션] 레일을 뺐다. 그 목록은 **사이드바 [AI] 작업대**로 갔고(왼쪽이 목록
 // 자리다), 조용함 감시는 화면 없이 계속 돈다(store/aiQuietWatch.ts) — 화면과 함께 지우면 그
 // 기능의 목적("안 보고 있어도 알아챈다")이 사라진다.
-export const RAIL_IDS = ['ai', 'pastlog'] as const
+export const RAIL_IDS = ['ai'] as const
 export type RailId = (typeof RAIL_IDS)[number]
-
-export function isRailId(id: ActivityId): id is RailId {
-  return (RAIL_IDS as readonly string[]).includes(id)
-}
 
 // 하단 패널 — 터미널 **아래**에 붙어 세로만 먹는다(터미널 80칸에 영향이 없다).
 // 전부 **서버 것**이다(§4.8): 포트·시스템 자원·프로세스·서비스·디스크·패키지·컨테이너.
@@ -376,16 +315,13 @@ export function isRailId(id: ActivityId): id is RailId {
 // 창과 하단 두 군데서 보던 것을 하나로 모은 것이다. **서버는 세션 탭이 정한다** — 하단에
 // 서버 선택 UI 를 두지 않는다(터미널은 A서버인데 하단은 B서버인 상태를 만들지 않는다).
 //
-// 열이면 탭바가 좁은 배치에서 넘친다. 2026-08-30(FINISH-M7) 준영님 결정으로 **숨기기가 없어져**
-// 열 개가 늘 선다 — 넘치는 것은 `.bp-tabscroll` 의 가로 스크롤이 받는다(§4.7 반응형과 같은 답).
-// 라벨은 접히지 않는다(`.bp-tab { white-space: nowrap; flex: none }`).
-//
-// 액티비티 바 항목은 그대로 두고, 누르면 하단 패널이 그 탭으로 열린다 — 바를 옮기지 않는 이유는
-// 우리 바가 "무엇을 열지"를 고르는 것이지 VS Code 처럼 "사이드바 내용을 바꾸는" 것이 아니어서다.
+// 열이면 탭바가 좁은 배치에서 넘친다 — 넘치는 것은 `.bp-tabscroll` 의 가로 스크롤이 받는다(§4.7).
+// 라벨은 접히지 않는다(`.bp-tab { white-space: nowrap; flex: none }`). 2.0 3단계부터 설정 › 기능에서
+// 탭을 끌 수 있다(features.ts — 쿠버네티스·서버 로그는 기본 숨김).
 export const BOTTOM_IDS = ['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s', 'log', 'applog'] as const
 export type BottomId = (typeof BOTTOM_IDS)[number]
 
-export function isBottomId(id: ActivityId): id is BottomId {
+export function isBottomId(id: string): id is BottomId {
   return (BOTTOM_IDS as readonly string[]).includes(id)
 }
 
@@ -446,15 +382,8 @@ export type SidebarState = {
   /** 'past' = [지난 세션](2.0 에서 우측 레일 → 사이드바). 세션 수명 동안만 — 하이드레이트가 conn 으로 되돌린다. */
   activeTab: 'conn' | 'file' | 'ai' | 'past'
   width: number
-  /**
-   * #13(2026-10-08): 하단 도구 패널 — 탭 이름 = 그 탭으로 열려 있었다, null = 접혀 있었다,
-   * 미지정 = 저장된 적 없음(옛 동작: 첫 세션이 생기면 [포트]로 연다). 사이드바와 같은 툴윈도우
-   * 접힘이라 새 채널 대신 ui:setSidebar 에 얹었다.
-   * 🔴 선택 필드라 `SCHEMA_VERSION` 은 그대로다(UiState.termCompletion 주석).
-   * 2.0(2026-10-27): **더 쓰지도 읽지도 않는다**(하단 패널은 늘 닫힌 채 시작). 옛 파일에 남은 값은
-   * hydrateSidebar 가 버린다. 필드 제거는 3단계 정리 때.
-   */
-  bottom?: BottomId | null
+  // #13(2026-10-08)~2.0: `bottom`(하단 패널 열림 상태)이 여기 있었다. 2.0 에서 하단 패널은 늘 닫힌 채
+  // 시작하므로 필드를 지웠다 — 옛 파일에 남은 값은 hydrateSidebar 가 버린다.
   /**
    * #13(2026-10-08): 연결 트리에서 **접어 둔** 노드(그룹 이름 · `__fav` · `__local` · `node:<id>`).
    * 접힌 것만 담는다(true). 펼침이 기본이라 없는 키 = 펼침. 사이드바 접힘과 같은 툴윈도우 상태라
@@ -546,7 +475,7 @@ export type UiState = {
   // compatible 전용 base URL. 비밀이 아니다 — 설정 화면에 항상 보이는 값(전송 대상 투명성).
   aiCompatibleBaseUrl?: string
   // 2026-08-30(FINISH-M7): activityOrder·activityHidden 이 여기 있었다. 우측 아이콘 바를 설정에서
-  // 고치는 기능을 통째로 없애 순서는 ACTIVITY_ITEMS 하나가 정한다 — ctxMenuStyle 과 같은 처리다.
+  // 고치는 기능을 통째로 없앴다(우측 바 자체도 2.0 에서 없어졌다) — ctxMenuStyle 과 같은 처리다.
   // 옛 스냅샷에 남아 있는 키는 읽는 쪽이 없어 그대로 무시된다(마이그레이션 불필요).
   // R6: 프로필에서 파생되지 않는 그룹까지 담는 목록. 프로필이 있는 그룹은 파생으로 나오므로
   // 여기 저장이 필요한 것은 "빈 그룹"이지만, 이름 변경·삭제를 한 곳에서 처리하려고 전체를 싣는다.

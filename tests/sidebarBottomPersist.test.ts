@@ -18,8 +18,8 @@ describe('#13 접힘 상태 영속', () => {
   })
 
   it('★ 2.0: 하단 패널 상태는 복원하지 않는다 — 옛 파일에 열린 탭·접힘이 남아 있어도 버린다', () => {
-    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: 'sys' })).toBe(false)
-    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: null })).toBe(false)
+    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: 'sys' } as never)).toBe(false)
+    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: null } as never)).toBe(false)
   })
 
   it('2.0 [지난 세션] 탭은 세션 수명 동안만 — 재시작하면 [연결]로', () => {
@@ -89,7 +89,7 @@ describe('#13 하이드레이트 경합 — load() 가 늦게 끝나도 저장�
   }
 
   it('로드 전 update 는 저장하지 않고, 로드 후 하이드레이트 값 위에 다시 얹어 한 번 저장한다', async () => {
-    const saved: SidebarState = { collapsed: true, activeTab: 'conn', width: 300, bottom: null, connCollapsed: { AI: true } }
+    const saved: SidebarState = { collapsed: true, activeTab: 'conn', width: 300, connCollapsed: { AI: true } }
     const { ev, writes, finish } = fakeEv(saved)
     const p = sidebarPersist((s) => ev.ui.setSidebar(s))
     const loading = ev.workspace.load()

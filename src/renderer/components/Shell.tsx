@@ -1577,7 +1577,7 @@ export function Shell() {
           bottom={
             <BottomPanel
               tab={bottom}
-              // 탭은 **갈아타기**다(끄지 않는다) — 끄는 자리는 액티비티 바의 [하단바] 토글과
+              // 탭은 **갈아타기**다(끄지 않는다) — 끄는 자리는 레일의 [서버 도구] 토글과
               // 이 패널의 [×] 둘이다(IntelliJ 툴윈도우와 같은 규칙).
               onTab={setBottom}
               onClose={() => setBottom(null)}

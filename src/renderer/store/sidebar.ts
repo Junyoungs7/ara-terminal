@@ -98,7 +98,7 @@ export function hydrateSidebar(s: Partial<SidebarState>): SidebarState {
     width: clampSidebarWidth(typeof s.width === 'number' ? s.width : DEFAULT_SIDEBAR.width)
   }
   // 2.0: 하단 패널 열림 상태는 복원하지 않는다(늘 닫힌 채 시작) — 옛 파일에 남은 값도 버린다.
-  delete next.bottom
+  delete (next as { bottom?: unknown }).bottom
   // #13 연결 트리 접힘: 모양·크기만 남긴다. 없으면 키도 없다(옛 파일 = 전부 펼침).
   if ('connCollapsed' in s) next.connCollapsed = cleanConnCollapsed(s.connCollapsed)
   return next

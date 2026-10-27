@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { holdTermResize } from '../terminal/resizeGate'
 import { RdpView } from './RdpView'
-import { IconClose } from './icons'
-import { StateDot } from './StateDot'
-import { rdpSessionState, sessionState, setSessionState } from '../store/sessionState'
+import { rdpSessionState, setSessionState } from '../store/sessionState'
 import type { PaneCell, useLayout } from '../store/layout'
 import type { Session } from '../store/sessions'
 import { paneDropZone, zoneRect, type DropZone, type Rect } from '../store/dropZone'
@@ -125,8 +122,7 @@ export function PaneGrid({
     setRowRatio,
     canSplit,
     replaceSession,
-    showSession,
-    toggleMaximize
+    showSession
   } = layout
   const gridRef = useRef<HTMLDivElement>(null)
   // FB-0002: 탭 드래그 → 패널 드롭 미리보기(점선 오버레이). null = 드래그 중이 아니거나 그리드 밖.
@@ -324,59 +320,8 @@ export function PaneGrid({
             data-session-id={key}
             onMouseDown={() => cell && focus(cell.id)}
           >
-            {/* 헤더 = 상태 dot + 제목 + 닫기. R3.9 에서 ×(그땐 detach: 창만 사라지고 탭은 남음)가
-                혼란을 불러 없앴었는데, R9a 로 "칸 닫기 = 세션 종료"가 되면서 탭 ×와 뜻이 같아졌다 —
-                손이 가는 자리에 있는 편이 낫다. Ctrl+Shift+W·메뉴 pane.close 도 전부 같은 경로다. */}
-            <div
-              className="pane-hd"
-              draggable={!!session}
-              onDragStart={(e) => {
-                if (!session) return
-                e.dataTransfer.setData('text/plain', session.id)
-                e.dataTransfer.effectAllowed = 'move'
-              }}
-            >
-              {/* 점은 **상태**를 말한다(#166) — 색을 여기서 고르지 않는다.
-                  `err` 는 이 슬롯이 복원 실패 placeholder 일 때의 유일한 단서다(세션이 없어
-                  등록된 상태도 없다). 세션이 살아 있는데 끊긴 경우는 MainArea 가 `lost` 로
-                  등록하므로 탭·칸이 같은 값을 본다. */}
-              <StateDot cls="pdot" state={err ? 'lost' : sessionState(key)} />
-              <span className="ptitle">
-                <b>{err ? err.title : (session?.title ?? key)}</b>
-              </span>
-              {/* 2026-08-17 제보 ⑦: 칸마다 [최대화]. 분할해 놓고 하나를 잠깐 크게 볼 때
-                  Ctrl+Shift+Enter 를 몰라도 손이 닿아야 한다. 칸이 하나뿐이면 최대화할 것이
-                  없으므로 버튼도 없다(누르면 아무 일도 안 일어나는 버튼을 두지 않는다). */}
-              {cell && cells.length > 1 && (
-                <span
-                  className="pmax"
-                  title={t(maximizedId === cell.id ? 'explorer.restore' : 'explorer.maximize')}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleMaximize(cell.id)
-                  }}
-                >
-                  {/* 크기는 `.pane-hd .pmax svg`(11px)가 정한다 — 옆 `.px` 와 같은 규칙. */}
-                  {maximizedId === cell.id ? <Minimize2 /> : <Maximize2 />}
-                </span>
-              )}
-              {cell && (
-                <span
-                  className="px"
-                  title={t('tab.close')}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    // 복원 실패 자리는 세션이 아니다 — 카드의 [닫기]와 같은 경로로 치운다.
-                    if (err) onDismissError?.(err.sessionId)
-                    else onCloseSession?.(key)
-                  }}
-                >
-                  <IconClose />
-                </span>
-              )}
-            </div>
+            {/* 2.0: 칸 머리줄(.pane-hd)은 없다 — 탭 바로 아래가 터미널이다. 제목·닫기는 탭이, 최대화는
+                Ctrl+Up·메뉴 [분할 › 패널 최대화]가, 칸 옮기기는 탭 끌기(같은 text/plain 경로)가 맡는다. */}
             <div className="pane-body">
               {err && !session ? (
                 // F6 부분 복원(C-4): SSH 재접속 실패 — 오류 + 재시도/닫기. 다른 패널은 정상.

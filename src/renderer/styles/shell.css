@@ -2812,7 +2812,6 @@
    준영님 제보 ⑥("시스템 모니터는 지금 하단 중 좌측에만 보이고 있고")이 바로 이것이다.
    래퍼가 하나 더 끼어도 안 죽게 후손 선택자로 둔다. */
 .bp-pane .log-panel.embedded,
-.bp-pane .monitor-panel.embedded,
 /* 2026-08-27 [서버 로그]도 같은 자리다. 준영님 제보("뭔가 잘려 보인다") — flex:1 이 없으면
    가로 flex 인 .bp-pane 안에서 **내용 너비만큼만** 그려진다(위 2026-08-17 사고와 같은 종류). */
 .bp-pane .applog {
@@ -2842,105 +2841,6 @@
   background: var(--pane-dim);
   pointer-events: none;
   z-index: 5;
-}
-/* 2.0: 세션 창 머리줄 없음 — 탭 바로 아래가 터미널이다(시안 Z-final). 이름·닫기는 탭이, 최대화는
-   Ctrl+Up·메뉴가 맡는다. 마크업·끌어 옮기기 코드는 3단계 정리 때 함께 본다. */
-.pane-hd {
-  display: none;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: 0 var(--sp-5);
-  min-height: 28px;
-  flex: none;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-md);
-  user-select: none;
-}
-/* 크기·모양은 `.sdot` 이 준다(#166) — 자리마다 같은 4줄을 적던 것을 한 곳으로 모았다. */
-.pane-hd .ptitle {
-  font-family: var(--ui);
-  font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-mid);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pane-hd .ptitle b {
-  color: var(--text-hi);
-}
-/* 칸 헤더 × — 탭 ×(.ttab .tx)와 같은 동작·같은 모양. 포커스 칸에서만 상시 보이고
-   나머지는 호버에서만 뜬다(오클릭으로 남의 세션을 죽이지 않게). */
-.pane-hd .px {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-  border-radius: var(--radius-sm);
-  color: var(--text-lo);
-  opacity: 0;
-  transition: var(--dur-quick);
-  cursor: pointer;
-  flex: none;
-}
-.pane:hover .px {
-  opacity: 1;
-}
-.pane.focused .px {
-  opacity: 0.55;
-}
-.pane.focused:hover .px,
-.pane-hd .px:hover {
-  opacity: 1;
-}
-.pane-hd .px svg {
-  width: 11px;
-  height: 11px;
-}
-.pane-hd .px:hover {
-  color: var(--err);
-  background: var(--bg-overlay);
-}
-/* 칸 헤더 [최대화](2026-08-17 제보 ⑦) — × 와 같은 크기·같은 나타남 규칙을 쓰되 색만 다르다
-   (파괴적이지 않은 버튼이 빨갛게 물들면 안 된다). 둘 중 **앞의 것**이 오른쪽으로 밀고,
-   뒤따르는 × 는 바로 옆에 붙어야 한다 — 둘 다 auto 면 사이가 벌어진다. */
-.pane-hd .pmax {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-  border-radius: var(--radius-sm);
-  color: var(--text-lo);
-  font-size: var(--fs-md);
-  opacity: 0;
-  transition: var(--dur-quick);
-  cursor: pointer;
-  flex: none;
-}
-/* 바로 옆 `.px` 에는 있는 규칙이 여기만 없어서 TSX 가 `size={11}` 로 때우고 있었다(M2 §5 ①). */
-.pane-hd .pmax svg {
-  width: 11px;
-  height: 11px;
-}
-.pane-hd .pmax + .px {
-  margin-left: 0;
-}
-.pane:hover .pmax {
-  opacity: 1;
-}
-.pane.focused .pmax {
-  opacity: 0.55;
-}
-.pane.focused:hover .pmax,
-.pane-hd .pmax:hover {
-  opacity: 1;
-}
-.pane-hd .pmax:hover {
-  color: var(--text-hi);
-  background: var(--bg-overlay);
 }
 .pane-body {
   flex: 1;
@@ -5641,22 +5541,16 @@ button.sb-seg.upd:hover .val {
    요청한 번호와 다른 포트로 열렸으면 경고 톤 — OAuth 콜백은 번호가 달라지면 성립하지 않는다. */
 /* 아직 포워딩되지 않은 행의 ↗ 는 호버 전엔 숨긴다 — 행마다 버튼이 늘 떠 있으면 목록이 시끄럽다. */
 
-/* ── FB-ui2(FB-0007②): [모니터] 우측 레일 — 좌측 사이드바에서 이관. 껍데기는 .ai-panel/.ai-head 와
-   같은 조합(폭만 다르게), 안쪽은 위 .pmon 을 그대로 붙인다(다시 만들지 않는다). ── */
+/* ── FB-ui2(FB-0007②): 패널 껍데기(머리 + 본문). 우측 레일 시절엔 폭 280px·왼쪽 선을 가졌는데,
+   2.0 에서 쓰는 자리는 하단 [시스템 모니터]와 사이드바 [지난 세션] 둘이고 **폭은 둘 다 담는 쪽이
+   정한다** — 그래서 폭·선을 버렸다. ── */
 .monitor-panel {
-  width: 280px;
-  flex: 0 0 280px;
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--bg-surface);
-  border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-/* 2.0 [지난 세션]이 우측 레일에서 사이드바 안으로 왔다 — 폭은 사이드바가 정한다. */
-.sidebar .monitor-panel {
-  width: auto;
-  flex: 1 1 auto;
-  border-left: none;
 }
 .mon-head {
   height: var(--row-tabbar);
@@ -6265,9 +6159,8 @@ button.sb-seg.upd:hover .val {
 }
 
 /* ── FB-ui2(FB-0006): 우측 액티비티 바 ──
-   VS Code 액티비티 바 형태(폭 좁은 세로 아이콘 열) — 우측에 이미 붙는 패널(미니 프리뷰·모니터·
-   아라)들의 바깥 최우측에 고정한다. 타이틀바의 아라·기어 아이콘을 대체한다(중복 진입점 정리 —
-   메뉴·단축키는 그대로 유지, 발견성은 오히려 이 바 하나로 일원화된다). */
+   2.0 에서 본창의 우측 바는 없어졌다(왼쪽 레일 .lrail 로). 이 규칙은 **떼어낸 세션 창**
+   (SessionWindow.tsx)의 [하단바] 토글 하나가 아직 쓴다. */
 .activity-bar {
   width: 44px;
   flex: 0 0 44px;
@@ -6278,22 +6171,6 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-4) 0;
-}
-/* #87 ①: 묶음 경계 — 아래에 열리는 것 / 오른쪽에 열리는 것 / 창으로 열리는 것.
-   배치 원칙(§4.8)이 바에서도 읽혀야 한다. margin 이 아니라 선인 이유: 여백만으로는
-   "떨어져 있다"가 화면 배율에 따라 사라진다. */
-.act-item.sep {
-  margin-top: var(--sp-5);
-  position: relative;
-}
-.act-item.sep::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 8px;
-  right: 8px;
-  height: 1px;
-  background: var(--line);
 }
 .act-item {
   width: 32px;
@@ -7596,21 +7473,6 @@ button.sb-seg.upd:hover .val {
 
 /* ── F30 AI 세션 패널 ────────────────────────────────────────────────────── */
 /* 목업 D안(mockups/ai-sessions.png) 확정본. 껍데기는 포트 모니터 것을 그대로 쓴다. */
-.act-item {
-  position: relative;
-}
-/* 패널을 닫아 두면 아무것도 안 보이는 게 D안의 급소였다 — 아이콘 위 점이 그 보완이다. */
-.act-badge {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warn);
-  border: 1.5px solid var(--bg-surface);
-  animation: aisess-breathe 1.6s ease-in-out infinite;
-}
 @keyframes aisess-breathe {
   0%,
   100% {
@@ -9209,8 +9071,6 @@ button.sb-seg.upd:hover .val {
 .ttab .tx:active,
 .bp-max:active,
 .bp-close:active,
-.pane-hd .px:active,
-.pane-hd .pmax:active,
 .rec-btn:active,
 .ts-btn:active,
 .sclear:active,

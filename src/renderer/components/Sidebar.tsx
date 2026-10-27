@@ -60,7 +60,7 @@ function railTip(label: string, action?: KeymapAction): string {
 const TAB_KEY: Partial<Record<SidebarTab, KeymapAction>> = { file: 'fileTree.toggle' }
 
 /**
- * 좌측 아이콘 레일 — 사이드바의 여닫이. 우측 `ActivityBar` 와 **같은 규칙**이고, 클래스만 다르다
+ * 좌측 아이콘 레일 — 사이드바의 여닫이. 옛 우측 액티비티 바(2.0 에서 삭제)와 **같은 규칙**이었고, 클래스만 달랐다
  * (같은 클래스를 돌려 쓰면 e2e 가 엉뚱한 버튼을 누른다 — 그 사고를 이미 한 번 냈다).
  *
  * 접혀 있으면 어떤 아이콘도 눌린 상태가 아니다: 눌림은 "그 패널이 지금 화면에 있다"는 뜻이어야 한다.
@@ -146,7 +146,7 @@ export function SidebarRail({
 
 // 풀하이트 사이드바 — 레일이 고른 패널 하나 (design-system §4.2). 동시 스택 금지.
 // F4b: 연결 탭에 서버→세션 트리(서버 노드 하위 열린 세션 자식 행) + ＋버튼으로 연결 관리자.
-// FB-ui2: [모니터] 탭은 우측 액티비티 바(ActivityBar)로 이관했다 — 이 컴포넌트엔 더 남아 있지 않다.
+// FB-ui2: [모니터] 탭은 하단 패널로 갔다 — 이 컴포넌트엔 더 남아 있지 않다.
 export function Sidebar({
   active,
   collapsed,

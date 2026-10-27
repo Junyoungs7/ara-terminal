@@ -124,8 +124,6 @@ type MainAreaProps = {
   // 액티비티 바가 "지금 열려 있나"를 표시하려면 그 값을 Shell 로 되돌려줘야 한다(미러 콜백,
   // onAskAi 와 반대 방향).
   onSettingsOpenChange?: (open: boolean) => void
-  /** 액티비티 바 [명령어 북] 아이콘 활성 표시용 미러(설정과 같은 방식 — 상태 주인은 여기다). */
-  onCommandBookOpenChange?: (open: boolean) => void
   /** 새 로컬 셸을 열면 사이드바를 [파일] 탭으로 — 사이드바 상태의 주인은 Shell 이라 요청만 한다. */
   onRevealFiles?: () => void
   /**
@@ -173,7 +171,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onAskAi,
       onOpenLog,
       onSettingsOpenChange,
-      onCommandBookOpenChange,
       onRevealFiles,
       onAiCliFlags,
       onAiApi,
@@ -518,11 +515,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onSettingsOpenChange?.(settingsOpen)
     }, [settingsOpen, onSettingsOpenChange])
-
-    // 2026-08-22 제보 9번: 명령어 북도 액티비티 바 항목이 됐다 — 같은 미러가 필요하다.
-    useEffect(() => {
-      onCommandBookOpenChange?.(commandBookOpen)
-    }, [commandBookOpen, onCommandBookOpenChange])
 
     useEffect(() => {
       onAiCliFlags?.(prefs.aiCliFlags)
