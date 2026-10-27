@@ -583,7 +583,6 @@ export type MenuCommandId =
   // 2026-08-13 감사: 우측 바에만 있던 패널 다섯이 메뉴에도 통합 검색(F1)에도 없어서
   // "콘솔"·"포트"를 쳐도 안 나왔다. 팔레트가 MENUBAR 를 그대로 읽으므로 여기 올리면
   // **메뉴와 검색이 한 번에** 해결된다(팔레트 쪽은 손댈 것이 없다).
-  | 'panel.console'
   | 'panel.ports'
   | 'panel.sysmon'
   | 'panel.log'
@@ -592,9 +591,7 @@ export type MenuCommandId =
   | 'panel.disk'
   | 'panel.pkg'
   | 'panel.ctr'
-  // 2.0 3단계: 기본 숨김인 두 탭도 통합 검색(F1)에서 찾아 열 수 있어야 한다 — 검색이 이 표를 읽는다.
-  | 'panel.k8s'
-  | 'panel.applog'
+  // 2.0 4단계: 기본 숨김 셋(쿠버네티스·서버 로그·서버 콘솔)은 단축키가 생겨 KeymapAction 으로 옮겼다.
   | 'panel.pastlog'
   // F17: 단축키 없는 진입점(패널 상단 버튼이 또 하나 있다 — AiPanel.onOpenBootstrap).
   | 'ai.bootstrap'
@@ -643,7 +640,7 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
   {
     title: '보기',
     items: [
-      { command: 'panel.console' },
+      { action: 'panel.console' },
       // 하단에 열리는 것들. #84·#86 으로 들어온 여섯이 여기 없어서 F1 검색에도 안 잡혔고,
       // 우측 아이콘을 끄면 되찾을 길이 아예 없었다(2026-08-16).
       { command: 'panel.ports' },
@@ -653,9 +650,9 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       { command: 'panel.disk' },
       { command: 'panel.pkg' },
       { command: 'panel.ctr' },
-      { command: 'panel.k8s' },
+      { action: 'panel.k8s' },
       { command: 'panel.log' },
-      { command: 'panel.applog' },
+      { action: 'panel.applog' },
       // 우측 레일.
       { command: 'panel.pastlog' },
       { action: 'sidebar.collapse' },

@@ -27,6 +27,17 @@ describe('기능 표시', () => {
     }
   })
 
+  it('기본 숨김 셋은 Ctrl+Alt+문자 — 다른 키와 안 겹치고 bash·zsh 기본 M-C- 키를 피한다', () => {
+    const combos = KEYMAP.map((k) => k.win)
+    expect(new Set(combos).size).toBe(combos.length)
+    for (const f of FEATURES.filter((x) => x.hidden)) {
+      const win = KEYMAP.find((k) => k.action === f.key)?.win ?? ''
+      expect(win, f.id).toMatch(/^Ctrl\+Alt\+[A-Z]$/)
+      // bash 5.x 리드라인 M-C-e·g·h·i·j·l·r·y (+ b·d·f 는 판본에 따라) · zsh ^[^D·G·H·L
+      expect('BDEFGHIJLRY', f.id).not.toContain(win.slice(-1))
+    }
+  })
+
   it('끈 기능은 메뉴에서 빠지고 켜면 돌아온다', () => {
     const view = MENUBAR.findIndex((m) => m.title === '보기')
     const ids = (shown = featuresOf(undefined)) => menuBarItems(view, shown).map((i) => i.id)
@@ -44,7 +55,7 @@ describe('통합 검색 — 꺼진 기능', () => {
     const { paletteItems } = await import('../src/renderer/store/palette')
     const shown = { ...featuresOf(undefined), monitor: false }
     const items = paletteItems([], [], false, shown)
-    expect(items.find((i) => i.id === 'command:panel.k8s')?.off).toEqual({ id: 'k8s', byDefault: true })
+    expect(items.find((i) => i.id === 'action:panel.k8s')?.off).toEqual({ id: 'k8s', byDefault: true })
     expect(items.find((i) => i.id === 'command:panel.ports')?.off).toEqual({ id: 'monitor', byDefault: false })
     expect(items.find((i) => i.id === 'command:panel.sysmon')?.off).toBeUndefined()
   })

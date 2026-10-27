@@ -61,7 +61,8 @@ export const AI_ENTRY = AI_CHAT || ARA_CHAT
  *
  * `hidden` = 기본 숨김(0단계 "덜어낼 기능 후보" 표, 2026-10-27 준영님 결정).
  * `key` = 이 기능을 여는 KEYMAP 액션, `menu` = 메뉴바 명령 id — 메뉴·검색에서 이 기능을 알아보는 열쇠이자
- * 설정 화면의 단축키 칸이다. **이 표에 단축키를 새로 만들지 않는다**(없으면 빈칸).
+ * 설정 화면의 단축키 칸이다. **이 표에 단축키를 새로 만들지 않는다**(없으면 빈칸) — 키는 KEYMAP 에서만 생긴다
+ * (4단계: 기본 숨김 셋에 Ctrl+Alt+K·V·O).
  *
  * 브라우저 창은 여기 없다: 따로 여는 자리가 없고(포트 [열기]·터미널 링크가 그 결과로 띄운다)
  * 숨길 진입점이 없다 — 스위치를 달면 눌러도 아무 일 없는 스위치가 된다.
@@ -96,9 +97,9 @@ export const FEATURES: readonly Feature[] = [
   { id: 'pastlog', menu: 'panel.pastlog' },
   { id: 'explorer', key: 'explorer.toggle' },
   { id: 'cmdbook', key: 'commandBook.toggle' },
-  { id: 'k8s', menu: 'panel.k8s', hidden: true },
-  { id: 'applog', menu: 'panel.applog', hidden: true },
-  { id: 'console', menu: 'panel.console', hidden: true }
+  { id: 'k8s', key: 'panel.k8s', hidden: true },
+  { id: 'applog', key: 'panel.applog', hidden: true },
+  { id: 'console', key: 'panel.console', hidden: true }
 ]
 
 export type FeatureShown = Record<FeatureId, boolean>

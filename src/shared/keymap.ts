@@ -5,6 +5,9 @@
 //   C 인터럽트 · D EOF · Z 서스펜드 · L 클리어 · R 역검색 · W 단어삭제 · U/K 라인킬 ·
 //   A/E 줄 처음·끝 · T transpose · S/Q 흐름제어 · B/F 커서 이동 · \ SIGQUIT.
 // 앱 전용 키는 Ctrl+Shift+* / Alt+* / F-키에서만 고른다.
+// 2.0 4단계: **Ctrl+Alt+문자**(숨긴 기능 셋)를 더했다. xterm 은 이 조합을 ESC+Ctrl-문자로 보내는데,
+// 리드라인(bash 5.1+)·zsh 기본 키맵이 쓰는 것은 피했다 — M-C-e·g·h·i·j·l·r·y·] (bash) / ^[^D·G·H·L (zsh).
+// 그래서 시안의 서버 로그 Ctrl+Alt+L(= bash clear-display · zsh clear-screen)을 Ctrl+Alt+V 로 바꿨다.
 // #67(2026-08-14): 유일한 예외였던 palette.smart(Ctrl+K)가 없어졌다 — 스마트 팔레트를 지우면서
 // Ctrl+K 를 리드라인 라인킬로 셸에 돌려줬다. 이제 정책에 예외가 없다.
 
@@ -44,6 +47,10 @@ export type KeymapAction =
   | 'palette.all'
   // #206 오류 신고 — 창을 먼저 찍고 신고 창을 연다.
   | 'report.open'
+  // 2.0 4단계: 기본 숨김 기능 셋(features.ts) — 숨겨도 단축키·통합 검색으로 연다. 이름은 옛 메뉴 명령 id 그대로.
+  | 'panel.k8s'
+  | 'panel.applog'
+  | 'panel.console'
 
 import { AI_ENTRY } from './features'
 
@@ -134,7 +141,10 @@ const ALL_KEYS: readonly KeyBinding[] = [
   { action: 'palette.all', category: 'search', labelKo: '통합 검색', win: 'F1', mac: 'F1', implemented: true },
   // #206 오류 신고. F1(통합 검색)과 겹치지 않는다 — modifiersMatch 가 Ctrl·Shift 까지 같아야 맞춘다.
   // 메뉴바가 없는 떼어낸 창에서는 이 키가 유일한 입구다(SessionWindow). F-키라 R3.8 정책 안이다.
-  { action: 'report.open', category: 'help', labelKo: '오류 신고…', win: 'Ctrl+Shift+F1', mac: 'Cmd+Shift+F1', implemented: true }
+  { action: 'report.open', category: 'help', labelKo: '오류 신고…', win: 'Ctrl+Shift+F1', mac: 'Cmd+Shift+F1', implemented: true },
+  { action: 'panel.k8s', category: 'view', labelKo: '쿠버네티스', win: 'Ctrl+Alt+K', mac: 'Cmd+Opt+K', implemented: true },
+  { action: 'panel.applog', category: 'view', labelKo: '서버 로그', win: 'Ctrl+Alt+V', mac: 'Cmd+Opt+V', implemented: true },
+  { action: 'panel.console', category: 'view', labelKo: '서버 콘솔', win: 'Ctrl+Alt+O', mac: 'Cmd+Opt+O', implemented: true }
 ] as const
 
 /**
