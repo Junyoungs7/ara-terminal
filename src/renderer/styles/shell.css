@@ -4501,29 +4501,45 @@ button.sb-seg.upd:hover .val {
    설정 드로어 (F5) — 목업 variant-final-2 .drawer 그대로.
    폰트 비교 스트립 + 폰트 리스트 + 크기/행간 슬라이더 + 실사용 한글 미리보기 + OFL 고지.
    ============================================================ */
+/* 2.0 6단계 — 오른쪽 500px 서랍이 설정 › 기능 설명을 잘랐다. 시안 Z-settings 대로 가운데 넓은 창 +
+   뒤 스크림으로 바꾼다. 이름(.drawer)은 e2e·스모크 선택자라 그대로 둔다. 확인 다이얼로그(.overlay
+   z 100)가 이 위에 떠야 하므로 z 는 90 그대로. 닫혀 있어도 언마운트하지 않는다(보던 섹션 유지). */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(7px);
+  z-index: 89;
+  display: none;
+}
+.drawer-scrim.open {
+  display: block;
+  animation: fade var(--dur-pop) ease;
+}
 .drawer {
   position: fixed;
-  top: var(--row-titlebar);
-  right: 0;
-  bottom: var(--row-statusbar);
-  width: 500px;
-  max-width: 94vw;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(1000px, calc(100vw - 48px));
+  height: min(780px, calc(100vh - 48px));
   background: var(--bg-surface);
-  border-left: 1px solid var(--line-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  transform: translateX(100%);
-  transition: transform var(--dur-drawer) var(--ease-drawer);
+  overflow: hidden;
   z-index: 90;
-  display: flex;
+  display: none;
   flex-direction: column;
 }
 .drawer.open {
-  transform: translateX(0);
+  display: flex;
+  animation: pop var(--dur-pop) var(--ease-pop);
 }
-/* 500px 슬라이드는 이 앱에서 가장 큰 단일 움직임인데 reduced-motion 이 이 자리를 놓치고 있었다
-   (2026-09-04, 모션 감사 A5). 옵션을 켠 사람에게 부팅 인사만 조용해지고 매일 여닫는 서랍은
-   그대로 미끄러졌다. 서랍은 붙었다 떨어졌다 할 뿐이고 자리는 그대로다 — 뜻이 안 죽는다.
-   2026-10-08: 그 처리는 이제 tokens.css 가 한다(reduced-motion 에서 --dur-drawer: 0ms). */
+/* 프로그램이 준 포커스(.modal:focus 와 같은 이유) — 테두리는 그리지 않는다. */
+.drawer:focus {
+  outline: none;
+}
 .drawer-hd {
   display: flex;
   align-items: center;
@@ -9244,7 +9260,6 @@ button.sb-seg.upd:hover .val {
 .feat-row .fr-desc {
   font-size: var(--fs-md);
   color: var(--text-mid);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 6단계: 넓어진 창에서 한 줄로 다 보인다 — 말줄임 대신 넘치면 줄바꿈(잘려 숨지 않게). */
+  word-break: keep-all;
 }

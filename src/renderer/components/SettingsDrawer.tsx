@@ -1,6 +1,6 @@
 import { AI_ENTRY, FEATURES } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import {
@@ -907,6 +907,9 @@ type Props = {
   onOpenCommandBook?: (query?: string) => void
 }
 
+// 2.0 6단계 — 단축키는 칩 하나(`Ctrl Alt K`, 키 사이 공백·`+` 없음, 시안 Z-settings).
+const keyChip = (combo: string) => combo.split('+').join(' ')
+
 export function SettingsDrawer({
   open,
   font,
@@ -942,8 +945,23 @@ export function SettingsDrawer({
     }
   }, [open])
 
+  // 2.0 6단계 — 서랍 → 가운데 모달(시안 Z-settings). 열릴 때 포커스를 창 안으로 들인다(Dialog.tsx 와 같은 방식).
+  const boxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (open) boxRef.current?.focus()
+  }, [open])
+
   return (
-    <div className={'drawer' + (open ? ' open' : '')} role="dialog" aria-label={t('settings.title')}>
+    <>
+    <div className={'drawer-scrim' + (open ? ' open' : '')} onClick={onClose} />
+    <div
+      className={'drawer' + (open ? ' open' : '')}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('settings.title')}
+      tabIndex={-1}
+      ref={boxRef}
+    >
       <div className="drawer-hd">
         <div className="dh-ico">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1134,13 +1152,7 @@ export function SettingsDrawer({
                           <span className="fr-name">{t('feature.' + f.id)}</span>
                           <span className="fr-desc">{t('feature.' + f.id + '.desc')}</span>
                           <span className="cs-keys">
-                            {b &&
-                              (isMac ? b.mac : b.win).split('+').map((c, i) => (
-                                <Fragment key={i}>
-                                  {i > 0 && <span className="cs-sep">+</span>}
-                                  <span className="cs-k">{c}</span>
-                                </Fragment>
-                              ))}
+                            {b && <span className="cs-k">{keyChip(isMac ? b.mac : b.win)}</span>}
                           </span>
                           <Toggle
                             on={prefs.features[f.id]}
@@ -1344,12 +1356,7 @@ export function SettingsDrawer({
                       <div className="cs-row" key={b.action}>
                         <span className="cs-desc">{b.labelKo}</span>
                         <span className="cs-keys">
-                          {(isMac ? b.mac : b.win).split('+').map((c, i) => (
-                            <Fragment key={i}>
-                              {i > 0 && <span className="cs-sep">+</span>}
-                              <span className="cs-k">{c}</span>
-                            </Fragment>
-                          ))}
+                          <span className="cs-k">{keyChip(isMac ? b.mac : b.win)}</span>
                         </span>
                       </div>
                     ))}
@@ -1417,5 +1424,6 @@ export function SettingsDrawer({
         </div>
       </div>
     </div>
+    </>
   )
 }
