@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cleanConnCollapsed, isBottomId, type BottomId, type SidebarState } from '@shared/types'
+import { cleanConnCollapsed, type SidebarState } from '@shared/types'
 
 // R4.3 사이드바 상태 단일 소스. ui.sidebar{width,collapsed,activeTab} 스키마는 F1부터 있었지만
 // 아무도 읽지 않는 죽은 필드였고 폭은 CSS 고정이었다. useFont 와 같은 형태로:
@@ -97,8 +97,8 @@ export function hydrateSidebar(s: Partial<SidebarState>): SidebarState {
     activeTab,
     width: clampSidebarWidth(typeof s.width === 'number' ? s.width : DEFAULT_SIDEBAR.width)
   }
-  // #13: null(접힘)·알려진 탭만 남긴다. 그 밖은 "저장된 적 없음"으로 — 옛 동작으로 돌아간다.
-  if (!(s.bottom === null || (typeof s.bottom === 'string' && isBottomId(s.bottom as BottomId)))) delete next.bottom
+  // 2.0: 하단 패널 열림 상태는 복원하지 않는다(늘 닫힌 채 시작) — 옛 파일에 남은 값도 버린다.
+  delete next.bottom
   // #13 연결 트리 접힘: 모양·크기만 남긴다. 없으면 키도 없다(옛 파일 = 전부 펼침).
   if ('connCollapsed' in s) next.connCollapsed = cleanConnCollapsed(s.connCollapsed)
   return next
@@ -129,14 +129,6 @@ export function sidebarPersist(save: (s: SidebarState) => void) {
       return next
     }
   }
-}
-
-/**
- * #13 첫 세션이 생길 때 하단 패널을 무엇으로 열까. 지난번에 **접고 끝냈으면(null) 열지 않는다** —
- * 사용자가 끈 것을 앱이 되돌리면 안 된다. 저장된 적 없으면(undefined) 옛 동작(보던 탭 = fallback).
- */
-export function bootBottom(saved: BottomId | null | undefined, fallback: BottomId): BottomId | null {
-  return saved === null ? null : (saved ?? fallback)
 }
 
 export function useSidebar() {

@@ -450,6 +450,8 @@ export type SidebarState = {
    * 미지정 = 저장된 적 없음(옛 동작: 첫 세션이 생기면 [포트]로 연다). 사이드바와 같은 툴윈도우
    * 접힘이라 새 채널 대신 ui:setSidebar 에 얹었다.
    * 🔴 선택 필드라 `SCHEMA_VERSION` 은 그대로다(UiState.termCompletion 주석).
+   * 2.0(2026-10-27): **더 쓰지도 읽지도 않는다**(하단 패널은 늘 닫힌 채 시작). 옛 파일에 남은 값은
+   * hydrateSidebar 가 버린다. 필드 제거는 3단계 정리 때.
    */
   bottom?: BottomId | null
   /**

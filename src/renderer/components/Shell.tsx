@@ -26,7 +26,7 @@ import { sizeOf } from '../terminal/termRegistry'
 import { holdTermResize } from '../terminal/resizeGate'
 import { useProfiles, connectErrorTitle, connectErrorMessage, profileInput, type ConnectFailure } from '../store/profiles'
 import { connectWithRecovery } from '../store/sshConnect'
-import { bootBottom, clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
+import { clampSidebarWidth, nextSidebar, useSidebar } from '../store/sidebar'
 import { checkToast, runUpdateAction, useUpdateState } from '../store/updateNotify'
 import { primeCwd } from '../store/cwdPrime'
 import { spanRdp } from '../store/rdpSpanOpen'
@@ -99,7 +99,7 @@ function quitDetail(list: { serverKey: string; title: string }[]): { label: stri
 // 3행 그리드 앱 셸 (design-system §4.1): 타이틀바 / (사이드바+메인) / 상태바.
 export function Shell() {
   // R4.3: 폭·접힘·활성 탭이 한 상태로 묶여 workspace.json 에 저장된다(그전엔 렌더러 지역 상태).
-  const { sidebar, loaded: sidebarLoaded, update: updateSidebar, preview: previewSidebar, revealAi } = useSidebar()
+  const { sidebar, update: updateSidebar, preview: previewSidebar, revealAi } = useSidebar()
   // 드래그 중에는 사이드바 폭 트랜지션을 끈다(0.22s ease 가 걸린 채로 끌면 폭이 커서를 따라오지 않는다).
   const [resizing, setResizing] = useState(false)
   // 빈 문자열로 시작한다 — 예전엔 '0.1.0' 이 박혀 있었다. 아래 getVersion() 은 `.catch(() => {})`
@@ -303,27 +303,9 @@ export function Shell() {
     })
   }, [ask])
 
-  // 2026-08-24 준영님: "세션창 생기면 자동으로 하단바가 열리고 하단에 딱 붙어있게."
-  // **첫 세션이 생길 때 한 번만** 연다(0개 → 1개). 세션을 열 때마다 열면, 방금 닫은 사람 앞에서
-  // 탭 하나 열 때마다 도로 올라온다 — 사용자가 끈 것을 앱이 되돌리면 안 된다.
-  // #13: 지난번 끝낼 때의 하단 상태를 첫 열기에 쓴다(접고 끝냈으면 안 연다). 하이드레이트를 기다린다.
-  const hadSession = useRef(false)
-  const savedBottom = useRef(sidebar.bottom)
-  savedBottom.current = sidebar.bottom
-  useEffect(() => {
-    if (!sidebarLoaded) return
-    const has = sessions.sessions.length > 0
-    if (has && !hadSession.current) setBottom((cur) => cur ?? bootBottom(savedBottom.current, lastBottom.current))
-    hadSession.current = has
-  }, [sessions.sessions.length, sidebarLoaded])
-  // #13 영속 — 값이 **바뀔 때만** 쓴다. 부팅 직후의 null(아직 안 열림)을 "접고 끝냈다"로 저장하면,
-  // 세션 없이 켰다 끈 다음 실행에서 사용자가 접은 적 없는 패널이 안 열린다.
-  const prevBottom = useRef(bottom)
-  useEffect(() => {
-    if (prevBottom.current === bottom) return
-    prevBottom.current = bottom
-    if (sidebarLoaded) updateSidebar({ bottom })
-  }, [bottom, sidebarLoaded, updateSidebar])
+  // 2.0(2026-10-27 준영님): 하단 패널은 **늘 닫힌 채 시작하고 열림 상태를 기억하지 않는다.**
+  // 서버 도구 아이콘(왼쪽 레일)·메뉴·아라가 열 때만 열린다. 1.x 의 "첫 세션에 자동으로 연다"(2026-08-24)와
+  // "지난번 상태 복원"(#13)을 둘 다 끊었다 — ui.sidebar.bottom 은 더 쓰지도 읽지도 않는다.
 
   /**
    * 아라가 "이거 보세요" 하고 화면 아래 패널을 연다(2026-08-26 준영님 제안).

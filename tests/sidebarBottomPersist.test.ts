@@ -2,22 +2,28 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bootBottom, DEFAULT_SIDEBAR, hydrateSidebar, sidebarPersist } from '../src/renderer/store/sidebar'
+import { DEFAULT_SIDEBAR, hydrateSidebar, sidebarPersist } from '../src/renderer/store/sidebar'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { CONN_COLLAPSED_MAX, type SidebarState } from '../src/shared/types'
 
-// #13(2026-10-08): 왼쪽 사이드바·하단 패널의 접힘이 재시작 후에도 남는다.
+// #13(2026-10-08): 왼쪽 사이드바의 접힘이 재시작 후에도 남는다.
+// 2.0(2026-10-27): **하단 패널은 빠졌다** — 늘 닫힌 채 시작하고 열림 상태를 복원하지 않는다.
 // 저장은 ui.sidebar 하나(ui:setSidebar) — JSON 왕복을 거쳐 같은 값으로 돌아와야 한다.
 const roundTrip = (s: SidebarState): SidebarState => hydrateSidebar(JSON.parse(JSON.stringify(s)))
 
 describe('#13 접힘 상태 영속', () => {
-  it('사이드바 접힘·하단 접힘(null)이 저장 → 복원 왕복으로 남는다', () => {
-    const saved: SidebarState = { collapsed: true, activeTab: 'file', width: 300, bottom: null }
+  it('사이드바 접힘이 저장 → 복원 왕복으로 남는다', () => {
+    const saved: SidebarState = { collapsed: true, activeTab: 'file', width: 300 }
     expect(roundTrip(saved)).toEqual(saved)
   })
 
-  it('하단이 열린 탭으로 끝났으면 그 탭이 남는다', () => {
-    expect(roundTrip({ ...DEFAULT_SIDEBAR, bottom: 'sys' }).bottom).toBe('sys')
+  it('★ 2.0: 하단 패널 상태는 복원하지 않는다 — 옛 파일에 열린 탭·접힘이 남아 있어도 버린다', () => {
+    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: 'sys' })).toBe(false)
+    expect('bottom' in roundTrip({ ...DEFAULT_SIDEBAR, bottom: null })).toBe(false)
+  })
+
+  it('2.0 [지난 세션] 탭은 세션 수명 동안만 — 재시작하면 [연결]로', () => {
+    expect(roundTrip({ ...DEFAULT_SIDEBAR, activeTab: 'past' }).activeTab).toBe('conn')
   })
 
   it('값이 없으면(옛 파일) 기본값 그대로 — 하단은 "저장된 적 없음"', () => {
@@ -31,12 +37,6 @@ describe('#13 접힘 상태 영속', () => {
     expect('bottom' in h).toBe(false)
     expect(h.collapsed).toBe(false)
     expect(h.width).toBe(DEFAULT_SIDEBAR.width)
-  })
-
-  it('첫 세션 자동 열기: 접고 끝냈으면 안 열고, 저장된 탭이면 그 탭, 없으면 옛 동작', () => {
-    expect(bootBottom(null, 'monitor')).toBeNull()
-    expect(bootBottom('ps', 'monitor')).toBe('ps')
-    expect(bootBottom(undefined, 'monitor')).toBe('monitor')
   })
 })
 
