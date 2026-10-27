@@ -3504,6 +3504,35 @@ button.sb-seg.upd:hover .val {
 .sb-seg.gauge-seg .val {
   font-size: var(--fs-md);
 }
+/* 2.0 상태바 — 칸 폭 고정(시안 Z-final). 값이 바뀌어도, 없어서 — 가 찍혀도 옆 칸이 움직이지 않는다. */
+.sb-seg .val.na {
+  color: var(--text-lo);
+  font-weight: 400;
+}
+.sb-seg.os .val {
+  min-width: 11ch;
+}
+.sb-seg.uptime .val {
+  min-width: 7ch;
+}
+.sb-seg.cpu .gauge .val {
+  min-width: 4ch;
+}
+/* MEM·GPU 막대 — 게이지 채움은 포인트 색 하나(design-system-v2 §1.4 "게이지 채움"). */
+.sb-mbar {
+  display: block;
+  width: 44px;
+  height: 4px;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--bg-overlay);
+}
+.sb-mbar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
 
 /* ── W4 F23 MCP "AI 조종 중" 인디케이터 — --purple 계열(AI 전용 색, design-system §1.5). 글로우·
    점멸 없음(R8 톤다운 방침) — 색 자체가 신호다. */

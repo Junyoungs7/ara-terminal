@@ -522,6 +522,8 @@
   "statusbar.host": "호스트",
   "statusbar.shell": "셸",
   "statusbar.cwd": "경로",
+  "statusbar.os": "OS",
+  "statusbar.uptime": "가동",
   "statusbar.sessions": "세션",
   "statusbar.encoding": "인코딩",
   "statusbar.state": "상태",

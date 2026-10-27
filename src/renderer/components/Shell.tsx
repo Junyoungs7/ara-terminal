@@ -1797,6 +1797,8 @@ export function Shell() {
         cwd={activeCwd}
         sessionCount={sessions.sessions.length}
         stats={telemetry.stats}
+        // 하단 [시스템 모니터]와 같은 이력 — CPU 흐름선이 첫 점부터가 아니라 그 이력으로 그려진다.
+        history={sysHistory}
         update={updateSt}
         onUpdateAction={(a) => {
           // 확인은 결과를 토스트로 돌려줘야 한다 — 눌렀는데 아무 반응이 없으면 안 된다.

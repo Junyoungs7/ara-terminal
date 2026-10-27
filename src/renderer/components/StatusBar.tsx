@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { ConnectionProfile, RemoteStats } from '@shared/types'
+import { parseOverview, type Overview } from '@shared/remoteCatalog'
 import type { UpdateState } from '@shared/ipc'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
@@ -71,6 +73,47 @@ export function gaugesOf(stats: RemoteStats | null, history: readonly Sample[] =
   return out
 }
 
+/** 값이 없는 칸 — 자리는 그대로 두고 이것만 찍는다(칸 폭이 흔들리지 않게). */
+export const NA = '—'
+
+/** 가동 시간 짧은 표기(시안 Z-final `12d 3h`). 못 읽었으면 —. */
+export function uptimeShort(sec: number | null | undefined): string {
+  if (sec == null) return NA
+  const d = Math.floor(sec / 86400)
+  const h = Math.floor((sec % 86400) / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+/**
+ * 2.0 상태바의 OS·가동 칸 — **활성 탭 기준.** SSH 면 그 서버(작업대 개요와 같은 `sys.overview` 한 번),
+ * 로컬이면 내 PC. 내 PC 가동 시간은 지금 읽는 길이 없다(새 수집기를 만들지 않는다) → —.
+ */
+export function hostFacts(session: Session | null, ov: Overview | null): { os: string; uptime: string } {
+  if (!session) return { os: NA, uptime: NA }
+  if (session.type === 'ssh') return { os: ov?.distro || NA, uptime: uptimeShort(ov?.uptimeSec) }
+  return { os: navigator.userAgent.includes('Mac') ? 'macOS' : 'Windows', uptime: NA }
+}
+
+/**
+ * SSH 세션의 서버 개요(배포판·가동 시간). 폴링하지 않는다 — 배포판은 안 변하고 가동 시간은 일·시
+ * 단위라(ServerOverview 와 같은 판단) **세션이 바뀔 때 한 번** 읽는다. 세션별로 기억해 탭을 오가도 다시 안 읽는다.
+ */
+function useOverview(session: Session | null): Overview | null {
+  const [cache, setCache] = useState<Record<string, Overview>>({})
+  const id = session?.type === 'ssh' ? session.id : null
+  useEffect(() => {
+    if (!id || cache[id]) return
+    void window.ev?.remote
+      ?.run(id, 'sys.overview')
+      .then((r) => {
+        if (r?.ok) setCache((c) => ({ ...c, [id]: parseOverview(r.out) }))
+      })
+      .catch(() => {})
+  }, [id, cache])
+  return id ? (cache[id] ?? null) : null
+}
+
 // 활성 세션 → 상태바에 찍을 값(순수 — 단위 테스트 대상).
 export function statusModel(
   session: Session | null,
@@ -129,6 +172,7 @@ export function StatusBar({
   onUpdateAction?: (action: 'download' | 'install' | 'check') => void
 }) {
   const m = statusModel(session, profile, conn, cwd, stats, history)
+  const facts = hostFacts(session, useOverview(session))
   const u = updateSeg(update ?? null, version)
   // 업데이트를 말하는 동안에는 브랜드 라벨을 뺀다 — 상태바는 좁고, 지금 할 말은 "A.R.A" 가 아니다.
   const verBody = (
@@ -138,6 +182,8 @@ export function StatusBar({
     </>
   )
   const label = m.idle ? t('statusbar.state') : session?.type === 'ssh' ? t('statusbar.host') : t('statusbar.shell')
+  const gauge = (key: Gauge['key']) => m.gauges.find((g) => g.key === key)
+  const cpu = gauge('cpu')
   return (
     <div className="statusbar">
       <div className={'sb-seg host' + (m.idle ? ' idle' : '')}>
@@ -145,39 +191,62 @@ export function StatusBar({
         <span className="lbl">{label}</span>
         <span className="val">{m.primary}</span>
       </div>
-      {m.cwd && (
-        <div className="sb-seg cwd" title={m.cwd}>
-          <span className="lbl">{t('statusbar.cwd')}</span>
-          <span className="val">{m.cwd}</span>
-        </div>
-      )}
-      {/* W1 F10 / FB-0008 리소스 게이지(목업 하단 바 스타일). 활성 세션(SSH·로컬)에 폴링 값이 오면 나타난다. */}
-      {m.gauges.map((g) => (
-        <div key={g.key} className="sb-seg gauge-seg">
-          <span className="lbl">{g.key.toUpperCase()}</span>
-          <div className="gauge">
-            {/* 폴링이 한 바퀴 돌 때마다 점이 하나 늘고 왼쪽으로 흐른다 — 값이 어디로 가는
-                중인지가 보인다. 그리는 함수는 하단 [시스템 모니터]와 같은 것을 쓴다. */}
-            <svg className={'sb-spark ' + g.key} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden>
-              {/* 아래를 채운다(제보 18) — 14px 높이에서는 선 하나보다 면이 훨씬 빨리 읽힌다. */}
-              <polygon points={sparkArea(g.series, SPARK_W, SPARK_H)} />
-              <polyline points={sparkPoints(g.series, SPARK_W, SPARK_H)} />
-            </svg>
-            <span className="val">{g.text}</span>
+      {/* 2.0: 활성 탭 기준 서버 정보 — 칸은 늘 같은 자리에 서고, 값이 없으면 — 만 찍는다(시안 Z-final).
+          세션이 없을 때(유휴)는 말할 대상이 없어 칸을 세우지 않는다. */}
+      {!m.idle && (
+        <>
+          <div className="sb-seg cwd" title={m.cwd ?? undefined}>
+            <span className="lbl">{t('statusbar.cwd')}</span>
+            <span className={'val' + (m.cwd ? '' : ' na')}>{m.cwd ?? NA}</span>
           </div>
-        </div>
-      ))}
+          <div className="sb-seg os">
+            <span className="lbl">{t('statusbar.os')}</span>
+            <span className={'val' + (facts.os === NA ? ' na' : '')}>{facts.os}</span>
+          </div>
+          {/* W1 F10 / FB-0008 리소스 게이지. CPU 는 흐름(스파크라인), MEM·GPU 는 막대(시안 Z-final). */}
+          <div className="sb-seg gauge-seg cpu">
+            <span className="lbl">CPU</span>
+            <div className="gauge">
+              {/* 폴링이 한 바퀴 돌 때마다 점이 하나 늘고 왼쪽으로 흐른다 — 값이 어디로 가는
+                  중인지가 보인다. 그리는 함수는 하단 [시스템 모니터]와 같은 것을 쓴다. */}
+              <svg className="sb-spark cpu" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden>
+                {cpu && <polygon points={sparkArea(cpu.series, SPARK_W, SPARK_H)} />}
+                {cpu && <polyline points={sparkPoints(cpu.series, SPARK_W, SPARK_H)} />}
+              </svg>
+              <span className={'val' + (cpu ? '' : ' na')}>{cpu?.text ?? NA}</span>
+            </div>
+          </div>
+          {(['mem', 'gpu'] as const).map((key) => {
+            const g = gauge(key)
+            return (
+              <div key={key} className={'sb-seg gauge-seg ' + key}>
+                <span className="lbl">{key.toUpperCase()}</span>
+                <div className="gauge">
+                  <span className="sb-mbar" aria-hidden>
+                    <i style={{ width: `${g?.pct ?? 0}%` }} />
+                  </span>
+                  <span className={'val' + (g ? '' : ' na')}>{g?.text ?? NA}</span>
+                </div>
+              </div>
+            )
+          })}
+          <div className="sb-seg uptime">
+            <span className="lbl">{t('statusbar.uptime')}</span>
+            <span className={'val' + (facts.uptime === NA ? ' na' : '')}>{facts.uptime}</span>
+          </div>
+        </>
+      )}
       <div className="sb-right">
         {children}
-        <div className="sb-seg">
-          <span className="lbl">{t('statusbar.sessions')}</span>
-          <span className="val">{sessionCount}</span>
-        </div>
         {/* 좁아지면 접히는 두 칸(2026-08-17). 늘 참인 값이라 급할 때 볼 이유가 없다 —
-            자리를 두고 다투면 도구 버튼에 양보한다. */}
+            자리를 두고 다투면 도구 버튼에 양보한다. 2.0 순서: UTF-8 · 세션 n · 버전(시안 Z-final). */}
         <div className="sb-seg enc">
           <span className="lbl">{t('statusbar.encoding')}</span>
           <span className="val">UTF-8</span>
+        </div>
+        <div className="sb-seg">
+          <span className="lbl">{t('statusbar.sessions')}</span>
+          <span className="val">{sessionCount}</span>
         </div>
         {/* #98: 버전 칸이 곧 업데이트 알림이다(2026-09-04). 받을 것이 있으면 눌리는 버튼이 되고,
             없으면 예전 그대로 `v{version}` 만 보인다. `error`·`checking` 은 여기까지 안 온다 —
