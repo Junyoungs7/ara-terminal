@@ -18,7 +18,7 @@ export function defaultSnapshot(appVersion: string): WorkspaceSnapshot {
     tabGroups: [],
     aiSessions: [],
     ui: {
-      sidebar: { collapsed: false, activeTab: 'conn', width: 264 },
+      sidebar: { collapsed: false, activeTab: 'conn', width: 232 },
       font: { term: 'Nanum Gothic Coding', sizePx: 14, lineHeight: 1.58 },
       locale: 'ko',
       scrollback: DEFAULT_SCROLLBACK,

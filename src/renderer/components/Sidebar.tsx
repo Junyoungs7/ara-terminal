@@ -12,13 +12,16 @@ import type { TmuxListResult } from '../../shared/tmuxList'
 import { shownTab } from '../store/sidebar'
 import type { GroupLayout } from '../store/groups'
 import { t } from '../i18n'
+import { Compass, History, SlidersHorizontal, Wrench } from 'lucide-react'
+import { KEYMAP, type KeymapAction } from '../../shared/keymap'
+import { PastLogPanel } from './PastLogPanel'
 
-export type SidebarTab = 'conn' | 'file' | 'ai'
+export type SidebarTab = 'conn' | 'file' | 'ai' | 'past'
 
 // 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(우측 액티비티 바와 같은
 // IntelliJ 툴윈도우 방식 — 누르면 열리고 다시 누르면 닫힌다). 글리프는 옛 탭 것을 그대로 쓴다:
 // 자리를 옮겼다고 모양까지 바꾸면 같은 것인 줄 모른다.
-const TAB_ICON: Record<SidebarTab, () => JSX.Element> = {
+const TAB_ICON: Record<Exclude<SidebarTab, 'past'>, () => JSX.Element> = {
   conn: () => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="4" width="18" height="7" rx="1.5" />
@@ -43,8 +46,17 @@ const TAB_ICON: Record<SidebarTab, () => JSX.Element> = {
 const TAB_LABEL: Record<SidebarTab, string> = {
   conn: 'sidebar.tab.conn',
   file: 'sidebar.tab.file',
-  ai: 'sidebar.tab.ai'
+  ai: 'sidebar.tab.ai',
+  past: 'pastlog.title'
 }
+
+/** 레일 툴팁 — 이름 + (있으면) 단축키. 끝의 `(조합)` 은 툴팁이 뱃지로 떼어 낸다(store/tooltip.ts splitTip). */
+const isMac = navigator.userAgent.includes('Mac')
+function railTip(label: string, action?: KeymapAction): string {
+  const b = action ? KEYMAP.find((k) => k.action === action) : undefined
+  return b ? `${label} (${isMac ? b.mac : b.win})` : label
+}
+const TAB_KEY: Partial<Record<SidebarTab, KeymapAction>> = { file: 'fileTree.toggle' }
 
 /**
  * 좌측 아이콘 레일 — 사이드바의 여닫이. 우측 `ActivityBar` 와 **같은 규칙**이고, 클래스만 다르다
@@ -56,38 +68,73 @@ export function SidebarRail({
   active,
   collapsed,
   fileEnabled,
-  onPick
+  onPick,
+  explorerOpen,
+  onExplorer,
+  bottomOpen,
+  onBottom,
+  settingsOpen,
+  onSettings
 }: {
   active: SidebarTab
   collapsed: boolean
   /** 세션이 없으면 파일 트리가 읽을 파일시스템이 없다 — 못 누르게 막고 이유를 툴팁에 적는다. */
   fileEnabled: boolean
   onPick: (tab: SidebarTab) => void
+  /** 2.0: 우측 액티비티 바가 없어지며 왼쪽으로 온 셋 — 탐색기 창 · 하단 패널(서버 도구) · 설정. */
+  explorerOpen: boolean
+  onExplorer: () => void
+  bottomOpen: boolean
+  onBottom: () => void
+  settingsOpen: boolean
+  onSettings: () => void
 }) {
   // 패널이 실제로 무엇을 그리는지와 같은 값을 봐야 한다 — 아래 Sidebar 도 이 함수를 쓴다.
   const shown = shownTab(active, fileEnabled)
+  const tab = (id: SidebarTab, Icon: () => JSX.Element) => {
+    const on = !collapsed && shown === id
+    const disabled = id === 'file' && !fileEnabled
+    return (
+      <button
+        key={id}
+        type="button"
+        className={'lrail-item' + (on ? ' active' : '')}
+        role="tab"
+        aria-selected={on}
+        data-tab={id}
+        disabled={disabled}
+        title={disabled ? t('sidebar.tab.fileNeedsSession') : railTip(t(TAB_LABEL[id]), TAB_KEY[id])}
+        onClick={() => onPick(id)}
+      >
+        <Icon />
+      </button>
+    )
+  }
+  // 사이드바 탭이 아닌 것(창·하단 패널·설정 덮개) — 여닫이 버튼이라 tab 이 아니라 눌림(aria-pressed)이다.
+  const tool = (id: string, on: boolean, tip: string, onClick: () => void, Icon: () => JSX.Element) => (
+    <button
+      key={id}
+      type="button"
+      className={'lrail-item' + (on ? ' active' : '')}
+      aria-pressed={on}
+      data-activity={id}
+      title={tip}
+      onClick={onClick}
+    >
+      <Icon />
+    </button>
+  )
+  // 순서는 시안(Z-final) 그대로: 연결 · 파일 · 탐색기 · AI 작업대 · 서버 도구 · 지난 세션 … 아래 설정.
   return (
     <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
-      {(['conn', 'file', 'ai'] as const).map((id) => {
-        const Icon = TAB_ICON[id]
-        const on = !collapsed && shown === id
-        const disabled = id === 'file' && !fileEnabled
-        return (
-          <button
-            key={id}
-            type="button"
-            className={'lrail-item' + (on ? ' active' : '')}
-            role="tab"
-            aria-selected={on}
-            data-tab={id}
-            disabled={disabled}
-            title={disabled ? t('sidebar.tab.fileNeedsSession') : t(TAB_LABEL[id])}
-            onClick={() => onPick(id)}
-          >
-            <Icon />
-          </button>
-        )
-      })}
+      {tab('conn', TAB_ICON.conn)}
+      {tab('file', TAB_ICON.file)}
+      {tool('explorer', explorerOpen, railTip(t('wb.title'), 'explorer.toggle'), onExplorer, () => <Compass />)}
+      {tab('ai', TAB_ICON.ai)}
+      {tool('bottombar', bottomOpen, t('bottom.bar.toggle'), onBottom, () => <Wrench />)}
+      {tab('past', () => <History />)}
+      <div className="lrail-spacer" />
+      {tool('settings', settingsOpen, railTip(t('settings.open'), 'settings.open'), onSettings, () => <SlidersHorizontal />)}
     </div>
   )
 }
@@ -133,7 +180,9 @@ export function Sidebar({
   onBenchOpen,
   onBenchRemove,
   onBenchSplit,
-  onNewBench
+  onNewBench,
+  onPastClose,
+  onPastOpenCurrent
 }: {
   active: SidebarTab
   collapsed: boolean
@@ -180,6 +229,9 @@ export function Sidebar({
   onBenchRemove: (s: AiSessionState) => void
   onBenchSplit: (s: AiSessionState) => void
   onNewBench: () => void
+  /** 2.0 [지난 세션] — 우측 레일에서 사이드바로 왔다. 닫기 = 사이드바 접기, [진행 중] = 하단 [세션 기록]. */
+  onPastClose: () => void
+  onPastOpenCurrent: () => void
   // F14: 터미널 Ctrl+V 파일 업로드가 시작될 때 [파일] 탭을 펼쳐 전송 큐를 보여 준다.
   onRevealFiles: () => void
   // 파일 삭제 확인·새 폴더 이름 입력(Shell 의 단일 Dialog 인스턴스).
@@ -192,8 +244,11 @@ export function Sidebar({
   const tab: SidebarTab = shownTab(active, !!fileSession)
   return (
     <div className={'sidebar' + (collapsed ? ' collapsed' : '')}>
+      {/* 2.0 [지난 세션] — 자기 머리(제목·새로고침·닫기)가 있어 사이드바 머리 대신 그것을 쓴다(높이 같음). */}
+      {tab === 'past' && <PastLogPanel open={!collapsed} onClose={onPastClose} onOpenCurrent={onPastOpenCurrent} />}
       {/* 옛 [연결|파일] 탭이 있던 자리. 탭은 레일로 나갔고(2026-08-19) 지금 보고 있는 패널의
           **이름**과 그 패널의 동작만 남는다 — IntelliJ 툴윈도우 머리와 같은 모양이다. */}
+      {tab !== 'past' && (
       <div className="sb-tabs">
         <span className="sb-head">{t(TAB_LABEL[tab])}</span>
         <div className="sb-tab-spacer" />
@@ -217,6 +272,7 @@ export function Sidebar({
         {/* 새로고침 버튼은 제거했다(R1.5): 트리는 profiles/sessions 스토어에서 파생되는 상태라
             다시 읽어올 원격 소스가 없고, 실제 배선도 ＋(연결 관리자 열기)와 같아 중복 버튼이었다. */}
       </div>
+      )}
       <div className={'sb-panel' + (tab === 'conn' ? ' active' : '')} role="tabpanel">
         <ConnTree
           profiles={profiles}

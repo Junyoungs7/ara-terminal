@@ -170,6 +170,41 @@
 .tb-spacer {
   flex: 1;
 }
+/* 2.0 [채팅] — 아라 채팅 열고 닫기(시안 Z-final `.tb-btn`). 우측 액티비티 바의 [아라]가 여기로 왔다. */
+.tb-chat {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 24px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: var(--dur-quick);
+}
+.tb-chat svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.tb-chat:hover,
+.tb-chat.on {
+  background: var(--glass);
+}
+.tb-chat kbd {
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
 .tb-quick {
   -webkit-app-region: no-drag;
   display: flex;
@@ -204,7 +239,8 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  flex: 0 1 460px;
+  /* 2.0: 가운데 360px(시안 Z-final `.kbtn`). */
+  flex: 0 1 360px;
   min-width: 0;
   min-height: 23px;
   padding: 0 var(--sp-4);
@@ -383,7 +419,7 @@
 /* ── 미들 (아이콘 레일 + 사이드바 + 메인) ── */
 .middle {
   /* 레일 폭은 여기 산다 — `.lrail` 자신과 `.sb-resizer` 의 left 계산이 같은 값을 봐야 한다. */
-  --lrail-w: 40px;
+  --lrail-w: 44px;
   display: flex;
   min-height: 0;
   overflow: hidden;
@@ -2168,11 +2204,12 @@
   padding: var(--sp-4) 0;
 }
 .lrail-item {
-  width: 30px;
-  min-height: 30px;
+  position: relative;
+  width: 32px;
+  min-height: 32px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   border: none;
   background: none;
   color: var(--text-lo);
@@ -2184,13 +2221,27 @@
   height: var(--sb-icon);
 }
 .lrail-item:hover:not(:disabled) {
-  background: var(--bg-overlay);
-  color: var(--accent-bright);
+  background: var(--glass-hover);
+  color: var(--text-hi);
 }
+/* 2.0 레일 활성 — 글라스 면 + 왼쪽 2px 네온 블루 막대(시안 Z-final `.rbtn.on`). 막대는 레일 가장자리에 붙는다. */
 .lrail-item.active {
-  color: var(--accent-bright);
-  background: var(--bg-raised);
-  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--text-hi);
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.lrail-item.active::before {
+  content: '';
+  position: absolute;
+  left: calc((var(--lrail-w) - 32px) / -2);
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  background: var(--accent);
+}
+/* 위 묶음(연결…지난 세션)과 맨 아래 [설정]을 가른다. */
+.lrail-spacer {
+  flex: 1;
 }
 /* 세션이 없을 때의 [파일]. §1.3 이중 감쇠 금지 — 토큰 위에 opacity 를 또 곱하지 않는다.
    못 누르는 것과 안 보이는 것은 다르다(툴팁에 이유가 적혀 있어 읽혀야 뜻이 있다). */
@@ -5559,6 +5610,12 @@ button.sb-seg.upd:hover .val {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+/* 2.0 [지난 세션]이 우측 레일에서 사이드바 안으로 왔다 — 폭은 사이드바가 정한다. */
+.sidebar .monitor-panel {
+  width: auto;
+  flex: 1 1 auto;
+  border-left: none;
 }
 .mon-head {
   height: var(--row-tabbar);

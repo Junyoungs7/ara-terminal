@@ -633,6 +633,8 @@
   "about.version": "버전",
   "about.platform": "플랫폼",
   "titlebar.help": "단축키 치트시트 (?)",
+  "titlebar.chat": "채팅",
+  "titlebar.chat.tip": "아라 채팅 열기/닫기",
   "titlebar.min": "최소화",
   "titlebar.max": "최대화 / 이전 크기",
   "titlebar.close": "닫기",

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { BrandOrb } from './BrandOrb'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
-import { dispatchAction } from '../../shared/keymap'
+import { dispatchAction, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
 
 // 커스텀 프레임리스 타이틀바 (design-system §4.1/§8). 트래픽 라이트는 no-drag.
@@ -25,7 +25,8 @@ export function TitleBar({
   onCommand,
   omni,
   title,
-  reportNews = 0
+  reportNews = 0,
+  chat
 }: {
   /** 없으면 메뉴바·[?] 를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
@@ -36,6 +37,8 @@ export function TitleBar({
   title?: string
   /** R16: 새 소식이 있는 내 신고 수. 0 보다 크면 [내 신고] 가 든 메뉴 제목에 빨간 점, 항목 라벨에 개수. */
   reportNews?: number
+  /** 2.0: 오른쪽 [채팅] 버튼 — 아라 채팅 열고 닫기(단축키 ai.toggle 과 같은 동작). 없으면 안 그린다(세션 창). */
+  chat?: { open: boolean; onToggle: () => void }
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(버튼 왼쪽 아래).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -44,6 +47,9 @@ export function TitleBar({
     const r = el.getBoundingClientRect()
     setOpen({ index, x: r.left, y: r.bottom })
   }
+
+  const chatBind = KEYMAP.find((k) => k.action === 'ai.toggle')
+  const chatKey = (navigator.userAgent.includes('Mac') ? chatBind?.mac : chatBind?.win)?.replace(/\+/g, ' ') ?? ''
 
   const glyph = (d: string) => (
     <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
@@ -87,6 +93,23 @@ export function TitleBar({
       {/* 세션 창 — 검색창 자리에 **이 창이 무엇인지**를 놓는다(작업표시줄 제목과 같은 문구). */}
       {title && <div className="tb-title">{title}</div>}
       <div className="tb-spacer" />
+      {/* 2.0: 오른쪽 = 아라 채팅만. 우측 액티비티 바가 없어져 여닫는 자리가 여기 하나다(시안 Z-final). */}
+      {chat && (
+        <button
+          type="button"
+          className={'tb-chat' + (chat.open ? ' on' : '')}
+          aria-pressed={chat.open}
+          data-action="chat.toggle"
+          title={t('titlebar.chat.tip')}
+          onClick={chat.onToggle}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+          </svg>
+          <span>{t('titlebar.chat')}</span>
+          <kbd>{chatKey}</kbd>
+        </button>
+      )}
       <div className="tb-quick">
         {/* FB-ui2(FB-0006): 아라·기어 아이콘을 우측 액티비티 바로 옮겼다(중복 진입점 정리 —
             메뉴(File>설정)·단축키(Alt+A, Ctrl+,)는 그대로 유지, ActivityBar.tsx 참고). */}

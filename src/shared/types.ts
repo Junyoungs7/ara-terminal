@@ -442,7 +442,8 @@ export type UiPrefs = {
 // 옛 스냅샷에 'monitor' 가 남아 있을 수 있어 읽는 쪽(store/sidebar.ts)이 그 값을 conn 으로 되돌린다.
 export type SidebarState = {
   collapsed: boolean
-  activeTab: 'conn' | 'file' | 'ai'
+  /** 'past' = [지난 세션](2.0 에서 우측 레일 → 사이드바). 세션 수명 동안만 — 하이드레이트가 conn 으로 되돌린다. */
+  activeTab: 'conn' | 'file' | 'ai' | 'past'
   width: number
   /**
    * #13(2026-10-08): 하단 도구 패널 — 탭 이름 = 그 탭으로 열려 있었다, null = 접혀 있었다,

@@ -8,12 +8,10 @@ import { AiPanel } from './AiPanel'
 import { AraChatPanel } from './AraChatPanel'
 import { AiBootstrapModal } from './AiBootstrapModal'
 import { WorkProfileModal } from './WorkProfileModal'
-import { ActivityBar } from './ActivityBar'
 import { PortMonitor } from './PortMonitor'
 import { BottomPanel } from './BottomPanel'
 import { LogPanel } from './LogPanel'
 import { AppLogPanel } from './AppLogPanel'
-import { PastLogPanel } from './PastLogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
 import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
@@ -47,7 +45,6 @@ import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } f
 import { MAIN_WIN_ID } from '@shared/sessionWin'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, removeFromLayout, renameInLayout, useGroupList, type GroupLayout } from '../store/groups'
-import { SHOWN_ACTIVITIES, type ActivityId } from '../store/activityBar'
 import type { TreeTarget } from './ConnTree'
 import { cdCommand } from './filePath'
 import type { MenuCommandId, TreeActionId } from '../interactions/actions'
@@ -56,7 +53,6 @@ import { buildTmuxInput } from '../../shared/tmux'
 import {
   MCP_AUTO_ALLOW_MINUTES,
   isBottomId,
-  isRailId,
   type BottomId,
   type ConnectionProfile,
   type WorkProfile,
@@ -155,12 +151,6 @@ export function Shell() {
   // #125: 아라 대화를 **한 번이라도 열었나**. 아래 렌더 참고 — 첫 열림 전까지는 붙이지 않는다.
   const araEver = useRef(false)
   if (aiOpen) araEver.current = true
-  // #86: 지난 세션 — 우측 레일(세션 목록은 세로 카드다). 현재 기록은 하단 [세션 기록]이다.
-  const pastLogOpen = rail === 'pastlog'
-  const monitorOpen = bottom === 'monitor'
-  // #83: 시스템 모니터는 **서버 자원**이라 아래다(§4.8 — 내용이 자리를 정한다).
-  const sysOpen = bottom === 'sys'
-  const logOpen = bottom === 'log'
   /**
    * 2026-08-27 [서버 로그] 탭 — 세션마다 **지금 보고 있는 로그 파일**.
    * 세션별로 나누는 이유는 하단바의 규칙 그대로다: "터미널은 A서버인데 하단은 B서버"를 만들지
@@ -205,8 +195,6 @@ export function Shell() {
   // FB-ui2: 설정 창 열림 상태의 실제 주인은 MainArea(Ctrl+, keydown 이 거기 배선돼 있다) — 액티비티
   // 바의 활성 표시만을 위한 미러(MainArea.onSettingsOpenChange 가 채운다).
   const [settingsActive, setSettingsActive] = useState(false)
-  // 명령어 북도 같은 미러다(2026-08-22 제보 9번으로 액티비티 바 항목이 됐다).
-  const [cmdbookActive, setCmdbookActive] = useState(false)
   // 설정 [AI] 의 CLI 기본 플래그. settingsActive 와 같은 미러다(prefs 의 주인은 MainArea) —
   // 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
   const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
@@ -677,7 +665,8 @@ export function Shell() {
           toggleBottom('ctr')
           return
         case 'panel.pastlog':
-          toggleRail('pastlog')
+          // 2.0: [지난 세션]은 왼쪽 사이드바 안이다(우측 레일 폐지).
+          updateSidebar((s) => nextSidebar(s, 'past'))
           return
         case 'help.about':
           void ask({
@@ -1451,57 +1440,13 @@ export function Shell() {
     ]
   )
 
-  // FB-ui2(FB-0006): 우측 액티비티 바 상태·토글. **레일 여섯은 서로 배타적이다**(#79) — 위 rail
-  // 하나가 주인이라 다른 것을 누르면 앞엣것이 닫힌다. 떠 있는 창(탐색기·콘솔)은 레일이 아니라
-  // 그대로 각자 토글한다. [설정]만 진짜 소유자가 MainArea라
-  // dispatchAction 으로 같은 keydown 경로를 태운다(타이틀바 기어가 하던 것과 동일 — 새 배선 없음).
-  const activityState = useMemo(
-    () => ({
-      ai: aiOpen,
-      monitor: monitorOpen,
-      sys: sysOpen,
-      // #84: 하단 탭 다섯 — 열린 것 하나만 활성이다(하단도 한 번에 하나만 그린다).
-      ps: bottom === 'ps',
-      svc: bottom === 'svc',
-      disk: bottom === 'disk',
-      pkg: bottom === 'pkg',
-      ctr: bottom === 'ctr',
-      k8s: bottom === 'k8s',
-      log: logOpen,
-      applog: bottom === 'applog',
-      pastlog: pastLogOpen,
-      preview: previewOpen,
-      explorer: explorerOpen,
-      cmdbook: cmdbookActive,
-      settings: settingsActive
-    }),
-    [
-      aiOpen,
-      monitorOpen,
-      sysOpen,
-      bottom,
-      logOpen,
-      pastLogOpen,
-      previewOpen,
-      explorerOpen,
-      cmdbookActive,
-      settingsActive
-    ]
-  )
-  const onActivityToggle = useCallback((id: ActivityId) => {
-    if (isRailId(id)) toggleRail(id)
-    else if (isBottomId(id)) toggleBottom(id)
-    else if (id === 'explorer') setExplorerOpen((o) => !o)
-    // 설정·명령어 북은 오버레이다 — 단축키와 **같은 길**로 보낸다(바 전용 배선을 만들지 않는다).
-    else if (id === 'settings') dispatchAction('settings.open')
-    else if (id === 'cmdbook') dispatchAction('commandBook.toggle')
-  }, [])
-
   return (
     <div className="app">
       <TitleBar
         onCommand={onMenuCommand}
         reportNews={myReports.unread}
+        // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
+        chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
         // (dispatchAction / 메뉴 명령 / connectProfile) — 팔레트 전용 배선을 만들지 않는다.
         omni={
@@ -1537,6 +1482,13 @@ export function Shell() {
           collapsed={sidebar.collapsed}
           fileEnabled={!!activeSession && activeSession.type !== 'rdp'}
           onPick={(tab) => updateSidebar((s) => nextSidebar(s, tab))}
+          explorerOpen={explorerOpen}
+          onExplorer={() => setExplorerOpen((o) => !o)}
+          bottomOpen={bottom !== null}
+          onBottom={toggleBottomBar}
+          settingsOpen={settingsActive}
+          // 설정은 덮개다 — 단축키와 **같은 길**로 보낸다(레일 전용 배선을 만들지 않는다).
+          onSettings={() => dispatchAction('settings.open')}
         />
         <Sidebar
           active={sidebar.activeTab}
@@ -1617,6 +1569,8 @@ export function Shell() {
           }}
           onBenchSplit={(b) => void splitBench(b)}
           onNewBench={() => void runAiCliNow()}
+          onPastClose={() => updateSidebar({ collapsed: true })}
+          onPastOpenCurrent={() => openBottom('log')}
           onCdTerminal={(absPath) => {
             // 트리→터미널 동기: 로컬·SSH 모두 cd 전송(R7 — 로컬 셸도 파일 탭을 쓴다).
             if (activeSession) window.ev.session.input(activeSession.id, cdCommand(absPath))
@@ -1745,7 +1699,6 @@ export function Shell() {
             if (text) setAiPrefill({ text, at: Date.now() })
           }}
           onSettingsOpenChange={setSettingsActive}
-          onCommandBookOpenChange={setCmdbookActive}
           onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
           onAiCliFlags={setAiCliFlags}
@@ -1758,16 +1711,6 @@ export function Shell() {
           sessions={sessions.sessions}
           activeId={sessions.activeId}
           onSelect={selectSession}
-        />
-        {/* #86 지난 세션 — 로그 폴더를 읽어 목록을 낸다(새 저장소 없음). 현재 세션 기록은
-            하단 [세션 기록] 탭이고, 여기서 [진행 중] 줄을 누르면 그쪽으로 보낸다. */}
-        <PastLogPanel
-          open={pastLogOpen}
-          onClose={() => closeRail('pastlog')}
-          onOpenCurrent={() => {
-            closeRail('pastlog')
-            openBottom('log')
-          }}
         />
         {/* #125 아라 대화 v2 — 같은 자리(ai 레일). **처음 열 때까지 붙이지 않는다**: 마운트하는
             순간 claude 프로세스가 뜨는데(≈20초) 앱 부팅마다 그걸 띄울 이유가 없다. 한 번 열면
@@ -1806,17 +1749,6 @@ export function Shell() {
             }
           />
         )}
-        {/* FB-ui2(FB-0006): 우측 최외곽 고정 — 위 우측 레일들 바깥. */}
-        <ActivityBar
-          items={SHOWN_ACTIVITIES}
-          state={activityState}
-          onToggle={onActivityToggle}
-          // #132: [AI 세션] 레일이 없어졌지만 **점은 남는다** — 조용한 AI 가 있으면 사이드바
-          // [AI] 를 보라는 신호다(감시는 화면 없이 계속 돈다).
-          badges={{}}
-          bottomOpen={bottom !== null}
-          onToggleBottomBar={toggleBottomBar}
-        />
       </div>
       {/* #74: 떠 있는 창 둘은 **언마운트하지 않는다.** 조건부 렌더였을 때는 닫는 순간 탭·경로·
           표의 정렬·검색이 통째로 날아갔다(프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다).

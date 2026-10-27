@@ -11,7 +11,7 @@ import { cleanConnCollapsed, isBottomId, type BottomId, type SidebarState } from
 export const SIDEBAR_MIN = 180
 export const SIDEBAR_MAX = 480
 
-export const DEFAULT_SIDEBAR: SidebarState = { collapsed: false, activeTab: 'conn', width: 264 }
+export const DEFAULT_SIDEBAR: SidebarState = { collapsed: false, activeTab: 'conn', width: 232 }
 
 export const clampSidebarWidth = (w: number): number =>
   Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)))
@@ -38,7 +38,8 @@ export function nextSidebar(prev: SidebarState, tab: SidebarState['activeTab']):
  */
 export function shownTab(activeTab: SidebarState['activeTab'], fileEnabled: boolean): SidebarState['activeTab'] {
   // #129 [AI] 작업대 목록은 세션이 없어도 읽을 것이 있다(껐다 켜도 남는 목록이다) — 안 떨어뜨린다.
-  if (activeTab === 'ai') return 'ai'
+  // 2.0 [지난 세션]도 로그 폴더를 읽는다 — 세션과 무관하다.
+  if (activeTab === 'ai' || activeTab === 'past') return activeTab
   return fileEnabled ? activeTab : 'conn'
 }
 
