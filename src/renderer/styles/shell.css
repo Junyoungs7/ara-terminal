@@ -346,6 +346,15 @@
   font-family: var(--ui);
   font-size: var(--fs-md);
 }
+/* 2.0: 설정 › 기능에서 꺼진 기능 — 검색엔 남기고 점선 배지(시안 Z-palette). */
+.cp-off {
+  flex: none;
+  padding: 0 var(--sp-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
 .cp-empty,
 .cp-foot {
   color: var(--text-mid);

@@ -2,6 +2,7 @@ import { KEYMAP, type KeymapAction } from '../../shared/keymap'
 import { MENUBAR, type MenuCommandId } from '../interactions/actions'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { t } from '../i18n'
+import { featureOf, type FeatureId, type FeatureShown } from '@shared/features'
 
 // F31 통합 검색(커맨드 팔레트) — 준영님 요청(2026-08-13):
 // "vscode처럼 상단에 통합 검색 버튼 제공하여 거기서 바로 킬 수 있도록, 프로필도 거기서 켜거나,
@@ -27,6 +28,8 @@ export type PaletteItem = {
   hint?: string
   /** 검색에 걸리지만 화면에는 안 보이는 낱말(영문 이름 등). */
   alias?: string
+  /** 2.0: 설정 › 기능에서 꺼진 기능. 검색에는 남고 배지가 붙는다(byDefault = 기본 숨김인 것). */
+  off?: { id: FeatureId; byDefault: boolean }
   run: PaletteRun
 }
 
@@ -58,9 +61,15 @@ export const PALETTE_GROUPS: readonly { kind: PaletteKind; key: string }[] = [
 export function paletteItems(
   profiles: readonly ConnectionProfile[],
   workProfiles: readonly WorkProfile[],
-  isMac: boolean
+  isMac: boolean,
+  shown?: FeatureShown
 ): PaletteItem[] {
   const out: PaletteItem[] = []
+  // 꺼진 기능도 **빼지 않는다** — 숨긴 기능을 찾는 길이 여기다(0단계 결정). 표시만 붙인다.
+  const offOf = (id: string): PaletteItem['off'] => {
+    const f = featureOf(id)
+    return f && shown && !shown[f.id] ? { id: f.id, byDefault: !!f.hidden } : undefined
+  }
 
   // ① 단축키 있는 기능. **implemented 인 것만** — 눌러도 아무 일 없는 항목을 검색 결과에 올리지 않는다
   //    (치트시트가 이미 같은 규칙을 쓴다).
@@ -72,6 +81,7 @@ export function paletteItems(
       label: k.labelKo,
       hint: isMac ? k.mac : k.win,
       alias: k.action,
+      off: offOf(k.action),
       run: { do: 'action', action: k.action }
     })
   }
@@ -94,6 +104,7 @@ export function paletteItems(
         label,
         hint: menu.title,
         alias: e.command,
+        off: offOf(e.command),
         run: { do: 'command', command: e.command }
       })
     }

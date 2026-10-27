@@ -38,3 +38,14 @@ describe('기능 표시', () => {
     expect(ids({ ...featuresOf(undefined), monitor: false })).not.toContain('panel.ports')
   })
 })
+
+describe('통합 검색 — 꺼진 기능', () => {
+  it('목록에서 빠지지 않고 배지(off)가 붙는다, 기본 숨김은 byDefault', async () => {
+    const { paletteItems } = await import('../src/renderer/store/palette')
+    const shown = { ...featuresOf(undefined), monitor: false }
+    const items = paletteItems([], [], false, shown)
+    expect(items.find((i) => i.id === 'command:panel.k8s')?.off).toEqual({ id: 'k8s', byDefault: true })
+    expect(items.find((i) => i.id === 'command:panel.ports')?.off).toEqual({ id: 'monitor', byDefault: false })
+    expect(items.find((i) => i.id === 'command:panel.sysmon')?.off).toBeUndefined()
+  })
+})

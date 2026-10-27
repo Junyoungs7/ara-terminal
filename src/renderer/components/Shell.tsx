@@ -1448,6 +1448,8 @@ export function Shell() {
             onClose={() => setPaletteOpen(false)}
             profiles={profiles}
             workProfiles={work.list}
+            features={features}
+            onEnable={(id) => mainRef.current?.showFeature(id)}
             onRun={(run) => {
               if (run.do === 'action') dispatchAction(run.action)
               else if (run.do === 'command') onMenuCommand(run.command)

@@ -3,6 +3,7 @@ import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchBinding } from '../../shared/keymap'
 import { filterPalette, groupPalette, moveCursor, paletteItems, PALETTE_GROUPS, type PaletteRun } from '../store/palette'
 import { t } from '../i18n'
+import type { FeatureId, FeatureShown } from '@shared/features'
 
 // F31 통합 검색 — 타이틀바에 **박혀 있는 검색창**이다. 목록·검색·묶기는 store/palette.ts 의
 // 순수 함수이고 여기는 그리기만 한다.
@@ -21,11 +22,24 @@ type Props = {
   profiles: readonly ConnectionProfile[]
   workProfiles: readonly WorkProfile[]
   onRun: (run: PaletteRun) => void
+  /** 2.0 설정 › 기능 — 꺼진 기능에 배지를 붙인다. */
+  features?: FeatureShown
+  /** Ctrl+Enter — 꺼진 기능을 설정에서 켠다(그리고 실행한다). */
+  onEnable?: (id: FeatureId) => void
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 
-export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, onRun }: Props): JSX.Element {
+export function CommandPalette({
+  open,
+  onOpen,
+  onClose,
+  profiles,
+  workProfiles,
+  onRun,
+  features,
+  onEnable
+}: Props): JSX.Element {
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -35,7 +49,10 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
   // 검색창 사각형에 맞춘다(폭까지 같게 — VS Code 와 같은 모양).
   const [drop, setDrop] = useState<{ left: number; top: number; width: number } | null>(null)
 
-  const items = useMemo(() => paletteItems(profiles, workProfiles, isMac), [profiles, workProfiles])
+  const items = useMemo(
+    () => paletteItems(profiles, workProfiles, isMac, features),
+    [profiles, workProfiles, features]
+  )
   const shown = useMemo(() => filterPalette(items, q), [items, q])
   const groups = useMemo(() => groupPalette(shown), [shown])
   // 커서는 **화면에 보이는 순서**를 따라야 한다 — 검색 순위대로 정렬된 shown 을 그대로 세면
@@ -84,9 +101,10 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
     listRef.current?.querySelector('.cp-item.on')?.scrollIntoView({ block: 'nearest' })
   }, [cursor, q])
 
-  const pick = (i: number): void => {
+  const pick = (i: number, enable = false): void => {
     const item = ordered[i]
     if (!item) return
+    if (enable && item.off) onEnable?.(item.off.id)
     // **실행 전에 포커스를 내려놓는다.** onClose 는 React 상태라 이번 틱에 반영되지 않는데,
     // 그 사이에 실행된 기능이 "입력칸에 타이핑 중이면 무시"로 스스로를 막을 수 있다
     // (치트시트의 `?` 가 정확히 그렇다 — 이걸 빠뜨려 PAL-5 가 빨갰다).
@@ -159,7 +177,7 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
             setCursor((c) => moveCursor(c, -1, ordered.length))
           } else if (e.key === 'Enter') {
             e.preventDefault()
-            pick(cursor)
+            pick(cursor, e.ctrlKey || e.metaKey)
           }
         }}
       />
@@ -193,6 +211,11 @@ export function CommandPalette({ open, onOpen, onClose, profiles, workProfiles, 
                       onClick={() => pick(i)}
                     >
                       <span className="cp-label">{item.label}</span>
+                      {item.off && (
+                        <span className="cp-off">
+                          {t(item.off.byDefault ? 'palette.off.default' : 'palette.off')}
+                        </span>
+                      )}
                       {item.hint && <span className="cp-hint">{item.hint}</span>}
                     </div>
                   )
