@@ -205,7 +205,7 @@
   "file.stat.filtered": "‘{q}’ 검색 결과",
   "file.paste.empty": "붙여넣을 항목이 없습니다.",
   "paste.noQueue": "이 세션에는 파일 목록이 열려 있지 않아 경로만 붙여넣었습니다. 사이드바 [파일] 탭을 열고 다시 시도해 보세요.",
-  "wb.title": "서버 작업대",
+  "wb.title": "탐색기",
   "wb.close": "작업대 닫기 (Ctrl+Shift+O)",
   "wb.home": "홈",
   "explorer.maximize": "최대화",
