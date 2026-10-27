@@ -174,21 +174,14 @@ export function StatusBar({
   const m = statusModel(session, profile, conn, cwd, stats, history)
   const facts = hostFacts(session, useOverview(session))
   const u = updateSeg(update ?? null, version)
-  // 업데이트를 말하는 동안에는 브랜드 라벨을 뺀다 — 상태바는 좁고, 지금 할 말은 "A.R.A" 가 아니다.
-  const verBody = (
-    <>
-      {!u.tone && <span className="lbl">{t('app.name')}</span>}
-      <span className="val">{u.text}</span>
-    </>
-  )
-  const label = m.idle ? t('statusbar.state') : session?.type === 'ssh' ? t('statusbar.host') : t('statusbar.shell')
+  // 2.0 4단계: 라벨 없는 값 위주(시안 Z-final) — 호스트·인코딩·버전 칸의 라벨을 뺐다. 선택자(.lbl·.val)는 그대로.
+  const verBody = <span className="val">{u.text}</span>
   const gauge = (key: Gauge['key']) => m.gauges.find((g) => g.key === key)
   const cpu = gauge('cpu')
   return (
     <div className="statusbar">
       <div className={'sb-seg host' + (m.idle ? ' idle' : '')}>
         {m.dot && <span className={'sb-dot ' + m.dot} />}
-        <span className="lbl">{label}</span>
         <span className="val">{m.primary}</span>
       </div>
       {/* 2.0: 활성 탭 기준 서버 정보 — 칸은 늘 같은 자리에 서고, 값이 없으면 — 만 찍는다(시안 Z-final).
@@ -241,7 +234,6 @@ export function StatusBar({
         {/* 좁아지면 접히는 두 칸(2026-08-17). 늘 참인 값이라 급할 때 볼 이유가 없다 —
             자리를 두고 다투면 도구 버튼에 양보한다. 2.0 순서: UTF-8 · 세션 n · 버전(시안 Z-final). */}
         <div className="sb-seg enc">
-          <span className="lbl">{t('statusbar.encoding')}</span>
           <span className="val">UTF-8</span>
         </div>
         <div className="sb-seg">

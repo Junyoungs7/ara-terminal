@@ -100,7 +100,8 @@
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-5);
+  /* 오른쪽은 0 — 창 버튼이 창 모서리에 붙는다(시안). */
+  padding: 0 0 0 var(--sp-5);
   background: linear-gradient(180deg, var(--bg-surface), var(--bg-canvas));
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
@@ -374,55 +375,39 @@
 
 .tb-controls {
   display: flex;
-  gap: var(--sp-5);
+  align-self: stretch;
   margin-left: var(--sp-4);
   -webkit-app-region: no-drag;
 }
-/* 창 컨트롤은 **다른 갈래로 남긴다**(M3). 패널 닫기와 생김새를 맞추지 않는다 — 신호등은 OS 창의
-   관용구이고, 여기서만 색이 곧 기능이다(빨강=닫기). 공유하는 것은 <button> 리셋뿐이다. */
+/* 창 컨트롤(2.0 4단계 — 시안 Z-final). 신호등 점을 버리고 얇은 선 아이콘 − □ × 를 타이틀바 높이
+   그대로 세운다 — 칸 전체가 클릭 표적이라 예전의 ::before 확장이 필요 없다. 색은 닫기 호버 하나만. */
 .tb-ctl {
-  width: var(--tb-dot);
-  height: var(--tb-dot);
+  width: 38px;
   border: 0;
-  border-radius: 50%;
+  background: none;
+  color: var(--text-lo);
   cursor: pointer;
   transition: var(--dur-quick);
   display: grid;
   place-items: center;
-  position: relative;
   -webkit-app-region: no-drag;
 }
-/* 점보다 넓은 클릭 표적. 창을 닫으려다 빗나가는 것이 크기 불만의 실제 알맹이다 —
-   점만 키우면 타이틀바 높이에 갇힌다(위아래로는 여기서만 넓힐 수 있다). */
-.tb-ctl::before {
-  content: '';
-  position: absolute;
-  inset: -6px -3px;
-}
-/* 글리프는 클러스터에 호버할 때만(macOS 관례). 점 안에 아이콘을 상시 그리면
-   색으로 읽히던 신호등이 잡음이 된다. */
 .tb-ctl svg {
-  width: var(--tb-dot);
-  height: var(--tb-dot);
-  opacity: 0;
-  color: var(--on-dot);
-  transition: opacity var(--dur-quick);
+  width: 14px;
+  height: 14px;
   pointer-events: none;
 }
-.tb-controls:hover .tb-ctl svg {
-  opacity: 1;
-}
-.tb-ctl.min {
-  background: var(--warn);
-}
-.tb-ctl.max {
-  background: var(--ok);
-}
-.tb-ctl.close {
-  background: var(--err);
+.tb-ctl.max svg {
+  width: 12px;
+  height: 12px;
 }
 .tb-ctl:hover {
-  filter: brightness(1.15);
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+}
+.tb-ctl.close:hover {
+  background: var(--err);
+  color: var(--text-hi);
 }
 
 /* ── 미들 (아이콘 레일 + 사이드바 + 메인) ── */
@@ -482,7 +467,8 @@
 .sb-head {
   padding: 0 var(--sp-2);
   font-family: var(--ui);
-  font-size: var(--fs-xl);
+  /* 2.0 4단계: 제목(16) → 탭바와 같은 결의 13/500(시안 Z-final). 높이는 .sb-tabs 가 --row-tabbar 로 맞춘다. */
+  font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-hi);
   white-space: nowrap;
@@ -3200,7 +3186,9 @@
   background: linear-gradient(180deg, var(--bg-surface), var(--bg-abyss));
   border-top: 1px solid var(--line);
   font-family: var(--ui);
-  font-size: var(--fs-md);
+  /* 2.0 4단계: 보조 글자 한 단(시안 11~12px — 척도에 12 가 없어 11). */
+  font-size: var(--fs-micro);
+  letter-spacing: 0.01em;
   color: var(--text-mid);
   padding: 0 var(--sp-2);
   user-select: none;
@@ -3225,9 +3213,6 @@
 }
 .sb-seg .lbl {
   color: var(--text-lo);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: 0.4px;
 }
 .sb-seg .val {
   color: var(--text-hi);
@@ -3409,9 +3394,6 @@ button.sb-seg.upd:hover .val {
 .gauge .val {
   min-width: 62px;
   font-variant-numeric: tabular-nums;
-}
-.sb-seg.gauge-seg .val {
-  font-size: var(--fs-md);
 }
 /* 2.0 상태바 — 칸 폭 고정(시안 Z-final). 값이 바뀌어도, 없어서 — 가 찍혀도 옆 칸이 움직이지 않는다. */
 .sb-seg .val.na {
@@ -4490,7 +4472,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
   background: var(--bg-overlay);
 }
-/* 2.0 주 버튼 — `--accent-deep` 단색 + 흰 글자(시안 Z-final, 대비 4.20). 1.x 의 액센트 그라디언트 +
+/* 2.0 주 버튼 — `--accent-deep` 단색 + 흰 글자(시안 Z-final, 대비 4.73). 1.x 의 액센트 그라디언트 +
    어두운 글자는 버렸다: 흰 글은 밝은 `--accent` 위에서 2.86 이라 바탕을 deep 으로 내린다. */
 .btn.pri {
   background: var(--accent-deep);

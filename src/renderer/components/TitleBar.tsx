@@ -6,11 +6,10 @@ import type { FeatureShown } from '@shared/features'
 import { dispatchAction, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
 
-// 커스텀 프레임리스 타이틀바 (design-system §4.1/§8). 트래픽 라이트는 no-drag.
+// 커스텀 프레임리스 타이틀바 (design-system §4.1/§8). 창 컨트롤은 no-drag.
 //
-// R2.6: 신호등 버튼이 실제로 창을 조작한다(그전엔 onClick 자체가 없었다). 글리프는 상시가 아니라
-// 클러스터 호버 시에만 노출한다 — macOS 관례이고, 12px dot 안에 아이콘을 늘 그려 두면
-// 색만으로 읽히던 신호등이 잡음이 된다.
+// R2.6: 창 버튼이 실제로 창을 조작한다(그전엔 onClick 자체가 없었다). 2.0 4단계에서 신호등 점을
+// 시안의 얇은 선 아이콘(− □ ×)으로 바꿨다 — 글리프는 늘 보인다.
 //
 // R4.1: 메뉴바가 실제로 열린다. 그전엔 Session 만 클릭 핸들러가 있었고 나머지 6개는 hover 효과만
 // 있는 장식이었다. 항목·라벨·단축키 힌트는 전부 MENUBAR/KEYMAP 파생이고(interactions/actions.tsx),
@@ -20,7 +19,7 @@ import { t } from '../i18n'
  * "새창 상단 닫기 내리기 전체 디자인도 우리 아라 디자인과 동일해야해" — 그전에는 OS 기본
  * 프레임이었다. 세션 창에는 메뉴바도 통합 검색도 없으므로(그건 본창의 일이다) 두 자리를
  * **선택**으로 바꾸고, 대신 그 자리에 창 제목을 놓는다. 컴포넌트를 두 벌 만들지 않는다 —
- * 신호등 모양·드래그 영역·호버 규칙이 두 창에서 갈리면 그게 곧 "다른 앱처럼 보인다"가 된다.
+ * 창 버튼 모양·드래그 영역·호버 규칙이 두 창에서 갈리면 그게 곧 "다른 앱처럼 보인다"가 된다.
  */
 export function TitleBar({
   onCommand,
@@ -55,9 +54,10 @@ export function TitleBar({
   const chatBind = KEYMAP.find((k) => k.action === 'ai.toggle')
   const chatKey = (navigator.userAgent.includes('Mac') ? chatBind?.mac : chatBind?.win)?.replace(/\+/g, ' ') ?? ''
 
-  const glyph = (d: string) => (
-    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
-      <path d={d} />
+  // 2.0 4단계: 신호등 점 → 시안 Z-final 의 얇은 선 − □ ×(닫기 호버만 빨강 바탕). 기능·선택자는 그대로.
+  const glyph = (body: React.ReactNode) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {body}
     </svg>
   )
   return (
@@ -124,10 +124,9 @@ export function TitleBar({
         )}
       </div>
       <div className="tb-controls">
-        {/* M3: 셋 다 <button> 이다. 신호등은 창 컨트롤 관용구라 **모양은 패널 닫기와 따로 가되**,
-            키보드로 닫을 수 있어야 한다는 점은 다르지 않다(전에는 마우스로만 닿았다). */}
+        {/* M3: 셋 다 <button> 이다 — 키보드로 닫을 수 있어야 한다(전에는 마우스로만 닿았다). */}
         <button type="button" className="tb-ctl min" title={t('titlebar.min')} onClick={() => void window.ev?.window.minimize()}>
-          {glyph('M3 6h6')}
+          {glyph(<path d="M5 12h14" />)}
         </button>
         <button
           type="button"
@@ -135,10 +134,10 @@ export function TitleBar({
           title={t('titlebar.max')}
           onClick={() => void window.ev?.window.toggleMaximize()}
         >
-          {glyph('M4.2 7.8L7.8 4.2M7.8 4.2H5.2M7.8 4.2v2.6M4.2 7.8h2.6M4.2 7.8V5.2')}
+          {glyph(<rect width="12" height="12" x="6" y="6" rx="1" />)}
         </button>
         <button type="button" className="tb-ctl close" title={t('titlebar.close')} onClick={() => void window.ev?.window.close()}>
-          {glyph('M3.6 3.6l4.8 4.8M8.4 3.6l-4.8 4.8')}
+          {glyph(<path d="M18 6 6 18M6 6l12 12" />)}
         </button>
       </div>
       <ContextMenu

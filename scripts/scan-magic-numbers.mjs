@@ -360,6 +360,16 @@ for (const [tn, bn, r] of nontextPairs.filter(([, , r]) => r < NONTEXT_MIN_RATIO
   )
 }
 const worstNontext = nontextPairs.reduce((a, b) => (a[2] <= b[2] ? a : b))
+// 흰 글을 얹는 포인트 면(2026-10-27, 2.0 4단계). 주 버튼·사용자 말풍선·전송 버튼이 이 짝이다 —
+// 4.20 으로 출발해 손으로 잰 수가 문서에만 있었다. 위 램프 검사는 --text-* 만 보므로 따로 잰다.
+const deepHex = resolveHex('--accent-deep')
+const onDeepHex = resolveHex('--on-accent-deep')
+const deepRatio = deepHex && onDeepHex ? contrast(deepHex, onDeepHex) : 0
+if (deepRatio < MIN_RATIO) {
+  violations.push(
+    `src/renderer/styles/tokens.css  --on-accent-deep × --accent-deep 대비 ${deepRatio.toFixed(2)} < ${MIN_RATIO} (못 풀었으면 0 — 6자리 HEX 여야 한다)`
+  )
+}
 
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
@@ -473,6 +483,7 @@ console.log(
   `매직넘버 스캔 통과 (HEX/px/맨 transition 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
     `글자 대비 ${pairs.length}조합 통과(글자 ${MIN_RATIO} · ${DIM_TOKEN} ${DIM_MIN_RATIO}) — 가장 나쁜 글자 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}\n` +
     `비텍스트 대비 ${nontextPairs.length}조합 전부 ${NONTEXT_MIN_RATIO} 이상 — 가장 나쁜 짝 ${worstNontext[0]} × ${worstNontext[1]} = ${worstNontext[2].toFixed(2)}\n` +
+    `흰 글 × --accent-deep = ${deepRatio.toFixed(2)}\n` +
     `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled\n` +
     `굵기 600 이상 ${heavyAllowed}규칙 전부 허용 목록(브랜드·@font-face)`
 )
