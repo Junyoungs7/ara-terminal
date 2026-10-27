@@ -9448,3 +9448,26 @@ button.sb-seg.upd:hover .val {
 .pod-row:active td {
   filter: var(--press-dim);
 }
+
+/* 2.0 설정 › 기능 — 한 줄: 이름 · 한 줄 설명 · 단축키 · 스위치(시안 Z-settings). .set-row 는 세로
+   배치라 열 줄을 쌓으면 화면 두 장이 된다 — 이 목록만 한 줄 격자로 둔다. */
+.feat-row {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.feat-row .fr-name {
+  font-size: var(--fs-md);
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.feat-row .fr-desc {
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

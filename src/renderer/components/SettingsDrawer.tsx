@@ -1,4 +1,4 @@
-import { AI_ENTRY } from '@shared/features'
+import { AI_ENTRY, FEATURES } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
 import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
@@ -47,7 +47,7 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'terminal', 'font', 'features', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
 type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
@@ -1071,6 +1071,47 @@ export function SettingsDrawer({
                   labelKey={(v) => 'settings.bell.' + v}
                 />
               </Row>
+            </>
+          )}
+
+          {section === 'features' && (
+            <>
+              {/* 2.0 3단계 — 시안 Z-settings. 끄는 것은 진입점(하단 탭·메뉴·레일)뿐이다(features.ts). */}
+              <div className="set-note">{t('settings.features.note')}</div>
+              {[false, true].map((def) => {
+                const list = FEATURES.filter((f) => !!f.hidden === def)
+                return (
+                  <div key={String(def)} data-sec={def ? 'hidden' : 'shown'}>
+                    <div className="set-sec-t">
+                      {t(def ? 'settings.features.hidden' : 'settings.features.shown')} {list.length}
+                    </div>
+                    {list.map((f) => {
+                      const b = f.key && KEYMAP.find((k) => k.action === f.key)
+                      return (
+                        <div className="feat-row" key={f.id} data-feature={f.id}>
+                          <span className="fr-name">{t('feature.' + f.id)}</span>
+                          <span className="fr-desc">{t('feature.' + f.id + '.desc')}</span>
+                          <span className="cs-keys">
+                            {b &&
+                              (isMac ? b.mac : b.win).split('+').map((c, i) => (
+                                <Fragment key={i}>
+                                  {i > 0 && <span className="cs-sep">+</span>}
+                                  <span className="cs-k">{c}</span>
+                                </Fragment>
+                              ))}
+                          </span>
+                          <Toggle
+                            on={prefs.features[f.id]}
+                            label={t('feature.' + f.id)}
+                            onChange={(on) => onPrefsChange({ features: { ...prefs.features, [f.id]: on } })}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+              <div className="set-note">{t('settings.features.browser')}</div>
             </>
           )}
 
