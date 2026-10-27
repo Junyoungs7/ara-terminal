@@ -46,7 +46,7 @@ async function openFileTabAt(page: Page, dir: string): Promise<void> {
   if (!(await rail.evaluate((el) => el.classList.contains('active')).catch(() => false))) {
     await page.keyboard.press('Control+Shift+E')
   }
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'file')
   await expect(row(page, '문서/')).toBeVisible({ timeout: 25_000 })
 }
 
@@ -59,7 +59,7 @@ test('FILE-1 [파일] 탭은 세션이 있어야 트리를 보여 준다', async
   const fileTab = page.locator('.lrail-item[data-tab="file"]')
   await page.keyboard.press('Control+Shift+E')
   await expect(fileTab).toBeDisabled()
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'conn')
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'conn')
   // hover 중이면 title 이 data-tip 으로 옮겨간다(전역 툴팁) — 둘 중 하나에 이유가 있어야 한다.
   expect(await fileTab.evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')).toBe(
     '세션에 연결하면 파일을 볼 수 있습니다'

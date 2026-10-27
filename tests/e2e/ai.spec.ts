@@ -51,8 +51,8 @@ test.beforeEach(() => {
 
 test('AI-1 키 없음 상태로 패널을 열면 안내 카드와 비활성 입력만 보인다', async ({ ara }) => {
   const { page } = ara
-  // FB-ui2: 아라 진입점이 타이틀바(.tb-ai, 제거됨)에서 우측 액티비티 바로 이관됐다.
-  await page.click('.act-item[data-activity="ai"]')
+  // 2.0: 우측 액티비티 바가 없어지며 채팅 진입점은 타이틀바 [채팅](.tb-chat) 하나다.
+  await page.click('.tb-chat')
   await expect(page.locator('.ai-panel')).toBeVisible()
   await expect(page.locator('.ai-panel .ai-card')).toContainText('아라를 쓰려면 API 키가 필요합니다')
   await expect(page.locator('.ai-panel .ai-input')).toBeDisabled()
@@ -240,49 +240,6 @@ test('AI-9 우클릭 메뉴의 [AI에게 질문]이 선택 텍스트를 프리�
   await expect(page.locator('.ai-panel .ai-input')).toBeFocused()
 })
 
-// AI-10★ 레일은 한 번에 하나만 열린다 (#79, 2026-08-14)
-// 이 검사는 원래 "미니 프리뷰와 아라 패널을 **동시에** 열어도 레이아웃이 안 무너진다"였다.
-// 준영님 결정으로 레일이 상호 배타가 되면서 그 상황 자체가 만들어지지 않는다 — 지키는 성질을
-// 바꾼다: ① 두 번째를 열면 첫 번째가 닫힌다 ② 그래도 **상태는 남는다**(컴포넌트가 안 죽는다)
-// ③ 레일이 열린 채로도 터미널이 살아 있다.
-//
-// 왜 배타로 바꿨나: 레일 여섯이 전부 폭 고정이라 터미널만 줄어들었다. 셋만 열어도 1920 화면에서
-// 터미널이 80칸 아래로 떨어지고, 여섯이면 아예 사라졌다.
-test('AI-10★ 레일은 하나만 열리고, 다시 열면 쓰던 내용이 남아 있다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-  await newLocalShell(page)
-
-  await page.keyboard.press('Control+Shift+P')
-  await expect(page.locator('.mini-rail')).toBeVisible()
-
-  // ① 아라 패널을 열면 미니 프리뷰가 닫힌다.
-  await openAiPanel(page)
-  await expect(page.locator('.ai-panel')).toBeVisible()
-  await expect(page.locator('.mini-rail')).toHaveCount(0)
-
-  // ② 레일에 값을 남기고 떠났다 돌아오면 그대로 있다(컴포넌트가 죽지 않는다).
-  //    이관 이력: 세션 로그 검색창(→ #78 하단) → 시스템 모니터 탭(→ #83 하단) → **아라 패널의
-  //    [터미널 화면 첨부] 칩**. 이제 남은 레일이 셋(ai·aisess·preview)뿐이고 그중 사용자가 바꿀
-  //    수 있는 값이 이 칩이다. 컴포저 입력칸과 달리 이 칩은 API 키 없이도 눌린다(세션만 있으면 된다).
-  const rail = (id: string) => page.click(`.activity-bar .act-item[data-activity="${id}"]`)
-  const ctxChip = page.locator('.ai-panel .ai-chip[data-action="ai.ctxToggle"]')
-  await expect(ctxChip).toHaveAttribute('aria-pressed', 'false')
-  await ctxChip.click()
-  await expect(ctxChip).toHaveAttribute('aria-pressed', 'true')
-  await rail('preview')
-  await expect(page.locator('.mini-rail')).toBeVisible()
-  await expect(page.locator('.ai-panel')).toHaveCount(0)
-  await rail('ai')
-  await expect(ctxChip).toHaveAttribute('aria-pressed', 'true')
-
-  // ③ 레일이 열려 있어도 터미널이 살아 있고 가로 스크롤이 안 생긴다.
-  const dims = await page.evaluate(() => {
-    const doc = document.documentElement
-    const rect = (sel: string) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0
-    return { overflowX: doc.scrollWidth - doc.clientWidth, pane: rect('.pane-grid'), rail: rect('.ai-panel') }
-  })
-  expect(dims.overflowX).toBeLessThanOrEqual(1)
-  expect(dims.pane).toBeGreaterThan(50)
-  expect(dims.rail).toBeGreaterThan(50)
-})
+// AI-10★(레일 상호 배타 · 미니 프리뷰와 번갈아 열기)은 2.0 3단계에서 지웠다 — 미리보기가 삭제돼
+// 오른쪽에 남은 레일이 아라 하나뿐이라 "하나만 열린다"를 만들 상대가 없다. 닫았다 열어도 상태가
+// 남는다는 성질은 arachat.spec.ts ARA2-2 가 [채팅] 버튼으로 지킨다.

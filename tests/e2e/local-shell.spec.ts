@@ -18,7 +18,8 @@ test('LOCAL-1 탭바 ＋ → 로컬 셸이 열리고 탭·패널·상태바가 �
   await newLocalShell(page)
   await expect(page.locator('.term-tabbar .ttab')).toHaveCount(1)
   await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
-  await expect(page.locator('.statusbar .sb-right .sb-seg').first().locator('.val')).toHaveText('1')
+  // 2.0: 오른쪽 첫 칸은 UTF-8 이다 — 세션 수 칸은 라벨로 집는다.
+  await expect(page.locator('.statusbar .sb-right .sb-seg:has(.lbl:text-is("세션")) .val')).toHaveText('1')
 })
 
 // LOCAL-2★ 빈 화면 안내 (#66-8, 2026-08-14)

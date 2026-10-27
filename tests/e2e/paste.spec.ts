@@ -105,7 +105,7 @@ test('PASTE-3 붙여넣기 업로드가 [파일] 탭을 펼친다', async ({ ara
   await openRemoteTree(page, ssh, 'paste3')
   // 다시 [연결] 탭으로 돌아간 상태에서 붙여넣는다.
   await page.click('.lrail-item[data-tab="conn"]')
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'conn')
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'conn')
 
   const localDir = mkdtempSync(join(tmpdir(), 'ara-pastelocal-'))
   const file = join(localDir, 'reveal_확인.txt')
@@ -113,7 +113,7 @@ test('PASTE-3 붙여넣기 업로드가 [파일] 탭을 펼친다', async ({ ara
 
   await focusTerminal(page)
   await pasteFiles(page, [file])
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file', { timeout: 20_000 })
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'file', { timeout: 20_000 })
 })
 
 // PASTE-4 로컬 세션은 업로드할 곳이 없다 — 경로 문자열을 붙여넣는다(실행하지 않는다)

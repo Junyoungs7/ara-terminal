@@ -77,7 +77,7 @@ async function openProcessTab(page: Page): Promise<void> {
 
 /** #91: [서버 작업대] 창을 열고 그 서버를 고른다 — 격자([홈] 탭)를 보는 검사들이 쓴다. */
 async function openWorkbench(page: Page): Promise<void> {
-  await page.click('.act-item[data-activity="explorer"]')
+  await page.click('.lrail-item[data-activity="explorer"]')
   await expect(page.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
   await page.click('.exp-nav .exp-node[data-server]')
   await expect(page.locator('.wb-win .exp-node[data-server].on')) .toBeVisible()
@@ -163,7 +163,7 @@ test('CON-35★ 작업대를 닫았다 열어도 자리·크기와 열린 도구
 
   await ara.page.click('.wb-win .exp-wbtn.x')
   await expect(ara.page.locator('.wb-win')).not.toBeVisible()
-  await ara.page.click('.act-item[data-activity="explorer"]')
+  await ara.page.click('.lrail-item[data-activity="explorer"]')
   await expect(ara.page.locator('.wb-win')).toBeVisible()
   expect(await box()).toBe(before)
   // 열어 뒀던 도구 탭도 그대로다.
@@ -425,7 +425,7 @@ test('CON-10 로컬에서는 하단이 안내를 내고 작업대 격자에 원�
     'SSH 세션에서 쓸 수 있습니다'
   )
 
-  await ara.page.click('.act-item[data-activity="explorer"]')
+  await ara.page.click('.lrail-item[data-activity="explorer"]')
   await expect(ara.page.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
   // 내 PC 가 기본 대상이다 — 파일·시스템·터미널만 남는다.
   await expect(ara.page.locator('.wb-pad .con-app')).toHaveCount(3)
@@ -1131,11 +1131,15 @@ test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고
   }
 })
 
-// CON-34★ 첫 세션이 생기면 하단바가 **스스로 열린다**(2026-08-24 준영님).
-// 두 번째 세션부터는 열지 않는다 — 방금 닫은 사람 앞에서 탭 하나 열 때마다 도로 올라오면 안 된다.
-test('CON-34★ 첫 세션에서 하단바가 자동으로 열리고, 닫은 뒤 새 세션이 생겨도 다시 열지 않는다', async ({ ara }) => {
+// CON-34b★ 하단바는 **늘 닫힌 채** 시작하고, 세션이 생겨도 스스로 열리지 않는다(2.0 2단계).
+// 이력: 2026-08-24 준영님 결정으로 "첫 세션이 생기면 스스로 열린다"였다 → 2.0 에서 그 자동 열기와
+// 열림 기억(`ui.sidebar.bottom`)을 함께 걷었다(세션 창 = 화면). 여는 자리는 좌측 레일 [서버 도구].
+test('CON-34b★ 세션이 생겨도 하단바는 닫혀 있고, 레일로 열면 상태바 위에 붙는다', async ({ ara }) => {
   await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
   await newLocalShell(ara.page)
+  await ara.page.waitForTimeout(500)
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
+  await ara.page.click('.lrail-item[data-activity="bottombar"]')
   await expect(ara.page.locator('.bottom-panel')).toBeVisible({ timeout: 15_000 })
   // 화면 맨 아래에 붙어 있다(상태바 위) — 떠 있거나 중간에 걸리지 않는다.
   const gap = await ara.page.locator('.bottom-panel').evaluate((el) => {

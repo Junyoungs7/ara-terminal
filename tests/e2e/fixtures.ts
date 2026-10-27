@@ -390,13 +390,22 @@ export async function expectTermText(
 /**
  * 하단바를 켜고 그 도구 탭을 고른다 — 2026-08-17(IntelliJ 툴윈도우 방식).
  *
- * 하단바는 액티비티 바 맨 아래의 **토글 하나**로 켜고 끈다. 꺼져 있으면 탭줄도 없으므로
+ * 하단바는 **토글 하나**로 켜고 끈다(2.0: 좌측 레일 [서버 도구]). 꺼져 있으면 탭줄도 없으므로
  * 탭을 바로 누를 수 없다 — 그래서 "없으면 켜고, 그다음 탭을 고른다"를 한 자리에 둔다.
  * (토글을 무조건 누르면 이미 켜져 있을 때 꺼져 버린다 — 테스트마다 그 분기를 쓰지 않게 한다.)
+ *
+ * 2.0 3·4단계: 기본 숨김 기능(쿠버네티스·서버 로그)은 탭줄에 없다 — 그 둘은 단축키로 연다
+ * (KEYMAP `panel.k8s`·`panel.applog`). 열린 탭은 숨김이어도 탭줄에 그려진다(BottomPanel).
  */
+const HIDDEN_BOTTOM_KEY: Record<string, string> = { k8s: 'Control+Alt+K', applog: 'Control+Alt+V' }
+
 export async function openBottomTool(page: Page, id: string): Promise<void> {
-  if ((await page.locator('.bottom-panel').count()) === 0) {
-    await page.click('.act-bottombar')
+  const key = HIDDEN_BOTTOM_KEY[id]
+  if (key && (await page.locator(`.bp-tab[data-bottom="${id}"]`).count()) === 0) {
+    // 단축키는 토글이다 — 탭이 없을 때(= 그 탭이 열려 있지 않을 때)만 누른다.
+    await page.keyboard.press(key)
+  } else if ((await page.locator('.bottom-panel').count()) === 0) {
+    await page.click('.lrail-item[data-activity="bottombar"]')
     await page.locator('.bottom-panel').waitFor({ state: 'visible' })
   }
   await page.click(`.bp-tab[data-bottom="${id}"]`)

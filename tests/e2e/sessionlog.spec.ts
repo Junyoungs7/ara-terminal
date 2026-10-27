@@ -127,6 +127,7 @@ test('SLOG-5 보존 기간을 고르면 재기동 후에도 유지된다', async
 })
 
 // ── #86(2026-08-16) 지난 세션 — 우측 레일 ─────────────────────────────────────
+// 2.0(2단계): 우측 레일이 없어져 [지난 세션]은 **좌측 사이드바 탭**('past')이다. 패널 클래스는 그대로.
 // 준영님: "현재 세션의 기록은 하단에서, 이전 세션 기록은 우측에서 찾을 수 있게."
 // 새 저장소는 없다 — 로그 파일 이름(`날짜-시각_서버_id8.log`)이 곧 색인이다.
 
@@ -142,7 +143,7 @@ test('SLOG-6★ 닫힌 세션의 기록을 [지난 세션]에서 다시 본다',
   // 세션을 닫는다 — 그래도 파일은 남는다(이 기능의 존재 이유다).
   await page.evaluate((id) => window.ev.session.destroy(id), sid)
 
-  await page.click('.act-item[data-activity="pastlog"]')
+  await page.click('.lrail-item[data-tab="past"]')
   const rail = page.locator('.monitor-panel.pastlog')
   await expect(rail).toBeVisible({ timeout: 10_000 })
   const row = rail.locator('.pl-row').first()
@@ -169,22 +170,22 @@ test('SLOG-7★ 진행 중인 기록을 누르면 하단 [세션 기록] 으로 
   await sendInput(page, sid, 'echo 진행중표식\r\n')
   await expectTermText(page, sid, /진행중표식/)
 
-  await page.click('.act-item[data-activity="pastlog"]')
+  await page.click('.lrail-item[data-tab="past"]')
   const rail = page.locator('.monitor-panel.pastlog')
   const row = rail.locator('.pl-row.live').first()
   await expect(row).toBeVisible({ timeout: 15_000 })
   await expect(row.locator('.pl-live')).toHaveText('진행 중')
 
   await row.click()
-  // 레일은 닫히고 하단 [세션 기록] 이 열린다.
-  await expect(page.locator('.monitor-panel.pastlog')).toHaveCount(0)
+  // 하단 [세션 기록] 이 열린다. 2.0: [지난 세션]은 좌측 사이드바 안이라 닫히지 않는다
+  // (1.x 우측 레일은 closeRail 로 닫았다 — Shell.tsx onPastOpenCurrent 는 이제 openBottom 만 한다).
   await expect(page.locator('.bottom-panel .bp-tab.on[data-bottom="log"]')).toBeVisible({ timeout: 10_000 })
 })
 
 // SLOG-8 기록이 꺼져 있으면 "없다"가 아니라 **켜는 법**을 말한다(#68 과 같은 규칙).
 test('SLOG-8 기록이 없으면 설정을 켜라고 안내한다', async ({ ara }) => {
   const { page } = ara
-  await page.click('.act-item[data-activity="pastlog"]')
+  await page.click('.lrail-item[data-tab="past"]')
   const rail = page.locator('.monitor-panel.pastlog')
   await expect(rail).toBeVisible({ timeout: 10_000 })
   await expect(rail.locator('.sftp-empty')).toContainText('설정')

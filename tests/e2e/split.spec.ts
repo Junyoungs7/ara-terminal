@@ -119,14 +119,15 @@ test('SPLIT-8 divider 를 끌어 분할 비율을 바꾼다', async ({ ara }) =>
   await expect.poll(gridCols).not.toBe(before)
 })
 
-// SPLIT-9★ 칸 헤더의 [최대화] — 2026-08-17 준영님 제보 ⑦
+// SPLIT-9★ 칸 [최대화] — 2026-08-17 준영님 제보 ⑦
 // ("각각의 세션창에 전체화면 버튼을 주고 누르면 전체화면이 가능했으면 좋겠어")
 //
-// 버튼을 달았다는 것만으로는 부족하다: **그 버튼이 이름대로 동작하는지**를 본다.
-// 같은 라벨(explorer.maximize)을 쓰는 자리가 이미 둘 있고(하단 패널·작업대 창), 그중 하나는
-// 예전에 라벨과 반대로 동작한 이력이 있다. 여기서는 폭으로 판정한다 — 최대화하면 남은 칸이
+// 2.0 3단계: 칸 머리(.pane-hd · [최대화] 버튼)를 지웠다 — 세션 창 = 화면. 최대화는 **Ctrl+Up**
+// (KEYMAP pane.maximize)·메뉴 [분할 › 패널 최대화]·통합 검색으로 남았다. 그래서 키로 누른다.
+// 지키는 성질은 그대로 **이름대로 동작하는지**다 — 폭으로 판정한다: 최대화하면 남은 칸이
 // 사라지고 이 칸이 그리드를 다 쓴다.
-test('SPLIT-9★ 칸 헤더 [최대화] 를 누르면 그 칸이 그리드를 다 쓴다', async ({ ara }) => {
+// (옛 SPLIT-10 "칸이 하나면 [최대화] 버튼이 없다"는 버튼 자체가 없어져 함께 지웠다.)
+test('SPLIT-9★ Ctrl+Up 으로 최대화하면 그 칸이 그리드를 다 쓴다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await newLocalShell(page)
@@ -138,21 +139,13 @@ test('SPLIT-9★ 칸 헤더 [최대화] 를 누르면 그 칸이 그리드를 �
   const gridWidth = (await page.locator('.pane-grid').boundingBox())!.width
   expect(before).toBeLessThan(gridWidth * 0.75) // 분할 상태 = 그리드의 절반쯤
 
-  await focused.locator('.pane-hd .pmax').click()
+  await page.keyboard.press('Control+ArrowUp')
   // 최대화 = 형제가 숨고 이 칸이 전부(§4.8 의 정의를 폭으로 확인한다).
   await expect(page.locator('.pane-grid .pane:visible')).toHaveCount(1)
   await expect.poll(async () => (await focused.boundingBox())!.width).toBeGreaterThan(gridWidth * 0.9)
 
-  // 되돌리면 원래 폭으로. 버튼 하나가 토글이다(누를 자리를 새로 찾지 않는다).
-  await focused.locator('.pane-hd .pmax').click()
+  // 되돌리면 원래 폭으로. 같은 키가 토글이다.
+  await page.keyboard.press('Control+ArrowUp')
   await expect(page.locator('.pane-grid .pane:visible')).toHaveCount(2)
   await expect.poll(async () => (await focused.boundingBox())!.width).toBeLessThan(gridWidth * 0.75)
-})
-
-// SPLIT-10 칸이 하나면 [최대화] 버튼이 없다 — 눌러도 아무 일도 없는 버튼을 두지 않는다.
-test('SPLIT-10 칸이 하나뿐이면 [최대화] 버튼이 없다', async ({ ara }) => {
-  const { page } = ara
-  await newLocalShell(page)
-  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
-  await expect(page.locator('.pane-grid .pane-hd .pmax')).toHaveCount(0)
 })

@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { test, expect, newLocalShell, sessionList, connectNewSshProfile, expectTermText } from './fixtures'
 
 test('SMOKE-1 앱이 임시 userData 로 기동한다', async ({ ara }) => {
-  await expect(ara.page.locator('.titlebar .tb-name')).toHaveText('A.R.A')
+  // 1.0.10(5e3c3c6): 앱 이름 A.R.A → ARA(i18n app.name).
+  await expect(ara.page.locator('.titlebar .tb-name')).toHaveText('ARA')
   await expect(ara.page.locator('.pane-grid .pane')).toHaveCount(0)
   const userDataPath = await ara.app.evaluate(({ app }) => app.getPath('userData'))
   expect(userDataPath.toLowerCase()).toBe(ara.userData.toLowerCase())

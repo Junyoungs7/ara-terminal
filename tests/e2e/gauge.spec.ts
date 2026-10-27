@@ -21,23 +21,29 @@ test('GAUGE-1 SSH 세션 상태바에 CPU·MEM·GPU 게이지가 뜬다', async 
   await connectWithTelemetry(ara.page, ssh, tele, 'g1')
   await expect(gauges(ara.page)).toHaveCount(3, { timeout: 30_000 })
   expect(await gauges(ara.page).locator('.lbl').allTextContents()).toEqual(['CPU', 'MEM', 'GPU'])
-  await expect(gauge(ara.page, 'GPU').locator('.val')).toHaveText('61%')
+  // 2.0: 칸은 세션이 생기자마자 — 로 서므로, 값은 첫 폴링을 기다린다.
+  await expect(gauge(ara.page, 'GPU').locator('.val')).toHaveText('61%', { timeout: 30_000 })
 })
 
-// GAUGE-2 게이지는 **꺾은선**이다 — 2026-08-17(제보 ③)에 채움 막대를 걷고 시계열 그래프로 바꿨다.
+// GAUGE-2 CPU 는 **꺾은선**이다 — 2026-08-17(제보 ③)에 채움 막대를 걷고 시계열 그래프로 바꿨다.
 // "지금 몇 %인가"는 옆 숫자가 말하고, 그래프는 **어디로 가는 중인가**를 말한다. 폭 대신 그것을 본다.
 // (2026-08-22 제보 18번: 선 아래를 면으로 채웠다 — 그 면도 함께 그려지는지 여기서 지킨다.)
-test('GAUGE-2 게이지마다 시계열 그래프가 면과 함께 그려진다', async ({ ara, ssh }) => {
+// 2.0 2단계(시안 Z-final): 그래프는 CPU 만 남고 MEM·GPU 는 막대(.sb-mbar)로 돌아갔다 — 막대 폭이 값을 탄다.
+test('GAUGE-2 CPU 는 면 있는 시계열 그래프, MEM·GPU 는 값만큼 찬 막대', async ({ ara, ssh }) => {
   const tele = makeTelemetry()
   await connectWithTelemetry(ara.page, ssh, tele, 'g2')
   await expect(gauge(ara.page, 'GPU').locator('.val')).toHaveText('61%', { timeout: 30_000 })
 
-  for (const key of ['CPU', 'MEM', 'GPU'] as const) {
-    const spark = gauge(ara.page, key).locator('svg.sb-spark')
-    await expect(spark).toHaveCount(1)
-    // 점이 실려 있어야 선이다(빈 문자열이면 화면엔 아무것도 없다).
-    await expect.poll(async () => (await spark.locator('polyline').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
-    await expect.poll(async () => (await spark.locator('polygon').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
+  const spark = gauge(ara.page, 'CPU').locator('svg.sb-spark')
+  await expect(spark).toHaveCount(1)
+  // 점이 실려 있어야 선이다(빈 문자열이면 화면엔 아무것도 없다).
+  await expect.poll(async () => (await spark.locator('polyline').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
+  await expect.poll(async () => (await spark.locator('polygon').getAttribute('points'))?.length ?? 0).toBeGreaterThan(3)
+
+  for (const key of ['MEM', 'GPU'] as const) {
+    const fill = gauge(ara.page, key).locator('.sb-mbar i')
+    await expect(fill).toHaveCount(1)
+    await expect.poll(async () => parseFloat((await fill.getAttribute('style'))?.match(/width:\s*([\d.]+)%/)?.[1] ?? '0')).toBeGreaterThan(0)
   }
 })
 
@@ -63,30 +69,35 @@ test('GAUGE-4 메모리를 11.8/31.3G 형태로 보여 준다', async ({ ara, ss
   await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText('11.8/31.3G')
 })
 
-// GAUGE-5 nvidia-smi 가 없는 서버는 GPU 칸 자체가 없다(0% 로 표시하지 않는다)
-test('GAUGE-5 GPU 가 없는 서버는 GPU 칸을 만들지 않는다', async ({ ara, ssh }) => {
+// GAUGE-5 nvidia-smi 가 없는 서버는 GPU 를 0% 로 표시하지 않는다.
+// 2.0 2단계: 칸은 늘 같은 자리에 서고(폭 고정) 값이 없으면 `—`(.val.na) — 칸을 빼던 1.x 와 다르다.
+test('GAUGE-5 GPU 가 없는 서버는 GPU 칸에 — 만 찍는다', async ({ ara, ssh }) => {
   const tele = makeTelemetry({ gpu: null })
   await connectWithTelemetry(ara.page, ssh, tele, 'g5')
-  await expect(gauges(ara.page)).toHaveCount(2, { timeout: 30_000 })
-  expect(await gauges(ara.page).locator('.lbl').allTextContents()).toEqual(['CPU', 'MEM'])
+  await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText('11.8/31.3G', { timeout: 30_000 })
+  expect(await gauges(ara.page).locator('.lbl').allTextContents()).toEqual(['CPU', 'MEM', 'GPU'])
+  await expect(gauge(ara.page, 'GPU').locator('.val.na')).toHaveText('—')
 })
 
-// GAUGE-6 FB-0008: 로컬 셸에도 CPU/MEM 게이지가 뜬다(GPU 는 무의존 조회 방법이 없어 생략)
-test('GAUGE-6 로컬 세션에도 CPU·MEM 게이지가 뜬다(GPU 는 없다)', async ({ ara }) => {
+// GAUGE-6 FB-0008: 로컬 셸에도 CPU/MEM 게이지가 뜬다(GPU 는 무의존 조회 방법이 없어 — , 2.0 칸 고정)
+test('GAUGE-6 로컬 세션에도 CPU·MEM 게이지가 뜬다(GPU 는 —)', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await expect(gauges(ara.page)).toHaveCount(2, { timeout: 5_000 })
-  expect(await gauges(ara.page).locator('.lbl').allTextContents()).toEqual(['CPU', 'MEM'])
+  await expect(gauges(ara.page)).toHaveCount(3, { timeout: 5_000 })
+  expect(await gauges(ara.page).locator('.lbl').allTextContents()).toEqual(['CPU', 'MEM', 'GPU'])
+  await expect(gauge(ara.page, 'GPU').locator('.val.na')).toHaveText('—')
   // 실머신 값이라 정확한 수치는 알 수 없다 — 형식만 확인한다(원격 게이지와 동일 표시 형식).
-  await expect(gauge(ara.page, 'CPU').locator('.val')).toHaveText(/^\d{1,3}%$/)
-  await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText(/^\d+\.\d\/\d+\.\dG$/)
+  await expect(gauge(ara.page, 'CPU').locator('.val')).toHaveText(/^\d{1,3}%$/, { timeout: 30_000 })
+  await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText(/^\d+\.\d\/\d+\.\dG$/, { timeout: 30_000 })
 })
 
-// GAUGE-7 /proc 이 없는 서버(비리눅스)는 게이지만 빠지고 포트 목록은 그대로다
+// GAUGE-7 /proc 이 없는 서버(비리눅스)는 게이지 값만 비고(2.0: 칸은 서고 — ) 포트 목록은 그대로다
 test('GAUGE-7 /proc 이 없어도 포트 목록은 살아 있다', async ({ ara, ssh }) => {
   const tele = makeTelemetry({ proc: false })
   await connectWithTelemetry(ara.page, ssh, tele, 'g7')
   await openBottomTool(ara.page, 'monitor')
   // 22 는 tcp·tcp6 가 한 행으로 합쳐져 다섯 줄이다(mergeProtos).
   await expect(portRows(ara.page)).toHaveCount(5, { timeout: 30_000 })
-  await expect(gauges(ara.page)).toHaveCount(0)
+  // CPU·MEM 은 /proc 에서 온다 — 값 없이 — . (GPU 는 nvidia-smi 출처라 여기서 단언하지 않는다.)
+  await expect(gauge(ara.page, 'CPU').locator('.val.na')).toHaveText('—')
+  await expect(gauge(ara.page, 'MEM').locator('.val.na')).toHaveText('—')
 })

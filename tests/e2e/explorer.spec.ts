@@ -148,12 +148,12 @@ test('EXP-2 [보기] 메뉴에서 탐색기를 연다', async ({ ara }) => {
   await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
 })
 
-// EXP-2b 우측 액티비티 바 아이콘으로도 연다(준영님 요청 진입점)
-test('EXP-2b 우측 기능 바 아이콘으로 탐색기를 연다', async ({ ara }) => {
+// EXP-2b 레일 아이콘으로도 연다(준영님 요청 진입점 — 2.0 에서 우측 액티비티 바 → 좌측 레일)
+test('EXP-2b 좌측 레일 아이콘으로 탐색기를 연다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await ara.page.click('.act-item[data-activity="explorer"]')
+  await ara.page.click('.lrail-item[data-activity="explorer"]')
   await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
-  await ara.page.click('.act-item[data-activity="explorer"]')
+  await ara.page.click('.lrail-item[data-activity="explorer"]')
   await expect(ara.page.locator('.exp-win')).not.toBeVisible() // #74: 창은 남고 숨는다
 })
 
@@ -164,10 +164,10 @@ test('EXP-13★ 떠 있는 창은 작업대 하나뿐이다', async ({ ara }) =>
   const { page } = ara
   await newLocalShell(page)
 
-  await page.click('.act-item[data-activity="explorer"]')
+  await page.click('.lrail-item[data-activity="explorer"]')
   await expect(page.locator('.wb-win')).toBeVisible()
-  // 액티비티 바에 [서버 콘솔] 항목 자체가 없다(작업대에 흡수됐다).
-  await expect(page.locator('.act-item[data-activity="console"]')).toHaveCount(0)
+  // 레일에 [서버 콘솔] 항목 자체가 없다(작업대에 흡수됐다).
+  await expect(page.locator('[data-activity="console"]')).toHaveCount(0)
   await expect(page.locator('.exp-win')).toHaveCount(1)
 
   // 창을 눌러도(본문이든 탭바든) 살아 있고 앞으로 온다 — z 는 여전히 관리된다.

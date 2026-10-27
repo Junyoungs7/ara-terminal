@@ -1,19 +1,19 @@
-// 설정 창 8섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP) — 즉시 적용 · 영속 · 라이선스 고지
+// 설정 창 11섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP + 명령 기록 + 2.0 기능·모양) — 즉시 적용 · 영속 · 라이선스 고지
 import { test, expect, newLocalShell, persist, quitAra, openConnTab } from './fixtures'
 
 const drawer = '.drawer.open'
 
-// SET-1 진입점 3개(Ctrl+, · 우측 액티비티 바 설정 아이콘 · File 메뉴)와 8섹션(W3 F16 에서 [AI] 추가로
-// 6→7, F23 에서 [MCP] 추가로 7→8). FB-ui2: 두 번째 진입점이 타이틀바 기어(.tb-gear, 제거됨)에서
-// 액티비티 바로 이관됐다.
-test('SET-1 설정 창이 세 진입점 모두에서 열리고 8개 섹션을 갖는다', async ({ ara }) => {
+// SET-1 진입점 3개(Ctrl+, · 좌측 레일 설정 아이콘 · File 메뉴)와 11섹션(W3 F16 에서 [AI] 추가로
+// 6→7, F23 에서 [MCP] 추가로 7→8, [명령 기록] 9, 2.0 3단계 [기능] 10, 4단계 [모양] 11).
+// FB-ui2: 두 번째 진입점이 타이틀바 기어(.tb-gear, 제거됨)에서 액티비티 바로, 2.0 에서 좌측 레일로 옮겼다.
+test('SET-1 설정 창이 세 진입점 모두에서 열리고 11개 섹션을 갖는다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
   await expect(page.locator(drawer)).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.locator(drawer)).toHaveCount(0)
 
-  await page.click('.act-item[data-activity="settings"]')
+  await page.click('.lrail-item[data-activity="settings"]')
   await expect(page.locator(drawer)).toBeVisible()
   await page.keyboard.press('Escape')
 
@@ -22,7 +22,7 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 8개 섹션을 �
   await expect(page.locator(drawer)).toBeVisible()
 
   const sections = await page.locator(`${drawer} .set-nav [data-section]`).allTextContents()
-  expect(sections).toEqual(['일반', '터미널', '폰트', '로그', 'AI', 'MCP', '단축키', '정보'])
+  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '로그', 'AI', 'MCP', '단축키', '명령 기록', '정보'])
   for (const s of ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'about']) {
     await page.click(`${drawer} .set-nav [data-section="${s}"]`)
     await expect(page.locator(`${drawer} .set-nav [data-section="${s}"]`)).toHaveAttribute('aria-selected', 'true')
@@ -84,7 +84,7 @@ test('SET-6 정보 섹션이 버전과 폰트 라이선스를 보여 준다', as
   const { page } = ara
   await page.keyboard.press('Control+,')
   await page.click(`${drawer} .set-nav [data-section="about"]`)
-  await expect(page.locator(`${drawer} .set-row .sr-label`).first()).toHaveText('A.R.A')
+  await expect(page.locator(`${drawer} .set-row .sr-label`).first()).toHaveText('ARA') // 1.0.10: 앱 이름 ARA
   await expect(page.locator(`${drawer} .sr-ctl .v`).first()).toHaveText(/^v\d/)
   expect(await page.locator(`${drawer} .license-list .license-row`).count()).toBeGreaterThan(0)
   await expect(page.locator(`${drawer} .license-list .lic-ofl`).first()).toHaveText('SIL Open Font License 1.1')
@@ -184,28 +184,30 @@ test('SET-8 바꾼 설정이 재기동 후에도 유지된다', async ({ userDat
   ).toHaveClass(/on/)
 })
 
-// SET-ACT★ 아이콘 바·하단 탭줄의 목록과 순서.
+// SET-ACT★ 레일·하단 탭줄의 목록과 순서.
 // 2026-08-30 준영님 결정으로 설정 [우측 아이콘 바]가 **없어졌다**(순서·숨기기 둘 다).
 // 순서를 고칠 손잡이가 없으니 **파생이 틀리면 사용자가 되돌릴 수 없다** — 그만큼 이 계약이
-// 살아 있어야 한다. 단위 검사(tests/activityBar.test.ts)는 배열만 보고, 여기서는 **진짜 화면**을 본다.
-test('SET-ACT★ 아이콘 바는 ACTIVITY_ITEMS 순서, 하단 탭줄은 BOTTOM_IDS 열 개', async ({ ara }) => {
+// 살아 있어야 한다. 2.0 2단계에서 우측 바가 없어지고 좌측 레일(Sidebar.tsx SidebarRail)이 다 받았다.
+// 3단계에서 하단 탭줄도 설정 › 기능을 따른다 — 기본 숨김(쿠버네티스·서버 로그)은 탭줄에 없다.
+test('SET-ACT★ 좌측 레일은 시안 순서 일곱, 하단 탭줄은 기본 노출 여덟', async ({ ara }) => {
   const { page } = ara
-  await page.click('.act-bottombar')
+  await page.click('.lrail-item[data-activity="bottombar"]')
   await expect(page.locator('.bottom-panel')).toBeVisible()
 
-  const barIds = await page
-    .locator('.activity-bar .act-item')
-    .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.activity))
+  // 사이드바 탭은 data-tab, 여닫이(창·하단·설정)는 data-activity 를 단다.
+  const railIds = await page
+    .locator('.lrail .lrail-item')
+    .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab ?? (e as HTMLElement).dataset.activity))
   const dockIds = await page
     .locator('.bottom-panel .bp-tab')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bottom))
 
-  // 레일 = ACTIVITY_ITEMS 에서 isBottomId 아닌 것 + 맨 아래 [하단바] 토글(ActivityId 가 아니다).
-  expect(barIds).toEqual(['ai', 'pastlog', 'preview', 'explorer', 'cmdbook', 'settings', 'bottombar'])
-  // 하단 탭줄 = BOTTOM_IDS 그대로. 숨기기가 없어졌으니 **늘 열**이다(준영님이 감수하신 결과).
-  expect(dockIds).toEqual(['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'k8s', 'log', 'applog'])
-  // 둘 다에 있으면 같은 도구가 화면에 두 번 나온다.
-  for (const id of dockIds) expect(barIds).not.toContain(id)
+  // 시안(Z-final): 연결 · 파일 · 탐색기 · AI 작업대 · 서버 도구 · 지난 세션 … 설정.
+  expect(railIds).toEqual(['conn', 'file', 'explorer', 'ai', 'bottombar', 'past', 'settings'])
+  // 하단 탭줄 = BOTTOM_IDS 에서 기본 숨김(k8s·applog)을 뺀 순서 그대로.
+  expect(dockIds).toEqual(['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'log'])
+  // 오른쪽에 아이콘 바가 다시 생기면 2.0 원칙(오른쪽 = 채팅)이 깨진다.
+  await expect(page.locator('.activity-bar')).toHaveCount(0)
 
   // 설정 [일반]에 그 목록이 남아 있으면 안 된다.
   await page.keyboard.press('Control+,')

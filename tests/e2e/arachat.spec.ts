@@ -22,7 +22,7 @@ async function openAra(ara: Ara): Promise<void> {
     ipcMain.removeHandler('fs:pickDir')
     ipcMain.handle('fs:pickDir', () => ({ dir }))
   }, process.cwd())
-  await ara.page.click('.activity-bar .act-item[data-activity="ai"]')
+  await ara.page.click('.tb-chat')
   // 세션이 없으니 아라 폴더에서 열린다 — 경로 줄은 표시 전용이라 아라 폴더면 감춘다. 열렸다 = 입력칸이 산다.
   await expect(ara.page.locator('.ara-panel .ara-input')).toBeEnabled()
 }
@@ -78,10 +78,11 @@ test('ARA2-2 [중지]는 도는 동안에만 눌린다 · 닫았다 열어도 �
   await expect(send).not.toHaveClass(/stop/)
   await expect(send).toBeDisabled()
 
-  // 레일을 옮겼다 돌아와도 대화가 그대로다 — 언마운트하면 목록도 엔진도 새로 뜬다(#125 렌더 규칙).
-  await page.click('.activity-bar .act-item[data-activity="preview"]')
+  // 닫았다 다시 열어도 대화가 그대로다 — 언마운트하면 목록도 엔진도 새로 뜬다(#125 렌더 규칙).
+  // (2.0: 옆 레일[미리보기]가 지워져 "옮겼다 돌아오기" 대신 [채팅] 버튼으로 닫고 연다.)
+  await page.click('.tb-chat')
   await expect(panel).toHaveCount(0)
-  await page.click('.activity-bar .act-item[data-activity="ai"]')
+  await page.click('.tb-chat')
   await expect(panel.locator('.ara-me')).toHaveText('안녕')
   await expect(panel.locator('.ara-fold')).toHaveCount(1)
 })
@@ -306,7 +307,7 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   )
 
   const a = await launch(userDataDir)
-  await a.page.click('.activity-bar .act-item[data-activity="ai"]')
+  await a.page.click('.tb-chat')
   await expect(a.page.locator('.ara-panel')).toBeVisible()
 
   // ① 버튼이 **글자로** 보인다 — 아이콘만 뒀더니 무엇인지 안 읽혔다(준영님 제보).
@@ -346,7 +347,7 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   // ⑤ 이름은 재기동 후에도 남는다(workspace.json 에 저장 — CLI 에는 대화 이름이 없다).
   await a.app.close()
   const b = await launch(userDataDir)
-  await b.page.click('.activity-bar .act-item[data-activity="ai"]')
+  await b.page.click('.tb-chat')
   await b.page.locator('.ara-panel [data-action="ara.chats"]').click()
   await expect(b.page.locator(`.overlay.open .modal.ara-chats .ac-row[data-chat="${id}"] .ac-t`)).toHaveText('금요일 배포')
 })

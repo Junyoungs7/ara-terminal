@@ -63,8 +63,8 @@ test('DETACH-2★ 떼어낸 창에서 하단바를 따로 켠다', async ({ ara 
   // 개수를 손으로 박지 않는다 — F26 이 ps·svc·disk 를 더했을 때 8 이 낡아 이 검사만 깨졌다
   // (지키려는 성질은 "떼어낸 창도 **같은** 하단바를 갖는다"이지 "탭이 여덟"이 아니다).
   await expect(win.locator('.bottom-panel .bp-tab')).toHaveCount(BOTTOM_IDS.length)
-  // 저쪽을 켜도 이쪽은 안 움직인다. **"본창은 꺼져 있다"가 아니다** — 2026-08-24 부터 본창은
-  // 첫 세션이 생길 때 하단바가 자동으로 열리고, 떼어내도 그대로 남는다. 지킬 성질은 독립성이다.
+  // 저쪽을 켜도 이쪽은 안 움직인다. **"본창은 꺼져 있다"를 박지 않는다** — 2026-08-24~2.0 이전엔
+  // 본창 하단바가 첫 세션에 자동으로 열렸다(2.0 에서 걷음). 지킬 성질은 독립성이다.
   expect(await page.locator('.bottom-panel').count()).toBe(mainBefore)
 })
 
@@ -374,8 +374,9 @@ test('DETACH-5 떼어낸 창은 작업 창이다 — 트리·설정이 없다', 
   const win = await detachTab(ara, a)
 
   await expect(win.locator('.sidebar')).toHaveCount(0)
-  await expect(win.locator('.act-item[data-activity="settings"]')).toHaveCount(0)
-  await expect(win.locator('.act-item[data-activity="ai"]')).toHaveCount(0)
+  // 2.0: 본창의 설정은 좌측 레일, 채팅은 타이틀바 [채팅] — 어느 클래스로도 이 창엔 없어야 한다.
+  await expect(win.locator('[data-activity="settings"]')).toHaveCount(0)
+  await expect(win.locator('[data-activity="ai"], .tb-chat')).toHaveCount(0)
   // 있어야 하는 것: 탭바 · 분할 그리드 · 하단바 토글.
   await expect(win.locator('.term-tabbar')).toHaveCount(1)
   await expect(win.locator('.pane-grid')).toHaveCount(1)

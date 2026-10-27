@@ -69,8 +69,8 @@ test('AISESS-1 만들어 둔 것이 없으면 안내만 낸다 · 옛 레일은 
   await openBench(page)
   await expect(page.locator('.bench-empty')).toContainText('AI CLI')
   await expect(rows(page)).toHaveCount(0)
-  // #132: 우측 [AI 세션] 아이콘은 이제 없다 — 같은 목록이 두 자리에 있으면 어느 쪽이 진짜인지 모른다.
-  await expect(page.locator('.act-item[data-activity="aisess"]')).toHaveCount(0)
+  // #132: [AI 세션] 아이콘은 이제 없다(2.0 에서 우측 바 자체가 없어져 클래스 없이 찾는다) — 같은 목록이 두 자리에 있으면 어느 쪽이 진짜인지 모른다.
+  await expect(page.locator('[data-activity="aisess"]')).toHaveCount(0)
 })
 
 test('AISESS-2★ 시작한 AI 가 작업대로 **적립된다** — 만들고 잊지 않는다', async ({ ara, ssh }) => {

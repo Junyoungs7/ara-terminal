@@ -133,8 +133,9 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   await expect(bp.locator('.log-panel')).toHaveCount(0) // 탭을 떠난 쪽은 그리지 않는다
 
   // ★ 우측 레일과 **같이** 열린다 — 세로만 먹으니 터미널 폭에 영향이 없다.
-  await page.click('.act-item[data-activity="preview"]')
-  await expect(page.locator('.mini-rail')).toBeVisible()
+  //   (2.0: 미리보기가 지워져 오른쪽 레일은 [채팅] 하나다 — 그것을 연다.)
+  await page.click('.tb-chat')
+  await expect(page.locator('.ara-panel')).toBeVisible()
   await expect(bp).toBeVisible()
 
   const dims = await page.evaluate(() => {
@@ -150,8 +151,8 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
   // (전에는 형제로 자리를 나눠 열 때마다 분할 칸이 찌그러졌다.)
   await expect(bp).toBeVisible()
 
-  // 끄는 자리는 액티비티 바 맨 아래 토글 — 누르면 탭줄까지 통째로 사라진다.
-  await page.click('.act-bottombar')
+  // 끄는 자리는 좌측 레일 [서버 도구] 토글(2.0) — 누르면 탭줄까지 통째로 사라진다.
+  await page.click('.lrail-item[data-activity="bottombar"]')
   await expect(page.locator('.bottom-panel')).toHaveCount(0)
 })
 

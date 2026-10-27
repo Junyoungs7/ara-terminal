@@ -26,12 +26,13 @@ test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async (
   await expect(page.locator('.pane-grid .div-row')).toHaveCount(1)
 })
 
-// CHROME-3 Help > A.R.A 정보
+// CHROME-3 Help > ARA 정보
+// 1.0.10(5e3c3c6): 앱 이름이 A.R.A → ARA(i18n app.name — Windows 검색에서 찾게). 치트시트·부팅 인사 글자는 그대로 A.R.A.
 test('CHROME-3 Help 메뉴에서 앱 정보를 연다', async ({ ara }) => {
   const { page } = ara
   await page.click('.tb-menu span:text-is("도움말")')
   await page.click('.ctx-menu .ctx-item[data-action="help.about"]')
-  await expect(page.locator('.dlg-overlay .modal.sm')).toContainText('A.R.A 정보')
+  await expect(page.locator('.dlg-overlay .modal.sm')).toContainText('ARA 정보')
   await expect(page.locator('.dlg-overlay .dlg-detail')).toContainText('버전')
 })
 
@@ -53,11 +54,17 @@ test('CHROME-5 상태바가 활성 세션을 반영한다', async ({ ara }) => {
   await expect(page.locator('.statusbar .sb-seg.host .val')).toHaveText('유휴 — 열린 세션 없음')
   await newLocalShell(page)
   await expect(page.locator('.statusbar .sb-seg.host')).not.toHaveClass(/idle/)
-  await expect(page.locator('.statusbar .sb-seg.host .lbl')).toHaveText('셸')
-  const right = page.locator('.statusbar .sb-right .sb-seg')
-  await expect(right.nth(0).locator('.val')).toHaveText('1')
-  await expect(right.nth(1).locator('.val')).toHaveText('UTF-8')
-  await expect(right.nth(2).locator('.val')).toHaveText(/^v\d/)
+  // 2.0 4단계: 호스트·인코딩·버전 칸은 라벨 없이 값만(시안 Z-final). 오른쪽 순서는 UTF-8 · 세션 n · 버전(2단계).
+  await expect(page.locator('.statusbar .sb-seg.host .lbl')).toHaveCount(0)
+  const right = page.locator('.statusbar .sb-right')
+  await expect(right.locator('.sb-seg.enc .val')).toHaveText('UTF-8')
+  await expect(right.locator('.sb-seg:has(.lbl:text-is("세션")) .val')).toHaveText('1')
+  await expect(right.locator('.sb-seg.ver .val')).toHaveText(/^v\d/)
+  // 순서: 앞의 MCP 칸(children)은 상황에 따라 있다 — 뒤 세 칸의 상대 순서만 본다.
+  const order = await right.locator('.sb-seg').evaluateAll((els) =>
+    els.map((e) => (e.classList.contains('enc') ? 'enc' : e.classList.contains('ver') ? 'ver' : e.querySelector('.lbl')?.textContent ?? ''))
+  )
+  expect(order.slice(-3)).toEqual(['enc', '세션', 'ver'])
 })
 
 // CHROME-6 사이드바 접기(버튼 · 단축키)와 [연결|파일] 탭 전환
@@ -69,7 +76,7 @@ test('CHROME-6 사이드바를 접고 펴고 탭을 전환한다', async ({ ara 
   // (IntelliJ 툴윈도우). 여는 자리와 닫는 자리가 같아진 것이 이 변경의 알맹이다.
   await page.click('.lrail-item[data-tab="conn"]')
   await expect(sidebar).toHaveClass(/collapsed/)
-  await expect(page.locator('.lrail-item.active')).toHaveCount(0) // 닫히면 눌림도 풀린다
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveCount(0) // 닫히면 눌림도 풀린다
   await page.keyboard.press('Control+Shift+B')
   await expect(sidebar).not.toHaveClass(/collapsed/)
   // Ctrl+Shift+E = [파일] 탭 토글. 세션이 있어야 한다 — 세션이 0개면 [파일] 탭은 disabled 이고
@@ -78,12 +85,12 @@ test('CHROME-6 사이드바를 접고 펴고 탭을 전환한다', async ({ ara 
   // 2026-08-22(준영님 제보 6번): 셸을 열면 앱이 **스스로 [파일] 로 넘어간다**(연 폴더를 바로
   // 보여 준다). 그래서 여기서 Ctrl+Shift+E 는 여는 키가 아니라 **닫는 키**다 — 그게 같은 규칙이다.
   await newLocalShell(page)
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'file')
   await page.keyboard.press('Control+Shift+E')
   await expect(sidebar).toHaveClass(/collapsed/)
   // 다시 누르면 [파일] 로 돌아온다.
   await page.keyboard.press('Control+Shift+E')
-  await expect(page.locator('.lrail-item.active')).toHaveAttribute('data-tab', 'file')
+  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'file')
 })
 
 // CHROME-7 사이드바 폭 드래그 + 재기동 후 폭 유지(R4.3)
@@ -114,10 +121,10 @@ test('CHROME-7 사이드바 폭을 끌어 바꾸면 재기동 후에도 유지�
 // CHROME-8 창 제목(OS 작업표시줄)이 활성 세션을 반영한다(R4.4)
 test('CHROME-8 창 제목이 활성 세션을 따라간다', async ({ ara }) => {
   const { page } = ara
-  await expect.poll(async () => page.title()).toBe('A.R.A')
+  await expect.poll(async () => page.title()).toBe('ARA') // 1.0.10: 앱 이름 ARA
   await newLocalShell(page)
   const title = (await sessionList(page))[0].title
-  await expect.poll(async () => page.title(), { timeout: 15_000 }).toBe(`A.R.A — ${title}`)
+  await expect.poll(async () => page.title(), { timeout: 15_000 }).toBe(`ARA — ${title}`)
 })
 
 // CHROME-9 타이틀바 ? 버튼 = 치트시트

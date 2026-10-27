@@ -24,8 +24,8 @@ async function registerAiKey(page: Page, key = 'sk-ant-fake-0001'): Promise<void
 }
 
 async function openBootstrapViaPanel(page: Page): Promise<void> {
-  // FB-ui2: 아라 진입점이 타이틀바(.tb-ai, 제거됨)에서 우측 액티비티 바로 이관됐다.
-  await page.click('.act-item[data-activity="ai"]')
+  // 2.0: 우측 액티비티 바가 없어지며 채팅 진입점은 타이틀바 [채팅](.tb-chat) 하나다.
+  await page.click('.tb-chat')
   await expect(page.locator('.ai-panel')).toBeVisible()
   await page.click('.ai-panel [data-action="ai.bootstrap.open"]')
   await expect(page.locator(modal)).toBeVisible()
