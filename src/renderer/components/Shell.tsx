@@ -14,7 +14,7 @@ import { AppLogPanel } from './AppLogPanel'
 import { StatusBar } from './StatusBar'
 import { McpIndicator } from './McpIndicator'
 import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
-import { WorkbenchView } from './WorkbenchView'
+import type { ExplorerAct } from '@shared/explorerWin'
 import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
 import { useDialog } from './Dialog'
@@ -204,24 +204,15 @@ export function Shell() {
     const p = aiProviderOf(undefined)
     return { provider: p, model: aiModelsOf(undefined)[p] }
   })
-  // W4sat F20: 탐색기 전체화면 모드. .middle 은 언마운트하지 않는다(display:none 만) — 터미널
-  // 세션·레이아웃이 살아 있어야 나갈 때 보존된다(스펙 요구사항). 미니 프리뷰·아라 패널과 같은 규칙으로
-  // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
+  // 탐색기(서버 작업대)는 2026-10-28 부터 **진짜 OS 창**이다(main/windows/ExplorerWindow.ts) —
+  // 본창 안 떠 있는 창은 본창을 못 벗어났다(준영님 제보). 여기 남은 것은 레일 표시용 사본뿐이고
+  // 열림의 주인은 main 이다(explorer:shown). 모든 진입점(레일·단축키·검색·메뉴·[탐색기로 열기])이
+  // openExplorer 하나를 지난다 — 이미 열려 있으면 main 이 앞으로 가져온다(토글이 아니다).
   const [explorerOpen, setExplorerOpen] = useState(false)
-  // F26 R2: 디스크 창의 [탐색기로 열기]. 탐색기에 "이 서버의 이 폴더로 가라"를 한 번 건네는 신호다
-  // (at 은 같은 경로를 두 번 눌러도 다시 열리게 하는 표식 — aiPrefill 과 같은 모양).
-  const [explorerReveal, setExplorerReveal] = useState<{ profileId: string; path: string; at: number } | null>(null)
-  // F26 서버 콘솔(런치패드 + 프로세스 창). 탐색기와 같은 떠 있는 창이라 같은 규칙 —
-  // 세션 수명 동안만 사는 토글이라 workspace.json 에 저장하지 않는다.
-  // #74 후속(2026-08-14): 떠 있는 창은 닫아도 언마운트하지 않지만, **열기 전에는 만들지도 않는다.**
-  // 처음부터 마운트했더니 숨은 탐색기의 FileTree 가 DOM 에 남아 사이드바 [파일] 트리와 겹쳤다
-  // (`.sftp-wrap .ftree` 가 2개 → e2e 18건 실패). 눈에 안 보이는 트리가 붙여넣기 대상·업로더
-  // 같은 **전역 등록**을 가로챌 수 있다는 게 더 큰 문제다 — 그건 화면 없이 조용히 틀리는 종류다.
-  // 한 번 열면 그다음부터는 계속 살아 있어 탭·정렬·검색이 남는다(#74 가 노린 것).
-  const [explorerMounted, setExplorerMounted] = useState(false)
-  useEffect(() => {
-    if (explorerOpen) setExplorerMounted(true)
-  }, [explorerOpen])
+  const openExplorer = useCallback((reveal?: { profileId: string; path: string }) => {
+    void window.ev?.explorer.open(reveal).catch(() => {})
+  }, [])
+  useEffect(() => window.ev?.explorer.onShown(({ open }) => setExplorerOpen(open)), [])
   // F31 통합 검색(F1 · 타이틀바 돋보기). 목록은 기존 표(KEYMAP·MENUBAR·프로필)에서 만들어진다.
   const [paletteOpen, setPaletteOpen] = useState(false)
   // 연결 관리자를 어떤 상태로 열지(트리 "정보 수정" → 해당 프로필 / 그룹 "새 연결" → 그룹 기본값).
@@ -529,7 +520,7 @@ export function Shell() {
         toggleRail('ai')
       } else if (matchBinding(e, 'explorer.toggle')) {
         e.preventDefault()
-        setExplorerOpen((o) => !o)
+        openExplorer()
       } else if (matchBinding(e, 'ai.cli')) {
         // F27 진입점 ② — 아무것도 정해지지 않은 빈 창(마지막에 쓴 조합이 채워진다).
         e.preventDefault()
@@ -551,12 +542,12 @@ export function Shell() {
       } else if (matchBinding(e, 'panel.console')) {
         // #91: 서버 콘솔은 [서버 작업대] 창에 흡수됐다 — 같은 창을 연다.
         e.preventDefault()
-        setExplorerOpen((o) => !o)
+        openExplorer()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom])
+  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, openExplorer])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -1427,6 +1418,73 @@ export function Shell() {
     ]
   )
 
+  // 탐색기 창에 본창 상태의 사본을 민다 — 세션·프로필·즐겨찾기의 주인은 여기다. main 이 마지막
+  // 사본을 들고 있다가 창이 뜨면 건네므로(explorer:hello) 창이 닫혀 있어도 그냥 보낸다(작다).
+  useEffect(() => {
+    void window.ev?.explorer
+      .setState({
+        sessions: sessions.sessions.map((x) => ({
+          id: x.id,
+          title: x.title,
+          serverKey: x.serverKey,
+          type: x.type,
+          ...(x.profileId ? { profileId: x.profileId } : {})
+        })),
+        profiles,
+        workProfiles: work.list
+      })
+      .catch(() => {})
+  }, [sessions.sessions, profiles, work.list])
+
+  // 탐색기 창이 올린 일. 각 갈래는 옛 WorkbenchView 콜백 그대로다(그때 이 JSX 에 붙어 있던 것).
+  // 최신 클로저를 쓰려고 ref 로 들고 구독은 한 번만 건다.
+  const onExplorerAct = useRef<(a: ExplorerAct) => void>(() => {})
+  onExplorerAct.current = (a) => {
+    switch (a.kind) {
+      case 'connect':
+        void connectProfile(a.profileId)
+        return
+      case 'askAi':
+        openRail('ai')
+        setAiPrefill({ text: a.text, at: Date.now() })
+        return
+      case 'sendInput': {
+        const sid = activeSession?.id
+        if (sid) window.ev?.session.input(sid, a.text)
+        return
+      }
+      // D(#168): 탐색기가 보고 있는 서버로 띄운다(활성 세션에 밀어 넣지 않는다).
+      case 'aiCli':
+        void runAiCliNow(undefined, a.path, undefined, a.profileId ?? AI_CLI_LOCAL)
+        return
+      case 'saveWork':
+        void saveWorkProfile(a.path, a.profileId)
+        return
+      // 제보 ①: 탐색기의 즐겨찾기도 사이드바와 같은 곳에 도착한다(두 자리, 한 동작).
+      case 'workAction':
+        void onTreeAction(a.id as TreeActionId, { kind: 'work', workId: a.workId })
+        return
+      case 'launch':
+        // ↗ 칸 — 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번 구독하지 않는다) 하단 그 탭을 연다.
+        if (a.id === 'port') openBottom('monitor')
+        else if (a.id === 'sys') openBottom('sys')
+        // #88 R1: cwd 가 있으면 **그 폴더에서** 연다([여기서 터미널 열기]).
+        else if (a.profileId) void connectProfile(a.profileId, undefined, a.cwd)
+        else if (a.cwd) {
+          void sessions.restoreLocal({
+            type: 'local',
+            title: a.cwd.split(/[\/]/).pop() || 'shell',
+            serverKey: 'localhost',
+            cwd: a.cwd,
+            profileId: null,
+            shell: undefined
+          })
+        } else dispatchAction('session.new')
+        return
+    }
+  }
+  useEffect(() => window.ev?.explorer.onAct((a) => onExplorerAct.current(a)), [])
+
   return (
     <div className="app">
       <TitleBar
@@ -1474,7 +1532,7 @@ export function Shell() {
           onPick={(tab) => updateSidebar((s) => nextSidebar(s, tab))}
           features={features}
           explorerOpen={explorerOpen}
-          onExplorer={() => setExplorerOpen((o) => !o)}
+          onExplorer={() => openExplorer()}
           bottomOpen={bottom !== null}
           onBottom={toggleBottomBar}
           settingsOpen={settingsActive}
@@ -1662,8 +1720,7 @@ export function Shell() {
                     onOpenExplorer={(path: string) => {
                       const profileId = activeSession?.profileId
                       if (!profileId) return
-                      setExplorerOpen(true)
-                      setExplorerReveal({ profileId, path, at: Date.now() })
+                      openExplorer({ profileId, path })
                     }}
                     // 컨테이너 접속(`docker exec -it`)은 대화형이라 exec 채널로 못 한다 —
                     // AI CLI 실행과 같은 채널로 지금 세션 터미널에 보낸다.
@@ -1737,63 +1794,6 @@ export function Shell() {
           />
         )}
       </div>
-      {/* #74: 떠 있는 창 둘은 **언마운트하지 않는다.** 조건부 렌더였을 때는 닫는 순간 탭·경로·
-          표의 정렬·검색이 통째로 날아갔다(프로세스 표를 맞춰 놓고 잠깐 닫으면 처음부터였다).
-          우측 레일이 상태를 지키는 것과 같은 이유로 여기도 열림 여부만 넘기고 창이 display:none
-          으로 숨는다. 숨은 동안 원격 폴링이 돌지 않는 것은 각 창이 active 를 함께 내려서 막는다. */}
-      {/* #91: 옛 [파일 탐색기] 창과 [서버 콘솔] 런치패드가 **한 창**이 됐다(서버 작업대).
-          #74: 닫혀도 언마운트하지 않는다 — 대상·열린 도구·경로·표의 정렬이 남는다.
-          숨은 동안 원격 폴링이 돌지 않는 것은 창이 visible 을 아래로 내려서 막는다. */}
-      {explorerMounted && (
-        <WorkbenchView
-          visible={explorerOpen}
-          sessions={sessions.sessions}
-          profiles={profiles}
-          workProfiles={work.list}
-          onConnect={(id) => void connectProfile(id)}
-          onClose={() => setExplorerOpen(false)}
-          ask={ask}
-          askText={askText}
-          onAskAi={(text) => {
-            openRail('ai')
-            setAiPrefill({ text, at: Date.now() })
-          }}
-          onSendInput={(text) => {
-            const sid = activeSession?.id
-            if (sid) window.ev?.session.input(sid, text)
-          }}
-          // D(#168): 작업대가 보고 있는 서버로 띄운다. 예전에는 활성 세션에 한 줄을 밀어 넣어
-          // **다른 서버의 탭**에서 도는 일이 있었다 — 이제는 새 세션이라 대상을 정확히 말해야 한다.
-          onAiCli={(profileId, path) => void runAiCliNow(undefined, path, undefined, profileId ?? AI_CLI_LOCAL)}
-          onSaveWork={(profileId, path) => void saveWorkProfile(path, profileId)}
-          onLaunch={(id, profileId, cwd) => {
-            // ↗ 칸 — 창 밖에서 열린다. 포트·시스템은 **활성 세션**의 것이라(telemetry 를 두 번
-            // 구독하지 않는다) 하단 그 탭을 열 뿐이다. 터미널은 그 서버로 새 세션.
-            if (id === 'port') openBottom('monitor')
-            else if (id === 'sys') openBottom('sys')
-            else if (id === 'term') {
-              // #88 R1: cwd 가 있으면 **그 폴더에서** 연다([여기서 터미널 열기]) — 탐색기에 없는
-              // 것이고, 폴더를 찾은 다음 개발자가 실제로 하는 일이다.
-              if (profileId) void connectProfile(profileId, undefined, cwd)
-              else if (cwd) {
-                void sessions.restoreLocal({
-                  type: 'local',
-                  title: cwd.split(/[\/]/).pop() || 'shell',
-                  serverKey: 'localhost',
-                  cwd,
-                  profileId: null,
-                  shell: undefined
-                })
-              } else dispatchAction('session.new')
-              // 세션을 만드는 동작이라 터미널이 보여야 한다 — 이 칸만 창을 닫는다.
-              setExplorerOpen(false)
-            }
-          }}
-          reveal={explorerReveal}
-          // 제보 ①: 작업대의 즐겨찾기도 사이드바와 같은 곳에 도착한다(두 자리, 한 동작).
-          onWorkAction={(id, workId) => void onTreeAction(id, { kind: 'work', workId })}
-        />
-      )}
       <StatusBar
         version={version}
         session={activeSession}

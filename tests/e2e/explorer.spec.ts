@@ -1,4 +1,6 @@
-// 서버 작업대(#91, src/renderer/components/WorkbenchView.tsx) — 진입/종료 · 좌측에서 대상 고르기 ·
+// 서버 작업대(#91, src/renderer/components/WorkbenchView.tsx) — 2026-10-28 부터 **OS 창**(#explorerwin,
+// ExplorerWindow.tsx). 탐색기 화면은 그 창의 Page(ex)에서, 터미널·아라 패널은 본창(ara.page)에서 본다.
+// 진입/종료 · 좌측에서 대상 고르기 ·
 // 도구 탭 · 다중 선택 복사/붙여넣기(로컬→원격, 같은 서버 안) · 아라 연결점(WB, #88 R1) ·
 // 탐색기 따라잡기(FM, #88 R2).
 // 2패널 모드(구 F20)는 없어졌다 — "복사 →/이동 →" 우클릭 항목 대신 클립보드가 그 자리를 대신한다.
@@ -7,9 +9,20 @@
 import { cpSync, mkdirSync, mkdtempSync, statSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
-import type { Locator, Page } from '@playwright/test'
+import type { ElectronApplication, Locator, Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { test, expect, newLocalShell, runCommand, termText, connectNewSshProfile, dialog, dialogConfirm } from './fixtures'
+import {
+  test,
+  expect,
+  newLocalShell,
+  runCommand,
+  termText,
+  connectNewSshProfile,
+  dialog,
+  dialogConfirm,
+  explorerWindow,
+  explorerWindowCount
+} from './fixtures'
 
 // 같은 서버 안 복사(sftp:copyRemote)는 SFTP 가 아니라 **exec 으로 `cp`** 를 돌린다 — 이 하네스엔
 // 진짜 셸이 없으므로 cp 한 줄만 흉내 낸다. 작은따옴표 인용을 실제로 풀어 보기 때문에 shQuote 조립이
@@ -86,16 +99,19 @@ async function cleanupFixture(page: Page, dir: string): Promise<void> {
   rmSync(dir, { recursive: true, force: true })
 }
 
-async function openExplorer(page: Page): Promise<void> {
-  await page.keyboard.press('Control+Shift+O')
-  await expect(page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
+/** Ctrl+Shift+O(본창) → 탐색기 OS 창의 Page. */
+async function openExplorer(ara: { app: ElectronApplication; page: Page }): Promise<Page> {
+  return explorerWindow(ara.app, () => ara.page.keyboard.press('Control+Shift+O'))
 }
 
-async function closeExplorer(page: Page): Promise<void> {
-  await page.keyboard.press('Control+Shift+O')
-  // #74: 창은 닫아도 언마운트하지 않는다(탭·경로를 기억한다) — 사라지는 게 아니라 숨는다.
-  await expect(page.locator('.exp-win')).not.toBeVisible({ timeout: 10_000 })
+/** 탐색기 창의 타이틀바 [×] — 창이 닫히고(파괴) 목록에서 빠진다. */
+async function closeExplorer(ara: { app: ElectronApplication }, ex: Page): Promise<void> {
+  await ex.click('.tb-ctl.close')
+  await expect.poll(() => explorerWindowCount(ara.app), { timeout: 10_000 }).toBe(0)
 }
+
+/** 제목줄이 말하는 대상 — "탐색기 — <대상>". */
+const titleOf = (name: string): string => `탐색기 — ${name}`
 
 /** 지금 보이는 탭의 파일 영역. 숨은 탭도 DOM 에 남아 있으므로(폴더를 기억하려고) :visible 로 고른다. */
 const pane = (page: Page): Locator => page.locator('.exp-pane:visible')
@@ -110,7 +126,7 @@ const toolBtn = (page: Page, label: string): Locator => pane(page).locator(`.fto
  */
 async function openServerTab(page: Page, profileName: string): Promise<void> {
   await navNode(page, profileName).click()
-  await expect(page.locator('.wb-win .con-srv')).toHaveText(profileName, { timeout: 30_000 })
+  await expect(page.locator('.tb-title')).toHaveText(titleOf(profileName), { timeout: 30_000 })
   await openFiles(page)
 }
 
@@ -129,14 +145,18 @@ async function openLocalFiles(page: Page): Promise<void> {
 }
 
 // EXP-1 Ctrl+Shift+O 로 떠 있는 창이 열린다 — 본문(.middle)은 **가려지지 않는다**(구 전체화면 모드와 다름).
-test('EXP-1 Ctrl+Shift+O 로 작업대가 열리고 터미널 본문은 그대로 보인다', async ({ ara }) => {
+// 2026-10-28: 탐색기는 **별도 OS 창**이다 — 본창에는 탐색기 DOM 이 아예 없다.
+test('EXP-1 Ctrl+Shift+O 로 탐색기 창이 열리고 본창 터미널은 그대로 보인다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await openExplorer(ara.page)
+  const ex = await openExplorer(ara)
   await expect(ara.page.locator('.middle')).toBeVisible()
+  await expect(ex.locator('.wb-win')).toHaveCount(0)
   // #91: 열자마자 [홈] 격자 하나. 대상은 **내 PC** 가 기본이고 제목줄에 찍힌다.
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
-  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
-  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('내 PC')
+  await expect(ex.locator('.exp-tab')).toHaveCount(1)
+  await expect(ex.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await expect(ex.locator('.tb-title')).toHaveText(titleOf('내 PC'))
+  // 2.0 타이틀바(− □ ×) — 본창과 같은 TitleBar
+  await expect(ex.locator('.tb-controls .tb-ctl')).toHaveCount(3)
 })
 
 // EXP-2 [보기] 메뉴에서도 같은 진입점으로 열린다
@@ -144,35 +164,32 @@ test('EXP-1 Ctrl+Shift+O 로 작업대가 열리고 터미널 본문은 그대�
 test('EXP-2 [보기] 메뉴에서 탐색기를 연다', async ({ ara }) => {
   await newLocalShell(ara.page)
   await ara.page.click('.tb-menu span:text-is("보기")')
-  await ara.page.click('.ctx-menu .ctx-item[data-action="explorer.toggle"]')
-  await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
+  await explorerWindow(ara.app, () => ara.page.click('.ctx-menu .ctx-item[data-action="explorer.toggle"]'))
 })
 
 // EXP-2b 레일 아이콘으로도 연다(준영님 요청 진입점 — 2.0 에서 우측 액티비티 바 → 좌측 레일)
 test('EXP-2b 좌측 레일 아이콘으로 탐색기를 연다', async ({ ara }) => {
   await newLocalShell(ara.page)
+  await explorerWindow(ara.app, () => ara.page.click('.lrail-item[data-activity="explorer"]'))
+  // 열려 있는 동안 레일 아이콘이 켜져 있다(main 이 explorer:shown 으로 알린다).
+  await expect(ara.page.locator('.lrail-item.active[data-activity="explorer"]')).toHaveCount(1)
+  // 다시 눌러도 닫히지 않는다 — 토글이 아니라 **있는 창을 앞으로**(창은 하나).
   await ara.page.click('.lrail-item[data-activity="explorer"]')
-  await expect(ara.page.locator('.exp-win')).toBeVisible({ timeout: 10_000 })
-  await ara.page.click('.lrail-item[data-activity="explorer"]')
-  await expect(ara.page.locator('.exp-win')).not.toBeVisible() // #74: 창은 남고 숨는다
+  expect(explorerWindowCount(ara.app)).toBe(1)
 })
 
-// EXP-13★ #91: 떠 있는 창이 **하나**가 됐다 — 탐색기와 서버 콘솔이 [서버 작업대]로 합쳐졌다.
-// 원래 검사(둘이 같은 좌표에서 시작해 아래 창을 꺼낼 수 없던 문제, #72)는 창이 둘일 때의 것이다.
-// 지금 지킬 성질은 "창이 정말 하나인가" — 둘로 되돌아가면 그 겹침 문제도 같이 돌아온다.
-test('EXP-13★ 떠 있는 창은 작업대 하나뿐이다', async ({ ara }) => {
+// EXP-13★ #91: 탐색기와 서버 콘솔이 [서버 작업대] 창 **하나**로 합쳐졌다. 2026-10-28 부터 그 창은
+// OS 창이고, 지킬 성질은 같다 — "창이 정말 하나인가". 진입점이 달라도 같은 창이 앞으로 와야 한다.
+test('EXP-13★ 탐색기 창은 하나뿐이다 — 진입점이 달라도 같은 창', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
 
-  await page.click('.lrail-item[data-activity="explorer"]')
-  await expect(page.locator('.wb-win')).toBeVisible()
+  const ex = await explorerWindow(ara.app, () => page.click('.lrail-item[data-activity="explorer"]'))
   // 레일에 [서버 콘솔] 항목 자체가 없다(작업대에 흡수됐다).
   await expect(page.locator('[data-activity="console"]')).toHaveCount(0)
-  await expect(page.locator('.exp-win')).toHaveCount(1)
-
-  // 창을 눌러도(본문이든 탭바든) 살아 있고 앞으로 온다 — z 는 여전히 관리된다.
-  await page.locator('.wb-win .exp-tabs').click({ position: { x: 4, y: 4 } })
-  await expect(page.locator('.wb-win')).toBeVisible()
+  await page.keyboard.press('Control+Shift+O')
+  expect(explorerWindowCount(ara.app)).toBe(1)
+  await expect(ex.locator('.wb-win')).toBeVisible()
 })
 
 // EXP-3★ 탐색기는 xterm 을 파괴하지 않는다 — 닫으면 출력·활성 탭·패널이 그대로다.
@@ -201,8 +218,8 @@ test('EXP-3★ 탐색기를 열었다 닫아도 터미널 출력·활성 탭·�
   const before = await termText(ara.page, id)
   const paneCountBefore = await ara.page.locator('.pane-grid .pane').count()
 
-  await openExplorer(ara.page)
-  await closeExplorer(ara.page)
+  const ex = await openExplorer(ara)
+  await closeExplorer(ara, ex)
 
   await expect(ara.page.locator(`.ttab.active[data-session-id="${id}"]`)).toBeVisible()
   expect(await ara.page.locator('.pane-grid .pane').count()).toBe(paneCountBefore)
@@ -214,13 +231,13 @@ test('EXP-4★ 좌측 서버 목록에서 서버를 열면 탭이 생기고 원�
   const remote = makeRemote()
   const h = await ssh({ password: 'pw-exp4', sftpRoot: remote })
   await connectNewSshProfile(ara.page, { name: 'exp4-remote', port: h.port, password: 'pw-exp4' })
-  await openExplorer(ara.page)
-  await openServerTab(ara.page, 'exp4-remote')
-  await expect(frow(pane(ara.page), 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
+  const ex = await openExplorer(ara)
+  await openServerTab(ex, 'exp4-remote')
+  await expect(frow(pane(ex), 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
   // #91: 탭은 [홈]+[파일] 둘이고, **어느 서버인지는 제목줄**이 말한다(옛 위치 탭 대신).
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
-  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('exp4-remote')
-  await expect(ara.page.locator(`.exp-node.on:has(.nm:text-is("exp4-remote"))`)).toBeVisible()
+  await expect(ex.locator('.exp-tab')).toHaveCount(2)
+  await expect(ex.locator('.tb-title')).toHaveText(titleOf('exp4-remote'))
+  await expect(ex.locator(`.exp-node.on:has(.nm:text-is("exp4-remote"))`)).toBeVisible()
 })
 
 // EXP-4b #91: 대상은 **하나**다 — 같은 서버를 다시 눌러도 아무 일이 없고(열린 도구도 그대로),
@@ -228,19 +245,19 @@ test('EXP-4★ 좌측 서버 목록에서 서버를 열면 탭이 생기고 원�
 test('EXP-4b 같은 서버를 다시 눌러도 그대로, 다른 서버면 [홈] 으로 돌아간다', async ({ ara, ssh }) => {
   const hA = await ssh({ password: 'pw-exp4bA', sftpRoot: makeRemote() })
   await connectNewSshProfile(ara.page, { name: 'exp4bA', port: hA.port, password: 'pw-exp4bA' })
-  await openExplorer(ara.page)
-  await openServerTab(ara.page, 'exp4bA')
+  const ex = await openExplorer(ara)
+  await openServerTab(ex, 'exp4bA')
 
   // 같은 서버 다시 — [파일] 탭이 그대로 열려 있다.
-  await navNode(ara.page, 'exp4bA').click()
-  await expect(ara.page.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
+  await navNode(ex, 'exp4bA').click()
+  await expect(ex.locator('.exp-tab.on[data-tab="files"]')).toBeVisible()
+  await expect(ex.locator('.exp-tab')).toHaveCount(2)
 
   // 다른 대상(내 PC)으로 — 도구가 접히고 [홈] 이 활성이 된다.
-  await navNode(ara.page, '홈 폴더').click()
-  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
-  await expect(ara.page.locator('.wb-win .con-srv')).toHaveText('내 PC')
+  await navNode(ex, '홈 폴더').click()
+  await expect(ex.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await expect(ex.locator('.exp-tab')).toHaveCount(1)
+  await expect(ex.locator('.tb-title')).toHaveText(titleOf('내 PC'))
 })
 
 // EXP-4c★ #91: 탭 드래그(위치 탭 순서 바꾸기, 2026-08-13)는 위치 탭과 함께 사라졌다.
@@ -248,14 +265,14 @@ test('EXP-4b 같은 서버를 다시 눌러도 그대로, 다른 서버면 [홈]
 test('EXP-4c★ 도구 탭을 닫으면 [홈] 으로 돌아간다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-exp4c', sftpRoot: makeRemote() })
   await connectNewSshProfile(ara.page, { name: 'exp4c-remote', port: h.port, password: 'pw-exp4c' })
-  await openExplorer(ara.page)
-  await openServerTab(ara.page, 'exp4c-remote')
+  const ex = await openExplorer(ara)
+  await openServerTab(ex, 'exp4c-remote')
 
-  await ara.page.click('.exp-tab[data-tab="files"] .exp-tab-x')
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
-  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await ex.click('.exp-tab[data-tab="files"] .exp-tab-x')
+  await expect(ex.locator('.exp-tab')).toHaveCount(1)
+  await expect(ex.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
   // [홈] 에는 닫기 버튼이 없다 — 마지막 한 장이자 돌아갈 곳이다.
-  await expect(ara.page.locator('.exp-tab[data-tab="home"] .exp-tab-x')).toHaveCount(0)
+  await expect(ex.locator('.exp-tab[data-tab="home"] .exp-tab-x')).toHaveCount(0)
 })
 
 // EXP-4d 경로 표시줄 — 브레드크럼을 입력으로 바꿔 경로를 직접 치면 그 폴더로 간다(준영님 요청).
@@ -265,9 +282,9 @@ test('EXP-4d★ [경로 직접 입력]으로 경로를 쳐서 이동한다', asy
     mkdirSync(join(dir, '목표폴더'))
     writeFileSync(join(dir, '목표폴더', 'hit.txt'), 'hit\n')
     await newLocalShell(ara.page)
-    await openExplorer(ara.page)
-    await openLocalFiles(ara.page)
-    const p = pane(ara.page)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
     await p.locator('[data-action="path.edit"]').click()
     const input = p.locator('.fpath-in')
     await expect(input).toBeVisible()
@@ -289,10 +306,10 @@ test('EXP-5 로컬 탭에서 폴더를 더블클릭하면 하위로 이동한다
     mkdirSync(join(dir, '하위폴더'))
     writeFileSync(join(dir, '하위폴더', 'inner.txt'), 'inner\n')
     await newLocalShell(ara.page)
-    await openExplorer(ara.page)
-    await openLocalFiles(ara.page)
-    const p = pane(ara.page)
-    await gotoPath(ara.page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, '하위폴더/')).toBeVisible({ timeout: 15_000 })
     await frow(p, '하위폴더/').dblclick()
     await expect(frow(p, 'inner.txt')).toBeVisible({ timeout: 15_000 })
@@ -312,22 +329,22 @@ test('EXP-6★ 로컬에서 파일 2개를 골라 복사하고 서버 탭에 붙
     writeFileSync(join(dir, 'two.bin'), Buffer.alloc(8 * 1024, 0x43))
     const h = await ssh({ password: 'pw-exp6', sftpRoot: remote })
     await connectNewSshProfile(ara.page, { name: 'exp6-remote', port: h.port, password: 'pw-exp6' })
-    await openExplorer(ara.page)
+    const ex = await openExplorer(ara)
 
     // #91: 위치 탭이 없다 — 좌측에서 [내 PC] 를 고르고 [파일] 을 연다.
-    await openLocalFiles(ara.page)
-    const local = pane(ara.page)
-    await gotoPath(ara.page, dir)
+    await openLocalFiles(ex)
+    const local = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(local, 'one.bin')).toBeVisible({ timeout: 15_000 })
     await frow(local, 'one.bin').click()
     await frow(local, 'two.bin').click({ modifiers: ['Control'] })
-    await expect(ara.page.locator('.ftcount:visible')).toHaveText('2개 선택')
-    await toolBtn(ara.page, '복사').click()
+    await expect(ex.locator('.ftcount:visible')).toHaveText('2개 선택')
+    await toolBtn(ex, '복사').click()
 
     // 서버 탭으로 옮겨 붙여넣기.
-    await openServerTab(ara.page, 'exp6-remote')
-    await expect(frow(pane(ara.page), 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
-    await toolBtn(ara.page, '붙여넣기').click()
+    await openServerTab(ex, 'exp6-remote')
+    await expect(frow(pane(ex), 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
+    await toolBtn(ex, '붙여넣기').click()
 
     await expect.poll(() => existsSync(join(remote, 'one.bin')), { timeout: 90_000 }).toBe(true)
     await expect.poll(() => existsSync(join(remote, 'two.bin')), { timeout: 90_000 }).toBe(true)
@@ -343,15 +360,15 @@ test('EXP-7★ 같은 서버 안에서 복사·붙여넣기 하면 서버에서 
   mkdirSync(join(remote, 'dest'))
   const h = await ssh({ password: 'pw-exp7', sftpRoot: remote, execHandler: cpExec(remote) })
   await connectNewSshProfile(ara.page, { name: 'exp7-remote', port: h.port, password: 'pw-exp7' })
-  await openExplorer(ara.page)
-  await openServerTab(ara.page, 'exp7-remote')
-  const p = pane(ara.page)
+  const ex = await openExplorer(ara)
+  await openServerTab(ex, 'exp7-remote')
+  const p = pane(ex)
   await expect(frow(p, 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
   await frow(p, 'remote_readme.txt').click()
-  await toolBtn(ara.page, '복사').click()
+  await toolBtn(ex, '복사').click()
   await frow(p, 'dest/').dblclick()
   await expect(p.locator('.fcrumb')).toContainText('dest', { timeout: 15_000 })
-  await toolBtn(ara.page, '붙여넣기').click()
+  await toolBtn(ex, '붙여넣기').click()
   await expect.poll(() => existsSync(join(remote, 'dest', 'remote_readme.txt')), { timeout: 60_000 }).toBe(true)
 })
 
@@ -361,19 +378,19 @@ test('EXP-8 선택이 없으면 복사·삭제 버튼이 비활성이고, 하나
   try {
     writeFileSync(join(dir, 'a.txt'), 'a\n')
     await newLocalShell(ara.page)
-    await openExplorer(ara.page)
-    await openLocalFiles(ara.page)
-    const p = pane(ara.page)
-    await gotoPath(ara.page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, 'a.txt')).toBeVisible({ timeout: 15_000 })
 
-    await expect(toolBtn(ara.page, '복사')).toBeDisabled()
-    await expect(toolBtn(ara.page, '삭제')).toBeDisabled()
-    await expect(toolBtn(ara.page, '이름 변경')).toBeDisabled()
+    await expect(toolBtn(ex, '복사')).toBeDisabled()
+    await expect(toolBtn(ex, '삭제')).toBeDisabled()
+    await expect(toolBtn(ex, '이름 변경')).toBeDisabled()
 
     await frow(p, 'a.txt').click()
-    await expect(toolBtn(ara.page, '복사')).toBeEnabled()
-    await expect(toolBtn(ara.page, '이름 변경')).toBeEnabled()
+    await expect(toolBtn(ex, '복사')).toBeEnabled()
+    await expect(toolBtn(ex, '이름 변경')).toBeEnabled()
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -385,28 +402,33 @@ test('EXP-8 선택이 없으면 복사·삭제 버튼이 비활성이고, 하나
 test('EXP-9 도구 탭만 닫히고 [홈] 은 남는다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-exp9', sftpRoot: makeRemote() })
   await connectNewSshProfile(ara.page, { name: 'exp9-remote', port: h.port, password: 'pw-exp9' })
-  await openExplorer(ara.page)
-  await expect(ara.page.locator('.exp-tab-x')).toHaveCount(0) // [홈] 뿐이면 ✕ 자체가 없다
-  await openServerTab(ara.page, 'exp9-remote')
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(2)
+  const ex = await openExplorer(ara)
+  await expect(ex.locator('.exp-tab-x')).toHaveCount(0) // [홈] 뿐이면 ✕ 자체가 없다
+  await openServerTab(ex, 'exp9-remote')
+  await expect(ex.locator('.exp-tab')).toHaveCount(2)
 
-  await ara.page.locator('.exp-tab.on .exp-tab-x').click()
-  await expect(ara.page.locator('.exp-tab')).toHaveCount(1)
-  await expect(ara.page.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
-  await expect(ara.page.locator('.exp-tab-x')).toHaveCount(0)
+  await ex.locator('.exp-tab.on .exp-tab-x').click()
+  await expect(ex.locator('.exp-tab')).toHaveCount(1)
+  await expect(ex.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
+  await expect(ex.locator('.exp-tab-x')).toHaveCount(0)
 })
 
-// EXP-10 창 최대화/복원 — 떠 있는 창이라 크기가 바뀐다(전체화면 오버레이가 아니다).
-test('EXP-10 최대화하면 창이 화면을 채우고, 다시 누르면 원래 크기로 돌아온다', async ({ ara }) => {
+// EXP-10 창 최대화/복원 — 이제 OS 창이라 **그 창**이 최대화된다(본창이 아니다 — window:* 는 보낸 창 대상).
+test('EXP-10 탐색기 창의 [□] 는 그 창을 최대화하고, 다시 누르면 되돌린다', async ({ ara }) => {
   await newLocalShell(ara.page)
-  await openExplorer(ara.page)
-  const win = ara.page.locator('.wb-win')
-  const before = await win.boundingBox()
-  await ara.page.locator('.exp-wbtn:not(.x)').click()
-  const maxed = await win.boundingBox()
-  expect(maxed!.width).toBeGreaterThan(before!.width)
-  await ara.page.locator('.exp-wbtn:not(.x)').click()
-  await expect.poll(async () => (await win.boundingBox())!.width, { timeout: 5_000 }).toBe(before!.width)
+  const ex = await openExplorer(ara)
+  const wins = () =>
+    ara.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().map((w) => ({ t: w.getTitle(), m: w.isMaximized() }))
+    )
+  const exMax = async () => (await wins()).find((w) => w.t.startsWith('탐색기'))?.m
+  const others = async () => (await wins()).filter((w) => !w.t.startsWith('탐색기')).map((w) => w.m)
+  const mainBefore = await others()
+  await ex.click('.tb-ctl.max')
+  await expect.poll(exMax, { timeout: 5_000 }).toBe(true)
+  expect(await others()).toEqual(mainBefore) // 본창은 그대로
+  await ex.click('.tb-ctl.max')
+  await expect.poll(exMax, { timeout: 5_000 }).toBe(false)
 })
 
 // EXP-11★ 서버 A → 서버 B. SFTP 에 서버 간 전송 op 가 없어 데이터는 우리를 거치지만, main 이 두
@@ -420,21 +442,21 @@ test('EXP-11★ 서버 A 의 파일을 서버 B 탭에 붙여넣는다(로컬 �
   const b = await ssh({ password: 'pw-b', sftpRoot: rootB })
   await connectNewSshProfile(ara.page, { name: 'srv-a', port: a.port, password: 'pw-a' })
   await connectNewSshProfile(ara.page, { name: 'srv-b', port: b.port, password: 'pw-b' })
-  await openExplorer(ara.page)
+  const ex = await openExplorer(ara)
 
-  await openServerTab(ara.page, 'srv-a')
-  await expect(frow(pane(ara.page), 'payload.bin')).toBeVisible({ timeout: 20_000 })
-  await frow(pane(ara.page), 'payload.bin').click()
-  await toolBtn(ara.page, '복사').click()
+  await openServerTab(ex, 'srv-a')
+  await expect(frow(pane(ex), 'payload.bin')).toBeVisible({ timeout: 20_000 })
+  await frow(pane(ex), 'payload.bin').click()
+  await toolBtn(ex, '복사').click()
 
-  await openServerTab(ara.page, 'srv-b')
-  await expect(pane(ara.page).locator('.sftp-empty')).toBeVisible({ timeout: 20_000 })
-  await toolBtn(ara.page, '붙여넣기').click()
+  await openServerTab(ex, 'srv-b')
+  await expect(pane(ex).locator('.sftp-empty')).toBeVisible({ timeout: 20_000 })
+  await toolBtn(ex, '붙여넣기').click()
 
   // 크기까지 본다 — SFTP OPEN(w) 만으로도 빈 파일이 생기므로 "존재"만으로는 전송 성공이 아니다.
   await expect.poll(() => (existsSync(join(rootB, 'payload.bin')) ? statSync(join(rootB, 'payload.bin')).size : 0), { timeout: 90_000 }).toBe(8 * 1024)
   expect(existsSync(join(rootA, 'payload.bin'))).toBe(true) // 복사 — 출발지는 그대로.
-  await expect(frow(pane(ara.page), 'payload.bin')).toBeVisible({ timeout: 20_000 })
+  await expect(frow(pane(ex), 'payload.bin')).toBeVisible({ timeout: 20_000 })
 })
 
 // EXP-12 폴더는 서버 사이로 못 옮긴다(스트림 하나 = 파일 하나) — 조용히 실패하지 않고 알린다.
@@ -446,14 +468,14 @@ test('EXP-12 폴더만 골라 다른 서버에 붙여넣으면 안내가 뜬다'
   const b = await ssh({ password: 'pw-b12', sftpRoot: rootB })
   await connectNewSshProfile(ara.page, { name: 'a12', port: a.port, password: 'pw-a12' })
   await connectNewSshProfile(ara.page, { name: 'b12', port: b.port, password: 'pw-b12' })
-  await openExplorer(ara.page)
+  const ex = await openExplorer(ara)
 
-  await openServerTab(ara.page, 'a12')
-  await frow(pane(ara.page), 'onlydir/').click({ timeout: 20_000 })
-  await toolBtn(ara.page, '복사').click()
-  await openServerTab(ara.page, 'b12')
-  await toolBtn(ara.page, '붙여넣기').click()
-  await expect(pane(ara.page).locator('.sftp-err')).toContainText('폴더는', { timeout: 15_000 })
+  await openServerTab(ex, 'a12')
+  await frow(pane(ex), 'onlydir/').click({ timeout: 20_000 })
+  await toolBtn(ex, '복사').click()
+  await openServerTab(ex, 'b12')
+  await toolBtn(ex, '붙여넣기').click()
+  await expect(pane(ex).locator('.sftp-err')).toContainText('폴더는', { timeout: 15_000 })
   expect(existsSync(join(rootB, 'onlydir'))).toBe(false)
 })
 
@@ -465,15 +487,15 @@ test('EXP-12 폴더만 골라 다른 서버에 붙여넣으면 안내가 뜬다'
 test('WB-1★ 로컬 폴더 우클릭에 아라 연결점 셋이 있다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
-  await openExplorer(page)
-  await openLocalFiles(page)
+  const ex = await openExplorer(ara)
+  await openLocalFiles(ex)
 
-  await pane(page).locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-  const menu = page.locator('.ctx-menu')
+  await pane(ex).locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
+  const menu = ex.locator('.ctx-menu')
   await expect(menu.locator('[data-action="file.terminal"]')).toBeVisible()
   await expect(menu.locator('[data-action="file.aicli"]')).toBeVisible()
   await expect(menu.locator('[data-action="file.saveWork"]')).toBeVisible()
-  await page.keyboard.press('Escape')
+  await ex.keyboard.press('Escape')
 })
 
 // WB-2★ [여기서 터미널 열기] — 그 폴더를 cwd 로 새 셸. 탐색기에 없는 것이고 제일 자주 한다.
@@ -482,18 +504,17 @@ test('WB-2★ [여기서 터미널 열기]가 그 폴더에서 새 셸을 연다
   const dir = makeLocalFixture('ara-wb2-')
   try {
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
 
     const before = await page.locator('.term-tabbar .ttab').count()
     await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-    await page.click('.ctx-menu [data-action="file.terminal"]')
+    await ex.click('.ctx-menu [data-action="file.terminal"]')
 
-    // 새 세션이 생기고 창은 물러난다(터미널이 보여야 한다).
+    // 새 세션이 **본창에** 생기고 본창이 앞으로 온다(탐색기 창은 세션을 소유하지 않는다).
     await expect(page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
-    await expect(page.locator('.wb-win')).not.toBeVisible()
     // 그 폴더에서 시작했다 — 상태바 cwd 로 확인한다.
     await expect(page.locator('.statusbar .sb-seg.cwd .val')).toContainText(basename(dir), { timeout: 25_000 })
   } finally {
@@ -509,15 +530,15 @@ test('WB-3★ [아라에게 물어보기]가 경로를 아라 입력창에 얹�
   try {
     writeFileSync(join(dir, 'target.txt'), 'x\n')
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, 'target.txt')).toBeVisible({ timeout: 15_000 })
 
     await frow(p, 'target.txt').click()
     await frow(p, 'target.txt').click({ button: 'right' })
-    await page.click('.ctx-menu [data-action="file.askAi"]')
+    await ex.click('.ctx-menu [data-action="file.askAi"]')
 
     await expect(page.locator('.ai-panel')).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.ai-panel .ai-input')).toHaveValue(/target\.txt/)
@@ -538,13 +559,13 @@ test('WB-4★ 로컬 폴더에서 AI CLI 를 시작하면 그 폴더로 가는 �
   const dir = makeLocalFixture('ara-wb4-')
   try {
     const sessionId = await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
 
     await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-    await page.click('.ctx-menu [data-action="file.aicli"]')
+    await ex.click('.ctx-menu [data-action="file.aicli"]')
 
     // 창은 뜨지 않는다.
     await expect(page.locator('.aicli-modal')).toHaveCount(0)
@@ -567,25 +588,26 @@ test('WB-5★ 작업대에서 [작업 프로필로 저장]을 누르면 즐겨�
   const dir = makeLocalFixture('ara-wb5-')
   try {
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
 
     // 저장 전에는 즐겨찾기가 하나도 없다(임시 userData 라 매번 빈 상태에서 시작한다).
-    await expect(page.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(0)
+    await expect(ex.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(0)
 
     await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-    await page.click('.ctx-menu [data-action="file.saveWork"]')
+    await ex.click('.ctx-menu [data-action="file.saveWork"]')
 
     // 이름만 묻는다 — 대상 서버·경로는 화면이 이미 안다. 확인창에 그 둘이 박혀 있다.
+    // 즐겨찾기의 주인은 본창이라 **본창**이 묻는다(main 이 본창을 앞으로 가져온다).
     await expect(dialog(page)).toBeVisible({ timeout: 10_000 })
     await expect(dialog(page)).toContainText(basename(dir))
     await dialog(page).locator('.dlg-input').fill('WB5 즐겨찾기')
     await dialogConfirm(page)
 
-    // 좌측 즐겨찾기에 그 이름이 뜬다 — 저장이 실제로 일어났다는 증거다.
-    await expect(page.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(1, {
+    // 탐색기 창 좌측 즐겨찾기에 그 이름이 뜬다 — 본창에서 저장돼 사본으로 돌아왔다는 증거다.
+    await expect(ex.locator('.exp-nav .exp-node .nm', { hasText: 'WB5 즐겨찾기' })).toHaveCount(1, {
       timeout: 10_000
     })
   } finally {
@@ -612,19 +634,19 @@ test('FM-1★ 숨김 항목을 감췄다 다시 본다', async ({ ara }) => {
     writeFileSync(join(dir, '.env'), 'X=1\n')
     writeFileSync(join(dir, 'plain.txt'), 'x\n')
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, '.env')).toBeVisible({ timeout: 15_000 })
 
-    await pickView(page, 'file.hidden')
+    await pickView(ex, 'file.hidden')
     await expect(frow(p, '.env')).toHaveCount(0)
     await expect(frow(p, 'plain.txt')).toBeVisible()
     // 왜 줄었는지 상태 표시줄이 말한다 — 안 그러면 파일이 사라진 것으로 보인다.
     await expect(p.locator('.fstat')).toContainText('숨김 1')
 
-    await pickView(page, 'file.hidden')
+    await pickView(ex, 'file.hidden')
     await expect(frow(p, '.env')).toBeVisible()
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -641,17 +663,17 @@ test('FM-2★ 크기순으로 정렬하고 방향을 뒤집는다', async ({ ara
     writeFileSync(join(dir, 'big.txt'), 'a'.repeat(5_000))
     mkdirSync(join(dir, 'adir'))
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, 'big.txt')).toBeVisible({ timeout: 15_000 })
     const order = (): Promise<string[]> => p.locator('.ftree .frow .fn').allInnerTexts()
 
-    await pickView(page, 'file.sort.size')
+    await pickView(ex, 'file.sort.size')
     expect(await order()).toEqual(['adir/', 'small.txt', 'big.txt'])
 
-    await pickView(page, 'file.sort.size')
+    await pickView(ex, 'file.sort.size')
     expect(await order()).toEqual(['adir/', 'big.txt', 'small.txt']) // 뒤집혀도 폴더는 위
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -666,17 +688,17 @@ test('FM-3★ 잘라내기로 파일을 다른 폴더로 옮긴다', async ({ ar
     writeFileSync(join(dir, 'move_me.txt'), 'hello\n')
     mkdirSync(join(dir, 'dest'))
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, 'move_me.txt')).toBeVisible({ timeout: 15_000 })
 
     await frow(p, 'move_me.txt').click()
-    await toolBtn(page, '잘라내기').click()
+    await toolBtn(ex, '잘라내기').click()
     await frow(p, 'dest/').dblclick()
     await expect(p.locator('.fcrumb')).toContainText('dest', { timeout: 15_000 })
-    await toolBtn(page, '붙여넣기').click()
+    await toolBtn(ex, '붙여넣기').click()
     await expect(frow(p, 'move_me.txt')).toBeVisible({ timeout: 15_000 })
 
     expect(existsSync(join(dir, 'dest', 'move_me.txt'))).toBe(true)
@@ -692,15 +714,15 @@ test('FM-4★ 새 파일을 만들고 상태 표시줄이 개수를 센다', asy
   const dir = makeLocalFixture('ara-fm4-')
   try {
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(p.locator('.fstat')).toContainText('0개 항목', { timeout: 15_000 })
 
-    await toolBtn(page, '새 파일').click()
-    await page.fill('.dlg-input', '메모.txt')
-    await dialogConfirm(page)
+    await toolBtn(ex, '새 파일').click()
+    await ex.fill('.dlg-input', '메모.txt')
+    await dialogConfirm(ex)
     await expect(frow(p, '메모.txt')).toBeVisible({ timeout: 15_000 })
     await expect(p.locator('.fstat')).toContainText('1개 항목')
 
@@ -721,10 +743,10 @@ test('FM-5★ 이름으로 거르고, 뒤로·앞으로 오간다', async ({ ara
     writeFileSync(join(dir, 'beta.txt'), 'b')
     mkdirSync(join(dir, 'sub'))
     await newLocalShell(page)
-    await openExplorer(page)
-    await openLocalFiles(page)
-    const p = pane(page)
-    await gotoPath(page, dir)
+    const ex = await openExplorer(ara)
+    await openLocalFiles(ex)
+    const p = pane(ex)
+    await gotoPath(ex, dir)
     await expect(frow(p, 'beta.txt')).toBeVisible({ timeout: 15_000 })
 
     await p.locator('[data-action="file.filter"]').click()
@@ -756,13 +778,13 @@ test('FM-6★ 원격 메뉴에는 로컬 전용 항목이 없다', async ({ ara,
   try {
     const h = await ssh({ password: 'pw-fm6', sftpRoot: remote })
     await connectNewSshProfile(page, { name: 'fm6', port: h.port, password: 'pw-fm6' })
-    await openExplorer(page)
-    await openServerTab(page, 'fm6')
-    const p = pane(page)
+    const ex = await openExplorer(ara)
+    await openServerTab(ex, 'fm6')
+    const p = pane(ex)
     await expect(frow(p, 'remote_readme.txt')).toBeVisible({ timeout: 20_000 })
 
     await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-    const menu = page.locator('.ctx-menu')
+    const menu = ex.locator('.ctx-menu')
     await expect(menu.locator('[data-action="file.paste"]')).toBeVisible()
     await expect(menu.locator('[data-action="file.cut"]')).toHaveCount(0)
     // [새 파일]은 1.0.14 부터 원격에도 있다(형제 점검 F — 있는 이름은 거절, 내용을 비우지 않는 'ax').
@@ -770,7 +792,7 @@ test('FM-6★ 원격 메뉴에는 로컬 전용 항목이 없다', async ({ ara,
     await expect(menu.locator('[data-action="file.reveal"]')).toHaveCount(0)
     // 보기(정렬·숨김)는 원격에도 있다 — 목록을 어떻게 볼지는 화면의 문제라 백엔드와 무관하다.
     await expect(menu.locator('[data-action="file.view"]')).toBeVisible()
-    await page.keyboard.press('Escape')
+    await ex.keyboard.press('Escape')
   } finally {
     rmSync(remote, { recursive: true, force: true })
   }

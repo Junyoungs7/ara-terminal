@@ -3,6 +3,13 @@
 // (FIX-window-destroyed 패턴 — isDestroyed 접근 자체도 try 로 감싼다).
 import { app, BrowserWindow, clipboard, shell, type IpcMainInvokeEvent } from 'electron'
 import { openPortWindow } from '../windows/PortWindow'
+import {
+  explorerHello,
+  explorerWindowContents,
+  openExplorerWindow,
+  setExplorerState
+} from '../windows/ExplorerWindow'
+import { pushSend } from '../util/windowPush'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
 import { clipboardFilePaths } from '../util/clipboardFiles'
@@ -22,6 +29,41 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     openPortWindow(getWindow)
     return { ok: true } as const
   })
+  // 탐색기 독립 창(2026-10-28). 창은 하나 — PortWindow 와 같다. main 은 **중계만** 한다:
+  // 상태의 주인은 본창(Shell), 탐색기 창은 사본을 받아 그리고 본창이 할 일은 act 로 올린다.
+  const mainWc = (): Electron.WebContents | null => live()?.webContents ?? null
+  handle('explorer:open', (req) => {
+    const r = req?.reveal
+    const reveal =
+      r && typeof r.profileId === 'string' && typeof r.path === 'string'
+        ? { profileId: r.profileId, path: r.path, at: Date.now() }
+        : undefined
+    openExplorerWindow((open) => pushSend(mainWc(), 'explorer:shown', { open }), reveal)
+    if (reveal) pushSend(explorerWindowContents(), 'explorer:reveal', reveal)
+    return { ok: true } as const
+  })
+  // 본창만 사본을 쓴다 — 다른 창(세션 창)이 보내면 탐색기 목록이 그 창 것으로 바뀐다.
+  handle('explorer:state', (state, e) => {
+    if (e.sender !== mainWc()) return { ok: true } as const
+    setExplorerState(state)
+    pushSend(explorerWindowContents(), 'explorer:state', state)
+    return { ok: true } as const
+  })
+  handle('explorer:hello', () => explorerHello())
+  // 탐색기 창 → 본창. [연결]·[AI 에 묻기]·[작업 프로필로 저장] 등은 본창에서 묻고 본창에 열리므로
+  // 본창을 앞으로 가져온다(접속 확인·이름 입력이 뒤에 숨으면 멈춘 것처럼 보인다).
+  // 컨테이너 접속 한 줄(sendInput)만은 예외 — 표를 보던 자리를 뺏지 않는다.
+  handle('explorer:act', (act, e) => {
+    if (e.sender !== explorerWindowContents()) return { ok: true } as const
+    pushSend(mainWc(), 'explorer:act', act)
+    if (act?.kind !== 'sendInput') {
+      const w = live()
+      if (w?.isMinimized()) w.restore()
+      w?.focus()
+    }
+    return { ok: true } as const
+  })
+
   /**
    * 보낸 창을 대상으로 한다(window:close 와 같은 이유 — 2026-08-23 에 세션 창이 프레임리스가
    * 되면서 **그 창에도 신호등이 생겼다**. 본창만 조작하면 떼어낸 창의 최소화 버튼이 본창을 내린다).

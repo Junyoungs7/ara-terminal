@@ -40,6 +40,7 @@ import type {
 import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliId, AiCliRecent, AiCommand } from './aiCli'
 import type { BrowserTabView } from './browserWin'
+import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
 // 되묻기 요청의 모양(#125). main 이 주인이고 렌더러는 그리기만 한다 — SessionSpec 과 같은 선례.
@@ -441,6 +442,12 @@ export type InvokeContract = {
   'telemetry:refresh': { req: { sessionId: string }; res: { ok: true } }
   // 포트 모니터 독립 창 열기(없으면 만들고, 있으면 앞으로). 창은 하나 · 서버는 그 안의 탭.
   'portwin:open': { req: Record<string, never>; res: { ok: true } }
+  // 탐색기 독립 창(2026-10-28). open 은 본창(레일·단축키·검색·메뉴·[탐색기로 열기])이, state 는 본창이
+  // 사본을 밀 때, hello 는 막 뜬 탐색기 창이 그때까지의 사본을 받을 때, act 는 탐색기 창이 본창에 일을 시킬 때.
+  'explorer:open': { req: { reveal?: { profileId: string; path: string } }; res: { ok: true } }
+  'explorer:state': { req: ExplorerState; res: { ok: true } }
+  'explorer:hello': { req: Record<string, never>; res: { state: ExplorerState | null; reveal: ExplorerReveal | null } }
+  'explorer:act': { req: ExplorerAct; res: { ok: true } }
   // 내장 브라우저 탭(2026-08-21). 탭 줄 렌더러 → main. 페이지 본문은 WebContentsView 라
   // 이 채널들은 **우리 탭 줄에서만** 불린다(원격 페이지엔 preload 가 없다).
   'browser:select': { req: { id: string }; res: { ok: true } }
@@ -821,6 +828,20 @@ export type EvApi = {
   }
   // W1 F9/F10 원격 텔레메트리. 활성 SSH 세션 하나만 구독한다(세션 전환 시 stop→start).
   portwin: { open(): Promise<{ ok: true }> }
+  explorer: {
+    open(reveal?: { profileId: string; path: string }): Promise<{ ok: true }>
+    setState(s: ExplorerState): Promise<{ ok: true }>
+    hello(): Promise<{ state: ExplorerState | null; reveal: ExplorerReveal | null }>
+    act(a: ExplorerAct): Promise<{ ok: true }>
+    /** 탐색기 창 쪽 — 본창이 사본을 새로 밀었다. */
+    onState(cb: (s: ExplorerState) => void): () => void
+    /** 탐색기 창 쪽 — [탐색기로 열기]가 폴더를 건넸다. */
+    onReveal(cb: (r: ExplorerReveal) => void): () => void
+    /** 본창 쪽 — 탐색기 창이 일을 올렸다. */
+    onAct(cb: (a: ExplorerAct) => void): () => void
+    /** 본창 쪽 — 탐색기 창이 열렸다/닫혔다(레일 표시). */
+    onShown(cb: (e: { open: boolean }) => void): () => void
+  }
   browserTabs: {
     select(id: string): Promise<{ ok: true }>
     closeTab(id: string): Promise<{ ok: true }>

@@ -22,6 +22,7 @@ import { registerLocalCliIpc } from './ipc/registerLocalCliIpc'
 import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
+import { closeExplorerWindow, explorerWindowContents } from './windows/ExplorerWindow'
 import { anyWindowVisible } from './windows/visibleWindows'
 import { shouldLockSingleInstance, windowToRaise } from './windows/singleInstance'
 import { createOpenHere, folderToOpen } from './windows/openHere'
@@ -179,6 +180,8 @@ function createWindow(): void {
   mainWindow = win
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
+    // 탐색기 창은 본창 없이는 아무것도 못 한다([연결]·[AI 에 묻기]가 본창에 도착한다) — 같이 닫는다.
+    closeExplorerWindow()
   })
 
   /**
@@ -441,7 +444,12 @@ app.whenReady().then(async () => {
   registerSshIpc(profiles, store, sessions)
   registerRdpIpc(profiles, getWebContents)
   registerRdpClipIpc()
-  const sftpService = registerSftpIpc(sessions, getWebContents)
+  // 탐색기 독립 창은 세션을 소유하지 않지만 파일 전송·원격 표를 건다 — 그 알림은 그 창에도 간다.
+  const explorerToo = (): Electron.WebContents[] => {
+    const wc = explorerWindowContents()
+    return wc ? [wc] : []
+  }
+  const sftpService = registerSftpIpc(sessions, getWebContents, explorerToo)
   registerFsIpc(() => store.get().ui.downloadDir)
   registerLocalCliIpc()
   // #98 자동 업데이트 — 본창으로만 알린다(떼어낸 창에 같은 배너를 두 번 띄울 이유가 없다).
@@ -457,7 +465,7 @@ app.whenReady().then(async () => {
   })
   // F26: 서버 콘솔의 원격 exec. 명령은 shared/remoteCatalog.ts 의 표에 있는 것만 — 렌더러가 문자열을
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
-  const remoteSvc = registerRemoteIpc(sessions, getWebContents, profiles)
+  const remoteSvc = registerRemoteIpc(sessions, getWebContents, profiles, explorerToo)
   remoteConsole = remoteSvc
   // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
   const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
@@ -683,6 +691,7 @@ app.on('before-quit', (e) => {
   quitStep('history flush', () => history?.flush())
   quitStep('telemetry', () => telemetry?.stopAll())
   quitStep('portWindow', () => closePortWindow())
+  quitStep('explorerWindow', () => closeExplorerWindow())
   quitStep('remoteConsole', () => remoteConsole?.stopAll())
   quitStep('forwards', () => forwards?.stopAll())
   exitTrace('flushed')

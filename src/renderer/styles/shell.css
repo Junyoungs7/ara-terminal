@@ -1005,81 +1005,19 @@
   font-family: var(--ui);
 }
 
-/* ── 파일 탐색기 창(E1 + 탭) ──
-   전체화면 오버레이가 아니라 **떠 있는 창**이다 — 뒤쪽 터미널이 그대로 보이고 클릭도 된다.
-   z-index 는 드로어(90)보다 위, 모달(.overlay 100)보다 아래 — 탐색기가 열린 채로도 삭제 확인
-   다이얼로그·연결 관리자가 그 위에 뜬다(탐색기 안에서 ask() 를 부르므로 이 순서가 중요하다). */
-.exp-win {
-  position: fixed;
-  z-index: 95;
+/* ── 탐색기 독립 창(2026-10-28) ──
+   진짜 OS 창이다(main/windows/ExplorerWindow.ts). 머리는 본창과 같은 TitleBar(− □ ×)이고
+   그 아래가 탐색기 본문 하나 — 상태바는 없다(본창의 일이다). */
+.app.explorerwin {
+  grid-template-rows: var(--row-titlebar) 1fr;
+  background: var(--bg-canvas);
+}
+.wb-win {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--bg-surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 0;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-.exp-title {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  flex: none;
-  height: var(--row-tabbar);
-  padding: 0 var(--sp-2) 0 var(--sp-6);
-  background: var(--bg-canvas);
-  border-bottom: 1px solid var(--line);
-  cursor: move;
-  user-select: none;
-}
-.exp-tico {
-  display: grid;
-  place-items: center;
-  color: var(--warn);
-}
-.exp-tico svg {
-  width: 14px;
-  height: 14px;
-}
-.exp-tname {
-  font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-hi);
-}
-.exp-wbtn {
-  /* #71: <button> 이 됐다 — 기본 배경·테두리·글꼴 제거. */
-  border: none;
-  background: none;
-  font-family: var(--ui);
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 22px;
-  border-radius: var(--radius);
-  color: var(--text-lo);
-  font-size: var(--fs-md);
-  cursor: var(--cur-hand, pointer);
-  position: relative;
-}
-/* #72: 클릭 표적을 점 밖으로 넓힌다 — 타이틀바 .tb-ctl 이 #62 에서 같은 방식으로 고쳐졌는데
-   떠 있는 창 버튼은 그때 빠져 있었다(28×22 는 창을 닫으려다 빗나가기 쉽다). */
-.exp-wbtn::before {
-  content: '';
-  position: absolute;
-  inset: -4px -2px;
-}
-.exp-wbtn:hover {
-  background: var(--bg-overlay);
-  color: var(--text-hi);
-}
-.exp-wbtn.x:hover {
-  background: var(--err-line);
-  color: var(--err);
-}
-.exp-wbtn svg {
-  width: 13px;
-  height: 13px;
 }
 
 /* 탭 — 위치 하나가 탭 하나. 상단 탭바(.tab)와 같은 톤이되 한 단 작다. */
@@ -1113,10 +1051,21 @@
   color: var(--text-mid);
 }
 .exp-tab.on {
+  position: relative;
   font-weight: 500;
   background: var(--bg-abyss);
   border-color: var(--line-strong);
   color: var(--text-hi);
+}
+/* 2.0: 활성 탭은 밑줄(네온 블루) — 본체 탭·포트 모니터 창(.pw-tab.on)과 같은 문법. */
+.exp-tab.on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
 }
 /* 드래그 재정렬 — 터미널 탭바(.ttab)와 같은 신호를 쓴다(집은 탭 흐리게, 놓일 자리에 세로 바). */
 .exp-tab.dragging {
@@ -1259,19 +1208,8 @@
   flex: 1;
   min-width: 0;
 }
-/* 우하단 크기 조절 손잡이. */
-.exp-grip {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
-  background: linear-gradient(135deg, transparent 50%, var(--line-strong) 50%, var(--line-strong) 62%, transparent 62%);
-}
-
 /* ── F26 서버 콘솔 창 ──
-   창 껍데기(.exp-win / .exp-title / .exp-tabs / .exp-grip)는 파일 탐색기 것을 그대로 쓴다 —
+   창 껍데기(.wb-win / .exp-tabs)는 파일 탐색기 것을 그대로 쓴다 —
    두 창의 조작이 같아야 배울 게 없다. 여기서는 그 안의 런치패드 격자와 프로세스 표만 정의한다.
    한글이 들어가는 글자는 11px 이 하한이다(그 아래는 래스터화에서 뭉개진다 — tests/font.test.ts 가 지킨다). */
 /* 지금 만지고 있는 서버 — 제목줄에 늘 보여야 한다(엉뚱한 서버의 프로세스를 죽이지 않게). */
@@ -1838,8 +1776,8 @@
 }
 /* 아이콘 하나만 든 버튼 — 글자 버튼과 같은 좌우 여백을 주면 아이콘이 한쪽으로 쏠린다.
    #74: 25×24 는 작았다(준영님: "뒤로가기 버튼이 너무 작거나 안 보인다"). 글자가 없어 눈에 안
-   띄는 것이 절반이라 크기를 올리고, 나머지 절반은 히트 영역을 넓혀 메운다 — .tb-ctl(#62)·
-   .exp-wbtn(#71) 과 같은 방식이다. */
+   띄는 것이 절반이라 크기를 올리고, 나머지 절반은 히트 영역을 넓혀 메운다 — .tb-ctl(#62) 과
+   같은 방식이다. */
 .con-btn.icon {
   min-height: 28px;
   min-width: 30px;
@@ -4047,7 +3985,7 @@ button.sb-seg.upd:hover .val {
    같은 규칙 세 벌**이었다(.cs-hd 쪽은 interactions.css 에 복사본으로 살았다). 한 벌로 합친다 —
    클래스는 그대로 둔다(e2e·스모크가 그 이름으로 요소를 찾는다). 셋이 같아야 한다는 사실이
    이제 선택자 목록에 적혀 있어, 다음에 하나만 고치는 일이 안 생긴다.
-   `border`·`background` 는 <button> 이 되면서 필요해진 UA 기본값 제거다(.exp-wbtn·.bp-close 와 같은 방식).
+   `border`·`background` 는 <button> 이 되면서 필요해진 UA 기본값 제거다(.bp-close 와 같은 방식).
    옛 `font-size: var(--fs-xl)` 는 뺐다 — ✕ 글리프였을 때의 값이고 지금 자식은 SVG 하나뿐이다. */
 .modal-hd .x,
 .drawer-hd .x,
@@ -9155,7 +9093,6 @@ button.sb-seg.upd:hover .val {
 .g-act:active,
 .g-x:active,
 .xfer-cancel:active,
-.exp-wbtn:active,
 .exp-tab-x:active,
 .bw-x:active,
 .pbtn:active:not(:disabled),

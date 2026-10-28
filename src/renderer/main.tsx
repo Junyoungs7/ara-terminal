@@ -6,6 +6,8 @@ import { RdpSpanWindow, parseRdpWinHash } from './components/RdpSpanWindow'
 import { SessionWindow, parseSessionWinHash } from './components/SessionWindow'
 import { PortWindow } from './components/PortWindow'
 import { isPortWinHash } from '@shared/portWin'
+import { ExplorerWindow } from './components/ExplorerWindow'
+import { isExplorerWinHash } from '@shared/explorerWin'
 import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
 import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
@@ -32,6 +34,8 @@ const portWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && isPortWin
 // 여기서 그리는 것은 줄 하나뿐이다.
 const browserWin =
   !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && isBrowserWinHash(window.location.hash)
+// 탐색기 독립 창(2026-10-28). 포트 모니터와 같이 매개변수가 없다 — 대상은 창 안 좌측이 고른다.
+const explorerWin = isExplorerWinHash(window.location.hash)
 
 // OS 기본 툴팁 대신 우리 것을 쓴다. 창마다(본체·편집기·다중 모니터) 각자 자기 document 에 건다 —
 // 전역 위임이라 `title` 을 쓰는 89곳을 하나도 고치지 않는다(store/tooltip.ts).
@@ -64,6 +68,8 @@ createRoot(document.getElementById('root')!).render(
       <PortWindow />
     ) : browserWin ? (
       <BrowserTabStrip />
+    ) : explorerWin ? (
+      <ExplorerWindow />
     ) : (
       <Shell />
     )}

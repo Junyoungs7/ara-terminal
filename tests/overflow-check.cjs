@@ -413,20 +413,8 @@ function probe(cfg) {
         hit('[data-activity="' + id + '"]')
         await sleep(200)
       }
-    })),
-    {
-      id: 'explorer',
-      at: '.exp-win',
-      open: async () => {
-        if (!hit('[data-activity="explorer"]')) return false
-        await sleep(600)
-        return true
-      },
-      close: async () => {
-        hit('[data-activity="explorer"]')
-        await sleep(300)
-      }
-    }
+    }))
+    // 탐색기는 2026-10-28 부터 별도 OS 창(#explorerwin)이라 본창 DOM 검사 대상이 아니다.
   ]
 
   return (async () => {

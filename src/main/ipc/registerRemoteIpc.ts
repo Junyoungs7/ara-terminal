@@ -44,11 +44,18 @@ export function sudoPasswordOf(
 export function registerRemoteIpc(
   sessions: MainSessionManager,
   getWebContents: (sessionId?: string) => WebContents | null,
-  profiles: ProfileStore
+  profiles: ProfileStore,
+  // 2026-10-28: 세션을 소유하지 않고 **함께 보는** 창(탐색기 독립 창의 프로세스·서비스 표).
+  // 받는 쪽이 sessionId·cmdId 로 거르므로 안 보는 창에는 해가 없다(telemetry 의 alsoTo 와 같다).
+  alsoTo: () => WebContents[] = () => []
 ): RemoteConsoleService {
   const svc = createRemoteConsoleService(
     (sessionId) => sessions.sshClient(sessionId),
-    (e) => pushSend(getWebContents(e.sessionId), 'remote:data', e),
+    (e) => {
+      const owner = getWebContents(e.sessionId)
+      pushSend(owner, 'remote:data', e)
+      for (const wc of alsoTo()) if (wc !== owner) pushSend(wc, 'remote:data', e)
+    },
     undefined,
     (sessionId) => sudoPasswordOf(sessions, profiles, sessionId)
   )

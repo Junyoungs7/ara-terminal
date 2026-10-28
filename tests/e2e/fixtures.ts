@@ -412,6 +412,30 @@ export async function openBottomTool(page: Page, id: string): Promise<void> {
   await page.locator(`.bp-tab.on[data-bottom="${id}"]`).waitFor({ state: 'visible' })
 }
 
+// ── 탐색기 독립 창(2026-10-28) ─────────────────────────────────────────────
+// 탐색기는 본창 안 떠 있는 창(.exp-win)이 아니라 **OS 창**이다(#explorerwin). 그 창의 Page 를 돌려준다.
+// trigger 는 여는 동작(단축키·레일·메뉴). 이미 떠 있으면 새 창이 안 생긴다(앞으로 올 뿐) — 그 창을 준다.
+export const isExplorerUrl = (url: string): boolean => url.includes('#explorerwin')
+
+export async function explorerWindow(app: ElectronApplication, trigger: () => Promise<unknown>): Promise<Page> {
+  const existing = app.windows().find((w) => isExplorerUrl(w.url()))
+  if (existing) {
+    await trigger()
+    return existing
+  }
+  const opened = app.waitForEvent('window', { predicate: (w) => isExplorerUrl(w.url()), timeout: 15_000 })
+  await trigger()
+  const win = await opened
+  await win.waitForLoadState('domcontentloaded')
+  await expect(win.locator('.wb-win')).toBeVisible({ timeout: 10_000 })
+  return win
+}
+
+/** 열려 있는 탐색기 창 수(창은 하나여야 한다). */
+export function explorerWindowCount(app: ElectronApplication): number {
+  return app.windows().filter((w) => isExplorerUrl(w.url())).length
+}
+
 // 로컬 셸 하나를 탭바 ＋ 클릭으로 연다(실사용 경로 — 원클릭, UI-tabbar). 새로 생긴 세션 id 반환.
 export async function newLocalShell(page: Page): Promise<string> {
   const before = await sessionIds(page)

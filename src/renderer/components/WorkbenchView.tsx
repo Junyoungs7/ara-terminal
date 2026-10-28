@@ -31,8 +31,6 @@ import {
   FolderOpen,
   Gauge,
   HardDrive,
-  Maximize2,
-  Minimize2,
   Monitor,
   Network,
   Package,
@@ -45,10 +43,10 @@ import type { Session } from '../store/sessions'
 import { FileTree, type ActiveFileSession } from './FileTree'
 import { ServerTool, type ServerToolId } from './ServerTool'
 import { ServerOverview } from './ServerOverview'
-import { IconClose, IconFolder } from './icons'
+import { IconClose } from './icons'
+import { TitleBar } from './TitleBar'
 import type { DialogSpec, DialogResult } from './Dialog'
 import { LOCAL_TARGET, sameTarget, type ExpTarget } from '../store/explorerTabs'
-import { useFloatWindow } from '../store/floatWindow'
 import { t } from '../i18n'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { treeMenu, type TreeActionId } from '../interactions/actions'
@@ -83,15 +81,15 @@ const CARDS: readonly Card[] = [
 
 const isTool = (id: WbToolId | WbLaunchId): id is WbToolId => !CARDS.find((c) => c.id === id)?.ext
 
+// 2026-10-28: 본창 안 떠 있는 창(.exp-win)이 아니라 **진짜 OS 창**에 산다(ExplorerWindow.tsx).
+// 그래서 창 껍데기(끌기·최대화·닫기)는 여기 없다 — 머리는 본창과 같은 TitleBar, 나머지는 OS 가 쥔다.
+// 아래 콜백은 그 창이 main 을 거쳐 본창(Shell)으로 올려 보낸다(shared/explorerWin.ts 의 ExplorerAct).
 type Props = {
-  /** 창을 그릴지. 닫혀도 언마운트하지 않는다(#74) — 대상·열린 도구·경로가 남는다. */
-  visible: boolean
   sessions: Session[]
   profiles: ConnectionProfile[]
   workProfiles: WorkProfile[]
   /** 프로필로 접속. 새 세션은 sessions 목록으로 돌아온다. */
   onConnect: (profileId: string) => void
-  onClose: () => void
   ask: (spec: DialogSpec) => Promise<DialogResult>
   askText: (spec: DialogSpec & { input: NonNullable<DialogSpec['input']> }) => Promise<string | null>
   onAskAi: (text: string) => void
@@ -118,12 +116,10 @@ type Props = {
 }
 
 export function WorkbenchView({
-  visible,
   sessions,
   profiles,
   workProfiles,
   onConnect,
-  onClose,
   ask,
   askText,
   onAskAi,
@@ -141,7 +137,6 @@ export function WorkbenchView({
   const [active, setActive] = useState<'home' | WbToolId>('home')
   // 즐겨찾기·reveal 이 준 시작 폴더. 한 번 쓰고 나면 FileTree 가 자기 경로를 갖는다.
   const [goto, setGoto] = useState<string | null>(null)
-  const { rect, maximized, drag, toggleMax, z, toFront } = useFloatWindow()
   // 즐겨찾기 행 우클릭 위치(제보 ①). 사이드바 트리와 **같은 메뉴 정의**를 쓴다.
   const [favMenu, setFavMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   // 아직 접속 중인 프로필 — 세션이 뜨면 그 대상으로 넘어간다.
@@ -249,47 +244,20 @@ export function WorkbenchView({
   }
 
   const cards = CARDS.filter((c) => c.localToo || !isLocal)
-  // 창이 숨어 있으면 어떤 도구도 활성이 아니다 — 안 보이는 창이 원격에 명령을 보내면 안 된다.
-  const shown = (id: WbToolId): boolean => visible && active === id
+  // 보고 있는 도구만 활성이다 — 숨은 탭이 원격에 명령을 보내면 안 된다.
+  const shown = (id: WbToolId): boolean => active === id
+
+  // 어느 대상을 만지고 있는지가 늘 보여야 한다 — 창 하나가 여러 서버를 오간다.
+  // 작업표시줄·Alt+Tab 에도 같은 문구가 뜨게 document.title 도 맞춘다.
+  const winTitle = `${t('wb.title')} — ${targetName}`
+  useEffect(() => {
+    document.title = winTitle
+  }, [winTitle])
 
   return (
-    // #72: 어디를 누르든 앞으로 온다. #74: 닫혀도 언마운트하지 않는다(그리지만 않는다).
-    <div
-      className="exp-win wb-win"
-      style={{
-        left: rect.x,
-        top: rect.y,
-        width: rect.w,
-        height: rect.h,
-        zIndex: z,
-        ...(visible ? null : { display: 'none' })
-      }}
-      onMouseDown={toFront}
-      role="dialog"
-      aria-label={t('wb.title')}
-    >
-      <div className="exp-title" onMouseDown={(e) => drag(e, 'move')} onDoubleClick={toggleMax}>
-        <span className="exp-tico">
-          <IconFolder />
-        </span>
-        <span className="exp-tname">{t('wb.title')}</span>
-        {/* 어느 대상을 만지고 있는지가 늘 보여야 한다 — 창 하나가 여러 서버를 오간다. */}
-        <span className="con-srv">{targetName}</span>
-        <span className="sb-tab-spacer" />
-        <button
-          type="button"
-          className="exp-wbtn"
-          title={t(maximized ? 'explorer.restore' : 'explorer.maximize')}
-          onClick={toggleMax}
-        >
-          {/* 크기는 `.exp-wbtn svg`(13px)가 정한다 — 옆 [닫기]와 같은 규칙을 그대로 쓴다. */}
-          {maximized ? <Minimize2 /> : <Maximize2 />}
-        </button>
-        <button type="button" className="exp-wbtn x" title={t('wb.close')} onClick={onClose}>
-          <IconClose />
-        </button>
-      </div>
-
+    <>
+    <TitleBar title={winTitle} />
+    <div className="wb-win" aria-label={t('wb.title')}>
       <div className="exp-tabs">
         <div
           className={'exp-tab' + (active === 'home' ? ' on' : '')}
@@ -380,7 +348,7 @@ export function WorkbenchView({
         <div className="exp-main">
           {/* [홈] — 카드 격자. 준영님이 말씀하신 "카드 형식의 런치패드"가 이 자리다. */}
           <div className="con-pad wb-pad" style={active === 'home' ? undefined : { display: 'none' }}>
-            {!isLocal && <ServerOverview sessionId={sessionId} active={visible && active === 'home'} />}
+            {!isLocal && <ServerOverview sessionId={sessionId} active={active === 'home'} />}
             {cards.map(({ id, Icon, ext }) => (
               <button
                 key={id}
@@ -443,8 +411,6 @@ export function WorkbenchView({
         </div>
       </div>
 
-      <div className="exp-grip" title={t('explorer.resize')} onMouseDown={(e) => drag(e, 'resize')} />
-
       {/* 제보 ①: 즐겨찾기 우클릭. [열기]는 여기서, 이름 변경·삭제는 목록 주인(Shell)에게. */}
       <ContextMenu
         open={favMenu !== null}
@@ -465,5 +431,6 @@ export function WorkbenchView({
         onClose={() => setFavMenu(null)}
       />
     </div>
+    </>
   )
 }

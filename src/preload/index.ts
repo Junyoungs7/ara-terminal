@@ -18,6 +18,7 @@ import type {
 import type { AgentStatus } from '@shared/agentStatus'
 import type { AiCliId, AiCommand, LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
+import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
 import type { HostStats } from '@shared/types'
@@ -194,6 +195,33 @@ const api: EvApi = {
   },
   // 포트 모니터 독립 창 — 열기 하나뿐이다(닫기·복원은 OS 와 main 이 쥔다).
   portwin: { open: () => ipcRenderer.invoke('portwin:open', {}) },
+  // 탐색기 독립 창 — 본창과 탐색기 창이 main 을 사이에 두고 주고받는다(shared/explorerWin.ts).
+  explorer: {
+    open: (reveal?: { profileId: string; path: string }) => ipcRenderer.invoke('explorer:open', { reveal }),
+    setState: (s: ExplorerState) => ipcRenderer.invoke('explorer:state', s),
+    hello: () => ipcRenderer.invoke('explorer:hello', {}),
+    act: (a: ExplorerAct) => ipcRenderer.invoke('explorer:act', a),
+    onState: (cb: (s: ExplorerState) => void) => {
+      const listener = (_e: IpcRendererEvent, s: ExplorerState) => cb(s)
+      ipcRenderer.on('explorer:state', listener)
+      return () => ipcRenderer.removeListener('explorer:state', listener)
+    },
+    onReveal: (cb: (r: ExplorerReveal) => void) => {
+      const listener = (_e: IpcRendererEvent, r: ExplorerReveal) => cb(r)
+      ipcRenderer.on('explorer:reveal', listener)
+      return () => ipcRenderer.removeListener('explorer:reveal', listener)
+    },
+    onAct: (cb: (a: ExplorerAct) => void) => {
+      const listener = (_e: IpcRendererEvent, a: ExplorerAct) => cb(a)
+      ipcRenderer.on('explorer:act', listener)
+      return () => ipcRenderer.removeListener('explorer:act', listener)
+    },
+    onShown: (cb: (e: { open: boolean }) => void) => {
+      const listener = (_e: IpcRendererEvent, v: { open: boolean }) => cb(v)
+      ipcRenderer.on('explorer:shown', listener)
+      return () => ipcRenderer.removeListener('explorer:shown', listener)
+    }
+  },
   // 내장 브라우저 탭 줄 전용. 이 API 는 **#browserwin 창의 최상위 프레임**만 본다 —
   // 페이지 본문은 preload 없는 WebContentsView 라 여기 닿을 수 없다.
   browserTabs: {

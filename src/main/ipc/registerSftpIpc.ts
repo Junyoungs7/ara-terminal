@@ -10,11 +10,18 @@ import { pushSend } from '../util/windowPush'
 // F23: 반환값(service)을 MCP sftp_* 툴이 같은 인스턴스로 재사용한다(세 번째 호출자 — F16 패턴).
 export function registerSftpIpc(
   sessions: MainSessionManager,
-  getWebContents: () => WebContents | null
+  getWebContents: () => WebContents | null,
+  // 2026-10-28: 본창이 아닌 창(탐색기 독립 창)도 전송을 건다 — 진행률은 그 창에도 가야 한다.
+  // 채널이 전송 id 별이라 안 건 창은 듣지 않는다(telemetry 의 alsoTo 와 같은 방식).
+  alsoTo: () => WebContents[] = () => []
 ): SftpService {
   const service = new SftpService(
     (sessionId) => sessions.sshClient(sessionId),
-    (p) => pushSend(getWebContents(), `sftp:progress:${p.transferId}`, p)
+    (p) => {
+      const owner = getWebContents()
+      pushSend(owner, `sftp:progress:${p.transferId}`, p)
+      for (const wc of alsoTo()) if (wc !== owner) pushSend(wc, `sftp:progress:${p.transferId}`, p)
+    }
   )
 
   handle('sftp:list', ({ sessionId, path }) => service.list(sessionId, path))
