@@ -122,7 +122,7 @@ const ALL_KEYS: readonly KeyBinding[] = [
   { action: 'sidebar.collapse', category: 'view', labelKo: '사이드바 접기', win: 'Ctrl+Shift+B', mac: 'Cmd+Shift+B', implemented: true },
   // W4sat F20: 파일 탐색기 전체화면 2패널 모드. Ctrl+O 단독은 리드라인에 바인딩이 없어 자유롭지만
   // R3.8 정책(단일 Ctrl+문자 금지)을 그대로 지켜 Shift 를 얹는다.
-  { action: 'explorer.toggle', category: 'view', labelKo: '탐색기 모드', win: 'Ctrl+Shift+O', mac: 'Cmd+Shift+O', implemented: true },
+  { action: 'explorer.toggle', category: 'view', labelKo: '탐색기 창 열기', win: 'Ctrl+Shift+O', mac: 'Cmd+Shift+O', implemented: true },
   // Ctrl+S 단독은 터미널 흐름제어(XOFF — 화면이 멈춘 것처럼 보인다).
   // 2026-08-13 감사: `implemented:false` 인데 실제로는 로그 패널의 [내려받기]가 동작했다 —
   // "추후 지원" 토스트만 내고 있었다. 패널을 여는 것으로 배선한다.

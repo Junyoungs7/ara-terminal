@@ -14,7 +14,7 @@ import { shownTab } from '../store/sidebar'
 import type { GroupLayout } from '../store/groups'
 import { t } from '../i18n'
 import { Compass, History, SlidersHorizontal, Wrench } from 'lucide-react'
-import { KEYMAP, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, isMac, type KeymapAction } from '../../shared/keymap'
 import { PastLogPanel } from './PastLogPanel'
 
 export type SidebarTab = 'conn' | 'file' | 'ai' | 'past'
@@ -51,11 +51,16 @@ const TAB_LABEL: Record<SidebarTab, string> = {
   past: 'pastlog.title'
 }
 
-/** 레일 툴팁 — 이름 + (있으면) 단축키. 끝의 `(조합)` 은 툴팁이 뱃지로 떼어 낸다(store/tooltip.ts splitTip). */
-const isMac = navigator.userAgent.includes('Mac')
-function railTip(label: string, action?: KeymapAction): string {
+/**
+ * 레일 툴팁 — 이름 · 어디에 열림 + (있으면) 단축키. 끝의 `(조합)` 은 툴팁이 뱃지로 떼어 낸다(store/tooltip.ts splitTip).
+ *
+ * "어디에 열림"(#87)은 2.0 에서 우측 바를 지우며 같이 사라졌다가 다듬기 R1(리뷰 B1)에서 돌아왔다 — 레일 일곱 칸이
+ * 하는 일이 넷(사이드바 탭 · OS 창 · 하단 패널 · 덮개)으로 갈리는데 아이콘만으로는 눌러 보기 전에 모른다.
+ */
+function railTip(label: string, action?: KeymapAction, where?: 'sidebar' | 'window' | 'bottom'): string {
   const b = action ? KEYMAP.find((k) => k.action === action) : undefined
-  return b ? `${label} (${isMac ? b.mac : b.win})` : label
+  const name = where ? `${label} · ${t('activity.where.' + where)}` : label
+  return b ? `${name} (${isMac() ? b.mac : b.win})` : name
 }
 const TAB_KEY: Partial<Record<SidebarTab, KeymapAction>> = { file: 'fileTree.toggle' }
 
@@ -107,20 +112,29 @@ export function SidebarRail({
         aria-selected={on}
         data-tab={id}
         disabled={disabled}
-        title={disabled ? t('sidebar.tab.fileNeedsSession') : railTip(t(TAB_LABEL[id]), TAB_KEY[id])}
+        title={disabled ? t('sidebar.tab.fileNeedsSession') : railTip(t(TAB_LABEL[id]), TAB_KEY[id], 'sidebar')}
         onClick={() => onPick(id)}
       >
         <Icon />
       </button>
     )
   }
-  // 사이드바 탭이 아닌 것(창·하단 패널·설정 덮개) — 여닫이 버튼이라 tab 이 아니라 눌림(aria-pressed)이다.
-  const tool = (id: string, on: boolean, tip: string, onClick: () => void, Icon: () => JSX.Element) => (
+  // 사이드바 탭이 아닌 것(창·하단 패널·설정 덮개). 여닫이(하단 패널·설정)는 눌림(aria-pressed)이고,
+  // 탐색기는 **토글이 아니다**(다시 눌러도 안 닫히고 앞으로 온다 — 리뷰 B6) — 눌림 대신 이름이 "열기"다.
+  // `active` 는 그대로 "그 창이 지금 열려 있다"는 표시로 둔다.
+  const tool = (
+    id: string,
+    on: boolean,
+    tip: string,
+    onClick: () => void,
+    Icon: () => JSX.Element,
+    name?: string
+  ) => (
     <button
       key={id}
       type="button"
       className={'lrail-item' + (on ? ' active' : '')}
-      aria-pressed={on}
+      {...(name ? { 'aria-label': name } : { 'aria-pressed': on })}
       data-activity={id}
       title={tip}
       onClick={onClick}
@@ -128,16 +142,25 @@ export function SidebarRail({
       <Icon />
     </button>
   )
-  // 순서는 시안(Z-final) 그대로: 연결 · 파일 · 탐색기 · AI 작업대 · 서버 도구 · 지난 세션 … 아래 설정.
+  // 사이드바 탭 묶음(연결 · 파일 · AI 작업대 · 지난 세션) | 1px | 도구 묶음(탐색기 창 · 서버 도구) … 아래 설정.
+  // 시안은 한 줄로 섞여 있었는데, 누르면 일어나는 일이 다른 둘을 갈라 놓는다(리뷰 B1).
   return (
     <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
       {tab('conn', TAB_ICON.conn)}
       {tab('file', TAB_ICON.file)}
-      {(features?.explorer !== false || explorerOpen) &&
-        tool('explorer', explorerOpen, railTip(t('wb.title'), 'explorer.toggle'), onExplorer, () => <Compass />)}
       {tab('ai', TAB_ICON.ai)}
-      {tool('bottombar', bottomOpen, t('bottom.bar.toggle'), onBottom, () => <Wrench />)}
       {(features?.pastlog !== false || (!collapsed && active === 'past')) && tab('past', () => <History />)}
+      <div className="lrail-div" role="separator" />
+      {(features?.explorer !== false || explorerOpen) &&
+        tool(
+          'explorer',
+          explorerOpen,
+          railTip(t('wb.title'), 'explorer.toggle', 'window'),
+          onExplorer,
+          () => <Compass />,
+          t('rail.explorer.open')
+        )}
+      {tool('bottombar', bottomOpen, railTip(t('bottom.bar.toggle'), undefined, 'bottom'), onBottom, () => <Wrench />)}
       <div className="lrail-spacer" />
       {tool('settings', settingsOpen, railTip(t('settings.open'), 'settings.open'), onSettings, () => <SlidersHorizontal />)}
     </div>

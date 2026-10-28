@@ -12,6 +12,12 @@ describe('레일 툴팁 문구', () => {
     // 단축키가 없는 항목은 꼬리표 없이 이름만 — 빈 괄호가 붙으면 안 된다.
     expect(splitTip('지난 세션')).toEqual({ text: '지난 세션', key: null })
   })
+
+  it('★ "어디에 열림" 꼬리가 붙어도 단축키만 뱃지로 떨어진다(다듬기 R1 — #87 꼬리 복구)', () => {
+    const win = KEYMAP.find((k) => k.action === 'explorer.toggle')!.win
+    expect(splitTip(`탐색기 · 새 창 (${win})`)).toEqual({ text: '탐색기 · 새 창', key: win })
+    expect(splitTip('하단바 (서버 도구) · 아래 패널')).toEqual({ text: '하단바 (서버 도구) · 아래 패널', key: null })
+  })
 })
 
 // 2026-09-05 — "잘린 글자만 툴팁"(pickCut)과 "넓은 앵커는 위로"(placeTip). 아이콘 레일은 두 규칙의
