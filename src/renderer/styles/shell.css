@@ -243,6 +243,8 @@
   width: 14px;
   height: 14px;
   flex: none;
+  /* 아이콘만 파랑(다듬기 R3) — 오른쪽 위 유일한 여닫는 자리라 눈이 찾는다. */
+  color: var(--accent-bright);
 }
 .tb-chat:hover,
 .tb-chat.on {
@@ -359,6 +361,10 @@
   flex: none;
   width: 16px;
   height: 16px;
+}
+/* 검색 칸에 입력 중 — 돋보기가 파랑(다듬기 R3). */
+.cp-head:focus-within svg {
+  color: var(--accent);
 }
 .cp-head input {
   flex: 1;
@@ -2265,7 +2271,8 @@
 }
 /* 2.0 레일 활성 — 글라스 면 + 왼쪽 2px 네온 블루 막대(시안 Z-final `.rbtn.on`). 막대는 레일 가장자리에 붙는다. */
 .lrail-item.active {
-  color: var(--text-hi);
+  /* 아이콘도 파랑(다듬기 R3 — R2 의 중성 hi 가 밋밋했다). 막대와 같은 자리라 한 덩어리로 읽힌다. */
+  color: var(--accent-bright);
   background: var(--glass);
   box-shadow: inset 0 1px 0 var(--glass-hi);
 }
@@ -2526,7 +2533,7 @@
 }
 .tterm-add:hover {
   background: var(--bg-overlay);
-  color: var(--text-hi);
+  color: var(--accent-bright);
 }
 
 /* FB-tabs: 탭바 오버플로 드롭다운 버튼 — .tt-scroll 밖(스크롤 영역 우측 고정)에만 렌더,
@@ -3959,9 +3966,10 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   color: var(--text-lo);
 }
-/* 고른 세션은 배지도 함께 밝아진다 — 예전 아이콘이 하던 일이다(.sicon.active). */
+/* 고른 세션은 배지가 파랑이 된다(다듬기 R3) — 면은 글라스, 포인트는 배지 하나. 예전 아이콘이 하던 일이다. */
 .sess-node.active .sess-type {
-  border-color: var(--text-lo);
+  color: var(--accent-bright);
+  border-color: var(--accent-line);
 }
 .sess-node .sess-type.sys {
   color: var(--ok);

@@ -477,7 +477,8 @@ const ACCENT_OK = new RegExp(
     String.raw`\.cur-opt|\.font-item\.sel|\.fb-check`, // 라디오·체크 고름(시안 Z-cursor)
     String.raw`\.xfer-fill|\.con-bar i|\.upd-fill|\.sb-spark|\.gauge \.bar|\.sb-mbar i|\.rx-fill|\.sysm-spark|\.sysm-dfill|\.ara-us (?:\.week )?\.mb i`, // 게이지 채움
     String.raw`\.md-link`, // 링크 글자
-    String.raw`\.cp-item\.on|\.cp-item mark` // 통합 검색 고른 줄·맞은 글자(시안 Z-palette)
+    String.raw`\.cp-item\.on|\.cp-item mark|\.cp-head:focus-within svg`, // 통합 검색 고른 줄·맞은 글자·입력 중 돋보기(시안 Z-palette)
+    String.raw`\.lrail-item\.active\b|\.sess-node\.active \.sess-type|\.tb-chat svg|\.tterm-add:hover` // 다듬기 R3 — 레일 활성 아이콘·고른 세션 배지·채팅 버튼 아이콘·새 탭 + 호버
   ].join('|')
 )
 let accentOk = 0

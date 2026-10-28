@@ -63,7 +63,9 @@
 | 자리 | 시안 표현 | 토큰 |
 |---|---|---|
 | 탭 밑줄 | 활성 탭 아래 2px + 아래쪽 은은한 번짐 | `--accent` |
-| 레일 활성 · 설정 네비 활성 | 왼쪽 가장자리 2px 세로 막대(면은 글라스) | `--accent` |
+| 레일 활성 · 설정 네비 활성 | 왼쪽 가장자리 2px 세로 막대(면은 글라스) · 레일은 아이콘도 파랑(다듬기 R3) | `--accent` · 아이콘 `--accent-bright` |
+| 고른 세션 행 | 면은 글라스, 타입 배지(ssh·local…) 글자·테두리만 파랑(다듬기 R3) | `--accent-bright` · `--accent-line` |
+| 채팅 여닫기 버튼 · 새 탭 `+` 호버 | 아이콘 색만(다듬기 R3) | `--accent-bright` |
 | 주 버튼 | 바탕 + 흰 글 | `--accent-deep` + `#fff` |
 | 전송 버튼 | 원형 28px 바탕 + 흰 화살표 | `--accent-deep` |
 | 포커스 링 | 불투명 2px + 2px 틈(1.x 규칙 유지) | `--focus-ring-color` = `--accent` |
@@ -74,7 +76,7 @@
 | 게이지 채움 | 상태바 CPU/MEM 막대·채팅 사용량 막대 | `--accent` |
 | 링크 글자 | 밑줄 링크 | `--accent-bright` |
 | 라디오·체크 고름 | 고른 칸 테두리 + 라디오 점(시안 Z-cursor) | `--accent` |
-| 통합 검색 | 고른 줄 왼쪽 2px · 맞은 글자 틴트(시안 Z-palette) | `--accent` · `--accent-glow` |
+| 통합 검색 | 고른 줄 왼쪽 2px · 맞은 글자 틴트(시안 Z-palette) · 입력 중 돋보기(다듬기 R3) | `--accent` · `--accent-glow` |
 
 - **게이트**: `npm run scan:magic` 이 shell.css·interactions.css 의 `--accent*` 를 쓰는 규칙을 선택자 이름으로 이 표와 대조한다(`ACCENT_OK`). 표에 자리를 더하면 그 목록도 같이 고친다. TSX 인라인 색(BrandOrb 마크·터미널 검색 강조)은 못 본다.
 - 그 밖의 선택 행·호버·활성 라벨·드롭 자리·리사이저·배지는 **중성**이다 — 선택 = 글라스(`--glass` + 위 1px `--glass-hi`), 활성 글자 `--text-hi`, 호버 테두리 `--text-lo`, 끌어 놓기 자리 2px 점선 `--text-mid`.
