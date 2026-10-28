@@ -58,7 +58,7 @@ test('DETACH-2★ 떼어낸 창에서 하단바를 따로 켠다', async ({ ara 
   // 본창의 하단바 상태와 무관하다 — 창마다 자기 것이다.
   await expect(win.locator('.bottom-panel')).toHaveCount(0)
   const mainBefore = await page.locator('.bottom-panel').count()
-  await win.click('.act-bottombar')
+  await win.click('.lrail-item[data-activity="bottombar"]')
   await expect(win.locator('.bottom-panel')).toBeVisible()
   // 개수를 손으로 박지 않는다 — F26 이 ps·svc·disk 를 더했을 때 8 이 낡아 이 검사만 깨졌다
   // (지키려는 성질은 "떼어낸 창도 **같은** 하단바를 갖는다"이지 "탭이 여덟"이 아니다).
@@ -380,5 +380,8 @@ test('DETACH-5 떼어낸 창은 작업 창이다 — 트리·설정이 없다', 
   // 있어야 하는 것: 탭바 · 분할 그리드 · 하단바 토글.
   await expect(win.locator('.term-tabbar')).toHaveCount(1)
   await expect(win.locator('.pane-grid')).toHaveCount(1)
-  await expect(win.locator('.act-bottombar')).toHaveCount(1)
+  await expect(win.locator('.lrail-item[data-activity="bottombar"]')).toHaveCount(1)
+  // 하단바 토글은 본창처럼 **왼쪽 레일**에 있다 — 1.x 오른쪽 액티비티 바는 없다(다듬기 R2, 리뷰 B7).
+  await expect(win.locator('.activity-bar')).toHaveCount(0)
+  await expect(win.locator('.lrail .lrail-item')).toHaveCount(1)
 })

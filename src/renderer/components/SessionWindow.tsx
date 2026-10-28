@@ -33,7 +33,14 @@ import { BOTTOM_IDS, type BottomId } from '@shared/types'
 import { AppLogPanel } from './AppLogPanel'
 import type { SessionWinTarget } from '@shared/sessionWin'
 import { t } from '../i18n'
-import { matchBinding } from '../../shared/keymap'
+import { KEYMAP, isMac, matchBinding } from '../../shared/keymap'
+import { Wrench } from 'lucide-react'
+
+// 본창 레일 툴팁(Sidebar.tsx railTip)과 같은 문구 — 이름 · 어디에 열림 (키).
+const bottomKey = KEYMAP.find((k) => k.action === 'bottom.toggle')
+const railTip =
+  `${t('bottom.bar.toggle')} · ${t('activity.where.bottom')}` +
+  (bottomKey ? ` (${isMac() ? bottomKey.mac : bottomKey.win})` : '')
 
 // 해시 계약은 shared 에 있다(main 도 같은 문자열로 창을 연다) — 여기서는 그대로 다시 내보낸다.
 export { parseSessionWinHash, type SessionWinTarget } from '@shared/sessionWin'
@@ -62,6 +69,16 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
   const lastBottom = useRef<BottomId>('monitor')
   if (bottom) lastBottom.current = bottom
   const toggleBottomBar = useCallback(() => setBottom((cur) => (cur ? null : lastBottom.current)), [])
+  // 본창과 같은 키(Ctrl+Shift+J — 다듬기 R1). 레일 툴팁이 이 키를 말하니 이 창에서도 들어야 한다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchBinding(e, 'bottom.toggle')) return
+      e.preventDefault()
+      toggleBottomBar()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleBottomBar])
 
   const activeSession = useMemo(
     () => sessions.sessions.find((s) => s.id === sessions.activeId) ?? null,
@@ -206,6 +223,21 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
           "이 서버를 보는 화면"이라 그 둘이 할 일이 없다(F32 확정 구성). */}
       <TitleBar title={winTitle} />
       <div className="middle">
+        {/* 하단바 토글 — 본창 왼쪽 레일의 [서버 도구](렌치)와 같은 자리·같은 클래스·같은 data-activity
+            (다듬기 R2, 리뷰 B7: 1.x 의 오른쪽 액티비티 바가 이 창에만 남아 있었다). 이 창에는 다른
+            레일 항목이 없으므로 이것 하나만 산다. */}
+        <div className="lrail" role="toolbar" aria-label={t('sidebar.rail.label')}>
+          <button
+            type="button"
+            className={'lrail-item' + (bottom ? ' active' : '')}
+            aria-pressed={bottom !== null}
+            title={railTip}
+            data-activity="bottombar"
+            onClick={toggleBottomBar}
+          >
+            <Wrench />
+          </button>
+        </div>
         <MainArea
           ref={mainRef}
           sessions={sessions}
@@ -300,23 +332,6 @@ export function SessionWindow({ target }: { target: SessionWinTarget }): JSX.Ele
             </BottomPanel>
           }
         />
-        {/* 하단바 토글 — 본창 액티비티 바의 그 버튼과 같은 자리·같은 클래스(누르는 손이 헷갈리지
-            않게). 이 창에는 다른 액티비티 항목이 없으므로 바에 이것 하나만 산다. */}
-        <div className="activity-bar" role="tablist" aria-label={t('activity.bar.label')}>
-          <button
-            type="button"
-            className={'act-item act-bottombar' + (bottom ? ' active' : '')}
-            aria-pressed={bottom !== null}
-            title={t('bottom.bar.toggle')}
-            data-activity="bottombar"
-            onClick={toggleBottomBar}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M3 15h18" />
-            </svg>
-          </button>
-        </div>
       </div>
       {/* 상태바 — 지금 붙어 있는 곳과 자원. 연결 프로필 목록은 이 창에 없으므로(본창 것이다)
           호스트 표기는 serverKey 로 떨어진다 — statusModel 이 그 폴백을 이미 갖고 있다. */}

@@ -1337,7 +1337,7 @@
   padding: var(--sp-8);
 }
 .con-app {
-  /* #71: <button> 이 됐다 — 브라우저 기본 배경·테두리·글꼴을 지운다(.act-item 과 같은 방식). */
+  /* #71: <button> 이 됐다 — 브라우저 기본 배경·테두리·글꼴을 지운다(.lrail-item 과 같은 방식). */
   font-family: var(--ui);
   text-align: center;
   display: flex;
@@ -3315,16 +3315,6 @@
   flex: 0 1 auto;
   min-width: 0;
 }
-/* 하단바 토글 — 액티비티 바 **맨 아래**에 붙는다(IntelliJ 툴윈도우 버튼과 같은 자리).
-   위 항목들과 성격이 달라 사이를 띄우고 선을 하나 긋는다: 저것들은 "무엇을 열지",
-   이것은 "하단바를 쓸지"다. */
-.act-bottombar {
-  margin-top: auto;
-  margin-bottom: var(--sp-2);
-  border-top: 1px solid var(--line);
-  padding-top: var(--sp-4);
-}
-
 /* #98 업데이트 알림 — **버전 칸이 상태를 말한다**(2026-09-04). 새 칸을 만들지 않은 이유는
    여기가 이미 버전 이야기를 하는 자리이기 때문이다. 받을 것이 있으면 눌리는 버튼이 되므로
    .sb-seg.mcp 와 같은 버튼 초기화가 필요하다.
@@ -6213,47 +6203,6 @@ button.sb-seg.upd:hover .val {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* ── FB-ui2(FB-0006): 우측 액티비티 바 ──
-   2.0 에서 본창의 우측 바는 없어졌다(왼쪽 레일 .lrail 로). 이 규칙은 **떼어낸 세션 창**
-   (SessionWindow.tsx)의 [하단바] 토글 하나가 아직 쓴다. */
-.activity-bar {
-  width: 44px;
-  flex: 0 0 44px;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: var(--sp-4) 0;
-}
-.act-item {
-  width: 32px;
-  min-height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius);
-  border: none;
-  background: none;
-  color: var(--text-lo);
-  cursor: var(--cur-hand, pointer);
-  transition: var(--dur-quick);
-}
-.act-item svg {
-  width: 18px;
-  height: 18px;
-}
-.act-item:hover {
-  background: var(--bg-overlay);
-  color: var(--text-hi);
-}
-/* 우측 레일이라 막대도 오른쪽에 붙는다(바깥쪽 모서리 — 어느 바에 속한 항목인지가 읽힌다). */
-.act-item.active {
-  color: var(--text-hi);
-  background: var(--bg-raised);
-  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 
 /* ── F25 앱 내장 RDP 뷰 ──
@@ -9273,7 +9222,6 @@ button.sb-seg.upd:hover .val {
 .prof:active,
 .font-item:active,
 .set-nav span:active,
-.act-item:active,
 .pl-row:active,
 .wp-row:active,
 .ac-row:active,
