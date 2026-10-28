@@ -574,16 +574,35 @@
   flex: none;
   height: var(--row-tabbar);
 }
-/* 지금 보고 있는 패널 이름. 옛 [연결|파일] 탭 버튼 둘이 있던 자리다(2026-08-19 레일로 이관) —
-   고르는 일은 레일이 하고 여기는 **어느 것이 열렸는지**만 말한다. */
-.sb-head {
-  padding: 0 var(--sp-2);
+/* 2.0 다듬기 R5: 시안 Z-final 머리 탭 [연결 | 파일 | AI]. 고른 것 = 글라스 면(중성) + 흰 글자 — accent 아님.
+   좁은 폭(SIDEBAR_MIN 180)에서 넘치지 않게 줄어들고 말줄임한다. */
+.sb-tab {
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-4);
+  border: none;
+  border-radius: var(--radius);
+  background: none;
   font-family: var(--ui);
-  /* 2.0 4단계: 제목(16) → 탭바와 같은 결의 13/500(시안 Z-final). 높이는 .sb-tabs 가 --row-tabbar 로 맞춘다. */
   font-size: var(--fs-md);
-  font-weight: 500;
-  color: var(--text-hi);
+  font-weight: 400;
+  color: var(--text-lo);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: var(--cur-hand, pointer);
+}
+.sb-tab:hover:not(:disabled) {
+  color: var(--text-hi);
+}
+.sb-tab.on {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.sb-tab:disabled {
+  color: var(--text-dim);
+  cursor: var(--cur-arrow, default);
 }
 .sb-tab-spacer {
   flex: 1;

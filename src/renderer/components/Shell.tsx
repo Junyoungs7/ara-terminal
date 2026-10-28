@@ -1564,6 +1564,7 @@ export function Shell() {
         <Sidebar
           active={sidebar.activeTab}
           collapsed={sidebar.collapsed}
+          onPick={(tab) => updateSidebar((s) => nextSidebar(s, tab))}
           profiles={profiles}
           groups={groups}
           conn={conn}

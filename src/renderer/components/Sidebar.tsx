@@ -210,7 +210,8 @@ export function Sidebar({
   onBenchSplit,
   onNewBench,
   onPastClose,
-  onPastOpenCurrent
+  onPastOpenCurrent,
+  onPick
 }: {
   active: SidebarTab
   collapsed: boolean
@@ -260,6 +261,8 @@ export function Sidebar({
   /** 2.0 [지난 세션] — 우측 레일에서 사이드바로 왔다. 닫기 = 사이드바 접기, [진행 중] = 하단 [세션 기록]. */
   onPastClose: () => void
   onPastOpenCurrent: () => void
+  /** 머리 탭 — 레일의 onPick 과 **같은 함수**(Shell 의 nextSidebar). 따로 상태를 두면 레일과 머리가 다른 말을 한다. */
+  onPick: (tab: SidebarTab) => void
   // F14: 터미널 Ctrl+V 파일 업로드가 시작될 때 [파일] 탭을 펼쳐 전송 큐를 보여 준다.
   onRevealFiles: () => void
   // 파일 삭제 확인·새 폴더 이름 입력(Shell 의 단일 Dialog 인스턴스).
@@ -274,11 +277,29 @@ export function Sidebar({
     <div className={'sidebar' + (collapsed ? ' collapsed' : '')}>
       {/* 2.0 [지난 세션] — 자기 머리(제목·새로고침·닫기)가 있어 사이드바 머리 대신 그것을 쓴다(높이 같음). */}
       {tab === 'past' && <PastLogPanel open={!collapsed} onClose={onPastClose} onOpenCurrent={onPastOpenCurrent} />}
-      {/* 옛 [연결|파일] 탭이 있던 자리. 탭은 레일로 나갔고(2026-08-19) 지금 보고 있는 패널의
-          **이름**과 그 패널의 동작만 남는다 — IntelliJ 툴윈도우 머리와 같은 모양이다. */}
+      {/* 2.0 다듬기 R5: 시안 Z-final 머리 = [연결 | 파일 | AI] 탭(레일도 그대로 둔다 — 시안도 둘 다).
+          고른 탭은 레일과 같은 `tab`(shownTab) 이고, 누르면 레일과 같은 onPick 으로 간다.
+          이미 보고 있는 탭은 다시 눌러도 아무 일 없다(레일의 "다시 누르면 접기"는 머리 탭에선 뜻밖이다). */}
       {tab !== 'past' && (
-      <div className="sb-tabs">
-        <span className="sb-head">{t(TAB_LABEL[tab])}</span>
+      <div className="sb-tabs" role="tablist" aria-label={t('sidebar.rail.label')}>
+        {(['conn', 'file', 'ai'] as const).map((id) => {
+          const disabled = id === 'file' && !fileSession
+          return (
+            <button
+              key={id}
+              type="button"
+              className={'sb-tab' + (tab === id ? ' on' : '')}
+              role="tab"
+              aria-selected={tab === id}
+              data-tab={id}
+              disabled={disabled}
+              title={disabled ? t('sidebar.tab.fileNeedsSession') : undefined}
+              onClick={() => tab !== id && onPick(id)}
+            >
+              {t(TAB_LABEL[id])}
+            </button>
+          )
+        })}
         <div className="sb-tab-spacer" />
         {/* #129 새 작업대 — 지금 보고 있는 세션의 폴더에서 AI CLI 를 띄운다(= 작업대를 만든다).
             AI CLI 시작(Ctrl+Shift+L)과 **같은 길**이다 — 만드는 문이 둘로 갈리면 안 된다. */}
