@@ -566,6 +566,11 @@ export type HostStats = {
   disks: DiskUsage[]
   hostname: string
   platform: string
+  /** 다듬기 R3 — 상태바 "내 PC" 칸(`계정@호스트`·OS·가동). os.userInfo 가 던지는 환경이면 ''. */
+  user: string
+  /** os.release() 원문(예: Windows `10.0.22631`). 화면 표기는 렌더러 osLabel() 이 만든다. */
+  osRelease: string
+  uptimeSec: number
 }
 
 // W2 F8 활성 포트 포워딩 한 줄(내 PC 127.0.0.1:localPort → 원격 127.0.0.1:remotePort).

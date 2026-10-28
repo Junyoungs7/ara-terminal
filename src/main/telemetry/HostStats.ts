@@ -53,6 +53,18 @@ export function createHostStatsService(
   let tick = 0
   let mounts: string[] | null = null
   let disks: DiskUsage[] = [] // 마지막으로 읽은 값 — 디스크 틱이 아닌 회차에도 그대로 실어 보낸다.
+  // 계정 이름은 실행 중에 안 바뀐다 — 한 번만 묻는다. 도메인 계정·SYSTEM 등에서 던질 수 있어 ''로 버틴다.
+  let user: string | null = null
+  const userName = (): string => {
+    if (user === null) {
+      try {
+        user = os.userInfo().username
+      } catch {
+        user = ''
+      }
+    }
+    return user
+  }
 
   async function readDisks(): Promise<void> {
     if (!mounts) mounts = mountsFor(process.platform, existsSync)
@@ -72,7 +84,16 @@ export function createHostStatsService(
     prev = cur
     if (tick % DISK_EVERY === 0) void readDisks()
     tick += 1
-    emit({ cpuPct, ...memStatsOf(os.totalmem(), os.freemem()), disks, hostname: os.hostname(), platform: process.platform })
+    emit({
+      cpuPct,
+      ...memStatsOf(os.totalmem(), os.freemem()),
+      disks,
+      hostname: os.hostname(),
+      platform: process.platform,
+      user: userName(),
+      osRelease: os.release(),
+      uptimeSec: Math.round(os.uptime())
+    })
   }
 
   return {

@@ -67,13 +67,18 @@ export function registerTelemetryIpc(
     localTelemetry.stop(sessionId)
     return { ok: true } as const
   })
-  // F29: 내 PC 통계. 세션이 없어도 돈다 — 패널이 열려 있는 동안만.
+  // F29: 내 PC 통계. 세션이 없어도 돈다 — 구독자가 있는 동안만.
+  // 다듬기 R3: 구독자가 둘이 됐다(상태바 "내 PC" 칸 + [시스템 모니터] 로컬 탭) — 하나가 멈춰도 다른 쪽이
+  // 끊기지 않게 센다. 폴러는 하나다(같은 sys:data 를 함께 받는다).
+  let hostSubs = 0
   handle('sys:start', () => {
+    hostSubs += 1
     host.start()
     return { ok: true } as const
   })
   handle('sys:stop', () => {
-    host.stop()
+    hostSubs = Math.max(0, hostSubs - 1)
+    if (hostSubs === 0) host.stop()
     return { ok: true } as const
   })
   handle('logtail:start', ({ sessionId, path }) => ({ id: logs.start(sessionId, path) }))

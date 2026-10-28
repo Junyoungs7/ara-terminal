@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { ConnectionProfile, RemoteStats } from '@shared/types'
+import type { ConnectionProfile, HostStats, RemoteStats } from '@shared/types'
 import { parseOverview, type Overview } from '@shared/remoteCatalog'
 import type { UpdateState } from '@shared/ipc'
 import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { t } from '../i18n'
-import { sparkArea, sparkPoints, type Sample } from '../store/sysMonitor'
+import { sparkArea, sparkPoints, useHostStats, type Sample } from '../store/sysMonitor'
 import { updateSeg } from '../store/updateNotify'
 
 // 하단 상태바 (design-system §4.1).
@@ -86,13 +86,63 @@ export function uptimeShort(sec: number | null | undefined): string {
 }
 
 /**
- * 2.0 상태바의 OS·가동 칸 — **활성 탭 기준.** SSH 면 그 서버(작업대 개요와 같은 `sys.overview` 한 번),
- * 로컬이면 내 PC. 내 PC 가동 시간은 지금 읽는 길이 없다(새 수집기를 만들지 않는다) → —.
+ * Windows 빌드 번호 → 기능 업데이트 이름. os.release() 는 `10.0.22631` 처럼 빌드만 주고 "23H2" 를 안 준다.
+ * 표에 없는 새 빌드는 가장 가까운 아래 이름 대신 **빌드 번호**를 찍는다(틀린 이름보다 낫다).
  */
-export function hostFacts(session: Session | null, ov: Overview | null): { os: string; uptime: string } {
-  if (!session) return { os: NA, uptime: NA }
-  if (session.type === 'ssh') return { os: ov?.distro || NA, uptime: uptimeShort(ov?.uptimeSec) }
-  return { os: navigator.userAgent.includes('Mac') ? 'macOS' : 'Windows', uptime: NA }
+const WIN_BUILDS: ReadonlyArray<[number, string]> = [
+  [26200, '11 25H2'],
+  [26100, '11 24H2'],
+  [22631, '11 23H2'],
+  [22621, '11 22H2'],
+  [22000, '11 21H2'],
+  [19045, '10 22H2'],
+  [19044, '10 21H2'],
+  [19043, '10 21H1'],
+  [19042, '10 20H2'],
+  [19041, '10 2004']
+]
+
+/** 내 PC OS 짧은 표기(상태바 OS 칸). platform·release 는 main 의 process.platform·os.release(). */
+export function osLabel(platform: string, release: string): string {
+  if (platform === 'win32') {
+    const build = Number(release.split('.')[2])
+    if (!Number.isFinite(build)) return 'Windows'
+    const hit = WIN_BUILDS.find(([b]) => b === build)
+    if (hit) return `Windows ${hit[1]}`
+    return `Windows ${build >= 22000 ? '11' : '10'} (${build})`
+  }
+  if (platform === 'darwin') {
+    // Darwin 20 = macOS 11, 이후 한 단씩.
+    const major = Number(release.split('.')[0])
+    return major >= 20 ? `macOS ${major - 9}` : 'macOS'
+  }
+  return release ? `Linux ${release.split('-')[0]}` : 'Linux'
+}
+
+/** 내 PC 이름 칸 — `계정@호스트`. 계정을 못 읽었으면 호스트만. */
+export function localPrimary(h: HostStats): string {
+  return h.user ? `${h.user}@${h.hostname}` : h.hostname
+}
+
+/**
+ * 2.0 상태바의 OS·가동 칸 — **활성 탭 기준.** SSH 면 그 서버(작업대 개요와 같은 `sys.overview` 한 번),
+ * 로컬 탭이거나 세션이 없으면 내 PC(다듬기 R3 — 시스템 모니터와 같은 sys:data 폴러). 못 읽었으면 —.
+ */
+export function hostFacts(session: Session | null, ov: Overview | null, host: HostStats | null = null): { os: string; uptime: string } {
+  if (session?.type === 'ssh') return { os: ov?.distro || NA, uptime: uptimeShort(ov?.uptimeSec) }
+  if (!host) return { os: NA, uptime: NA }
+  return { os: osLabel(host.platform, host.osRelease), uptime: uptimeShort(host.uptimeSec) }
+}
+
+/** 창이 보이는지 — 숨거나 최소화되면 Chromium 이 visibilityState 를 hidden 으로 바꾼다(ExplorerWindow 와 같은 규칙). */
+function usePageVisible(): boolean {
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
+  useEffect(() => {
+    const on = (): void => setVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [])
+  return visible
 }
 
 /** 개요를 못 읽었을 때 다시 묻기까지(다듬기 R2, 리뷰 B8). 접속 직후 셸이 덜 떴을 때 한 번 실패하곤 한다. */
@@ -136,21 +186,29 @@ function useOverview(session: Session | null, connected: boolean): Overview | nu
 }
 
 // 활성 세션 → 상태바에 찍을 값(순수 — 단위 테스트 대상).
+// 다듬기 R3: `host`(내 PC)가 오면 세션이 없을 때도·로컬 탭에서도 `계정@호스트` + 내 PC 게이지를 찍는다.
+// SSH 탭은 그대로 그 서버다.
 export function statusModel(
   session: Session | null,
   profile: ConnectionProfile | undefined,
   conn: ConnState,
   cwd: string | null,
   stats: RemoteStats | null = null,
-  history: readonly Sample[] = []
+  history: readonly Sample[] = [],
+  host: HostStats | null = null,
+  hostHistory: readonly Sample[] = []
 ): StatusModel {
-  if (!session) return { primary: t('statusbar.idle'), dot: null, cwd: null, idle: true, gauges: [] }
+  if (!session) {
+    if (host) return { primary: localPrimary(host), dot: null, cwd: null, idle: true, gauges: gaugesOf(host, hostHistory) }
+    return { primary: t('statusbar.idle'), dot: null, cwd: null, idle: true, gauges: [] }
+  }
   if (session.type === 'ssh') {
     // 프로필을 못 찾는 경우(삭제된 프로필의 살아 있는 세션)는 서버 그룹 키로 폴백한다.
     const primary = profile ? `${profile.username}@${profile.host}:${profile.port}` : session.serverKey
     return { primary, dot: (profile && conn[profile.id]) || 'connected', cwd, idle: false, gauges: gaugesOf(stats, history) }
   }
   // FB-0008: 로컬 세션도 게이지를 받는다(내 PC의 CPU/메모리) — gaugesOf 는 stats 가 없으면 그냥 빈 배열.
+  if (host) return { primary: localPrimary(host), dot: null, cwd, idle: false, gauges: gaugesOf(host, hostHistory) }
   return { primary: session.title, dot: null, cwd, idle: false, gauges: gaugesOf(stats, history) }
 }
 
@@ -192,8 +250,13 @@ export function StatusBar({
   /** 위 칸을 눌렀을 때. `ready` 의 확인 받기는 호출측(runUpdateAction)이 한다. */
   onUpdateAction?: (action: 'download' | 'install' | 'check') => void
 }) {
-  const m = statusModel(session, profile, conn, cwd, stats, history)
-  const facts = hostFacts(session, useOverview(session, m.dot === 'connected'))
+  // 다듬기 R3: 로컬 탭·세션 없음이면 내 PC 를 켜자마자 보여 준다. 창이 숨거나 최소화되면 구독을 끊어
+  // 폴러가 멈춘다(main 이 구독자를 센다 — 시스템 모니터 [로컬] 탭과 같은 폴러를 나눠 쓴다).
+  const visible = usePageVisible()
+  const local = !session || session.type === 'local'
+  const host = useHostStats(local && visible)
+  const m = statusModel(session, profile, conn, cwd, stats, history, local ? host.stats : null, host.history)
+  const facts = hostFacts(session, useOverview(session, m.dot === 'connected'), local ? host.stats : null)
   const u = updateSeg(update ?? null, version)
   // 2.0 4단계: 라벨 없는 값 위주(시안 Z-final) — 호스트·인코딩·버전 칸의 라벨을 뺐다. 선택자(.lbl·.val)는 그대로.
   const verBody = <span className="val">{u.text}</span>
@@ -206,13 +269,16 @@ export function StatusBar({
         <span className="val">{m.primary}</span>
       </div>
       {/* 2.0: 활성 탭 기준 서버 정보 — 칸은 늘 같은 자리에 서고, 값이 없으면 — 만 찍는다(시안 Z-final).
-          세션이 없을 때(유휴)는 말할 대상이 없어 칸을 세우지 않는다. */}
-      {!m.idle && (
+          세션이 없을 때는 내 PC 를 말한다(다듬기 R3) — 경로 칸만 뺀다(셸이 없으니 경로도 없다).
+          내 PC 값이 아직 안 왔으면(첫 표본 전) 예전처럼 유휴 한 칸만. */}
+      {(!m.idle || m.gauges.length > 0) && (
         <>
-          <div className="sb-seg cwd" title={m.cwd ?? undefined}>
-            <span className="lbl">{t('statusbar.cwd')}</span>
-            <span className={'val' + (m.cwd ? '' : ' na')}>{m.cwd ?? NA}</span>
-          </div>
+          {!m.idle && (
+            <div className="sb-seg cwd" title={m.cwd ?? undefined}>
+              <span className="lbl">{t('statusbar.cwd')}</span>
+              <span className={'val' + (m.cwd ? '' : ' na')}>{m.cwd ?? NA}</span>
+            </div>
+          )}
           <div className="sb-seg os">
             <span className="lbl">{t('statusbar.os')}</span>
             <span className={'val' + (facts.os === NA ? ' na' : '')}>{facts.os}</span>
