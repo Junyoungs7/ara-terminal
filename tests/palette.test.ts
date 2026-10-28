@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest'
 import { KEYMAP } from '../src/shared/keymap'
 import { MENUBAR } from '../src/renderer/interactions/actions'
-import { filterPalette, groupPalette, moveCursor, paletteItems } from '../src/renderer/store/palette'
+import { filterPalette, groupPalette, moveCursor, openItems, paletteHome, paletteItems } from '../src/renderer/store/palette'
+import { FEATURES, featuresOf } from '../src/shared/features'
 import type { ConnectionProfile, WorkProfile } from '../src/shared/types'
 
 const PROFILES = [
@@ -64,8 +65,41 @@ describe('팔레트 목록 — 기존 표에서 끌어온다(따로 관리하지
   it('단축키 표기는 플랫폼을 따른다', () => {
     const win = paletteItems([], [], false).find((i) => i.id === 'action:session.new')
     const mac = paletteItems([], [], true).find((i) => i.id === 'action:session.new')
-    expect(win?.hint).toBe('Ctrl+Shift+T')
-    expect(mac?.hint).toBe('Cmd+Shift+T')
+    // 2.0 다듬기 R1: 단축키는 칩(key) — 키 사이 공백. hint 는 설명 자리다.
+    expect(win?.key).toBe('Ctrl Shift T')
+    expect(mac?.key).toBe('Cmd Shift T')
+  })
+})
+
+// 2.0 다듬기 R1 — 빈 검색어는 긴 목록 대신 세 묶음(열린 창 / 최근 서버 / 숨긴 기능).
+describe('빈 검색어 묶음', () => {
+  const profiles = [
+    { id: 'p1', type: 'ssh', name: 'web-01', host: 'h1', port: 22, username: 'u', authType: 'password' },
+    { id: 'p2', type: 'ssh', name: 'db-01', host: 'h2', port: 22, username: 'u', authType: 'password' }
+  ] as unknown as ConnectionProfile[]
+  const shown = featuresOf({}) // 기본값 — 쿠버네티스·서버 로그·서버 콘솔이 숨김
+  const items = paletteItems(profiles, [], false, shown)
+
+  it('★ 열린 창 → 최근 서버(최근 것 먼저) → 숨긴 기능 순서, 없는 프로필 id 는 건너뛴다', () => {
+    const open = openItems([{ id: 's1', title: 'web-01', server: 'web-01' }], true)
+    const home = paletteHome(items, open, ['p2', 'gone', 'p1'])
+    expect(home.map((g) => g.key)).toEqual(['palette.group.open', 'palette.group.recent', 'palette.group.hidden'])
+    expect(home[0].items.map((i) => i.id)).toEqual(['session:s1', 'window:explorer'])
+    expect(home[1].items.map((i) => i.id)).toEqual(['profile:p2', 'profile:p1'])
+    expect(home[2].items.length).toBeGreaterThan(0)
+    expect(home[2].items.every((i) => i.off)).toBe(true)
+  })
+
+  it('세션 탭을 고르면 그 탭으로 간다 · 탐색기는 여는 길(explorer.toggle)로', () => {
+    const [tab, exp] = openItems([{ id: 's1', title: 'PowerShell' }], true)
+    expect(tab.run).toEqual({ do: 'session', sessionId: 's1' })
+    expect(tab.hint).toBeUndefined() // 로컬 탭은 서버 이름이 없다
+    expect(exp.run).toEqual({ do: 'action', action: 'explorer.toggle' })
+  })
+
+  it('세 묶음이 다 비면 빈 배열 — 부르는 쪽이 전체 목록을 보인다', () => {
+    const all = featuresOf(Object.fromEntries(FEATURES.map((f) => [f.id, true])))
+    expect(paletteHome(paletteItems([], [], false, all), [], [])).toEqual([])
   })
 })
 

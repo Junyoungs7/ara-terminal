@@ -277,8 +277,9 @@
   border-color: var(--accent-line);
   color: var(--accent-bright);
 }
-/* F31 통합 검색 — 타이틀바 가운데의 **검색창**. VS Code 의 상단 검색줄과 같은 자리·같은 뜻이다.
-   창을 여는 버튼이 아니라 여기서 바로 타이핑한다(2026-08-13 준영님 재요청). */
+/* F31 통합 검색 — 타이틀바 가운데의 **검색칸**(VS Code 의 상단 검색줄과 같은 자리·같은 뜻).
+   2.0 다듬기 R1: 칸은 여는 자리(<button>)이고 타이핑은 가운데 창(.cp-drop)의 입력칸에서 한다 —
+   생김새는 검색칸 그대로 둔다(돋보기·안내·F1 칩 — 2026-08-13 "검색창처럼 보여야" 요청). */
 .tb-omni {
   display: flex;
   align-items: center;
@@ -292,25 +293,74 @@
   border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-lo);
+  font-family: var(--ui);
   font-size: var(--fs-md);
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
   -webkit-app-region: no-drag;
 }
-.tb-omni:hover,
-.tb-omni:focus-within {
-  border-color: var(--accent-line);
-}
-/* 안쪽 input 은 테두리가 없어 링도 껍데기가 그린다(.pw-wrap 과 같은 구조). */
-.tb-omni:has(input:focus-visible) {
-  border-color: var(--focus-ring-color);
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+.tb-omni:hover {
+  border-color: var(--line-strong);
 }
 .tb-omni svg {
   flex: none;
   width: 12px;
   height: 12px;
 }
-.tb-omni input {
+.tb-omni-ph {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 진짜 placeholder 가 아니라 **누르는 칸의 글자**다 — 대비 하한(4.5)을 지키는 lo. */
+  color: var(--text-lo);
+}
+
+/* 결과 — 화면 가운데 640px 덮개 창(시안 Z-palette). 뒤는 살짝만 어둡게(설정 같은 모달이 아니다 —
+   터미널이 비쳐 보여야 "잠깐 찾는 것"으로 읽힌다). position:fixed — 타이틀바 안에 그려지지만
+   타이틀바에 쌓임 맥락이 없어 화면 기준이다.
+   z-index 150 = 떠 있는 창(95)·모달(100) 위, 컨텍스트 메뉴(199·201)와 툴팁(300) 아래. */
+.cp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: var(--scrim-soft);
+  /* 타이틀바 줄 위의 덮개도 눌려야 닫힌다 — drag 영역이면 창이 끌린다. */
+  -webkit-app-region: no-drag;
+}
+.cp-drop {
+  position: fixed;
+  z-index: 150;
+  top: calc(var(--row-titlebar) + 44px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, calc(100vh - var(--row-titlebar) - 88px));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-canvas);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.cp-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-6) var(--sp-7);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-lo);
+}
+.cp-head svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.cp-head input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -318,52 +368,58 @@
   background: transparent;
   color: var(--text-hi);
   font-family: var(--ui);
-  font-size: var(--fs-md);
+  font-size: var(--fs-xl);
 }
-
-/* 결과 — 검색창 **바로 아래**로 펼친다. position:fixed 인 이유: 타이틀바 안에 두면 아래 본문이
-   덮는다(타이틀바에 쌓임 맥락이 없다). 자리·폭은 검색창 사각형에서 재 온다.
-   z-index 150 = 떠 있는 창(95)·모달(100) 위, 컨텍스트 메뉴(199·201)와 툴팁(300) 아래. */
-.cp-drop {
-  position: fixed;
-  z-index: 150;
-  display: flex;
-  flex-direction: column;
-  max-height: 60vh;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
+.cp-head input::placeholder {
+  color: var(--text-dim);
 }
 .cp-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-2) 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
 }
 .cp-group {
-  padding: var(--sp-3) var(--sp-6) var(--sp-2);
+  padding: var(--sp-5) var(--sp-4) var(--sp-2);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.01em;
 }
 .cp-item {
   display: flex;
   align-items: center;
   gap: var(--sp-5);
-  min-height: 26px;
-  padding: 0 var(--sp-6);
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius);
   cursor: var(--cur-hand, pointer);
 }
+/* 고른 줄 = 글라스 면 + 왼쪽 2px 막대(레일 활성과 같은 말 — 시안). */
 .cp-item.on {
-  background: var(--bg-overlay);
+  background: var(--glass);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+.cp-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text-lo);
+}
+.cp-ic svg {
+  width: 14px;
+  height: 14px;
+}
+.cp-item.on .cp-ic {
+  color: var(--text-hi);
+}
 .cp-label {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -371,39 +427,56 @@
   font-size: var(--fs-md);
 }
 .cp-hint {
-  flex: none;
-  max-width: 45%;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-lo);
-  font-family: var(--ui);
   font-size: var(--fs-md);
+}
+/* 맞은 글자 — 포인트 글자 + 옅은 틴트(시안). */
+.cp-item mark {
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+  border-radius: var(--radius-sm);
 }
 /* 2.0: 설정 › 기능에서 꺼진 기능 — 검색엔 남기고 점선 배지(시안 Z-palette). */
 .cp-off {
   flex: none;
+  margin-left: auto;
   padding: 0 var(--sp-3);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-sm);
   color: var(--text-mid);
   font-size: var(--fs-micro);
 }
-.cp-empty,
-.cp-foot {
+.cp-key {
+  margin-left: auto;
+}
+.cp-off + .cp-key {
+  margin-left: 0;
+}
+.cp-empty {
+  padding: var(--sp-7) var(--sp-4);
   color: var(--text-mid);
   font-size: var(--fs-md);
 }
-.cp-empty {
-  padding: var(--sp-7) var(--sp-6);
-}
 .cp-foot {
   flex: none;
-  padding: var(--sp-3) var(--sp-6);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-4) var(--sp-7);
   border-top: 1px solid var(--line);
-  font-size: var(--fs-micro);
-  font-weight: 500;
   color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.cp-foot .kbd {
+  margin-right: var(--sp-2);
+}
+.cp-foot-note {
+  margin-left: auto;
 }
 
 .tb-controls {
@@ -620,7 +693,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg-canvas);
-  cursor: var(--cur-text, text);
+  cursor: var(--cur-hand, pointer);
 }
 .fpath-box:hover {
   border-color: var(--line-strong);
@@ -8971,10 +9044,10 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-arrow, default);
 }
 :root[data-cursor] :is(textarea, input:not([type]), input[type='text'], input[type='password'], input[type='search'], input[type='number']) {
-  cursor: var(--cur-text, text);
+  cursor: var(--cur-hand, pointer);
 }
 :root[data-cursor] .xterm {
-  cursor: var(--cur-text, text);
+  cursor: var(--cur-hand, pointer);
 }
 :root[data-cursor] .xterm .xterm-viewport,
 :root[data-cursor] .xterm.enable-mouse-events {

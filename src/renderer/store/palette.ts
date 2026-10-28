@@ -1,4 +1,4 @@
-import { KEYMAP, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, keyText, type KeymapAction } from '../../shared/keymap'
 import { MENUBAR, type MenuCommandId } from '../interactions/actions'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { t } from '../i18n'
@@ -17,15 +17,17 @@ import { featureOf, type FeatureId, type FeatureShown } from '@shared/features'
 //
 // 화면(CommandPalette.tsx)은 여기서 나온 목록을 그리기만 한다. 아래는 전부 순수 함수다.
 
-export type PaletteKind = 'action' | 'command' | 'profile' | 'work'
+export type PaletteKind = 'session' | 'action' | 'command' | 'profile' | 'work'
 
 export type PaletteItem = {
   /** 목록 key + e2e 선택자. 종류별로 접두어가 달라 서로 부딪히지 않는다. */
   id: string
   kind: PaletteKind
   label: string
-  /** 오른쪽에 흐리게 붙는 보조 정보(단축키 · 호스트 · 경로). */
+  /** 이름 옆에 흐리게 붙는 설명(기능 설명 · 호스트 · 경로 · 메뉴 이름). */
   hint?: string
+  /** 오른쪽 단축키 칩(`.kbd`) 글자 — keyText 표기(`Ctrl Shift T`). */
+  key?: string
   /** 검색에 걸리지만 화면에는 안 보이는 낱말(영문 이름 등). */
   alias?: string
   /** 2.0: 설정 › 기능에서 꺼진 기능. 검색에는 남고 배지가 붙는다(byDefault = 기본 숨김인 것). */
@@ -39,6 +41,7 @@ export type PaletteRun =
   | { do: 'command'; command: MenuCommandId }
   | { do: 'connect'; profileId: string }
   | { do: 'work'; workId: string }
+  | { do: 'session'; sessionId: string }
 
 /**
  * KEYMAP 에 **같은 기능이 이미 있는** 메뉴 명령. 팔레트에 두 줄로 뜨지 않게 건너뛴다
@@ -52,6 +55,7 @@ const COMMAND_DUPES: Partial<Record<MenuCommandId, KeymapAction>> = { 'help.chea
 
 /** 종류별 머리말. 섞여 나오면 무엇을 고르는 중인지 흐려진다. */
 export const PALETTE_GROUPS: readonly { kind: PaletteKind; key: string }[] = [
+  { kind: 'session', key: 'palette.group.open' },
   { kind: 'action', key: 'palette.group.action' },
   { kind: 'command', key: 'palette.group.command' },
   { kind: 'profile', key: 'palette.group.profile' },
@@ -75,11 +79,14 @@ export function paletteItems(
   //    (치트시트가 이미 같은 규칙을 쓴다).
   for (const k of KEYMAP) {
     if (!k.implemented) continue
+    const f = featureOf(k.action)
     out.push({
       id: 'action:' + k.action,
       kind: 'action',
       label: k.labelKo,
-      hint: isMac ? k.mac : k.win,
+      // 설명은 설정 › 기능과 같은 문구(그 표에 있는 기능만). 단축키는 칩으로 따로 간다.
+      ...(f ? { hint: t('feature.' + f.id + '.desc') } : {}),
+      key: keyText(isMac ? k.mac : k.win),
       alias: k.action,
       off: offOf(k.action),
       run: { do: 'action', action: k.action }
@@ -98,11 +105,12 @@ export function paletteItems(
       if (dupe && out.some((i) => i.id === 'action:' + dupe)) continue
       const label = t('menu.' + e.command)
       if (out.some((i) => i.kind === 'action' && i.label === label)) continue
+      const f = featureOf(e.command)
       out.push({
         id: 'command:' + e.command,
         kind: 'command',
         label,
-        hint: menu.title,
+        hint: f ? t('feature.' + f.id + '.desc') : menu.title,
         alias: e.command,
         off: offOf(e.command),
         run: { do: 'command', command: e.command }
@@ -150,7 +158,7 @@ export function filterPalette(items: readonly PaletteItem[], query: string): Pal
   const scored: { item: PaletteItem; rank: number; i: number }[] = []
   items.forEach((item, i) => {
     const label = item.label.toLowerCase()
-    const hay = `${label} ${(item.hint ?? '').toLowerCase()} ${(item.alias ?? '').toLowerCase()}`
+    const hay = `${label} ${(item.hint ?? '').toLowerCase()} ${(item.alias ?? '').toLowerCase()} ${(item.key ?? '').toLowerCase()}`
     if (!words.every((w) => hay.includes(w))) return
     const rank = label.startsWith(words[0]) ? 0 : label.includes(words[0]) ? 1 : 2
     scored.push({ item, rank, i })
@@ -163,6 +171,71 @@ export function groupPalette(items: readonly PaletteItem[]): { kind: PaletteKind
   return PALETTE_GROUPS.map(({ kind }) => ({ kind, items: items.filter((x) => x.kind === kind) })).filter(
     (g) => g.items.length > 0
   )
+}
+
+/**
+ * 열린 창 — 세션 탭과 탐색기 창(2.0 다듬기 R1, 빈 쿼리 묶음 겸 창 목록). 고르면 그 탭으로 가거나
+ * 탐색기를 앞으로 가져온다(explorer.toggle 은 토글이 아니라 "열기/앞으로" — Shell 주석).
+ * ponytail: 브라우저·포트 창은 본창 렌더러가 열림 여부를 모른다(main 만 안다) — 상태 중계가 생기면 여기 더한다.
+ */
+export function openItems(
+  sessions: readonly { id: string; title: string; server?: string }[],
+  explorerOpen: boolean
+): PaletteItem[] {
+  const out: PaletteItem[] = sessions.map((s) => ({
+    id: 'session:' + s.id,
+    kind: 'session',
+    label: s.title,
+    ...(s.server && s.server !== s.title ? { hint: s.server } : {}),
+    run: { do: 'session', sessionId: s.id }
+  }))
+  if (explorerOpen)
+    out.push({
+      id: 'window:explorer',
+      kind: 'session',
+      label: t('feature.explorer'),
+      hint: t('palette.window'),
+      run: { do: 'action', action: 'explorer.toggle' }
+    })
+  return out
+}
+
+/**
+ * **빈 검색어**일 때 보이는 것 — 긴 단축키 목록 대신 세 묶음(시안 Z-palette · 리뷰 B 추가 제안):
+ * 열린 창 / 최근 서버 / 숨긴 기능. 셋 다 비면(첫 실행 직후 같은 때) 빈 배열 — 부르는 쪽이 전체 목록을 보인다.
+ */
+export function paletteHome(
+  items: readonly PaletteItem[],
+  open: readonly PaletteItem[],
+  recentProfileIds: readonly string[]
+): { key: string; items: PaletteItem[] }[] {
+  const recent = recentProfileIds
+    .map((id) => items.find((i) => i.id === 'profile:' + id))
+    .filter((i): i is PaletteItem => !!i)
+  return [
+    { key: 'palette.group.open', items: [...open] },
+    { key: 'palette.group.recent', items: recent },
+    { key: 'palette.group.hidden', items: items.filter((i) => i.off) }
+  ].filter((g) => g.items.length > 0)
+}
+
+/** 최근 접속한 서버(프로필 id, 최근 것 먼저). 설정이 아니라 잠깐의 기억이라 localStorage(BootSplash 와 같은 이유). */
+const RECENT_KEY = 'ara.palette.recentServers'
+const RECENT_MAX = 5
+export function recentServers(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+export function noteRecentServer(profileId: string): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify([profileId, ...recentServers().filter((x) => x !== profileId)].slice(0, RECENT_MAX)))
+  } catch {
+    /* 저장 못 하면 최근 목록만 빈다 */
+  }
 }
 
 /** ↑↓ 이동 — 끝에서 반대편으로 돈다(목록이 짧아 감아 도는 편이 빠르다). 빈 목록은 0. */

@@ -17,6 +17,7 @@ import { ConnectionModal, type ConnModalRequest } from './ConnectionModal'
 import type { ExplorerAct } from '@shared/explorerWin'
 import { ServerTool } from './ServerTool'
 import { CommandPalette } from './CommandPalette'
+import { noteRecentServer } from '../store/palette'
 import { useDialog } from './Dialog'
 import { useBugReport } from './BugReportModal'
 import { useMyReports } from './MyReportsModal'
@@ -463,6 +464,14 @@ export function Shell() {
     return () => offs.forEach((off) => off?.())
   }, [sessionIds])
   const activeCwd = activeId ? (cwdBy[activeId] ?? null) : null
+  // 통합 검색 빈 쿼리의 [열린 창] — 본창의 탭만(떼어낸 창의 세션은 그 창이 주인이다).
+  const paletteSessions = useMemo(
+    () =>
+      sessions.sessions
+        .filter((s) => !s.winId)
+        .map((s) => ({ id: s.id, title: s.title, ...(s.type === 'ssh' ? { server: s.serverKey } : {}) })),
+    [sessions.sessions]
+  )
 
   // 아라 채팅 v2: **지금 보는 세션**을 main 에 알린다(바뀔 때마다). 채팅은 이 세션을 대상으로 쓰고,
   // 아라가 이 세션에 치는 것은 묻지 않는다(approval.ts) — 그래서 패널이 닫혀 있어도 늘 맞춰 둔다.
@@ -1074,6 +1083,7 @@ export function Shell() {
         { acceptHostKey, password, size, aiCommand }
       )
       if (!res.ok) return false
+      if (!restore) noteRecentServer(profileId) // 통합 검색 빈 쿼리의 [최근 서버]
       const p = await lookup(profileId)
       const name = p?.name ?? 'ssh'
       // 탭 이름은 main 이 정한다(같은 서버 다중 세션은 ·2, ·3 — R2.1). serverKey 는 그룹 키라 프로필명 그대로.
@@ -1510,8 +1520,11 @@ export function Shell() {
             workProfiles={work.list}
             features={features}
             onEnable={(id) => mainRef.current?.showFeature(id)}
+            sessions={paletteSessions}
+            explorerOpen={explorerOpen}
             onRun={(run) => {
               if (run.do === 'action') dispatchAction(run.action)
+              else if (run.do === 'session') selectSession(run.sessionId)
               else if (run.do === 'command') onMenuCommand(run.command)
               else if (run.do === 'connect') void connectProfile(run.profileId)
               else {
