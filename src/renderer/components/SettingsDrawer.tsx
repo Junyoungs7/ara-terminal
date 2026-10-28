@@ -1127,7 +1127,7 @@ export function SettingsDrawer({
                     <span className="cur-smp">
                       {CURSOR_KINDS.map((k) => (
                         <span key={k} style={{ cursor: cursorValue(c, k) }} title={t('mouseCursor.kind.' + k)}>
-                          {c !== 'system' && <img src={cursorSrc(c, k)} alt="" />}
+                          <img src={cursorSrc(c, k)} alt="" />
                         </span>
                       ))}
                     </span>

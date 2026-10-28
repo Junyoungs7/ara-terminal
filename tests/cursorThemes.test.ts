@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { MOUSE_CURSORS, mouseCursorOf } from '../src/shared/types'
-import { CURSOR_KINDS, cursorValue } from '../src/renderer/cursorThemes'
+import { CURSOR_KINDS, cursorSrc, cursorValue } from '../src/renderer/cursorThemes'
 
 // 2.0 4단계 — 마우스 커서 테마. 값마다 표준 커서 폴백이 붙고, 시스템 기본이면 표준 키워드뿐이다.
 describe('마우스 커서 테마', () => {
@@ -18,6 +18,11 @@ describe('마우스 커서 테마', () => {
         if (theme === 'system') expect(v).toMatch(/^[a-z-]+$/)
         else expect(v).toMatch(/^url\("data:image\/svg\+xml,%3Csvg .+"\) \d+ \d+, (default|pointer|text|col-resize|wait)$/)
       }
+  })
+
+  it('견본은 테마마다 다섯 칸 전부 그림이 있다 — "시스템 기본"도(다듬기 R2: 빈칸이었다)', () => {
+    for (const theme of MOUSE_CURSORS)
+      for (const k of CURSOR_KINDS) expect(cursorSrc(theme, k)).toMatch(/^data:image\/svg\+xml,%3Csvg .+%3C\/svg%3E$/)
   })
 
   it('CSS 의 표준 커서는 전부 테마 변수를 거친다(맨 키워드가 남으면 그 자리만 테마를 안 탄다)', () => {

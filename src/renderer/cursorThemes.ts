@@ -57,9 +57,21 @@ export const CURSOR_SVGS: Record<Exclude<MouseCursor, 'system'>, Record<CursorKi
   },
 }
 
+/**
+ * "시스템 기본" 견본 — 표준 Windows 모양을 그린 **그림일 뿐**이다(다듬기 R2: 견본 다섯 칸이 비어 있었다).
+ * 실제 커서는 여전히 OS 의 것이다(cursorValue 가 표준 키워드를 준다). 시안 Z-cursor 의 SVG 그대로.
+ */
+const SYSTEM_SAMPLES: Record<CursorKind, string> = {
+  arrow: '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M3 2v17l4.5-4.2 2.9 6.4 2.6-1.2-2.8-6.2h6z%22 fill=%22%23fff%22 stroke=%22%23000%22 stroke-width=%221%22 stroke-linejoin=%22miter%22/%3E%3C/svg%3E',
+  hand: '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M7.5 3.5a1.5 1.5 0 0 1 3 0v6.1a1.25 1.25 0 0 1 2.5 0v.8a1.25 1.25 0 0 1 2.5 0v.8a1.25 1.25 0 0 1 2.5 0v5.3a5.5 5.5 0 0 1-5.5 5.5h-.9a5.5 5.5 0 0 1-4.3-2.1l-3.4-4.3a1.4 1.4 0 0 1 2.1-1.8l1.5 1.5z%22 fill=%22%23fff%22 stroke=%22%23000%22 stroke-width=%221%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M10.5 10v3M13 10.8v2.2M15.5 11.6v1.4%22 stroke=%22%23000%22 stroke-width=%22.8%22 stroke-linecap=%22round%22 opacity=%22.5%22/%3E%3C/svg%3E',
+  text: '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22%3E%3Cg fill=%22none%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M9 3.5h6M12 3.5v17M9 20.5h6%22 stroke=%22%23fff%22 stroke-width=%223.4%22/%3E%3Cpath d=%22M9 3.5h6M12 3.5v17M9 20.5h6%22 stroke=%22%23000%22 stroke-width=%221.4%22/%3E%3C/g%3E%3C/svg%3E',
+  ew: '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M1.5 12l5-5v3h11V7l5 5-5 5v-3h-11v3z%22 fill=%22%23fff%22 stroke=%22%23000%22 stroke-width=%221%22 stroke-linejoin=%22miter%22/%3E%3C/svg%3E',
+  wait: '%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%227%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%224.8%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%227%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%222.6%22/%3E%3Cpath d=%22M12 5a7 7 0 0 1 7 7%22 fill=%22none%22 stroke=%22%230078d4%22 stroke-width=%222.6%22/%3E%3C/svg%3E',
+}
+
 /** 설정 화면 견본용 이미지 주소. */
-export const cursorSrc = (theme: Exclude<MouseCursor, 'system'>, kind: CursorKind): string =>
-  'data:image/svg+xml,' + CURSOR_SVGS[theme][kind][0]
+export const cursorSrc = (theme: MouseCursor, kind: CursorKind): string =>
+  'data:image/svg+xml,' + (theme === 'system' ? SYSTEM_SAMPLES[kind] : CURSOR_SVGS[theme][kind][0])
 
 /** CSS `cursor` 값 — 시스템 기본이면 표준 키워드, 아니면 `url(...) x y, <표준값>`. */
 export function cursorValue(theme: MouseCursor, kind: CursorKind): string {
