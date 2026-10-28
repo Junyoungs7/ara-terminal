@@ -160,7 +160,7 @@ export function SidebarRail({
           () => <Compass />,
           t('rail.explorer.open')
         )}
-      {tool('bottombar', bottomOpen, railTip(t('bottom.bar.toggle'), undefined, 'bottom'), onBottom, () => <Wrench />)}
+      {tool('bottombar', bottomOpen, railTip(t('bottom.bar.toggle'), 'bottom.toggle', 'bottom'), onBottom, () => <Wrench />)}
       <div className="lrail-spacer" />
       {tool('settings', settingsOpen, railTip(t('settings.open'), 'settings.open'), onSettings, () => <SlidersHorizontal />)}
     </div>

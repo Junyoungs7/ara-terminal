@@ -583,7 +583,6 @@ export type MenuCommandId =
   // 2026-08-13 감사: 우측 바에만 있던 패널 다섯이 메뉴에도 통합 검색(F1)에도 없어서
   // "콘솔"·"포트"를 쳐도 안 나왔다. 팔레트가 MENUBAR 를 그대로 읽으므로 여기 올리면
   // **메뉴와 검색이 한 번에** 해결된다(팔레트 쪽은 손댈 것이 없다).
-  | 'panel.ports'
   | 'panel.sysmon'
   | 'panel.log'
   | 'panel.ps'
@@ -643,7 +642,8 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
       { action: 'panel.console' },
       // 하단에 열리는 것들. #84·#86 으로 들어온 여섯이 여기 없어서 F1 검색에도 안 잡혔고,
       // 우측 아이콘을 끄면 되찾을 길이 아예 없었다(2026-08-16).
-      { command: 'panel.ports' },
+      { action: 'panel.ports' },
+      { action: 'bottom.toggle' },
       { command: 'panel.sysmon' },
       { command: 'panel.ps' },
       { command: 'panel.svc' },

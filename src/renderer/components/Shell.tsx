@@ -548,6 +548,12 @@ export function Shell() {
       } else if (matchBinding(e, 'panel.applog')) {
         e.preventDefault()
         toggleBottom('applog')
+      } else if (matchBinding(e, 'panel.ports')) {
+        e.preventDefault()
+        toggleBottom('monitor')
+      } else if (matchBinding(e, 'bottom.toggle')) {
+        e.preventDefault()
+        toggleBottomBar()
       } else if (matchBinding(e, 'panel.console')) {
         // #91: 서버 콘솔은 [서버 작업대] 창에 흡수됐다 — 같은 창을 연다.
         e.preventDefault()
@@ -556,7 +562,7 @@ export function Shell() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, openExplorer])
+  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, toggleBottomBar, openExplorer])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -626,9 +632,6 @@ export function Shell() {
         case 'ai.bootstrap':
           if (!AI_ENTRY) return // 아라 대화가 꺼진 판에서는 갈 곳이 없다(features.ts)
           setBootstrapOpen(true)
-          return
-        case 'panel.ports':
-          toggleBottom('monitor')
           return
         case 'panel.sysmon':
           toggleBottom('sys')

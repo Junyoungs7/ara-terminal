@@ -86,7 +86,7 @@ export type FeatureId =
 export type Feature = { id: FeatureId; hidden?: true; key?: KeymapAction; menu?: string }
 
 export const FEATURES: readonly Feature[] = [
-  { id: 'monitor', menu: 'panel.ports' },
+  { id: 'monitor', key: 'panel.ports' },
   { id: 'sys', menu: 'panel.sysmon' },
   { id: 'ps', menu: 'panel.ps' },
   { id: 'svc', menu: 'panel.svc' },

@@ -56,7 +56,7 @@ describe('통합 검색 — 꺼진 기능', () => {
     const shown = { ...featuresOf(undefined), monitor: false }
     const items = paletteItems([], [], false, shown)
     expect(items.find((i) => i.id === 'action:panel.k8s')?.off).toEqual({ id: 'k8s', byDefault: true })
-    expect(items.find((i) => i.id === 'command:panel.ports')?.off).toEqual({ id: 'monitor', byDefault: false })
+    expect(items.find((i) => i.id === 'action:panel.ports')?.off).toEqual({ id: 'monitor', byDefault: false })
     expect(items.find((i) => i.id === 'command:panel.sysmon')?.off).toBeUndefined()
   })
 })

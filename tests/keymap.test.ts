@@ -47,6 +47,15 @@ describe('R3.8 충돌 정책', () => {
     expect(offenders).toEqual([])
   })
 
+  // 2.0 4단계·다듬기 R1: Ctrl+Alt+문자는 xterm 이 ESC+Ctrl-문자로 보낸다 — bash(5.1+) 기본 M-C-e·g·h·i·j·l·r·y·]
+  // · zsh 기본 ^[^D·G·H·L 과 겹치면 셸이 그 키를 잃는다(keymap.ts 머리 주석).
+  it('★ Ctrl+Alt+문자 앱 키는 bash·zsh 기본 M-C- 키맵을 피한다', () => {
+    const META_CTRL = ['E', 'G', 'H', 'I', 'J', 'L', 'R', 'Y', ']', 'D']
+    const offenders = KEYMAP.filter((b) => META_CTRL.some((k) => b.win === `Ctrl+Alt+${k}`)).map((b) => `${b.action}=${b.win}`)
+    expect(offenders).toEqual([])
+    expect(KEYMAP.some((b) => b.win.startsWith('Ctrl+Alt+'))).toBe(true) // 양성 대조 — 검사할 키가 있다
+  })
+
   it('셸 표준 키는 터미널을 그대로 통과한다(앱이 가로채지 않는다)', () => {
     for (const key of ['c', 'd', 'z', 'l', 'r', 'w', 'u', 'a', 'e', 't', 'b', 'f', 's', '\\']) {
       expect(isAppShortcut(ev({ ctrlKey: true, key }))).toBe(false)

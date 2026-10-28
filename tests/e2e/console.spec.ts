@@ -1138,6 +1138,17 @@ test('CON-25e★ [관리자 권한으로 보기]를 눌러야 sudo 가 나가고
   }
 })
 
+// CON-34c 하단 패널·포트 모니터 단축키(2.0 다듬기 R1 — 리뷰 B5). 터미널에 포커스가 있어도 앱이 받는다.
+test('CON-34c Ctrl+Shift+J 로 하단 패널을 여닫고, Ctrl+Alt+P 로 포트 모니터를 연다', async ({ ara }) => {
+  await newLocalShell(ara.page)
+  await ara.page.keyboard.press('Control+Shift+J')
+  await expect(ara.page.locator('.bottom-panel')).toBeVisible({ timeout: 15_000 })
+  await ara.page.keyboard.press('Control+Shift+J')
+  await expect(ara.page.locator('.bottom-panel')).toHaveCount(0)
+  await ara.page.keyboard.press('Control+Alt+P')
+  await expect(ara.page.locator('.bottom-panel')).toBeVisible({ timeout: 15_000 })
+})
+
 // CON-34b★ 하단바는 **늘 닫힌 채** 시작하고, 세션이 생겨도 스스로 열리지 않는다(2.0 2단계).
 // 이력: 2026-08-24 준영님 결정으로 "첫 세션이 생기면 스스로 열린다"였다 → 2.0 에서 그 자동 열기와
 // 열림 기억(`ui.sidebar.bottom`)을 함께 걷었다(세션 창 = 화면). 여는 자리는 좌측 레일 [서버 도구].
