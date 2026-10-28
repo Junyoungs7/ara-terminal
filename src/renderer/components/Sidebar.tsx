@@ -19,30 +19,16 @@ import { PastLogPanel } from './PastLogPanel'
 
 export type SidebarTab = 'conn' | 'file' | 'ai' | 'past'
 
-// 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(우측 액티비티 바와 같은
-// IntelliJ 툴윈도우 방식 — 누르면 열리고 다시 누르면 닫힌다). 글리프는 옛 탭 것을 그대로 쓴다:
-// 자리를 옮겼다고 모양까지 바꾸면 같은 것인 줄 모른다.
-const TAB_ICON: Record<Exclude<SidebarTab, 'past'>, () => JSX.Element> = {
-  conn: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="18" height="7" rx="1.5" />
-      <rect x="3" y="13" width="18" height="7" rx="1.5" />
-      <path d="M7 7.5h.01M7 16.5h.01" />
-    </svg>
-  ),
-  file: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-    </svg>
-  ),
-  // #129 작업대. 우측 [아라](관제실)와 **다른 글리프**를 쓴다 — 같은 모양이면 같은 것인 줄 안다.
-  ai: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="3" y="5" width="18" height="13" rx="2" />
-      <path d="M8 10.5l2 2-2 2M13 14.5h3" />
-    </svg>
-  )
-}
+// 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(IntelliJ 툴윈도우 방식).
+// 다듬기 R6(2026-10-28): 머리 탭 [연결 | 파일 | AI] 가 생겨 레일의 [파일]·[AI 작업대]는 뺐다.
+// 남은 [연결] 글리프가 사이드바 자체의 여닫이다(nextSidebar 'sidebar').
+const ConnIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="4" width="18" height="7" rx="1.5" />
+    <rect x="3" y="13" width="18" height="7" rx="1.5" />
+    <path d="M7 7.5h.01M7 16.5h.01" />
+  </svg>
+)
 
 const TAB_LABEL: Record<SidebarTab, string> = {
   conn: 'sidebar.tab.conn',
@@ -62,7 +48,6 @@ function railTip(label: string, action?: KeymapAction, where?: 'sidebar' | 'wind
   const name = where ? `${label} · ${t('activity.where.' + where)}` : label
   return b ? `${name} (${isMac() ? b.mac : b.win})` : name
 }
-const TAB_KEY: Partial<Record<SidebarTab, KeymapAction>> = { file: 'fileTree.toggle' }
 
 /**
  * 좌측 아이콘 레일 — 사이드바의 여닫이. 옛 우측 액티비티 바(2.0 에서 삭제)와 **같은 규칙**이었고, 클래스만 달랐다
@@ -85,9 +70,10 @@ export function SidebarRail({
 }: {
   active: SidebarTab
   collapsed: boolean
-  /** 세션이 없으면 파일 트리가 읽을 파일시스템이 없다 — 못 누르게 막고 이유를 툴팁에 적는다. */
+  /** 세션이 없으면 [파일] 은 [연결] 로 보인다(shownTab) — 눌림 판정이 패널과 같은 값을 보게. */
   fileEnabled: boolean
-  onPick: (tab: SidebarTab) => void
+  /** 'sidebar' = 사이드바 여닫이(store/sidebar.ts nextSidebar). */
+  onPick: (tab: SidebarTab | 'sidebar') => void
   /** 2.0 설정 › 기능 — 끈 탐색기·지난 세션은 레일에서 뺀다(단축키·검색으로는 열린다). 없으면 전부. */
   features?: FeatureShown
   /** 2.0: 우측 액티비티 바가 없어지며 왼쪽으로 온 셋 — 탐색기 창 · 하단 패널(서버 도구) · 설정. */
@@ -100,25 +86,9 @@ export function SidebarRail({
 }) {
   // 패널이 실제로 무엇을 그리는지와 같은 값을 봐야 한다 — 아래 Sidebar 도 이 함수를 쓴다.
   const shown = shownTab(active, fileEnabled)
-  const tab = (id: SidebarTab, Icon: () => JSX.Element) => {
-    const on = !collapsed && shown === id
-    const disabled = id === 'file' && !fileEnabled
-    return (
-      <button
-        key={id}
-        type="button"
-        className={'lrail-item' + (on ? ' active' : '')}
-        role="tab"
-        aria-selected={on}
-        data-tab={id}
-        disabled={disabled}
-        title={disabled ? t('sidebar.tab.fileNeedsSession') : railTip(t(TAB_LABEL[id]), TAB_KEY[id], 'sidebar')}
-        onClick={() => onPick(id)}
-      >
-        <Icon />
-      </button>
-    )
-  }
+  // [사이드바] — conn·file·ai 중 무엇이든 펼쳐져 있으면 눌림. [지난 세션]이면 그쪽이 눌린다.
+  const sideOn = !collapsed && shown !== 'past'
+  const pastOn = !collapsed && shown === 'past'
   // 사이드바 탭이 아닌 것(창·하단 패널·설정 덮개). 여닫이(하단 패널·설정)는 눌림(aria-pressed)이고,
   // 탐색기는 **토글이 아니다**(다시 눌러도 안 닫히고 앞으로 온다 — 리뷰 B6) — 눌림 대신 이름이 "열기"다.
   // `active` 는 그대로 "그 창이 지금 열려 있다"는 표시로 둔다.
@@ -142,14 +112,24 @@ export function SidebarRail({
       <Icon />
     </button>
   )
-  // 사이드바 탭 묶음(연결 · 파일 · AI 작업대 · 지난 세션) | 1px | 도구 묶음(탐색기 창 · 서버 도구) … 아래 설정.
+  // 사이드바 묶음(사이드바 여닫이 · 지난 세션) | 1px | 도구 묶음(탐색기 창 · 서버 도구) … 아래 설정.
   // 시안은 한 줄로 섞여 있었는데, 누르면 일어나는 일이 다른 둘을 갈라 놓는다(리뷰 B1).
   return (
-    <div className="lrail" role="tablist" aria-label={t('sidebar.rail.label')}>
-      {tab('conn', TAB_ICON.conn)}
-      {tab('file', TAB_ICON.file)}
-      {tab('ai', TAB_ICON.ai)}
-      {(features?.pastlog !== false || (!collapsed && active === 'past')) && tab('past', () => <History />)}
+    <div className="lrail" role="toolbar" aria-label={t('sidebar.rail.label')}>
+      {/* 여닫이라 눌림(aria-pressed)이면서 이름(aria-label)도 단다 — 연결 글리프만으론 "사이드바"인 줄 모른다. */}
+      <button
+        type="button"
+        className={'lrail-item' + (sideOn ? ' active' : '')}
+        aria-pressed={sideOn}
+        aria-label={t('sidebar.rail.toggle')}
+        data-activity="sidebar"
+        title={railTip(t('sidebar.rail.toggle'), 'sidebar.collapse')}
+        onClick={() => onPick('sidebar')}
+      >
+        <ConnIcon />
+      </button>
+      {(features?.pastlog !== false || pastOn) &&
+        tool('pastlog', pastOn, railTip(t(TAB_LABEL.past), undefined, 'sidebar'), () => onPick('past'), () => <History />)}
       <div className="lrail-div" role="separator" />
       {(features?.explorer !== false || explorerOpen) &&
         tool(
@@ -277,7 +257,7 @@ export function Sidebar({
     <div className={'sidebar' + (collapsed ? ' collapsed' : '')}>
       {/* 2.0 [지난 세션] — 자기 머리(제목·새로고침·닫기)가 있어 사이드바 머리 대신 그것을 쓴다(높이 같음). */}
       {tab === 'past' && <PastLogPanel open={!collapsed} onClose={onPastClose} onOpenCurrent={onPastOpenCurrent} />}
-      {/* 2.0 다듬기 R5: 시안 Z-final 머리 = [연결 | 파일 | AI] 탭(레일도 그대로 둔다 — 시안도 둘 다).
+      {/* 2.0 다듬기 R5: 시안 Z-final 머리 = [연결 | 파일 | AI] 탭. R6 부터 이 셋을 고르는 자리는 여기뿐이다(레일엔 [사이드바] 여닫이만).
           고른 탭은 레일과 같은 `tab`(shownTab) 이고, 누르면 레일과 같은 onPick 으로 간다.
           이미 보고 있는 탭은 다시 눌러도 아무 일 없다(레일의 "다시 누르면 접기"는 머리 탭에선 뜻밖이다). */}
       {tab !== 'past' && (

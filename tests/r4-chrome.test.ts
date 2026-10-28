@@ -138,6 +138,38 @@ describe('좌측 레일 여닫이 규칙(nextSidebar)', () => {
   })
 })
 
+// 다듬기 R6(2026-10-28 준영님): 레일의 [파일]·[AI 작업대]를 빼고 남은 [연결] 아이콘 = 사이드바 여닫이.
+describe('레일 [사이드바] 여닫이(nextSidebar "sidebar")', () => {
+  type Tab = 'conn' | 'file' | 'ai' | 'past'
+  const st = (collapsed: boolean, activeTab: Tab, lastTab?: 'conn' | 'file' | 'ai') => ({
+    collapsed,
+    activeTab,
+    width: 264,
+    ...(lastTab ? { lastTab } : {})
+  })
+
+  it('★ 접혀 있으면 마지막에 보던 탭으로 편다(activeTab 은 그대로)', () => {
+    expect(nextSidebar(st(true, 'ai'), 'sidebar')).toEqual({ collapsed: false })
+    expect(nextSidebar(st(true, 'file'), 'sidebar')).toEqual({ collapsed: false })
+  })
+
+  it('★ conn·file·ai 를 펴 보고 있으면 접는다', () => {
+    for (const tab of ['conn', 'file', 'ai'] as const) expect(nextSidebar(st(false, tab), 'sidebar')).toEqual({ collapsed: true })
+  })
+
+  it('★ [지난 세션]을 보고 있으면(펴짐·접힘 모두) 마지막 conn/file/ai 탭으로 돌아간다', () => {
+    expect(nextSidebar(st(false, 'past', 'ai'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'ai' })
+    expect(nextSidebar(st(true, 'past', 'file'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'file' })
+    expect(nextSidebar(st(false, 'past'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'conn' })
+  })
+
+  it('[지난 세션]으로 갈 때 직전 탭을 lastTab 으로 기억한다 — 위 규칙이 돌아갈 자리', () => {
+    expect(nextSidebar(st(false, 'file'), 'past')).toEqual({ collapsed: false, activeTab: 'past', lastTab: 'file' })
+    const s1 = { ...st(false, 'ai'), ...nextSidebar(st(false, 'ai'), 'past') }
+    expect({ ...s1, ...nextSidebar(s1, 'sidebar') }.activeTab).toBe('ai')
+  })
+})
+
 // 2026-09-01 준영님: "세션에서 claude 또는 다른 ai 를 키면 자동으로 AI 세션 탭 이동 필요."
 // 화면을 뺏는 기능이라 **안 뺏을 조건**이 곧 이 기능의 전부다 — 넷이 그대로 케이스다.
 describe('★ AI 자동 전환(revealAiTab)', () => {

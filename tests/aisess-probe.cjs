@@ -213,7 +213,8 @@ const PROBE = `(() => {
       dead: e.classList.contains('dead'),
       title: (e.querySelector('.t') || {}).textContent
     })),
-    sidebarTab: (q('.lrail-item.active')[0] || {}).dataset ? q('.lrail-item.active')[0].dataset.tab : null
+    // 다듬기 R6: 레일엔 [사이드바] 여닫이만 남았다 — 보이는 탭은 머리 탭(.sb-tab.on)이다.
+    sidebarTab: q('.lrail-item[data-activity="sidebar"].active').length ? (q('.sb-tab.on')[0] || {}).dataset?.tab ?? null : null
   }
 })()`
 
@@ -252,7 +253,7 @@ app.whenReady().then(async () => {
   await wait(3000)
 
   // 사이드바 [AI] 로.
-  await js(win, `document.querySelector('.lrail-item[data-tab="ai"]')?.click()`)
+  await js(win, `if (!document.querySelector('.lrail-item[data-activity="sidebar"].active')) document.querySelector('.lrail-item[data-activity="sidebar"]')?.click(); document.querySelector('.sb-tab[data-tab="ai"]')?.click()`)
   await wait(600)
 
   const before = await js(win, PROBE)

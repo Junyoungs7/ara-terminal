@@ -42,11 +42,12 @@ const names = (page: Page) => page.locator('.ftree .frow .fn').allTextContents()
 async function openFileTabAt(page: Page, dir: string): Promise<void> {
   const id = await newLocalShell(page)
   await runCommand(page, id, `cd "${slash(dir)}"`)
-  const rail = page.locator('.lrail-item[data-tab="file"]')
-  if (!(await rail.evaluate((el) => el.classList.contains('active')).catch(() => false))) {
-    await page.keyboard.press('Control+Shift+E')
-  }
-  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'file')
+  // 다듬기 R6: 펴져 있고 머리 탭이 [파일] 이어야 "열려 있다"다(레일엔 [파일] 아이콘이 없다).
+  const open = async () =>
+    (await page.locator('.lrail-item[data-activity="sidebar"].active').count()) > 0 &&
+    (await page.locator('.sb-tab.on[data-tab="file"]').count()) > 0
+  if (!(await open())) await page.keyboard.press('Control+Shift+E')
+  await expect(page.locator('.sb-tab.on')).toHaveAttribute('data-tab', 'file')
   await expect(row(page, '문서/')).toBeVisible({ timeout: 25_000 })
 }
 
@@ -54,12 +55,12 @@ async function openFileTabAt(page: Page, dir: string): Promise<void> {
 test('FILE-1 [파일] 탭은 세션이 있어야 트리를 보여 준다', async ({ ara }) => {
   const { page } = ara
   // 세션이 없을 때의 "안내"는 더 이상 패널 안내문이 아니라 **못 누르게 막은 탭 + 그 이유**다
-  // (Sidebar.tsx `SidebarRail`: `disabled` + title, "눌러도 아무 일이 없으면 무반응으로 읽힌다").
+  // (다듬기 R6 부터 사이드바 머리 탭 `.sb-tab`: `disabled` + title, "눌러도 아무 일이 없으면 무반응으로 읽힌다").
   // 그래서 Ctrl+Shift+E 를 눌러도 [연결] 에 머문다.
-  const fileTab = page.locator('.lrail-item[data-tab="file"]')
+  const fileTab = page.locator('.sb-tab[data-tab="file"]')
   await page.keyboard.press('Control+Shift+E')
   await expect(fileTab).toBeDisabled()
-  await expect(page.locator('.lrail-item[data-tab].active')).toHaveAttribute('data-tab', 'conn')
+  await expect(page.locator('.sb-tab.on')).toHaveAttribute('data-tab', 'conn')
   // hover 중이면 title 이 data-tip 으로 옮겨간다(전역 툴팁) — 둘 중 하나에 이유가 있어야 한다.
   expect(await fileTab.evaluate((e) => e.getAttribute('title') ?? e.getAttribute('data-tip') ?? '')).toBe(
     '세션에 연결하면 파일을 볼 수 있습니다'

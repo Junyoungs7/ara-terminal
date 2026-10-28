@@ -3,13 +3,13 @@
 // 진짜 `claude` 를 띄우지 않는다: 목록을 main 쪽 채널(aisession:save)로 심고 화면이 그것을
 // 어떻게 그리는지만 본다. 적립·판정 규칙 자체는 tests/aiWorkbench.test.ts 가 순수 함수로 본다.
 import type { Ara } from './fixtures'
-import { test, expect, dialog, dialogCancel, dialogConfirm, skipIntro } from './fixtures'
+import { test, expect, dialog, dialogCancel, dialogConfirm, pickSidebarTab, skipIntro } from './fixtures'
 
 const seed = (ara: Ara, list: unknown): Promise<unknown> =>
   ara.page.evaluate((l) => (window as unknown as { ev: { ara: { saveSessions(x: unknown): Promise<unknown> } } }).ev.ara.saveSessions(l), list)
 
 test('BENCH-1 빈 목록은 어디서 쌓이는지 알려 준다', async ({ ara }) => {
-  await ara.page.click('.lrail-item[data-tab="ai"]')
+  await pickSidebarTab(ara.page, 'ai')
   await expect(ara.page.locator('.bench-empty')).toContainText('Ctrl+Shift+L')
 })
 
@@ -25,7 +25,7 @@ test('BENCH-2★ 껐다 켜도 남고, 점이 처지를 말한다', async ({ ara
   await page.reload()
   await page.waitForSelector('.pane-grid')
   await skipIntro(page) // 새로고침이면 부팅 인사가 다시 지나간다(#139)
-  await page.click('.lrail-item[data-tab="ai"]')
+  await pickSidebarTab(page, 'ai')
 
   const rows = page.locator('.bench-row')
   await expect(rows).toHaveCount(3)
@@ -53,7 +53,7 @@ test('BENCH-3★ 부모를 지우면 딸린 분리 세션을 먼저 알린다', 
   await page.reload()
   await page.waitForSelector('.pane-grid')
   await skipIntro(page) // 새로고침이면 부팅 인사가 다시 지나간다(#139)
-  await page.click('.lrail-item[data-tab="ai"]')
+  await pickSidebarTab(page, 'ai')
 
   await page.locator('.bench-row[data-bench="p"]').hover()
   await page.locator('.bench-row[data-bench="p"] .bench-x').click()

@@ -23,8 +23,19 @@ export const clampSidebarWidth = (w: number): number =>
  * (경계에 붙어 있던 `‹`/`›` 손잡이)이 필요 없어진다 — 그 손잡이는 하단바와 겹쳐 잘 안 보였다.
  * 다른 아이콘은 갈아타며 연다(접혀 있었으면 펴면서).
  */
-export function nextSidebar(prev: SidebarState, tab: SidebarState['activeTab']): Partial<SidebarState> {
+export function nextSidebar(
+  prev: SidebarState,
+  tab: SidebarState['activeTab'] | 'sidebar'
+): Partial<SidebarState> {
+  // 다듬기 R6: 레일의 [파일]·[AI 작업대]는 머리 탭으로 갔고 남은 [연결] 아이콘은 사이드바 자체의 여닫이다.
+  // 접혀 있으면 마지막 탭으로 펴고, 펴져 있으면 접는다 — 단 [지난 세션]을 보고 있으면 마지막 탭으로 돌아간다.
+  if (tab === 'sidebar') {
+    if (prev.activeTab === 'past') return { collapsed: false, activeTab: prev.lastTab ?? 'conn' }
+    return { collapsed: !prev.collapsed }
+  }
   if (!prev.collapsed && prev.activeTab === tab) return { collapsed: true }
+  // [지난 세션]으로 갈 때 지금 탭을 기억해 둔다(위 'sidebar' 가 돌아갈 자리).
+  if (tab === 'past' && prev.activeTab !== 'past') return { collapsed: false, activeTab: tab, lastTab: prev.activeTab }
   return { collapsed: false, activeTab: tab }
 }
 
@@ -99,6 +110,8 @@ export function hydrateSidebar(s: Partial<SidebarState>): SidebarState {
   }
   // 2.0: 하단 패널 열림 상태는 복원하지 않는다(늘 닫힌 채 시작) — 옛 파일에 남은 값도 버린다.
   delete (next as { bottom?: unknown }).bottom
+  // 다듬기 R6 lastTab: 모르는 값은 버린다(없으면 'sidebar' 가 conn 으로 돌아간다).
+  if (!['conn', 'file', 'ai'].includes(next.lastTab as string)) delete next.lastTab
   // #13 연결 트리 접힘: 모양·크기만 남긴다. 없으면 키도 없다(옛 파일 = 전부 펼침).
   if ('connCollapsed' in s) next.connCollapsed = cleanConnCollapsed(s.connCollapsed)
   return next

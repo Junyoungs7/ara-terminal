@@ -143,7 +143,7 @@ test('SLOG-6★ 닫힌 세션의 기록을 [지난 세션]에서 다시 본다',
   // 세션을 닫는다 — 그래도 파일은 남는다(이 기능의 존재 이유다).
   await page.evaluate((id) => window.ev.session.destroy(id), sid)
 
-  await page.click('.lrail-item[data-tab="past"]')
+  await page.click('.lrail-item[data-activity="pastlog"]')
   const rail = page.locator('.monitor-panel.pastlog')
   await expect(rail).toBeVisible({ timeout: 10_000 })
   const row = rail.locator('.pl-row').first()
@@ -170,7 +170,7 @@ test('SLOG-7★ 진행 중인 기록을 누르면 하단 [세션 기록] 으로 
   await sendInput(page, sid, 'echo 진행중표식\r\n')
   await expectTermText(page, sid, /진행중표식/)
 
-  await page.click('.lrail-item[data-tab="past"]')
+  await page.click('.lrail-item[data-activity="pastlog"]')
   const rail = page.locator('.monitor-panel.pastlog')
   const row = rail.locator('.pl-row.live').first()
   await expect(row).toBeVisible({ timeout: 15_000 })
@@ -185,7 +185,7 @@ test('SLOG-7★ 진행 중인 기록을 누르면 하단 [세션 기록] 으로 
 // SLOG-8 기록이 꺼져 있으면 "없다"가 아니라 **켜는 법**을 말한다(#68 과 같은 규칙).
 test('SLOG-8 기록이 없으면 설정을 켜라고 안내한다', async ({ ara }) => {
   const { page } = ara
-  await page.click('.lrail-item[data-tab="past"]')
+  await page.click('.lrail-item[data-activity="pastlog"]')
   const rail = page.locator('.monitor-panel.pastlog')
   await expect(rail).toBeVisible({ timeout: 10_000 })
   await expect(rail.locator('.sftp-empty')).toContainText('설정')

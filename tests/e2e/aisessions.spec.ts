@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ServerChannel } from 'ssh2'
-import { test, expect, connectNewSshProfile, newLocalShell, openConnTab } from './fixtures'
+import { test, expect, connectNewSshProfile, newLocalShell, openConnTab, pickSidebarTab } from './fixtures'
 
 // F27 창을 실제로 통과시키려면 설치 확인(`command -v`)과 셸 준비 신호가 필요하다 —
 // aicli.spec.ts 의 하네스와 같은 모양(그쪽이 단일 출처지만 spec 간 import 는 하지 않는다).
@@ -32,7 +32,7 @@ const rows = (page: Page) => page.locator('.bench-row')
 
 /** 작업대 목록은 **왼쪽** 사이드바다(#129) — 오른쪽 레일이 아니다. */
 async function openBench(page: Page): Promise<void> {
-  await page.click('.lrail-item[data-tab="ai"]')
+  await pickSidebarTab(page, 'ai')
   await expect(page.locator('.sb-panel.active .bench-list, .sb-panel.active .bench-empty')).toBeVisible()
 }
 

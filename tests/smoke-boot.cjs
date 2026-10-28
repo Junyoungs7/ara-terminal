@@ -440,7 +440,8 @@ const checks = []
   checks.push(['.statusbar 렌더', r.hasStatusbar])
   // 2.0: 우측 액티비티 바가 없어지며 레일이 7개가 됐다 — 정의부는 Sidebar.tsx SidebarRail.
   // 탐색기·지난 세션은 설정 › 기능에서 끌 수 있다(기본 켜짐 — 이 하네스는 기본 설정이다).
-  checks.push(['좌측 레일 아이콘 7개(연결·파일·탐색기·AI·서버 도구·지난 세션·설정)', r.sbTabs === 7])
+  // 다듬기 R6: [파일]·[AI 작업대]는 사이드바 머리 탭으로 갔다 — 레일 = 사이드바·지난 세션·탐색기·서버 도구·설정.
+  checks.push(['좌측 레일 아이콘 5개(사이드바·지난 세션·탐색기·서버 도구·설정)', r.sbTabs === 5])
   // 1.0.10(5e3c3c6, 2026-09-15): 앱 이름이 A.R.A → ARA 로 바뀌었다(i18n app.name — Windows 검색에서
   // 찾기 어렵다는 제보). 타이틀바는 그 키를 그린다. 'ARA' 는 'A.R.A' 의 부분 문자열이 아니라 옛 값이면 실패한다.
   checks.push(['브랜드=ARA', r.brandName === 'ARA'])
@@ -721,7 +722,10 @@ const checks = []
     await wait(200)
     document.querySelector('.ctx-menu .ctx-item[data-action="local.new"]')?.click()
     await wait(500)
-    const fileTab = document.querySelector('.lrail-item[data-tab="file"]')
+    // 다듬기 R6: [파일] 은 사이드바 머리 탭이다 — 접혀 있으면 레일 [사이드바] 로 먼저 편다.
+    if (!document.querySelector('.lrail-item[data-activity="sidebar"].active')) document.querySelector('.lrail-item[data-activity="sidebar"]')?.click()
+    await wait(100)
+    const fileTab = document.querySelector('.sb-tab[data-tab="file"]')
     if (fileTab) fileTab.click()
     await wait(400)
     const localRows = [...document.querySelectorAll('.ftree .frow')]
@@ -1700,7 +1704,8 @@ const checks = []
 
     // Ctrl+Shift+E → [파일] **열기/닫기** (2026-08-19: 레일과 같은 규칙. 예전엔 [연결] 로 넘겼다).
     // 시작 상태를 가정할 수 없으므로(활성 탭은 스냅샷에 저장된다) 먼저 [파일] 을 확실히 열어 둔다.
-    const railTab = () => document.querySelector('.lrail-item.active')?.dataset.tab || ''
+    // 다듬기 R6: 펴져 있으면(레일 [사이드바] 눌림) 머리 탭 이름, 접혀 있으면 ''.
+    const railTab = () => document.querySelector('.lrail-item[data-activity="sidebar"].active') ? (document.querySelector('.sb-tab.on')?.dataset.tab || '') : ''
     const sbShut = () => document.querySelector('.sidebar').classList.contains('collapsed')
     const railBefore = railTab()
     const shutBefore = sbShut()
@@ -1712,7 +1717,9 @@ const checks = []
     // **들어올 때의 모양으로 돌려놓는다.** 사이드바 상태는 스냅샷에 남아 재로드에도 따라오므로
     // 닫은 채 끝내면 뒤 블록(View 메뉴 토글·폭 드래그·재시작 복원)이 전부 흔들린다.
     if (!shutBefore) {
-      document.querySelector('.lrail-item[data-tab="' + (railBefore || 'conn') + '"]')?.click()
+      document.querySelector('.lrail-item[data-activity="sidebar"]')?.click()
+      await wait(300)
+      document.querySelector('.sb-tab[data-tab="' + (railBefore || 'conn') + '"]')?.click()
       await wait(300)
     }
     // Ctrl+Shift+M → 연결 관리자(Ctrl+Shift+C 는 복사로 넘겼다).
@@ -2260,10 +2267,13 @@ const checks = []
     await drag(clampedMin, 400)
     // 활성 탭을 [파일] 로, 접힘은 펼침 상태로 두고 저장 상태를 굳힌다.
     // **이미 [파일] 이면 누르지 않는다** — 2026-08-19 부터 같은 아이콘을 다시 누르면 접힌다.
-    if (document.querySelector('.lrail-item.active')?.dataset.tab !== 'file') {
-      document.querySelector('.lrail-item[data-tab="file"]')?.click()
+    // 다듬기 R6: 머리 탭은 다시 눌러도 안 접힌다 — 펴 두고 [파일] 을 고른다.
+    if (!document.querySelector('.lrail-item[data-activity="sidebar"].active')) {
+      document.querySelector('.lrail-item[data-activity="sidebar"]')?.click()
       await wait(300)
     }
+    document.querySelector('.sb-tab[data-tab="file"]')?.click()
+    await wait(300)
     const persisted = (await window.ev.workspace.load()).ui.sidebar
     return { hasHandle, before, midDrag, dragged, clampedMax, clampedMin, persisted }
   })()`)
@@ -2280,9 +2290,9 @@ const checks = []
   await new Promise((res) => setTimeout(res, 2500))
   const r4d = await win.webContents.executeJavaScript(`(async () => ({
     width: Math.round(parseFloat(getComputedStyle(document.querySelector('.sidebar')).width)),
-    activeTab: document.querySelector('.lrail-item.active')?.dataset.tab || '',
+    activeTab: document.querySelector('.lrail-item[data-activity="sidebar"].active') ? (document.querySelector('.sb-tab.on')?.dataset.tab || '') : '',
     // 세션이 없을 때 [파일] 탭은 누를 수 없어야 한다(눌러도 아무 일이 없으면 "무반응"으로 읽힌다).
-    fileTabDisabled: document.querySelector('.lrail-item[data-tab="file"]')?.disabled === true,
+    fileTabDisabled: document.querySelector('.sb-tab[data-tab="file"]')?.disabled === true,
     savedTab: (await window.ev.workspace.load()).ui.sidebar.activeTab,
     collapsed: document.querySelector('.sidebar').classList.contains('collapsed'),
     title: document.title
@@ -2446,7 +2456,9 @@ const checks = []
       el.dispatchEvent(new Event('input', { bubbles: true }))
     }
     // R4.3 에서 활성 탭을 [파일] 로 두고 저장했다 — 트리를 보려면 [연결] 로 되돌린다.
-    ;document.querySelector('.lrail-item[data-tab="conn"]')?.click()
+    if (!document.querySelector('.lrail-item[data-activity="sidebar"].active')) document.querySelector('.lrail-item[data-activity="sidebar"]')?.click()
+    await wait(100)
+    ;document.querySelector('.sb-tab[data-tab="conn"]')?.click()
     await wait(300)
     // .srv-hd = [caret span][그룹명 텍스트][카운트 span]. 로컬 그룹은 연결 그룹이 아니라 제외.
     const groupNames = () => [...document.querySelectorAll('.tree .srv-hd')]

@@ -1,7 +1,7 @@
 // 우클릭 인터랙션 (F4c + R1.4) — 리스트 메뉴 · 트리 메뉴 구성 · 미래 기능 안내
 // #67(2026-08-14): 라디얼·스마트 팔레트를 지웠다. 모양 선택 설정도 함께 사라져 setCtxStyle 헬퍼가
 // 필요 없어졌고, CTX-3/CTX-4 는 "둘이 정말 없는가"를 보는 검사 하나로 합쳤다.
-import { test, expect, dialogConfirm, newLocalShell, sessionList } from './fixtures'
+import { test, expect, dialogConfirm, newLocalShell, pickSidebarTab, sessionList } from './fixtures'
 
 const rightClickTerminal = (page: import('@playwright/test').Page) =>
   page.click('.pane-grid', { button: 'right', position: { x: 320, y: 220 } })
@@ -96,7 +96,7 @@ test('CTX-6 사이드바 우클릭 메뉴가 상황별로 구성된다', async (
 
   // 셸을 열면 사이드바가 **[파일] 탭으로 넘어간다**(2026-08-22 준영님 제보 6번 — 연 셸의 폴더를
   // 바로 보여 준다). 트리를 다시 보려면 [연결] 로 돌아온다.
-  await page.click('.lrail-item[data-tab="conn"]')
+  await pickSidebarTab(page, 'conn')
 
   // 로컬 그룹 헤더 — 세션이 생긴 뒤에야 나온다(그전에는 트리에 아무것도 없다).
   await page.locator('.tree .srv-group:has(.srv-hd:has-text("로컬")) > .srv-hd').click({ button: 'right' })

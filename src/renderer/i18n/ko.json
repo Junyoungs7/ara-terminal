@@ -643,6 +643,7 @@
   "titlebar.max": "최대화 / 이전 크기",
   "titlebar.close": "닫기",
   "sidebar.rail.label": "사이드바 도구",
+  "sidebar.rail.toggle": "사이드바",
   "sidebar.resize": "드래그해서 사이드바 폭 조절",
   "sidebar.act.newConn": "새 연결",
   "conn.title": "연결 관리자",

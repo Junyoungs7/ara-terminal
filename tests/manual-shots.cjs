@@ -406,9 +406,9 @@ app.whenReady().then(async () => {
   results.shot13 = await captureNoResize(win, 'shot-13-completion.png')
 
   // ── 4: 연결 프로필 — [RDP] 를 고르면 포트가 3389 로 ──────────────────────
-  // 왼쪽 아이콘 레일을 [연결] 로 되돌린다 — 세션이 생긴 뒤로는 [파일] 이 기본으로 뜬다
+  // 사이드바를 [연결] 로 되돌린다(다듬기 R6: 머리 탭 — 접혀 있으면 레일 [사이드바] 로 먼저 편다) — 세션이 생긴 뒤로는 [파일] 이 기본으로 뜬다
   // (Sidebar.tsx shownTab). [새 연결] 버튼은 tab==='conn' 일 때만 그려진다.
-  await js(win, `document.querySelector('.lrail-item[data-tab="conn"]')?.click()`)
+  await js(win, `if (!document.querySelector('.lrail-item[data-activity="sidebar"].active')) document.querySelector('.lrail-item[data-activity="sidebar"]')?.click(); document.querySelector('.sb-tab[data-tab="conn"]')?.click()`)
   await wait(300)
   await js(win, `document.querySelector('.sb-act')?.click()`)
   await wait(500)

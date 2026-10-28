@@ -333,13 +333,23 @@ export { expect }
 // ── 세션 헬퍼 ──────────────────────────────────────────────────────────────
 
 /**
+ * 다듬기 R6: 레일엔 [사이드바] 여닫이만 남고 [연결|파일|AI] 는 사이드바 **머리 탭**(`.sb-tab`)이다.
+ * 접혀 있으면 레일로 먼저 펴고(접힌 머리 탭은 안 보여 클릭이 죽는다), 그 탭이 아니면 머리 탭을 누른다.
+ * 머리 탭은 이미 고른 것을 다시 눌러도 아무 일 없으니 "맞추기"가 안전하다.
+ */
+export async function pickSidebarTab(page: Page, id: 'conn' | 'file' | 'ai'): Promise<void> {
+  const side = page.locator('.lrail-item[data-activity="sidebar"]')
+  if (!(await side.evaluate((el) => el.classList.contains('active')))) await side.click()
+  await page.click(`.sb-tab[data-tab="${id}"]`)
+}
+
+/**
  * 사이드바를 [연결] 탭으로 되돌린다. SSH 에 접속하면 앱이 자동으로 [파일] 탭으로 넘어가므로
  * (실사용 편의 — 접속 직후 하는 일이 대개 파일 보기다) 접속 뒤에 트리를 클릭하려면 먼저 돌아와야 한다.
  * 두 패널은 항상 렌더돼 있고 CSS 로만 감춰지므로, 이 단계를 빼면 "요소는 찾았는데 안 보인다"로 실패한다.
  */
 export async function openConnTab(page: Page): Promise<void> {
-  const tab = page.locator('.lrail-item[data-tab="conn"]')
-  if (!(await tab.evaluate((el) => el.classList.contains('active')).catch(() => true))) await tab.click()
+  await pickSidebarTab(page, 'conn')
   await expect(page.locator('.sb-panel.active .tree')).toBeVisible({ timeout: 10_000 })
 }
 
@@ -348,9 +358,7 @@ export async function openConnTab(page: Page): Promise<void> {
  * 열려 있으면 오히려 닫아 버린다(그래서 "요소는 찾았는데 안 보인다"로 죽는다). 상태를 보고 맞춘다.
  */
 export async function openFileTab(page: Page): Promise<void> {
-  const tab = page.locator('.lrail-item[data-tab="file"]')
-  const active = await tab.evaluate((el) => el.classList.contains('active')).catch(() => false)
-  if (!active) await tab.click()
+  await pickSidebarTab(page, 'file')
   await expect(page.locator('.sb-panel.active .sftp-wrap')).toBeVisible({ timeout: 10_000 })
 }
 

@@ -394,6 +394,8 @@ export type SidebarState = {
   collapsed: boolean
   /** 'past' = [지난 세션](2.0 에서 우측 레일 → 사이드바). 세션 수명 동안만 — 하이드레이트가 conn 으로 되돌린다. */
   activeTab: 'conn' | 'file' | 'ai' | 'past'
+  /** 다듬기 R6: [지난 세션]으로 가기 직전에 보던 탭 — 레일 [사이드바] 아이콘이 그리로 돌아간다(nextSidebar). */
+  lastTab?: 'conn' | 'file' | 'ai'
   width: number
   // #13(2026-10-08)~2.0: `bottom`(하단 패널 열림 상태)이 여기 있었다. 2.0 에서 하단 패널은 늘 닫힌 채
   // 시작하므로 필드를 지웠다 — 옛 파일에 남은 값은 hydrateSidebar 가 버린다.
