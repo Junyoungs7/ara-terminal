@@ -90,6 +90,19 @@ test('GAUGE-6 로컬 세션에도 CPU·MEM 게이지가 뜬다(GPU 는 —)', as
   await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText(/^\d+\.\d\/\d+\.\dG$/, { timeout: 30_000 })
 })
 
+// GAUGE-8 다듬기 R3: 세션이 없어도 켜자마자 내 PC — 계정@호스트 · OS · CPU·MEM(GPU —) · 가동. 경로 칸은 없다.
+test('GAUGE-8 세션 없이도 상태바에 내 PC 가 뜬다', async ({ ara }) => {
+  const sb = ara.page.locator('.statusbar')
+  await expect(gauges(ara.page)).toHaveCount(3, { timeout: 10_000 })
+  await expect(sb.locator('.sb-seg.host .val')).toHaveText(/^\S+@\S+$/)
+  await expect(sb.locator('.sb-seg.cwd')).toHaveCount(0)
+  await expect(sb.locator('.sb-seg.os .val')).not.toHaveText('—')
+  await expect(sb.locator('.sb-seg.uptime .val')).toHaveText(/^\d+(d \d+h|h \d+m|m)$/)
+  await expect(gauge(ara.page, 'CPU').locator('.val')).toHaveText(/^\d{1,3}%$/, { timeout: 30_000 })
+  await expect(gauge(ara.page, 'MEM').locator('.val')).toHaveText(/^\d+\.\d\/\d+\.\dG$/)
+  await expect(gauge(ara.page, 'GPU').locator('.val.na')).toHaveText('—')
+})
+
 // GAUGE-7 /proc 이 없는 서버(비리눅스)는 게이지 값만 비고(2.0: 칸은 서고 — ) 포트 목록은 그대로다
 test('GAUGE-7 /proc 이 없어도 포트 목록은 살아 있다', async ({ ara, ssh }) => {
   const tele = makeTelemetry({ proc: false })

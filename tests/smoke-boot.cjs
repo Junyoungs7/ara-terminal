@@ -2210,7 +2210,8 @@ const checks = []
 
   checks.push(['R4.2: 하드코딩 localhost 제거(활성 세션 실데이터)', r4b.localBar.val !== 'localhost'])
   // 2.0 4단계: 호스트 칸 라벨(셸·호스트·상태)을 뺐다 — 값만 남는다(시안 Z-final).
-  checks.push(['R4.2: 로컬 세션은 셸 이름 표시(라벨 없이 값만)', r4b.localBar.label === '' && r4b.localBar.val.length > 0])
+  // 다듬기 R3: 로컬 탭은 셸 이름 대신 내 PC `계정@호스트`(sys:data — 첫 표본 전이면 셸 이름).
+  checks.push(['R4.2: 로컬 세션은 내 PC 계정@호스트 표시(라벨 없이 값만)', r4b.localBar.label === '' && r4b.localBar.val.length > 0])
   checks.push(['R4.2: 로컬 세션 cwd 표시(OSC7 경로 재사용)', r4b.localBar.cwd === '/srv/서비스/로그'])
   checks.push(['R4.2: SSH 세션은 user@host:port + 연결 dot', /^deploy@10\.9\.9\.9:22/.test(r4b.sshBar.val) && r4b.sshBar.dot.includes('connected')])
   checks.push(['R4.2: 세션 전환 시 상태바 갱신', r4b.localBar.val !== r4b.sshBar.val])

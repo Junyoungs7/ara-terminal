@@ -54,7 +54,8 @@ test('CHROME-4 최대화 버튼이 창을 최대화·복원한다', async ({ ara
 test('CHROME-5 상태바가 활성 세션을 반영한다', async ({ ara }) => {
   const { page } = ara
   await expect(page.locator('.statusbar .sb-seg.host')).toHaveClass(/idle/)
-  await expect(page.locator('.statusbar .sb-seg.host .val')).toHaveText('유휴 — 열린 세션 없음')
+  // 다듬기 R3: 유휴 문구 대신 켜자마자 내 PC `계정@호스트`(첫 표본 전 잠깐만 유휴 문구).
+  await expect(page.locator('.statusbar .sb-seg.host .val')).toHaveText(/^\S+@\S+$/, { timeout: 10_000 })
   await newLocalShell(page)
   await expect(page.locator('.statusbar .sb-seg.host')).not.toHaveClass(/idle/)
   // 2.0 4단계: 호스트·인코딩·버전 칸은 라벨 없이 값만(시안 Z-final). 오른쪽 순서는 UTF-8 · 세션 n · 버전(2단계).
