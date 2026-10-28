@@ -465,7 +465,7 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
 // ⚠️ 못 보는 것: TSX 인라인 style·SVG 속성(BrandOrb 마크·터미널 검색 강조는 TS 가 칠한다),
 //    tokens.css 의 토큰끼리 참조(--focus-ring-color 등), 선택자 이름이 자리를 속이는 경우.
 // AI 전용 보라(--purple 계열)는 2.0 에서 없앴다 — 이름이 다시 나타나면 실패한다.
-const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep)?\)/
+const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep|-halo)?\)/
 const ACCENT_OK = new RegExp(
   [
     String.raw`\.(?:ttab\.active|exp-tab\.on|bw-tab\.on|pw-tab\.on|bp-tab\.on)::?(?:before|after)`, // 탭 밑줄(+아래 번짐)

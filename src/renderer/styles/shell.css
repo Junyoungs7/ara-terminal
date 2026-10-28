@@ -8119,10 +8119,12 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
   font: var(--fs-md) / 1.5 var(--ui);
 }
+/* 채팅 빛은 은은하게(다듬기 R3) — 불투명 2px 링 + 2px 틈 + 파랑 테두리가 겹쳐 네온처럼 보였다.
+   글 입력칸은 캐럿이 이미 위치를 말하므로 테두리 40% + 넓고 옅은 번짐(10%)으로 낮춘다. */
 .ara-input:focus-visible {
-  border-color: var(--focus-ring-color);
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  border-color: var(--accent-line);
+  outline: none;
+  box-shadow: 0 0 16px var(--accent-halo);
 }
 .ara-input:disabled {
   color: var(--text-dim);
@@ -8610,11 +8612,11 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-bubble);
   padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);
+  transition: var(--dur-quick);
 }
 .ara-box:has(.ara-input:focus-visible) {
-  border-color: var(--focus-ring-color);
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  border-color: var(--accent-line);
+  box-shadow: 0 0 16px var(--accent-halo);
 }
 /* ⚠️ **부모에 건 opacity 는 자손 전체에 곱해진다** — AUDIT-R4 의 `td { opacity:.45 }` 와 같은 병이다.
    여기 안에는 textarea 가 있고 꺼진 동안 그건 .ara-input:disabled(--text-dim)라, 이 한 줄이
