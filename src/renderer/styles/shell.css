@@ -104,7 +104,7 @@
   gap: var(--sp-4);
   /* 오른쪽은 0 — 창 버튼이 창 모서리에 붙는다(시안). */
   padding: 0 0 0 var(--sp-5);
-  background: linear-gradient(180deg, var(--bg-surface), var(--bg-canvas));
+  background: var(--bg-surface); /* 단색(시안 — 그라디언트 틀 없음, 다듬기 R2) */
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
   user-select: none;
@@ -3226,7 +3226,7 @@
      최소 크기(=내용의 min-content)가 그대로 창의 최소 폭이 된다 — 도크 여덟을 얹자 900px 창에서
      앱 전체가 972px 을 요구했다(SCALE-3 실측, 2026-08-17). 0 을 박아야 안에서 줄어들기 시작한다. */
   min-width: 0;
-  background: linear-gradient(180deg, var(--bg-surface), var(--bg-abyss));
+  background: var(--bg-surface); /* 단색(시안 — 그라디언트 틀 없음, 다듬기 R2) */
   border-top: 1px solid var(--line);
   font-family: var(--ui);
   /* 2.0 4단계: 보조 글자 한 단(시안 11~12px — 척도에 12 가 없어 11). */
@@ -4386,8 +4386,8 @@ button.sb-seg.upd:hover .val {
 .seg-ctl {
   display: flex;
   gap: var(--sp-2);
-  background: var(--bg-canvas);
-  border: 1px solid var(--line);
+  background: var(--bg-abyss);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   padding: var(--sp-2);
 }
@@ -4419,10 +4419,11 @@ button.sb-seg.upd:hover .val {
   width: 14px;
   height: 14px;
 }
+/* 고른 칸 = 글라스 면 + 위 1px 하이라이트(시안 Z-connect .seg — 1.x 의 틴트+테두리 상자가 아니다). */
 .seg-ctl button.on {
   background: var(--glass);
   color: var(--text-hi);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 .key-file {
   display: flex;
@@ -4732,9 +4733,12 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
+/* 켜짐 = 짙은 파랑 바탕 + 파랑 테두리 + 흰 손잡이(design-system-v2 §1.4 · 시안 .sw.on). 1.x 는 밝은
+   파랑 바탕에 어두운 손잡이였다(금색 스위치를 색만 바꾼 모양). */
 .set-toggle.on {
-  background: var(--accent);
+  background: var(--accent-deep);
   border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 .set-toggle .st-knob {
   position: absolute;
@@ -4748,7 +4752,7 @@ button.sb-seg.upd:hover .val {
 }
 .set-toggle.on .st-knob {
   left: 19px;
-  background: var(--bg-canvas);
+  background: var(--on-accent-deep);
 }
 
 /* 단축키 섹션(치트시트 파생 — 행 스타일은 .cs-row 재사용) */
