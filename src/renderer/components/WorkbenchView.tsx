@@ -85,6 +85,8 @@ const isTool = (id: WbToolId | WbLaunchId): id is WbToolId => !CARDS.find((c) =>
 // 그래서 창 껍데기(끌기·최대화·닫기)는 여기 없다 — 머리는 본창과 같은 TitleBar, 나머지는 OS 가 쥔다.
 // 아래 콜백은 그 창이 main 을 거쳐 본창(Shell)으로 올려 보낸다(shared/explorerWin.ts 의 ExplorerAct).
 type Props = {
+  /** 창이 보이는가. 숨은 창(× = 숨김)에서는 어떤 도구도 원격에 명령을 보내지 않는다. */
+  visible?: boolean
   sessions: Session[]
   profiles: ConnectionProfile[]
   workProfiles: WorkProfile[]
@@ -116,6 +118,7 @@ type Props = {
 }
 
 export function WorkbenchView({
+  visible = true,
   sessions,
   profiles,
   workProfiles,
@@ -245,7 +248,7 @@ export function WorkbenchView({
 
   const cards = CARDS.filter((c) => c.localToo || !isLocal)
   // 보고 있는 도구만 활성이다 — 숨은 탭이 원격에 명령을 보내면 안 된다.
-  const shown = (id: WbToolId): boolean => active === id
+  const shown = (id: WbToolId): boolean => visible && active === id
 
   // 어느 대상을 만지고 있는지가 늘 보여야 한다 — 창 하나가 여러 서버를 오간다.
   // 작업표시줄·Alt+Tab 에도 같은 문구가 뜨게 document.title 도 맞춘다.
@@ -348,7 +351,7 @@ export function WorkbenchView({
         <div className="exp-main">
           {/* [홈] — 카드 격자. 준영님이 말씀하신 "카드 형식의 런치패드"가 이 자리다. */}
           <div className="con-pad wb-pad" style={active === 'home' ? undefined : { display: 'none' }}>
-            {!isLocal && <ServerOverview sessionId={sessionId} active={active === 'home'} />}
+            {!isLocal && <ServerOverview sessionId={sessionId} active={visible && active === 'home'} />}
             {cards.map(({ id, Icon, ext }) => (
               <button
                 key={id}

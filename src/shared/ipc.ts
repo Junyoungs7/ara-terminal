@@ -56,6 +56,19 @@ export type { PastLog }
 // 디렉토리 항목(계획서 §C F7 / design-system 5.2 파일 행). 폴더 우선 정렬은 main이 담당.
 // R7: 로컬 파일시스템(fs:*)과 원격 SFTP(sftp:*)가 같은 항목·결과 타입을 쓴다 — [파일] 탭은
 // 백엔드만 갈아끼우고 렌더 코드는 하나다.
+/**
+ * 앱 안 파일 클립보드(FileTree 의 Ctrl+C) — 창마다 모듈에 있던 것을 main 이 하나로 든다(다듬기 R2).
+ * osAtCopy: 복사하던 순간 OS 클립보드의 파일 목록(붙여넣기 때 "그 뒤로 바뀌었나"를 이걸로 가른다).
+ */
+export type FileClipData = {
+  session: { id: string; type: 'local' | 'ssh'; serverKey?: string } | null
+  dir: string
+  entries: FileEntry[]
+  mode: 'copy' | 'cut'
+  at: number
+  osAtCopy: string[] | null
+}
+
 export type FileEntry = {
   name: string
   // 심볼릭 링크는 **가리키는 대상**의 종류로 채운다 — 그래야 링크 폴더가 폴더처럼 정렬·동작한다
@@ -240,6 +253,7 @@ export type InvokeContract = {
   // xterm 생성 직후 재생 버퍼를 인계받고 라이브 스트림을 연다(세션 전환·재마운트 후 스크롤백 복구).
   'session:attach': { req: { id: string }; res: { backlog: Uint8Array } }
   // window 도메인 (R2.6). 프레임리스 타이틀바의 신호등 버튼이 실제로 창을 조작한다.
+  'window:focus': { req: void; res: { ok: true } }
   'window:minimize': { req: void; res: { ok: true } }
   'window:toggleMaximize': { req: void; res: { maximized: boolean } }
   'window:close': { req: void; res: { ok: true } }
@@ -510,6 +524,8 @@ export type InvokeContract = {
   'clipboard:readFiles': { req: void; res: { paths: string[] } }
   'clipboard:writeText': { req: string; res: { ok: boolean } }
   'clipboard:readText': { req: void; res: string }
+  'clipboard:setFiles': { req: FileClipData | null; res: { ok: true } }
+  'clipboard:getFiles': { req: void; res: FileClipData | null }
   // RDP 원격 클립보드에서 내려받은 바이트를 사용자가 고른 폴더에 쓴다. name·sub 는 원격이 준
   // 문자열이라 main 이 조각마다 검사한다(폴더 밖 쓰기 차단).
   'fs:saveBytes': { req: { dir: string; sub?: string; name: string; bytes: Uint8Array }; res: FileOpResult }
@@ -707,6 +723,8 @@ export type EvApi = {
     reply(id: string, body: string): Promise<ReportReplyResult>
   }
   window: {
+    /** 이 창을 앞으로 — 사람의 답을 기다리는 Dialog 가 다른 창에 가려 있을 때(다듬기 R2). */
+    focus(): Promise<{ ok: true }>
     minimize(): Promise<{ ok: true }>
     toggleMaximize(): Promise<{ maximized: boolean }>
     close(): Promise<{ ok: true }>
@@ -970,6 +988,9 @@ export type EvApi = {
     readFiles(): Promise<{ paths: string[] }>
     writeText(text: string): Promise<{ ok: boolean }>
     readText(): Promise<string>
+    /** 앱 안 파일 클립보드를 창끼리 나눈다(사이드바 [파일] ↔ 탐색기 창). main 은 마지막 것만 든다. */
+    setFiles(clip: FileClipData | null): Promise<{ ok: true }>
+    getFiles(): Promise<FileClipData | null>
   }
   // F11 명령어 히스토리. scope = SSH 는 serverKey, 로컬은 'local'.
   // AI CLI 세션(`ai:*`)은 여기 없다 — 디스크로 안 가므로 main 이 그 통을 본 적이 없다.

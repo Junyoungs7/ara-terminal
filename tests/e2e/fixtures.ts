@@ -431,7 +431,12 @@ export async function explorerWindow(app: ElectronApplication, trigger: () => Pr
   return win
 }
 
-/** 열려 있는 탐색기 창 수(창은 하나여야 한다). */
+/** 탐색기 창이 화면에 보이는가 — × 는 숨김이라(다듬기 R2) 창 수로는 닫힘을 못 가른다. */
+export async function explorerVisible(win: Page): Promise<boolean> {
+  return (await win.evaluate(() => document.visibilityState)) === 'visible'
+}
+
+/** 열려 있는 탐색기 창 수(창은 하나여야 한다 — 숨은 창도 센다). */
 export function explorerWindowCount(app: ElectronApplication): number {
   return app.windows().filter((w) => isExplorerUrl(w.url())).length
 }

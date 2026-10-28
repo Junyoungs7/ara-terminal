@@ -21,7 +21,8 @@ import {
   dialog,
   dialogConfirm,
   explorerWindow,
-  explorerWindowCount
+  explorerWindowCount,
+  explorerVisible
 } from './fixtures'
 
 // 같은 서버 안 복사(sftp:copyRemote)는 SFTP 가 아니라 **exec 으로 `cp`** 를 돌린다 — 이 하네스엔
@@ -104,10 +105,11 @@ async function openExplorer(ara: { app: ElectronApplication; page: Page }): Prom
   return explorerWindow(ara.app, () => ara.page.keyboard.press('Control+Shift+O'))
 }
 
-/** 탐색기 창의 타이틀바 [×] — 창이 닫히고(파괴) 목록에서 빠진다. */
+/** 탐색기 창의 타이틀바 [×] — 창이 숨는다(다듬기 R2: 파괴가 아니다 — 창은 하나 그대로 남는다). */
 async function closeExplorer(ara: { app: ElectronApplication }, ex: Page): Promise<void> {
   await ex.click('.tb-ctl.close')
-  await expect.poll(() => explorerWindowCount(ara.app), { timeout: 10_000 }).toBe(0)
+  await expect.poll(() => explorerVisible(ex), { timeout: 10_000 }).toBe(false)
+  expect(explorerWindowCount(ara.app)).toBe(1)
 }
 
 /** 제목줄이 말하는 대상 — "탐색기 — <대상>". */

@@ -13,6 +13,7 @@ import { pushSend } from '../util/windowPush'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
 import { clipboardFilePaths } from '../util/clipboardFiles'
+import type { FileClipData } from '@shared/ipc'
 
 export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
   const live = (): BrowserWindow | null => {
@@ -50,13 +51,14 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     return { ok: true } as const
   })
   handle('explorer:hello', () => explorerHello())
-  // 탐색기 창 → 본창. [연결]·[AI 에 묻기]·[작업 프로필로 저장] 등은 본창에서 묻고 본창에 열리므로
-  // 본창을 앞으로 가져온다(접속 확인·이름 입력이 뒤에 숨으면 멈춘 것처럼 보인다).
-  // 컨테이너 접속 한 줄(sendInput)만은 예외 — 표를 보던 자리를 뺏지 않는다.
+  // 탐색기 창 → 본창. **본창을 앞으로 가져오는 것은 본창에서 사람이 답해야 할 때만**(다듬기 R2):
+  // 호스트키 확인·비밀번호·이름 입력·삭제 확인은 전부 본창 Dialog 라, 그 Dialog 가 뜰 때 스스로
+  // 앞으로 나온다(window:focus — Dialog.tsx). 그래서 [연결]은 키가 저장된 서버면 탐색기에 머문다.
+  // [AI 에 묻기]만 여기서 끈다 — 채워 둔 질문은 본창 채팅에서 보내야 끝난다.
   handle('explorer:act', (act, e) => {
     if (e.sender !== explorerWindowContents()) return { ok: true } as const
     pushSend(mainWc(), 'explorer:act', act)
-    if (act?.kind !== 'sendInput') {
+    if (act?.kind === 'askAi') {
       const w = live()
       if (w?.isMinimized()) w.restore()
       w?.focus()
@@ -76,6 +78,14 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
       return live()
     }
   }
+
+  // 창이 사람의 답을 기다리는데 다른 창(탐색기 창)에 가려 있을 때 — Dialog 가 뜨면서 부른다.
+  handle('window:focus', (_req, e) => {
+    const w = sender(e)
+    if (w?.isMinimized()) w.restore()
+    w?.focus()
+    return { ok: true } as const
+  })
 
   handle('window:minimize', (_req, e) => {
     sender(e)?.minimize()
@@ -178,4 +188,13 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
    * 우리 렌더러만 쓴다 — 쓰기를 옮긴 것과 같은 이유로, 같은 방식이다.
    */
   handle('clipboard:readText', () => clipboard.readText())
+
+  // 앱 안 파일 클립보드(다듬기 R2). 창마다 FileTree 모듈에 따로 있어 사이드바 [파일]에서 복사한 것을
+  // 탐색기 창에 붙일 수 없었다 — main 이 마지막 복사 하나를 들고 창들이 붙일 때 묻는다.
+  let fileClip: FileClipData | null = null
+  handle('clipboard:setFiles', (clip) => {
+    fileClip = clip ?? null
+    return { ok: true } as const
+  })
+  handle('clipboard:getFiles', () => fileClip)
 }

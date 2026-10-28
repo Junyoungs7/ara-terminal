@@ -1,7 +1,12 @@
 // 탐색기 독립 창 (2026-10-28 준영님 제보 — "탐색기가 별도의 창으로 떠야하는데 아라 툴 내부에서만 떠").
 //
 // PortWindow.ts 를 그대로 따른다: 앱 렌더러를 재사용하고 해시(#explorerwin)로 진입점만 바꾼다.
-// 창은 하나 — 두 번째 호출은 있는 창을 앞으로. 닫으면 파괴(숨기지 않는다).
+// 창은 하나 — 두 번째 호출은 있는 창을 앞으로.
+//
+// **× 는 숨김이다(다듬기 R2, #74 복구).** 파괴하면 대상·열린 도구·경로·탭이 다 날아가 다시 열 때
+// [홈]부터다 — 1.x 의 "닫았다 열어도 그대로"가 그것을 지켰다. 파괴는 본창이 닫힐 때와 앱 종료
+// (quitStep → closeExplorerWindow 의 destroy, close 이벤트를 안 지난다)·로그오프 때뿐이다.
+// 숨은 동안 원격 폴링은 렌더러가 멈춘다(document.visibilityState — ExplorerWindow.tsx).
 //
 // 다른 점 둘:
 //  1. **프레임리스**다. 2.0 디자인의 타이틀바(− □ ×)를 본창·세션 창과 같은 TitleBar 로 그린다.
@@ -30,6 +35,10 @@ let lastReveal: ExplorerReveal | null = null
 export function openExplorerWindow(onShown: (open: boolean) => void, reveal?: ExplorerReveal): void {
   if (reveal) lastReveal = reveal
   if (win && !win.isDestroyed()) {
+    if (!win.isVisible()) {
+      win.show()
+      onShown(true)
+    }
     if (win.isMinimized()) win.restore()
     win.focus()
     return
@@ -53,6 +62,18 @@ export function openExplorerWindow(onShown: (open: boolean) => void, reveal?: Ex
   })
   win.removeMenu()
   const w = win
+  // 로그오프(WM_ENDSESSION)는 before-quit 을 안 지나고 close 로 곧장 온다 — 그때 숨기면 OS 종료를
+  // 붙잡는다. 본창의 같은 자리(index.ts session-end)와 같은 이유다.
+  let ending = false
+  w.on('session-end', () => {
+    ending = true
+  })
+  w.on('close', (e) => {
+    if (ending) return
+    e.preventDefault()
+    w.hide()
+    onShown(false)
+  })
   w.on('closed', () => {
     if (win === w) win = null
     onShown(false)

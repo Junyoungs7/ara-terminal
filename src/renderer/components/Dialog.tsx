@@ -43,6 +43,9 @@ export function useDialog(): {
         resolveRef.current = resolve
         textRef.current = s.input?.value ?? ''
         setSpec(s)
+        // 사람의 답을 기다린다 — 이 창이 다른 창(탐색기 창)에 가려 있으면 앞으로(다듬기 R2).
+        // 탐색기의 [연결]이 호스트키·비밀번호를 물을 때가 이 자리다. 이미 앞이면 아무 일 없다.
+        if (!document.hasFocus()) void window.ev?.window.focus().catch(() => {})
       }),
     []
   )

@@ -783,15 +783,17 @@ export function FileTree({
     (mode: 'copy' | 'cut' = 'copy') => {
       const entries = selectedEntries()
       if (entries.length === 0) return
-      fileClip = { session, dir: path, entries, mode, at: Date.now() }
+      const clip: FileClip = { session, dir: path, entries, mode, at: Date.now() }
+      fileClip = clip
       // 지금 OS 클립보드에 무엇이 있었는지 찍어 둔다 — 붙여넣기 때 "그 뒤로 바뀌었는지"를 이걸로 판단한다.
+      // 찍은 뒤 main 에도 올린다 — 다른 창(사이드바 [파일] ↔ 탐색기 창)이 붙일 수 있게(다듬기 R2).
       void window.ev.clipboard
         .readFiles()
-        .then((r) => {
-          osClipAtCopy = r.paths
-        })
-        .catch(() => {
-          osClipAtCopy = []
+        .then((r) => r.paths)
+        .catch(() => [] as string[])
+        .then((paths) => {
+          osClipAtCopy = paths
+          void window.ev.clipboard.setFiles?.({ ...clip, osAtCopy: paths }).catch(() => {})
         })
       // 붙여넣을 곳이 앱 밖일 수도 있다 — 절대경로를 텍스트로도 올려 둔다(터미널·편집기에 그대로 붙는다).
       // writeClipboard 를 거친다(main 경유) — 직접 navigator 를 부르면 포커스가 없을 때 조용히 거부된다.
@@ -806,6 +808,13 @@ export function FileTree({
     // "아무 반응 없다"로 읽힌다(2026-08-22 준영님 제보 26번).
     setError(null)
     const os = await window.ev.clipboard.readFiles().catch(() => ({ paths: [] as string[] }))
+    // 다른 창에서 더 나중에 복사한 것이 있으면 그것이 지금의 클립보드다.
+    const shared = await window.ev.clipboard.getFiles?.().catch(() => null)
+    if (shared && (!fileClip || shared.at > fileClip.at)) {
+      const { osAtCopy, ...rest } = shared
+      fileClip = rest
+      osClipAtCopy = osAtCopy
+    }
     const src = pasteSource(os.paths, osClipAtCopy, fileClip !== null)
 
     // ① OS 클립보드(윈도 탐색기에서 Ctrl+C 한 파일)
@@ -824,7 +833,10 @@ export function FileTree({
       if (clip.session?.type === 'ssh' || backend?.remote) return setError(t('file.cut.localOnly'))
       const r = await window.ev.fs.move(clip.entries.map((e) => joinPath(clip.dir, e.name)), dir)
       // 붙여넣고 나면 클립보드를 비운다 — 이동은 한 번뿐이다(두 번째 붙여넣기는 원본이 없어 실패한다).
-      if (r.ok) fileClip = null
+      if (r.ok) {
+        fileClip = null
+        void window.ev.clipboard.setFiles?.(null).catch(() => {})
+      }
       return applyOp(r)
     }
     // 같은 서버 안이면 서버에서 cp 를 돌린다 — 내려받았다 올리면 같은 디스크 복사에 네트워크를 두 번 탄다.

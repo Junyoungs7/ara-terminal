@@ -17,6 +17,7 @@ import {
   dialogConfirm,
   explorerWindow,
   explorerWindowCount,
+  explorerVisible,
   newLocalShell,
   openBottomTool,
   sessionList
@@ -164,10 +165,10 @@ test('CON-34★ 격자 타일을 포커스·Enter 로 열 수 있다', async ({ 
   await expect(wb.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 })
 
-// CON-35★ 2026-10-28: 작업대가 OS 창이 되면서 #74(닫아도 숨기기만)는 **PortWindow 방식(닫으면 파괴)**
-// 으로 바뀌었다(지시서 — 창 하나, 닫기는 PortWindow 를 따른다). 지킬 성질: 닫으면 정말 없어지고(유령
-// 창이 원격 폴링을 붙들지 않는다), 다시 열면 새 창이 [홈] 에서 시작한다.
-test('CON-35★ 작업대 창을 닫으면 없어지고, 다시 열면 [홈] 에서 시작한다', async ({ ara, ssh }) => {
+// CON-35★ #74 복구(다듬기 R2): 작업대 창의 × 는 **숨김**이다. 2026-10-28 에 OS 창이 되면서 PortWindow 를
+// 따라 파괴로 바뀌었다가 되돌렸다 — 다시 열면 대상·열린 도구·탭이 그대로여야 한다. 숨은 동안 레일
+// 표시는 꺼지고(열려 있지 않다), 창은 하나 그대로다(새 창이 생기지 않는다).
+test('CON-35★ 작업대 창을 닫았다 다시 열면 열린 도구 탭이 그대로다', async ({ ara, ssh }) => {
   const ps = makePs()
   const h = await ssh({ password: 'pw-con35', execHandler: ps.exec })
   await openConsole(ara.page, 'con35', h.port, 'pw-con35')
@@ -176,10 +177,13 @@ test('CON-35★ 작업대 창을 닫으면 없어지고, 다시 열면 [홈] 에
   await expect(wb.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 
   await wb.click('.tb-ctl.close')
-  await expect.poll(() => explorerWindowCount(ara.app), { timeout: 10_000 }).toBe(0)
+  await expect.poll(() => explorerVisible(wb), { timeout: 10_000 }).toBe(false)
+  expect(explorerWindowCount(ara.app)).toBe(1)
   await expect(ara.page.locator('.lrail-item.active[data-activity="explorer"]')).toHaveCount(0)
   const again = await explorerWindow(ara.app, () => ara.page.click('.lrail-item[data-activity="explorer"]'))
-  await expect(again.locator('.wb-win .exp-tab.on[data-tab="home"]')).toBeVisible()
+  expect(again).toBe(wb)
+  await expect.poll(() => explorerVisible(again), { timeout: 10_000 }).toBe(true)
+  await expect(again.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 })
 
 // CON-1b★ 창 밖에서 열리는 칸에만 ↗ 를 단다.

@@ -75,6 +75,7 @@ const api: EvApi = {
     }
   },
   window: {
+    focus: () => ipcRenderer.invoke('window:focus'),
     minimize: () => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
     close: () => ipcRenderer.invoke('window:close'),
@@ -352,7 +353,9 @@ const api: EvApi = {
     // 쓰기는 main 을 거친다 — navigator.clipboard 는 포커스가 없으면 거부한다(registerWindowIpc 주석).
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
     // 읽기도 main 을 거친다 — 권한 핸들러가 clipboard-read 를 거절한다(같은 주석).
-    readText: () => ipcRenderer.invoke('clipboard:readText')
+    readText: () => ipcRenderer.invoke('clipboard:readText'),
+    setFiles: (clip) => ipcRenderer.invoke('clipboard:setFiles', clip),
+    getFiles: () => ipcRenderer.invoke('clipboard:getFiles')
   },
   // F11: 명령어 히스토리. load 는 배열만 돌려주도록 풀어 준다(렌더러가 res.entries 를 벗기지 않게).
   history: {

@@ -16,6 +16,8 @@ const { FakeWin, handlers, created, mkWc } = vi.hoisted(() => {
     webContents = mkWc()
     opts: Record<string, unknown>
     closed?: () => void
+    onClose?: (e: { preventDefault: () => void }) => void
+    visible = true
     focus = vi.fn()
     constructor(opts: Record<string, unknown>) {
       this.opts = opts
@@ -25,8 +27,22 @@ const { FakeWin, handlers, created, mkWc } = vi.hoisted(() => {
     isMinimized = () => false
     restore = vi.fn()
     removeMenu = () => {}
-    on(ev: string, fn: () => void) {
-      if (ev === 'closed') this.closed = fn
+    isVisible = () => this.visible
+    show = () => {
+      this.visible = true
+    }
+    hide = () => {
+      this.visible = false
+    }
+    on(ev: string, fn: (e: { preventDefault: () => void }) => void) {
+      if (ev === 'closed') this.closed = fn as () => void
+      if (ev === 'close') this.onClose = fn
+    }
+    /** OS·× 의 close — preventDefault 되면 창은 남는다. */
+    close = () => {
+      let kept = false
+      this.onClose?.({ preventDefault: () => (kept = true) })
+      if (!kept) this.closed?.()
     }
     once() {}
     loadURL = () => Promise.resolve()
@@ -89,19 +105,34 @@ describe('탐색기 창 중계', () => {
     expect(await call('explorer:hello', explorer().webContents)).toMatchObject({ state: st })
   })
 
-  it('★ 탐색기의 [연결]은 본창에 도착하고 본창을 앞으로 가져온다(접속 확인이 뒤에 숨지 않게)', async () => {
+  it('★ 탐색기의 [연결]은 본창에 도착하되 본창을 끌어오지 않는다 — 물을 게 있으면 Dialog 가 스스로 앞으로', async () => {
     await call('explorer:open', main.webContents)
     const act = { kind: 'connect', profileId: 'p1' }
     await call('explorer:act', explorer().webContents, act)
     expect(main.webContents.send).toHaveBeenCalledWith('explorer:act', act)
+    expect(main.focus).not.toHaveBeenCalled()
+    await call('explorer:act', explorer().webContents, { kind: 'sendInput', text: 'x' })
+    expect(main.focus).not.toHaveBeenCalled()
+  })
+
+  it('[AI 에 묻기]는 본창을 앞으로 — 채운 질문은 본창 채팅에서 보낸다', async () => {
+    await call('explorer:open', main.webContents)
+    await call('explorer:act', explorer().webContents, { kind: 'askAi', text: 'x' })
     expect(main.focus).toHaveBeenCalled()
   })
 
-  it('컨테이너 접속 한 줄(sendInput)은 본창을 앞으로 끌지 않는다', async () => {
+  it('★ × 는 숨김이다 — 같은 창이 남고(상태 유지) 다시 열면 그 창이 보인다', async () => {
     await call('explorer:open', main.webContents)
-    await call('explorer:act', explorer().webContents, { kind: 'sendInput', text: 'x' })
-    expect(main.webContents.send).toHaveBeenCalledWith('explorer:act', { kind: 'sendInput', text: 'x' })
-    expect(main.focus).not.toHaveBeenCalled()
+    const w = explorer()
+    const n = created.length
+    main.webContents.send.mockClear()
+    w.close()
+    expect(w.visible).toBe(false)
+    expect(main.webContents.send).toHaveBeenCalledWith('explorer:shown', { open: false })
+    await call('explorer:open', main.webContents)
+    expect(created.length).toBe(n)
+    expect(w.visible).toBe(true)
+    expect(main.webContents.send).toHaveBeenCalledWith('explorer:shown', { open: true })
   })
 
   it('탐색기 창이 아닌 곳에서 온 act 는 버린다', async () => {

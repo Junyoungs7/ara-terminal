@@ -19,6 +19,14 @@ export function ExplorerWindow() {
   const [reveal, setReveal] = useState<ExplorerReveal | null>(null)
   // 확인·이름 입력(삭제 확인 등)은 이 창에서 묻는다 — 본창의 다이얼로그를 빌려올 수 없다.
   const { ask, askText, node: dialogNode } = useDialog()
+  // × 는 창을 숨긴다(main ExplorerWindow.ts) — 숨은 동안은 원격 폴링을 멈춘다(1.x 의 visible 규칙).
+  // OS 창이 숨거나 최소화되면 Chromium 이 visibilityState 를 hidden 으로 바꾼다.
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
+  useEffect(() => {
+    const on = (): void => setVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [])
 
   useEffect(() => {
     const offState = window.ev?.explorer.onState(setState)
@@ -42,6 +50,7 @@ export function ExplorerWindow() {
   return (
     <div className="app explorerwin">
       <WorkbenchView
+        visible={visible}
         sessions={state.sessions}
         profiles={state.profiles}
         workProfiles={state.workProfiles}
