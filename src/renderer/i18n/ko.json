@@ -831,7 +831,6 @@
   "term.link.hint": "Ctrl+클릭으로 열기",
   "settings.open": "설정",
   "settings.title": "설정",
-  "settings.subtitle": "터미널 동작 · 폰트 · 로그 · AI · MCP · 단축키",
   "settings.close": "닫기 (ESC)",
   "settings.nav.general": "일반",
   "settings.nav.look": "모양",

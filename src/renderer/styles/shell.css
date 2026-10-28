@@ -4563,6 +4563,11 @@ button.sb-seg.upd:hover .val {
   display: block;
   animation: fade var(--dur-pop) ease;
 }
+/* [폰트]·[모양]·[터미널] — 고르면서 뒤 터미널을 본다(다듬기 R2, 리뷰 B4). 블러 끔 + 옅은 스크림. */
+.drawer-scrim.clear {
+  backdrop-filter: none;
+  background: var(--scrim-soft);
+}
 .drawer {
   position: fixed;
   top: 50%;
@@ -4570,7 +4575,7 @@ button.sb-seg.upd:hover .val {
   translate: -50% -50%;
   width: min(1000px, calc(100vw - 48px));
   height: min(780px, calc(100vh - 48px));
-  background: var(--bg-surface);
+  background: var(--bg-canvas);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
@@ -4590,33 +4595,15 @@ button.sb-seg.upd:hover .val {
 .drawer-hd {
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
-  padding: var(--sp-7) var(--sp-9);
+  height: 52px;
+  padding: 0 var(--sp-7) 0 28px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
-.drawer-hd .dh-ico {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius);
-  background: var(--accent-glow);
-  color: var(--accent-bright);
-  display: grid;
-  place-items: center;
-  flex: none;
-}
-.drawer-hd .dh-ico svg {
-  width: 15px;
-  height: 15px;
-}
+/* 시안 Z-settings: 오른쪽 머리 = 고른 칸 이름 하나(아이콘 타일·부제는 1.x 서랍의 것이라 지웠다). */
 .drawer-hd h2 {
   font-size: var(--fs-xl);
   font-weight: 500;
-}
-.drawer-hd p {
-  font-size: var(--fs-md);
-  color: var(--text-lo);
-  margin-top: var(--sp-hair);
 }
 /* .drawer-hd .x 는 위 `.modal-hd .x` 묶음이 함께 그린다(M3). */
 /* R5: 섹션이 5개로 늘어 좌측 세로 nav + 우측 스크롤 패널 2열이 됐다(가로 탭은 라벨이 눌린다). */
@@ -4629,32 +4616,59 @@ button.sb-seg.upd:hover .val {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
-  padding: var(--sp-6) var(--sp-4);
-  width: 106px;
+  padding: var(--sp-7) var(--sp-5);
+  width: 208px;
   flex: none;
   border-right: 1px solid var(--line);
+  overflow-y: auto;
 }
-.set-nav span {
+/* 네비 맨 위 "설정" — 창 제목이 여기 산다(시안). 칸 이름이 아니라 lo 로 낮춘다. */
+.set-nav-t {
   font-size: var(--fs-md);
   color: var(--text-lo);
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-2) var(--sp-5) var(--sp-6);
+}
+.set-nav span {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  padding: 0 var(--sp-5);
   border-radius: var(--radius);
   cursor: var(--cur-hand, pointer);
-  border-left: 2px solid transparent;
   transition: var(--dur-quick);
 }
 .set-nav span:hover {
-  background: var(--bg-overlay);
+  background: var(--glass-hover);
   color: var(--text-hi);
 }
+/* 선택 = 레일 활성과 같은 글라스 면 + 네비 가장자리 2px 막대(시안 — 파란 틴트 상자 아님). */
 .set-nav span.on {
-  color: var(--accent-bright);
-  background: var(--accent-glow);
-  border-color: var(--accent);
+  color: var(--text-hi);
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.set-nav span.on::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--sp-5) * -1);
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--accent);
+}
+.set-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .set-pane {
   overflow-y: auto;
-  padding: var(--sp-7) var(--sp-8);
+  padding: var(--sp-7) 28px var(--sp-9);
   flex: 1;
   min-width: 0;
 }

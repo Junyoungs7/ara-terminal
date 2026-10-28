@@ -950,9 +950,49 @@ export function SettingsDrawer({
     if (open) boxRef.current?.focus()
   }, [open])
 
+  // 다듬기 R2(리뷰 B4): aria-modal 인데 뒤가 살아 있었다 — 열린 동안 창 바깥을 inert 로 묶는다.
+  // 창에서 앱 뿌리까지 올라가며 **형제**만 묶는다(조상은 이 창을 품고 있어 묶으면 창도 죽는다).
+  // 확인 다이얼로그(.overlay)·스크림은 빼고, 열린 뒤 새로 뜨는 다이얼로그는 새 요소라 묶이지 않는다.
+  useEffect(() => {
+    const box = boxRef.current
+    if (!open || !box) return
+    const locked: Element[] = []
+    for (let el: Element = box; el.parentElement && el !== document.body; el = el.parentElement) {
+      for (const sib of Array.from(el.parentElement.children)) {
+        if (sib === el || sib.hasAttribute('inert') || sib.matches('.drawer-scrim, .overlay, script')) continue
+        sib.setAttribute('inert', '')
+        locked.push(sib)
+      }
+    }
+    return () => locked.forEach((x) => x.removeAttribute('inert'))
+  }, [open])
+
+  // 포커스 트랩 — Tab 이 창 끝에서 처음으로, Shift+Tab 이 처음에서 끝으로 돈다.
+  const trapTab = (e: React.KeyboardEvent): void => {
+    const box = boxRef.current
+    if (e.key !== 'Tab' || !box) return
+    const items = Array.from(
+      box.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((x) => !x.hasAttribute('disabled') && x.getClientRects().length > 0)
+    if (items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    const at = document.activeElement
+    if (e.shiftKey && (at === first || at === box)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && at === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
+  // [폰트]·[모양]·[터미널]은 고르면서 뒤 터미널을 봐야 한다 — 스크림의 블러를 끄고 옅게(리뷰 B4).
+  const seeThrough = section === 'font' || section === 'look' || section === 'terminal'
+
   return (
     <>
-    <div className={'drawer-scrim' + (open ? ' open' : '')} onClick={onClose} />
+    <div className={'drawer-scrim' + (open ? ' open' : '') + (seeThrough ? ' clear' : '')} onClick={onClose} />
     <div
       className={'drawer' + (open ? ' open' : '')}
       role="dialog"
@@ -960,39 +1000,40 @@ export function SettingsDrawer({
       aria-label={t('settings.title')}
       tabIndex={-1}
       ref={boxRef}
+      onKeyDown={trapTab}
     >
-      <div className="drawer-hd">
-        <div className="dh-ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3.5" />
-            <path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3L4.9 4.9M19.1 19.1l-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4" />
-          </svg>
-        </div>
-        <div>
-          <h2>{t('settings.title')}</h2>
-          <p>{t('settings.subtitle')}</p>
-        </div>
-        <button type="button" className="x" title={t('settings.close')} onClick={onClose}>
-          <IconClose />
-        </button>
-      </div>
-
+      {/* 시안 Z-settings: 왼쪽 네비 맨 위에 "설정", 오른쪽 머리에 고른 칸 이름 하나(아이콘 타일·부제 없음). */}
       <div className="drawer-body">
-        <div className="set-nav" role="tablist">
+        <div className="set-nav" role="tablist" aria-label={t('settings.title')}>
+          <div className="set-nav-t">{t('settings.title')}</div>
           {SETTINGS_SECTIONS.map((s) => (
             <span
               key={s}
               role="tab"
+              tabIndex={0}
               aria-selected={section === s}
               data-section={s}
               className={section === s ? 'on' : undefined}
               onClick={() => setSection(s)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSection(s)
+                }
+              }}
             >
               {t('settings.nav.' + s)}
             </span>
           ))}
         </div>
 
+        <div className="set-main">
+        <div className="drawer-hd">
+          <h2>{t('settings.nav.' + section)}</h2>
+          <button type="button" className="x" title={t('settings.close')} onClick={onClose}>
+            <IconClose />
+          </button>
+        </div>
         <div className="set-pane" role="tabpanel">
           {/* 섹션 제목은 좌측 nav 가 이미 달고 있다 — 안에서 한 번 더 쓰지 않는다(하위 구분만 .set-sec-t). */}
           {section === 'general' && (
@@ -1420,6 +1461,7 @@ export function SettingsDrawer({
               <div className="set-note">{t('settings.license.note')}</div>
             </>
           )}
+        </div>
         </div>
       </div>
     </div>
