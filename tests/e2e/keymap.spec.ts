@@ -80,7 +80,7 @@ test('KEY-6 치트시트에 적힌 조합이 실제로 동작한다', async ({ a
   const combo = await page
     .locator('.cheatsheet .cs-row:has(.cs-desc:text-is("패널 최대화")) .cs-k')
     .allTextContents()
-  expect(combo).toEqual(['Ctrl', 'Up'])
+  expect(combo).toEqual(['Ctrl Up']) // 2.0 다듬기 R1: 칩 하나, 키 사이 공백
   await page.keyboard.press('Escape')
   await page.keyboard.press('Control+Shift+\\')
   await expect(page.locator('.pane-grid .pane:visible')).toHaveCount(2)

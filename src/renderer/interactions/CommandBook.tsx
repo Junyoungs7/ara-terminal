@@ -161,7 +161,7 @@ export function CommandBook({ open, onClose, sessionId, initialQuery }: Props) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <span className="esc-kbd">ESC</span>
+          <kbd className="esc-kbd kbd">Esc</kbd>
         </div>
         <div className="cs-body">
           {results.length === 0 ? (

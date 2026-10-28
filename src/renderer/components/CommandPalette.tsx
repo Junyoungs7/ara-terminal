@@ -181,7 +181,7 @@ export function CommandPalette({
           }
         }}
       />
-      <span className="tb-omni-key">F1</span>
+      <kbd className="tb-omni-key kbd">F1</kbd>
 
       {open && drop && (
         <div

@@ -3,7 +3,7 @@ import { BrandOrb } from './BrandOrb'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
 import type { FeatureShown } from '@shared/features'
-import { dispatchAction, KEYMAP } from '../../shared/keymap'
+import { dispatchAction, isMac, keyText, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
 
 // 커스텀 프레임리스 타이틀바 (design-system §4.1/§8). 창 컨트롤은 no-drag.
@@ -52,7 +52,7 @@ export function TitleBar({
   }
 
   const chatBind = KEYMAP.find((k) => k.action === 'ai.toggle')
-  const chatKey = (navigator.userAgent.includes('Mac') ? chatBind?.mac : chatBind?.win)?.replace(/\+/g, ' ') ?? ''
+  const chatKey = chatBind ? keyText(isMac() ? chatBind.mac : chatBind.win) : ''
 
   // 2.0 4단계: 신호등 점 → 시안 Z-final 의 얇은 선 − □ ×(닫기 호버만 빨강 바탕). 기능·선택자는 그대로.
   const glyph = (body: React.ReactNode) => (
@@ -111,7 +111,7 @@ export function TitleBar({
             <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
           </svg>
           <span>{t('titlebar.chat')}</span>
-          <kbd>{chatKey}</kbd>
+          <kbd className="kbd">{chatKey}</kbd>
         </button>
       )}
       <div className="tb-quick">

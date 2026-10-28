@@ -29,7 +29,7 @@ test('CTX-1 터미널 우클릭 기본은 리스트 메뉴다', async ({ ara }) 
   ])
   // 단축키 힌트는 keymap 단일 소스에서 온다 — 묶여 들어간 뒤에도 서브메뉴 안에 그대로 있다.
   await page.hover('.ctx-menu .ctx-item[data-action="split"]')
-  await expect(page.locator('.ctx-menu .ctx-item[data-action="split.horizontal"] .ci-kbd')).toHaveText('Ctrl+Shift+-')
+  await expect(page.locator('.ctx-menu .ctx-item[data-action="split.horizontal"] .ci-kbd')).toHaveText('Ctrl Shift -')
 })
 
 // CTX-2 리스트 메뉴에서 분할 실행

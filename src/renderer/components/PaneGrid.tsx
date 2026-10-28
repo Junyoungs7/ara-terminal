@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
+import { KEYMAP, isMac, keyText } from '../../shared/keymap'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { holdTermResize } from '../terminal/resizeGate'
 import { RdpView } from './RdpView'
@@ -284,15 +285,21 @@ export function PaneGrid({
           <h2>{t('pane.empty.title')}</h2>
           <p>{t('pane.empty.desc')}</p>
           <div className="pe-keys">
-            <span>
-              <kbd>Ctrl+Shift+T</kbd> {t('pane.empty.key.new')}
-            </span>
-            <span>
-              <kbd>Ctrl+Shift+M</kbd> {t('pane.empty.key.conn')}
-            </span>
-            <span>
-              <kbd>F1</kbd> {t('pane.empty.key.palette')}
-            </span>
+            {/* 칩 글자는 KEYMAP 에서 — 키를 바꾸면 안내도 따라온다(2.0 다듬기 R1, 공용 .kbd). */}
+            {(
+              [
+                ['session.new', 'pane.empty.key.new'],
+                ['connection.manager', 'pane.empty.key.conn'],
+                ['palette.all', 'pane.empty.key.palette']
+              ] as const
+            ).map(([action, label]) => {
+              const b = KEYMAP.find((k) => k.action === action)
+              return (
+                <span key={action}>
+                  <kbd className="kbd">{b ? keyText(isMac() ? b.mac : b.win) : ''}</kbd> {t(label)}
+                </span>
+              )
+            })}
           </div>
         </div>
       )}

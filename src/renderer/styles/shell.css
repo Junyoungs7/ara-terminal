@@ -197,15 +197,6 @@
 .tb-chat.on {
   background: var(--glass);
 }
-.tb-chat kbd {
-  font-family: var(--ui);
-  font-size: var(--fs-micro);
-  color: var(--text-lo);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--sp-2);
-  font-variant-numeric: tabular-nums;
-}
 .tb-quick {
   -webkit-app-region: no-drag;
   display: flex;
@@ -276,16 +267,6 @@
   color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
-}
-.tb-omni-key {
-  flex: none;
-  font-family: var(--mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  color: var(--text-lo);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--sp-2);
 }
 
 /* 결과 — 검색창 **바로 아래**로 펼친다. position:fixed 인 이유: 타이틀바 안에 두면 아래 본문이
@@ -2505,18 +2486,9 @@
   flex-wrap: wrap;
   justify-content: center;
   font-size: var(--fs-micro);
-  font-weight: 500;
   color: var(--text-lo);
 }
-.pe-keys kbd {
-  font-family: var(--mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  color: var(--text-lo);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: var(--sp-hair) var(--sp-3);
+.pe-keys .kbd {
   margin-right: var(--sp-2);
 }
 
@@ -6752,17 +6724,8 @@ button.sb-seg.upd:hover .val {
 }
 /* 끝에 붙은 단축키만 뱃지가 된다(문장 속 조합키는 글자 그대로 — store/tooltip.ts splitTip). */
 .ara-tip-k {
-  flex: none;
+  /* 모양은 공용 .kbd(2.0 다듬기 R1) — 전에는 파란 틴트 뱃지였다(포인트 색 남용 자리 하나 줄었다). */
   margin-left: var(--sp-4);
-  padding: var(--sp-hair) var(--sp-3);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  background: var(--accent-glow);
-  color: var(--accent);
-  /* 뱃지 안은 라틴 조합키(Ctrl+Shift+O)뿐이다. 보조 단(11px) — 하한과 같은 값이라 여유는 없다. */
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 /* ── #86 지난 세션 목록 — 우측 레일. 껍데기는 .monitor-panel/.mon-head 를 그대로 쓴다. ── */

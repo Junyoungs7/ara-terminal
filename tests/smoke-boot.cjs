@@ -872,13 +872,13 @@ const checks = []
   // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
     '리스트에 단축키 힌트 표시(R3.8 재배치 반영)',
-    f4c.listHints.includes('Ctrl+Shift+W') && f4c.listHints.includes('Ctrl+Shift+D')
+    f4c.listHints.includes('Ctrl Shift W') && f4c.listHints.includes('Ctrl Shift D')
   ])
   // 2026-08-18(준영님 지적): 터미널에서 사람이 실제로 누르는 건 Ctrl+C/V 다. 메뉴가 **안 쓰는
   // 조합을 가르치고 있었다** — KEYMAP 의 Ctrl+Shift 계열은 그대로 살아 있고 표기만 바꿨다.
   checks.push([
     'R3.1: 우클릭 복사/붙여넣기에 Ctrl+C/V 힌트',
-    f4c.listHints.includes('Ctrl+C') && f4c.listHints.includes('Ctrl+V')
+    f4c.listHints.includes('Ctrl C') && f4c.listHints.includes('Ctrl V')
   ])
   // 2026-08-14: 마지막 흐린 항목(로그 저장)이 실배선돼 이제 흐린 항목이 하나도 없다.
   checks.push(['흐린(추후) 항목 0 + 패널 닫기 위험 톤', f4c.listDim === 0 && f4c.listDanger === 1])
@@ -2155,7 +2155,7 @@ const checks = []
   checks.push(['R4.1: 메뉴바 최상위 6종(Tools 제거 — 넣을 기능이 없었다)', r4a.titles.join(',') === '파일,편집,세션,분할,보기,도움말'])
   checks.push(['R4.1: 모든 최상위 메뉴가 열리고 항목이 있다(빈 메뉴 없음)', r4a.opened.every((m) => m.count > 0)])
   checks.push(['R4.1: Session 첫 항목은 연결 관리자(기존 손버릇 유지)', r4a.opened.find((m) => m.title === '세션').ids[0] === 'connection.manager'])
-  checks.push(['R4.1: 항목에 keymap 단축키 힌트 표기', r4a.splitHints.includes('Ctrl+Shift+-') && r4a.splitHints.includes('Ctrl+Shift+W')])
+  checks.push(['R4.1: 항목에 keymap 단축키 힌트 표기', r4a.splitHints.includes('Ctrl Shift -') && r4a.splitHints.includes('Ctrl Shift W')])
   checks.push(['R4.1: Split→가로 분할이 실제로 패널을 늘린다', r4a.panesAfterMenu === r4a.panesBefore + 1])
   checks.push(['R4.1: Split→패널 닫기가 실제로 패널을 줄인다', r4a.panesAfterClose === r4a.panesBefore])
   checks.push(['R4.1: View→사이드바 접기 토글 동작', r4a.collapsedBefore === false && r4a.collapsedAfter === true && r4a.collapsedBack === false])

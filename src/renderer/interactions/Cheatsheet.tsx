@@ -1,5 +1,4 @@
-import { Fragment } from 'react'
-import { KEYMAP, type KeyBinding, type KeymapCategory } from '../../shared/keymap'
+import { KEYMAP, keyText, type KeyBinding, type KeymapCategory } from '../../shared/keymap'
 import { IconClose } from '../components/icons'
 import { t } from '../i18n'
 
@@ -18,24 +17,13 @@ const COLUMNS: readonly Column[] = [
   { title: '보기 · 기타', cats: ['view', 'file', 'connection', 'help'] }
 ]
 
-// 'Ctrl+Shift+B' → ['Ctrl','Shift','B'] kbd 칩. 'Ctrl+1-9' 같은 범위는 마지막 토큰 그대로.
-function keyChips(combo: string) {
-  return combo.split('+')
-}
-
+// 2.0 다듬기 R1: 칩 하나에 `Ctrl Shift B`(키 사이 공백) — 앱의 다른 단축키 표기와 같은 `.kbd`.
 function Row({ b }: { b: KeyBinding }) {
-  const combo = isMac ? b.mac : b.win
-  const chips = keyChips(combo)
   return (
     <div className="cs-row">
       <span className="cs-desc">{b.labelKo}</span>
       <span className="cs-keys">
-        {chips.map((c, i) => (
-          <Fragment key={i}>
-            {i > 0 && <span className="cs-sep">+</span>}
-            <span className="cs-k">{c}</span>
-          </Fragment>
-        ))}
+        <kbd className="cs-k kbd">{keyText(isMac ? b.mac : b.win)}</kbd>
       </span>
     </div>
   )

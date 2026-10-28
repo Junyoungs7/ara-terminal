@@ -156,6 +156,12 @@ export const KEYMAP: readonly KeyBinding[] = ALL_KEYS.filter(
   (k) => AI_ENTRY || (k.action !== 'ai.ask' && k.action !== 'ai.toggle')
 )
 
+/**
+ * 화면에 찍는 단축키 글자 — 2.0 다듬기 R1: 키 사이는 **공백**이다(`Ctrl Shift K`, `+` 없음 — 시안).
+ * 칩(`.kbd`) 하나에 이 글자를 통째로 넣는다. KEYMAP 의 `+` 표기는 판정용이라 그대로 둔다.
+ */
+export const keyText = (combo: string): string => combo.split('+').join(' ')
+
 // 렌더러 공용 — 단축키 표기(⌘)와 OS 이름이 들어가는 라벨(Finder/탐색기)이 같은 판정을 쓴다.
 export const isMac = (): boolean => typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 

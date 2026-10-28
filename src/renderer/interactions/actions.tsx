@@ -2,7 +2,7 @@ import { AI_ENTRY, featureOf, type FeatureShown } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
-import { KEYMAP, isMac, matchBinding, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, isMac, keyText, matchBinding, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import type { SortKey, SortSpec } from '../store/fileView'
 
@@ -146,13 +146,13 @@ const LITERAL_HINT: Partial<Record<ActionId, string>> = {
 // KEYMAP 표기(Ctrl+Shift+W 등). 플랫폼별 표기는 여기 한 곳에서 고른다.
 function comboOf(action: KeymapAction): string | undefined {
   const b = KEYMAP.find((k) => k.action === action)
-  return b ? (isMac() ? b.mac : b.win) : undefined
+  return b ? keyText(isMac() ? b.mac : b.win) : undefined
 }
 
 function hintFor(id: ActionId): string | undefined {
   const mac = isMac()
   const lit = LITERAL_HINT[id]
-  if (lit) return mac ? lit.replace('Ctrl', 'Cmd') : lit
+  if (lit) return keyText(mac ? lit.replace('Ctrl', 'Cmd') : lit)
   return comboOf(KEY_OF[id] ?? (id as string as KeymapAction))
 }
 

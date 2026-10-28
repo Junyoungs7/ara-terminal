@@ -41,8 +41,8 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
     const split = menuBarItems(MENUBAR.findIndex((m) => m.title === '분할'))
     const byId = Object.fromEntries(split.map((i) => [i.id, i]))
     expect(byId['split.horizontal'].label).toBe('가로 분할')
-    expect(byId['split.horizontal'].hint).toBe('Ctrl+Shift+-')
-    expect(byId['pane.close'].hint).toBe('Ctrl+Shift+W')
+    expect(byId['split.horizontal'].hint).toBe('Ctrl Shift -')
+    expect(byId['pane.close'].hint).toBe('Ctrl Shift W')
     // 되돌리기 어려운 항목만 위험 톤.
     expect(byId['pane.close'].danger).toBe(true)
     expect(byId['split.vertical'].danger).toBeUndefined()
@@ -54,13 +54,13 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
     // 단축키 없는 command 항목(i18n 라벨, 힌트 없음)이라는 이 테스트의 취지는 그대로 유지한다.
     // #206: report.open 도 action 항목이다(Ctrl+Shift+F1). R16: 그 옆에 [내 신고](command) 가 붙는다.
     expect(help.map((i) => i.id)).toEqual(['help.cheatsheet', 'commandBook.toggle', 'report.open', 'help.myReports', 'help.about'])
-    expect(help.find((i) => i.id === 'report.open')?.hint).toBe('Ctrl+Shift+F1')
+    expect(help.find((i) => i.id === 'report.open')?.hint).toBe('Ctrl Shift F1')
     for (const i of help.filter((x) => x.id !== 'commandBook.toggle' && x.id !== 'report.open')) {
       expect(i.label).not.toContain('menu.')
       expect(i.hint).toBeUndefined()
     }
     const cmdBook = help.find((i) => i.id === 'commandBook.toggle')
-    expect(cmdBook?.hint).toBe('Ctrl+Shift+K')
+    expect(cmdBook?.hint).toBe('Ctrl Shift K')
   })
 
   it('모든 메뉴 항목이 라벨을 갖고 i18n 키가 그대로 새지 않는다', () => {

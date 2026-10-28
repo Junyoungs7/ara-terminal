@@ -220,7 +220,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
           >
             {it.icon && <span className="ci-ic">{it.icon}</span>}
             <span className="ci-lbl">{it.label}</span>
-            {it.hint && <span className="ci-kbd">{it.hint}</span>}
+            {it.hint && <kbd className="ci-kbd kbd">{it.hint}</kbd>}
             {/* 트리 캐럿과 달리 **안 돌린다** — 펼침 상태가 아니라 "오른쪽에 더 있다"는 방향 표시다. */}
             {it.submenu && (
               <span className="ci-sub-arrow">
@@ -246,7 +246,7 @@ export function ContextMenu({ open, x, y, items, onPick, onClose }: Props) {
             >
               {sub.icon && <span className="ci-ic">{sub.icon}</span>}
               <span className="ci-lbl">{sub.label}</span>
-              {sub.hint && <span className="ci-kbd">{sub.hint}</span>}
+              {sub.hint && <kbd className="ci-kbd kbd">{sub.hint}</kbd>}
             </div>
           ))}
         </div>

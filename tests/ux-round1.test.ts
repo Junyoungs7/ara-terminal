@@ -161,15 +161,15 @@ describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
     const menu = terminalMenu()
     const byId = Object.fromEntries(menu.map((m) => [m.id, m]))
     const sub = Object.fromEntries((byId['split'].submenu ?? []).map((m) => [m.id, m]))
-    expect(sub['split.horizontal'].hint).toBe('Ctrl+Shift+-')
-    expect(sub['split.vertical'].hint).toBe('Ctrl+Shift+\\')
-    expect(byId['pane.close'].hint).toBe('Ctrl+Shift+W')
-    expect(byId['session.duplicate'].hint).toBe('Ctrl+Shift+D')
+    expect(sub['split.horizontal'].hint).toBe('Ctrl Shift -')
+    expect(sub['split.vertical'].hint).toBe('Ctrl Shift \\')
+    expect(byId['pane.close'].hint).toBe('Ctrl Shift W')
+    expect(byId['session.duplicate'].hint).toBe('Ctrl Shift D')
     // 2026-08-18(준영님 지적): 클립보드는 KEYMAP 상 Ctrl+Shift+C/V 지만 터미널에서 사람이
     // 누르는 건 Ctrl+C/V 다(선택이 있으면 복사, 없으면 SIGINT — R3.1). 메뉴가 **안 쓰는
     // 조합을 가르치고 있었다.** 대신 그 키가 먹으면 토스트로 알린다(TerminalPane).
-    expect(byId['copy'].hint).toBe('Ctrl+C')
-    expect(byId['paste'].hint).toBe('Ctrl+V')
+    expect(byId['copy'].hint).toBe('Ctrl C')
+    expect(byId['paste'].hint).toBe('Ctrl V')
   })
 
   it('패널 닫기는 위험 톤, 흐린(추후) 항목은 하나도 없다', () => {

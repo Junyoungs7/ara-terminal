@@ -32,7 +32,7 @@ import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
 import { forgetCachedScope } from '../store/history'
 import { LICENSES } from '../fonts/licenses'
-import { KEYMAP, type KeymapCategory } from '../../shared/keymap'
+import { KEYMAP, keyText, type KeymapCategory } from '../../shared/keymap'
 import { CURSOR_KINDS, cursorSrc, cursorValue } from '../cursorThemes'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
@@ -908,7 +908,6 @@ type Props = {
 }
 
 // 2.0 6단계 — 단축키는 칩 하나(`Ctrl Alt K`, 키 사이 공백·`+` 없음, 시안 Z-settings).
-const keyChip = (combo: string) => combo.split('+').join(' ')
 
 export function SettingsDrawer({
   open,
@@ -1152,7 +1151,7 @@ export function SettingsDrawer({
                           <span className="fr-name">{t('feature.' + f.id)}</span>
                           <span className="fr-desc">{t('feature.' + f.id + '.desc')}</span>
                           <span className="cs-keys">
-                            {b && <span className="cs-k">{keyChip(isMac ? b.mac : b.win)}</span>}
+                            {b && <kbd className="cs-k kbd">{keyText(isMac ? b.mac : b.win)}</kbd>}
                           </span>
                           <Toggle
                             on={prefs.features[f.id]}
@@ -1356,7 +1355,7 @@ export function SettingsDrawer({
                       <div className="cs-row" key={b.action}>
                         <span className="cs-desc">{b.labelKo}</span>
                         <span className="cs-keys">
-                          <span className="cs-k">{keyChip(isMac ? b.mac : b.win)}</span>
+                          <kbd className="cs-k kbd">{keyText(isMac ? b.mac : b.win)}</kbd>
                         </span>
                       </div>
                     ))}

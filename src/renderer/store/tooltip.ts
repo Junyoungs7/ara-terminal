@@ -11,6 +11,8 @@
 // React 가 리렌더하며 `title` 을 다시 붙여도 다음 hover 에서 또 떼면 그만이다(네이티브는 500ms 쯤
 // 기다렸다 뜨는데 우리는 mouseover 즉시 떼므로 깜빡임도 없다).
 
+import { keyText } from '../../shared/keymap'
+
 /** 표시까지 기다리는 시간. 지나가다 스치는 것마다 뜨면 소음이다. */
 const SHOW_DELAY_MS = 450
 /** 요소와 툴팁 사이 간격. */
@@ -154,8 +156,8 @@ function show(el: Element, raw: string): void {
   h.appendChild(document.createTextNode(text))
   if (key) {
     const b = document.createElement('span')
-    b.className = 'ara-tip-k'
-    b.textContent = key
+    b.className = 'ara-tip-k kbd'
+    b.textContent = keyText(key)
     h.appendChild(b)
   }
   // 크기를 재려면 먼저 보여야 한다 — 화면 밖에 두고 재고 나서 제자리로 옮긴다(깜빡임 없음).

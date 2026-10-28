@@ -38,7 +38,7 @@ describe('AI CLI 단축키', () => {
 
   it('우클릭 [AI 실행 ▸ …] 에 힌트가 붙는다', () => {
     const sub = terminalMenu().find((m) => m.id === 'aicli.run')?.submenu ?? []
-    expect(sub.map((s) => s.hint)).toEqual(['Alt+1', 'Alt+2', 'Alt+3'])
+    expect(sub.map((s) => s.hint)).toEqual(['Alt 1', 'Alt 2', 'Alt 3'])
   })
 
   it('★ 떼어낸 창(onRunAiCli 없음)에선 키가 아무 일도 안 한다 — 메뉴를 감추는 판정과 같다', () => {

@@ -39,7 +39,7 @@ test('LOCAL-2★ 세션이 없으면 빈 화면이 다음 할 일을 안내한�
   await expect(guide.locator('button')).toHaveCount(0)
   // 단축키 세 줄(새 셸·연결 관리자·통합 검색)이 함께 보인다.
   await expect(guide.locator('.pe-keys kbd')).toHaveCount(3)
-  await expect(guide.locator('.pe-keys')).toContainText('Ctrl+Shift+T')
+  await expect(guide.locator('.pe-keys')).toContainText('Ctrl Shift T')
 
   // 세션이 생기면 사라지고, 마지막 세션을 닫으면 다시 나온다.
   await newLocalShell(page)
