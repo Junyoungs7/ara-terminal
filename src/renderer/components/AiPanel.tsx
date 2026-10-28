@@ -16,7 +16,7 @@ import { AI_CONTEXT_LINES, AI_PROVIDER_LABELS, DEFAULT_AI_PROVIDER, type AiEnv, 
 // 이 파일에는 SDK 도 네트워크도 없다. 질문은 ai:send 로 main 에 넘기고 답만 받는다.
 
 // 아라 아바타. 별도 에셋을 쓰지 않는다 — assets/brand/ev-icon-2.svg 는 "E·V" 레터마크와
-// 시안 HEX 가 그려져 있어 A.R.A 리브랜딩과 --purple(AI 전용 색) 방침을 모두 되돌린다.
+// 시안 HEX 가 그려져 있어 A.R.A 리브랜딩을 되돌린다(2.0 에는 AI 전용 색이 없다).
 // currentColor 로 그려 두면 색을 CSS 토큰이 정한다.
 function AraMark() {
   return (

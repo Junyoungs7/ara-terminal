@@ -274,8 +274,8 @@
 }
 .tb-help:hover {
   background: var(--bg-overlay);
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 /* F31 통합 검색 — 타이틀바 가운데의 **검색칸**(VS Code 의 상단 검색줄과 같은 자리·같은 뜻).
    2.0 다듬기 R1: 칸은 여는 자리(<button>)이고 타이핑은 가운데 창(.cp-drop)의 입력칸에서 한다 —
@@ -597,7 +597,7 @@
 }
 .sb-act:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .sb-act svg {
   width: 13px;
@@ -656,7 +656,7 @@
   position: relative;
 }
 .sftp-wrap.drag-over {
-  outline: 2px dashed var(--accent-line);
+  outline: 2px dashed var(--text-mid);
   outline-offset: -4px;
 }
 .sftp-path-bar {
@@ -727,11 +727,11 @@
   padding: 0 var(--sp-1);
 }
 .fcrumb .seg:hover {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   background: var(--bg-overlay);
 }
 .fcrumb > span:last-child .seg {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 /* 구분자 `/` 도 글자다 — §1.3 이중 감쇠 금지. dim × .7 은 canvas 위에서 3.00 이었다.
    세그먼트(--text-lo)보다 조용해야 하는 것은 맞고, 그건 이미 한 단계 아래 토큰이 낸다(4.70). */
@@ -744,7 +744,7 @@
   min-width: 0;
   height: 24px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
@@ -763,7 +763,7 @@
 }
 .sftp-path-bar .sb-act:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .sftp-path-bar .sb-act svg {
   width: var(--sb-icon);
@@ -785,7 +785,7 @@
   padding: 0;
 }
 .sftp-path-bar .sb-act.on {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   background: var(--bg-overlay);
 }
 .ffil {
@@ -793,7 +793,7 @@
   min-width: 60px;
   height: 22px;
   padding: 0 var(--sp-3);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
@@ -873,14 +873,14 @@
    --accent-glow(알파 0.15) 하나로는 hover 배경과 구분이 거의 안 됐다. 프로필 목록·레일이 쓰는
    **왼쪽 선택 바**(inset 2px)를 같이 준다 — 앱 안에서 "고른 것"의 표시는 한 가지 문법이어야 한다. */
 .frow.sel {
-  background: var(--accent-glow);
-  color: var(--accent-bright);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--glass);
+  color: var(--text-hi);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 /* 마우스를 올려도 선택은 선택으로 남아야 한다(hover 가 배경을 덮어써 표시가 흐려지던 것). */
 .frow.sel:hover {
-  background: var(--accent-glow);
-  color: var(--accent-bright);
+  background: var(--glass);
+  color: var(--text-hi);
 }
 /* 아이콘은 인라인 SVG(R7.4) — 사이드바 나머지와 같은 규격(24 viewBox · stroke 2 · --sb-icon 렌더). */
 .frow .fi {
@@ -921,7 +921,7 @@
   cursor: var(--cur-hand, pointer);
 }
 .frow.dir .fn {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 /* 끊긴 심볼릭 링크 — 대상이 없으니 들어갈 수도, 내려받을 수도 없다. 흐리게 + 취소선. */
 .frow.broken .fn {
@@ -932,14 +932,14 @@
   color: var(--err);
 }
 .frow.dir .fi {
-  color: var(--accent);
+  color: var(--text-mid);
 }
 /* 인라인 이름 변경(탭 이름 편집 .tt-edit 과 같은 톤). */
 .frow .fedit {
   flex: 1;
   min-width: 0;
   background: var(--bg-canvas);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--ui);
@@ -987,7 +987,7 @@
   flex: none;
   border: 1px solid var(--line-strong);
   background: var(--bg-raised);
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-5);
@@ -1187,7 +1187,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--accent);
+  background: var(--text-mid);
 }
 .exp-tab-nm {
   white-space: nowrap;
@@ -1219,7 +1219,7 @@
   padding: 0 var(--sp-5);
 }
 .exp-tab.add:hover {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 .exp-body {
@@ -1258,9 +1258,9 @@
 }
 .exp-node.on {
   font-weight: 500;
-  background: var(--accent-glow);
+  background: var(--glass);
   color: var(--text-hi);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 /* 글리프가 앉던 자리 — 이제 SVG 가 들어온다(M2 §5 ④). 글자는 베이스라인에 앉지만 SVG 는 안 그래서
    `place-items: center` 로 상자 한가운데에 못박는다. 크기도 여기서 정한다(§8.4 — SVG 태그에 px 를 안 박는다). */
@@ -1320,7 +1320,7 @@
    한글이 들어가는 글자는 11px 이 하한이다(그 아래는 래스터화에서 뭉개진다 — tests/font.test.ts 가 지킨다). */
 /* 지금 만지고 있는 서버 — 제목줄에 늘 보여야 한다(엉뚱한 서버의 프로세스를 죽이지 않게). */
 .con-srv {
-  color: var(--accent);
+  color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
 }
@@ -1351,7 +1351,7 @@
   cursor: var(--cur-hand, pointer);
 }
 .con-app:hover {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
   background: var(--bg-raised);
 }
 /* #69: 콘솔 밖(우측 레일·터미널)에서 열리는 칸. 나머지 칸은 같은 창의 탭으로 열린다 —
@@ -1368,12 +1368,12 @@
   color: var(--text-lo);
 }
 .con-app.ext:hover .ext-mark {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .con-app .ic {
   display: grid;
   place-items: center;
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .con-app .ic svg {
   width: 26px;
@@ -1494,7 +1494,7 @@
   flex: none;
 }
 .bw-dot.load {
-  background: var(--accent);
+  background: var(--text-mid);
 }
 /* × 가 앉던 자리(M2 §5 ④). <button> 으로는 못 바꿨다 — 부모가 `role="tab"` 이라 중첩이 된다(M3 §4). */
 .bw-x {
@@ -1625,7 +1625,7 @@
   white-space: nowrap;
 }
 .ptbl tr:hover td {
-  background: var(--accent-glow);
+  background: var(--glass-hover);
 }
 /* 열려 있는 행 — 옅은 초록 면. 호버가 그 위를 덮지 않게 한 단 진하게 둔다. */
 .ptbl tr.fwd td {
@@ -1744,11 +1744,11 @@
 }
 /* 열려 있는 포트의 주 동작 — 액센트는 **테두리와 글자에만**. 면을 칠하면 26px 행에서 너무 세다. */
 .pbtn.pri {
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 .pbtn.pri:hover {
-  background: var(--accent-glow);
+  background: var(--glass);
 }
 /* 해제는 되돌릴 수 있는 동작이라(다시 [열기]) 평소엔 조용하고 호버에만 위험 톤이 든다. */
 .pbtn.dgr:hover {
@@ -1933,7 +1933,7 @@
   color: var(--text-mid);
 }
 .con-tbl th.on {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 /* 표 정렬 캐럿 — 펼침 캐럿과 **같은 크기**를 쓰되 회전은 안 한다(M3). 상태가 "펼침/접힘"이 아니라
    "오름/내림"이라 ChevronUp·ChevronDown 두 개를 갈아 끼우는 쪽이 뜻에 맞는다.
@@ -2001,7 +2001,7 @@
 .svc-row.sel td:first-child,
 .dsk-row.sel td:first-child,
 .ctr-row.sel td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 /* 좀비·고CPU 만 색으로 — 전부 강조하면 강조가 아니다. */
 .con-row.hot .ccpu {
@@ -2128,7 +2128,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--accent);
+  color: var(--text-mid);
   font-family: var(--mono);
   font-size: var(--fs-md);
 }
@@ -2311,7 +2311,7 @@
 }
 .sb-resizer:hover,
 .middle.resizing .sb-resizer {
-  background: var(--accent-line);
+  background: var(--text-lo);
 }
 /* 끄는 동안에는 트랜지션을 끈다 — 폭에 시간이 걸려 있으면 커서를 늦게 따라온다.
    `.sidebar` 는 A2(2026-09-04)로 폭 트랜지션 자체가 사라져 지금은 걸릴 것이 없다. 그래도 남긴다:
@@ -2358,8 +2358,8 @@
    말한다. 탭 하나 위에 있을 때는 그 탭이 .drop 으로 이미 자리를 표시하므로, 이 표시는 빈 자리에
    왔을 때만 켠다(둘이 겹쳐 뜨면 어디에 들어갈지가 오히려 흐려진다). */
 .tt-scroll.adopting {
-  box-shadow: inset 0 -2px 0 var(--accent);
-  background: var(--accent-glow);
+  box-shadow: inset 0 -2px 0 var(--text-mid);
+  background: var(--glass);
 }
 /* 터미널 탭 (목업 .ttab/.tterm-add — 플랫 탭. FB-tabs: 서버 그룹 래퍼 제거. #166 부터
    어느 서버인지는 **탭 툴팁의 글자**가 말한다 — .tdot 은 상태 전용이다) */
@@ -2475,7 +2475,7 @@
   min-width: 0;
   width: 118px;
   background: var(--bg-canvas);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   color: var(--text-hi);
   font-family: var(--ui);
@@ -2496,7 +2496,7 @@
   width: 2px;
   height: auto;
   opacity: 1;
-  background: var(--group-clr, var(--accent));
+  background: var(--group-clr, var(--text-mid));
 }
 /* FB-ui2(FB-0005): 패널에서 빠진(detach) 탭 — "죽은 탭"처럼 보이는 문제의 발견성 보완.
    클릭하면 포커스 패널에 다시 표시된다(store/layout.ts showSession, 이미 되는 동작) — 라벨·dot 만
@@ -2526,7 +2526,7 @@
 }
 .tterm-add:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 /* FB-tabs: 탭바 오버플로 드롭다운 버튼 — .tt-scroll 밖(스크롤 영역 우측 고정)에만 렌더,
@@ -2547,7 +2547,7 @@
 }
 .tt-overflow-btn:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 /* FB-0002: 탭 드래그 → 패널 드롭 미리보기. .pane-grid 기준 절대배치, PaneGrid 가 좌표를 계산.
@@ -2555,8 +2555,8 @@
 .drop-preview {
   position: absolute;
   pointer-events: none;
-  border: 2px dashed var(--accent);
-  background: var(--accent-glow);
+  border: 2px dashed var(--text-mid);
+  background: var(--glass);
   border-radius: 0;
   z-index: 30;
   display: flex;
@@ -2683,7 +2683,7 @@
   z-index: 7;
 }
 .bp-resizer:hover {
-  background: var(--accent-line);
+  background: var(--text-lo);
 }
 .bp-tabs {
   display: flex;
@@ -2749,14 +2749,14 @@
     box-shadow: none;
   }
   40% {
-    box-shadow: 0 0 0 2px var(--accent);
+    box-shadow: 0 0 0 2px var(--text-mid);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   /* 움직임을 줄여 달라고 한 사람에게는 깜빡이지 않고 테두리만 남긴다. */
   .bp-tab.flash {
     animation: none;
-    box-shadow: 0 0 0 2px var(--accent);
+    box-shadow: 0 0 0 2px var(--text-mid);
   }
 }
 /* 활성 탭. `--bg-raised`(#1e2532)는 hover 의 `--bg-overlay`(#252e3e)보다 **어둡다** — 명시도가
@@ -2811,7 +2811,7 @@
 }
 .bp-max:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .bp-close:hover {
   background: var(--err-line);
@@ -2944,12 +2944,12 @@
   cursor: var(--cur-hand, pointer);
 }
 .restore-err-card .rec-btn.primary {
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
   background: var(--bg-overlay);
 }
 .restore-err-card .rec-btn:hover {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
 }
 /* divider — hover 시 시안 라인 + col/row-resize 커서 (목업 그대로). */
 .div-col {
@@ -2968,7 +2968,7 @@
   transition: var(--dur-quick);
 }
 .div-col:hover::before {
-  background: var(--accent-line);
+  background: var(--text-lo);
 }
 .div-row,
 .div-row-r {
@@ -2989,7 +2989,7 @@
 }
 .div-row:hover::before,
 .div-row-r:hover::before {
-  background: var(--accent-line);
+  background: var(--text-lo);
 }
 .term-pane {
   width: 100%;
@@ -3060,7 +3060,7 @@
   text-overflow: ellipsis;
 }
 .term-comp .ci.on {
-  background: var(--accent-glow);
+  background: var(--glass);
   color: var(--text-hi);
 }
 /* 안내 한 줄(`Esc 닫고 친 대로 실행 · …`) — **한글이다.** §1.3 이중 감쇠 금지: dim × .75 는
@@ -3075,8 +3075,8 @@
 }
 /* R5 시각 벨 — BEL 수신 시 짧게 번쩍인다(설정 [터미널] > 벨 = 시각). */
 .term-pane.bell {
-  box-shadow: inset 0 0 0 2px var(--accent-line);
-  background: var(--accent-glow);
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+  background: var(--glass);
 }
 /* 4분할 상한 초과 토스트. */
 .pane-toast {
@@ -3085,8 +3085,8 @@
   bottom: 18px;
   transform: translateX(-50%);
   background: var(--bg-overlay);
-  border: 1px solid var(--accent-line);
-  color: var(--accent-bright);
+  border: 1px solid var(--line-strong);
+  color: var(--text-hi);
   font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-4) var(--sp-7);
@@ -3109,7 +3109,7 @@
   gap: var(--sp-5);
   min-width: 260px;
   background: var(--bg-overlay);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   color: var(--text-hi);
   font-family: var(--ui);
   padding: var(--sp-5) var(--sp-6);
@@ -3128,7 +3128,7 @@
 }
 .upd-title {
   font-size: var(--fs-md);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .upd-sub {
   font-size: var(--fs-micro);
@@ -3152,7 +3152,7 @@
   flex: 0 0 auto;
   font-family: var(--term);
   font-size: var(--fs-md);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 /* ── R3.2 터미널 검색 바 ── 패널 그리드 우상단 인라인 오버레이(모달 아님, 터미널 계속 보임).
@@ -3166,7 +3166,7 @@
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   background: var(--bg-overlay);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   z-index: 45;
@@ -3341,7 +3341,7 @@ button.sb-seg.upd {
 /* 받을 것이 생겼다 / 받아 뒀다 — 둘 다 사람이 누를 차례라 같은 강조색을 쓴다. */
 .sb-seg.upd.available .val,
 .sb-seg.upd.ready .val {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 /* 받는 중은 알림이 아니라 경과다 — 강조하지 않는다. 숫자는 자리가 안 흔들리게 등폭으로. */
 .sb-seg.upd.downloading .val {
@@ -3400,7 +3400,7 @@ button.sb-seg.upd:hover .val {
   stroke: none;
 }
 .sb-spark.mem polyline {
-  stroke: var(--purple);
+  stroke: var(--accent-bright);
 }
 .sb-spark.mem polygon {
   fill: var(--graph-fill-mem);
@@ -3426,13 +3426,13 @@ button.sb-seg.upd:hover .val {
   transition: width 0.3s linear;
 }
 .gauge .bar.cpu i {
-  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+  background: var(--accent);
 }
 .gauge .bar.mem i {
-  background: linear-gradient(90deg, var(--accent-deep), var(--accent-bright));
+  background: var(--accent);
 }
 .gauge .bar.gpu i {
-  background: linear-gradient(90deg, var(--purple-line), var(--purple));
+  background: var(--accent);
 }
 .gauge .val {
   min-width: 62px;
@@ -3468,8 +3468,8 @@ button.sb-seg.upd:hover .val {
   background: var(--accent);
 }
 
-/* ── W4 F23 MCP "AI 조종 중" 인디케이터 — --purple 계열(AI 전용 색, design-system §1.5). 글로우·
-   점멸 없음(R8 톤다운 방침) — 색 자체가 신호다. */
+/* ── W4 F23 MCP "AI 조종 중" 인디케이터 — 1.x 의 AI 전용 보라는 2.0 에서 걷어냈다(포인트 색 정리 —
+   design-system-v2 §1.4 쓰는 자리 밖). 글로우·점멸 없음(R8 톤다운 방침) — 글자가 신호다. */
 .mcp-ind {
   position: relative;
   display: flex;
@@ -3479,14 +3479,14 @@ button.sb-seg.upd:hover .val {
   border: none;
   background: none;
   font: inherit;
-  color: var(--purple);
+  color: var(--text-hi);
   cursor: var(--cur-hand, pointer);
 }
 .sb-seg.mcp .lbl {
-  color: var(--purple);
+  color: var(--text-hi);
 }
 .sb-seg.mcp .val {
-  color: var(--purple);
+  color: var(--text-hi);
 }
 .mcp-pop {
   position: absolute;
@@ -3495,7 +3495,7 @@ button.sb-seg.upd:hover .val {
   min-width: 260px;
   max-width: 360px;
   background: var(--bg-surface);
-  border: 1px solid var(--purple-line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   padding: var(--sp-5);
@@ -3537,7 +3537,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
 }
 .mcp-pop-row .mode.autoAllow {
-  color: var(--purple);
+  color: var(--text-hi);
 }
 .mcp-pop-actions {
   display: flex;
@@ -3733,14 +3733,14 @@ button.sb-seg.upd:hover .val {
    못 놓는 자리(2단 상한 초과 · "기타")는 붉게 두르고, 왜인지는 놓는 순간 토스트가 말한다 —
    커서 옆에 글자를 띄울 자리가 없어 색만으로는 이유를 전할 수 없다. */
 .srv-hd.dz-before {
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 2px 0 var(--text-mid);
 }
 .srv-hd.dz-after {
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--text-mid);
 }
 .srv-hd.dz-into {
-  background: var(--accent-glow);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .srv-hd.dz-bad {
   background: var(--err-tint);
@@ -3770,9 +3770,9 @@ button.sb-seg.upd:hover .val {
 .srv-node.active,
 .sess-node.active {
   font-weight: 500;
-  background: var(--accent-glow);
+  background: var(--glass);
   color: var(--text-hi);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 /* 상태 점 — 연결됨/연결 중/끊김. 서버 행에만 붙는다(세션은 열려 있는 것만 그려진다). */
 .srv-node .st {
@@ -3794,7 +3794,7 @@ button.sb-seg.upd:hover .val {
    화면이 말해 주지 않았다. 진행은 액센트 + 맥동(움직이면 "하는 중"이 읽힌다), 실패는 오류색 —
    맥동은 AI 세션 패널이 쓰는 것을 그대로 빌린다(새 키프레임을 만들지 않는다). */
 .st.connecting {
-  background: var(--accent);
+  background: var(--text-mid);
   animation: aisess-breathe 1.6s ease-in-out infinite;
 }
 .st.error {
@@ -3816,7 +3816,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 
-/* 타입 배지 — SSH / RDP / SYS. 색까지 타입이 정한다(파랑·보라·초록). */
+/* 타입 배지 — SSH / RDP / SYS. 글자가 타입을 말한다 — 색은 중성(2.0 포인트 색 정리), SYS 만 상태색. */
 .tbadge {
   flex: none;
   padding: var(--sp-hair) var(--sp-3);
@@ -3828,13 +3828,10 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   color: var(--text-lo);
 }
-.tbadge.ssh {
-  color: var(--accent-bright);
-  border-color: var(--accent-line);
-}
+.tbadge.ssh,
 .tbadge.rdp {
-  color: var(--purple);
-  border-color: var(--purple-line);
+  color: var(--text-mid);
+  border-color: var(--line-strong);
 }
 .tbadge.sys {
   color: var(--ok);
@@ -3954,7 +3951,7 @@ button.sb-seg.upd:hover .val {
   content: '\200E';
 }
 .sess-node.active .sess-cwd {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 /* 세션 행 맨 앞의 타입 배지(2026-08-14 — `>_` 아이콘을 대체했다).
    **폭을 고정한다**: SSH·RDP·SYS 가 글자 수는 같지만 폰트에 따라 미세하게 달라지는데,
@@ -3973,7 +3970,7 @@ button.sb-seg.upd:hover .val {
 }
 /* 고른 세션은 배지도 함께 밝아진다 — 예전 아이콘이 하던 일이다(.sicon.active). */
 .sess-node.active .sess-type {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
 }
 .sess-node .sess-type.sys {
   color: var(--ok);
@@ -3981,8 +3978,8 @@ button.sb-seg.upd:hover .val {
 }
 .sess-node .sess-type.ai,
 .sess-node .sess-type.log {
-  color: var(--purple);
-  border-color: var(--purple-line);
+  color: var(--text-hi);
+  border-color: var(--text-lo);
 }
 
 /* 즐겨찾기(작업 프로필) — 서버+폴더를 한 번에 여는 행. 지금까지 Ctrl+P 팝업에만 있어
@@ -4071,8 +4068,8 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   display: grid;
   place-items: center;
-  background: var(--accent-glow);
-  color: var(--accent-bright);
+  background: var(--bg-overlay);
+  color: var(--text-mid);
   flex: none;
 }
 .modal-hd .mh-ico svg {
@@ -4173,8 +4170,8 @@ button.sb-seg.upd:hover .val {
 }
 .pl-add:hover {
   border-style: solid;
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
   background: var(--bg-raised);
 }
 .prof {
@@ -4196,7 +4193,7 @@ button.sb-seg.upd:hover .val {
 .prof.sel {
   background: var(--bg-raised);
   border-color: transparent;
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 .prof .pfi {
   width: 28px;
@@ -4209,13 +4206,13 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
   flex: none;
   background: var(--bg-overlay);
-  color: var(--accent);
+  color: var(--text-mid);
   border: 1px solid var(--line);
 }
 .prof.sel .pfi {
-  background: var(--accent-glow);
-  color: var(--accent-bright);
-  border-color: var(--accent-line);
+  background: var(--glass);
+  color: var(--text-hi);
+  border-color: var(--text-lo);
 }
 .prof.prod .pfi {
   color: var(--err);
@@ -4375,7 +4372,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
 }
 .pw-wrap.shown .pw-eye {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 .pw-eye svg {
   width: 15px;
@@ -4422,9 +4419,9 @@ button.sb-seg.upd:hover .val {
   height: 14px;
 }
 .seg-ctl button.on {
-  background: var(--accent-glow);
-  color: var(--accent-bright);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  background: var(--glass);
+  color: var(--text-hi);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .key-file {
   display: flex;
@@ -4448,7 +4445,7 @@ button.sb-seg.upd:hover .val {
   transition: var(--dur-quick);
 }
 .btn-ghost:hover {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
   color: var(--text-hi);
 }
 .modal-ft {
@@ -4716,7 +4713,7 @@ button.sb-seg.upd:hover .val {
 .set-row .sr-ctl .v {
   font-family: var(--ui);
   font-size: var(--fs-md);
-  color: var(--accent-bright);
+  color: var(--text-hi);
   min-width: 54px;
   text-align: right;
 }
@@ -4760,7 +4757,7 @@ button.sb-seg.upd:hover .val {
 .set-keys .sk-title {
   font-size: var(--fs-md);
   font-weight: 500;
-  color: var(--accent-bright);
+  color: var(--text-hi);
   margin-bottom: var(--sp-3);
 }
 .set-sec-t {
@@ -4801,9 +4798,8 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
 }
 .font-item.sel {
-  border-color: var(--accent-line);
+  border-color: var(--accent);
   background: var(--bg-raised);
-  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 .font-item .radio {
   width: 15px;
@@ -4843,9 +4839,9 @@ button.sb-seg.upd:hover .val {
 .font-item .fi-tag {
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  color: var(--accent-bright);
-  background: var(--accent-glow);
-  border: 1px solid var(--accent-line);
+  color: var(--text-lo);
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-3);
   font-weight: 500;
@@ -4913,10 +4909,10 @@ button.sb-seg.upd:hover .val {
   word-break: break-all;
 }
 .fc-best {
-  background: var(--accent-glow);
+  background: var(--glass);
 }
 .fc-best .fc-label {
-  border-right-color: var(--accent-line);
+  border-right-color: var(--line-strong);
 }
 
 /* 크기/행간 슬라이더 */
@@ -4947,7 +4943,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
 }
 .fp-controls .row .v {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   min-width: 36px;
 }
 .fp-controls input[type='range'] {
@@ -4965,10 +4961,8 @@ button.sb-seg.upd:hover .val {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow:
-    0 0 0 3px var(--accent-glow),
-    var(--shadow-knob);
+  background: var(--text-hi);
+  box-shadow: var(--shadow-knob);
   cursor: var(--cur-hand, pointer);
 }
 
@@ -5022,7 +5016,7 @@ button.sb-seg.upd:hover .val {
   color: var(--warn);
 }
 .pv-ln.pv-info {
-  color: var(--accent-bright);
+  color: var(--t-blue);
 }
 .pv-ln.pv-dim {
   color: var(--text-lo);
@@ -5057,7 +5051,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-1);
 }
 .license-row .lic-ofl {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .set-note {
   font-size: var(--fs-md);
@@ -5067,7 +5061,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-5) var(--sp-6);
   background: var(--bg-raised);
   border-radius: var(--radius-sm);
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--line-strong);
 }
 
 /* ============================================================
@@ -5097,7 +5091,7 @@ button.sb-seg.upd:hover .val {
   transition: var(--dur-quick);
 }
 .dd.open .dd-btn {
-  border-color: var(--accent);
+  border-color: var(--text-lo);
 }
 .dd-btn:focus-visible {
   border-color: var(--focus-ring-color);
@@ -5187,7 +5181,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 .dd-opt.sel {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 /* ---------- 확인·경고 다이얼로그 (window.confirm/alert 대체) ---------- */
@@ -5388,7 +5382,7 @@ button.sb-seg.upd:hover .val {
 }
 .mr-item.on {
   background: var(--bg-overlay);
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
   color: var(--text-hi);
 }
 .mr-item-t {
@@ -5439,7 +5433,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
 }
 .mr-cmt.admin {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
 }
 .mr-cmt-hd {
   display: flex;
@@ -5448,7 +5442,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
 }
 .mr-cmt.admin .mr-cmt-hd b {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 /* 토스트에 버튼이 붙을 때(R16 [보기]) — 그때만 눌린다. 글자만인 토스트는 그대로 클릭을 흘려보낸다. */
 .pane-toast.has-act {
@@ -5549,8 +5543,8 @@ button.sb-seg.upd:hover .val {
   font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
-  color: var(--accent-bright);
-  background: var(--accent-glow);
+  color: var(--text-hi);
+  background: var(--bg-overlay);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-3);
 }
@@ -5724,7 +5718,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   flex-direction: column;
   background: var(--bg-abyss);
-  border-top: 1px solid var(--accent-line);
+  border-top: 1px solid var(--line);
   box-shadow: var(--shadow-md);
   z-index: 40;
 }
@@ -5814,9 +5808,8 @@ button.sb-seg.upd:hover .val {
   user-select: text;
 }
 /* ── F16 아라 패널 (우측 고정 레일) ──
-   AI 표면은 전부 --purple 계열이다(design-system §1.5 가 이 색을 "AI 전용"으로 지정했고
-   우클릭 메뉴의 AI 항목이 이미 그 토큰을 쓴다). 터미널 액센트(시안)와 섞지 않아 "지금 보는 것이
-   터미널인가 아라인가"가 색만으로 갈린다. R8 톤다운 방침에 따라 glow 는 쓰지 않는다. */
+   1.x 에서는 AI 표면이 전부 보라(AI 전용 색)였다. 2.0 은 그 색을 걷어내고 중성으로 둔다 —
+   포인트 색은 design-system-v2 §1.4 의 쓰는 자리에만(2.0 다듬기 R2). glow 는 쓰지 않는다. */
 .ai-panel {
   width: 360px;
   flex: 0 0 360px;
@@ -5840,7 +5833,7 @@ button.sb-seg.upd:hover .val {
   display: flex;
   width: 15px;
   height: 15px;
-  color: var(--purple);
+  color: var(--text-hi);
 }
 .ai-name {
   flex: 1;
@@ -5861,7 +5854,7 @@ button.sb-seg.upd:hover .val {
 }
 .ai-head-btn:hover {
   color: var(--text-hi);
-  border-color: var(--purple-line);
+  border-color: var(--text-lo);
 }
 /* .ai-x 는 위 `.mon-close` 묶음이 함께 그린다(M3). */
 
@@ -5931,7 +5924,7 @@ button.sb-seg.upd:hover .val {
   word-break: break-word;
 }
 .ai-turn.ara {
-  border-left: 2px solid var(--purple-line);
+  border-left: 2px solid var(--line-strong);
   padding-left: var(--sp-5);
   display: flex;
   flex-direction: column;
@@ -5989,8 +5982,8 @@ button.sb-seg.upd:hover .val {
   border-color: var(--line-strong);
 }
 .ai-code-btn.send:hover:not(:disabled) {
-  color: var(--purple);
-  border-color: var(--purple-line);
+  color: var(--text-hi);
+  border-color: var(--text-lo);
 }
 /* lo × .4 = canvas(.ai-code-hd 바탕) 위 2.08. 한 칸 아래 토큰으로: 4.70. */
 .ai-code-btn:disabled {
@@ -6030,7 +6023,7 @@ button.sb-seg.upd:hover .val {
   height: 12px;
 }
 .ai-ctx-badge:hover {
-  color: var(--purple);
+  color: var(--text-hi);
 }
 .ai-ctx-full {
   margin: var(--sp-3) 0 0;
@@ -6079,8 +6072,8 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 .ai-chip.on {
-  color: var(--purple);
-  border-color: var(--purple-line);
+  color: var(--text-hi);
+  border-color: var(--text-lo);
   background: var(--bg-raised);
 }
 .ai-chip.ghost {
@@ -6249,13 +6242,13 @@ button.sb-seg.upd:hover .val {
 }
 .act-item:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 /* 우측 레일이라 막대도 오른쪽에 붙는다(바깥쪽 모서리 — 어느 바에 속한 항목인지가 읽힌다). */
 .act-item.active {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   background: var(--bg-raised);
-  box-shadow: inset -2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 
 /* ── F25 앱 내장 RDP 뷰 ──
@@ -6348,10 +6341,10 @@ button.sb-seg.upd:hover .val {
 }
 .rdp-go {
   padding: var(--sp-4) var(--sp-6);
-  background: var(--accent);
+  background: var(--accent-deep);
   border: none;
   border-radius: var(--radius);
-  color: var(--bg-abyss);
+  color: var(--on-accent-deep);
   font-size: var(--fs-md);
   font-weight: 500;
   cursor: var(--cur-hand, pointer);
@@ -6403,7 +6396,7 @@ button.sb-seg.upd:hover .val {
   /* 알약(예외). 옛 7px 은 그때 글자 크기에서의 "높이 절반"이었는데, 이 배지는 --fs-micro 라
      --ui-scale 을 탄다 — 배율을 올리면 고정 7px 이 알약이기를 그만둔다. 그래서 뜻으로 적는다. */
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--text-mid);
   color: var(--bg-abyss);
   font-family: var(--ui);
   font-size: var(--fs-micro);
@@ -6448,7 +6441,7 @@ button.sb-seg.upd:hover .val {
 }
 /* 파일을 끌고 들어왔을 때 — 놓을 수 있다는 표시. */
 .rdp-body.dropping {
-  outline: 2px dashed var(--accent);
+  outline: 2px dashed var(--text-mid);
   outline-offset: -6px;
 }
 
@@ -6523,10 +6516,10 @@ button.sb-seg.upd:hover .val {
 }
 .ed-save {
   padding: var(--sp-2) var(--sp-6);
-  background: var(--accent);
+  background: var(--accent-deep);
   border: none;
   border-radius: var(--radius);
-  color: var(--bg-abyss);
+  color: var(--on-accent-deep);
   font-size: var(--fs-md);
   font-weight: 500;
   cursor: var(--cur-hand, pointer);
@@ -6586,7 +6579,7 @@ button.sb-seg.upd:hover .val {
   z-index: 2;
 }
 .lp-resizer:hover {
-  background: var(--accent-line);
+  background: var(--text-lo);
 }
 /* 지금 보고 있는 것이 "처음부터의 기록"인지 "최근 화면"뿐인지 — 이걸 모르면 없는 걸 찾게 된다. */
 .log-src {
@@ -6653,10 +6646,10 @@ button.sb-seg.upd:hover .val {
 }
 .log-dl {
   padding: var(--sp-2) var(--sp-6);
-  background: var(--accent);
+  background: var(--accent-deep);
   border: none;
   border-radius: var(--radius);
-  color: var(--bg-abyss);
+  color: var(--on-accent-deep);
   font-size: var(--fs-md);
   font-weight: 500;
   cursor: var(--cur-hand, pointer);
@@ -6729,7 +6722,7 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
 }
 .wp-row.cur {
-  background: var(--accent-glow);
+  background: var(--glass);
 }
 .wp-row:hover .wp-act {
   opacity: 1;
@@ -6895,11 +6888,11 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
 }
 .pl-row:hover {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
   background: var(--bg-overlay);
 }
 .pl-row.live {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
 }
 .pl-top {
   display: flex;
@@ -6918,7 +6911,7 @@ button.sb-seg.upd:hover .val {
    보여 주지 않는다). 그 사실을 색이 아니라 글자로도 말한다. */
 .pl-live {
   flex: none;
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-size: var(--fs-md);
 }
 .pl-sub {
@@ -6980,7 +6973,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
 }
 .sysm-tab.active {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   background: var(--bg-raised);
   border-color: var(--line-strong);
 }
@@ -7050,7 +7043,7 @@ button.sb-seg.upd:hover .val {
   stroke: none;
 }
 .sysm-spark.mem polyline {
-  stroke: var(--purple);
+  stroke: var(--accent-bright);
 }
 .sysm-spark.mem polygon {
   fill: var(--graph-fill-mem);
@@ -7242,7 +7235,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 .con-tbl td.pkg-ver {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .con-tbl td.pkg-path,
 .con-tbl td.pkg-date {
@@ -7305,7 +7298,7 @@ button.sb-seg.upd:hover .val {
 }
 .con-help:hover {
   color: var(--text-hi);
-  border-color: var(--accent);
+  border-color: var(--text-lo);
 }
 
 /* 정렬하지 않는 열은 손 모양도 강조도 주지 않는다 — 눌러도 아무 일 없는 머리는 거짓 신호다. */
@@ -7356,7 +7349,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
 }
 .pod-row:hover .pod-caret {
-  color: var(--accent);
+  color: var(--text-hi);
 }
 .pod-ns {
   color: var(--text-lo);
@@ -7492,7 +7485,7 @@ button.sb-seg.upd:hover .val {
 }
 .pd-exec:hover {
   background: var(--bg-overlay);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 
 /* 조작 줄은 목록 아래에 고정한다 — 표가 길어져도 버튼이 화면 밖으로 밀려나지 않게. */
@@ -7540,7 +7533,7 @@ button.sb-seg.upd:hover .val {
   height: 11px;
   border-radius: 50%;
   border: 2px solid var(--line-strong);
-  border-top-color: var(--accent);
+  border-top-color: var(--text-hi);
   animation: ai-key-spin 0.7s linear infinite;
 }
 @keyframes ai-key-spin {
@@ -7569,7 +7562,7 @@ button.sb-seg.upd:hover .val {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--text-mid);
   opacity: 0.35;
   animation: ai-think 1.1s ease-in-out infinite;
 }
@@ -7593,8 +7586,8 @@ button.sb-seg.upd:hover .val {
 }
 
 /* ── #125 아라 대화 v2 — 준영님이 고른 **B+C 혼합**(agent_talk/MOCKUP-ara-chat.html, 2026-08-24).
-   도구는 접히는 묶음(B), 되묻기는 알약 버튼(C). 색은 --accent(금) 계열이다 — F16 의 .ai-panel 이
-   쓰던 보라와 다른데, 목업이 그 색으로 승인됐고 이 패널이 그 자리를 이어받기 때문이다. */
+   도구는 접히는 묶음(B), 되묻기는 알약 버튼(C). 2.0 에서 색은 중성이다 — 포인트 색은 전송 버튼·
+   사용량 막대처럼 design-system-v2 §1.4 의 쓰는 자리에만 남았다(다듬기 R2). */
 .ara-panel {
   /* 폭은 인라인 style 이 준다(#137 — 끌어서 넓힌다). 여기서는 늘지도 줄지도 않게만 못박는다. */
   flex-grow: 0;
@@ -7623,7 +7616,7 @@ button.sb-seg.upd:hover .val {
 /* 1.0.9: 터미널에 파일을 끌어 온 중 — 아라 패널·파일 트리와 **같은 표시**다.
    세 자리가 같은 동작을 하니 같은 모양이어야 한다(다르면 "여긴 되나?"를 매번 묻게 된다). */
 .term-pane.drag-over {
-  outline: 2px dashed var(--accent-line);
+  outline: 2px dashed var(--text-mid);
   outline-offset: -4px;
 }
 /* 왼쪽 가장자리 손잡이 — 보이지 않지만 잡힌다(사이드바 리사이저와 같은 폭). */
@@ -7637,7 +7630,7 @@ button.sb-seg.upd:hover .val {
   z-index: 2;
 }
 .ara-grip:hover {
-  background: var(--accent);
+  background: var(--text-mid);
   opacity: 0.35;
 }
 .ara-hd {
@@ -7675,7 +7668,7 @@ button.sb-seg.upd:hover .val {
 }
 /* 지금 이어 가는 대화. 목록에서 "내가 어디 있나" 가 안 보이면 고를 수가 없다. */
 .modal.ara-chats .ac-row.on {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 .modal.ara-chats .ac-open {
   flex: 1;
@@ -7704,12 +7697,12 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
 }
 .modal.ara-chats .sess-type.cc {
-  color: var(--accent);
-  border-color: var(--accent-line);
+  color: var(--text-mid);
+  border-color: var(--text-lo);
 }
 .modal.ara-chats .sess-type.api {
-  color: var(--purple);
-  border-color: var(--purple-line);
+  color: var(--text-hi);
+  border-color: var(--text-lo);
 }
 .modal.ara-chats .ac-txt {
   min-width: 0;
@@ -7739,7 +7732,7 @@ button.sb-seg.upd:hover .val {
   min-width: 0;
   margin: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
@@ -7808,19 +7801,19 @@ button.sb-seg.upd:hover .val {
 }
 .ara-sel:hover,
 .ara-sel.open {
-  border-color: var(--accent-line);
+  border-color: var(--text-lo);
 }
 .ara-sel .e,
 .ara-pick-menu .it .e {
   width: 8px;
   height: 8px;
   border-radius: var(--radius-sm);
-  background: var(--accent);
+  background: var(--text-mid);
   flex: none;
 }
 .ara-sel .e.api,
 .ara-pick-menu .it .e.api {
-  background: var(--purple);
+  background: var(--text-lo);
 }
 .ara-sel .en {
   color: var(--text-mid);
@@ -7883,14 +7876,14 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
 }
 .ara-pick-menu .it.on {
-  background: var(--accent-glow);
+  background: var(--glass);
 }
 .ara-pick-menu .it .l {
   color: var(--text-hi);
   font-size: var(--fs-md);
 }
 .ara-pick-menu .it.on .l {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-weight: 500;
 }
 /* 메뉴 바탕이 overlay 라 dim 은 대비가 모자란다 — lo(`.set-dir-tag` 과 같은 예외). */
@@ -7902,7 +7895,7 @@ button.sb-seg.upd:hover .val {
 .ara-pick-menu .it .chk {
   width: 12px;
   flex: none;
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-size: var(--fs-micro);
 }
 .ara-pick-menu .warn {
@@ -8070,7 +8063,7 @@ button.sb-seg.upd:hover .val {
 
 /* C: 되묻기 — 세로선 + 알약 버튼. 좁은 레일에서 세로를 덜 먹는다. */
 .ara-ask {
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--line-strong);
   padding-left: var(--sp-5);
 }
 /* 카드는 키 입력을 받으려고 포커스를 갖는다(숫자 선택). 테두리를 그리지는 않는다 — 왼쪽
@@ -8104,12 +8097,12 @@ button.sb-seg.upd:hover .val {
 }
 .ara-ask .pill:hover,
 .ara-choices .pill:hover {
-  border-color: var(--accent);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 .ara-ask .pill .num,
 .ara-choices .pill .num {
-  color: var(--accent);
+  color: var(--text-mid);
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -8201,7 +8194,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
 }
 .ara-dot.run {
-  background: var(--accent);
+  background: var(--text-mid);
 }
 .ara-dot.off {
   background: var(--text-lo);
@@ -8216,8 +8209,8 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
 }
 .ara-btn.p {
-  border-color: var(--accent);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 .ara-btn:hover:not(:disabled) {
   background: var(--bg-overlay);
@@ -8237,7 +8230,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-4);
   border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  background: var(--bg-raised);
 }
 .ara-plan .q {
   flex: 1;
@@ -8261,8 +8254,8 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
 }
 .ara-chip.on {
-  border-color: var(--accent);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 
 /* ── #129 사이드바 [AI] — 작업대 목록. 트리 행은 연결 트리와 같은 밀도로 맞춘다
@@ -8346,7 +8339,7 @@ button.sb-seg.upd:hover .val {
 /* 테두리를 갖는 것은 **선택된 줄 하나뿐**이다(선은 정보가 아닌데 정보처럼 눈에 걸린다). */
 .bench-row.on {
   background: var(--bg-raised);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 /* 분리 세션(worktree)은 부모 밑으로 한 칸. 세로선으로 부모·자식을 보이게 한다.
    부모가 다른 묶음으로 갔으면 화면이 이 클래스를 안 붙인다(store 의 groupRows). */
@@ -8465,7 +8458,7 @@ button.sb-seg.upd:hover .val {
   white-space: nowrap;
 }
 .bench-name .br {
-  color: var(--accent);
+  color: var(--text-mid);
   font-family: var(--mono);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -8586,7 +8579,7 @@ button.sb-seg.upd:hover .val {
   background: var(--bg-raised);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-2);
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 /* 코드블록 복사(2026-09-08 준영님 제보 ①). 버튼은 `<pre>` **위 줄**에 앉는다 — 자리 후보가 둘이었다:
    ① `<pre>` 안 우상단: 가로로 스크롤하는 것이 `<pre>` 자신이라 긴 명령을 밀면 버튼이 흘러나가 사라진다.
@@ -8695,8 +8688,8 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg-canvas);
+  background: var(--accent-deep);
+  color: var(--on-accent-deep);
   cursor: var(--cur-hand, pointer);
 }
 .ara-send svg {
@@ -8821,7 +8814,7 @@ button.sb-seg.upd:hover .val {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--text-mid);
   opacity: 0.35;
   animation: ara-think 1.1s ease-in-out infinite;
 }
@@ -8890,7 +8883,7 @@ button.sb-seg.upd:hover .val {
 .wc-prev {
   margin-top: var(--sp-5);
   min-height: 18px;
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-size: var(--fs-md);
 }
 .wc-ft {
@@ -8927,7 +8920,7 @@ button.sb-seg.upd:hover .val {
   width: 520px;
   height: 520px;
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--text-hi) 14%, transparent), transparent 62%);
   animation: boot-glow 1.6s ease-out both;
 }
 .boot-in {
@@ -8951,7 +8944,7 @@ button.sb-seg.upd:hover .val {
   animation-delay: 0.1s;
 }
 .boot-hi {
-  color: var(--accent-bright);
+  color: var(--text-hi);
   font-size: var(--fs-md);
   /* 명언은 인사보다 길다 — 한 줄에 다 넣으려다 화면 끝까지 가지 않게 폭을 잡고 가운데로. */
   max-width: 520px;
@@ -8975,7 +8968,7 @@ button.sb-seg.upd:hover .val {
 .boot-sweep {
   position: fixed;
   inset: 0;
-  background: linear-gradient(100deg, transparent 34%, color-mix(in srgb, var(--accent) 13%, transparent) 50%, transparent 66%);
+  background: linear-gradient(100deg, transparent 34%, color-mix(in srgb, var(--text-hi) 13%, transparent) 50%, transparent 66%);
   background-size: 260% 100%;
   animation: boot-sweep 1.2s ease-in-out both;
   animation-delay: 0.3s;

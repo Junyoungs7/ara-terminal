@@ -9,7 +9,7 @@ import type { SortKey, SortSpec } from '../store/fileView'
 // 컨텍스트 액션 단일 레지스트리 — 터미널 우클릭 메뉴가 이 배열 하나에서 나온다
 // (이중 정의 금지, 계획서 §C F4c). 목업 variant-final-3 의 8항목·순서·아이콘을 그대로 이식.
 //
-// tint: 'ai' → --purple, 'danger' → --err (목업의 인라인 HEX 대신 토큰 — 매직넘버 스캔 통과).
+// tint: 'danger' → --err ('ai' 는 표시만 남은 꼬리표 — 2.0 에서 AI 전용 보라를 걷어냈다) (목업의 인라인 HEX 대신 토큰 — 매직넘버 스캔 통과).
 //
 // 여기 있던 `future: true`(= 비활성 스타일 + "추후 지원" 토스트)는 AUDIT-R5 에서 걷어냈다.
 // ai.ask 가 W3 에서, log.save 가 2026-08-14 에 실배선되며 마지막 사용처가 사라졌고 그 뒤로는

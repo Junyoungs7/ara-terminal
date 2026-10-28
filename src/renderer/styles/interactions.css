@@ -103,8 +103,8 @@
   width: 30px;
   height: 30px;
   border-radius: var(--radius);
-  background: var(--accent-glow);
-  color: var(--accent-bright);
+  background: var(--bg-overlay);
+  color: var(--text-mid);
   display: grid;
   place-items: center;
   flex: none;
@@ -141,7 +141,7 @@
   font-weight: 500;
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: var(--accent-bright);
+  color: var(--text-hi);
   margin-bottom: var(--sp-5);
   display: flex;
   align-items: center;
@@ -151,7 +151,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--accent-line);
+  background: var(--line);
 }
 .cs-row {
   display: flex;
@@ -245,7 +245,7 @@
   flex: none;
   font-family: var(--mono);
   font-size: var(--fs-md);
-  color: var(--accent-bright);
+  color: var(--text-hi);
   white-space: nowrap;
 }
 .cb-desc {
@@ -278,12 +278,12 @@
   white-space: nowrap;
 }
 .cb-distro.deb {
-  border-color: var(--accent-line);
-  color: var(--accent-bright);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 .cb-distro.rpm {
-  border-color: var(--purple-line);
-  color: var(--purple);
+  border-color: var(--text-lo);
+  color: var(--text-hi);
 }
 /* 사실 전달(배포판 차이·기본 미설치). caution 의 --warn 과 톤을 나눈다. */
 .cb-hint {
@@ -350,7 +350,7 @@
   height: 13px;
 }
 .ctx-item.cur .ci-ic {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 .ctx-item.danger .ci-ic {
   color: var(--err);
@@ -398,7 +398,7 @@
   height: 12px;
 }
 .ctx-item.has-sub.cur .ci-sub-arrow {
-  color: var(--accent-bright);
+  color: var(--text-hi);
 }
 /* 서브메뉴 패널 — 부모 **옆**에 나란히(ContextMenu.tsx 의 submenuPos: 오른쪽에 자리가 없으면
    왼쪽으로 뒤집는다). 표면·행 스타일은 .ctx-menu/.ctx-item 그대로. */

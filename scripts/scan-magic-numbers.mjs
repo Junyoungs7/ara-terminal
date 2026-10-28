@@ -458,6 +458,48 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
     )
   }
 }
+// ── 포인트 색 쓰는 자리 (2026-10-28, 2.0 다듬기 R2) ─────────────────────────
+// design-system-v2 §1.4 "쓰는 자리" 표 밖에서는 --accent 계열(accent·bright·line·glow·deep)을 쓰지 않는다.
+// 1.x 가 금색을 칠하던 자리가 2.0 에서 통째로 파랑이 되어 ~200곳에 퍼졌고(리뷰 A4·A5), 게이트가
+// 없는 축이라 아무도 몰랐다. **선택자 이름**으로 판정한다 — 아래 목록이 곧 문서의 표다(둘을 같이 고친다).
+// ⚠️ 못 보는 것: TSX 인라인 style·SVG 속성(BrandOrb 마크·터미널 검색 강조는 TS 가 칠한다),
+//    tokens.css 의 토큰끼리 참조(--focus-ring-color 등), 선택자 이름이 자리를 속이는 경우.
+// AI 전용 보라(--purple 계열)는 2.0 에서 없앴다 — 이름이 다시 나타나면 실패한다.
+const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep)?\)/
+const ACCENT_OK = new RegExp(
+  [
+    String.raw`\.(?:ttab\.active|exp-tab\.on|bw-tab\.on|pw-tab\.on|bp-tab\.on)::?(?:before|after)`, // 탭 밑줄(+아래 번짐)
+    String.raw`\.lrail-item\.active::before|\.set-nav span\.on::before`, // 레일·설정 네비 활성 막대
+    String.raw`\.btn\.pri\b|\.rdp-go|\.ed-save|\.log-dl`, // 주 버튼(--accent-deep + 흰 글)
+    String.raw`\.ara-send`, // 전송 버튼
+    String.raw`:focus`, // 포커스 링
+    String.raw`\.set-toggle\.on`, // 스위치 켜짐
+    String.raw`\.cur-opt|\.font-item\.sel|\.fb-check`, // 라디오·체크 고름(시안 Z-cursor)
+    String.raw`\.xfer-fill|\.con-bar i|\.upd-fill|\.sb-spark|\.gauge \.bar|\.sb-mbar i|\.rx-fill|\.sysm-spark|\.sysm-dfill|\.ara-us (?:\.week )?\.mb i`, // 게이지 채움
+    String.raw`\.md-link`, // 링크 글자
+    String.raw`\.cp-item\.on|\.cp-item mark` // 통합 검색 고른 줄·맞은 글자(시안 Z-palette)
+  ].join('|')
+)
+let accentOk = 0
+for (const name of ['shell.css', 'interactions.css']) {
+  const file = join(STYLES_DIR, name)
+  const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  if (/--purple(?:-line)?\b/.test(src)) violations.push(`${file}  --purple(AI 전용 보라)는 2.0 에서 없앴다 — 중성이나 쓰는 자리의 포인트 색으로`)
+  for (const chunk of src.split('}')) {
+    const at = chunk.lastIndexOf('{')
+    if (at < 0) continue
+    if (!ACCENT_USE.test(chunk.slice(at + 1))) continue
+    const sel = chunk.slice(0, at).split(';').pop().split(/\r?\n/).filter((x) => x.trim()).map((x) => x.trim()).join(' ')
+    if (ACCENT_OK.test(sel)) accentOk++
+    else violations.push(`${file}  포인트 색은 쓰는 자리(design-system-v2 §1.4)에만 — ${sel} (중성 --text-*·--glass·--line* 을 쓸 것)`)
+  }
+}
+// 양성 대조 — 탭 밑줄·레일·주 버튼·게이지 등 허용 자리가 안 잡히면 파서나 선택자 이름이 바뀐 것이다.
+if (accentOk < 20) {
+  console.error(`포인트 색 검사가 공허하다: 허용 자리 규칙 ${accentOk}개(하한 20). 선택자·파서를 확인하라.`)
+  process.exit(1)
+}
+
 // 공허성 방지 — 위 MIN_PAIRS 와 같은 규칙. 파서가 깨져 규칙을 0개로 읽으면 조용히 초록이 된다.
 // dim 용도 검사의 양성 대조 — placeholder 규칙이 최소 몇 개는 dim 을 써야 정상이다(지금 18).
 // 0 이면 "위반 없음"이 아니라 토큰 이름이 바뀌었거나 파서가 못 읽은 것이다.
@@ -485,5 +527,7 @@ console.log(
     `비텍스트 대비 ${nontextPairs.length}조합 전부 ${NONTEXT_MIN_RATIO} 이상 — 가장 나쁜 짝 ${worstNontext[0]} × ${worstNontext[1]} = ${worstNontext[2].toFixed(2)}\n` +
     `흰 글 × --accent-deep = ${deepRatio.toFixed(2)}\n` +
     `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled\n` +
-    `굵기 600 이상 ${heavyAllowed}규칙 전부 허용 목록(브랜드·@font-face)`
+    `굵기 600 이상 ${heavyAllowed}규칙 전부 허용 목록(브랜드·@font-face)
+` +
+    `포인트 색 ${accentOk}규칙 전부 쓰는 자리 안(design-system-v2 §1.4)`
 )
