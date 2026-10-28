@@ -55,6 +55,7 @@ test('BOOT-1 AI 패널 상단 버튼으로 부트스트랩 모달이 열린다',
 test('BOOT-2 File 메뉴의 [프로젝트 부트스트랩…] 항목으로도 열린다(패널 마운트 불필요)', async ({ ara }) => {
   const { page } = ara
   await expect(page.locator('.ai-panel')).toHaveCount(0)
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.titlebar .tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="ai.bootstrap"]')
   await expect(page.locator(modal)).toBeVisible()

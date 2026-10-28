@@ -8,6 +8,7 @@ test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ 
   // 2026-08-21(b7dd258)에 메뉴바가 한글이 됐다 — 라벨은 MENUBAR 단일 출처에서 온다.
   expect(titles).toEqual(['파일', '편집', '세션', '분할', '보기', '도움말'])
   for (const title of titles) {
+    await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
     await page.click(`.tb-menu span:text-is("${title}")`)
     await expect(page.locator('.ctx-menu')).toBeVisible()
     expect(await page.locator('.ctx-menu .ctx-item').count()).toBeGreaterThan(0)
@@ -20,6 +21,7 @@ test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ 
 test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("분할")')
   await page.click('.ctx-menu .ctx-item[data-action="split.horizontal"]')
   await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
@@ -30,6 +32,7 @@ test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async (
 // 1.0.10(5e3c3c6): 앱 이름이 A.R.A → ARA(i18n app.name — Windows 검색에서 찾게). 치트시트·부팅 인사 글자는 그대로 A.R.A.
 test('CHROME-3 Help 메뉴에서 앱 정보를 연다', async ({ ara }) => {
   const { page } = ara
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("도움말")')
   await page.click('.ctx-menu .ctx-item[data-action="help.about"]')
   await expect(page.locator('.dlg-overlay .modal.sm')).toContainText('ARA 정보')
@@ -125,6 +128,16 @@ test('CHROME-8 창 제목이 활성 세션을 따라간다', async ({ ara }) => 
   await newLocalShell(page)
   const title = (await sessionList(page))[0].title
   await expect.poll(async () => page.title(), { timeout: 15_000 }).toBe(`ARA — ${title}`)
+})
+
+// CHROME-8b 타이틀바 왼쪽 = `ARA / 서버 / 경로`(2.0 다듬기 R1 — 시안 Z-final). 세션이 없으면 ARA 만.
+test('CHROME-8b 타이틀바 왼쪽이 활성 탭의 서버를 따라간다', async ({ ara }) => {
+  const { page } = ara
+  await expect(page.locator('.titlebar .tb-name')).toHaveText('ARA')
+  await expect(page.locator('.titlebar .tb-server')).toHaveCount(0)
+  await newLocalShell(page)
+  const title = (await sessionList(page))[0].title
+  await expect(page.locator('.titlebar .tb-server')).toHaveText(title)
 })
 
 // CHROME-9 타이틀바 ? 버튼 = 치트시트

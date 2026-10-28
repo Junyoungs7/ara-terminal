@@ -17,6 +17,8 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 11개 섹션을 �
   await expect(page.locator(drawer)).toBeVisible()
   await page.keyboard.press('Escape')
 
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
+
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await expect(page.locator(drawer)).toBeVisible()

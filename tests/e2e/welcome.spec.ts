@@ -35,6 +35,7 @@ test('WELCOME-1★ 처음 켜면 이름을 묻고, 넣으면 다시 안 묻는�
   await expect(page.locator('.modal.welcome')).toHaveCount(0)
 
   // 설정에서 그 이름이 보이고 바꿀 수 있다.
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await page.click('.drawer.open .set-nav [data-section="ai"]')
@@ -56,6 +57,7 @@ test('WELCOME-2 건너뛰어도 다시 안 뜬다 — 첫 화면이 관문이 �
   await page.waitForSelector('.pane-grid')
   await page.keyboard.press('Escape')
   await expect(page.locator('.modal.welcome')).toHaveCount(0)
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await page.click('.drawer.open .set-nav [data-section="ai"]')
@@ -88,6 +90,7 @@ test('BOOT-1★ 켤 때 인사가 지나간다 · 아무 키로 건너뛴다 · 
   await page.keyboard.press('Escape')
 
   // ★ 끌 수 있다 — 멋은 한 번이고 방해는 매일이다.
+  await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await page.click('.drawer.open .set-nav [data-section="general"]')

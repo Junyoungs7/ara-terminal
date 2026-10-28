@@ -1489,6 +1489,12 @@ export function Shell() {
     <div className="app">
       <TitleBar
         onCommand={onMenuCommand}
+        // 2.0 다듬기 R1: 왼쪽 `ARA / 서버 / 경로` — 활성 탭 기준(상태바와 같은 값). SSH 는 serverKey 가 프로필 이름이다.
+        crumb={
+          activeSession
+            ? { server: activeSession.type === 'ssh' ? activeSession.serverKey : activeSession.title, path: activeCwd }
+            : undefined
+        }
         reportNews={myReports.unread}
         features={features}
         // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.

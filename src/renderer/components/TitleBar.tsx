@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { BrandOrb } from './BrandOrb'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
 import type { FeatureShown } from '@shared/features'
@@ -21,10 +20,17 @@ import { t } from '../i18n'
  * **선택**으로 바꾸고, 대신 그 자리에 창 제목을 놓는다. 컴포넌트를 두 벌 만들지 않는다 —
  * 창 버튼 모양·드래그 영역·호버 규칙이 두 창에서 갈리면 그게 곧 "다른 앱처럼 보인다"가 된다.
  */
+/**
+ * 2.0 다듬기 R1(2026-10-28 준영님 "타이틀 바는 시안처럼"): 왼쪽은 **`ARA / 서버 / 경로`**(시안 Z-final),
+ * 메뉴바 여섯(파일·편집·세션·분할·보기·도움말)은 **≡ 버튼 하나**로 접었다. 누르면 같은 여섯 제목이
+ * 세로로 펼쳐지고(`.tb-menu` — 선택자·항목·키 힌트·실행 경로는 그대로), 제목에 올리면 그 메뉴가 옆에 열린다.
+ * 키보드: ≡ 에서 Enter → [파일] 이 열리고, ← → 로 옆 메뉴로 넘어간다(옛 메뉴바와 같은 손버릇).
+ */
 export function TitleBar({
   onCommand,
   omni,
   title,
+  crumb,
   reportNews = 0,
   chat,
   features
@@ -36,6 +42,8 @@ export function TitleBar({
   omni?: React.ReactNode
   /** 세션 창의 제목(서버 — 세션). 본창은 안 쓴다(로고가 그 자리다). */
   title?: string
+  /** 본창 왼쪽 `ARA / 서버 / 경로` — 활성 탭 기준. 없으면(세션 없음) `ARA` 만. */
+  crumb?: { server: string; path: string | null }
   /** R16: 새 소식이 있는 내 신고 수. 0 보다 크면 [내 신고] 가 든 메뉴 제목에 빨간 점, 항목 라벨에 개수. */
   reportNews?: number
   /** 2.0: 오른쪽 [채팅] 버튼 — 아라 채팅 열고 닫기(단축키 ai.toggle 과 같은 동작). 없으면 안 그린다(세션 창). */
@@ -43,13 +51,33 @@ export function TitleBar({
   /** 2.0 설정 › 기능 — 끈 기능은 메뉴에서 뺀다. 없으면 전부. */
   features?: FeatureShown
 }) {
-  // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(버튼 왼쪽 아래).
+  // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(제목 행 오른쪽).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
+  const tops = useRef<(HTMLSpanElement | null)[]>([])
 
-  const openAt = (index: number, el: HTMLElement) => {
-    const r = el.getBoundingClientRect()
-    setOpen({ index, x: r.left, y: r.bottom })
-  }
+  // 좌표는 **펼친 뒤에** 잰다 — ≡ 를 누르는 순간엔 제목 목록이 아직 숨어 있어 사각형이 0 이다.
+  // 그림 그리기 전(layout effect)이라 0,0 에 한 번 뜨는 깜빡임은 없다.
+  useLayoutEffect(() => {
+    const r = open ? tops.current[open.index]?.getBoundingClientRect() : undefined
+    if (open && r && r.width > 0 && (r.right !== open.x || r.top !== open.y)) setOpen({ index: open.index, x: r.right, y: r.top })
+  }, [open])
+  // 옆 메뉴로 넘어갈 때는 옛 좌표를 들고 간다 — 0 으로 지우면 그 틈에 메뉴가 한 번 닫혔다 열려
+  // (backdrop 이 사라졌다 생긴다) 돌려줄 포커스 자리를 잃는다.
+  const openAt = (index: number) => setOpen((o) => ({ index, x: o?.x ?? 0, y: o?.y ?? 0 }))
+
+  // ← → 로 옆 메뉴(옛 가로 메뉴바의 손버릇). ContextMenu 가 캡처 단계에서 ↑↓·Enter·Esc 를 먹고,
+  // 서브메뉴가 없는 행의 ← → 는 흘려보낸다 — 그것만 여기서 받는다.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+      if (!d || e.defaultPrevented) return
+      e.preventDefault()
+      openAt((open.index + d + MENUBAR.length) % MENUBAR.length)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
   const chatBind = KEYMAP.find((k) => k.action === 'ai.toggle')
   const chatKey = chatBind ? keyText(isMac() ? chatBind.mac : chatBind.win) : ''
@@ -62,24 +90,50 @@ export function TitleBar({
   )
   return (
     <div className="titlebar">
-      <div className="tb-logo">
-        <span className="tb-mark">
-          <BrandOrb />
-        </span>
-        <span className="tb-name">
-          <b>{t('app.name')}</b>
-        </span>
-      </div>
-      {/* 열려 있을 때만 backdrop 위로 올라간다 — 항상 올려 두면 모달을 뚫는다(shell.css 주석). */}
       {onCommand && (
-      <div className={'tb-menu' + (open ? ' on' : '')}>
+        <button
+          type="button"
+          className={'tb-burger' + (open ? ' on' : '')}
+          aria-label={t('titlebar.menu')}
+          aria-haspopup="menu"
+          aria-expanded={open !== null}
+          title={t('titlebar.menu')}
+          onClick={() => (open ? setOpen(null) : openAt(0))}
+        >
+          {glyph(<path d="M4 6h16M4 12h16M4 18h16" />)}
+          {/* 접혀 있어도 새 소식은 보여야 한다 — 펼치면 그 메뉴 제목에도 같은 점이 있다. */}
+          {reportNews > 0 && <i className="tb-news" role="img" aria-label={t('report.news.dot')} />}
+        </button>
+      )}
+      <div className="tb-logo">
+        <span className="tb-name">{t('app.name')}</span>
+        {crumb && (
+          <>
+            <span className="tb-sep" aria-hidden>/</span>
+            <span className="tb-server">{crumb.server}</span>
+            {crumb.path && (
+              <>
+                <span className="tb-sep" aria-hidden>/</span>
+                <span className="tb-path" title={crumb.path}>{crumb.path}</span>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      {/* ≡ 의 펼침 — 옛 메뉴바 제목 여섯이 세로로. 열려 있을 때만 보이고 그때만 backdrop 위로
+          올라간다(항상 올려 두면 모달을 뚫는다 — shell.css 주석). */}
+      {onCommand && (
+      <div className={'tb-menu' + (open ? ' on' : '')} role="menubar" hidden={!open}>
         {MENUBAR.map((m, i) => (
           <span
             key={m.title}
+            ref={(el) => (tops.current[i] = el)}
+            role="menuitem"
+            aria-haspopup="menu"
             className={open?.index === i ? 'open' : undefined}
-            onClick={(e) => openAt(i, e.currentTarget)}
-            // 하나가 열려 있으면 다른 최상위 위를 지나기만 해도 그쪽으로 넘어간다(메뉴바 관례).
-            onMouseEnter={(e) => open && openAt(i, e.currentTarget)}
+            onClick={() => openAt(i)}
+            // 다른 제목 위를 지나기만 해도 그쪽으로 넘어간다(메뉴바 관례).
+            onMouseEnter={() => open && open.index !== i && openAt(i)}
           >
             {m.title}
             {reportNews > 0 && m.items.some((e) => 'command' in e && e.command === 'help.myReports') && (
@@ -118,9 +172,9 @@ export function TitleBar({
         {/* FB-ui2(FB-0006): 아라·기어 아이콘은 여기 없다 — 채팅은 위 [채팅] 버튼, 설정은 좌측 레일·
             메뉴(파일>설정)·단축키(Alt+A, Ctrl+,)가 맡는다. */}
         {onCommand && (
-          <div className="tb-help" title={t('titlebar.help')} onClick={() => onCommand('help.cheatsheet')}>
+          <button type="button" className="tb-help" title={t('titlebar.help')} aria-label={t('titlebar.help')} onClick={() => onCommand('help.cheatsheet')}>
             ?
-          </div>
+          </button>
         )}
       </div>
       <div className="tb-controls">
@@ -141,7 +195,8 @@ export function TitleBar({
         </button>
       </div>
       <ContextMenu
-        open={open !== null}
+        // 좌표를 재기 전(0,0)에는 그리지 않는다 — 위 layout effect 가 같은 틱에 채운다.
+        open={open !== null && open.x > 0}
         x={open?.x ?? 0}
         y={open?.y ?? 0}
         items={

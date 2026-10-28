@@ -97,6 +97,8 @@
 
 /* ── 타이틀바 (§4.1) ── */
 .titlebar {
+  /* ≡ 펼침(.tb-menu)이 이 줄 바로 아래에 붙는 기준. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
@@ -110,46 +112,94 @@
 .tb-logo {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
-}
-.tb-mark {
-  width: 17px;
-  height: 17px;
-  border-radius: var(--radius-sm);
-  display: grid;
-  place-items: center;
-  flex: none;
-  overflow: hidden;
-  background: var(--bg-abyss);
-  border: 1px solid var(--accent-line);
-}
-.tb-mark svg {
-  width: 15px;
-  height: 15px;
+  gap: var(--sp-3);
+  min-width: 0;
+  flex: 0 1 auto;
 }
 .tb-name {
+  flex: none;
   font-weight: 600;
   font-size: var(--fs-base);
   letter-spacing: 0.1px;
+  color: var(--text-hi);
 }
-/* 로고의 **R**. 색만 주면 안 된다 — `<b>` 의 UA 기본 굵기는 `bolder` 라 600 부모 위에서
-   브라우저가 **800** 으로 올린다(700 부모에서는 900 이었다). 척도에 없는 네 번째 굵기가
-   아무도 안 적은 채로 화면에 있었다. inherit 로 부모 굵기를 그대로 물린다. */
-.tb-name b {
-  font-weight: inherit;
-  color: var(--accent-bright);
+/* 2.0 다듬기 R1 — `ARA / 서버 / 경로`(시안 Z-final). 서버는 강조(500, DS §2 "경로의 활성 칸"),
+   경로는 lo. 긴 경로만 줄어든다(…) — 서버 이름은 끝까지 보인다. */
+.tb-sep {
+  flex: none;
+  color: var(--text-lo);
+}
+.tb-server {
+  flex: none;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+.tb-path {
+  min-width: 0;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-md);
+  color: var(--text-lo);
+}
+/* ≡ — 메뉴바 여섯을 접은 버튼. 창 버튼과 같은 얇은 선 글리프. */
+.tb-burger {
+  -webkit-app-region: no-drag;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: calc(var(--sp-3) * -1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+  transition: var(--dur-quick);
+}
+.tb-burger svg {
+  width: 16px;
+  height: 16px;
+}
+.tb-burger:hover,
+.tb-burger.on {
+  background: var(--glass);
+  color: var(--text-hi);
+}
+/* 접혀 있을 때의 새 소식 점 — 글리프 오른쪽 위. */
+.tb-burger .tb-news {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  margin: 0;
 }
 .tb-menu {
+  /* ≡ 아래로 펼치는 세로 목록(옛 가로 메뉴바 제목 여섯). 표면은 우클릭 메뉴(.ctx-menu)와 같다. */
+  position: absolute;
+  top: 100%;
+  left: var(--sp-3);
   display: flex;
-  gap: var(--sp-hair);
-  margin-left: var(--sp-2);
+  flex-direction: column;
+  min-width: 132px;
+  padding: var(--sp-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
   -webkit-app-region: no-drag;
   /* 드롭다운 backdrop(.ctx-backdrop, z-index 199) 위에 남아야 메뉴가 열린 채로 옆 메뉴로
      넘어갈 수 있다(R4.1) — 아래에 깔리면 hover/click 이 전부 backdrop 에 먹힌다.
      **다만 열려 있을 때만이다**(2026-08-21 준영님 제보). 항상 201 이면 모달 오버레이(100)를
-     뚫고 올라와, 연결 관리자·설정이 떠 있는데 File 메뉴가 눌린다. 닫혀 있으면 일반 흐름으로
-     내려와 오버레이 밑에 깔린다 — 모달 중에는 드롭다운을 열 수 없으니 두 상태는 안 겹친다. */
-  position: relative;
+     뚫고 올라와, 연결 관리자·설정이 떠 있는데 File 메뉴가 눌린다. 닫혀 있으면 아예 안 보인다. */
+}
+.tb-menu:not(.on) {
+  display: none;
 }
 /* 드롭다운이 열려 있는 동안만 backdrop 위로. */
 .tb-menu.on {
@@ -158,9 +208,10 @@
 .tb-menu span {
   font-size: var(--fs-md);
   color: var(--text-mid);
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
   border-radius: var(--radius);
   cursor: var(--cur-hand, pointer);
+  white-space: nowrap;
   transition: var(--dur-quick);
 }
 .tb-menu span:hover,
@@ -211,12 +262,13 @@
   height: calc(20px * var(--ui-scale));
   display: grid;
   place-items: center;
+  padding: 0;
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
+  background: none;
   color: var(--text-lo);
   cursor: var(--cur-hand, pointer);
   font-size: var(--fs-md);
-  font-weight: 500;
   font-family: var(--ui);
   transition: var(--dur-quick);
 }
