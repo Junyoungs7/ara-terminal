@@ -2630,6 +2630,8 @@
 }
 .pe-keys .kbd {
   margin-right: var(--sp-2);
+  /* 다듬기 R4 — 빈 화면에서 눈이 갈 자리는 "무엇을 누르나"다. 칩 글자만 옅은 파랑(면·테두리는 중성). */
+  color: var(--accent-soft);
 }
 
 /* ── 하단 패널(#78, 2026-08-15) ──
@@ -3659,14 +3661,21 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-5) var(--sp-5) var(--sp-2);
-  color: var(--text-lo);
+  /* 다듬기 R4 — 그룹 이름만 옅은 파랑. 접기 화살표·개수는 바로 아래에서 중성으로 되돌린다(파랑 남발 금지). */
+  color: var(--accent-soft);
   font-size: var(--fs-micro);
   font-weight: 400;
   letter-spacing: 0.4px;
   cursor: var(--cur-hand, pointer);
   user-select: none;
 }
-.srv-hd:hover {
+.srv-hd .caret,
+.srv-hd .g-count {
+  color: var(--text-lo);
+}
+/* 호버는 중성 그대로 — 이름은 파랑을 지키고 화살표·개수만 한 단 밝아진다. */
+.srv-hd:hover .caret,
+.srv-hd:hover .g-count {
   color: var(--text-mid);
 }
 /* ── 펼침 캐럿 (M3 · 준영님 "지금껀 잘 안 보여") ──
@@ -3814,7 +3823,8 @@ button.sb-seg.upd:hover .val {
   color: var(--text-hi);
 }
 
-/* 타입 배지 — SSH / RDP / SYS. 글자가 타입을 말한다 — 색은 중성(2.0 포인트 색 정리), SYS 만 상태색. */
+/* 타입 배지 — SSH / RDP / SYS. 글자가 타입을 말한다. 다듬기 R4: 셋 다 옅은 파랑 한 계열·같은 모양 —
+   색으로 종류를 가르지 않는다(글자가 가른다). 테두리는 중성. */
 .tbadge {
   flex: none;
   padding: var(--sp-hair) var(--sp-3);
@@ -3827,13 +3837,10 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
 }
 .tbadge.ssh,
-.tbadge.rdp {
-  color: var(--text-mid);
-  border-color: var(--line-strong);
-}
+.tbadge.rdp,
 .tbadge.sys {
-  color: var(--ok);
-  border-color: var(--ok-line);
+  color: var(--accent-soft);
+  border-color: var(--line-strong);
 }
 
 /* 호버 액션 — 평소엔 숨는다(VS Code 트리 규칙). 우클릭을 몰라도 접속할 수 있어야 한다. */
@@ -3966,14 +3973,16 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line);
   color: var(--text-lo);
 }
-/* 고른 세션은 배지가 파랑이 된다(다듬기 R3) — 면은 글라스, 포인트는 배지 하나. 예전 아이콘이 하던 일이다. */
+/* 다듬기 R4 — 종류 배지는 평소 옅은 파랑(서버 행 .tbadge 와 같은 규칙, SYS 도 같은 색). */
+.sess-node .sess-type.ssh,
+.sess-node .sess-type.rdp,
+.sess-node .sess-type.sys {
+  color: var(--accent-soft);
+}
+/* 고른 세션은 배지가 더 밝은 파랑이 된다(다듬기 R3) — 면은 글라스, 포인트는 배지 하나. 위 규칙보다 뒤에 둔다. */
 .sess-node.active .sess-type {
   color: var(--accent-bright);
   border-color: var(--accent-line);
-}
-.sess-node .sess-type.sys {
-  color: var(--ok);
-  border-color: var(--ok-line);
 }
 .sess-node .sess-type.ai,
 .sess-node .sess-type.log {

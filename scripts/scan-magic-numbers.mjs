@@ -370,6 +370,12 @@ if (deepRatio < MIN_RATIO) {
     `src/renderer/styles/tokens.css  --on-accent-deep × --accent-deep 대비 ${deepRatio.toFixed(2)} < ${MIN_RATIO} (못 풀었으면 0 — 6자리 HEX 여야 한다)`
   )
 }
+// 옅은 파랑 글자(2.0 다듬기 R4) — --text-* 램프 밖의 글자색이라 표면 전부와 따로 잰다. 못 풀면 0 → 위반.
+const softHex = resolveHex('--accent-soft')
+const softWorst = softHex ? Math.min(...surfaces.map(([, bv]) => contrast(softHex, bv))) : 0
+if (softWorst < MIN_RATIO) {
+  violations.push(`src/renderer/styles/tokens.css  --accent-soft 글자 대비 ${softWorst.toFixed(2)} < ${MIN_RATIO} (가장 나쁜 표면 기준, 못 풀었으면 0)`)
+}
 
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
@@ -465,7 +471,7 @@ for (const name of readdirSync(STYLES_DIR).filter((n) => n.endsWith('.css'))) {
 // ⚠️ 못 보는 것: TSX 인라인 style·SVG 속성(BrandOrb 마크·터미널 검색 강조는 TS 가 칠한다),
 //    tokens.css 의 토큰끼리 참조(--focus-ring-color 등), 선택자 이름이 자리를 속이는 경우.
 // AI 전용 보라(--purple 계열)는 2.0 에서 없앴다 — 이름이 다시 나타나면 실패한다.
-const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep|-halo)?\)/
+const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep|-halo|-soft)?\)/
 const ACCENT_OK = new RegExp(
   [
     String.raw`\.(?:ttab\.active|exp-tab\.on|bw-tab\.on|pw-tab\.on|bp-tab\.on)::?(?:before|after)`, // 탭 밑줄(+아래 번짐)
@@ -478,7 +484,9 @@ const ACCENT_OK = new RegExp(
     String.raw`\.xfer-fill|\.con-bar i|\.upd-fill|\.sb-spark|\.gauge \.bar|\.sb-mbar i|\.rx-fill|\.sysm-spark|\.sysm-dfill|\.ara-us (?:\.week )?\.mb i`, // 게이지 채움
     String.raw`\.md-link`, // 링크 글자
     String.raw`\.cp-item\.on|\.cp-item mark|\.cp-head:focus-within svg`, // 통합 검색 고른 줄·맞은 글자·입력 중 돋보기(시안 Z-palette)
-    String.raw`\.lrail-item\.active\b|\.sess-node\.active \.sess-type|\.tb-chat svg|\.tterm-add:hover` // 다듬기 R3 — 레일 활성 아이콘·고른 세션 배지·채팅 버튼 아이콘·새 탭 + 호버
+    String.raw`\.lrail-item\.active\b|\.sess-node\.active \.sess-type|\.tb-chat svg|\.tterm-add:hover`, // 다듬기 R3 — 레일 활성 아이콘·고른 세션 배지·채팅 버튼 아이콘·새 탭 + 호버
+    // 다듬기 R4 — 연결 트리 종류 배지·그룹 이름(머리글 자체만 — 그 안 화살표·개수·호버는 중성)·빈 화면 키 칩
+    String.raw`\.tbadge\.(?:ssh|rdp|sys)\b|\.sess-node \.sess-type\.(?:ssh|rdp|sys)\b|^\.srv-hd$|\.pe-keys \.kbd\b`
   ].join('|')
 )
 let accentOk = 0
@@ -526,7 +534,7 @@ console.log(
   `매직넘버 스캔 통과 (HEX/px/맨 transition 리터럴 없음, CSS 중괄호 균형 정상, 토큰 ${defined.size}종 전부 정의됨)\n` +
     `글자 대비 ${pairs.length}조합 통과(글자 ${MIN_RATIO} · ${DIM_TOKEN} ${DIM_MIN_RATIO}) — 가장 나쁜 글자 짝 ${worst[0]} × ${worst[1]} = ${worst[2].toFixed(2)}\n` +
     `비텍스트 대비 ${nontextPairs.length}조합 전부 ${NONTEXT_MIN_RATIO} 이상 — 가장 나쁜 짝 ${worstNontext[0]} × ${worstNontext[1]} = ${worstNontext[2].toFixed(2)}\n` +
-    `흰 글 × --accent-deep = ${deepRatio.toFixed(2)}\n` +
+    `흰 글 × --accent-deep = ${deepRatio.toFixed(2)} · --accent-soft 글자 최저 ${softWorst.toFixed(2)}\n` +
     `--text-dim 용도 ${dimRules}규칙 전부 placeholder·disabled\n` +
     `굵기 600 이상 ${heavyAllowed}규칙 전부 허용 목록(브랜드·@font-face)
 ` +
