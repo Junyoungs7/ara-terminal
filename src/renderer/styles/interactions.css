@@ -269,7 +269,7 @@
 .cb-distro {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   padding: var(--sp-hair) var(--sp-3);
   border-radius: var(--radius-sm);
   background: var(--bg-raised);
@@ -369,7 +369,7 @@
   opacity: 0.55;
 }
 .ctx-item.cur {
-  font-weight: 500;
+  font-weight: 400;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }

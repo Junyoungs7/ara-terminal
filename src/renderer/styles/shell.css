@@ -83,7 +83,7 @@
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 /* 세션 창 제목 — 본창의 통합 검색창이 있던 자리. 창이 무엇을 보고 있는지 한 줄로 말한다. */
 .tb-title {
@@ -824,7 +824,7 @@
   background: var(--bg-raised);
   color: var(--text-mid);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -904,7 +904,7 @@
 .frow .fmt {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
@@ -913,7 +913,7 @@
   min-width: 34px;
   text-align: right;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
@@ -1106,7 +1106,7 @@
   display: block;
   margin-top: var(--sp-2);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   font-family: var(--ui);
 }
@@ -1240,7 +1240,7 @@
   padding: var(--sp-5) var(--sp-6) var(--sp-2);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.5px;
 }
 .exp-node {
@@ -1257,7 +1257,7 @@
   background: var(--bg-raised);
 }
 .exp-node.on {
-  font-weight: 500;
+  font-weight: 400;
   background: var(--glass);
   color: var(--text-hi);
   box-shadow: inset 0 1px 0 var(--glass-hi);
@@ -1364,7 +1364,7 @@
   top: 4px;
   right: 6px;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 .con-app.ext:hover .ext-mark {
@@ -1607,7 +1607,7 @@
   text-align: left;
   padding: var(--sp-3) var(--sp-5);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   white-space: nowrap;
   background: var(--bg-raised);
@@ -1674,7 +1674,7 @@
   gap: var(--sp-3);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .pstate i {
   width: 7px;
@@ -1693,7 +1693,7 @@
 .pdest {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--ok);
 }
 .pdest.none {
@@ -1718,7 +1718,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   color: var(--text-lo);
 }
@@ -1840,7 +1840,7 @@
   color: var(--text-lo);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .con-btn {
   display: flex;
@@ -1924,7 +1924,7 @@
   border-bottom: 1px solid var(--line);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
   cursor: var(--cur-hand, pointer);
   user-select: none;
@@ -1993,7 +1993,7 @@
 .svc-row.sel td,
 .dsk-row.sel td,
 .ctr-row.sel td {
-  font-weight: 500;
+  font-weight: 400;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
@@ -2222,7 +2222,7 @@
   padding-right: var(--sp-2);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* ── 좌측 아이콘 레일 (§4.5) ──
@@ -2571,7 +2571,7 @@
 .drop-preview-msg {
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--err);
   background: var(--bg-overlay);
   padding: var(--sp-2) var(--sp-4);
@@ -3232,7 +3232,7 @@
   /* 2.0 4단계: 보조 글자 한 단(시안 11~12px — 척도에 12 가 없어 11). */
   font-size: var(--fs-micro);
   letter-spacing: 0.01em;
-  color: var(--text-mid);
+  color: var(--text-lo);
   padding: 0 var(--sp-2);
   user-select: none;
 }
@@ -3257,9 +3257,10 @@
 .sb-seg .lbl {
   color: var(--text-lo);
 }
+/* 값은 mid/400(시안 Z-final .status .v) — hi+500 이면 상태바가 화면에서 먼저 읽힌다(리뷰 A M5). */
 .sb-seg .val {
-  color: var(--text-hi);
-  font-weight: 500;
+  color: var(--text-mid);
+  font-weight: 400;
 }
 .sb-seg.host .val {
   color: var(--ok);
@@ -3663,7 +3664,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-5) var(--sp-5) var(--sp-2);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.4px;
   cursor: var(--cur-hand, pointer);
   user-select: none;
@@ -3711,7 +3712,7 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* ── #193 2단 중첩 그룹 (2026-09-08) ─────────────────────────────────────────
@@ -3769,7 +3770,7 @@ button.sb-seg.upd:hover .val {
 }
 .srv-node.active,
 .sess-node.active {
-  font-weight: 500;
+  font-weight: 400;
   background: var(--glass);
   color: var(--text-hi);
   box-shadow: inset 0 1px 0 var(--glass-hi);
@@ -3823,7 +3824,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.3px;
   border: 1px solid var(--line);
   color: var(--text-lo);
@@ -3917,7 +3918,7 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
 }
 .sess-node.active .sess-name {
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-hi);
 }
 /* 경로는 뒤쪽(현재 폴더)이 중요하다 — 잘릴 때 앞을 자른다. */
@@ -3964,7 +3965,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   border: 1px solid var(--line);
   color: var(--text-lo);
 }
@@ -4005,7 +4006,7 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4136,7 +4137,7 @@ button.sb-seg.upd:hover .val {
   justify-content: space-between;
   padding: var(--sp-2) var(--sp-3) var(--sp-4);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 /* 서버 목록 아래 [＋ 새 프로필]. 2026-08-19: 헤더의 라벨 없는 `＋` 를 대신한다.
@@ -4203,7 +4204,7 @@ button.sb-seg.upd:hover .val {
   place-items: center;
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   flex: none;
   background: var(--bg-overlay);
   color: var(--text-mid);
@@ -4232,7 +4233,7 @@ button.sb-seg.upd:hover .val {
 .prof .pf-host {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4243,7 +4244,7 @@ button.sb-seg.upd:hover .val {
 .prof .pf-tag {
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   padding: var(--sp-hair) var(--sp-3);
   border-radius: var(--radius-sm);
   background: var(--bg-overlay);
@@ -4297,7 +4298,7 @@ button.sb-seg.upd:hover .val {
 .fld label {
   font-size: var(--fs-md);
   color: var(--text-mid);
-  font-weight: 500;
+  font-weight: 400;
 }
 .fld input,
 .fld select {
@@ -4397,7 +4398,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-family: var(--ui);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   /* 가로 여백이 `--sp-5`(10px)였을 때 설정 [AI] 의 세 칸(claude-sonnet-5 …)·네 칸(… 호환 엔드포인트)
      알약이 355px 드로어 **밖으로 삐져나왔다**(tests/overflow-check.cjs 실측: normal 5px, 프로바이더는
      특대에서 6px). `nowrap` 이라 잘리지 않고 그대로 넘친다. 글자 크기를 내리면 짧은 세그먼트
@@ -4844,7 +4845,7 @@ button.sb-seg.upd:hover .val {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: var(--sp-hair) var(--sp-3);
-  font-weight: 500;
+  font-weight: 400;
 }
 /* `.set-dir-tag` 과 같은 예외 — overlay 위라 dim 이면 3.54 다. lo = 4.51. */
 .font-item .fi-tag.sys {
@@ -4888,7 +4889,7 @@ button.sb-seg.upd:hover .val {
   border-right: 1px solid var(--line);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   display: flex;
   flex-direction: column;
@@ -4930,7 +4931,7 @@ button.sb-seg.upd:hover .val {
 }
 .fp-controls label {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   letter-spacing: 0.4px;
 }
@@ -5045,7 +5046,7 @@ button.sb-seg.upd:hover .val {
 }
 .license-row .lic-meta {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   font-family: var(--ui);
   margin-top: var(--sp-1);
@@ -5176,7 +5177,7 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
 }
 .dd-opt.cur {
-  font-weight: 500;
+  font-weight: 400;
   background: var(--bg-overlay);
   color: var(--text-hi);
 }
@@ -5495,7 +5496,7 @@ button.sb-seg.upd:hover .val {
 }
 .dlg-row .dlg-k {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 .dlg-row .dlg-v {
@@ -5542,7 +5543,7 @@ button.sb-seg.upd:hover .val {
 .pmon-count {
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-hi);
   background: var(--bg-overlay);
   border-radius: var(--radius-sm);
@@ -5747,7 +5748,7 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   gap: var(--sp-3);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   letter-spacing: 0.3px;
 }
@@ -5764,7 +5765,7 @@ button.sb-seg.upd:hover .val {
 .lv-kind {
   flex: none;
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-mid);
 }
 .lv-path {
@@ -5779,7 +5780,7 @@ button.sb-seg.upd:hover .val {
 .lv-end {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--warn);
 }
 /* 검색 바에서 가져온 .ts-btn 은 아이콘 전용(22px 정사각)이라 글자 버튼([일시정지])이 세로로 접힌다.
@@ -5964,7 +5965,7 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.04em;
 }
 .ai-code-btn {
@@ -6014,7 +6015,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-family: inherit;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   padding: var(--sp-2) 0 0;
   cursor: var(--cur-hand, pointer);
 }
@@ -6117,7 +6118,7 @@ button.sb-seg.upd:hover .val {
 .ai-usage {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   padding-top: var(--sp-3);
   text-align: right;
 }
@@ -6194,7 +6195,7 @@ button.sb-seg.upd:hover .val {
 .cliflag code {
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 /* 아라 패널 상단 — 현재 프로바이더·모델(무엇이 답하고 있는지). */
@@ -6203,7 +6204,7 @@ button.sb-seg.upd:hover .val {
   max-width: 130px;
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   font-family: var(--ui);
   white-space: nowrap;
   overflow: hidden;
@@ -6400,7 +6401,7 @@ button.sb-seg.upd:hover .val {
   color: var(--bg-abyss);
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 /* 전송 진행 한 줄 — 헤더 바로 아래. 받기·보내기 공통이라 하나만 둔다(동시 전송은 순차 처리). */
 .rdp-xfer {
@@ -6436,7 +6437,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
   font-family: var(--ui);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 /* 파일을 끌고 들어왔을 때 — 놓을 수 있다는 표시. */
@@ -6588,7 +6589,7 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius-sm);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 }
 .log-body {
@@ -6626,7 +6627,7 @@ button.sb-seg.upd:hover .val {
   margin-bottom: var(--sp-3);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .log-foot {
   flex: none;
@@ -6772,7 +6773,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-1);
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   white-space: nowrap;
   overflow: hidden;
@@ -7011,7 +7012,7 @@ button.sb-seg.upd:hover .val {
 .sysm-mlabel {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .sysm-mnow {
   color: var(--text-hi);
@@ -7097,7 +7098,7 @@ button.sb-seg.upd:hover .val {
 .sysm-dpct {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .sysm-dpct.warn {
   color: var(--warn);
@@ -7125,7 +7126,7 @@ button.sb-seg.upd:hover .val {
 .sysm-dsub {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* #83(2026-08-15) 하단 패널 안 — 세로 280px 레일에서 가로로 넓고 세로가 짧은 자리로 옮겼다.
@@ -7201,7 +7202,7 @@ button.sb-seg.upd:hover .val {
 }
 .con-note.sm {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   border-top: 1px solid var(--line);
   margin-top: var(--sp-3);
 }
@@ -7292,7 +7293,7 @@ button.sb-seg.upd:hover .val {
   border-radius: 50%;
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   cursor: help;
   flex: none;
 }
@@ -7692,7 +7693,7 @@ button.sb-seg.upd:hover .val {
   text-align: center;
   border-radius: var(--radius-sm);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   border: 1px solid var(--line);
   color: var(--text-lo);
 }
@@ -7725,7 +7726,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .modal.ara-chats .ac-name {
   flex: 1;
@@ -7773,7 +7774,7 @@ button.sb-seg.upd:hover .val {
 .ara-tgt .typ {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -7818,14 +7819,14 @@ button.sb-seg.upd:hover .val {
 .ara-sel .en {
   color: var(--text-mid);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 }
 .ara-sel .md {
   min-width: 0;
   color: var(--text-hi);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7856,7 +7857,7 @@ button.sb-seg.upd:hover .val {
 .ara-pick-menu .grp {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   padding: var(--sp-3) var(--sp-4) var(--sp-2);
 }
 .ara-pick-menu .it {
@@ -7884,7 +7885,7 @@ button.sb-seg.upd:hover .val {
 }
 .ara-pick-menu .it.on .l {
   color: var(--text-hi);
-  font-weight: 500;
+  font-weight: 400;
 }
 /* 메뉴 바탕이 overlay 라 dim 은 대비가 모자란다 — lo(`.set-dir-tag` 과 같은 예외). */
 .ara-pick-menu .it .h {
@@ -8025,7 +8026,7 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   font-family: var(--mono);
 }
 .ara-fold .in {
@@ -8105,7 +8106,7 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 /* #23 선택지(v3) — 마지막 아라 말 끝의 [[선택: …]] 표식이 알약이 된다. 되돌리기 어려운 선택은 경고색. */
 .ara-choices {
@@ -8132,7 +8133,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-3);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .ara-empty {
@@ -8176,7 +8177,7 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-3);
   margin-top: var(--sp-3);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 .ara-bar .sp {
@@ -8313,7 +8314,7 @@ button.sb-seg.upd:hover .val {
   border-radius: 999px;
   padding: var(--sp-hair) var(--sp-3);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 /* `오래 멈춘 순` — **한글이다.** 2026-08-31 준영님이 안 읽힌다고 짚은 두 자리 중 하나이고,
@@ -8326,7 +8327,7 @@ button.sb-seg.upd:hover .val {
 .bench-sec .hint {
   margin-left: auto;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 .bench-row {
   position: relative;
@@ -8421,7 +8422,7 @@ button.sb-seg.upd:hover .val {
   flex: none;
   margin-left: auto;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
   font-variant-numeric: tabular-nums;
 }
@@ -8438,7 +8439,7 @@ button.sb-seg.upd:hover .val {
   padding-left: 15px;
   padding-right: calc(var(--sb-hit) * 2 + var(--sp-1) + var(--sp-2));
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-lo);
 }
 .bench-name .chip {
@@ -8461,13 +8462,13 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-family: var(--mono);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   flex: none;
 }
 .bench-name .skip {
   color: var(--warn);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   flex: none;
 }
 /* 액션은 흐름 밖에 얹는다 — 1번째 줄 오른쪽 끝은 **경과 열**의 자리라 여기를 흐름에 넣으면
@@ -8715,7 +8716,7 @@ button.sb-seg.upd:hover .val {
   border-top: 1px solid var(--line);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -8771,7 +8772,7 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-3);
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 
@@ -8797,7 +8798,7 @@ button.sb-seg.upd:hover .val {
 .md-table th {
   background: var(--bg-raised);
   color: var(--text-hi);
-  font-weight: 500;
+  font-weight: 400;
 }
 .md-table tr:last-child td {
   border-bottom: 0;
@@ -8958,7 +8959,7 @@ button.sb-seg.upd:hover .val {
 .boot-by {
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: 400;
   animation: boot-up 0.7s ease-out both;
   animation-delay: 0.62s;
 }
