@@ -67,7 +67,7 @@
 | 전송 버튼 | 원형 28px 바탕 + 흰 화살표 | `--accent-deep` |
 | 포커스 링 | 불투명 2px + 2px 틈(1.x 규칙 유지) | `--focus-ring-color` = `--accent` |
 | 사용자 말풍선 | 바탕 + 흰 글 | `--accent-deep` |
-| 스위치 켜짐 | 바탕 `--accent-deep`, 테두리 `--accent`, 8px 번짐 | 둘 다 |
+| 스위치 켜짐 | 30×18 · 바탕 `--accent-deep`, 테두리 `--accent`, 8px 번짐 · 흰 손잡이 12 | 둘 다 |
 | 터미널 커서 | 블록 커서(포커스 잃으면 `--text-lo` 윤곽만) | `--accent` |
 | 게이지 채움 | 상태바 CPU/MEM 막대·채팅 사용량 막대 | `--accent` |
 | 링크 글자 | 밑줄 링크 | `--accent-bright` |

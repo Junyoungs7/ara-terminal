@@ -471,7 +471,7 @@ const ACCENT_OK = new RegExp(
     String.raw`\.(?:ttab\.active|exp-tab\.on|bw-tab\.on|pw-tab\.on|bp-tab\.on)::?(?:before|after)`, // 탭 밑줄(+아래 번짐)
     String.raw`\.lrail-item\.active::before|\.set-nav span\.on::before`, // 레일·설정 네비 활성 막대
     String.raw`\.btn\.pri\b|\.rdp-go|\.ed-save|\.log-dl`, // 주 버튼(--accent-deep + 흰 글)
-    String.raw`\.ara-send`, // 전송 버튼
+    String.raw`\.ara-send|\.ara-me\b`, // 전송 버튼·사용자 말풍선
     String.raw`:focus`, // 포커스 링
     String.raw`\.set-toggle\.on`, // 스위치 켜짐
     String.raw`\.cur-opt|\.font-item\.sel|\.fb-check`, // 라디오·체크 고름(시안 Z-cursor)

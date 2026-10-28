@@ -553,7 +553,7 @@ export function ConnTree({
         <div className="empty">
           {t('conn.tree.empty')}
           {onNewConn && (
-            <button type="button" className="btn tree-empty-new" data-action="conn.new" onClick={onNewConn}>
+            <button type="button" className="btn pri tree-empty-new" data-action="conn.new" onClick={onNewConn}>
               {t('sidebar.act.newConn')}
             </button>
           )}

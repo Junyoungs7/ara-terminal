@@ -4712,8 +4712,9 @@ button.sb-seg.upd:hover .val {
 
 /* on/off 토글(선택 자동 복사·커서 깜빡임) */
 .set-toggle {
-  width: 38px;
-  height: 21px;
+  /* 시안 Z-final .sw — 30×18, 손잡이 12(위·왼 2 + 테두리 1). */
+  width: 30px;
+  height: 18px;
   /* 알약(예외 — 아래 .ai-chip·.rf-n 과 함께 tokens.css §Radius 주석 참고). 옛 값 11px 은
      "높이 21 의 절반"을 손으로 적은 것이라 이미 알약이었다 — 모양은 그대로고 뜻만 적었다. */
   border-radius: 999px;
@@ -4734,14 +4735,14 @@ button.sb-seg.upd:hover .val {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--text-lo);
   transition: var(--dur-quick);
 }
 .set-toggle.on .st-knob {
-  left: 19px;
+  left: 14px;
   background: var(--on-accent-deep);
 }
 
@@ -7920,11 +7921,13 @@ button.sb-seg.upd:hover .val {
 .ara-me {
   align-self: flex-end;
   max-width: 86%;
-  background: var(--bg-overlay);
+  /* 시안 Z-final — 짙은 파랑 + 흰 글(4.73, design-system-v2 §1.4). 안은 평문뿐이라(마크다운 없음)
+     코드·링크 색을 따로 둘 것이 없다. */
+  background: var(--accent-deep);
   /* 오른쪽 아래만 각지다 — 말풍선 꼬리 대신이다(design-system-v2 §3 — 16, 꼬리 쪽 한 모서리 4). */
   border-radius: var(--radius-bubble) var(--radius-bubble) var(--radius-sm) var(--radius-bubble);
   padding: var(--sp-3) var(--sp-5);
-  color: var(--text-hi);
+  color: var(--on-accent-deep);
   font-size: var(--fs-md);
   white-space: pre-wrap;
   word-break: break-word;
