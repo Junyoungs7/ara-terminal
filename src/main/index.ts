@@ -23,6 +23,7 @@ import { registerEditorIpc } from './ipc/registerEditorIpc'
 import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
 import { closeExplorerWindow, explorerWindowContents } from './windows/ExplorerWindow'
+import { closeBrowserWindow } from './browser/BrowserTabs'
 import { anyWindowVisible } from './windows/visibleWindows'
 import { shouldLockSingleInstance, windowToRaise } from './windows/singleInstance'
 import { createOpenHere, folderToOpen } from './windows/openHere'
@@ -182,6 +183,8 @@ function createWindow(): void {
     if (mainWindow === win) mainWindow = null
     // 탐색기 창은 본창 없이는 아무것도 못 한다([연결]·[AI 에 묻기]가 본창에 도착한다) — 같이 닫는다.
     closeExplorerWindow()
+    // 내장 브라우저 창도 본창에 딸리지 않은 독립 창이다(parent 없음) — parent 가 해 주던 동반 닫힘을 여기서.
+    closeBrowserWindow()
   })
 
   /**
@@ -692,6 +695,7 @@ app.on('before-quit', (e) => {
   quitStep('telemetry', () => telemetry?.stopAll())
   quitStep('portWindow', () => closePortWindow())
   quitStep('explorerWindow', () => closeExplorerWindow())
+  quitStep('browserWindow', () => closeBrowserWindow())
   quitStep('remoteConsole', () => remoteConsole?.stopAll())
   quitStep('forwards', () => forwards?.stopAll())
   exitTrace('flushed')

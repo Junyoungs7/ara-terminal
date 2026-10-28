@@ -84,12 +84,15 @@ function layout(): void {
   }
 }
 
-function ensureWindow(getParent: () => BrowserWindow | null): BrowserWindow {
+/**
+ * 2026-10-28 준영님 요청("탐색기처럼") — **본창에 딸리지 않은 독립 창**이다(ExplorerWindow 와 같은 규칙).
+ * 예전엔 `parent: 본창` 이라 늘 본창 위에 떠 있고 본창 최소화 때 같이 숨었다. parent 가 하던 일 중
+ * 남길 것은 "본창이 닫히면 같이 닫힘"과 "앱 종료 때 닫힘" 둘뿐이고, 둘 다 index.ts 가
+ * closeBrowserWindow 로 명시적으로 한다(본창 'closed' · quitStep).
+ */
+function ensureWindow(): BrowserWindow {
   if (win && !win.isDestroyed()) return win
-  const parent = getParent()
   win = new BrowserWindow({
-    ...(parent && !parent.isDestroyed() ? { parent } : {}),
-    modal: false,
     width: WIDTH,
     height: HEIGHT,
     title: BROWSER_TITLE,
@@ -134,10 +137,10 @@ function ensureWindow(getParent: () => BrowserWindow | null): BrowserWindow {
 }
 
 /** 새 탭을 만든다(같은 오리진이 이미 있으면 그 탭을 재사용 — 미리보기는 오리진 단위로 본다). */
-export function openTab(url: string, getParent: () => BrowserWindow | null): boolean {
+export function openTab(url: string, getMainWindow: () => BrowserWindow | null): boolean {
   if (!isSafeExternal(url)) return false
-  getMain = getParent // 본창에도 탭 상태를 알리기 위해(publish 주석 참고)
-  const w = ensureWindow(getParent)
+  getMain = getMainWindow // 본창에도 탭 상태를 알리기 위해(publish 주석 참고)
+  const w = ensureWindow()
 
   const same = tabs.find((t) => originOf(t.url) === originOf(url) && originOf(url) !== '')
   if (same) {
@@ -230,8 +233,9 @@ export function goBackActive(): void {
   if (wc && !wc.isDestroyed() && wc.canGoBack()) wc.goBack()
 }
 
+/** 본창 닫힘·앱 종료 때. 탐색기 창과 같이 destroy — 닫기 확인 같은 것을 기다리지 않는다. */
 export function closeBrowserWindow(): void {
-  if (win && !win.isDestroyed()) win.close()
+  if (win && !win.isDestroyed()) win.destroy()
   win = null
 }
 
@@ -251,9 +255,9 @@ export type BrowserService = {
   close(): void
 }
 
-export function createBrowserService(getParent: () => BrowserWindow | null): BrowserService {
+export function createBrowserService(getMainWindow: () => BrowserWindow | null): BrowserService {
   return {
-    open: (url) => openTab(url, getParent),
+    open: (url) => openTab(url, getMainWindow),
     closeOrigin: closeTabByOrigin,
     current: () => browserWindowForTest().win,
     close: closeBrowserWindow
