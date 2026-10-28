@@ -95,22 +95,43 @@ export function hostFacts(session: Session | null, ov: Overview | null): { os: s
   return { os: navigator.userAgent.includes('Mac') ? 'macOS' : 'Windows', uptime: NA }
 }
 
+/** 개요를 못 읽었을 때 다시 묻기까지(다듬기 R2, 리뷰 B8). 접속 직후 셸이 덜 떴을 때 한 번 실패하곤 한다. */
+export const OVERVIEW_RETRY_MS = 1500
+
+/**
+ * 서버 개요를 읽는다 — 실패하면 **한 번만** 다시 묻는다(그래도 못 읽으면 null → 칸은 —).
+ * 예전엔 한 번 실패하면 그 세션 동안 OS·가동 칸이 내내 — 였다(리뷰 B8).
+ */
+export async function loadOverview(
+  run: () => Promise<{ ok: boolean; out?: string } | undefined>,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))
+): Promise<Overview | null> {
+  for (let i = 0; i < 2; i++) {
+    if (i > 0) await wait(OVERVIEW_RETRY_MS)
+    const r = await run().catch(() => undefined)
+    if (r?.ok) return parseOverview(r.out ?? '')
+  }
+  return null
+}
+
 /**
  * SSH 세션의 서버 개요(배포판·가동 시간). 폴링하지 않는다 — 배포판은 안 변하고 가동 시간은 일·시
  * 단위라(ServerOverview 와 같은 판단) **세션이 바뀔 때 한 번** 읽는다. 세션별로 기억해 탭을 오가도 다시 안 읽는다.
+ * **연결된 뒤에만** 묻는다 — 접속 중에 물으면 실패가 정해져 있다.
  */
-function useOverview(session: Session | null): Overview | null {
+function useOverview(session: Session | null, connected: boolean): Overview | null {
   const [cache, setCache] = useState<Record<string, Overview>>({})
   const id = session?.type === 'ssh' ? session.id : null
   useEffect(() => {
-    if (!id || cache[id]) return
-    void window.ev?.remote
-      ?.run(id, 'sys.overview')
-      .then((r) => {
-        if (r?.ok) setCache((c) => ({ ...c, [id]: parseOverview(r.out) }))
-      })
-      .catch(() => {})
-  }, [id, cache])
+    if (!id || !connected || cache[id]) return
+    let alive = true
+    void loadOverview(() => window.ev?.remote?.run(id, 'sys.overview') ?? Promise.resolve(undefined)).then((ov) => {
+      if (alive && ov) setCache((c) => ({ ...c, [id]: ov }))
+    })
+    return () => {
+      alive = false
+    }
+  }, [id, connected, cache])
   return id ? (cache[id] ?? null) : null
 }
 
@@ -172,7 +193,7 @@ export function StatusBar({
   onUpdateAction?: (action: 'download' | 'install' | 'check') => void
 }) {
   const m = statusModel(session, profile, conn, cwd, stats, history)
-  const facts = hostFacts(session, useOverview(session))
+  const facts = hostFacts(session, useOverview(session, m.dot === 'connected'))
   const u = updateSeg(update ?? null, version)
   // 2.0 4단계: 라벨 없는 값 위주(시안 Z-final) — 호스트·인코딩·버전 칸의 라벨을 뺐다. 선택자(.lbl·.val)는 그대로.
   const verBody = <span className="val">{u.text}</span>

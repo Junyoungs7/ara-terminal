@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { hostFacts, NA, uptimeShort } from '../src/renderer/components/StatusBar'
+import { describe, it, expect, vi } from 'vitest'
+import { hostFacts, loadOverview, NA, uptimeShort } from '../src/renderer/components/StatusBar'
 import { parseOverview } from '../src/shared/remoteCatalog'
 import type { Session } from '../src/renderer/store/sessions'
 
@@ -30,5 +30,25 @@ describe('2.0 상태바 hostFacts', () => {
     const f = hostFacts(local, { ...parseOverview(''), distro: 'Ubuntu', uptimeSec: 1 })
     expect(['Windows', 'macOS']).toContain(f.os)
     expect(f.uptime).toBe(NA)
+  })
+})
+
+// 다듬기 R2(리뷰 B8): 접속 직후 한 번 실패하면 그 세션 내내 — 였다. 실패하면 한 번만 다시 묻는다.
+describe('상태바 개요 재시도', () => {
+  const wait = vi.fn(() => Promise.resolve())
+  it('첫 번째가 실패하면 한 번 더 묻고, 그 답을 쓴다', async () => {
+    const run = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true, out: '' })
+    expect(await loadOverview(run, wait)).not.toBeNull()
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+  it('던져도 실패로 치고 재시도한다 — 두 번 다 실패하면 null(더 묻지 않는다)', async () => {
+    const run = vi.fn().mockRejectedValue(new Error('x'))
+    expect(await loadOverview(run, wait)).toBeNull()
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+  it('첫 번째가 되면 다시 묻지 않는다', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true, out: '' })
+    await loadOverview(run, wait)
+    expect(run).toHaveBeenCalledTimes(1)
   })
 })
