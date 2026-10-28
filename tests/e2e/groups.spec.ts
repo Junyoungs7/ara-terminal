@@ -20,7 +20,9 @@ const groupHeaders = (page: import('@playwright/test').Page) =>
 test('GROUP-0★ 아무것도 등록하지 않은 첫 화면에는 그룹이 하나도 없고 등록 안내만 뜬다', async ({ ara }) => {
   const { page } = ara
   await expect(page.locator('.tree .srv-group')).toHaveCount(0)
-  await expect(page.locator('.tree .empty')).toContainText('새 연결 추가')
+  await expect(page.locator('.tree .empty')).toContainText('연결이 없습니다')
+  // 다듬기 R1(리뷰 B10): 안내가 누를 수 있는 [새 연결] 버튼이다 — 머리의 ＋ 와 같은 연결 관리자.
+  await expect(page.locator('.tree .empty button[data-action="conn.new"]')).toHaveText('새 연결')
 
   // 로컬 셸을 열면 그때 [로컬] 그룹이 생긴다(세션을 어딘가에는 보여 줘야 한다).
   await newLocalShell(page)

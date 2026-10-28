@@ -3638,9 +3638,13 @@ button.sb-seg.upd:hover .val {
   background: var(--accent-glow);
 }
 .tree .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
   padding: var(--sp-7) var(--sp-5);
   font-size: var(--fs-md);
-  color: var(--text-mid);
+  color: var(--text-lo);
   text-align: center;
 }
 

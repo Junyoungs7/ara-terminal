@@ -69,6 +69,8 @@ type Props = {
   cwdBy?: Record<string, string>
   /** 세션 카드의 ✕ — 탭 ×와 같은 경로(세션 종료). */
   onCloseSession?: (sessionId: string) => void
+  /** 첫 실행 빈 상태의 [새 연결] — 머리의 ＋ 와 같은 동작(다듬기 R1, 리뷰 B10: 누를 수 없는 문구였다). */
+  onNewConn?: () => void
   // FB-monitor(F19 tmux 후속): 서버/세션 우클릭 시 tmux 서브메뉴에 띄울 세션 목록 1회 조회.
   onTmuxQuery: (sessionId: string) => Promise<TmuxListResult>
   /** 작업 프로필(서버+폴더). 트리 최상단 [즐겨찾기] 그룹으로 올린다 — Ctrl+P 팝업에만 있으면 잊힌다. */
@@ -207,6 +209,7 @@ export function ConnTree({
   onTmuxQuery,
   cwdBy,
   onCloseSession,
+  onNewConn,
   workProfiles,
   onOpenWork,
   groupLayout,
@@ -546,7 +549,16 @@ export function ConnTree({
         {...treeKeys}
         onContextMenu={(e) => openCtx(e, 'sidebar', { kind: 'local' })}
       >
-      {profiles.length === 0 && <div className="empty">{t('conn.tree.empty')}</div>}
+      {profiles.length === 0 && (
+        <div className="empty">
+          {t('conn.tree.empty')}
+          {onNewConn && (
+            <button type="button" className="btn tree-empty-new" data-action="conn.new" onClick={onNewConn}>
+              {t('sidebar.act.newConn')}
+            </button>
+          )}
+        </div>
+      )}
       {profiles.length > 0 && visible.length === 0 && <div className="empty">{t('conn.search.noMatch')}</div>}
       {/* 즐겨찾기(작업 프로필) — 서버+폴더를 한 번에 연다. 검색 중에는 감춘다(검색 대상은 서버다). */}
       {!searching && workProfiles && workProfiles.length > 0 && (

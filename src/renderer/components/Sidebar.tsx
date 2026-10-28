@@ -322,6 +322,7 @@ export function Sidebar({
           onConnCollapsed={onConnCollapsed}
           cwdBy={cwdBy}
           onCloseSession={onCloseSession}
+          onNewConn={onNewConn}
         />
       </div>
       <div className={'sb-panel' + (tab === 'file' ? ' active' : '')} role="tabpanel">
