@@ -9300,3 +9300,34 @@ button.sb-seg.upd:hover .val {
   /* 6단계: 넓어진 창에서 한 줄로 다 보인다 — 말줄임 대신 넘치면 줄바꿈(잘려 숨지 않게). */
   word-break: keep-all;
 }
+
+/* ── 고대비(Windows 대비 테마 · forced-colors) 최소 대응 — 2.0 다듬기 R1(리뷰 B13) ──
+   이 모드에서는 OS 가 색을 시스템 색으로 갈아 끼우고 배경을 지운다. 그때 깨지는 셋만 잡는다:
+   ① 비활성 창 덮개(::after) — 반투명이 불투명 면이 되어 창 내용을 통째로 가린다 → 끈다.
+   ② 포커스 링 — box-shadow·투명 테두리로 그린 자리는 사라진다 → 모든 :focus-visible 에 시스템 색 외곽선.
+   ③ 스위치 — 바탕·손잡이가 배경이라 지워지면 켜짐/꺼짐이 안 보인다 → 시스템 색으로 직접 칠한다.
+   !important 는 ② 하나 — 자리마다 outline:none 으로 덮은 규칙이 수십 개라 그보다 세야 한다. */
+@media (forced-colors: active) {
+  .pane-grid > .pane::after {
+    display: none;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+  }
+  .set-toggle {
+    forced-color-adjust: none;
+    background: Canvas;
+    border-color: CanvasText;
+  }
+  .set-toggle .st-knob {
+    background: CanvasText;
+  }
+  .set-toggle.on {
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .set-toggle.on .st-knob {
+    background: HighlightText;
+  }
+}
