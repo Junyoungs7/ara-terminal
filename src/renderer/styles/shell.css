@@ -957,7 +957,8 @@
   color: var(--err);
 }
 .frow.dir .fi {
-  color: var(--text-mid);
+  /* 다듬기 R5 — 폴더 아이콘만 옅은 파랑(1.x 금색 폴더의 후손). 이름(.fn)은 --text-hi 그대로. */
+  color: var(--accent-soft);
 }
 /* 인라인 이름 변경(탭 이름 편집 .tt-edit 과 같은 톤). */
 .frow .fedit {

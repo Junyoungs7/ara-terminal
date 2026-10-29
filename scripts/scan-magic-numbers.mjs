@@ -486,7 +486,8 @@ const ACCENT_OK = new RegExp(
     String.raw`\.cp-item\.on|\.cp-item mark|\.cp-head:focus-within svg`, // 통합 검색 고른 줄·맞은 글자·입력 중 돋보기(시안 Z-palette)
     String.raw`\.lrail-item\.active\b|\.sess-node\.active \.sess-type|\.tb-chat svg|\.tterm-add:hover`, // 다듬기 R3 — 레일 활성 아이콘·고른 세션 배지·채팅 버튼 아이콘·새 탭 + 호버
     // 다듬기 R4 — 연결 트리 종류 배지·그룹 이름(머리글 자체만 — 그 안 화살표·개수·호버는 중성)·빈 화면 키 칩
-    String.raw`\.tbadge\.(?:ssh|rdp|sys)\b|\.sess-node \.sess-type\.(?:ssh|rdp|sys)\b|^\.srv-hd$|\.pe-keys \.kbd\b`
+    String.raw`\.tbadge\.(?:ssh|rdp|sys)\b|\.sess-node \.sess-type\.(?:ssh|rdp|sys)\b|^\.srv-hd$|\.pe-keys \.kbd\b`,
+    String.raw`\.frow\.dir \.fi\b` // 다듬기 R5 — 파일 트리 폴더 아이콘(이름은 중성)
   ].join('|')
 )
 let accentOk = 0
