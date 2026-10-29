@@ -483,6 +483,8 @@ const api: EvApi = {
     otpConfirm: (code: string) => ipcRenderer.invoke('lock:otpConfirm', { code }),
     forgotVerify: (code: string) => ipcRenderer.invoke('lock:forgotVerify', { code }),
     forgotReset: (newPassword: string) => ipcRenderer.invoke('lock:forgotReset', { newPassword }),
+    unreadable: () => ipcRenderer.invoke('lock:unreadable'),
+    clearUnreadable: () => ipcRenderer.invoke('lock:clearUnreadable'),
     onState: (cb: (v: LockView) => void) => {
       const listener = (_e: IpcRendererEvent, v: LockView) => cb(v)
       ipcRenderer.on('lock:state', listener)

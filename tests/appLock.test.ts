@@ -282,6 +282,45 @@ describe('AppLock', () => {
     expect(v.raw.get('bad')).toBe('foreign-bytes')
   })
 
+  it('못 푸는 저장값 — 개수만 세고, 지우기는 그것만 지우며, 잠긴 동안은 거부한다', async () => {
+    const v = memVault()
+    v.raw.set('srv-1', 'server-secret-a')
+    v.raw.set('bad-1', 'foreign-a')
+    v.raw.set('bad-2', 'foreign-b')
+    const get = v.get
+    v.get = (k: string) => {
+      if (k.startsWith('bad')) throw new Error('decrypt failed')
+      return get(k)
+    }
+    const l = mk(v)
+    expect(l.unreadableCount()).toBe(2)
+    expect(await l.enable(PW1)).toEqual({ ok: true })
+    expect(l.unreadableCount()).toBe(2)
+    l.lock()
+    expect(l.clearUnreadable()).toEqual({ ok: false, reason: 'state' })
+    expect(v.raw.has('bad-1')).toBe(true)
+    expect(await l.unlock(PW1)).toEqual({ ok: true })
+    expect(l.clearUnreadable()).toEqual({ ok: true, removed: 2 })
+    expect([...v.raw.keys()]).toEqual(['srv-1'])
+    expect(l.store.get('srv-1')).toBe('server-secret-a')
+    expect(l.unreadableCount()).toBe(0)
+    // 시작 잠금(DK 없음)도 거부
+    expect(mk(v).clearUnreadable()).toEqual({ ok: false, reason: 'state' })
+  })
+
+  it('safeStorage 자체를 못 쓰면 못 푸는 값으로 세지 않는다 — 멀쩡한 값까지 지우지 않게', () => {
+    const v = memVault()
+    v.raw.set('srv-1', 'x')
+    v.get = () => {
+      throw new Error('decrypt failed')
+    }
+    const off = { enc: (): string => { throw new Error('unavailable') }, dec: (s: string) => s }
+    const l = new AppLock(lockPath, v, off, { kdf: KDF, now: () => now })
+    expect(l.unreadableCount()).toBe(0)
+    expect(l.clearUnreadable()).toEqual({ ok: true, removed: 0 })
+    expect(v.raw.has('srv-1')).toBe(true)
+  })
+
   it('꺼져 있을 때 잠금 시도는 안내(hint)를 부르고, 켜진 뒤엔 부르지 않고 잠근다', async () => {
     const v = memVault()
     let hints = 0

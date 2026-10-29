@@ -196,6 +196,8 @@ export type InvokeContract = {
   'lock:otpConfirm': { req: { code: string }; res: LockResult }
   'lock:forgotVerify': { req: { code: string }; res: LockResult }
   'lock:forgotReset': { req: { newPassword: string }; res: LockResult & { removed?: number } }
+  'lock:unreadable': { req: void; res: number }
+  'lock:clearUnreadable': { req: void; res: LockResult & { removed?: number } }
   // R14 탐색기에서 `아라`: 본창이 부트 복원을 끝냈다고 알린다 → 기다리던 폴더가 있으면 main 이 거기서
   // 로컬 셸을 연다(`session:opened` 로 칸을 잡는다). opened = 열었나. main/windows/openHere.ts 참고.
   'app:openLaunchDir': { req: void; res: { opened: boolean } }
@@ -1128,6 +1130,10 @@ export type EvApi = {
     otpConfirm(code: string): Promise<LockResult>
     forgotVerify(code: string): Promise<LockResult>
     forgotReset(newPassword: string): Promise<LockResult & { removed?: number }>
+    /** 이 PC 의 safeStorage 로 못 푸는 저장값 **개수**(키 이름은 안 온다). */
+    unreadable(): Promise<number>
+    /** 그 값만 지운다. 잠긴 동안은 reason 'state'. */
+    clearUnreadable(): Promise<LockResult & { removed?: number }>
     onState(cb: (v: LockView) => void): () => void
     /** 잠금이 꺼져 있을 때 잠금 키가 눌렸다(본창에만 온다) — 설정 › 보안으로 안내. */
     onHint(cb: () => void): () => void

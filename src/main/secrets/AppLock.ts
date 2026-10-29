@@ -236,6 +236,42 @@ export class AppLock {
     return out
   }
 
+  /**
+   * safeStorage 가 못 푸는 키(readVault 가 건너뛰는 것과 같은 판정). safeStorage 자체를 못 쓰는 때는 **빈 목록** —
+   * 그때는 모든 값이 실패하므로 "못 푸는 값"으로 세면 멀쩡한 값까지 지우게 된다.
+   */
+  private unreadableKeys(): string[] {
+    try {
+      this.protect.enc('')
+    } catch {
+      return []
+    }
+    return this.vault.keys().filter((k) => {
+      try {
+        this.vault.get(k)
+        return false
+      } catch {
+        return true
+      }
+    })
+  }
+
+  /** 설정 › 보안 안내용 — **개수만** 밖으로 낸다(키 이름·값 금지). */
+  unreadableCount(): number {
+    return this.unreadableKeys().length
+  }
+
+  /**
+   * 못 푸는 값만 지운다 — 나머지 값·명령 기록·서버 목록은 그대로. 잠긴 동안은 거부한다.
+   * 지운 키를 가리키던 프로필은 ProfileStore.resolveSecret 이 `has()` 실패 → orphanSecret(접속 시 다시 묻기)로 받는다.
+   */
+  clearUnreadable(): LockResult & { removed?: number } {
+    if (this.st !== 'off' && this.st !== 'unlocked') return { ok: false, reason: 'state' }
+    const keys = this.unreadableKeys()
+    if (keys.length > 0) this.vault.setMany(Object.fromEntries(keys.map((k) => [k, null])))
+    return { ok: true, removed: keys.length }
+  }
+
   /** 켜기 도중 꺼진 흔적(안 봉한 값)을 봉한다. 실패해도 값은 그대로 읽히므로 치명적이지 않다. */
   private sweep(): void {
     const dk = this.dk

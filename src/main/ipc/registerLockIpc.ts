@@ -84,5 +84,7 @@ export function registerLockIpc(lock: AppLock, sessionCount: () => number, getMa
   handle('lock:otpConfirm', (r) => lock.otpConfirm(str(r?.code)))
   handle('lock:forgotVerify', (r) => lock.forgotVerify(str(r?.code)))
   handle('lock:forgotReset', (r) => lock.forgotReset(str(r?.newPassword)))
+  handle('lock:unreadable', () => lock.unreadableCount())
+  handle('lock:clearUnreadable', () => lock.clearUnreadable())
   return { view, broadcast }
 }

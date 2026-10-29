@@ -1,6 +1,6 @@
 import { AI_ENTRY, FEATURES } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { PasswordInput } from './PasswordInput'
@@ -677,7 +677,7 @@ function lockMsg(r: LockResult): string {
  * 설정 › 보안 — 2.0 앱 잠금(시안 mockups/v2/L-settings). 상태의 주인은 main(AppLock)이고 여기는 그리기·요청만 한다.
  * 비밀번호 칸은 버튼을 누를 때만 펼친다: 켜기(두 번) · 끄기(현재) · 바꾸기(현재 + 새 두 번).
  */
-function SecuritySection({ open }: { open: boolean }) {
+function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec) => Promise<DialogResult> }) {
   const v = useLockView()
   const on = !!v && v.state !== 'off'
   type Form = 'enable' | 'disable' | 'change' | null
@@ -690,6 +690,33 @@ function SecuritySection({ open }: { open: boolean }) {
   const [capture, setCapture] = useState(false)
   const [otp, setOtp] = useState<{ secret: string; uri: string } | null>(null)
   const [code, setCode] = useState('')
+  // 이 PC 에서 못 푸는 저장값 개수(main 은 개수만 준다). 섹션을 열 때·잠금 상태가 바뀔 때(켜기 직후 포함) 다시 센다.
+  const [bad, setBad] = useState(0)
+  const lockState = v?.state
+  const countBad = useCallback(() => {
+    void window.ev?.lock
+      ?.unreadable()
+      .then(setBad)
+      .catch(() => setBad(0))
+  }, [])
+  useEffect(() => {
+    if (open) countBad()
+  }, [open, lockState, countBad])
+  // 확인 다이얼로그가 없으면(하네스) 지우지 않는다 — HistorySection.wipe 와 같다.
+  const clearBad = async (): Promise<void> => {
+    if (!ask) return
+    const r = await ask({
+      title: t('settings.sec.bad.title'),
+      message: t('settings.sec.bad.msg').replace('{n}', String(bad)),
+      tone: 'danger',
+      confirmLabel: t('settings.sec.bad.clear'),
+      cancelLabel: t('dlg.cancel')
+    })
+    if (r !== 'confirm') return
+    const res = await window.ev.lock.clearUnreadable().catch((): LockResult => ({ ok: false, reason: 'state' }))
+    setMsg(lockMsg(res))
+    countBad()
+  }
 
   const clear = (): void => {
     setCur('')
@@ -776,6 +803,13 @@ function SecuritySection({ open }: { open: boolean }) {
     <>
       <div className="set-note">{t('settings.sec.note')}</div>
       <div className="set-note sec-keep">{t('settings.sec.keep')}</div>
+      {bad > 0 && (
+        <Row label={t('settings.sec.bad').replace('{n}', String(bad))}>
+          <button type="button" className="btn sec" data-action="lock.clearUnreadable" disabled={!ask} onClick={() => void clearBad()}>
+            {t('settings.sec.bad.clear')}
+          </button>
+        </Row>
+      )}
       <div className="set-sec-t">{t('settings.sec.lock')}</div>
       <Row label={t('settings.sec.use')} desc={t('settings.sec.use.desc')}>
         <Toggle
@@ -1609,7 +1643,7 @@ export function SettingsDrawer({
 
           {section === 'mcp' && <McpSection ask={ask} />}
 
-          {section === 'security' && <SecuritySection open={open} />}
+          {section === 'security' && <SecuritySection open={open} ask={ask} />}
 
           {section === 'keys' && (
             <>
