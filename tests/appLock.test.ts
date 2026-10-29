@@ -230,6 +230,15 @@ describe('AppLock', () => {
     expect(again.view(0).otp).toBe(true) // OTP 등록은 남는다
   })
 
+  it('lock.json 에 셸 키가 적혀 있으면 기본 키를 쓴다', async () => {
+    const v = memVault()
+    const l = mk(v)
+    l.setPrefs({ shortcut: 'Ctrl+Shift+9' })
+    expect(l.shortcut()).toBe('Ctrl+Shift+9')
+    l.setPrefs({ shortcut: 'Ctrl+L' })
+    expect(l.shortcut()).toBe('Ctrl+Alt+L')
+  })
+
   it('OTP 미등록이면 분실 흐름을 못 연다', async () => {
     const v = memVault()
     await mk(v).enable(PW1)

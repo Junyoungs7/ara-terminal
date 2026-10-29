@@ -55,8 +55,8 @@ function guard(e: KeyboardEvent): void {
   const host = document.getElementById(LOCK_HOST_ID)
   if (!(e.target instanceof Node) || !host?.contains(e.target)) e.preventDefault()
 }
-// window 가 없는 자리(노드 단위 시험이 이 파일을 간접 import 한다)에서는 걸지 않는다.
-const hasWindow = typeof window !== 'undefined'
+// window 가 없거나 가짜인 자리(노드 단위 시험이 이 파일을 간접 import 하고, 어떤 시험은 window 를 빈 객체로 둔다)에서는 걸지 않는다.
+const hasWindow = typeof window !== 'undefined' && typeof window.addEventListener === 'function'
 if (hasWindow) for (const type of ['keydown', 'keyup', 'keypress'] as const) window.addEventListener(type, guard, true)
 
 /**

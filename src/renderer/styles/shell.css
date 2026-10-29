@@ -9567,3 +9567,212 @@ button.sb-seg.upd:hover .val {
   align-items: center;
   justify-content: space-between;
 }
+/* "비밀번호를 잊었어요" — 링크 글자(design-system-v2 §1.4 링크 자리). */
+.lock-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  color: var(--accent-bright);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: var(--cur-hand, pointer);
+}
+/* 6자리 칸 — 입력은 하나(투명), 보이는 칸은 여섯(LockScreen.OtpInput 주석). */
+.otp-box {
+  position: relative;
+  display: inline-flex;
+  gap: var(--sp-3);
+}
+.otp-real {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  font-size: var(--fs-md);
+  cursor: var(--cur-text, text);
+}
+.otp-cell {
+  width: 34px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-abyss);
+  font-family: var(--mono);
+  font-size: var(--fs-xl);
+  color: var(--text-hi);
+}
+.otp-cell.gap {
+  margin-left: var(--sp-4);
+}
+.otp-real:focus-visible ~ .otp-cell.at {
+  border-color: var(--focus-ring-color);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.lock-forgot {
+  width: 1040px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--bg-canvas);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+.lf-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-8);
+  border-bottom: 1px solid var(--line);
+}
+.lf-hd h2,
+.lf-col h3 {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 500;
+}
+.lf-back {
+  background: none;
+  border: none;
+  color: var(--text-mid);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.lf-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.lf-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-8);
+  min-width: 0;
+}
+.lf-col + .lf-col {
+  border-left: 1px solid var(--line);
+}
+.lf-step {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.lf-step.done {
+  color: var(--ok);
+}
+.lf-otp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-5);
+}
+.lf-ok {
+  color: var(--ok);
+  font-size: var(--fs-micro);
+}
+.lf-note {
+  margin-top: auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.lf-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  border: 1px solid var(--err-line);
+  border-radius: var(--radius);
+  background: var(--err-tint);
+}
+.lf-warn-t {
+  color: var(--err);
+}
+.lf-list {
+  margin: 0;
+  padding-left: var(--sp-8);
+  color: var(--text-hi);
+}
+.lf-list.gone li::marker {
+  color: var(--err);
+}
+.lf-list.kept li::marker {
+  color: var(--ok);
+}
+.lf-ack {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--text-hi);
+}
+.lf-checks {
+  margin: 0;
+  padding-left: var(--sp-8);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.lf-checks li.ok {
+  color: var(--ok);
+}
+.lf-go {
+  margin-top: auto;
+  justify-content: center;
+}
+/* 설정 › 보안 */
+.sec-keep::before {
+  content: '✓ ';
+  color: var(--ok);
+}
+.sec-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: 360px;
+  margin: var(--sp-2) 0 var(--sp-6);
+}
+.sec-msg {
+  color: var(--err);
+}
+.sec-otp-st {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.sec-otp {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-6) var(--sp-8);
+  align-items: start;
+}
+.sec-otp .set-note {
+  grid-column: 2;
+}
+.sec-qr {
+  width: 166px;
+  height: 166px;
+  border-radius: var(--radius);
+  image-rendering: pixelated;
+}
+.sec-steps {
+  margin: 0;
+  padding-left: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  color: var(--text-hi);
+}
+.sec-steps .row {
+  margin-top: var(--sp-3);
+}
+.sec-key {
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  letter-spacing: 0.08em;
+  padding: var(--sp-3) var(--sp-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-abyss);
+}

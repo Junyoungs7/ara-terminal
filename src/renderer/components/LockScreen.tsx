@@ -9,7 +9,7 @@ import { t } from '../i18n'
 import { PasswordInput } from './PasswordInput'
 import { IconLock } from './icons'
 import { useLockView } from '../store/lock'
-import { isLockedState, type LockResult } from '@shared/lock'
+import { isLockedState, LOCK_MIN_PASSWORD, type LockResult } from '@shared/lock'
 
 export type LockVariant = 'clock' | 'card'
 
@@ -34,6 +34,150 @@ function failText(r: LockResult, waitLeft: number): string {
   if (r.ok) return ''
   if (r.reason === 'wait') return t('lock.wait').replace('{s}', String(Math.ceil(waitLeft / 1000)))
   return t('lock.wrong')
+}
+
+/**
+ * 6자리 칸 — 보이는 칸은 여섯이지만 **입력은 하나**다(투명 입력칸이 칸 위에 깔린다). 칸마다 입력을 두면
+ * 지우기·붙여넣기·포커스 이동을 키 처리로 흉내 내야 하는데, 잠긴 동안은 키 이벤트를 가드가 삼킨다.
+ * 하나면 글자 입력·지우기·붙여넣기가 전부 기본 동작이라 가드와 무관하게 된다. 설정 › 보안도 이걸 쓴다.
+ */
+export function OtpInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  return (
+    <span className="otp-box">
+      <input
+        className="otp-real"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+      />
+      {Array.from({ length: 6 }, (_, i) => (
+        <span key={i} className={'otp-cell' + (i === 3 ? ' gap' : '') + (i === value.length ? ' at' : '')} aria-hidden>
+          {value[i] ?? ''}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/**
+ * 비밀번호 분실(A안) — 시안 L-forgot 의 세 단계. ① 구글 OTP 확인 → ② 지워지는 것 확인 → ③ 새 비밀번호.
+ * 끝나면 main 이 저장된 비밀값을 지우고 새 비밀번호로 연다(상태가 unlocked 가 되면 이 화면은 저절로 내려간다).
+ */
+function ForgotFlow({ otp, onBack }: { otp: boolean; onBack: () => void }) {
+  const [code, setCode] = useState('')
+  const [verified, setVerified] = useState(false)
+  const [ack, setAck] = useState(false)
+  const [p1, setP1] = useState('')
+  const [p2, setP2] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const longOk = p1.length >= LOCK_MIN_PASSWORD
+  const same = p1 !== '' && p1 === p2
+
+  const verify = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (busy || code.length !== 6) return
+    setBusy(true)
+    const r = await window.ev.lock.forgotVerify(code).catch((): LockResult => ({ ok: false, reason: 'wrong' }))
+    setBusy(false)
+    setCode('')
+    if (r.ok) {
+      setVerified(true)
+      setMsg('')
+    } else {
+      setMsg(r.reason === 'wait' ? failText(r, r.waitMs ?? 0) : t(r.reason === 'noOtp' ? 'lock.forgot.noOtp' : 'lock.forgot.wrongOtp'))
+    }
+  }
+
+  const reset = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (busy || !verified || !ack || !longOk || !same) return
+    setBusy(true)
+    const r = await window.ev.lock.forgotReset(p1).catch((): LockResult => ({ ok: false, reason: 'state' }))
+    setBusy(false)
+    setP1('')
+    setP2('')
+    if (r.ok) return
+    if (r.reason === 'expired') setVerified(false)
+    setMsg(t(r.reason === 'expired' ? 'lock.forgot.expired' : 'lock.forgot.fail'))
+  }
+
+  return (
+    <div className="lock-forgot">
+      <div className="lf-hd">
+        <h2>{t('lock.forgot')}</h2>
+        <button type="button" className="lf-back" onClick={onBack}>
+          {t('lock.forgot.back')}
+        </button>
+      </div>
+      <div className="lf-cols">
+        <form className="lf-col" onSubmit={verify}>
+          <div className={'lf-step' + (verified ? ' done' : '')}>{t('lock.forgot.s1')}</div>
+          <h3>{t('lock.forgot.s1.title')}</h3>
+          {otp ? (
+            <>
+              <div className="lock-cap">{t('lock.forgot.s1.desc')}</div>
+              {!verified && (
+                <div className="lf-otp">
+                  <OtpInput value={code} onChange={setCode} label={t('lock.forgot.s1.title')} />
+                  <button type="submit" className="btn pri" disabled={busy || code.length !== 6}>
+                    {t('lock.forgot.verify')}
+                  </button>
+                </div>
+              )}
+              {verified && <div className="lf-ok">{t('lock.forgot.verified')}</div>}
+            </>
+          ) : (
+            <div className="lock-cap">{t('lock.forgot.noOtp')}</div>
+          )}
+          <div className="lf-note">{t('lock.forgot.s1.note')}</div>
+        </form>
+        <div className="lf-col">
+          <div className={'lf-step' + (ack ? ' done' : '')}>{t('lock.forgot.s2')}</div>
+          <div className="lf-warn">
+            <div className="lf-warn-t">{t('lock.forgot.s2.warn')}</div>
+            <div className="lock-cap">{t('lock.forgot.s2.gone')}</div>
+            <ul className="lf-list gone">
+              <li>{t('lock.forgot.s2.g1')}</li>
+              <li>{t('lock.forgot.s2.g2')}</li>
+              <li>{t('lock.forgot.s2.g3')}</li>
+            </ul>
+            <div className="lock-cap">{t('lock.forgot.s2.kept')}</div>
+            <ul className="lf-list kept">
+              <li>{t('lock.forgot.s2.k1')}</li>
+              <li>{t('lock.forgot.s2.k2')}</li>
+            </ul>
+          </div>
+          <div className="lf-note">{t('lock.forgot.s2.note')}</div>
+          <label className="lf-ack">
+            <input type="checkbox" checked={ack} disabled={!verified} onChange={(e) => setAck(e.target.checked)} />
+            {t('lock.forgot.s2.ack')}
+          </label>
+        </div>
+        <form className="lf-col" onSubmit={reset}>
+          <div className="lf-step">{t('lock.forgot.s3')}</div>
+          <h3>{t('lock.forgot.s3.title')}</h3>
+          <div className="lock-cap">{t('lock.forgot.new')}</div>
+          <PasswordInput value={p1} onChange={setP1} placeholder={t('lock.forgot.new')} ariaLabel={t('lock.forgot.new')} />
+          <div className="lock-cap">{t('lock.forgot.again')}</div>
+          <PasswordInput value={p2} onChange={setP2} placeholder={t('lock.forgot.again')} ariaLabel={t('lock.forgot.again')} />
+          <ul className="lf-checks">
+            <li className={longOk ? 'ok' : undefined}>{t('lock.rule.len').replace('{n}', String(LOCK_MIN_PASSWORD))}</li>
+            <li className={same ? 'ok' : undefined}>{t('lock.rule.same')}</li>
+          </ul>
+          <button type="submit" className="btn pri lf-go" disabled={busy || !verified || !ack || !longOk || !same}>
+            {t('lock.forgot.go')}
+          </button>
+        </form>
+      </div>
+      <div className="lock-msg" role="status" aria-live="polite">
+        {msg}
+      </div>
+    </div>
+  )
 }
 
 function UnlockForm({ wide, onDone }: { wide: boolean; onDone?: () => void }) {
@@ -116,6 +260,7 @@ export function LockScreen({ variant }: { variant: LockVariant }) {
   const startup = v?.state === 'locked-startup'
   const now = useNow(locked)
   const [lockedAt, setLockedAt] = useState<Date | null>(null)
+  const [forgot, setForgot] = useState(false)
 
   useEffect(() => {
     const root = document.getElementById('root')
@@ -126,10 +271,24 @@ export function LockScreen({ variant }: { variant: LockVariant }) {
     if (locked) {
       if (document.activeElement instanceof HTMLElement && root?.contains(document.activeElement)) document.activeElement.blur()
       setLockedAt(new Date())
-    }
+    } else setForgot(false)
   }, [locked])
 
   if (!v || !locked) return null
+
+  const forgotLink = (
+    <button type="button" className="lock-link" onClick={() => setForgot(true)}>
+      {t('lock.forgot')}
+    </button>
+  )
+
+  if (forgot) {
+    return (
+      <div className="lock-veil" role="dialog" aria-modal="true" aria-label={t('lock.forgot')}>
+        <ForgotFlow otp={v.otp} onBack={() => setForgot(false)} />
+      </div>
+    )
+  }
 
   // 앱을 켤 때는 어느 창이든 카드(A) — 시안 결정. 본창의 실행 중 잠금만 시계(B).
   if (variant === 'clock' && !startup) {
@@ -150,6 +309,7 @@ export function LockScreen({ variant }: { variant: LockVariant }) {
         </div>
         <div className="lock-bottom">
           <UnlockForm wide />
+          {forgotLink}
           <Sessions n={v.sessions} tiles />
         </div>
       </div>
@@ -167,7 +327,7 @@ export function LockScreen({ variant }: { variant: LockVariant }) {
         <div className="lock-sub">{t(startup ? 'lock.startup.sub' : 'lock.sub')}</div>
         <UnlockForm wide={false} />
         <div className="lock-row2">
-          <span />
+          {forgotLink}
           <span className="lock-cap">{t('lock.rule')}</span>
         </div>
         {!startup && (

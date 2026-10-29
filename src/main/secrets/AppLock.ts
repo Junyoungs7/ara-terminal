@@ -14,6 +14,7 @@ import type { SecretStore } from './SecretStore'
 import { deriveKek, isSealed, KDF_DEFAULT, newDataKey, newKdf, openValue, sealValue, unwrapDk, wrapDk, type KdfParams, type Wrapped } from './lockCrypto'
 import { newTotpSecret, otpauthUri, verifyTotp } from './totp'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
+import { lockShortcutProblem } from '@shared/keymap'
 import {
   AUTO_LOCK_OPTIONS,
   DEFAULT_LOCK_SHORTCUT,
@@ -90,8 +91,10 @@ export class AppLock {
     return this.file.key ? (this.file.autoLockMin ?? 0) : 0
   }
 
+  /** lock.json 은 고칠 수 있다 — 셸 키(Ctrl+L 등)가 들어 있으면 main 이 그 키를 셸에서 빼앗게 되므로 기본 키로. */
   shortcut(): string {
-    return this.file.shortcut ?? DEFAULT_LOCK_SHORTCUT
+    const s = this.file.shortcut
+    return s && lockShortcutProblem(s) === null ? s : DEFAULT_LOCK_SHORTCUT
   }
 
   view(sessions: number): LockView {

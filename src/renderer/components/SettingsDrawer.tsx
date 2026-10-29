@@ -3,6 +3,7 @@ import { callNameOf } from '@shared/araPersona'
 import { useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
+import { PasswordInput } from './PasswordInput'
 import {
   AI_MODELS_BY_PROVIDER,
   AI_PROVIDER_HOSTS,
@@ -32,7 +33,11 @@ import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
 import { forgetCachedScope } from '../store/history'
 import { LICENSES } from '../fonts/licenses'
-import { KEYMAP, keyText, type KeymapCategory } from '../../shared/keymap'
+import { KEYMAP, keyText, comboFromEvent, lockShortcutProblem, type KeymapCategory } from '../../shared/keymap'
+import { AUTO_LOCK_OPTIONS, LOCK_MIN_PASSWORD, type LockResult } from '@shared/lock'
+import { useLockView } from '../store/lock'
+import { OtpInput } from './LockScreen'
+import qrcode from 'qrcode-generator'
 import { CURSOR_KINDS, cursorSrc, cursorValue } from '../cursorThemes'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
@@ -50,7 +55,7 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'security', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
 type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
@@ -660,6 +665,232 @@ function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange
 // [MCP] 섹션 (W4 F23). AI 키 섹션과 같은 절제 원칙: 발급된 토큰 원문을 이 컴포넌트 밖(상위 상태·
 // workspace.json)으로 올리지 않는다 — 발급 응답에서 받은 그 순간에만 화면에 잠깐 보여주고, 다시
 // 드로어를 열면 사라져 있다(재조회 채널이 계약에 없다 — mcp:getToken 부재).
+// 잠금 결과 → 한 줄 안내. 비밀번호 값은 어디에도 남기지 않는다(보낸 뒤 칸을 비운다).
+function lockMsg(r: LockResult): string {
+  if (r.ok) return ''
+  if (r.reason === 'wait') return t('lock.wait').replace('{s}', String(Math.ceil((r.waitMs ?? 0) / 1000)))
+  if (r.reason === 'weak') return t('lock.rule.len').replace('{n}', String(LOCK_MIN_PASSWORD))
+  return t(r.reason === 'wrong' ? 'lock.wrong' : 'settings.sec.fail')
+}
+
+/**
+ * 설정 › 보안 — 2.0 앱 잠금(시안 mockups/v2/L-settings). 상태의 주인은 main(AppLock)이고 여기는 그리기·요청만 한다.
+ * 비밀번호 칸은 버튼을 누를 때만 펼친다: 켜기(두 번) · 끄기(현재) · 바꾸기(현재 + 새 두 번).
+ */
+function SecuritySection({ open }: { open: boolean }) {
+  const v = useLockView()
+  const on = !!v && v.state !== 'off'
+  type Form = 'enable' | 'disable' | 'change' | null
+  const [form, setForm] = useState<Form>(null)
+  const [cur, setCur] = useState('')
+  const [p1, setP1] = useState('')
+  const [p2, setP2] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [capture, setCapture] = useState(false)
+  const [otp, setOtp] = useState<{ secret: string; uri: string } | null>(null)
+  const [code, setCode] = useState('')
+
+  const clear = (): void => {
+    setCur('')
+    setP1('')
+    setP2('')
+  }
+  // 드로어를 닫으면 펼친 칸·받아 둔 OTP 비밀을 버린다(다시 열면 처음부터).
+  useEffect(() => {
+    if (open) return
+    clear()
+    setForm(null)
+    setOtp(null)
+    setCode('')
+    setCapture(false)
+    setMsg('')
+  }, [open])
+
+  // 단축키 바꾸기 — 누른 키를 **다른 리스너보다 먼저**(window 캡처) 가로챈다: 안 그러면 Ctrl+Shift+T 같은
+  // 키가 바꾸는 동안 새 세션을 연다. Esc = 취소.
+  useEffect(() => {
+    if (!capture) return
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (e.key === 'Escape') return setCapture(false)
+      const combo = comboFromEvent(e)
+      if (!combo) return
+      const bad = lockShortcutProblem(combo)
+      setCapture(false)
+      if (bad) return setMsg(t('settings.sec.key.' + bad).replace('{k}', keyText(combo)))
+      setMsg('')
+      void window.ev.lock.setPrefs({ shortcut: combo })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [capture])
+
+  const run = async (fn: () => Promise<LockResult>): Promise<void> => {
+    setBusy(true)
+    const r = await fn().catch((): LockResult => ({ ok: false, reason: 'state' }))
+    setBusy(false)
+    clear()
+    setMsg(lockMsg(r))
+    if (r.ok) setForm(null)
+  }
+
+  const submit = (e: React.FormEvent): void => {
+    e.preventDefault()
+    if (busy) return
+    if ((form === 'enable' || form === 'change') && p1 !== p2) return setMsg(t('lock.rule.same'))
+    if (form === 'enable') void run(() => window.ev.lock.enable(p1))
+    if (form === 'disable') void run(() => window.ev.lock.disable(cur))
+    if (form === 'change') void run(() => window.ev.lock.change(cur, p1))
+  }
+
+  const qrUrl = (() => {
+    if (!otp) return ''
+    const q = qrcode(0, 'M')
+    q.addData(otp.uri)
+    q.make()
+    return q.createDataURL(4, 2)
+  })()
+
+  const beginOtp = async (): Promise<void> => {
+    setMsg('')
+    setCode('')
+    setOtp(await window.ev.lock.otpBegin().catch(() => null))
+  }
+  const confirmOtp = async (): Promise<void> => {
+    const r = await window.ev.lock.otpConfirm(code).catch((): LockResult => ({ ok: false, reason: 'state' }))
+    setCode('')
+    if (r.ok) {
+      setOtp(null)
+      setMsg('')
+    } else setMsg(r.reason === 'wrong' ? t('lock.forgot.wrongOtp') : lockMsg(r))
+  }
+
+  if (!v) return <div className="set-note">{t('settings.sec.na')}</div>
+  const changed = v.changedAt ? new Date(v.changedAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }) : ''
+  const needTwo = form === 'enable' || form === 'change'
+  const needCur = form === 'disable' || form === 'change'
+
+  return (
+    <>
+      <div className="set-note">{t('settings.sec.note')}</div>
+      <div className="set-note sec-keep">{t('settings.sec.keep')}</div>
+      <div className="set-sec-t">{t('settings.sec.lock')}</div>
+      <Row label={t('settings.sec.use')} desc={t('settings.sec.use.desc')}>
+        <Toggle
+          on={on}
+          label={t('settings.sec.use')}
+          onChange={(want) => {
+            clear()
+            setMsg('')
+            setForm(want ? 'enable' : 'disable')
+          }}
+        />
+      </Row>
+      {form && (
+        <form className="sec-form" onSubmit={submit} data-form={form}>
+          {needCur && (
+            <PasswordInput value={cur} onChange={setCur} placeholder={t('settings.sec.cur')} ariaLabel={t('settings.sec.cur')} autoFocus />
+          )}
+          {needTwo && (
+            <>
+              <PasswordInput value={p1} onChange={setP1} placeholder={t('lock.forgot.new')} ariaLabel={t('lock.forgot.new')} autoFocus={!needCur} />
+              <PasswordInput value={p2} onChange={setP2} placeholder={t('lock.forgot.again')} ariaLabel={t('lock.forgot.again')} />
+              <div className="lock-cap">{t('lock.rule.len').replace('{n}', String(LOCK_MIN_PASSWORD))}</div>
+            </>
+          )}
+          <div className="row">
+            <button type="button" className="btn sec" onClick={() => (clear(), setForm(null), setMsg(''))}>
+              {t('dlg.cancel')}
+            </button>
+            <button
+              type="submit"
+              className="btn pri"
+              disabled={busy || (needCur && !cur) || (needTwo && (!p1 || !p2))}
+              data-action={'lock.' + form}
+            >
+              {t('settings.sec.go.' + form)}
+            </button>
+          </div>
+        </form>
+      )}
+      {msg && (
+        <div className="set-note sec-msg" role="status">
+          {msg}
+        </div>
+      )}
+      <Row label={t('settings.sec.pw')} desc={on ? t('settings.sec.pw.set').replace('{d}', changed) : t('settings.sec.pw.none')}>
+        <button type="button" className="btn sec" disabled={!on} onClick={() => (clear(), setMsg(''), setForm('change'))}>
+          {t('settings.sec.pw.change')}
+        </button>
+      </Row>
+      <Row label={t('settings.sec.key')} desc={t('settings.sec.key.desc')}>
+        <div className="row">
+          <kbd className="kbd">{capture ? t('settings.sec.key.press') : keyText(v.shortcut)}</kbd>
+          <button type="button" className="btn sec" disabled={!on} onClick={() => (setMsg(''), setCapture((c) => !c))}>
+            {t(capture ? 'dlg.cancel' : 'settings.sec.key.change')}
+          </button>
+        </div>
+      </Row>
+      <Row label={t('settings.sec.mcp')} desc={t('settings.sec.mcp.desc')}>
+        <Toggle
+          on={v.mcpWhileLocked}
+          label={t('settings.sec.mcp')}
+          disabled={!on}
+          onChange={(mcpWhileLocked) => void window.ev.lock.setPrefs({ mcpWhileLocked })}
+        />
+      </Row>
+      <Row label={t('settings.sec.auto')} desc={t('settings.sec.auto.desc')}>
+        <Seg
+          value={String(v.autoLockMin)}
+          options={AUTO_LOCK_OPTIONS.map(String)}
+          onChange={(m) => on && void window.ev.lock.setPrefs({ autoLockMin: Number(m) })}
+          labelKey={(m) => (m === '0' ? 'settings.sec.auto.off' : 'settings.sec.auto.min.' + m)}
+          field="autoLock"
+        />
+      </Row>
+      <div className="set-sec-t">
+        {t('settings.sec.otp')} <span className="sec-otp-st">{t(v.otp ? 'settings.sec.otp.on' : 'settings.sec.otp.off')}</span>
+      </div>
+      {!otp && (
+        <Row label={t('settings.sec.otp.reg')} desc={t('settings.sec.otp.note')}>
+          <button type="button" className="btn sec" disabled={v.state !== 'unlocked'} onClick={() => void beginOtp()}>
+            {t(v.otp ? 'settings.sec.otp.again' : 'settings.sec.otp.start')}
+          </button>
+        </Row>
+      )}
+      {otp && (
+        <div className="sec-otp">
+          <img className="sec-qr" src={qrUrl} alt={t('settings.sec.otp.qr')} />
+          <ol className="sec-steps">
+            <li>{t('settings.sec.otp.s1')}</li>
+            <li>
+              {t('settings.sec.otp.s2')}
+              <div className="row">
+                <code className="sec-key">{otp.secret.replace(/(.{4})/g, '$1 ').trim()}</code>
+                <button type="button" className="btn sec" onClick={() => void writeClipboard(otp.secret)}>
+                  {t('settings.sec.otp.copy')}
+                </button>
+              </div>
+            </li>
+            <li>
+              {t('settings.sec.otp.s3')}
+              <div className="row">
+                <OtpInput value={code} onChange={setCode} label={t('settings.sec.otp.s3')} />
+                <button type="button" className="btn pri" disabled={code.length !== 6} onClick={() => void confirmOtp()}>
+                  {t('settings.sec.otp.confirm')}
+                </button>
+              </div>
+            </li>
+          </ol>
+          <div className="set-note">{t('settings.sec.otp.note')}</div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult> }) {
   const [state, setState] = useState<McpState | null>(null)
   const [busy, setBusy] = useState(false)
@@ -1370,6 +1601,8 @@ export function SettingsDrawer({
           {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} />}
 
           {section === 'mcp' && <McpSection ask={ask} />}
+
+          {section === 'security' && <SecuritySection open={open} />}
 
           {section === 'keys' && (
             <>
