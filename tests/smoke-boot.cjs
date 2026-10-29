@@ -997,9 +997,9 @@ const checks = []
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
     // 정의부는 SettingsDrawer.tsx SETTINGS_SECTIONS. [명령 기록]이 빠져 있던 것도 함께 맞췄다(2.0 3단계 [기능] 추가).
-    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션.
-    '좌측 nav 11섹션(일반/모양/터미널/폰트/기능/로그/AI/MCP/단축키/명령 기록/정보)',
-    f5.navSections.join(',') === 'general,look,terminal,font,features,log,ai,mcp,keys,history,about'
+    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션. 잠금 L1: [보안]이 [기능] 다음에 들어와 12섹션.
+    '좌측 nav 12섹션(일반/모양/터미널/폰트/기능/보안/로그/AI/MCP/단축키/명령 기록/정보)',
+    f5.navSections.join(',') === 'general,look,terminal,font,features,security,log,ai,mcp,keys,history,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
