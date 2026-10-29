@@ -10,6 +10,7 @@ import {
   openAsk,
   pickByKey,
   pushAsk,
+  prefillStep,
   pushMine,
   reduceChat,
   remainText,
@@ -344,18 +345,23 @@ export function AraChatPanel({
   }
 
   // 얹어 주는 말. at 이 바뀔 때만 반응한다(같은 선택을 다시 골라도 새 요청이다).
+  // autoSend 는 엔진이 준비(CAN_TYPE)될 때까지 기다린다 — 처음 열 때 바로 보내면 send 가 버렸다(P3, prefillStep).
   const prefillAt = prefill?.at
+  const prefillDone = useRef<number | null>(null)
+  const canType = CAN_TYPE.has(phase)
   useEffect(() => {
-    const text = prefill?.text?.trim()
-    if (!open || !prefillAt || !text) return
-    if (prefill?.autoSend) sendRef.current(text)
+    const step = prefillStep(prefill, prefillDone.current, open, canType)
+    if (step === 'none' || step === 'wait') return
+    prefillDone.current = prefill?.at ?? null
+    const text = prefill?.text?.trim() ?? ''
+    if (step === 'send') sendRef.current(text)
     else {
       setDraft(text)
       inputRef.current?.focus()
     }
     // prefill.text 는 at 과 함께 오므로 deps 에 at 만 둔다(AiPanel 이 쓰던 그 규칙).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, prefillAt])
+  }, [open, prefillAt, canType])
 
   // 되묻기가 오면 **카드로 포커스를 옮긴다.** 안 옮기면 숫자 키가 입력칸에 글자로 박히고,
   // 입력칸은 터미널 단축키를 막느라 키를 위로 안 올려 준다(stopPropagation) — 즉 숫자 선택이

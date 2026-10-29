@@ -168,3 +168,19 @@ export function splitChoices(text: string): { body: string; choices: string[] | 
 export function riskyChoice(c: string): boolean {
   return /삭제|제거|지우|지움|폐기|초기화|포맷|drop|delete|remove|truncate|destroy|\brm\b/i.test(c)
 }
+
+/**
+ * 얹어 줄 말(prefill)을 지금 어떻게 할지. P3(2026-10-29): 처음 열 때 엔진이 뜨기 전(closed·opening)에
+ * autoSend 를 보내면 send 가 버렸고 효과는 다시 돌지 않아 부트스트랩 제출 글이 사라졌다 — 그때는 **기다린다.**
+ * `doneAt` 은 이미 처리한 prefill 의 at(같은 요청을 두 번 보내지 않는다).
+ */
+export function prefillStep(
+  prefill: { text: string; at: number; autoSend?: boolean } | null | undefined,
+  doneAt: number | null,
+  open: boolean,
+  canType: boolean
+): 'none' | 'wait' | 'send' | 'draft' {
+  if (!open || !prefill?.at || prefill.at === doneAt || !prefill.text.trim()) return 'none'
+  if (!prefill.autoSend) return 'draft'
+  return canType ? 'send' : 'wait'
+}
