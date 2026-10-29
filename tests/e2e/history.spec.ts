@@ -260,8 +260,31 @@ test('HIST-11 재기동 후에도 고스트가 그대로 뜬다', async ({ userD
   const a2 = await launch(userDataDir)
   // 복원된 세션이 뜰 때까지 기다렸다가 그 터미널에 친다.
   await expect(a2.page.locator('.pane-grid .pane')).toHaveCount(1, { timeout: 40_000 })
+  /**
+   * **칸이 떴다고 셸이 뜬 게 아니다.** 복원은 새 셸을 띄우고 칸부터 세운다 — 프롬프트 전에 친 글자는
+   * 늦게 에코되고, 고스트는 에코가 커서 앞에 올 때까지 ≈0.36초만 기다린다(TerminalPane renderGhost ·
+   * GHOST_RETRIES). 새 셸은 newLocalShell 이 프롬프트를 기다리지만(fixtures "입력이 유실될 수 있다")
+   * 여기엔 그 대기가 없었다 — 1.x·2.0 모두 이 자리에서 실패했다(2026-10-29). 같은 대기를 둔다.
+   */
+  const rid = await a2.page.locator('.pane-grid .pane').first().getAttribute('data-session-id')
+  if (!rid) throw new Error('복원된 칸의 세션 id 가 없다')
+  await expect.poll(async () => (await termText(a2.page, rid)).trim().length, { timeout: 30_000 }).toBeGreaterThan(0)
+  let last = ''
+  await expect
+    .poll(
+      async () => {
+        const now = await termText(a2.page, rid)
+        const settled = now === last
+        last = now
+        return settled
+      },
+      { timeout: 20_000, intervals: [400, 400, 600] }
+    )
+    .toBe(true)
   await focusTerminal(a2.page)
   await a2.page.keyboard.type('echo restart-', { delay: 25 })
+  // 두 층을 가른다: ① 친 글자가 화면에 왔나(셸·에코) → ② 그 위에 고스트가 떴나(히스토리·제품).
+  await expect.poll(() => termText(a2.page, rid), { timeout: 10_000 }).toContain('echo restart-')
   await expect(a2.page.locator('.term-ghost')).toHaveText('ghost-source', { timeout: 20_000 })
 })
 
