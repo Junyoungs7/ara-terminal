@@ -77,6 +77,14 @@ export const IconFolderPlus = () =>
 // 닫기 — 모달·드로어·탭·전송 항목이 쓰던 ✕/× 텍스트 글리프를 대체한다(폰트 폴백 편차 제거).
 export const IconClose = () => line(<path d="M6 6l12 12M18 6L6 18" />)
 // 비밀번호 표시/숨김 (2026-08-21 준영님 요청 — "입력창에 눈 표시를 둬서 실제 값 보여주게").
+// 2.0 앱 잠금 — 자물쇠(잠금 화면 머리·설정 › 보안).
+export const IconLock = () =>
+  line(
+    <>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 018 0v4" />
+    </>
+  )
 export const IconEye = () =>
   line(
     <>

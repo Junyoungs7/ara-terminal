@@ -8,6 +8,9 @@
 // 2.0 4단계: **Ctrl+Alt+문자**(숨긴 기능 셋)를 더했다. xterm 은 이 조합을 ESC+Ctrl-문자로 보내는데,
 // 리드라인(bash 5.1+)·zsh 기본 키맵이 쓰는 것은 피했다 — M-C-e·g·h·i·j·l·r·y·] (bash) / ^[^D·G·H·L (zsh).
 // 그래서 시안의 서버 로그 Ctrl+Alt+L(= bash clear-display · zsh clear-screen)을 Ctrl+Alt+V 로 바꿨다.
+// **예외 하나(2026-10-29 준영님 결정)**: 앱 잠금(app.lock)이 그 Ctrl+Alt+L 을 쓴다 — 윈도우의 Win+L 손버릇.
+// 셸은 그 키를 잃지만 같은 일(화면 지우기)을 Ctrl+L 로 한다. 설정 › 보안에서 바꿀 수 있다(setLockShortcut).
+// 이 키는 main 이 before-input-event 로 먼저 잡는다(main/ipc/registerLockIpc.ts) — 셸·RDP·브라우저 뷰 어디서 눌러도 잠긴다.
 // #67(2026-08-14): 유일한 예외였던 palette.smart(Ctrl+K)가 없어졌다 — 스마트 팔레트를 지우면서
 // Ctrl+K 를 리드라인 라인킬로 셸에 돌려줬다. 이제 정책에 예외가 없다.
 
@@ -54,8 +57,11 @@ export type KeymapAction =
   // 2.0 다듬기 R1(리뷰 B5): 기본으로 보이는 하단 패널에 키가 없고 숨긴 셋에만 있던 것을 바로잡는다.
   | 'bottom.toggle'
   | 'panel.ports'
+  // 2.0 앱 잠금 — 키는 설정에서 바꿀 수 있다(아래 LOCK_KEY · setLockShortcut).
+  | 'app.lock'
 
 import { AI_ENTRY } from './features'
+import { DEFAULT_LOCK_SHORTCUT } from './lock'
 
 export type KeymapCategory =
   | 'panel'
@@ -77,6 +83,19 @@ export type KeyBinding = {
   // 실제로 핸들러에 배선된 키만 true. 치트시트는 true 인 것만 보여 준다(R2.5) — 눌러도 아무 일도
   // 없는 키를 문서화하지 않기 위해서다. 미구현 기능(F12 로그 저장·F16 AI·터미널 검색)은 false.
   implemented: boolean
+}
+
+/**
+ * 앱 잠금 키 — 표에서 **유일하게 바뀌는 칸**이다(설정 › 보안 › 잠금 단축키). 객체를 따로 두고 표에 넣어
+ * 치트시트·설정 [단축키]·matchBinding·isAppShortcut 이 바뀐 키를 저절로 따라오게 한다.
+ */
+const LOCK_KEY: KeyBinding = {
+  action: 'app.lock',
+  category: 'view',
+  labelKo: '아라 잠그기',
+  win: DEFAULT_LOCK_SHORTCUT,
+  mac: DEFAULT_LOCK_SHORTCUT.replace('Ctrl', 'Cmd').replace('Alt', 'Opt'),
+  implemented: true
 }
 
 const ALL_KEYS: readonly KeyBinding[] = [
@@ -155,7 +174,8 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 포트 모니터 = Ctrl+Alt+P — 숨긴 셋(Ctrl+Alt+K·V·O)과 같은 줄. bash 기본 키맵에 M-C-p 가 없고 zsh 의 ^[^P 도 없다(위 머리 주석의 목록).
   // Ctrl+Shift+P 는 비어 있지만 VS Code 의 명령 팔레트 손버릇과 부딪혀 뜻이 갈린다 — 그래서 안 썼다.
   // 이름은 옛 메뉴 명령 id 그대로(panel.k8s 와 같은 방식 — 설정 저장값·features 표가 이 이름을 본다).
-  { action: 'panel.ports', category: 'view', labelKo: '포트 모니터', win: 'Ctrl+Alt+P', mac: 'Cmd+Opt+P', implemented: true }
+  { action: 'panel.ports', category: 'view', labelKo: '포트 모니터', win: 'Ctrl+Alt+P', mac: 'Cmd+Opt+P', implemented: true },
+  LOCK_KEY
 ] as const
 
 /**
@@ -296,4 +316,50 @@ export function isAppShortcut(e: KeyboardEvent): boolean {
       b.implemented &&
       (matchBinding(e, b.action) || matchArrow(e, b.action) !== null || matchNumber(e, b.action) !== null)
   )
+}
+
+const F_KEY = /^F([1-9]|1[0-2])$/
+
+/**
+ * 잠금 키로 쓸 수 있나 — 안 되면 이유(i18n 접미사), 되면 null. 렌더러(바꾸기 칸)와 main(저장 전 검사)이 같은 규칙.
+ * 받는 모양: `Ctrl+Alt+L` · `Ctrl+Shift+L` · `F1`~`F12`(+수식키). 단일 Ctrl+문자는 셸 키라 안 받는다(R3.8).
+ */
+export function lockShortcutProblem(combo: string): 'format' | 'shell' | 'taken' | null {
+  const parts = combo.split('+')
+  const key = parts[parts.length - 1]
+  const mods = parts.slice(0, -1)
+  if (!mods.every((m) => m === 'Ctrl' || m === 'Alt' || m === 'Shift') || new Set(mods).size !== mods.length) return 'format'
+  const fkey = F_KEY.test(key)
+  if (!fkey && !/^[A-Z0-9]$/.test(key)) return 'format'
+  if (!fkey && !(mods.includes('Ctrl') && (mods.includes('Alt') || mods.includes('Shift')))) return 'shell'
+  if (ALL_KEYS.some((b) => b.action !== 'app.lock' && b.win === combo)) return 'taken'
+  return null
+}
+
+/** 저장된 잠금 키를 표에 반영한다(lock:state 를 받을 때마다). 틀린 값이면 기본 키로. */
+export function setLockShortcut(combo: string): void {
+  const c = lockShortcutProblem(combo) === null ? combo : DEFAULT_LOCK_SHORTCUT
+  LOCK_KEY.win = c
+  LOCK_KEY.mac = c.replace('Ctrl', 'Cmd').replace('Alt', 'Opt')
+}
+
+/** KeyboardEvent → `Ctrl+Alt+L` 표기(바꾸기 칸이 누른 키를 읽는다). 수식키만 눌렀으면 null. */
+export function comboFromEvent(e: { key: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; code?: string }): string | null {
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return null
+  // Alt·Shift 가 섞이면 e.key 가 바뀐다(Shift+1 → '!') — 글자·숫자는 물리 키(code)로 읽는다.
+  const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(e.code ?? '')
+  const key = m ? (m[1] ?? m[2]) : F_KEY.test(e.key) ? e.key : e.key.length === 1 ? e.key.toUpperCase() : e.key
+  return [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', key].filter(Boolean).join('+')
+}
+
+/** main 의 before-input-event(Electron Input) 판정 — 렌더러보다 먼저 잡는다. */
+export function comboMatchesInput(
+  combo: string,
+  i: { type: string; key: string; code?: string; control: boolean; alt: boolean; shift: boolean; meta: boolean }
+): boolean {
+  if (i.type !== 'keyDown') return false
+  const c = parseCombo(combo)
+  const m = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(i.code ?? '')
+  const key = (m ? (m[1] ?? m[2]) : i.key).toLowerCase()
+  return key === c.key && (i.control || i.meta) === c.ctrl && i.alt === c.alt && i.shift === c.shift
 }

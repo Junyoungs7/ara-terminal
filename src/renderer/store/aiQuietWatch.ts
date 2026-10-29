@@ -1,3 +1,4 @@
+import { isLockedNow } from './lock'
 import { useEffect, useRef } from 'react'
 import { notifyTag } from '@shared/agentStatus'
 import { useAiSessions, waitingCount, type AiSessionView } from './aiSessions'
@@ -59,8 +60,11 @@ export function useAiQuietWatch(onGoTo: (sessionId: string) => void): {
           // 그때부터 전부 무시하게 된다.
           if (document.hasFocus()) return
           try {
-            const n = new Notification(t('aisess.notify.title').replace('{s}', v.serverName).replace('{c}', v.cli), {
-              body: t('aisess.notify.body'),
+            // 2.0 앱 잠금 — 잠긴 동안은 **내용 없이**(서버 이름·CLI 를 화면 밖 알림으로 흘리지 않는다).
+            const hide = isLockedNow()
+            const title = hide ? t('lock.notify.title') : t('aisess.notify.title').replace('{s}', v.serverName).replace('{c}', v.cli)
+            const n = new Notification(title, {
+              body: t(hide ? 'lock.notify.body' : 'aisess.notify.body'),
               // 같은 대기의 반복 이벤트를 OS 가 알림 하나로 합쳐 준다.
               tag
             })

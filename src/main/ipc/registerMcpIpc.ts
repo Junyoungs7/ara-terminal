@@ -36,7 +36,9 @@ export function registerMcpIpc(
    * 앱을 여러 개 동시에 띄우면 전부 같은 고정 포트를 잡으려 해서 하나만 성공한다. 프로덕션은
    * 앱이 하나라 겪지 않는 문제다.
    */
-  bindPort?: number
+  bindPort?: number,
+  /** 2.0 앱 잠금 — 잠긴 동안 외부 도구 요청을 막나(McpServer.createMcpServer 의 isBlocked). */
+  isBlocked?: () => boolean
 ): McpRuntime {
   const push = (channel: string, payload: unknown): void => pushSend(getWebContents(), channel, payload)
 
@@ -67,7 +69,7 @@ export function registerMcpIpc(
   // 게이트를 여기서 한 번 만든다 — API 엔진이 쓴다(MCP 서버는 연결마다 같은 표로 따로 만든다).
   // 이 게이트를 부르는 것은 아라 채팅(API 엔진)뿐이라 caller 는 늘 'ara' 다.
   const gate = buildAraTools(ctx, () => 'ara')
-  const server = createMcpServer(ctx, vault, bindPort)
+  const server = createMcpServer(ctx, vault, bindPort, isBlocked)
 
   handle('mcp:getState', () => state())
   // 켜고 끄는 것을 **저장한다**(2026-08-26). 기본이 켬이 됐으므로, 끈 선택을 기억하지 않으면

@@ -1,3 +1,5 @@
+// 2.0 앱 잠금 — **맨 먼저** import 한다: 그 파일이 거는 키 가드가 다른 모든 키 리스너보다 앞서야 한다.
+import { initLock, subscribeLock, lockView, LOCK_HOST_ID } from './store/lock'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Shell } from './components/Shell'
@@ -9,6 +11,7 @@ import { isPortWinHash } from '@shared/portWin'
 import { ExplorerWindow } from './components/ExplorerWindow'
 import { isExplorerWinHash } from '@shared/explorerWin'
 import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
+import { LockScreen } from './components/LockScreen'
 import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
 import { installErrorRing } from './store/errorRing'
@@ -56,7 +59,18 @@ for (const type of ['dragover', 'drop']) {
   })
 }
 
-createRoot(document.getElementById('root')!).render(
+/**
+ * 2.0 앱 잠금 — 덮개는 본문(#root) **밖**에 따로 그린다. 잠기면 #root 를 inert·블러로 덮고 덮개만 살린다.
+ * 본창은 시계(B), 나머지 창은 가운데 카드(A). 앱을 켤 때의 잠금은 어느 창이든 카드다(LockScreen 이 가른다).
+ */
+const isMainWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && !browserWin && !explorerWin
+const lockHost = document.createElement('div')
+lockHost.id = LOCK_HOST_ID
+document.body.appendChild(lockHost)
+createRoot(lockHost).render(<LockScreen variant={isMainWin ? 'clock' : 'card'} />)
+
+const renderApp = (): void =>
+  createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {editorTarget ? (
       <EditorWindow target={editorTarget} />
@@ -74,4 +88,18 @@ createRoot(document.getElementById('root')!).render(
       <Shell />
     )}
   </StrictMode>
-)
+  )
+
+/**
+ * **앱을 켤 때 잠겨 있으면 본창(Shell)을 아직 그리지 않는다** — Shell 이 마운트되면 세션 복원·자동 접속이
+ * 돌고, 그건 저장된 비밀번호를 쓴다. 풀린 뒤에 그린다(= 복원·접속이 그때 진행된다).
+ * 보조 창은 기다리지 않는다: 풀기 전엔 열 길이 없고, 열려 있다면 이미 한 번 풀린 뒤다.
+ */
+void initLock().then((v) => {
+  if (!isMainWin || v?.state !== 'locked-startup') return renderApp()
+  const off = subscribeLock(() => {
+    if (lockView()?.state === 'locked-startup') return
+    off()
+    renderApp()
+  })
+})

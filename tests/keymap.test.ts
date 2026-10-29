@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { AI_ENTRY } from '../src/shared/features'
-import { KEYMAP, matchBinding, matchArrow, matchNumber, isAppShortcut } from '../src/shared/keymap'
+import {
+  KEYMAP,
+  matchBinding,
+  matchArrow,
+  matchNumber,
+  isAppShortcut,
+  lockShortcutProblem,
+  setLockShortcut,
+  comboMatchesInput,
+  comboFromEvent
+} from '../src/shared/keymap'
 
 const ev = (init: Partial<KeyboardEvent>): KeyboardEvent =>
   ({ ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...init }) as KeyboardEvent
@@ -51,7 +61,11 @@ describe('R3.8 충돌 정책', () => {
   // · zsh 기본 ^[^D·G·H·L 과 겹치면 셸이 그 키를 잃는다(keymap.ts 머리 주석).
   it('★ Ctrl+Alt+문자 앱 키는 bash·zsh 기본 M-C- 키맵을 피한다', () => {
     const META_CTRL = ['E', 'G', 'H', 'I', 'J', 'L', 'R', 'Y', ']', 'D']
-    const offenders = KEYMAP.filter((b) => META_CTRL.some((k) => b.win === `Ctrl+Alt+${k}`)).map((b) => `${b.action}=${b.win}`)
+    // 예외 하나: 앱 잠금 Ctrl+Alt+L(2026-10-29 준영님 결정 — 셸의 같은 일은 Ctrl+L). keymap.ts 머리 주석.
+    const ACCEPTED = ['app.lock=Ctrl+Alt+L']
+    const offenders = KEYMAP.filter((b) => META_CTRL.some((k) => b.win === `Ctrl+Alt+${k}`))
+      .map((b) => `${b.action}=${b.win}`)
+      .filter((x) => !ACCEPTED.includes(x))
     expect(offenders).toEqual([])
     expect(KEYMAP.some((b) => b.win.startsWith('Ctrl+Alt+'))).toBe(true) // 양성 대조 — 검사할 키가 있다
   })
@@ -186,5 +200,57 @@ describe('치트시트 노출 대상 (R2.5 implemented 플래그)', () => {
 
   it('배선된 항목이 치트시트를 채운다(4열 표 기준 15행 이상)', () => {
     expect(KEYMAP.filter((k) => k.implemented).length).toBeGreaterThanOrEqual(15)
+  })
+})
+
+// 2.0 앱 잠금 — 표에서 유일하게 바뀌는 키(설정 › 보안).
+describe('앱 잠금 단축키', () => {
+  const input = (i: Partial<{ key: string; code: string; control: boolean; alt: boolean; shift: boolean; meta: boolean }>) => ({
+    type: 'keyDown',
+    key: '',
+    control: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    ...i
+  })
+
+  it('기본 Ctrl+Alt+L — 앱이 잡고 셸로 안 보낸다', () => {
+    setLockShortcut('Ctrl+Alt+L')
+    expect(matchBinding(ev({ key: 'l', ctrlKey: true, altKey: true }), 'app.lock')).toBe(true)
+    expect(isAppShortcut(ev({ key: 'l', ctrlKey: true, altKey: true }))).toBe(true)
+    expect(isAppShortcut(ev({ key: 'l', ctrlKey: true }))).toBe(false) // Ctrl+L 은 셸
+  })
+
+  it('바꾼 키를 표가 따라간다(치트시트·판정 한 벌)', () => {
+    setLockShortcut('Ctrl+Shift+9')
+    expect(KEYMAP.find((k) => k.action === 'app.lock')?.win).toBe('Ctrl+Shift+9')
+    expect(matchBinding(ev({ key: 'l', ctrlKey: true, altKey: true }), 'app.lock')).toBe(false)
+    setLockShortcut('Ctrl+L') // 셸 키 → 기본으로
+    expect(KEYMAP.find((k) => k.action === 'app.lock')?.win).toBe('Ctrl+Alt+L')
+  })
+
+  it('쓸 수 없는 키를 가른다', () => {
+    expect(lockShortcutProblem('Ctrl+Alt+L')).toBeNull()
+    expect(lockShortcutProblem('F9')).toBeNull()
+    expect(lockShortcutProblem('Ctrl+L')).toBe('shell')
+    expect(lockShortcutProblem('Alt+L')).toBe('shell')
+    expect(lockShortcutProblem('Ctrl+Alt+K')).toBe('taken') // 쿠버네티스
+    expect(lockShortcutProblem('Ctrl+Alt+Tab')).toBe('format')
+    expect(lockShortcutProblem('Win+L')).toBe('format')
+  })
+
+  it('main 의 before-input-event 판정(물리 키 기준)', () => {
+    expect(comboMatchesInput('Ctrl+Alt+L', input({ key: 'l', code: 'KeyL', control: true, alt: true }))).toBe(true)
+    expect(comboMatchesInput('Ctrl+Alt+L', input({ key: 'l', code: 'KeyL', control: true }))).toBe(false)
+    expect(comboMatchesInput('Ctrl+Shift+1', input({ key: '!', code: 'Digit1', control: true, shift: true }))).toBe(true)
+    expect(comboMatchesInput('F9', input({ key: 'F9', code: 'F9' }))).toBe(true)
+    expect(comboMatchesInput('Ctrl+Alt+L', { ...input({ key: 'l', code: 'KeyL', control: true, alt: true }), type: 'keyUp' })).toBe(false)
+  })
+
+  it('누른 키 → 표기', () => {
+    expect(comboFromEvent({ key: 'L', code: 'KeyL', ctrlKey: true, altKey: true, shiftKey: false })).toBe('Ctrl+Alt+L')
+    expect(comboFromEvent({ key: '!', code: 'Digit1', ctrlKey: true, altKey: false, shiftKey: true })).toBe('Ctrl+Shift+1')
+    expect(comboFromEvent({ key: 'Control', code: 'ControlLeft', ctrlKey: true, altKey: false, shiftKey: false })).toBeNull()
   })
 })

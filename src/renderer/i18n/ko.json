@@ -1253,5 +1253,20 @@
   "update.done.notesFailed": "패치 내역을 열지 못했습니다 — 사내망에 연결되어 있는지 확인해 주세요.",
   "settings.notes.title": "패치 내역",
   "settings.notes.desc": "판마다 무엇이 추가되고 무엇이 고쳐졌는지 봅니다.",
-  "settings.notes.open": "패치 내역 보기"
+  "settings.notes.open": "패치 내역 보기",
+  "lock.title": "아라가 잠겨 있습니다",
+  "lock.sub": "비밀번호를 입력하면 하던 화면으로 돌아갑니다.",
+  "lock.startup.title": "비밀번호를 입력하세요",
+  "lock.startup.sub": "풀기 전엔 저장된 서버 비밀번호를 쓰지 않습니다.",
+  "lock.badge": "잠김",
+  "lock.pw": "비밀번호",
+  "lock.unlock": "잠금 해제",
+  "lock.wrong": "비밀번호가 틀렸습니다.",
+  "lock.wait": "{s}초 뒤에 다시 시도하세요.",
+  "lock.rule": "5회 틀리면 30초 대기",
+  "lock.sessions": "세션 {n}개 계속 동작 중",
+  "lock.tile": "세션 {n}",
+  "lock.at": "{t} 잠금",
+  "lock.notify.title": "아라",
+  "lock.notify.body": "확인할 것이 있습니다."
 }

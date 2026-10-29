@@ -99,7 +99,14 @@ function rpcError(res: ServerResponse, status: number, code: number, message: st
 // vault: 토큰 해시 저장소(SafeStorageSecretStore 를 그대로 넘긴다 — 새 vault 를 만들지 않는다).
 // bindPort: 테스트 seam(ARA_AI_FAKE 와 같은 관행) — 0 이면 OS 가 빈 포트를 골라 매 테스트가 고정
 // 포트 재바인딩 타이밍(TIME_WAIT)과 경쟁하지 않는다. 프로덕션 호출자는 넘기지 않는다(항상 MCP_DEFAULT_PORT).
-export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: number = MCP_DEFAULT_PORT): McpServerHandle {
+// isBlocked: 2.0 앱 잠금 — 잠긴 동안(스위치가 막음이거나 켤 때 잠금) 모든 요청을 거부한다. 인증보다 **먼저** 본다:
+// 켤 때 잠금이면 토큰 해시(vault)를 읽을 수도 없다.
+export function createMcpServer(
+  ctx: ToolCtx,
+  vault: TokenVault,
+  bindPort: number = MCP_DEFAULT_PORT,
+  isBlocked: () => boolean = () => false
+): McpServerHandle {
   let httpServer: HttpServer | null = null
   let transport: StreamableHTTPServerTransport | null = null
   let mcp: SdkMcpServer | null = null
@@ -129,6 +136,7 @@ export function createMcpServer(ctx: ToolCtx, vault: TokenVault, bindPort: numbe
   }
 
   async function onRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (isBlocked()) return rpcError(res, 423, -32002, '아라가 잠겨 있음 — 아라 잠금을 푼 뒤 다시 시도하세요.')
     // 인증 전에는 initialize 핸드셰이크조차 진행하지 않는다 — 툴 목록도 인증 전엔 새어나가지 않는다.
     const kind = authKind(req)
     if (!kind) return rpcError(res, 401, -32001, '인증되지 않았습니다.')

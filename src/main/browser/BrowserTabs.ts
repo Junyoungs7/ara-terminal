@@ -73,13 +73,23 @@ function publish(): void {
   if (main && !main.isDestroyed()) pushSend(main.webContents, 'browser:tabs', payload)
 }
 
+/**
+ * 2.0 앱 잠금 — 원격 페이지 뷰(WebContentsView)는 렌더러의 HTML 덮개 **위에** 그려져 가릴 수 없다.
+ * 잠긴 동안 전부 숨기고, 풀리면 활성 탭만 되살린다(main/ipc/registerLockIpc.ts 가 부른다).
+ */
+let lockHidden = false
+export function setBrowserLockHidden(on: boolean): void {
+  lockHidden = on
+  layout()
+}
+
 /** 활성 탭만 보이게 한다. 숨김은 bounds 0 이 아니라 visible 로 — 0 크기 뷰는 리사이즈가 튄다. */
 function layout(): void {
   if (!win || win.isDestroyed()) return
   const { width, height } = win.getContentBounds()
   for (const t of tabs) {
     const on = t.id === activeId
-    t.view.setVisible(on)
+    t.view.setVisible(on && !lockHidden)
     if (on) t.view.setBounds({ x: 0, y: TAB_STRIP_H, width, height: Math.max(0, height - TAB_STRIP_H) })
   }
 }

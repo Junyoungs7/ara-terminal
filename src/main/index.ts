@@ -566,7 +566,9 @@ app.whenReady().then(async () => {
     () => store.get().ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
     getWebContents,
     // e2e 는 앱을 여러 개 동시에 띄운다 — 기본 켜짐이 된 뒤로 고정 포트를 두고 싸운다.
-    process.env['ARA_E2E'] === '1' ? 0 : undefined
+    process.env['ARA_E2E'] === '1' ? 0 : undefined,
+    // 잠긴 동안 외부 도구(MCP) — 설정 › 보안 스위치(기본 막음). 켤 때 잠금은 늘 막는다.
+    () => appLock.mcpBlocked()
   )
   /**
    * MCP 는 **기본으로 켠다**(2026-08-26 준영님 지시). 아라가 우리 도구를 쓰는 길이 이것뿐이라,
