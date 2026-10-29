@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { allPanesRdp, gridUsage, cellsFor, toLayoutNode, MAX_PANES, type LayoutState, type Pane } from '../src/renderer/store/layout'
+import {
+  allPanesRdp,
+  gridUsage,
+  cellsFor,
+  toLayoutNode,
+  MAX_PANES,
+  showSessionPanes,
+  splitFiller,
+  splitPanes,
+  type LayoutState,
+  type Pane
+} from '../src/renderer/store/layout'
 import type { LayoutNode } from '../src/shared/types'
 
 const mkPanes = (n: number): Pane[] =>
@@ -130,5 +141,35 @@ describe('하단바를 감출 칸 구성', () => {
 
   it('칸이 하나도 없으면(빈 시작) 감추지 않는다 — 감출 근거가 없다', () => {
     expect(allPanesRdp([])).toBe(false)
+  })
+})
+
+/**
+ * 분할 경합(2.0 e2e SPLIT-2~7·CHROME-2·CTX-2·KEY-6): 배경 탭이 없으면 분할이 새 셸을 연다(MainArea doSplit).
+ * 그 셸의 `session:opened` 가 `session:create` 응답보다 **먼저** 오면 리스너의 showSession 이 보던 칸의
+ * 세션을 새 셸로 갈아 끼우고, 이어지는 split 이 같은 새 셸로 둘째 칸을 만든다 — 한 세션이 두 칸이라
+ * PaneGrid 는 칸 하나만 그린다. 분할 전에 그 칸에 있던 세션(splitFiller)을 filler 로 넘기면 제자리로 돌아온다.
+ */
+describe('분할 경합 — opened 가 create 응답보다 먼저 와도 두 칸이 된다', () => {
+  const one = (): LayoutState => stateOf(1, { focusedId: 'p1' }) // p1 = s1
+  it('splitFiller 는 showSession 이 덮어쓸 칸(포커스, 없으면 첫 칸)의 세션이다', () => {
+    expect(splitFiller(one())).toBe('s1')
+    expect(splitFiller(stateOf(2))).toBe('s1')
+    expect(splitFiller(stateOf(0))).toBeUndefined()
+  })
+  it('opened 가 먼저 와도 filler 를 주면 [원래 세션, 새 세션] 두 칸', () => {
+    const s = one()
+    const raced = showSessionPanes(s, 'new')
+    expect(raced.panes.map((p) => p.sessionId)).toEqual(['new']) // 경합: 보던 칸이 새 셸로 바뀌었다
+    const after = splitPanes(raced, 'p2', 'new', 'lr', false, splitFiller(s))
+    expect(after.panes.map((p) => p.sessionId)).toEqual(['s1', 'new'])
+    expect(after.focusedId).toBe('p2')
+  })
+  it('opened 가 나중에 와도 같은 결과(filler 는 아무것도 바꾸지 않는다)', () => {
+    const s = one()
+    const split = splitPanes(s, 'p2', 'new', 'lr', false, splitFiller(s))
+    const after = showSessionPanes(split, 'new')
+    expect(after.panes.map((p) => p.sessionId)).toEqual(['s1', 'new'])
+    expect(after.focusedId).toBe('p2')
   })
 })

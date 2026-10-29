@@ -4,7 +4,7 @@ import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
 import { PaneGrid, type RestoreError } from './PaneGrid'
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
-import { useLayout, toLayoutNode, allPanesRdp, type PairAxis } from '../store/layout'
+import { useLayout, toLayoutNode, allPanesRdp, splitFiller, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
@@ -947,7 +947,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         }
         const placed = new Set(layout.cells.map((c) => c.sessionId))
         const background = pickBackgroundSession(list, placed, mru)
-        layout.split(background ?? (await open()), axis)
+        // 새 셸이면 그 opened 가 응답보다 먼저 와 보던 칸을 갈아 끼울 수 있다 — 그 칸의 세션을 filler 로(layout.splitFiller).
+        const filler = splitFiller({ panes: layout.cells, focusedId: layout.focusedId })
+        layout.split(background ?? (await open()), axis, false, filler)
       },
       [layout, list, mru, open, showToast]
     )

@@ -148,6 +148,51 @@ export function fromLayoutNode(node: LayoutNode): RestoredLayout {
   return { sessionIds: sessionIds.slice(0, MAX_PANES), colRatio, rowRatio, pairAxis }
 }
 
+// 분할의 상태 변화(순수 — 상한 검사는 호출측). 아래 useLayout.split 주석 참고.
+export function splitPanes(
+  s: LayoutState,
+  paneId: string,
+  newSessionId: string,
+  axis: PairAxis = 'lr',
+  before = false,
+  filler?: string
+): LayoutState {
+  const p = { id: paneId, sessionId: newSessionId }
+  const kept = filler ? s.panes.map((x) => (x.sessionId === newSessionId ? { ...x, sessionId: filler } : x)) : s.panes
+  return {
+    ...s,
+    panes: before ? [p, ...kept] : [...kept, p],
+    pairAxis: s.panes.length === 1 ? axis : s.pairAxis,
+    focusedId: p.id,
+    maximizedId: null
+  }
+}
+
+// 세션 활성화의 상태 변화(순수). 아래 useLayout.showSession 주석 참고.
+export function showSessionPanes(s: LayoutState, sessionId: string): LayoutState {
+  const existing = s.panes.find((p) => p.sessionId === sessionId)
+  if (existing) return existing.id === s.focusedId ? s : { ...s, focusedId: existing.id }
+  if (s.panes.length === 0) {
+    const p = { id: nextPaneId(), sessionId }
+    return { ...s, panes: [p], focusedId: p.id }
+  }
+  const targetId = s.focusedId ?? s.panes[0].id
+  const panes = s.panes.map((p) => (p.id === targetId ? { ...p, sessionId } : p))
+  return { ...s, panes, focusedId: targetId }
+}
+
+/**
+ * 분할 직전에 **showSession 이 덮어쓸 칸**(포커스, 없으면 첫 칸)의 세션. 새 셸을 열어 분할할 때 filler 로 준다.
+ *
+ * 그 셸의 `session:opened` 는 `session:create` 응답보다 먼저 올 수도 나중에 올 수도 있다(MainArea
+ * restoreDone 주석 — 순서가 보장되지 않는다). 먼저 오면 리스너의 showSession 이 이 칸을 새 셸로 갈아
+ * 끼우고, 뒤따른 split 이 같은 셸로 둘째 칸을 만들어 한 세션이 두 칸이 된다(PaneGrid 는 하나만 그린다).
+ * filler 가 그 칸을 원래 세션으로 돌려놓는다. 나중에 오면 새 셸이 아직 어느 칸에도 없어 아무것도 안 바꾼다.
+ */
+export function splitFiller(s: Pick<LayoutState, 'panes' | 'focusedId'>): string | undefined {
+  return (s.panes.find((p) => p.id === s.focusedId) ?? s.panes[0])?.sessionId
+}
+
 export function useLayout(initialSessionId: string | null) {
   const [state, setState] = useState<LayoutState>(() => ({
     panes: initialSessionId ? [{ id: nextPaneId(), sessionId: initialSessionId }] : [],
@@ -173,20 +218,7 @@ export function useLayout(initialSessionId: string | null) {
       // (한 세션은 한 칸에만 그려진다 — 같은 세션을 두 칸에 두면 나중 칸이 통째로 빈다, 실제 증상).
       filler?: string
     ): void => {
-      setState((s) => {
-        if (s.panes.length >= MAX_PANES) return s // 상한 — 변화 없음
-        const p = { id: nextPaneId(), sessionId: newSessionId }
-        const kept = filler
-          ? s.panes.map((x) => (x.sessionId === newSessionId ? { ...x, sessionId: filler } : x))
-          : s.panes
-        return {
-          ...s,
-          panes: before ? [p, ...kept] : [...kept, p],
-          pairAxis: s.panes.length === 1 ? axis : s.pairAxis,
-          focusedId: p.id,
-          maximizedId: null
-        }
-      })
+      setState((s) => (s.panes.length >= MAX_PANES ? s : splitPanes(s, nextPaneId(), newSessionId, axis, before, filler)))
     },
     []
   )
@@ -198,17 +230,7 @@ export function useLayout(initialSessionId: string | null) {
   // 세션 활성화(탭·트리 클릭): 이미 어떤 패널이 표시 중이면 그 패널을 포커스,
   // 아니면 포커스 패널의 sessionId 를 교체(display 전환 — xterm 재마운트 없음). 패널이 없으면 첫 패널 생성.
   const showSession = useCallback((sessionId: string) => {
-    setState((s) => {
-      const existing = s.panes.find((p) => p.sessionId === sessionId)
-      if (existing) return existing.id === s.focusedId ? s : { ...s, focusedId: existing.id }
-      if (s.panes.length === 0) {
-        const p = { id: nextPaneId(), sessionId }
-        return { ...s, panes: [p], focusedId: p.id }
-      }
-      const targetId = s.focusedId ?? s.panes[0].id
-      const panes = s.panes.map((p) => (p.id === targetId ? { ...p, sessionId } : p))
-      return { ...s, panes, focusedId: targetId }
-    })
+    setState((s) => showSessionPanes(s, sessionId))
   }, [])
 
   // F6 부분 복원 재시도: 특정 패널의 sessionId 를 교체(오류 placeholder → 재접속 성공 세션).
