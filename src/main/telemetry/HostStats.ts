@@ -53,6 +53,7 @@ export function createHostStatsService(
   let tick = 0
   let mounts: string[] | null = null
   let disks: DiskUsage[] = [] // 마지막으로 읽은 값 — 디스크 틱이 아닌 회차에도 그대로 실어 보낸다.
+  let last: HostStats | null = null // 나중에 붙은 구독자에게 곧바로 다시 보낼 마지막 표본
   // 계정 이름은 실행 중에 안 바뀐다 — 한 번만 묻는다. 도메인 계정·SYSTEM 등에서 던질 수 있어 ''로 버틴다.
   let user: string | null = null
   const userName = (): string => {
@@ -84,7 +85,7 @@ export function createHostStatsService(
     prev = cur
     if (tick % DISK_EVERY === 0) void readDisks()
     tick += 1
-    emit({
+    last = {
       cpuPct,
       ...memStatsOf(os.totalmem(), os.freemem()),
       disks,
@@ -93,12 +94,17 @@ export function createHostStatsService(
       user: userName(),
       osRelease: os.release(),
       uptimeSec: Math.round(os.uptime())
-    })
+    }
+    emit(last)
   }
 
   return {
     start() {
-      if (timer) return
+      // 이미 돌고 있으면(상태바가 먼저 켰다) 새 구독자가 다음 주기까지 빈 그래프로 기다리지 않게 마지막 표본을 다시 보낸다.
+      if (timer) {
+        if (last) emit(last)
+        return
+      }
       tick = 0
       timer = setInterval(sample, intervalMs)
       sample() // 첫 화면을 주기만큼 기다리지 않게(RemoteTelemetry 관행과 동일).
@@ -108,6 +114,7 @@ export function createHostStatsService(
       clearInterval(timer)
       timer = null
       prev = null
+      last = null
     },
     running: () => timer !== null
   }

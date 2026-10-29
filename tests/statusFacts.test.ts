@@ -112,6 +112,21 @@ describe('HostStats 폴러', () => {
     expect(got).toHaveLength(3)
     vi.useRealTimers()
   })
+
+  // 구독자가 둘이다(상태바 + [시스템 모니터]). 상태바가 먼저 폴러를 켜 두면 나중에 연 모니터는
+  // 다음 주기까지 빈 그래프였다 — 이미 돌고 있어도 start 는 마지막 표본을 곧바로 다시 보낸다.
+  it('이미 돌고 있을 때 start 하면 마지막 표본을 곧바로 다시 보낸다', () => {
+    vi.useFakeTimers()
+    const got: HostStats[] = []
+    const svc = createHostStatsService((s) => got.push(s), 1000)
+    svc.start()
+    expect(got).toHaveLength(1)
+    svc.start() // 두 번째 구독자
+    expect(got).toHaveLength(2)
+    expect(got[1]).toEqual(got[0])
+    svc.stop()
+    vi.useRealTimers()
+  })
 })
 
 // 다듬기 R2(리뷰 B8): 접속 직후 한 번 실패하면 그 세션 내내 — 였다. 실패하면 한 번만 다시 묻는다.
