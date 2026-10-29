@@ -1136,6 +1136,8 @@ type Props = {
   ask?: (spec: DialogSpec) => Promise<DialogResult>
   // FB-monitor(FB-0004): [단축키] 섹션의 "tmux 사용법 보기" → 명령어 북(F18)을 그 카테고리로 바로 연다.
   onOpenCommandBook?: (query?: string) => void
+  // 이 섹션으로 열린다(잠금 키 안내 등) — 없으면 마지막에 보던 섹션 그대로.
+  entrySection?: SettingsSection
 }
 
 // 2.0 6단계 — 단축키는 칩 하나(`Ctrl Alt K`, 키 사이 공백·`+` 없음, 시안 Z-settings).
@@ -1149,7 +1151,8 @@ export function SettingsDrawer({
   onChange,
   onPrefsChange,
   ask,
-  onOpenCommandBook
+  onOpenCommandBook,
+  entrySection
 }: Props) {
   const [section, setSection] = useState<SettingsSection>('general')
 
@@ -1167,7 +1170,7 @@ export function SettingsDrawer({
     void window.ev?.ai
       .getState()
       .then((s) => {
-        if (alive && AI_ENTRY && !s.hasKey) setSection('ai')
+        if (alive && AI_ENTRY && !s.hasKey && !entrySection) setSection('ai')
       })
       .catch(() => {})
     return () => {
@@ -1197,6 +1200,10 @@ export function SettingsDrawer({
     }
     return () => locked.forEach((x) => x.removeAttribute('inert'))
   }, [open])
+
+  useEffect(() => {
+    if (open && entrySection) setSection(entrySection)
+  }, [open, entrySection])
 
   // 포커스 트랩 — Tab 이 창 끝에서 처음으로, Shift+Tab 이 처음에서 끝으로 돈다.
   const trapTab = (e: React.KeyboardEvent): void => {

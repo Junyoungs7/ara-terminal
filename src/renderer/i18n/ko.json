@@ -1258,6 +1258,7 @@
   "lock.startup.title": "비밀번호를 입력하세요",
   "lock.startup.sub": "풀기 전엔 저장된 서버 비밀번호를 쓰지 않습니다.",
   "lock.badge": "잠김",
+  "lock.offHint": "잠금을 쓰려면 먼저 비밀번호를 설정하세요",
   "lock.pw": "비밀번호",
   "lock.unlock": "잠금 해제",
   "lock.wrong": "비밀번호가 틀렸습니다.",

@@ -487,6 +487,11 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, v: LockView) => cb(v)
       ipcRenderer.on('lock:state', listener)
       return () => ipcRenderer.removeListener('lock:state', listener)
+    },
+    onHint: (cb: () => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('lock:hint', listener)
+      return () => ipcRenderer.removeListener('lock:hint', listener)
     }
   },
   mcp: {

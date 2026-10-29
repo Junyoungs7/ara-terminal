@@ -13,7 +13,7 @@ const AUTO_LOCK_TICK_MS = 30_000
 
 export type LockRuntime = { view(): LockView; broadcast(): void }
 
-export function registerLockIpc(lock: AppLock, sessionCount: () => number): LockRuntime {
+export function registerLockIpc(lock: AppLock, sessionCount: () => number, getMainWindow: () => BrowserWindow | null): LockRuntime {
   const view = (): LockView => lock.view(sessionCount())
   const broadcast = (): void => {
     const v = view()
@@ -24,6 +24,15 @@ export function registerLockIpc(lock: AppLock, sessionCount: () => number): Lock
         /* 파괴 레이스 — 그 창은 이미 없다 */
       }
     }
+  }
+  // 잠금이 꺼져 있을 때 잠금 키 → 본창을 앞으로 + 본창이 설정 › 보안을 연다(보조 창에서 눌러도 같다).
+  const hintOff = (): void => {
+    const w = getMainWindow()
+    if (!w || w.isDestroyed()) return
+    if (w.isMinimized()) w.restore()
+    w.show()
+    w.focus()
+    pushSend(w.webContents, 'lock:hint')
   }
   lock.setOnChange(() => {
     // 브라우저 창의 원격 페이지(WebContentsView)는 HTML 덮개로 못 가린다 — 잠긴 동안 숨긴다.
@@ -41,7 +50,7 @@ export function registerLockIpc(lock: AppLock, sessionCount: () => number): Lock
     wc.on('before-input-event', (ev, input) => {
       if (!comboMatchesInput(lock.shortcut(), input)) return
       ev.preventDefault()
-      lock.lock()
+      lock.lockOrHint(hintOff)
     })
     wc.on('devtools-opened', () => {
       if (isLockedState(lock.state())) wc.closeDevTools()
@@ -57,7 +66,10 @@ export function registerLockIpc(lock: AppLock, sessionCount: () => number): Lock
 
   const str = (v: unknown): string => (typeof v === 'string' ? v : '')
   handle('lock:get', () => view())
-  handle('lock:lock', () => ({ ok: lock.lock() }))
+  handle('lock:lock', () => {
+    const ok = lock.lockOrHint(hintOff)
+    return ok ? { ok } : { ok, reason: lock.state() === 'off' ? ('off' as const) : undefined }
+  })
   handle('lock:unlock', (r) => lock.unlock(str(r?.password)))
   handle('lock:enable', (r) => lock.enable(str(r?.password)))
   handle('lock:disable', (r) => lock.disable(str(r?.password)))

@@ -253,4 +253,16 @@ describe('AppLock', () => {
     require('node:fs').writeFileSync(lockPath, JSON.stringify(f))
     expect(await mk(v).unlock(PW1)).toEqual({ ok: false, reason: 'wrong' })
   })
+
+  it('꺼져 있을 때 잠금 시도는 안내(hint)를 부르고, 켜진 뒤엔 부르지 않고 잠근다', async () => {
+    const v = memVault()
+    let hints = 0
+    const lk = mk(v)
+    expect(lk.lockOrHint(() => hints++)).toBe(false)
+    expect(hints).toBe(1)
+    await lk.enable(PW1)
+    expect(lk.lockOrHint(() => hints++)).toBe(true)
+    expect(lk.lockOrHint(() => hints++)).toBe(false) // 이미 잠김 — 안내 아님
+    expect(hints).toBe(1)
+  })
 })

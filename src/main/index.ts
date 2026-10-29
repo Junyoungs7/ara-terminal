@@ -634,7 +634,7 @@ app.whenReady().then(async () => {
   // 렌더러가 ara:active 로 알린 마지막 값이다(외부 MCP 클라이언트에는 해당 없음 — approval.ts).
   mcp.approval.setAraTarget(() => araChat?.active()?.id ?? null)
   registerWindowIpc(() => mainWindow)
-  registerLockIpc(appLock, () => sessions.snapshot().length)
+  registerLockIpc(appLock, () => sessions.snapshot().length, () => mainWindow)
   /**
    * F1a 훅 기반 에이전트 상태 — **창을 만들기 전에** 포트를 잡는다.
    *

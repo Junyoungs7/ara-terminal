@@ -186,7 +186,7 @@ export type InvokeContract = {
   'app:getVersion': { req: void; res: string }
   // 2.0 앱 잠금(main/secrets/AppLock.ts). 비밀번호는 이 채널로만 오가고 main 은 기록하지 않는다.
   'lock:get': { req: void; res: LockView }
-  'lock:lock': { req: void; res: { ok: boolean } }
+  'lock:lock': { req: void; res: { ok: boolean; reason?: 'off' } }
   'lock:unlock': { req: { password: string }; res: LockResult }
   'lock:enable': { req: { password: string }; res: LockResult }
   'lock:disable': { req: { password: string }; res: LockResult }
@@ -1118,7 +1118,7 @@ export type EvApi = {
   // 2.0 앱 잠금. 상태는 main 이 쥐고 `lock:state` 로 모든 창에 방송한다.
   lock: {
     get(): Promise<LockView>
-    lock(): Promise<{ ok: boolean }>
+    lock(): Promise<{ ok: boolean; reason?: 'off' }>
     unlock(password: string): Promise<LockResult>
     enable(password: string): Promise<LockResult>
     disable(password: string): Promise<LockResult>
@@ -1129,6 +1129,8 @@ export type EvApi = {
     forgotVerify(code: string): Promise<LockResult>
     forgotReset(newPassword: string): Promise<LockResult & { removed?: number }>
     onState(cb: (v: LockView) => void): () => void
+    /** 잠금이 꺼져 있을 때 잠금 키가 눌렸다(본창에만 온다) — 설정 › 보안으로 안내. */
+    onHint(cb: () => void): () => void
   }
   // F24 앱 내 피드백 수집. **읽기 채널이 없다는 것이 계약이다** — 목록 화면을 만들지 않으므로
   // 저장된 항목을 렌더러로 되돌리는 창구가 표면에 존재하지 않는다(폴더 열기로 충분).

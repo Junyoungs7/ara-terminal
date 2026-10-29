@@ -11,7 +11,7 @@ import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
-import { SettingsDrawer, SIZE_MAX, SIZE_MIN } from './SettingsDrawer'
+import { SettingsDrawer, SIZE_MAX, SIZE_MIN, type SettingsSection } from './SettingsDrawer'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
@@ -250,6 +250,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // W1 F13 로그 뷰어(파일 탭 우클릭 [tail로 보기]). 한 번에 하나만 — 다른 파일을 고르면 갈아탄다.
     // 설정 창 — 열림 상태 + 폰트(F5)·터미널 동작(R5) 스토어(하이드레이트/실시간 적용/영속).
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const [settingsEntry, setSettingsEntry] = useState<SettingsSection | undefined>()
     const { font, update: updateFont } = useFont()
     const { prefs, update: updatePrefs } = useUiPrefs()
 
@@ -262,6 +263,16 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // 다중 모니터 RDP 안내(모니터 한 장·이미 열림·죽은 영역)를 여기 토스트로 보낸다 —
     // PaneGrid 는 다이얼로그도 토스트도 갖고 있지 않다.
     useEffect(() => setSpanNotifier(showToast), [showToast])
+    // 잠금이 꺼져 있을 때 잠금 키(실제 키·F1) — main 이 본창에만 보낸다. 설정 › 보안 + 안내 토스트.
+    useEffect(
+      () =>
+        window.ev?.lock?.onHint?.(() => {
+          setSettingsEntry('security')
+          setSettingsOpen(true)
+          showToast(t('lock.offHint'))
+        }),
+      [showToast]
+    )
     // 터미널 Ctrl+V 가 업로드로 못 넘어가 텍스트 붙여넣기로 떨어졌을 때 — 2026-08-16.
     useEffect(() => setUploadNotifier(showToast), [showToast])
     // 클립보드 쓰기·읽기가 거부되면(창 비활성 등) 조용히 삼키지 않고 여기로 낸다 — 2026-08-13.
@@ -1483,7 +1494,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           font={font}
           prefs={prefs}
           version={version}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false)
+            setSettingsEntry(undefined)
+          }}
+          entrySection={settingsEntry}
           onChange={updateFont}
           onPrefsChange={updatePrefs}
           ask={ask}

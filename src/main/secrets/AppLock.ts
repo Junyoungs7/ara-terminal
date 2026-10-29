@@ -194,6 +194,13 @@ export class AppLock {
     return true
   }
 
+  /** 잠그기를 시도하고, **잠금이 꺼져 있어서** 못 잠근 것이면 hint 를 부른다(단축키·F1 이 조용히 끝나지 않게). */
+  lockOrHint(hint: () => void): boolean {
+    if (this.lock()) return true
+    if (this.st === 'off') hint()
+    return false
+  }
+
   async unlock(password: string): Promise<LockResult> {
     if (this.st !== 'locked' && this.st !== 'locked-startup') return { ok: false, reason: 'state' }
     const r = await this.check(password)
