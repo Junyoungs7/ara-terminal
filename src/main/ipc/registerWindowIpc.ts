@@ -40,7 +40,12 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
       r && typeof r.profileId === 'string' && typeof r.path === 'string'
         ? { profileId: r.profileId, path: r.path, at: Date.now() }
         : undefined
-    openExplorerWindow((open) => pushSend(mainWc(), 'explorer:shown', { open }), reveal)
+    // 탐색기 창 자신에게도 보낸다 — 숨은 동안 폴링을 멈추는 근거다. visibilityState 는 hide() 뒤에도 visible 로
+    // 남았다(2026-10-29 e2e CON-35·EXP-3). 막 만든 창은 아직 안 받지만 그때는 보이는 중이라 기본값이 맞다.
+    openExplorerWindow((open) => {
+      pushSend(mainWc(), 'explorer:shown', { open })
+      pushSend(explorerWindowContents(), 'explorer:shown', { open })
+    }, reveal)
     if (reveal) pushSend(explorerWindowContents(), 'explorer:reveal', reveal)
     return { ok: true } as const
   })

@@ -135,6 +135,18 @@ describe('탐색기 창 중계', () => {
     expect(main.webContents.send).toHaveBeenCalledWith('explorer:shown', { open: true })
   })
 
+  // 숨은 동안 폴링을 멈추는 근거를 창 자신에게도 준다. document.visibilityState 는 hide() 뒤에도
+  // 'visible' 로 남았다(2026-10-29 e2e CON-35·EXP-3: OS 창은 숨었는데 문서는 모름) — main 이 아는 값을 보낸다.
+  it('★ × 로 숨기면 탐색기 창 자신도 "숨었다"를 받고, 다시 열면 "보인다"를 받는다', async () => {
+    await call('explorer:open', main.webContents)
+    const w = explorer()
+    w.webContents.send.mockClear()
+    w.close()
+    expect(w.webContents.send).toHaveBeenCalledWith('explorer:shown', { open: false })
+    await call('explorer:open', main.webContents)
+    expect(w.webContents.send).toHaveBeenCalledWith('explorer:shown', { open: true })
+  })
+
   it('탐색기 창이 아닌 곳에서 온 act 는 버린다', async () => {
     await call('explorer:open', main.webContents)
     await call('explorer:act', mkWc(), { kind: 'connect', profileId: 'p1' })

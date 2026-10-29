@@ -21,12 +21,17 @@ export function ExplorerWindow() {
   const { ask, askText, node: dialogNode } = useDialog()
   // × 는 창을 숨긴다(main ExplorerWindow.ts) — 숨은 동안은 원격 폴링을 멈춘다(1.x 의 visible 규칙).
   // OS 창이 숨거나 최소화되면 Chromium 이 visibilityState 를 hidden 으로 바꾼다.
-  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
+  const [docVisible, setDocVisible] = useState(() => document.visibilityState === 'visible')
   useEffect(() => {
-    const on = (): void => setVisible(document.visibilityState === 'visible')
+    const on = (): void => setDocVisible(document.visibilityState === 'visible')
     document.addEventListener('visibilitychange', on)
     return () => document.removeEventListener('visibilitychange', on)
   }, [])
+  // visibilityState 만으로는 × 숨김을 모를 때가 있었다(2026-10-29 e2e: OS 창은 숨었는데 문서는 visible) —
+  // main 이 숨기고 보일 때 이 창에도 알린다(registerWindowIpc explorer:open). 둘 중 하나라도 숨김이면 숨김이다.
+  const [shown, setShown] = useState(true)
+  useEffect(() => window.ev?.explorer.onShown((e) => setShown(e.open)), [])
+  const visible = docVisible && shown
 
   useEffect(() => {
     const offState = window.ev?.explorer.onState(setState)
@@ -48,7 +53,7 @@ export function ExplorerWindow() {
   const act = (a: ExplorerAct): void => void window.ev?.explorer.act(a).catch(() => {})
 
   return (
-    <div className="app explorerwin">
+    <div className="app explorerwin" data-visible={visible ? 'true' : 'false'}>
       <WorkbenchView
         visible={visible}
         sessions={state.sessions}

@@ -443,9 +443,14 @@ export async function explorerWindow(app: ElectronApplication, trigger: () => Pr
   return win
 }
 
-/** 탐색기 창이 화면에 보이는가 — × 는 숨김이라(다듬기 R2) 창 수로는 닫힘을 못 가른다. */
+/**
+ * 탐색기 창이 **스스로 보인다고 아는가** — 숨은 동안 폴링을 멈추는 바로 그 값(ExplorerWindow.tsx `visible`,
+ * 루트 `data-visible`). × 는 숨김이라(다듬기 R2) 창 수로는 닫힘을 못 가른다.
+ * 예전엔 document.visibilityState 를 봤는데, hide() 뒤에도 visible 로 남아(2026-10-29 재실행) 제품이
+ * main 의 explorer:shown 도 함께 보게 고쳤다 — 그래서 여기서도 제품이 쓰는 값을 본다.
+ */
 export async function explorerVisible(win: Page): Promise<boolean> {
-  return (await win.evaluate(() => document.visibilityState)) === 'visible'
+  return (await win.locator('.app.explorerwin').getAttribute('data-visible')) === 'true'
 }
 
 /**
