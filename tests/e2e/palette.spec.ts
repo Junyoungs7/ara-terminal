@@ -71,9 +71,9 @@ test('PAL-3★ 단축키 있는 기능·메뉴 명령·저장한 서버가 한 �
   // MENUBAR 의 단축키 없는 명령.
   await field(ara.page).fill('help.about')
   await expect(ara.page.locator('.cp-item[data-item="command:help.about"]')).toBeVisible()
-  // 저장된 서버.
+  // 저장된 서버. 2.0(fad86c0)부터 같은 이름의 **열린 창**(session:) 행도 함께 나온다 — 저장한 서버 행을 고른다.
   await field(ara.page).fill('pal3')
-  await expect(ara.page.locator('.cp-item', { hasText: 'pal3-서버' })).toBeVisible()
+  await expect(ara.page.locator('.cp-item[data-item^="profile:"]', { hasText: 'pal3-서버' })).toBeVisible()
 })
 
 // PAL-4 검색은 라벨과 영문 별칭 양쪽에 걸린다.
@@ -113,7 +113,8 @@ test('PAL-6★ 팔레트에서 서버를 고르면 그 서버로 접속한다', 
 
   await ara.page.keyboard.press('F1')
   await field(ara.page).fill('pal6')
-  await ara.page.locator('.cp-item', { hasText: 'pal6-서버' }).first().click()
+  // 열린 창(session:) 행을 고르면 그 탭으로 갈 뿐이다 — 접속 경로를 타는 것은 저장한 서버(profile:) 행이다(PAL-3).
+  await ara.page.locator('.cp-item[data-item^="profile:"]', { hasText: 'pal6-서버' }).click()
   // 같은 프로필로 세션이 하나 더 뜬다(팔레트가 실제 connectProfile 경로를 탄다).
   await expect(ara.page.locator('.term-tabbar .ttab')).toHaveCount(before + 1, { timeout: 30_000 })
 })

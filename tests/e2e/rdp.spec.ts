@@ -62,7 +62,8 @@ test('RDP-1 유형을 RDP 로 바꾸면 인증 방식 선택이 사라지고 포
   // 인증 섹션은 남고(비밀번호 저장용) 방식 선택 버튼만 사라진다.
   await expect(page.locator('.pf-sec-t:has-text("인증")')).toBeVisible()
   await expect(page.locator('.prof-form .seg-ctl button:has-text("비밀번호")')).toHaveCount(0)
-  await expect(page.locator('.pf-hint')).toBeVisible()
+  // 비밀번호 저장 안내(0492abb 부터 [다중 모니터] 안내도 .pf-hint 라 문구로 고른다).
+  await expect(page.locator('.pf-hint', { hasText: '설정 파일에는 남지 않습니다' })).toBeVisible()
   await expect(field(page, '포트')).toHaveValue('3389')
 })
 
@@ -93,9 +94,11 @@ test('RDP-5 RDP 트리 메뉴는 새 세션·호스트키 재설정이 빠진 �
   // FB-monitor: 활성 SSH 세션이 있는 행에는 tmux 서브메뉴가 항목 맨 끝에 덧붙는다(RDP엔 안 붙는다 — 아래).
   // 2026-08-17(#95): [AI CLI 시작]이 **세션 행**으로 옮겨갔다 — 서버 행에서 열면 폴더를 다시
   // 골라야 하지만 세션 행에는 그 세션이 서 있는 폴더가 이미 있다(TREE_MENUS 주석).
+  // 2026-08-25(#131, 11e684b): 서버 행에도 다시 [AI CLI 시작] — 그 서버의 홈에서 바로 작업대(묻지 않는다).
   expect(sshActions).toEqual([
     'server.connect',
     'server.newSession',
+    'aicli.start',
     'server.edit',
     'server.duplicate',
     'server.forgetHostKey',

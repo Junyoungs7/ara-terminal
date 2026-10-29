@@ -22,7 +22,8 @@ import {
   dialogConfirm,
   explorerWindow,
   explorerWindowCount,
-  explorerVisible
+  explorerVisible,
+  explorerShownByOs
 } from './fixtures'
 
 // 같은 서버 안 복사(sftp:copyRemote)는 SFTP 가 아니라 **exec 으로 `cp`** 를 돌린다 — 이 하네스엔
@@ -108,6 +109,8 @@ async function openExplorer(ara: { app: ElectronApplication; page: Page }): Prom
 /** 탐색기 창의 타이틀바 [×] — 창이 숨는다(다듬기 R2: 파괴가 아니다 — 창은 하나 그대로 남는다). */
 async function closeExplorer(ara: { app: ElectronApplication }, ex: Page): Promise<void> {
   await ex.click('.tb-ctl.close')
+  // 두 층을 따로 본다: OS 창이 숨었나(main 이 아는 값) → 그 창 문서가 숨었다고 아나(폴링을 멈추는 근거).
+  await expect.poll(() => explorerShownByOs(ara.app), { timeout: 10_000 }).toBe(false)
   await expect.poll(() => explorerVisible(ex), { timeout: 10_000 }).toBe(false)
   expect(explorerWindowCount(ara.app)).toBe(1)
 }
@@ -152,7 +155,8 @@ test('EXP-1 Ctrl+Shift+O 로 탐색기 창이 열리고 본창 터미널은 그�
   await newLocalShell(ara.page)
   const ex = await openExplorer(ara)
   await expect(ara.page.locator('.middle')).toBeVisible()
-  await expect(ex.locator('.wb-win')).toHaveCount(0)
+  // 본창에는 탐색기 DOM 이 없다(ca892d4 가 ex 로 잘못 적었다 — 탐색기 창엔 .wb-win 이 있어야 정상이다).
+  await expect(ara.page.locator('.wb-win')).toHaveCount(0)
   // #91: 열자마자 [홈] 격자 하나. 대상은 **내 PC** 가 기본이고 제목줄에 찍힌다.
   await expect(ex.locator('.exp-tab')).toHaveCount(1)
   await expect(ex.locator('.exp-tab.on[data-tab="home"]')).toBeVisible()
@@ -546,8 +550,9 @@ test('WB-3★ [아라에게 물어보기]가 경로를 아라 입력창에 얹�
     await frow(p, 'target.txt').click({ button: 'right' })
     await ex.click('.ctx-menu [data-action="file.askAi"]')
 
-    await expect(page.locator('.ai-panel')).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('.ai-panel .ai-input')).toHaveValue(/target\.txt/)
+    // #125 부터 아라 자리는 AraChatPanel(.ara-panel) 이다 — 옛 .ai-panel 은 붙지 않는다(bootstrap.spec 주석).
+    await expect(page.locator('.ara-panel')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.ara-panel .ara-input')).toHaveValue(/target\.txt/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -579,7 +584,8 @@ test('WB-4★ 로컬 폴더에서 AI CLI 를 시작하면 그 폴더로 가는 �
     await expect.poll(() => termText(page, sessionId), { timeout: 20_000 }).toContain(basename(dir))
     expect(await termText(page, sessionId)).toContain('claude')
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    // 셸이 그 폴더로 cd 해 잡고 있다 — 바로 지우면 EBUSY(#88 R1). 세션을 닫고 재시도하는 헬퍼로.
+    await cleanupFixture(page, dir)
   }
 })
 

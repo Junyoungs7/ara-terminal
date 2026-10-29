@@ -181,13 +181,14 @@ test('W5-12b★ 사내 사설망 http baseUrl 이 허용되고 반출 고지에 
 })
 
 // W5-13 모델 추천 칩을 누르면 입력값이 채워지고 그 칩이 선택 표시된다.
+// 추천 목록은 6564c8b(2026-10-20)부터 현재 모델 — claude-opus-5 → claude-opus-5-5(types.ts AI_MODELS_BY_PROVIDER).
 test('W5-13 모델 추천 칩을 누르면 입력값이 채워지고 칩이 선택 표시된다', async ({ ara }) => {
   const { page } = ara
   await openAiSettings(page)
   const modelRow = `${drawer} .set-row:has(.sr-label:text-is("모델"))`
-  await page.click(`${modelRow} .seg-ctl button[data-value="claude-opus-5"]`)
-  await expect(page.locator(`${modelRow} input[data-field="ai.model"]`)).toHaveValue('claude-opus-5')
-  await expect(page.locator(`${modelRow} .seg-ctl button[data-value="claude-opus-5"]`)).toHaveClass(/on/)
+  await page.click(`${modelRow} .seg-ctl button[data-value="claude-opus-5-5"]`)
+  await expect(page.locator(`${modelRow} input[data-field="ai.model"]`)).toHaveValue('claude-opus-5-5')
+  await expect(page.locator(`${modelRow} .seg-ctl button[data-value="claude-opus-5-5"]`)).toHaveClass(/on/)
 })
 
 /**

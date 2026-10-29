@@ -32,10 +32,12 @@ test('SYSM-1 액티비티 바에서 열리고 기본 탭은 [내 PC] 다', async
 test('SYSM-2 내 PC 탭에 CPU·메모리 그래프와 디스크가 실제 값으로 그려진다', async ({ ara }) => {
   const { page } = ara
   await openSys(page)
-  // 표본이 쌓여 선이 생길 때까지(첫 틱은 즉시, 두 번째는 2.5초).
+  // 표본이 쌓여 선이 생길 때까지(첫 틱은 즉시, 두 번째는 2.5초). polyline 은 값이 없어도 그려지므로
+  // 개수가 아니라 **선의 점**을 기다린다 — 개수를 기다리면 첫 렌더에서 곧장 빈 선을 읽는다.
   await expect.poll(async () => page.locator('.sysm-spark polyline').count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(2)
-  const pts = await page.locator('.sysm-spark polyline').first().getAttribute('points')
-  expect(pts ?? '').not.toBe('') // 빈 선이 아니다
+  await expect
+    .poll(async () => (await page.locator('.sysm-spark polyline').first().getAttribute('points')) ?? '', { timeout: 15_000 })
+    .not.toBe('') // 빈 선이 아니다
   // 디스크는 30초 주기지만 첫 틱에 한 번 읽는다 — 이 PC 에 최소 한 칸은 있다.
   await expect.poll(async () => page.locator('.sysm-disk').count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
   // 퍼센트가 0~100 범위의 실제 숫자로 찍힌다(NaN·빈칸이 아니다).
@@ -71,9 +73,10 @@ test('SYSM-5★ 원격 GPU 는 값이 올 때만 칸이 생긴다', async ({ ara
   await openSys(page)
   await page.locator('.sysm-tab').nth(1).click()
   await expect.poll(async () => page.locator('.sysm-mlabel').allInnerTexts(), { timeout: 20_000 }).toContain('GPU')
-  // 사용률만으로는 "몇 GB 쓰는지"를 못 본다(준영님 2026-08-13) — 2048/24576 MiB = 2.0G / 24.0G.
+  // 사용률만으로는 "몇 GB 쓰는지"를 못 본다(준영님 2026-08-13) — 2048/24576 MiB = 2.0G / 24G.
+  // 1.0.14(#201 E)부터 표기는 humanSize 하나다 — 10 이상은 소수점 없이(디스크·메모리와 같은 규칙).
   const gpuCard = page.locator('.sysm-metric', { has: page.locator('.sysm-mlabel', { hasText: 'GPU' }) })
-  await expect(gpuCard.locator('.sysm-sub')).toHaveText('2.0G / 24.0G')
+  await expect(gpuCard.locator('.sysm-sub')).toHaveText('2.0G / 24G')
 })
 
 test('SYSM-5b 사용률만 오는 서버는 GPU 칸은 있고 메모리 줄만 없다', async ({ ara, ssh }) => {

@@ -62,8 +62,10 @@ test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 내�
   expect((await spyCalls(app)).external).toEqual([])
 })
 
-// LINK-2 로컬 셸의 localhost 는 진짜 내 PC 다 — 종전대로 OS 브라우저로 간다
-test('LINK-2 로컬 셸의 localhost 링크는 OS 기본 브라우저로 간다', async ({ ara }) => {
+// LINK-2 로컬 셸의 링크 — 2026-09-10 준영님 제보 뒤로 규칙이 SSH 와 같다(linkTarget.ts planLink 주석):
+// **Ctrl+클릭 = 아라 브라우저 · Ctrl+Alt+클릭 = OS 브라우저.** 로컬 셸의 localhost 는 진짜 내 PC 라
+// 어느 쪽이든 **터널은 만들지 않는다** — 이 검사가 처음부터 지키던 성질은 그것이다.
+test('LINK-2 로컬 셸의 localhost 링크는 터널 없이 — Ctrl+클릭은 아라 브라우저, Ctrl+Alt+클릭은 OS 브라우저', async ({ ara }) => {
   const { page, app } = ara
   await spyShell(app)
   const sid = await newLocalShell(page)
@@ -72,8 +74,12 @@ test('LINK-2 로컬 셸의 localhost 링크는 OS 기본 브라우저로 간다'
   await runCommand(page, sid, `echo ${url}`)
   await ctrlClickLink(page, url)
 
+  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe(url)
+  expect((await spyCalls(app)).external).toEqual([]) // OS 브라우저로 새지 않았다
+  expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널도 안 팠다
+
+  await ctrlClickLink(page, url, true)
   await expect.poll(async () => (await spyCalls(app)).external, { timeout: 20_000 }).toEqual([url])
-  expect(await browserWindows(app)).toHaveLength(0)
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0)
 })
 

@@ -18,6 +18,7 @@ import {
   explorerWindow,
   explorerWindowCount,
   explorerVisible,
+  explorerShownByOs,
   newLocalShell,
   openBottomTool,
   sessionList
@@ -177,6 +178,8 @@ test('CON-35★ 작업대 창을 닫았다 다시 열면 열린 도구 탭이 �
   await expect(wb.locator('.wb-win .exp-tab.on[data-tab="ps"]')).toBeVisible()
 
   await wb.click('.tb-ctl.close')
+  // OS 창이 숨었나 → 그 문서가 숨었다고 아나(폴링을 멈추는 근거) — 두 층을 따로 본다(explorer.spec closeExplorer).
+  await expect.poll(() => explorerShownByOs(ara.app), { timeout: 10_000 }).toBe(false)
   await expect.poll(() => explorerVisible(wb), { timeout: 10_000 }).toBe(false)
   expect(explorerWindowCount(ara.app)).toBe(1)
   await expect(ara.page.locator('.lrail-item.active[data-activity="explorer"]')).toHaveCount(0)
@@ -946,7 +949,7 @@ test('CON-25 컨테이너 런타임이 없으면 빈 표가 아니라 안내가 
   const h = await ssh({ password: 'pw25', execHandler: makeCtr('docker: command not found').exec })
   await openConsole(ara.page, 'c25', h.port, 'pw25')
   await openBottomTool(ara.page, 'ctr')
-  await expect(ara.page.locator('.ctr-block .cb-why')).toHaveText('도커 또는 포드먼이 이 서버에 없습니다.', { timeout: 20_000 })
+  await expect(ara.page.locator('.ctr-block .cb-why')).toHaveText('도커 · 포드먼 · crictl 이 이 서버에 없습니다.', { timeout: 20_000 }) // #192: crictl 도 이 탭
   await expect(ara.page.locator('.ctr-row')).toHaveCount(0)
 })
 

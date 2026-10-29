@@ -1,12 +1,12 @@
-// 설정 창 11섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP + 명령 기록 + 2.0 기능·모양) — 즉시 적용 · 영속 · 라이선스 고지
+// 설정 창 12섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP + 명령 기록 + 2.0 기능·모양·보안) — 즉시 적용 · 영속 · 라이선스 고지
 import { test, expect, newLocalShell, persist, quitAra, openConnTab } from './fixtures'
 
 const drawer = '.drawer.open'
 
-// SET-1 진입점 3개(Ctrl+, · 좌측 레일 설정 아이콘 · File 메뉴)와 11섹션(W3 F16 에서 [AI] 추가로
-// 6→7, F23 에서 [MCP] 추가로 7→8, [명령 기록] 9, 2.0 3단계 [기능] 10, 4단계 [모양] 11).
+// SET-1 진입점 3개(Ctrl+, · 좌측 레일 설정 아이콘 · File 메뉴)와 12섹션(W3 F16 에서 [AI] 추가로
+// 6→7, F23 에서 [MCP] 추가로 7→8, [명령 기록] 9, 2.0 3단계 [기능] 10, 4단계 [모양] 11, 잠금 L1 [보안] 12).
 // FB-ui2: 두 번째 진입점이 타이틀바 기어(.tb-gear, 제거됨)에서 액티비티 바로, 2.0 에서 좌측 레일로 옮겼다.
-test('SET-1 설정 창이 세 진입점 모두에서 열리고 11개 섹션을 갖는다', async ({ ara }) => {
+test('SET-1 설정 창이 세 진입점 모두에서 열리고 12개 섹션을 갖는다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
   await expect(page.locator(drawer)).toBeVisible()
@@ -24,8 +24,8 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 11개 섹션을 �
   await expect(page.locator(drawer)).toBeVisible()
 
   const sections = await page.locator(`${drawer} .set-nav [data-section]`).allTextContents()
-  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '로그', 'AI', 'MCP', '단축키', '명령 기록', '정보'])
-  for (const s of ['general', 'terminal', 'font', 'log', 'ai', 'mcp', 'keys', 'about']) {
+  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '보안', '로그', 'AI', 'MCP', '단축키', '명령 기록', '정보'])
+  for (const s of ['general', 'terminal', 'font', 'security', 'log', 'ai', 'mcp', 'keys', 'about']) {
     await page.click(`${drawer} .set-nav [data-section="${s}"]`)
     await expect(page.locator(`${drawer} .set-nav [data-section="${s}"]`)).toHaveAttribute('aria-selected', 'true')
   }
@@ -191,12 +191,12 @@ test('SET-8 바꾼 설정이 재기동 후에도 유지된다', async ({ userDat
 // 순서를 고칠 손잡이가 없으니 **파생이 틀리면 사용자가 되돌릴 수 없다** — 그만큼 이 계약이
 // 살아 있어야 한다. 2.0 2단계에서 우측 바가 없어지고 좌측 레일(Sidebar.tsx SidebarRail)이 다 받았다.
 // 3단계에서 하단 탭줄도 설정 › 기능을 따른다 — 기본 숨김(쿠버네티스·서버 로그)은 탭줄에 없다.
-test('SET-ACT★ 좌측 레일은 시안 순서 일곱, 하단 탭줄은 기본 노출 여덟', async ({ ara }) => {
+test('SET-ACT★ 좌측 레일은 다섯(R6), 하단 탭줄은 기본 노출 여덟', async ({ ara }) => {
   const { page } = ara
   await page.click('.lrail-item[data-activity="bottombar"]')
   await expect(page.locator('.bottom-panel')).toBeVisible()
 
-  // 사이드바 탭은 data-tab, 여닫이(창·하단·설정)는 data-activity 를 단다.
+  // 다듬기 R6(9c32297): 레일에 탭이 없다 — 전부 data-activity(사이드바·지난 세션 | 탐색기·서버 도구 … 설정).
   const railIds = await page
     .locator('.lrail .lrail-item')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab ?? (e as HTMLElement).dataset.activity))
@@ -204,8 +204,10 @@ test('SET-ACT★ 좌측 레일은 시안 순서 일곱, 하단 탭줄은 기본 
     .locator('.bottom-panel .bp-tab')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bottom))
 
-  // 시안(Z-final): 연결 · 파일 · 탐색기 · AI 작업대 · 서버 도구 · 지난 세션 … 설정.
-  expect(railIds).toEqual(['conn', 'file', 'explorer', 'ai', 'bottombar', 'past', 'settings'])
+  // R5·R6: [연결|파일|AI] 는 사이드바 머리 탭(.sb-tab)으로 올라갔고 레일엔 [사이드바] 하나가 남았다.
+  expect(railIds).toEqual(['sidebar', 'pastlog', 'explorer', 'bottombar', 'settings'])
+  // 옮겨 간 탭이 사라진 게 아니다 — 머리 탭에 그대로 있다.
+  expect(await page.locator('.sb-tab').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab))).toEqual(['conn', 'file', 'ai'])
   // 하단 탭줄 = BOTTOM_IDS 에서 기본 숨김(k8s·applog)을 뺀 순서 그대로.
   expect(dockIds).toEqual(['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'log'])
   // 오른쪽에 아이콘 바가 다시 생기면 2.0 원칙(오른쪽 = 채팅)이 깨진다.

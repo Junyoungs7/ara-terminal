@@ -55,7 +55,9 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
   await expect(fold.locator('.in .l').first()).toContainText('세션 1개')
 
   // ④ 글과 비용·턴. 비용은 "이 대화가 얼마 썼나"라 늘 보여야 한다(설계 §4-4).
-  await expect(panel.locator('.ara-ai')).toContainText('받은 말: 세션 목록 좀 봐 줘')
+  // 아라 채팅 v2(217bb4a): 엔진에 가는 말 앞에 [지금 보는 세션] 머리말이 붙는다(AraChat.send) — 가짜 엔진은
+  // 받은 그대로 돌려주므로 머리말 뒤에 보낸 말이 그대로 있어야 한다.
+  await expect(panel.locator('.ara-ai')).toContainText(/받은 말: \[지금 보는 세션\][\s\S]*세션 목록 좀 봐 줘/)
   // v3: 비용은 입력칸 밑 상태줄(한도가 없으면 이번 대화 토큰 · 추정 비용).
   await expect(panel.locator('[data-field="ara.usage"]')).toContainText('한도 확인 불가')
   await expect(panel.locator('[data-field="ara.usage"]')).toContainText('$0.01')
@@ -73,7 +75,7 @@ test('ARA2-2 [중지]는 도는 동안에만 눌린다 · 닫았다 열어도 �
   await expect(send).not.toHaveClass(/stop/)
   await panel.locator('.ara-input').fill('안녕')
   await panel.locator('.ara-input').press('Enter')
-  await expect(panel.locator('.ara-ai')).toContainText('받은 말: 안녕')
+  await expect(panel.locator('.ara-ai')).toContainText(/받은 말: \[지금 보는 세션\][\s\S]*안녕/) // 머리말 — ARA2-1
   // 턴이 끝나면 [중지]가 아니게 되고, 입력칸이 비어 있으니 다시 잠긴다.
   await expect(send).not.toHaveClass(/stop/)
   await expect(send).toBeDisabled()
@@ -310,9 +312,11 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   await a.page.click('.tb-chat')
   await expect(a.page.locator('.ara-panel')).toBeVisible()
 
-  // ① 버튼이 **글자로** 보인다 — 아이콘만 뒀더니 무엇인지 안 읽혔다(준영님 제보).
+  // ① 버튼이 무엇인지 읽힌다 — 아이콘만 뒀더니 무엇인지 안 읽혔다(준영님 제보).
+  // 0aef679(2026-10-20 머리 A안)부터 좁은 머리 한 줄이라 아이콘이고, 이름은 title·aria-label 이 말한다.
   const btn = a.page.locator('.ara-panel [data-action="ara.chats"]')
-  await expect(btn).toContainText('지난 대화')
+  await expect(btn).toHaveAccessibleName('지난 대화')
+  await expect(btn).toHaveAttribute('title', '지난 대화')
 
   // ② 누르면 **팝업**이 뜨고 목록이 비어 있지 않다(제보의 그 자리).
   await btn.click()
@@ -325,7 +329,7 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   await expect(row.locator('.sess-type')).toHaveText('API')
 
   // ②b [새 대화] 는 목록 옆에 있다 — 이어 가던 것을 놓고 빈 판에서 시작한다.
-  await expect(a.page.locator('.ara-panel [data-action="ara.chats.new"]')).toContainText('새 대화')
+  await expect(a.page.locator('.ara-panel [data-action="ara.chats.new"]')).toHaveAccessibleName('새 대화')
 
   // ③ 이름을 붙이면 목록이 그 이름으로 바뀐다.
   await row.locator('[data-action="ara.chats.rename"]').click()

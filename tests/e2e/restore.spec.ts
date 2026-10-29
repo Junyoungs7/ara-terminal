@@ -117,7 +117,9 @@ test('RESTORE-4 SSH 재접속 실패는 그 패널만 오류 카드가 되고 �
   const a2 = await launch(userDataDir)
   const errCard = a2.page.locator('.pane-grid .restore-err-card')
   await expect(errCard).toHaveCount(1, { timeout: 60_000 })
-  await expect(errCard.locator('.rec-title')).toHaveText('연결 복원 실패')
+  // 1.0.11(9f39bea): SSH 복원은 connectProfile 을 타고 실패 사유는 그쪽이 이미 화면으로 말한다('shown') —
+  // 카드는 일반 사유 '연결이 끊겼습니다'로 돌아간다(MainArea 부팅 복원 주석). '연결 복원 실패'는 프로필 없는 자리 몫이다.
+  await expect(errCard.locator('.rec-title')).toHaveText('연결이 끊겼습니다')
   await expect(errCard.locator('.rec-btn.primary')).toHaveText('재시도')
   // 로컬 세션은 정상 — 전체 실패가 아니다.
   expect((await sessionList(a2.page)).length).toBe(1)

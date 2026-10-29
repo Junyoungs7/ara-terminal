@@ -131,6 +131,10 @@ async function sandboxUserPaths(app: ElectronApplication, userData: string): Pro
     })
     ipcMain.removeHandler('fs:downloadsDir')
     ipcMain.handle('fs:downloadsDir', () => ({ dir: dl }))
+    // 1.0.15(3efcc2f)부터 묻지 않는 받기(더블클릭·RDP 자동 받기)는 fs:downloadsDir 가 아니라 이 채널을 탄다 —
+    // 이것을 안 막아 2026-10-29 전체 실행이 SFTP-4·4b 의 README_한글*.md 를 **실제 다운로드 폴더**에 떨궜다.
+    ipcMain.removeHandler('fs:downloadTarget')
+    ipcMain.handle('fs:downloadTarget', () => ({ dir: dl }))
   }, userData)
 }
 
@@ -442,6 +446,17 @@ export async function explorerWindow(app: ElectronApplication, trigger: () => Pr
 /** 탐색기 창이 화면에 보이는가 — × 는 숨김이라(다듬기 R2) 창 수로는 닫힘을 못 가른다. */
 export async function explorerVisible(win: Page): Promise<boolean> {
   return (await win.evaluate(() => document.visibilityState)) === 'visible'
+}
+
+/**
+ * 탐색기 OS 창이 보이는가 — **main 이 아는 값**(BrowserWindow.isVisible). explorerVisible 은 그 창 문서의
+ * Page Visibility 라 한 층 위다. × 를 눌렀는데 explorerVisible 만 visible 로 남으면 "창은 숨었는데 문서가
+ * 모른다"(숨은 동안 폴링이 안 멈춘다)이고, 이것까지 true 면 숨김 자체가 안 걸린 것이다.
+ */
+export async function explorerShownByOs(app: ElectronApplication): Promise<boolean> {
+  return app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.webContents.getURL().includes('#explorerwin') && w.isVisible())
+  )
 }
 
 /** 열려 있는 탐색기 창 수(창은 하나여야 한다 — 숨은 창도 센다). */

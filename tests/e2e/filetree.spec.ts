@@ -19,8 +19,10 @@ import {
 const slash = (p: string) => p.replace(/\\/g, '/')
 
 // 알려진 내용의 임시 작업 폴더(한글 이름 포함) — 홈 디렉토리는 내용이 환경마다 달라 검증할 수 없다.
-function makeWorkdir(): string {
-  const root = mkdtempSync(join(tmpdir(), 'ara-files-'))
+// inside 를 주면 그 안에 'work' 로 만든다(상위 폴더 목록을 알려진 크기로 두고 싶을 때 — FILE-4).
+function makeWorkdir(inside?: string): string {
+  const root = inside ? join(inside, 'work') : mkdtempSync(join(tmpdir(), 'ara-files-'))
+  if (inside) mkdirSync(root)
   mkdirSync(join(root, '문서'))
   mkdirSync(join(root, '로그'))
   writeFileSync(join(root, 'alpha.txt'), 'alpha\n')
@@ -171,7 +173,10 @@ test('FILE-3 폴더를 더블클릭하면 진입만 하고, 버튼을 눌러야 
 
 // FILE-4 상위 폴더 버튼 + 브레드크럼으로 되돌아간다
 test('FILE-4 상위 폴더·브레드크럼으로 이동한다', async ({ ara }) => {
-  const dir = makeWorkdir()
+  // 한 단계 더 들어가 만든다: 브레드크럼으로 올라가는 곳이 OS 임시 폴더면 그 목록 크기가 PC 마다 다르다
+  // (2026-10-29 실측 10만 4천 항목 — 항목마다 stat 하는 목록이 15초 안에 안 끝났다). 지금은 'work' 하나뿐이다.
+  const outer = mkdtempSync(join(tmpdir(), 'ara-files-'))
+  const dir = makeWorkdir(outer)
   await openFileTabAt(ara.page, dir)
   await row(ara.page, '로그/').dblclick()
   await expect(ara.page.locator('.ftree .sftp-empty')).toHaveText('빈 폴더입니다')
@@ -183,7 +188,8 @@ test('FILE-4 상위 폴더·브레드크럼으로 이동한다', async ({ ara })
   await expect.poll(() => segs.count(), { timeout: 10_000 }).toBeGreaterThan(1)
   const count = await segs.count()
   await segs.nth(count - 2).click()
-  await expect.poll(async () => (await names(ara.page)).length, { timeout: 15_000 }).toBeGreaterThan(0)
+  // 상위로 갔다 = 방금 있던 폴더가 목록의 한 행이다(개수만 보면 어느 폴더든 통과한다).
+  await expect(row(ara.page, 'work/')).toBeVisible({ timeout: 15_000 })
 })
 
 // FILE-5 우클릭 → 새 폴더(이름 입력 다이얼로그)
