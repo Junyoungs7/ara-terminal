@@ -53,14 +53,15 @@ test('CLIP-1 선택 상태의 Ctrl+C 는 복사한다', async ({ ara }) => {
 // 아니라 — 그건 Chromium 동작이지 우리 것이 아니다 — "거부되면 우리가 알리는가" 이기 때문이다.
 // 창을 만졌다 놓았다 하는 방식은 OS 마다 결과가 달라 흔들리기도 한다.
 test('CLIP-1b★ 복사가 거부되면 조용히 넘어가지 않고 안내가 뜬다', async ({ ara }) => {
-  const { page } = ara
+  const { page, app } = ara
   const id = await newLocalShell(page)
   await runCommand(page, id, 'echo 거부확인_문자열')
   await expectTermText(page, id, /거부확인_문자열/)
-  // 실제 거부와 같은 예외를 던지게 한다(포커스 없는 창에서 브라우저가 내는 그것).
-  await page.evaluate(() => {
-    navigator.clipboard.writeText = () =>
-      Promise.reject(new DOMException('Document is not focused.', 'NotAllowedError'))
+  // cec8689(2026-08-31)부터 복사는 navigator.clipboard 가 아니라 main(clipboard:writeText)을 거친다 —
+  // 렌더러 쪽을 막아 봐야 아무 일도 없다(그래서 "복사됨"이 떴다). 거부는 그 길의 끝, main 에서 만든다.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('clipboard:writeText')
+    ipcMain.handle('clipboard:writeText', () => ({ ok: false }))
   })
   await focusTerminal(page)
   await page.evaluate((sid) => window.__evTerm(sid)?.selectAll(), id)
