@@ -371,8 +371,12 @@
 
           <div class="dl-box reveal">
             <div>
-              <h3>ARA for Windows</h3>
-              <p class="muted">사내 배포판입니다.</p>
+              <h3>ARA 2.0 for Windows</h3>
+              <p class="muted">
+                사내 배포판입니다. 2.0 은 화면을 새로 짰습니다 — 금색을 걷어낸 차분한 회색에 파랑 하나, 탭 바로 아래 붙은 세션 창,
+                오른쪽은 채팅만. 여기에 <b>앱 잠금</b>(비밀번호로 저장된 비밀까지 암호화, 잠겨도 열린 세션은 그대로)과
+                <b>탐색기·지난 세션 로그를 별도 창</b>으로 여는 것이 더해졌습니다. 자세한 것은 패치 내역에 있습니다.
+              </p>
               <div style="margin-top: 26px; display: flex; gap: 10px; flex-wrap: wrap">
                 <a class="btn btn-primary" data-dl href="downloads/" download>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -407,6 +411,28 @@
           </div>
 
           <div class="grid3" style="margin-top: 40px">
+            <div class="tile reveal">
+              <h4>이전 버전 <span data-rel-v1="version">1.0.33</span></h4>
+              <p>
+                2.0 은 1.x 의 자동 업데이트로 가지 않습니다 — 위에서 받아 덮어 설치하시면 서버 목록·설정이 그대로 이어집니다.
+                1.x 가 필요하시면 <a class="link" data-dl-v1 href="downloads/" download><span data-rel-v1="file">ARA Setup 1.0.33.exe</span></a>
+                (<span data-rel-v1="size">94.3 MB</span>).
+              </p>
+            </div>
+            <div class="tile reveal">
+              <h4>1.x 로 돌아가기</h4>
+              <p>
+                2.0 은 처음 켤 때 1.x 설정을 <code>%APPDATA%\A.R.A\backup-1.x-날짜-시각</code> 폴더에 복사해 둡니다.
+                아라를 끄고 1.0.33 을 설치한 뒤, 그 폴더의 파일을 <code>%APPDATA%\A.R.A</code> 로 덮어 복사하시면 2.0 이전 상태로 돌아갑니다.
+              </p>
+            </div>
+            <div class="tile reveal">
+              <h4>앱 잠금은 켜야 동작합니다</h4>
+              <p>기본은 꺼져 있습니다. <b>설정 › 보안</b>에서 켜면 비밀번호를 잊었을 때를 위해 Google OTP 도 함께 등록합니다.</p>
+            </div>
+          </div>
+
+          <div class="grid3" style="margin-top: 20px">
             <div class="tile reveal">
               <h4>처음이신가요</h4>
               <p><a class="link" href="manual.html#start">사용 설명서의 [시작하기]</a>가 첫 서버 연결까지 안내합니다.</p>
