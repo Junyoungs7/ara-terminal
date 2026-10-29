@@ -78,4 +78,24 @@ describe('SafeStorageSecretStore', () => {
     const s1 = new SafeStorageSecretStore(vaultPath)
     expect(s1.get('key')).toBe('recovered')
   })
+  it('setMany(앱 잠금) — 한 번에 바꾸고 .bak 에 옛 값이 남지 않는다, null 은 지운다', () => {
+    const s = new SafeStorageSecretStore(vaultPath)
+    s.set('a', 'old-a')
+    s.set('b', 'old-b')
+    s.setMany({ a: 'new-a', b: null })
+    expect(s.get('a')).toBe('new-a')
+    expect(s.has('b')).toBe(false)
+    const fs = require('node:fs')
+    expect(fs.readFileSync(vaultPath + '.bak', 'utf8')).toBe(fs.readFileSync(vaultPath, 'utf8'))
+    expect(new SafeStorageSecretStore(vaultPath).keys()).toEqual(['a'])
+  })
+
+  it('setMany — 암호화 미가용이면 아무것도 안 바뀐다', () => {
+    const s = new SafeStorageSecretStore(vaultPath)
+    s.set('a', 'old-a')
+    encAvailable = false
+    expect(() => s.setMany({ a: 'new-a' })).toThrow()
+    encAvailable = true
+    expect(s.get('a')).toBe('old-a')
+  })
 })

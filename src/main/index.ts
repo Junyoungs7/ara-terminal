@@ -1,5 +1,5 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
-import { app, BrowserWindow, session } from 'electron'
+import { app, BrowserWindow, session, safeStorage } from 'electron'
 import { join, isAbsolute, basename, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { appendFileSync, mkdirSync } from 'node:fs'
@@ -7,6 +7,8 @@ import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
 import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
 import { ProfileStore } from './secrets/ProfileStore'
+import { AppLock } from './secrets/AppLock'
+import { registerLockIpc } from './ipc/registerLockIpc'
 import { registerWorkspaceIpc } from './ipc/registerWorkspaceIpc'
 import { registerSessionIpc } from './ipc/registerSessionIpc'
 import { registerSessionWindowIpc } from './ipc/registerSessionWindowIpc'
@@ -373,7 +375,19 @@ app.whenReady().then(async () => {
   const userData = app.getPath('userData')
   store = new WorkspaceStore(join(userData, 'workspace.json'), app.getVersion())
   history = new HistoryStore(join(userData, 'history.json'))
-  const secrets = new SafeStorageSecretStore(join(userData, 'secrets.vault'))
+  /**
+   * 2.0 앱 잠금 — vault 위에 잠금 층을 끼운다. 잠금을 안 쓰면(기본) 이 층은 그대로 통과라 지금과 같다.
+   * 아래 모든 소비자(ProfileStore·AI·MCP·아라)는 `secrets` 를 SecretStore 로만 본다 — 고친 곳은 이 몇 줄뿐이다.
+   * OTP 비밀만 safeStorage 로 따로 싼다(잠금 층 밖 — 비밀번호를 잊었을 때 써야 한다).
+   */
+  const appLock = new AppLock(join(userData, 'lock.json'), new SafeStorageSecretStore(join(userData, 'secrets.vault')), {
+    enc: (s) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('safeStorage 암호화를 사용할 수 없습니다.')
+      return safeStorage.encryptString(s).toString('base64')
+    },
+    dec: (s) => safeStorage.decryptString(Buffer.from(s, 'base64'))
+  })
+  const secrets = appLock.store
   const profiles = new ProfileStore(store, secrets)
 
   // 현재 창의 webContents 접근자(세션·SFTP·AI·MCP 이벤트 공용). 반환값이 이미 destroyed 일 수도
@@ -487,7 +501,8 @@ app.whenReady().then(async () => {
   // W5: F16 시절 단일 키(`ai.apiKey`)를 프로바이더별 분리 저장(`ai.apiKey.<provider>`)으로 옮긴 뒤 —
   // 1회성, 이미 옮겨졌으면 조건이 거짓이라 매 기동마다 비용이 없다. 사용자가 다시 키를 입력하지 않게 한다.
   const LEGACY_AI_KEY_VAULT = 'ai.apiKey'
-  if (secrets.has(LEGACY_AI_KEY_VAULT) && !secrets.has(aiKeyVaultId('anthropic'))) {
+  // 잠긴 채 켰으면(앱 잠금) 옛 키를 못 읽는다 — 그때는 건너뛴다. 잠금은 이 이전보다 나중 기능이라 실제로 남아 있을 일은 없다.
+  if (appLock.state() !== 'locked-startup' && secrets.has(LEGACY_AI_KEY_VAULT) && !secrets.has(aiKeyVaultId('anthropic'))) {
     const legacy = secrets.get(LEGACY_AI_KEY_VAULT)
     if (legacy) secrets.set(aiKeyVaultId('anthropic'), legacy)
     secrets.delete(LEGACY_AI_KEY_VAULT)
@@ -614,6 +629,7 @@ app.whenReady().then(async () => {
   // 렌더러가 ara:active 로 알린 마지막 값이다(외부 MCP 클라이언트에는 해당 없음 — approval.ts).
   mcp.approval.setAraTarget(() => araChat?.active()?.id ?? null)
   registerWindowIpc(() => mainWindow)
+  registerLockIpc(appLock, () => sessions.snapshot().length)
   /**
    * F1a 훅 기반 에이전트 상태 — **창을 만들기 전에** 포트를 잡는다.
    *

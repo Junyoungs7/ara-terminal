@@ -51,6 +51,7 @@ import type { AraChatRow, ChatMessage } from '../main/ai/araChats'
 import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
 import type { PastLog } from '../main/log/SessionLog'
+import type { LockResult, LockView } from './lock'
 export type { PastLog }
 
 // 디렉토리 항목(계획서 §C F7 / design-system 5.2 파일 행). 폴더 우선 정렬은 main이 담당.
@@ -182,6 +183,18 @@ export type InvokeContract = {
   // 경쟁하지 않는다(그쪽은 세션·레이아웃 담당).
   'ui:setSidebar': { req: SidebarState; res: { ok: true } }
   'app:getVersion': { req: void; res: string }
+  // 2.0 앱 잠금(main/secrets/AppLock.ts). 비밀번호는 이 채널로만 오가고 main 은 기록하지 않는다.
+  'lock:get': { req: void; res: LockView }
+  'lock:lock': { req: void; res: { ok: boolean } }
+  'lock:unlock': { req: { password: string }; res: LockResult }
+  'lock:enable': { req: { password: string }; res: LockResult }
+  'lock:disable': { req: { password: string }; res: LockResult }
+  'lock:change': { req: { oldPassword: string; newPassword: string }; res: LockResult }
+  'lock:setPrefs': { req: { mcpWhileLocked?: boolean; autoLockMin?: number; shortcut?: string }; res: LockResult }
+  'lock:otpBegin': { req: void; res: { secret: string; uri: string } | null }
+  'lock:otpConfirm': { req: { code: string }; res: LockResult }
+  'lock:forgotVerify': { req: { code: string }; res: LockResult }
+  'lock:forgotReset': { req: { newPassword: string }; res: LockResult & { removed?: number } }
   // R14 탐색기에서 `아라`: 본창이 부트 복원을 끝냈다고 알린다 → 기다리던 폴더가 있으면 main 이 거기서
   // 로컬 셸을 연다(`session:opened` 로 칸을 잡는다). opened = 열었나. main/windows/openHere.ts 참고.
   'app:openLaunchDir': { req: void; res: { opened: boolean } }
@@ -1091,6 +1104,21 @@ export type EvApi = {
     clear(): Promise<{ ok: true }>
     onDelta(cb: (d: AiDelta) => void): () => void
     onEnd(cb: (e: AiEnd) => void): () => void
+  }
+  // 2.0 앱 잠금. 상태는 main 이 쥐고 `lock:state` 로 모든 창에 방송한다.
+  lock: {
+    get(): Promise<LockView>
+    lock(): Promise<{ ok: boolean }>
+    unlock(password: string): Promise<LockResult>
+    enable(password: string): Promise<LockResult>
+    disable(password: string): Promise<LockResult>
+    change(oldPassword: string, newPassword: string): Promise<LockResult>
+    setPrefs(p: { mcpWhileLocked?: boolean; autoLockMin?: number; shortcut?: string }): Promise<LockResult>
+    otpBegin(): Promise<{ secret: string; uri: string } | null>
+    otpConfirm(code: string): Promise<LockResult>
+    forgotVerify(code: string): Promise<LockResult>
+    forgotReset(newPassword: string): Promise<LockResult & { removed?: number }>
+    onState(cb: (v: LockView) => void): () => void
   }
   // F24 앱 내 피드백 수집. **읽기 채널이 없다는 것이 계약이다** — 목록 화면을 만들지 않으므로
   // 저장된 항목을 렌더러로 되돌리는 창구가 표면에 존재하지 않는다(폴더 열기로 충분).

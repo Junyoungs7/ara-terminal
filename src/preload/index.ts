@@ -34,6 +34,7 @@ import type {
   McpState
 } from '@shared/types'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
+import type { LockView } from '@shared/lock'
 
 const api: EvApi = {
   workspace: {
@@ -457,6 +458,24 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, p: { sessionId: string }) => cb(p.sessionId)
       ipcRenderer.on('agent:exit', listener)
       return () => ipcRenderer.removeListener('agent:exit', listener)
+    }
+  },
+  lock: {
+    get: () => ipcRenderer.invoke('lock:get'),
+    lock: () => ipcRenderer.invoke('lock:lock'),
+    unlock: (password: string) => ipcRenderer.invoke('lock:unlock', { password }),
+    enable: (password: string) => ipcRenderer.invoke('lock:enable', { password }),
+    disable: (password: string) => ipcRenderer.invoke('lock:disable', { password }),
+    change: (oldPassword: string, newPassword: string) => ipcRenderer.invoke('lock:change', { oldPassword, newPassword }),
+    setPrefs: (p) => ipcRenderer.invoke('lock:setPrefs', p),
+    otpBegin: () => ipcRenderer.invoke('lock:otpBegin'),
+    otpConfirm: (code: string) => ipcRenderer.invoke('lock:otpConfirm', { code }),
+    forgotVerify: (code: string) => ipcRenderer.invoke('lock:forgotVerify', { code }),
+    forgotReset: (newPassword: string) => ipcRenderer.invoke('lock:forgotReset', { newPassword }),
+    onState: (cb: (v: LockView) => void) => {
+      const listener = (_e: IpcRendererEvent, v: LockView) => cb(v)
+      ipcRenderer.on('lock:state', listener)
+      return () => ipcRenderer.removeListener('lock:state', listener)
     }
   },
   mcp: {
