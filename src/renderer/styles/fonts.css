@@ -89,54 +89,32 @@
 }
 
 /* ------------------------------------------------------------------------
-   원문자(①②③…) 겹침 (1.0.9, 2026-09-10 준영님 캡처 3장) — 폰트가 셀보다 넓게 그린다.
+   원문자(①②③…) 겹침 — claude 답변의 ①②③ 이 옆 칸을 덮는다(1.0.9 캡처 → 2.0 재신고).
 
-   claude 가 표와 목록에 `①②③` 을 쓰는데 **글자가 옆 칸을 덮었다.** 재 보니 어긋난 것은
-   폭 계산이 아니라 **글리프 하나**다:
+   ① 은 유니코드 '모호 폭'이라 xterm 도 claude(Ink)도 **1칸**으로 센다. 그런데 나눔고딕코딩·
+   D2Coding 은 그 글자를 **2칸 너비**로 그려 다음 칸(공백·다음 숫자)을 덮는다 —
+   `① 첫째` 의 공백이 사라지고 `④⑤⑥` 이 뭉개진다. 틀린 것은 글리프 크기 하나다.
 
-     · 프로그램(claude)  — ① 을 **1칸**으로 세어 표를 맞춘다(East Asian *Ambiguous* = narrow)
-     · xterm            — **1칸**을 배정한다 ✅ 둘이 일치한다
-     · D2Coding(폰트)    — ① 을 **1.00em = 2칸 너비로 그린다** 🔴 여기만 어긋난다
+   해법: 같은 나눔고딕코딩 파일을 이 구간에서만 `size-adjust: 80%` 로 작게 그린다. 80% 에서
+   둥근 모양 그대로 1칸 안에 들어가고 뒤 공백이 산다(62%·72% 는 너무 작았다). 스택 맨 앞에
+   두되 unicode-range 밖('W' 등 xterm 이 셀 폭을 재는 글자)은 이 페이스에 매치되지 않으므로
+   셀 폭은 원래 글꼴 그대로다.
 
-   실측(fontTools, A=0.50em 기준): D2Coding 은 아래 다섯 구간 **148자만** 2배 폭이고 박스 선
-   (U+2500…)은 1칸이다 — 그래서 **표는 멀쩡하고 원문자만 깨진다.** 캡처와 정확히 맞는다.
-   (⚠️ 나눔고딕코딩은 461자가 2배이고 **박스 선까지 2배**다 — 그 폰트를 고르면 표도 깨진다.
-    이 페이스가 스택 앞에 있어도 그쪽은 못 고친다. 별개 항목이다.)
-
-   🔴 **폭 표(`wcwidth`)를 고치는 것은 답이 아니다.** "① 은 2칸"이라고 xterm 에 알려주면 이 겹침은
-   사라지지만 **프로그램이 1칸으로 맞춰 놓은 표가 통째로 어긋난다.** 틀린 것은 폰트 하나이고,
-   고칠 것도 그 하나다.
-
-   해법은 위 Nerd Font·아래 KR System 과 **같은 기법**이다 — `unicode-range` 로 그 구간만
-   1칸으로 그리는 폰트에 넘긴다. Consolas 실측 A=0.55em / ①=0.55em = **정확히 1칸**.
-   Segoe UI Symbol 은 1.3칸이라 차선(그래도 2칸보다 낫다).
-
-   구간은 내가 고른 것이 아니라 **D2Coding 을 U+2000..U+27FF 로 훑어 "A 대비 1.5배 초과"인
-   코드포인트를 모아 접은 것**이다(원문자·괄호문자·검은 원문자 다섯 구간).
-   ⚠️ 로컬 폰트라 없는 PC 에서는 조용히 다음 폰트로 넘어간다 — 그 경우 예전 동작(겹침)이다.
-      번들하지 않는 이유는 KR System 과 같다(재배포 라이선스가 필요 없다).
+   기각한 것:
+     · `rescaleOverlappingGlyphs` — WebGL 에서 ① 을 가로로 눌러 얇은 타원이 된다(못 읽음).
+     · 폭 표를 2칸으로 — claude 는 1칸으로 세므로 화면 줄이 어긋난다.
+     · 예전 'ARA Narrow Enclosed'(local Consolas) — stackFor() 에 안 들어가 첫 페인트 뒤엔
+       안 쓰였고, 없는 PC 에선 조용히 겹침으로 돌아갔다. 이 페이스로 대체했다.
+   로마 숫자(U+2160…)는 넣지 않는다 — 원래 멀쩡했다.
    ------------------------------------------------------------------------ */
 @font-face {
-  font-family: 'ARA Narrow Enclosed';
+  font-family: 'ARA Circled';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  unicode-range: U+2460-2487, U+249C-24E9, U+24EB-24F4, U+2776-277F, U+278A-2793;
-  src:
-    local('Consolas'),
-    local('Segoe UI Symbol'),
-    local('DejaVu Sans Mono');
-}
-@font-face {
-  font-family: 'ARA Narrow Enclosed';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  unicode-range: U+2460-2487, U+249C-24E9, U+24EB-24F4, U+2776-277F, U+278A-2793;
-  src:
-    local('Consolas Bold'),
-    local('Consolas'),
-    local('Segoe UI Symbol');
+  unicode-range: U+2460-24FF, U+2776-2793, U+3251-325F, U+32B1-32BF;
+  size-adjust: 80%;
+  src: url('../../../resources/fonts/NanumGothicCoding-Regular.ttf') format('truetype');
 }
 
 /* ------------------------------------------------------------------------

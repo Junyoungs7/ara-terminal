@@ -13,20 +13,22 @@ export type FontOption = {
 }
 
 // primary=나눔고딕코딩, 폴백=D2Coding, 라틴=JetBrains Mono(+한글 폴백). design-system §2.1.
+// 'ARA Circled' 는 원문자(①…) 구간만 80% 로 작게 그리는 unicode-range 페이스(styles/fonts.css) —
+// 그 구간 밖 글자는 매치되지 않아 셀 폭('W' 측정)은 각 스택의 원래 글꼴 그대로다.
 export const FONT_OPTIONS: FontOption[] = [
   {
     key: 'Nanum Gothic Coding',
     label: '나눔고딕코딩',
     tag: '권장',
     desc: '한글 고정폭 · 13px 선명 · 번들(OFL)',
-    stack: "'Nanum Gothic Coding', 'D2Coding', monospace"
+    stack: "'ARA Circled', 'Nanum Gothic Coding', 'D2Coding', monospace"
   },
   {
     key: 'D2Coding',
     label: 'D2Coding',
     tag: '폴백',
     desc: '한글 고정폭 · 리거처 지원 · 번들(OFL)',
-    stack: "'D2Coding', 'Nanum Gothic Coding', monospace"
+    stack: "'ARA Circled', 'D2Coding', 'Nanum Gothic Coding', monospace"
   },
   {
     key: 'JetBrains Mono',
@@ -34,7 +36,7 @@ export const FONT_OPTIONS: FontOption[] = [
     tag: '라틴',
     tagSys: true,
     desc: '라틴 리거처 특화 · 한글은 나눔고딕코딩 폴백',
-    stack: "'JetBrains Mono', 'Nanum Gothic Coding', monospace"
+    stack: "'ARA Circled', 'JetBrains Mono', 'Nanum Gothic Coding', monospace"
   }
 ]
 

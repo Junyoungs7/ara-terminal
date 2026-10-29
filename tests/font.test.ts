@@ -233,3 +233,9 @@ describe('UI-font2: 잉크 ascent 실측 기반 회귀 가드 (agent_talk/UI-fon
     expect(Number(m![1])).toBeGreaterThanOrEqual(1.35)
   })
 })
+
+describe('원문자 겹침 — ARA Circled', () => {
+  it('세 스택 모두 맨 앞이 ARA Circled 다', () => {
+    for (const o of FONT_OPTIONS) expect(o.stack.startsWith("'ARA Circled', "), o.key).toBe(true)
+  })
+})
