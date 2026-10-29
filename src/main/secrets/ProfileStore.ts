@@ -2,6 +2,7 @@
 // 계획서 §B.4/§C F3: 비밀은 vault 암호문으로만, workspace.json엔 secretRef만. 삭제 시 vault 키 동기 삭제(고아 방지).
 import { randomUUID } from 'node:crypto'
 import type { ConnectionProfile, ProfileInput, SecretRef } from '@shared/types'
+import { LockedError } from './AppLock'
 import type { SecretStore } from './SecretStore'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 
@@ -107,7 +108,15 @@ export class ProfileStore {
     const ref = refOf(profile)
     if (!ref) return { ok: true, secret: null } // 키 인증 + 패스프레이즈 없음 / rdp 미저장
     if (!this.vault.has(ref.key)) return { ok: false, reason: 'orphanSecret' }
-    return { ok: true, secret: this.vault.get(ref.key) }
+    try {
+      return { ok: true, secret: this.vault.get(ref.key) }
+    } catch (e) {
+      // 잠금 상태는 그대로 올린다(잠금 해제 흐름이 받는다).
+      if (e instanceof LockedError) throw e
+      // 이 PC 의 safeStorage 로 못 푸는 암호문(다른 PC·계정에서 옮겨 온 vault 등) — 값은 지우지 않고
+      // 고아와 같이 "다시 입력" 흐름으로 보낸다. 예외 문구는 로그에 남기지 않는다(키·값 금지).
+      return { ok: false, reason: 'orphanSecret' }
+    }
   }
 }
 

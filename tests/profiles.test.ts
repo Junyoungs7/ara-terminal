@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
 import { ProfileStore } from '../src/main/secrets/ProfileStore'
+import { LockedError } from '../src/main/secrets/AppLock'
 import type { SecretStore } from '../src/main/secrets/SecretStore'
 import type { ConnectionProfile, SshProfile } from '../src/shared/types'
 
@@ -127,6 +128,21 @@ describe('ProfileStore (F3 프로필 CRUD + vault 조율)', () => {
     const look = store.lookupSecret(asSsh(store.get(p.id)!))
     expect(look.ok).toBe(false)
     if (!look.ok) expect(look.reason).toBe('orphanSecret')
+  })
+
+  it('vault.get 이 복호화 실패(일반 Error)로 던지면 orphanSecret, LockedError 는 그대로 던진다', () => {
+    const p = store.save({ name: 'd', host: 'h', port: 22, username: 'u', authType: 'password', secret: 's' })
+    const orig = vault.get.bind(vault)
+    vault.get = () => {
+      throw new Error('decrypt failed')
+    }
+    expect(store.lookupSecret(asSsh(p))).toEqual({ ok: false, reason: 'orphanSecret' })
+    vault.get = () => {
+      throw new LockedError()
+    }
+    expect(() => store.lookupSecret(asSsh(p))).toThrow(LockedError)
+    vault.get = orig
+    expect(vault.has(keyOf(p))).toBe(true) // 값은 지우지 않는다
   })
 
   it('키 인증(패스프레이즈 없음)은 secret 없이도 연결 가능(lookup ok, secret=null)', () => {
