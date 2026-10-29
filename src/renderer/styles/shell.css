@@ -3382,8 +3382,12 @@ button.sb-seg.upd:hover .val {
     display: none;
   }
   /* **업데이트를 말하고 있을 때는 안 접는다.** "늘 같은 값"이라 접었던 칸인데, 그때만은 늘 같은
-     값이 아니고 이 자리가 그 알림의 유일한 상시 자리다(창 하나는 닫히면 끝이다). */
-  .statusbar .sb-seg.ver.upd {
+     값이 아니고 이 자리가 그 알림의 유일한 상시 자리다(창 하나는 닫히면 끝이다).
+     평소 버전 칸도 1.0.10 부터 눌리는 버튼(.upd)이라 `.ver.upd` 로 고르면 늘 걸린다 — 그래서 2.0 에서
+     칸이 늘자 1024px 에서 상태바가 넘쳤다(SCALE-5). 할 말이 있을 때(tone)만 고른다. */
+  .statusbar .sb-seg.ver.upd.available,
+  .statusbar .sb-seg.ver.upd.downloading,
+  .statusbar .sb-seg.ver.upd.ready {
     display: flex;
   }
 }

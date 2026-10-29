@@ -145,6 +145,14 @@ function usePageVisible(): boolean {
   return visible
 }
 
+/**
+ * 눌리는 버전 칸의 class. tone 이 없으면(평소 — 누르면 확인) 색 열쇠를 안 단다 — 예전엔 `upd null` 이 찍혔다.
+ * 좁은 창에서 버전 칸을 접는 규칙의 예외는 tone 이 있을 때만이다(shell.css `.sb-seg.ver.upd.<tone>`).
+ */
+export function verSegClass(tone: 'available' | 'downloading' | 'ready' | null): string {
+  return 'sb-seg ver upd' + (tone ? ' ' + tone : '')
+}
+
 /** 개요를 못 읽었을 때 다시 묻기까지(다듬기 R2, 리뷰 B8). 접속 직후 셸이 덜 떴을 때 한 번 실패하곤 한다. */
 export const OVERVIEW_RETRY_MS = 1500
 
@@ -333,7 +341,7 @@ export function StatusBar({
         {u.action ? (
           <button
             type="button"
-            className={'sb-seg ver upd ' + u.tone}
+            className={verSegClass(u.tone)}
             /* 설정 서랍의 [받기]·[설치] 와 **다른 이름**이다 — 같은 동작이라도 자리가 다르면
                선택자도 달라야 한다(안 그러면 e2e 가 엉뚱한 버튼을 누른다). 붙여 만들지 않는 이유는
                따로 있다: 점으로 끝나는 리터럴은 scan-i18n 이 키 접두어로 삼는다. */

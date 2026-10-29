@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import * as os from 'node:os'
-import { hostFacts, loadOverview, localPrimary, NA, osLabel, statusModel, uptimeShort } from '../src/renderer/components/StatusBar'
+import { hostFacts, loadOverview, localPrimary, NA, osLabel, statusModel, uptimeShort, verSegClass } from '../src/renderer/components/StatusBar'
 import { createHostStatsService } from '../src/main/telemetry/HostStats'
 import type { HostStats } from '../src/shared/types'
 import { parseOverview } from '../src/shared/remoteCatalog'
@@ -146,5 +146,18 @@ describe('상태바 개요 재시도', () => {
     const run = vi.fn().mockResolvedValue({ ok: true, out: '' })
     await loadOverview(run, wait)
     expect(run).toHaveBeenCalledTimes(1)
+  })
+})
+
+// SCALE-5(2026-10-29): 평소 버전 칸(누르면 확인 — tone 없음)이 'sb-seg ver upd null' 이었다. `null` 이 글자로 찍혔고,
+// 좁은 창에서 버전 칸을 접는 규칙의 예외(.ver.upd = "업데이트를 말하는 중")에 늘 걸려 1024px 에서 상태바가 넘쳤다.
+describe('상태바 버전 칸 class', () => {
+  it('할 말이 없으면(tone 없음) null 도, 알림 색 열쇠도 없다', () => {
+    expect(verSegClass(null)).toBe('sb-seg ver upd')
+  })
+  it('받을 것·받는 중·준비됨은 그 열쇠를 단다', () => {
+    expect(verSegClass('available')).toBe('sb-seg ver upd available')
+    expect(verSegClass('downloading')).toBe('sb-seg ver upd downloading')
+    expect(verSegClass('ready')).toBe('sb-seg ver upd ready')
   })
 })
