@@ -254,6 +254,34 @@ describe('AppLock', () => {
     expect(await mk(v).unlock(PW1)).toEqual({ ok: false, reason: 'wrong' })
   })
 
+  it('이 PC 에서 못 푸는 저장값(safeStorage 실패)은 건너뛴다 — 켜기·풀기·끄기가 막히지 않고 그 값은 원래 바이트 그대로', async () => {
+    const v = memVault()
+    v.raw.set('srv-1', 'server-secret-a')
+    v.raw.set('bad', 'foreign-bytes')
+    const get = v.get
+    // 다른 Local State 로 암호화된 값 — SafeStorageSecretStore.get 이 던지는 것을 흉내 낸다.
+    v.get = (k: string) => {
+      if (k === 'bad') throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.')
+      return get(k)
+    }
+    const l = mk(v)
+    expect(await l.enable(PW1)).toEqual({ ok: true })
+    expect(v.raw.get('bad')).toBe('foreign-bytes')
+    expect(v.raw.get('srv-1')).not.toContain('server-secret-a')
+    expect(l.store.get('srv-1')).toBe('server-secret-a')
+    // 풀기의 봉하기 고리도 던지지 않는다
+    v.raw.set('late', 'plain-left-behind')
+    const again = mk(v)
+    expect(await again.unlock(PW1)).toEqual({ ok: true })
+    expect(v.raw.get('late')).not.toContain('plain-left-behind')
+    expect(v.raw.get('bad')).toBe('foreign-bytes')
+    // 끄기도 — 봉한 값만 되돌리고 못 푸는 값은 그대로
+    expect(await again.disable(PW1)).toEqual({ ok: true })
+    expect(v.raw.get('srv-1')).toBe('server-secret-a')
+    expect(v.raw.get('late')).toBe('plain-left-behind')
+    expect(v.raw.get('bad')).toBe('foreign-bytes')
+  })
+
   it('꺼져 있을 때 잠금 시도는 안내(hint)를 부르고, 켜진 뒤엔 부르지 않고 잠근다', async () => {
     const v = memVault()
     let hints = 0

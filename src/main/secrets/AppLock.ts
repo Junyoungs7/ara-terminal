@@ -214,14 +214,35 @@ export class AppLock {
     return { ok: true }
   }
 
+  /**
+   * vault 를 훑는다. safeStorage 가 못 푸는 값(다른 프로필의 Local State 로 암호화됨 — 프로필 이동·손상)은
+   * **건너뛴다** — 지우지도 봉하지도 않고 원래 바이트 그대로 둔다. 이미 이 PC 에서 쓸 수 없던 값이라
+   * 상태가 나빠지지 않고, 그 하나 때문에 켜기·끄기·풀기가 통째로 막히지 않는다. 개수만 로그(키 이름·값 금지).
+   */
+  private readVault(): [string, string][] {
+    const out: [string, string][] = []
+    let skipped = 0
+    for (const k of this.vault.keys()) {
+      let raw: string | null
+      try {
+        raw = this.vault.get(k)
+      } catch {
+        skipped++
+        continue
+      }
+      if (raw !== null) out.push([k, raw])
+    }
+    if (skipped > 0) console.warn(`[lock] 이 PC 에서 못 푸는 저장값 ${skipped}개는 그대로 둔다`)
+    return out
+  }
+
   /** 켜기 도중 꺼진 흔적(안 봉한 값)을 봉한다. 실패해도 값은 그대로 읽히므로 치명적이지 않다. */
   private sweep(): void {
     const dk = this.dk
     if (!dk) return
     const next: Record<string, string> = {}
-    for (const k of this.vault.keys()) {
-      const raw = this.vault.get(k)
-      if (raw !== null && !isSealed(raw)) next[k] = sealValue(dk, k, raw)
+    for (const [k, raw] of this.readVault()) {
+      if (!isSealed(raw)) next[k] = sealValue(dk, k, raw)
     }
     if (Object.keys(next).length === 0) return
     try {
@@ -235,11 +256,9 @@ export class AppLock {
   async enable(password: string): Promise<LockResult> {
     if (this.st !== 'off') return { ok: false, reason: 'state' }
     if (password.length < LOCK_MIN_PASSWORD) return { ok: false, reason: 'weak' }
-    // 먼저 전부 읽는다 — 하나라도 못 읽으면(이미 봉한 값·safeStorage 실패) 아무것도 쓰기 전에 멈춘다.
+    // 먼저 전부 읽는다 — 이미 봉한 값이 있으면 아무것도 쓰기 전에 멈춘다. safeStorage 가 못 푸는 값은 건너뛴다(readVault).
     const plain: Record<string, string> = {}
-    for (const k of this.vault.keys()) {
-      const v = this.vault.get(k)
-      if (v === null) continue
+    for (const [k, v] of this.readVault()) {
       if (isSealed(v)) throw new Error('lock: 이미 잠금으로 봉한 값이 있어 켤 수 없습니다(lock.json 이 없어졌을 수 있다)')
       plain[k] = v
     }
@@ -266,9 +285,8 @@ export class AppLock {
     const r = await this.check(password)
     if (!('dk' in r)) return r
     const plain: Record<string, string> = {}
-    for (const k of this.vault.keys()) {
-      const raw = this.vault.get(k)
-      if (raw !== null && isSealed(raw)) plain[k] = openValue(r.dk, k, raw) // 하나라도 못 풀면 던진다 — 아무것도 안 바뀐다
+    for (const [k, raw] of this.readVault()) {
+      if (isSealed(raw)) plain[k] = openValue(r.dk, k, raw) // 하나라도 못 풀면 던진다 — 아무것도 안 바뀐다
     }
     this.vault.setMany(plain)
     const rest = { ...this.file }
