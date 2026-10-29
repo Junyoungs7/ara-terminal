@@ -7,17 +7,20 @@
 ;(function () {
   'use strict'
 
-  var rel = window.ARA_RELEASE || {}
-
   // 1) 배포 정보 채우기 — data-rel="version" 같은 속성이 붙은 자리에 값을 넣는다.
-  document.querySelectorAll('[data-rel]').forEach(function (el) {
-    var v = rel[el.getAttribute('data-rel')]
-    if (v) el.textContent = v
-  })
-  // 다운로드 링크는 파일 이름이 버전마다 바뀐다(공백은 URL 인코딩).
-  document.querySelectorAll('[data-dl]').forEach(function (a) {
-    if (rel.file) a.setAttribute('href', 'downloads/' + encodeURIComponent(rel.file))
-  })
+  //    지금 판(2.0)은 data-rel·data-dl, 이전 버전(1.x)은 data-rel-v1·data-dl-v1 — release.js 의 두 블록.
+  var fill = function (rel, relAttr, dlAttr) {
+    document.querySelectorAll('[' + relAttr + ']').forEach(function (el) {
+      var v = rel[el.getAttribute(relAttr)]
+      if (v) el.textContent = v
+    })
+    // 다운로드 링크는 파일 이름이 버전마다 바뀐다(공백은 URL 인코딩). 폴더는 판마다 다르다(2.0 = downloads/v2/).
+    document.querySelectorAll('[' + dlAttr + ']').forEach(function (a) {
+      if (rel.file) a.setAttribute('href', (rel.dir || 'downloads/') + encodeURIComponent(rel.file))
+    })
+  }
+  fill(window.ARA_RELEASE || {}, 'data-rel', 'data-dl')
+  fill(window.ARA_RELEASE_V1 || {}, 'data-rel-v1', 'data-dl-v1')
 
   // 2) 내비 배경 — 맨 위에서는 투명, 내려가면 진해진다.
   var nav = document.querySelector('.nav')

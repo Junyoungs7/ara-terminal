@@ -4,7 +4,9 @@
  * 준영님이 정한 자리(2026-08-23):
  *   서버 192.168.100.56 · 사용자 jun · 경로 /data/jun/ARA · 포트 8899
  *   → 다운로드 페이지 http://192.168.100.56:8899/
- *   → 자동 업데이트 채널 http://192.168.100.56:8899/downloads/  (electron-builder.yml 의 publish.url)
+ *   → 자동 업데이트 채널 http://192.168.100.56:8899/downloads/v2/  (2.0 — electron-builder.yml 의 publish.url)
+ *     1.x 채널 /downloads/latest.yml 은 1.0.33 그대로(2.0 을 1.x 자동 업데이트로 밀지 않는다).
+ *   site/ 를 통째로(하위 폴더 포함) 올리고 지우지는 않는다 — 서버의 1.x 파일은 남는다.
  *
  * **비밀번호는 환경변수로만 받는다.** 인자로 받으면 프로세스 목록(ps)에 그대로 뜨고, 파일에 적으면
  * 저장소에 남는다. 둘 다 안 된다.
@@ -112,13 +114,12 @@ conn.on('ready', async () => {
       `curl -sS -o /dev/null -w '%{http_code} ' http://127.0.0.1:${PORT}/ ; ` +
         `curl -sS -o /dev/null -w '%{http_code} ' http://127.0.0.1:${PORT}/manual.html ; ` +
         `curl -sS -o /dev/null -w '%{http_code} ' http://127.0.0.1:${PORT}/downloads/latest.yml ; ` +
-        `curl -sS -r 0-99 -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${PORT}/downloads/${encodeURIComponent(
-          releaseFile()
-        )}'`
+        `curl -sS -o /dev/null -w '%{http_code} ' http://127.0.0.1:${PORT}/downloads/v2/latest.yml ; ` +
+        `curl -sS -r 0-99 -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${PORT}/${releaseFile()}'`
     )
-    console.log(`서버 안 확인(index · manual · latest.yml · Range): ${check.out}`)
+    console.log(`서버 안 확인(index · manual · 1.x latest.yml · v2 latest.yml · Range): ${check.out}`)
     console.log(`\n배포 완료 → http://${HOST}:${PORT}/`)
-    console.log(`업데이트 채널 → http://${HOST}:${PORT}/downloads/`)
+    console.log(`업데이트 채널 → http://${HOST}:${PORT}/downloads/v2/ (1.x: /downloads/)`)
   } catch (e) {
     console.error('배포 실패:', e.message)
     process.exitCode = 1
@@ -127,10 +128,11 @@ conn.on('ready', async () => {
   }
 })
 
-/** release.js 가 가리키는 설치본 이름(사이트가 실제로 내려주는 파일). */
+/** release.js 첫 블록(지금 판)이 가리키는 설치본 경로(사이트가 실제로 내려주는 파일, URL 인코딩). */
 function releaseFile() {
   const js = readFileSync(join(LOCAL, 'assets', 'release.js'), 'utf8')
-  return js.match(/file:\s*'([^']+)'/)?.[1] ?? ''
+  const dir = js.match(/dir:\s*'([^']+)'/)?.[1] ?? 'downloads/'
+  return dir + encodeURIComponent(js.match(/file:\s*'([^']+)'/)?.[1] ?? '')
 }
 
 conn.on('error', (e) => {

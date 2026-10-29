@@ -11,6 +11,10 @@
  *   · `latest.yml`              — electron-updater 가 "새 버전이 있나"를 판단하는 파일
  *
  * latest.yml 은 electron-builder 가 남기면 그것을 쓰고, 없으면 **여기서 만든다**(아래 주석 참고).
+ *
+ * 🔴 **2.0 이상은 `site/downloads/v2/` 로 간다**(2026-10-29 준영님 결정 — electron-builder.yml publish.url).
+ * 루트 `site/downloads/` 의 1.x 설치본·latest.yml 은 **건드리지 않는다** — 1.x 자동 업데이트 피드라 거기에
+ * 2.0 latest.yml 이 놓이면 1.x 전원이 2.0 으로 밀린다. release.js 의 1.x 값(ARA_RELEASE_V1)도 그대로 옮겨 적는다.
  */
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -18,10 +22,11 @@ import { join } from 'node:path'
 
 const root = process.cwd()
 const dist = join(root, 'dist')
-const out = join(root, 'site', 'downloads')
-
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = pkg.version
+// 사이트 기준 폴더(release.js 의 dir · 링크 앞부분). 2.0 이상은 v2 — 1.x 피드와 갈라 둔다.
+const dlDir = Number(version.split('.')[0]) >= 2 ? 'downloads/v2/' : 'downloads/'
+const out = join(root, 'site', ...dlDir.split('/').filter(Boolean))
 const exe = `${pkg.productName} Setup ${version}.exe`
 
 /**
@@ -108,8 +113,13 @@ const bytes = statSync(join(out, exe)).size
 const size = `${(bytes / 1024 / 1024).toFixed(1)} MB`
 const date = new Date().toISOString().slice(0, 10)
 
+// 1.x 값은 지난 release.js 에서 그대로 옮긴다 — 2.0 을 올려도 "이전 버전" 칸이 살아 있어야 한다.
+const releaseJs = join(root, 'site', 'assets', 'release.js')
+const v1Block = (existsSync(releaseJs) ? readFileSync(releaseJs, 'utf8') : '').match(/window\.ARA_RELEASE_V1 = \{[^}]*\}/)?.[0]
+if (!v1Block) console.warn('⚠️  release.js 에 ARA_RELEASE_V1(1.x) 이 없습니다 — 사이트의 "이전 버전" 칸이 빈다.')
+
 writeFileSync(
-  join(root, 'site', 'assets', 'release.js'),
+  releaseJs,
   `/**
  * 배포 정보 — **\`npm run site:stage\` 가 다시 쓴다.** 손으로 고치지 말 것.
  * (scripts/stage-release.mjs 가 dist/ 의 실제 설치본을 보고 값을 채운다)
@@ -122,11 +132,12 @@ window.ARA_RELEASE = {
   date: '${date}',
   file: '${exe}',
   size: '${size}',
-  os: 'Windows 10 / 11 (64비트)'
+  os: 'Windows 10 / 11 (64비트)',
+  dir: '${dlDir}'
 }
-`,
+${v1Block ? `\n// 이전 버전(1.x) — 2.0 을 스테이징해도 지난 값을 그대로 옮긴다.\n${v1Block}\n` : ''}`,
   'utf8'
 )
 
-console.log(`site/downloads/ 준비 완료 — ${exe} (${size})`)
+console.log(`site/${dlDir} 준비 완료 — ${exe} (${size})`)
 console.log('사내 웹 서버의 배포 폴더에 site/ 를 통째로 올리면 다운로드와 자동 업데이트가 함께 갱신됩니다.')
