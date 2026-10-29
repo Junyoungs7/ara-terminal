@@ -153,10 +153,13 @@ test('SLOG-6★ 닫힌 세션의 기록을 [지난 세션]에서 다시 본다',
   // 닫힌 세션이므로 [진행 중] 이 아니다.
   await expect(row).not.toHaveClass(/live/)
 
+  // 2026-10-29: 내용은 **독립 창**에 뜬다(사이드바엔 목록만 — 고른 행은 .picked).
+  const opened = ara.app.waitForEvent('window')
   await row.click()
-  await expect(rail.locator('.log-text')).toContainText('지난기록표식', { timeout: 15_000 })
-  // 목록으로 돌아갈 수 있다.
-  await rail.locator('.pl-back .btn').click()
+  const win = await opened
+  await win.waitForLoadState('domcontentloaded')
+  await expect(win.locator('.app.pastlogwin .log-text')).toContainText('지난기록표식', { timeout: 15_000 })
+  await expect(row).toHaveClass(/picked/)
   await expect(rail.locator('.pl-row')).toHaveCount(1)
 })
 

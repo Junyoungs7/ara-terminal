@@ -245,6 +245,9 @@ function registerWorkspaceStub() {
   ipcMain.handle('ui:setPrefs', (_e, prefs) => { Object.assign(UI, prefs); return { ok: true } })
   // 2.0 앱 잠금 — 렌더러가 켤 때 상태를 묻는다(없어도 "잠금 없음"으로 그리지만 main 로그를 더럽히지 않게).
   ipcMain.handle('lock:get', () => ({ state: 'off', otp: false, mcpWhileLocked: false, autoLockMin: 0, shortcut: 'Ctrl+Alt+L', changedAt: null, sessions: 0, waitMs: { pw: 0, otp: 0 } }))
+  // 지난 세션 로그 창(2026-10-29) — 스모크에서 진짜 창을 띄우지 않는다. 계약 모양만 답한다.
+  ipcMain.handle('pastlog:open', () => ({ ok: true }))
+  ipcMain.handle('pastlog:hello', () => null)
   // R6: 빈 그룹 목록.
   ipcMain.handle('ui:setGroups', (_e, { groups }) => { UI.groups = groups; return { ok: true } })
   // AUDIT-R2 ④: 화면이 버전을 **여기서** 받아 온다. 예전에는 렌더러가 '0.1.0' 을 박아 두고 있어서

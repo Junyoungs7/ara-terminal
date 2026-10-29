@@ -9,6 +9,7 @@ import {
   openExplorerWindow,
   setExplorerState
 } from '../windows/ExplorerWindow'
+import { openPastLogWindow, pastLogHello, pastLogWindowContents } from '../windows/PastLogWindow'
 import { pushSend } from '../util/windowPush'
 import { handle } from './handle'
 import { isSafeExternal } from '../util/safeExternal'
@@ -51,6 +52,16 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
     return { ok: true } as const
   })
   handle('explorer:hello', () => explorerHello())
+  // 지난 세션 로그 창(2026-10-29). 창은 하나 — 이미 떠 있으면 내용만 바꾼다(pastlog:show).
+  // file 은 폴더 안 이름이다 — 실제 읽기(sessionlog:readFile)가 탈출을 다시 막는다.
+  handle('pastlog:open', (req) => {
+    if (typeof req?.file !== 'string' || typeof req.serverKey !== 'string' || !Number.isFinite(req.startedAt))
+      return { ok: false } as const
+    const t = { file: req.file, serverKey: req.serverKey, startedAt: req.startedAt }
+    if (openPastLogWindow(t)) pushSend(pastLogWindowContents(), 'pastlog:show', t)
+    return { ok: true } as const
+  })
+  handle('pastlog:hello', () => pastLogHello())
   // 탐색기 창 → 본창. **본창을 앞으로 가져오는 것은 본창에서 사람이 답해야 할 때만**(다듬기 R2):
   // 호스트키 확인·비밀번호·이름 입력·삭제 확인은 전부 본창 Dialog 라, 그 Dialog 가 뜰 때 스스로
   // 앞으로 나온다(window:focus — Dialog.tsx). 그래서 [연결]은 키가 저장된 서버면 탐색기에 머문다.

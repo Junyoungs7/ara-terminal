@@ -148,7 +148,6 @@
   "pastlog.title": "지난 세션",
   "pastlog.empty": "남아 있는 기록이 없습니다 — 설정 › 세션 기록을 켜면 이곳에 쌓입니다.",
   "pastlog.live": "진행 중",
-  "pastlog.back": "← 목록",
   "log.src.file": "기록 파일",
   "log.src.file.title": "세션 시작부터의 기록입니다(설정 › 세션 기록). 비밀번호로 보이는 값은 가려집니다.",
   "log.src.buffer": "화면 버퍼",

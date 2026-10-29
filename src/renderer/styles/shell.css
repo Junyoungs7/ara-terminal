@@ -6916,22 +6916,44 @@ button.sb-seg.upd:hover .val {
   margin-left: auto;
   font-family: var(--ui);
 }
-.pl-back {
+.pl-row.picked {
+  border-color: var(--line-strong);
+  background: var(--bg-overlay);
+}
+
+/* ── 지난 세션 로그 독립 창(2026-10-29) ──
+   진짜 OS 창이다(main/windows/PastLogWindow.ts). 머리는 본창과 같은 TitleBar, 그 아래가 내용 하나. */
+.app.pastlogwin {
+  grid-template-rows: var(--row-titlebar) 1fr;
+  background: var(--bg-canvas);
+}
+.plw-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+}
+.plw-head {
   flex: none;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
   border-bottom: 1px solid var(--line-soft);
 }
-.pl-cur {
-  flex: 1;
+.plw-srv {
   min-width: 0;
   color: var(--text-hi);
   font-size: var(--fs-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.plw-when {
+  flex: none;
+  color: var(--text-lo);
+  font-size: var(--fs-md);
 }
 
 /* ── F29 시스템 모니터 ─────────────────────────────────────────────────────

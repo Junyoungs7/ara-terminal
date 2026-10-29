@@ -10,6 +10,8 @@ import { PortWindow } from './components/PortWindow'
 import { isPortWinHash } from '@shared/portWin'
 import { ExplorerWindow } from './components/ExplorerWindow'
 import { isExplorerWinHash } from '@shared/explorerWin'
+import { PastLogWindow } from './components/PastLogWindow'
+import { isPastLogWinHash } from '@shared/pastLogWin'
 import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
 import { LockScreen } from './components/LockScreen'
 import { isBrowserWinHash } from '@shared/browserWin'
@@ -39,6 +41,8 @@ const browserWin =
   !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && isBrowserWinHash(window.location.hash)
 // 탐색기 독립 창(2026-10-28). 포트 모니터와 같이 매개변수가 없다 — 대상은 창 안 좌측이 고른다.
 const explorerWin = isExplorerWinHash(window.location.hash)
+// 지난 세션 로그 창(2026-10-29). 매개변수 없음 — 어느 로그인지는 main 이 hello·show 로 건넨다.
+const pastLogWin = isPastLogWinHash(window.location.hash)
 
 // OS 기본 툴팁 대신 우리 것을 쓴다. 창마다(본체·편집기·다중 모니터) 각자 자기 document 에 건다 —
 // 전역 위임이라 `title` 을 쓰는 89곳을 하나도 고치지 않는다(store/tooltip.ts).
@@ -63,7 +67,7 @@ for (const type of ['dragover', 'drop']) {
  * 2.0 앱 잠금 — 덮개는 본문(#root) **밖**에 따로 그린다. 잠기면 #root 를 inert·블러로 덮고 덮개만 살린다.
  * 본창은 시계(B), 나머지 창은 가운데 카드(A). 앱을 켤 때의 잠금은 어느 창이든 카드다(LockScreen 이 가른다).
  */
-const isMainWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && !browserWin && !explorerWin
+const isMainWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && !browserWin && !explorerWin && !pastLogWin
 const lockHost = document.createElement('div')
 lockHost.id = LOCK_HOST_ID
 document.body.appendChild(lockHost)
@@ -84,6 +88,8 @@ const renderApp = (): void =>
       <BrowserTabStrip />
     ) : explorerWin ? (
       <ExplorerWindow />
+    ) : pastLogWin ? (
+      <PastLogWindow />
     ) : (
       <Shell />
     )}

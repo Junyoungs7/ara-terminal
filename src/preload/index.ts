@@ -19,6 +19,7 @@ import type { AgentStatus } from '@shared/agentStatus'
 import type { AiCliId, AiCommand, LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
+import type { PastLogTarget } from '@shared/pastLogWin'
 import type { PastLog } from '@shared/ipc'
 import type { CmdId } from '@shared/remoteCatalog'
 import type { HostStats } from '@shared/types'
@@ -197,6 +198,16 @@ const api: EvApi = {
   },
   // 포트 모니터 독립 창 — 열기 하나뿐이다(닫기·복원은 OS 와 main 이 쥔다).
   portwin: { open: () => ipcRenderer.invoke('portwin:open', {}) },
+  // 지난 세션 로그 창 — 창은 하나, 떠 있으면 대상만 바뀐다(shared/pastLogWin.ts).
+  pastlog: {
+    open: (t: PastLogTarget) => ipcRenderer.invoke('pastlog:open', t),
+    hello: () => ipcRenderer.invoke('pastlog:hello', {}),
+    onShow: (cb: (t: PastLogTarget) => void) => {
+      const listener = (_e: IpcRendererEvent, t: PastLogTarget) => cb(t)
+      ipcRenderer.on('pastlog:show', listener)
+      return () => ipcRenderer.removeListener('pastlog:show', listener)
+    }
+  },
   // 탐색기 독립 창 — 본창과 탐색기 창이 main 을 사이에 두고 주고받는다(shared/explorerWin.ts).
   explorer: {
     open: (reveal?: { profileId: string; path: string }) => ipcRenderer.invoke('explorer:open', { reveal }),
