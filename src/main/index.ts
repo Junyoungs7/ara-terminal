@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { WorkspaceStore } from './workspace/WorkspaceStore'
 import { HistoryStore } from './history/HistoryStore'
+import { backupV1Data } from './workspace/backupV1'
 import { SafeStorageSecretStore } from './secrets/SafeStorageSecretStore'
 import { ProfileStore } from './secrets/ProfileStore'
 import { AppLock } from './secrets/AppLock'
@@ -376,6 +377,9 @@ handle('app:openLaunchDir', () => ({ opened: openHere?.ready() ?? false }))
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
+  // 2.0 첫 실행: 1.x 파일을 복사해 둔다(1.x 로 돌아갈 길). **맨 먼저** — 아래 WorkspaceStore 가 workspace 를
+  // 고쳐 쓰고 AppLock 이 잠금을 켜면 vault 를 다시 봉하기 전이어야 한다. 동기·작은 파일 몇 개뿐이다.
+  backupV1Data(userData, (e) => logMainError('backup-1.x', e))
   store = new WorkspaceStore(join(userData, 'workspace.json'), app.getVersion())
   history = new HistoryStore(join(userData, 'history.json'))
   /**
