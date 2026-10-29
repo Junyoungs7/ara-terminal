@@ -97,8 +97,16 @@ async function cleanupFixture(page: Page, dir: string): Promise<void> {
       await page.waitForTimeout(250)
     }
   }
-  // 20번(5초)을 넘겨도 잡혀 있으면 그 사실을 드러낸다 — 조용히 남기지 않는다.
-  rmSync(dir, { recursive: true, force: true })
+  // 20번(5초)을 넘겨도 잡혀 있으면 그 사실을 드러낸다 — 조용히 남기지 않는다. 다만 **시험을 실패시키지는
+  // 않는다**: 세션을 닫아도 그 셸이 띄운 자식(WB-4 의 AI CLI 줄)이 cwd 를 더 쥐고 있을 수 있고(2026-10-29
+  // 3차 재실행 EBUSY), 그건 검사 대상이 아니다. 실패 사유 대신 경고 주석·로그로 남은 경로를 밝힌다(OS 임시 폴더).
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch (e) {
+    const msg = `정리 못 함(임시 폴더가 아직 잡혀 있다): ${dir} — ${(e as Error).message}`
+    console.warn(`[cleanupFixture] ${msg}`)
+    test.info().annotations.push({ type: 'warning', description: msg })
+  }
 }
 
 /** Ctrl+Shift+O(본창) → 탐색기 OS 창의 Page. */
