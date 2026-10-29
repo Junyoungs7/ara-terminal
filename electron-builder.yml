@@ -18,10 +18,15 @@ asarUnpack:
 # 8899 포트로 서빙한다(`npm run site:deploy` 가 올리고 띄운다). 다운로드 페이지가
 # `http://192.168.100.56:8899/`, 업데이트 채널이 그 아래 `downloads/` 다.
 # 서버가 옮겨 가면 이 줄을 고쳐 다시 빌드하거나, 다시 빌드하지 않고 `ARA_UPDATE_URL`
-# 환경변수로 덮어쓴다(src/main/ipc/registerUpdateIpc.ts).
+# 환경변수로 덮어쓴다(src/main/ipc/registerUpdateIpc.ts) — 2.0 이면 덮는 값도 `…/downloads/v2/` 다.
+#
+# 🔴 2.0 은 **`downloads/v2/`** 를 본다(2026-10-29 준영님 결정). 1.x 피드(`downloads/latest.yml`)는
+# 1.0.33 그대로 두어 2.0 을 1.x 자동 업데이트로 밀지 않는다 — 2.0 은 사이트의 "ARA 2.0 받기"로만 깔고,
+# 2.0 끼리의 업데이트만 이 v2 경로로 돈다. 1.x 설치본에는 옛 주소(`downloads/`)가 박혀 있으므로
+# 이 v2 피드를 볼 일이 없다. 안정된 뒤 1.x 를 2.0 으로 넘기는 것은 준영님 결정 — 그때 1.x 피드에 2.0 을 올린다.
 publish:
   provider: generic
-  url: http://192.168.100.56:8899/downloads/
+  url: http://192.168.100.56:8899/downloads/v2/
   channel: latest
 win:
   target: nsis

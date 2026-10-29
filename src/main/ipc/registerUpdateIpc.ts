@@ -16,6 +16,7 @@ export function registerUpdateIpc(getWebContents: () => WebContents | null): Aut
     updater: autoUpdater as unknown as UpdaterLike,
     packaged: app.isPackaged,
     // 사내 서버가 옮겨 가도 다시 빌드하지 않게 — 있으면 패키지에 박힌 주소를 덮는다.
+    // 2.0 의 박힌 주소는 `…/downloads/v2/`(electron-builder.yml publish.url) — 덮을 때도 v2 폴더를 준다.
     feedUrl: process.env.ARA_UPDATE_URL?.trim() || undefined,
     emit: (state) => pushSend(getWebContents(), 'update:state', state),
     onError: (where, err) => logMainError(where, err)
