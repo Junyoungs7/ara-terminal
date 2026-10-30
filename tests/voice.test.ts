@@ -349,3 +349,26 @@ describe('사용량·기록 파일', () => {
     rmSync(d, { recursive: true, force: true })
   })
 })
+
+describe('렌더러 — 자막 잇기 · 단축키', () => {
+  it('같은 사람의 조각은 한 줄로, 차례가 끝나면 새 줄, 20줄만 남긴다', async () => {
+    const { addCaption } = await import('../src/renderer/store/voice')
+    let l = addCaption([], 'me', '디스크')
+    l = addCaption(l, 'me', ' 봐줘')
+    expect(l).toEqual([{ who: 'me', text: '디스크 봐줘', done: false }])
+    l = addCaption(l, 'ara', '네')
+    expect(l).toHaveLength(2)
+    l = addCaption([{ who: 'ara', text: 'a', done: true }], 'ara', 'b')
+    expect(l).toHaveLength(2)
+    for (let i = 0; i < 30; i += 1) l = addCaption(l, i % 2 ? 'me' : 'ara', 'x')
+    expect(l).toHaveLength(20)
+  })
+
+  it('Ctrl+Shift+Space 가 음성 키로 잡히고 셸로 새지 않는다', async () => {
+    const { matchBinding, isAppShortcut } = await import('../src/shared/keymap')
+    const e = { key: ' ', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false } as KeyboardEvent
+    expect(matchBinding(e, 'voice.toggle')).toBe(true)
+    expect(isAppShortcut(e)).toBe(true)
+    expect(matchBinding({ ...e, shiftKey: false } as KeyboardEvent, 'voice.toggle')).toBe(false)
+  })
+})

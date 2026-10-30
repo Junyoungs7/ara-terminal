@@ -141,7 +141,11 @@ describe('기기 ID', () => {
         const p = join(dir, n)
         return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) ? [p] : []
       })
-    const hits = [...walk('src/renderer'), 'src/preload/index.ts'].filter((f) => /deviceId|device-id/.test(readFileSync(f, 'utf8')))
+    // 2.1 음성: voice/audio.ts 의 deviceId 는 **마이크 장치**(웹 표준 MediaDeviceInfo·getUserMedia 이름)라
+    // 신고 기기 ID 와 같은 글자일 뿐 다른 물건이다. 그 파일 하나만 뺀다 — 거기 신고 기기 ID 가 들어가면 이 검사는 못 잡는다.
+    const hits = [...walk('src/renderer'), 'src/preload/index.ts']
+      .filter((f) => !f.replace(/\\/g, '/').endsWith('src/renderer/voice/audio.ts'))
+      .filter((f) => /deviceId|device-id/.test(readFileSync(f, 'utf8')))
     expect(hits).toEqual([])
   })
 })

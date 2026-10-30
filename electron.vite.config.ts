@@ -52,6 +52,11 @@ export default defineConfig({
     root: resolve('src/renderer'),
     resolve: { alias: sharedAlias },
     plugins: [rdpWasmDataUrlFix(), react()],
-    build: { rollupOptions: { input: resolve('src/renderer/index.html') } }
+    build: {
+      rollupOptions: { input: resolve('src/renderer/index.html') },
+      // 2.1 음성: 마이크 AudioWorklet 은 **파일로** 내보낸다. 4KB 미만이라 기본값이면 data: URL 로 박히는데,
+      // CSP(script-src 'self')가 data: 모듈을 막아 addModule 이 실패한다(빌드 산출물로 확인).
+      assetsInlineLimit: (file: string) => (file.endsWith('pcm-worklet.js') ? false : undefined)
+    }
   }
 })

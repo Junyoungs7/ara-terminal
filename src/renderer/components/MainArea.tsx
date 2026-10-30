@@ -3,6 +3,8 @@ import { setUploadNotifier } from '../store/uploadBus'
 import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
 import { PaneGrid, type RestoreError } from './PaneGrid'
+import { VoicePane } from './VoicePane'
+import { closeVoice, openVoice, pttDown, pttUp, setVoicePrefs, setVoiceSettingsOpener, useVoice, voiceView } from '../store/voice'
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
 import { useLayout, toLayoutNode, allPanesRdp, splitFiller, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
@@ -1268,6 +1270,62 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       activateSession(locals[(cur + 1) % locals.length].id)
     }, [list, activeId, activateSession, openLocal])
 
+    // 2.1 음성. 설정은 store 에 넣어 두고(듣는 방식·장치), 상태바 칩이 설정 › 음성을 열 수 있게 한다.
+    const voice = useVoice()
+    useEffect(() => setVoicePrefs(prefs.voice), [prefs.voice])
+    // 설정에서 음성을 끄면 켜져 있던 패널도 닫는다.
+    useEffect(() => {
+      if (!prefs.voice.enabled && voice.open) closeVoice()
+    }, [prefs.voice.enabled, voice.open])
+    useEffect(() => {
+      if (detachedWinId) return
+      setVoiceSettingsOpener(() => {
+        setSettingsEntry('voice')
+        setSettingsOpen(true)
+      })
+      return () => setVoiceSettingsOpener(null)
+    }, [detachedWinId])
+    /**
+     * Ctrl+Shift+Space — **짧게 = 켜고/끄기, 켜진 채 누르고 있기 = 말하기**(누르고 말하기 모드).
+     * 키 하나로 두 일을 하는 이유: 말하기 키를 따로 두면 손이 두 조합을 외워야 하고, 둘 다 셸이 안 쓰는
+     * 자리를 또 찾아야 한다. 떼는 순간은 Space·Ctrl·Shift 중 무엇이 먼저 올라와도 같다.
+     */
+    useEffect(() => {
+      if (detachedWinId || !prefs.voice.enabled) return
+      const HOLD_MS = 250
+      let press: { wasOpen: boolean; held: boolean; timer: ReturnType<typeof setTimeout> } | null = null
+      const down = (e: KeyboardEvent): void => {
+        if (!matchBinding(e, 'voice.toggle')) return
+        e.preventDefault()
+        if (e.repeat || press) return
+        const wasOpen = voiceView().open
+        if (!wasOpen) void openVoice()
+        const p = {
+          wasOpen,
+          held: false,
+          timer: setTimeout(() => {
+            p.held = true
+            if (prefs.voice.listen === 'ptt') pttDown()
+          }, HOLD_MS)
+        }
+        press = p
+      }
+      const up = (e: KeyboardEvent): void => {
+        if (!press || (e.key !== ' ' && e.key !== 'Control' && e.key !== 'Shift' && e.key !== 'Meta')) return
+        clearTimeout(press.timer)
+        if (press.held) pttUp()
+        else if (press.wasOpen) closeVoice()
+        press = null
+      }
+      window.addEventListener('keydown', down)
+      window.addEventListener('keyup', up)
+      return () => {
+        window.removeEventListener('keydown', down)
+        window.removeEventListener('keyup', up)
+        if (press) clearTimeout(press.timer)
+      }
+    }, [detachedWinId, prefs.voice.enabled, prefs.voice.listen])
+
     // 단축키(§B.8 + R3.8 충돌 정책). 조합은 전부 keymap.ts 에서 온다 — 여기엔 키 문자열이 없다.
     // 앱 전용 키는 Ctrl+Shift+* / Alt+* 뿐이라 셸의 Ctrl+문자 관례를 건드리지 않는다.
     useEffect(() => {
@@ -1433,6 +1491,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onAdopt={(sessionId, overId) => void adoptSession(sessionId, overId)}
           onNotice={showToast}
         />
+        {/* 2.1 음성 — 작업대 오른쪽에 칸 하나. 감싸는 줄은 늘 그린다(음성을 켜고 끌 때 PaneGrid 가
+            다시 마운트되면 터미널이 다시 붙는다). 떼어낸 창에는 없다 — 얼굴은 화면에 하나. */}
+        <div className="pane-row">
         <PaneGrid
           layout={layout}
           sessions={list}
@@ -1445,6 +1506,19 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onTitle={onAutoTitle}
           onLink={(sessionId, url, isSsh, external) => void openLink(sessionId, url, isSsh, external)}
         />
+        {voice.open && !detachedWinId && (
+          <>
+            <div className="pane-row-div" aria-hidden />
+            <VoicePane
+              prefs={prefs.voice}
+              onOpenAiSettings={() => {
+                setSettingsEntry('ai')
+                setSettingsOpen(true)
+              }}
+            />
+          </>
+        )}
+        </div>
         {/* RDP 만 보고 있으면 하단바를 **그리지 않는다**(2026-09-02 준영님 ③ — allPanesRdp 주석).
             ⚠️ 켜 둔 상태는 건드리지 않는다: 터미널 탭에서 열어 두고 RDP 탭에 갔다 돌아오면 그대로
             있다. 껐다고 기억하면 사용자가 안 껐는데 꺼져 있는 것이 된다.

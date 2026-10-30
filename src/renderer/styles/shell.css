@@ -9803,3 +9803,381 @@ button.sb-seg.upd:hover .val {
   border-radius: var(--radius);
   background: var(--bg-abyss);
 }
+
+/* ── 2.1 음성 ─────────────────────────────────────────────────────────────
+   작업대 줄(.pane-row) = PaneGrid + (켜졌을 때) 음성 칸. 음성 칸은 세션 칸 하나 크기(시안 V-photo-f). */
+.pane-row {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.pane-row-div {
+  flex: none;
+  width: 1px;
+  background: var(--line);
+}
+.voice-pane {
+  flex: 1;
+  max-width: 50%;
+}
+.vp-hd {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: var(--row-tabbar);
+  padding: 0 var(--sp-5);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+.vp-hd b {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.vp-hd .grow {
+  flex: 1;
+}
+.vp-hd .btn {
+  padding: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-md);
+}
+.vp-hd .btn.on {
+  color: var(--err);
+  border-color: var(--err-line);
+}
+.vp-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-7) var(--sp-6) var(--sp-6);
+}
+/* 얼굴 자리 — 이번 판은 빈 틀(그림은 다음 라운드). 자막만 고르면 접힌다. */
+.vp-face {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 420px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.vp-face.bare {
+  flex: 0;
+  box-shadow: none;
+}
+.vp-st {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--text-mid);
+  font-size: var(--fs-base);
+}
+[data-voice-state='error'] .vp-st {
+  color: var(--err);
+}
+/* 출력 음량 막대 — --lv(0~1)는 VoicePane 이 프레임마다 넣는다. 막대마다 배율을 달리해 출렁이게. */
+.vp-eq {
+  --lv: 0;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.vp-eq i {
+  width: 3px;
+  height: calc(3px + 11px * var(--lv));
+  background: var(--text-mid);
+}
+.vp-eq i:nth-child(2) {
+  height: calc(3px + 11px * var(--lv) * 0.6);
+}
+.vp-eq i:nth-child(3) {
+  height: calc(3px + 11px * var(--lv) * 0.85);
+}
+.vp-eq i:nth-child(4) {
+  height: calc(3px + 11px * var(--lv) * 0.45);
+}
+[data-voice-state='speaking'] .vp-eq i {
+  background: var(--text-hi);
+}
+.vp-note {
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  text-align: center;
+  word-break: keep-all;
+}
+.vp-note.err {
+  color: var(--err);
+}
+.vp-note .lnk,
+.vs .lnk {
+  margin-left: var(--sp-3);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-hi);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: var(--cur-hand, pointer);
+}
+.vp-caps {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3) var(--sp-5);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}
+.vp-cap {
+  display: contents;
+}
+.vp-cap .w {
+  color: var(--text-lo);
+}
+.vp-cap .t {
+  color: var(--text-mid);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.vp-cap.ara.now .w,
+.vp-cap.ara.now .t {
+  color: var(--text-hi);
+}
+
+/* 상태바 — 승인 생략 켜짐(시안 VS-c .bp). */
+.sb-bypass {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  align-self: center;
+  height: 18px;
+  margin: 0 var(--sp-4);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--err-line);
+  border-radius: var(--radius-sm);
+  background: var(--err-tint);
+  color: var(--err);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+  white-space: nowrap;
+}
+
+/* 설정 › 음성 — 시안 VS-c(왼쪽 미리보기 256 + 오른쪽 한 줄 행). */
+.vs-lead {
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+  margin-bottom: var(--sp-3);
+}
+.vs-keyln {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+}
+.vs-keyln .okk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ok);
+}
+.vs-keyln .nok {
+  color: var(--err);
+}
+.vs .lnk {
+  margin-left: 0;
+}
+.vs-cols {
+  display: flex;
+  gap: 24px;
+  margin-top: var(--sp-5);
+}
+.vs-pv {
+  width: 256px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.vs-stage {
+  position: relative;
+  width: 256px;
+  height: 360px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.vs-stage .tag {
+  position: absolute;
+  left: var(--sp-5);
+  top: var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 1px var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-abyss);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.vs-stage .tag i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-mid);
+}
+.vs-stage .sub {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 26px 14px 12px;
+  background: linear-gradient(to top, var(--bg-abyss) 55%, transparent);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-hi);
+}
+.vs-stage .sub .me {
+  color: var(--text-lo);
+}
+.vs-pvseg .seg-ctl button {
+  flex: 1;
+}
+.vs-note {
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.vs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--text-lo);
+}
+.vs-row .vs-lvl-t {
+  margin-left: auto;
+}
+.vs-lvl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  flex: none;
+}
+.vs-lvl i {
+  width: 4px;
+  height: 10px;
+  background: var(--sel-bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.vs-lvl i.on {
+  background: var(--text-mid);
+  box-shadow: none;
+}
+.vs-lvl-t {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.vs-rt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vs-fg {
+  padding: var(--sp-4) 0 var(--sp-2);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  border-bottom: 1px solid var(--line);
+}
+.vs-fg:first-child {
+  padding-top: 0;
+}
+.vs-fr {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  border-bottom: 1px solid var(--line-soft);
+}
+.vs-fr .nm {
+  width: 96px;
+  flex: none;
+  color: var(--text-hi);
+}
+.vs-fr .ds {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vs-fr .ctl {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.vs-fr .seg-ctl {
+  padding: 1px;
+}
+.vs-fr .seg-ctl button {
+  padding: var(--sp-2) var(--sp-4);
+}
+.vs-dd {
+  width: 168px;
+}
+.vs-dd.wide {
+  width: 236px;
+}
+.vs-warn {
+  display: flex;
+  gap: var(--sp-5);
+  align-items: flex-start;
+  margin: var(--sp-3) 0 var(--sp-4);
+  padding: var(--sp-4) var(--sp-6);
+  background: var(--err-tint);
+  border-left: 2px solid var(--err);
+  border-radius: var(--radius-sm);
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+}
+.vs-warn svg {
+  flex: none;
+  color: var(--err);
+  margin-top: 1px;
+}
+.vs-warn em {
+  font-style: normal;
+  color: var(--err);
+}
+.vs-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: auto;
+  padding-top: var(--sp-5);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  border-top: 1px solid var(--line);
+}
+.vs-foot b {
+  font-weight: 400;
+  color: var(--text-hi);
+}

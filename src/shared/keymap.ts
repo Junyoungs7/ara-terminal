@@ -59,6 +59,8 @@ export type KeymapAction =
   | 'panel.ports'
   // 2.0 앱 잠금 — 키는 설정에서 바꿀 수 있다(아래 LOCK_KEY · setLockShortcut).
   | 'app.lock'
+  // 2.1 음성 — 짧게 누르면 패널 켜고/끄기, 켜진 채 누르고 있으면 말하기(누르고 말하기 모드).
+  | 'voice.toggle'
 
 import { AI_ENTRY } from './features'
 import { DEFAULT_LOCK_SHORTCUT } from './lock'
@@ -175,6 +177,9 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // Ctrl+Shift+P 는 비어 있지만 VS Code 의 명령 팔레트 손버릇과 부딪혀 뜻이 갈린다 — 그래서 안 썼다.
   // 이름은 옛 메뉴 명령 id 그대로(panel.k8s 와 같은 방식 — 설정 저장값·features 표가 이 이름을 본다).
   { action: 'panel.ports', category: 'view', labelKo: '포트 모니터', win: 'Ctrl+Alt+P', mac: 'Cmd+Opt+P', implemented: true },
+  // 2.1 음성(가안 — PLAN-v2-voice). Ctrl+Shift+Space 는 셸·리드라인 바인딩이 없다(Ctrl+Space 는 set-mark 라 Shift 를 얹었다).
+  // 회사 PC 한글 IME 가 이 조합을 먹는지는 준영님 확인 항목이다.
+  { action: 'voice.toggle', category: 'ai', labelKo: '음성 켜기/끄기 · 누르고 말하기', win: 'Ctrl+Shift+Space', mac: 'Cmd+Shift+Space', implemented: true },
   LOCK_KEY
 ] as const
 
@@ -202,7 +207,9 @@ const KEY_ALIAS: Record<string, string> = {
   up: 'arrowup',
   down: 'arrowdown',
   left: 'arrowleft',
-  right: 'arrowright'
+  right: 'arrowright',
+  // e.key 는 ' ' 다(표기는 사람이 읽게 Space).
+  space: ' '
 }
 
 // Shift 를 누르면 기호 키의 e.key 가 상단 문자로 바뀐다(- → _, \ → |). 'Ctrl+Shift+-' 같은 표기를
