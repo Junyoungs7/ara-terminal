@@ -53,6 +53,7 @@ import type { CmdId } from './remoteCatalog'
 import type { TmuxListResult } from './tmuxList'
 import type { PastLog } from '../main/log/SessionLog'
 import type { LockResult, LockView } from './lock'
+import type { VoiceEvent, VoiceStatus } from './voice'
 export type { PastLog }
 
 // 디렉토리 항목(계획서 §C F7 / design-system 5.2 파일 행). 폴더 우선 정렬은 main이 담당.
@@ -610,6 +611,14 @@ export type InvokeContract = {
    * 메시지를 다시 보내 주지 않으므로, 화면은 우리가 기록을 읽어 그려야 한다.
    */
   'ara:chatLog': { req: { id: string }; res: { items: ChatMessage[] } }
+  // ── 2.1 음성(registerVoiceIpc). 키는 hasKey 로만 나온다. bypass 는 main 메모리 값(저장 안 함). ──
+  'voice:state': { req: void; res: { hasKey: boolean; bypass: boolean; status: VoiceStatus } }
+  'voice:start': { req: void; res: { ok: true } | { ok: false; reason: 'noKey' } }
+  'voice:stop': { req: void; res: { ok: true } }
+  'voice:preview': { req: void; res: { ok: true } | { ok: false; reason: 'noKey' } }
+  'voice:setBypass': { req: { on: boolean }; res: { bypass: boolean } }
+  /** 이번 달 대화 시간·추정 비용(달러). by='time' 이면 토큰 정보가 없어 시간×단가 범위다. */
+  'voice:usage': { req: void; res: { seconds: number; by: 'tokens' | 'time'; low: number; high: number } }
   'ara:state': { req: void; res: { open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] } }
   'mcp:approvalRespond': { req: McpApprovalDecision; res: { ok: true } }
   // #125 되묻기 — AI 가 사람에게 물은 것에 답한다. 헤드리스 Claude Code 에는 되묻는 도구가 없어서
@@ -659,6 +668,9 @@ export type SendContract = {
   // xterm write 백로그 임계치 초과 시 pty read 일시정지/재개 (백프레셔 메커니즘 2).
   'session:pause': { id: string }
   'session:resume': { id: string }
+  // 2.1 음성: 마이크 PCM16 16kHz 조각(약 64ms)과 누르고 말하기를 뗀 표시.
+  'voice:audio': { pcm: Uint8Array }
+  'voice:audioEnd': void
 }
 export type SendChannel = keyof SendContract
 
@@ -1087,6 +1099,19 @@ export type EvApi = {
     close(): Promise<{ ok: true }>
     state(): Promise<{ open: boolean; resumeId: string | null; pending: { requestId: string; tool: string; brief: string }[] }>
     onEvent(cb: (e: AraChatEvent) => void): () => void
+  }
+  // 2.1 음성. **키를 읽는 창구가 없다는 것이 계약이다** — hasKey 만 온다.
+  voice: {
+    state(): Promise<{ hasKey: boolean; bypass: boolean; status: VoiceStatus }>
+    start(): Promise<{ ok: true } | { ok: false; reason: 'noKey' }>
+    stop(): Promise<{ ok: true }>
+    preview(): Promise<{ ok: true } | { ok: false; reason: 'noKey' }>
+    setBypass(on: boolean): Promise<{ bypass: boolean }>
+    usage(): Promise<{ seconds: number; by: 'tokens' | 'time'; low: number; high: number }>
+    audio(pcm: Uint8Array): void
+    audioEnd(): void
+    onEvent(cb: (e: VoiceEvent) => void): () => void
+    onBypass(cb: (on: boolean) => void): () => void
   }
   // W2 F8 포트 포워딩. 포트 번호 외에는 아무것도 넘길 수 없다(호스트·바인드 주소는 main 하드코딩).
   forward: {

@@ -18,6 +18,7 @@ import {
 import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
 import { featuresOf } from '@shared/features'
+import { voiceOf } from '@shared/voice'
 import { applyMouseCursor } from '../cursorThemes'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
@@ -37,6 +38,7 @@ export const termPrefs: Omit<
   | 'downloadDir'
   | 'aiProvider'
   | 'aiModels'
+  | 'voice'
   | 'aiCompatibleBaseUrl'
   // AI CLI 기본 플래그도 xterm 이 읽어 갈 값이 아니다(터미널에 밀어 넣을 한 줄을 만들 때만 쓴다).
   | 'aiCliFlags'
@@ -82,6 +84,7 @@ export function prefsFrom(
     | 'araWelcomeSeen'
     | 'bootSplash'
     | 'features'
+    | 'voice'
   >
 ): UiPrefs {
   return {
@@ -112,7 +115,8 @@ export function prefsFrom(
     araWelcomeSeen: ui.araWelcomeSeen === true,
     // 미지정이면 **켬** — 처음 쓰는 사람에게 한 번은 보여 주고, 싫으면 끄게 한다.
     bootSplash: ui.bootSplash !== false,
-    features: featuresOf(ui.features)
+    features: featuresOf(ui.features),
+    voice: voiceOf(ui.voice)
   }
 }
 

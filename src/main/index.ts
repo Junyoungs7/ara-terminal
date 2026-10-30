@@ -44,6 +44,8 @@ import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
+import { registerVoiceIpc, type VoiceRuntime } from './ipc/registerVoiceIpc'
+import { voiceOf } from '@shared/voice'
 import { clearStaleSelfToken } from './ai/engine/araMcp'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setApiPersona } from './ai/prompt'
@@ -139,6 +141,7 @@ let mcp: McpRuntime | null = null
 // F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
 let agent: AgentRuntime | null = null
 let araChat: AraRuntime | null = null
+let voice: VoiceRuntime | null = null
 let mainWindow: BrowserWindow | null = null
 // R14 탐색기에서 `아라` — 단일 인스턴스 잠금을 쥔 실행에서만 채워진다(아래 second-instance 블록).
 let openHere: ReturnType<typeof createOpenHere> | null = null
@@ -538,11 +541,23 @@ app.whenReady().then(async () => {
     )
   )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
-  // 권한 요청은 **전부 거절한다.** 마이크·카메라·위치·알림 중 우리가 쓰는 것은 하나도 없다
-  // (#140 에서 음성 모드를 걷은 뒤로 media 를 여는 자리가 없어졌다).
+  // 권한 요청은 **마이크 하나만** 연다(2.1 음성). 카메라·화면·위치·알림·클립보드는 전부 거절이다.
+  // mediaTypes 가 오디오만일 때만 — 비디오가 하나라도 섞이면 거절한다. 아라 브라우저 뷰는 다른
+  // 파티션이라 여기 걸리지 않고 자기 선(전부 거절)을 따로 지킨다(BrowserService.hardenSession).
   // ⚠️ 이 줄을 지우면 안 된다 — 핸들러가 없으면 Electron 은 요청을 **승인**한다(브라우저처럼
-  // 물어보지 않는다). 아라 브라우저 뷰도 같은 선을 따로 지킨다(BrowserService).
-  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(false))
+  // 물어보지 않는다).
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+    cb(permission === 'media' && types.length > 0 && types.every((t) => t === 'audio'))
+  })
+  // 2.1 음성 — Gemini Live. 키는 AI 설정의 Google 키(vault)를 같이 쓴다. 설정은 ui.voice(읽을 때마다 클램프).
+  voice = registerVoiceIpc({
+    vault: secrets,
+    prefs: () => voiceOf(store.get().ui.voice),
+    callName: () => callNameOf(store.get().ui.araCallName),
+    dir: join(userData, 'voice'),
+    getWebContents: () => getWebContents()
+  })
   // F23: MCP 조종 모드. 다운로드/업로드는 고정 디렉토리 안으로만(AI가 저장 경로를 정할 수 없다 —
   // 설계 §7 오케 확정 7). 감사 로그 보존은 F12 와 같은 설정값을 공유한다(별도 정책 없음, 설계 §4.1).
   mcp = registerMcpIpc(
@@ -732,6 +747,7 @@ app.on('before-quit', (e) => {
   quitStep('ara', () => ara?.cancel())
   // #123 규율: claude 상주 프로세스를 반드시 내린다(고아 금지 — #64 와 같은 선).
   quitStep('araChat', () => araChat?.chat.close())
+  quitStep('voice', () => voice?.stop())
   // F23: MCP 리스너·연결 정리(설계 §5 — 외부 클라이언트가 붙은 채 앱 종료). 포트가 즉시 재사용
   // 가능해야 한다(좀비 리스너 없음).
   quitStep('mcp', () => void mcp?.server.stop())

@@ -36,6 +36,7 @@ import type {
 } from '@shared/types'
 import type { SessionSpec } from '../main/sessions/ISessionManager'
 import type { LockView } from '@shared/lock'
+import type { VoiceEvent } from '@shared/voice'
 
 const api: EvApi = {
   workspace: {
@@ -455,6 +456,27 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, ev: AraChatEvent) => cb(ev)
       ipcRenderer.on('ara:event', listener)
       return () => ipcRenderer.removeListener('ara:event', listener)
+    }
+  },
+  // 2.1 음성 — 마이크 조각은 send(고빈도), 나머지는 invoke. 키를 읽는 함수가 없다.
+  voice: {
+    state: () => ipcRenderer.invoke('voice:state'),
+    start: () => ipcRenderer.invoke('voice:start'),
+    stop: () => ipcRenderer.invoke('voice:stop'),
+    preview: () => ipcRenderer.invoke('voice:preview'),
+    setBypass: (on: boolean) => ipcRenderer.invoke('voice:setBypass', { on }),
+    usage: () => ipcRenderer.invoke('voice:usage'),
+    audio: (pcm: Uint8Array) => ipcRenderer.send('voice:audio', { pcm }),
+    audioEnd: () => ipcRenderer.send('voice:audioEnd'),
+    onEvent: (cb: (e: VoiceEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, ev: VoiceEvent) => cb(ev)
+      ipcRenderer.on('voice:event', listener)
+      return () => ipcRenderer.removeListener('voice:event', listener)
+    },
+    onBypass: (cb: (on: boolean) => void) => {
+      const listener = (_e: IpcRendererEvent, p: { on: boolean }) => cb(p.on)
+      ipcRenderer.on('voice:bypass', listener)
+      return () => ipcRenderer.removeListener('voice:bypass', listener)
     }
   },
   // F1a 에이전트 상태 — 훅이 말해 준 것을 받아만 본다(쓰는 함수가 없다는 것이 계약이다).
