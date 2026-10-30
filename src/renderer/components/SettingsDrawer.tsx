@@ -41,6 +41,11 @@ import qrcode from 'qrcode-generator'
 import { CURSOR_KINDS, cursorSrc, cursorValue } from '../cursorThemes'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
+import { Dropdown } from './Dropdown'
+import { Check, Clock, KeyRound, Mic, Play, ShieldAlert } from 'lucide-react'
+import { VOICES, VOICE_FACES, VOICE_KEEP, VOICE_LISTEN, VOICE_SPEEDS } from '@shared/voice'
+import { openMic, listMics, type MicHandle } from '../voice/audio'
+import { previewVoice, setBypass, useVoice } from '../store/voice'
 
 // 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] → #204 [명령 기록] 추가).
 // 좌측 nav 9섹션: 일반 / 터미널 / 폰트 / 로그 / AI / MCP / 단축키 / 명령 기록 / 정보.
@@ -55,7 +60,7 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'security', 'log', 'ai', 'mcp', 'keys', 'history', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'security', 'log', 'ai', 'voice', 'mcp', 'keys', 'history', 'about'] as const
 type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
 export type SettingsSection = SettingsSectionAll
 
@@ -1157,6 +1162,256 @@ function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<Dia
   )
 }
 
+/** VS-c 의 한 줄 행 — 이름 · 설명 · (오른쪽) 컨트롤. 음성 칸만 이 모양이다(시안 그대로). */
+function Fr({ name, desc, children }: { name: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <div className="vs-fr">
+      <span className="nm">{name}</span>
+      <span className="ds">{desc ?? ''}</span>
+      <span className="ctl">{children}</span>
+    </div>
+  )
+}
+
+const LEVEL_BARS = 20
+const voiceLabel = (name: string): string => {
+  const v = VOICES.find((x) => x.name === name)
+  return v ? `${v.name} · ${v.ko}` : name
+}
+const minutesText = (sec: number): string => {
+  const m = Math.floor(sec / 60)
+  const h = Math.floor(m / 60)
+  return h > 0 ? `${h}${t('settings.voice.h')} ${m % 60}${t('settings.voice.m')}` : `${m}${t('settings.voice.m')}`
+}
+
+/**
+ * 2.1 설정 › 음성 — 시안 VS-c(왼쪽 미리보기 + 오른쪽 한 줄 행) 그대로.
+ * 얼굴 그림은 다음 라운드라 미리보기 자리는 비어 있고, 고른 값만 저장한다.
+ * bypass 는 prefs 가 아니다 — main 메모리 값(앱 재시작 시 꺼짐)이라 voice store 를 거친다.
+ */
+function VoiceSection({
+  prefs,
+  onPrefsChange,
+  ask,
+  open,
+  goAi
+}: {
+  prefs: UiPrefs
+  onPrefsChange: (p: Partial<UiPrefs>) => void
+  ask?: (spec: DialogSpec) => Promise<DialogResult>
+  open: boolean
+  goAi: () => void
+}) {
+  const v = prefs.voice
+  const set = (p: Partial<typeof v>): void => onPrefsChange({ voice: { ...v, ...p } })
+  const { bypass } = useVoice()
+  const [hasKey, setHasKey] = useState<boolean | null>(null)
+  const [usage, setUsage] = useState<{ seconds: number; by: 'tokens' | 'time'; low: number; high: number } | null>(null)
+  const [mics, setMics] = useState<{ id: string; label: string }[]>([])
+  const [rms, setRms] = useState(0)
+  const [micErr, setMicErr] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    void window.ev?.voice?.state().then((s) => setHasKey(s.hasKey)).catch(() => {})
+    void window.ev?.voice?.usage().then(setUsage).catch(() => {})
+  }, [open])
+
+  // 입력 레벨 — 이 칸이 보이는 동안만 마이크를 연다(소리는 어디로도 보내지 않는다).
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    let h: MicHandle | null = null
+    setMicErr(false)
+    openMic(v.inputDeviceId, () => {}, (x) => alive && setRms(x))
+      .then((m) => {
+        if (alive) h = m
+        else m.stop()
+        return listMics()
+      })
+      .then((l) => alive && setMics(l))
+      .catch(() => alive && setMicErr(true))
+    return () => {
+      alive = false
+      h?.stop()
+    }
+  }, [open, v.inputDeviceId])
+
+  const db = rms > 0 ? Math.max(-60, Math.round(20 * Math.log10(rms))) : -60
+  const lit = Math.round(((db + 60) / 60) * LEVEL_BARS)
+  const defaultMic = t('settings.voice.mic.default')
+  const micOptions = [defaultMic, ...mics.map((m) => m.label || m.id.slice(0, 8))]
+  const micAt = mics.findIndex((m) => m.id === v.inputDeviceId)
+  const micValue = micAt >= 0 ? micOptions[micAt + 1] : defaultMic
+  const key = KEYMAP.find((k) => k.action === 'voice.toggle')
+
+  const flipBypass = async (on: boolean): Promise<void> => {
+    if (on) {
+      // 확인 창이 없으면(하네스) 켜지 않는다 — 위험한 쪽으로 조용히 기울지 않는다.
+      if (!ask) return
+      const r = await ask({
+        title: t('settings.voice.bypass.ask.title'),
+        message: t('settings.voice.bypass.ask.msg'),
+        tone: 'danger',
+        confirmLabel: t('settings.voice.bypass.ask.ok'),
+        cancelLabel: t('dlg.cancel')
+      })
+      if (r !== 'confirm') return
+    }
+    await setBypass(on)
+  }
+
+  const usd = (n: number): string => n.toFixed(2)
+  const cost = !usage
+    ? '—'
+    : usage.by === 'tokens'
+      ? `${t('settings.voice.cost.about')} ${usd(usage.low)}${t('settings.voice.cost.usd')}`
+      : `${t('settings.voice.cost.about')} ${usd(usage.low)}~${usd(usage.high)}${t('settings.voice.cost.usd')}`
+
+  return (
+    <div className="vs">
+      <p className="vs-lead">{t('settings.voice.lead')}</p>
+      <div className="vs-keyln">
+        <KeyRound size={13} aria-hidden />
+        <span>{t('settings.voice.key')}</span>
+        {hasKey ? (
+          <span className="okk">
+            <Check size={12} aria-hidden />
+            {t('settings.voice.key.ok')}
+          </span>
+        ) : (
+          <span className="nok">{t('settings.voice.key.none')}</span>
+        )}
+        <span>{t('settings.voice.key.paid')}</span>
+        <button type="button" className="lnk" data-action="voice.toAi" onClick={goAi}>
+          {t('settings.voice.key.go')}
+        </button>
+      </div>
+      <div className="vs-cols">
+        <div className="vs-pv">
+          <div className="vs-stage">
+            <span className="tag">
+              <i />
+              {t('settings.voice.pv.tag')} · {t('settings.voice.face.' + v.face)}
+            </span>
+            <div className="sub">
+              <span className="me">{t('voice.me')} </span>
+              {t('settings.voice.pv.me')}
+              {v.captionLines > 1 && (
+                <>
+                  <br />
+                  {t('settings.voice.pv.ara')}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="vs-pvseg">
+            <Seg value={v.face} options={VOICE_FACES} onChange={(face) => set({ face })} labelKey={(f) => 'settings.voice.face.' + f} field="voice.face" />
+          </div>
+          <p className="vs-note">{t('settings.voice.face.note')}</p>
+          <div className="vs-row">
+            <button type="button" className="btn sec" data-action="voice.preview" disabled={!hasKey} onClick={() => void previewVoice()}>
+              <Play size={12} aria-hidden />
+              {t('settings.voice.preview')}
+            </button>
+            <span className="vs-note">
+              {v.voiceName} · {t('settings.voice.speed.' + v.speed)}
+            </span>
+          </div>
+          <div className="vs-row">
+            <Mic size={14} aria-hidden />
+            <span className="vs-lvl" aria-label={t('settings.voice.level')}>
+              {Array.from({ length: LEVEL_BARS }, (_, i) => (
+                <i key={i} className={i < lit ? 'on' : undefined} />
+              ))}
+            </span>
+            <span className="vs-lvl-t">{micErr ? t('settings.voice.mic.err') : `${db} dB`}</span>
+          </div>
+          <p className="vs-note">{t('settings.voice.level.note')}</p>
+        </div>
+        <div className="vs-rt">
+          <div className="vs-fg">{t('settings.voice.g.voice')}</div>
+          <Fr name={t('settings.voice.enabled')} desc={t('settings.voice.enabled.desc')}>
+            <kbd className="kbd">{key ? keyText(isMac ? key.mac : key.win) : ''}</kbd>
+            <Toggle on={v.enabled} label={t('settings.voice.enabled')} onChange={(enabled) => set({ enabled })} />
+          </Fr>
+          <div className="vs-fg">{t('settings.voice.g.speak')}</div>
+          <Fr name={t('settings.voice.voice')}>
+            <div className="vs-dd">
+              <Dropdown
+                value={voiceLabel(v.voiceName)}
+                options={VOICES.map((x) => voiceLabel(x.name))}
+                onChange={(label) => set({ voiceName: VOICES.find((x) => voiceLabel(x.name) === label)?.name ?? v.voiceName })}
+                ariaLabel={t('settings.voice.voice')}
+              />
+            </div>
+          </Fr>
+          <Fr name={t('settings.voice.speed')}>
+            <Seg value={v.speed} options={VOICE_SPEEDS} onChange={(speed) => set({ speed })} labelKey={(x) => 'settings.voice.speed.' + x} field="voice.speed" />
+          </Fr>
+          <div className="vs-fg">{t('settings.voice.g.mic')}</div>
+          <Fr name={t('settings.voice.mic')}>
+            <div className="vs-dd wide">
+              <Dropdown
+                value={micValue}
+                options={micOptions}
+                onChange={(label) => set({ inputDeviceId: label === defaultMic ? '' : (mics[micOptions.indexOf(label) - 1]?.id ?? '') })}
+                ariaLabel={t('settings.voice.mic')}
+              />
+            </div>
+          </Fr>
+          <Fr name={t('settings.voice.listen')} desc={t('settings.voice.listen.desc')}>
+            <Seg value={v.listen} options={VOICE_LISTEN} onChange={(listen) => set({ listen })} labelKey={(x) => 'settings.voice.listen.' + x} field="voice.listen" />
+          </Fr>
+          <div className="vs-fg">{t('settings.voice.g.caption')}</div>
+          <Fr name={t('settings.voice.lines')}>
+            <Seg
+              value={String(v.captionLines) as '1' | '2' | '3'}
+              options={['1', '2', '3'] as const}
+              onChange={(n) => set({ captionLines: Number(n) as 1 | 2 | 3 })}
+              labelKey={(x) => 'settings.voice.lines.' + x}
+              field="voice.lines"
+            />
+          </Fr>
+          <Fr name={t('settings.voice.keep')} desc={t('settings.voice.keep.desc')}>
+            <Seg
+              value={v.keep}
+              options={VOICE_KEEP}
+              onChange={(keep) => set({ keep })}
+              labelKey={(x) => (x === 'off' ? 'settings.voice.keep.off' : 'settings.retention.' + x)}
+              field="voice.keep"
+            />
+          </Fr>
+          <div className="vs-fg">{t('settings.voice.g.approve')}</div>
+          <Fr name={t('settings.voice.approve')} desc={t('settings.voice.approve.desc')}>
+            <span className="vs-lvl-t">{t('settings.voice.approve.always')}</span>
+          </Fr>
+          <Fr name={t('settings.voice.bypass')} desc={t('settings.voice.bypass.desc')}>
+            <Toggle on={bypass} label={t('settings.voice.bypass')} onChange={(on) => void flipBypass(on)} />
+          </Fr>
+          {bypass && (
+            <div className="vs-warn">
+              <ShieldAlert size={15} aria-hidden />
+              <span>
+                {t('settings.voice.bypass.warn1')}
+                <em>{t('settings.voice.bypass.warn2')}</em>
+                {t('settings.voice.bypass.warn3')}
+              </span>
+            </div>
+          )}
+          <div className="vs-foot">
+            <Clock size={13} aria-hidden />
+            <span>
+              {t('settings.voice.month')} <b>{usage ? minutesText(usage.seconds) : '—'}</b> · {t('settings.voice.cost')} <b>{cost}</b>{' '}
+              <span>{t(usage?.by === 'tokens' ? 'settings.voice.cost.byTokens' : 'settings.voice.cost.byTime')}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type Props = {
   open: boolean
   font: FontConfig
@@ -1640,6 +1895,10 @@ export function SettingsDrawer({
           )}
 
           {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} />}
+
+          {section === 'voice' && (
+            <VoiceSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} goAi={() => setSection('ai')} />
+          )}
 
           {section === 'mcp' && <McpSection ask={ask} />}
 

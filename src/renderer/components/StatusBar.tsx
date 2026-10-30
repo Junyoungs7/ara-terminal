@@ -7,6 +7,8 @@ import type { Session } from '../store/sessions'
 import { t } from '../i18n'
 import { sparkArea, sparkPoints, useHostStats, type Sample } from '../store/sysMonitor'
 import { updateSeg } from '../store/updateNotify'
+import { openVoiceSettings, useVoice } from '../store/voice'
+import { ShieldAlert } from 'lucide-react'
 
 // 하단 상태바 (design-system §4.1).
 //
@@ -265,6 +267,7 @@ export function StatusBar({
   const host = useHostStats(local && visible)
   const m = statusModel(session, profile, conn, cwd, stats, history, local ? host.stats : null, host.history)
   const facts = hostFacts(session, useOverview(session, m.dot === 'connected'), local ? host.stats : null)
+  const voice = useVoice()
   const u = updateSeg(update ?? null, version)
   // 2.0 4단계: 라벨 없는 값 위주(시안 Z-final) — 호스트·인코딩·버전 칸의 라벨을 뺐다. 선택자(.lbl·.val)는 그대로.
   const verBody = <span className="val">{u.text}</span>
@@ -361,6 +364,13 @@ export function StatusBar({
           <div className={'sb-seg ver' + (u.tone ? ' upd ' + u.tone : '')} title={u.title || undefined}>
             {verBody}
           </div>
+        )}
+        {/* 2.1 승인 생략(bypass)이 켜진 동안만 — 맨 오른쪽 빨간 칩. 누르면 설정 › 음성(끄는 자리). */}
+        {voice.bypass && (
+          <button type="button" className="sb-bypass" data-action="statusbar.bypass" title={t('statusbar.bypass.title')} onClick={openVoiceSettings}>
+            <ShieldAlert size={12} aria-hidden />
+            {t('statusbar.bypass')}
+          </button>
         )}
       </div>
     </div>
