@@ -39,7 +39,7 @@ const RETRY_MS = [500, 1000, 2000]
 const QUEUE_MAX = 48
 
 export class LiveClient {
-  private sock: LiveSocket | null = null
+  private ws: LiveSocket | null = null
   private next: LiveSocket | null = null
   private status: VoiceStatus = 'off'
   private handle: string | null = null
@@ -79,8 +79,8 @@ export class LiveClient {
   private teardown(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
-    const socks = [this.sock, this.next]
-    this.sock = this.next = null
+    const socks = [this.ws, this.next]
+    this.ws = this.next = null
     for (const s of socks) s?.close(1000)
     this.flushTurn()
     this.account()
@@ -92,7 +92,7 @@ export class LiveClient {
   sendAudio(pcm: Uint8Array): void {
     if (this.status === 'off' || this.status === 'error' || this.preview) return
     const msg = JSON.stringify(audioMsg(Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).toString('base64')))
-    if (this.sock) this.sock.send(msg)
+    if (this.ws) this.ws.send(msg)
     else {
       this.queue.push(msg)
       if (this.queue.length > QUEUE_MAX) this.queue.shift()
@@ -101,7 +101,7 @@ export class LiveClient {
 
   /** 누르고 말하기를 뗐다. */
   endAudio(): void {
-    this.sock?.send(JSON.stringify(audioEndMsg()))
+    if (this.ws) this.ws.send(JSON.stringify(audioEndMsg()))
     if (this.status === 'listening') this.setStatus('thinking')
   }
 
@@ -114,29 +114,29 @@ export class LiveClient {
   private connect(): void {
     const key = this.d.getKey()
     if (!key) return this.fail('Google 키가 없습니다')
-    const s = this.d.open(liveUrl(key))
-    this.next = s
+    const ws = this.d.open(liveUrl(key))
+    this.next = ws
     const { voiceName, speed, callName } = this.d.config()
-    s.onopen = () => s.send(JSON.stringify(buildSetup({ voiceName, speed, callName, handle: this.handle })))
-    s.onmessage = (f) => {
-      for (const ev of parseServer(f)) this.on(s, ev)
+    ws.onopen = () => ws.send(JSON.stringify(buildSetup({ voiceName, speed, callName, handle: this.handle })))
+    ws.onmessage = (f) => {
+      for (const ev of parseServer(f)) this.on(ws, ev)
     }
-    s.onclose = (code, reason) => this.closed(s, code, reason)
+    ws.onclose = (code, reason) => this.closed(ws, code, reason)
   }
 
-  private on(s: LiveSocket, ev: LiveIn): void {
+  private on(ws: LiveSocket, ev: LiveIn): void {
     switch (ev.t) {
       case 'setupComplete': {
-        if (s !== this.next) return
-        const old = this.sock
-        this.sock = s
+        if (ws !== this.next) return
+        const old = this.ws
+        this.ws = ws
         this.next = null
         this.retries = 0
         old?.close(1000)
-        for (const m of this.queue) s.send(m)
+        for (const m of this.queue) ws.send(m)
         this.queue = []
         if (this.readyAt === null) this.readyAt = (this.d.now ?? Date.now)()
-        if (this.preview) s.send(JSON.stringify(textTurnMsg(this.preview)))
+        if (this.preview) ws.send(JSON.stringify(textTurnMsg(this.preview)))
         if (this.status === 'connecting') this.setStatus('listening')
         return
       }
@@ -202,13 +202,13 @@ export class LiveClient {
     this.connect()
   }
 
-  private closed(s: LiveSocket, code: number, reason: string): void {
-    if (s === this.next) {
+  private closed(ws: LiveSocket, code: number, reason: string): void {
+    if (ws === this.next) {
       this.next = null
       return this.retry(code, reason)
     }
-    if (s !== this.sock) return // 이미 갈아탄 옛 연결
-    this.sock = null
+    if (ws !== this.ws) return // 이미 갈아탄 옛 연결
+    this.ws = null
     if (this.next) return // 새 연결이 오는 중 — 그동안 쌓아 둔다
     if (this.preview) return this.stop()
     this.retry(code, reason)
