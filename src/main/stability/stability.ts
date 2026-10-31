@@ -153,12 +153,19 @@ const rendererRecoveryPrompt = (): MessageBoxOptions => ({
 })
 
 /** 렌더러가 죽으면 다시 불러온다. 60초 안 3번을 넘으면 자동은 멈추고 사용자에게 묻는다(창은 한 번에 하나). */
+const RENDERER_RELOAD_DELAY_MS = 250
+
 export function installRendererRecovery(win: BrowserWindow, isQuitting: () => boolean): void {
   const breaker = new RecoveryCircuitBreaker({ windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS, maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES })
   let prompting = false
   const wc = win.webContents
+  // 🔴 render-process-gone 처리기 **안에서 바로** reload 하면 Electron 40 에서 Chromium 이
+  // "Observers can only be added once!"(NOTREACHED)로 앱째 죽는다(2026-11-01 실측, ME-1 E3). Orca 도 타이머 뒤에
+  // 다시 불러온다(createMainWindow-recovery-reload-watchdog.test.ts 가 250ms 를 흘려 보낸다) — 같은 값으로 미룬다.
   const reload = (): void => {
-    if (!win.isDestroyed()) wc.reload()
+    setTimeout(() => {
+      if (!win.isDestroyed()) wc.reload()
+    }, RENDERER_RELOAD_DELAY_MS)
   }
   wc.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit' || win.isDestroyed() || isQuitting()) return
