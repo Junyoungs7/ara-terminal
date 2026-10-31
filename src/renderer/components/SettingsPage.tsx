@@ -1,6 +1,6 @@
 import { AI_ENTRY, FEATURES } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { PasswordInput } from './PasswordInput'
 import {
@@ -47,6 +47,8 @@ import { openMic, listMics, type MicHandle } from '../voice/audio'
 import { previewVoice, setBypass, useVoice } from '../store/voice'
 import { SETTINGS_INDEX, searchSettings, sectionDef, type SettingsSection } from '@shared/settingsIndex'
 import type { SettingsTarget } from '../store/settingsNav'
+// M3 에이전트 설정 — AI 작업 공간 청크(지연 로드). 이 진입점 밖의 aiws 파일은 직접 import 하지 않는다(feature-module.md).
+import { AgentSettings } from '../features/aiws'
 
 // 설정 페이지 (F5 드로어 → 2.0 가운데 창 → M1 1-A **전체 화면 + 검색**, 시안 SW-final 설정 장면).
 // 묶음·섹션·항목 목록은 shared/settingsIndex.ts 한 곳에 있다(검색·딥링크가 그 표를 읽는다).
@@ -130,7 +132,7 @@ function Seg<T extends string>({
   )
 }
 
-function Toggle({
+export function Toggle({
   on,
   label,
   onChange,
@@ -307,7 +309,7 @@ function DirRow({
   )
 }
 
-function Row({ label, desc, item, children }: { label: string; desc?: string; item?: string; children: React.ReactNode }) {
+export function Row({ label, desc, item, children }: { label: string; desc?: string; item?: string; children: React.ReactNode }) {
   return (
     <div className="set-row" data-item={item}>
       <div className="sr-main">
@@ -1680,6 +1682,9 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
 
           {section === 'agents' && (
             <>
+              <Suspense fallback={null}>
+                <AgentSettings />
+              </Suspense>
               <div className="set-sec-t" data-sec="ai.cli" data-item="ai.cli">
                 {t('settings.ai.cliSec')}
               </div>

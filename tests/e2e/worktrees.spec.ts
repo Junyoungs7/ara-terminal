@@ -51,6 +51,8 @@ test('WT-1★ 실험 기능 → 프로젝트 추가 → 새 작업(워크트리)
     await page.click('.aiws-ref[data-ref="v1"]')
     await expect(page.locator('[data-aiws="new-base-value"]')).toHaveText('v1')
     await expect(page.locator('.aiws-mode[data-mode="worktree"]')).toHaveAttribute('aria-checked', 'true')
+    // M3: 이 시험은 에이전트를 안 띄운다(설치된 진짜 CLI 가 기본으로 골라지지 않게).
+    await page.selectOption('[data-aiws="new-agent"]', '')
     await page.click('[data-aiws="new-create"]')
 
     // 사이드바에 보이고(진행 줄은 금방 지나갈 수 있다 — 끝 상태를 본다), 고른 줄이 된다 → 타이틀바·상태바에 반영.
@@ -80,6 +82,8 @@ test('WT-1★ 실험 기능 → 프로젝트 추가 → 새 작업(워크트리)
     await page.click(`${side} [data-aiws="new"]`)
     await page.click('.aiws-mode[data-mode="none"]')
     await expect(page.locator('[data-aiws="new-name"]')).toHaveCount(0)
+    // M3: 이 시험은 에이전트를 안 띄운다(설치된 진짜 CLI 가 기본으로 골라지지 않게).
+    await page.selectOption('[data-aiws="new-agent"]', '')
     await page.click('[data-aiws="new-create"]')
     await expect(mainRow).toHaveAttribute('aria-current', 'true')
     await expect(page.locator('.titlebar .tb-path')).toHaveText('main')

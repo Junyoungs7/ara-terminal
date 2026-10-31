@@ -7,6 +7,7 @@ import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { ensureAiwsLoaded, useAiwsStore } from './store'
 import { WorktreeSidebar } from './WorktreeSidebar'
 import { NewWorkCard } from './NewWorkCard'
+import { AgentWorkspace } from './AgentPane'
 import { shortBranch } from './sidebarRows'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
@@ -113,12 +114,8 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
         {composer ? (
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (
-          <div className="aiws-empty" data-aiws="selected">
-            <GitBranch className="aiws-home-ic" aria-hidden />
-            <b>{active.displayName}</b>
-            <span className="aiws-mono">{active.path}</span>
-            <span>{t('aiws.sel.desc')}</span>
-          </div>
+          // M3: 고른 작업 단위의 에이전트 탭 줄(없으면 피커).
+          <AgentWorkspace key={active.id} worktree={active} />
         ) : (
           <div className="aiws-empty">
             <Sparkles className="aiws-home-ic" aria-hidden />

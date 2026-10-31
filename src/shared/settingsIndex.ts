@@ -39,6 +39,16 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
     id: 'agents',
     group: 'aiws',
     items: [
+      // M3 에이전트(features/aiws/AgentSettingsPanel.tsx)
+      i('agents.detect', 'settings.agents.detect', 'settings.agents.redetect.desc'),
+      i('agents.default', 'settings.agents.default'),
+      i('agents.rc', 'settings.agents.rc', 'settings.agents.rc.desc'),
+      i('agents.launch', 'settings.agents.launch'),
+      i('agents.permission', 'settings.agents.permission', 'settings.agents.permission.desc'),
+      i('agents.args', 'settings.agents.args', 'settings.agents.args.desc'),
+      i('agents.env', 'settings.agents.env', 'settings.agents.env.desc'),
+      i('agents.command', 'settings.agents.command', 'settings.agents.command.desc'),
+      i('agents.preview', 'settings.agents.preview'),
       i('ai.cli', 'settings.ai.cliSec'),
       i('ai.hook', 'settings.ai.hook', 'settings.ai.hook.desc'),
       i('ai.hook.remote', 'settings.ai.hook.remote', 'settings.ai.hook.remote.desc'),

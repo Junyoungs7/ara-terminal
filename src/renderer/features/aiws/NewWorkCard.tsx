@@ -2,11 +2,13 @@ import { useEffect, useState, type JSX } from 'react'
 import type { BaseRef } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore } from './store'
+import { AGENTS, type AgentId } from '@shared/agents'
+import { pickInitialAgent, useAgentStore } from './agentStore'
 
 /**
  * M2 라운드 2 WS-02·WS-04 — 새 작업 만들기. Orca NewWorkspaceComposerCard·new-workspace/ComposerBaseRefPicker
  * (orcaRef 7a7f46f8a3)의 순서만 따른다: 프로젝트 → 이름(브랜치) → 분기 지점(검색 가능한 브랜치/태그) → 워크트리로/없이 → 만들기.
- * 첫 지시 칸은 자리만(에이전트 실행은 M3). 뺀 것: 에이전트 고르기·이슈/PR 연결·설정 스크립트·고급 옵션.
+ * M3: 에이전트 + 첫 지시 — 만든 뒤 그 작업 단위에서 띄운다. 뺀 것: 이슈/PR 연결·설정 스크립트·고급 옵션.
  */
 const REF_SEARCH_DEBOUNCE_MS = 150
 
@@ -39,18 +41,35 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
   const effectiveMode = isGit ? mode : 'none'
   const canCreate = !!repo && (effectiveMode === 'none' || name.trim() !== '')
 
+  // M3: 에이전트 + 첫 지시 — 만들고 나면 그 작업 단위에서 바로 띄운다(Orca 새 작업 카드의 에이전트 고르기).
+  const detected = useAgentStore((s) => s.detected)
+  const agentSettings = useAgentStore((s) => s.settings)
+  useEffect(() => {
+    if (!detected) void useAgentStore.getState().loadAgents()
+  }, [detected])
+  const usable = (detected ?? []).filter((d) => d.installed && agentSettings?.agents[d.id].enabled !== false)
+  const [agentPick, setAgentPick] = useState<AgentId | '' | null>(null)
+  const agent = agentPick ?? pickInitialAgent(agentSettings, detected) ?? ''
+  const [prompt, setPrompt] = useState('')
+  const launch = (worktreeId: string, cwd: string): void => {
+    if (agent) void useAgentStore.getState().launchAgent({ agent, worktreeId, cwd, prompt })
+  }
+
   const create = (): void => {
     if (!repo || !canCreate) return
     const st = useAiwsStore.getState()
     if (effectiveMode === 'none') {
-      st.openWithoutWorktree(repo.id)
+      const id = st.openWithoutWorktree(repo.id)
       onClose()
+      if (id) launch(id, repo.path)
       return
     }
-    // 바로 닫는다 — 진행은 사이드바 줄이 보여 준다(WS-03). 다 만들어지면 그 워크트리를 고른다.
+    // 바로 닫는다 — 진행은 사이드바 줄이 보여 준다(WS-03). 다 만들어지면 그 워크트리를 고르고 에이전트를 띄운다.
     onClose()
     void st.createWorktree({ repoId: repo.id, name: name.trim(), baseBranch: base || undefined }).then((r) => {
-      if (r.ok) useAiwsStore.getState().setActiveWorktree(r.worktree.id)
+      if (!r.ok) return
+      useAiwsStore.getState().setActiveWorktree(r.worktree.id)
+      launch(r.worktree.id, r.worktree.path)
     })
   }
 
@@ -156,9 +175,27 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
           )}
 
           <label className="aiws-field">
+            <span>{t('aiws.new.agent')}</span>
+            <select className="aiws-input" data-aiws="new-agent" value={agent} onChange={(e) => setAgentPick(e.target.value as AgentId | '')}>
+              {usable.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {AGENTS[d.id].label}
+                </option>
+              ))}
+              <option value="">{t('aiws.new.noAgent')}</option>
+            </select>
+          </label>
+          <label className="aiws-field">
             <span>{t('aiws.new.prompt')}</span>
-            {/* 에이전트 실행은 M3 — 칸만 세워 둔다. */}
-            <textarea className="aiws-input" rows={3} disabled placeholder={t('aiws.new.promptPh')} />
+            <textarea
+              className="aiws-input"
+              data-aiws="new-prompt"
+              rows={3}
+              disabled={!agent}
+              placeholder={t('aiws.agent.promptPh')}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
           </label>
         </>
       )}

@@ -7,3 +7,5 @@ export const AiRail = lazy(() => import('./AiSpace').then((m) => ({ default: m.A
 export type AiwsLocation = { crumb: { server: string; path: string | null }; status: string | null }
 
 export const AiHome = lazy(() => import('./AiSpace').then((m) => ({ default: m.AiHome })))
+/** M3 설정 › AI 작업 공간 › 에이전트(감지·켜고 끄기·실행 설정). 설정 화면이 그 섹션을 열 때 불러온다. */
+export const AgentSettings = lazy(() => import('./AgentSettingsPanel').then((m) => ({ default: m.AgentSettingsPanel })))

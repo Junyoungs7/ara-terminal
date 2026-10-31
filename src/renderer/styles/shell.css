@@ -9748,6 +9748,81 @@ button.sb-seg.upd:hover .val {
   justify-content: flex-end;
   gap: var(--sp-3);
 }
+/* M3 에이전트 — 피커 선택지(.aiws-mode 모양 재사용) · 탭 줄 + 터미널 */
+.aiws-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.aiws-agents .aiws-mode {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.aiws-err {
+  color: var(--text-hi);
+}
+.aiws-agentws {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.aiws-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-canvas);
+}
+.aiws-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-lo);
+  font: inherit;
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-tab.on {
+  border-color: var(--line);
+  background: var(--bg-surface);
+  color: var(--text-hi);
+}
+.aiws-tab:disabled {
+  opacity: 0.5;
+  cursor: var(--cur-arrow, default);
+}
+.aiws-tab-ic {
+  width: 14px;
+  height: 14px;
+}
+.aiws-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-mid);
+}
+.aiws-tab-dot.off {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--text-lo);
+}
+.aiws-tab-state {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.aiws-term {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.aiws-term[hidden] {
+  display: none;
+}
 
 /* 상태바 왼쪽 — "main 에서 n 커밋 앞" */
 .sb-seg-ic {
