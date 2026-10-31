@@ -41,6 +41,15 @@ import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliId, AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { ResourceSnapshot } from './resources'
+import type {
+  BaseRef,
+  CreateWorktreeArgs,
+  CreateWorktreeProgressEvent,
+  CreateWorktreeResult,
+  Project,
+  RemoveWorktreeResult,
+  Worktree
+} from './worktrees'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -529,6 +538,15 @@ export type InvokeContract = {
   'resources:snapshot': { req: void; res: ResourceSnapshot }
   // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
   'resources:killPty': { req: { id: string }; res: { ok: boolean } }
+  // M2 작업 단위(main/worktrees/feature.ts). 이름은 Orca 채널(repos:* · worktrees:*)을 따른다.
+  'repos:list': { req: void; res: Project[] }
+  'repos:add': { req: { path: string }; res: { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string } }
+  'repos:remove': { req: { repoId: string }; res: { ok: boolean } }
+  'repos:searchBaseRefs': { req: { repoId: string; query: string }; res: BaseRef[] }
+  'worktrees:list': { req: { repoId: string }; res: { ok: true; worktrees: Worktree[] } | { ok: false; message: string } }
+  'worktrees:create': { req: CreateWorktreeArgs; res: CreateWorktreeResult }
+  'worktrees:cancelCreate': { req: { creationId: string }; res: { ok: boolean } }
+  'worktrees:remove': { req: { repoId: string; path: string; force?: boolean }; res: RemoveWorktreeResult }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1138,6 +1156,21 @@ export type EvApi = {
   resources: {
     snapshot(): Promise<ResourceSnapshot>
     killPty(id: string): Promise<{ ok: boolean }>
+  }
+  // M2 작업 단위(preload/features/worktrees.ts). Orca preload 의 repos·worktrees 모양.
+  repos: {
+    list(): Promise<Project[]>
+    add(path: string): Promise<InvokeRes<'repos:add'>>
+    remove(repoId: string): Promise<{ ok: boolean }>
+    searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]>
+  }
+  worktrees: {
+    list(repoId: string): Promise<InvokeRes<'worktrees:list'>>
+    create(args: CreateWorktreeArgs): Promise<CreateWorktreeResult>
+    cancelCreate(creationId: string): Promise<{ ok: boolean }>
+    remove(repoId: string, path: string, force?: boolean): Promise<RemoveWorktreeResult>
+    /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
+    onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

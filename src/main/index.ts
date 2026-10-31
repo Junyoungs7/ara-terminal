@@ -41,6 +41,7 @@ import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerReportIpc } from './ipc/registerReportIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerResourcesFeature } from './resources/feature'
+import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
@@ -539,6 +540,8 @@ app.whenReady().then(async () => {
   forwards = fwdIpc.forwards
   // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). 상한(M4)은 이 서비스에 붙는다.
   registerResourcesFeature(sessions)
+  // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
+  registerWorktreesFeature(userData)
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(
