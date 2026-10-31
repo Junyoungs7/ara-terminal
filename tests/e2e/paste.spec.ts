@@ -26,16 +26,29 @@ function makeRemote(): string {
   return root
 }
 
-// 파일이 담긴 붙여넣기를 주입한다. Electron 은 File 에 실경로(path)를 실어 주는데 페이지에서
-// 그런 File 을 만들 수는 없으므로, 우리 코드가 실제로 읽는 것(name·path)만 갖춘 객체를 넘긴다.
+// 파일이 담긴 붙여넣기를 주입한다. 경로는 preload 의 webUtils.getPathForFile 이 **진짜 File** 에서만
+// 꺼내 주므로(가짜 객체는 던진다), 숨은 <input type=file> 에 setInputFiles 로 디스크 File 을 받아 넘긴다.
+// 포커스는 붙여넣기 대상 선택(pickPasteTarget)의 기준이라 input 을 거치기 전 자리로 되돌린다.
 async function pasteFiles(page: Page, paths: string[]): Promise<void> {
-  await page.evaluate((ps) => {
+  await page.evaluate(() => {
+    ;(window as unknown as { __e2eFocus: Element | null }).__e2eFocus = document.activeElement
+    const i = document.createElement('input')
+    i.type = 'file'
+    i.multiple = true
+    i.id = '__e2e_paste_files'
+    i.style.display = 'none'
+    document.body.appendChild(i)
+  })
+  await page.locator('#__e2e_paste_files').setInputFiles(paths)
+  await page.evaluate(() => {
+    const i = document.getElementById('__e2e_paste_files') as HTMLInputElement
+    const files = [...(i.files ?? [])]
+    i.remove()
+    ;((window as unknown as { __e2eFocus: Element | null }).__e2eFocus as HTMLElement | null)?.focus?.()
     const ev = new Event('paste', { bubbles: true, cancelable: true })
-    Object.defineProperty(ev, 'clipboardData', {
-      value: { files: ps.map((p) => ({ name: p.split(/[\/]/).pop(), path: p })) }
-    })
+    Object.defineProperty(ev, 'clipboardData', { value: { files } })
     document.dispatchEvent(ev)
-  }, paths)
+  })
 }
 
 // 텍스트 붙여넣기는 이제 xterm 이 자기 textarea 로 받는다(bracketed paste 포함) — 렌더러 스텁으로는

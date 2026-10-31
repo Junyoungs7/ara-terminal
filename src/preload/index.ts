@@ -1,6 +1,6 @@
 // preload — 좁은 도메인 API를 contextBridge로 노출 (계획서 §B.1/§B.2).
 // 채널명은 이 파일 안에만 존재; renderer는 window.ev만 본다. ipcRenderer 직접 노출 금지.
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import type { AskRequest } from '../main/mcp/askUser'
 import type { AraChatEvent } from '../main/ai/AraChat'
 import type {
@@ -60,6 +60,8 @@ const api: EvApi = {
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
     hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found),
     logPaths: () => ipcRenderer.invoke('app:logPaths'),
+    // Electron 32 에서 File.path 가 없어진다 — 경로는 webUtils 로 묻는다(동기, IPC 아님).
+    pathForFile: (file: File) => webUtils.getPathForFile(file),
     // #190 터미널 렌더러 진단. gpuInfo 는 main 이 아는 GPU 상태고, webglOptOut 은 **값**이다 —
     // 프로브는 xterm 을 만드는 그 순간 동기로 판정해야 해서 IPC 로는 늦는다(TerminalPane 주석).
     // sandbox 프리로드에도 process.env 는 있지만, 없더라도 **부팅이 멈추지 않게** typeof 로 본다:

@@ -49,7 +49,7 @@ const PASTE_SUB = 'ara'
 /**
  * 경로 없는 파일(= 클립보드 캡처)을 디스크에 떨구고 그 경로를 돌려준다.
  *
- * 왜 파일이어야 하나: 아라에게 넘기는 것은 **경로**다(아래 intake 참고). 캡처는 File.path 가 비어
+ * 왜 파일이어야 하나: 아라에게 넘기는 것은 **경로**다(아래 intake 참고). 캡처는 디스크 경로가 비어
  * 있어 그대로는 넘길 것이 없다 — 여기서 실체를 만들어 주지 않으면 "붙였는데 아무 일도 안 일어난다".
  */
 async function saveClipFile(f: File): Promise<{ path: string } | { error: string }> {
@@ -415,7 +415,7 @@ export function AraChatPanel({
   const intake = useCallback(async (files: readonly File[]): Promise<void> => {
     const paths = filePaths(files)
     for (const f of files) {
-      if ((f as File & { path?: string }).path) continue
+      if (window.ev.app.pathForFile(f)) continue
       const r = await saveClipFile(f)
       if ('path' in r) paths.push(r.path)
       // 조용히 버리지 않는다 — 붙인 사람은 붙었다고 믿는다.

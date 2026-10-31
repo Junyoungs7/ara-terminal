@@ -736,6 +736,8 @@ export type EvApi = {
     hasCli(bin: string): Promise<boolean>
     /** 지금 쓰이는 기록 폴더 두 곳 + 기본 자리(설정 화면이 보여 준다). */
     logPaths(): Promise<{ sessionLogDir: string; appLogDir: string; defaultDir: string }>
+    /** 끌어다 놓기·붙여넣기 File 의 실경로(webUtils.getPathForFile). 디스크에 없는 File 이면 ''. */
+    pathForFile(file: File): string
     /** #190 진단 — Electron 이 아는 GPU 상태·GPU 이름. 설정 [정보]가 보여 주고 복사해 준다. */
     gpuInfo(): Promise<GpuInfo>
     /**

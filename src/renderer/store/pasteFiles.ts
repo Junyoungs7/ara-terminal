@@ -71,9 +71,9 @@ export function registerPasteTarget(t: PasteTarget): () => void {
   }
 }
 
-/** Electron 은 File 에 실경로를 실어 준다 — 업로드·복사는 경로로 돈다. 경로가 없는 항목은 버린다. */
+/** File 의 실경로는 preload(webUtils)에 묻는다 — 업로드·복사는 경로로 돈다. 경로가 없는 항목은 버린다. */
 export function filePaths(files: readonly File[]): string[] {
-  return files.map((f) => (f as File & { path?: string }).path ?? '').filter((p) => p !== '')
+  return files.map((f) => window.ev.app.pathForFile(f)).filter((p) => p !== '')
 }
 
 // 테스트 전용 — 등록 목록을 비운다(모듈 스코프라 테스트끼리 샌다).

@@ -2,7 +2,7 @@
 //
 // 왜 순수 함수로 뺐나: 잘못 고르면 이름 변경 칸에 붙여넣으려던 텍스트가 서버로 업로드되거나,
 // 반대로 터미널 붙여넣기가 통째로 죽는다. 둘 다 조용히 일어나서 화면만 봐선 모른다.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { pickPasteTarget, filePaths, type PasteTarget } from '../src/renderer/store/pasteFiles'
 
 // 가짜 DOM — contains 만 있으면 된다(jsdom 없이 돈다).
@@ -74,8 +74,17 @@ describe('붙여넣기 대상 고르기', () => {
 
 describe('File → 경로', () => {
   const f = (name: string, path?: string): File => ({ name, path } as unknown as File)
+  // 실경로는 preload 의 webUtils.getPathForFile 이 준다 — 여기서는 그 자리만 흉내 낸다.
+  beforeAll(() => {
+    ;(globalThis as unknown as { window: unknown }).window = {
+      ev: { app: { pathForFile: (x: File) => (x as unknown as { path?: string }).path ?? '' } }
+    }
+  })
+  afterAll(() => {
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
 
-  it('Electron 이 실어 준 실경로를 뽑는다 — 여러 개 그대로', () => {
+  it('preload 가 준 실경로를 뽑는다 — 여러 개 그대로', () => {
     expect(filePaths([f('a.txt', 'C:/a.txt'), f('b.txt', 'C:/b.txt')])).toEqual(['C:/a.txt', 'C:/b.txt'])
   })
   it('경로 없는 항목은 버린다(브라우저 File — 업로드할 실체가 없다)', () => {

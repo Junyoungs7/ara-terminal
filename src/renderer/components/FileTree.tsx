@@ -1061,8 +1061,8 @@ export function FileTree({
   }, [putFiles, pasteHere])
 
   // OS 파일탐색기 → 트리 드롭. 원격=업로드 · 로컬=복사(붙여넣기와 같은 putFiles).
-  // 경로는 정본 `filePaths()` 로 뽑는다(#201 E) — 전에는 같은 식을 손으로 다시 써서, `File.path` 가
-  // `webUtils.getPathForFile` 로 옮겨 가는 날 정본만 고쳐지고 여기는 조용히 빈 배열이 될 자리였다.
+  // 경로는 정본 `filePaths()` 로 뽑는다(#201 E) — 같은 식을 손으로 다시 쓰면 경로 얻는 법이 바뀔 때
+  // 정본만 고쳐지고 여기는 조용히 빈 배열이 된다.
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
