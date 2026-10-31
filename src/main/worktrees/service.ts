@@ -111,7 +111,8 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       }
       if (!project) return fail({ ok: false, reason: 'notFound', message: repoId })
       if (project.kind !== 'git') return fail({ ok: false, reason: 'notRepo', message: project.path })
-      if (inflight.has(creationId)) return fail({ ok: false, reason: 'collision', message: creationId })
+      // 같은 id 가 이미 돌고 있다 — 그쪽 진행을 'failed' 로 덮지 않게 이벤트 없이 거절한다.
+      if (inflight.has(creationId)) return { ok: false, reason: 'collision', message: creationId }
       let sanitized: string
       try {
         sanitized = sanitizeWorktreeName(String(args.name ?? ''))
