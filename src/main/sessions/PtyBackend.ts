@@ -16,7 +16,9 @@ function shellKind(file: string): ShellKind {
   return 'other'
 }
 
-// Windows: pwsh(신형)→powershell(구형)→cmd. mac/linux: 로그인 셸 env→zsh→bash.
+// Windows: PWSH 환경변수가 가리키는 셸 → 없으면 powershell.exe(5.1). pwsh 를 찾아 나서지는 않는다
+// (처음부터 이 동작이다 — 1c019e7). 스폰이 실패하면 생성자가 cmd 로 폴백한다.
+// mac/linux: 로그인 셸(SHELL env) → 없으면 zsh.
 function resolveShell(spec: SessionSpec): { file: string; args: string[]; kind: ShellKind } {
   const of = (file: string, args: string[] = []) => ({ file, args, kind: shellKind(file) })
   if (spec.shell) return of(spec.shell)
@@ -32,7 +34,7 @@ function resolveShell(spec: SessionSpec): { file: string; args: string[]; kind: 
  * #90: 이 PC 의 기본 셸이 어느 조립 규칙인가. AI CLI 시작이 `cd A && B` 를 보낼지
  * `Set-Location …; if ($?) { B }` 를 보낼지 여기서 갈린다 — powershell.exe(5.1)는 `&&` 가
  * **파서 오류**라 잘못 고르면 명령이 실행조차 되지 않는다.
- * 셸 선택 규칙(pwsh → powershell → cmd)을 두 벌로 만들지 않으려고 위 resolveShell 을 그대로 탄다.
+ * 셸 선택 규칙(PWSH env → powershell → 스폰 실패 시 cmd)을 두 벌로 만들지 않으려고 위 resolveShell 을 그대로 탄다.
  */
 export function defaultLaunchShell(): LaunchShell {
   return shellFor(resolveShell({} as SessionSpec).kind, process.platform === 'win32' ? 'win32' : 'other')
@@ -138,8 +140,43 @@ export async function drainKilledPtys(): Promise<void> {
   killedPtys.clear()
 }
 
+// ── 시작 DA1 에 main 이 답한다(fix-da1) ────────────────────────────────────────────────────
+// 번들 conpty(useConptyDll, OpenConsole 1.23)는 시작할 때 DA1(`ESC[c`)을 묻고, 답이 오거나 약 3.8초
+// 타임아웃이 날 때까지 셸 출력을 내보내지 않는다. attach 전 출력은 backlog 에 갇히고, 렌더러는 재그리기
+// 중 xterm 의 응답을 일부러 버린다(TerminalPane — 옛 `[?1;2c` 잔재 버그) → 답할 사람이 없어 새 탭·복원마다
+// 프롬프트가 ~4초 늦었다(agent_talk/perf-workspace-done.md). 그래서 **첫 질의 한 번만** main 이
+// xterm.js 와 같은 값(`ESC[?1;2c`)으로 답하고 그 질의 바이트는 렌더러로 안 넘긴다. 이후의 DA1(사용자
+// 프로그램이 묻는 것)은 손대지 않는다 — 지금처럼 xterm 이 답한다.
+// ponytail: 첫 DA1_WATCH_CHUNKS 조각 안에서만 찾는다. 놓치면(더 늦게 오거나 시스템 conpty 처럼 아예 안 물으면)
+// 지금처럼 타임아웃으로 돌아갈 뿐 더 나빠지지 않는다. 실측은 첫 1~2조각 안이다.
+const DA1 = '[c'
+export const DA1_REPLY = '[?1;2c'
+const DA1_WATCH_CHUNKS = 4
+
+/** 시작 DA1 거르기 상태. `null` = 끝(그 뒤로는 통과). `carry` = 조각 끝에 걸린 질의 앞부분. */
+export type StartupDa1 = { carry: string; left: number } | null
+export const startupDa1Initial = (): StartupDa1 => ({ carry: '', left: DA1_WATCH_CHUNKS })
+
+/** 순수 함수 — 조각 하나를 받아 내보낼 문자열·다음 상태·답할지 여부를 돌려준다. */
+export function filterStartupDa1(st: StartupDa1, chunk: string): { out: string; st: StartupDa1; reply: boolean } {
+  if (!st) return { out: chunk, st, reply: false }
+  const s = st.carry + chunk
+  const i = s.indexOf(DA1)
+  if (i >= 0) return { out: s.slice(0, i) + s.slice(i + DA1.length), st: null, reply: true }
+  if (st.left > 1) {
+    // 끝이 질의의 앞부분(`ESC`, `ESC[`)이면 다음 조각까지 보관한다.
+    for (let k = DA1.length - 1; k > 0; k--) {
+      if (s.endsWith(DA1.slice(0, k))) return { out: s.slice(0, -k), st: { carry: s.slice(-k), left: st.left - 1 }, reply: false }
+    }
+    return { out: s, st: { carry: '', left: st.left - 1 }, reply: false }
+  }
+  return { out: s, st: null, reply: false }
+}
+
 export class PtyBackend implements SessionBackend {
   private readonly pty: IPty
+  // Windows(번들 conpty)에서만 시작 DA1 을 거른다. POSIX 는 처음부터 끝(null).
+  private da1: StartupDa1 = process.platform === 'win32' ? startupDa1Initial() : null
 
   get pid(): number {
     return this.pty.pid
@@ -240,7 +277,19 @@ export class PtyBackend implements SessionBackend {
     )
   }
   onData(cb: (data: string) => void): void {
-    this.pty.onData(cb)
+    this.pty.onData((data) => {
+      if (!this.da1) return cb(data)
+      const r = filterStartupDa1(this.da1, data)
+      this.da1 = r.st
+      if (r.reply) {
+        try {
+          this.pty.write(DA1_REPLY)
+        } catch {
+          /* 종료 레이스: 무시 */
+        }
+      }
+      if (r.out) cb(r.out)
+    })
   }
   onExit(cb: (exitCode: number, signal?: number) => void): void {
     this.pty.onExit(({ exitCode, signal }) => cb(exitCode, signal))

@@ -128,7 +128,7 @@ export function validCliBin(v: unknown): string | null {
  * 어느 셸에 밀어 넣는 한 줄인가(#90, 2026-08-16).
  *
  * 원격은 늘 POSIX 였지만 **로컬은 Windows 라 갈린다.** `PtyBackend.ts` 가 기본 셸을
- * pwsh → powershell → cmd 순으로 고르는데, `powershell.exe`(5.1)는 **`&&` 가 파서 오류다** —
+ * PWSH env → powershell → (스폰 실패 시) cmd 순으로 고르는데, `powershell.exe`(5.1)는 **`&&` 가 파서 오류다** —
  * 명령이 아예 실행되지 않는다. 프롬프트(`PS C:\…>`)만으로는 5.1 인지 7 인지 알 수 없고
  * 기존 ShellKind 도 둘을 구분하지 않으므로, **버전을 알아내려 하지 말고 양쪽에서 다 되는
  * 문법**을 쓴다(`;` + `if ($?)`).
