@@ -210,6 +210,8 @@ test('DROP-3★ [다시 접속]을 누르면 그 서버로 되살아난다', asy
   const { page } = ara
   const h = await ssh({ password: 'pw-drop3' })
   await connectNewSshProfile(page, { name: 'drop3', port: h.port, password: 'pw-drop3' })
+  // DROP-1 처럼 칸이 선 뒤에 끊는다 — 접속이 다 붙기 전에 끊으면 '쓰던 중 끊김'이 아니라 카드가 안 뜬다(Electron 40 에서 매번).
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
 
   h.dropAll() // 서버는 살아 있고 연결만 끊긴다 = 되살릴 수 있는 상황
   await expect(page.locator('.restore-err-card.over')).toBeVisible({ timeout: 30_000 })
