@@ -192,3 +192,20 @@ describe('분기 지점(WS-04)', () => {
     expect((await svc.searchBaseRefs(p.project.id, 'LOG')).map((r) => r.refName)).toEqual(['feature/login'])
   })
 })
+
+describe('통계(WS-05 — +/− 줄 수 · main 에서 n 커밋 앞)', () => {
+  it('갈림점부터 커밋 수와 줄 수(커밋 안 한 변경 포함), 목록에 없는 경로는 거절', async () => {
+    const svc = makeService()
+    const p = await svc.addProject(repo)
+    if (!p.ok) throw new Error('add')
+    const wt = join(dir, 'feat')
+    await sh(['worktree', 'add', '-q', '-b', 'feat', wt])
+    writeFileSync(join(wt, 'b.txt'), 'b1\nb2\n')
+    await sh(['add', '.'], wt)
+    await sh(['commit', '-q', '-m', 'b'], wt)
+    writeFileSync(join(wt, 'a.txt'), 'A\n') // 커밋 안 한 변경: a → A (1+ 1−)
+    expect(await svc.worktreeStats(p.project.id, wt)).toEqual({ ok: true, base: 'main', ahead: 1, added: 3, removed: 1 })
+    expect(await svc.worktreeStats(p.project.id, repo)).toEqual({ ok: true, base: 'main', ahead: 0, added: 0, removed: 0 })
+    expect(await svc.worktreeStats(p.project.id, join(dir, 'nope'))).toEqual({ ok: false })
+  })
+})

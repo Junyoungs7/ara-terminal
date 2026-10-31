@@ -35,7 +35,9 @@ import {
   type PendingCreation,
   type Project,
   type RemoveWorktreeResult,
-  type Worktree
+  type Worktree,
+  type WorktreeStats,
+  parseShortstat
 } from '@shared/worktrees'
 
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string }
@@ -187,6 +189,23 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       if (!target) return { ok: false, message: worktreePath }
       const r = await removeWorktree(project.path, target.path, force === true)
       return r.code === 0 ? { ok: true } : { ok: false, message: `${r.stderr}${r.stdout}`.trim() || String(r.error) }
+    },
+
+    /** 사이드바 +/− · 상태바 "main 에서 n 커밋 앞". 목록에 있는 경로만(렌더러 값 불신). git 3번 — 행마다 부르므로 짧은 상한. */
+    async worktreeStats(repoId: string, worktreePath: string): Promise<WorktreeStats> {
+      const project = deps.store.get(repoId)
+      if (!project || project.kind !== 'git') return { ok: false }
+      const listed = (await listWorktrees(project.path)) ?? []
+      const target = listed.find((w) => same(w.path, worktreePath))
+      const main = listed.find((w) => w.isMainWorktree)
+      if (!target || !main?.branch) return { ok: false }
+      const base = main.branch.replace(/^refs\/heads\//, '')
+      const mb = await git(['merge-base', main.head, 'HEAD'], target.path)
+      if (mb.code !== 0) return { ok: false }
+      const fork = mb.stdout.trim()
+      const [count, diff] = await Promise.all([git(['rev-list', '--count', `${fork}..HEAD`], target.path), git(['diff', '--shortstat', fork], target.path)])
+      if (count.code !== 0 || diff.code !== 0) return { ok: false }
+      return { ok: true, base, ahead: Number(count.stdout.trim()) || 0, ...parseShortstat(diff.stdout) }
     },
 
     async searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]> {

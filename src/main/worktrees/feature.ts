@@ -1,6 +1,6 @@
 // M2 작업 단위 — 기능 틀(docs/feature-module.md)의 main 등록 함수. 이 기능의 IPC 는 전부 여기서 건다.
 // Orca src/main/ipc/worktrees.ts·repos(orcaRef 7a7f46f8a3)의 채널 이름을 따른다. 원격·SSH 워크트리는 M8.
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, dialog } from 'electron'
 import { join } from 'node:path'
 import { handle } from '../ipc/handle'
 import { pushSend } from '../util/windowPush'
@@ -15,9 +15,15 @@ export function registerWorktreesFeature(userData: string): WorktreeService {
     emit: (e) => {
       for (const w of BrowserWindow.getAllWindows()) pushSend(w.webContents, 'createWorktree:progress', e)
     },
-    warn: (msg) => logMainError('worktree-include', new Error(msg))
+    warn: (msg) => logMainError('worktree-include', new Error(msg)),
+    // e2e 는 사용자 홈(~/ara/workspaces)에 워크트리를 만들지 않는다 — 그 인스턴스의 임시 userData 안으로.
+    ...(process.env.ARA_E2E ? { workspaceDir: join(userData, 'workspaces') } : {})
   })
   handle('repos:list', () => service.listProjects())
+  handle('repos:pickFolder', async () => {
+    const res = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return res.canceled ? null : (res.filePaths[0] ?? null)
+  })
   handle('repos:add', ({ path }) => service.addProject(path))
   handle('repos:remove', ({ repoId }) => service.removeProject(repoId))
   handle('repos:searchBaseRefs', ({ repoId, query }) => service.searchBaseRefs(repoId, query))
@@ -25,6 +31,7 @@ export function registerWorktreesFeature(userData: string): WorktreeService {
   handle('worktrees:create', (args) => service.createWorktree(args))
   handle('worktrees:cancelCreate', ({ creationId }) => service.cancelCreate(creationId))
   handle('worktrees:remove', ({ repoId, path, force }) => service.removeWorktree(repoId, path, force))
+  handle('worktrees:stats', ({ repoId, path }) => service.worktreeStats(repoId, path))
   // 지난번에 앱이 죽어 남은 생성 기록 정리(WS-03). 기동을 막지 않는다.
   void service.reconcilePending().catch((e) => logMainError('worktree-reconcile', e))
   return service

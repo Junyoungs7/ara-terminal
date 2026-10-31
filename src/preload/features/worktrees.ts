@@ -7,6 +7,7 @@ import type { CreateWorktreeArgs, CreateWorktreeProgressEvent } from '@shared/wo
 export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees'> = {
   repos: {
     list: () => ipcRenderer.invoke('repos:list'),
+    pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
     add: (path: string) => ipcRenderer.invoke('repos:add', { path }),
     remove: (repoId: string) => ipcRenderer.invoke('repos:remove', { repoId }),
     searchBaseRefs: (repoId: string, query: string) => ipcRenderer.invoke('repos:searchBaseRefs', { repoId, query })
@@ -16,6 +17,7 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees'> = {
     create: (args: CreateWorktreeArgs) => ipcRenderer.invoke('worktrees:create', args),
     cancelCreate: (creationId: string) => ipcRenderer.invoke('worktrees:cancelCreate', { creationId }),
     remove: (repoId: string, path: string, force?: boolean) => ipcRenderer.invoke('worktrees:remove', { repoId, path, force }),
+    stats: (repoId: string, path: string) => ipcRenderer.invoke('worktrees:stats', { repoId, path }),
     onCreateProgress: (cb: (e: CreateWorktreeProgressEvent) => void) => {
       const listener = (_e: IpcRendererEvent, d: CreateWorktreeProgressEvent) => cb(d)
       ipcRenderer.on('createWorktree:progress', listener)

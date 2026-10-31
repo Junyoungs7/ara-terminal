@@ -48,7 +48,8 @@ import type {
   CreateWorktreeResult,
   Project,
   RemoveWorktreeResult,
-  Worktree
+  Worktree,
+  WorktreeStats
 } from './worktrees'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
@@ -540,6 +541,8 @@ export type InvokeContract = {
   'resources:killPty': { req: { id: string }; res: { ok: boolean } }
   // M2 작업 단위(main/worktrees/feature.ts). 이름은 Orca 채널(repos:* · worktrees:*)을 따른다.
   'repos:list': { req: void; res: Project[] }
+  // 폴더 고르기 — 경로는 사용자가 OS 대화상자에서 고른 것만(렌더러가 지어내지 않는다). 취소 = null.
+  'repos:pickFolder': { req: void; res: string | null }
   'repos:add': { req: { path: string }; res: { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string } }
   'repos:remove': { req: { repoId: string }; res: { ok: boolean } }
   'repos:searchBaseRefs': { req: { repoId: string; query: string }; res: BaseRef[] }
@@ -547,6 +550,7 @@ export type InvokeContract = {
   'worktrees:create': { req: CreateWorktreeArgs; res: CreateWorktreeResult }
   'worktrees:cancelCreate': { req: { creationId: string }; res: { ok: boolean } }
   'worktrees:remove': { req: { repoId: string; path: string; force?: boolean }; res: RemoveWorktreeResult }
+  'worktrees:stats': { req: { repoId: string; path: string }; res: WorktreeStats }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1160,6 +1164,7 @@ export type EvApi = {
   // M2 작업 단위(preload/features/worktrees.ts). Orca preload 의 repos·worktrees 모양.
   repos: {
     list(): Promise<Project[]>
+    pickFolder(): Promise<string | null>
     add(path: string): Promise<InvokeRes<'repos:add'>>
     remove(repoId: string): Promise<{ ok: boolean }>
     searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]>
@@ -1169,6 +1174,7 @@ export type EvApi = {
     create(args: CreateWorktreeArgs): Promise<CreateWorktreeResult>
     cancelCreate(creationId: string): Promise<{ ok: boolean }>
     remove(repoId: string, path: string, force?: boolean): Promise<RemoveWorktreeResult>
+    stats(repoId: string, path: string): Promise<WorktreeStats>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
   }

@@ -295,3 +295,13 @@ describe('base refs (WS-04)', () => {
     expect(await resolveWorktreeAddBaseRef('refs/tags/v1.0', has([]))).toBe('refs/tags/v1.0')
   })
 })
+
+describe('parseShortstat', () => {
+  it('더한·뺀 줄 — 한쪽만 있거나 빈 출력', async () => {
+    const { parseShortstat } = await import('@shared/worktrees')
+    expect(parseShortstat(' 3 files changed, 10 insertions(+), 2 deletions(-)\n')).toEqual({ added: 10, removed: 2 })
+    expect(parseShortstat(' 1 file changed, 1 insertion(+)')).toEqual({ added: 1, removed: 0 })
+    expect(parseShortstat(' 1 file changed, 4 deletions(-)')).toEqual({ added: 0, removed: 4 })
+    expect(parseShortstat('')).toEqual({ added: 0, removed: 0 })
+  })
+})

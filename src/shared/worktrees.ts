@@ -76,6 +76,19 @@ export type BaseRef = { refName: string; kind: 'local' | 'remote' | 'tag' }
 
 export type RemoveWorktreeResult = { ok: true } | { ok: false; message: string }
 
+/**
+ * 사이드바 +/− 줄 수 · 상태바 "main 에서 n 커밋 앞"(WS-05). base = 본 작업 폴더가 체크아웃한 브랜치.
+ * 줄 수는 base 와의 갈림점부터 지금 작업 폴더까지(커밋 안 한 변경 포함 — Orca 카드의 +/− 와 같은 뜻).
+ */
+export type WorktreeStats = { ok: true; base: string; ahead: number; added: number; removed: number } | { ok: false }
+
+/** `git diff --shortstat` 한 줄 → 더한·뺀 줄 수. 변경이 없으면 빈 출력 → 0·0. */
+export function parseShortstat(out: string): { added: number; removed: number } {
+  const added = /(\d+) insertions?\(\+\)/.exec(out)
+  const removed = /(\d+) deletions?\(-\)/.exec(out)
+  return { added: added ? Number(added[1]) : 0, removed: removed ? Number(removed[1]) : 0 }
+}
+
 /** Orca WORKTREE_ID_SEPARATOR(src/shared/pty-session-id-format.ts). */
 export const WORKTREE_ID_SEPARATOR = '::'
 
