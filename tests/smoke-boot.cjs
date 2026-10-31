@@ -417,6 +417,10 @@ const checks = []
   checks.push(['nodeIntegration', wp.nodeIntegration === false || wp.nodeIntegration === undefined])
   checks.push(['sandbox', wp.sandbox === true])
 
+  // ME-2(React 19): loadFile 이 끝나도 첫 렌더가 아직일 수 있다(18 에선 우연히 끝나 있었다) — .app 이 설 때까지 기다린다.
+  // 안 그러면 아래 getComputedStyle(null) 이 던져 스모크 전체가 'Script failed to execute' 하나로 죽는다.
+  for (let i = 0; i < 100 && !(await win.webContents.executeJavaScript(`!!document.querySelector('.app')`)); i++)
+    await new Promise((r) => setTimeout(r, 100))
   // renderer 측 검증: window.ev 존재, window.require 부재, 셸 3행 렌더
   const r = await win.webContents.executeJavaScript(`(() => ({
     hasEv: typeof window.ev === 'object' && window.ev !== null,
