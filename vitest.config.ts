@@ -19,6 +19,10 @@ export default defineConfig({
     //    무관해졌다(tests/sessionlog.test.ts:382-386). 지킬 대상이 없다.
     // singleFork 자체는 이번에 건드리지 않는다 — 병렬로 되돌리면 공유 상태·고정 포트(39217)가
     // 드러나므로 검증을 붙일 별도 라운드감이다.
-    poolOptions: { forks: { singleFork: true } }
+    // ME-2(vitest 5): poolOptions 는 vitest 4 에서 없어져 **조용히 무시**된다 — 그대로 두면 파일들이 병렬로 돌아
+    // 고정 포트(39217)·공유 상태가 부딪친다. 같은 뜻(한 번에 한 프로세스)은 최상위 maxWorkers: 1 이다(Orca config/vitest.config.ts).
+    // 정말 하나인지는 setupFiles 의 tests/setup-single-worker.ts 가 지킨다(--maxWorkers=2 로 돌리면 실패해야 한다 — 양성 대조).
+    maxWorkers: 1,
+    setupFiles: ['tests/setup-single-worker.ts']
   }
 })
