@@ -32,7 +32,7 @@ ELECTRON_MIRROR="http://<미러>/electron/" npx install-electron   # 첫 실행 
 2. 그 캐시 폴더(위 표의 기본 위치)를 **통째로** 빌드 PC·맥 빌드 머신의 같은 위치로 복사한다. 하위 폴더 이름이 주소 해시라 zip 만 따로 옮기면 못 찾는다.
 3. 빌드 PC 에서 `npx electron --version` 이 판을 찍으면 끝.
 
-`npx install-electron` 은 42 릴리스 노트가 안내하는 명령이다. 43 설치 뒤 명령 이름·플래그를 `node_modules/electron/package.json` 의 `bin` 으로 한 번 확인한다(2026-11-01 작성 시점 40 이라 확인 못 했다).
+`npx install-electron` 은 42 릴리스 노트가 안내하는 명령이다. 43 설치 뒤 명령 이름·플래그를 `node_modules/electron/package.json` 의 `bin` 으로 한 번 확인한다— 2026-11-01 43.8.6 에서 확인: `bin` = `{ electron: cli.js, 'install-electron': install.js }`, 사내망에서 `node node_modules/electron/install.js` 로 받아졌다(DLP 막힘 없음).
 
 ## 막히면
 
