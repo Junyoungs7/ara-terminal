@@ -69,6 +69,9 @@ const ALL_MENUBAR: readonly MenuDef[] = [
       { action: 'sidebar.collapse' },
       { action: 'bottom.toggle' },
       { action: 'ai.toggle' },
+      // M1 라운드 2 — 실험 기능이 꺼져 있으면 그리는 쪽(TitleBar·팔레트)이 뺀다(SPACE_ACTIONS).
+      { action: 'space.term' },
+      { action: 'space.ai' },
       { command: 'font.zoomIn' },
       { command: 'font.zoomOut' }
     ]
@@ -144,6 +147,9 @@ export function menuGroups(items: readonly MenuEntry[]): (MenuEntry | { sub: Men
   }
   return out
 }
+
+/** 공간 전환 항목 — 실험 기능(설정 › 고급)이 꺼져 있으면 ≡ 메뉴·통합 검색에서 뺀다. */
+export const SPACE_ACTIONS: ReadonlySet<string> = new Set<KeymapAction>(['space.term', 'space.ai'])
 
 export const menuEntryId = (e: MenuEntry): string => ('action' in e ? e.action : e.command)
 

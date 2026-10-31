@@ -158,7 +158,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('dir.app', 'settings.dir.app', 'settings.dir.app.desc')
     ]
   },
-  soon('experimental', 'advanced'),
+  // M1 라운드 2: 첫 실험 토글 — AI 작업 공간(M3 에서 기본으로 연다).
+  { id: 'experimental', group: 'advanced', items: [i('exp.aiSpace', 'settings.exp.aiSpace', 'settings.exp.aiSpace.desc')] },
 
   {
     id: 'about',

@@ -34,7 +34,9 @@ const DEFAULT_PREFS: UiPrefs = {
   araWelcomeSeen: false,
   bootSplash: true,
   features: featuresOf(undefined),
-  voice: DEFAULT_VOICE
+  voice: DEFAULT_VOICE,
+  aiSpace: false,
+  space: 'term'
 }
 
 export function useUiPrefs() {

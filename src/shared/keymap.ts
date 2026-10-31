@@ -61,6 +61,9 @@ export type KeymapAction =
   | 'app.lock'
   // 2.1 음성 — 짧게 누르면 패널 켜고/끄기, 켜진 채 누르고 있으면 말하기(누르고 말하기 모드).
   | 'voice.toggle'
+  // M1 라운드 2 공간 전환 — 실험 기능(설정 › 고급)을 켰을 때만 뜻이 있다(꺼져 있으면 받는 쪽이 흘려보낸다).
+  | 'space.term'
+  | 'space.ai'
 
 import { AI_ENTRY } from './features'
 import { DEFAULT_LOCK_SHORTCUT } from './lock'
@@ -180,6 +183,12 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 2.1 음성(가안 — PLAN-v2-voice). Ctrl+Shift+Space 는 셸·리드라인 바인딩이 없다(Ctrl+Space 는 set-mark 라 Shift 를 얹었다).
   // 회사 PC 한글 IME 가 이 조합을 먹는지는 준영님 확인 항목이다.
   { action: 'voice.toggle', category: 'ai', labelKo: '음성 켜기/끄기 · 누르고 말하기', win: 'Ctrl+Shift+Space', mac: 'Cmd+Shift+Space', implemented: true },
+  // M1 라운드 2 공간 전환. Ctrl+Alt+숫자 — 탭 번호(Ctrl+1-9)·AI CLI(Alt+1-3)와는 수식키가 달라 안 겹친다
+  // (modifiersMatch 가 Ctrl·Alt 를 둘 다 본다). xterm 은 이 조합을 ESC+숫자(리드라인 M-숫자 = 반복 인자)로 보내는데
+  // Alt+1-3 이 이미 그 자리를 가져갔고 셸은 같은 일을 Alt+숫자로 한다. 한국어 배열엔 AltGr 이 없고, AltGr 배열은
+  // e.key 가 숫자가 아니라(² 등) 안 맞는다. ponytail: mac Opt+숫자는 aicli.run.* 과 같은 e.key 한계.
+  { action: 'space.term', category: 'view', labelKo: '공간: 터미널', win: 'Ctrl+Alt+1', mac: 'Cmd+Opt+1', implemented: true },
+  { action: 'space.ai', category: 'view', labelKo: '공간: AI 작업', win: 'Ctrl+Alt+2', mac: 'Cmd+Opt+2', implemented: true },
   LOCK_KEY
 ] as const
 

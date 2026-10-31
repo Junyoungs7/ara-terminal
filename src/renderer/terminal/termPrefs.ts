@@ -19,6 +19,7 @@ import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
 import { featuresOf } from '@shared/features'
 import { voiceOf } from '@shared/voice'
+import { spaceOf } from '@shared/space'
 import { applyMouseCursor } from '../cursorThemes'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
@@ -47,6 +48,8 @@ export const termPrefs: Omit<
   | 'araWelcomeSeen'
   | 'bootSplash'
   | 'features'
+  | 'aiSpace'
+  | 'space'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -85,6 +88,8 @@ export function prefsFrom(
     | 'bootSplash'
     | 'features'
     | 'voice'
+    | 'aiSpace'
+    | 'space'
   >
 ): UiPrefs {
   return {
@@ -116,7 +121,10 @@ export function prefsFrom(
     // 미지정이면 **켬** — 처음 쓰는 사람에게 한 번은 보여 주고, 싫으면 끄게 한다.
     bootSplash: ui.bootSplash !== false,
     features: featuresOf(ui.features),
-    voice: voiceOf(ui.voice)
+    voice: voiceOf(ui.voice),
+    // M1 실험 기능 — 미지정이면 끔(지금과 똑같은 화면).
+    aiSpace: ui.aiSpace === true,
+    space: spaceOf(ui.space)
   }
 }
 
