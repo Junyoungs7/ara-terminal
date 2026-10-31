@@ -9,6 +9,7 @@ import { openSettings, setSettingsOpener, type SettingsTarget } from '../store/s
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
 import { useLayout, toLayoutNode, allPanesRdp, splitFiller, serial, MAX_PANES, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
+import type { Space } from '@shared/space'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
@@ -83,6 +84,8 @@ export type MainAreaHandle = {
   setAiModel: (provider: AiProvider, model: string) => void
   /** 2.0 통합 검색 Ctrl+Enter — 숨긴 기능을 설정에서 켠다(prefs 의 주인이 여기다). */
   showFeature: (id: FeatureId) => void
+  /** M1 공간 전환 — 고른 공간을 저장한다(prefs 의 주인이 여기다). 실험 기능이 꺼져 있으면 부르는 쪽이 안 부른다. */
+  setSpace: (space: Space) => void
 }
 
 /** R16: 토스트에 버튼 하나 — [내 신고] 새 소식의 [보기]. 버튼이 있으면 좀 더 오래 머문다. */
@@ -137,6 +140,13 @@ type MainAreaProps = {
   onAiApi?: (a: { provider: AiProvider; model: string }) => void
   /** 2.0 설정 › 기능 미러 — 하단 탭·메뉴·레일을 거르는 Shell 이 쓴다(onAiCliFlags 와 같은 형태). */
   onFeatures?: (f: FeatureShown) => void
+  /** M1 실험 기능(AI 작업 공간)·마지막 공간 미러 — 타이틀바 스위치·레일·상태바를 고르는 Shell 이 쓴다. */
+  onSpace?: (s: { on: boolean; space: Space }) => void
+  /**
+   * M1 AI 작업 공간의 가운데. 주면 탭 줄·칸 격자·하단 패널을 **숨기고**(언마운트하지 않는다 — 터미널이 다시
+   * 붙지 않게) 이 노드를 그린다. 설정 덮개·토스트·창들은 그대로 이 컴포넌트 안에 남는다.
+   */
+  spaceView?: React.ReactNode
   /** #78: 터미널 **아래** 패널(포트·세션 기록). 상태의 주인은 Shell 이라 다 만들어진 노드를 받는다
       — 타이틀바가 통합 검색(omni)을 받는 것과 같은 방식이다. .main 안에 있어야 폭이 아니라
       세로를 먹는다(레일과 달리 터미널 80칸에 영향이 없다). */
@@ -176,6 +186,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onAiCliFlags,
       onAiApi,
       onFeatures,
+      onSpace,
+      spaceView,
       bottom,
       detachedWinId
     },
@@ -546,6 +558,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       onFeatures?.(prefs.features)
     }, [prefs.features, onFeatures])
+
+    useEffect(() => {
+      onSpace?.({ on: prefs.aiSpace, space: prefs.space })
+    }, [prefs.aiSpace, prefs.space, onSpace])
 
     useEffect(() => {
       onAiApi?.({ provider: prefs.aiProvider, model: prefs.aiModels[prefs.aiProvider] })
@@ -1158,7 +1174,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         zoomFont,
         toast: showToast,
         setAiModel: (provider: AiProvider, model: string) => updatePrefs({ aiModels: { ...prefs.aiModels, [provider]: model } }),
-        showFeature: (id: FeatureId) => updatePrefs({ features: { ...prefs.features, [id]: true } })
+        showFeature: (id: FeatureId) => updatePrefs({ features: { ...prefs.features, [id]: true } }),
+        setSpace: (space: Space) => updatePrefs({ space })
       }),
       [activateSession, closeTab, openLocal, startEdit, zoomFont, showToast, updatePrefs, prefs.aiModels, prefs.features]
     )
@@ -1470,7 +1487,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     }, [zoomFont])
 
     return (
-      <div className="main">
+      <div className={'main' + (spaceView ? ' space-ai' : '')}>
+        {spaceView}
         {/* #139 부팅 인사 — 자비스식. 짧고, 아무 키로 건너뛰고, 설정에서 끈다.
             **이름 묻기보다 먼저** 지나간다: 처음 켠 사람도 인사부터 받고 그다음 이름을 준다.
             **떼어낸 창에서는 안 뜬다**(2026-09-01 제보 ① — shouldShowBootSplash 주석 참고). */}

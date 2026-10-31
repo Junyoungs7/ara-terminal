@@ -2,6 +2,7 @@ import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
 import { AppWindow, List, SquareTerminal, Star, Zap } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchBinding } from '../../shared/keymap'
+import { SPACE_ACTIONS } from '../../shared/menubar'
 import {
   filterPalette,
   groupPalette,
@@ -45,6 +46,8 @@ type Props = {
   /** 2.0 다듬기 R1: 빈 검색어의 [열린 창] — 세션 탭(+ 탐색기 창). */
   sessions?: readonly { id: string; title: string; server?: string }[]
   explorerOpen?: boolean
+  /** M1 공간 전환 — 실험 기능(설정 › 고급)이 꺼져 있으면 "공간:" 두 줄을 뺀다(≡ 메뉴와 같은 규칙). */
+  spaceOn?: boolean
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
@@ -70,7 +73,8 @@ export function CommandPalette({
   features,
   onEnable,
   sessions = NO_SESSIONS,
-  explorerOpen = false
+  explorerOpen = false,
+  spaceOn = false
 }: Props): JSX.Element {
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
@@ -78,8 +82,8 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null)
 
   const items = useMemo(
-    () => paletteItems(profiles, workProfiles, isMac, features),
-    [profiles, workProfiles, features]
+    () => paletteItems(profiles, workProfiles, isMac, features).filter((i) => spaceOn || !SPACE_ACTIONS.has(i.alias ?? '')),
+    [profiles, workProfiles, features, spaceOn]
   )
   const opened = useMemo(() => openItems(sessions, explorerOpen), [sessions, explorerOpen])
   // 빈 검색어 = 열린 창 / 최근 서버 / 숨긴 기능(긴 단축키 목록 대신). 셋 다 비면 전체 목록.

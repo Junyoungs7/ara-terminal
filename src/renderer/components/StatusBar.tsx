@@ -269,7 +269,8 @@ export function StatusBar({
   history = [],
   children,
   update = null,
-  onUpdateAction
+  onUpdateAction,
+  leftEmpty = false
 }: {
   version: string
   session: Session | null
@@ -295,6 +296,8 @@ export function StatusBar({
   update?: UpdateState | null
   /** 위 칸을 눌렀을 때. `ready` 의 확인 받기는 호출측(runUpdateAction)이 한다. */
   onUpdateAction?: (action: 'download' | 'install' | 'check') => void
+  /** M1 AI 작업 공간 — 왼쪽(서버 정보)을 비운다. 오른쪽(MCP · 세션 · 자원 · 업데이트 · 버전)은 두 공간 공통. */
+  leftEmpty?: boolean
 }) {
   // 다듬기 R3: 로컬 탭·세션 없음이면 내 PC 를 켜자마자 보여 준다. 창이 숨거나 최소화되면 구독을 끊어
   // 폴러가 멈춘다(main 이 구독자를 센다 — 시스템 모니터 [로컬] 탭과 같은 폴러를 나눠 쓴다).
@@ -311,6 +314,8 @@ export function StatusBar({
   const cpu = gauge('cpu')
   return (
     <div className="statusbar">
+      {!leftEmpty && (
+      <>
       <div className={'sb-seg host' + (m.idle ? ' idle' : '')}>
         {m.dot && <span className={'sb-dot ' + m.dot} />}
         <span className="val">{m.primary}</span>
@@ -362,6 +367,8 @@ export function StatusBar({
             <span className={'val' + (facts.uptime === NA ? ' na' : '')}>{facts.uptime}</span>
           </div>
         </>
+      )}
+      </>
       )}
       <div className="sb-right">
         {children}

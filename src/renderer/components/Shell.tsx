@@ -1,5 +1,8 @@
 import { AI_ENTRY, featuresOf, type FeatureShown } from '@shared/features'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { shownSpace, type Space } from '@shared/space'
+import { AiHome, AiRail } from '../features/aiws'
+import { RightBar } from './RightBar'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
@@ -201,6 +204,11 @@ export function Shell() {
   const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
   // 2.0 설정 › 기능 — 같은 미러(주인은 MainArea 의 prefs). 끈 기능은 하단 탭·메뉴·레일에서 빠진다.
   const [features, setFeatures] = useState<FeatureShown>(() => featuresOf(undefined))
+  // M1 라운드 2 공간 — 같은 미러(주인은 MainArea 의 prefs: aiSpace = 설정 › 고급 › 실험 기능, space = 마지막 공간).
+  // 실험 기능이 꺼져 있으면 저장값과 무관하게 터미널 공간이다(shownSpace) — 스위치·오른쪽 아이콘 바도 없다.
+  const [spaceSt, setSpaceSt] = useState<{ on: boolean; space: Space }>({ on: false, space: 'term' })
+  const space = shownSpace({ aiSpace: spaceSt.on, space: spaceSt.space })
+  const pickSpace = useCallback((s: Space) => mainRef.current?.setSpace(s), [])
   // 아라 채팅 v2: API 모드 공급자·모델 — 같은 미러(채팅 선택기가 ready 추론 대신 설정 값을 쓴다).
   const [aiApi, setAiApi] = useState<{ provider: AiProvider; model: string }>(() => {
     const p = aiProviderOf(undefined)
@@ -559,11 +567,15 @@ export function Shell() {
         // #91: 서버 콘솔은 [서버 작업대] 창에 흡수됐다 — 같은 창을 연다.
         e.preventDefault()
         openExplorer()
+      } else if (spaceSt.on && (matchBinding(e, 'space.term') || matchBinding(e, 'space.ai'))) {
+        // M1 공간 전환(Ctrl+Alt+1·2). 실험 기능이 꺼져 있으면 받지 않는다(스위치가 없는 화면에서 공간이 바뀌면 안 된다).
+        e.preventDefault()
+        pickSpace(matchBinding(e, 'space.ai') ? 'ai' : 'term')
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, toggleBottomBar, openExplorer])
+  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, toggleBottomBar, openExplorer, spaceSt.on, pickSpace])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -1506,6 +1518,7 @@ export function Shell() {
         features={features}
         // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
         chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
+        space={spaceSt.on ? { value: space, onPick: pickSpace } : undefined}
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
         // (dispatchAction / 메뉴 명령 / connectProfile) — 팔레트 전용 배선을 만들지 않는다.
         omni={
@@ -1519,6 +1532,7 @@ export function Shell() {
             onEnable={(id) => mainRef.current?.showFeature(id)}
             sessions={paletteSessions}
             explorerOpen={explorerOpen}
+            spaceOn={spaceSt.on}
             onRun={(run) => {
               if (run.do === 'action') dispatchAction(run.action)
               else if (run.do === 'session') selectSession(run.sessionId)
@@ -1534,13 +1548,20 @@ export function Shell() {
       />
       {/* --sidebar-w 를 여기서 덮어써 .sidebar 와 폭 손잡이(.sb-resizer) 위치가 함께 따라온다. */}
       <div
-        className={'middle' + (resizing ? ' resizing' : '')}
+        className={'middle' + (resizing ? ' resizing' : '') + (space === 'ai' ? ' space-ai' : '')}
         // 탐색기는 이제 떠 있는 창이라 본문을 가리지 않는다 — 터미널을 보면서 파일을 만질 수 있다
         // (예전 전체화면 모드는 여기서 display:none 으로 본문을 통째로 숨겼다).
         style={{ ['--sidebar-w' as string]: `${sidebar.width}px` }}
       >
         {/* 좌측 아이콘 레일 — 사이드바 자체의 여닫이(2026-08-19). 사이드바가 접혀도 남아 있어야
             한다: 여기가 다시 여는 유일한 자리다(옛 `‹`/`›` 손잡이를 없앤 이유가 그것과 겹쳤다). */}
+        {/* M1: AI 작업 공간이면 왼쪽 레일이 AI 작업 레일로 바뀐다(처음 열 때 import()). 사이드바는 숨기만 한다(CSS
+            .middle.space-ai) — 언마운트하면 트리 펼침·파일 위치가 날아간다. */}
+        {space === 'ai' ? (
+          <Suspense fallback={null}>
+            <AiRail settingsOpen={settingsActive} onSettings={() => openSettings()} />
+          </Suspense>
+        ) : (
         <SidebarRail
           active={sidebar.activeTab}
           collapsed={sidebar.collapsed}
@@ -1555,6 +1576,7 @@ export function Shell() {
           // 설정은 덮개다 — 단축키와 **같은 길**로 보낸다(레일 전용 배선을 만들지 않는다).
           onSettings={() => openSettings()}
         />
+        )}
         <ErrorBoundary area="sidebar" className="sidebar">
         <Sidebar
           active={sidebar.activeTab}
@@ -1771,6 +1793,14 @@ export function Shell() {
           onOpenLog={() => openBottom('log')}
           onAiCliFlags={setAiCliFlags}
           onFeatures={setFeatures}
+          onSpace={setSpaceSt}
+          spaceView={
+            space === 'ai' ? (
+              <Suspense fallback={null}>
+                <AiHome />
+              </Suspense>
+            ) : undefined
+          }
           onAiApi={setAiApi}
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}
@@ -1793,8 +1823,11 @@ export function Shell() {
           />
           </ErrorBoundary>
         )}
+        {/* M1: 오른쪽 끝 아이콘 바 — 실험 기능을 켰을 때만. 아라 채팅은 타이틀바 [채팅]·Alt+A 와 같은 상태·같은 토글이다. */}
+        {spaceSt.on && AI_ENTRY && <RightBar space={space} chatOpen={aiOpen} onChat={() => toggleRail('ai')} />}
       </div>
       <StatusBar
+        leftEmpty={space === 'ai'}
         version={version}
         session={activeSession}
         profile={activeProfile}

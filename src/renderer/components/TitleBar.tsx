@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
-import { menuEntryById, type MenuEntry } from '../../shared/menubar'
+import { menuEntryById, SPACE_ACTIONS, type MenuEntry } from '../../shared/menubar'
+import { SPACES, type Space } from '@shared/space'
+import { Sparkles, SquareTerminal } from 'lucide-react'
 import type { FeatureShown } from '@shared/features'
 import { dispatchAction, isMac, keyText, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
@@ -34,7 +36,8 @@ export function TitleBar({
   crumb,
   reportNews = 0,
   chat,
-  features
+  features,
+  space
 }: {
   /** 없으면 메뉴바를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
@@ -51,6 +54,12 @@ export function TitleBar({
   chat?: { open: boolean; onToggle: () => void }
   /** 2.0 설정 › 기능 — 끈 기능은 메뉴에서 뺀다. 없으면 전부. */
   features?: FeatureShown
+  /**
+   * M1 라운드 2 공간 스위치 `[터미널 | AI 작업]`. 실험 기능(설정 › 고급)이 꺼져 있으면 Shell 이 안 넘긴다 —
+   * 그러면 스위치도, ≡ [보기] 의 "공간:" 두 줄도 없다(지금과 똑같은 화면).
+   * attention: 그 공간에 손댈 일이 생겼을 때 버튼 옆 맥박 점. 자리만 — 신호를 보내는 쪽(알림 센터)은 라운드 3.
+   */
+  space?: { value: Space; onPick: (s: Space) => void; attention?: Partial<Record<Space, boolean>> }
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(제목 행 오른쪽).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -94,8 +103,11 @@ export function TitleBar({
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  const chatBind = KEYMAP.find((k) => k.action === 'ai.toggle')
-  const chatKey = chatBind ? keyText(isMac() ? chatBind.mac : chatBind.win) : ''
+  const keyOf = (action: string): string => {
+    const b = KEYMAP.find((k) => k.action === action)
+    return b ? keyText(isMac() ? b.mac : b.win) : ''
+  }
+  const chatKey = keyOf('ai.toggle')
 
   // 2.0 4단계: 신호등 점 → 시안 Z-final 의 얇은 선 − □ ×(닫기 호버만 빨강 바탕). 기능·선택자는 그대로.
   const glyph = (body: React.ReactNode) => (
@@ -119,6 +131,26 @@ export function TitleBar({
           {/* 접혀 있어도 새 소식은 보여야 한다 — 펼치면 그 메뉴 제목에도 같은 점이 있다. */}
           {reportNews > 0 && <i className="tb-news" role="img" aria-label={t('report.news.dot')} />}
         </button>
+      )}
+      {space && (
+        <div className="tb-spaces" role="tablist" aria-label={t('space.label')}>
+          {SPACES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={space.value === s}
+              className={space.value === s ? 'on' : undefined}
+              data-space={s}
+              title={`${t('space.' + s)} · ${keyOf('space.' + s)}` + (space.attention?.[s] ? ' · ' + t('space.attention') : '')}
+              onClick={() => space.onPick(s)}
+            >
+              {s === 'term' ? <SquareTerminal aria-hidden /> : <Sparkles aria-hidden />}
+              {t('space.' + s)}
+              {space.attention?.[s] && <i className="tb-spaces-dot" role="img" aria-label={t('space.attention')} />}
+            </button>
+          ))}
+        </div>
       )}
       <div className="tb-logo">
         <span className="tb-name">{t('app.name')}</span>
@@ -209,7 +241,9 @@ export function TitleBar({
         y={open?.y ?? 0}
         items={
           open
-            ? menuBarItems(open.index, features).map((it) =>
+            ? menuBarItems(open.index, features)
+                .filter((it) => space || !SPACE_ACTIONS.has(it.id))
+                .map((it) =>
                 it.id === 'help.myReports' && reportNews > 0
                   ? { ...it, label: t('menu.help.myReports.new').replace('{n}', String(reportNews)) }
                   : it

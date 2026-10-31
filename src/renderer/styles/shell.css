@@ -9302,6 +9302,196 @@ button.sb-seg.upd:hover .val {
   box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
+/* ── M1 라운드 2: 공간 전환(시안 SW-final) ──
+   실험 기능(설정 › 고급)을 켰을 때만 그려지는 것들. 클래스는 전부 새 이름이다 — 모양이 같은 왼쪽 레일(.lrail-item)
+   선택자를 돌려 쓰면 e2e 가 엉뚱한 버튼을 누른다. */
+.tb-spaces {
+  -webkit-app-region: no-drag;
+  display: flex;
+  flex: none;
+  height: 26px;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius);
+  background: var(--bg-abyss);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.tb-spaces button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-5);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-lo);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  cursor: var(--cur-hand, pointer);
+  transition: var(--dur-quick);
+}
+.tb-spaces button svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.tb-spaces button:hover {
+  color: var(--text-hi);
+}
+.tb-spaces button.on {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.tb-spaces button.on svg {
+  color: var(--accent-bright);
+}
+/* 다른 공간에 손댈 일 — 맥박 점. 자리만(신호는 라운드 3 알림 센터). */
+.tb-spaces-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  animation: tb-spaces-pulse 1.8s ease-in-out infinite;
+}
+@keyframes tb-spaces-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-line);
+    opacity: 1;
+  }
+  60% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.55;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tb-spaces-dot {
+    animation: none;
+  }
+}
+
+/* AI 작업 공간 — 사이드바는 숨기만 한다(언마운트하면 트리 펼침·파일 위치가 날아간다). 가운데는 MainArea 가
+   탭 줄·칸 격자·하단 패널을 숨기고 .aiws-home 을 그린다(터미널은 붙은 채 — fitIfUsable 이 0 폭을 건너뛴다). */
+.middle.space-ai > .sidebar,
+.middle.space-ai > .sb-resizer,
+.main.space-ai > .term-tabbar,
+.main.space-ai > .pane-row,
+.main.space-ai > .bottom-panel,
+.main.space-ai > .term-search {
+  display: none;
+}
+.aiws-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8);
+  text-align: center;
+  color: var(--text-lo);
+  font-size: var(--fs-base);
+}
+.aiws-home b {
+  color: var(--text-mid);
+  font-weight: 500;
+  font-size: var(--fs-md);
+}
+.aiws-home-ic {
+  width: 28px;
+  height: 28px;
+  margin-bottom: var(--sp-2);
+  color: var(--text-lo);
+}
+
+/* AI 작업 레일(왼쪽) · 오른쪽 끝 아이콘 바 — 모양은 왼쪽 레일과 같다(.lrail · .lrail-item). */
+.ai-rail,
+.rbar {
+  width: var(--lrail-w);
+  flex: 0 0 var(--lrail-w);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-4) 0;
+}
+.ai-rail {
+  border-right: 1px solid var(--line);
+}
+.rbar {
+  border-left: 1px solid var(--line);
+}
+.ai-rail-spacer {
+  flex: 1;
+}
+.rbar-div {
+  flex: none;
+  width: 20px;
+  height: 1px;
+  margin: var(--sp-2) 0;
+  background: var(--line);
+}
+.ai-rail-item,
+.rbar-item {
+  position: relative;
+  width: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  border: none;
+  background: none;
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+  transition: var(--dur-quick);
+}
+.ai-rail-item svg,
+.rbar-item svg {
+  width: var(--sb-icon);
+  height: var(--sb-icon);
+}
+.ai-rail-item:hover:not(:disabled),
+.rbar-item:hover:not(:disabled) {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+.ai-rail-item.active,
+.rbar-item.active {
+  color: var(--accent-bright);
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.ai-rail-item.active::before,
+.rbar-item.active::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  background: var(--accent);
+}
+.ai-rail-item.active::before {
+  left: calc((var(--lrail-w) - 32px) / -2);
+}
+/* 오른쪽 바는 막대가 바깥(오른쪽) 가장자리에 붙는다(시안 .rail.rr). */
+.rbar-item.active::before {
+  right: calc((var(--lrail-w) - 32px) / -2);
+}
+.ai-rail-item:disabled,
+.rbar-item:disabled {
+  color: var(--text-dim);
+  cursor: var(--cur-arrow, default);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    §PRESS — 누름 반응(:active).  2026-09-04
    ══════════════════════════════════════════════════════════════════════════
@@ -10448,3 +10638,4 @@ button.sb-seg.upd:hover .val {
   display: flex;
   gap: var(--sp-2);
 }
+
