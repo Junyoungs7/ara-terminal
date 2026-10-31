@@ -1682,9 +1682,13 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
 
           {section === 'agents' && (
             <>
-              <Suspense fallback={null}>
-                <AgentSettings />
-              </Suspense>
+              {/* 열렸을 때만 — 이 페이지는 닫혀도 마운트돼 있어 감지(powershell·where·--version 4~7개)가 켤 때마다 돌아
+                  작업공간 복원과 CPU 를 다퉜다(perf-creep-done.md, workspaceMs +214ms). */}
+              {open && (
+                <Suspense fallback={null}>
+                  <AgentSettings />
+                </Suspense>
+              )}
               <div className="set-sec-t" data-sec="ai.cli" data-item="ai.cli">
                 {t('settings.ai.cliSec')}
               </div>
