@@ -6,7 +6,7 @@ const drawer = '.drawer.open'
 // SET-1 진입점 3개(Ctrl+, · 좌측 레일 설정 아이콘 · File 메뉴)와 12섹션(W3 F16 에서 [AI] 추가로
 // 6→7, F23 에서 [MCP] 추가로 7→8, [명령 기록] 9, 2.0 3단계 [기능] 10, 4단계 [모양] 11, 잠금 L1 [보안] 12).
 // FB-ui2: 두 번째 진입점이 타이틀바 기어(.tb-gear, 제거됨)에서 액티비티 바로, 2.0 에서 좌측 레일로 옮겼다.
-test('SET-1 설정 창이 세 진입점 모두에서 열리고 12개 섹션을 갖는다', async ({ ara }) => {
+test('SET-1 설정 창이 세 진입점 모두에서 열리고 13개 섹션을 갖는다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
   await expect(page.locator(drawer)).toBeVisible()
@@ -24,7 +24,7 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 12개 섹션을 �
   await expect(page.locator(drawer)).toBeVisible()
 
   const sections = await page.locator(`${drawer} .set-nav [data-section]`).allTextContents()
-  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '보안', '로그', 'AI', 'MCP', '단축키', '명령 기록', '정보'])
+  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '보안', '로그', 'AI', '음성', 'MCP', '단축키', '명령 기록', '정보'])
   for (const s of ['general', 'terminal', 'font', 'security', 'log', 'ai', 'mcp', 'keys', 'about']) {
     await page.click(`${drawer} .set-nav [data-section="${s}"]`)
     await expect(page.locator(`${drawer} .set-nav [data-section="${s}"]`)).toHaveAttribute('aria-selected', 'true')
