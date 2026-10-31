@@ -121,6 +121,14 @@ if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA))
 }
 
+/**
+ * 성능 게이트의 **양성 대조**(tests/perf-baseline.cjs 머리말). 게이트가 느려진 판을 정말 잡는지
+ * 보려고 부팅 앞에 일부러 지연을 넣는다 — main 스레드를 그대로 막는다(켜는 시간·작업 공간 시간에 다 실린다).
+ * 🔴 **패키지본(배포 설치본)에서는 읽지 않는다** — `app.isPackaged` 가 참이면 환경변수가 있어도 0 이다.
+ */
+const perfDelayMs = app.isPackaged ? 0 : Number(process.env['ARA_PERF_INJECT_DELAY_MS']) || 0
+if (perfDelayMs > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, perfDelayMs)
+
 let store: WorkspaceStore
 let history: HistoryStore
 let sessions: MainSessionManager

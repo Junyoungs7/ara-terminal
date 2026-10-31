@@ -28,6 +28,8 @@
     "screenshot:w1b": "electron-vite build && npm run w1b:bundle && electron tests/w1b-screenshot.cjs",
     "screenshot:polish": "electron-vite build && electron tests/fix-polish-screenshot.cjs",
     "e2e:full": "electron-vite build && playwright test",
+    "perf": "electron-vite build && node tests/perf-baseline.cjs",
+    "perf:gate": "electron-vite build && node tests/perf-baseline.cjs --gate",
     "e2e:full:nobuild": "playwright test",
     "scan:magic": "node scripts/scan-magic-numbers.mjs",
     "scan:i18n": "node scripts/scan-i18n.mjs",
