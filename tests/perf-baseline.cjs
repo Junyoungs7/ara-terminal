@@ -159,7 +159,8 @@ async function launch(userData) {
     args: [MAIN_JS, `--user-data-dir=${userData}`],
     cwd: ROOT,
     timeout: 60_000,
-    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1' }
+    // 멈춤 감시는 배포본에서 늘 켜지고 개발 실행에선 꺼진다 — 배포본 비용을 재려고 강제로 켠다(M0 FD-02).
+    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_HANG_WATCHDOG_FORCE: '1' }
   })
   const page = await app.firstWindow()
   // 25분 측정 동안 사용자 화면을 가리지 않게 화면 밖으로(showInactive 라 포커스는 원래 안 뺏는다).
