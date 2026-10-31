@@ -5,19 +5,26 @@ import { test, expect, quitAra } from './fixtures'
 
 // STAB-1 렌더러가 죽으면 main 이 다시 불러온다(창을 다시 띄우지 않고 같은 창에서 다시 그린다).
 test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시 그려진다', async ({ ara }) => {
-  const bw = await ara.app.browserWindow(ara.page)
-  await bw.evaluate((w) => w.webContents.forcefullyCrashRenderer())
-  await expect
-    .poll(
-      () =>
-        bw.evaluate(async (w) => {
-          const wc = w.webContents
-          if (wc.isDestroyed() || wc.isCrashed()) return false
-          return (await wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false)) as boolean
-        }),
-      { timeout: 30_000 }
-    )
-    .toBe(true)
+  // 크래시·재로드 확인을 main 안에서 한 번에 한다. 페이지 핸들(bw/page)을 거쳐 poll 하면 렌더러가 죽는 순간
+  // Playwright 의 CDP 세션이 "Cannot find context" 로 꼬여 앱은 살아났는데도 술어가 끝까지 false 다(2026-11-01 실측).
+  const redrawn = await ara.app.evaluate(async ({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows()[0]
+    const wc = w.webContents
+    // 양성 대조: 죽었고(gone) 다시 불러왔다(reloaded)는 것까지 본다 — 안 죽어도 .app 은 있으니 그것만으론 통과가 공짜다.
+    let gone = ''
+    wc.once('render-process-gone', (_e, d) => (gone = d.reason))
+    const reloaded = new Promise<boolean>((resolve) => wc.once('did-finish-load', () => resolve(true)))
+    wc.forcefullyCrashRenderer()
+    const didReload = await Promise.race([reloaded, new Promise<boolean>((r) => setTimeout(() => r(false), 20_000))])
+    let app = false
+    for (let i = 0; i < 40 && !app; i++) {
+      if (!wc.isDestroyed() && !wc.isCrashed())
+        app = (await wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false)) as boolean
+      if (!app) await new Promise((r) => setTimeout(r, 250))
+    }
+    return { gone, didReload, app }
+  })
+  expect(redrawn).toEqual({ gone: 'crashed', didReload: true, app: true })
 })
 
 // STAB-2 main 을 5초 막으면 감시 워커가 표식을 남기고, 다음 실행이 로그 폴더에 보고 파일을 쓴다.
