@@ -1690,6 +1690,18 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
 
           {section === 'update' && <UpdateRow />}
 
+          {section === 'notify' && (
+            // M1 라운드 3: 알림 센터(벨·토스트·공간 맥박)는 AI 작업 공간(실험 기능)을 켰을 때 보인다.
+            <>
+              <Row label={t('settings.notify.toast')} desc={t('settings.notify.toast.desc')} item="notify.toast">
+                <Toggle on={prefs.notifyToast} label={t('settings.notify.toast')} onChange={(notifyToast) => onPrefsChange({ notifyToast })} />
+              </Row>
+              <Row label={t('settings.notify.sound')} desc={t('settings.notify.sound.desc')} item="notify.sound">
+                <span className="set-note">{t('aiws.soon')}</span>
+              </Row>
+            </>
+          )}
+
           {section === 'experimental' && (
             // M1 라운드 2: 켜면 타이틀바에 공간 스위치 [터미널 | AI 작업] 이 생긴다. 끄면 스위치와 AI 작업 화면이 함께 사라진다.
             <Row label={t('settings.exp.aiSpace')} desc={t('settings.exp.aiSpace.desc')} item="exp.aiSpace">

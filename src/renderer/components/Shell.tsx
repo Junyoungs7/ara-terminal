@@ -3,6 +3,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { shownSpace, type Space } from '@shared/space'
 import { AiHome, AiRail } from '../features/aiws'
 import { RightBar } from './RightBar'
+import { NotifyBell, NotifyToasts } from './NotifyCenter'
+import { attention, installTestNotify, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
@@ -102,6 +104,9 @@ function quitDetail(list: { serverKey: string; title: string }[]): { label: stri
 }
 
 // 3행 그리드 앱 셸 (design-system §4.1): 타이틀바 / (사이드바+메인) / 상태바.
+// M1 라운드 3: 시험 빌드에서만 `window.__araTestNotify` — e2e 가 알림을 만드는 길(store/notify.ts).
+installTestNotify(window.ev?.app?.testHooks)
+
 export function Shell() {
   // R4.3: 폭·접힘·활성 탭이 한 상태로 묶여 workspace.json 에 저장된다(그전엔 렌더러 지역 상태).
   const { sidebar, update: updateSidebar, preview: previewSidebar, revealAi } = useSidebar()
@@ -399,6 +404,21 @@ export function Shell() {
   // #132: 조용한 AI 감시 — **화면 없이 항상 돈다**. 그게 이 기능의 목적이라(안 보고 있어도
   // 알아챈다) 패널을 걷어내면서 로직만 남겼다. 사이드바 [AI] 의 노란 점이 그 결과다.
   const { views: aiViews } = useAiQuietWatch(selectSession)
+
+  // M1 라운드 3 알림 센터 — 실험 기능(AI 작업 공간)을 켰을 때만 벨·토스트·맥박이 보인다(스위치와 같은 조건).
+  // 누르면 그 공간·세션으로 가고 읽음이 된다. 지금 보는 공간을 저장소에 알려 그 공간의 맥박을 끈다.
+  const { notes } = useNotes()
+  const [bellOpen, setBellOpen] = useState(false)
+  useEffect(() => setNoteSpace(space), [space])
+  const openNote = useCallback(
+    (n: Note) => {
+      readNote(n.id)
+      setBellOpen(false)
+      pickSpace(n.space)
+      if (n.target?.type === 'session') selectSession(n.target.id)
+    },
+    [pickSpace, selectSession]
+  )
 
   // 작업대 줄. 살아 있는 세션 찾기는 **F30 실행 기록**(어느 터미널에서 무엇이 도는가)을 통해서다 —
   // 같은 사실을 두 곳에서 다르게 세지 않는다.
@@ -1518,7 +1538,20 @@ export function Shell() {
         features={features}
         // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
         chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
-        space={spaceSt.on ? { value: space, onPick: pickSpace } : undefined}
+        space={spaceSt.on ? { value: space, onPick: pickSpace, attention: attention(notes, space) } : undefined}
+        bell={
+          spaceSt.on ? (
+            <NotifyBell
+              open={bellOpen}
+              onOpenChange={setBellOpen}
+              onPick={openNote}
+              onSettings={() => {
+                setBellOpen(false)
+                openSettings('notify')
+              }}
+            />
+          ) : undefined
+        }
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
         // (dispatchAction / 메뉴 명령 / connectProfile) — 팔레트 전용 배선을 만들지 않는다.
         omni={
@@ -1876,6 +1909,7 @@ export function Shell() {
         onRename={(id) => void renameWorkProfile(id)}
         onDelete={(id) => void deleteWorkProfile(id)}
       />
+      {spaceSt.on && <NotifyToasts onPick={openNote} onMore={() => setBellOpen(true)} />}
       {dialog.node}
       {bugReport.node}
       {myReports.node}

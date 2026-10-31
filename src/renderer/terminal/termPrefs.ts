@@ -50,6 +50,7 @@ export const termPrefs: Omit<
   | 'features'
   | 'aiSpace'
   | 'space'
+  | 'notifyToast'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -90,6 +91,7 @@ export function prefsFrom(
     | 'voice'
     | 'aiSpace'
     | 'space'
+    | 'notifyToast'
   >
 ): UiPrefs {
   return {
@@ -124,7 +126,9 @@ export function prefsFrom(
     voice: voiceOf(ui.voice),
     // M1 실험 기능 — 미지정이면 끔(지금과 똑같은 화면).
     aiSpace: ui.aiSpace === true,
-    space: spaceOf(ui.space)
+    space: spaceOf(ui.space),
+    // M1 라운드 3 — 미지정이면 켬(false 만 끔).
+    notifyToast: ui.notifyToast !== false
   }
 }
 

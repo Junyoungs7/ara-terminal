@@ -50,7 +50,12 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   soon('git', 'aiws'),
   soon('editor', 'aiws'),
   soon('sessionSearch', 'aiws'),
-  soon('notify', 'aiws'),
+  // M1 라운드 3: 알림 센터 — 토스트 켜기/끄기 + 소리(3차) 자리.
+  {
+    id: 'notify',
+    group: 'aiws',
+    items: [i('notify.toast', 'settings.notify.toast', 'settings.notify.toast.desc'), i('notify.sound', 'settings.notify.sound', 'settings.notify.sound.desc')]
+  },
   soon('browser', 'aiws'),
   soon('automations', 'aiws'),
 

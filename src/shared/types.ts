@@ -391,6 +391,8 @@ export type UiPrefs = {
   aiSpace: boolean
   /** M1 마지막으로 고른 공간(재시작 후 유지). 그릴 공간은 shownSpace 가 정한다. */
   space: Space
+  /** M1 라운드 3 설정 › 알림 [앱 안 토스트]. 기본 켬 — 꺼도 벨 목록에는 모인다. */
+  notifyToast: boolean
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -544,6 +546,8 @@ export type UiState = {
   /** M1 실험 기능 · 공간. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 prefsFrom 에서 클램프한다. */
   aiSpace?: boolean
   space?: Space
+  /** M1 라운드 3 설정 › 알림. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
+  notifyToast?: boolean
   // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
   // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
   // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.

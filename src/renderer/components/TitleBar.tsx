@@ -37,7 +37,8 @@ export function TitleBar({
   reportNews = 0,
   chat,
   features,
-  space
+  space,
+  bell
 }: {
   /** 없으면 메뉴바를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
@@ -57,9 +58,11 @@ export function TitleBar({
   /**
    * M1 라운드 2 공간 스위치 `[터미널 | AI 작업]`. 실험 기능(설정 › 고급)이 꺼져 있으면 Shell 이 안 넘긴다 —
    * 그러면 스위치도, ≡ [보기] 의 "공간:" 두 줄도 없다(지금과 똑같은 화면).
-   * attention: 그 공간에 손댈 일이 생겼을 때 버튼 옆 맥박 점. 자리만 — 신호를 보내는 쪽(알림 센터)은 라운드 3.
+   * attention: 그 공간에 손댈 일이 생겼을 때 버튼 옆 맥박 점. 신호는 라운드 3 알림 센터(store/notify.ts 의 attention)가 채운다.
    */
   space?: { value: Space; onPick: (s: Space) => void; attention?: Partial<Record<Space, boolean>> }
+  /** M1 라운드 3 알림 벨(NotifyBell) — [채팅] 왼쪽 자리만 내준다. 실험 기능이 꺼져 있으면 Shell 이 안 넘긴다. */
+  bell?: React.ReactNode
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(제목 행 오른쪽).
   const [open, setOpen] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -199,6 +202,7 @@ export function TitleBar({
       {title && <div className="tb-title">{title}</div>}
       <div className="tb-spacer" />
       {/* 2.0: 오른쪽 = 아라 채팅만. 우측 액티비티 바가 없어져 여닫는 자리가 여기 하나다(시안 Z-final). */}
+      {bell}
       {chat && (
         <button
           type="button"

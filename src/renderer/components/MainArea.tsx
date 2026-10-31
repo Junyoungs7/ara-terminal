@@ -37,6 +37,7 @@ let bootSplashShown = false
 import { readClipboard, setClipboardNotifier, writeClipboard } from '../store/clipboardWrite'
 import { planRestore } from '../store/restore'
 import { setSessionState, useSessionStates } from '../store/sessionState'
+import { pushNote, setToastsEnabled } from '../store/notify'
 import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
 import { CHANGELOG_URL } from '../../shared/links'
@@ -563,6 +564,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onSpace?.({ on: prefs.aiSpace, space: prefs.space })
     }, [prefs.aiSpace, prefs.space, onSpace])
 
+    // M1 라운드 3: 토스트는 알림 센터가 보일 때(실험 기능) + 설정 › 알림 [앱 안 토스트] 가 켜졌을 때만.
+    useEffect(() => setToastsEnabled(prefs.aiSpace && prefs.notifyToast), [prefs.aiSpace, prefs.notifyToast])
+
     useEffect(() => {
       onAiApi?.({ provider: prefs.aiProvider, model: prefs.aiModels[prefs.aiProvider] })
     }, [prefs.aiProvider, prefs.aiModels, onAiApi])
@@ -830,6 +834,15 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 탭의 점도 함께 바뀐다(#166) — 칸 머리는 아래 오류 카드로 이미 알지만 탭은
             // restoreErrors 를 안 본다. 두 자리가 같은 사실을 다르게 그리면 그게 다음 제보다.
             setSessionState(s.id, 'lost')
+            // M1 라운드 3: 나중에 돌아와 볼 일이다 — 알림 센터로(칸의 [재접속] 카드는 그대로).
+            pushNote({
+              kind: 'error',
+              space: 'term',
+              target: { type: 'session', id: s.id },
+              title: t('notify.ssh.lost').replace('{s}', s.title),
+              body: t('restore.reason.dropped'),
+              ctx: s.serverKey
+            })
             setRestoreErrors((m) => {
               if (m.has(s.id)) return m
               const n = new Map(m)

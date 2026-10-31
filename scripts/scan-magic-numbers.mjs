@@ -490,7 +490,9 @@ const ACCENT_OK = new RegExp(
     String.raw`\.tbadge\.(?:ssh|rdp|sys)\b|\.sess-node \.sess-type\.(?:ssh|rdp|sys)\b|^\.srv-hd$|\.pe-keys \.kbd\b`,
     String.raw`\.frow\.dir \.fi\b`, // 다듬기 R5 — 파일 트리 폴더 아이콘(이름은 중성)
     // M1 라운드 2 — AI 작업 레일·오른쪽 아이콘 바 활성(레일과 같은 규칙) · 공간 스위치 고른 아이콘·맥박 점(시안 SW-final)
-    String.raw`\.(?:ai-rail|rbar)-item\.active\b|\.tb-spaces button\.on svg|\.tb-spaces-dot|tb-spaces-pulse`
+    String.raw`\.(?:ai-rail|rbar)-item\.active\b|\.tb-spaces button\.on svg|\.tb-spaces-dot|tb-spaces-pulse`,
+    // M1 라운드 3 — 알림 센터: 벨 안 읽음 점 · 기다림 아이콘·수명 막대 · 안 읽은 항목 점 · 토스트 호버 테두리(시안 SW-final)
+    String.raw`\.tb-bell-dot|\.ntf-(?:k|life)\.wait|\.ntf-item\.unread \.ntf-time::after|\.ntf-toast:hover`
   ].join('|')
 )
 let accentOk = 0

@@ -36,7 +36,8 @@ const DEFAULT_PREFS: UiPrefs = {
   features: featuresOf(undefined),
   voice: DEFAULT_VOICE,
   aiSpace: false,
-  space: 'term'
+  space: 'term',
+  notifyToast: true
 }
 
 export function useUiPrefs() {

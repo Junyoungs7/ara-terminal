@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { notifyTag } from '@shared/agentStatus'
 import { useAiSessions, waitingCount, type AiSessionView } from './aiSessions'
 import { t } from '../i18n'
+import { pushNote } from './notify'
 
 /**
  * AI 감시(#132 · F1a) — **화면 없는 감시자.**
@@ -56,6 +57,15 @@ export function useAiQuietWatch(onGoTo: (sessionId: string) => void): {
         setTimeout(() => {
           pending.current.delete(tag)
           fired.current.add(tag)
+          // M1 라운드 3 알림 센터 — 앱이 앞에 있어도 목록·토스트·맥박에는 남긴다(창 알림만 아래 조건).
+          // CLI 는 터미널 탭 안에서 돈다 → 터미널 공간. 같은 대기 한 번에 한 번(태그 규칙 그대로).
+          pushNote({
+            kind: 'wait',
+            space: 'term',
+            target: { type: 'session', id: v.sessionId },
+            title: t('aisess.notify.title').replace('{s}', v.serverName).replace('{c}', v.cli),
+            body: t('notify.wait.body')
+          })
           // **앱이 뒤에 있을 때만.** 앞에 있으면 점으로 충분하고, 알림이 겹치기 시작하면
           // 그때부터 전부 무시하게 된다.
           if (document.hasFocus()) return

@@ -83,6 +83,7 @@
 | 빈 화면 키 칩 | 세션이 없을 때 가운데 안내의 단축키 칩 글자(면·테두리 중성, 다듬기 R4) | `--accent-soft` |
 | 파일 트리 폴더 아이콘 | 폴더 줄의 아이콘만 옅은 파랑. 이름·호버·선택 행은 중성(다듬기 R5) | `--accent-soft` |
 | 공간 스위치 · AI 작업 레일 · 오른쪽 아이콘 바(M1 라운드 2) | 고른 공간 아이콘 · 다른 공간에 손댈 일 맥박 점 · 레일 활성(레일과 같은 규칙, 오른쪽 바는 막대가 오른쪽 가장자리) | `--accent-bright` · `--accent-line` · `--accent` |
+| 알림 센터(M1 라운드 3) | 벨 안 읽음 점 · 안 읽은 항목 점 · 기다림 아이콘·토스트 수명 막대 · 토스트 호버 테두리 | `--accent` · `--accent-bright` · `--accent-line` |
 | 설정 페이지(M1) | 묶음 머리 글자 옅은 파랑 · 검색 맞은 글자 틴트 · 딥링크로 온 줄 잠깐 밝힘(시안 SW-final) | `--accent-soft` · `--accent-glow` · `--accent-bright` |
 
 - **게이트**: `npm run scan:magic` 이 shell.css·interactions.css 의 `--accent*` 를 쓰는 규칙을 선택자 이름으로 이 표와 대조한다(`ACCENT_OK`). 표에 자리를 더하면 그 목록도 같이 고친다. TSX 인라인 색(BrandOrb 마크·터미널 검색 강조)은 못 본다.

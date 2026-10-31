@@ -9492,6 +9492,385 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-arrow, default);
 }
 
+/* ── M1 라운드 3: 알림 센터(시안 SW-final) — 타이틀바 벨 + 드롭다운 · 오른쪽 아래 토스트 ──
+   실험 기능을 켰을 때만 그려진다. 클래스는 전부 ntf- / tb-bell 새 이름(돌려 쓰면 e2e 가 엉뚱한 걸 누른다). */
+.tb-bellwrap {
+  -webkit-app-region: no-drag;
+  position: relative;
+  display: flex;
+  margin-right: var(--sp-3);
+}
+.tb-bell {
+  position: relative;
+  width: 26px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+  transition: var(--dur-quick);
+}
+.tb-bell svg {
+  width: 15px;
+  height: 15px;
+}
+.tb-bell:hover,
+.tb-bell.on {
+  background: var(--glass);
+  color: var(--text-hi);
+}
+/* 안 읽음 — 숫자 없는 점(결정). */
+.tb-bell-dot {
+  position: absolute;
+  right: 5px;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+.ntf-menu {
+  position: absolute;
+  top: calc(100% + var(--sp-3));
+  right: 0;
+  z-index: 95;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  cursor: var(--cur-arrow, default);
+  animation: ntf-pop var(--dur-pop) var(--ease-pop);
+}
+@keyframes ntf-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.ntf-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 40px;
+  padding: 0 var(--sp-4) 0 var(--sp-7);
+  border-bottom: 1px solid var(--line);
+}
+.ntf-head b {
+  font-weight: 500;
+  color: var(--text-hi);
+}
+.ntf-cnt {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ntf-readall,
+.ntf-foot {
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  color: var(--text-mid);
+  font-family: var(--ui);
+  cursor: var(--cur-hand, pointer);
+}
+.ntf-readall {
+  margin-left: auto;
+  gap: var(--sp-2);
+  height: 24px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius);
+  font-size: var(--fs-micro);
+}
+.ntf-readall svg,
+.ntf-foot svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.ntf-readall:hover:not(:disabled),
+.ntf-foot:hover {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+.ntf-readall:disabled {
+  color: var(--text-dim);
+  cursor: var(--cur-arrow, default);
+}
+.ntf-list {
+  max-height: 420px;
+  overflow: auto;
+  padding: var(--sp-1) var(--sp-3) var(--sp-3);
+}
+.ntf-sec {
+  padding: var(--sp-4) var(--sp-5) var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ntf-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+  width: 100%;
+  padding: var(--sp-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+  font-family: var(--ui);
+  color: var(--text-mid);
+  cursor: var(--cur-hand, pointer);
+}
+.ntf-item:hover {
+  background: var(--glass-hover);
+}
+.ntf-k {
+  flex: none;
+  display: flex;
+  margin-top: 1px;
+}
+.ntf-k svg {
+  width: 15px;
+  height: 15px;
+}
+.ntf-k.wait {
+  color: var(--accent-bright);
+}
+.ntf-k.done {
+  color: var(--ok);
+}
+.ntf-k.error {
+  color: var(--err);
+}
+.ntf-k.info {
+  color: var(--text-mid);
+}
+.ntf-b {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.ntf-t,
+.ntf-body,
+.ntf-m {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ntf-t {
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+}
+.ntf-body {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ntf-m {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ntf-m svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+.ntf-time {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  font-variant-numeric: tabular-nums;
+}
+.ntf-item.unread .ntf-t {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.ntf-item.unread .ntf-time::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ntf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 32px 24px 28px;
+  text-align: center;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ntf-empty svg {
+  width: 22px;
+  height: 22px;
+}
+.ntf-empty b {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-mid);
+}
+.ntf-foot {
+  gap: var(--sp-4);
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--sp-7);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-micro);
+}
+.ntf-foot svg:last-child {
+  margin-left: auto;
+  color: var(--text-lo);
+}
+/* 토스트 — 오른쪽 아래, 오른쪽 아이콘 바·상태바를 비킨다. 최신이 아래. 설정 페이지(z 90)·pane-toast(91) 위. */
+.ntf-toasts {
+  position: fixed;
+  right: calc(var(--lrail-w) + var(--sp-6));
+  bottom: calc(var(--row-statusbar) + var(--sp-6));
+  z-index: 92;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-4);
+  pointer-events: none;
+}
+.ntf-toasts > * {
+  pointer-events: auto;
+}
+.ntf-toast {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+  padding: var(--sp-5) 36px var(--sp-6) var(--sp-6);
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--ui);
+  color: var(--text-mid);
+  cursor: var(--cur-hand, pointer);
+  overflow: hidden;
+  animation: ntf-in var(--dur-pop) var(--ease-pop);
+}
+@keyframes ntf-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.ntf-toast:hover {
+  border-color: var(--accent-line);
+}
+.ntf-toast .ntf-t {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.ntf-toast .ntf-body {
+  color: var(--text-mid);
+}
+.ntf-x {
+  position: absolute;
+  right: var(--sp-4);
+  top: var(--sp-4);
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+}
+.ntf-x svg {
+  width: 13px;
+  height: 13px;
+}
+.ntf-x:hover {
+  background: var(--glass);
+  color: var(--text-hi);
+}
+/* 수명 막대 — 줄어들다 끝나면(animationend) 닫힌다. 올리거나 포커스하면 멈춘다. 길이는 TSX 가 종류별로 준다. */
+.ntf-life {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: currentColor;
+  transform-origin: left;
+  animation: ntf-life 5s linear forwards;
+}
+@keyframes ntf-life {
+  to {
+    transform: scaleX(0);
+  }
+}
+.ntf-life.wait {
+  color: var(--accent-bright);
+}
+.ntf-life.done {
+  color: var(--ok);
+}
+.ntf-life.error {
+  color: var(--err);
+}
+.ntf-life.info {
+  color: var(--text-lo);
+}
+.ntf-toasts:hover .ntf-life,
+.ntf-toast:focus-within .ntf-life {
+  animation-play-state: paused;
+}
+.ntf-more {
+  height: 24px;
+  padding: 0 var(--sp-5);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+  cursor: var(--cur-hand, pointer);
+}
+.ntf-more:hover {
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+/* 움직임을 줄여 달라고 하면 등장은 없고 막대는 안 보인다(수명은 그대로 흐른다 — 애니메이션은 돌고 투명할 뿐). */
+@media (prefers-reduced-motion: reduce) {
+  .ntf-menu,
+  .ntf-toast {
+    animation: none;
+  }
+  .ntf-life {
+    opacity: 0;
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    §PRESS — 누름 반응(:active).  2026-09-04
    ══════════════════════════════════════════════════════════════════════════
