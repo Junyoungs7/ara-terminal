@@ -76,7 +76,8 @@ export async function launchAra(userData: string, keepIntro = false): Promise<Ar
   const page = await app.firstWindow()
   await page.waitForSelector('.app', { timeout: 30_000 })
   // 부트 복원이 끝나 화면이 확정될 때까지(빈 상태는 안내 없이 .pane-grid 만 남으므로 그 자체로 충분 — UI-tabbar).
-  await page.waitForSelector('.pane-grid', { timeout: 40_000 })
+  // M1: AI 작업 공간으로 저장된 채 다시 켜지면 터미널 칸(.pane-grid)은 숨어 있다 — 그 공간의 첫 화면(.aiws-home)도 '확정'으로 친다.
+  await page.waitForSelector('.pane-grid:visible, .aiws-home:visible', { timeout: 40_000 })
   await sandboxUserPaths(app, userData)
   // 켤 때 지나가는 화면 둘 — **부팅 인사**(#139, 1.4초 오버레이)와 **이름 묻기**(#138).
   // 그 둘을 보는 검사만 그걸 원하고 나머지 90여 스펙은 그 뒤 화면을 눌러야 한다 —
