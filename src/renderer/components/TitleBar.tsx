@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
+import { menuEntryById, type MenuEntry } from '../../shared/menubar'
 import type { FeatureShown } from '@shared/features'
 import { dispatchAction, isMac, keyText, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
@@ -63,6 +64,20 @@ export function TitleBar({
   }, [open])
   // 옆 메뉴로 넘어갈 때는 옛 좌표를 들고 간다 — 0 으로 지우면 그 틈에 메뉴가 한 번 닫혔다 열려
   // (backdrop 이 사라졌다 생긴다) 돌려줄 포커스 자리를 잃는다.
+  // 단축키가 있는 항목은 그 키를 누른 것과 같은 경로로 보낸다(메뉴 전용 배선 금지).
+  const run = (entry: MenuEntry) => {
+    if ('action' in entry) dispatchAction(entry.action)
+    else onCommand?.(entry.command)
+  }
+  // M0 0-9: macOS 메뉴 막대(main/appMenu.ts)는 같은 표에서 나오고, 누르면 id 만 보낸다 — 여기서 ≡ 와 같은 길로.
+  // 세션 창(onCommand 없음)은 ≡ 를 안 그리므로 받지도 않는다.
+  useEffect(() => {
+    if (!onCommand) return
+    return window.ev?.window.onMenuPick?.((id) => {
+      const entry = menuEntryById(id)
+      if (entry) run(entry)
+    })
+  })
   const openAt = (index: number) => setOpen((o) => ({ index, x: o?.x ?? 0, y: o?.y ?? 0 }))
 
   // ← → 로 옆 메뉴(옛 가로 메뉴바의 손버릇). ContextMenu 가 캡처 단계에서 ↑↓·Enter·Esc 를 먹고,
@@ -211,10 +226,7 @@ export function TitleBar({
         onPick={(id) => {
           const entry = open ? MENUBAR[open.index].items.find((e) => ('action' in e ? e.action : e.command) === id) : undefined
           setOpen(null)
-          if (!entry) return
-          // 단축키가 있는 항목은 그 키를 누른 것과 같은 경로로 보낸다(메뉴 전용 배선 금지).
-          if ('action' in entry) dispatchAction(entry.action)
-          else onCommand?.(entry.command)
+          if (entry) run(entry)
         }}
         onClose={() => setOpen(null)}
       />

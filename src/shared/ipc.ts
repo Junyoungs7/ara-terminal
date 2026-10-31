@@ -767,6 +767,8 @@ export type EvApi = {
      * "아라를 종료할까요?"). 창마다 자기 것만 온다: 세션 창은 SessionWindow, 본창은 Shell.
      */
     onCloseAsk(cb: () => void): () => void
+    /** M0 0-9: macOS 메뉴 막대 항목을 눌렀다(id = shared/menubar 의 항목 id). TitleBar 가 ≡ 클릭과 같은 길로 실행한다. */
+    onMenuPick?(cb: (id: string) => void): () => void
     /**
      * 물어본 것에 답한다(kill=true 종료 / false 본창으로). 취소면 부르지 않는다.
      * 본창이 답할 때는 winId 에 `MAIN_WIN_ID`(빈 문자열, @shared/sessionWin) 를 준다 —
