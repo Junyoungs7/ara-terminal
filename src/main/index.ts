@@ -1,5 +1,6 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
-import { app, BrowserWindow, session, safeStorage } from 'electron'
+import { app, BrowserWindow, Menu, session, safeStorage } from 'electron'
+import { appMenuTemplate } from './appMenu'
 import { join, isAbsolute, basename, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { appendFileSync, mkdirSync } from 'node:fs'
@@ -379,6 +380,9 @@ if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env
 handle('app:openLaunchDir', () => ({ opened: openHere?.ready() ?? false }))
 
 app.whenReady().then(async () => {
+  // 기본 메뉴 가속키(Ctrl+R 새로고침 등)를 끈다 — 이유는 appMenu.ts. 창을 만들기 전에.
+  const menu = appMenuTemplate(process.platform, !app.isPackaged)
+  Menu.setApplicationMenu(menu ? Menu.buildFromTemplate(menu) : null)
   const userData = app.getPath('userData')
   // 2.0 첫 실행: 1.x 파일을 복사해 둔다(1.x 로 돌아갈 길). **맨 먼저** — 아래 WorkspaceStore 가 workspace 를
   // 고쳐 쓰고 AppLock 이 잠금을 켜면 vault 를 다시 봉하기 전이어야 한다. 동기·작은 파일 몇 개뿐이다.
