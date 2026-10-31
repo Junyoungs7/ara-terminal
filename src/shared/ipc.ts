@@ -40,6 +40,7 @@ import type {
 import type { AgentHookState, AgentStatus } from './agentStatus'
 import type { AiCliId, AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
+import type { ResourceSnapshot } from './resources'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -520,6 +521,10 @@ export type InvokeContract = {
   // W2 F8 내장 브라우저. http/https 만(app:openExternal 과 같은 isSafeExternal 게이트를 재사용 —
   // 두 번째 화이트리스트를 만들지 않는다). 창 하나를 재사용해 navigate 한다.
   'browser:open': { req: { url: string }; res: { ok: boolean } }
+  // M0 0-7 FD-01 자원 관리자. 팝오버가 열린 동안만 렌더러가 2초마다 묻는다(상시 폴러 없음).
+  'resources:snapshot': { req: void; res: ResourceSnapshot }
+  // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
+  'resources:killPty': { req: { id: string }; res: { ok: boolean } }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1112,6 +1117,11 @@ export type EvApi = {
   }
   // W2 F8 내장 브라우저(별도 창 하나 재사용). 스킴이 http/https 가 아니면 ok:false 로 거부된다.
   browser: { open(url: string): Promise<{ ok: boolean }> }
+  // M0 0-7 FD-01 자원 관리자(preload/features/resources.ts).
+  resources: {
+    snapshot(): Promise<ResourceSnapshot>
+    killPty(id: string): Promise<{ ok: boolean }>
+  }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {
     reveal(): Promise<{ ok: boolean }>

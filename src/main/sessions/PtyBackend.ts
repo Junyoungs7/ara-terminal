@@ -141,6 +141,10 @@ export async function drainKilledPtys(): Promise<void> {
 export class PtyBackend implements SessionBackend {
   private readonly pty: IPty
 
+  get pid(): number {
+    return this.pty.pid
+  }
+
   /**
    * paneId(= 세션 id)는 **훅이 어느 탭인지 말하게 하는 값**이다(F1a). 셸 env 에 넣어 두면
    * 사용자가 직접 친 `claude` 도 그 셸의 자식이라 물려받는다 — 우리가 띄운 것만 아는 것이 아니라

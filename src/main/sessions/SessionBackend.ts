@@ -13,4 +13,6 @@ export interface SessionBackend {
    * 로컬 pty 는 셸 통합이 OSC7 을 방출하므로 구현하지 않는다.
    */
   onCwd?(cb: (cwd: string) => void): void
+  /** 로컬 셸의 OS pid — 자원 관리자(FD-01)가 그 트리를 잰다. ssh2 채널은 프로세스가 없어 없다. */
+  readonly pid?: number
 }

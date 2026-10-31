@@ -18,6 +18,7 @@ import type {
 import type { AgentStatus } from '@shared/agentStatus'
 import type { AiCliId, LaunchShell } from '@shared/aiCli'
 import { browserBridge } from './features/browser'
+import { resourcesBridge } from './features/resources'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLogTarget } from '@shared/pastLogWin'
 import type { PastLog } from '@shared/ipc'
@@ -242,6 +243,8 @@ const api: EvApi = {
   },
   // 내장 브라우저 — 기능 틀(preload/features/browser.ts).
   ...browserBridge,
+  // FD-01 자원 관리자 — 기능 틀(preload/features/resources.ts).
+  ...resourcesBridge,
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),
     stop: (sessionId: string) => ipcRenderer.invoke('telemetry:stop', { sessionId }),

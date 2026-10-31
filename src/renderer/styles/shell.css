@@ -10181,3 +10181,118 @@ button.sb-seg.upd:hover .val {
   font-weight: 400;
   color: var(--text-hi);
 }
+
+/* M0 0-7 FD-01 자원 관리자 — 상태바 [자원] 칸 + 팝오버(.mcp-pop 과 같은 틀). */
+.res-ind {
+  position: relative;
+  display: flex;
+  height: 100%;
+}
+.sb-seg.res {
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text-mid);
+  cursor: var(--cur-hand, pointer);
+}
+.sb-seg.res.on {
+  color: var(--text-hi);
+}
+.res-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: 360px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-5);
+  z-index: 40;
+}
+.res-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.res-tab {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-md);
+  color: var(--text-mid);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius);
+  cursor: var(--cur-hand, pointer);
+}
+.res-tab.on {
+  color: var(--text-hi);
+  background: var(--glass);
+}
+.res-count {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.res-empty {
+  color: var(--text-mid);
+  font-size: var(--fs-md);
+  padding: var(--sp-3) 0;
+}
+.res-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.res-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  font-size: var(--fs-md);
+  padding: var(--sp-2) 0;
+}
+.res-row .name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.res-row .pid {
+  color: var(--text-lo);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.res-row .cpu,
+.res-row .mem {
+  flex: none;
+  width: 64px;
+  text-align: right;
+  font-family: var(--mono);
+  color: var(--text-mid);
+}
+.res-total {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-2);
+}
+.res-total .cpu,
+.res-total .mem {
+  color: var(--text-hi);
+}
+.res-kill {
+  flex: none;
+  border: 1px solid var(--line-strong);
+  background: none;
+  font: inherit;
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-sm);
+  cursor: var(--cur-hand, pointer);
+}
+.res-kill.confirm {
+  color: var(--err);
+  border-color: var(--err-line);
+  background: var(--err-tint);
+}

@@ -40,6 +40,7 @@ import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerReportIpc } from './ipc/registerReportIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
+import { registerResourcesFeature } from './resources/feature'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
@@ -529,6 +530,8 @@ app.whenReady().then(async () => {
   // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
   const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
   forwards = fwdIpc.forwards
+  // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). 상한(M4)은 이 서비스에 붙는다.
+  registerResourcesFeature(sessions)
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(

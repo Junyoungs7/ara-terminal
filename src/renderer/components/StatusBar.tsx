@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import type { ConnectionProfile, HostStats, RemoteStats } from '@shared/types'
 import { parseOverview, type Overview } from '@shared/remoteCatalog'
 import type { UpdateState } from '@shared/ipc'
@@ -9,6 +9,42 @@ import { sparkArea, sparkPoints, useHostStats, type Sample } from '../store/sysM
 import { updateSeg } from '../store/updateNotify'
 import { openVoiceSettings, useVoice } from '../store/voice'
 import { ShieldAlert } from 'lucide-react'
+import { ResourcePopover } from '../features/resources'
+
+/**
+ * M0 0-7 FD-01 자원 관리자 칸(Orca ResourceUsageStatusSegment 를 따라 상태바 항목 → 팝오버).
+ * 팝오버 코드는 처음 열 때 import() 로 온다. M1 에서 자리를 옮길 수 있게 이 칸만으로 독립이다.
+ */
+function ResourceSegment() {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+  return (
+    <div className="res-ind" ref={rootRef}>
+      <button
+        type="button"
+        className={'sb-seg res' + (open ? ' on' : '')}
+        data-action="statusbar.resources"
+        title={t('resources.title')}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="val">{t('resources.label')}</span>
+      </button>
+      {open && (
+        <Suspense fallback={null}>
+          <ResourcePopover />
+        </Suspense>
+      )}
+    </div>
+  )
+}
 
 // 하단 상태바 (design-system §4.1).
 //
@@ -329,6 +365,7 @@ export function StatusBar({
       )}
       <div className="sb-right">
         {children}
+        <ResourceSegment />
         {/* 좁아지면 접히는 두 칸(2026-08-17). 늘 참인 값이라 급할 때 볼 이유가 없다 —
             자리를 두고 다투면 도구 버튼에 양보한다. 2.0 순서: UTF-8 · 세션 n · 버전(시안 Z-final). */}
         <div className="sb-seg enc">

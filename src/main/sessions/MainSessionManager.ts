@@ -333,6 +333,16 @@ export class MainSessionManager implements ISessionManager {
     return [...this.handles.values()].map((h) => h.meta)
   }
 
+  /** FD-01 자원 관리자: 세션별 셸 pid(로컬만). */
+  ptyList(): { id: string; title: string; type: string; pid?: number }[] {
+    return [...this.handles.values()].map((h) => ({
+      id: h.meta.id,
+      title: h.meta.title,
+      type: h.meta.type,
+      pid: h.backend.pid
+    }))
+  }
+
   /**
    * F32: 이 세션을 가진 창. undefined = 본창.
    * 출력 push 의 목적지를 정하는 값이라 **소유의 단일 출처는 여기**다(렌더러가 각자 기억하면
