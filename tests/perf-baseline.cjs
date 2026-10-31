@@ -162,6 +162,11 @@ async function launch(userData) {
     env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1' }
   })
   const page = await app.firstWindow()
+  // 25분 측정 동안 사용자 화면을 가리지 않게 화면 밖으로(showInactive 라 포커스는 원래 안 뺏는다).
+  // 한계: 가려진 창은 Chromium 이 렌더를 줄일 수 있어 유휴 CPU 가 실사용보다 낮게 나올 수 있다 — 기준선과 게이트가 같은 조건이라 비교는 유효.
+  await app
+    .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.setPosition(-32000, -32000)))
+    .catch(() => {})
   const created = await app.evaluate(() => process.getCreationTime()).catch(() => null)
   return { app, page, created, t0: created ?? tLaunch }
 }
