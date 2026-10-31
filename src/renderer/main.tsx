@@ -1,6 +1,6 @@
 // 2.0 앱 잠금 — **맨 먼저** import 한다: 그 파일이 거는 키 가드가 다른 모든 키 리스너보다 앞서야 한다.
 import { initLock, subscribeLock, lockView, LOCK_HOST_ID } from './store/lock'
-import { StrictMode } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Shell } from './components/Shell'
 import { EditorWindow, parseEditorHash } from './components/EditorWindow'
@@ -12,7 +12,7 @@ import { ExplorerWindow } from './components/ExplorerWindow'
 import { isExplorerWinHash } from '@shared/explorerWin'
 import { PastLogWindow } from './components/PastLogWindow'
 import { isPastLogWinHash } from '@shared/pastLogWin'
-import { BrowserWindow as BrowserTabStrip } from './components/BrowserWindow'
+import { BrowserTabStrip } from './features/browser'
 import { LockScreen } from './components/LockScreen'
 import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
@@ -85,7 +85,9 @@ const renderApp = (): void =>
     ) : portWin ? (
       <PortWindow />
     ) : browserWin ? (
-      <BrowserTabStrip />
+      <Suspense fallback={null}>
+        <BrowserTabStrip />
+      </Suspense>
     ) : explorerWin ? (
       <ExplorerWindow />
     ) : pastLogWin ? (

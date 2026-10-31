@@ -17,7 +17,7 @@ import type {
 } from '@shared/ipc'
 import type { AgentStatus } from '@shared/agentStatus'
 import type { AiCliId, LaunchShell } from '@shared/aiCli'
-import type { BrowserTabView } from '@shared/browserWin'
+import { browserBridge } from './features/browser'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLogTarget } from '@shared/pastLogWin'
 import type { PastLog } from '@shared/ipc'
@@ -100,6 +100,11 @@ const api: EvApi = {
       const listener = () => cb()
       ipcRenderer.on('win:closeAsk', listener)
       return () => ipcRenderer.removeListener('win:closeAsk', listener)
+    },
+    onMenuPick: (cb: (id: string) => void) => {
+      const listener = (_: unknown, id: string) => cb(id)
+      ipcRenderer.on('menu:pick', listener)
+      return () => ipcRenderer.removeListener('menu:pick', listener)
     },
     confirmClose: (winId: string, kill: boolean) => ipcRenderer.invoke('win:closeConfirm', { winId, kill })
   },
@@ -235,20 +240,8 @@ const api: EvApi = {
       return () => ipcRenderer.removeListener('explorer:shown', listener)
     }
   },
-  // 내장 브라우저 탭 줄 전용. 이 API 는 **#browserwin 창의 최상위 프레임**만 본다 —
-  // 페이지 본문은 preload 없는 WebContentsView 라 여기 닿을 수 없다.
-  browserTabs: {
-    select: (id: string) => ipcRenderer.invoke('browser:select', { id }),
-    closeTab: (id: string) => ipcRenderer.invoke('browser:closeTab', { id }),
-    closeOrigin: (origin: string) => ipcRenderer.invoke('browser:closeOrigin', { origin }),
-    reload: () => ipcRenderer.invoke('browser:reload', {}),
-    back: () => ipcRenderer.invoke('browser:back', {}),
-    onTabs: (cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void) => {
-      const listener = (_e: IpcRendererEvent, d: { tabs: BrowserTabView[]; activeId: string | null }) => cb(d)
-      ipcRenderer.on('browser:tabs', listener)
-      return () => ipcRenderer.removeListener('browser:tabs', listener)
-    }
-  },
+  // 내장 브라우저 — 기능 틀(preload/features/browser.ts).
+  ...browserBridge,
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),
     stop: (sessionId: string) => ipcRenderer.invoke('telemetry:stop', { sessionId }),
@@ -383,10 +376,6 @@ const api: EvApi = {
       ipcRenderer.invoke('forward:create', { sessionId, remotePort, exactPort }),
     stop: (id: string) => ipcRenderer.invoke('forward:stop', { id }),
     list: () => ipcRenderer.invoke('forward:list')
-  },
-  // W2 F8: 내장 브라우저 창(preload 미주입 · 전용 파티션). 스킴 검증은 main 이 다시 한다.
-  browser: {
-    open: (url: string) => ipcRenderer.invoke('browser:open', { url })
   },
   // #206 오류 신고. prepare 가 부른 창을 찍는다 — 신고 창은 그 답을 받은 뒤에 연다.
   report: {

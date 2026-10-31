@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { BrowserTabView } from '@shared/browserWin'
-import { t } from '../i18n'
+import { t } from '../../i18n'
 
 // 내장 브라우저의 **탭 줄**. 2026-08-21 준영님 제보로 생겼다:
 //   "모니터를 열고 다른 포트에서 열면 그전에가 사라지는데 이 모니터도 탭 형식으로."

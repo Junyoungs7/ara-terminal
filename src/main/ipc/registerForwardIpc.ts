@@ -5,15 +5,8 @@ import { shell, type BrowserWindow } from 'electron'
 import { handle } from './handle'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { createForwardService, type ForwardService } from '../forward/PortForward'
-import {
-  closeTab,
-  closeTabByOrigin,
-  createBrowserService,
-  goBackActive,
-  reloadActive,
-  selectTab,
-  type BrowserService
-} from '../browser/BrowserTabs'
+import type { BrowserService } from '../browser/BrowserTabs'
+import { registerBrowserFeature } from '../browser/feature'
 
 // 반환값은 세션 종료 훅(stopSession)과 앱 종료 정리(stopAll)용.
 export function registerForwardIpc(
@@ -28,7 +21,8 @@ export function registerForwardIpc(
     (id) => sessions.sshClient(id),
     (id) => sessions.snapshot().find((s) => s.id === id)?.title
   )
-  const browser = createBrowserService(getMainWindow)
+  // 브라우저 IPC 는 기능 틀로 옮겼다(main/browser/feature.ts). 반환값 모양은 그대로.
+  const browser = registerBrowserFeature(getMainWindow)
 
   handle('forward:create', ({ sessionId, remotePort, exactPort }) =>
     forwards.create(sessionId, remotePort, exactPort)
@@ -38,28 +32,6 @@ export function registerForwardIpc(
     return { ok: true } as const
   })
   handle('forward:list', () => forwards.list())
-  // 진입점 스킴 검증(BrowserService 안의 will-navigate 게이트와 이중). 렌더러가 보낸 값은 신뢰하지 않는다.
-  handle('browser:open', ({ url }) => ({ ok: typeof url === 'string' && browser.open(url) }))
-  // 탭 조작(2026-08-21). 부르는 쪽은 우리 탭 줄뿐이지만, id 는 신뢰하지 않는다 —
-  // 목록에 없는 id 면 BrowserTabs 가 조용히 무시한다.
-  handle('browser:select', ({ id }) => {
-    selectTab(id)
-    return { ok: true } as const
-  })
-  handle('browser:closeTab', ({ id }) => {
-    closeTab(id)
-    return { ok: true } as const
-  })
-  // 포트 표의 [닫기] — 탭 id 대신 주소로 닫는다(그쪽은 id 를 모른다).
-  handle('browser:closeOrigin', ({ origin }) => ({ ok: closeTabByOrigin(origin) }))
-  handle('browser:reload', () => {
-    reloadActive()
-    return { ok: true } as const
-  })
-  handle('browser:back', () => {
-    goBackActive()
-    return { ok: true } as const
-  })
   // F12: 로그 폴더를 탐색기로 연다. 경로 인자를 받지 않는다 — 렌더러가 임의 폴더를 열 수 없다.
   handle('sessionlog:reveal', async () => ({ ok: (await shell.openPath(logDir())) === '' }))
 
