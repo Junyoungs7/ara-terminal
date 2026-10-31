@@ -9388,7 +9388,22 @@ button.sb-seg.upd:hover .val {
 .main.space-ai > .term-search {
   display: none;
 }
+/* M2 라운드 2: 본문 = 왼쪽 워크트리 목록(.aiws-side, 시안 SW-final .side 264px) + 가운데(.aiws-center). */
 .aiws-home {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  font-size: var(--fs-base);
+  color: var(--text-mid);
+}
+.aiws-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow: auto;
+}
+.aiws-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -9398,9 +9413,8 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-8);
   text-align: center;
   color: var(--text-lo);
-  font-size: var(--fs-base);
 }
-.aiws-home b {
+.aiws-empty b {
   color: var(--text-mid);
   font-weight: 500;
   font-size: var(--fs-md);
@@ -9409,6 +9423,336 @@ button.sb-seg.upd:hover .val {
   width: 28px;
   height: 28px;
   margin-bottom: var(--sp-2);
+  color: var(--text-lo);
+}
+.aiws-mono {
+  font-family: var(--mono);
+}
+
+/* 사이드바 */
+.aiws-side {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-canvas);
+  border-right: 1px solid var(--line);
+}
+.aiws-side-head {
+  height: var(--row-tabbar);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.aiws-side-ttl {
+  padding: 0 var(--sp-2);
+  color: var(--text-lo);
+}
+.aiws-side-tools {
+  margin-left: auto;
+  display: flex;
+  gap: var(--sp-1);
+}
+.aiws-ic {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-ic svg {
+  width: 14px;
+  height: 14px;
+}
+.aiws-ic:hover:not(:disabled),
+.aiws-ic.on {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+.aiws-ic:disabled {
+  color: var(--text-dim);
+  cursor: var(--cur-arrow, default);
+}
+.aiws-filter {
+  padding: var(--sp-3) var(--sp-4) 0;
+}
+.aiws-list {
+  flex: 1;
+  overflow: auto;
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+.aiws-side-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--text-lo);
+}
+.aiws-grp {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--sp-4) var(--sp-2);
+  color: var(--text-mid);
+}
+.aiws-grp b {
+  font-weight: 400;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.aiws-grp-ic {
+  width: 12px;
+  height: 12px;
+}
+.aiws-grp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-grp-act {
+  margin-left: auto;
+}
+.aiws-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  cursor: var(--cur-hand, pointer);
+  outline: none;
+}
+.aiws-row:hover {
+  background: var(--glass-hover);
+}
+.aiws-row.act {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.aiws-row:focus-visible {
+  box-shadow: var(--focus-ring-inset);
+}
+.aiws-row-l1,
+.aiws-row-l2 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.aiws-row-l1 {
+  color: var(--text-hi);
+}
+.aiws-row-l2 {
+  padding-left: var(--sp-8);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-row-ic {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--text-lo);
+}
+.aiws-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+/* 상태 점 자리(M3 에이전트 상태). 지금은 고른 줄만 강조색. */
+.aiws-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--idle);
+}
+.aiws-row.act .aiws-dot {
+  background: var(--text-mid);
+}
+.aiws-row-acts {
+  display: none;
+  gap: var(--sp-1);
+}
+.aiws-row:hover .aiws-row-acts,
+.aiws-row:focus-within .aiws-row-acts,
+.aiws-row-acts.on {
+  display: flex;
+}
+.aiws-row-proj {
+  color: var(--text-mid);
+}
+.aiws-diffn {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+.aiws-diffn .p {
+  color: var(--ok);
+}
+.aiws-diffn .m {
+  color: var(--err);
+}
+.aiws-pending {
+  cursor: var(--cur-arrow, default);
+}
+.aiws-pending.failed .aiws-row-ic,
+.aiws-pending.failed .aiws-row-l2 {
+  color: var(--err);
+}
+.aiws-pending-out,
+.aiws-pending-err {
+  padding-left: var(--sp-8);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-pending-err {
+  color: var(--err);
+  white-space: normal;
+  word-break: break-word;
+}
+.aiws-spin {
+  animation: ai-key-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aiws-spin {
+    animation: none;
+  }
+}
+
+/* 입력(사이드바 필터·새 작업 카드 공용). 버튼은 앱 공용 .btn.sec·.btn.pri */
+.aiws-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-hi);
+  font: inherit;
+}
+.aiws-input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+}
+.aiws-input:disabled {
+  color: var(--text-dim);
+}
+/* 새 작업 카드(WS-02) */
+.aiws-new {
+  width: 100%;
+  max-width: 560px;
+  margin: var(--sp-8) auto;
+  padding: var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  align-self: flex-start;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.aiws-new-ttl {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-hi);
+}
+.aiws-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  color: var(--text-lo);
+}
+.aiws-note {
+  margin: 0;
+  color: var(--text-lo);
+}
+.aiws-modes {
+  display: flex;
+  gap: var(--sp-3);
+}
+.aiws-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-lo);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-mode b {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.aiws-mode.on {
+  border-color: var(--line-strong);
+  background: var(--glass);
+}
+.aiws-mode:disabled {
+  opacity: 0.5;
+  cursor: var(--cur-arrow, default);
+}
+.aiws-refs {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+.aiws-ref {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border: none;
+  background: none;
+  color: var(--text-mid);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-ref:hover {
+  background: var(--glass-hover);
+}
+.aiws-ref.on {
+  background: var(--sel-bg);
+  color: var(--text-hi);
+}
+.aiws-ref-kind {
+  margin-left: auto;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.aiws-new-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+
+/* 상태바 왼쪽 — "main 에서 n 커밋 앞" */
+.sb-seg-ic {
+  width: 13px;
+  height: 13px;
   color: var(--text-lo);
 }
 

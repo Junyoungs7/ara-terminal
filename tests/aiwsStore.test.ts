@@ -8,12 +8,17 @@ const main: Worktree = { id: 'r1::C:/repo', repoId: 'r1', path: 'C:/repo', head:
 const feat: Worktree = { ...main, id: 'r1::C:/ws/feat', path: 'C:/ws/feat', branch: 'refs/heads/feat', isMainWorktree: false, displayName: 'feat' }
 
 const ev = {
-  repos: { list: vi.fn(async () => [project]), add: vi.fn(), remove: vi.fn(async () => ({ ok: true })), searchBaseRefs: vi.fn() },
+  repos: {
+    list: vi.fn(async () => [project]),
+    pickFolder: vi.fn(async (): Promise<string | null> => 'C:/repo/sub'),
+    add: vi.fn(async () => ({ ok: true as const, project })),
+    remove: vi.fn(async () => ({ ok: true })), searchBaseRefs: vi.fn() },
   worktrees: {
     list: vi.fn(async () => ({ ok: true as const, worktrees: [main] })),
     create: vi.fn(async () => ({ ok: true as const, worktree: feat })),
     cancelCreate: vi.fn(async () => ({ ok: true })),
     remove: vi.fn(async () => ({ ok: true as const })),
+    stats: vi.fn(async () => ({ ok: true as const, base: 'main', ahead: 2, added: 5, removed: 1 })),
     onCreateProgress: vi.fn(() => () => {})
   }
 }
@@ -23,6 +28,11 @@ let subscribed = 0
 let store: typeof import('../src/renderer/features/aiws/store')
 
 beforeAll(async () => {
+  const mem = new Map<string, string>()
+  ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: (k: string, v: string) => void mem.set(k, v)
+  }
   ;(globalThis as unknown as { window: unknown }).window = { ev }
   store = await import('../src/renderer/features/aiws/store')
   subscribed = ev.worktrees.onCreateProgress.mock.calls.length
@@ -31,6 +41,7 @@ beforeAll(async () => {
 // 한 프로세스에서 파일들이 차례로 돈다(vitest maxWorkers 1) — 남의 시험이 가짜 window 를 보지 않게 치운다.
 afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window
+  delete (globalThis as unknown as { localStorage?: unknown }).localStorage
 })
 
 beforeEach(() => {
@@ -66,6 +77,10 @@ describe('aiws store', () => {
     expect(store.useAiwsStore.getState().pendingWorktreeCreations.x).toMatchObject({ phase: 'failed', error: 'boom' })
     s.removePendingWorktreeCreation('x')
     expect(store.useAiwsStore.getState().pendingWorktreeCreations).toEqual({})
+    // 취소는 실패 줄로 남지 않는다.
+    s.applyCreateProgress({ creationId: 'y', repoId: 'r1', phase: 'start', path: 'p', branch: 'b' })
+    s.applyCreateProgress({ creationId: 'y', repoId: 'r1', phase: 'failed', reason: 'canceled', message: 'p' })
+    expect(store.useAiwsStore.getState().pendingWorktreeCreations).toEqual({})
   })
 
   it('워크트리 없이 열기 — git 호출 없이 본 폴더가 활성 작업 단위', async () => {
@@ -84,5 +99,32 @@ describe('aiws store', () => {
     expect(store.useAiwsStore.getState()).toMatchObject({ worktreesByRepo: { r1: [main] }, activeWorktreeId: null })
     await store.useAiwsStore.getState().removeRepo('r1')
     expect(store.useAiwsStore.getState()).toMatchObject({ repos: [], worktreesByRepo: {} })
+  })
+
+  it('폴더 고르기 → 등록 → 그 워크트리·통계를 불러온다, 취소면 아무 일 없음', async () => {
+    expect(await store.useAiwsStore.getState().pickAndAddRepo()).toEqual(project)
+    expect(ev.repos.add).toHaveBeenCalledWith('C:/repo/sub')
+    expect(store.useAiwsStore.getState().worktreesByRepo.r1).toEqual([main])
+    await vi.waitFor(() => expect(store.useAiwsStore.getState().statsById[main.id]).toMatchObject({ ok: true, ahead: 2 }))
+    ev.repos.pickFolder.mockResolvedValueOnce(null)
+    ev.repos.add.mockClear()
+    expect(await store.useAiwsStore.getState().pickAndAddRepo()).toBeNull()
+    expect(ev.repos.add).not.toHaveBeenCalled()
+  })
+
+  it('핀 — 켜고 끄며 localStorage 에 남는다', () => {
+    const s = store.useAiwsStore.getState()
+    s.togglePin(feat.id)
+    expect(store.useAiwsStore.getState().pinnedIds).toEqual([feat.id])
+    expect(localStorage.getItem('aiws.pinnedWorktrees')).toBe(JSON.stringify([feat.id]))
+    s.togglePin(feat.id)
+    expect(store.useAiwsStore.getState().pinnedIds).toEqual([])
+    s.setGroupBy('none')
+    expect(localStorage.getItem('aiws.groupBy')).toBe('"none"')
+  })
+
+  it('[다시] 를 위해 분기 지점을 pending 에 남긴다', async () => {
+    await store.useAiwsStore.getState().createWorktree({ repoId: 'r1', name: 'x', baseBranch: 'v1', creationId: 'fixed' })
+    expect(store.useAiwsStore.getState().pendingWorktreeCreations.fixed).toMatchObject({ name: 'x', baseBranch: 'v1' })
   })
 })

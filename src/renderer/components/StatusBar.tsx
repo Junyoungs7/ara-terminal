@@ -8,7 +8,7 @@ import { t } from '../i18n'
 import { sparkArea, sparkPoints, useHostStats, type Sample } from '../store/sysMonitor'
 import { updateSeg } from '../store/updateNotify'
 import { openVoiceSettings, useVoice } from '../store/voice'
-import { ShieldAlert } from 'lucide-react'
+import { GitBranch, ShieldAlert } from 'lucide-react'
 import { ResourcePopover } from '../features/resources'
 
 /**
@@ -270,7 +270,8 @@ export function StatusBar({
   children,
   update = null,
   onUpdateAction,
-  leftEmpty = false
+  leftEmpty = false,
+  leftText = null
 }: {
   version: string
   session: Session | null
@@ -298,6 +299,8 @@ export function StatusBar({
   onUpdateAction?: (action: 'download' | 'install' | 'check') => void
   /** M1 AI 작업 공간 — 왼쪽(서버 정보)을 비운다. 오른쪽(MCP · 세션 · 자원 · 업데이트 · 버전)은 두 공간 공통. */
   leftEmpty?: boolean
+  /** M2 WS-05: leftEmpty 일 때 왼쪽에 한 칸 — 고른 워크트리의 "main 에서 n 커밋 앞". */
+  leftText?: string | null
 }) {
   // 다듬기 R3: 로컬 탭·세션 없음이면 내 PC 를 켜자마자 보여 준다. 창이 숨거나 최소화되면 구독을 끊어
   // 폴러가 멈춘다(main 이 구독자를 센다 — 시스템 모니터 [로컬] 탭과 같은 폴러를 나눠 쓴다).
@@ -369,6 +372,12 @@ export function StatusBar({
         </>
       )}
       </>
+      )}
+      {leftEmpty && leftText && (
+        <div className="sb-seg aiws-ahead">
+          <GitBranch className="sb-seg-ic" aria-hidden />
+          <span className="val">{leftText}</span>
+        </div>
       )}
       <div className="sb-right">
         {children}

@@ -1,7 +1,7 @@
 import { AI_ENTRY, featuresOf, type FeatureShown } from '@shared/features'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { shownSpace, type Space } from '@shared/space'
-import { AiHome, AiRail } from '../features/aiws'
+import { AiHome, AiRail, type AiwsLocation } from '../features/aiws'
 import { RightBar } from './RightBar'
 import { NotifyBell, NotifyToasts } from './NotifyCenter'
 import { attention, installTestNotify, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
@@ -213,6 +213,8 @@ export function Shell() {
   // 실험 기능이 꺼져 있으면 저장값과 무관하게 터미널 공간이다(shownSpace) — 스위치·오른쪽 아이콘 바도 없다.
   const [spaceSt, setSpaceSt] = useState<{ on: boolean; space: Space }>({ on: false, space: 'term' })
   const space = shownSpace({ aiSpace: spaceSt.on, space: spaceSt.space })
+  // M2 WS-05: AI 작업 공간에서 고른 워크트리 — 타이틀바 `프로젝트 / 워크트리 / 브랜치`·상태바 "main 에서 n 커밋 앞".
+  const [aiLoc, setAiLoc] = useState<AiwsLocation | null>(null)
   const pickSpace = useCallback((s: Space) => mainRef.current?.setSpace(s), [])
   // 아라 채팅 v2: API 모드 공급자·모델 — 같은 미러(채팅 선택기가 ready 추론 대신 설정 값을 쓴다).
   const [aiApi, setAiApi] = useState<{ provider: AiProvider; model: string }>(() => {
@@ -1530,7 +1532,9 @@ export function Shell() {
         onCommand={onMenuCommand}
         // 2.0 다듬기 R1: 왼쪽 `ARA / 서버 / 경로` — 활성 탭 기준(상태바와 같은 값). SSH 는 serverKey 가 프로필 이름이다.
         crumb={
-          activeSession
+          space === 'ai'
+            ? (aiLoc?.crumb ?? undefined)
+            : activeSession
             ? { server: activeSession.type === 'ssh' ? activeSession.serverKey : activeSession.title, path: activeCwd }
             : undefined
         }
@@ -1830,7 +1834,7 @@ export function Shell() {
           spaceView={
             space === 'ai' ? (
               <Suspense fallback={null}>
-                <AiHome />
+                <AiHome ask={ask} onLocation={setAiLoc} />
               </Suspense>
             ) : undefined
           }
@@ -1861,6 +1865,7 @@ export function Shell() {
       </div>
       <StatusBar
         leftEmpty={space === 'ai'}
+        leftText={space === 'ai' ? (aiLoc?.status ?? null) : null}
         version={version}
         session={activeSession}
         profile={activeProfile}

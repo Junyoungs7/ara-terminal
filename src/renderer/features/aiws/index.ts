@@ -3,4 +3,7 @@
 import { lazy } from 'react'
 
 export const AiRail = lazy(() => import('./AiSpace').then((m) => ({ default: m.AiRail })))
+/** AI 작업 공간이 Shell 에 알리는 위치 — 타이틀바 crumb 과 상태바 왼쪽 글. */
+export type AiwsLocation = { crumb: { server: string; path: string | null }; status: string | null }
+
 export const AiHome = lazy(() => import('./AiSpace').then((m) => ({ default: m.AiHome })))

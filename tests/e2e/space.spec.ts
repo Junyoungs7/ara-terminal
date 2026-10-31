@@ -40,9 +40,11 @@ test('SPACE-2★ 실험 기능 켜기 → 스위치 → AI 작업 공간 전환�
   await page.click(`${sw} [data-space="ai"]`)
   await expect(page.locator(`${sw} [data-space="ai"]`)).toHaveAttribute('aria-selected', 'true')
   await expect(page.locator('.ai-rail')).toBeVisible()
-  await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="worktree"]')).toBeDisabled()
+  // M2 라운드 2: 워크트리 목록이 들어왔다 — 레일의 [워크트리]는 지금 화면(눌림), 나머지는 아직 비활성.
+  await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="worktree"]')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="agents"]')).toBeDisabled()
   await expect(page.locator('.lrail')).toHaveCount(0)
-  await expect(page.locator('.aiws-home')).toContainText('곧 들어옵니다')
+  await expect(page.locator('.aiws-home .aiws-side')).toBeVisible()
   await expect(page.locator('.sidebar')).toBeHidden()
   await expect(page.locator('.term-tabbar')).toBeHidden()
   await expect(page.locator('.statusbar .sb-seg.host')).toHaveCount(0)

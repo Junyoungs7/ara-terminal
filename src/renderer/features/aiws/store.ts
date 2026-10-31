@@ -1,9 +1,9 @@
 // M2 작업 단위 — 렌더러 상태 저장소(zustand 5). Orca src/renderer/src/store/slices/repos.ts·worktrees.ts(orcaRef 7a7f46f8a3)의
 // 슬라이스 모양·이름(repos · worktreesByRepo · activeWorktreeId · pendingWorktreeCreations)을 따른다. 1차 범위만:
-// 메타(핀·정렬·읽음)·감지 스캔·호스트 소유·PR 연동은 뺐다(사이드바 라운드 WS-05·2차).
+// 라운드 2(WS-05): 핀·묶기 방식·+/− 통계를 더했다. 읽음·감지 스캔·호스트 소유·PR 연동은 2차.
 // 이 파일은 AI 작업 공간 청크(features/aiws)에 산다 — 처음 열 때만 불러오고, 그때 진행 이벤트를 한 번 구독한다.
 import { create, type StateCreator } from 'zustand'
-import type { CreateWorktreeProgressEvent, CreateWorktreeResult, Project, RemoveWorktreeResult, Worktree, WorktreeCheckoutProgress } from '@shared/worktrees'
+import type { CreateWorktreeProgressEvent, CreateWorktreeResult, Project, RemoveWorktreeResult, Worktree, WorktreeCheckoutProgress, WorktreeStats } from '@shared/worktrees'
 import { composeWorktreeId } from '@shared/worktrees'
 
 /** Orca PendingWorktreeCreation(src/renderer/src/lib/pending-worktree-creation.ts)의 1차 부분집합. */
@@ -11,6 +11,8 @@ export type PendingWorktreeCreation = {
   creationId: string
   repoId: string
   name: string
+  /** [다시] 가 같은 값으로 다시 만들 수 있게. */
+  baseBranch?: string
   startedAt: number
   phase: CreateWorktreeProgressEvent['phase']
   path?: string
@@ -24,10 +26,46 @@ export type PendingWorktreeCreation = {
 // 출력은 꼬리만 — 큰 체크아웃이 진행 막대를 수천 줄 찍는다.
 const OUTPUT_TAIL_CHARS = 4000
 
+// 핀·묶기 방식은 이 PC 의 보기 설정이다(Orca 는 worktree meta 로 main 에 둔다 — 여러 창·기기 동기화가 필요해지면 옮긴다).
+const PINS_KEY = 'aiws.pinnedWorktrees'
+const GROUP_KEY = 'aiws.groupBy'
+export type SidebarGroupBy = 'repo' | 'none'
+
+function readLocal<T>(key: string, fallback: T, ok: (v: unknown) => v is T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    const v: unknown = raw === null ? null : JSON.parse(raw)
+    return ok(v) ? v : fallback
+  } catch {
+    return fallback
+  }
+}
+function writeLocal(key: string, v: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(v))
+  } catch {
+    // 저장 못 해도 이번 창에서는 그대로 쓴다
+  }
+}
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string')
+const isGroupBy = (v: unknown): v is SidebarGroupBy => v === 'repo' || v === 'none'
+
+export type SidebarSlice = {
+  pinnedIds: string[]
+  groupBy: SidebarGroupBy
+  statsById: Record<string, WorktreeStats>
+  togglePin: (worktreeId: string) => void
+  setGroupBy: (g: SidebarGroupBy) => void
+  /** +/− 줄 수 · 커밋 앞(행마다 git 3번 — 목록을 다시 읽을 때만). */
+  fetchStats: (w: Worktree) => Promise<void>
+}
+
 export type RepoSlice = {
   repos: Project[]
   fetchRepos: () => Promise<void>
   addRepo: (path: string) => Promise<Project | null>
+  /** OS 폴더 고르기 → 등록 → 그 워크트리 불러오기. 취소면 null. */
+  pickAndAddRepo: () => Promise<Project | null>
   removeRepo: (repoId: string) => Promise<void>
 }
 
@@ -36,7 +74,7 @@ export type WorktreeSlice = {
   activeWorktreeId: string | null
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
   fetchWorktrees: (repoId: string) => Promise<void>
-  createWorktree: (args: { repoId: string; name: string; baseBranch?: string }) => Promise<CreateWorktreeResult>
+  createWorktree: (args: { repoId: string; name: string; baseBranch?: string; creationId?: string }) => Promise<CreateWorktreeResult>
   cancelWorktreeCreation: (creationId: string) => Promise<void>
   removePendingWorktreeCreation: (creationId: string) => void
   removeWorktree: (worktreeId: string, force?: boolean) => Promise<RemoveWorktreeResult>
@@ -47,7 +85,27 @@ export type WorktreeSlice = {
   applyCreateProgress: (e: CreateWorktreeProgressEvent) => void
 }
 
-export type AiwsState = RepoSlice & WorktreeSlice
+export type AiwsState = RepoSlice & WorktreeSlice & SidebarSlice
+
+const createSidebarSlice: StateCreator<AiwsState, [], [], SidebarSlice> = (set) => ({
+  pinnedIds: readLocal(PINS_KEY, [], isStringArray),
+  groupBy: readLocal<SidebarGroupBy>(GROUP_KEY, 'repo', isGroupBy),
+  statsById: {},
+  togglePin: (id) =>
+    set((s) => {
+      const pinnedIds = s.pinnedIds.includes(id) ? s.pinnedIds.filter((x) => x !== id) : [...s.pinnedIds, id]
+      writeLocal(PINS_KEY, pinnedIds)
+      return { pinnedIds }
+    }),
+  setGroupBy: (groupBy) => {
+    writeLocal(GROUP_KEY, groupBy)
+    set({ groupBy })
+  },
+  fetchStats: async (w) => {
+    const r = await window.ev.worktrees.stats(w.repoId, w.path)
+    set((s) => ({ statsById: { ...s.statsById, [w.id]: r } }))
+  }
+})
 
 const createRepoSlice: StateCreator<AiwsState, [], [], RepoSlice> = (set, get) => ({
   repos: [],
@@ -59,6 +117,13 @@ const createRepoSlice: StateCreator<AiwsState, [], [], RepoSlice> = (set, get) =
     if (!r.ok) return null
     if (!get().repos.some((p) => p.id === r.project.id)) set((s) => ({ repos: [...s.repos, r.project] }))
     return r.project
+  },
+  pickAndAddRepo: async () => {
+    const path = await window.ev.repos.pickFolder()
+    if (!path) return null
+    const project = await get().addRepo(path)
+    if (project) await get().fetchWorktrees(project.id)
+    return project
   },
   removeRepo: async (repoId) => {
     await window.ev.repos.remove(repoId)
@@ -77,14 +142,16 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
   fetchWorktrees: async (repoId) => {
     const r = await window.ev.worktrees.list(repoId)
     // 못 읽으면 있던 목록을 지우지 않는다(일시적인 git 실패로 사이드바가 비지 않게).
-    if (r.ok) set((s) => ({ worktreesByRepo: { ...s.worktreesByRepo, [repoId]: r.worktrees } }))
+    if (!r.ok) return
+    set((s) => ({ worktreesByRepo: { ...s.worktreesByRepo, [repoId]: r.worktrees } }))
+    // 통계는 기다리지 않는다 — 목록이 먼저 보이고 +/− 는 뒤따라 찬다. 실패해도 목록은 그대로.
+    for (const w of r.worktrees) void get().fetchStats(w).catch(() => {})
   },
-  createWorktree: async ({ repoId, name, baseBranch }) => {
-    const creationId = crypto.randomUUID()
+  createWorktree: async ({ repoId, name, baseBranch, creationId = crypto.randomUUID() }) => {
     set((s) => ({
       pendingWorktreeCreations: {
         ...s.pendingWorktreeCreations,
-        [creationId]: { creationId, repoId, name, startedAt: Date.now(), phase: 'start', output: '' }
+        [creationId]: { creationId, repoId, name, baseBranch, startedAt: Date.now(), phase: 'start', output: '' }
       }
     }))
     // 결과는 진행 이벤트(done/failed)로도 온다 — 상태 반영은 applyCreateProgress 한 곳에서.
@@ -123,10 +190,16 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     return id
   },
   applyCreateProgress: (e) => {
+    if (e.phase === 'done') void get().fetchStats(e.worktree).catch(() => {})
     set((s) => {
       const prev = s.pendingWorktreeCreations[e.creationId]
       // 다른 창이 시작한 생성 — 이 창에도 진행이 보이게 받아 둔다.
       const base: PendingWorktreeCreation = prev ?? { creationId: e.creationId, repoId: e.repoId, name: '', startedAt: Date.now(), phase: 'start', output: '' }
+      // 사용자가 취소한 것은 실패 줄로 남기지 않는다 — 반쯤 만든 것은 main 이 이미 치웠다.
+      if (e.phase === 'failed' && e.reason === 'canceled') {
+        const { [e.creationId]: _gone, ...rest } = s.pendingWorktreeCreations
+        return { pendingWorktreeCreations: rest }
+      }
       if (e.phase === 'done') {
         const { [e.creationId]: _done, ...rest } = s.pendingWorktreeCreations
         const list = (s.worktreesByRepo[e.repoId] ?? []).filter((w) => w.id !== e.worktree.id)
@@ -144,7 +217,7 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
   }
 })
 
-export const useAiwsStore = create<AiwsState>()((...a) => ({ ...createRepoSlice(...a), ...createWorktreeSlice(...a) }))
+export const useAiwsStore = create<AiwsState>()((...a) => ({ ...createRepoSlice(...a), ...createWorktreeSlice(...a), ...createSidebarSlice(...a) }))
 
 // 모듈이 처음 불릴 때(= AI 작업 공간을 처음 열 때) 한 번 구독한다. 창이 사는 동안 유지한다.
 // 시험(node)에는 window.ev 가 없다 — 그때는 건너뛴다.
