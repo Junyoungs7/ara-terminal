@@ -8,6 +8,7 @@ import {
   showSessionPanes,
   splitFiller,
   splitPanes,
+  serial,
   type LayoutState,
   type Pane
 } from '../src/renderer/store/layout'
@@ -171,5 +172,66 @@ describe('분할 경합 — opened 가 create 응답보다 먼저 와도 두 칸
     const after = showSessionPanes(split, 'new')
     expect(after.panes.map((p) => p.sessionId)).toEqual(['s1', 'new'])
     expect(after.focusedId).toBe('p2')
+  })
+})
+
+/**
+ * 연타 분할(2026-11-01 — 스모크 F4a: 350ms 간격 Ctrl+Shift+- 세 번에 칸이 사라지고 상한 토스트도 안 뜸).
+ * MainArea.doSplit 을 순수 함수로 그대로 옮겼다: 최신 상태(get) + 한 줄 서기(serial) + filler.
+ * 셸 생성(open)은 느리고, 그 셸의 opened 는 응답보다 **먼저** 와서 포커스 칸을 갈아 끼운다(최악 순서).
+ */
+describe('연타 분할 — 앞 분할이 끝나기 전에 다음 키가 와도 누른 만큼 칸이 선다', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+  const harness = (stale: boolean) => {
+    let st: LayoutState = stateOf(1, { focusedId: 'p1' })
+    let seq = 1
+    let pid = 1
+    let toasts = 0
+    const open = async () => {
+      const id = `s${(seq += 1)}`
+      await tick()
+      st = showSessionPanes(st, id) // opened 가 응답보다 먼저
+      await tick()
+      return id
+    }
+    const body = async (snap: LayoutState) => {
+      if (snap.panes.length >= MAX_PANES) return void (toasts += 1)
+      const filler = splitFiller(snap)
+      const id = await open()
+      if (st.panes.length < MAX_PANES) st = splitPanes(st, `p${(pid += 1)}`, id, 'tb', false, filler)
+    }
+    const q = serial()
+    // stale: 예전 doSplit — 키를 누른 순간의 렌더 값으로 판정하고 겹쳐 돈다.
+    const press = () => (stale ? body(st) : q(() => body(st)))
+    return { press, get: () => st, toasts: () => toasts }
+  }
+  const pressFour = async (h: ReturnType<typeof harness>) => {
+    await Promise.all([h.press(), h.press(), h.press(), h.press()])
+    return h.get().panes.map((p) => p.sessionId)
+  }
+  it('고친 길: 4칸·세션 중복 없음·넷째 키는 토스트', async () => {
+    const h = harness(false)
+    const ids = await pressFour(h)
+    expect(ids).toEqual(['s1', 's2', 's3', 's4'])
+    expect(h.toasts()).toBe(1)
+  })
+  it('대조(예전 길): 겹쳐 돌면 보던 세션이 칸에서 밀려나고 토스트 대신 셸이 하나 더 생긴다', async () => {
+    const h = harness(true)
+    const ids = await pressFour(h)
+    expect(ids).not.toContain('s1') // 실측 [s5, s2, s3, s4] — s1 은 탭에만 남는다
+    expect(h.toasts()).toBe(0)
+  })
+  it('serial: 앞 작업이 실패해도 다음 작업은 돈다', async () => {
+    const q = serial()
+    const order: number[] = []
+    const a = q(async () => {
+      await tick()
+      order.push(1)
+      throw new Error('x')
+    })
+    const b = q(async () => void order.push(2))
+    await expect(a).rejects.toThrow('x')
+    await b
+    expect(order).toEqual([1, 2])
   })
 })

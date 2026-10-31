@@ -6,7 +6,7 @@ import { PaneGrid, type RestoreError } from './PaneGrid'
 import { VoicePane } from './VoicePane'
 import { closeVoice, openVoice, pttDown, pttUp, setVoicePrefs, setVoiceSettingsOpener, useVoice, voiceView } from '../store/voice'
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
-import { useLayout, toLayoutNode, allPanesRdp, splitFiller, type PairAxis } from '../store/layout'
+import { useLayout, toLayoutNode, allPanesRdp, splitFiller, serial, MAX_PANES, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
@@ -939,19 +939,29 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // "분할하면 새 셸이 뜬다"가 아니라 "지금 있는 창들이 나란히 보인다"가 기대 동작이다.
     // 배경 세션이 하나도 없을 때만 새 로컬 셸을 만든다(기존 동작은 폴백으로 남는다).
     // axis: 'tb' 가로 분할(상하) / 'lr' 세로 분할(좌우) — 1→2 분할에서만 방향이 반영된다.
+    /**
+     * 🔴 **분할은 한 줄로 선다**(2026-11-01 — 350ms 간격 Ctrl+Shift+- 세 번에 칸이 사라지던 것).
+     * 분할은 `await open()` 을 낀다. 그동안 다음 키가 오면 예전엔 **렌더 클로저의 `layout`**(앞 분할 전
+     * 값)으로 판정했다: filler 가 낡아 opened 가 갈아 끼운 칸을 **엉뚱한 세션으로** 되돌려 한 세션이 두 칸
+     * (= 한 칸이 빔, 앞 분할의 셸은 화면에서 사라짐), 상한도 낡아 넷째 칸 뒤 키에 토스트 대신 셸만 하나 더
+     * 생겼다. 그래서 ① `splitQueue` 로 앞 분할이 끝난 뒤 시작하고 ② 판정은 `layout.get()`(최신)으로 한다.
+     */
+    const splitQueue = useMemo(serial, [])
     const doSplit = useCallback(
-      async (axis: PairAxis) => {
-        if (!layout.canSplit) {
-          showToast(t('pane.limit'))
-          return
-        }
-        const placed = new Set(layout.cells.map((c) => c.sessionId))
-        const background = pickBackgroundSession(list, placed, mru)
-        // 새 셸이면 그 opened 가 응답보다 먼저 와 보던 칸을 갈아 끼울 수 있다 — 그 칸의 세션을 filler 로(layout.splitFiller).
-        const filler = splitFiller({ panes: layout.cells, focusedId: layout.focusedId })
-        layout.split(background ?? (await open()), axis, false, filler)
-      },
-      [layout, list, mru, open, showToast]
+      (axis: PairAxis) =>
+        splitQueue(async () => {
+          const cur = layout.get()
+          if (cur.panes.length >= MAX_PANES) {
+            showToast(t('pane.limit'))
+            return
+          }
+          const placed = new Set(cur.panes.map((c) => c.sessionId))
+          const background = pickBackgroundSession(list, placed, mru)
+          // 새 셸이면 그 opened 가 응답보다 먼저 와 보던 칸을 갈아 끼울 수 있다 — 그 칸의 세션을 filler 로(layout.splitFiller).
+          const filler = splitFiller(cur)
+          layout.split(background ?? (await open()), axis, false, filler)
+        }),
+      [splitQueue, layout, list, mru, open, showToast]
     )
 
     // 드래그로 가장자리에 놓았을 때. 탭·칸 헤더 둘 다 여기로 온다.
@@ -984,36 +994,39 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       [detachedWinId, select, layout, reorder, showToast]
     )
 
+    // doSplit 과 같은 줄에 선다(위 splitQueue 주석) — filler 용 새 셸을 여는 동안 키 분할이 끼어들 수 있다.
     const splitDrop = useCallback(
-      async (sessionId: string, zone: 'left' | 'right' | 'top' | 'bottom') => {
-        if (!layout.canSplit) {
-          showToast(t('pane.limit'))
-          return
-        }
-        const axis: PairAxis = zone === 'left' || zone === 'right' ? 'lr' : 'tb'
-        const before = zone === 'left' || zone === 'top'
-        const placed = new Set(layout.cells.map((c) => c.sessionId))
-        if (!placed.has(sessionId)) {
-          layout.split(sessionId, axis, before)
-          return
-        }
-        /**
-         * 2026-08-22 준영님 제보 21번 — 재현: 세션 1·2 를 열고 2번 탭을 오른쪽에 드롭하면
-         * **왼쪽에 2번이 그대로 있고 오른쪽이 빈다**(1번 탭을 눌러야 그제야 옮겨진다).
-         *
-         * 원인이 이 두 줄이었다. `placed.delete(sessionId)` 는 "이 세션이 비우고 갈 칸은 채울
-         * 곳"이라는 뜻으로 넣은 것인데, 그 바람에 **옮기는 세션 자신이 filler 후보**가 됐다.
-         * mru 의 맨 앞은 방금 만진 그 세션이라 거의 항상 자기가 뽑혔고, 결과는 같은 세션이 두 칸에
-         * 앉는 상태다 — 렌더는 첫 칸에만 붙으므로 새 칸이 통째로 빈다(바로 위 주석이 경고한 그것).
-         *
-         * 후보에서 빼야 할 것은 둘이다: **이미 배치된 세션** + **지금 옮기는 세션**.
-         */
-        const fillerPool = new Set(placed)
-        fillerPool.add(sessionId)
-        const filler = pickBackgroundSession(list, fillerPool, mru) ?? (await open())
-        layout.split(sessionId, axis, before, filler)
-      },
-      [layout, list, mru, open, showToast]
+      (sessionId: string, zone: 'left' | 'right' | 'top' | 'bottom') =>
+        splitQueue(async () => {
+          const cur = layout.get()
+          if (cur.panes.length >= MAX_PANES) {
+            showToast(t('pane.limit'))
+            return
+          }
+          const axis: PairAxis = zone === 'left' || zone === 'right' ? 'lr' : 'tb'
+          const before = zone === 'left' || zone === 'top'
+          const placed = new Set(cur.panes.map((c) => c.sessionId))
+          if (!placed.has(sessionId)) {
+            layout.split(sessionId, axis, before)
+            return
+          }
+          /**
+           * 2026-08-22 준영님 제보 21번 — 재현: 세션 1·2 를 열고 2번 탭을 오른쪽에 드롭하면
+           * **왼쪽에 2번이 그대로 있고 오른쪽이 빈다**(1번 탭을 눌러야 그제야 옮겨진다).
+           *
+           * 원인이 이 두 줄이었다. `placed.delete(sessionId)` 는 "이 세션이 비우고 갈 칸은 채울
+           * 곳"이라는 뜻으로 넣은 것인데, 그 바람에 **옮기는 세션 자신이 filler 후보**가 됐다.
+           * mru 의 맨 앞은 방금 만진 그 세션이라 거의 항상 자기가 뽑혔고, 결과는 같은 세션이 두 칸에
+           * 앉는 상태다 — 렌더는 첫 칸에만 붙으므로 새 칸이 통째로 빈다(바로 위 주석이 경고한 그것).
+           *
+           * 후보에서 빼야 할 것은 둘이다: **이미 배치된 세션** + **지금 옮기는 세션**.
+           */
+          const fillerPool = new Set(placed)
+          fillerPool.add(sessionId)
+          const filler = pickBackgroundSession(list, fillerPool, mru) ?? (await open())
+          layout.split(sessionId, axis, before, filler)
+        }),
+      [splitQueue, layout, list, mru, open, showToast]
     )
 
     // R9a: 세션 종료의 단일 경로. 칸 닫기·탭 ×·다른 탭 모두 닫기가 전부 여기를 지난다.

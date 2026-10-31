@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { LayoutNode } from '../../shared/types'
 
 // F4a 분할 레이아웃 모델. 최대 4패널(2x2). 목업 variant-final-3 의 고정 2x2 그리드를
@@ -193,6 +193,19 @@ export function splitFiller(s: Pick<LayoutState, 'panes' | 'focusedId'>): string
   return (s.panes.find((p) => p.id === s.focusedId) ?? s.panes[0])?.sessionId
 }
 
+/**
+ * 작업을 **하나씩** 돌린다 — 앞 작업이 끝난(실패도 끝) 뒤에 다음이 시작한다. 분할 경합용(2026-11-01).
+ * 분할 하나가 `await open()` 을 끼므로, 겹쳐 돌면 둘째가 첫째 결과를 모른 채 상한·filler 를 판정한다.
+ */
+export function serial(): <T>(task: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve()
+  return (task) => {
+    const run = tail.then(task, task)
+    tail = run.catch(() => undefined)
+    return run
+  }
+}
+
 export function useLayout(initialSessionId: string | null) {
   const [state, setState] = useState<LayoutState>(() => ({
     panes: initialSessionId ? [{ id: nextPaneId(), sessionId: initialSessionId }] : [],
@@ -202,6 +215,23 @@ export function useLayout(initialSessionId: string | null) {
     maximizedId: null,
     pairAxis: 'lr'
   }))
+
+  /**
+   * **최신 상태를 렌더 없이 읽는 자리**(분할 경합, 2026-11-01). 분할은 `await open()` 을 끼고 돌아서,
+   * 그 사이 다음 키가 오면 MainArea 의 `layout` 클로저는 **앞 분할이 반영되기 전** 값이다 — 상한 판정·
+   * filler·배치된 세션 목록이 전부 낡는다(→ 같은 세션 두 칸 · 상한 토스트 누락). 그래서 모든 갱신을
+   * 이 ref 에 먼저 적용하고(update) 호출부는 get() 으로 읽는다. setState 업데이터는 React 가 나중에
+   * 돌릴 수 있어 그 안에서 읽는 값은 믿을 수 없다(아래 split 주석). **setState 를 직접 부르지 마라** —
+   * ref 와 갈라진다.
+   */
+  const ref = useRef(state)
+  const update = useCallback((f: (s: LayoutState) => LayoutState) => {
+    const next = f(ref.current)
+    if (next === ref.current) return
+    ref.current = next
+    setState(next)
+  }, [])
+  const get = useCallback(() => ref.current, [])
 
   // 분할: 지정 세션을 새 패널에 올린다. 상한 초과면 조용히 무시한다(호출부가 canSplit 으로 먼저 막고
   // 토스트를 띄운다). 성공 여부를 반환하지 않는 이유: setState 업데이터는 React 가 동기 호출한다는
@@ -218,24 +248,24 @@ export function useLayout(initialSessionId: string | null) {
       // (한 세션은 한 칸에만 그려진다 — 같은 세션을 두 칸에 두면 나중 칸이 통째로 빈다, 실제 증상).
       filler?: string
     ): void => {
-      setState((s) => (s.panes.length >= MAX_PANES ? s : splitPanes(s, nextPaneId(), newSessionId, axis, before, filler)))
+      update((s) => (s.panes.length >= MAX_PANES ? s : splitPanes(s, nextPaneId(), newSessionId, axis, before, filler)))
     },
     []
   )
 
   const focus = useCallback((paneId: string) => {
-    setState((s) => (s.focusedId === paneId ? s : { ...s, focusedId: paneId }))
+    update((s) => (s.focusedId === paneId ? s : { ...s, focusedId: paneId }))
   }, [])
 
   // 세션 활성화(탭·트리 클릭): 이미 어떤 패널이 표시 중이면 그 패널을 포커스,
   // 아니면 포커스 패널의 sessionId 를 교체(display 전환 — xterm 재마운트 없음). 패널이 없으면 첫 패널 생성.
   const showSession = useCallback((sessionId: string) => {
-    setState((s) => showSessionPanes(s, sessionId))
+    update((s) => showSessionPanes(s, sessionId))
   }, [])
 
   // F6 부분 복원 재시도: 특정 패널의 sessionId 를 교체(오류 placeholder → 재접속 성공 세션).
   const replaceSession = useCallback((fromSessionId: string, toSessionId: string) => {
-    setState((s) => {
+    update((s) => {
       const idx = s.panes.findIndex((p) => p.sessionId === fromSessionId)
       if (idx < 0) return s
       const panes = s.panes.map((p) => (p.sessionId === fromSessionId ? { ...p, sessionId: toSessionId } : p))
@@ -245,7 +275,7 @@ export function useLayout(initialSessionId: string | null) {
 
   // 세션 종료: 그 세션을 표시 중인 패널을 제거(탭 닫기 경로). 없으면 변화 없음.
   const removeSession = useCallback((sessionId: string) => {
-    setState((s) => {
+    update((s) => {
       const idx = s.panes.findIndex((p) => p.sessionId === sessionId)
       if (idx < 0) return s
       const panes = s.panes.filter((p) => p.sessionId !== sessionId)
@@ -261,7 +291,7 @@ export function useLayout(initialSessionId: string | null) {
   // 닫힌 패널의 sessionId 를 반환(호출부가 세션 종료 결정).
   const closePane = useCallback((paneId: string): string | null => {
     let closedSession: string | null = null
-    setState((s) => {
+    update((s) => {
       const idx = s.panes.findIndex((p) => p.id === paneId)
       if (idx < 0) return s
       closedSession = s.panes[idx].sessionId
@@ -274,13 +304,13 @@ export function useLayout(initialSessionId: string | null) {
     return closedSession
   }, [])
 
-  const setColRatio = useCallback((r: number) => setState((s) => ({ ...s, colRatio: clampRatio(r) })), [])
-  const setRowRatio = useCallback((r: number) => setState((s) => ({ ...s, rowRatio: clampRatio(r) })), [])
+  const setColRatio = useCallback((r: number) => update((s) => ({ ...s, colRatio: clampRatio(r) })), [])
+  const setRowRatio = useCallback((r: number) => update((s) => ({ ...s, rowRatio: clampRatio(r) })), [])
 
   // F6 복원: 저장된 패널 배치(sessionId 순서 + 비율)를 그대로 재구성한다. 첫 sessionId 패널에 포커스.
   // 부트에서 1회만 호출된다(권위 복원).
   const restore = useCallback((r: RestoredLayout) => {
-    setState((s) => {
+    update((s) => {
       const ids = r.sessionIds.slice(0, MAX_PANES)
       if (ids.length === 0) return s // 배치할 세션 없음 — 기존 유지.
       const panes = ids.map((sid) => ({ id: nextPaneId(), sessionId: sid }))
@@ -300,7 +330,7 @@ export function useLayout(initialSessionId: string | null) {
   // [최대화] 버튼(2026-08-17 제보 ⑦)이 id 를 준다 — 클릭이 포커스도 옮기지만 그 순서에
   // 기대지 않는다. 이미 최대화 중이면 무엇을 눌러도 원래대로 돌아온다(토글 하나로 족하다).
   const toggleMaximize = useCallback((id?: string) => {
-    setState((s) => {
+    update((s) => {
       if (s.maximizedId) return { ...s, maximizedId: null }
       const target = id ?? s.focusedId
       if (!target) return s
@@ -310,7 +340,7 @@ export function useLayout(initialSessionId: string | null) {
 
   // 포커스 이동(Alt+Arrow): 방향에 따라 인접 셀 패널로.
   const moveFocus = useCallback((dir: 'left' | 'right' | 'up' | 'down') => {
-    setState((s) => {
+    update((s) => {
       if (s.panes.length < 2 || !s.focusedId) return s
       const cells = cellsFor(s.panes, s.pairAxis)
       const cur = cells.find((c) => c.id === s.focusedId)
@@ -340,6 +370,7 @@ export function useLayout(initialSessionId: string | null) {
     cells,
     usage,
     canSplit: state.panes.length < MAX_PANES,
+    get,
     split,
     focus,
     showSession,
