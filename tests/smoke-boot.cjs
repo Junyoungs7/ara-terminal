@@ -955,7 +955,7 @@ const checks = []
     // 라이선스 고지는 R5 에서 [정보] 섹션으로 옮겼다 — 세어 본 뒤 다시 [폰트] 로 돌아온다.
     document.querySelector('.drawer.open .set-nav span[data-section="about"]')?.click()
     await wait(200)
-    const licenseRows = document.querySelectorAll('.drawer.open .license-list .license-row').length
+    const licenseRows = (document.querySelector('.drawer.open .license-list')?.querySelectorAll('.license-row').length ?? 0) // 첫 목록=OFL 폰트. 둘째는 M0 코드 고지(CODE_NOTICES)
     const aboutVersion = /v\\d/.test(document.querySelector('.drawer.open .set-pane .sr-ctl .v')?.textContent || '')
     document.querySelector('.drawer.open .set-nav span[data-section="font"]')?.click()
     await wait(200)
@@ -998,9 +998,9 @@ const checks = []
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
     // 정의부는 SettingsDrawer.tsx SETTINGS_SECTIONS. [명령 기록]이 빠져 있던 것도 함께 맞췄다(2.0 3단계 [기능] 추가).
-    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션. 잠금 L1: [보안]이 [기능] 다음에 들어와 12섹션.
-    '좌측 nav 12섹션(일반/모양/터미널/폰트/기능/보안/로그/AI/MCP/단축키/명령 기록/정보)',
-    f5.navSections.join(',') === 'general,look,terminal,font,features,security,log,ai,mcp,keys,history,about'
+    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션. 잠금 L1: [보안]이 [기능] 다음에 들어와 12섹션. 2.1: [음성]이 [AI] 다음에 들어와 13섹션.
+    '좌측 nav 13섹션(일반/모양/터미널/폰트/기능/보안/로그/AI/음성/MCP/단축키/명령 기록/정보)',
+    f5.navSections.join(',') === 'general,look,terminal,font,features,security,log,ai,voice,mcp,keys,history,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
@@ -2225,7 +2225,7 @@ const checks = []
   checks.push(['R4.2: 로컬 세션 cwd 표시(OSC7 경로 재사용)', r4b.localBar.cwd === '/srv/서비스/로그'])
   checks.push(['R4.2: SSH 세션은 user@host:port + 연결 dot', /^deploy@10\.9\.9\.9:22/.test(r4b.sshBar.val) && r4b.sshBar.dot.includes('connected')])
   checks.push(['R4.2: 세션 전환 시 상태바 갱신', r4b.localBar.val !== r4b.sshBar.val])
-  checks.push(['R4.2: 우측에 세션 수·인코딩·버전', r4b.sshBar.segs.length === 3 && r4b.sshBar.segs.some((s) => s.includes('UTF-8')) && r4b.sshBar.segs.some((s) => /v\d/.test(s))])
+  checks.push(['R4.2: 우측에 자원·세션 수·인코딩·버전', r4b.sshBar.segs.length === 4 && r4b.sshBar.segs.some((s) => s.includes('UTF-8')) && r4b.sshBar.segs.some((s) => /v\d/.test(s))])
   // 1.0.10: 창 제목 = `${t('app.name')} — 세션`(Shell.tsx) 이고 app.name 이 ARA 가 됐다(5e3c3c6).
   checks.push(['R4.4: 창 타이틀이 활성 세션 반영', /^ARA — .+/.test(r4b.sshTitle) && r4b.localTitle !== r4b.sshTitle])
   checks.push(['R4.4: OS 창 제목이 문서 제목을 따라간다(작업표시줄·Alt+Tab)', winTitle === r4b.sshTitle])
