@@ -637,6 +637,7 @@ export type InvokeContract = {
 /**
  * 업데이트 상태 (#98).
  *  · off — 개발 모드이거나 배포 주소가 없다(화면에서 이 줄을 숨긴다)
+ *  · manual — 맥(ad-hoc 서명, 인증서 없음)은 자동 업데이트를 안 한다. 설치본을 직접 받아 설치
  *  · idle — 확인 전이거나 최신
  *  · available — 새 버전이 있다. **받는 것은 사람이 누른다**(AUDIT-R2 ③, 2026-08-28 준영님 결정 —
  *    평문 HTTP 피드 + 무서명 빌드라 electron-updater 가 서명 검증을 건너뛴다. 무인 설치 경로를 없앤다)
@@ -644,7 +645,7 @@ export type InvokeContract = {
  *  · error — 사유를 그대로 보여 준다(사내망 밖이면 흔히 여기로 온다)
  */
 export type UpdateState = {
-  status: 'off' | 'idle' | 'available' | 'checking' | 'downloading' | 'ready' | 'error'
+  status: 'off' | 'manual' | 'idle' | 'available' | 'checking' | 'downloading' | 'ready' | 'error'
   version?: string
   percent?: number
   message?: string

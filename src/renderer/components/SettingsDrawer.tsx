@@ -189,6 +189,17 @@ function UpdateRow() {
   if (st.status === 'off') return null
   // `available` 은 **busy 가 아니다** — 새 버전을 찾아 두고 안 받은 상태에서도 다시 확인할 수 있어야
   // 한다. 여기에 넣으면 버튼이 영영 잠긴다(AUDIT-R2 ③ — check() 가드와 같은 이유).
+  // 맥: 확인·받기 버튼 없이 안내 문장만.
+  if (st.status === 'manual')
+    return (
+      <Row label={t('settings.update')}>
+        <div className="set-dir">
+          <span className="set-dir-path is-msg" data-update-status="manual">
+            {t('settings.update.manual')}
+          </span>
+        </div>
+      </Row>
+    )
   const busy = st.status === 'checking' || st.status === 'downloading'
   const detail =
     st.status === 'available'

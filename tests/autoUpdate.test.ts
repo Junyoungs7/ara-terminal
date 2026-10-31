@@ -265,3 +265,21 @@ describe('사용자 조작', () => {
     expect(updater.quitAndInstall).toHaveBeenCalledWith(true, true)
   })
 })
+
+describe('맥 수동 설치', () => {
+  it('darwin 이면 패키지본이어도 조용히 꺼지고 manual, 피드·확인·받기 모두 안 건드린다', () => {
+    const u = fakeUpdater()
+    const emit = vi.fn()
+    const svc = createAutoUpdate({ updater: u, packaged: true, platform: 'darwin', feedUrl: 'http://x', emit, onError: vi.fn() })
+    svc.check()
+    svc.download()
+    expect(svc.state().status).toBe('manual')
+    expect(u.feed).toBeNull()
+    expect(u.downloadUpdate).not.toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
+  })
+  it('win32 는 그대로 idle', () => {
+    const svc = createAutoUpdate({ updater: fakeUpdater(), packaged: true, platform: 'win32', emit: vi.fn(), onError: vi.fn() })
+    expect(svc.state().status).toBe('idle')
+  })
+})

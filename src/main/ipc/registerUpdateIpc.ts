@@ -38,6 +38,7 @@ export function registerUpdateIpc(getWebContents: () => WebContents | null): Aut
   })
 
   // 타이머는 **반드시 unref** 한다 — 안 그러면 창을 다 닫고도 이벤트 루프가 살아 앱이 안 죽는다(#64).
+  // 맥(수동 설치)은 check() 가 no-op 이라 타이머가 돌아도 무해하다.
   setTimeout(() => svc.check(), FIRST_CHECK_MS).unref()
   setInterval(() => svc.check(), EVERY_MS).unref()
 

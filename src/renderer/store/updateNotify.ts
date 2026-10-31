@@ -141,6 +141,8 @@ export function updateSeg(st: UpdateState | null, version: string): UpdateSeg {
   const plain: UpdateSeg = { text: `v${version}`, title: t('statusbar.update.check.title'), action: 'check', tone: null }
   // 상태를 아직 모른다(부팅 직후) — 그래도 누르면 확인한다.
   if (!st) return plain
+  // 맥(수동 설치) — 누를 것이 없다. 확인해 봐야 아무 일도 안 일어난다.
+  if (st.status === 'manual') return { text: `v${version}`, title: t('settings.update.manual'), action: null, tone: null }
   // 받는 중에는 버전 없이도 할 말이 있다(진행률). 누를 것은 없다 — 취소는 만들지 않았다.
   if (st.status === 'downloading') {
     const p = String(st.percent ?? 0)

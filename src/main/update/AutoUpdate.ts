@@ -32,10 +32,15 @@ export type UpdaterLike = {
   on(event: string, listener: (...args: unknown[]) => void): unknown
 }
 
+/** 맥은 ad-hoc 서명(인증서 없음)이라 latest-mac.yml 자동 갱신이 안 된다 — 수동 설치(준영님 결정). */
+export const autoUpdateSupported = (platform: string): boolean => platform !== 'darwin'
+
 export type AutoUpdateDeps = {
   updater: UpdaterLike
   /** 패키지본인가(app.isPackaged). false 면 상태는 영영 'off'. */
   packaged: boolean
+  /** process.platform. 생략하면 현재 플랫폼. 'darwin' 이면 조용히 꺼지고 상태는 'manual'. */
+  platform?: string
   /** 환경변수 override. 비어 있으면 패키지에 박힌 주소를 쓴다. */
   feedUrl?: string
   emit(state: UpdateState): void
@@ -70,14 +75,15 @@ const reason = (err: unknown): string => {
 
 export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
   const { updater, packaged, feedUrl, emit, onError } = deps
-  let state: UpdateState = { status: packaged ? 'idle' : 'off' }
+  const supported = autoUpdateSupported(deps.platform ?? process.platform)
+  let state: UpdateState = { status: !packaged ? 'off' : supported ? 'idle' : 'manual' }
 
   const set = (next: UpdateState): void => {
     state = next
     emit(next)
   }
 
-  if (!packaged) return { state: () => state, check: () => {}, download: () => {}, install: () => {} }
+  if (!packaged || !supported) return { state: () => state, check: () => {}, download: () => {}, install: () => {} }
 
   // 받는 것은 사람이 누른다(설계 결정 0) — 적용 시점은 그대로 종료할 때다(설계 결정 1).
   updater.autoDownload = false

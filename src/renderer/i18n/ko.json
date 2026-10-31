@@ -960,6 +960,7 @@
   "settings.update.downloading": "{v} 내려받는 중 {p}%",
   "settings.update.ready": "{v} 준비됨 — 다시 켜면 적용됩니다",
   "settings.update.error": "확인하지 못했습니다",
+  "settings.update.manual": "이 운영체제는 자동 업데이트를 하지 않습니다 — 새 설치본을 받아 직접 설치하세요",
   "settings.update.check": "업데이트 확인",
   "settings.update.download": "받기",
   "settings.update.install": "다시 시작하여 설치",
