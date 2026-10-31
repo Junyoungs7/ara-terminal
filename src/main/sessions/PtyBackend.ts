@@ -190,7 +190,9 @@ export class PtyBackend implements SessionBackend {
    */
   constructor(spec: SessionSpec, paneId?: string) {
     const { file, args: baseArgs, kind } = resolveShell(spec)
-    const base = { ...(process.env as Record<string, string>), ...(paneId ? { ARA_PANE: paneId } : {}) }
+    // M3: 에이전트 탭은 설정의 env·첫 지시를 싣는다(spec.env). 이름이 env 모양인 것만.
+    const extra = Object.fromEntries(Object.entries(spec.env ?? {}).filter(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string'))
+    const base = { ...(process.env as Record<string, string>), ...extra, ...(paneId ? { ARA_PANE: paneId } : {}) }
     const { args, env } = withShellIntegration(kind, baseArgs, base)
     const win = process.platform === 'win32'
     // Windows conpty 종료 경로 안정화: useConptyDll=true 는 kill() 시 node-pty 가

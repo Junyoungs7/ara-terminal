@@ -347,7 +347,7 @@ export function useSessions(winId?: string) {
     const all = await window.ev?.session.list().catch(() => null)
     if (!all) return
     const mine = all
-      .filter((m) => (m.winId ?? undefined) === winId)
+      .filter((m) => (m.winId ?? undefined) === winId && m.space !== 'ai')
       .map<Session>((m) => ({
         id: m.id,
         title: m.title,
@@ -379,7 +379,8 @@ export function useSessions(winId?: string) {
    */
   useEffect(() => {
     const off = window.ev?.session.onOpened?.((m) => {
-      if ((m.winId ?? undefined) !== winId) return
+      // M3: AI 작업 공간 에이전트 탭은 그쪽 탭 줄이 그린다(Session.space).
+      if ((m.winId ?? undefined) !== winId || m.space === 'ai') return
       adopt(m.id, m.title, m.serverKey, m.type, m.profileId ?? undefined, m.aiCli)
     })
     return () => off?.()

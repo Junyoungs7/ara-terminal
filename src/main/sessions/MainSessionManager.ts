@@ -101,7 +101,9 @@ export class MainSessionManager implements ISessionManager {
       ...(spec.winId ? { winId: spec.winId } : {}),
       // 1.0.8 ②: 이 탭에서 무엇이 돌았나. 렌더러가 보낸 값이라 표에 있는 이름만 받는다
       // (그대로 스냅샷에 실려 다음 부팅의 [이어서 시작] 카드가 된다).
-      ...(aiCliOf(spec.aiCli) ? { aiCli: spec.aiCli } : {})
+      ...(aiCliOf(spec.aiCli) ? { aiCli: spec.aiCli } : {}),
+      // M3: AI 작업 공간 에이전트 탭 — 터미널 공간이 건너뛰는 표시.
+      ...(spec.space === 'ai' ? { space: 'ai' as const } : {})
     }
     this.register(backend, meta)
     return meta.id

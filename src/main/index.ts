@@ -42,6 +42,7 @@ import { registerReportIpc } from './ipc/registerReportIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerResourcesFeature } from './resources/feature'
 import { registerWorktreesFeature } from './worktrees/feature'
+import { registerAgentsFeature } from './agents/feature'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
@@ -542,6 +543,8 @@ app.whenReady().then(async () => {
   registerResourcesFeature(sessions)
   // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
   registerWorktreesFeature(userData)
+  // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행. 옛 aiCliFlags 를 처음 한 번 옮긴다.
+  registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags })
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(

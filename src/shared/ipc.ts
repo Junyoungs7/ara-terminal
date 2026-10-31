@@ -51,6 +51,9 @@ import type {
   Worktree,
   WorktreeStats
 } from './worktrees'
+import type { AgentId, AgentSettings, DetectedAgent } from './agents'
+/** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
+export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -551,6 +554,13 @@ export type InvokeContract = {
   'worktrees:cancelCreate': { req: { creationId: string }; res: { ok: boolean } }
   'worktrees:remove': { req: { repoId: string; path: string; force?: boolean }; res: RemoveWorktreeResult }
   'worktrees:stats': { req: { repoId: string; path: string }; res: WorktreeStats }
+  // M3 에이전트(main/agents/feature.ts). 감지는 force 면 로그인 셸 PATH 도 다시 읽는다.
+  'agents:detect': { req: { force?: boolean }; res: DetectedAgent[] }
+  'agents:getSettings': { req: void; res: AgentSettings }
+  // 저장값은 main 이 agentSettingsOf 로 다시 거른다(렌더러 값 불신). 거른 값을 돌려준다.
+  'agents:setSettings': { req: { settings: AgentSettings }; res: AgentSettings }
+  // 명령줄·env 는 main 이 저장된 설정으로 만든다 — 렌더러는 에이전트·폴더·첫 지시만.
+  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string }; res: AgentLaunchResult }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1177,6 +1187,13 @@ export type EvApi = {
     stats(repoId: string, path: string): Promise<WorktreeStats>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
+  }
+  // M3 에이전트(preload/features/agents.ts).
+  agents: {
+    detect(force?: boolean): Promise<DetectedAgent[]>
+    getSettings(): Promise<AgentSettings>
+    setSettings(settings: AgentSettings): Promise<AgentSettings>
+    launch(agent: AgentId, cwd: string, prompt?: string): Promise<AgentLaunchResult>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

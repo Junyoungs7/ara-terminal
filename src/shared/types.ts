@@ -154,6 +154,11 @@ export type Session = {
    */
   cols?: number
   rows?: number
+  /**
+   * M3: AI 작업 공간의 에이전트 탭(main/agents/feature.ts 가 만든다). 터미널 공간의 탭·칸·스냅샷 저장은
+   * 이 세션을 건너뛴다 — 그리는 곳은 AI 작업 공간의 탭 줄 하나다. 재시작 복원은 M4(로컬 데몬)라 저장하지 않는다.
+   */
+  space?: 'ai'
 }
 
 export type TabGroup = {

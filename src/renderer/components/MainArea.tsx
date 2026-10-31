@@ -720,7 +720,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       if (!restoreDone) return // 위 restoreDone 주석 — 이 줄이 없으면 F6 이 깨진다
       const off = window.ev?.session.onOpened?.((m) => {
         // 남의 창 세션은 건드리지 않는다(store/sessions.ts 의 편입 규칙과 **같은 기준**).
-        if ((m.winId ?? undefined) !== detachedWinId) return
+        if ((m.winId ?? undefined) !== detachedWinId || m.space === 'ai') return
         // 복원이 만든 세션은 **언제 와도** 무시한다 — 칸은 layout.restore 가 정했다(위 주석).
         if (restoredIds.current.has(m.id)) return
         showPane(m.id)
@@ -778,7 +778,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       // 본창이 가진 나머지가 스냅샷에서 사라진다(창별 저장은 R2 workspace v6).
       if (detachedWinId) return
       if (!uiRef.current) return // 아직 로드 전 — 저장하지 않음(빈 스냅샷 덮어쓰기 방지).
-      const mainSessions = await window.ev.session.list()
+      // M3: AI 작업 공간 에이전트 탭은 저장하지 않는다(재시작 복원은 M4 로컬 데몬 — Session.space 주석).
+      const mainSessions = (await window.ev.session.list()).filter((s) => s.space !== 'ai')
       // 오류 패널 자리는 저장하지 않는다(실 세션 아님). F25: rdp 세션도 제외한다 — main 에 세션이
       // 없어 복원 대상이 아니고(비밀번호를 저장하지 않으므로 자동 재접속도 불가), 남겨 두면 복원 때
       // 존재하지 않는 세션을 가리키는 빈 칸이 생긴다.

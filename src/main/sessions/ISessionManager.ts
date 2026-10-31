@@ -23,7 +23,11 @@ export type SessionSpec = Pick<
   // 프롬프트가 접힌다). 새 세션은 안 준다: 그때는 렌더러가 sizeOf 로 지금 칸을 잰다.
   | 'cols'
   | 'rows'
->
+  | 'space'
+> & {
+  /** M3 에이전트 탭 셸에 덧붙일 env(에이전트 설정·첫 지시). 메타에 안 실린다 — 스냅샷·목록에 지시 글이 남지 않게. */
+  env?: Record<string, string>
+}
 
 // main→renderer 스트림 싱크. IPC 레이어가 주입한다(세션 매니저는 IPC를 모른다).
 export interface SessionSink {
