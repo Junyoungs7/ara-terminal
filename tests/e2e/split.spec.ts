@@ -43,6 +43,10 @@ test('SPLIT-4 4분할이 상한이고 그 이상은 안내가 뜬다', async ({ 
   for (let i = 0; i < 3; i++) {
     await page.keyboard.press('Control+Shift+\\')
     await expect(page.locator('.pane-grid .pane')).toHaveCount(i + 2)
+    // 칸 수가 늘어도 새 칸의 터미널이 붙어 포커스를 가져가기 전에 누르면 키가 사라진다(Electron 40 에서 드러남 —
+    // 1.5초씩 쉬면 5/5, 바로 누르면 둘째에서 멈춤). 새 칸마다 xterm 이 붙고 포커스가 터미널에 앉을 때까지 기다린다.
+    await expect(page.locator('.pane-grid .pane .xterm')).toHaveCount(i + 2)
+    await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea'))).toBe(true)
   }
   await page.keyboard.press('Control+Shift+\\')
   await expect(page.locator('.pane-toast')).toHaveText('최대 4분할까지만 가능합니다')

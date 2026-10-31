@@ -69,7 +69,9 @@ export async function launchAra(userData: string, keepIntro = false): Promise<Ar
     // (isFakeAi()). 항상 켜 둔다 — AI 를 건드리지 않는 나머지 테스트에는 영향이 없고, 아라
     // 시나리오가 실키·네트워크 없이 돈다(DLP).
     // ARA_E2E: 창을 showInactive() 로 띄워 사용자 화면에서 포커스를 뺏지 않는다(main/index.ts).
-    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_EXIT_TRACE: trace }
+    // ARA_NO_WEBGL: 시험은 터미널 글자를 DOM(.xterm-rows)에서 읽는다. Electron 40 부터 시험 창에서도 진짜 GPU(ANGLE)가
+    // 잡혀 WebGL 렌더러가 실리고 DOM 에 글자가 없어 링크·출력 시험 9개가 한꺼번에 깨졌다(ME-1 E3). 실앱·성능 측정은 WebGL 그대로.
+    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_EXIT_TRACE: trace, ARA_NO_WEBGL: '1' }
   })
   const page = await app.firstWindow()
   await page.waitForSelector('.app', { timeout: 30_000 })
