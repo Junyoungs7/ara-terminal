@@ -78,6 +78,13 @@ export class WorkspaceStore {
     this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
   }
 
+  // ME-1 E4: 대화상자 마지막 폴더. 잃어도 다음 대화상자가 다운로드에서 열릴 뿐이라 디바운스로 충분하다.
+  setLastDialogDir(dir: string): void {
+    this.snapshot.ui.lastDialogDir = dir
+    if (this.timer) return
+    this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
+  }
+
   // 즉시 디스크 기록(before-quit 훅에서 동기 호출).
   flush(): void {
     if (this.timer) {

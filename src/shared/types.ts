@@ -488,6 +488,9 @@ export type UiState = {
   appLogDir?: string
   // R15: [파일] 탭이 받는 폴더(빈 값 = OS 다운로드). 🔴 선택 필드라 SCHEMA_VERSION 은 그대로다(termCompletion 주석).
   downloadDir?: string
+  // ME-1 E4: 저장·열기 대화상자가 마지막에 고른 폴더(Electron 43 은 기억해 주지 않는다 — main/util/dialogDir.ts).
+  // 선택 필드라 SCHEMA_VERSION 그대로.
+  lastDialogDir?: string
   // W5 [AI]: 아라가 쓸 프로바이더 + 프로바이더별 모델. 미지정 필드는 aiProviderOf/aiModelsOf 가
   // 기본값으로 채운다. 키는 여기 없다(vault 전용, 프로바이더별로 분리 저장).
   aiProvider?: AiProvider

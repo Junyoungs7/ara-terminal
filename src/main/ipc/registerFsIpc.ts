@@ -5,15 +5,21 @@ import { dialog, app, shell } from 'electron'
 import { handle } from './handle'
 import { list, renameEntry, makeDir, makeFile, makeDirP, moveEntries, drives, trash, copyEntries, freeName, downloadTarget } from '../fs/LocalFs'
 import { saveBytes } from '../fs/saveBytes'
+import { dialogDefaultPath, type LastDir } from '../util/dialogDir'
 
 const badPath = { ok: false as const, message: '잘못된 경로입니다.' }
 
 // downloadDirPref: 설정 [다운로드 폴더](ui.downloadDir) — 저장소를 여기로 끌어오지 않고 읽는 함수만 받는다.
-export function registerFsIpc(downloadDirPref: () => string | undefined = () => undefined): void {
+export function registerFsIpc(
+  downloadDirPref: () => string | undefined = () => undefined,
+  lastDir: LastDir = { get: () => undefined, set: () => {} }
+): void {
   // 설정의 기록 폴더 고르기. **경로를 렌더러가 지어낼 수 없다** — 사용자가 고른 것만 돌려준다.
   handle('fs:pickDir', async () => {
-    const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    return { dir: res.canceled ? null : (res.filePaths[0] ?? null) }
+    const res = await dialog.showOpenDialog({ defaultPath: dialogDefaultPath(lastDir.get()), properties: ['openDirectory', 'createDirectory'] })
+    const dir = res.canceled ? null : (res.filePaths[0] ?? null)
+    if (dir) lastDir.set(dir)
+    return { dir }
   })
 
   handle('fs:list', ({ path }) =>

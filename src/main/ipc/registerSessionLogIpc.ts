@@ -8,6 +8,7 @@ import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { SessionLogService } from '../log/SessionLog'
 import { bufferToText, readFileWindow } from '../log/readSessionLog'
 import { friendly } from '../util/fsError'
+import { dialogDefaultPath, pickedDir, type LastDir } from '../util/dialogDir'
 
 // 저장 파일 기본 이름: 세션 이름 그대로 쓰면 경로 구분자가 섞일 수 있어 글자·숫자만 남긴다.
 function defaultName(title: string): string {
@@ -17,7 +18,9 @@ function defaultName(title: string): string {
 
 export function registerSessionLogIpc(
   sessions: MainSessionManager,
-  getLog: () => SessionLogService | null
+  getLog: () => SessionLogService | null,
+  // ME-1 E4: 대화상자 마지막 폴더(Electron 43 은 기억하지 않는다).
+  lastDir: LastDir = { get: () => undefined, set: () => {} }
 ): void {
   handle('sessionlog:read', ({ sessionId, before }) => {
     if (typeof sessionId !== 'string' || !sessionId) return { ok: false as const, message: '세션이 없습니다.' }
@@ -43,8 +46,10 @@ export function registerSessionLogIpc(
   handle('sessionlog:save', async ({ sessionId }) => {
     if (typeof sessionId !== 'string' || !sessionId) return { ok: false as const, message: '세션이 없습니다.' }
     const title = sessions.snapshot().find((s) => s.id === sessionId)?.title ?? 'session'
-    const res = await dialog.showSaveDialog({ defaultPath: defaultName(title) })
+    const res = await dialog.showSaveDialog({ defaultPath: dialogDefaultPath(lastDir.get(), defaultName(title)) })
     if (res.canceled || !res.filePath) return { ok: false as const, message: '취소했습니다.', canceled: true }
+    const dir = pickedDir(res.filePath, false)
+    if (dir) lastDir.set(dir)
     try {
       const path = getLog()?.pathOf(sessionId)
       // 창이 아니라 **전체**를 저장한다. 파일이 있으면 통째로 복사(20MB 상한은 기록 쪽이 이미 건다).

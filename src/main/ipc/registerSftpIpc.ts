@@ -6,6 +6,7 @@ import { handle } from './handle'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { SftpService } from '../sftp/SftpService'
 import { pushSend } from '../util/windowPush'
+import { dialogDefaultPath, pickedDir, type LastDir } from '../util/dialogDir'
 
 // F23: 반환값(service)을 MCP sftp_* 툴이 같은 인스턴스로 재사용한다(세 번째 호출자 — F16 패턴).
 export function registerSftpIpc(
@@ -13,7 +14,9 @@ export function registerSftpIpc(
   getWebContents: () => WebContents | null,
   // 2026-10-28: 본창이 아닌 창(탐색기 독립 창)도 전송을 건다 — 진행률은 그 창에도 가야 한다.
   // 채널이 전송 id 별이라 안 건 창은 듣지 않는다(telemetry 의 alsoTo 와 같은 방식).
-  alsoTo: () => WebContents[] = () => []
+  alsoTo: () => WebContents[] = () => [],
+  // ME-1 E4: 대화상자 마지막 폴더(Electron 43 은 기억하지 않는다).
+  lastDir: LastDir = { get: () => undefined, set: () => {} }
 ): SftpService {
   const service = new SftpService(
     (sessionId) => sessions.sshClient(sessionId),
@@ -55,20 +58,30 @@ export function registerSftpIpc(
 
   // 다운로드 저장 위치 선택(save dialog). 취소 시 null.
   handle('sftp:pickSavePath', async ({ defaultName }) => {
-    const res = await dialog.showSaveDialog({ defaultPath: basename(defaultName) })
-    return { path: res.canceled || !res.filePath ? null : res.filePath }
+    const res = await dialog.showSaveDialog({ defaultPath: dialogDefaultPath(lastDir.get(), basename(defaultName)) })
+    const path = res.canceled || !res.filePath ? null : res.filePath
+    const dir = pickedDir(path ?? undefined, false)
+    if (dir) lastDir.set(dir)
+    return { path }
   })
   // 다중 다운로드 저장 폴더 선택(파일마다 대화상자를 띄우지 않는다). 취소 시 null.
   handle('sftp:pickSaveDir', async () => {
-    const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    return { path: res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0] }
+    const res = await dialog.showOpenDialog({ defaultPath: dialogDefaultPath(lastDir.get()), properties: ['openDirectory', 'createDirectory'] })
+    const path = res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+    if (path) lastDir.set(path)
+    return { path }
   })
   // 업로드 파일 선택(드래그 불가 환경 폴백). 취소 시 빈 배열. dir: 폴더 고르기(신고 #18/#19).
   handle('sftp:pickUploadPaths', async (req) => {
     const res = await dialog.showOpenDialog({
+      defaultPath: dialogDefaultPath(lastDir.get()),
       properties: [req?.dir ? 'openDirectory' : 'openFile', 'multiSelections']
     })
-    return { paths: res.canceled ? [] : res.filePaths }
+    const paths = res.canceled ? [] : res.filePaths
+    // 여러 개를 골랐어도 한 폴더 안이다 — 폴더를 골랐으면 그 부모가 "고르던 자리"다.
+    const dir = pickedDir(paths[0], false)
+    if (dir) lastDir.set(dir)
+    return { paths }
   })
 
   return service

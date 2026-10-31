@@ -514,8 +514,10 @@ app.whenReady().then(async () => {
     const wc = explorerWindowContents()
     return wc ? [wc] : []
   }
-  const sftpService = registerSftpIpc(sessions, getWebContents, explorerToo)
-  registerFsIpc(() => store.get().ui.downloadDir)
+  // ME-1 E4: 저장·열기 대화상자가 마지막 폴더에서 열리게(Electron 43 은 다운로드 폴더에서 연다).
+  const lastDialogDir = { get: () => store.get().ui.lastDialogDir, set: (dir: string) => store.setLastDialogDir(dir) }
+  const sftpService = registerSftpIpc(sessions, getWebContents, explorerToo, lastDialogDir)
+  registerFsIpc(() => store.get().ui.downloadDir, lastDialogDir)
   registerLocalCliIpc()
   // #98 자동 업데이트 — 본창으로만 알린다(떼어낸 창에 같은 배너를 두 번 띄울 이유가 없다).
   registerUpdateIpc(mainWc)
@@ -547,7 +549,7 @@ app.whenReady().then(async () => {
   sessionLog.sweep()
   sessions.setLog(sessionLog)
   // 로그 패널: 기록 파일이 있으면 그걸, 없으면 링버퍼를 읽어 준다(늦은 바인딩 — 로거가 방금 생겼다).
-  registerSessionLogIpc(sessions, () => sessionLog)
+  registerSessionLogIpc(sessions, () => sessionLog, lastDialogDir)
   // W5: F16 시절 단일 키(`ai.apiKey`)를 프로바이더별 분리 저장(`ai.apiKey.<provider>`)으로 옮긴 뒤 —
   // 1회성, 이미 옮겨졌으면 조건이 거짓이라 매 기동마다 비용이 없다. 사용자가 다시 키를 입력하지 않게 한다.
   const LEGACY_AI_KEY_VAULT = 'ai.apiKey'

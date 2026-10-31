@@ -53,8 +53,22 @@ nsis:
   # 바탕화면 것만 installer.nsh 가 `A.R.A` 로 바꾼다(신고 #4·#5 — 이유는 그 파일의 customInstall 주석).
   shortcutName: ARA
 mac:
-  target: dmg
+  # ME-1 E4(2026-11-01, 계획서 6절·묶음 결정 8절): 맥은 준영님 혼자 쓴다 → Apple 인증서·공증 없이 간다.
+  # 대상: dmg(설치용) + zip(electron-updater 의 맥 경로가 받는 형식 — 아래 자동 업데이트 주석 참고).
+  # arch 는 적지 않는다 — 빌드하는 맥의 아키텍처 하나로 낸다(x64·arm64 둘 다 필요해지면 그때 arch 를 단다).
+  target:
+    - dmg
+    - zip
   # mac 은 PNG 그대로 — .icns 는 한 장에서 잘 나온다(Windows 와 달리 여기서 깨진 적 없다).
-  # F1은 scripts/sign-adhoc.sh로 ad-hoc 스모크.
   icon: resources/icons/ara-icon.png
-  # 정식 Developer ID 서명·공증은 배포 직전.
+  # 서명: 인증서가 없으므로 electron-builder 의 서명 단계를 건너뛴다(null). 그 뒤 설치한 앱에
+  # scripts/sign-adhoc.sh 로 ad-hoc 서명(codesign --sign -)과 quarantine 제거를 한다 — 절차는 docs/build-macos.md.
+  # (electron-builder 26 에서 identity: "-" 로 빌드 중 ad-hoc 서명이 되는지는 맥에서 확인하지 않았다.)
+  identity: null
+  # hardenedRuntime·notarize 는 Developer ID 서명이 있어야 의미가 있다(공증은 서명 안 된 앱을 거부한다).
+  # 인증서가 없으므로 끈다. 인증서가 생기면 둘 다 켜고 entitlements(JIT·서명 안 된 실행 메모리 허용)를 단다.
+  hardenedRuntime: false
+  notarize: false
+  # 자동 업데이트: 맥의 electron-updater(Squirrel.Mac)는 서명된 앱만 교체한다 — ad-hoc 서명으로는
+  # 거의 확실히 안 된다. 그래서 맥은 **수동 설치 전제**다(새 dmg 를 받아 덮어 설치). latest-mac.yml 은
+  # 빌드 때 나오지만 사내 배포 서버에는 올리지 않는다. zip 은 서명이 생겼을 때 바로 쓰려고 미리 낸다.
