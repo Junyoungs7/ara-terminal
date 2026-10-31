@@ -75,8 +75,10 @@ test('KEY-6 치트시트에 적힌 조합이 실제로 동작한다', async ({ a
   const { page } = ara
   await newLocalShell(page)
   // 터미널이 포커스를 잡고 있으면 ? 는 셸로 간다(입력 중에는 치트시트를 열지 않는 정책 — KEY-2).
-  // 여기서는 문서-동작 일치만 보면 되므로 타이틀바 버튼으로 연다.
-  await page.click('.titlebar .tb-help')
+  // 여기서는 문서-동작 일치만 보면 되므로 도움말 메뉴로 연다(M1: 타이틀바 [?] 버튼은 지웠다).
+  await page.click('.titlebar .tb-burger')
+  await page.click('.tb-menu span:text-is("도움말")')
+  await page.click('.ctx-menu .ctx-item[data-action="help.cheatsheet"]')
   const combo = await page
     .locator('.cheatsheet .cs-row:has(.cs-desc:text-is("패널 최대화")) .cs-k')
     .allTextContents()

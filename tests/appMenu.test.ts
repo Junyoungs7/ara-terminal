@@ -38,11 +38,28 @@ describe('mac 메뉴 막대 = ≡ 메뉴', () => {
     MENUBAR.forEach((_, i) => {
       const sub = appMenus[i].submenu as MenuItemConstructorOptions[]
       expect(sub.map((s) => [s.id, s.label])).toEqual(menuBarItems(i).map((it) => [it.id, it.label]))
+      // M1: ▸ 하위 메뉴(분할·탭 이동·서버 도구)까지 같다.
+      menuBarItems(i).forEach((it, j) => {
+        const macSub = sub[j].submenu as MenuItemConstructorOptions[] | undefined
+        expect(macSub?.map((s) => [s.id, s.label])).toEqual(it.submenu?.map((s) => [s.id, s.label]))
+      })
     })
   })
 
+  it('M1: 파일·편집·보기·터미널·AI 작업·도움말, AI 작업은 비활성 한 줄', () => {
+    expect(appMenus.map((m) => m.label)).toEqual(['파일', '편집', '보기', '터미널', 'AI 작업', '도움말'])
+    const ai = appMenus[4].submenu as MenuItemConstructorOptions[]
+    expect(ai).toHaveLength(1)
+    expect(ai[0].enabled).toBe(false)
+    const term = appMenus[3].submenu as MenuItemConstructorOptions[]
+    const tools = term.find((s) => s.id === 'sub.tools')?.submenu as MenuItemConstructorOptions[]
+    expect(tools.map((s) => s.id)).toContain('panel.ports')
+  })
+
   it('단축키는 표시만 한다(렌더러 keydown 과 두 번 실행되지 않게)', () => {
-    const items = appMenus.flatMap((m) => m.submenu as MenuItemConstructorOptions[])
+    const flat = (l: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] =>
+      l.flatMap((s) => [s, ...flat(Array.isArray(s.submenu) ? s.submenu : [])])
+    const items = flat(appMenus.flatMap((m) => m.submenu as MenuItemConstructorOptions[]))
     expect(items.some((s) => s.accelerator)).toBe(true)
     for (const s of items) if (s.accelerator) expect(s.registerAccelerator).toBe(false)
   })

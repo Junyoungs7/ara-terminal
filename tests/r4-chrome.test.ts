@@ -25,8 +25,23 @@ const actionsOf = (e: MenuEntry[]) => e.flatMap((x) => ('action' in x ? [x.actio
 describe('R4.1 메뉴바 = keymap 파생', () => {
   it('최상위 메뉴 6종이 모두 항목을 갖는다(빈 메뉴 = 눌러도 반응 없음)', () => {
     // 2026-08-21: 최상위 이름을 한글로 바꿨다(앱의 다른 라벨과 결을 맞춘다).
-    expect(MENUBAR.map((m) => m.title)).toEqual(['파일', '편집', '세션', '분할', '보기', '도움말'])
-    for (const m of MENUBAR) expect(m.items.length).toBeGreaterThan(0)
+    // M1 1-B: 파일·편집·보기·터미널·AI 작업·도움말(구성안 3-5). AI 작업은 M3 전까지 비활성 "곧" 한 줄.
+    expect(MENUBAR.map((m) => m.title)).toEqual(['파일', '편집', '보기', '터미널', 'AI 작업', '도움말'])
+    for (let i = 0; i < MENUBAR.length; i++) expect(menuBarItems(i).length).toBeGreaterThan(0)
+    const ai = menuBarItems(MENUBAR.findIndex((m) => m.title === 'AI 작업'))
+    expect(ai).toEqual([expect.objectContaining({ id: 'menu.soon', disabled: true })])
+  })
+
+  it('M1: [터미널] 은 분할▸·탭 이동▸·서버 도구▸ 하위 메뉴를 갖는다(시안 SW-final 순서)', () => {
+    const term = menuBarItems(MENUBAR.findIndex((m) => m.title === '터미널'))
+    expect(term.map((i) => i.id)).toEqual([
+      'connection.manager', 'session.duplicate', 'sub.split', 'pane.close', 'sub.tabs',
+      'explorer.toggle', 'sub.tools', 'panel.pastlog', 'log.save'
+    ])
+    const sub = (id: string) => term.find((i) => i.id === id)?.submenu?.map((s) => s.id)
+    expect(sub('sub.split')).toEqual(['split.horizontal', 'split.vertical', 'pane.maximize'])
+    expect(sub('sub.tabs')).toEqual(['tab.next', 'tab.prev'])
+    expect(sub('sub.tools')).toEqual(expect.arrayContaining(['panel.ports', 'panel.sysmon', 'panel.ctr', 'panel.log']))
   })
 
   it('메뉴가 참조하는 keymap 액션은 전부 실배선(implemented)된 것뿐이다', () => {
@@ -38,7 +53,8 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
   })
 
   it('라벨·단축키 힌트를 KEYMAP 에서 그대로 가져온다(메뉴 전용 문구 없음)', () => {
-    const split = menuBarItems(MENUBAR.findIndex((m) => m.title === '분할'))
+    const term = menuBarItems(MENUBAR.findIndex((m) => m.title === '터미널'))
+    const split = term.flatMap((i) => [i, ...(i.submenu ?? [])])
     const byId = Object.fromEntries(split.map((i) => [i.id, i]))
     expect(byId['split.horizontal'].label).toBe('가로 분할')
     expect(byId['split.horizontal'].hint).toBe('Ctrl Shift -')
@@ -53,9 +69,10 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
     // W3sat F18: commandBook.toggle 은 action 항목(단축키 있음, KEYMAP 파생 라벨) — 나머지는
     // 단축키 없는 command 항목(i18n 라벨, 힌트 없음)이라는 이 테스트의 취지는 그대로 유지한다.
     // #206: report.open 도 action 항목이다(Ctrl+Shift+F1). R16: 그 옆에 [내 신고](command) 가 붙는다.
-    expect(help.map((i) => i.id)).toEqual(['help.cheatsheet', 'commandBook.toggle', 'report.open', 'help.myReports', 'help.about'])
+    // M1: 맨 위에 [통합 검색](palette.all — action, F1) — 구성안 3-5 도움말 › 명령 팔레트.
+    expect(help.map((i) => i.id)).toEqual(['palette.all', 'help.cheatsheet', 'commandBook.toggle', 'report.open', 'help.myReports', 'help.about'])
     expect(help.find((i) => i.id === 'report.open')?.hint).toBe('Ctrl Shift F1')
-    for (const i of help.filter((x) => x.id !== 'commandBook.toggle' && x.id !== 'report.open')) {
+    for (const i of help.filter((x) => !['palette.all', 'commandBook.toggle', 'report.open'].includes(x.id))) {
       expect(i.label).not.toContain('menu.')
       expect(i.hint).toBeUndefined()
     }
@@ -72,8 +89,8 @@ describe('R4.1 메뉴바 = keymap 파생', () => {
     }
   })
 
-  it('Session 첫 항목은 연결 관리자(R3 까지의 Session 클릭 동작을 지킨다)', () => {
-    expect(menuBarItems(MENUBAR.findIndex((m) => m.title === '세션'))[0].id).toBe('connection.manager')
+  it('[터미널](옛 Session) 첫 항목은 연결 관리자(R3 까지의 Session 클릭 동작을 지킨다)', () => {
+    expect(menuBarItems(MENUBAR.findIndex((m) => m.title === '터미널'))[0].id).toBe('connection.manager')
   })
 
   it('방향·번호 범위 키는 메뉴에 싣지 않는다(단일 항목으로 뜻이 없다)', () => {

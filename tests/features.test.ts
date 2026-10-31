@@ -39,8 +39,10 @@ describe('기능 표시', () => {
   })
 
   it('끈 기능은 메뉴에서 빠지고 켜면 돌아온다', () => {
-    const view = MENUBAR.findIndex((m) => m.title === '보기')
-    const ids = (shown = featuresOf(undefined)) => menuBarItems(view, shown).map((i) => i.id)
+    // M1: 서버 도구는 [터미널 › 서버 도구▸] 하위 메뉴로 옮겼다 — 하위까지 펼쳐 본다.
+    const term = MENUBAR.findIndex((m) => m.title === '터미널')
+    const ids = (shown = featuresOf(undefined)) =>
+      menuBarItems(term, shown).flatMap((i) => [i.id, ...(i.submenu ?? []).map((s) => s.id)])
     expect(ids()).not.toContain('panel.k8s')
     expect(ids()).toContain('panel.ports')
     expect(ids({ ...featuresOf(undefined), k8s: true, monitor: false })).toEqual(

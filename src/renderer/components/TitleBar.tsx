@@ -23,7 +23,7 @@ import { t } from '../i18n'
  */
 /**
  * 2.0 다듬기 R1(2026-10-28 준영님 "타이틀 바는 시안처럼"): 왼쪽은 **`ARA / 서버 / 경로`**(시안 Z-final),
- * 메뉴바 여섯(파일·편집·세션·분할·보기·도움말)은 **≡ 버튼 하나**로 접었다. 누르면 같은 여섯 제목이
+ * 메뉴바 여섯(M1 부터 파일·편집·보기·터미널·AI 작업·도움말)은 **≡ 버튼 하나**로 접었다. 누르면 같은 여섯 제목이
  * 세로로 펼쳐지고(`.tb-menu` — 선택자·항목·키 힌트·실행 경로는 그대로), 제목에 올리면 그 메뉴가 옆에 열린다.
  * 키보드: ≡ 에서 Enter → [파일] 이 열리고, ← → 로 옆 메뉴로 넘어간다(옛 메뉴바와 같은 손버릇).
  */
@@ -36,7 +36,7 @@ export function TitleBar({
   chat,
   features
 }: {
-  /** 없으면 메뉴바·[?] 를 그리지 않는다(세션 창). */
+  /** 없으면 메뉴바를 그리지 않는다(세션 창). */
   onCommand?: (id: MenuCommandId) => void
   /** F31 통합 검색창(CommandPalette). 목록이 프로필·즐겨찾기에 걸려 있어 Shell 이 만들어 넘긴다 —
       타이틀바가 그 상태를 알 필요는 없고, 자리만 내준다. */
@@ -183,15 +183,8 @@ export function TitleBar({
           <kbd className="kbd">{chatKey}</kbd>
         </button>
       )}
-      <div className="tb-quick">
-        {/* FB-ui2(FB-0006): 아라·기어 아이콘은 여기 없다 — 채팅은 위 [채팅] 버튼, 설정은 좌측 레일·
-            메뉴(파일>설정)·단축키(Alt+A, Ctrl+,)가 맡는다. */}
-        {onCommand && (
-          <button type="button" className="tb-help" title={t('titlebar.help')} aria-label={t('titlebar.help')} onClick={() => onCommand('help.cheatsheet')}>
-            ?
-          </button>
-        )}
-      </div>
+      {/* M1(구성안 3-2): [?] 버튼은 지웠다 — 도움말 메뉴·`?` 키·통합 검색(F1)으로 충분하다.
+          FB-ui2(FB-0006): 채팅은 위 [채팅] 버튼, 설정은 좌측 레일·메뉴(파일>설정)·단축키(Ctrl+,)가 맡는다. */}
       <div className="tb-controls">
         {/* M3: 셋 다 <button> 이다 — 키보드로 닫을 수 있어야 한다(전에는 마우스로만 닿았다). */}
         <button type="button" className="tb-ctl min" title={t('titlebar.min')} onClick={() => void window.ev?.window.minimize()}>

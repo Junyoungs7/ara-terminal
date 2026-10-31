@@ -6,7 +6,8 @@ test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ 
   const { page } = ara
   const titles = await page.locator('.tb-menu span').allTextContents()
   // 2026-08-21(b7dd258)에 메뉴바가 한글이 됐다 — 라벨은 MENUBAR 단일 출처에서 온다.
-  expect(titles).toEqual(['파일', '편집', '세션', '분할', '보기', '도움말'])
+  // M1 1-B: 파일·편집·보기·터미널·AI 작업·도움말(AI 작업은 M3 전까지 비활성 "곧" 한 줄 — 그래도 항목 수 > 0).
+  expect(titles).toEqual(['파일', '편집', '보기', '터미널', 'AI 작업', '도움말'])
   for (const title of titles) {
     await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
     await page.click(`.tb-menu span:text-is("${title}")`)
@@ -18,12 +19,14 @@ test('CHROME-1 메뉴바 6개가 모두 드롭다운으로 열린다', async ({ 
 })
 
 // CHROME-2 메뉴 항목은 단축키와 같은 경로로 실행된다("메뉴에서만 되는 기능" 금지)
-test('CHROME-2 Split 메뉴의 가로 분할이 실제로 분할한다', async ({ ara }) => {
+// M1: [분할] 은 [터미널 › 분할▸] 하위 메뉴로 옮겼다 — 행에 올리면 옆에 펼쳐진다.
+test('CHROME-2 터미널 › 분할▸ 의 가로 분할이 실제로 분할한다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
-  await page.click('.tb-menu span:text-is("분할")')
-  await page.click('.ctx-menu .ctx-item[data-action="split.horizontal"]')
+  await page.click('.tb-menu span:text-is("터미널")')
+  await page.hover('.ctx-menu .ctx-item[data-action="sub.split"]')
+  await page.click('.ctx-submenu .ctx-item[data-action="split.horizontal"]')
   await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
   await expect(page.locator('.pane-grid .div-row')).toHaveCount(1)
 })
@@ -148,10 +151,13 @@ test('CHROME-8b 타이틀바 왼쪽이 활성 탭의 서버를 따라간다', as
   await expect(page.locator('.titlebar .tb-server')).toHaveText(title)
 })
 
-// CHROME-9 타이틀바 ? 버튼 = 치트시트
-test('CHROME-9 타이틀바 ? 가 치트시트를 연다', async ({ ara }) => {
+// CHROME-9 도움말 › 단축키 치트시트 (M1: 타이틀바 [?] 버튼은 지웠다 — 구성안 3-2)
+test('CHROME-9 도움말 메뉴가 치트시트를 연다 · [?] 버튼은 없다', async ({ ara }) => {
   const { page } = ara
-  await page.click('.titlebar .tb-help')
+  await expect(page.locator('.titlebar .tb-help')).toHaveCount(0)
+  await page.click('.titlebar .tb-burger')
+  await page.click('.tb-menu span:text-is("도움말")')
+  await page.click('.ctx-menu .ctx-item[data-action="help.cheatsheet"]')
   await expect(page.locator('.cheatsheet.open')).toBeVisible()
   await expect(page.locator('.cheatsheet .cs-hd h2')).toHaveText('A.R.A 단축키 치트시트')
   await page.keyboard.press('Escape')

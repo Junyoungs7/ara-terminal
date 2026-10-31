@@ -173,12 +173,12 @@ test('EXP-1 Ctrl+Shift+O 로 탐색기 창이 열리고 본창 터미널은 그�
   await expect(ex.locator('.tb-controls .tb-ctl')).toHaveCount(3)
 })
 
-// EXP-2 [보기] 메뉴에서도 같은 진입점으로 열린다
-// (2026-08-21 메뉴바를 한글로 바꾸면서 "View" → "보기" — actions.tsx MENUBAR 참고)
-test('EXP-2 [보기] 메뉴에서 탐색기를 연다', async ({ ara }) => {
+// EXP-2 [터미널] 메뉴에서도 같은 진입점으로 열린다
+// (2026-08-21 "View" → "보기", M1 1-B 에서 탐색기 창은 [터미널] 로 — shared/menubar.ts 참고)
+test('EXP-2 [터미널] 메뉴에서 탐색기를 연다', async ({ ara }) => {
   await newLocalShell(ara.page)
   await ara.page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
-  await ara.page.click('.tb-menu span:text-is("보기")')
+  await ara.page.click('.tb-menu span:text-is("터미널")')
   await explorerWindow(ara.app, () => ara.page.click('.ctx-menu .ctx-item[data-action="explorer.toggle"]'))
 })
 

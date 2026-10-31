@@ -5,7 +5,7 @@ import { AI_ENTRY } from './features'
 import { KEYMAP, type KeymapAction } from './keymap'
 
 // ── 메뉴바 (R4.1) ──
-// 타이틀바의 File/Edit/Session/Split/View/Help 는 R3 까지 Session 하나만 동작하는 장식이었다.
+// 타이틀바의 File/Edit/Session/Split/View/Help 는(M1 에서 파일·편집·보기·터미널·AI 작업·도움말로 재구성) R3 까지 Session 하나만 동작하는 장식이었다.
 // 이제 전부 드롭다운으로 열리고, 항목은 두 종류뿐이다:
 //   { action } — keymap 항목. 라벨(labelKo)·단축키 힌트·실행(dispatchAction 이 그 조합의 keydown 을
 //                쏜다)이 모두 KEYMAP 에서 나온다. 메뉴는 아무것도 새로 배선하지 않는다.
@@ -35,12 +35,19 @@ export type MenuCommandId =
   // F17: 단축키 없는 진입점.
   | 'ai.bootstrap'
 
-export type MenuEntry = { action: KeymapAction } | { command: MenuCommandId }
+/** 한 메뉴 안의 하위 메뉴(▸). 항목은 표에 **평평하게** 두고 `sub` 로 묶는다 — 팔레트·id 조회·테스트는
+ *  계속 평평한 목록을 읽고, 묶음은 그리는 두 자리(menuBarItems·appMenu)만 안다. 같은 sub 는 붙여 둔다. */
+export type MenuSubId = 'split' | 'tabs' | 'tools'
+export type MenuEntry = ({ action: KeymapAction } | { command: MenuCommandId }) & { sub?: MenuSubId }
+export type MenuDef = { title: string; items: readonly MenuEntry[]; /** 아직 빈 자리 — 비활성 "곧" 한 줄로 그린다. */ soon?: boolean }
 
 // 최상위 이름은 **한글**이다(2026-08-21 준영님). 앱의 다른 라벨이 전부 한글인데 여기만
 // File/Edit/Help 라 그 줄만 남의 앱처럼 보였다. 이 표의 항목 라벨은 KEYMAP.labelKo·i18n 에서
 // 오므로, 최상위 이름도 같은 결로 직기입한다(CONTEXT_ACTIONS.labelKo 와 같은 방식).
-const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
+// M1 1-B(구성안 3-5·4-2): 파일·편집·보기·터미널·AI 작업·도움말. 옛 [세션]·[분할] 은 [터미널] 안으로,
+// 옛 [보기] 의 서버 도구는 [터미널 › 서버 도구▸], 화면 배치 토글만 [보기]. 팔레트로만 보낸 것
+// (서버 콘솔·파일 트리 토글·터미널 토글)은 KEYMAP 항목이라 통합 검색(F1)에 그대로 남는다.
+const ALL_MENUBAR: readonly MenuDef[] = [
   {
     // 설정은 R5 에서 단축키(Ctrl+,)가 생겨 command → action 으로 옮겼다. 메뉴에 힌트가 붙고
     // 실행 경로도 keydown 핸들러 하나로 합쳐진다("메뉴에서만 되는 기능" 금지).
@@ -57,52 +64,46 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
     items: [{ action: 'clipboard.copy' }, { action: 'clipboard.paste' }, { action: 'terminal.search' }]
   },
   {
-    // 첫 항목은 계속 연결 관리자다(R3 까지 Session 클릭 = 연결 관리자였다 — 그 손버릇을 깨지 않는다).
-    title: '세션',
-    items: [
-      { action: 'connection.manager' },
-      { action: 'session.duplicate' },
-      { action: 'tab.next' },
-      { action: 'tab.prev' },
-      { action: 'terminal.toggle' }
-    ]
-  },
-  {
-    title: '분할',
-    items: [
-      { action: 'split.horizontal' },
-      { action: 'split.vertical' },
-      { action: 'pane.maximize' },
-      { action: 'pane.close' }
-    ]
-  },
-  {
     title: '보기',
     items: [
-      { action: 'panel.console' },
-      // 하단에 열리는 것들. #84·#86 으로 들어온 여섯이 여기 없어서 F1 검색에도 안 잡혔고,
-      // 우측 아이콘을 끄면 되찾을 길이 아예 없었다(2026-08-16).
-      { action: 'panel.ports' },
-      { action: 'bottom.toggle' },
-      { command: 'panel.sysmon' },
-      { command: 'panel.ps' },
-      { command: 'panel.svc' },
-      { command: 'panel.disk' },
-      { command: 'panel.pkg' },
-      { command: 'panel.ctr' },
-      { action: 'panel.k8s' },
-      { command: 'panel.log' },
-      { action: 'panel.applog' },
-      // 우측 레일.
-      { command: 'panel.pastlog' },
       { action: 'sidebar.collapse' },
-      { action: 'fileTree.toggle' },
-      { action: 'explorer.toggle' },
+      { action: 'bottom.toggle' },
       { action: 'ai.toggle' },
       { command: 'font.zoomIn' },
       { command: 'font.zoomOut' }
     ]
   },
+  {
+    // 첫 항목은 계속 연결 관리자다(R3 까지 Session 클릭 = 연결 관리자였다 — 그 손버릇을 깨지 않는다).
+    title: '터미널',
+    items: [
+      { action: 'connection.manager' },
+      { action: 'session.duplicate' },
+      { action: 'split.horizontal', sub: 'split' },
+      { action: 'split.vertical', sub: 'split' },
+      { action: 'pane.maximize', sub: 'split' },
+      { action: 'pane.close' },
+      { action: 'tab.next', sub: 'tabs' },
+      { action: 'tab.prev', sub: 'tabs' },
+      { action: 'explorer.toggle' },
+      // 하단에 열리는 서버 도구. #84·#86 으로 들어온 것들이 메뉴에 없어서 F1 검색에도 안 잡혔고,
+      // 우측 아이콘을 끄면 되찾을 길이 아예 없었다(2026-08-16) — 그래서 메뉴(=검색)에 남긴다.
+      { action: 'panel.ports', sub: 'tools' },
+      { command: 'panel.sysmon', sub: 'tools' },
+      { command: 'panel.ps', sub: 'tools' },
+      { command: 'panel.svc', sub: 'tools' },
+      { command: 'panel.disk', sub: 'tools' },
+      { command: 'panel.pkg', sub: 'tools' },
+      { command: 'panel.ctr', sub: 'tools' },
+      { action: 'panel.k8s', sub: 'tools' },
+      { action: 'panel.applog', sub: 'tools' },
+      { command: 'panel.log', sub: 'tools' },
+      { command: 'panel.pastlog' },
+      { action: 'log.save' }
+    ]
+  },
+  // M3(Orca 이식) 전까지 자리만 — 비활성 "곧" 한 줄.
+  { title: 'AI 작업', items: [], soon: true },
   {
     title: '도움말',
     // 치트시트를 설정처럼 command → action 으로 옮기려다 되돌렸다(2026-08-13, 스모크가 잡았다).
@@ -110,6 +111,7 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
     // 터미널에 포커스가 있는 보통 상황에서 눌러도 아무 일이 안 일어난다 — 그래서 command 로 둔다.
     // 통합 검색의 중복(치트시트가 두 줄)은 store/palette.ts 의 COMMAND_DUPES 로 걸러 낸다.
     items: [
+      { action: 'palette.all' },
       { command: 'help.cheatsheet' },
       { action: 'commandBook.toggle' },
       // #206: 단축키가 있어 command 가 아니라 action 이다(설정과 같은 이유 — 실행 경로가 keydown 하나).
@@ -127,10 +129,21 @@ const ALL_MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = [
  * 통합 검색(F1)에도 죽은 항목이 잡힌다 — 목록을 만드는 자리 하나에서 함께 거른다.
  */
 const HIDDEN_MENU = new Set<string>(AI_ENTRY ? [] : ['ai.bootstrap', 'ai.toggle', 'ai.ask'])
-export const MENUBAR: readonly { title: string; items: readonly MenuEntry[] }[] = ALL_MENUBAR.map((m) => ({
+export const MENUBAR: readonly MenuDef[] = ALL_MENUBAR.map((m) => ({
   ...m,
   items: m.items.filter((it) => !HIDDEN_MENU.has('action' in it ? it.action : it.command))
-})).filter((m) => m.items.length > 0)
+})).filter((m) => m.items.length > 0 || m.soon)
+
+/** 그리는 두 자리 공용 — 붙어 있는 같은 sub 항목을 하나의 ▸ 묶음으로. 이름은 i18n 'menu.sub.<sub>'. */
+export function menuGroups(items: readonly MenuEntry[]): (MenuEntry | { sub: MenuSubId; items: MenuEntry[] })[] {
+  const out: (MenuEntry | { sub: MenuSubId; items: MenuEntry[] })[] = []
+  for (const e of items) {
+    const last = out[out.length - 1]
+    if (e.sub && last && 'items' in last && last.sub === e.sub) last.items.push(e)
+    else out.push(e.sub ? { sub: e.sub, items: [e] } : e)
+  }
+  return out
+}
 
 export const menuEntryId = (e: MenuEntry): string => ('action' in e ? e.action : e.command)
 

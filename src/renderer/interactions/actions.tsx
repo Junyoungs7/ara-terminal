@@ -4,7 +4,7 @@ import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
 import { KEYMAP, isMac, keyText, matchBinding, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
-import { MENUBAR, menuEntryId, menuEntryLabel } from '../../shared/menubar'
+import { MENUBAR, menuEntryId, menuEntryLabel, menuGroups, type MenuEntry } from '../../shared/menubar'
 import type { SortKey, SortSpec } from '../store/fileView'
 
 // 컨텍스트 액션 단일 레지스트리 — 터미널 우클릭 메뉴가 이 배열 하나에서 나온다
@@ -576,10 +576,9 @@ const MENU_DANGER: ReadonlySet<string> = new Set(['app.quit', 'pane.close'])
 export function menuBarItems(index: number, shown?: FeatureShown): MenuItem[] {
   const menu = MENUBAR[index]
   if (!menu) return []
-  return menu.items.filter((e) => {
-    const f = featureOf('action' in e ? e.action : e.command)
-    return !f || !shown || shown[f.id]
-  }).map((e) => {
+  // M1: 아직 빈 메뉴(AI 작업)는 비활성 "곧" 한 줄 — 빈 메뉴는 "눌러도 반응 없음"이 된다.
+  if (menu.soon) return [{ id: 'menu.soon', label: t('menu.soon'), disabled: true }]
+  const leaf = (e: MenuEntry): MenuItem => {
     const id = menuEntryId(e)
     const hint = 'action' in e ? comboOf(e.action) : undefined
     const label = menuEntryLabel(e, t)
@@ -589,5 +588,12 @@ export function menuBarItems(index: number, shown?: FeatureShown): MenuItem[] {
       ...(hint ? { hint } : {}),
       ...(MENU_DANGER.has(id) ? { danger: true } : {})
     }
+  }
+  const visible = menu.items.filter((e) => {
+    const f = featureOf('action' in e ? e.action : e.command)
+    return !f || !shown || shown[f.id]
   })
+  return menuGroups(visible).map((g) =>
+    'items' in g ? { id: 'sub.' + g.sub, label: t('menu.sub.' + g.sub), submenu: g.items.map(leaf) } : leaf(g)
+  )
 }

@@ -503,8 +503,8 @@ const checks = []
 
   const f3b = await win.webContents.executeJavaScript(`(async () => {
     // 연결 관리자 열기 → 모달 + 폼 + 프로필 리스트 행 렌더.
-    // R4.1 이후 Session 은 드롭다운이라 첫 항목(연결 관리자)까지 골라야 한다.
-    const sessionMenu = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '세션')
+    // R4.1 이후 Session 은 드롭다운이라 첫 항목(연결 관리자)까지 골라야 한다. M1: [세션] → [터미널].
+    const sessionMenu = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '터미널')
     if (sessionMenu) sessionMenu.click()
     await new Promise(r => setTimeout(r, 200))
     document.querySelector('.ctx-menu .ctx-item[data-action="connection.manager"]')?.click()
@@ -1115,8 +1115,8 @@ const checks = []
     await closeMenu()
 
     // 4) 네이티브 <select> 전멸 + 커스텀 콤보 동작(연결 관리자 그룹 필드 — R6 부터 타이핑 가능).
-    // R4.1: Session 드롭다운 → 연결 관리자 항목.
-    const sessionMenuBtn = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '세션')
+    // R4.1: Session 드롭다운 → 연결 관리자 항목. M1: [세션] → [터미널].
+    const sessionMenuBtn = [...document.querySelectorAll('.tb-menu span')].find(s => s.textContent === '터미널')
     if (sessionMenuBtn) sessionMenuBtn.click()
     await wait(200)
     document.querySelector('.ctx-menu .ctx-item[data-action="connection.manager"]')?.click()
@@ -2105,6 +2105,11 @@ const checks = []
       await wait(350)
     }
     const closeMenu = async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(150) }
+    // M1: ▸ 하위 메뉴(분할·탭 이동·서버 도구)는 행에 올려야 펼쳐진다(React onMouseEnter = mouseover).
+    const openSub = async (id) => {
+      document.querySelector('.ctx-menu .ctx-item[data-action="' + id + '"]')?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      await wait(120)
+    }
 
     // R4.1 ① 최상위 6개가 전부 열리고 항목이 있다(R3 까지 Session 하나만 반응했다).
     const titles = tops().map(s => s.textContent)
@@ -2114,8 +2119,8 @@ const checks = []
       opened.push({ title: tt, count: items().length, ids: items() })
       await closeMenu()
     }
-    // R4.1 ② 힌트가 keymap 단일 소스에서 온다.
-    await openTop('분할')
+    // R4.1 ② 힌트가 keymap 단일 소스에서 온다. M1: [분할] → [터미널 › 분할▸].
+    await openTop('터미널'); await openSub('sub.split')
     const splitHints = [...document.querySelectorAll('.ctx-menu .ctx-item .ci-kbd')].map(k => k.textContent)
     await closeMenu()
 
@@ -2125,10 +2130,10 @@ const checks = []
 
     // R4.1 ③ 메뉴 항목이 실제로 동작한다 — Split → 가로 분할로 패널이 늘어난다.
     const panesBefore = document.querySelectorAll('.pane-grid .pane').length
-    await openTop('분할'); await pick('split.horizontal')
+    await openTop('터미널'); await openSub('sub.split'); await pick('split.horizontal')
     const panesAfterMenu = document.querySelectorAll('.pane-grid .pane').length
     // 되돌리기: 칸 닫기(R9a — 그 칸의 세션도 함께 끝난다. 여기선 로컬이라 확인 없음).
-    await openTop('분할'); await pick('pane.close')
+    await openTop('터미널'); await pick('pane.close')
     await wait(200); await okDialog()
     const panesAfterClose = document.querySelectorAll('.pane-grid .pane').length
 
@@ -2169,9 +2174,9 @@ const checks = []
     }
   })()`)
 
-  checks.push(['R4.1: 메뉴바 최상위 6종(Tools 제거 — 넣을 기능이 없었다)', r4a.titles.join(',') === '파일,편집,세션,분할,보기,도움말'])
+  checks.push(['R4.1/M1: 메뉴바 최상위 6종(파일·편집·보기·터미널·AI 작업·도움말)', r4a.titles.join(',') === '파일,편집,보기,터미널,AI 작업,도움말'])
   checks.push(['R4.1: 모든 최상위 메뉴가 열리고 항목이 있다(빈 메뉴 없음)', r4a.opened.every((m) => m.count > 0)])
-  checks.push(['R4.1: Session 첫 항목은 연결 관리자(기존 손버릇 유지)', r4a.opened.find((m) => m.title === '세션').ids[0] === 'connection.manager'])
+  checks.push(['R4.1: [터미널](옛 Session) 첫 항목은 연결 관리자(기존 손버릇 유지)', r4a.opened.find((m) => m.title === '터미널').ids[0] === 'connection.manager'])
   checks.push(['R4.1: 항목에 keymap 단축키 힌트 표기', r4a.splitHints.includes('Ctrl Shift -') && r4a.splitHints.includes('Ctrl Shift W')])
   checks.push(['R4.1: Split→가로 분할이 실제로 패널을 늘린다', r4a.panesAfterMenu === r4a.panesBefore + 1])
   checks.push(['R4.1: Split→패널 닫기가 실제로 패널을 줄인다', r4a.panesAfterClose === r4a.panesBefore])

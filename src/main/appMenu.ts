@@ -9,7 +9,7 @@
 // ponytail: 설정 › 기능에서 끈 항목도 mac 메뉴 막대엔 남는다(main 은 그 값을 모른다) — M1 재구성 때 IPC 로 받는다.
 import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 import { KEYMAP } from '../shared/keymap'
-import { MENUBAR, menuEntryId, menuEntryLabel } from '../shared/menubar'
+import { MENUBAR, menuEntryId, menuEntryLabel, menuGroups, type MenuEntry } from '../shared/menubar'
 import ko from '../renderer/i18n/ko.json'
 
 export const MENU_PICK = 'menu:pick'
@@ -17,20 +17,26 @@ const t = (key: string): string => (ko as Record<string, string>)[key] ?? key
 
 export function appMenuTemplate(platform: NodeJS.Platform, dev: boolean): MenuItemConstructorOptions[] | null {
   if (platform !== 'darwin') return null
+  const leaf = (e: MenuEntry): MenuItemConstructorOptions => {
+    const id = menuEntryId(e)
+    const mac = 'action' in e ? KEYMAP.find((k) => k.action === e.action)?.mac : undefined
+    // 'Cmd+1-9'·'Opt+Arrow' 같은 묶음 표기는 Electron 가속키가 아니다 — 힌트를 뺀다.
+    const accel = mac && !/1-9|Arrow/.test(mac) ? mac.replace(/Opt/g, 'Alt') : undefined
+    return {
+      id,
+      label: menuEntryLabel(e, t),
+      ...(accel ? { accelerator: accel, registerAccelerator: false } : {}),
+      click: (_i, w) => (w as BrowserWindow | undefined)?.webContents.send(MENU_PICK, id)
+    }
+  }
+  // ≡ 의 menuBarItems 와 같은 모양: ▸ 묶음은 sub.<id>, 빈 자리(AI 작업)는 비활성 "곧" 한 줄.
   const app: MenuItemConstructorOptions[] = MENUBAR.map((m) => ({
     label: m.title,
-    submenu: m.items.map((e) => {
-      const id = menuEntryId(e)
-      const mac = 'action' in e ? KEYMAP.find((k) => k.action === e.action)?.mac : undefined
-      // 'Cmd+1-9'·'Opt+Arrow' 같은 묶음 표기는 Electron 가속키가 아니다 — 힌트를 뺀다.
-      const accel = mac && !/1-9|Arrow/.test(mac) ? mac.replace(/Opt/g, 'Alt') : undefined
-      return {
-        id,
-        label: menuEntryLabel(e, t),
-        ...(accel ? { accelerator: accel, registerAccelerator: false } : {}),
-        click: (_i, w) => (w as BrowserWindow | undefined)?.webContents.send(MENU_PICK, id)
-      }
-    })
+    submenu: m.soon
+      ? [{ id: 'menu.soon', label: t('menu.soon'), enabled: false }]
+      : menuGroups(m.items).map((g) =>
+          'items' in g ? { id: 'sub.' + g.sub, label: t('menu.sub.' + g.sub), submenu: g.items.map(leaf) } : leaf(g)
+        )
   }))
   const menu: MenuItemConstructorOptions[] = [{ role: 'appMenu' }, { role: 'editMenu' }, ...app, { role: 'windowMenu' }]
   if (dev) menu.push({ label: 'Dev', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }] })
