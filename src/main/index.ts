@@ -50,7 +50,16 @@ import { voiceOf } from '@shared/voice'
 import { clearStaleSelfToken } from './ai/engine/araMcp'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setApiPersona } from './ai/prompt'
-import { setMainErrorLogDir } from './log/MainErrorLog'
+import { mainErrorLogPath, setMainErrorLogDir } from './log/MainErrorLog'
+import {
+  applySafeGraphicsIfMarked,
+  installGpuCrashFallback,
+  installHangWatchdog,
+  installRendererRecovery,
+  reportPreviousHang,
+  scheduleTestMainBlock
+} from './stability/stability'
+import { startEventLoopDelayProbe } from './stability/eventLoopProbe'
 import { pushSend } from './util/windowPush'
 import { logMainError } from './log/MainErrorLog'
 import { aiModelsOf, aiProviderOf, isBottomId, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
@@ -120,6 +129,8 @@ const LEGACY_USER_DATA = 'A.R.A'
 if (!app.commandLine.hasSwitch('user-data-dir')) {
   app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA))
 }
+// FD-04 안전 그래픽 모드: 지난 실행이 GPU 크래시 반복으로 표식을 남겼으면 ready 전에 하드웨어 가속을 끈다.
+applySafeGraphicsIfMarked(app.getPath('userData'))
 
 /**
  * 성능 게이트의 **양성 대조**(tests/perf-baseline.cjs 머리말). 게이트가 느려진 판을 정말 잡는지
@@ -195,6 +206,8 @@ function createWindow(): void {
   })
 
   mainWindow = win
+  // FD-04: 렌더러가 죽으면 다시 불러온다(횟수 제한 — stability.ts).
+  installRendererRecovery(win, () => quitting)
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
     // 탐색기 창은 본창 없이는 아무것도 못 한다([연결]·[AI 에 묻기]가 본창에 도착한다) — 같이 닫는다.
@@ -457,6 +470,13 @@ app.whenReady().then(async () => {
   const savedDirs = store.get().ui
   const sessionDir = dirPref(savedDirs.sessionLogDir)
   setMainErrorLogDir(dirPref(savedDirs.appLogDir))
+  // M0 0-8 — 지난 실행의 멈춤 보고(FD-02, 워커보다 먼저), 멈춤 감시 워커, 시험용 main 막기(배포본 무시),
+  // 진단 프로브(FD-03, 기본 꺼짐), GPU 크래시 반복 → 안전 그래픽 모드(FD-04).
+  reportPreviousHang(userData, dirPref(savedDirs.appLogDir))
+  installHangWatchdog(userData)
+  scheduleTestMainBlock()
+  startEventLoopDelayProbe(() => dirname(mainErrorLogPath()))
+  installGpuCrashFallback(userData, () => quitting, () => mainWindow)
   // ui:setPrefs 가 도착하면 로거에 즉시 반영한다(전용 설정 채널을 만들지 않는다).
   registerWorkspaceIpc(store, history, (prefs) => {
     sessionLog?.setPrefs(prefs.sessionLog, prefs.logRetentionDays)

@@ -42,7 +42,12 @@ export default defineConfig({
     // node-pty 등 네이티브 모듈은 번들하지 않고 externalize(계획서 §B.5).
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: sharedAlias },
-    build: { rollupOptions: { input: resolve('src/main/index.ts') } }
+    // hangWatchdogWorker: FD-02 멈춤 감시 워커 — main 이 out/main/hangWatchdogWorker.js 를 worker thread 로 띄운다.
+    build: {
+      rollupOptions: {
+        input: { index: resolve('src/main/index.ts'), hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts') }
+      }
+    }
   },
   preload: {
     resolve: { alias: sharedAlias },

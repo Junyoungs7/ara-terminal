@@ -1,0 +1,12 @@
+{
+  "rendererRecovery.title": "아라 화면을 다시 불러오지 못했습니다",
+  "rendererRecovery.message": "화면이 짧은 시간에 여러 번 멈췄습니다.",
+  "rendererRecovery.detail": "[다시 불러오기]를 누르면 화면을 새로 그립니다. 계속 반복되면 아라를 종료한 뒤 다시 켜 주세요.",
+  "rendererRecovery.reload": "다시 불러오기",
+  "rendererRecovery.quit": "종료",
+  "gpuFallback.title": "안전 그래픽 모드로 다시 시작할까요?",
+  "gpuFallback.message": "그래픽 처리 프로세스가 여러 번 멈췄습니다.",
+  "gpuFallback.detail": "안전 그래픽 모드는 이 버전에서 하드웨어 가속을 끕니다. 화면이 조금 느려질 수 있습니다. [계속 사용]을 누르면 그래픽 설정을 바꾸지 않습니다.",
+  "gpuFallback.restart": "안전 그래픽 모드로 다시 시작",
+  "gpuFallback.continue": "계속 사용"
+}
