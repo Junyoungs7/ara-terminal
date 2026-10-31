@@ -21,7 +21,7 @@ import {
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { joinPath } from './filePath'
 import { IconClose, IconHistory, IconPencil, IconPlus } from './icons'
-import { Markdown } from './md'
+import { loadMarkdown, Markdown } from './mdLazy'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { AI_MODELS_BY_PROVIDER, AI_PROVIDER_LABELS, type AiProvider } from '@shared/types'
 import type { AraTarget } from '@shared/araPersona'
@@ -199,6 +199,11 @@ export function AraChatPanel({
   const [dropping, setDropping] = useState(false)
 
   const ask = openAsk(items)
+
+  // 마크다운 묶음은 패널을 처음 열 때 불러온다(mdLazy.tsx) — 첫 답변이 오기 전에 끝나 평문이 비칠 틈이 없다.
+  useEffect(() => {
+    void loadMarkdown()
+  }, [])
 
   // 엔진 사건 → 목록. 상태줄에 쓰는 것(비용·단계)은 따로 뽑는다.
   useEffect(() => {

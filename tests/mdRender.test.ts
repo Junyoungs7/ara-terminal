@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { insertText } from '../src/shared/shellInput'
 
@@ -69,5 +69,15 @@ describe('선택 표시 (제보 ④)', () => {
     expect(rule, '::selection 규칙을 못 찾음').toBeTruthy()
     expect(rule![0]).toMatch(/background:\s*var\(--sel-bg\)/)
     expect(rule![0]).not.toMatch(/--accent-glow/)
+  })
+})
+
+describe('md.tsx — 진입 청크에 끌려 들어오면 안 된다 (M0 4-B, ≈375 kB)', () => {
+  it('렌더러에서 md.tsx 를 정적 import 하는 곳이 없다 — mdLazy.tsx 의 import() 만 연다', () => {
+    const dir = join(__dirname, '../src/renderer')
+    const hits = (readdirSync(dir, { recursive: true }) as string[])
+      .filter((f) => /\.tsx?$/.test(f))
+      .filter((f) => /from '\.{1,2}\/(components\/)?md'/.test(readFileSync(join(dir, f), 'utf8')))
+    expect(hits).toEqual([])
   })
 })
