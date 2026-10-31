@@ -183,11 +183,12 @@ async function skipIntro(page) {
 
 /** 정상 종료(before-quit → workspace.json flush) → 안 내려가면 트리째 내린다 → userData 삭제. */
 async function quit(app, userData) {
+  // close() 뒤에는 app.process() 가 던진다 — pid 는 먼저 잡는다.
+  const pid = app.process()?.pid
   const closed = app.waitForEvent('close').catch(() => {})
   void app.evaluate(({ app: a }) => void setTimeout(() => a.quit(), 0)).catch(() => {})
   await Promise.race([closed, sleep(20_000)])
   await app.close().catch(() => {})
-  const pid = app.process().pid
   if (pid && isAlive(pid)) {
     try {
       if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
