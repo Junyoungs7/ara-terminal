@@ -176,7 +176,7 @@ describe('🔴 화면이 그 판정을 **실제로 쓰는가**', () => {
   const read = (p: string): string => readFileSync(join(__dirname, '..', p), 'utf8')
   const pane = read('src/renderer/terminal/TerminalPane.tsx')
   const grid = read('src/renderer/components/PaneGrid.tsx')
-  const drawer = read('src/renderer/components/SettingsDrawer.tsx')
+  const drawer = read('src/renderer/components/SettingsPage.tsx')
 
   it('TerminalPane 이 historyScope 를 지난다', () => {
     expect(pane).toMatch(/const scope = historyScope\(\{ local, serverKey, aiCli \}\)/)
@@ -194,7 +194,7 @@ describe('🔴 화면이 그 판정을 **실제로 쓰는가**', () => {
     expect(pane).toMatch(/\[sessionId, local, serverKey, aiCli\]/)
   })
 
-  it('🔴 SettingsDrawer 가 history.clear 뒤에 forgetCachedScope 를 부른다', () => {
+  it('🔴 SettingsPage 가 history.clear 뒤에 forgetCachedScope 를 부른다', () => {
     expect(drawer).toMatch(/history\?\.clear\(scope\)[\s\S]{0,200}?forgetCachedScope\(scope\)/)
   })
 })

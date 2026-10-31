@@ -3,12 +3,12 @@
 import type { Page } from '@playwright/test'
 import { test, expect, newLocalShell } from './fixtures'
 
-const drawer = '.drawer.open'
+const drawer = '.settings-page.open'
 const modal = '.overlay.open .ai-bootstrap'
 
 async function openAiSettings(page: Page): Promise<void> {
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="ai"]`)
+  await page.click(`${drawer} .sp-nav [data-section="ai"]`)
 }
 
 // 설정 [AI] 에서 fake 키를 등록한다(ARA_AI_FAKE 라 실 검증 없이 즉시 ok) — ai.spec.ts 와 같은 헬퍼를

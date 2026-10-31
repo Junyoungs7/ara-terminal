@@ -1,12 +1,13 @@
-// 설정 창 12섹션 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP + 명령 기록 + 2.0 기능·모양·보안) — 즉시 적용 · 영속 · 라이선스 고지
+// 설정 페이지 (F5 폰트 + R5 확장 + W2 로그 + W3 AI + F23 MCP + 명령 기록 + 2.0 기능·모양·보안 + M1 1-A 전체 화면·검색·딥링크) — 즉시 적용 · 영속 · 라이선스 고지
 import { test, expect, newLocalShell, persist, quitAra, openConnTab } from './fixtures'
 
-const drawer = '.drawer.open'
+const drawer = '.settings-page.open'
 
 // SET-1 진입점 3개(Ctrl+, · 좌측 레일 설정 아이콘 · File 메뉴)와 12섹션(W3 F16 에서 [AI] 추가로
 // 6→7, F23 에서 [MCP] 추가로 7→8, [명령 기록] 9, 2.0 3단계 [기능] 10, 4단계 [모양] 11, 잠금 L1 [보안] 12).
 // FB-ui2: 두 번째 진입점이 타이틀바 기어(.tb-gear, 제거됨)에서 액티비티 바로, 2.0 에서 좌측 레일로 옮겼다.
-test('SET-1 설정 창이 세 진입점 모두에서 열리고 13개 섹션을 갖는다', async ({ ara }) => {
+// M1 1-A: 전체 화면 페이지 + 묶음 7개(AI 작업 공간 → 앱 → 전역 → 터미널 → 보안·연동 → 고급 → 정보).
+test('SET-1 설정 페이지가 세 진입점 모두에서 열리고 묶음 순서대로 섹션을 갖는다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
   await expect(page.locator(drawer)).toBeVisible()
@@ -23,11 +24,22 @@ test('SET-1 설정 창이 세 진입점 모두에서 열리고 13개 섹션을 �
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
   await expect(page.locator(drawer)).toBeVisible()
 
-  const sections = await page.locator(`${drawer} .set-nav [data-section]`).allTextContents()
-  expect(sections).toEqual(['일반', '모양', '터미널', '폰트', '기능', '보안', '로그', 'AI', '음성', 'MCP', '단축키', '명령 기록', '정보'])
-  for (const s of ['general', 'terminal', 'font', 'security', 'log', 'ai', 'mcp', 'keys', 'about']) {
-    await page.click(`${drawer} .set-nav [data-section="${s}"]`)
-    await expect(page.locator(`${drawer} .set-nav [data-section="${s}"]`)).toHaveAttribute('aria-selected', 'true')
+  const groups = await page.locator(`${drawer} .sp-nav .sp-group`).evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.group))
+  expect(groups).toEqual(['aiws', 'app', 'global', 'terminal', 'security', 'advanced', 'about'])
+  await expect(page.locator(`${drawer} .sp-nav .sp-group`).first()).toContainText('AI 작업 공간')
+  const sections = await page.locator(`${drawer} .sp-nav [data-section]`).evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.section))
+  expect(sections).toEqual([
+    'agents', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'browser', 'automations',
+    'general', 'look', 'pet', 'font', 'keys', 'update',
+    'ai', 'voice',
+    'terminal', 'conn', 'features', 'log', 'history',
+    'security', 'mcp', 'remote', 'mobile', 'slack', 'privacy',
+    'advanced', 'experimental',
+    'about'
+  ])
+  for (const s of ['agents', 'general', 'terminal', 'font', 'security', 'log', 'ai', 'mcp', 'keys', 'update', 'advanced', 'about']) {
+    await page.click(`${drawer} .sp-nav [data-section="${s}"]`)
+    await expect(page.locator(`${drawer} .sp-nav [data-section="${s}"]`)).toHaveAttribute('aria-selected', 'true')
   }
 })
 
@@ -36,7 +48,7 @@ test('SET-2 폰트 크기·행간이 즉시 반영된다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="font"]`)
+  await page.click(`${drawer} .sp-nav [data-section="font"]`)
   await page.locator(`${drawer} input[aria-label="글자 크기"]`).fill('18')
   await expect(page.locator(`${drawer} .fp-controls .cg`).first().locator('.v')).toHaveText('18px')
   await expect
@@ -53,7 +65,7 @@ test('SET-3 폰트를 고르면 미리보기와 터미널에 함께 적용된다
   const { page } = ara
   await newLocalShell(page)
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="font"]`)
+  await page.click(`${drawer} .sp-nav [data-section="font"]`)
   // 미리보기는 알파벳이 아니라 실제 한글 터미널 출력이어야 한다.
   await expect(page.locator(`${drawer} .preview-box .pb-body`)).toContainText('데이터베이스 백업이 완료되었습니다')
   await expect(page.locator(`${drawer} .font-compare .fc-row`)).toHaveCount(4)
@@ -71,7 +83,7 @@ test('SET-4 커서 설정이 열린 세션에 즉시 반영된다', async ({ ara
   const { page } = ara
   const id = await newLocalShell(page)
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="terminal"]`)
+  await page.click(`${drawer} .sp-nav [data-section="terminal"]`)
   await page.click(`${drawer} .set-row:has(.sr-label:text-is("커서 모양")) .seg-ctl button[data-value="bar"]`)
   await expect.poll(async () => page.evaluate((sid) => window.__evTerm(sid)?.cursorStyle, id)).toBe('bar')
   await page.click(`${drawer} .set-row:has(.sr-label:text-is("커서 깜빡임")) .set-toggle`)
@@ -85,7 +97,7 @@ test('SET-4 커서 설정이 열린 세션에 즉시 반영된다', async ({ ara
 test('SET-6 정보 섹션이 버전과 폰트 라이선스를 보여 준다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="about"]`)
+  await page.click(`${drawer} .sp-nav [data-section="about"]`)
   await expect(page.locator(`${drawer} .set-row .sr-label`).first()).toHaveText('ARA') // 1.0.10: 앱 이름 ARA
   await expect(page.locator(`${drawer} .sr-ctl .v`).first()).toHaveText(/^v\d/)
   expect(await page.locator(`${drawer} .license-list .license-row`).count()).toBeGreaterThan(0)
@@ -96,7 +108,7 @@ test('SET-6 정보 섹션이 버전과 폰트 라이선스를 보여 준다', as
 test('SET-7 단축키 섹션이 실제 배선된 단축키만 보여 준다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="keys"]`)
+  await page.click(`${drawer} .sp-nav [data-section="keys"]`)
   const rows = await page.locator(`${drawer} .set-keys .cs-row .cs-desc`).allTextContents()
   expect(rows).toContain('가로 분할')
   expect(rows).toContain('연결 관리자')
@@ -113,7 +125,7 @@ test('SET-7 단축키 섹션이 실제 배선된 단축키만 보여 준다', as
 test('SET-8 [단축키]의 tmux 사용법 보기가 명령어 북을 tmux 카테고리로 연다', async ({ ara }) => {
   const { page } = ara
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="keys"]`)
+  await page.click(`${drawer} .sp-nav [data-section="keys"]`)
   await page.click(`${drawer} [data-action="cmdbook.open.tmux"]`)
 
   // F24 [피드백 작성]과 같은 규칙 — 설정 창을 강제로 닫지 않는다(모달 위에 쌓인다).
@@ -144,7 +156,7 @@ test('SET-9★ 폰트 설정은 터미널만 바꾸고 사이드바 글꼴은 �
   )
 
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="font"]`)
+  await page.click(`${drawer} .sp-nav [data-section="font"]`)
   const items = page.locator(`${drawer} .font-list .font-item`)
   expect(await items.count()).toBeGreaterThan(1)
   // 현재 선택과 다른 항목을 고른다(0 이 이미 선택돼 있으면 1을, 아니면 0을 고른다).
@@ -167,9 +179,9 @@ test('SET-9★ 폰트 설정은 터미널만 바꾸고 사이드바 글꼴은 �
 test('SET-8 바꾼 설정이 재기동 후에도 유지된다', async ({ userDataDir, launch }) => {
   const a1 = await launch(userDataDir)
   await a1.page.keyboard.press('Control+,')
-  await a1.page.click(`${drawer} .set-nav [data-section="font"]`)
+  await a1.page.click(`${drawer} .sp-nav [data-section="font"]`)
   await a1.page.locator(`${drawer} input[aria-label="글자 크기"]`).fill('19')
-  await a1.page.click(`${drawer} .set-nav [data-section="terminal"]`)
+  await a1.page.click(`${drawer} .sp-nav [data-section="terminal"]`)
   await a1.page.click(`${drawer} .set-row:has(.sr-label:text-is("커서 모양")) .seg-ctl button[data-value="underline"]`)
   await a1.page.keyboard.press('Escape')
   await persist(a1.page)
@@ -182,7 +194,7 @@ test('SET-8 바꾼 설정이 재기동 후에도 유지된다', async ({ userDat
     })
     .toBe('19px')
   await a2.page.keyboard.press('Control+,')
-  await a2.page.click(`${drawer} .set-nav [data-section="terminal"]`)
+  await a2.page.click(`${drawer} .sp-nav [data-section="terminal"]`)
   await expect(
     a2.page.locator(`${drawer} .set-row:has(.sr-label:text-is("커서 모양")) .seg-ctl button[data-value="underline"]`)
   ).toHaveClass(/on/)
@@ -217,6 +229,78 @@ test('SET-ACT★ 좌측 레일은 다섯(R6), 하단 탭줄은 기본 노출 여
 
   // 설정 [일반]에 그 목록이 남아 있으면 안 된다.
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="general"]`)
+  await page.click(`${drawer} .sp-nav [data-section="general"]`)
   await expect(page.locator(`${drawer} .act-cfg`)).toHaveCount(0)
+})
+
+// SET-10★ 항목 단위 검색(M1 1-A) — Ctrl+F 로 검색칸, 라벨로 항목만 걸러 보이고, 누르면 그 섹션의 그 줄로 간다.
+test('SET-10★ 설정 검색이 항목까지 걸러 보이고 누르면 그 줄로 간다', async ({ ara }) => {
+  const { page } = ara
+  await page.keyboard.press('Control+,')
+  await expect(page.locator(drawer)).toBeVisible()
+  await page.keyboard.press('Control+F')
+  const input = page.locator(`${drawer} .sp-search input`)
+  await expect(input).toBeFocused()
+  await input.fill('스크롤백')
+  // 목록에는 맞는 섹션만, 결과에는 맞는 항목만.
+  await expect(page.locator(`${drawer} .sp-nav [data-section]`)).toHaveCount(1)
+  await expect(page.locator(`${drawer} .sp-nav [data-section="terminal"] .sp-hits`)).toHaveText('1')
+  await expect(page.locator(`${drawer} .sp-hit`)).toHaveCount(1)
+  await page.click(`${drawer} .sp-hit[data-item="scrollback"]`)
+  await expect(input).toHaveValue('')
+  await expect(page.locator(`${drawer} .sp-nav [data-section="terminal"]`)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator(`${drawer} .sp-pane [data-item="scrollback"]`)).toHaveClass(/sp-flash/)
+
+  // 설명에만 있는 낱말도 찾는다 — 진단 프로브(설명: event-loop-delay.ndjson)는 고급에 있다.
+  await input.fill('ndjson')
+  await expect(page.locator(`${drawer} .sp-hit[data-item="probe"]`)).toBeVisible()
+  await expect(page.locator(`${drawer} .sp-hit-sec[data-section="advanced"]`)).toBeVisible()
+
+  // 없으면 빈 안내. Esc 는 검색어를 먼저 지우고, 다음 Esc 에 닫는다.
+  await input.fill('없는낱말zzz')
+  await expect(page.locator(`${drawer} .sp-empty`)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(input).toHaveValue('')
+  await expect(page.locator(drawer)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator(drawer)).toHaveCount(0)
+})
+
+// SET-11★ 딥링크(openSettings(section, item)) — 다른 화면의 "설정 열기"가 그 항목으로 바로 간다.
+// 부트스트랩 창의 [키 없음] 카드 버튼 → 전역 › 아라 채팅의 API 키 줄.
+test('SET-11★ 다른 화면의 설정 열기가 그 섹션·항목으로 바로 간다', async ({ ara }) => {
+  const { page } = ara
+  await page.click('.titlebar .tb-burger')
+  await page.click('.titlebar .tb-menu span:text-is("파일")')
+  await page.click('.ctx-menu .ctx-item[data-action="ai.bootstrap"]')
+  await page.click('.overlay.open .ai-bootstrap .ai-card .btn')
+  await expect(page.locator(`${drawer} .sp-nav [data-section="ai"]`)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator(`${drawer} .sp-pane [data-item="ai.key"]`)).toHaveClass(/sp-flash/)
+  await expect(page.locator(`${drawer} .sp-crumb`).first()).toHaveText('전역 (아라)')
+})
+
+// SET-12★ 대응표 4-3 — 옮긴 항목이 새 자리에 있다(빠지면 사용자가 못 찾는다).
+test('SET-12★ 옮긴 설정 항목이 새 자리에 있다', async ({ ara }) => {
+  const { page } = ara
+  await page.keyboard.press('Control+,')
+  const at = async (section: string, items: string[]): Promise<void> => {
+    await page.click(`${drawer} .sp-nav [data-section="${section}"]`)
+    for (const it of items) await expect(page.locator(`${drawer} .sp-pane [data-item="${it}"]`).first()).toBeAttached()
+  }
+  await at('agents', ['ai.cli', 'ai.cliPick', 'ai.cliFlags'])
+  await at('terminal', ['termCompletion', 'cursorStyle', 'cursorBlink', 'bell', 'copyOnSelect', 'scrollback'])
+  await at('update', ['update'])
+  await at('mcp', ['mcp.enable', 'sec.mcp'])
+  await at('advanced', ['gpu', 'probe', 'dir.app'])
+  await at('log', ['sessionLog', 'logRetention', 'logFolder', 'dir.session'])
+  // 옛 자리에는 없다.
+  await at('general', ['uiScale', 'bootSplash', 'dir.download'])
+  await expect(page.locator(`${drawer} .sp-pane [data-item="copyOnSelect"]`)).toHaveCount(0)
+  await at('about', ['about.version', 'manual', 'notes', 'license', 'notice'])
+  await expect(page.locator(`${drawer} .sp-pane [data-item="probe"]`)).toHaveCount(0)
+  await at('ai', ['ai.callName', 'ai.provider', 'ai.key', 'ai.model', 'ai.usage'])
+  await expect(page.locator(`${drawer} .sp-pane [data-item="ai.cliFlags"]`)).toHaveCount(0)
+  // 이식 예정 섹션은 자리만.
+  await page.click(`${drawer} .sp-nav [data-section="git"]`)
+  await expect(page.locator(`${drawer} .sp-soon`)).toBeVisible()
 })

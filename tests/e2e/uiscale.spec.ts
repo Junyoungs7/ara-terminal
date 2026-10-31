@@ -258,9 +258,9 @@ test('SCALE-4 설정 [일반]에서 배율을 바꾸면 글자가 즉시 커지�
   const before = await a1.page.evaluate(() => parseFloat(getComputedStyle(document.body).fontSize))
 
   await a1.page.keyboard.press('Control+Comma')
-  await expect(a1.page.locator('.drawer')).toBeVisible()
+  await expect(a1.page.locator('.settings-page.open')).toBeVisible()
   // 배율은 [일반] 섹션에 있다 — 열린 섹션을 가정하지 않고 눌러서 간다(기본 섹션이 바뀌어도 안 깨진다).
-  await a1.page.click('.drawer .set-nav [data-section="general"]')
+  await a1.page.click('.settings-page .sp-nav [data-section="general"]')
   // Seg 컨트롤: 화면에 보이는 라벨로 고른다(저장값은 'xlarge').
   await a1.page.getByText('아주 크게', { exact: true }).click()
 

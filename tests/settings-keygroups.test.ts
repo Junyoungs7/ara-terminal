@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { KEYMAP } from '../src/shared/keymap'
 import { AI_ENTRY } from '../src/shared/features'
-import { KEY_GROUPS } from '../src/renderer/components/SettingsDrawer'
+import { KEY_GROUPS } from '../src/renderer/components/SettingsPage'
 
 describe('설정 [단축키] 그룹이 KEYMAP 카테고리를 빠짐없이 덮는다', () => {
   it('implemented:true 인 바인딩의 카테고리는 전부 어느 KEY_GROUPS 에 속한다', () => {

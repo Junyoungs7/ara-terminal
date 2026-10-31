@@ -7,11 +7,11 @@
 import type { Page } from '@playwright/test'
 import { test, expect, dialog, dialogConfirm, persist, quitAra } from './fixtures'
 
-const drawer = '.drawer.open'
+const drawer = '.settings-page.open'
 
 async function openAiSettings(page: Page): Promise<void> {
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="ai"]`)
+  await page.click(`${drawer} .sp-nav [data-section="ai"]`)
 }
 
 // 앱 상태(main 소유)에 직접 턴을 하나 만든다 — AraSession.send() 는 키 유무와 무관하게 사용자+assistant

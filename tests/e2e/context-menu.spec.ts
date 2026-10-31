@@ -57,12 +57,12 @@ test('CTX-3★ 라디얼·팔레트가 사라지고 Ctrl+K 가 앱을 열지 않
   // Ctrl+K 는 이제 앱 키가 아니다 — 어떤 오버레이도 열리지 않고 xterm 이 셸로 흘려보낸다.
   await page.keyboard.press('Control+k')
   await expect(page.locator('.radial-menu, .smart-palette, .ctx-menu')).toHaveCount(0)
-  await expect(page.locator('.cp-drop, .cheatsheet.open, .drawer.open')).toHaveCount(0)
+  await expect(page.locator('.cp-drop, .cheatsheet.open, .settings-page.open')).toHaveCount(0)
 
   // 설정에도 "우클릭 메뉴 스타일" 줄이 남아 있지 않다.
   await page.keyboard.press('Control+,')
-  await expect(page.locator('.drawer.open')).toBeVisible()
-  await expect(page.locator('.drawer .sr-label:text-is("우클릭 메뉴 스타일")')).toHaveCount(0)
+  await expect(page.locator('.settings-page.open')).toBeVisible()
+  await expect(page.locator('.settings-page .sr-label:text-is("우클릭 메뉴 스타일")')).toHaveCount(0)
   await page.keyboard.press('Escape')
 })
 

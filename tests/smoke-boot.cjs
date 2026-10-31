@@ -935,42 +935,42 @@ const checks = []
     // R5→FB-ui2: 설정 창 열기 — 탭바 버튼도, 타이틀바 기어도 사라졌으므로 우측 액티비티 바(진입점 ①)를 쓴다.
     document.querySelector('.lrail-item[data-activity="settings"]')?.click()
     await wait(350)
-    const drawerOpen = !!document.querySelector('.drawer.open')
-    // 좌측 nav 8섹션(W2 [로그] · W3 [AI] · F23 [MCP] 추가) → [폰트] 로 전환해야 아래 폰트 UI 가 보인다.
-    const navSections = [...document.querySelectorAll('.drawer.open .set-nav span')].map(s => s.dataset.section)
+    const drawerOpen = !!document.querySelector('.settings-page.open')
+    // 왼쪽 목록(M1 1-A 묶음 순서) → [글꼴] 로 전환해야 아래 폰트 UI 가 보인다.
+    const navSections = [...document.querySelectorAll('.settings-page.open .sp-nav .sp-item')].map(s => s.dataset.section)
     // W3 F16: [AI] 섹션에 반출 고지 문구가 실제로 그려지는지(설계 §4.7 — 사내 배포 필수 문구).
-    document.querySelector('.drawer.open .set-nav span[data-section="ai"]')?.click()
+    document.querySelector('.settings-page.open .sp-nav .sp-item[data-section="ai"]')?.click()
     await wait(200)
-    const aiNote = document.querySelector('.drawer.open [data-note="ai.export"]')?.textContent || ''
-    const aiKeyField = document.querySelector('.drawer.open input[data-field="ai.key"]')
+    const aiNote = document.querySelector('.settings-page.open [data-note="ai.export"]')?.textContent || ''
+    const aiKeyField = document.querySelector('.settings-page.open input[data-field="ai.key"]')
     // 저장된 키를 되읽어 채우지 않는다 — 필드는 언제 열어도 비어 있어야 한다.
     const aiKeyEmpty = aiKeyField?.value === '' && aiKeyField?.type === 'password'
     // W5: 모델 추천 칩은 .ai-model-ctl 안에만 있다(스코프로 provider Seg 와 구분).
     // provider 는 **자기 이름으로** 집는다(#150): 전에는 "그 밖의 .seg-ctl" 이었는데 [AI] 섹션에
     // AI CLI 고르기 세그먼트(claude/codex/gemini)가 생기면서 그것까지 프로바이더로 셌다.
-    const aiModels = [...document.querySelectorAll('.drawer.open .ai-model-ctl .seg-ctl button')].map(b => b.dataset.value)
-    const aiProviders = [...document.querySelectorAll('.drawer.open .seg-ctl[data-field="ai.provider"] button')]
+    const aiModels = [...document.querySelectorAll('.settings-page.open .ai-model-ctl .seg-ctl button')].map(b => b.dataset.value)
+    const aiProviders = [...document.querySelectorAll('.settings-page.open .seg-ctl[data-field="ai.provider"] button')]
       .map(b => b.dataset.value)
-    document.querySelector('.drawer.open .set-nav span[data-section="font"]')?.click()
+    document.querySelector('.settings-page.open .sp-nav .sp-item[data-section="font"]')?.click()
     await wait(200)
-    const compareRows = document.querySelectorAll('.drawer.open .fc-strip .fc-row').length
-    const fontItems = document.querySelectorAll('.drawer.open .font-list .font-item').length
-    const previewLines = document.querySelectorAll('.drawer.open .preview-box .pv-ln').length
+    const compareRows = document.querySelectorAll('.settings-page.open .fc-strip .fc-row').length
+    const fontItems = document.querySelectorAll('.settings-page.open .font-list .font-item').length
+    const previewLines = document.querySelectorAll('.settings-page.open .preview-box .pv-ln').length
     // 라이선스 고지는 R5 에서 [정보] 섹션으로 옮겼다 — 세어 본 뒤 다시 [폰트] 로 돌아온다.
-    document.querySelector('.drawer.open .set-nav span[data-section="about"]')?.click()
+    document.querySelector('.settings-page.open .sp-nav .sp-item[data-section="about"]')?.click()
     await wait(200)
-    const licenseRows = (document.querySelector('.drawer.open .license-list')?.querySelectorAll('.license-row').length ?? 0) // 첫 목록=OFL 폰트. 둘째는 M0 코드 고지(CODE_NOTICES)
-    const aboutVersion = /v\\d/.test(document.querySelector('.drawer.open .set-pane .sr-ctl .v')?.textContent || '')
-    document.querySelector('.drawer.open .set-nav span[data-section="font"]')?.click()
+    const licenseRows = (document.querySelector('.settings-page.open .license-list')?.querySelectorAll('.license-row').length ?? 0) // 첫 목록=OFL 폰트. 둘째는 M0 코드 고지(CODE_NOTICES)
+    const aboutVersion = /v\\d/.test(document.querySelector('.settings-page.open .sp-pane .sr-ctl .v')?.textContent || '')
+    document.querySelector('.settings-page.open .sp-nav .sp-item[data-section="font"]')?.click()
     await wait(200)
     // 미리보기가 실사용 한글(알파벳 예시 아님) 포함.
-    const previewText = document.querySelector('.drawer.open .preview-box .pb-body')?.textContent || ''
+    const previewText = document.querySelector('.settings-page.open .preview-box .pb-body')?.textContent || ''
     const koreanPreview = /백업|데이터베이스|결제|승인/.test(previewText)
     // 크기 슬라이더 범위 = 10–20.
-    const sizeSlider = document.querySelector('.drawer.open .fp-controls input[type=range]')
+    const sizeSlider = document.querySelector('.settings-page.open .fp-controls input[type=range]')
     const sizeMin = sizeSlider?.min, sizeMax = sizeSlider?.max
     // 폰트 전환: D2Coding 선택 → --term CSS 변수에 D2Coding 반영 + workspace 영속.
-    const d2Item = [...document.querySelectorAll('.drawer.open .font-list .font-item')].find(f => /D2Coding/.test(f.textContent))
+    const d2Item = [...document.querySelectorAll('.settings-page.open .font-list .font-item')].find(f => /D2Coding/.test(f.textContent))
     if (d2Item) d2Item.click()
     await wait(300)
     const termVarAfterPick = getComputedStyle(document.documentElement).getPropertyValue('--term').trim()
@@ -1001,16 +1001,15 @@ const checks = []
   checks.push(['번들 Pretendard(UI) 로드(오프라인)', f5.pretendardLoaded === true])
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
-    // 정의부는 SettingsDrawer.tsx SETTINGS_SECTIONS. [명령 기록]이 빠져 있던 것도 함께 맞췄다(2.0 3단계 [기능] 추가).
-    // 2.0 4단계: [모양](마우스 커서)이 [일반] 다음에 들어와 11섹션. 잠금 L1: [보안]이 [기능] 다음에 들어와 12섹션. 2.1: [음성]이 [AI] 다음에 들어와 13섹션.
-    '좌측 nav 13섹션(일반/모양/터미널/폰트/기능/보안/로그/AI/음성/MCP/단축키/명령 기록/정보)',
-    f5.navSections.join(',') === 'general,look,terminal,font,features,security,log,ai,voice,mcp,keys,history,about'
+    // 정의부는 shared/settingsIndex.ts SETTINGS_SECTIONS(M1 1-A — 묶음: AI 작업 공간 → 앱 → 전역 → 터미널 → 보안·연동 → 고급 → 정보).
+    '설정 목록 30섹션이 묶음 순서대로(AI 작업 공간이 맨 위)',
+    f5.navSections.join(',') === 'agents,usage,git,editor,sessionSearch,notify,browser,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,experimental,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
   //
   // #150: 아래 넷은 옛 스위치로 막혀 **한 번도 돈 적이 없다.** 그런데 이 섹션을 그리는 문은
-  // SettingsDrawer 의 `AI_ENTRY`(= ARA_CHAT)다 — 검사할 것이 화면에 멀쩡히 있는데
+  // SettingsPage 의 `AI_ENTRY`(= ARA_CHAT)다 — 검사할 것이 화면에 멀쩡히 있는데
   // 검사만 건너뛰고 있었다(실패가 아니라 침묵이라 실패 목록에도 안 잡혔다).
   // **제품이 무엇으로 문을 잠그는지를 그대로 쓴다.**
   if (AI_ENTRY)
@@ -2147,7 +2146,7 @@ const checks = []
     // R4.1 ⑤ File → 설정 / Help → 치트시트 / Help → 정보.
     // R5: 설정에 Ctrl+, 가 생겨 command 가 아니라 action 항목이 됐다(메뉴가 그 키를 눌러 준다).
     await openTop('파일'); await pick('settings.open')
-    const drawerOpen = !!document.querySelector('.drawer.open')
+    const drawerOpen = !!document.querySelector('.settings-page.open')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(250)
     await closeMenu()
     await openTop('도움말'); await pick('help.cheatsheet')
@@ -2342,8 +2341,8 @@ const checks = []
       el.dispatchEvent(new Event('input', { bubbles: true }))
       el.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    const nav = (s) => document.querySelector('.drawer.open .set-nav span[data-section="' + s + '"]')?.click()
-    const rowByLabel = (text) => [...document.querySelectorAll('.drawer.open .set-row')]
+    const nav = (s) => document.querySelector('.settings-page.open .sp-nav .sp-item[data-section="' + s + '"]')?.click()
+    const rowByLabel = (text) => [...document.querySelectorAll('.settings-page.open .set-row')]
       .find(r => (r.querySelector('.sr-label')?.textContent || '').includes(text))
 
     // 세션 하나 확보 — "열린 세션에도 즉시 적용"을 xterm 옵션으로 확인해야 한다.
@@ -2356,11 +2355,13 @@ const checks = []
     // 진입점 ②: Ctrl+, (기어·File>설정과 같은 상태를 연다).
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }))
     await wait(350)
-    const openedByHotkey = !!document.querySelector('.drawer.open')
+    const openedByHotkey = !!document.querySelector('.settings-page.open')
 
-    // [일반] — 선택 자동복사 끄기 / 스크롤백 2000. (#67: 우클릭 스타일 줄은 없어졌다.)
+    // [일반] — #67: 우클릭 스타일 줄은 없어졌다.
     nav('general'); await wait(200)
     const ctxStyleRowGone = !rowByLabel('우클릭 메뉴 스타일')
+    // [터미널] — 선택 자동복사 끄기 / 스크롤백 2000(M1 1-A 에서 [일반] → 터미널 › 터미널, 대응표 4-3).
+    nav('terminal'); await wait(200)
     const copyToggle = rowByLabel('자동 복사')?.querySelector('.set-toggle')
     const copyOnBefore = copyToggle?.getAttribute('aria-checked')
     copyToggle?.click(); await wait(200)
@@ -2380,9 +2381,9 @@ const checks = []
 
     // [단축키] — 치트시트와 같은 KEYMAP 파생(읽기 전용) + 커스터마이즈 안내.
     nav('keys'); await wait(200)
-    const keyRows = document.querySelectorAll('.drawer.open .set-keys .cs-row').length
-    const keyNote = document.querySelector('.drawer.open .set-note')?.textContent || ''
-    const hasSettingsKey = [...document.querySelectorAll('.drawer.open .set-keys .cs-row')]
+    const keyRows = document.querySelectorAll('.settings-page.open .set-keys .cs-row').length
+    const keyNote = document.querySelector('.settings-page.open .set-note')?.textContent || ''
+    const hasSettingsKey = [...document.querySelectorAll('.settings-page.open .set-keys .cs-row')]
       .some(r => /설정/.test(r.querySelector('.cs-desc')?.textContent || ''))
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await wait(300)

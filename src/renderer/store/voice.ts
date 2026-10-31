@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import { DEFAULT_VOICE, type VoiceEvent, type VoicePrefs, type VoiceStatus } from '@shared/voice'
 import { openMic, Player, type MicHandle } from '../voice/audio'
+import { openSettings } from './settingsNav'
 
 export type Caption = { who: 'me' | 'ara'; text: string; done: boolean }
 
@@ -160,12 +161,8 @@ export function useVoice(): VoiceView {
   )
 }
 
-// 상태바 "승인 생략 켜짐" 칩 → 설정 › 음성. 설정 창의 주인(MainArea)이 열어 주는 함수를 넣는다.
-let openSettings: (() => void) | null = null
-export const setVoiceSettingsOpener = (fn: (() => void) | null): void => {
-  openSettings = fn
-}
-export const openVoiceSettings = (): void => openSettings?.()
+// 상태바 "승인 생략 켜짐" 칩 → 설정 › 음성의 그 줄(딥링크).
+export const openVoiceSettings = (): void => openSettings('voice', 'voice.bypass')
 
 /** 지금 값(이벤트 처리기용 — 훅 밖에서 읽는다). */
 export const voiceView = (): VoiceView => view

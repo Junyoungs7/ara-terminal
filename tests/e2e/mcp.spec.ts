@@ -1,14 +1,14 @@
 // F23 설정 [MCP] 섹션 — 서버 토글 · 포트/토큰 노출 · 토큰 1회성 발급 · 연결 관리 행.
-// McpSection(SettingsDrawer.tsx)은 프롭 없이 window.ev.mcp.getState()/onStateChanged 로만
+// McpSection(SettingsPage.tsx)은 프롭 없이 window.ev.mcp.getState()/onStateChanged 로만
 // 상태를 얻는다 — 렌더러 로컬 state 는 freshToken(발급 직후 1회 표시) 뿐이다.
 import { test, expect, skipIntro, dialog, dialogConfirm, dialogCancel } from './fixtures'
 
-const drawer = '.drawer.open'
+const drawer = '.settings-page.open'
 const mcpToggle = `${drawer} .set-row:has(.sr-label:text-is("MCP 서버")) .set-toggle`
 
 async function openMcpSettings(page: import('@playwright/test').Page): Promise<void> {
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="mcp"]`)
+  await page.click(`${drawer} .sp-nav [data-section="mcp"]`)
 }
 
 /**
@@ -56,8 +56,8 @@ test('MCP-3 토큰을 발급하면 입력칸에 값이 채워지고 경고 문�
 // MCP-5 발급 직후 토큰은 컴포넌트 밖(상위 상태·workspace.json)으로 올라가지 않는다 — 재조회 채널이
 // 계약에 없다(McpSection 주석). 드로어를 닫았다가 다시 열어도(섹션을 벗어났다가 되돌아오는 재진입) 값이
 // 남아 있으면 안 된다 — freshToken 은 McpSection 로컬 state 라 실제로 사라짐을 보려면 그 컴포넌트를
-// 다시 마운트시켜야 한다(Escape 는 CSS 로만 드로어를 숨기고 SettingsDrawer/McpSection 은 계속 마운트된
-// 채로 남는다 — 실제 소스 확인: MainArea.tsx 가 SettingsDrawer 를 unmount 하지 않는다). 그래서 재진입은
+// 다시 마운트시켜야 한다(Escape 는 CSS 로만 설정 페이지를 숨기고 SettingsPage/McpSection 은 계속 마운트된
+// 채로 남는다 — 실제 소스 확인: MainArea.tsx 가 SettingsPage 를 unmount 하지 않는다). 그래서 재진입은
 // 다른 섹션을 거쳐 mcp 섹션으로 되돌아오는 경로로 만든다(section 이 바뀌면 McpSection 이 unmount/remount).
 test('MCP-5 발급된 토큰은 섹션을 재진입하면 다시 보이지 않는다', async ({ ara }) => {
   const { page } = ara
@@ -65,8 +65,8 @@ test('MCP-5 발급된 토큰은 섹션을 재진입하면 다시 보이지 않�
   await page.click(`${drawer} [data-action="mcp.token.issue"]`)
   await expect(page.locator(`${drawer} input[data-field="mcp.token"]`)).not.toHaveValue('')
 
-  await page.click(`${drawer} .set-nav [data-section="general"]`)
-  await page.click(`${drawer} .set-nav [data-section="mcp"]`)
+  await page.click(`${drawer} .sp-nav [data-section="general"]`)
+  await page.click(`${drawer} .sp-nav [data-section="mcp"]`)
 
   await expect(page.locator(`${drawer} input[data-field="mcp.token"]`)).toHaveValue('')
   await expect(page.locator(`${drawer} input[data-field="mcp.token"]`)).toHaveAttribute('placeholder', /발급된 토큰 있음/)

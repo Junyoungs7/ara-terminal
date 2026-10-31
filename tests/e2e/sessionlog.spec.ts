@@ -15,7 +15,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 
-const drawer = '.drawer.open'
+const drawer = '.settings-page.open'
 
 const logDir = (userData: string): string => join(userData, 'logs')
 
@@ -36,7 +36,7 @@ function logText(userData: string): string {
 // 설정 [로그] 섹션에서 기록을 켠다(사용자가 실제로 하는 경로 — 설정을 거치지 않고 켤 방법은 없다).
 async function enableLog(page: Page): Promise<void> {
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="log"]`)
+  await page.click(`${drawer} .sp-nav [data-section="log"]`)
   const toggle = page.locator(`${drawer} .set-row:has(.sr-label:text-is("세션 로그 기록")) .set-toggle`)
   await expect(toggle).not.toHaveClass(/\bon\b/) // 기본 꺼짐
   await toggle.click()
@@ -97,7 +97,7 @@ test('SLOG-4 [폴더 열기]가 로그 폴더를 연다', async ({ ara }) => {
   await spyShell(app)
 
   await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .set-nav [data-section="log"]`)
+  await page.click(`${drawer} .sp-nav [data-section="log"]`)
   await page.click(`${drawer} [data-action="log.reveal"]`)
 
   await expect.poll(async () => (await spyCalls(app)).paths, { timeout: 10_000 }).toEqual([logDir(userData)])
@@ -107,7 +107,7 @@ test('SLOG-4 [폴더 열기]가 로그 폴더를 연다', async ({ ara }) => {
 test('SLOG-5 보존 기간을 고르면 재기동 후에도 유지된다', async ({ userDataDir, launch }) => {
   const a1 = await launch(userDataDir)
   await a1.page.keyboard.press('Control+,')
-  await a1.page.click(`${drawer} .set-nav [data-section="log"]`)
+  await a1.page.click(`${drawer} .sp-nav [data-section="log"]`)
   const seg = `${drawer} .set-row:has(.sr-label:text-is("보존 기간")) .seg-ctl`
   expect(await a1.page.locator(`${seg} button`).allTextContents()).toEqual(['7일', '30일', '90일', '무제한'])
   await a1.page.click(`${seg} button[data-value="90"]`)
@@ -118,7 +118,7 @@ test('SLOG-5 보존 기간을 고르면 재기동 후에도 유지된다', async
 
   const a2 = await launch(userDataDir)
   await a2.page.keyboard.press('Control+,')
-  await a2.page.click(`${drawer} .set-nav [data-section="log"]`)
+  await a2.page.click(`${drawer} .sp-nav [data-section="log"]`)
   await expect(a2.page.locator(`${seg} button[data-value="90"]`)).toHaveClass(/on/)
   // 기록 토글은 재기동해도 기본 꺼짐 그대로다(보존 기간만 바꿨다).
   await expect(

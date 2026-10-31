@@ -4,7 +4,8 @@ import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
 import { PaneGrid, type RestoreError } from './PaneGrid'
 import { VoicePane } from './VoicePane'
-import { closeVoice, openVoice, pttDown, pttUp, setVoicePrefs, setVoiceSettingsOpener, useVoice, voiceView } from '../store/voice'
+import { closeVoice, openVoice, pttDown, pttUp, setVoicePrefs, useVoice, voiceView } from '../store/voice'
+import { openSettings, setSettingsOpener, type SettingsTarget } from '../store/settingsNav'
 import { pickBackgroundSession, type Session, type useSessions } from '../store/sessions'
 import { useLayout, toLayoutNode, allPanesRdp, splitFiller, serial, MAX_PANES, type PairAxis } from '../store/layout'
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
@@ -13,7 +14,7 @@ import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
-import { SettingsDrawer, SIZE_MAX, SIZE_MIN, type SettingsSection } from './SettingsDrawer'
+import { SettingsPage, SIZE_MAX, SIZE_MIN } from './SettingsPage'
 import { useFont } from '../store/font'
 import { useUiPrefs } from '../store/uiPrefs'
 import { WelcomeModal } from './WelcomeModal'
@@ -250,7 +251,19 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     // W1 F13 로그 뷰어(파일 탭 우클릭 [tail로 보기]). 한 번에 하나만 — 다른 파일을 고르면 갈아탄다.
     // 설정 창 — 열림 상태 + 폰트(F5)·터미널 동작(R5) 스토어(하이드레이트/실시간 적용/영속).
     const [settingsOpen, setSettingsOpen] = useState(false)
-    const [settingsEntry, setSettingsEntry] = useState<SettingsSection | undefined>()
+    const [settingsEntry, setSettingsEntry] = useState<(SettingsTarget & { n: number }) | undefined>()
+    // 설정 딥링크(store/settingsNav) — 여는 길은 이것 하나다(Ctrl+, · 레일 · 메뉴 · 다른 화면의 "설정 열기").
+    useEffect(() => {
+      setSettingsOpener((target) => {
+        setSettingsEntry(target ? { ...target, n: Date.now() } : undefined)
+        setSettingsOpen(true)
+      })
+      return () => setSettingsOpener(null)
+    }, [])
+    const closeSettings = useCallback(() => {
+      setSettingsOpen(false)
+      setSettingsEntry(undefined)
+    }, [])
     const { font, update: updateFont } = useFont()
     const { prefs, update: updatePrefs } = useUiPrefs()
 
@@ -267,8 +280,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(
       () =>
         window.ev?.lock?.onHint?.(() => {
-          setSettingsEntry('security')
-          setSettingsOpen(true)
+          openSettings('security', 'sec.use')
           showToast(t('lock.offHint'))
         }),
       [showToast]
@@ -516,11 +528,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       if (!settingsOpen) return
       const onKey = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') setSettingsOpen(false)
+        if (e.key === 'Escape') closeSettings()
       }
       window.addEventListener('keydown', onKey)
       return () => window.removeEventListener('keydown', onKey)
-    }, [settingsOpen])
+    }, [settingsOpen, closeSettings])
 
     // FB-ui2: 액티비티 바의 [설정] 아이콘 활성 표시용 미러(위 prop 설명 참고).
     useEffect(() => {
@@ -1288,14 +1300,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     useEffect(() => {
       if (!prefs.voice.enabled && voice.open) closeVoice()
     }, [prefs.voice.enabled, voice.open])
-    useEffect(() => {
-      if (detachedWinId) return
-      setVoiceSettingsOpener(() => {
-        setSettingsEntry('voice')
-        setSettingsOpen(true)
-      })
-      return () => setVoiceSettingsOpener(null)
-    }, [detachedWinId])
     /**
      * Ctrl+Shift+Space — **짧게 = 켜고/끄기, 켜진 채 누르고 있기 = 말하기**(누르고 말하기 모드).
      * 키 하나로 두 일을 하는 이유: 말하기 키를 따로 두면 손이 두 조합을 외워야 하고, 둘 다 셸이 안 쓰는
@@ -1389,7 +1393,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         } else if (matchBinding(e, 'settings.open')) {
           // R5: Ctrl+, — 타이틀바 기어·File>설정과 같은 상태를 연다(진입점 3개, 배선은 여기 하나).
           e.preventDefault()
-          setSettingsOpen(true)
+          openSettings()
         } else {
           // R14 Alt+1·2·3 — 우클릭 [AI 실행 ▸ …] 과 같은 onAction 길. 떼어낸 창엔 onRunAiCli 가 없어
           // 아무 일도 안 한다(메뉴를 감추는 TerminalMenuCaps.runAiCli 와 같은 판정).
@@ -1526,10 +1530,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             <div className="pane-row-div" aria-hidden />
             <VoicePane
               prefs={prefs.voice}
-              onOpenAiSettings={() => {
-                setSettingsEntry('ai')
-                setSettingsOpen(true)
-              }}
+              onOpenAiSettings={() => openSettings('ai', 'ai.key')}
             />
           </>
         )}
@@ -1582,23 +1583,17 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         />
         <ErrorBoundary
           area="settings"
-          className={'drawer' + (settingsOpen ? ' open' : '')}
+          className={'settings-page' + (settingsOpen ? ' open' : '')}
           resetKey={settingsOpen}
-          onDismiss={() => {
-            setSettingsOpen(false)
-            setSettingsEntry(undefined)
-          }}
+          onDismiss={closeSettings}
         >
-        <SettingsDrawer
+        <SettingsPage
           open={settingsOpen}
           font={font}
           prefs={prefs}
           version={version}
-          onClose={() => {
-            setSettingsOpen(false)
-            setSettingsEntry(undefined)
-          }}
-          entrySection={settingsEntry}
+          onClose={closeSettings}
+          entry={settingsEntry}
           onChange={updateFont}
           onPrefsChange={updatePrefs}
           ask={ask}

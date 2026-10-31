@@ -48,6 +48,7 @@ import type { TreeTarget } from './ConnTree'
 import { cdCommand } from './filePath'
 import type { MenuCommandId, TreeActionId } from '../interactions/actions'
 import { dispatchAction, matchBinding } from '../../shared/keymap'
+import { openSettings } from '../store/settingsNav'
 import { buildTmuxInput } from '../../shared/tmux'
 import {
   MCP_AUTO_ALLOW_MINUTES,
@@ -1552,7 +1553,7 @@ export function Shell() {
           onBottom={toggleBottomBar}
           settingsOpen={settingsActive}
           // 설정은 덮개다 — 단축키와 **같은 길**로 보낸다(레일 전용 배선을 만들지 않는다).
-          onSettings={() => dispatchAction('settings.open')}
+          onSettings={() => openSettings()}
         />
         <ErrorBoundary area="sidebar" className="sidebar">
         <Sidebar

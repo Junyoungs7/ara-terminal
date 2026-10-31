@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
-import { dispatchAction } from '../../shared/keymap'
+import { openSettings } from '../store/settingsNav'
 import { AI_PROVIDER_LABELS, DEFAULT_AI_PROVIDER, type AiProvider } from '@shared/types'
 import { buildBootstrapPrompt, BOOTSTRAP_FIELD_MAX, type BootstrapForm, type BootstrapKind } from './aiBootstrap'
 
@@ -91,7 +91,7 @@ export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
               <div className="ai-card-d">
                 {AI_PROVIDER_LABELS[provider]} {t('ai.noKey.desc.suffix')}
               </div>
-              <button type="button" className="btn sec" onClick={() => dispatchAction('settings.open')}>
+              <button type="button" className="btn sec" onClick={() => openSettings('ai', 'ai.key')}>
                 {t('ai.noKey.btn')}
               </button>
             </div>

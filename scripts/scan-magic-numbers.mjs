@@ -475,7 +475,8 @@ const ACCENT_USE = /var\(--accent(?:-bright|-line|-glow|-deep|-halo|-soft)?\)/
 const ACCENT_OK = new RegExp(
   [
     String.raw`\.(?:ttab\.active|exp-tab\.on|bw-tab\.on|pw-tab\.on|bp-tab\.on)::?(?:before|after)`, // 탭 밑줄(+아래 번짐)
-    String.raw`\.lrail-item\.active::before|\.set-nav span\.on::before`, // 레일·설정 네비 활성 막대
+    String.raw`\.lrail-item\.active::before|\.sp-item\.on::before`, // 레일·설정 네비 활성 막대
+    String.raw`\.settings-page mark|\.sp-flash|^\.sp-group$`, // M1 설정 페이지 — 검색 맞은 글자·딥링크 줄 밝힘·묶음 머리(시안 SW-final)
     String.raw`\.btn\.pri\b|\.rdp-go|\.ed-save|\.log-dl`, // 주 버튼(--accent-deep + 흰 글)
     String.raw`\.ara-send|\.ara-me\b`, // 전송 버튼·사용자 말풍선
     String.raw`:focus`, // 포커스 링

@@ -134,12 +134,12 @@ test('CLIP-6 선택 시 자동 복사는 기본 켜짐이고 설정에서 끌 �
   await expectTermText(page, id, /자동복사_대상/)
 
   // 기본값 확인 + 실제 동작(선택 후 mouseup 시점에 복사).
-  const toggle = page.locator('.drawer .set-row:has(.sr-label:text-is("선택 시 자동 복사")) .set-toggle')
-  // 이 설정은 [일반] 섹션에 있다(터미널 동작이지만 화면 전체 습관이라 그쪽에 뒀다) — 열린 섹션을
+  const toggle = page.locator('.settings-page .set-row:has(.sr-label:text-is("선택 시 자동 복사")) .set-toggle')
+  // 이 설정은 [터미널] 섹션에 있다(M1 1-A 에서 [일반] → 터미널 › 터미널, 대응표 4-3) — 열린 섹션을
   // 가정하지 않고 눌러서 간다.
   const openTerminalSection = async (): Promise<void> => {
     await page.keyboard.press('Control+,')
-    await page.click('.drawer .set-nav [data-section="general"]')
+    await page.click('.settings-page .sp-nav [data-section="terminal"]')
   }
   await openTerminalSection()
   await expect(toggle).toHaveAttribute('aria-checked', 'true')

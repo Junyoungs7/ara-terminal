@@ -38,8 +38,8 @@ test('WELCOME-1★ 처음 켜면 이름을 묻고, 넣으면 다시 안 묻는�
   await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
-  await page.click('.drawer.open .set-nav [data-section="ai"]')
-  const field = page.locator('.drawer.open [data-field="ai.callName"]')
+  await page.click('.settings-page.open .sp-nav [data-section="ai"]')
+  const field = page.locator('.settings-page.open [data-field="ai.callName"]')
   await expect(field).toHaveValue('준영')
   await field.fill('대리')
   await expect(field).toHaveValue('대리')
@@ -60,8 +60,8 @@ test('WELCOME-2 건너뛰어도 다시 안 뜬다 — 첫 화면이 관문이 �
   await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
-  await page.click('.drawer.open .set-nav [data-section="ai"]')
-  await expect(page.locator('.drawer.open [data-field="ai.callName"]')).toHaveValue('')
+  await page.click('.settings-page.open .sp-nav [data-section="ai"]')
+  await expect(page.locator('.settings-page.open [data-field="ai.callName"]')).toHaveValue('')
 })
 
 test('BOOT-1★ 켤 때 인사가 지나간다 · 아무 키로 건너뛴다 · 설정에서 끈다', async ({ launch, userDataDir }) => {
@@ -93,8 +93,8 @@ test('BOOT-1★ 켤 때 인사가 지나간다 · 아무 키로 건너뛴다 · 
   await page.click('.titlebar .tb-burger') // 2.0 다듬기 R1: 메뉴바는 ≡ 안에 접혀 있다
   await page.click('.tb-menu span:text-is("파일")')
   await page.click('.ctx-menu .ctx-item[data-action="settings.open"]')
-  await page.click('.drawer.open .set-nav [data-section="general"]')
-  await page.locator('.drawer.open .set-row', { hasText: '켤 때 인사 화면' }).locator('.set-toggle').click()
+  await page.click('.settings-page.open .sp-nav [data-section="general"]')
+  await page.locator('.settings-page.open .set-row', { hasText: '켤 때 인사 화면' }).locator('.set-toggle').click()
   await page.keyboard.press('Escape')
   await page.reload()
   await page.waitForSelector('.pane-grid')

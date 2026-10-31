@@ -53,8 +53,8 @@ test('TERM-5 스크롤백 설정이 즉시 반영된다', async ({ ara }) => {
   const id = await newLocalShell(page)
   const before = await page.evaluate((sid) => window.__evTerm(sid)?.scrollback, id)
   await page.keyboard.press('Control+,')
-  await page.click('.drawer .set-nav [data-section="general"]')
-  const slider = page.locator('.drawer .set-row:has(.sr-label:text-is("스크롤백")) input[type="range"]')
+  await page.click('.settings-page .sp-nav [data-section="terminal"]') // M1 1-A: [일반] → 터미널 › 터미널
+  const slider = page.locator('.settings-page .set-row:has(.sr-label:text-is("스크롤백")) input[type="range"]')
   await slider.fill('20000')
   await page.keyboard.press('Escape')
   await expect.poll(async () => page.evaluate((sid) => window.__evTerm(sid)?.scrollback, id)).toBe(20000)

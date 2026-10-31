@@ -2,7 +2,6 @@ import { AI_ENTRY, FEATURES } from '@shared/features'
 import { callNameOf } from '@shared/araPersona'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
-import { IconClose } from './icons'
 import { PasswordInput } from './PasswordInput'
 import {
   AI_MODELS_BY_PROVIDER,
@@ -42,15 +41,16 @@ import { CURSOR_KINDS, cursorSrc, cursorValue } from '../cursorThemes'
 import { CHANGELOG_URL, MANUAL_URL } from '@shared/links'
 import type { DialogResult, DialogSpec } from './Dialog'
 import { Dropdown } from './Dropdown'
-import { Check, Clock, KeyRound, Mic, Play, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Check, Clock, KeyRound, Mic, Play, Search, ShieldAlert } from 'lucide-react'
 import { VOICES, VOICE_FACES, VOICE_KEEP, VOICE_LISTEN, VOICE_SPEEDS } from '@shared/voice'
 import { openMic, listMics, type MicHandle } from '../voice/audio'
 import { previewVoice, setBypass, useVoice } from '../store/voice'
+import { SETTINGS_INDEX, searchSettings, sectionDef, type SettingsSection } from '@shared/settingsIndex'
+import type { SettingsTarget } from '../store/settingsNav'
 
-// 설정 창 (F5 드로어 → R5 확장 → W2 [로그] → W3 [AI] → F23 [MCP] → #204 [명령 기록] 추가).
-// 좌측 nav 9섹션: 일반 / 터미널 / 폰트 / 로그 / AI / MCP / 단축키 / 명령 기록 / 정보.
-// 표면은 목업 variant-final-2 의 .drawer 를 그대로 쓰고, .set-nav 만 가로 탭에서 세로 열로 바꿨다
-// (섹션이 1개에서 5개로 늘어 가로로는 라벨이 눌린다). 새 모달 프레임워크는 쓰지 않는다.
+// 설정 페이지 (F5 드로어 → 2.0 가운데 창 → M1 1-A **전체 화면 + 검색**, 시안 SW-final 설정 장면).
+// 묶음·섹션·항목 목록은 shared/settingsIndex.ts 한 곳에 있다(검색·딥링크가 그 표를 읽는다).
+// 닫아도 언마운트하지 않는다(open 클래스만 토글 — 보던 섹션 유지). 각 섹션의 `open` 은 그래서 필요하다.
 //
 // 슬라이더 범위(계획서 C-5 확정): 크기 10–20px, 행간 1.3–2.0.
 // R3.7 Ctrl+휠 확대/축소도 같은 범위를 쓴다(슬라이더와 값이 어긋나면 안 된다).
@@ -60,9 +60,6 @@ const LH_MIN = 1.3
 const LH_MAX = 2.0
 const LH_STEP = 0.02
 
-export const SETTINGS_SECTIONS = ['general', 'look', 'terminal', 'font', 'features', 'security', 'log', 'ai', 'voice', 'mcp', 'keys', 'history', 'about'] as const
-type SettingsSectionAll = (typeof SETTINGS_SECTIONS)[number]
-export type SettingsSection = SettingsSectionAll
 
 // 미리보기·비교 스트립에 쓰는 실사용 한글 터미널 출력(알파벳 예시 금지 — 스펙 #3).
 const PREVIEW_LINES: { cls: string; text: string }[] = [
@@ -85,7 +82,7 @@ const COMPARE_ROWS: { label: string; source: string; stack: string; note?: strin
 const COMPARE_TEXT = '✔ 배포 완료: 백업_20260731.sql (성공) · ⚠ 결제/승인 retry 3/3'
 
 // 단축키 섹션 열 구성 — 치트시트(interactions/Cheatsheet)와 같은 KEYMAP 파생이다.
-// 드로어는 폭이 좁아 4열 대신 카테고리 한 덩어리씩 세로로 쌓는다.
+// 설정 열(720)은 치트시트보다 좁아 4열 대신 카테고리 한 덩어리씩 세로로 쌓는다.
 // export: tests/settings-keygroups.test.ts 가 KEYMAP 의 모든 implemented 카테고리가 여기 빠짐없이
 // 들어 있는지 검사한다(M-5 — 새 카테고리 추가 시 이 배열에 추가하지 않으면 그 테스트가 즉시 깨진다).
 export const KEY_GROUPS: { title: string; cats: KeymapCategory[] }[] = [
@@ -186,13 +183,14 @@ function UpdateRow() {
       .catch(() => {})
     return window.ev?.app?.onUpdateState?.(setSt)
   }, [])
-  if (st.status === 'off') return null
+  // 개발 모드 — [업데이트] 가 섹션 하나가 되어 빈 칸으로 두지 않는다(예전엔 [일반] 끝 줄이라 숨겼다).
+  if (st.status === 'off') return <div className="set-note" data-item="update">{t('settings.update.off')}</div>
   // `available` 은 **busy 가 아니다** — 새 버전을 찾아 두고 안 받은 상태에서도 다시 확인할 수 있어야
   // 한다. 여기에 넣으면 버튼이 영영 잠긴다(AUDIT-R2 ③ — check() 가드와 같은 이유).
   // 맥: 확인·받기 버튼 없이 안내 문장만.
   if (st.status === 'manual')
     return (
-      <Row label={t('settings.update')}>
+      <Row label={t('settings.update')} item="update">
         <div className="set-dir">
           <span className="set-dir-path is-msg" data-update-status="manual">
             {t('settings.update.manual')}
@@ -214,7 +212,7 @@ function UpdateRow() {
               ? t('settings.update.error') + ' — ' + (st.message ?? '')
               : t('settings.update.idle')
   return (
-    <Row label={t('settings.update')}>
+    <Row label={t('settings.update')} item="update">
       <div className="set-dir">
         {/* 경로가 아니라 **문장**이다 — .is-msg 가 경로용 rtl·말줄임·고정폭을 되돌린다
             (2026-09-04: 그게 없어 "…다 — [받기]를 누르세요 1.0.0" 으로 보였다). */}
@@ -258,12 +256,14 @@ function UpdateRow() {
 function DirRow({
   label,
   desc,
+  item,
   value,
   onChange,
   resolve
 }: {
   label: string
   desc: string
+  item: string
   value: string
   onChange: (next: string) => void
   /** 지금 실제로 쓰이는 자리를 main 에게 묻는다. 없으면 기록 폴더 둘(logPaths) 중 하나. */
@@ -285,7 +285,7 @@ function DirRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, label])
   return (
-    <Row label={label} desc={desc}>
+    <Row label={label} desc={desc} item={item}>
       <div className="set-dir">
         <span className="set-dir-path" title={effective}>
           {effective || t('settings.dir.loading')}
@@ -307,9 +307,9 @@ function DirRow({
   )
 }
 
-function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+function Row({ label, desc, item, children }: { label: string; desc?: string; item?: string; children: React.ReactNode }) {
   return (
-    <div className="set-row">
+    <div className="set-row" data-item={item}>
       <div className="sr-main">
         <div className="sr-label">{label}</div>
         {desc && <div className="sr-desc">{desc}</div>}
@@ -348,22 +348,20 @@ function ModelPicker({ provider, value, onChange }: { provider: AiProvider; valu
 }
 
 // [AI] 섹션 (W3 F16 → W5 멀티 프로바이더). 키 입력 상태를 이 컴포넌트 안에만 두는 것이 의도다 —
-// 드로어 props 나 상위 스토어로 올리면 저장된 키가 렌더러 상태 트리에 남는다.
+// 설정 페이지 props 나 상위 스토어로 올리면 저장된 키가 렌더러 상태 트리에 남는다.
 //
 // ⚠️ 저장된 키를 되읽어 표시하지 않는다. 마스킹된 형태(sk-ant-…)조차 그리지 않는다 —
 // 접두사 몇 글자도 로그·스크린샷으로 새어 나가면 의미가 있는 정보다(설계 §2). 프로바이더별로
 // vault 에 분리 저장되므로 hasKey 도 "현재 선택된 프로바이더"의 것만 보여준다.
+// M1 1-A: AI CLI 줄(훅·CLI 기본 플래그)은 AI 작업 공간 › 에이전트로 갔다. 여기는 전역 › 아라 채팅.
 function AiSection({
   prefs,
   onPrefsChange,
-  ask,
-  open
+  ask
 }: {
   prefs: UiPrefs
   onPrefsChange: (patch: Partial<UiPrefs>) => void
   ask?: (spec: DialogSpec) => Promise<DialogResult>
-  /** #162 드로어가 **열릴 때마다** 훅 상태를 다시 묻는 신호. 이 드로어는 언마운트되지 않는다. */
-  open: boolean
 }) {
   const [key, setKey] = useState('')
   const [hasKey, setHasKey] = useState(false)
@@ -392,7 +390,7 @@ function AiSection({
     const res = (await window.ev?.ai.setKey(value).catch(() => null)) ?? null
     setBusy(false)
     setResult(res)
-    // 성공하면 입력 필드를 즉시 비운다 — 드로어를 다시 열었을 때 키가 남아 있지 않게.
+    // 성공하면 입력 필드를 즉시 비운다 — 설정 페이지를 다시 열었을 때 키가 남아 있지 않게.
     if (res?.ok) setKey('')
     await refresh()
   }
@@ -436,7 +434,7 @@ function AiSection({
     <>
       {/* #138 호칭 — 엔진과 무관하다(Claude Code 든 API 든 아라는 같은 이름으로 부른다).
           그래서 프로바이더보다 위, 이 섹션의 첫 줄이다. */}
-      <Row label={t('settings.ai.call')} desc={t('settings.ai.call.desc')}>
+      <Row label={t('settings.ai.call')} desc={t('settings.ai.call.desc')} item="ai.callName">
         <input
           type="text"
           className="ai-key-input"
@@ -448,7 +446,7 @@ function AiSection({
           onChange={(e) => onPrefsChange({ araCallName: callNameOf(e.target.value) })}
         />
       </Row>
-      <Row label={t('settings.ai.provider')} desc={t('settings.ai.provider.desc')}>
+      <Row label={t('settings.ai.provider')} desc={t('settings.ai.provider.desc')} item="ai.provider">
         <Seg
           value={provider}
           options={AI_PROVIDERS}
@@ -459,7 +457,7 @@ function AiSection({
       </Row>
 
       {provider === 'compatible' && (
-        <Row label={t('settings.ai.baseUrl')} desc={t('settings.ai.baseUrl.desc')}>
+        <Row label={t('settings.ai.baseUrl')} desc={t('settings.ai.baseUrl.desc')} item="ai.baseUrl">
           <input
             type="text"
             className="ai-key-input"
@@ -473,7 +471,7 @@ function AiSection({
         </Row>
       )}
 
-      <Row label={t('settings.ai.key')} desc={t('settings.ai.key.desc')}>
+      <Row label={t('settings.ai.key')} desc={t('settings.ai.key.desc')} item="ai.key">
         <div className="ai-key-ctl">
           <input
             type="password"
@@ -514,20 +512,15 @@ function AiSection({
         {!busy && !result && !hasKey && <span className="ai-key-hint">{t('settings.ai.key.hint')}</span>}
       </div>
 
-      <Row label={t('settings.ai.model')} desc={t('settings.ai.model.desc')}>
+      <Row label={t('settings.ai.model')} desc={t('settings.ai.model.desc')} item="ai.model">
         <ModelPicker provider={provider} value={model} onChange={(v) => onPrefsChange({ aiModels: { ...prefs.aiModels, [provider]: v } })} />
       </Row>
-      <Row label={t('settings.ai.usage')} desc={t('settings.ai.usage.desc')}>
+      <Row label={t('settings.ai.usage')} desc={t('settings.ai.usage.desc')} item="ai.usage">
         <span className="v">
           {t('ai.usage.in')} {usage.input.toLocaleString('ko-KR')} / {t('ai.usage.out')}{' '}
           {usage.output.toLocaleString('ko-KR')}
         </span>
       </Row>
-      <div className="set-sec-t" data-sec="ai.cli" style={{ marginTop: 18 }}>
-        {t('settings.ai.cliSec')}
-      </div>
-      <AgentHookRow open={open} />
-      <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
       {/* 이 문장은 장식이 아니다 — 사내 배포에서 데이터 반출 고지가 화면에 없으면 안 된다(설계 §4.7).
           W5: 선택된 프로바이더 이름·호스트가 들어가게 갱신 — "Anthropic API로 전송됩니다" 고정 문구는
           이제 거짓이 될 수 있다(설계 W5 §보안). */}
@@ -546,7 +539,7 @@ function AiSection({
  * 실패는 대개 사람이 고칠 것(깨진 `settings.json`·쓰기 권한)이라 사유를 그대로 보여 준다.
  * 다시 심는 버튼은 두지 않는다 — 설치는 기동 때 한 번이고, 고친 뒤 앱을 다시 켜면 된다.
  *
- * ⚠️ #162 **열릴 때마다 다시 묻는다.** 이 드로어는 언마운트되지 않으므로(`open` 클래스만 토글된다)
+ * ⚠️ #162 **열릴 때마다 다시 묻는다.** 이 설정 페이지는 언마운트되지 않으므로(`open` 클래스만 토글된다)
  * 마운트 한 번에 한 번 묻는 것은 곧 **앱 기동 직후 한 번**이다 — 그때는 붙은 서버가 없어서
  * 원격 줄이 영영 "아직 붙은 서버가 없습니다"로 굳는다.
  */
@@ -562,14 +555,14 @@ function AgentHookRow({ open }: { open: boolean }) {
   if (!state) return null
   return (
     <>
-      <Row label={t('settings.ai.hook')} desc={t('settings.ai.hook.desc')}>
+      <Row label={t('settings.ai.hook')} desc={t('settings.ai.hook.desc')} item="ai.hook">
         <span className="v" data-field="ai.hook">
           {state.install.ok
             ? `${t('settings.ai.hook.on')} · 127.0.0.1:${state.port}`
             : `${t('settings.ai.hook.off')} — ${state.install.message}`}
         </span>
       </Row>
-      <Row label={t('settings.ai.hook.remote')} desc={t('settings.ai.hook.remote.desc')}>
+      <Row label={t('settings.ai.hook.remote')} desc={t('settings.ai.hook.remote.desc')} item="ai.hook.remote">
         <span className="v" data-field="ai.hook.remote">
           {state.remote.length === 0
             ? t('settings.ai.hook.remote.none')
@@ -633,10 +626,10 @@ function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange
   const on = prefs.aiCliFlags[cli] ?? []
   return (
     <>
-      <Row label={t('settings.ai.cliPick')} desc={t('settings.ai.cliPick.desc')}>
+      <Row label={t('settings.ai.cliPick')} desc={t('settings.ai.cliPick.desc')} item="ai.cliPick">
         <Seg value={cli} options={FLAGGED_CLIS} onChange={setCli} labelKey={(v) => 'settings.ai.cli.' + v} />
       </Row>
-      <Row label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`} desc={t('settings.ai.cliFlags.desc')}>
+      <Row label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`} desc={t('settings.ai.cliFlags.desc')} item="ai.cliFlags">
         <div className="cliflags">
           {AI_CLIS[cli].flags.map((f) => (
             <label key={f.id} className="cliflag" data-flag={`${cli}.${f.id}`}>
@@ -658,7 +651,7 @@ function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange
 
 // [MCP] 섹션 (W4 F23). AI 키 섹션과 같은 절제 원칙: 발급된 토큰 원문을 이 컴포넌트 밖(상위 상태·
 // workspace.json)으로 올리지 않는다 — 발급 응답에서 받은 그 순간에만 화면에 잠깐 보여주고, 다시
-// 드로어를 열면 사라져 있다(재조회 채널이 계약에 없다 — mcp:getToken 부재).
+// 설정 페이지를 열면 사라져 있다(재조회 채널이 계약에 없다 — mcp:getToken 부재).
 // 잠금 결과 → 한 줄 안내. 비밀번호 값은 어디에도 남기지 않는다(보낸 뒤 칸을 비운다).
 function lockMsg(r: LockResult): string {
   if (r.ok) return ''
@@ -717,7 +710,7 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
     setP1('')
     setP2('')
   }
-  // 드로어를 닫으면 펼친 칸·받아 둔 OTP 비밀을 버린다(다시 열면 처음부터).
+  // 설정 페이지를 닫으면 펼친 칸·받아 둔 OTP 비밀을 버린다(다시 열면 처음부터).
   useEffect(() => {
     if (open) return
     clear()
@@ -805,7 +798,7 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
         </Row>
       )}
       <div className="set-sec-t">{t('settings.sec.lock')}</div>
-      <Row label={t('settings.sec.use')} desc={t('settings.sec.use.desc')}>
+      <Row label={t('settings.sec.use')} desc={t('settings.sec.use.desc')} item="sec.use">
         <Toggle
           on={on}
           label={t('settings.sec.use')}
@@ -848,12 +841,12 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
           {msg}
         </div>
       )}
-      <Row label={t('settings.sec.pw')} desc={on ? t('settings.sec.pw.set').replace('{d}', changed) : t('settings.sec.pw.none')}>
+      <Row item="sec.pw" label={t('settings.sec.pw')} desc={on ? t('settings.sec.pw.set').replace('{d}', changed) : t('settings.sec.pw.none')}>
         <button type="button" className="btn sec" disabled={!on} onClick={() => (clear(), setMsg(''), setForm('change'))}>
           {t('settings.sec.pw.change')}
         </button>
       </Row>
-      <Row label={t('settings.sec.key')} desc={t('settings.sec.key.desc')}>
+      <Row label={t('settings.sec.key')} desc={t('settings.sec.key.desc')} item="sec.key">
         <div className="row">
           <kbd className="kbd">{capture ? t('settings.sec.key.press') : keyText(v.shortcut)}</kbd>
           <button type="button" className="btn sec" disabled={!on} onClick={() => (setMsg(''), setCapture((c) => !c))}>
@@ -861,15 +854,7 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
           </button>
         </div>
       </Row>
-      <Row label={t('settings.sec.mcp')} desc={t('settings.sec.mcp.desc')}>
-        <Toggle
-          on={v.mcpWhileLocked}
-          label={t('settings.sec.mcp')}
-          disabled={!on}
-          onChange={(mcpWhileLocked) => void window.ev.lock.setPrefs({ mcpWhileLocked })}
-        />
-      </Row>
-      <Row label={t('settings.sec.auto')} desc={t('settings.sec.auto.desc')}>
+      <Row label={t('settings.sec.auto')} desc={t('settings.sec.auto.desc')} item="sec.auto">
         <Seg
           value={String(v.autoLockMin)}
           options={AUTO_LOCK_OPTIONS.map(String)}
@@ -878,7 +863,7 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
           field="autoLock"
         />
       </Row>
-      <div className="set-sec-t">
+      <div className="set-sec-t" data-item="sec.otp">
         {t('settings.sec.otp')} <span className="sec-otp-st">{t(v.otp ? 'settings.sec.otp.on' : 'settings.sec.otp.off')}</span>
       </div>
       {!otp && (
@@ -920,6 +905,9 @@ function SecuritySection({ open, ask }: { open: boolean; ask?: (spec: DialogSpec
 }
 
 function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult> }) {
+  // 잠긴 동안 외부 도구 허용 — 값의 주인은 잠금(lock.json)이지만 자리는 외부 도구다(대응표 4-3).
+  const lock = useLockView()
+  const lockOn = !!lock && lock.state !== 'off'
   const [state, setState] = useState<McpState | null>(null)
   const [busy, setBusy] = useState(false)
   const [freshToken, setFreshToken] = useState<string | null>(null)
@@ -967,17 +955,17 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
 
   return (
     <>
-      <Row label={t('settings.mcp.enable')} desc={t('settings.mcp.enable.desc')}>
+      <Row label={t('settings.mcp.enable')} desc={t('settings.mcp.enable.desc')} item="mcp.enable">
         <Toggle on={state.enabled} label={t('settings.mcp.enable')} onChange={(v) => void toggle(v)} />
       </Row>
       {state.enabled && (
         <>
-          <Row label={t('settings.mcp.port')} desc={t('settings.mcp.port.desc')}>
+          <Row label={t('settings.mcp.port')} desc={t('settings.mcp.port.desc')} item="mcp.port">
             <span className="v" data-field="mcp.port">
               127.0.0.1:{state.port}
             </span>
           </Row>
-          <Row label={t('settings.mcp.token')} desc={t('settings.mcp.token.desc')}>
+          <Row label={t('settings.mcp.token')} desc={t('settings.mcp.token.desc')} item="mcp.token">
             <div className="ai-key-ctl">
               <input
                 type="text"
@@ -996,7 +984,7 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
             </div>
           </Row>
           {freshToken && <div className="set-note">{t('settings.mcp.token.warn')}</div>}
-          <Row label={t('settings.mcp.connected')} desc={t('settings.mcp.connected.desc')}>
+          <Row label={t('settings.mcp.connected')} desc={t('settings.mcp.connected.desc')} item="mcp.connected">
             <div className="ai-key-ctl">
               <span className="v" data-field="mcp.connected">
                 {state.connected}
@@ -1013,6 +1001,16 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
             </div>
           </Row>
         </>
+      )}
+      {lock && (
+        <Row label={t('settings.sec.mcp')} desc={t('settings.sec.mcp.desc')} item="sec.mcp">
+          <Toggle
+            on={lock.mcpWhileLocked}
+            label={t('settings.sec.mcp')}
+            disabled={!lockOn}
+            onChange={(mcpWhileLocked) => void window.ev.lock.setPrefs({ mcpWhileLocked })}
+          />
+        </Row>
       )}
       <div className="set-note" data-note="mcp.scope">
         {t('settings.mcp.note')}
@@ -1039,7 +1037,7 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
  */
 function GpuRow({ open, version }: { open: boolean; version: string }) {
   const [gpu, setGpu] = useState<GpuInfo | null>(null)
-  // AgentHookRow 와 같은 이유로 **열릴 때마다** 묻는다(#162 — 이 드로어는 언마운트되지 않으므로
+  // AgentHookRow 와 같은 이유로 **열릴 때마다** 묻는다(#162 — 이 설정 페이지는 언마운트되지 않으므로
   // 마운트 한 번에 한 번은 곧 "기동 직후 한 번"이고, 그때는 터미널조차 아직 없다).
   useEffect(() => {
     if (!open) return
@@ -1057,7 +1055,7 @@ function GpuRow({ open, version }: { open: boolean; version: string }) {
     .replace('{gpu}', termRenderer.gpu || gpu?.gl.renderer || unknown)
     .replace('{webgl2}', gpu?.features['webgl2'] ?? unknown)
   return (
-    <Row label={t('settings.gpu.title')} desc={desc}>
+    <Row label={t('settings.gpu.title')} desc={desc} item="gpu">
       <div className="ai-key-ctl">
         <span className="v" data-field="gpu.renderer">
           {kind}
@@ -1086,7 +1084,7 @@ function GpuRow({ open, version }: { open: boolean; version: string }) {
  */
 function ProbeRow({ open }: { open: boolean }) {
   const [st, setSt] = useState<DiagProbeStatus | null>(null)
-  // 드로어는 언마운트되지 않는다(GpuRow 주석) — 열려 있는 동안만 1초마다 묻는다.
+  // 설정 페이지는 언마운트되지 않는다(GpuRow 주석) — 열려 있는 동안만 1초마다 묻는다.
   useEffect(() => {
     if (!open) return
     const read = (): void => void window.ev?.app?.probe?.().then(setSt).catch(() => {})
@@ -1103,7 +1101,7 @@ function ProbeRow({ open }: { open: boolean }) {
         .replace('{elu}', String(Math.round(last.elu * 100)))
     : t('settings.probe.desc')
   return (
-    <Row label={t('settings.probe.title')} desc={desc}>
+    <Row label={t('settings.probe.title')} desc={desc} item="probe">
       <Toggle
         on={st?.on === true}
         label={t('settings.probe.title')}
@@ -1129,7 +1127,7 @@ function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<Dia
 
   const refresh = (): Promise<void> =>
     window.ev?.history?.scopes().then(setInfo).catch(() => {}) ?? Promise.resolve()
-  // 드로어는 언마운트되지 않으므로(열림 클래스만 토글) 열릴 때마다 다시 센다 — 그사이 쌓인 줄이 있다.
+  // 설정 페이지는 언마운트되지 않으므로(열림 클래스만 토글) 열릴 때마다 다시 센다 — 그사이 쌓인 줄이 있다.
   useEffect(() => {
     if (open) void refresh()
   }, [open])
@@ -1172,7 +1170,7 @@ function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<Dia
         </Row>
       ))}
       {scopes.length > 0 && (
-        <Row label={t('settings.hist.clearAll')} desc={t('settings.hist.clearAll.desc')}>
+        <Row label={t('settings.hist.clearAll')} desc={t('settings.hist.clearAll.desc')} item="hist.clearAll">
           <button type="button" className="btn sec" data-action="hist.clearAll" onClick={() => void wipe()}>
             {t('settings.hist.clearAll')}
           </button>
@@ -1185,9 +1183,9 @@ function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<Dia
 }
 
 /** VS-c 의 한 줄 행 — 이름 · 설명 · (오른쪽) 컨트롤. 음성 칸만 이 모양이다(시안 그대로). */
-function Fr({ name, desc, children }: { name: string; desc?: string; children: React.ReactNode }) {
+function Fr({ name, desc, item, children }: { name: string; desc?: string; item?: string; children: React.ReactNode }) {
   return (
-    <div className="vs-fr">
+    <div className="vs-fr" data-item={item}>
       <span className="nm">{name}</span>
       <span className="ds">{desc ?? ''}</span>
       <span className="ctl">{children}</span>
@@ -1353,12 +1351,12 @@ function VoiceSection({
         </div>
         <div className="vs-rt">
           <div className="vs-fg">{t('settings.voice.g.voice')}</div>
-          <Fr name={t('settings.voice.enabled')} desc={t('settings.voice.enabled.desc')}>
+          <Fr name={t('settings.voice.enabled')} desc={t('settings.voice.enabled.desc')} item="voice.enabled">
             <kbd className="kbd">{key ? keyText(isMac ? key.mac : key.win) : ''}</kbd>
             <Toggle on={v.enabled} label={t('settings.voice.enabled')} onChange={(enabled) => set({ enabled })} />
           </Fr>
           <div className="vs-fg">{t('settings.voice.g.speak')}</div>
-          <Fr name={t('settings.voice.voice')}>
+          <Fr name={t('settings.voice.voice')} item="voice.voice">
             <div className="vs-dd">
               <Dropdown
                 value={voiceLabel(v.voiceName)}
@@ -1368,11 +1366,11 @@ function VoiceSection({
               />
             </div>
           </Fr>
-          <Fr name={t('settings.voice.speed')}>
+          <Fr name={t('settings.voice.speed')} item="voice.speed">
             <Seg value={v.speed} options={VOICE_SPEEDS} onChange={(speed) => set({ speed })} labelKey={(x) => 'settings.voice.speed.' + x} field="voice.speed" />
           </Fr>
           <div className="vs-fg">{t('settings.voice.g.mic')}</div>
-          <Fr name={t('settings.voice.mic')}>
+          <Fr name={t('settings.voice.mic')} item="voice.mic">
             <div className="vs-dd wide">
               <Dropdown
                 value={micValue}
@@ -1382,11 +1380,11 @@ function VoiceSection({
               />
             </div>
           </Fr>
-          <Fr name={t('settings.voice.listen')} desc={t('settings.voice.listen.desc')}>
+          <Fr name={t('settings.voice.listen')} desc={t('settings.voice.listen.desc')} item="voice.listen">
             <Seg value={v.listen} options={VOICE_LISTEN} onChange={(listen) => set({ listen })} labelKey={(x) => 'settings.voice.listen.' + x} field="voice.listen" />
           </Fr>
           <div className="vs-fg">{t('settings.voice.g.caption')}</div>
-          <Fr name={t('settings.voice.lines')}>
+          <Fr name={t('settings.voice.lines')} item="voice.lines">
             <Seg
               value={String(v.captionLines) as '1' | '2' | '3'}
               options={['1', '2', '3'] as const}
@@ -1395,7 +1393,7 @@ function VoiceSection({
               field="voice.lines"
             />
           </Fr>
-          <Fr name={t('settings.voice.keep')} desc={t('settings.voice.keep.desc')}>
+          <Fr name={t('settings.voice.keep')} desc={t('settings.voice.keep.desc')} item="voice.keep">
             <Seg
               value={v.keep}
               options={VOICE_KEEP}
@@ -1405,10 +1403,10 @@ function VoiceSection({
             />
           </Fr>
           <div className="vs-fg">{t('settings.voice.g.approve')}</div>
-          <Fr name={t('settings.voice.approve')} desc={t('settings.voice.approve.desc')}>
+          <Fr name={t('settings.voice.approve')} desc={t('settings.voice.approve.desc')} item="voice.approve">
             <span className="vs-lvl-t">{t('settings.voice.approve.always')}</span>
           </Fr>
-          <Fr name={t('settings.voice.bypass')} desc={t('settings.voice.bypass.desc')}>
+          <Fr name={t('settings.voice.bypass')} desc={t('settings.voice.bypass.desc')} item="voice.bypass">
             <Toggle on={bypass} label={t('settings.voice.bypass')} onChange={(on) => void flipBypass(on)} />
           </Fr>
           {bypass && (
@@ -1447,33 +1445,49 @@ type Props = {
   ask?: (spec: DialogSpec) => Promise<DialogResult>
   // FB-monitor(FB-0004): [단축키] 섹션의 "tmux 사용법 보기" → 명령어 북(F18)을 그 카테고리로 바로 연다.
   onOpenCommandBook?: (query?: string) => void
-  // 이 섹션으로 열린다(잠금 키 안내 등) — 없으면 마지막에 보던 섹션 그대로.
-  entrySection?: SettingsSection
+  /**
+   * 딥링크(store/settingsNav openSettings) — 이 섹션·항목으로 열린다. 없으면 마지막에 보던 섹션 그대로.
+   * n 은 같은 목적지를 다시 불러도 effect 가 다시 돌게 하는 꼬리표다.
+   */
+  entry?: SettingsTarget & { n: number }
 }
 
-// 2.0 6단계 — 단축키는 칩 하나(`Ctrl Alt K`, 키 사이 공백·`+` 없음, 시안 Z-settings).
+/** 검색어가 든 부분을 <mark> 로. 대소문자는 무시한다(searchSettings 와 같은 규칙). */
+function Hl({ text, q }: { text: string; q: string }) {
+  const at = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1
+  if (at < 0) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark>{text.slice(at, at + q.length)}</mark>
+      {text.slice(at + q.length)}
+    </>
+  )
+}
 
-export function SettingsDrawer({
-  open,
-  font,
-  prefs,
-  version,
-  onClose,
-  onChange,
-  onPrefsChange,
-  ask,
-  onOpenCommandBook,
-  entrySection
-}: Props) {
-  const [section, setSection] = useState<SettingsSection>('general')
+const FLASH_MS = 1600
+
+export function SettingsPage({ open, font, prefs, version, onClose, onChange, onPrefsChange, ask, onOpenCommandBook, entry }: Props) {
+  const [section, setSection] = useState<SettingsSection>(SETTINGS_INDEX[0].id)
+  const [query, setQuery] = useState('')
+  // 딥링크로 온 항목 — 섹션이 그려진 뒤 그 줄로 스크롤하고 잠깐 밝힌다.
+  const [focusItem, setFocusItem] = useState<{ item: string; n: number } | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const paneRef = useRef<HTMLDivElement>(null)
+
+  const go = useCallback((s: SettingsSection, item?: string) => {
+    setQuery('')
+    setSection(s)
+    setFocusItem(item ? { item, n: Date.now() } : null)
+  }, [])
 
   /**
-   * **AI 키가 아직 없으면 [AI] 섹션으로 열린다** (2026-08-22 준영님 제보 8번).
+   * **AI 키가 아직 없으면 [아라 채팅] 섹션으로 열린다** (2026-08-22 준영님 제보 8번).
    *
-   * 이 드로어는 언마운트되지 않고 `open` 클래스만 토글되므로 마지막에 보던 섹션이 그대로 남는다 —
+   * 이 페이지는 언마운트되지 않고 `open` 클래스만 토글되므로 마지막에 보던 섹션이 그대로 남는다 —
    * 평소엔 그게 맞지만, 키를 아직 안 넣은 사람에게는 **첫 할 일이 그것**이라 그 자리를 스스로
    * 찾아가게 두지 않는다. 키가 한 번이라도 저장되면 이 분기는 다시는 타지 않는다(기존 동작 복귀).
-   * 열릴 때 한 번만 묻는다 — 드로어가 떠 있는 동안 사용자가 고른 섹션을 빼앗지 않기 위해서다.
+   * 열릴 때 한 번만 묻는다 — 페이지가 떠 있는 동안 사용자가 고른 섹션을 빼앗지 않기 위해서다.
    */
   useEffect(() => {
     if (!open) return
@@ -1481,7 +1495,7 @@ export function SettingsDrawer({
     void window.ev?.ai
       .getState()
       .then((s) => {
-        if (alive && AI_ENTRY && !s.hasKey && !entrySection) setSection('ai')
+        if (alive && AI_ENTRY && !s.hasKey && !entry) setSection('ai')
       })
       .catch(() => {})
     return () => {
@@ -1489,22 +1503,25 @@ export function SettingsDrawer({
     }
   }, [open])
 
-  // 2.0 6단계 — 서랍 → 가운데 모달(시안 Z-settings). 열릴 때 포커스를 창 안으로 들인다(Dialog.tsx 와 같은 방식).
+  useEffect(() => {
+    if (open && entry) go(entry.section, entry.item)
+  }, [open, entry, go])
+
+  // 열릴 때 포커스를 페이지 안으로 들인다 — 뒤 터미널에 남아 있으면 친 글자가 셸로 간다.
   const boxRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (open) boxRef.current?.focus()
   }, [open])
 
-  // 다듬기 R2(리뷰 B4): aria-modal 인데 뒤가 살아 있었다 — 열린 동안 창 바깥을 inert 로 묶는다.
-  // 창에서 앱 뿌리까지 올라가며 **형제**만 묶는다(조상은 이 창을 품고 있어 묶으면 창도 죽는다).
-  // 확인 다이얼로그(.overlay)·스크림은 빼고, 열린 뒤 새로 뜨는 다이얼로그는 새 요소라 묶이지 않는다.
+  // 열린 동안 페이지 바깥(타이틀바·상태바는 빼고)을 inert 로 묶는다 — 덮인 터미널·사이드바가 Tab 으로 잡히지 않게.
+  // 페이지에서 앱 뿌리까지 올라가며 **형제**만 묶는다(조상은 이 페이지를 품고 있어 묶으면 페이지도 죽는다).
   useEffect(() => {
     const box = boxRef.current
     if (!open || !box) return
     const locked: Element[] = []
     for (let el: Element = box; el.parentElement && el !== document.body; el = el.parentElement) {
       for (const sib of Array.from(el.parentElement.children)) {
-        if (sib === el || sib.hasAttribute('inert') || sib.matches('.drawer-scrim, .overlay, script')) continue
+        if (sib === el || sib.hasAttribute('inert') || sib.matches('.titlebar, .statusbar, .overlay, script')) continue
         sib.setAttribute('inert', '')
         locked.push(sib)
       }
@@ -1512,84 +1529,186 @@ export function SettingsDrawer({
     return () => locked.forEach((x) => x.removeAttribute('inert'))
   }, [open])
 
+  // Ctrl+F — 설정 찾기(시안). 열린 동안만, 다른 리스너보다 먼저 가로챈다.
   useEffect(() => {
-    if (open && entrySection) setSection(entrySection)
-  }, [open, entrySection])
-
-  // 포커스 트랩 — Tab 이 창 끝에서 처음으로, Shift+Tab 이 처음에서 끝으로 돈다.
-  const trapTab = (e: React.KeyboardEvent): void => {
-    const box = boxRef.current
-    if (e.key !== 'Tab' || !box) return
-    const items = Array.from(
-      box.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
-    ).filter((x) => !x.hasAttribute('disabled') && x.getClientRects().length > 0)
-    if (items.length === 0) return
-    const first = items[0]
-    const last = items[items.length - 1]
-    const at = document.activeElement
-    if (e.shiftKey && (at === first || at === box)) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && at === last) {
-      e.preventDefault()
-      first.focus()
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
     }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open])
+
+  // 딥링크 항목 밝히기. 섹션 몸통이 비동기로 채워지는 줄(훅 상태 등)이 있어 잠깐 기다리며 찾는다.
+  useEffect(() => {
+    if (!focusItem || !open) return
+    let tries = 0
+    let off: ReturnType<typeof setTimeout> | undefined
+    const find = (): void => {
+      const el = paneRef.current?.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusItem.item)}"]`)
+      if (!el) {
+        if (++tries < 20) off = setTimeout(find, 50)
+        return
+      }
+      el.scrollIntoView({ block: 'center' })
+      el.classList.add('sp-flash')
+      off = setTimeout(() => el.classList.remove('sp-flash'), FLASH_MS)
+    }
+    find()
+    return () => clearTimeout(off)
+  }, [focusItem, open])
+
+  const q = query.trim()
+  const hits = q ? searchSettings(q, t) : []
+  const hitCount = hits.reduce((n, h) => n + Math.max(1, h.items.length), 0)
+  const def = sectionDef(section)
+
+  // 왼쪽 목록 — 묶음 머리 + 섹션. 검색 중이면 맞는 섹션만, 옆에 맞은 항목 수.
+  const navRows: React.ReactNode[] = []
+  let lastGroup = ''
+  for (const d of SETTINGS_INDEX) {
+    const hit = q ? hits.find((h) => h.section.id === d.id) : undefined
+    if (q && !hit) continue
+    if (d.group !== lastGroup) {
+      lastGroup = d.group
+      navRows.push(
+        <div className="sp-group" key={'g.' + d.group} data-group={d.group}>
+          {t('settings.group.' + d.group)}
+          {d.group === 'aiws' && <span className="sp-new">{t('settings.group.new')}</span>}
+        </div>
+      )
+    }
+    navRows.push(
+      <button
+        type="button"
+        key={d.id}
+        role="tab"
+        aria-selected={!q && section === d.id}
+        data-section={d.id}
+        className={'sp-item' + (!q && section === d.id ? ' on' : '') + (d.soon ? ' soon' : '')}
+        onClick={() => go(d.id)}
+      >
+        <Hl text={t('settings.nav.' + d.id)} q={q} />
+        {hit && hit.items.length > 0 && <span className="sp-hits">{hit.items.length}</span>}
+      </button>
+    )
   }
 
-  // [폰트]·[모양]·[터미널]은 고르면서 뒤 터미널을 봐야 한다 — 스크림의 블러를 끄고 옅게(리뷰 B4).
-  const seeThrough = section === 'font' || section === 'look' || section === 'terminal'
-
   return (
-    <>
-    <div className={'drawer-scrim' + (open ? ' open' : '') + (seeThrough ? ' clear' : '')} onClick={onClose} />
     <div
-      className={'drawer' + (open ? ' open' : '')}
-      role="dialog"
-      aria-modal="true"
+      className={'settings-page' + (open ? ' open' : '')}
+      role="region"
       aria-label={t('settings.title')}
       tabIndex={-1}
       ref={boxRef}
-      onKeyDown={trapTab}
     >
-      {/* 시안 Z-settings: 왼쪽 네비 맨 위에 "설정", 오른쪽 머리에 고른 칸 이름 하나(아이콘 타일·부제 없음). */}
-      <div className="drawer-body">
-        <div className="set-nav" role="tablist" aria-label={t('settings.title')}>
-          <div className="set-nav-t">{t('settings.title')}</div>
-          {SETTINGS_SECTIONS.map((s) => (
-            <span
-              key={s}
-              role="tab"
-              tabIndex={0}
-              aria-selected={section === s}
-              data-section={s}
-              className={section === s ? 'on' : undefined}
-              onClick={() => setSection(s)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setSection(s)
-                }
-              }}
-            >
-              {t('settings.nav.' + s)}
-            </span>
-          ))}
+      <nav className="sp-nav" aria-label={t('settings.title')}>
+        <button type="button" className="sp-back" data-action="settings.close" onClick={onClose}>
+          <ArrowLeft size={14} aria-hidden />
+          {t('settings.back')}
+          <kbd className="kbd">Esc</kbd>
+        </button>
+        <label className="sp-search">
+          <Search size={14} aria-hidden />
+          <input
+            ref={searchRef}
+            type="search"
+            placeholder={t('settings.search')}
+            aria-label={t('settings.search')}
+            spellCheck={false}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // 검색어가 있으면 Esc 는 먼저 검색어를 지운다(페이지 닫기는 그다음 Esc).
+              if (e.key === 'Escape' && query) {
+                e.stopPropagation()
+                setQuery('')
+              }
+            }}
+          />
+          <kbd className="kbd">{isMac ? '⌘ F' : 'Ctrl F'}</kbd>
+        </label>
+        <div className="sp-list" role="tablist" aria-orientation="vertical">
+          {navRows.length > 0 ? navRows : <div className="sp-empty">{t('settings.search.none').replace('{q}', q)}</div>}
         </div>
+      </nav>
 
-        <div className="set-main">
-        <div className="drawer-hd">
-          <h2>{t('settings.nav.' + section)}</h2>
-          <button type="button" className="x" title={t('settings.close')} onClick={onClose}>
-            <IconClose />
-          </button>
-        </div>
-        <div className="set-pane" role="tabpanel">
-          {/* 섹션 제목은 좌측 nav 가 이미 달고 있다 — 안에서 한 번 더 쓰지 않는다(하위 구분만 .set-sec-t). */}
+      <div className="sp-main" ref={paneRef}>
+        <div className="sp-col">
+          {q ? (
+            <div className="sp-results" data-count={hitCount}>
+              <div className="sp-crumb">{t('settings.search.crumb')}</div>
+              <h1 className="sp-h1">{t('settings.search.title').replace('{q}', q).replace('{n}', String(hitCount))}</h1>
+              <div className="sp-desc">{t('settings.search.desc')}</div>
+              {hits.map(({ section: d, items }) => (
+                <div className="sp-hit-sec" key={d.id} data-section={d.id}>
+                  <h2 className="sp-h2">
+                    {t('settings.group.' + d.group)} › <Hl text={t('settings.nav.' + d.id)} q={q} />
+                  </h2>
+                  {(items.length > 0 ? items : [{ id: '', label: 'settings.nav.' + d.id, desc: d.soon ? 'settings.soon' : undefined }]).map((x) => (
+                    <button
+                      type="button"
+                      key={x.id || d.id}
+                      className="sp-hit"
+                      data-item={x.id || undefined}
+                      onClick={() => go(d.id, x.id || undefined)}
+                    >
+                      <span className="sp-hit-l">
+                        <Hl text={t(x.label)} q={q} />
+                      </span>
+                      {x.desc && (
+                        <span className="sp-hit-d">
+                          <Hl text={t(x.desc)} q={q} />
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="sp-crumb">{t('settings.group.' + def.group)}</div>
+              <h1 className="sp-h1">{t('settings.nav.' + section)}</h1>
+              <div className="sp-pane" role="tabpanel" data-section={section}>
+          {def.soon && <div className="set-note sp-soon">{t('settings.soon')}</div>}
+
+          {section === 'agents' && (
+            <>
+              <div className="set-sec-t" data-sec="ai.cli" data-item="ai.cli">
+                {t('settings.ai.cliSec')}
+              </div>
+              <AgentHookRow open={open} />
+              <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
+            </>
+          )}
+
+          {section === 'update' && <UpdateRow />}
+
+          {section === 'advanced' && (
+            <>
+              <GpuRow open={open} version={version} />
+              <ProbeRow open={open} />
+              <DirRow
+                label={t('settings.dir.app')}
+                item="dir.app"
+                desc={t('settings.dir.app.desc')}
+                value={prefs.appLogDir}
+                onChange={(appLogDir) => onPrefsChange({ appLogDir })}
+              />
+            </>
+          )}
+
           {section === 'general' && (
             <>
               {/* UI-font5: 글자 크기를 우리가 한 번 더 추측하지 않고 쓰는 사람이 고른다.
                   터미널 글자는 이 배율을 타지 않는다 — [터미널] 섹션에 자체 크기 슬라이더가 있다. */}
-              <Row label={t('settings.uiScale')} desc={t('settings.uiScale.desc')}>
+              <Row label={t('settings.uiScale')} desc={t('settings.uiScale.desc')} item="uiScale">
                 <Seg
                   value={prefs.uiScale}
                   options={UI_SCALES}
@@ -1598,42 +1717,18 @@ export function SettingsDrawer({
                 />
               </Row>
               {/* #139 켤 때 인사. 멋은 한 번이고 방해는 매일이라 **끌 수 있어야** 한다. */}
-              <Row label={t('settings.bootSplash')} desc={t('settings.bootSplash.desc')}>
+              <Row label={t('settings.bootSplash')} desc={t('settings.bootSplash.desc')} item="bootSplash">
                 <Toggle
                   on={prefs.bootSplash}
                   label={t('settings.bootSplash')}
                   onChange={(bootSplash) => onPrefsChange({ bootSplash })}
                 />
               </Row>
-              {/* 2026-08-30 준영님 결정: [우측 아이콘 바] 행이 여기 있었다(순서 ↑↓ + 숨김 토글).
-                  *"그냥 우측 아이콘바 설정하는건 제거하자. 더 별로다"* — 순서 배열이 하나인데 그리는
-                  화면이 둘(레일·하단 탭줄)이라 슬롯 경계를 넘는 ↑↓ 는 눌러도 화면이 안 바뀌었다.
-                  2.0 에서 우측 바가 없어졌고, 기능을 끄고 켜는 자리는 [기능] 칸이다. */}
-              <Row label={t('settings.copyOnSelect')} desc={t('settings.copyOnSelect.desc')}>
-                <Toggle
-                  on={prefs.copyOnSelect}
-                  label={t('settings.copyOnSelect')}
-                  onChange={(copyOnSelect) => onPrefsChange({ copyOnSelect })}
-                />
-              </Row>
-              <Row label={t('settings.scrollback')} desc={t('settings.scrollback.desc')}>
-                <div className="row">
-                  <input
-                    type="range"
-                    min={SCROLLBACK_MIN}
-                    max={SCROLLBACK_MAX}
-                    step={SCROLLBACK_STEP}
-                    value={prefs.scrollback}
-                    aria-label={t('settings.scrollback')}
-                    onChange={(e) => onPrefsChange({ scrollback: Number(e.target.value) })}
-                  />
-                  <span className="v">{prefs.scrollback.toLocaleString('ko-KR')}</span>
-                </div>
-              </Row>
               {/* R15(신고 #3): "설정에 저장할 폴더를 지정하는 부분이 없음". 받는 곳은 [파일] 탭의 일이라
                   [로그] 가 아니라 여기다. 사라진 폴더는 받을 때 묻는다(FileTree.download). */}
               <DirRow
                 label={t('settings.dir.download')}
+                item="dir.download"
                 desc={t('settings.dir.download.desc')}
                 value={prefs.downloadDir}
                 onChange={(downloadDir) => onPrefsChange({ downloadDir })}
@@ -1643,14 +1738,13 @@ export function SettingsDrawer({
                     .then((r) => (r.missing ? `${r.missing} — ${t('settings.dir.missing')}` : r.dir))
                 }
               />
-              <UpdateRow />
             </>
           )}
 
           {/* 2.0 4단계 — 모양 › 마우스 커서(시안 Z-cursor). 견본 칸에 마우스를 올리면 그 커서가 된다. */}
           {section === 'look' && (
             <>
-              <div className="set-sec-t">{t('settings.mouseCursor')}</div>
+              <div className="set-sec-t" data-item="mouseCursor">{t('settings.mouseCursor')}</div>
               <div className="set-note">{t('settings.mouseCursor.desc')}</div>
               <div className="cur-legend" aria-hidden>
                 {CURSOR_KINDS.map((k) => (
@@ -1690,14 +1784,14 @@ export function SettingsDrawer({
             <>
               {/* #194 ④ 자동완성 스위치. 지금까지 빠져나갈 길이 없었다 — 거슬리는 사람에게
                   "끄세요" 라고 말할 수 있는 자리가 이 한 줄이다. 기본은 켬(기존 동작 유지). */}
-              <Row label={t('settings.termCompletion')} desc={t('settings.termCompletion.desc')}>
+              <Row label={t('settings.termCompletion')} desc={t('settings.termCompletion.desc')} item="termCompletion">
                 <Toggle
                   on={prefs.termCompletion}
                   label={t('settings.termCompletion')}
                   onChange={(termCompletion) => onPrefsChange({ termCompletion })}
                 />
               </Row>
-              <Row label={t('settings.cursorStyle')} desc={t('settings.cursorStyle.desc')}>
+              <Row label={t('settings.cursorStyle')} desc={t('settings.cursorStyle.desc')} item="cursorStyle">
                 <Seg
                   value={prefs.cursorStyle}
                   options={CURSOR_STYLES}
@@ -1705,20 +1799,42 @@ export function SettingsDrawer({
                   labelKey={(v) => 'settings.cursor.' + v}
                 />
               </Row>
-              <Row label={t('settings.cursorBlink')} desc={t('settings.cursorBlink.desc')}>
+              <Row label={t('settings.cursorBlink')} desc={t('settings.cursorBlink.desc')} item="cursorBlink">
                 <Toggle
                   on={prefs.cursorBlink}
                   label={t('settings.cursorBlink')}
                   onChange={(cursorBlink) => onPrefsChange({ cursorBlink })}
                 />
               </Row>
-              <Row label={t('settings.bell')} desc={t('settings.bell.desc')}>
+              <Row label={t('settings.bell')} desc={t('settings.bell.desc')} item="bell">
                 <Seg
                   value={prefs.bell}
                   options={BELL_STYLES}
                   onChange={(bell) => onPrefsChange({ bell })}
                   labelKey={(v) => 'settings.bell.' + v}
                 />
+              </Row>
+              {/* M1 1-A: 선택 시 자동 복사·스크롤백은 [일반]에서 여기로 왔다(대응표 4-3). */}
+              <Row label={t('settings.copyOnSelect')} desc={t('settings.copyOnSelect.desc')} item="copyOnSelect">
+                <Toggle
+                  on={prefs.copyOnSelect}
+                  label={t('settings.copyOnSelect')}
+                  onChange={(copyOnSelect) => onPrefsChange({ copyOnSelect })}
+                />
+              </Row>
+              <Row label={t('settings.scrollback')} desc={t('settings.scrollback.desc')} item="scrollback">
+                <div className="row">
+                  <input
+                    type="range"
+                    min={SCROLLBACK_MIN}
+                    max={SCROLLBACK_MAX}
+                    step={SCROLLBACK_STEP}
+                    value={prefs.scrollback}
+                    aria-label={t('settings.scrollback')}
+                    onChange={(e) => onPrefsChange({ scrollback: Number(e.target.value) })}
+                  />
+                  <span className="v">{prefs.scrollback.toLocaleString('ko-KR')}</span>
+                </div>
               </Row>
             </>
           )}
@@ -1737,7 +1853,7 @@ export function SettingsDrawer({
                     {list.map((f) => {
                       const b = f.key && KEYMAP.find((k) => k.action === f.key)
                       return (
-                        <div className="feat-row" key={f.id} data-feature={f.id}>
+                        <div className="feat-row" key={f.id} data-feature={f.id} data-item={'feature.' + f.id}>
                           <span className="fr-name">{t('feature.' + f.id)}</span>
                           <span className="fr-desc">{t('feature.' + f.id + '.desc')}</span>
                           <span className="cs-keys">
@@ -1761,7 +1877,7 @@ export function SettingsDrawer({
           {section === 'font' && (
             <>
               {/* 폰트 비교 스트립 — 동일 한글 문장을 후보별로 나란히 */}
-              <div className="font-compare">
+              <div className="font-compare" data-item="font.compare">
                 <div className="fc-title">{t('settings.compare.title')}</div>
                 <div className="fc-strip">
                   {COMPARE_ROWS.map((r) => (
@@ -1779,7 +1895,7 @@ export function SettingsDrawer({
               </div>
 
               {/* UI-font4: 한글만 OS 기본 한글 폰트(Tabby 재현)로 그릴지 — 기본 켜짐, 되돌리기 가능. */}
-              <Row label={t('settings.krFallback')} desc={t('settings.krFallback.desc')}>
+              <Row label={t('settings.krFallback')} desc={t('settings.krFallback.desc')} item="font.krFallback">
                 <Toggle
                   on={font.krSystemFallback ?? true}
                   label={t('settings.krFallback')}
@@ -1789,7 +1905,7 @@ export function SettingsDrawer({
 
               {/* 터미널 폰트 선택(라디오) — 2026-08-21 부터 **--term 하나만** 바꾼다.
                   앱 화면 글꼴(--ui Pretendard · --mono 나눔고딕코딩)은 고정이고 설정에 없다. */}
-              <div className="set-sec-t">{t('settings.pick.title')}</div>
+              <div className="set-sec-t" data-item="font.term">{t('settings.pick.title')}</div>
               <div className="set-sec-d">{t('settings.pick.desc')}</div>
               <div className="font-list">
                 {FONT_OPTIONS.map((o) => (
@@ -1813,9 +1929,9 @@ export function SettingsDrawer({
               </div>
 
               {/* 크기(10–20px) + 행간 슬라이더 */}
-              <div className="set-sec-t">{t('settings.preview.title')}</div>
+              <div className="set-sec-t" data-item="font.preview">{t('settings.preview.title')}</div>
               <div className="fp-controls">
-                <div className="cg">
+                <div className="cg" data-item="font.size">
                   <label>{t('settings.size')}</label>
                   <div className="row">
                     <input
@@ -1829,7 +1945,7 @@ export function SettingsDrawer({
                     <span className="v">{font.sizePx}px</span>
                   </div>
                 </div>
-                <div className="cg">
+                <div className="cg" data-item="font.lineHeight">
                   <label>{t('settings.lineHeight')}</label>
                   <div className="row">
                     <input
@@ -1873,14 +1989,14 @@ export function SettingsDrawer({
           {section === 'log' && (
             <>
               {/* 기본 off — 사내 DLP 환경에서 모든 원격 세션 출력을 묻지 않고 디스크에 남기지 않는다. */}
-              <Row label={t('settings.sessionLog')} desc={t('settings.sessionLog.desc')}>
+              <Row label={t('settings.sessionLog')} desc={t('settings.sessionLog.desc')} item="sessionLog">
                 <Toggle
                   on={prefs.sessionLog}
                   label={t('settings.sessionLog')}
                   onChange={(sessionLog) => onPrefsChange({ sessionLog })}
                 />
               </Row>
-              <Row label={t('settings.logRetention')} desc={t('settings.logRetention.desc')}>
+              <Row label={t('settings.logRetention')} desc={t('settings.logRetention.desc')} item="logRetention">
                 <Seg
                   value={String(prefs.logRetentionDays)}
                   options={RETENTION_VALUES}
@@ -1888,7 +2004,7 @@ export function SettingsDrawer({
                   labelKey={(v) => 'settings.retention.' + v}
                 />
               </Row>
-              <Row label={t('settings.logFolder')} desc={t('settings.logFolder.desc')}>
+              <Row label={t('settings.logFolder')} desc={t('settings.logFolder.desc')} item="logFolder">
                 <button
                   type="button"
                   className="btn sec"
@@ -1902,24 +2018,19 @@ export function SettingsDrawer({
                   세션 기록은 크고 사람이 열어 보는 것, 앱 로그는 문제 생겼을 때만 보는 진단용. */}
               <DirRow
                 label={t('settings.dir.session')}
+                item="dir.session"
                 desc={t('settings.dir.session.desc')}
                 value={prefs.sessionLogDir}
                 onChange={(sessionLogDir) => onPrefsChange({ sessionLogDir })}
-              />
-              <DirRow
-                label={t('settings.dir.app')}
-                desc={t('settings.dir.app.desc')}
-                value={prefs.appLogDir}
-                onChange={(appLogDir) => onPrefsChange({ appLogDir })}
               />
               <div className="set-note">{t('settings.log.note')}</div>
             </>
           )}
 
-          {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} />}
+          {section === 'ai' && <AiSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} />}
 
           {section === 'voice' && (
-            <VoiceSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} goAi={() => setSection('ai')} />
+            <VoiceSection prefs={prefs} onPrefsChange={onPrefsChange} ask={ask} open={open} goAi={() => go('ai', 'ai.key')} />
           )}
 
           {section === 'mcp' && <McpSection ask={ask} />}
@@ -1928,10 +2039,10 @@ export function SettingsDrawer({
 
           {section === 'keys' && (
             <>
-              <div className="set-note">{t('settings.keys.note')}</div>
+              <div className="set-note" data-item="keys.list">{t('settings.keys.note')}</div>
               {/* FB-monitor(FB-0004): tmux 를 처음 쓰는 사용자를 위한 진입점 — 명령어 북(F18)의
                   tmux 카테고리로 바로 연다. 새 도움말 화면을 만들지 않고 기존 검색형 치트시트를 재사용. */}
-              <Row label={t('settings.keys.tmux')} desc={t('settings.keys.tmux.desc')}>
+              <Row label={t('settings.keys.tmux')} desc={t('settings.keys.tmux.desc')} item="keys.tmux">
                 <button
                   type="button"
                   className="btn sec"
@@ -1965,14 +2076,14 @@ export function SettingsDrawer({
 
           {section === 'about' && (
             <>
-              <Row label={t('app.name')} desc={t('about.msg')}>
+              <Row label={t('app.name')} desc={t('about.msg')} item="about.version">
                 <span className="v">v{version}</span>
               </Row>
 
               {/* #175 — 배포 전엔 앱 어디에도 사용 설명서로 가는 길이 없었다. 정보 탭에 이미 버전·
                   라이선스가 있으니 여기 한 행이 제일 싸다. 새 창이 아니라 OS 기본 브라우저로(이 앱은
                   터미널이지 브라우저가 아니다) — app:openExternal 의 스킴 화이트리스트를 그대로 탄다. */}
-              <Row label={t('settings.manual.title')} desc={t('settings.manual.desc')}>
+              <Row label={t('settings.manual.title')} desc={t('settings.manual.desc')} item="manual">
                 <button
                   type="button"
                   className="btn sec"
@@ -1988,7 +2099,7 @@ export function SettingsDrawer({
                   ⚠️ 바로 위 [사용 설명서]는 **OS 브라우저**다(그 주석의 판단 — 이 앱은 터미널이지
                      브라우저가 아니다). 두 줄이 다른 곳으로 여는 것이 지금 상태이고, 어느 쪽으로
                      통일할지는 준영님 몫으로 남겼다. 조용히 한쪽을 바꾸지 않는다. */}
-              <Row label={t('settings.notes.title')} desc={t('settings.notes.desc')}>
+              <Row label={t('settings.notes.title')} desc={t('settings.notes.desc')} item="notes">
                 <button
                   type="button"
                   className="btn sec"
@@ -1999,11 +2110,8 @@ export function SettingsDrawer({
                 </button>
               </Row>
 
-              <GpuRow open={open} version={version} />
-              <ProbeRow open={open} />
-
               {/* OFL 라이선스 고지 (GAP-OFL) */}
-              <div className="set-sec-t">{t('settings.license.title')}</div>
+              <div className="set-sec-t" data-item="license">{t('settings.license.title')}</div>
               <div className="license-list">
                 {LICENSES.map((l) => (
                   <div className="license-row" key={l.name}>
@@ -2017,7 +2125,7 @@ export function SettingsDrawer({
               <div className="set-note">{t('settings.license.note')}</div>
 
               {/* M0 — 옮겨 온 코드의 고지. 원문은 설치 폴더 resources/NOTICE(electron-builder extraResources). */}
-              <div className="set-sec-t">{t('settings.notice.title')}</div>
+              <div className="set-sec-t" data-item="notice">{t('settings.notice.title')}</div>
               <div className="license-list">
                 {CODE_NOTICES.map((l) => (
                   <div className="license-row" key={l.name}>
@@ -2031,10 +2139,11 @@ export function SettingsDrawer({
               <div className="set-note">{t('settings.notice.note')}</div>
             </>
           )}
-        </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
-    </>
   )
 }

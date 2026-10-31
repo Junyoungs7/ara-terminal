@@ -8,7 +8,7 @@
    "표 숫자" 모드가 있다. Pretendard 가 이 기능을 갖고 있어 한 줄이면 끝난다.
    고정폭이 남은 22곳(경로·명령·로그)은 어차피 모든 글자 폭이 같아 영향이 없다. */
 .app,
-.drawer,
+.settings-page,
 .overlay {
   font-variant-numeric: tabular-nums;
 }
@@ -3121,7 +3121,8 @@
   padding: var(--sp-4) var(--sp-7);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  z-index: 40;
+  /* 설정 페이지(z 90)보다 위 — 잠금 키 안내처럼 설정을 열면서 띄우는 토스트가 페이지에 덮이지 않게(M1 1-A). */
+  z-index: 91;
   pointer-events: none;
 }
 
@@ -4122,14 +4123,13 @@ button.sb-seg.upd:hover .val {
   margin-top: var(--sp-hair);
 }
 /* ── 오버레이 우상단 닫기 (M3) ──
-   모달(.modal-hd) · 설정 드로어(.drawer-hd) · 치트시트/명령어북(.cs-hd)이 **선언 하나 다르지 않게
+   모달(.modal-hd) · (옛 설정 드로어) · 치트시트/명령어북(.cs-hd)이 **선언 하나 다르지 않게
    같은 규칙 세 벌**이었다(.cs-hd 쪽은 interactions.css 에 복사본으로 살았다). 한 벌로 합친다 —
    클래스는 그대로 둔다(e2e·스모크가 그 이름으로 요소를 찾는다). 셋이 같아야 한다는 사실이
    이제 선택자 목록에 적혀 있어, 다음에 하나만 고치는 일이 안 생긴다.
    `border`·`background` 는 <button> 이 되면서 필요해진 UA 기본값 제거다(.bp-close 와 같은 방식).
    옛 `font-size: var(--fs-xl)` 는 뺐다 — ✕ 글리프였을 때의 값이고 지금 자식은 SVG 하나뿐이다. */
 .modal-hd .x,
-.drawer-hd .x,
 .cs-hd .x {
   margin-left: auto;
   width: 27px;
@@ -4144,13 +4144,11 @@ button.sb-seg.upd:hover .val {
   transition: var(--dur-quick);
 }
 .modal-hd .x svg,
-.drawer-hd .x svg,
 .cs-hd .x svg {
   width: 13px;
   height: 13px;
 }
 .modal-hd .x:hover,
-.drawer-hd .x:hover,
 .cs-hd .x:hover {
   background: var(--bg-overlay);
   color: var(--text-hi);
@@ -4578,132 +4576,257 @@ button.sb-seg.upd:hover .val {
 }
 
 /* ============================================================
-   설정 드로어 (F5) — 목업 variant-final-2 .drawer 그대로.
-   폰트 비교 스트립 + 폰트 리스트 + 크기/행간 슬라이더 + 실사용 한글 미리보기 + OFL 고지.
+   설정 페이지 (M1 1-A — 시안 SW-final 설정 장면). 타이틀바·상태바 사이를 통째로 덮는 전체 화면.
+   왼쪽: 돌아가기 · 검색(Ctrl+F) · 묶음 머리 + 섹션. 오른쪽: 가운데 720 열에 한 섹션씩.
+   확인 다이얼로그(.overlay z 100)·메뉴(.ctx-menu z 200)가 이 위에 떠야 하므로 z 는 옛 서랍과 같은 90.
+   닫혀 있어도 언마운트하지 않는다(보던 섹션 유지) — open 클래스만 토글.
    ============================================================ */
-/* 2.0 6단계 — 오른쪽 500px 서랍이 설정 › 기능 설명을 잘랐다. 시안 Z-settings 대로 가운데 넓은 창 +
-   뒤 스크림으로 바꾼다. 이름(.drawer)은 e2e·스모크 선택자라 그대로 둔다. 확인 다이얼로그(.overlay
-   z 100)가 이 위에 떠야 하므로 z 는 90 그대로. 닫혀 있어도 언마운트하지 않는다(보던 섹션 유지). */
-.drawer-scrim {
+.settings-page {
   position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  backdrop-filter: blur(7px);
-  z-index: 89;
-  display: none;
-}
-.drawer-scrim.open {
-  display: block;
-  animation: fade var(--dur-pop) ease;
-}
-/* [폰트]·[모양]·[터미널] — 고르면서 뒤 터미널을 본다(다듬기 R2, 리뷰 B4). 블러 끔 + 옅은 스크림. */
-.drawer-scrim.clear {
-  backdrop-filter: none;
-  background: var(--scrim-soft);
-}
-.drawer {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  translate: -50% -50%;
-  width: min(1000px, calc(100vw - 48px));
-  height: min(780px, calc(100vh - 48px));
-  background: var(--bg-canvas);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
+  top: var(--row-titlebar);
+  bottom: var(--row-statusbar);
+  left: 0;
+  right: 0;
   z-index: 90;
   display: none;
-  flex-direction: column;
+  background: var(--bg-terminal);
+  font-variant-numeric: tabular-nums;
 }
-.drawer.open {
+.settings-page.open {
   display: flex;
-  animation: pop var(--dur-pop) var(--ease-pop);
 }
 /* 프로그램이 준 포커스(.modal:focus 와 같은 이유) — 테두리는 그리지 않는다. */
-.drawer:focus {
+.settings-page:focus {
   outline: none;
 }
-.drawer-hd {
-  display: flex;
-  align-items: center;
-  height: 52px;
-  padding: 0 var(--sp-7) 0 28px;
-  border-bottom: 1px solid var(--line);
+.sp-nav {
+  width: 260px;
   flex: none;
-}
-/* 시안 Z-settings: 오른쪽 머리 = 고른 칸 이름 하나(아이콘 타일·부제는 1.x 서랍의 것이라 지웠다). */
-.drawer-hd h2 {
-  font-size: var(--fs-xl);
-  font-weight: 500;
-}
-/* .drawer-hd .x 는 위 `.modal-hd .x` 묶음이 함께 그린다(M3). */
-/* R5: 섹션이 5개로 늘어 좌측 세로 nav + 우측 스크롤 패널 2열이 됐다(가로 탭은 라벨이 눌린다). */
-.drawer-body {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-}
-.set-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-7) var(--sp-5);
-  width: 208px;
-  flex: none;
+  min-height: 0;
+  background: var(--bg-canvas);
   border-right: 1px solid var(--line);
-  overflow-y: auto;
 }
-/* 네비 맨 위 "설정" — 창 제목이 여기 산다(시안). 칸 이름이 아니라 lo 로 낮춘다. */
-.set-nav-t {
-  font-size: var(--fs-md);
-  color: var(--text-lo);
-  padding: var(--sp-2) var(--sp-5) var(--sp-6);
-}
-.set-nav span {
-  position: relative;
-  flex: none;
+.sp-back {
   display: flex;
   align-items: center;
-  height: 32px;
-  font-size: var(--fs-md);
+  gap: var(--sp-4);
+  height: 36px;
+  padding: 0 var(--sp-7);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
   color: var(--text-mid);
-  padding: 0 var(--sp-5);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+  flex: none;
+}
+.sp-back:hover {
+  color: var(--text-hi);
+  background: var(--glass-hover);
+}
+.sp-back .kbd {
+  margin-left: auto;
+}
+.sp-search {
+  margin: var(--sp-5) var(--sp-5) var(--sp-2);
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
+  background: var(--bg-abyss);
+  color: var(--text-lo);
+  flex: none;
+}
+.sp-search:focus-within {
+  border-color: var(--accent-line);
+}
+.sp-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--text-hi);
+  font: inherit;
+  font-size: var(--fs-md);
+}
+.sp-search input::placeholder {
+  color: var(--text-dim);
+}
+/* 검색칸의 기본 ✕ 는 쓰지 않는다 — Esc 가 지운다. */
+.sp-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.sp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-4) var(--sp-8);
+}
+.sp-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--sp-4) var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--accent-soft);
+}
+.sp-new {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 var(--sp-3);
+  line-height: 15px;
+}
+.sp-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--sp-5);
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-mid);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
   cursor: var(--cur-hand, pointer);
   transition: var(--dur-quick);
 }
-.set-nav span:hover {
+.sp-item:hover {
   background: var(--glass-hover);
   color: var(--text-hi);
 }
-/* 선택 = 레일 활성과 같은 글라스 면 + 네비 가장자리 2px 막대(시안 — 파란 틴트 상자 아님). */
-.set-nav span.on {
+/* 아직 기능이 없는 이식 예정 섹션 — 고를 수는 있지만 한 단 낮춘다. */
+.sp-item.soon {
+  color: var(--text-lo);
+}
+/* 선택 = 레일 활성과 같은 글라스 면 + 목록 가장자리 2px 막대(시안). */
+.sp-item.on {
   color: var(--text-hi);
+  font-weight: 500;
   background: var(--glass);
   box-shadow: inset 0 1px 0 var(--glass-hi);
 }
-.set-nav span.on::before {
+.sp-item.on::before {
   content: '';
   position: absolute;
-  left: calc(var(--sp-5) * -1);
-  top: 8px;
-  bottom: 8px;
+  left: calc(var(--sp-4) * -1);
+  top: 6px;
+  bottom: 6px;
   width: 2px;
   background: var(--accent);
 }
-.set-main {
+.sp-hits {
+  margin-left: auto;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  font-weight: 400;
+}
+.settings-page mark {
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+  border-radius: var(--radius-sm);
+}
+.sp-empty {
+  padding: var(--sp-8) var(--sp-5);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+}
+.sp-main {
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
+  padding: 28px 48px var(--sp-9);
+  display: flex;
+  justify-content: center;
+}
+.sp-col {
+  width: 720px;
+  max-width: 100%;
+}
+.sp-crumb {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  margin-bottom: var(--sp-3);
+}
+.sp-h1 {
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  margin-bottom: var(--sp-6);
+}
+.sp-desc {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  margin: calc(var(--sp-4) * -1) 0 var(--sp-9);
+}
+.sp-h2 {
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-mid);
+  margin: 22px 0 var(--sp-4);
+}
+/* 검색 결과 — 섹션마다 한 카드, 항목 하나 = 누르면 그 섹션의 그 줄로 가는 버튼. */
+.sp-hit-sec {
   display: flex;
   flex-direction: column;
 }
-.set-pane {
-  overflow-y: auto;
-  padding: var(--sp-7) 28px var(--sp-9);
-  flex: 1;
-  min-width: 0;
+.sp-hit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-6) var(--sp-8);
+  border: 1px solid var(--line);
+  border-top-width: 0;
+  background: var(--bg-canvas);
+  color: var(--text-hi);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.sp-hit:first-of-type {
+  border-top-width: 1px;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+.sp-hit:last-of-type {
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+.sp-hit:first-of-type:last-of-type {
+  border-radius: var(--radius-xl);
+}
+.sp-hit:hover {
+  background: var(--glass-hover);
+}
+.sp-hit-l {
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.sp-hit-d {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.sp-soon {
+  margin-top: 0;
+}
+/* 딥링크로 온 줄 — 잠깐 밝혔다가 꺼진다(store/settingsNav). */
+.sp-flash {
+  background: var(--accent-glow);
+  border-radius: var(--radius);
+  transition: background var(--dur-pop);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-flash {
+    transition: none;
+  }
 }
 
 /* 설정 항목 한 줄: 라벨+설명 / 컨트롤 */
@@ -9243,7 +9366,6 @@ button.sb-seg.upd:hover .val {
 .sclear:active,
 .cc-b:active,
 .modal-hd .x:active,
-.drawer-hd .x:active,
 .cs-hd .x:active,
 .pl-add:active,
 .pw-eye:active,
@@ -9292,7 +9414,8 @@ button.sb-seg.upd:hover .val {
 .fav-node:active,
 .prof:active,
 .font-item:active,
-.set-nav span:active,
+.sp-item:active,
+.sp-hit:active,
 .pl-row:active,
 .wp-row:active,
 .ac-row:active,
