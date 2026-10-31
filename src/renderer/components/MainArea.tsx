@@ -44,6 +44,7 @@ import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
 import type { AiProvider, UiState } from '@shared/types'
 import type { FeatureId, FeatureShown } from '@shared/features'
+import { ErrorBoundary } from './ErrorBoundary'
 
 // SSH 복원 결과 — Shell 의 connectProfile 을 감싼다. 성공 시 새 세션 id, 실패 시 사유.
 /**
@@ -1566,6 +1567,15 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           commandBookQuery={commandBookQuery}
           activeSessionId={focusedSessionId()}
         />
+        <ErrorBoundary
+          area="settings"
+          className={'drawer' + (settingsOpen ? ' open' : '')}
+          resetKey={settingsOpen}
+          onDismiss={() => {
+            setSettingsOpen(false)
+            setSettingsEntry(undefined)
+          }}
+        >
         <SettingsDrawer
           open={settingsOpen}
           font={font}
@@ -1584,6 +1594,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             setCommandBookOpen(true)
           }}
         />
+        </ErrorBoundary>
       </div>
     )
   }

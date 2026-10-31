@@ -60,7 +60,7 @@ import {
   reportPreviousHang,
   scheduleTestMainBlock
 } from './stability/stability'
-import { startEventLoopDelayProbe } from './stability/eventLoopProbe'
+import { eventLoopDelayProbeStatus, setEventLoopDelayProbe, startEventLoopDelayProbe } from './stability/eventLoopProbe'
 import { pushSend } from './util/windowPush'
 import { logMainError } from './log/MainErrorLog'
 import { aiModelsOf, aiProviderOf, isBottomId, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
@@ -477,6 +477,10 @@ app.whenReady().then(async () => {
   installHangWatchdog(userData)
   scheduleTestMainBlock()
   startEventLoopDelayProbe(() => dirname(mainErrorLogPath()))
+  handle('diag:probe', ({ on }) => {
+    if (typeof on === 'boolean') setEventLoopDelayProbe(on, () => dirname(mainErrorLogPath()))
+    return eventLoopDelayProbeStatus()
+  })
   installGpuCrashFallback(userData, () => quitting, () => mainWindow)
   // ui:setPrefs 가 도착하면 로거에 즉시 반영한다(전용 설정 채널을 만들지 않는다).
   registerWorkspaceIpc(store, history, (prefs) => {

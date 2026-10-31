@@ -1,6 +1,7 @@
 A.R.A 에는 아래 오픈소스의 코드가 옮겨져(기능 단위 재작성) 들어 있습니다.
 
 - Orca (https://github.com/stablyai/orca) — MIT. 옮긴 파일 머리에 '// 출처: stablyai/orca <경로>@<커밋> (MIT)'.
+- herdr — Apache-2.0. 아직 옮기지 않았다(아래 자리). 옮기면 파일 머리에 '// 출처: herdr <경로>@<커밋> (Apache-2.0)'.
 
 ------------------------------------------------------------
 MIT License
@@ -24,3 +25,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+------------------------------------------------------------
+herdr — Apache License 2.0 (자리)
+
+아직 옮긴 코드가 없다. 옮길 때 이 자리에 herdr 의 NOTICE 내용(있으면)과
+Apache License 2.0 전문(https://www.apache.org/licenses/LICENSE-2.0.txt)을 넣고,
+src/renderer/fonts/licenses.ts 의 CODE_NOTICES 에 한 줄 더한다.

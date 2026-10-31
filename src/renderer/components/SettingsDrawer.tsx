@@ -24,7 +24,7 @@ import {
   type McpState,
   type UiPrefs
 } from '@shared/types'
-import type { GpuInfo, UpdateState } from '@shared/ipc'
+import type { DiagProbeStatus, GpuInfo, UpdateState } from '@shared/ipc'
 import type { AgentHookState, RemoteHookReport } from '@shared/agentStatus'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
@@ -32,7 +32,7 @@ import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
 import { forgetCachedScope } from '../store/history'
-import { LICENSES } from '../fonts/licenses'
+import { CODE_NOTICES, LICENSES } from '../fonts/licenses'
 import { KEYMAP, keyText, comboFromEvent, lockShortcutProblem, type KeymapCategory } from '../../shared/keymap'
 import { AUTO_LOCK_OPTIONS, LOCK_MIN_PASSWORD, type LockResult } from '@shared/lock'
 import { useLockView } from '../store/lock'
@@ -1070,6 +1070,39 @@ function GpuRow({ open, version }: { open: boolean; version: string }) {
 }
 
 /**
+ * M0 FD-03 진단 프로브 — main 이벤트 루프 지연을 1초마다 앱 로그 폴더 event-loop-delay.ndjson 에 남긴다.
+ * 켜 둔 동안은 마지막 1초 창을 설명 자리에 보여 준다. 저장하지 않는다(재시작하면 꺼짐 — 켜 둔 채 잊지 않게).
+ */
+function ProbeRow({ open }: { open: boolean }) {
+  const [st, setSt] = useState<DiagProbeStatus | null>(null)
+  // 드로어는 언마운트되지 않는다(GpuRow 주석) — 열려 있는 동안만 1초마다 묻는다.
+  useEffect(() => {
+    if (!open) return
+    const read = (): void => void window.ev?.app?.probe?.().then(setSt).catch(() => {})
+    read()
+    const id = setInterval(read, 1000)
+    return () => clearInterval(id)
+  }, [open])
+  const last = st?.on ? st.last : null
+  const desc = last
+    ? t('settings.probe.last')
+        .replace('{p50}', String(last.p50))
+        .replace('{p99}', String(last.p99))
+        .replace('{max}', String(last.max))
+        .replace('{elu}', String(Math.round(last.elu * 100)))
+    : t('settings.probe.desc')
+  return (
+    <Row label={t('settings.probe.title')} desc={desc}>
+      <Toggle
+        on={st?.on === true}
+        label={t('settings.probe.title')}
+        onChange={(v) => void window.ev?.app?.probe?.(v).then(setSt).catch(() => {})}
+      />
+    </Row>
+  )
+}
+
+/**
  * [명령 기록] 섹션 (#204). **지울 길**을 준다 — 지금까지는 `history.json` 을 손으로 여는 것
  * 말고는 없었다.
  *
@@ -1956,6 +1989,7 @@ export function SettingsDrawer({
               </Row>
 
               <GpuRow open={open} version={version} />
+              <ProbeRow open={open} />
 
               {/* OFL 라이선스 고지 (GAP-OFL) */}
               <div className="set-sec-t">{t('settings.license.title')}</div>
@@ -1970,6 +2004,20 @@ export function SettingsDrawer({
                 ))}
               </div>
               <div className="set-note">{t('settings.license.note')}</div>
+
+              {/* M0 — 옮겨 온 코드의 고지. 원문은 설치 폴더 resources/NOTICE(electron-builder extraResources). */}
+              <div className="set-sec-t">{t('settings.notice.title')}</div>
+              <div className="license-list">
+                {CODE_NOTICES.map((l) => (
+                  <div className="license-row" key={l.name}>
+                    <div className="lic-name">{l.name}</div>
+                    <div className="lic-meta">
+                      {l.copyright} · <span className="lic-ofl">{l.license}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="set-note">{t('settings.notice.note')}</div>
             </>
           )}
         </div>

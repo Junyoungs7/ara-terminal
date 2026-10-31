@@ -10,8 +10,11 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { Worker } from 'node:worker_threads'
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
-import ko from '../i18n/ko.json'
+import ko from '../../renderer/i18n/ko.json'
 import { logMainError } from '../log/MainErrorLog'
+
+// main 대화상자 문구도 렌더러 ko.json 한 벌에서 읽는다(appMenu.ts 와 같은 방식) — scan-i18n 이 여기 t() 호출의 키도 검사한다.
+const t = (key: string): string => (ko as Record<string, string>)[key] ?? key
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
@@ -140,13 +143,13 @@ export function scheduleTestMainBlock(): void {
 
 const rendererRecoveryPrompt = (): MessageBoxOptions => ({
   type: 'error',
-  buttons: [ko['rendererRecovery.reload'], ko['rendererRecovery.quit']],
+  buttons: [t('rendererRecovery.reload'), t('rendererRecovery.quit')],
   defaultId: 0,
   // Esc 는 다시 시도 — 세션을 날리지 않는다.
   cancelId: 0,
-  title: ko['rendererRecovery.title'],
-  message: ko['rendererRecovery.message'],
-  detail: ko['rendererRecovery.detail']
+  title: t('rendererRecovery.title'),
+  message: t('rendererRecovery.message'),
+  detail: t('rendererRecovery.detail')
 })
 
 /** 렌더러가 죽으면 다시 불러온다. 60초 안 3번을 넘으면 자동은 멈추고 사용자에게 묻는다(창은 한 번에 하나). */
@@ -226,12 +229,12 @@ export function installGpuCrashFallback(userData: string, isQuitting: () => bool
         promptForRestart: async () => {
           const options: MessageBoxOptions = {
             type: 'warning',
-            buttons: [ko['gpuFallback.restart'], ko['gpuFallback.continue']],
+            buttons: [t('gpuFallback.restart'), t('gpuFallback.continue')],
             defaultId: 0,
             cancelId: 1,
-            title: ko['gpuFallback.title'],
-            message: ko['gpuFallback.message'],
-            detail: ko['gpuFallback.detail']
+            title: t('gpuFallback.title'),
+            message: t('gpuFallback.message'),
+            detail: t('gpuFallback.detail')
           }
           const w = parent()
           const { response } = w && !w.isDestroyed() ? await dialog.showMessageBox(w, options) : await dialog.showMessageBox(options)

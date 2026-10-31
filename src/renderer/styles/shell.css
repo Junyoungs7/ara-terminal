@@ -10296,3 +10296,29 @@ button.sb-seg.upd:hover .val {
   border-color: var(--err-line);
   background: var(--err-tint);
 }
+
+/* M0 FD-04 오류 경계 대체 화면(components/ErrorBoundary.tsx). 영역 클래스(sidebar·main·drawer…)와 함께 붙어
+   그 영역의 자리를 그대로 차지한다 — 여기서는 안쪽 배치만 정한다. */
+.eb-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  min-height: 0;
+  text-align: center;
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+}
+.eb-fallback.eb-app {
+  height: 100vh;
+}
+.eb-title {
+  color: var(--text-hi);
+  font-size: var(--fs-xl);
+}
+.eb-actions {
+  display: flex;
+  gap: var(--sp-2);
+}

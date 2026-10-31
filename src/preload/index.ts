@@ -67,6 +67,9 @@ const api: EvApi = {
     // sandbox 프리로드에도 process.env 는 있지만, 없더라도 **부팅이 멈추지 않게** typeof 로 본다:
     // 이 파일이 던지면 창이 빈 화면으로 뜬다(사용자에게는 "앱이 안 켜진다"다).
     gpuInfo: () => ipcRenderer.invoke('app:gpuInfo'),
+    logRendererError: (area: string, message: string, stack: string) =>
+      ipcRenderer.invoke('app:logRendererError', { area, message, stack }),
+    probe: (on?: boolean) => ipcRenderer.invoke('diag:probe', { on }),
     webglOptOut: typeof process === 'undefined' ? undefined : process.env['ARA_NO_WEBGL'],
     // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
     updateState: () => ipcRenderer.invoke('update:get'),

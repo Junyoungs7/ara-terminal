@@ -226,6 +226,10 @@ export type InvokeContract = {
    * 이쪽이 없으면 제보를 받아도 그 PC 의 GPU 를 모른다. 핸들러 주석에 순서 함정도 함께 있다.
    */
   'app:gpuInfo': { req: void; res: GpuInfo }
+  /** M0 FD-04 — 렌더러 오류 경계(ErrorBoundary)가 잡은 화면 오류를 main-error.log 에 남긴다(마스킹은 main). */
+  'app:logRendererError': { req: { area: string; message: string; stack: string }; res: { ok: true } }
+  /** M0 FD-03 진단 프로브 — on 을 주면 켜거나 끄고, 빼면 상태만 묻는다. 저장하지 않는다(재시작하면 꺼짐). */
+  'diag:probe': { req: { on?: boolean }; res: DiagProbeStatus }
   /**
    * #206 오류 신고. prepare 는 **부른 창을 찍고** 보낼 것을 모아 미리보기로 준다 — 신고 창은 이 답을
    * 받은 **뒤에** 연다(먼저 열면 신고 창이 찍힌다). send 는 main 이 서버로 POST 한다(렌더러 CSP 밖).
@@ -656,6 +660,12 @@ export type GpuInfo = {
   gl: { renderer: string; vendor: string; version: string }
 }
 
+/** FD-03 프로브 상태 + 마지막 1초 창(main/stability/eventLoopProbe.ts 의 EventLoopDelayWindow 와 같은 모양). */
+export type DiagProbeStatus = {
+  on: boolean
+  last: { t: number; p50: number; p99: number; max: number; samples: number; elu: number } | null
+}
+
 export type InvokeChannel = keyof InvokeContract
 export type InvokeReq<C extends InvokeChannel> = InvokeContract[C]['req']
 export type InvokeRes<C extends InvokeChannel> = InvokeContract[C]['res']
@@ -736,6 +746,10 @@ export type EvApi = {
     pathForFile(file: File): string
     /** #190 진단 — Electron 이 아는 GPU 상태·GPU 이름. 설정 [정보]가 보여 주고 복사해 준다. */
     gpuInfo(): Promise<GpuInfo>
+    /** M0 FD-04 — 오류 경계가 잡은 화면 오류를 main-error.log 로. */
+    logRendererError(area: string, message: string, stack: string): Promise<{ ok: true }>
+    /** M0 FD-03 — 진단 프로브 켜기/끄기(on 생략 = 상태만). */
+    probe(on?: boolean): Promise<DiagProbeStatus>
     /**
      * `ARA_NO_WEBGL` 의 **날값**(함수가 아니다 — xterm 이 만들어지는 그 순간 동기로 필요해서
      * preload 가 값으로 건넨다. IPC 로는 그 시점을 못 맞춘다). 값 판정은 shouldUseWebgl 이 한다.

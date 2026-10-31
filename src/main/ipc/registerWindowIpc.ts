@@ -12,6 +12,7 @@ import {
 import { openPastLogWindow, pastLogHello, pastLogWindowContents } from '../windows/PastLogWindow'
 import { pushSend } from '../util/windowPush'
 import { handle } from './handle'
+import { logMainError } from '../log/MainErrorLog'
 import { isSafeExternal } from '../util/safeExternal'
 import { clipboardFilePaths } from '../util/clipboardFiles'
 import type { FileClipData } from '@shared/ipc'
@@ -168,6 +169,13 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
       // 그대로 빈 문자열 — 화면은 "알 수 없음"으로 보여 준다.
     }
     return { features: { ...app.getGPUFeatureStatus() }, gl }
+  })
+
+  // M0 FD-04 — 렌더러 오류 경계가 잡은 오류. 렌더러가 보낸 값이라 길이를 자른다(마스킹은 logMainError).
+  handle('app:logRendererError', ({ area, message, stack }) => {
+    logMainError(`renderer ${String(area).slice(0, 40)}`, `${String(message).slice(0, 500)}
+${String(stack).slice(0, 4000)}`)
+    return { ok: true as const }
   })
 
   // F14: 클립보드에 담긴 파일 경로. 렌더러는 OS 클립보드의 파일 형식을 볼 수 없으므로(브라우저

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
-import { LICENSES } from '../src/renderer/fonts/licenses'
+import { CODE_NOTICES, LICENSES } from '../src/renderer/fonts/licenses'
 
 /**
  * FINISH-M6(2026-08-30) — 설정 [정보]의 **번들 폰트 라이선스 고지**가 실제 배포물과 맞는가.
@@ -52,5 +52,17 @@ describe('번들 폰트 라이선스 고지 — 설정 [정보]', () => {
 
   it('★ 스캔이 공허하지 않다 — OFL 원문을 하나도 못 찾으면 위 검사가 전부 무의미하다', () => {
     expect(oflNames().length).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('옮겨 온 코드의 고지 — NOTICE · 설정 [정보]', () => {
+  it('★ 표의 저작권 문구가 NOTICE 에 있다 — 화면 고지가 설치본 원문과 어긋나지 않는다', () => {
+    const notice = readFileSync('NOTICE', 'utf8')
+    expect(CODE_NOTICES.length).toBeGreaterThan(0)
+    for (const n of CODE_NOTICES) expect(notice.includes(n.copyright), n.name).toBe(true)
+  })
+
+  it('★ 설치본에 NOTICE 를 싣는다(electron-builder extraResources)', () => {
+    expect(readFileSync('electron-builder.yml', 'utf8')).toMatch(/extraResources:\s+- from: NOTICE\s+to: NOTICE/)
   })
 })

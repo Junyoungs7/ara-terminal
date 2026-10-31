@@ -59,3 +59,30 @@ test('STAB-2 main 5초 막기 → 다음 실행에 logs/hang-report.ndjson', asy
   expect(existsSync(marker)).toBe(false)
   await quitAra(a2)
 })
+
+// STAB-3 FD-03 진단 프로브를 실행 중에 켜고 끈다(설정 › 정보 › [진단 프로브]와 같은 IPC). 기본 꺼짐.
+test('STAB-3 진단 프로브 켜기 → 최근 값·event-loop-delay.ndjson, 끄기 → 값 지움', async ({ ara, userDataDir }) => {
+  type St = { on: boolean; last: { p99: number } | null }
+  const probe = (on?: boolean): Promise<St> =>
+    ara.page.evaluate((v) => (window as unknown as { ev: { app: { probe(o?: boolean): Promise<St> } } }).ev.app.probe(v), on)
+  expect((await probe()).on).toBe(false)
+  expect((await probe(true)).on).toBe(true)
+  await expect.poll(async () => (await probe()).last !== null, { timeout: 10_000 }).toBe(true)
+  expect(existsSync(join(userDataDir, 'logs', 'event-loop-delay.ndjson'))).toBe(true)
+  expect(await probe(false)).toEqual({ on: false, last: null })
+})
+
+// STAB-4 FD-04 렌더러 오류 경계가 보내는 기록이 main-error.log 에 `renderer <영역>` 으로 남는다.
+// 경계 자체(한 영역만 대체 화면)는 화면을 깨뜨릴 시험 훅이 없어 여기서 보지 않는다 — 기록 경로만 본다.
+test('STAB-4 오류 경계 기록 → logs/main-error.log', async ({ ara, userDataDir }) => {
+  await ara.page.evaluate(() =>
+    (window as unknown as { ev: { app: { logRendererError(a: string, m: string, s: string): Promise<unknown> } } }).ev.app.logRendererError(
+      'sidebar',
+      'STAB-4 boom',
+      'Error: STAB-4 boom\n    at Sidebar'
+    )
+  )
+  const log = join(userDataDir, 'logs', 'main-error.log')
+  await expect.poll(() => (existsSync(log) ? readFileSync(log, 'utf8') : ''), { timeout: 5_000 }).toContain('renderer sidebar')
+  expect(readFileSync(log, 'utf8')).toContain('STAB-4 boom')
+})

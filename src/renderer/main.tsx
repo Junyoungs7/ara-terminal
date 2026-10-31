@@ -17,6 +17,7 @@ import { LockScreen } from './components/LockScreen'
 import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
 import { installErrorRing } from './store/errorRing'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/shell.css'
@@ -76,6 +77,8 @@ createRoot(lockHost).render(<LockScreen variant={isMainWin ? 'clock' : 'card'} /
 const renderApp = (): void =>
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    {/* M0 FD-04 앱 전체 경계 — 큰 영역 경계(Shell·MainArea)를 빠져나온 오류의 마지막 자리. */}
+    <ErrorBoundary area="app" className="eb-app">
     {editorTarget ? (
       <EditorWindow target={editorTarget} />
     ) : rdpWinTarget ? (
@@ -95,6 +98,7 @@ const renderApp = (): void =>
     ) : (
       <Shell />
     )}
+    </ErrorBoundary>
   </StrictMode>
   )
 

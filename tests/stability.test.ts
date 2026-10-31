@@ -20,7 +20,13 @@ import {
   writeGpuFallbackMarker,
   type GpuFallbackEngagementHandlers
 } from '../src/main/stability/gpuFallbackPolicy'
-import { delayMs, isEventLoopDelayProbeEnabled, startEventLoopDelayProbe } from '../src/main/stability/eventLoopProbe'
+import {
+  delayMs,
+  eventLoopDelayProbeStatus,
+  isEventLoopDelayProbeEnabled,
+  setEventLoopDelayProbe,
+  startEventLoopDelayProbe
+} from '../src/main/stability/eventLoopProbe'
 import { devTiming, HANG_REPORT_FILE, reportPreviousHang, shouldRunHangWatchdog, testBlockMainMs } from '../src/main/stability/stability'
 import { startUtilityHost, type UtilityChild } from '../src/main/stability/utilityHost'
 
@@ -156,6 +162,15 @@ describe('FD-03 진단 프로브', () => {
     const stop = startEventLoopDelayProbe(() => dir, { ARA_EVENT_LOOP_PROBE: '1' })
     expect(stop).toBeTypeOf('function')
     stop?.()
+  })
+
+  it('실행 중에 켜고 끈다 — 두 번 켜도 하나, 끄면 최근 값도 지운다', () => {
+    expect(eventLoopDelayProbeStatus()).toEqual({ on: false, last: null })
+    const a = setEventLoopDelayProbe(true, () => dir)
+    expect(setEventLoopDelayProbe(true, () => dir)).toBe(a)
+    expect(eventLoopDelayProbeStatus().on).toBe(true)
+    expect(setEventLoopDelayProbe(false, () => dir)).toBeNull()
+    expect(eventLoopDelayProbeStatus()).toEqual({ on: false, last: null })
   })
 
   it('표본 간격(10ms)을 뺀 값이 지연이다', () => {

@@ -65,6 +65,7 @@ import {
   aiModelsOf
 } from '@shared/types'
 import { t } from '../i18n'
+import { ErrorBoundary } from './ErrorBoundary'
 
 /**
  * 종료 확인에 보여 줄 세션 목록. **줄 수를 자른다.**
@@ -1553,6 +1554,7 @@ export function Shell() {
           // 설정은 덮개다 — 단축키와 **같은 길**로 보낸다(레일 전용 배선을 만들지 않는다).
           onSettings={() => dispatchAction('settings.open')}
         />
+        <ErrorBoundary area="sidebar" className="sidebar">
         <Sidebar
           active={sidebar.activeTab}
           collapsed={sidebar.collapsed}
@@ -1640,10 +1642,12 @@ export function Shell() {
             if (activeSession) window.ev.session.input(activeSession.id, cdCommand(absPath))
           }}
         />
+        </ErrorBoundary>
         {/* 사이드바-메인 경계 드래그(R4.3). 접혀 있으면 끌 폭이 없으므로 손잡이도 없다. */}
         {!sidebar.collapsed && (
           <div className="sb-resizer" role="separator" title={t('sidebar.resize')} onMouseDown={startResize} />
         )}
+        <ErrorBoundary area="main" className="main">
         <MainArea
           ref={mainRef}
           sessions={sessions}
@@ -1770,11 +1774,13 @@ export function Shell() {
           // 제보 11·32: 터미널 우클릭 [tmux ▸ 새 세션] 이 이름을 묻는다(트리 메뉴와 같은 창).
           askText={askText}
         />
+        </ErrorBoundary>
         {/* #125 아라 대화 v2 — 같은 자리(ai 레일). **처음 열 때까지 붙이지 않는다**: 마운트하는
             순간 claude 프로세스가 뜨는데(≈20초) 앱 부팅마다 그걸 띄울 이유가 없다. 한 번 열면
             그 뒤로는 계속 렌더한다(닫혀도 `open=false` 로 null 만 반환) — 언마운트하면 대화 목록이
             날아가고 다시 열 때 엔진까지 새로 뜬다. lastBottom.current 와 같은 손버릇이다. */}
         {(araEver.current || aiOpen) && (
+          <ErrorBoundary area="ara" className="ara-panel">
           <AraChatPanel
             open={aiOpen}
             onClose={() => closeRail('ai')}
@@ -1784,6 +1790,7 @@ export function Shell() {
             // API 모드의 모델은 설정 ui.aiModels[provider] 다 — 선택기에서 바꾸면 그 설정을 고친다(주인은 MainArea).
             onApiModel={(provider, model) => mainRef.current?.setAiModel(provider, model)}
           />
+          </ErrorBoundary>
         )}
       </div>
       <StatusBar

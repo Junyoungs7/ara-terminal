@@ -6,6 +6,11 @@ directories:
 files:
   - out/**/*
   - package.json
+# M0 — 옮겨 온 코드의 고지(Orca MIT · herdr Apache-2.0 자리). 설치 폴더 resources/NOTICE 로 싣는다 —
+# 설정 › 정보 › [오픈소스 고지]가 이 자리를 가리킨다. tests/fontLicenses.test.ts 가 이 줄이 있는지 본다.
+extraResources:
+  - from: NOTICE
+    to: NOTICE
 # node-pty 네이티브(.node) + conpty.dll 을 asar 밖으로 풀어야 useConptyDll 경로가 런타임에
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:
