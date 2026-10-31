@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from './runProcess'
 
 /**
  * 이 PC 에 그 명령이 있는가. **셸을 거치지 않는 execFile** 로 where/which 를 부른다 —
@@ -12,9 +12,5 @@ import { execFile } from 'node:child_process'
  */
 export function hasLocalCli(bin: string, timeoutMs = 4000): Promise<boolean> {
   const file = process.platform === 'win32' ? 'where' : 'which'
-  return new Promise((resolve) => {
-    execFile(file, [bin], { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
-      resolve(!err && stdout.trim() !== '')
-    })
-  })
+  return runProcess(file, [bin], { timeoutMs }).then((r) => !r.error && r.stdout.trim() !== '')
 }

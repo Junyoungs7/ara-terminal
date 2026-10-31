@@ -12,7 +12,6 @@
 //
 // 🔴 **실패를 다시 시도하지 않는다.** 사내 PC 의 DLP(오피스키퍼)가 클립보드 파일·임시 파일에 반응할 수
 // 있다 — 막힌 것을 되풀이하면 경보만 늘어난다. 사유를 그대로 돌려 화면에 보인다.
-import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { rmSync } from 'node:fs'
@@ -20,6 +19,7 @@ import { basename, join } from 'node:path'
 import { app } from 'electron'
 import { handle } from '../ipc/handle'
 import { safeBase, uniqueName } from '../fs/saveBytes'
+import { runProcess } from '../util/runProcess'
 
 /**
  * 로컬→원격 합계 상한. `uploadFiles` 는 브라우저 `File` 을 요구하는데 경로에서 **디스크 기반 File 을
@@ -67,19 +67,11 @@ export function overLimit(sizes: readonly number[], max = LOCAL_TO_REMOTE_MAX): 
   return sizes.reduce((a, b) => a + b, 0) > max
 }
 
-function runPs(args: string[], env?: Record<string, string>): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      'powershell.exe',
-      args,
-      { env: { ...process.env, ...env }, timeout: PS_TIMEOUT_MS, windowsHide: true },
-      (err, stdout, stderr) => {
-        // stderr 가 사유다(DLP 가 막으면 여기에 적힌다) — 그대로 올린다.
-        if (err) reject(new Error(String(stderr).trim() || err.message))
-        else resolve(String(stdout))
-      }
-    )
-  })
+async function runPs(args: string[], env?: Record<string, string>): Promise<string> {
+  const r = await runProcess('powershell.exe', args, { env, timeoutMs: PS_TIMEOUT_MS })
+  // stderr 가 사유다(DLP 가 막으면 여기에 적힌다) — 그대로 올린다.
+  if (r.error) throw new Error(r.stderr.trim() || r.error.message)
+  return r.stdout
 }
 
 const clipRoot = (): string => join(app.getPath('userData'), 'rdp-clip')

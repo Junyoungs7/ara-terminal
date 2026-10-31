@@ -107,25 +107,19 @@ const SHELL_ALLOW: string[] = []
 const CHILD_PROCESS_IMPORT =
   /\bfrom\s*['"](?:node:)?child_process['"]|\b(?:require|import)\s*\(\s*['"](?:node:)?child_process['"]/
 /**
- * 제품(`src/`)이 프로세스를 띄우는 자리는 셋뿐이고, 셋 다 **셸을 안 거치는 이유를 파일에 적어 두었다.**
- * Orca 는 이 결정을 `run-process.ts` 한 곳으로 모았는데 우리는 셋이라 아직 래퍼가 이르다 —
- * 그래서 이 목록은 "네 번째가 생기면 **혼자 정하지 말고 여기서 이야기하자**"는 뜻이다.
+ * 제품(`src/`)이 프로세스를 띄우는 자리는 **둘뿐**이다. 2026-11-01 다섯째(FD-01 자원 관리자)가 오면서
+ * 예고대로 Orca `runProcess`(@orca/process-host) 처럼 래퍼 하나로 모았다 — Orca 이식으로 git·ripgrep·
+ * 에이전트 CLI 스폰이 크게 늘어날 참이라, 자리마다 규칙을 다시 적게 두면 언젠가 하나가 빠진다.
+ *  · util/runProcess — **새 스폰은 전부 이것을 쓴다.** execFile + 인자 배열(셸 없음) · windowsHide · 시간·출력
+ *    상한 기본값 · env 는 process.env 위에 덧붙임. 신뢰 경계 밖 값은 인자 배열이나 env 로만 간다
+ *    (rdpClipboard 의 파일명 = 환경변수의 JSON — `tests/rdpClipBridge.test.ts` 가 잰다).
+ *    지금 쓰는 곳: localCli · localGit · rdpClipboard · resources/feature.
  *  · ClaudeCliEngine — 유일하게 셸(cmd.exe)을 지나야 하는 자리(`.cmd` 셔임). 인코딩이 여기 산다.
- *  · localCli · localGit — `execFile` 로 인자를 배열째 넘긴다(인용이라는 개념 자체가 없다).
- *  · rdpClipboard(#205, 2026-09-28 넷째로 들어왔다) — 윈도우 클립보드의 파일 형식(CF_HDROP)은 Electron 이
- *    못 다뤄 `powershell.exe` 를 부른다. 같은 규칙을 지킨다: `execFile` + 인자 배열 · 스크립트는 **고정 상수**를
- *    `-EncodedCommand` 로 · 파일명(원격이 정한 값 — 신뢰 경계 밖)은 **환경변수의 JSON 으로만** 가고 명령
- *    문자열에는 한 글자도 안 들어간다(`tests/rdpClipBridge.test.ts` 가 그걸 잰다). 다섯째가 오면 그때는
- *    Orca 처럼 래퍼 하나로 모을 때다.
+ * 셋째가 필요해 보이면(스트리밍·stdin·셸) **래퍼를 넓히는 쪽을 먼저** 본다 — 목록에 더하는 것은 마지막 수단이다.
  * `tests/`·`scripts/` 는 이 규칙 밖이다. 검사가 프로세스를 띄우는 것은 정상이고, 목록에 넣으면
  * 새 스모크를 쓸 때마다 늘어나 **의미가 닳는다.** 그쪽도 `shell: true` 는 위에서 그대로 막는다.
  */
-const CHILD_PROCESS_ALLOW = [
-  'src/main/ai/engine/ClaudeCliEngine.ts',
-  'src/main/util/localCli.ts',
-  'src/main/util/localGit.ts',
-  'src/main/rdp/rdpClipboard.ts'
-]
+const CHILD_PROCESS_ALLOW = ['src/main/ai/engine/ClaudeCliEngine.ts', 'src/main/util/runProcess.ts']
 
 describe('스폰 경계 래칫', () => {
   it('ⓓ 훑을 파일을 실제로 찾았다 — 못 찾으면 위반 0 으로 조용히 통과한다', () => {

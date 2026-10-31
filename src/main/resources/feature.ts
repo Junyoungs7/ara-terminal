@@ -2,9 +2,9 @@
 // (orcaRef 7a7f46f8a3)를 따라: 앱 프로세스는 Electron getAppMetrics, PTY 는 호스트 프로세스 표에서 셸 트리 합산.
 // 수집은 렌더러가 물을 때만 한다(팝오버가 열린 동안 2초마다) — 상시 폴러가 없다.
 import { app } from 'electron'
-import { execFile } from 'node:child_process'
 import os from 'node:os'
 import { handle } from '../ipc/handle'
+import { runProcess } from '../util/runProcess'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import {
   aggregatePtys,
@@ -24,12 +24,9 @@ import {
 const EXEC_TIMEOUT_MS = 5_000
 const EXEC_MAX_BUFFER = 10 * 1024 * 1024
 
-function run(file: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
-  return new Promise((resolve) => {
-    execFile(file, args, { timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER, windowsHide: true, env }, (err, out) =>
-      resolve(err ? '' : out)
-    )
-  })
+async function run(file: string, args: string[], env?: Record<string, string>): Promise<string> {
+  const r = await runProcess(file, args, { env, timeoutMs: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER })
+  return r.error ? '' : r.stdout
 }
 
 // Orca windows-process-resource-collector 와 같은 CIM 질의(typeperf 폴백은 뺐다 — 실패하면 PTY 칸이 0 으로 남는다).
@@ -50,7 +47,7 @@ async function hostProcesses(): Promise<ProcRow[]> {
     return rows
   }
   // 소수점이 로캘 쉼표로 나오면 parseFloat 가 잘린다(Orca 주석) — C 로캘로 고정.
-  return parsePs(await run('ps', ['-eo', 'pid=,ppid=,pcpu=,rss='], { ...process.env, LC_ALL: 'C', LANG: 'C' }))
+  return parsePs(await run('ps', ['-eo', 'pid=,ppid=,pcpu=,rss='], { LC_ALL: 'C', LANG: 'C' }))
 }
 
 function appProcs(): AppProc[] {

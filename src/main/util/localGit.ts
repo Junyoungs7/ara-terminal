@@ -1,5 +1,5 @@
-import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { runProcess } from './runProcess'
 import { branchFor, parseWorktreeOut, validWorktreeName, worktreePath, type WorktreeResult } from '@shared/gitWorktree'
 
 /**
@@ -11,14 +11,9 @@ import { branchFor, parseWorktreeOut, validWorktreeName, worktreePath, type Work
  */
 const TIMEOUT_MS = 20_000
 
-function git(args: string[], cwd: string): Promise<{ code: number; out: string }> {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, timeout: TIMEOUT_MS, windowsHide: true }, (err, stdout, stderr) => {
-      const out = `${stdout}${stderr}`.trim()
-      const code = (err as { code?: unknown } | null)?.code
-      resolve({ code: typeof code === 'number' ? code : err ? 1 : 0, out })
-    })
-  })
+async function git(args: string[], cwd: string): Promise<{ code: number; out: string }> {
+  const r = await runProcess('git', args, { cwd, timeoutMs: TIMEOUT_MS })
+  return { code: r.code, out: `${r.stdout}${r.stderr}`.trim() }
 }
 
 /** 저장소인가. 아니면 왜 안 되는지 말해 줄 수 있어야 한다(§10.3 규칙 1 — 빈 메뉴 금지). */
