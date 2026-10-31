@@ -405,14 +405,12 @@ const FEATURES_SRC = require('node:fs').readFileSync(
   require('node:path').join(__dirname, '..', 'src', 'shared', 'features.ts'),
   'utf8'
 )
-const AI_CHAT = /AI_CHAT\s*=\s*true/.test(FEATURES_SRC)
 /**
- * **메뉴에 [아라에게 묻기]가 뜨는가**는 AI_CHAT 이 아니라 `AI_ENTRY = AI_CHAT || ARA_CHAT` 이
- * 정한다(features.ts:47 · actions.tsx:120). #126 에서 ARA_CHAT 이 켜지면서 항목이 돌아왔는데
- * 여기는 AI_CHAT 만 보고 있어 **7항목을 기대한 채 8항목이 뜨는** 실패가 됐다 — AUDIT-R6.
+ * **메뉴에 [아라에게 묻기]가 뜨는가**는 `AI_ENTRY = ARA_CHAT` 이 정한다(features.ts · actions.tsx).
+ * 옛 스위치만 보고 있다가 **7항목을 기대한 채 8항목이 뜨는** 실패가 난 적이 있다 — AUDIT-R6.
  */
 const ARA_CHAT = /ARA_CHAT\s*=\s*true/.test(FEATURES_SRC)
-const AI_ENTRY = AI_CHAT || ARA_CHAT
+const AI_ENTRY = ARA_CHAT
 
 const checks = []
   checks.push(['contextIsolation', wp.contextIsolation === true])
@@ -1007,8 +1005,8 @@ const checks = []
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
   //
-  // #150: 아래 넷은 `AI_CHAT` 으로 막혀 **한 번도 돈 적이 없다.** 그런데 이 섹션을 그리는 문은
-  // SettingsDrawer 의 `AI_ENTRY`(= AI_CHAT || ARA_CHAT)다 — 검사할 것이 화면에 멀쩡히 있는데
+  // #150: 아래 넷은 옛 스위치로 막혀 **한 번도 돈 적이 없다.** 그런데 이 섹션을 그리는 문은
+  // SettingsDrawer 의 `AI_ENTRY`(= ARA_CHAT)다 — 검사할 것이 화면에 멀쩡히 있는데
   // 검사만 건너뛰고 있었다(실패가 아니라 침묵이라 실패 목록에도 안 잡혔다).
   // **제품이 무엇으로 문을 잠그는지를 그대로 쓴다.**
   if (AI_ENTRY)

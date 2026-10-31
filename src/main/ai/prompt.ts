@@ -87,7 +87,7 @@ export function systemPrompt(env?: AiEnv): string {
   return [head, envLine(env), ...rest].join('\n')
 }
 
-// 컨텍스트 상한(보안 리뷰 M2) — AI_CONTEXT_LINES(120)는 AiPanel.tsx 의 tailLines 관행일 뿐이라
+// 컨텍스트 상한(보안 리뷰 M2) — AI_CONTEXT_LINES(120)는 렌더러가 지키던 관행일 뿐이라
 // main(신뢰 경계)이 강제하지 않으면 다음 호출자가 그 규율을 안 지켜도 그대로 통과한다. 줄 수·문자
 // 수를 둘 다 강제해 개행 없는 대용량 단일 줄도 잡는다(리뷰가 실측한 5MB 단일 줄 사례). 뒤쪽(최근
 // 출력)을 남기고 앞을 자른다.

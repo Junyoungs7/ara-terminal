@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from '../components/icons'
-import { insertText } from '../components/aiBlocks'
+import { insertText } from '@shared/shellInput'
 import { writeClipboard } from '../store/clipboardWrite'
 import {
   CATEGORY_LABEL,

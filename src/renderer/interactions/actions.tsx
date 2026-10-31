@@ -592,7 +592,7 @@ export type MenuCommandId =
   | 'panel.ctr'
   // 2.0 4단계: 기본 숨김 셋(쿠버네티스·서버 로그·서버 콘솔)은 단축키가 생겨 KeymapAction 으로 옮겼다.
   | 'panel.pastlog'
-  // F17: 단축키 없는 진입점(패널 상단 버튼이 또 하나 있다 — AiPanel.onOpenBootstrap).
+  // F17: 단축키 없는 진입점.
   | 'ai.bootstrap'
 
 export type MenuEntry = { action: KeymapAction } | { command: MenuCommandId }

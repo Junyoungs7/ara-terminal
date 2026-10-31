@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { insertText } from '../src/renderer/components/aiBlocks'
+import { insertText } from '../src/shared/shellInput'
 
 // 2026-09-08 준영님 제보 넷 중 ①②③ 이 여기서 만난다(agent_talk/CHAT-usability-task.md).
 //

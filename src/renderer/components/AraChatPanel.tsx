@@ -359,7 +359,7 @@ export function AraChatPanel({
       setDraft(text)
       inputRef.current?.focus()
     }
-    // prefill.text 는 at 과 함께 오므로 deps 에 at 만 둔다(AiPanel 이 쓰던 그 규칙).
+    // prefill.text 는 at 과 함께 오므로 deps 에 at 만 둔다(옛 대화 화면이 쓰던 그 규칙).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefillAt, canType])
 

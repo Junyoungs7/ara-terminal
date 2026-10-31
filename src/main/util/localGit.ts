@@ -40,14 +40,5 @@ export async function addWorktree(parentPath: string, rawName: string): Promise<
   return r.code === 0 ? { ok: true, path: dest } : { ok: false, reason: 'git', message: r.out }
 }
 
-/**
- * 지운다. **`--force` 없이** 부른다 — 커밋 안 된 변경이 있으면 git 이 거절하고, 그 거절을
- * 그대로 올린다(§10.3 규칙 5). 대신 밀어붙이면 사용자의 작업이 조용히 사라진다.
- */
-export async function removeWorktree(parentPath: string, dest: string): Promise<WorktreeResult> {
-  const r = await git(['worktree', 'remove', dest], parentPath)
-  return r.code === 0 ? { ok: true, path: dest } : { ok: false, reason: 'git', message: r.out }
-}
-
 /** 원격 결과 파서를 로컬에서도 쓸 일이 있을까 봐 다시 내보낸다(호출측이 한 곳만 보게). */
 export { parseWorktreeOut }

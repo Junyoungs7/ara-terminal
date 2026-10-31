@@ -82,14 +82,12 @@ describe('치는 줄 = buildLaunch', () => {
     expect(commandChunks(ps!, 'powershell').join('')).not.toMatch(/[\x05\x15]/)
   })
 
-  it('Shell.runAiCliNow 는 그 한 줄을 그 셸에 친다 — 새 AI pty(command) 를 만들지 않는다', () => {
+  it('Shell.runAiCliNow 는 그 한 줄을 그 셸에 친다', () => {
     const src = readFileSync(join(__dirname, '..', 'src/renderer/components/Shell.tsx'), 'utf8')
     const fn = src.slice(src.indexOf('const runAiCliNow = useCallback('), src.indexOf('runAiCliRef.current = runAiCliNow'))
     expect(fn).toMatch(/const line = buildLaunch\(\{ cli: engine, flags, path, shell \}\)/)
     expect(fn).toMatch(/commandChunks\(line, shell\)\.forEach/)
     expect(fn).toMatch(/planAiLaunch\(/)
-    expect(fn).not.toMatch(/command:/)
-    expect(fn).not.toMatch(/aiCommandOf/)
   })
 })
 

@@ -74,7 +74,7 @@ describe('connectWithRecovery — 그 밖', () => {
     const size = { cols: 120, rows: 40 }
     await connectWithRecovery(deps, 'p1', { size, winId: 'win-2' })
     expect(connect.mock.calls[0][3]).toEqual(size)
-    expect(connect.mock.calls[0][5]).toBe('win-2')
+    expect(connect.mock.calls[0][4]).toBe('win-2')
   })
 
   it('되물을 수 없는 실패는 주입받은 showFailure 에 넘긴다(창마다 다른 것은 주입한다)', async () => {

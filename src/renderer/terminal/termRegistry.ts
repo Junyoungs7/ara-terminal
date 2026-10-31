@@ -101,22 +101,6 @@ export function lineBeforeCursor(sessionId: string): string {
   return buf.getLine(buf.baseY + buf.cursorY)?.translateToString(false, 0, buf.cursorX) ?? ''
 }
 
-// 세션 버퍼의 마지막 n 줄(꼬리의 빈 줄은 건너뛴다). F15 미니 프리뷰가 만들었고(2.0 에서 삭제) 지금은 AiPanel 이 쓴다.
-// 캔버스 캡처가 아니라 텍스트다 — WebGL 캔버스를 세션 수만큼 복사하면 GPU 메모리를 그만큼 먹고,
-// 소프트웨어 래스터 환경(canUseWebgl=false)에서는 프레임을 통째로 잡아먹는다.
-export function tailLines(sessionId: string, n: number): string[] {
-  const e = terms.get(sessionId)
-  if (!e) return []
-  const buf = e.term.buffer.active
-  const out: string[] = []
-  for (let i = buf.baseY + e.term.rows - 1; i >= 0 && out.length < n; i--) {
-    const text = buf.getLine(i)?.translateToString(true) ?? ''
-    if (out.length === 0 && !text.trim()) continue
-    out.push(text)
-  }
-  return out.reverse()
-}
-
 // R3.2 검색: 매치가 있으면 true. 한글은 xterm 이 유니코드 문자열로 그대로 비교하므로 별도 처리 없다.
 // 대소문자 무시 + 검색 바가 떠 있는 동안 전체 매치를 강조(decorations)한다.
 const cssVar = (name: string, fallback: string): string =>

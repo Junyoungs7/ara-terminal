@@ -1,9 +1,8 @@
-import { AI_ENTRY, ARA_CHAT, featuresOf, type FeatureShown } from '@shared/features'
+import { AI_ENTRY, featuresOf, type FeatureShown } from '@shared/features'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
-import { AiPanel } from './AiPanel'
 import { AraChatPanel } from './AraChatPanel'
 import { AiBootstrapModal } from './AiBootstrapModal'
 import { WorkProfileModal } from './WorkProfileModal'
@@ -32,7 +31,7 @@ import { primeCwd } from '../store/cwdPrime'
 import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
 import { useAiCliRecent } from '../store/aiCliRecent'
-import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, buildLaunch, resumeFlags, type AiCliId, type AiCommand } from '../../shared/aiCli'
+import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, buildLaunch, resumeFlags, type AiCliId } from '../../shared/aiCli'
 import { commandChunks, WIN_CLEAR_GAP_MS } from '../../shared/shellInput'
 import { agentStatuses } from '../store/agentStatus'
 import { useTelemetry } from '../store/telemetry'
@@ -165,7 +164,7 @@ export function Shell() {
     [openBottom]
   )
   // 우클릭 메뉴 [AI에게 질문] 이 넘긴 선택 텍스트. at 이 함께 와야 같은 문자열을 다시 골라도 반영된다.
-  // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AiPanel.prefill 참고).
+  // autoSend: F17 부트스트랩 전용(조립된 질문을 즉시 보낸다 — AraChatPanel.prefill 참고).
   const [aiPrefill, setAiPrefill] = useState<{ text: string; at: number; autoSend?: boolean } | null>(null)
   // F17 AI 부트스트랩 폼. 열림 상태만 여기 있고, 폼 값은 모달 안에만 산다(경로·이름이 렌더러
   // 상태 트리 위로 올라오지 않는다 — F16 이 API 키를 다루는 것과 같은 절제).
@@ -905,11 +904,11 @@ export function Shell() {
         return plan.sessionId
       }
       if (plan.kind === 'newRemote') {
-        // 같은 서버에 셸을 하나 더 열고 거기 친다. 7번째 인자(`{}`)는 [파일] 탭으로 넘기지 않게 —
+        // 같은 서버에 셸을 하나 더 열고 거기 친다. 6번째 인자(`{}`)는 [파일] 탭으로 넘기지 않게 —
         // 방금 띄운 AI 를 파일 화면이 가린다. 치수는 그대로 지금 칸에서 잰다(restore.size 없음).
         // ponytail: 그 서버의 **첫** 접속이면 원격 훅 설치(remoteHooks)와 경합해 이번 claude 만 훅 없이
         // 뜰 수 있다(목록에 `확인 불가`). 두 번째부터는 파일이 이미 같다. 잦으면 설치 완료를 기다린다.
-        void connectProfileRef.current?.(target, undefined, undefined, send, undefined, undefined, {})
+        void connectProfileRef.current?.(target, undefined, undefined, send, undefined, {})
         return null
       }
       const sid = await sessions.restoreLocal({
@@ -1047,11 +1046,6 @@ export function Shell() {
       /** 그 자리에서 받은 비밀번호(저장하지 않는다 — 아래 orphanSecret 분기에서만 채워진다). */
       password?: string,
       /**
-       * D(#168) 주면 이 세션은 **셸이 아니라 그 AI CLI 로** 열린다(그래서 startPath 도 안 쓴다 —
-       * 폴더는 명령에 실려 간다). 안 주면 지금까지의 셸 탭 그대로다.
-       */
-      aiCommand?: { argv: AiCommand; cwd: string },
-      /**
        * 복원·재접속인가(2026-09-16). 주면 둘을 바꾼다:
        *  · [파일] 탭으로 넘기지 않는다 — 복원은 사용자가 방금 서버를 고른 것이 아니라 **있던 것을
        *    되살리는** 일이라 보던 화면을 갈아 치우면 안 된다
@@ -1083,7 +1077,7 @@ export function Shell() {
       const res = await connectWithRecovery(
         { connect, lookup, ask, askText, showFailure: showConnectFailure },
         profileId,
-        { acceptHostKey, password, size, aiCommand }
+        { acceptHostKey, password, size }
       )
       if (!res.ok) return false
       if (!restore) noteRecentServer(profileId) // 통합 검색 빈 쿼리의 [최근 서버]
@@ -1097,8 +1091,7 @@ export function Shell() {
       if (startPath) window.ev.session.input(res.id, cdCommand(startPath))
       // 접속하면 바로 원격 파일이 보이게 [파일] 탭으로 넘긴다 — 접속 직후 하는 일이 대개 그거다.
       // 부팅 복원은 이 경로를 안 타므로 저장해 둔 탭이 그대로 살아난다(F6).
-      // D(#168) AI 세션은 예외다: 그 탭을 연 이유가 CLI 라, 파일 화면으로 덮으면 방금 띄운 것이 가려진다.
-      if (!aiCommand && !restore) revealFiles()
+      if (!restore) revealFiles()
       return true
     },
     [connect, lookup, sessions, selectSession, ask, askText, showConnectFailure, revealFiles]
@@ -1155,15 +1148,14 @@ export function Shell() {
    * ⚠️ **두 벌을 만들지 않는다.** 복구는 `connectProfile` 이 이미 하고 있으므로 그쪽에 태운다 —
    *    그 함수가 성공 시 `adopt`·`selectSession` 까지 하므로 여기서는 **새로 생긴 세션 id 만**
    *    받아 돌려주면 된다(`onSession` 콜백이 그 창구다).
-   * ⚠️ `revealFiles`(접속하면 [파일] 탭으로) 는 복원에서 원치 않는다 — `connectProfile` 은
-   *    `aiCommand` 가 있을 때만 그것을 건너뛴다. 복원도 건너뛰어야 하므로 플래그를 하나 더 준다.
+   * ⚠️ `revealFiles`(접속하면 [파일] 탭으로) 는 복원에서 원치 않는다 — 그래서 `restore` 플래그를 준다.
    */
   const sshRestore = useCallback(
     async (profileId: string, size?: { cols: number; rows: number }): Promise<SshRestoreResult> => {
       let newId: string | null = null
       const ok = await connectProfileRef.current?.(profileId, undefined, undefined, (id) => {
         newId = id
-      }, undefined, undefined, { ...(size ? { size } : {}) })
+      }, undefined, { ...(size ? { size } : {}) })
       if (ok && newId) return { ok: true, id: newId }
       /**
        * 사유는 `connectProfile` 이 **이미 화면으로 말했다**(호스트키 창·비밀번호 창·실패 안내).
@@ -1760,7 +1752,6 @@ export function Shell() {
           onDuplicateSession={duplicateSession}
           sshRestore={sshRestore}
           onOpenConnManager={() => openConnManager(null)}
-          onOpenAiCli={() => void runAiCliNow()}
           onRunAiCli={runAiCliNow}
           // 1.0.8 ②: 재시작 뒤 남은 끊김 카드에서 그 AI 를 되살린다(새 세션 id 를 돌려준다).
           onResumeAi={resumeAi}
@@ -1783,37 +1774,15 @@ export function Shell() {
             순간 claude 프로세스가 뜨는데(≈20초) 앱 부팅마다 그걸 띄울 이유가 없다. 한 번 열면
             그 뒤로는 계속 렌더한다(닫혀도 `open=false` 로 null 만 반환) — 언마운트하면 대화 목록이
             날아가고 다시 열 때 엔진까지 새로 뜬다. lastBottom.current 와 같은 손버릇이다. */}
-        {ARA_CHAT ? (
-          (araEver.current || aiOpen) && (
-            <AraChatPanel
-              open={aiOpen}
-              onClose={() => closeRail('ai')}
-              active={araTarget}
-              apiPick={aiApi}
-              prefill={aiPrefill}
-              // API 모드의 모델은 설정 ui.aiModels[provider] 다 — 선택기에서 바꾸면 그 설정을 고친다(주인은 MainArea).
-              onApiModel={(provider, model) => mainRef.current?.setAiModel(provider, model)}
-            />
-          )
-        ) : (
-          <AiPanel
+        {(araEver.current || aiOpen) && (
+          <AraChatPanel
             open={aiOpen}
-          onClose={() => closeRail('ai')}
-          prefill={aiPrefill}
-          onOpenBootstrap={() => setBootstrapOpen(true)}
-          session={
-            activeSession
-              ? {
-                  id: activeSession.id,
-                  // 호스트명·프로필명은 넣지 않는다 — SSH 라는 사실만 알린다(설계 §3.5).
-                  env: {
-                    os: navigator.userAgent.includes('Mac') ? 'darwin' : 'win32',
-                    sessionType: activeSession.type,
-                    ...(activeCwd ? { cwd: activeCwd } : {})
-                  }
-                }
-                : null
-            }
+            onClose={() => closeRail('ai')}
+            active={araTarget}
+            apiPick={aiApi}
+            prefill={aiPrefill}
+            // API 모드의 모델은 설정 ui.aiModels[provider] 다 — 선택기에서 바꾸면 그 설정을 고친다(주인은 MainArea).
+            onApiModel={(provider, model) => mainRef.current?.setAiModel(provider, model)}
           />
         )}
       </div>

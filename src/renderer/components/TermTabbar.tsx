@@ -33,8 +33,6 @@ type Props = {
   // **없으면 그 줄을 안 그린다**(#201 A-4): 떼어낸 창엔 연결 관리자가 없어 눌러도 아무 일이
   // 없었다. 그래서 옵셔널이다 — 판정은 핸들러의 존재 여부 하나뿐이다.
   onNewSsh?: () => void
-  // F27 진입점 ① — ＋ 메뉴의 "AI CLI 시작…". 아무것도 정해지지 않은 채로 창이 열린다.
-  onAiCli?: () => void
   // R2.1/R2.2: 인라인 편집 중인 탭 id(없으면 null) + 편집 시작/확정. value=null 은 취소(ESC).
   editingId: string | null
   onStartEdit: (id: string) => void
@@ -151,7 +149,6 @@ export function TermTabbar({
   onClose,
   onNew,
   onNewSsh,
-  onAiCli,
   editingId,
   onStartEdit,
   onCommitEdit,
@@ -307,8 +304,7 @@ export function TermTabbar({
    */
   const addActions: Partial<Record<TreeActionId, (() => void) | undefined>> = {
     'local.new': onNew,
-    'ssh.open': onNewSsh,
-    'aicli.start': onAiCli
+    'ssh.open': onNewSsh
   }
 
   // 오버플로 드롭다운 항목 — 탭과 **같은 점**(상태) + 활성 탭엔 "현재" 힌트. 서버는 행의 title 로.

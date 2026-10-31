@@ -16,7 +16,7 @@ import type {
   UpdateState
 } from '@shared/ipc'
 import type { AgentStatus } from '@shared/agentStatus'
-import type { AiCliId, AiCommand, LaunchShell } from '@shared/aiCli'
+import type { AiCliId, LaunchShell } from '@shared/aiCli'
 import type { BrowserTabView } from '@shared/browserWin'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLogTarget } from '@shared/pastLogWin'
@@ -56,9 +56,8 @@ const api: EvApi = {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openLaunchDir: () => ipcRenderer.invoke('app:openLaunchDir'),
     openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', { url }),
-    // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 두 가지(셸 문법 · CLI 존재).
+    // #90: 내 PC 에서 AI CLI 를 시작할 때 필요한 셸 문법.
     launchShell: () => ipcRenderer.invoke('app:launchShell').then((r: { shell: LaunchShell }) => r.shell),
-    hasCli: (bin: string) => ipcRenderer.invoke('app:hasCli', { bin }).then((r: { found: boolean }) => r.found),
     logPaths: () => ipcRenderer.invoke('app:logPaths'),
     // Electron 32 에서 File.path 가 없어진다 — 경로는 webUtils 로 묻는다(동기, IPC 아님).
     pathForFile: (file: File) => webUtils.getPathForFile(file),
@@ -110,16 +109,14 @@ const api: EvApi = {
     delete: (id: string) => ipcRenderer.invoke('profile:delete', { id })
   },
   ssh: {
-    // aiCommand: D(#168) 셸 대신 그 AI CLI 를 프로세스로 여는 세션. 안 주면 지금까지와 같다.
     // winId: 부른 창(떼어낸 창의 재접속·복제). 안 주면 본창 — 지금까지와 같다.
     connect: (
       profileId: string,
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      aiCommand?: { argv: AiCommand; cwd: string },
       winId?: string
-    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, aiCommand, winId }),
+    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, winId }),
     forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
     test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },
@@ -447,8 +444,6 @@ const api: EvApi = {
     chatLog: (id: string) => ipcRenderer.invoke('ara:chatLog', { id }),
     saveSessions: (list: unknown) => ipcRenderer.invoke('aisession:save', { list }),
     worktreeAdd: (path: string, name: string) => ipcRenderer.invoke('git:worktreeAdd', { path, name }),
-    worktreeRemove: (path: string, dest: string) => ipcRenderer.invoke('git:worktreeRemove', { path, dest }),
-    isRepo: (path: string) => ipcRenderer.invoke('git:isRepo', { path }),
     approvePlan: () => ipcRenderer.invoke('ara:approvePlan'),
     model: (model: string) => ipcRenderer.invoke('ara:model', { model }),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),

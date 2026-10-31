@@ -8608,7 +8608,7 @@ button.sb-seg.upd:hover .val {
    ② 감싼 칸의 우상단에 absolute: 안 사라지지만 **명령 위를 덮는다.** 실제로 찍어 보니(offscreen,
       레일 폭 337px) 한 줄짜리 명령의 오른쪽 50px 을 가렸다 — 복사하라고 단 버튼이 복사할 것을 가린다.
    그래서 흐름 안에 둔다. 세로 한 줄(약 18px)을 쓰는 대신 무엇도 가리지 않고, 가로로 밀어도 안 움직인다.
-   AiPanel·CommandBook 의 `.ai-code-hd` 가 이미 같은 판단을 한 자리다(클래스는 안 돌려 쓴다 — e2e 선택자). */
+   CommandBook 의 `.ai-code-hd` 가 이미 같은 판단을 한 자리다(클래스는 안 돌려 쓴다 — e2e 선택자). */
 .md-prewrap {
   display: flex;
   flex-direction: column;

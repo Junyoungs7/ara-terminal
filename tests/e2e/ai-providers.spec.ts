@@ -1,8 +1,8 @@
 // W5 아라 멀티 프로바이더 — 설정 [AI] 섹션의 provider 세그먼트 · 전환 확인 다이얼로그 ·
 // 프로바이더별 분리 키 · compatible baseUrl 검증(★ 보안: https 전용, loopback http 만 예외) ·
-// 모델 추천 칩 · 패널 헤더 표시 · 재기동 후 영속.
+// 모델 추천 칩 · 재기동 후 영속.
 //
-// openAiSettings/registerAiKey/lastAnswer 는 ai.spec.ts 와 동일 패턴을 이 파일에 로컬로 복제한다
+// openAiSettings 는 이 파일에 로컬로 둔다
 // (fixtures.ts 는 다른 에이전트가 동시 편집 중이라 건드리지 않는다).
 import type { Page } from '@playwright/test'
 import { test, expect, dialog, dialogConfirm, persist, quitAra } from './fixtures'
@@ -12,20 +12,6 @@ const drawer = '.drawer.open'
 async function openAiSettings(page: Page): Promise<void> {
   await page.keyboard.press('Control+,')
   await page.click(`${drawer} .set-nav [data-section="ai"]`)
-}
-
-async function registerAiKey(page: Page, key = 'sk-ant-fake-0001'): Promise<void> {
-  await openAiSettings(page)
-  await page.fill(`${drawer} input[data-field="ai.key"]`, key)
-  await page.click(`${drawer} [data-action="ai.key.save"]`)
-  await expect(page.locator(`${drawer} .ai-key-badge.ok`)).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.locator(drawer)).toHaveCount(0)
-}
-
-async function openAiPanel(page: Page): Promise<void> {
-  await page.keyboard.press('Alt+a')
-  await expect(page.locator('.ai-panel')).toBeVisible()
 }
 
 // 앱 상태(main 소유)에 직접 턴을 하나 만든다 — AraSession.send() 는 키 유무와 무관하게 사용자+assistant
@@ -189,24 +175,6 @@ test('W5-13 모델 추천 칩을 누르면 입력값이 채워지고 칩이 선�
   await page.click(`${modelRow} .seg-ctl button[data-value="claude-opus-5-5"]`)
   await expect(page.locator(`${modelRow} input[data-field="ai.model"]`)).toHaveValue('claude-opus-5-5')
   await expect(page.locator(`${modelRow} .seg-ctl button[data-value="claude-opus-5-5"]`)).toHaveClass(/on/)
-})
-
-/**
- * W5-15 는 **옛 화면 것이다**(2026-08-26 확인).
- *
- * `.ai-panel`(AiPanel) 은 `ARA_CHAT` 플래그가 켜진 뒤로 화면에 안 붙는다 — 같은 레일 자리를
- * `AraChatPanel` 이 쓴다(Shell.tsx 의 `ARA_CHAT ? … : …`). 그래서 이 검사는 열리지 않는 패널을
- * 기다리다 실패했다. **제품이 아니라 검사가 낡은 것**이다.
- *
- * 지키려던 성질("지금 어느 모델인지 헤더에서 보인다")은 지금 화면에서 ARA2-7(모델 고르기)이
- * 이미 지킨다. 플래그를 되돌릴 일이 없다고 볼 수 없어 지우지는 않고 건너뛴다 — 옛 패널을 정말
- * 걷어내는 날 이 줄이 함께 지워진다.
- */
-test.skip('W5-15 아라 패널 헤더에 현재 provider·model 이 표시된다(옛 AiPanel — ARA_CHAT 이후 미사용)', async ({ ara }) => {
-  const { page } = ara
-  await registerAiKey(page)
-  await openAiPanel(page)
-  await expect(page.locator('.ai-panel .ai-active-badge')).toContainText('Anthropic Claude')
 })
 
 // W5-17 provider·baseUrl 설정이 재기동 후에도 유지된다(SET-8 과 같은 재기동 패턴).

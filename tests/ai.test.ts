@@ -8,7 +8,7 @@ import { AraSession, aiKeyVaultId, type AiPrefs, type KeyVault } from '../src/ma
 import { ProviderError, type AiRequest, type ProviderAdapter } from '../src/main/ai/providers/types'
 import { migrate } from '../src/main/workspace/migrations'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
-import { splitBlocks, insertText } from '../src/renderer/components/aiBlocks'
+import { insertText } from '../src/shared/shellInput'
 import { AI_PROVIDERS, DEFAULT_AI_MODEL, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
 import { voiceOf } from '@shared/voice'
 import { featuresOf } from '../src/shared/features'
@@ -482,53 +482,6 @@ describe('prefs 마이그레이션 v4→v5 — 단일 aiModel → provider 분�
     const filled = aiModelsOf({ anthropic: 'claude-opus-5' })
     expect(filled.anthropic).toBe('claude-opus-5')
     expect(filled.openai).not.toBe('') // 나머지는 그 프로바이더의 기본 모델로 채워진다
-  })
-})
-
-describe('splitBlocks — 마크다운 라이브러리 없이 펜스만 자른다 (설계 §4.4)', () => {
-  it('코드블록이 없으면 텍스트 하나다', () => {
-    expect(splitBlocks('tar -xzf 는 압축을 풉니다.')).toEqual([{ type: 'text', text: 'tar -xzf 는 압축을 풉니다.' }])
-  })
-
-  it('빈 답변은 블록 0개다(스트리밍 시작 직후)', () => {
-    expect(splitBlocks('')).toEqual([])
-  })
-
-  it('코드 앞뒤 텍스트를 각각 분리한다', () => {
-    expect(splitBlocks('앞말\n\n```bash\nls -al\n```\n\n뒷말')).toEqual([
-      { type: 'text', text: '앞말' },
-      { type: 'code', lang: 'bash', code: 'ls -al' },
-      { type: 'text', text: '뒷말' }
-    ])
-  })
-
-  it('언어 표기가 없는 펜스도 코드블록이다', () => {
-    expect(splitBlocks('```\nwhoami\n```')).toEqual([{ type: 'code', lang: '', code: 'whoami' }])
-  })
-
-  it('연속 블록 2개를 각각 잘라낸다', () => {
-    const out = splitBlocks('```bash\na\n```\n```sh\nb\n```')
-    expect(out).toEqual([
-      { type: 'code', lang: 'bash', code: 'a' },
-      { type: 'code', lang: 'sh', code: 'b' }
-    ])
-  })
-
-  it('블록 안의 인라인 백틱은 펜스로 보지 않는다', () => {
-    const out = splitBlocks('```bash\necho `date` && echo "``"\n```')
-    expect(out).toEqual([{ type: 'code', lang: 'bash', code: 'echo `date` && echo "``"' }])
-  })
-
-  it('★ 닫히지 않은 펜스를 진행 중 코드블록으로 그린다(스트리밍 중 깜빡임 방지)', () => {
-    expect(splitBlocks('설명\n\n```bash\ndu -sh /var')).toEqual([
-      { type: 'text', text: '설명' },
-      { type: 'code', lang: 'bash', code: 'du -sh /var', open: true }
-    ])
-  })
-
-  it('여러 줄 코드는 줄을 보존한다', () => {
-    const out = splitBlocks('```bash\ncd /srv\nnpm ci\n```')
-    expect(out[0]).toEqual({ type: 'code', lang: 'bash', code: 'cd /srv\nnpm ci' })
   })
 })
 

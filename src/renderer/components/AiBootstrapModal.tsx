@@ -5,8 +5,8 @@ import { dispatchAction } from '../../shared/keymap'
 import { AI_PROVIDER_LABELS, DEFAULT_AI_PROVIDER, type AiProvider } from '@shared/types'
 import { buildBootstrapPrompt, BOOTSTRAP_FIELD_MAX, type BootstrapForm, type BootstrapKind } from './aiBootstrap'
 
-// F17 AI 부트스트랩 GUI — 폼만 새로 만든다. 전송·표시는 AiPanel/AraSession(F16)을 그대로 재사용한다
-// (onSubmit 이 조립된 프롬프트 문자열 하나를 Shell 에 올리고, Shell 이 그걸 AiPanel 의 기존
+// F17 AI 부트스트랩 GUI — 폼만 새로 만든다. 전송·표시는 아라 대화 패널을 그대로 재사용한다
+// (onSubmit 이 조립된 프롬프트 문자열 하나를 Shell 에 올리고, Shell 이 그걸 AraChatPanel 의 기존
 // prefill(+autoSend) 경로로 흘린다 — 두 번째 AI 전송 경로를 만들지 않는다).
 //
 // 바깥 껍데기는 Dialog(.overlay/.modal/.modal-hd/.dlg-body/.modal-ft)를, 행은 설정 드로어의
@@ -87,7 +87,7 @@ export function AiBootstrapModal({ open, hasSsh, onClose, onSubmit }: Props) {
               {/* 2026-08-28 감사 ①(b): 여기가 `ai.noKey.desc` 를 부르고 있었는데 그런 키는 없다 —
                   화면에 키 문자열이 그대로 찍혔다(t() 는 없는 키를 그대로 돌려준다). 문구는 갈려
                   있다: 앞은 프로바이더 이름, 뒤는 `ai.noKey.desc.suffix`. **새 PC 첫 실행 경로**라
-                  처음 켠 사람이 보는 자리다. AiPanel:300 과 같은 방식으로 조립한다. */}
+                  처음 켠 사람이 보는 자리다. */}
               <div className="ai-card-d">
                 {AI_PROVIDER_LABELS[provider]} {t('ai.noKey.desc.suffix')}
               </div>

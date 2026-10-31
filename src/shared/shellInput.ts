@@ -41,3 +41,13 @@ export function commandLine(command: string): string {
 export function commandChunks(command: string, shell: 'posix' | 'powershell' | 'cmd'): string[] {
   return shell === 'posix' ? [commandLine(command)] : [CLEAR_LINE_WIN, command + '\r']
 }
+
+/**
+ * [터미널로 보내기]·[복사] 가 실제로 넣는 문자열.
+ * **마지막 개행을 떼는 것이 이 기능의 안전 설계 전부다** — 명령이 프롬프트에 입력된 상태로 멈추고,
+ * 사용자가 읽고 Enter 를 눌러야 실행된다. 클릭 = 실행이 아니라 클릭 = 붙여넣기다(설계 §4.3).
+ * 여러 줄 블록은 첫 줄만 보내지 않는다. 중간 개행은 그대로 두고 꼬리만 잘라낸다.
+ */
+export function insertText(code: string): string {
+  return code.replace(/\n+$/, '')
+}

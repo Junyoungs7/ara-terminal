@@ -1,7 +1,7 @@
 import { memo, useState } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { insertText } from './aiBlocks'
+import { insertText } from '@shared/shellInput'
 import { writeClipboard } from '../store/clipboardWrite'
 import { t } from '../i18n'
 
@@ -32,7 +32,7 @@ import { t } from '../i18n'
  * ⚠️ **꼬리 개행을 뗀다**(`insertText`). 명령을 복사하는 자리라, 개행까지 붙여넣으면 터미널이
  * 그 순간 실행한다. [터미널로 보내기]가 쓰던 그 함수를 그대로 쓴다 — 두 벌을 만들면 한쪽만 고쳐진다.
  *
- * 성공 표시는 **버튼 자리에서** 한다(AiPanel·CommandBook 의 [복사]와 같은 1.2초 라벨 교체).
+ * 성공 표시는 **버튼 자리에서** 한다(CommandBook 의 [복사]와 같은 1.2초 라벨 교체).
  * 실패는 `writeClipboard` 가 스스로 알린다 — 여기서 "복사됨"으로 덮으면 그 안내가 거짓이 된다.
  */
 function CopyBtn(): JSX.Element {

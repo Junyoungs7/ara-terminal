@@ -1,13 +1,12 @@
 // ISessionManager — 프로세스 위치 불변 인터페이스 (계획서 §B.7).
 // Phase 2에서 UtilitySessionManager로 교체해도 renderer/shared 계약 변경 0.
 import type { Session } from '@shared/types'
-import type { AiCommand } from '@shared/aiCli'
 
 // manualTitle 은 복원 전용: 사용자가 바꿔 둔 탭 이름을 재스폰 후에도 OSC 제목에서 지켜 준다(R3.6).
 // winId 는 **부른 창**이다: 떼어낸 창에서 연 새 탭은 그 창 것이어야 한다(안 주면 본창).
 // 없을 때 무슨 일이 났었나: 떼어낸 창이 만든 세션의 소유가 본창으로 잡혀 출력이 엉뚱한 창으로
 // 갔다 — 받는 쪽에 그 탭이 없으니 아무 데도 안 나왔다.
-// aiCli 는 **무엇이 돌았는지의 기억**이다(1.0.8 ②): 아래 command 로 띄운 CLI 이름을 세션 메타에
+// aiCli 는 **무엇이 돌았는지의 기억**이다(1.0.8 ②): 그 탭에서 띄운 CLI 이름을 세션 메타에
 // 남겨 스냅샷에 실린다 — 재시작 뒤 그 탭을 맨 셸이 아니라 [이어서 시작] 카드로 되살리는 단서다.
 export type SessionSpec = Pick<
   Session,
@@ -24,21 +23,7 @@ export type SessionSpec = Pick<
   // 프롬프트가 접힌다). 새 세션은 안 준다: 그때는 렌더러가 sizeOf 로 지금 칸을 잰다.
   | 'cols'
   | 'rows'
-> & {
-  /**
-   * D(#168) **이 세션의 프로세스가 곧 이 CLI 다.** 주면 셸을 열지 않는다.
-   *
-   * `shell` 과 성격이 다르다: 저건 "무슨 셸을 열까"(문자열 하나)라 인자를 실을 자리가 없고,
-   * 이건 **명령 + 인자**라 배열이어야 한다(문자열로 이으면 `#152` 의 인용 문제가 돌아온다).
-   * `Session` 메타에는 **이 배열을 남기지 않는다** — 스냅샷의 명령줄을 그대로 다시 스폰하는 길을
-   * 만들지 않는다(손으로 고칠 수 있는 파일이 곧 실행 인자가 된다). 남는 것은 위 `aiCli` 이름
-   * 하나이고, 되살릴 때의 플래그는 그때 최근 목록·설정에서 다시 조립한다(1.0.8 ②).
-   *
-   * 신뢰 경계: 스폰하는 쪽이 `safeAiCommand` 로 한 번 더 본다(MCP `session_create` 스키마에는
-   * 이 필드가 없다 — AI 는 실행파일을 고를 수 없다는 S1 규칙 그대로다).
-   */
-  command?: AiCommand
-}
+>
 
 // main→renderer 스트림 싱크. IPC 레이어가 주입한다(세션 매니저는 IPC를 모른다).
 export interface SessionSink {

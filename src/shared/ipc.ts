@@ -38,7 +38,7 @@ import type {
   ReportSendResult
 } from './bugReport'
 import type { AgentHookState, AgentStatus } from './agentStatus'
-import type { AiCliId, AiCliRecent, AiCommand } from './aiCli'
+import type { AiCliId, AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
@@ -205,16 +205,14 @@ export type InvokeContract = {
   // R3.3: 터미널 안 URL 을 기본 브라우저로 연다. 렌더러가 shell 모듈을 직접 쓰지 못하므로 main 경유이며,
   // main 이 http/https 만 통과시킨다(file:·custom scheme 로 임의 프로그램 실행 금지).
   'app:openExternal': { req: { url: string }; res: { ok: boolean } }
-  // #90: AI CLI 를 내 PC 에서 시작할 때 main 만 알 수 있는 두 가지.
-  //   launchShell — 기본 셸의 조립 규칙(powershell.exe 5.1 은 `&&` 가 파서 오류다).
-  //   hasCli      — 그 실행 파일이 이 PC 에 있는가(where/which, 셸을 거치지 않는다).
+  // #90: AI CLI 를 내 PC 에서 시작할 때 main 만 아는 것 — 기본 셸의 조립 규칙
+  // (powershell.exe 5.1 은 `&&` 가 파서 오류다).
   'app:launchShell': { req: void; res: { shell: LaunchShell } }
   /**
    * 2026-08-23 설정 [기록 폴더] — 지금 **실제로 쓰이는** 두 폴더와 기본 자리.
    * 화면이 저장된 설정값만 보면 "빈 값 = 기본"이 어디인지 못 보여 준다(그 값은 main 만 안다).
    */
   'app:logPaths': { req: void; res: { sessionLogDir: string; appLogDir: string; defaultDir: string } }
-  'app:hasCli': { req: { bin: string }; res: { found: boolean } }
   /**
    * #190 진단 — Electron 이 아는 GPU 상태(`chrome://gpu` 의 Graphics Feature Status 그대로).
    *
@@ -321,8 +319,6 @@ export type InvokeContract = {
   // size: #158 셸을 열 치수. 새 세션은 포커스 칸에 뜨고 그 칸의 xterm 이 이미 그 크기라, 접속
   // **전에** 실어 보내면 80×24 로 열었다가 뒤따르는 resize 로 따라잡는 경합이 사라진다.
   // 선택 인자다 — 화면이 없는 호출자(MCP ssh_connect)는 안 주고, 그러면 지금까지와 똑같이 동작한다.
-  // aiCommand: D(#168) 주면 이 세션은 셸이 아니라 **그 AI CLI 가 프로세스인 채로** 열린다.
-  // 안 주면 지금까지와 똑같다 — 사용자의 셸 탭은 이 필드를 절대 채우지 않는다.
   // winId: **부른 창**이다(`session:create` 의 `spec.winId` 와 같은 뜻 — 안 주면 본창).
   // 이게 없어서 떼어낸 창에서 재접속하면 새 세션이 본창에 떴다: SSH 만 그 짝이 없었다.
   'ssh:connect': {
@@ -331,7 +327,6 @@ export type InvokeContract = {
       acceptHostKey?: boolean
       password?: string
       size?: { cols: number; rows: number }
-      aiCommand?: { argv: AiCommand; cwd: string }
       winId?: string
     }
     res: SshConnectResult
@@ -593,8 +588,6 @@ export type InvokeContract = {
    * `git.worktree.*` 가 같은 일을 한다.
    */
   'git:worktreeAdd': { req: { path: string; name: string }; res: WorktreeResult }
-  'git:worktreeRemove': { req: { path: string; dest: string }; res: WorktreeResult }
-  'git:isRepo': { req: { path: string }; res: { repo: boolean } }
   /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
   'ara:planMode': { req: { on: boolean }; res: { ok: true } }
   'ara:approvePlan': { req: void; res: { ok: true } }
@@ -732,8 +725,6 @@ export type EvApi = {
     updateDownload(): Promise<{ ok: true }>
     updateInstall(): Promise<{ ok: true }>
     onUpdateState(cb: (s: UpdateState) => void): () => void
-    /** #90: 그 실행 파일이 이 PC 에 있는가(where/which). 원격의 cliInstalled 에 대응한다. */
-    hasCli(bin: string): Promise<boolean>
     /** 지금 쓰이는 기록 폴더 두 곳 + 기본 자리(설정 화면이 보여 준다). */
     logPaths(): Promise<{ sessionLogDir: string; appLogDir: string; defaultDir: string }>
     /** 끌어다 놓기·붙여넣기 File 의 실경로(webUtils.getPathForFile). 디스크에 없는 File 이면 ''. */
@@ -799,7 +790,6 @@ export type EvApi = {
     /**
      * password 는 이번 접속에만 쓰이고 저장되지 않는다(비밀번호를 vault 에 두지 않는 사용자용).
      * size 는 셸을 열 치수(#158) — 안 주면 80×24 로 연다.
-     * aiCommand 는 D(#168) — 주면 셸이 아니라 그 AI CLI 가 이 세션의 프로세스다.
      * winId 는 부른 창(안 주면 본창) — 떼어낸 창에서 붙은 세션이 본창에 뜨지 않게 한다.
      */
     connect(
@@ -807,7 +797,6 @@ export type EvApi = {
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      aiCommand?: { argv: AiCommand; cwd: string },
       winId?: string
     ): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
@@ -1087,8 +1076,6 @@ export type EvApi = {
     saveSessions(list: unknown): Promise<{ ok: true }>
     /** #133 세션 분리(로컬). 원격은 remote.run('git.worktree.add') 쪽이다. */
     worktreeAdd(path: string, name: string): Promise<WorktreeResult>
-    worktreeRemove(path: string, dest: string): Promise<WorktreeResult>
-    isRepo(path: string): Promise<{ repo: boolean }>
     approvePlan(): Promise<{ ok: true }>
     model(model: string): Promise<{ ok: true }>
     /** 지난 대화 목록(최근 순). 이름이 없으면 첫 질문이 title 로 온다. */

@@ -94,8 +94,6 @@ type MainAreaProps = {
   sshRestore?: (profileId: string, size?: { cols: number; rows: number }) => Promise<SshRestoreResult>
   // 탭바 ＋ 메뉴·빈 상태의 "SSH 연결…" → 연결 관리자 열기(Shell 소유).
   onOpenConnManager?: () => void
-  // F27: 탭바 ＋ 메뉴의 "AI CLI 시작…" → 그 창 열기(창 상태도 Shell 소유 — onAskAi 와 같은 이유).
-  onOpenAiCli?: () => void
   /**
    * 2026-08-18: 우클릭 [AI 실행 ▸ …] — **창 없이** 지금 세션·지금 폴더에서 바로 띄운다.
    * 플래그는 그 CLI 로 마지막에 시작할 때 쓴 값을 재사용한다(Shell 이 최근 목록을 갖고 있다).
@@ -163,7 +161,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onDuplicateSession,
       sshRestore,
       onOpenConnManager,
-      onOpenAiCli,
       onRunAiCli,
       onResumeAi,
       version,
@@ -1486,7 +1483,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           onNew={() => void openLocal()}
           /* 없으면 ＋ 메뉴에서 그 줄이 빠진다(위 caps 와 같은 규칙) — 감싸지 않고 그대로 넘긴다. */
           onNewSsh={onOpenConnManager}
-          onAiCli={onOpenAiCli}
           editingId={editingId}
           onStartEdit={startEdit}
           onCommitEdit={commitEdit}
