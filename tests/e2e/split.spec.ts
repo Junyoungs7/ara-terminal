@@ -99,6 +99,9 @@ test('SPLIT-7 Alt+방향키로 패널 포커스를 옮긴다', async ({ ara }) =
   await page.keyboard.press('Control+Shift+\\')
   const focusedSession = () =>
     page.locator('.pane-grid .pane.focused').getAttribute('data-session-id')
+  // 분할은 새 셸을 기다린 뒤 직렬로 붙는다(b1885ba) — 두 칸이 서고 새 칸이 포커스를 가진 뒤에 읽는다(1/3 플레이크).
+  await expect(page.locator('.pane-grid .pane .xterm')).toHaveCount(2)
+  await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea'))).toBe(true)
   const right = await focusedSession() // 분할 직후 포커스는 새 패널(우측)
   await page.keyboard.press('Alt+ArrowLeft')
   await expect.poll(focusedSession).not.toBe(right)
