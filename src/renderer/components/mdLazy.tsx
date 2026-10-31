@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { type JSX, memo, useEffect, useState } from 'react'
 
 /**
  * 마크다운 지연 로드(M0 4-B). `md.tsx` 가 끄는 react-markdown·unified·micromark 묶음(≈588 kB)을

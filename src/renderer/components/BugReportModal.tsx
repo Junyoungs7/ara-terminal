@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useMemo, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { recentErrors } from '../store/errorRing'

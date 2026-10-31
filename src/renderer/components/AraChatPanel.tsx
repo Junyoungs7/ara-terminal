@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import type { AraChatEvent } from '../../main/ai/AraChat'
 import type { AraChatRow } from '../../main/ai/araChats'
 import type { AskRequest } from '../../main/mcp/askUser'

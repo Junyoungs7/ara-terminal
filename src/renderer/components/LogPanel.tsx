@@ -7,7 +7,7 @@
 //      위로 올라가 [이전 불러오기]를 누르면 앞쪽 창을 이어 붙인다. 화면상으론 끊김 없는 하나의 로그다.
 //   ② **찾기**로 줄을 좁힌다. 긴 로그에서 필요한 건 대개 "그 명령 근처"라 스크롤보다 검색이 빠르다.
 //   ③ **내려받기는 창이 아니라 전체**를 준다 — 뷰어는 창, 아카이브는 파일.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import { IconClose, IconRefresh } from './icons'
 import { t } from '../i18n'
 

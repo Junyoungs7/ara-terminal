@@ -13,7 +13,7 @@
 // 클립보드는 텍스트 양방향이고, 파일은 윈도우 클립보드(CF_HDROP)와 이어져 있다(#205 — main/rdp/rdpClipboard.ts).
 // 이미지는 아직.
 import { Check } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import { readClipboard, writeClipboard } from '../store/clipboardWrite'
 import { filePaths, registerPasteTarget } from '../store/pasteFiles'
 import type { RdpPhase } from '../store/sessionState'

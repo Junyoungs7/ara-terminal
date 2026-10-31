@@ -3,7 +3,7 @@
 //
 // 일부러 안 넣은 것: 문법 강조·탭 여러 개·되돌리기 스택. textarea 의 기본 편집(되돌리기 포함)과
 // Ctrl+S 만으로 "설정 파일 한 줄 고치기"는 끝난다 — 그 이상은 에디터를 만드는 일이다.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 
 type Target = { sessionId: string | null; path: string; server: string }

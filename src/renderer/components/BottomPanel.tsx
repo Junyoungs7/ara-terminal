@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
 import { IconClose } from './icons'

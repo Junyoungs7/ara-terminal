@@ -23,7 +23,7 @@
 // **하단은 지금 붙어 있는 세션의 서버**(세션 탭이 정한다), **여기는 아무 서버나**(접속 안 한 것도).
 // 다만 포트·시스템은 활성 세션 telemetry 구독에 매여 있어 여기서 다시 구독하지 않는다 —
 // 그 둘과 [터미널] 은 ↗ 를 달아 밖에서 열린다고 미리 알린다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   Boxes,

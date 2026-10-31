@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Terminal } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   K8S_DEFAULT_NS,
   K8S_NS_PREFIX,

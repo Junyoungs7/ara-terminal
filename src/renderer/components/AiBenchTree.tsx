@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 import { ChevronDown, GitBranch, X } from 'lucide-react'
 import type { AgentState } from '@shared/agentStatus'
 import type { AiSessionState } from '@shared/aiSession'

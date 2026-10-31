@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { type JSX, useMemo, useState } from 'react'
 import {
   buildCtrExec,
   parseCtrList,

@@ -9,7 +9,7 @@
 // **새 저장소가 없다.** 로그 파일 이름이 `날짜-시각_서버_id8.log` 라 그 폴더를 읽으면 목록이
 // 그대로 나온다(main/log/SessionLog.listPast). 읽기도 기존 창 단위 읽기를 그대로 탄다 —
 // 이 패널이 새로 만든 것은 목록 UI 하나뿐이다.
-import { useCallback, useEffect, useState } from 'react'
+import { type JSX, useCallback, useEffect, useState } from 'react'
 import { IconClose, IconRefresh } from './icons'
 import { humanSize, relTime } from './filePath'
 import { t } from '../i18n'

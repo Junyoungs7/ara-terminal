@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { type JSX, useRef, useState } from 'react'
 import { ChevronDown, MoreHorizontal, Star } from 'lucide-react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'

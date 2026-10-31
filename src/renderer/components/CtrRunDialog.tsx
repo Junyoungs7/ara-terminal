@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import { CTR_RESTARTS } from '@shared/remoteCatalog'
 import type { RunForm } from '@shared/ctrConflict'
 import { IconClose } from './icons'

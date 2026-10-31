@@ -6,7 +6,7 @@
 //
 // du 는 **폴링하지 않는다** — 큰 트리에서 몇 초씩 걸리는 명령이라 2.5초마다 돌리면 서버를 괴롭힌다.
 // 고를 때·파고들 때·[새로고침] 때만 한 번 실행한다. df 는 싸므로 그대로 watch 한다.
-import { useEffect, useRef, useState } from 'react'
+import { type JSX, useEffect, useRef, useState } from 'react'
 import { parseDf, parseDu, type DirUsage, type DiskRow } from '@shared/remoteCatalog'
 import { humanSize } from './filePath'
 import { IconBack, IconFolder, IconRefresh } from './icons'

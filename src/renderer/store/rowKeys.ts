@@ -99,7 +99,7 @@ export type RowKeysOptions = {
 
 /** 컨테이너에 그대로 펼쳐 넣는다: `<div {...useRowKeys(ref, {...})}>`. */
 export function useRowKeys(
-  ref: RefObject<HTMLElement>,
+  ref: RefObject<HTMLElement | null>,
   { selector, twisty }: RowKeysOptions
 ): { onKeyDown: (e: React.KeyboardEvent) => void; onFocus: (e: React.FocusEvent) => void; tabIndex: 0 } {
   const onKeyDown = useCallback(

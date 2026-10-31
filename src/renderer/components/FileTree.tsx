@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { writeClipboard } from '../store/clipboardWrite'
 import { useRowKeys } from '../store/rowKeys'
 import type { FileEntry, FileListResult, FileOpResult, SftpProgress, SftpXferResult } from '@shared/ipc'

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { IconClose } from './icons'
 import { failText } from './BugReportModal'

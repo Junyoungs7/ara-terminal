@@ -142,7 +142,7 @@ export function TitleBar({
         {MENUBAR.map((m, i) => (
           <span
             key={m.title}
-            ref={(el) => (tops.current[i] = el)}
+            ref={(el) => { tops.current[i] = el }}
             role="menuitem"
             aria-haspopup="menu"
             className={open?.index === i ? 'open' : undefined}

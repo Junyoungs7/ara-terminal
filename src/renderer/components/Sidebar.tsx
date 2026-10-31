@@ -1,3 +1,4 @@
+import type { JSX } from 'react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import type { FeatureShown } from '@shared/features'
 import type { ConnState } from '../store/profiles'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 import { BrandOrb } from './BrandOrb'
 import { honorific } from '@shared/araPersona'
 import { greetText, pickGreeting, type Greet } from '@shared/bootGreeting'

@@ -9,7 +9,7 @@
 // 세울 때 이미 빼 놓았다(shared/rdpSpan.ts). 여기서 CSS 로 높이를 바꾸면 그 계산이 어긋난다.
 //
 // 나가는 길: 제목 표시줄의 [X] · Alt+F4 · Alt+Tab 으로 비켜 두기(kiosk 가 아니라 OS 가 처리한다).
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
 import { RdpView } from './RdpView'
 import { monitorRects, type MonitorRect, type SpanMonitor } from '@shared/rdpSpan'
 import { openMirror, type MirrorHandle } from '../store/rdpMirror'

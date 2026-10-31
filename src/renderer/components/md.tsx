@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { type JSX, memo, useState } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { insertText } from '@shared/shellInput'

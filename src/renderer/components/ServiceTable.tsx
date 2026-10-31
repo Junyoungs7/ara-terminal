@@ -10,7 +10,7 @@
 //  · 쓰기가 셋이다(시작·정지·재시작). 셋 다 확인 다이얼로그에 **유닛 이름을 박아서** 묻고,
 //    실패하면 서버가 준 문장을 그대로 보여 준다(sudo 는 붙이지 않는다).
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
 import { useRowKeys } from '../store/rowKeys'
 import { parseSystemctl, systemdMissing, type SvcAction, type SvcRow } from '@shared/remoteCatalog'
 import { maskSecrets } from '@shared/maskSecrets'

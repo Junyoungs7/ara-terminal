@@ -11,6 +11,7 @@
 // 서버 선택 UI 가 여기 없는 것은 의도다(준영님 2026-08-16): 하단은 **지금 보고 있는 세션**의
 // 서버를 따라간다. 다른 서버를 보려면 세션 탭을 바꾸거나 런치패드를 쓴다 — 터미널은 A서버인데
 // 하단은 B서버인 상태를 만들지 않는다.
+import type { JSX } from 'react'
 import { ProcessTable } from './ProcessTable'
 import { ServiceTable } from './ServiceTable'
 import { DiskTable } from './DiskTable'

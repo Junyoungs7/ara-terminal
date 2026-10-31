@@ -3,7 +3,7 @@
 // 사이드바 [지난 세션](PastLogPanel)은 목록만 든다. 행을 누르면 main 이 이 창을 띄우거나(하나뿐)
 // 떠 있는 창에 대상을 민다(pastlog:show). 읽기는 예전 패널과 같은 창 단위 읽기(sessionLog.readFile) —
 // 렌더러는 로그 파일 **이름**만 안다(경로는 main 만).
-import { useCallback, useEffect, useState } from 'react'
+import { type JSX, useCallback, useEffect, useState } from 'react'
 import type { PastLogTarget } from '@shared/pastLogWin'
 import { TitleBar } from './TitleBar'
 import { filterLogLines } from './LogPanel'

@@ -11,7 +11,7 @@
 // **안 넣는 것 하나**(#201 A-5): `onResumeAi` — 끊김 카드의 [이어서 시작]. AI CLI 플래그와 최근
 // 목록이 Shell 에 있고 F32 가 이 창에서 AI 를 뺐다. 게다가 이 창은 부트 복원을 안 하므로
 // `PaneGrid` 의 `aiEnded` 카드가 뜰 일도 거의 없다 — 안 넘기면 그 버튼이 아예 안 그려진다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MainArea, type MainAreaHandle } from './MainArea'
 import { BottomPanel } from './BottomPanel'
 import { PortMonitor } from './PortMonitor'

@@ -1,7 +1,7 @@
 // 작업 프로필 팝업 — 저장해 둔 "서버 + 시작 폴더"를 고르면 그리로 접속한다.
 // 트리에 새 행을 만들지 않는 것이 이 화면의 존재 이유다(준영님 안): 한 서버에 작업 위치가 여러 개여도
 // 사이드바 계층은 그대로고, 로컬 폴더도 같은 목록에 나란히 둘 수 있다.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
 import { PenLine, Star, X } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchWorkProfile } from '../store/workProfiles'

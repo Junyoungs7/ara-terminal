@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
 import { AppWindow, List, SquareTerminal, Star, Zap } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchBinding } from '../../shared/keymap'
