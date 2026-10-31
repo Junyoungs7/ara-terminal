@@ -1313,8 +1313,11 @@ const checks = []
     const aVisibleMs = Date.now() - aT0
     const idB = await openSession('R1-B')
     echo(idB, 'R1버퍼B')
-    await wait(1200)
-    const bVisible = /R1버퍼B/.test(shown())
+    // A 와 같은 폴링(ME-1 E4 — 43 에서 B 만 고정 1200ms 안에 안 닿아 2건 실패). 걸린 시간을 남긴다.
+    const bT0 = Date.now()
+    let bVisible = false
+    while (Date.now() - bT0 < 8000 && !(bVisible = /R1버퍼B/.test(shown()))) await wait(200)
+    const bVisibleMs = Date.now() - bT0
     await clickTab(idA)
     const aKept = /R1버퍼A/.test(shown())
     const aBuf = /R1버퍼A/.test(window.__evTerm(idA)?.text() || '')
@@ -1386,13 +1389,13 @@ const checks = []
     const panesAfterMenuLocal = paneCount()
 
     return {
-      aVisible, aVisibleMs, bVisible, aKept, aBuf, aPaneVisible, tabLabels, bKept, panesAfterSplit, splitKept,
+      aVisible, aVisibleMs, bVisible, bVisibleMs, aKept, aBuf, aPaneVisible, tabLabels, bKept, panesAfterSplit, splitKept,
       panesBeforeLast, panesAfterLast, emptyState,
       dblBefore, dblAfter, sidebarMenu, tabsBeforeMenuLocal, tabsAfterMenuLocal, panesAfterMenuLocal
     }
   })()`)
 
-  console.log(`R1① 첫 셸 출력이 보이기까지 ${r1.aVisibleMs}ms`)
+  console.log(`R1① 첫 셸 출력이 보이기까지 ${r1.aVisibleMs}ms · B ${r1.bVisibleMs}ms`)
   checks.push(['R1①: 세션 A 출력이 패널에 보인다', r1.aVisible === true])
   checks.push(['R1①: 같은 패널에서 세션 B 로 전환', r1.bVisible === true])
   checks.push(['R1①: A 로 복귀 시 A 버퍼 보존', r1.aKept === true && r1.aBuf === true])
