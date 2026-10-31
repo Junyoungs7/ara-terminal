@@ -3,6 +3,7 @@
 import { cp, lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess, type RunResult } from '../util/runProcess'
+import { createWorktreeCopyBudgetTracker, type WorktreeCopyBudget } from './copyBudget'
 import {
   BASE_REF_FORMAT,
   WORKTREE_INCLUDE_FILE,
@@ -142,12 +143,23 @@ export async function resolveWorktreeIncludePaths(repoPath: string, warn: (msg: 
 }
 
 /**
- * 복사 — Orca createWorktreeCopiedPaths 의 1차 판(fs.cp, 심볼릭 링크는 따라가지 않고 그대로). 실패한 경로를 돌려준다.
- * ponytail: Orca 의 복사 예산(2GB·5만 개)은 뺐다 — node_modules 같은 큰 폴더를 적으면 오래 걸린다. 걸리면 예산을 옮긴다.
+ * 복사 — Orca createWorktreeCopiedPaths 의 1차 판(fs.cp, 심볼릭 링크는 따라가지 않고 그대로). 못 옮긴 경로를 돌려준다.
+ * Orca 복사 예산(2GB·5만 개, copyBudget.ts)을 먼저 잰다 — 넘는 항목은 복사하지 않고 사유(bytes·entries·sizing)를 붙인다.
  */
-export async function copyIncludePaths(repoPath: string, worktreePath: string, relativePaths: string[]): Promise<string[]> {
+export async function copyIncludePaths(
+  repoPath: string,
+  worktreePath: string,
+  relativePaths: string[],
+  budget?: WorktreeCopyBudget
+): Promise<string[]> {
   const failed: string[] = []
+  const tracker = createWorktreeCopyBudgetTracker(budget)
   for (const p of relativePaths) {
+    const verdict = await tracker.admit(join(repoPath, p))
+    if (!verdict.withinBudget) {
+      failed.push(`${p} (${verdict.reason})`)
+      continue
+    }
     try {
       await cp(join(repoPath, p), join(worktreePath, p), { recursive: true, force: false, errorOnExist: false, verbatimSymlinks: true })
     } catch {
