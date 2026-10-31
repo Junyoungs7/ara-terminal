@@ -22,6 +22,10 @@ export type RunOptions = {
   env?: Record<string, string>
   timeoutMs?: number
   maxBuffer?: number
+  /** 취소(M2 워크트리 생성 — 서브모듈·LFS 가 느릴 수 있다). 끊기면 error.name === 'AbortError'. */
+  signal?: AbortSignal
+  /** stderr 를 오는 대로 받는다(git 진행 막대). 결과의 stderr 에도 그대로 모인다. */
+  onStderr?: (chunk: string) => void
 }
 
 export type RunResult = {
@@ -34,7 +38,7 @@ export type RunResult = {
 
 export function runProcess(file: string, args: readonly string[], opts: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
-    execFile(
+    const child = execFile(
       file,
       [...args],
       {
@@ -42,7 +46,8 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
         env: { ...process.env, ...opts.env },
         timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
-        windowsHide: true
+        windowsHide: true,
+        signal: opts.signal
       },
       (err, stdout, stderr) => {
         const code = (err as { code?: unknown } | null)?.code
@@ -54,5 +59,6 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
         })
       }
     )
+    if (opts.onStderr) child.stderr?.on('data', (d: Buffer | string) => opts.onStderr?.(String(d)))
   })
 }
