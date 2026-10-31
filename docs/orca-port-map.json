@@ -1,0 +1,541 @@
+[
+  {
+    "id": "AI-01",
+    "feature": "에이전트 고르기·설치 감지",
+    "orcaPaths": [
+      "src/renderer/src/components/agent",
+      "src/renderer/src/components/settings/AgentDetectionCatalog.tsx",
+      "src/main/agent-cli-version-probe.ts",
+      "src/main/ipc/agent-detection-shell-path.ts",
+      "src/shared/agent-detection.ts",
+      "src/renderer/src/store/slices/detected-agents.ts",
+      "src/renderer/src/store/slices/local-detected-agent-state.ts",
+      "docs/site/content/docs/agents/supported.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-02",
+    "feature": "에이전트 실행 설정(인자·환경·권한 모드)",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/AgentLaunchDefaultsEditor.tsx",
+      "src/renderer/src/components/settings/HostAgentLaunchSettings.tsx",
+      "src/renderer/src/components/settings/AgentLaunchSettingsSection.tsx",
+      "src/renderer/src/components/settings/AgentPermissionsSetting.tsx",
+      "src/renderer/src/components/settings/AgentPermissionModeMenu.tsx",
+      "src/shared/agent-choice-settings.ts",
+      "src/shared/agent-choice-args.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-03",
+    "feature": "에이전트 실행·첫 프롬프트 전달",
+    "orcaPaths": [
+      "src/main/agent-launch",
+      "src/main/ipc/pty/ipc/spawn-agent-launch.ts",
+      "src/shared/agent-command-plan.ts",
+      "src/renderer/src/store/terminals/terminal-tab-agent-launch-pane.ts",
+      "src/renderer/src/store/slices/worktrees/create/host-planned-agent-launch.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-04",
+    "feature": "에이전트 상태 훅(여러 CLI)",
+    "orcaPaths": [
+      "src/main/agent-hooks",
+      "src/main/ipc/agent-hooks.ts",
+      "src/main/ipc/agent-status-ipc-boundary.ts",
+      "src/preload/api/agent-hook-api.ts",
+      "src/preload/api/agent-status-api.ts",
+      "src/preload/api/agent-status-bridge.ts",
+      "src/renderer/src/store/slices/agent-status",
+      "src/shared/agent-hook-listener",
+      "src/shared/agent-hook-listener.ts",
+      "src/shared/agent-hook-endpoint-file.ts",
+      "src/shared/agent-status-hooks-setting.ts",
+      "src/renderer/src/components/settings/agent-status-hooks-copy.ts",
+      "docs/site/content/docs/agents/hooks-memory.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-05",
+    "feature": "턴 끝 판정(훅 없는 CLI)",
+    "orcaPaths": [
+      "src/main/agent-turn-idle-verdict.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-06",
+    "feature": "서브에이전트 자식 줄",
+    "orcaPaths": [
+      "src/main/claude/claude-subagent-identities.ts",
+      "src/main/claude/claude-subagent-linkage.ts",
+      "src/main/claude/claude-subagent-task-frames.ts",
+      "src/shared/codex-subagent-identity.ts",
+      "src/shared/agent-child-row-model.ts",
+      "src/shared/agent-status-child-work.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-07",
+    "feature": "지난 에이전트 세션 목록·재개",
+    "orcaPaths": [
+      "src/main/ai-vault",
+      "src/main/ipc/ai-vault.ts",
+      "src/main/ipc/ai-vault-resume.ts",
+      "src/main/ipc/ai-vault-delete.ts",
+      "src/preload/api/ai-vault-api.ts",
+      "src/preload/api/ai-vault-bridge.ts",
+      "src/shared/ai-vault-resume-command.ts",
+      "src/renderer/src/components/right-sidebar/AiVaultPanel.tsx",
+      "src/renderer/src/components/right-sidebar/AiVaultSessionRow.tsx",
+      "src/renderer/src/components/right-sidebar/AiVaultSessionDetails.tsx",
+      "src/renderer/src/components/settings/SessionHistorySettingsPane.tsx",
+      "docs/site/content/docs/agents/session-history.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-08",
+    "feature": "에이전트 대시보드(상태별 보드)",
+    "orcaPaths": [
+      "src/renderer/src/components/dashboard",
+      "src/renderer/src/components/dashboard-popout",
+      "src/main/ipc/dashboard-popout.ts",
+      "src/main/ipc/dashboard-payload-validation.ts",
+      "src/preload/api/dashboard-api.ts",
+      "src/preload/api/dashboard-bridge.ts",
+      "src/renderer/src/store/slices/ui/ui-slice-agents-view-preference-actions.ts",
+      "docs/site/content/docs/model/agents-sessions.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-09",
+    "feature": "활동 피드",
+    "orcaPaths": [
+      "src/renderer/src/components/activity",
+      "src/renderer/src/store/slices/ui/ui-slice-activity-actions.ts",
+      "docs/site/content/docs/activity.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-10",
+    "feature": "사용량·한도 표시",
+    "orcaPaths": [
+      "src/main/rate-limits",
+      "src/main/claude-usage",
+      "src/main/codex-usage",
+      "src/main/ipc/rate-limits.ts",
+      "src/main/ipc/usage-provider-handlers.ts",
+      "src/preload/api/rate-limits-bridge.ts",
+      "src/preload/api/claude-usage-bridge.ts",
+      "src/preload/api/codex-usage-bridge.ts",
+      "src/preload/api/agent-usage-api.ts",
+      "src/renderer/src/store/slices/rate-limits.ts",
+      "src/renderer/src/store/slices/usage-provider-slices.ts",
+      "src/renderer/src/components/status-bar/UsageRosterPanel.tsx",
+      "docs/site/content/docs/agents/usage-tracking.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-01",
+    "feature": "워크트리 = 작업 단위",
+    "orcaPaths": [
+      "src/main/git/",
+      "src/main/ipc/worktrees/",
+      "src/main/ipc/worktrees.ts",
+      "src/main/ipc/worktree-logic.ts",
+      "src/main/ipc/worktree-remote.ts",
+      "src/preload/api/worktree-api.ts",
+      "src/preload/api/worktrees-bridge.ts",
+      "src/renderer/src/store/slices/worktrees/",
+      "src/renderer/src/store/slices/worktrees.ts",
+      "src/renderer/src/store/slices/worktree-helpers.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "porting"
+  },
+  {
+    "id": "WS-02",
+    "feature": "새 워크스페이스 만들기",
+    "orcaPaths": [
+      "src/renderer/src/components/NewWorkspaceComposerCard.tsx",
+      "src/renderer/src/components/new-workspace/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-03",
+    "feature": "백그라운드 생성·진행 표시",
+    "orcaPaths": [
+      "src/renderer/src/components/worktree-creation/",
+      "src/main/ipc/created-worktree-reconciliation.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "porting"
+  },
+  {
+    "id": "WS-04",
+    "feature": "분기 지점 고르기(Start-from)",
+    "orcaPaths": [
+      "src/renderer/src/components/new-workspace/ComposerBaseRefPicker.tsx",
+      "src/renderer/src/components/new-workspace/base-ref-picker-visibility.ts",
+      "src/renderer/src/components/settings/BaseRefPicker.tsx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "porting"
+  },
+  {
+    "id": "WS-05",
+    "feature": "워크스페이스 사이드바(그룹·필터·핀)",
+    "orcaPaths": [
+      "src/renderer/src/components/sidebar/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-06",
+    "feature": "파일 빠른 열기(Quick Open)",
+    "orcaPaths": [
+      "src/renderer/src/components/QuickOpen.tsx",
+      "src/renderer/src/components/quick-open-capped-local-listing.ts",
+      "src/renderer/src/components/quick-open-file-list.ts",
+      "src/renderer/src/components/quick-open-file-list-target.ts",
+      "src/renderer/src/components/quick-open-file-navigation.ts",
+      "src/renderer/src/components/quick-open-history-ranking.ts",
+      "src/renderer/src/components/quick-open-install-rg-guidance.tsx",
+      "src/renderer/src/components/quick-open-nested-worktrees.ts",
+      "src/renderer/src/components/quick-open-recent-validation.ts",
+      "src/renderer/src/components/quick-open-search.ts",
+      "src/renderer/src/components/use-quick-open-interaction.ts",
+      "src/main/ripgrep/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-07",
+    "feature": "코드 에디터(Monaco)",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/",
+      "src/renderer/src/store/slices/editor/",
+      "src/renderer/src/store/slices/editor.ts",
+      "src/main/ipc/filesystem/",
+      "src/preload/api/filesystem-api.ts",
+      "src/preload/api/fs-bridge.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-08",
+    "feature": "변경 감지 안전 저장",
+    "orcaPaths": [
+      "src/main/ipc/filesystem/local-disk-write-precondition.ts",
+      "src/main/ipc/filesystem/filesystem-write-handlers.ts",
+      "src/renderer/src/runtime/runtime-file-write-disk-precondition.ts",
+      "src/renderer/src/components/editor/ExternalFileChangeBanner.tsx",
+      "src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-09",
+    "feature": "워크트리 전체 검색",
+    "orcaPaths": [
+      "src/renderer/src/components/right-sidebar/SearchFilters.tsx",
+      "src/renderer/src/components/right-sidebar/SearchQueryRow.tsx",
+      "src/renderer/src/components/right-sidebar/SearchResultItems.tsx",
+      "src/renderer/src/components/right-sidebar/SearchResultsPane.tsx",
+      "src/renderer/src/components/right-sidebar/search-match-open.ts",
+      "src/renderer/src/components/right-sidebar/search-rows.ts",
+      "src/main/ripgrep/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-10",
+    "feature": "Diff 뷰어",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/",
+      "src/preload/api/git-inspection-api.ts",
+      "src/preload/api/git-bridge.ts",
+      "src/main/git/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-11",
+    "feature": "AI diff 주석(Annotate AI Diff)",
+    "orcaPaths": [
+      "src/renderer/src/components/diff-comments/",
+      "src/renderer/src/store/slices/diffComments.ts",
+      "src/renderer/src/store/slices/diff-comment-host-write.ts",
+      "src/renderer/src/store/slices/diff-comment-persistence.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-12",
+    "feature": "소스 컨트롤 패널",
+    "orcaPaths": [
+      "src/renderer/src/components/source-control/",
+      "src/renderer/src/components/right-sidebar/SourceControl.tsx",
+      "src/renderer/src/components/right-sidebar/source-control/",
+      "src/renderer/src/components/right-sidebar/source-control-actions.ts",
+      "src/renderer/src/components/right-sidebar/source-control-primary-action.ts",
+      "src/preload/api/git-operation-api.ts",
+      "src/preload/api/git-bridge.ts",
+      "src/main/git/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "WS-13",
+    "feature": "푸시 안전장치·amend",
+    "orcaPaths": [
+      "src/main/git/push-target-validation.ts",
+      "src/main/ipc/worktree-push-target-setup.ts",
+      "src/main/ipc/worktree-push-target-reconciliation.ts",
+      "src/renderer/src/components/right-sidebar/source-control/sync/"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "TM-01",
+    "feature": "점프 호스트·프록시·멀티플렉싱(터미널 개선)",
+    "orcaPaths": [
+      "src/main/ssh/ssh-proxy-command.ts",
+      "src/main/ssh/ssh-control-socket.ts",
+      "src/main/ssh/ssh-transport-selection.ts",
+      "src/main/ssh/config/ssh-config-parser.ts",
+      "src/main/ssh/config/ssh-g-config-resolution.ts",
+      "src/main/ssh/connection/ssh-connection.ts",
+      "src/main/ssh/system-transport/system-ssh-args.ts",
+      "docs/site/content/docs/ssh.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-11",
+    "feature": "상태 표시 점(Orca 글리프 채택)",
+    "orcaPaths": [
+      "src/renderer/src/components/sidebar/StatusIndicator.tsx",
+      "src/renderer/src/components/AgentStateDot.tsx",
+      "src/renderer/src/components/AgentWorkingSpinner.tsx",
+      "src/renderer/src/components/AgentQuestionIcon.tsx",
+      "src/renderer/src/components/StateIndicatorTooltip.tsx",
+      "src/renderer/src/lib/worktree-status.ts",
+      "docs/site/content/docs/model/agents-sessions.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-12",
+    "feature": "채팅 UI(구조화 채팅)",
+    "orcaPaths": [
+      "src/renderer/src/components/native-chat",
+      "src/main/native-chat",
+      "src/main/ipc/native-chat.ts",
+      "docs/site/content/docs/agents/native-chat.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-13",
+    "feature": "터미널 에이전트를 채팅으로 보기",
+    "orcaPaths": [
+      "src/renderer/src/store/terminals/terminal-chat-pane-layout-owner.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-14",
+    "feature": "에이전트별 채팅/터미널 기본 선택",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/AgentChatChoiceControls.tsx",
+      "src/renderer/src/components/settings/native-chat-provider-choice.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-15",
+    "feature": "모델·추론강도·모드 선택",
+    "orcaPaths": [
+      "src/main/claude/claude-model-catalog-probe.ts",
+      "src/main/acp/acp-model-catalog-probe.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-16",
+    "feature": "슬래시 명령·스킬 목록",
+    "orcaPaths": [
+      "src/main/claude/claude-slash-command-catalog.ts",
+      "src/main/acp/acp-at-rest-commands.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-17",
+    "feature": "파일·이미지 첨부, 초안 보존",
+    "orcaPaths": [
+      "src/main/native-chat/agent-session-attachments",
+      "src/main/acp/acp-prompt-content.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-18",
+    "feature": "채팅 권한 설정",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/ChatPermissionSetting.tsx",
+      "src/shared/agent-chat-permission-mode.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "AI-19",
+    "feature": "채팅 이름 자동 생성",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/ChatNamingSetting.tsx",
+      "src/main/text-generation/conversation-name-generation-request.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "DM-01",
+    "feature": "로컬 터미널 데몬",
+    "orcaPaths": [
+      "src/main/daemon",
+      "src/main/pty"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "DM-02",
+    "feature": "orcad(호스트 서버 데몬)",
+    "orcaPaths": [
+      "src/main/orcad"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "DM-03",
+    "feature": "관리형 서버 자동 설치·업데이트",
+    "orcaPaths": [
+      "src/main/managed-server",
+      "src/renderer/src/components/managed-runtime"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "DM-04",
+    "feature": "SSH 워크트리",
+    "orcaPaths": [
+      "src/main/ipc/worktrees/listing/ssh-worktree-fallback.ts",
+      "src/renderer/src/components/sidebar/WorktreeCardSshHostControl.tsx",
+      "src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts",
+      "src/renderer/src/store/slices/worktrees/listing/direct-ssh-authority.ts",
+      "docs/site/content/docs/recipes/remote-worktrees.mdx",
+      "docs/site/content/docs/ssh.mdx"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "DM-05",
+    "feature": "실행 위치 선택(Run on)",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx",
+      "src/renderer/src/components/host-picker"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "planned"
+  },
+  {
+    "id": "FD-01",
+    "feature": "자원 관리자(프로세스·PTY 별 CPU/메모리)",
+    "orcaPaths": [
+      "src/main/memory",
+      "src/renderer/src/store/slices/memory.ts",
+      "src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx",
+      "src/renderer/src/components/status-bar/ResourcePtyPanel.tsx",
+      "src/renderer/src/components/status-bar/ResourcePtyList.tsx",
+      "src/renderer/src/components/status-bar/resource-pty-view-model.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "ported"
+  },
+  {
+    "id": "FD-02",
+    "feature": "멈춤 감시(Hang watchdog)",
+    "orcaPaths": [
+      "src/main/hang-watchdog"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "ported"
+  },
+  {
+    "id": "FD-03",
+    "feature": "진단 프로브",
+    "orcaPaths": [
+      "src/main/diagnostics"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "ported"
+  },
+  {
+    "id": "FD-04",
+    "feature": "렌더러 복구·안전 그래픽 모드",
+    "orcaPaths": [
+      "src/renderer/src/components/error-boundaries",
+      "src/main/window/renderer-recovery-prompt.ts",
+      "src/main/window/renderer-recovery-reload-watchdog.ts",
+      "src/main/crash-reporting/renderer-recovery-circuit-breaker.ts",
+      "src/main/crash-reporting/gpu-fallback-engagement.ts",
+      "src/main/startup/gpu-fallback-switches.ts"
+    ],
+    "orcaRef": "7a7f46f8a3",
+    "status": "ported"
+  }
+]
