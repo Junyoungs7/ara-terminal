@@ -755,6 +755,8 @@ export type EvApi = {
      * preload 가 값으로 건넨다. IPC 로는 그 시점을 못 맞춘다). 값 판정은 shouldUseWebgl 이 한다.
      */
     webglOptOut?: string | undefined
+    /** 시험 훅 설치 여부 — main 이 `!isPackaged && ARA_E2E=1` 일 때만 인자를 넘긴다(renderer/testCrash.ts). */
+    testHooks?: boolean
   }
   /** #206 오류 신고 — 찍고 모으기(신고 창보다 먼저) · 보내기(자동 재시도 없음). */
   report: {

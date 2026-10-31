@@ -344,3 +344,27 @@ describe('0-6 utilityHost — 시작·메시지·재시작 한도·종료', () =
     expect(h.running).toBe(false)
   })
 })
+
+// 시험 훅 — 배포본/비활성에서는 window 에 안 생기고, 켜면 지정 영역만 던질 표식이 선다.
+import { crashArea, installTestCrash, shouldCrash, subscribeCrash } from '../src/renderer/testCrash'
+describe('testCrash 훅', () => {
+  it('꺼져 있으면 window 에 노출하지 않는다', () => {
+    const w: { __araTestCrash?: unknown } = {}
+    installTestCrash(false, w)
+    installTestCrash(undefined, w)
+    expect(w.__araTestCrash).toBeUndefined()
+  })
+  it('켜면 노출되고, 부른 영역만 표식·통지를 받는다', () => {
+    const w: { __araTestCrash?: (a: string) => void } = {}
+    installTestCrash(true, w)
+    let hits = 0
+    const off = subscribeCrash('sidebar', () => hits++)
+    w.__araTestCrash!('sidebar')
+    expect(shouldCrash('sidebar')).toBe(true)
+    expect(shouldCrash('main')).toBe(false)
+    expect(hits).toBe(1)
+    off()
+    crashArea('sidebar')
+    expect(hits).toBe(1)
+  })
+})

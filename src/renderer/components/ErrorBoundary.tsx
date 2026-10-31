@@ -4,8 +4,19 @@
 //
 // Orca 와 다른 점: 지연 청크 실패 구분·크래시 보고 서버 전송을 뺐다(아라는 로컬 파일 기록뿐).
 // [다시 시도]는 경계 상태만 지워 자식을 새로 그린다 — 같은 원인이면 다시 잡힌다(무한 루프가 아니라 같은 대체 화면).
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { t } from '../i18n'
+import { installTestCrash, shouldCrash, subscribeCrash } from '../testCrash'
+
+// 시험 빌드 전용 `window.__araTestCrash(area)` — 지정 영역의 TestBomb 가 다음 렌더에서 던진다.
+installTestCrash(window.ev?.app?.testHooks)
+
+function TestBomb({ area }: { area: string }): null {
+  const [, tick] = useState(0)
+  useEffect(() => subscribeCrash(area, () => tick((n) => n + 1)), [area])
+  if (shouldCrash(area)) throw new Error(`__araTestCrash ${area}`)
+  return null
+}
 
 type Props = {
   /** main-error.log 의 `renderer <area>` — 어느 영역이 죽었나. */
@@ -42,7 +53,13 @@ export class ErrorBoundary extends Component<Props, State> {
   private reset = (): void => this.setState({ error: null })
 
   render(): ReactNode {
-    if (!this.state.error) return this.props.children
+    if (!this.state.error)
+      return (
+        <>
+          {window.ev?.app?.testHooks && <TestBomb area={this.props.area} />}
+          {this.props.children}
+        </>
+      )
     return (
       <div className={'eb-fallback' + (this.props.className ? ' ' + this.props.className : '')} role="alert" data-area={this.props.area}>
         <div className="eb-title">{t('errorBoundary.title')}</div>

@@ -70,6 +70,7 @@ const api: EvApi = {
     logRendererError: (area: string, message: string, stack: string) =>
       ipcRenderer.invoke('app:logRendererError', { area, message, stack }),
     probe: (on?: boolean) => ipcRenderer.invoke('diag:probe', { on }),
+    testHooks: typeof process !== 'undefined' && process.argv.includes('--ara-test-hooks'),
     webglOptOut: typeof process === 'undefined' ? undefined : process.env['ARA_NO_WEBGL'],
     // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
     updateState: () => ipcRenderer.invoke('update:get'),

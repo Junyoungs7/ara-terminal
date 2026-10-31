@@ -73,7 +73,7 @@ test('STAB-3 진단 프로브 켜기 → 최근 값·event-loop-delay.ndjson, �
 })
 
 // STAB-4 FD-04 렌더러 오류 경계가 보내는 기록이 main-error.log 에 `renderer <영역>` 으로 남는다.
-// 경계 자체(한 영역만 대체 화면)는 화면을 깨뜨릴 시험 훅이 없어 여기서 보지 않는다 — 기록 경로만 본다.
+// 경계 자체(한 영역만 대체 화면)는 STAB-5 가 본다 — 여기는 기록 경로만 본다.
 test('STAB-4 오류 경계 기록 → logs/main-error.log', async ({ ara, userDataDir }) => {
   await ara.page.evaluate(() =>
     (window as unknown as { ev: { app: { logRendererError(a: string, m: string, s: string): Promise<unknown> } } }).ev.app.logRendererError(
@@ -85,4 +85,16 @@ test('STAB-4 오류 경계 기록 → logs/main-error.log', async ({ ara, userDa
   const log = join(userDataDir, 'logs', 'main-error.log')
   await expect.poll(() => (existsSync(log) ? readFileSync(log, 'utf8') : ''), { timeout: 5_000 }).toContain('renderer sidebar')
   expect(readFileSync(log, 'utf8')).toContain('STAB-4 boom')
+})
+
+// STAB-5 FD-04 사이드바 영역만 깨뜨리면 그 영역에만 대체 화면이 서고, 메인(터미널) 영역은 그대로다.
+// 훅은 시험 빌드(ARA_E2E=1, 비패키지)에서만 window.__araTestCrash 로 노출된다(renderer/testCrash.ts).
+test('STAB-5 사이드바 영역 강제 오류 → 그 영역만 대체 화면, 메인은 그대로', async ({ ara }) => {
+  const { page } = ara
+  await expect(page.locator('.main')).toBeVisible()
+  await page.evaluate(() => (window as unknown as { __araTestCrash(a: string): void }).__araTestCrash('sidebar'))
+  await expect(page.locator('.eb-fallback[data-area="sidebar"]')).toBeVisible()
+  await expect(page.locator('.eb-fallback[data-area="main"]')).toHaveCount(0)
+  await expect(page.locator('.main')).toBeVisible()
+  await expect(page.locator('.app')).toBeVisible()
 })

@@ -202,7 +202,8 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: true
+      webSecurity: true,
+      additionalArguments: !app.isPackaged && process.env['ARA_E2E'] === '1' ? ['--ara-test-hooks'] : []
     }
   })
 
