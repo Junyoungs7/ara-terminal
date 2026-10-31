@@ -118,8 +118,10 @@ test('SET-8 [단축키]의 tmux 사용법 보기가 명령어 북을 tmux 카테
 
   // F24 [피드백 작성]과 같은 규칙 — 설정 창을 강제로 닫지 않는다(모달 위에 쌓인다).
   await expect(page.locator('.cheatsheet.open')).toBeVisible()
-  const cats = new Set(await page.locator('.cheatsheet.open .cb-list .cb-cat').allTextContents())
-  expect(cats).toEqual(new Set(['tmux']))
+  // 카테고리 거르기는 열린 다음 렌더에 걸린다 — 한 번 읽으면 전체 목록을 잡을 때가 있다(E2 전체 실행에서 1회, 단독 3/3 통과).
+  await expect
+    .poll(async () => [...new Set(await page.locator('.cheatsheet.open .cb-list .cb-cat').allTextContents())])
+    .toEqual(['tmux'])
   expect(await page.locator('.cheatsheet.open .cb-list .cb-item').count()).toBeGreaterThan(0)
 })
 
