@@ -240,7 +240,7 @@ export function reloadActive(): void {
 
 export function goBackActive(): void {
   const wc = tabs.find((x) => x.id === activeId)?.view.webContents
-  if (wc && !wc.isDestroyed() && wc.canGoBack()) wc.goBack()
+  if (wc && !wc.isDestroyed() && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
 }
 
 /** 본창 닫힘·앱 종료 때. 탐색기 창과 같이 destroy — 닫기 확인 같은 것을 기다리지 않는다. */

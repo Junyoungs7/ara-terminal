@@ -76,12 +76,12 @@ export function wireTabContents(
   // 최소 조작키만. OAuth 는 "계정을 잘못 골랐다 → 뒤로"가 흔해서 뒤로가기 없는 브라우저는 실사용이 안 된다.
   wc.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return
-    if (input.alt && input.key === 'ArrowLeft' && wc.canGoBack()) {
+    if (input.alt && input.key === 'ArrowLeft' && wc.navigationHistory.canGoBack()) {
       e.preventDefault()
-      wc.goBack()
-    } else if (input.alt && input.key === 'ArrowRight' && wc.canGoForward()) {
+      wc.navigationHistory.goBack()
+    } else if (input.alt && input.key === 'ArrowRight' && wc.navigationHistory.canGoForward()) {
       e.preventDefault()
-      wc.goForward()
+      wc.navigationHistory.goForward()
     } else if (input.control && input.key.toLowerCase() === 'r') {
       e.preventDefault()
       wc.reload()
