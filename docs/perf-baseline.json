@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-31T15:49:52.207Z",
+  "createdAt": "2026-10-31T19:41:55.813Z",
   "runs": 5,
   "tabs": 4,
   "idleMs": 60000,
@@ -10,68 +10,68 @@
     "ramGB": 64,
     "platform": "win32",
     "osRelease": "10.0.26200",
-    "gitCommit": "7941f91",
+    "gitCommit": "f200332",
     "gitDirty": true,
-    "electron": "31.7.7"
+    "electron": "43.8.6"
   },
   "startupSources": [
     "getCreationTime→FCP"
   ],
   "metrics": {
     "startupMs": {
-      "median": 1617.2,
-      "min": 1570.3,
-      "max": 1650.9,
-      "mad": 33.74,
+      "median": 1566.6,
+      "min": 1451.1,
+      "max": 1713.8,
+      "mad": 49.39,
       "tolerance": 0.1,
       "samples": [
-        1578.2,
-        1650.9,
-        1650.9,
-        1617.2,
-        1570.3
+        1517.2,
+        1713.8,
+        1566.6,
+        1603.7,
+        1451.1
       ]
     },
     "idleMemMB": {
-      "median": 426.6,
-      "min": 424.7,
-      "max": 428.6,
-      "mad": 1.5,
+      "median": 471.1,
+      "min": 469.5,
+      "max": 473.8,
+      "mad": 1.61,
       "tolerance": 0.05,
       "samples": [
-        425.9,
-        424.7,
-        426.6,
-        428.6,
-        428.1
+        473.2,
+        470.4,
+        473.8,
+        469.5,
+        471.1
       ]
     },
     "idleCpuPct": {
       "median": 0,
       "min": 0,
-      "max": 0.1,
+      "max": 0,
       "mad": 0,
       "tolerance": 1,
       "samples": [
         0,
         0,
         0,
-        0.1,
+        0,
         0
       ]
     },
     "workspaceMs": {
-      "median": 6921.3,
-      "min": 6098.4,
-      "max": 7655.3,
-      "mad": 423.84,
-      "tolerance": 0.184,
+      "median": 3460.2,
+      "min": 3428.6,
+      "max": 4637,
+      "mad": 31.62,
+      "tolerance": 0.1,
       "samples": [
-        7655.3,
-        6497.4,
-        6098.4,
-        6921.3,
-        6924.5
+        4637,
+        3870,
+        3460.2,
+        3428.6,
+        3458.6
       ]
     }
   }

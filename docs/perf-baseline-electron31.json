@@ -1,0 +1,78 @@
+{
+  "createdAt": "2026-10-31T15:49:52.207Z",
+  "runs": 5,
+  "tabs": 4,
+  "idleMs": 60000,
+  "cpuMs": 30000,
+  "machine": {
+    "cpu": "Intel(R) Core(TM) i5-14600K",
+    "cores": 20,
+    "ramGB": 64,
+    "platform": "win32",
+    "osRelease": "10.0.26200",
+    "gitCommit": "7941f91",
+    "gitDirty": true,
+    "electron": "31.7.7"
+  },
+  "startupSources": [
+    "getCreationTime→FCP"
+  ],
+  "metrics": {
+    "startupMs": {
+      "median": 1617.2,
+      "min": 1570.3,
+      "max": 1650.9,
+      "mad": 33.74,
+      "tolerance": 0.1,
+      "samples": [
+        1578.2,
+        1650.9,
+        1650.9,
+        1617.2,
+        1570.3
+      ]
+    },
+    "idleMemMB": {
+      "median": 426.6,
+      "min": 424.7,
+      "max": 428.6,
+      "mad": 1.5,
+      "tolerance": 0.05,
+      "samples": [
+        425.9,
+        424.7,
+        426.6,
+        428.6,
+        428.1
+      ]
+    },
+    "idleCpuPct": {
+      "median": 0,
+      "min": 0,
+      "max": 0.1,
+      "mad": 0,
+      "tolerance": 1,
+      "samples": [
+        0,
+        0,
+        0,
+        0.1,
+        0
+      ]
+    },
+    "workspaceMs": {
+      "median": 6921.3,
+      "min": 6098.4,
+      "max": 7655.3,
+      "mad": 423.84,
+      "tolerance": 0.184,
+      "samples": [
+        7655.3,
+        6497.4,
+        6098.4,
+        6921.3,
+        6924.5
+      ]
+    }
+  }
+}
