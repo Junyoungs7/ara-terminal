@@ -1370,6 +1370,11 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           // Ctrl+Shift+A — 우클릭 메뉴 [AI에게 질문] 과 같은 경로(선택 텍스트를 아는 쪽이 여기다).
           e.preventDefault()
           void onAction('ai.ask')
+        } else if (matchBinding(e, 'log.save')) {
+          // Ctrl+Shift+S — 우클릭 [로그] 와 같은 길(로그 패널을 열고, 저장은 그 패널의 [내려받기]).
+          // 표에는 implemented:true 로 올라 키를 먹고 있었는데 이 분기가 없어 무동작이었다.
+          e.preventDefault()
+          void onAction('log.save')
         } else if (matchBinding(e, 'settings.open')) {
           // R5: Ctrl+, — 타이틀바 기어·File>설정과 같은 상태를 연다(진입점 3개, 배선은 여기 하나).
           e.preventDefault()
