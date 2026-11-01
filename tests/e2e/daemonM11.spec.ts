@@ -4,8 +4,8 @@
 // 🔴 두 시험 모두 ARA_E2E_KEEP_DAEMON=1 — finally 에서 데몬을 반드시 죽인다(daemon.spec.ts DM-1 과 같은 규칙). 진짜 claude 를 띄우지 않는다.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { test, expect, tempDir, rmDir, quitAra, persist, sessionIds, termText as shellText, sendInput } from './fixtures'
+import { delimiter, join } from 'node:path'
+import { test, expect, tempDir, rmDir, quitAra, persist, sessionIds, newLocalShell, termText as shellText, sendInput } from './fixtures'
 import type { ElectronApplication, Page } from '@playwright/test'
 
 const win = process.platform === 'win32'
@@ -21,15 +21,16 @@ if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.resume()
 `
 
-function fakeAgent(dir: string): string {
+// 피커는 PATH 의 claude·codex 로 '설치됨'을 가른다(detect.ts — agents.json 명령은 안 본다) → CLI 이름으로 만들고 bin 을 PATH 맨 앞에.
+function fakeAgent(dir: string, name: string): string {
   const js = join(dir, 'fake-m11-agent.cjs')
   writeFileSync(js, FAKE)
   if (win) {
-    const p = join(dir, 'fake.cmd')
+    const p = join(dir, `${name}.cmd`)
     writeFileSync(p, ['@echo off', `node "${js}" %*`, ''].join('\r\n'))
     return p
   }
-  const p = join(dir, 'fake')
+  const p = join(dir, name)
   writeFileSync(p, ['#!/bin/sh', `exec node "${js}" "$@"`, ''].join('\n'))
   chmodSync(p, 0o755)
   return p
@@ -72,8 +73,7 @@ test('DM-M11-1★ 터미널 로컬 셸: 앱 재시작에도 같은 셸(id·PID·
   process.env.ARA_E2E_KEEP_DAEMON = '1'
   try {
     const a = await launch(userDataDir)
-    const [sid] = await sessionIds(a.page)
-    expect(sid).toBeTruthy()
+    const sid = await newLocalShell(a.page) // 빈 userData 로 켜면 셸이 없다 — 하나 연다
     await sendInput(a.page, sid, echoPid)
     await expect.poll(async () => shellPids(await shellText(a.page, sid)).length, { timeout: 20_000 }).toBeGreaterThan(0)
     const pid = shellPids(await shellText(a.page, sid))[0]
@@ -114,11 +114,13 @@ test('DM-M11-2★ 데몬째 죽음(재부팅 흉내) → 다시 켜면 에이전
   const root = realpathSync(tempDir('ara-e2e-m11-'))
   const bin = join(root, 'bin')
   mkdirSync(bin)
-  const fake = fakeAgent(bin)
+  const [claude, codex, gemini] = ['claude', 'codex', 'gemini'].map((n) => fakeAgent(bin, n))
   const repo = makeRepo(root)
-  writeFileSync(join(userDataDir, 'agents.json'), JSON.stringify({ agents: { claude: { command: fake }, codex: { command: fake }, gemini: { command: fake } }, migratedAiCliFlags: true }))
+  writeFileSync(join(userDataDir, 'agents.json'), JSON.stringify({ agents: { claude: { command: claude }, codex: { command: codex }, gemini: { command: gemini } }, migratedAiCliFlags: true }))
   const saved = process.env.ARA_E2E_KEEP_DAEMON
   process.env.ARA_E2E_KEEP_DAEMON = '1'
+  const savedPath = process.env.PATH
+  process.env.PATH = bin + delimiter + (savedPath ?? '')
   try {
     const a = await launch(userDataDir)
     await openAi(a.app, a.page, repo, true)
@@ -147,6 +149,7 @@ test('DM-M11-2★ 데몬째 죽음(재부팅 흉내) → 다시 켜면 에이전
   } finally {
     if (saved === undefined) delete process.env.ARA_E2E_KEEP_DAEMON
     else process.env.ARA_E2E_KEEP_DAEMON = saved
+    process.env.PATH = savedPath
     killDaemons(userDataDir)
     rmDir(root)
   }
