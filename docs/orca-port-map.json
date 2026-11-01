@@ -942,10 +942,12 @@
       "src/main/claude-accounts/claude-login-session.ts",
       "src/main/codex-accounts/codex-login-session.ts",
       "src/main/codex-accounts/codex-config-mirror.ts",
-      "src/main/claude-accounts/claude-profile-sharing.ts"
+      "src/main/claude-accounts/claude-profile-sharing.ts",
+      "src/main/claude-accounts/claude-profile-provisioning.ts",
+      "src/main/codex/codex-home-paths.ts"
     ],
     "orcaRef": "fdfcfb3551",
     "status": "porting",
-    "notes": "M13 R1(v2.2 046e8a8): 계정 = userData/accounts/<cli>/<id>, 실행 env CLAUDE_CONFIG_DIR·CODEX_HOME(로컬 실행만, agents/feature.ts launch 에 두 줄). 시스템 기본 = env 안 붙임. 로그인 = claude auth login --claudeai · codex login(그 폴더 env, CLI 가 브라우저). 아라는 토큰 저장 안 함. Claude settings.json·CLAUDE.md 는 만들 때 복사, Codex config.toml 은 실행마다 복사(Orca 는 링크·미러 — junction 은 지울 때 원본 위험이라 복사). 계정별 사용량(설정 화면 열 때), 계정 전환 = 다시 묻기, 다른 계정 statusLine 실시간 값은 transcript_path 로 가려 버림. 뺀 것: 관찰 폴더 자동 감지·WSL·원격·장치 인증·붙여넣기 코드 로그인. 한계: 계정 탭의 Codex 채팅 보기·지난 세션은 기본 홈만 봄."
+    "notes": "M13 R1(v2.2 046e8a8): 계정 = userData/accounts/<cli>/<id>, 실행 env CLAUDE_CONFIG_DIR·CODEX_HOME(로컬 실행만, agents/feature.ts launch 에 두 줄). 시스템 기본 = env 안 붙임. 로그인 = claude auth login --claudeai · codex login(그 폴더 env, CLI 가 브라우저). 아라는 토큰 저장 안 함. Claude settings.json·CLAUDE.md 는 만들 때 복사, Codex config.toml 은 실행마다 복사(Orca 는 링크·미러 — junction 은 지울 때 원본 위험이라 복사). 계정별 사용량(설정 화면 열 때), 계정 전환 = 다시 묻기, 다른 계정 statusLine 실시간 값은 transcript_path 로 가려 버림. 뺀 것: 관찰 폴더 자동 감지·WSL·원격·장치 인증·붙여넣기 코드 로그인. 한계: 계정 탭의 Codex 채팅 보기·지난 세션은 기본 홈만 봄. M13 R2(v2.2 d7adda7): 복사 → Orca 처럼 링크 공유로 — Claude 는 claude-profile-provisioning 의 계정별 목록(CLAUDE_RUNTIME_STATE_ENTRIES·히스토리 폴더·숨은 항목·daemon*·agent-memory*)을 뺀 기본 폴더 항목 중 폴더=junction/symlink(agents·commands·skills·plugins…), 파일=내용이 다르면 복사(settings.json·CLAUDE.md…), Codex 는 codex-home-paths CODEX_SYSTEM_RESOURCE_ENTRIES 링크 + AGENTS.md·config.toml 복사. 만들 때·띄울 때마다. 계정 지우기는 removeAccountTree(lstat, 링크는 끊기만) 하나로. 뺀 것: .claude.json 상태 병합(copyState), CLAUDE.md 를 @~/.claude/CLAUDE.md 가져오기 줄로 쓰기(→ 복사), 히스토리 공유(shareClaudeProfileHistory·Codex sessions)."
   }
 ]
