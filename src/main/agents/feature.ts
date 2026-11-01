@@ -20,7 +20,7 @@ import { HOOK_ENV, isHookSource, type AgentStatusView, type HookSource } from '@
 import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
-import { claudeStatusLineArgs, createHookServer, installHooks, writeLaunchFile } from './hooks'
+import { claudeLaunchArgs, createHookServer, geminiLaunchDefaults, installHooks, writeLaunchFile } from './hooks'
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
 import { generateChatName, listModels, scanSlash } from './options'
@@ -31,7 +31,7 @@ import type { DaemonSessionInfo } from '../daemon/protocol'
 import { lowerPriority } from '../resources/hostProcs'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
-import { orielLaunch } from '@shared/oriel'
+import { GEMINI_DEFAULTS_ENV, orielGeminiDefaults, orielLaunch } from '@shared/oriel'
 import type { Oriel } from '../oriel/oriel'
 
 export function registerAgentsFeature(deps: {
@@ -296,10 +296,13 @@ export function registerAgentsFeature(deps: {
       return { ok: false, error: `폴더가 없습니다: ${cwd}` }
     }
     const shell = defaultLaunchShell()
-    // 훅: 서버를 열고(처음 한 번) 그 CLI 의 훅을 심는다(처음 한 번). 실패해도 실행은 한다 — 그 탭은 화면 판정('추정')만.
+    // 훅: 서버를 열고(처음 한 번) 그 CLI 의 훅 스크립트를 쓴다(처음 한 번). 실패해도 실행은 한다 — 그 탭은 화면 판정('추정')만.
+    // M9 R3: 훅 줄은 이 실행에만(Claude --settings · Gemini 시스템 기본값 파일) — 사용자 settings.json 은 안 건드린다.
     const hookEnv: Record<string, string> = {}
     const extraArgs: string[] = []
     const extraEnv: Record<string, string> = {}
+    // Gemini 시스템 기본값 파일은 env 하나라 훅·Oriel MCP 를 한 파일에 담는다.
+    const geminiDefaults: Record<string, unknown> = {}
     if (isHookSource(agent)) {
       const { port, token } = await ensureHooks()
       if (!installed.has(agent)) {
@@ -308,13 +311,15 @@ export function registerAgentsFeature(deps: {
         else logMainError(`agent hooks:${agent}`, new Error(r.message))
       }
       if (port > 0 && installed.has(agent)) Object.assign(hookEnv, { [HOOK_ENV.port]: String(port), [HOOK_ENV.token]: token })
-      // M9 R2 statusLine(사용량 실시간)은 이 claude 에만 --settings 로(전역 settings.json 안 건드림). 사용자 원래 상태줄은 그대로 보인다.
-      if (agent === 'claude' && hookEnv[HOOK_ENV.port]) {
+      // 상태 훅(R3)·statusLine(R2, 사용량 실시간)은 이 claude 에만 --settings 로. 사용자 원래 훅·상태줄은 그대로.
+      if (hookEnv[HOOK_ENV.port]) {
         try {
-          const configDir = settings.agents.claude.env['CLAUDE_CONFIG_DIR'] || userEnv['CLAUDE_CONFIG_DIR'] || join(deps.home, '.claude')
-          extraArgs.push(...claudeStatusLineArgs(deps.home, cwd, configDir))
+          if (agent === 'claude') {
+            const configDir = settings.agents.claude.env['CLAUDE_CONFIG_DIR'] || userEnv['CLAUDE_CONFIG_DIR'] || join(deps.home, '.claude')
+            extraArgs.push(...claudeLaunchArgs(deps.home, cwd, configDir))
+          } else Object.assign(geminiDefaults, geminiLaunchDefaults(deps.home))
         } catch (e) {
-          logMainError('agent statusLine', e)
+          logMainError('agent hooks launch', e)
         }
       }
     }
@@ -323,15 +328,25 @@ export function registerAgentsFeature(deps: {
     const os = await deps.oriel?.status()
     if (os?.installed) {
       try {
-        const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body))
-        extraArgs.push(...o.args)
-        Object.assign(extraEnv, o.env)
+        if (agent === 'gemini') Object.assign(geminiDefaults, orielGeminiDefaults(os.info.cliPath))
+        else {
+          const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body))
+          extraArgs.push(...o.args)
+          Object.assign(extraEnv, o.env)
+        }
       } catch (e) {
         logMainError('agent oriel', e)
       }
     } else if (os && !orielWarned) {
       orielWarned = true
       noOriel = true
+    }
+    if (Object.keys(geminiDefaults).length) {
+      try {
+        extraEnv[GEMINI_DEFAULTS_ENV] = writeLaunchFile(deps.home, 'gemini-defaults', 'json', JSON.stringify(geminiDefaults, null, 2))
+      } catch (e) {
+        logMainError('agent gemini defaults', e)
+      }
     }
     const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined, options: launchOptionsOf(options), extraArgs, extraEnv })
     if (!plan.ok) return plan

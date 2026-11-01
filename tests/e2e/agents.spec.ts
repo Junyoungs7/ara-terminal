@@ -3,7 +3,7 @@
 //    설정(agents.json)의 실행 명령도 그 가짜의 절대 경로로 미리 박아 둔다 — PATH 순서가 틀려도 진짜가 뜨지 않게 두 겹.
 // 🔴 훅은 임시 홈(userData/e2e-home)에만 심긴다(main/index.ts hookHome) — 사용자 실제 ~/.claude 는 안 건드린다.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { test, expect, tempDir, rmDir } from './fixtures'
 import type { ElectronApplication, Page } from '@playwright/test'
@@ -203,9 +203,11 @@ test('AG-2★ 상태 점 — claude 는 훅(추정 아님)으로 일함→승인
     await page.fill('[data-aiws="agent-prompt"]', 'run-a-turn')
     await page.click('[data-aiws="agent-launch"]')
 
-    // 훅은 임시 홈에 심겼다(스크립트 + ~/.claude/settings.json 의 우리 줄).
+    // 훅 스크립트는 임시 홈에. M9 R3: 줄은 사용자 settings.json 이 아니라 이 실행의 --settings 파일(~/.ara/agent-launch)에만.
     await expect.poll(() => existsSync(hookScript), { timeout: 20_000 }).toBe(true)
-    expect(readFileSync(join(hookHome, '.claude', 'settings.json'), 'utf8')).toContain('agent-hooks')
+    expect(existsSync(join(hookHome, '.claude', 'settings.json')) && readFileSync(join(hookHome, '.claude', 'settings.json'), 'utf8').includes('agent-hooks')).toBe(false)
+    const launchDir = join(hookHome, '.ara', 'agent-launch')
+    expect(readdirSync(launchDir).some((f) => f.startsWith('claude-settings-') && readFileSync(join(launchDir, f), 'utf8').includes('claude-hook.'))).toBe(true)
 
     const glyph = page.locator('.aiws-tab[data-agent-tab="claude"] .ag-glyph')
     const row = page.locator(`${side} .aiws-row`).filter({ hasText: 'main' }).locator('.aiws-row-l1 .ag-glyph')

@@ -24,7 +24,7 @@ import {
 } from '../src/shared/usage'
 import { createUsageService, CLAUDE_USAGE_URL, CODEX_USAGE_URL, type FetchLike } from '../src/main/usage/service'
 import { claudeLaunchSettings, HOOK_ENV, removeOurStatusLine, statusLineScript, userStatusLine } from '../src/shared/agentHooks'
-import { claudeStatusLineArgs, cleanupOurStatusLine, createHookServer, installHooks } from '../src/main/agents/hooks'
+import { claudeLaunchArgs, cleanupOurStatusLine, createHookServer, installHooks } from '../src/main/agents/hooks'
 
 const H = 3_600_000
 const NOW = Date.UTC(2026, 10, 1, 3, 0, 0)
@@ -301,23 +301,25 @@ describe('statusLine — 아라 claude 에만 --settings(M9 R2, 전역 settings.
     const h = tmp()
     const winp = process.platform === 'win32'
     expect(installHooks(h, 'claude', winp).ok).toBe(true)
-    expect(JSON.parse(readFileSync(join(h, '.claude', 'settings.json'), 'utf8')).statusLine).toBeUndefined()
+    expect(existsSync(join(h, '.claude', 'settings.json'))).toBe(false) // M9 R3: 훅 줄도 전역에 안 쓴다
     expect(existsSync(join(h, '.ara', 'agent-hooks', winp ? 'claude-statusline.cmd' : 'claude-statusline.sh'))).toBe(true)
     expect(existsSync(join(h, '.ara', 'agent-hooks', 'claude-statusline.installed'))).toBe(false)
   })
-  it('claudeStatusLineArgs — 프로젝트 statusLine 을 읽어 --settings 파일을 ~/.ara/agent-launch 에 쓴다(같은 내용 = 같은 파일)', () => {
+  it('claudeLaunchArgs — 프로젝트 statusLine 을 읽어 --settings 파일을 ~/.ara/agent-launch 에 쓴다(같은 내용 = 같은 파일)', () => {
     const h = tmp()
     const cwd = tmp()
     const winp = process.platform === 'win32'
-    expect(claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)).toEqual([]) // 스크립트가 아직 없으면 붙이지 않는다
+    expect(claudeLaunchArgs(h, cwd, join(h, '.claude'), winp)).toEqual([]) // 스크립트가 아직 없으면 붙이지 않는다
     expect(installHooks(h, 'claude', winp).ok).toBe(true)
     mkdirSync(join(cwd, '.claude'))
     writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'proj-hud' } }))
-    const a = claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)
+    const a = claudeLaunchArgs(h, cwd, join(h, '.claude'), winp)
     expect(a[0]).toBe('--settings')
     expect(a[1].startsWith(join(h, '.ara', 'agent-launch'))).toBe(true)
-    expect(JSON.parse(readFileSync(a[1], 'utf8')).statusLine.command).toMatch(/claude-statusline\.(cmd|sh) pass \| proj-hud$/)
-    expect(claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)).toEqual(a)
+    const launched = JSON.parse(readFileSync(a[1], 'utf8'))
+    expect(launched.statusLine.command).toMatch(/claude-statusline\.(cmd|sh) pass \| proj-hud$/)
+    expect(launched.hooks.Stop[0].hooks[0].command).toMatch(/agent-hooks\/claude-hook\.(cmd|sh)$/) // M9 R3: 상태 훅도 같은 파일
+    expect(claudeLaunchArgs(h, cwd, join(h, '.claude'), winp)).toEqual(a)
   })
   it('스크립트: 인자 없이는 아무것도 안 찍는다(echo 없음), env 검사가 stdin 읽기보다 앞(Windows)', () => {
     const w = statusLineScript(true).split('\r\n')
@@ -380,7 +382,7 @@ describe('statusLine — 아라 claude 에만 --settings(M9 R2, 전역 settings.
       const hud = `node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);process.stdout.write('HUD '+j.workspace.current_dir+' '+j.pad.length)})"`
       mkdirSync(join(h, '.claude'), { recursive: true })
       writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: hud } }))
-      const [, file] = claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)
+      const [, file] = claudeLaunchArgs(h, cwd, join(h, '.claude'), winp)
       const command = JSON.parse(readFileSync(file, 'utf8')).statusLine.command as string
       expect(command.endsWith(`pass | ${hud}`)).toBe(true)
       const run = (input: string, env: Record<string, string>): Promise<string> =>

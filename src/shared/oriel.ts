@@ -54,6 +54,7 @@ export function orielMcpServers(cliPath: string): { mcpServers: { oriel: { type:
  *    PowerShell 5.1 의 큰따옴표 문제를 비켜 간다. 경로에 `'` 가 있으면 담을 수 없어 Oriel 없이.
  *  · Gemini: env `GEMINI_CLI_SYSTEM_DEFAULTS_PATH=<json>` — 시스템 기본값 자리(가장 낮은 층, mcpServers 는 shallow_merge 라 사용자 서버와 합쳐진다,
  *    gemini-cli 0.46 settingsSchema). 지시는 붙일 자리가 없다(GEMINI_SYSTEM_MD 는 시스템 프롬프트를 통째로 바꾼다) — 도구 설명(oriel_guide)에 맡긴다.
+ *    M9 R3: 실행에서는 main 이 상태 훅과 한 파일로 합쳐 쓴다(orielGeminiDefaults — agents/feature.ts). 이 갈래는 Oriel 만 줄 때의 모양.
  */
 export function orielLaunch(
   agent: AgentId,
@@ -83,6 +84,14 @@ export function orielLaunch(
       env: {}
     }
   }
-  const { mcpServers } = orielMcpServers(cli)
-  return { args: [], env: { GEMINI_CLI_SYSTEM_DEFAULTS_PATH: write('oriel-gemini', 'json', JSON.stringify({ mcpServers: { oriel: { command: mcpServers.oriel.command, args: mcpServers.oriel.args } } }, null, 2)) } }
+  return { args: [], env: { [GEMINI_DEFAULTS_ENV]: write('oriel-gemini', 'json', JSON.stringify(orielGeminiDefaults(cli), null, 2)) } }
+}
+
+/** Gemini 시스템 기본값 파일 env — 실행 하나에 파일 하나라 상태 훅(M9 R3)과 Oriel MCP 를 한 파일에 담는다(main agents/feature.ts). */
+export const GEMINI_DEFAULTS_ENV = 'GEMINI_CLI_SYSTEM_DEFAULTS_PATH'
+
+/** Gemini 시스템 기본값 파일에 담을 Oriel MCP(type 칸 없는 Gemini 모양). */
+export function orielGeminiDefaults(cliPath: string): { mcpServers: { oriel: { command: string; args: string[] } } } {
+  const { command, args } = orielMcpServers(cliPath).mcpServers.oriel
+  return { mcpServers: { oriel: { command, args } } }
 }

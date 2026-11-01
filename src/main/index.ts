@@ -53,7 +53,7 @@ import { registerScmFeature } from './scm/feature'
 import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
-import { cleanupLegacyHooks, cleanupOurStatusLine } from './agents/hooks'
+import { cleanupLegacyHooks, cleanupOurGlobalHooks, cleanupOurStatusLine } from './agents/hooks'
 import { registerOrielFeature } from './oriel/feature'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
@@ -770,11 +770,13 @@ app.whenReady().then(async () => {
   registerWindowIpc(() => mainWindow)
   registerLockIpc(appLock, () => sessions.snapshot().length, () => mainWindow)
   // M3 S2(제거 A1): 옛 아라 훅(`# ara-agent-hook`)을 `~/.claude/settings.json` 에서 지운다 — 표식이 없으면 읽기만 한다(정리는 사실상 한 번).
-  // 새 훅(Orca 방식)은 에이전트를 처음 띄울 때 심는다(agents/feature.ts). e2e 는 임시 홈(hookHome).
+  // 새 훅(Orca 방식)은 아라가 띄우는 에이전트 실행에만 준다(agents/feature.ts). e2e 는 임시 홈(hookHome).
   try {
     cleanupLegacyHooks(hookHome)
     // M9 R2: R1 이 전역 settings.json 에 심은 우리 statusLine 을 지운다(우리 표식이 있는 줄만 — 남의 statusLine 은 읽기만).
     cleanupOurStatusLine(hookHome)
+    // M9 R3: M3 이 전역 ~/.claude·~/.gemini settings.json 에 심은 상태 훅 줄도 지운다(우리 표식 줄만 — 남의 훅은 읽기만). 이제 훅은 실행 인자·env 로만.
+    cleanupOurGlobalHooks(hookHome)
   } catch (e) {
     logMainError('legacy agent hooks cleanup', e)
   }

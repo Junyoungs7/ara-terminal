@@ -13,13 +13,16 @@ import {
   HOOK_TOKEN_HEADER,
   hookCommand,
   hookScript,
+  launchHooks,
   mergeHooks,
   removeLegacyHooks,
+  removeOurHooks,
   resolveStatus,
   type HookPane
 } from '../src/shared/agentHooks'
 import type { ScreenDetection } from '../src/shared/agentScreen'
-import { cleanupLegacyHooks, createHookServer, installHooks, type HookEvent } from '../src/main/agents/hooks'
+import { claudeLaunchArgs, cleanupLegacyHooks, cleanupOurGlobalHooks, createHookServer, geminiLaunchDefaults, installHooks, type HookEvent } from '../src/main/agents/hooks'
+import { runProcess } from '../src/main/util/runProcess'
 
 const T = 1_700_000_000_000
 const ev = (hook_event_name: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ hook_event_name, ...extra })
@@ -187,24 +190,144 @@ describe('S2 정리 — 옛 `# ara-agent-hook` 줄만 지운다', () => {
     expect(cleanupLegacyHooks(home())).toBe(false) // 파일 없음
   })
 
-  it('installHooks: 스크립트 + 설정 병합, 남의 훅 보존, 깨진 설정은 안 고친다', () => {
+  it('installHooks(M9 R3): 스크립트만 쓴다 — 사용자 settings.json 은 만들지도 고치지도 않는다(깨진 파일도 그대로)', () => {
     const h = home()
     mkdirSync(join(h, '.claude'))
     const cfg = join(h, '.claude', 'settings.json')
-    writeFileSync(cfg, JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine.sh' }] }] } }))
-    const r = installHooks(h, 'claude', true)
-    expect(r.ok).toBe(true)
-    const script = join(h, '.ara', 'agent-hooks', 'claude-hook.cmd')
-    expect(readFileSync(script, 'utf8')).toBe(hookScript('claude', true))
-    const s = JSON.parse(readFileSync(cfg, 'utf8'))
-    expect(s.hooks.Stop[0].hooks[0].command).toBe('mine.sh')
-    expect(s.hooks.Stop[1].hooks[0].command).toBe(hookCommand(script, true))
+    const mine = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine.sh' }] }] } })
+    writeFileSync(cfg, mine)
+    expect(installHooks(h, 'claude', true).ok).toBe(true)
+    expect(readFileSync(join(h, '.ara', 'agent-hooks', 'claude-hook.cmd'), 'utf8')).toBe(hookScript('claude', true))
+    expect(readFileSync(cfg, 'utf8')).toBe(mine)
+    expect(existsSync(cfg + '.bak')).toBe(false)
     const g = home()
-    mkdirSync(join(g, '.gemini'))
-    writeFileSync(join(g, '.gemini', 'settings.json'), '{ nope')
-    expect(installHooks(g, 'gemini', true).ok).toBe(false)
-    expect(readFileSync(join(g, '.gemini', 'settings.json'), 'utf8')).toBe('{ nope')
+    expect(installHooks(g, 'gemini', true).ok).toBe(true)
+    expect(existsSync(join(g, '.gemini'))).toBe(false)
+    const b = home()
+    mkdirSync(join(b, '.gemini'))
+    writeFileSync(join(b, '.gemini', 'settings.json'), '{ nope')
+    expect(installHooks(b, 'gemini', true).ok).toBe(true) // 깨진 사용자 설정과 상관없이 실행 훅은 붙는다
+    expect(readFileSync(join(b, '.gemini', 'settings.json'), 'utf8')).toBe('{ nope')
   })
+})
+
+describe('M9 R3 — 훅은 실행에만, 전역에 심었던 우리 줄은 정리', () => {
+  const homes: string[] = []
+  const home = (): string => {
+    const h = mkdtempSync(join(tmpdir(), 'ara-hooks-r3-'))
+    homes.push(h)
+    return h
+  }
+  afterEach(() => {
+    for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true })
+  })
+  const others = { Stop: [{ hooks: [{ type: 'command', command: 'notify-send done' }] }] }
+
+  it('removeOurHooks: 우리 줄만 빼고 남의 훅·다른 키는 그대로, 우리 것만 있던 hooks 칸은 없앤다, 없으면 null', () => {
+    const ours = mergeHooks({ model: 'opus', hooks: others }, 'claude', 'C:/u/.ara/agent-hooks/claude-hook.cmd')
+    expect(removeOurHooks(ours, 'claude')).toEqual({ model: 'opus', hooks: others })
+    expect(removeOurHooks(mergeHooks({ model: 'opus' }, 'gemini', '/h/.ara/agent-hooks/gemini-hook.sh'), 'gemini')).toEqual({ model: 'opus' })
+    expect(removeOurHooks({ hooks: others }, 'claude')).toBeNull()
+    // gemini 줄은 claude 정리에 안 걸린다(파일 이름으로 가림)
+    expect(removeOurHooks(mergeHooks({}, 'gemini', '/h/.ara/agent-hooks/gemini-hook.sh'), 'claude')).toBeNull()
+  })
+
+  it('cleanupOurGlobalHooks(임시 홈): ~/.claude·~/.gemini 의 우리 줄만 지움 + .bak, 남의 훅 남음, 두 번째·깨진 JSON·파일 없음은 안 씀', () => {
+    const h = home()
+    mkdirSync(join(h, '.claude'))
+    mkdirSync(join(h, '.gemini'))
+    const c = join(h, '.claude', 'settings.json')
+    const g = join(h, '.gemini', 'settings.json')
+    const geminiOthers = { AfterAgent: [{ hooks: [{ type: 'command', command: 'mine-after' }] }] }
+    writeFileSync(c, JSON.stringify(mergeHooks({ hooks: others, model: 'opus' }, 'claude', 'C:/Users/u/.ara/agent-hooks/claude-hook.cmd')))
+    writeFileSync(g, JSON.stringify(mergeHooks({ hooks: geminiOthers }, 'gemini', '/h/.ara/agent-hooks/gemini-hook.sh')))
+    expect(cleanupOurGlobalHooks(h)).toBe(2)
+    expect(JSON.parse(readFileSync(c, 'utf8'))).toEqual({ hooks: others, model: 'opus' })
+    expect(JSON.parse(readFileSync(g, 'utf8'))).toEqual({ hooks: geminiOthers })
+    expect(existsSync(c + '.bak') && existsSync(g + '.bak')).toBe(true)
+    const before = readFileSync(c, 'utf8')
+    expect(cleanupOurGlobalHooks(h)).toBe(0)
+    expect(readFileSync(c, 'utf8')).toBe(before)
+    writeFileSync(c, '{ broken claude-hook.cmd')
+    expect(cleanupOurGlobalHooks(h)).toBe(0)
+    expect(readFileSync(c, 'utf8')).toBe('{ broken claude-hook.cmd')
+    expect(cleanupOurGlobalHooks(home())).toBe(0)
+  })
+
+  it('claudeLaunchArgs: --settings 파일에 상태 훅 + statusLine, 사용자 원래 훅은 섞지 않는다(Claude 가 층을 이어 붙인다)', () => {
+    const win = process.platform === 'win32'
+    const h = home()
+    const cwd = home()
+    expect(claudeLaunchArgs(h, cwd, join(h, '.claude'), win)).toEqual([])
+    expect(installHooks(h, 'claude', win).ok).toBe(true)
+    const a = claudeLaunchArgs(h, cwd, join(h, '.claude'), win)
+    const s = JSON.parse(readFileSync(a[1], 'utf8'))
+    expect(s.hooks).toEqual(launchHooks('claude', hookCommand(join(h, '.ara', 'agent-hooks', win ? 'claude-hook.cmd' : 'claude-hook.sh'), win)).hooks)
+    expect(s.statusLine.type).toBe('command')
+    mkdirSync(join(h, '.claude'))
+    writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ hooks: others }))
+    expect(claudeLaunchArgs(h, cwd, join(h, '.claude'), win)).toEqual(a)
+    expect(existsSync(join(h, '.claude', 'settings.json.bak'))).toBe(false)
+  })
+
+  it('geminiLaunchDefaults: 스크립트가 있으면 hooks, 없으면 빈 객체', () => {
+    const h = home()
+    expect(geminiLaunchDefaults(h, true)).toEqual({})
+    expect(installHooks(h, 'gemini', true).ok).toBe(true)
+    expect(geminiLaunchDefaults(h, true)).toEqual(launchHooks('gemini', hookCommand(join(h, '.ara', 'agent-hooks', 'gemini-hook.cmd'), true)))
+  })
+
+  // 실제 Claude Code(이 PC 에 있으면): 임시 HOME·CLAUDE_CONFIG_DIR 에서 사용자 훅 + 우리 --settings 훅이 둘 다 돌고 우리 서버가 이벤트를 받는다.
+  // 로그인 없는 임시 홈이라 턴은 "Not logged in" 으로 끝난다 — UserPromptSubmit 은 그 전에 돈다(2.1.300 실측). 인증 env 는 비워 API 를 안 부른다.
+  const realClaude = ((): string | null => {
+    const win = process.platform === 'win32'
+    const exe = win ? 'claude.exe' : 'claude'
+    for (const d of (process.env['PATH'] ?? '').split(win ? ';' : ':')) {
+      if (!d) continue
+      for (const f of [join(d, exe), join(d, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', exe)]) if (existsSync(f)) return f
+    }
+    return null
+  })()
+  it.skipIf(!realClaude)('실제 claude: 사용자 훅과 아라 훅(--settings)이 둘 다 돌고, 아라 훅 서버가 UserPromptSubmit 을 받는다', async () => {
+    const win = process.platform === 'win32'
+    const got: HookEvent[] = []
+    const server = createHookServer((e) => got.push(e))
+    try {
+      const { port, token } = await server.ensure()
+      const h = home()
+      const cfgDir = join(h, 'config')
+      mkdirSync(cfgDir)
+      const fired = join(h, 'user-hook.txt').split('\\').join('/')
+      writeFileSync(join(cfgDir, 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `echo user >> "${fired}"` }] }] } }))
+      expect(installHooks(h, 'claude', win).ok).toBe(true)
+      const cwd = join(h, 'work') // 홈 그 자체가 아닌 폴더(실행 자리와 같게)
+      mkdirSync(cwd)
+      // UserPromptSubmit 은 stream-json 에 hook_* 줄로 안 나온다(SessionStart 만 나옴, 실측) — 사용자 훅이 쓴 파일·서버 수신으로 본다.
+      await runProcess(realClaude!, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...claudeLaunchArgs(h, cwd, cfgDir, win)], {
+        cwd,
+        timeoutMs: 60_000,
+        input: JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } }) + '\n',
+        env: {
+          HOME: h,
+          USERPROFILE: h,
+          CLAUDE_CONFIG_DIR: cfgDir,
+          ANTHROPIC_API_KEY: '',
+          ANTHROPIC_AUTH_TOKEN: '',
+          CLAUDE_CODE_OAUTH_TOKEN: '',
+          CLAUDE_CODE_USE_BEDROCK: '',
+          CLAUDE_CODE_USE_VERTEX: '',
+          [HOOK_ENV.port]: String(port),
+          [HOOK_ENV.token]: token,
+          [HOOK_ENV.pane]: 'tab-r3'
+        }
+      })
+      expect(readFileSync(fired, 'utf8')).toContain('user')
+      expect(got.map((e) => [e.source, e.paneKey, e.payload['hook_event_name']])).toContainEqual(['claude', 'tab-r3', 'UserPromptSubmit'])
+      expect(existsSync(join(cfgDir, 'settings.json.bak'))).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  }, 90_000)
 })
 
 describe('훅 명령·스크립트 모양', () => {

@@ -133,7 +133,7 @@ export function resolveStatus(
   return { sessionId, state: screen.state, kind: screen.state === 'blocked' ? 'permission' : undefined, estimated: true, children, source: `screen:${screen.rule ?? 'fallback'}` }
 }
 
-// ── 훅 설치(Orca 방식): ~/.ara/agent-hooks/<cli>-hook.(cmd|sh) 스크립트 + 각 CLI 설정 파일에 그 스크립트를 부르는 줄 ─────
+// ── 훅(Orca 방식): ~/.ara/agent-hooks/<cli>-hook.(cmd|sh) 스크립트 + 그 스크립트를 부르는 줄. M9 R3: 줄은 전역 설정 파일이 아니라 아라가 띄우는 실행에만(launchHooks) ─────
 
 /** 훅 스크립트가 읽는 env 셋. 에이전트 탭 셸에만 넣는다 — 터미널 공간 셸에는 없다(그 셸에서 직접 친 claude 는 훅이 아무 일도 안 한다). */
 /** M4 DM-01: 데몬이 죽어 잃은 에이전트 세션의 종료 코드(main/daemon/service.ts 가 낸다) — 탭이 "잃음"으로 그린다. */
@@ -310,8 +310,11 @@ export function userStatusLine(layers: readonly unknown[]): StatusLineDef | null
  * `<스크립트> pass | <원래 명령>` 으로 — 원래 명령이 같은 입력을 받아 같은 줄을 찍는다.
  * ponytail: 원래 명령이 `a && b` 처럼 여러 개면 파이프는 첫 명령에만 붙는다(원래도 둘째는 남은 입력을 받았다). 그런 사용자가 나오면 셸 묶음으로.
  */
-export function claudeLaunchSettings(scriptCommand: string, user: StatusLineDef | null): Settings {
-  return { statusLine: user ? { ...user, type: 'command', command: `${scriptCommand} pass | ${user.command}` } : { type: 'command', command: scriptCommand } }
+export function claudeLaunchSettings(scriptCommand: string, user: StatusLineDef | null, hookCmd?: string): Settings {
+  return {
+    ...(hookCmd ? launchHooks('claude', hookCmd) : {}),
+    statusLine: user ? { ...user, type: 'command', command: `${scriptCommand} pass | ${user.command}` } : { type: 'command', command: scriptCommand }
+  }
 }
 
 /** R1 이 전역 settings.json 에 심은 우리 statusLine 을 뺀 설정. 우리 것이 아니거나 없으면 null(쓰지 않는다 — 남의 statusLine 은 그대로). */
@@ -371,6 +374,22 @@ export function mergeHooks(settings: unknown, source: HookSource, command: strin
   }
   const out = { ...next, hooks }
   return JSON.stringify(out) === JSON.stringify(base) ? null : out
+}
+
+/**
+ * M9 R3 — 실행 한 번에 넘길 훅 설정(`{ hooks }`). 전역 설정 파일에 심지 않고 Claude 는 `--settings` 파일, Gemini 는 시스템 기본값 파일에 담는다.
+ * 두 CLI 모두 hooks 는 층마다 **이어 붙인다**(실측: Claude 2.1.300 get_settings effective = userSettings + flagSettings 훅 둘 다·둘 다 실행,
+ * gemini-cli 0.46 settingsSchema hooks.* mergeStrategy concat) — 사용자 원래 훅은 그대로 돈다.
+ */
+export const launchHooks = (source: HookSource, command: string): Settings => mergeHooks({}, source, command) ?? {}
+
+/** M3 이 전역 settings.json 에 심은 우리 훅 줄만 뺀 설정. 우리 줄이 없으면 null(쓰지 않는다 — 남의 훅은 그대로). 비어 버린 hooks 칸은 없앤다. */
+export function removeOurHooks(settings: unknown, source: HookSource): Settings | null {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
+  const { next, removed } = stripHooks(settings as Settings, isOurHookCommand(source))
+  if (!removed) return null
+  if (next.hooks && !Object.keys(next.hooks).length) delete next.hooks
+  return next
 }
 
 /** 옛 아라 훅(1.x~2.1, `# ara-agent-hook` 표식 — main/agent/claudeHooks.ts)의 표식. S2 정리 1회가 이 줄만 지운다. */

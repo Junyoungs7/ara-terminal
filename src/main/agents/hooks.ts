@@ -2,12 +2,13 @@
 // 출처: stablyai/orca @7a7f46f8a3 (MIT) src/main/agent-hooks/server.ts(받기)·src/main/claude/hook-service.ts·src/main/gemini/hook-service.ts(심기) — 핵심만.
 // 뺀 것: 원격 훅 릴레이·스풀·엔드포인트 파일(재시작 뒤 살아남은 PTY — 데몬 M4)·버전별 이벤트 게이트·Windows 네이티브 훅 exe·텔레메트리.
 //
-// 성능 원칙: 서버는 **첫 에이전트 실행 때** 연다(AI 작업 공간을 안 쓰면 포트도 안 연다). 훅은 그 에이전트를 처음 띄울 때 심는다.
+// 성능 원칙: 서버는 **첫 에이전트 실행 때** 연다(AI 작업 공간을 안 쓰면 포트도 안 연다). 훅 스크립트는 그 에이전트를 처음 띄울 때 쓴다.
+// M9 R3: 훅 줄은 사용자 설정 파일에 심지 않고 아라가 띄우는 실행에만 준다(Claude --settings · Gemini 시스템 기본값 파일). PC 침범 금지.
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { claudeLaunchSettings, HOOK_PANE_HEADER, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, LEGACY_HOOK_MARK, mergeHooks, removeLegacyHooks, removeOurStatusLine, STATUSLINE_MARKER, STATUSLINE_PATH, statusLineScript, statusLineScriptName, userStatusLine, type HookSource } from '@shared/agentHooks'
+import { claudeLaunchSettings, HOOK_PANE_HEADER, HOOK_SOURCES, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, launchHooks, LEGACY_HOOK_MARK, removeLegacyHooks, removeOurHooks, removeOurStatusLine, STATUSLINE_MARKER, STATUSLINE_PATH, statusLineScript, statusLineScriptName, userStatusLine, type HookSource } from '@shared/agentHooks'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { writeJsonAtomic } from '../util/atomicJson'
 
@@ -107,44 +108,28 @@ export function createHookServer(
 export type HookInstall = { ok: true; path: string } | { ok: false; message: string }
 
 /**
- * 그 CLI 의 훅을 심는다: `<home>/.ara/agent-hooks/<cli>-hook.(cmd|sh)` 를 쓰고(내용이 같으면 안 씀),
- * `<home>/<.claude|.gemini>/settings.json` 에 그 스크립트를 부르는 줄을 병합한다(남의 줄은 그대로, 깨진 JSON 은 손대지 않음, 같으면 안 씀).
+ * 그 CLI 의 훅 스크립트를 쓴다: `<home>/.ara/agent-hooks/<cli>-hook.(cmd|sh)`(내용이 같으면 안 씀). Claude 는 statusLine 스크립트도.
+ * M9 R3: 사용자 설정 파일(`~/.claude`·`~/.gemini` settings.json)에는 **쓰지 않는다** — 줄은 실행 때 claudeLaunchArgs·geminiLaunchDefaults 가 준다.
  */
 export function installHooks(home: string, source: HookSource, win = process.platform === 'win32'): HookInstall {
   if (!home) return { ok: false, message: '홈 디렉터리를 찾지 못했습니다.' }
   const dir = join(home, '.ara', 'agent-hooks')
   const script = join(dir, hookScriptName(source, win))
-  const cfgDir = join(home, HOOK_TARGETS[source].configDir)
-  const cfg = join(cfgDir, 'settings.json')
   try {
     mkdirSync(dir, { recursive: true })
     const body = hookScript(source, win)
     if (!existsSync(script) || readFileSync(script, 'utf8') !== body) writeFileSync(script, body, 'utf8')
     if (!win) chmodSync(script, 0o755)
-    let current: unknown = {}
-    if (existsSync(cfg)) {
-      try {
-        current = JSON.parse(readFileSync(cfg, 'utf8'))
-      } catch (e) {
-        return { ok: false, message: `${cfg} 를 읽을 수 없어 훅을 심지 않았습니다: ${String(e)}` }
-      }
-    }
-    const next = mergeHooks(current, source, hookCommand(script, win))
     if (source === 'claude') {
-      // M9 AI-10 statusLine 스크립트 — 전역 설정에는 안 적는다(R2). 실행 때 claudeStatusLineArgs 가 --settings 로 준다.
+      // M9 AI-10 statusLine 스크립트 — 전역 설정에는 안 적는다(R2). 실행 때 claudeLaunchArgs 가 --settings 로 준다.
       const sl = join(dir, statusLineScriptName(win))
       const slBody = statusLineScript(win)
       if (!existsSync(sl) || readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
       if (!win) chmodSync(sl, 0o755)
     }
-    if (next) {
-      mkdirSync(cfgDir, { recursive: true })
-      // writeJsonAtomic 은 기존 파일을 settings.json.bak 으로 밀어낸 뒤 바꾼다 — 남의 설정 파일이라 되돌릴 자리를 남긴다.
-      writeJsonAtomic(cfg, next)
-    }
-    return { ok: true, path: cfg }
+    return { ok: true, path: script }
   } catch (e) {
-    return { ok: false, message: `${cfg} 에 훅을 심지 못했습니다: ${String(e)}` }
+    return { ok: false, message: `${script} 를 쓰지 못했습니다: ${String(e)}` }
   }
 }
 
@@ -197,15 +182,54 @@ export function writeLaunchFile(home: string, name: string, ext: string, body: s
 }
 
 /**
- * M9 R2 — 아라 에이전트 탭의 claude 에만 statusLine 을 준다: `--settings <파일>`(전역 settings.json 은 안 건드린다).
- * 사용자의 원래 statusLine(프로젝트 local·프로젝트·사용자 순)이 있으면 같은 입력을 넘겨 그 출력을 그대로 보인다.
+ * 아라 에이전트 탭의 claude 에만 상태 훅(M9 R3)·statusLine(R2)을 준다: `--settings <파일>`(전역 settings.json 은 안 건드린다).
+ * hooks 는 사용자 층과 이어 붙고(원래 훅 그대로), statusLine 은 덮으므로 사용자의 원래 statusLine(프로젝트 local·프로젝트·사용자 순)이 있으면
+ * 같은 입력을 넘겨 그 출력을 그대로 보인다.
  * @param configDir 사용자 claude 설정 폴더(CLAUDE_CONFIG_DIR 또는 ~/.claude) — **읽기만**.
  */
-export function claudeStatusLineArgs(home: string, cwd: string, configDir: string, win = process.platform === 'win32'): string[] {
-  const script = join(home, '.ara', 'agent-hooks', statusLineScriptName(win))
-  if (!existsSync(script)) return []
+export function claudeLaunchArgs(home: string, cwd: string, configDir: string, win = process.platform === 'win32'): string[] {
+  const dir = join(home, '.ara', 'agent-hooks')
+  const script = join(dir, statusLineScriptName(win))
+  const hook = join(dir, hookScriptName('claude', win))
+  if (!existsSync(script) || !existsSync(hook)) return []
   const user = userStatusLine([join(cwd, '.claude', 'settings.local.json'), join(cwd, '.claude', 'settings.json'), join(configDir, 'settings.json')].map(readJson))
-  return ['--settings', writeLaunchFile(home, 'claude-settings', 'json', JSON.stringify(claudeLaunchSettings(hookCommand(script, win), user), null, 2))]
+  return ['--settings', writeLaunchFile(home, 'claude-settings', 'json', JSON.stringify(claudeLaunchSettings(hookCommand(script, win), user, hookCommand(hook, win)), null, 2))]
+}
+
+/** M9 R3 — Gemini 시스템 기본값 파일(GEMINI_CLI_SYSTEM_DEFAULTS_PATH)에 담을 훅. 스크립트가 없으면 빈 객체. Oriel mcpServers 와 한 파일로 합친다(feature.ts). */
+export function geminiLaunchDefaults(home: string, win = process.platform === 'win32'): Record<string, unknown> {
+  const hook = join(home, '.ara', 'agent-hooks', hookScriptName('gemini', win))
+  return existsSync(hook) ? launchHooks('gemini', hookCommand(hook, win)) : {}
+}
+
+/**
+ * M9 R3 — M3 이 전역 `~/.claude/settings.json`·`~/.gemini/settings.json` 에 심은 우리 훅 줄을 지운다. **우리 표식(.ara/agent-hooks/<cli>-hook.)이 있는 줄만** —
+ * 남의 훅은 읽기만. 표식 글자가 없으면 파싱도 안 한다(부팅마다 불러도 쓰는 것은 처음 한 번). 깨진 JSON 은 손대지 않는다.
+ * @returns 지운 파일 수
+ */
+export function cleanupOurGlobalHooks(home: string): number {
+  let n = 0
+  for (const source of HOOK_SOURCES) {
+    const cfg = join(home, HOOK_TARGETS[source].configDir, 'settings.json')
+    let text: string
+    try {
+      text = readFileSync(cfg, 'utf8')
+    } catch {
+      continue
+    }
+    if (!text.includes(`${source}-hook.`)) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      continue
+    }
+    const next = removeOurHooks(parsed, source)
+    if (!next) continue
+    writeJsonAtomic(cfg, next) // 기존 파일은 settings.json.bak 으로 남는다
+    n++
+  }
+  return n
 }
 
 /**
