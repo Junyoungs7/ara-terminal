@@ -291,10 +291,17 @@
       "src/renderer/src/components/editor/",
       "src/preload/api/git-inspection-api.ts",
       "src/preload/api/git-bridge.ts",
-      "src/main/git/"
+      "src/main/git/",
+      "src/main/git/source-control/status-read.ts",
+      "src/main/git/source-control/branch-compare.ts",
+      "src/main/git/source-control/diff-result.ts",
+      "src/shared/git-default-base-ref.ts",
+      "src/shared/large-diff-render-limit.ts",
+      "src/shared/git-status-limit.ts",
+      "src/renderer/src/components/editor/DiffViewer.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-11",
@@ -303,10 +310,13 @@
       "src/renderer/src/components/diff-comments/",
       "src/renderer/src/store/slices/diffComments.ts",
       "src/renderer/src/store/slices/diff-comment-host-write.ts",
-      "src/renderer/src/store/slices/diff-comment-persistence.ts"
+      "src/renderer/src/store/slices/diff-comment-persistence.ts",
+      "src/shared/diff-comments-format.ts",
+      "src/shared/diff-comment-types.ts",
+      "src/renderer/src/components/editor/DiffNotesSendMenu.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-12",
