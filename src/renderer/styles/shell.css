@@ -3979,6 +3979,8 @@ button.sb-seg.upd:hover .val {
 .fav-node .fav-p::after,
 .wp-path::before,
 .wp-path::after,
+.qo-dir::before,
+.qo-dir::after,
 .ara-path .cwd::before,
 .ara-path .cwd::after {
   content: '\200E';
@@ -9854,6 +9856,251 @@ button.sb-seg.upd:hover .val {
 .code-dirty {
   color: var(--text-mid);
   font-size: var(--fs-micro);
+}
+/* M6 R2 WS-06 빠른 열기(Ctrl+P) — 통합 검색(.cp-*)과 같은 덮개 창 모양. 선택자는 따로 둔다(e2e 가 두 창을 헷갈리지 않게). */
+.qo-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: var(--scrim-soft);
+  -webkit-app-region: no-drag;
+}
+.qo-drop {
+  position: fixed;
+  z-index: 150;
+  top: calc(var(--row-titlebar) + var(--sp-9) * 2);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - var(--sp-8) * 2));
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, calc(100vh - var(--row-titlebar) - var(--sp-9) * 5));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-canvas);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.qo-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-6) var(--sp-7);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-lo);
+}
+.qo-head > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.qo-head:focus-within > svg {
+  color: var(--accent);
+}
+.qo-head input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-hi);
+  font-family: var(--ui);
+  font-size: var(--fs-xl);
+}
+.qo-head input::placeholder {
+  color: var(--text-dim);
+}
+.qo-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+}
+.qo-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: var(--row-tabbar);
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius);
+  cursor: var(--cur-hand, pointer);
+}
+.qo-item.on {
+  background: var(--glass);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.qo-item > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text-lo);
+}
+.qo-name {
+  flex: none;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+.qo-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.qo-empty {
+  padding: var(--sp-7) var(--sp-4);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
+}
+.qo-foot {
+  flex: none;
+  padding: var(--sp-4) var(--sp-7);
+  border-top: 1px solid var(--line);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+/* M6 R2 WS-09 전체 검색 — 왼쪽 목록 자리(.aiws-side 와 같은 폭). 결과 = 파일 머리 + 줄 미리보기(맞은 글자 강조). */
+.aiws-search {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-canvas);
+  border-right: 1px solid var(--line);
+}
+.aiws-search[hidden] {
+  display: none;
+}
+.srch-wt {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srch-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.srch-q {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.srch-q .aiws-input {
+  flex: 1;
+  min-width: 0;
+}
+.srch-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4) var(--sp-2);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srch-status > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.srch-status.err {
+  color: var(--text-hi);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+.srch-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: var(--sp-4);
+}
+.srch-file-head,
+.srch-hit {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--text-mid);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.srch-file-head {
+  padding: var(--sp-1) var(--sp-3);
+}
+.srch-file-head > svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--text-lo);
+}
+.srch-name {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-hi);
+}
+.srch-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srch-n {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srch-hit {
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-9);
+}
+.srch-file-head:hover,
+.srch-hit:hover {
+  background: var(--glass-hover);
+}
+.srch-ln {
+  flex: none;
+  min-width: var(--sp-9);
+  color: var(--text-lo);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  text-align: right;
+}
+.srch-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.srch-text mark {
+  background: var(--accent-glow);
+  color: var(--accent-bright);
+  border-radius: var(--radius-sm);
 }
 /* M5 AI-13·12·17 에이전트 채팅으로 보기 — 목록(아래로 쌓임) · 승인 띠 · 입력칸(첨부 칩). */
 .aiws-chat-toggle {

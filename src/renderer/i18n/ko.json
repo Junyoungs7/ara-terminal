@@ -1738,5 +1738,20 @@
   "code.save.failTitle": "저장하지 못했습니다",
   "code.err.openTitle": "파일을 열 수 없습니다",
   "code.err.noWorktree": "왼쪽에서 작업 단위를 먼저 고르세요.",
-  "code.err.outside": "고른 작업 단위 폴더 밖의 파일입니다."
+  "code.err.outside": "고른 작업 단위 폴더 밖의 파일입니다.",
+  "qo.title": "파일로 이동",
+  "qo.placeholder": "{name} 에서 파일 이름으로 찾기",
+  "qo.loading": "파일 목록을 읽는 중…",
+  "qo.empty": "맞는 파일이 없습니다.",
+  "qo.truncated": "파일이 많아 앞의 {n}개만 찾습니다.",
+  "search.placeholder": "검색",
+  "search.case": "대소문자 구분",
+  "search.regex": "정규식",
+  "search.include": "포함할 파일 (예: src/**, *.ts)",
+  "search.exclude": "제외할 파일 (예: *.test.ts)",
+  "search.running": "찾는 중… {n}개",
+  "search.none": "결과가 없습니다.",
+  "search.summary": "{files}개 파일에서 {n}개",
+  "search.truncated": "{max}개에서 멈췄습니다",
+  "search.cancel": "검색 중지"
 }

@@ -3,6 +3,7 @@
 
 import type { LaunchShell } from './aiCli'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
+import type { SearchFile, SearchOptions } from './codeSearch'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
@@ -591,6 +592,14 @@ export type InvokeContract = {
   'code:write': { req: CodeWriteReq; res: CodeWriteResult }
   'code:watch': { req: { root: string; path: string }; res: void }
   'code:unwatch': { req: { path: string }; res: void }
+  // M6 R2 WS-06 빠른 열기 목록(rg --files, 워크트리 기준 '/' 경로, 2만 개 상한) · WS-09 전체 검색(rg --json).
+  // search 는 결과를 code:searchBatch 로 묶어 보내고, 끝나면 합계·잘림·취소를 돌려준다. id = 렌더러가 검색마다 새로 만든다.
+  'code:listFiles': { req: { root: string }; res: { ok: true; files: string[]; truncated: boolean } | { ok: false; message: string } }
+  'code:search': {
+    req: { id: string; root: string; options: SearchOptions }
+    res: { ok: true; total: number; truncated: boolean; cancelled: boolean } | { ok: false; message: string }
+  }
+  'code:searchCancel': { req: { id: string }; res: void }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1230,6 +1239,11 @@ export type EvApi = {
     watch(root: string, path: string): Promise<void>
     unwatch(path: string): Promise<void>
     onChanged(cb: (e: { path: string }) => void): () => void
+    listFiles(root: string): Promise<InvokeRes<'code:listFiles'>>
+    search(id: string, root: string, options: SearchOptions): Promise<InvokeRes<'code:search'>>
+    searchCancel(id: string): Promise<void>
+    /** 검색 결과 묶음(새로 맞은 것만) — 같은 파일이 여러 묶음에 나뉘어 올 수 있다(이어 붙인다). */
+    onSearchBatch(cb: (e: { id: string; files: SearchFile[] }) => void): () => void
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

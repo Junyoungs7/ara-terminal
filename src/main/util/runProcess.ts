@@ -26,6 +26,8 @@ export type RunOptions = {
   signal?: AbortSignal
   /** stderr 를 오는 대로 받는다(git 진행 막대). 결과의 stderr 에도 그대로 모인다. */
   onStderr?: (chunk: string) => void
+  /** stdout 을 오는 대로 받는다(M6 R2 rg --json 스트리밍 — 결과를 줄 단위로 읽다가 상한에서 signal 로 끊는다). 결과의 stdout 에도 모인다(maxBuffer 안). */
+  onStdout?: (chunk: string) => void
   /** stdin 으로 넣고 닫을 글(M5 — 모델 목록·이름 짓기: 사용자 글은 인자가 아니라 stdin 으로). 없으면 예전 그대로. */
   input?: string
 }
@@ -61,6 +63,7 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
         })
       }
     )
+    if (opts.onStdout) child.stdout?.on('data', (d: Buffer | string) => opts.onStdout?.(String(d)))
     if (opts.onStderr) child.stderr?.on('data', (d: Buffer | string) => opts.onStderr?.(String(d)))
     if (opts.input !== undefined) {
       child.stdin?.on('error', () => {}) // 먼저 끝난 프로세스 — 결과는 콜백이 알린다

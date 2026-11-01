@@ -62,7 +62,8 @@ type AgentState = {
   setView: (view: AiwsView) => void
 }
 
-export type AiwsView = 'worktree' | 'dashboard' | 'activity' | 'sessions'
+/** search = 왼쪽 목록 자리가 전체 검색(WS-09)으로 바뀌고 가운데는 작업 단위 그대로. */
+export type AiwsView = 'worktree' | 'dashboard' | 'activity' | 'sessions' | 'search'
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
   detected: null,

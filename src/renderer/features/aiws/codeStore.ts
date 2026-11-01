@@ -6,6 +6,7 @@ import { create } from 'zustand'
 import { isMac } from '@shared/keymap'
 import { isInsidePath, onDiskChange } from '@shared/codeFiles'
 import { areWorktreePathsEqual, type Worktree } from '@shared/worktrees'
+import { QUICK_OPEN_RECENT_LIMIT } from '@shared/codeSearch'
 import { useAiwsStore } from './store'
 import { t } from '../../i18n'
 
@@ -37,6 +38,8 @@ type CodeState = {
   /** 작업 단위별 가운데에 보이는 파일. null·없음 = 에이전트 탭이 보인다. */
   activeByWorktree: Record<string, string | null>
   editorOps: EditorOps | null
+  /** 작업 단위별 최근 연 파일(워크트리 기준 '/' 경로, 최근 것이 앞) — 빠른 열기(Ctrl+P)가 먼저 보인다. 재시작하면 비어 있다. */
+  recentByWorktree: Record<string, string[]>
   setActive: (worktreeId: string, path: string | null) => void
   setDirty: (path: string, dirty: boolean) => void
   /** 저장·다시 읽기 뒤 — 새 기준(서명·글). */
@@ -55,6 +58,7 @@ export const useCodeStore = create<CodeState>()((set, get) => ({
   files: [],
   activeByWorktree: {},
   editorOps: null,
+  recentByWorktree: {},
   setActive: (worktreeId, path) => set((s) => ({ activeByWorktree: { ...s.activeByWorktree, [worktreeId]: path } })),
   setDirty: (path, dirty) => {
     if (get().files.find((f) => same(f.path, path))?.dirty !== dirty) set(patch(path, { dirty }))
@@ -100,10 +104,16 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
   if (!isInsidePath(wt.path, abs, PLATFORM)) return { ok: false, message: t('code.err.outside') }
   const s = useCodeStore.getState()
   const reveal = line && line > 0 ? { line, seq: Date.now() } : null
+  const rel = abs.slice(wt.path.replace(/[\\/]+$/, '').length).replace(/\\/g, '/').replace(/^\/+/, '')
+  const remember = (): void =>
+    useCodeStore.setState((x) => ({
+      recentByWorktree: { ...x.recentByWorktree, [wt.id]: [rel, ...(x.recentByWorktree[wt.id] ?? []).filter((p) => p !== rel)].slice(0, QUICK_OPEN_RECENT_LIMIT) }
+    }))
   const open = s.files.find((f) => same(f.path, abs))
   if (open) {
     useCodeStore.setState(patch(abs, reveal ? { reveal } : {}))
     s.setActive(open.worktreeId, open.path)
+    remember()
     return { ok: true }
   }
   const r = await window.ev.code.read(wt.path, abs)
@@ -116,6 +126,7 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
     startWatch()
   }
   useCodeStore.getState().setActive(wt.id, abs)
+  remember()
   return { ok: true }
 }
 

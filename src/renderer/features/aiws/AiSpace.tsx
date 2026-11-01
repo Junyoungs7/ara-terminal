@@ -13,6 +13,9 @@ import { VaultPanel } from './VaultPanel'
 import { useAgentStore, type AiwsView } from './agentStore'
 import { shortBranch } from './sidebarRows'
 import { openFile } from './codeStore'
+import { QuickOpen } from './QuickOpen'
+import { SearchPanel } from './SearchPanel'
+import { isMac } from '@shared/keymap'
 import { OPEN_FILE_EVENT } from '@shared/codeFiles'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
@@ -33,15 +36,16 @@ const NAV: readonly { id: string; Icon: () => JSX.Element }[] = [
   { id: 'dashboard', Icon: () => <LayoutGrid /> }
 ]
 
-/** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 지난 세션 = AI-07(M4), 대시보드 = AI-08. 검색·자동화는 아직. */
-const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', sessions: 'sessions', dashboard: 'dashboard' }
+/** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 지난 세션 = AI-07(M4), 대시보드 = AI-08.
+ *  검색(M6 R2 WS-09) = 왼쪽 목록 자리가 전체 검색으로(가운데는 작업 단위 그대로). 자동화는 아직. */
+const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', sessions: 'sessions', search: 'search', dashboard: 'dashboard' }
 
 export function AiRail({ settingsOpen, onSettings }: { settingsOpen: boolean; onSettings: () => void }): JSX.Element {
   const view = useAgentStore((s) => s.view)
   return (
     <div className="ai-rail" role="toolbar" aria-label={t('aiws.rail.label')}>
       {NAV.map(({ id, Icon }) => (
-        // 워크트리(M2)·에이전트 활동 피드·대시보드(M3 R3)가 산다 — 고르면 가운데가 바뀐다. 검색·자동화는 아직.
+        // 워크트리(M2)·에이전트 활동 피드·대시보드(M3 R3)·검색(M6 R2)이 산다 — 고르면 가운데(검색은 왼쪽)가 바뀐다. 자동화는 아직.
         <button
           key={id}
           type="button"
@@ -118,6 +122,27 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
     return () => window.removeEventListener(OPEN_FILE_EVENT, h)
   }, [ask])
 
+  // M6 R2 WS-06 빠른 열기 = Ctrl+P(맥 Cmd+P) — **AI 작업 공간에서만**(이 컴포넌트는 그 공간에서만 붙는다). Orca 의 Go to File 키.
+  // KEYMAP 에 넣지 않는다: 넣으면 isAppShortcut 이 터미널 공간의 xterm 에서도 이 키를 삼켜 셸의 Ctrl+P(리드라인 이전 명령)가 죽는다.
+  // 창 캡처 단계에서 받아 에이전트 터미널·Monaco 보다 먼저 가져간다(Orca 도 전역). 한글 입력 상태면 e.key 가 'ㅔ' 라 e.code 로 본다.
+  const [quick, setQuick] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.code !== 'KeyP' || e.shiftKey || e.altKey || !(isMac() ? e.metaKey : e.ctrlKey)) return
+      e.preventDefault()
+      e.stopPropagation()
+      setQuick((v) => !v)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+  /** 빠른 열기·검색으로 연 파일이 보이게 — 새 작업 카드를 닫고, 대시보드 등이면 작업 단위로(검색은 왼쪽이라 그대로 둔다). */
+  const showFile = (): void => {
+    setComposer(null)
+    const v = useAgentStore.getState().view
+    if (v !== 'worktree' && v !== 'search') useAgentStore.getState().setView('worktree')
+  }
+
   const remove = async (w: Worktree): Promise<void> => {
     const branch = shortBranch(w) || '-'
     const yes = await ask({
@@ -142,13 +167,18 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
 
   return (
     <div className="aiws-home" role="region" aria-label={t('space.ai')}>
-      <WorktreeSidebar
-        onNew={(repoId) => {
-          setComposer({ repoId })
-          useAgentStore.getState().setView('worktree')
-        }}
-        onRemove={(w) => void remove(w)}
-      />
+      {view !== 'search' && (
+        <WorktreeSidebar
+          onNew={(repoId) => {
+            setComposer({ repoId })
+            useAgentStore.getState().setView('worktree')
+          }}
+          onRemove={(w) => void remove(w)}
+        />
+      )}
+      {/* 검색은 숨겨도 붙여 둔다 — 결과·검색어가 레일을 오가도 남는다. */}
+      <SearchPanel hidden={view !== 'search'} onOpened={showFile} />
+      {quick && <QuickOpen onClose={() => setQuick(false)} onOpened={showFile} />}
       <div className="aiws-center">
         {view === 'dashboard' ? (
           <AgentDashboard />
