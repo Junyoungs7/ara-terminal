@@ -331,14 +331,17 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             role="tab"
             tabIndex={0}
             aria-selected={f === shownFile}
-            className={'aiws-tab' + (f === shownFile ? ' on' : '')}
+            className={'aiws-tab' + (f === shownFile ? ' on' : '') + (f.preview ? ' preview' : '')}
             data-file-tab={baseName(f.path)}
             data-dirty={f.dirty || undefined}
+            data-preview={f.preview || undefined}
             title={f.path}
             onClick={() => {
               useDiffStore.getState().setShown(worktree.id, false)
               useCodeStore.getState().setActive(worktree.id, f.path)
             }}
+            // M12 R2 미리 보기 탭(기울임) — 두 번 누르면 고정(Orca).
+            onDoubleClick={() => useCodeStore.getState().pin(f.path)}
           >
             <FileText className="aiws-tab-ic" aria-hidden />
             <span>{baseName(f.path)}</span>

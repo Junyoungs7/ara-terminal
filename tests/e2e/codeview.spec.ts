@@ -1,4 +1,4 @@
-// M12 R1 코드 보기 2차 — CV-01 파일 탐색기(터미널 [파일] 탭과 한 구현) · CV-02 뷰어 · CV-03 워크트리 점프(Ctrl+J).
+// M12 R1 코드 보기 2차 — CV-01 파일 탐색기(터미널 [파일] 탭과 한 구현) · CV-02 뷰어 · CV-03 워크트리 점프(M12 R2: Ctrl+Shift+J — AI 공간에서만).
 // 저장소는 임시 폴더에 git init 한 것만(사내 저장소에 닿지 않는다). 폴더 고르기 OS 창은 main 에서 바꿔 끼운다(code.spec 와 같은 방법).
 // 작성만 — 실행은 메인(phase2-common).
 import { execFileSync } from 'node:child_process'
@@ -116,15 +116,20 @@ test('CV-2 뷰어 — 이미지는 글 에디터가 아니라 뷰어 탭(Monaco 
   }
 })
 
-test('CV-3 워크트리 점프 — Ctrl+J 로 다른 워크트리를 찾아 Enter', async ({ ara }) => {
+test('CV-3 워크트리 점프 — Ctrl+Shift+J 로 다른 워크트리를 찾아 Enter(Ctrl+J 는 안 잡고, 하단 패널도 안 열림)', async ({ ara }) => {
   const { app, page } = ara
   const { root, repo } = makeRepo()
   try {
     execFileSync('git', ['worktree', 'add', '-q', '-b', 'feat-jump', join(root, 'shop-api-feat')], { cwd: repo, stdio: 'ignore' })
     await openProject(app, page, repo)
-    await page.keyboard.press('Control+J')
     const pal = page.locator('[data-aiws="worktree-jump"]')
+    // M12 R2: Ctrl+J 단독은 앱이 잡지 않는다(에이전트 터미널의 Claude Code 줄바꿈으로 간다).
+    await page.keyboard.press('Control+J')
+    await expect(pal).toHaveCount(0)
+    await page.keyboard.press('Control+Shift+J')
     await expect(pal).toBeVisible()
+    // AI 공간에선 같은 키가 하단 패널을 열지 않는다(터미널 공간 전용).
+    await expect(page.locator('.bottom-panel')).toHaveCount(0)
     // 지금 것(main)은 빠진다.
     await expect(pal.locator('.qo-item')).toHaveCount(1)
     await page.keyboard.type('jump')

@@ -19,6 +19,8 @@ import { callNameOf } from '@shared/araPersona'
 import { featuresOf } from '@shared/features'
 import { voiceOf } from '@shared/voice'
 import { spaceOf } from '@shared/space'
+import { editorPrefsOf } from '@shared/editorPrefs'
+import { setEditorPrefs } from '../store/editorPrefs'
 import { applyMouseCursor } from '../cursorThemes'
 import { setAgentNotesEnabled } from '../store/notify'
 
@@ -49,6 +51,7 @@ export const termPrefs: Omit<
   | 'space'
   | 'notifyToast'
   | 'notifyAgents'
+  | 'codeEditor'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -89,6 +92,8 @@ export function prefsFrom(
     | 'space'
     | 'notifyToast'
     | 'notifyAgents'
+    | 'codeEditor'
+  | 'codeEditor'
   >
 ): UiPrefs {
   return {
@@ -124,7 +129,9 @@ export function prefsFrom(
     // M1 라운드 3 — 미지정이면 켬(false 만 끔).
     notifyToast: ui.notifyToast !== false,
     // M3 R3 — 미지정이면 켬.
-    notifyAgents: ui.notifyAgents !== false
+    notifyAgents: ui.notifyAgents !== false,
+    // M12 R2 — 미지정 칸은 Orca 기본값.
+    codeEditor: editorPrefsOf(ui.codeEditor)
   }
 }
 
@@ -137,6 +144,7 @@ export function applyUiPrefs(prefs: UiPrefs): void {
     document.documentElement.style.setProperty('--ui-scale', String(UI_SCALE_FACTOR[prefs.uiScale]))
     applyMouseCursor(prefs.mouseCursor)
   }
+  if (prefs.codeEditor) setEditorPrefs(prefs.codeEditor)
   termPrefs.scrollback = prefs.scrollback
   termPrefs.copyOnSelect = prefs.copyOnSelect
   termPrefs.cursorStyle = prefs.cursorStyle

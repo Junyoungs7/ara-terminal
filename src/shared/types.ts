@@ -2,6 +2,7 @@
 import type { FeatureShown } from './features'
 import type { VoicePrefs } from './voice'
 import type { Space } from './space'
+import type { EditorPrefs } from './editorPrefs'
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
 // v3: 탭바 순환 토글을 제거(R1.4) — 스타일을 바꿀 UI 가 없어졌으므로 남아 있는 radial/palette 를 다시 list 로 내린다.
@@ -387,6 +388,8 @@ export type UiPrefs = {
   notifyToast: boolean
   /** M3 R3 설정 › 알림 [에이전트 알림] — 에이전트 끝남·기다림·오류. 기본 켬. */
   notifyAgents: boolean
+  /** M12 R2 설정 › 편집기(AI 작업 공간 코드 에디터·변경 비교). editorPrefsOf 가 채운 확정값. */
+  codeEditor: EditorPrefs
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -536,6 +539,8 @@ export type UiState = {
   notifyToast?: boolean
   /** M3 R3 설정 › 알림 [에이전트 알림]. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
   notifyAgents?: boolean
+  /** M12 R2 설정 › 편집기. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 editorPrefsOf 로 클램프한다. */
+  codeEditor?: Partial<EditorPrefs>
   // M3 S1 옛 키(터미널 AI CLI 기본 플래그, id 만). 에이전트 설정(agents.json)이 처음 한 번 옮기고
   // (shared/agents.ts migrateAiCliFlags) 데이터 이전(main/agents/legacyImport.ts)이 그 뒤 지운다.
   aiCliFlags?: Partial<Record<string, string[]>>

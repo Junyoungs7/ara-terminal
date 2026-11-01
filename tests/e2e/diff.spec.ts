@@ -104,7 +104,10 @@ test('DIFF-1★ 변경 → "변경 비교 · 2" 탭 → Monaco diff(나란히/�
     await expect(page.locator('[data-diff-file="NEW.md"]')).toBeVisible()
 
     // 고친 파일 → 나란히 보기(양쪽 에디터 둘) → 한 줄 보기(하나).
+    // M12 R2: 처음 보기 = 설정 › 편집기 [변경 보기](Orca 기본 '한 줄') — 나란히로 바꿔 시작한다.
     await page.click('[data-diff-file="src/app.ts"]')
+    await expect(page.locator('[data-diff-layout="inline"]')).toHaveAttribute('aria-checked', 'true')
+    await page.click('[data-diff-layout="split"]')
     const mon = page.locator('[data-diff="view"] .diff-monaco')
     await expect(mon.locator('.modified .view-lines')).toContainText('const b = 20')
     await expect(mon.locator('.original .view-lines')).toContainText('const b = 2')

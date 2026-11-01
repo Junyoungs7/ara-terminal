@@ -4,10 +4,14 @@
 
 export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'untracked' | 'conflicted'
 export type GitStagingArea = 'staged' | 'unstaged' | 'untracked'
+/** M12 R2 머지 충돌 종류 — Orca shared/git-status-conflict-entries.ts parseConflictKind(porcelain v2 `u` 레코드의 XY). */
+export type GitConflictKind = 'both_modified' | 'both_added' | 'both_deleted' | 'added_by_us' | 'added_by_them' | 'deleted_by_us' | 'deleted_by_them'
+/** 충돌이 난 git 작업(Orca GitConflictOperation). */
+export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
 /** 한 파일·한 영역. 같은 파일이 staged·unstaged 둘 다면 항목이 둘이다(Orca 와 같다). path = 워크트리 기준 '/' 경로. */
-export type GitStatusEntry = { path: string; oldPath?: string; status: GitFileStatus; area: GitStagingArea }
+export type GitStatusEntry = { path: string; oldPath?: string; status: GitFileStatus; area: GitStagingArea; conflictKind?: GitConflictKind }
 export type GitStatusResult =
-  | { ok: true; branch: string | null; head: string | null; upstream: string | null; ahead: number; behind: number; entries: GitStatusEntry[]; truncated: boolean }
+  | { ok: true; branch: string | null; head: string | null; upstream: string | null; ahead: number; behind: number; entries: GitStatusEntry[]; truncated: boolean; operation?: GitConflictOperation }
   | { ok: false; message: string }
 export type GitBranchChange = { path: string; oldPath?: string; status: GitFileStatus }
 export type GitBranchCompareResult =
@@ -31,6 +35,7 @@ export const DIFF_READ_MAX_BYTES = 10 * 1024 * 1024
 export const MAX_RENDERED_DIFF_LINES_PER_SIDE = 120_000
 export const MAX_RENDERED_DIFF_COMBINED_CHARACTERS = 6_000_000
 
+const CONFLICT_KIND: Record<string, GitConflictKind> = { UU: 'both_modified', AA: 'both_added', DD: 'both_deleted', AU: 'added_by_us', UA: 'added_by_them', DU: 'deleted_by_us', UD: 'deleted_by_them' }
 const CODE: Record<string, GitFileStatus> = { M: 'modified', T: 'modified', A: 'added', D: 'deleted', R: 'renamed', C: 'copied', U: 'conflicted' }
 
 /**
@@ -67,7 +72,12 @@ export function parseStatusV2(stdout: string, limit = GIT_STATUS_LIMIT): Extract
     }
     const kind = rec[0]
     if (kind === '?') push({ path: rec.slice(2), status: 'untracked', area: 'untracked' })
-    else if (kind === 'u') push({ path: after(rec, 10), status: 'conflicted', area: 'unstaged' })
+    else if (kind === 'u') {
+      // Orca: 서브모듈 충돌(모드 160000)은 다루지 않는다 — 그래도 목록엔 남겨 커밋 버튼이 막히게(종류 없이).
+      const k = CONFLICT_KIND[rec.slice(2, 4)]
+      const sub = rec.split(' ').slice(3, 6).includes('160000')
+      push({ path: after(rec, 10), status: 'conflicted', area: 'unstaged', ...(k && !sub ? { conflictKind: k } : {}) })
+    }
     else if (kind === '1' || kind === '2') {
       const [x, y] = [rec[2], rec[3]]
       const path = after(rec, kind === '1' ? 8 : 9)

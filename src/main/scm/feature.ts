@@ -5,7 +5,7 @@ import { isAbsolute } from 'node:path'
 import { handle } from '../ipc/handle'
 import { workBackend } from '../work/backend'
 import type { PushConfirm } from '@shared/scm'
-import { amend, commit, discardPath, pull, push, safeRelPaths, stagePaths, unstagePaths } from './git'
+import { abortOperation, amend, commit, discardPath, pull, push, safeRelPaths, stagePaths, unstagePaths } from './git'
 
 const bad = { ok: false as const, message: 'bad request' }
 const okRoot = (root: unknown): root is string => typeof root === 'string' && isAbsolute(root)
@@ -31,4 +31,6 @@ export function registerScmFeature(): void {
     okRoot(root) ? push(root, force === true, Array.isArray(confirmed) ? CONFIRMS.filter((c) => confirmed.includes(c)) : [], x(host)) : bad
   )
   handle('scm:pull', ({ root, merge, host }) => (okRoot(root) ? pull(root, merge === true, x(host)) : bad))
+  // M12 R2 — op 는 셋 중 하나만(git 인자로 그대로 들어간다).
+  handle('scm:abort', ({ root, op, host }) => (okRoot(root) && (op === 'merge' || op === 'rebase' || op === 'cherry-pick') ? abortOperation(root, op, x(host)) : bad))
 }

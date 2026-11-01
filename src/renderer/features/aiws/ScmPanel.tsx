@@ -2,6 +2,7 @@
 // Orca right-sidebar/SourceControl.tsx·source-control/(commit·listing·sync)·source-control-actions.ts(orcaRef fdfcfb3551)의 1차 판.
 // 목록은 M7 R1 의 조회(gitInspect.status)를 쓰고, 쓰기는 scm:* — 쓰고 나면 다시 읽는다. 파일을 누르면 R1 의 diff 탭(창 이벤트 aiws:open-diff).
 // 원격 작업(푸시·풀)은 **사용자가 누를 때만**(묶음 11). 결과는 알림 센터 토스트로.
+// M12 R2: 머지 충돌 칸(Orca) — 충돌 파일은 에디터로 열고(3-way 색 구역), + 로 해결 표시, 진행 중인 병합·리베이스·체리픽은 [중단].
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { Minus, Plus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import type { GitStatusEntry, GitStatusResult } from '@shared/gitDiff'
@@ -10,6 +11,8 @@ import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { t } from '../../i18n'
 import { hostOfWorktree, useAiwsStore } from './store'
+import { openFile } from './codeStore'
+import { useDiffStore } from './diffStore'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -17,7 +20,7 @@ const LETTER: Record<GitStatusEntry['status'], string> = { modified: 'M', added:
 /** main 이 돌려주는 막힘 사유 코드 — 나머지는 git 의 말 그대로. */
 const CODES = new Set(['detached', 'noRemote', 'badTarget', 'forceProtected', 'emptyMessage'])
 
-export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
+export function ScmPanel({ ask, onOpened }: { ask: AskFn; onOpened?: () => void }): JSX.Element {
   const wt = useAiwsStore((s) => (s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined))
   // M8 R5 원격 작업 단위 — 같은 패널, git 은 그 서버에서(main 이 SSH exec 로 — 푸시 안전장치도 같다). host 만 실어 보낸다.
   const host = wt ? hostOfWorktree(wt.id) : undefined
@@ -69,13 +72,16 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
 
   const entries = status?.ok ? status.entries : []
   const staged = entries.filter((e) => e.area === 'staged')
-  const changes = entries.filter((e) => e.area !== 'staged')
+  // M12 R2 머지 충돌(Orca conflict-status-cards) — 충돌 파일은 [충돌] 칸으로 따로. + = 해결 표시(git add).
+  const conflicts = entries.filter((e) => e.status === 'conflicted')
+  const changes = entries.filter((e) => e.area !== 'staged' && e.status !== 'conflicted')
+  const op = status?.ok && conflicts.length > 0 ? status.operation : undefined
   const upstream = status?.ok ? { hasUpstream: !!status.upstream, upstreamName: status.upstream ?? undefined, ahead: status.ahead, behind: status.behind } : null
   const primary = resolvePrimaryAction({
     stagedCount: staged.length,
     hasUnstaged: changes.length > 0,
     hasMessage: !!message.trim(),
-    hasConflicts: entries.some((e) => e.status === 'conflicted'),
+    hasConflicts: conflicts.length > 0,
     busy: !!busy,
     hasBranch: status?.ok ? !!status.branch : false,
     upstream
@@ -104,6 +110,20 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
     const yes = await ask({ title: t('scm.discard.title'), message: t('scm.discard.msg').replace('{path}', e.path), tone: 'danger', confirmLabel: t('scm.discard.go') })
     if (yes === 'confirm') await run('discard', () => window.ev.scm.discard(root!, e.path, host))
   }
+  /** 충돌 파일은 비교가 아니라 에디터로 연다(Orca openConflictFile) — 표시 줄이 세 구역 색으로 갈리고 띠에서 위·아래 충돌로 간다. */
+  const openConflict = async (e: GitStatusEntry): Promise<void> => {
+    if (!wt) return
+    const r = await openFile(e.path, undefined, { gitConflict: e.conflictKind })
+    if (!r.ok) return void ask({ title: t('code.err.openTitle'), message: r.message + (e.conflictKind ? `
+${t('scm.conflict.hint.' + e.conflictKind)}` : ''), cancelLabel: null })
+    useDiffStore.getState().setShown(wt.id, false)
+    onOpened?.()
+  }
+  const abortOp = async (): Promise<void> => {
+    if (!op || op === 'unknown') return
+    const yes = await ask({ title: t('scm.abort.title.' + op), message: t('scm.abort.msg'), tone: 'danger', confirmLabel: t('scm.abort.go') })
+    if (yes === 'confirm') await run('abort', () => window.ev.scm.abort(root!, op, host), { done: t('scm.note.aborted'), fail: t('scm.note.abortFail') })
+  }
   const openDiff = (e: GitStatusEntry): void => {
     window.dispatchEvent(new CustomEvent('aiws:open-diff', { detail: { filePath: e.path, mode: e.area === 'staged' ? 'staged' : 'unstaged' } }))
   }
@@ -112,10 +132,17 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
     const cut = e.path.lastIndexOf('/')
     return (
       <div key={e.area + ':' + e.path} className="scm-row" data-scm-file={e.path} data-scm-area={e.area}>
-        <button type="button" className="scm-open" title={e.path} onClick={() => openDiff(e)}>
+        <button
+          type="button"
+          className="scm-open"
+          title={e.conflictKind ? `${e.path}
+${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
+          onClick={() => void (e.status === 'conflicted' ? openConflict(e) : openDiff(e))}
+        >
           <span className="scm-name">{e.path.slice(cut + 1)}</span>
           {cut > 0 && <span className="scm-dir">{e.path.slice(0, cut)}</span>}
         </button>
+        {e.conflictKind && <span className="scm-kind">{t('scm.conflict.kind.' + e.conflictKind)}</span>}
         {e.area !== 'staged' && (
           <button type="button" className="aiws-ic" data-scm="discard" title={t('scm.discard.go')} aria-label={t('scm.discard.go')} disabled={!!busy} onClick={() => void discard(e)}>
             <Undo2 />
@@ -192,7 +219,25 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
               {err}
             </div>
           )}
+          {op && (
+            <div className="scm-op" role="status" data-scm="operation" data-op={op}>
+              <span>{t('scm.op.' + op).replace('{n}', String(conflicts.length))}</span>
+              {op !== 'unknown' && (
+                <button type="button" className="btn sec" data-scm="abort" disabled={!!busy} onClick={() => void abortOp()}>
+                  {t('scm.abort.go')}
+                </button>
+              )}
+            </div>
+          )}
           <div className="scm-list">
+            {conflicts.length > 0 && (
+              <>
+                <div className="scm-sec" data-scm-sec="conflicts">
+                  <span>{t('scm.conflicts').replace('{n}', String(conflicts.length))}</span>
+                </div>
+                {conflicts.map(row)}
+              </>
+            )}
             {staged.length > 0 && (
               <>
                 <div className="scm-sec">

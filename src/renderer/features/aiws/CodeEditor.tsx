@@ -1,4 +1,5 @@
-import { useEffect, useRef, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { ChevronDown, ChevronUp, GitMerge } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import { CODE_READONLY_BYTES, languageOf } from '@shared/codeFiles'
 import { areWorktreePathsEqual } from '@shared/worktrees'
@@ -6,6 +7,9 @@ import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { t } from '../../i18n'
 import { monaco } from './monacoSetup'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
+import { codeEditorOptions } from './editorOptions'
+import { buildGitConflictDecorations, findGitConflictBlocks, getNextConflictNavigationIndex, hasGitConflictMarkers } from './conflictMarkers'
+import { useEditorPrefs } from '../../store/editorPrefs'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 type Model = ReturnType<typeof monaco.editor.createModel>
@@ -14,7 +18,7 @@ type Model = ReturnType<typeof monaco.editor.createModel>
  * M6 WS-07·08 — AI 작업 공간 가운데의 코드 에디터(Monaco). AgentPane 이 lazy 로 부른다 — 이 청크(+monacoSetup)가 Monaco 를 끌고 온다.
  * Orca components/editor/MonacoEditor.tsx·ExternalFileChangeBanner(orcaRef 7a7f46f8a3)의 1차 판: 파일마다 모델 하나(경로 = 모델 uri),
  * 더러움 = 저장한 뒤의 버전과 다름(VS Code 와 같은 alternativeVersionId), Ctrl+S 저장, 밖에서 바뀌면 띠로 안내.
- * 뺀 것: 비교(M7)·자동 저장·미니맵 설정·마크다운 미리보기·여러 분할.
+ * 뺀 것: 비교(M7)·자동 저장·마크다운 미리보기·여러 분할. M12 R2: 설정 › 편집기 옵션·미리 보기 탭·충돌 표시(Orca 방식).
  */
 
 const uriOf = (path: string) => monaco.Uri.file(path)
@@ -47,8 +51,26 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
   // M12: 뷰어 탭(media)은 MediaView 가 그린다 — 여기서는 글 파일만.
   const file = activePath ? files.find((f) => !f.media && f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, activePath, PLATFORM)) : undefined
   const editorRef = useRef<ReturnType<typeof monaco.editor.create> | null>(null)
+  const prefs = useEditorPrefs()
+  const readOnly = !!file?.readOnly
+  // M12 R2 머지 충돌(Orca useEditorConflictNavigation) — 보이는 모델의 충돌 블록 시작 줄 · 마지막으로 간 블록.
+  const [conflictLines, setConflictLines] = useState<number[]>([])
+  const [conflictAt, setConflictAt] = useState<number | null>(null)
+  const options = useMemo(() => ({ readOnly, automaticLayout: true, ...codeEditorOptions(prefs) }), [readOnly, prefs])
   const askRef = useRef(ask)
   askRef.current = ask
+
+  const jumpConflict = (direction: 'previous' | 'next'): void => {
+    const next = getNextConflictNavigationIndex({ currentIndex: conflictAt, direction, total: conflictLines.length })
+    const ed = editorRef.current
+    if (next === null || !ed) return
+    setConflictAt(next)
+    const line = conflictLines[next]
+    const len = ed.getModel()?.getLineLength(line) ?? 0
+    ed.revealLineInCenter(line)
+    ed.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: len + 1 })
+    ed.focus()
+  }
 
   // 저장·정리 손잡이를 상태 저장소에 건다(탭 줄의 닫기 확인이 부른다 — 그쪽은 monaco 를 모른다).
   useEffect(() => {
@@ -89,6 +111,21 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
           )}
         </div>
       )}
+      {file && conflictLines.length > 0 && (
+        <div className="code-bar warn" role="status" data-code="merge-conflict" data-kind={file.gitConflict}>
+          <GitMerge className="code-bar-ic" aria-hidden />
+          <span>
+            {file.gitConflict ? t('code.merge.kind.' + file.gitConflict) : t('code.merge.title')} · {(conflictAt ?? 0) + 1} / {conflictLines.length}
+          </span>
+          <span className="code-bar-hint">{t('code.merge.hint')}</span>
+          <button type="button" className="aiws-ic" data-code="conflict-prev" title={t('code.merge.prev')} aria-label={t('code.merge.prev')} onClick={() => jumpConflict('previous')}>
+            <ChevronUp />
+          </button>
+          <button type="button" className="aiws-ic" data-code="conflict-next" title={t('code.merge.next')} aria-label={t('code.merge.next')} onClick={() => jumpConflict('next')}>
+            <ChevronDown />
+          </button>
+        </div>
+      )}
       {file?.readOnly && (
         <div className="code-bar" role="status" data-code="readonly">
           {t('code.readonly').replace('{size}', mb(file.bytes)).replace('{limit}', mb(CODE_READONLY_BYTES))}
@@ -102,12 +139,14 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
             language={languageOf(file.path, LANGS)}
             theme="ara"
             keepCurrentModel
-            options={{ readOnly: file.readOnly, automaticLayout: true, minimap: { enabled: false }, fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono') }}
+            // M12 R2 설정 › 편집기(줄바꿈·미니맵·글꼴) — 바꾸면 Editor 가 updateOptions 로 바로 따른다.
+            options={options}
             onMount={(ed) => {
               editorRef.current = ed
               const st = useCodeStore.getState()
               const a = st.activeByWorktree[worktreeId]
               revealOf(ed, a ? st.files.find((f) => f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, a, PLATFORM)) : undefined)
+              watchConflicts(ed, setConflictLines, setConflictAt)
               ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
                 const p = ed.getModel()?.uri.fsPath
                 if (p) void save(p, askRef.current)
@@ -119,6 +158,31 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
     </div>
   )
 }
+
+/** 충돌 표시 줄을 장식하고(현재·공통 조상·들어오는 구역 색 + 표시 줄 라벨) 블록 시작 줄을 알린다. 모델이 바뀌면 다시, 고치면 150ms 묶어 다시. */
+function watchConflicts(ed: ReturnType<typeof monaco.editor.create>, setLines: (l: number[]) => void, setAt: (i: number | null) => void): void {
+  const deco = ed.createDecorationsCollection()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const labels = { current: t('code.merge.current'), base: t('code.merge.base'), incoming: t('code.merge.incoming'), end: t('code.merge.end') }
+  const scan = (): void => {
+    const text = ed.getModel()?.getValue() ?? ''
+    const has = hasGitConflictMarkers(text)
+    deco.set(has ? buildGitConflictDecorations(text, labels) : [])
+    setLines(has ? findGitConflictBlocks(text).map((b) => b.startLine) : NO_LINES)
+  }
+  ed.onDidChangeModel(() => {
+    setAt(null)
+    scan()
+  })
+  ed.onDidChangeModelContent(() => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(scan, CONFLICT_SCAN_MS)
+  })
+  ed.onDidDispose(() => timer && clearTimeout(timer))
+  scan()
+}
+const CONFLICT_SCAN_MS = 150
+const NO_LINES: number[] = []
 
 function revealOf(ed: ReturnType<typeof monaco.editor.create> | null, file: CodeFile | undefined): void {
   if (!ed || !file?.reveal) return

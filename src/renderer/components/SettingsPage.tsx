@@ -44,6 +44,7 @@ import { VOICES, VOICE_FACES, VOICE_KEEP, VOICE_LISTEN, VOICE_SPEEDS } from '@sh
 import { openMic, listMics, type MicHandle } from '../voice/audio'
 import { previewVoice, setBypass, useVoice } from '../store/voice'
 import { SETTINGS_INDEX, searchSettings, sectionDef, type SettingsSection } from '@shared/settingsIndex'
+import { editorPrefsOf, type DiffView } from '@shared/editorPrefs'
 import type { SettingsTarget } from '../store/settingsNav'
 // M3 에이전트 설정 — AI 작업 공간 청크(지연 로드). 이 진입점 밖의 aiws 파일은 직접 import 하지 않는다(feature-module.md).
 import { AgentSettings } from '../features/aiws'
@@ -98,6 +99,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 
 // 보존 기간 세그먼트. Seg 는 문자열 전용이라(라벨 키를 만들어야 한다) 문자열로 넘기고 되돌린다.
 const RETENTION_VALUES = LOG_RETENTION_OPTIONS.map(String)
+const DIFF_VIEWS: readonly DiffView[] = ['inline', 'side-by-side']
 
 // 세그먼트 컨트롤(연결 관리자 인증 방식과 같은 .seg-ctl) — 값이 2~3개인 선택지에 쓴다.
 function Seg<T extends string>({
@@ -1593,6 +1595,35 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
               </Row>
               <Row label={t('settings.notify.sound')} desc={t('settings.notify.sound.desc')} item="notify.sound">
                 <span className="set-note">{t('aiws.soon')}</span>
+              </Row>
+            </>
+          )}
+
+          {section === 'editor' && (
+            // M12 R2 에디터 옵션(Orca 기본값 — shared/editorPrefs.ts). AI 작업 공간 코드 에디터·변경 비교가 바로 따른다.
+            <>
+              <Row label={t('settings.editor.wordWrap')} desc={t('settings.editor.wordWrap.desc')} item="editor.wordWrap">
+                <Toggle on={prefs.codeEditor.wordWrap} label={t('settings.editor.wordWrap')} onChange={(wordWrap) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, wordWrap } })} />
+              </Row>
+              <Row label={t('settings.editor.minimap')} desc={t('settings.editor.minimap.desc')} item="editor.minimap">
+                <Toggle on={prefs.codeEditor.minimap} label={t('settings.editor.minimap')} onChange={(minimap) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, minimap } })} />
+              </Row>
+              <Row label={t('settings.editor.font')} desc={t('settings.editor.font.desc')} item="editor.font">
+                <input
+                  type="text"
+                  className="ai-key-input"
+                  data-field="editor.font"
+                  spellCheck={false}
+                  placeholder={t('settings.editor.font.placeholder')}
+                  value={prefs.codeEditor.fontFamily}
+                  onChange={(e) => onPrefsChange({ codeEditor: editorPrefsOf({ ...prefs.codeEditor, fontFamily: e.target.value }) })}
+                />
+              </Row>
+              <Row label={t('settings.editor.previewTabs')} desc={t('settings.editor.previewTabs.desc')} item="editor.previewTabs">
+                <Toggle on={prefs.codeEditor.previewTabs} label={t('settings.editor.previewTabs')} onChange={(previewTabs) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, previewTabs } })} />
+              </Row>
+              <Row label={t('settings.editor.diffView')} desc={t('settings.editor.diffView.desc')} item="editor.diffView">
+                <Seg value={prefs.codeEditor.diffView} options={DIFF_VIEWS} onChange={(diffView) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, diffView } })} labelKey={(v) => 'settings.editor.diffView.' + v} field="editor.diffView" />
               </Row>
             </>
           )}

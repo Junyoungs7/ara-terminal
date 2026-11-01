@@ -28,7 +28,8 @@ describe('기능 표시', () => {
   })
 
   it('기본 숨김 셋은 Ctrl+Alt+문자 — 다른 키와 안 겹치고 bash·zsh 기본 M-C- 키를 피한다', () => {
-    const combos = KEYMAP.map((k) => k.win)
+    // M12 R2: 같은 조합은 공간이 갈린 쌍만(Ctrl+Shift+J = 터미널 하단 패널 · AI 워크트리 점프) — 공간까지 묶어 센다.
+    const combos = KEYMAP.map((k) => `${k.win}@${k.space ?? '*'}`)
     expect(new Set(combos).size).toBe(combos.length)
     for (const f of FEATURES.filter((x) => x.hidden)) {
       const win = KEYMAP.find((k) => k.action === f.key)?.win ?? ''

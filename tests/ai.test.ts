@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { DEFAULT_EDITOR_PREFS } from '../src/shared/editorPrefs'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -390,7 +391,8 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         logRetentionDays: 30,
         aiProvider: provider,
         aiModels: aiModelsOf({ [provider]: 'x-model' }),
-        aiCompatibleBaseUrl: provider === 'compatible' ? 'https://gateway.internal/v1' : ''
+        aiCompatibleBaseUrl: provider === 'compatible' ? 'https://gateway.internal/v1' : '',
+        codeEditor: DEFAULT_EDITOR_PREFS
       })
       store.flush()
       expect(readFileSync(join(dir, `workspace-${provider}.json`), 'utf8')).not.toContain(SENTINEL)

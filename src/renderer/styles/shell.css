@@ -12358,7 +12358,7 @@ button.sb-seg.upd:hover .val {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   M12 — AI 작업 공간 파일 탐색기 패널 · 뷰어 · 워크트리 점프(Ctrl+J)
+   M12 — AI 작업 공간 파일 탐색기 패널 · 뷰어 · 워크트리 점프(Ctrl+Shift+J — M12 R2)
    ══════════════════════════════════════════════════════════════════════════ */
 .aiws-explorer {
   width: 264px;
@@ -12423,4 +12423,190 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-size: var(--fs-micro);
   white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   M12 R2 — 미리 보기 탭(기울임) · 머지 충돌 3-way 표시(Orca main.css .orca-conflict-* — 현재 = 바뀜 색, 공통 조상 = 옅은 회색, 들어오는 = 더함 색)
+   ══════════════════════════════════════════════════════════════════════════ */
+.aiws-tab.preview > span {
+  font-style: italic;
+}
+.code-bar-ic {
+  width: var(--sp-7);
+  height: var(--sp-7);
+  flex: none;
+  color: var(--err);
+}
+.code-bar > span.code-bar-hint {
+  flex: 0 1 auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.monaco-editor .orca-conflict-marker-line {
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+}
+.monaco-editor .orca-conflict-section-line {
+  border-left: var(--sp-1) solid transparent;
+}
+.monaco-editor .orca-conflict-current-line {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-left-color: color-mix(in srgb, var(--warn) 72%, transparent);
+}
+.monaco-editor .orca-conflict-base-line {
+  background: color-mix(in srgb, var(--text-lo) 7%, transparent);
+  border-left-color: color-mix(in srgb, var(--text-lo) 36%, transparent);
+}
+/* 들어오는 쪽 = 더함 색(Orca 는 renamed 색 — 아라 git 색 표는 노랑·초록·빨강 셋이라 초록을 쓴다). */
+.monaco-editor .orca-conflict-incoming-line {
+  background: color-mix(in srgb, var(--ok) 11%, transparent);
+  border-left-color: color-mix(in srgb, var(--ok) 68%, transparent);
+}
+.monaco-editor .orca-conflict-line-decoration {
+  width: var(--sp-2) !important;
+  margin-left: var(--sp-1);
+  background: var(--err);
+  border-radius: var(--radius-sm);
+}
+.monaco-editor .orca-conflict-margin {
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+.monaco-editor .orca-conflict-marker-label {
+  color: var(--err);
+  font-family: var(--ui);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  font-style: normal;
+}
+/* 소스 제어 [충돌] 줄 — 종류 꼬리표·도움말. */
+.scm-kind {
+  color: var(--err);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+}
+.scm-op {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-hi);
+  box-shadow: inset 3px 0 0 var(--err);
+}
+.scm-op > span {
+  flex: 1;
+}
+
+/* ── M11 에이전트 2차: 답할 일 = 반전 칩(시안 C) · 질문/승인 카드 · 재시작 · 지난 세션 범위·필터·검색 ── */
+.ag-ask-chip,
+.aiws-tab-state.ag-ask-chip {
+  background: var(--text-hi);
+  color: var(--bg-abyss);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-2);
+  font-weight: 500;
+}
+.ag-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: var(--sp-3) var(--sp-6);
+  padding: var(--sp-4) var(--sp-6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+.ag-ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--fs-micro);
+}
+.ag-ask-q {
+  margin: 0;
+  color: var(--text-hi);
+}
+.ag-ask-header {
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.ag-ask-detail {
+  margin: 0;
+  max-height: calc(var(--sp-8) * 6);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: var(--fs-micro);
+}
+.ag-ask-opts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.ag-ask-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-mid);
+  text-align: left;
+}
+.ag-ask-opt > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+.ag-ask-opt.on {
+  border-color: var(--line-strong);
+  color: var(--text-hi);
+}
+.ag-ask-num {
+  flex: none;
+  font-family: var(--mono);
+  color: var(--text-lo);
+}
+.ag-restart {
+  margin-left: calc(var(--sp-1) * -1);
+}
+.aiws-exited {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-6);
+}
+.aiws-exited > span:first-child {
+  flex: 1;
+}
+.aiws-vault-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.aiws-vault-controls input[type='search'] {
+  flex: 1;
+  min-width: calc(var(--sp-8) * 12);
+}
+.aiws-seg {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.aiws-vault-agents {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.aiws-vault-group-t {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.aiws-vault-snippet {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
 }

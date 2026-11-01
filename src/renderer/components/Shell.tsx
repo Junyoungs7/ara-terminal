@@ -182,6 +182,9 @@ export function Shell() {
   // M1 라운드 2 공간 — 같은 미러(주인은 MainArea 의 prefs.space = 마지막 공간). M3 부터 AI 작업 공간은 기본 공개라
   // 스위치·오른쪽 아이콘 바·알림 센터가 늘 보인다(옛 실험 기능 게이트는 지웠다).
   const [space, setSpaceMirror] = useState<Space>('term')
+  // M12 R2 — 창 단축키 핸들러가 지금 공간을 본다(Ctrl+Shift+J 는 터미널 공간에서만 하단 패널). 효과를 다시 걸지 않게 ref.
+  const spaceRef = useRef(space)
+  spaceRef.current = space
   // M2 WS-05: AI 작업 공간에서 고른 워크트리 — 타이틀바 `프로젝트 / 워크트리 / 브랜치`·상태바 "main 에서 n 커밋 앞".
   const [aiLoc, setAiLoc] = useState<AiwsLocation | null>(null)
   const pickSpace = useCallback((s: Space) => mainRef.current?.setSpace(s), [])
@@ -552,7 +555,8 @@ export function Shell() {
       } else if (matchBinding(e, 'panel.ports')) {
         e.preventDefault()
         toggleBottom('monitor')
-      } else if (matchBinding(e, 'bottom.toggle')) {
+      } else if (matchBinding(e, 'bottom.toggle') && spaceRef.current !== 'ai') {
+        // M12 R2: 터미널 공간에서만 — AI 공간에선 같은 키가 워크트리 점프(features/aiws/WorktreeJump 가 캡처 단계에서 받는다).
         e.preventDefault()
         toggleBottomBar()
       } else if (matchBinding(e, 'panel.console')) {

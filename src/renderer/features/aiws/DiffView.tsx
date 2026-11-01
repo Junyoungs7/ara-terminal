@@ -8,6 +8,7 @@ import { t } from '../../i18n'
 import { monaco } from './monacoSetup'
 import { changeCount, sendCommentsToAgent, useDiffStore, type DiffSel } from './diffStore'
 import { hostOfWorktree } from './store'
+import { editorFont } from './editorOptions'
 
 /**
  * M7 R1 WS-10·11 — 가운데 **"변경 비교 · n" 탭**의 본문. AgentPane 이 lazy 로 부른다(monacoSetup 을 같이 끌고 온다 — diff 탭을 안 열면 안 불린다).
@@ -61,7 +62,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
       // Monaco 기본값은 폭 900px 이하면 [나란히]를 몰래 한 줄 보기로 바꾼다 — 사용자가 고른 보기를 그대로 지킨다.
       useInlineViewWhenSpaceIsLimited: false,
       theme: 'ara',
-      fontFamily: css.getPropertyValue('--mono')
+      // M12 R2: 에디터와 같은 글꼴(설정 › 편집기 [글꼴], 비면 터미널 글꼴 — Orca).
+      ...editorFont(css)
     })
     edRef.current = ed
     decoRef.current = ed.getModifiedEditor().createDecorationsCollection()

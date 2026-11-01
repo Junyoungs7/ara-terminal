@@ -45,8 +45,9 @@ export function ExplorerPanel({ onOpened }: { onOpened: () => void }): JSX.Eleme
     }
   }, [root, deco])
 
-  const open = async (abs: string): Promise<void> => {
-    const r = await openFile(abs)
+  // M12 R2: 한 번 누름 = 미리 보기 탭, 두 번 누름 = 고정 탭(Orca).
+  const open = async (abs: string, preview: boolean): Promise<void> => {
+    const r = await openFile(abs, undefined, { preview })
     if (!r.ok) return void dialog.ask({ title: t('code.err.openTitle'), message: r.message, cancelLabel: null })
     onOpened()
   }
@@ -61,7 +62,7 @@ export function ExplorerPanel({ onOpened }: { onOpened: () => void }): JSX.Eleme
           cwd={root}
           ask={dialog.ask}
           askText={dialog.askText}
-          onOpenFile={(p) => void open(p)}
+          onOpenFile={(p, preview) => void open(p, preview === true)}
           decorate={decorate}
           watchToken={token}
         />

@@ -10,6 +10,7 @@ export const scmBridge: Pick<EvApi, 'scm'> = {
     commit: (root, message, host) => ipcRenderer.invoke('scm:commit', { root, message, host }),
     amend: (root, message, confirmed, host) => ipcRenderer.invoke('scm:amend', { root, message, confirmed, host }),
     push: (root, force, confirmed, host) => ipcRenderer.invoke('scm:push', { root, force, confirmed, host }),
+    abort: (root, op, host) => ipcRenderer.invoke('scm:abort', { root, op, host }),
     pull: (root, merge, host) => ipcRenderer.invoke('scm:pull', { root, merge, host })
   }
 }

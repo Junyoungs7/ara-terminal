@@ -9,6 +9,7 @@ import { hostOfWorktree, useAiwsStore } from './store'
 import { useAgentStore } from './agentStore'
 import { useCodeStore } from './codeStore'
 import { t } from '../../i18n'
+import { getEditorPrefs, subscribeEditorPrefs } from '../../store/editorPrefs'
 
 /** 목록 갈래 — 작업 중 변경(status) / 분기 기준 대비(branchCompare). */
 export type DiffList = 'working' | 'branch'
@@ -18,7 +19,6 @@ export type WorktreeDiff = { list: DiffList; selected: DiffSel | null; working: 
 // 주석은 이 PC 의 localStorage 에 작업 단위 **폴더 경로**로 둔다 — 앱을 다시 켜도 남는다(Orca 는 orca-data.json 의 worktree meta).
 // ponytail: 창 하나·쓰기 한 곳이라 Orca 의 쓰기 줄 세우기·되돌리기는 뺐다. 여러 창이 같은 주석을 고치게 되면 main 저장으로 옮긴다.
 const COMMENTS_KEY = 'aiws.diffComments'
-const SPLIT_KEY = 'aiws.diffInline'
 
 function loadComments(): Record<string, DiffComment[]> {
   try {
@@ -69,13 +69,8 @@ export const useDiffStore = create<DiffState>()((set, get) => {
   return {
     byWorktree: {},
     shownByWorktree: {},
-    inline: (() => {
-      try {
-        return localStorage.getItem(SPLIT_KEY) === '1'
-      } catch {
-        return false
-      }
-    })(),
+    // M12 R2: 처음 보기 = 설정 › 편집기 [변경 보기](Orca diffDefaultView, 기본 한 줄). 탭 안의 [한 줄 | 나란히]는 이번 실행에서만.
+    inline: getEditorPrefs().diffView === 'inline',
     comments: loadComments(),
     setShown: (id, shown) => set((s) => ({ shownByWorktree: { ...s.shownByWorktree, [id]: shown } })),
     close: (id) =>
@@ -89,14 +84,7 @@ export const useDiffStore = create<DiffState>()((set, get) => {
       void get().refresh(wt)
     },
     select: (id, sel) => patchWt(id, { selected: sel }),
-    setInline: (inline) => {
-      set({ inline })
-      try {
-        localStorage.setItem(SPLIT_KEY, inline ? '1' : '0')
-      } catch {
-        // 보기 설정 — 못 적어도 이번엔 그대로
-      }
-    },
+    setInline: (inline) => set({ inline }),
     refresh: async (wt) => {
       const list = (get().byWorktree[wt.id] ?? empty()).list
       patchWt(wt.id, { loading: true })
@@ -175,3 +163,12 @@ export async function sendCommentsToAgent(wt: Worktree, filePath?: string): Prom
   ag.setActiveTab(wt.id, tab.sessionId)
   return { ok: true, sent: unsent.length }
 }
+
+// 설정 › 편집기 [변경 보기]를 바꾸면 열린 비교도 그 보기로(설정이 기준 — Orca 는 새 비교 탭부터지만 아라는 비교 탭이 하나다).
+let lastDiffView = getEditorPrefs().diffView
+subscribeEditorPrefs(() => {
+  const v = getEditorPrefs().diffView
+  if (v === lastDiffView) return
+  lastDiffView = v
+  useDiffStore.getState().setInline(v === 'inline')
+})

@@ -91,5 +91,9 @@ export async function push(root: string, force: boolean, confirmed: readonly Pus
   return r.code === 0 ? { ok: true, message: target } : { ...fail(r, 'push failed'), target }
 }
 
+/** M12 R2 — 진행 중인 병합·리베이스·체리픽 중단(Orca git-conflict-operation abortMerge·abortRebase + cherry-pick 같은 꼴). 작업 폴더가 그 작업 전으로 돌아간다. */
+export const abortOperation = async (root: string, op: 'merge' | 'rebase' | 'cherry-pick', x: Exec = runProcess): Promise<ScmResult> =>
+  done(await git(root, [op, '--abort'], SHORT_MS, x), `${op} --abort failed`)
+
 /** 풀 — pull 은 빨리 감기만, sync 는 갈라졌으면 병합(Orca runPullWithDivergenceFallback 의 병합 폴백). 푸시는 렌더러가 push 로 따로(같은 안전장치). */
 export const pull = async (root: string, merge: boolean, x: Exec = runProcess): Promise<ScmResult> => done(await git(root, ['pull', merge ? '--no-rebase' : '--ff-only'], REMOTE_MS, x), 'pull failed')

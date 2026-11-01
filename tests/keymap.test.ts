@@ -21,9 +21,19 @@ describe('keymap 단일 진실 소스', () => {
     expect(new Set(actions).size).toBe(actions.length)
   })
 
-  it('같은 조합을 두 action 이 쓰지 않는다(재배치 후 충돌 방지)', () => {
-    const combos = KEYMAP.map((k) => k.win)
-    expect(new Set(combos).size).toBe(combos.length)
+  it('같은 조합을 두 action 이 쓰지 않는다(재배치 후 충돌 방지) — 공간이 갈린 쌍만 예외', () => {
+    // M12 R2: Ctrl+Shift+J = 터미널 공간 하단 패널 · AI 공간 워크트리 점프. 공간 없는(둘 다) 키와는 겹칠 수 없다.
+    for (const a of KEYMAP)
+      for (const b of KEYMAP) if (a !== b && a.win === b.win) expect(a.space && b.space && a.space !== b.space, `${a.action}·${b.action}`).toBeTruthy()
+  })
+
+  it('M12 R2 Ctrl+Shift+J 는 공간마다 하나 — 터미널 = 하단 패널, AI = 워크트리 점프. Ctrl+J 단독은 앱이 안 잡는다', () => {
+    const j = KEYMAP.filter((k) => k.win === 'Ctrl+Shift+J').map((k) => [k.action, k.space])
+    expect(j).toEqual(expect.arrayContaining([['bottom.toggle', 'term'], ['worktree.jump', 'ai']]))
+    expect(KEYMAP.find((k) => k.mac === 'Cmd+Shift+J' && k.action === 'worktree.jump')).toBeTruthy()
+    expect(KEYMAP.find((k) => k.win === 'Ctrl+J')).toBeUndefined()
+    expect(isAppShortcut(ev({ ctrlKey: true, key: 'j' }))).toBe(false)
+    expect(matchBinding(ev({ ctrlKey: true, shiftKey: true, key: 'J' }), 'worktree.jump')).toBe(true)
   })
 
   it('모든 바인딩이 win·mac·라벨을 채운다', () => {

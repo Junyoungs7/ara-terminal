@@ -11,6 +11,7 @@ import {
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
 import { featuresOf } from '@shared/features'
 import { DEFAULT_VOICE } from '@shared/voice'
+import { DEFAULT_EDITOR_PREFS } from '@shared/editorPrefs'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 
 // R5 터미널 동작 설정 단일 소스(useFont·useSidebar 와 같은 형태):
@@ -35,7 +36,8 @@ const DEFAULT_PREFS: UiPrefs = {
   voice: DEFAULT_VOICE,
   space: 'term',
   notifyToast: true,
-  notifyAgents: true
+  notifyAgents: true,
+  codeEditor: DEFAULT_EDITOR_PREFS
 }
 
 export function useUiPrefs() {

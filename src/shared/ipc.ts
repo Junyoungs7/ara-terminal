@@ -672,6 +672,8 @@ export type InvokeContract = {
   'scm:amend': { req: { root: string; message: string; confirmed?: boolean; host?: string }; res: ScmResult }
   'scm:push': { req: { root: string; force?: boolean; confirmed?: PushConfirm[]; host?: string }; res: ScmResult }
   'scm:pull': { req: { root: string; merge?: boolean; host?: string }; res: ScmResult }
+  // M12 R2 머지 충돌 — 진행 중인 병합·리베이스·체리픽 중단(Orca abortMerge·abortRebase).
+  'scm:abort': { req: { root: string; op: 'merge' | 'rebase' | 'cherry-pick'; host?: string }; res: ScmResult }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1360,6 +1362,7 @@ export type EvApi = {
     amend(root: string, message: string, confirmed?: boolean, host?: string): Promise<ScmResult>
     push(root: string, force?: boolean, confirmed?: PushConfirm[], host?: string): Promise<ScmResult>
     pull(root: string, merge?: boolean, host?: string): Promise<ScmResult>
+    abort(root: string, op: 'merge' | 'rebase' | 'cherry-pick', host?: string): Promise<ScmResult>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

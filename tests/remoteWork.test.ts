@@ -11,7 +11,8 @@ import { buildGitGrepArgs, gitGrepMatcher, ingestGitGrepLine, newSearchAcc, type
 import { execOn, remoteBackend } from '../src/main/work/remote'
 import { listFilesOn, searchTextOn } from '../src/main/code/search'
 import { readFileDiff, readGitStatus } from '../src/main/git/inspect'
-import { commit, push, stagePaths } from '../src/main/scm/git'
+import { abortOperation, commit, push, stagePaths } from '../src/main/scm/git'
+import { findGitConflictBlocks } from '../src/renderer/features/aiws/conflictMarkers'
 
 const opts = (query: string, more: Partial<{ regex: boolean; caseSensitive: boolean; include: string; exclude: string }> = {}) => ({
   query,
@@ -240,5 +241,50 @@ describe.skipIf(!READY)('원격 작업 단위 — WSL 의 git 저장소를 SSH(e
     expect(bytes.ok && Buffer.from(bytes.data).toString('utf8')).toBe('const hello = 1\n')
     expect(await b.fs.readBytes(`${root}/src/b.ts`, 3)).toMatchObject({ ok: false, tooBig: true })
     ok(await b.fs.remove([`${root}/src/x.txt`]))
+  }, 120_000)
+
+  // M12 R2 머지 충돌 — 원격도 같은 길(git 은 SSH exec): status 의 충돌 종류·진행 중 작업(merge) → 파일(SFTP)에 3-way 표시 → [중단].
+  it('머지 충돌 — 감지(both_modified·merge) → 표시 줄 → merge --abort', async () => {
+    const c = client!
+    const b = remoteBackend(async () => c)
+    const root = `${home}/conf`
+    const mk = await execOn(
+      c,
+      'sh',
+      [
+        '-c',
+        [
+          'set -e',
+          'git init -q conf',
+          'cd conf',
+          'git symbolic-ref HEAD refs/heads/main',
+          'git config user.email t@example.invalid',
+          'git config user.name tester',
+          'git config merge.conflictStyle diff3',
+          "printf 'a\n' > f.txt",
+          'git add -A',
+          'git commit -qm 1',
+          'git checkout -qb other',
+          "printf 'theirs\n' > f.txt",
+          'git commit -qam 2',
+          'git checkout -q main',
+          "printf 'ours\n' > f.txt",
+          'git commit -qam 3',
+          'git merge other || true'
+        ].join('\n')
+      ],
+      { cwd: home, timeoutMs: 30_000 }
+    )
+    expect(mk.code, mk.stderr).toBe(0)
+    const st = await readGitStatus(root, b.inspect)
+    if (!st.ok) throw new Error(st.message)
+    expect(st.entries).toEqual([{ path: 'f.txt', status: 'conflicted', area: 'unstaged', conflictKind: 'both_modified' }])
+    expect(st.operation).toBe('merge')
+    const f = await b.readCode(`${root}/f.txt`)
+    if (!f.ok) throw new Error(f.message)
+    expect(findGitConflictBlocks(f.text)).toEqual([{ startLine: 1, baseLine: 3, separatorLine: 5, endLine: 7 }])
+    expect((await abortOperation(root, 'merge', b.exec)).ok).toBe(true)
+    const after = await readGitStatus(root, b.inspect)
+    expect(after.ok && after.entries).toEqual([])
   }, 120_000)
 })

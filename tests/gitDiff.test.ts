@@ -38,7 +38,7 @@ describe('parseStatusV2', () => {
       { path: 'both.ts', status: 'modified', area: 'staged' },
       { path: 'both.ts', status: 'modified', area: 'unstaged' },
       { path: 'new name.ts', oldPath: 'old name.ts', status: 'renamed', area: 'staged' },
-      { path: 'conflict.ts', status: 'conflicted', area: 'unstaged' },
+      { path: 'conflict.ts', status: 'conflicted', area: 'unstaged', conflictKind: 'both_modified' }, // M12 R2 — u 레코드의 XY
       { path: '새 파일.txt', status: 'untracked', area: 'untracked' }
     ])
   })

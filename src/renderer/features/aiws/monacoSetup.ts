@@ -4,7 +4,9 @@
 //  · CDN 금지: @monaco-editor/react 는 설정이 없으면 jsdelivr 에서 Monaco 를 받아 온다 — loader.config({ monaco }) 로
 //    이 번들의 monaco 를 쓰게 한다(사내망·CSP script-src 'self'). 이 줄이 Editor 를 그리기 전에 돌아야 한다(모듈 맨 위).
 //  · 테마: 아라 토큰(tokens.css 의 CSS 변수)을 읽어 만든다 — 색 리터럴을 여기 두지 않는다. 배경 밝기로 다크/라이트 바탕을 고른다.
-// 뺀 것(Orca): 추가 언어 등록 16종(Vue·Svelte…), TS 워커 유휴 정지, 붙여넣기·diff 폐기 가드 — 필요해지면 그때.
+// M12 R2 언어 하이라이트 확장(Orca runMonacoSetupSteps 의 언어 등록 — monarch 판만): Vue·Svelte·Astro·Glimmer(.gjs/.gts)·CUDA·JSONL·dotenv·Quarto·
+// Markdown 의 bash 별칭. 뺀 것: Nim·Lean·Typst·Zig·Groovy·CMake(shiki·oniguruma TextMate 엔진 = 새 의존성), Markdown 머리말 접기.
+// 뺀 것(Orca): TS 워커 유휴 정지, 붙여넣기·diff 폐기 가드 — 필요해지면 그때.
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
@@ -12,6 +14,15 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { registerVueLanguage } from './monacoLanguages/register-vue'
+import { registerSvelteLanguage } from './monacoLanguages/register-svelte'
+import { registerAstroLanguage } from './monacoLanguages/register-astro'
+import { registerGlimmerLanguages } from './monacoLanguages/register-glimmer'
+import { registerCudaLanguage } from './monacoLanguages/register-cuda'
+import { registerJsonlLanguage } from './monacoLanguages/register-jsonl'
+import { registerDotenvLanguage } from './monacoLanguages/register-dotenv'
+import { registerQuartoLanguage } from './monacoLanguages/register-quarto'
+import { registerShellMarkdownAliases } from './monacoLanguages/register-shell-markdown-aliases'
 
 globalThis.MonacoEnvironment = {
   getWorker(_id: string, label: string) {
@@ -39,6 +50,15 @@ globalThis.MonacoEnvironment = {
 const quiet = { noSemanticValidation: true, noSuggestionDiagnostics: true, noSyntaxValidation: true }
 monaco.typescript.typescriptDefaults.setDiagnosticsOptions(quiet)
 monaco.typescript.javascriptDefaults.setDiagnosticsOptions(quiet)
+
+// 하나가 실패해도 에디터는 뜨게(Orca monaco-setup-steps 와 같은 뜻).
+for (const reg of [registerVueLanguage, registerSvelteLanguage, registerAstroLanguage, registerGlimmerLanguages, registerCudaLanguage, registerJsonlLanguage, registerDotenvLanguage, registerQuartoLanguage, registerShellMarkdownAliases]) {
+  try {
+    reg(monaco)
+  } catch (e) {
+    console.warn('[monaco] language registration failed', e)
+  }
+}
 
 loader.config({ monaco })
 

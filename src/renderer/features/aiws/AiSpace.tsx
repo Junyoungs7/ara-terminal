@@ -222,7 +222,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           </div>
         )}
       </div>
-      {right === 'scm' && <ScmPanel ask={ask} />}
+      {right === 'scm' && <ScmPanel ask={ask} onOpened={showFile} />}
       {right === 'explorer' && <ExplorerPanel onOpened={showFile} />}
       <WorktreeJump onJumped={() => setComposer(null)} />
     </div>

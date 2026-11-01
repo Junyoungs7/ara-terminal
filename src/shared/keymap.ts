@@ -66,6 +66,8 @@ export type KeymapAction =
   // M1 라운드 2 공간 전환(M3 부터 늘 — 옛 실험 기능 게이트는 지웠다).
   | 'space.term'
   | 'space.ai'
+  // M12 R2 워크트리 점프(Orca Ctrl+Shift+J·맥 Cmd+Shift+J) — AI 공간에서만. 같은 조합이 터미널 공간에선 하단 패널(bottom.toggle)이다(space 칸).
+  | 'worktree.jump'
 
 import { AI_ENTRY } from './features'
 import { DEFAULT_LOCK_SHORTCUT } from './lock'
@@ -87,6 +89,8 @@ export type KeyBinding = {
   labelKo: string
   win: string
   mac: string
+  /** 이 키가 뜻이 있는 공간 — 없으면 둘 다. 같은 조합을 공간마다 다른 action 이 쓸 때만 단다(M12 R2: Ctrl+Shift+J). */
+  space?: 'term' | 'ai'
   // 실제로 핸들러에 배선된 키만 true. 치트시트는 true 인 것만 보여 준다(R2.5) — 눌러도 아무 일도
   // 없는 키를 문서화하지 않기 위해서다. 미구현 기능(F12 로그 저장·F16 AI·터미널 검색)은 false.
   implemented: boolean
@@ -177,7 +181,9 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 2.0 다듬기 R1 — 하단 패널 여닫기 = Ctrl+Shift+J. VS Code 의 패널 토글(Ctrl+J) 손버릇에 R3.8 정책대로 Shift 를 얹었다
   // (Ctrl+J 단독은 리드라인 accept-line·vim 아래 줄이라 셸에 둔다 — 터미널은 Ctrl+Shift+J 도 같은 0x0A 로 보내므로
   // 셸이 잃는 키는 없다). 레일 [서버 도구] 버튼과 같은 동작(마지막으로 연 탭을 되살린다).
-  { action: 'bottom.toggle', category: 'panel', labelKo: '하단 패널 열고 닫기', win: 'Ctrl+Shift+J', mac: 'Cmd+Shift+J', implemented: true },
+  // M12 R2(메인 결정): 터미널 공간에서만 — AI 공간에선 같은 키가 워크트리 점프(Orca 키)다. Ctrl+J 단독은 에이전트 터미널(Claude Code 줄바꿈)로 간다.
+  { action: 'bottom.toggle', category: 'panel', labelKo: '하단 패널 열고 닫기(터미널 공간)', win: 'Ctrl+Shift+J', mac: 'Cmd+Shift+J', implemented: true, space: 'term' },
+  { action: 'worktree.jump', category: 'view', labelKo: '워크트리 점프(AI 공간)', win: 'Ctrl+Shift+J', mac: 'Cmd+Shift+J', implemented: true, space: 'ai' },
   // 포트 모니터 = Ctrl+Alt+P — 숨긴 셋(Ctrl+Alt+K·V·O)과 같은 줄. bash 기본 키맵에 M-C-p 가 없고 zsh 의 ^[^P 도 없다(위 머리 주석의 목록).
   // Ctrl+Shift+P 는 비어 있지만 VS Code 의 명령 팔레트 손버릇과 부딪혀 뜻이 갈린다 — 그래서 안 썼다.
   // 이름은 옛 메뉴 명령 id 그대로(panel.k8s 와 같은 방식 — 설정 저장값·features 표가 이 이름을 본다).

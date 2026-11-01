@@ -289,7 +289,8 @@ export function FileTree({
    * M12 CV-01 AI 작업 공간 탐색기(Orca) — 주면 **뿌리 고정 트리**가 된다: 파일 클릭 = 가운데 탭으로 열기, 폴더 클릭 = 펼치기/접기,
    * 다른 폴더로 들어가지 않는다(상위로·경로 줄 없음). 터미널 [파일] 탭은 주지 않는다 — 펼침(▸)·끌어 옮기기·이름 순서는 같다.
    */
-  onOpenFile?: (absPath: string) => void
+  /** preview(M12 R2) = 한 번 누름으로 연 것(미리 보기 탭) · 두 번 누름·메뉴 [열기]는 고정. */
+  onOpenFile?: (absPath: string, preview?: boolean) => void
   /** git 상태 색(Orca) — 절대 경로 → 'modified'·'added'·'untracked'·'deleted'·'conflicted'·'renamed', 폴더는 아래에 바뀐 게 있으면 'dirty'. */
   decorate?: (absPath: string) => string | undefined
   /** 바뀔 때마다 지금 폴더와 펼친 폴더를 조용히 다시 읽는다(선택·펼침 유지) — 폴더 감시가 올린다. */
@@ -548,7 +549,7 @@ export function FileTree({
       if (!onOpenFile) return
       const row = shown[idx]
       if (row.type === 'dir') void toggleDir(name)
-      else if (!row.broken) onOpenFile(joinPath(path, name))
+      else if (!row.broken) onOpenFile(joinPath(path, name), true)
     },
     [shown, anchor, onOpenFile, toggleDir, path]
   )
@@ -1605,8 +1606,8 @@ export function FileTree({
                 // 그전에 로컬 더블클릭은 `download()` 를 불렀는데 그 함수는 원격 전용이라 첫 줄에서
                 // 되돌아왔다 — **로컬에서는 더블클릭이 아무 일도 안 했다.**
                 onDoubleClick={() => {
-                  // M12 뿌리 고정 트리 — 한 번 누름이 이미 펼치거나 열었다.
-                  if (pinned) return
+                  // M12 뿌리 고정 트리 — 한 번 누름이 이미 펼치거나 열었다. 파일이면 미리 보기 탭을 고정(M12 R2, Orca).
+                  if (pinned) return void (!isDir && kind !== 'broken' && onOpenFile?.(joinPath(path, entry.name), false))
                   if (kind === 'broken') return setError(t('file.brokenLink'))
                   if (isDir) return enterDir(entry.name)
                   if (backend.xfer) return void download([entry], false, true)

@@ -61,7 +61,18 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   { id: 'managed', group: 'aiws', items: [i('managed.list', 'managed.list', 'managed.desc'), i('managed.install', 'managed.installable', 'managed.noTargets')] },
   soon('usage', 'aiws'),
   soon('git', 'aiws'),
-  soon('editor', 'aiws'),
+  // M12 R2 에디터 옵션(Orca 기본값 — shared/editorPrefs.ts).
+  {
+    id: 'editor',
+    group: 'aiws',
+    items: [
+      i('editor.wordWrap', 'settings.editor.wordWrap', 'settings.editor.wordWrap.desc'),
+      i('editor.minimap', 'settings.editor.minimap', 'settings.editor.minimap.desc'),
+      i('editor.font', 'settings.editor.font', 'settings.editor.font.desc'),
+      i('editor.previewTabs', 'settings.editor.previewTabs', 'settings.editor.previewTabs.desc'),
+      i('editor.diffView', 'settings.editor.diffView', 'settings.editor.diffView.desc')
+    ]
+  },
   soon('sessionSearch', 'aiws'),
   // M1 라운드 3: 알림 센터 — 토스트 켜기/끄기 + 소리(3차) 자리.
   {

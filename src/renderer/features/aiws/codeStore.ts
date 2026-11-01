@@ -8,8 +8,10 @@ import { isInsidePath, onDiskChange } from '@shared/codeFiles'
 import { areWorktreePathsEqual, type Worktree } from '@shared/worktrees'
 import { QUICK_OPEN_RECENT_LIMIT } from '@shared/codeSearch'
 import { mediaOf, type MediaKind } from '@shared/media'
+import type { GitConflictKind } from '@shared/gitDiff'
 import { hostOfWorktree, useAiwsStore } from './store'
 import { t } from '../../i18n'
+import { getEditorPrefs } from '../../store/editorPrefs'
 
 export type CodeFile = {
   path: string
@@ -33,6 +35,10 @@ export type CodeFile = {
   reveal: { line: number; seq: number } | null
   /** M12 CV-02 뷰어 탭(PDF·이미지·오디오/비디오) — 글을 읽지 않는다. 바이트는 탭이 보일 때 뷰어가 읽는다. */
   media?: MediaKind
+  /** M12 R2 미리 보기 탭(Orca editorPreviewTabsEnabled) — 탐색기에서 한 번 눌러 연 것. 다음 미리 보기가 이 자리를 갈아 끼운다. 고치거나 탭을 두 번 누르면 고정. */
+  preview?: boolean
+  /** M12 R2 머지 충돌 — 소스 제어 [충돌]에서 연 파일의 충돌 종류(Orca OpenFile.conflict). 충돌 띠가 말한다. */
+  gitConflict?: GitConflictKind
 }
 
 /** 에디터 청크가 걸어 두는 손잡이 — 모델의 지금 글로 저장, 탭을 닫을 때 모델 정리. 에디터가 아직 안 떴으면 null. */
@@ -53,6 +59,8 @@ type CodeState = {
   /** 디스크 것 받기 — 다시 읽어 모델을 바꾼다(더러움·충돌 지움). */
   reloadFromDisk: (path: string) => Promise<void>
   closeFile: (path: string) => void
+  /** 미리 보기 탭을 고정(탭 두 번 누름). */
+  pin: (path: string) => void
 }
 
 export const PLATFORM = isMac() ? 'darwin' : typeof navigator !== 'undefined' && /Win/i.test(navigator.platform) ? 'win32' : 'linux'
@@ -67,7 +75,12 @@ export const useCodeStore = create<CodeState>()((set, get) => ({
   recentByWorktree: {},
   setActive: (worktreeId, path) => set((s) => ({ activeByWorktree: { ...s.activeByWorktree, [worktreeId]: path } })),
   setDirty: (path, dirty) => {
-    if (get().files.find((f) => same(f.path, path))?.dirty !== dirty) set(patch(path, { dirty }))
+    const f = get().files.find((x) => same(x.path, path))
+    // 고치면 미리 보기가 고정된다(Orca — 편집한 탭을 다음 미리 보기가 갈아 끼우면 안 된다).
+    if (f && (f.dirty !== dirty || (dirty && f.preview))) set(patch(path, dirty ? { dirty, preview: false } : { dirty }))
+  },
+  pin: (path) => {
+    if (get().files.find((f) => same(f.path, path))?.preview) set(patch(path, { preview: false }))
   },
   markSaved: (path, sig, text, dirty) => set(patch(path, { sig, text, dirty, conflict: null })),
   setConflict: (path, conflict) => set(patch(path, { conflict })),
@@ -103,9 +116,10 @@ function activeWorktree(): Worktree | undefined {
 /**
  * **파일 열기 API**(M6 R1 — R2 의 Ctrl+P·전체 검색이 이것을 부른다). 지금 고른 작업 단위에서 연다.
  * path = 절대 경로 또는 워크트리 기준 상대 경로(/·\ 둘 다). line = 1부터, 주면 그 줄로 간다.
+ * opts.preview(M12 R2) = 미리 보기 탭으로(설정 › 편집기 [미리 보기 탭]이 꺼져 있으면 보통 탭). 같은 작업 단위의 안 고친 미리 보기 탭을 갈아 끼운다.
  * 이미 열려 있으면 그 탭을 고르고(줄 이동만), 아니면 디스크에서 읽어 탭을 하나 더한다. 실패하면 사람이 읽을 이유(message — 그대로 보여 주면 된다).
  */
-export async function openFile(path: string, line?: number): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function openFile(path: string, line?: number, opts?: { preview?: boolean; gitConflict?: GitConflictKind }): Promise<{ ok: true } | { ok: false; message: string }> {
   const wt = activeWorktree()
   if (!wt) return { ok: false, message: t('code.err.noWorktree') }
   // M8 R5 원격 작업 단위 — 서버 경로(POSIX)로 열고, 읽기·쓰기·감시는 main 이 SSH 로(host). 빠른 열기·검색·링크가 모두 이 길을 지난다.
@@ -120,9 +134,11 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
     useCodeStore.setState((x) => ({
       recentByWorktree: { ...x.recentByWorktree, [wt.id]: [rel, ...(x.recentByWorktree[wt.id] ?? []).filter((p) => p !== rel)].slice(0, QUICK_OPEN_RECENT_LIMIT) }
     }))
+  const preview = !!opts?.preview && getEditorPrefs().previewTabs
   const open = s.files.find((f) => same(f.path, abs))
   if (open) {
-    useCodeStore.setState(patch(abs, reveal ? { reveal } : {}))
+    // 고정으로 열면(빠른 열기·검색·두 번 누름) 미리 보기였던 탭도 고정된다. 미리 보기로 다시 눌러도 고정 탭은 그대로.
+    useCodeStore.setState(patch(abs, { ...(reveal ? { reveal } : {}), ...(open.preview && !preview ? { preview: false } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}) }))
     s.setActive(open.worktreeId, open.path)
     remember()
     return { ok: true }
@@ -131,8 +147,9 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
   const media = mediaOf(abs)
   if (media) {
     if (!useCodeStore.getState().files.some((f) => same(f.path, abs))) {
-      const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: '', eol: 'lf', sig: '', bytes: 0, readOnly: true, dirty: false, conflict: null, loadSeq: 0, reveal: null, media: media.kind }
-      useCodeStore.setState((x) => ({ files: [...x.files, file] }))
+      const at = preview ? replacePreview(wt.id) : -1
+      const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: '', eol: 'lf', sig: '', bytes: 0, readOnly: true, dirty: false, conflict: null, loadSeq: 0, reveal: null, media: media.kind, ...(preview ? { preview } : {}) }
+      addFile(file, at)
     }
     useCodeStore.getState().setActive(wt.id, abs)
     remember()
@@ -142,8 +159,9 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
   if (!r.ok) return { ok: false, message: r.message }
   // 읽는 사이 같은 파일을 또 열었으면(연타) 하나만.
   if (!useCodeStore.getState().files.some((f) => same(f.path, abs))) {
-    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal }
-    useCodeStore.setState((x) => ({ files: [...x.files, file] }))
+    const at = preview ? replacePreview(wt.id) : -1
+    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal, ...(preview ? { preview } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}) }
+    addFile(file, at)
     void window.ev.code.watch(wt.path, abs, host)
     startWatch()
   }
@@ -151,6 +169,17 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
   remember()
   return { ok: true }
 }
+
+/** 그 작업 단위의 안 고친 미리 보기 탭을 닫는다(새 미리 보기가 그 자리를 넘겨받는다 — Orca getReplaceablePreviewFileId). */
+function replacePreview(worktreeId: string): number {
+  const files = useCodeStore.getState().files
+  const at = files.findIndex((f) => f.worktreeId === worktreeId && f.preview && !f.dirty)
+  if (at >= 0) useCodeStore.getState().closeFile(files[at].path)
+  return at
+}
+/** 탭 줄에 더한다 — 갈아 끼운 미리 보기가 있었으면 그 자리에. */
+const addFile = (file: CodeFile, at: number): void =>
+  useCodeStore.setState((x) => ({ files: at < 0 || at > x.files.length ? [...x.files, file] : [...x.files.slice(0, at), file, ...x.files.slice(at)] }))
 
 let watchStarted = false
 /** 밖에서 바뀜(WS-08) — 더럽지 않으면 조용히 다시 읽고, 더러우면 충돌 안내, 지워졌으면 지워짐 안내. */

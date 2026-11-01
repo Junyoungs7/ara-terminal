@@ -14,6 +14,7 @@ import {
   parseStatusV2,
   pickDefaultBaseRef,
   type GitBranchCompareResult,
+  type GitConflictOperation,
   type GitDiffArgs,
   type GitDiffResult,
   type GitStatusResult
@@ -39,7 +40,21 @@ const failed = (stderr: string, fallback: string): { ok: false; message: string 
 /** 작업 중 변경(스테이지됨·안 됨·추적 안 됨). Orca status-read 의 인자 그대로 + -z. ponytail: 출력은 runProcess 상한(16MB) 안에서 통째로 — 목록은 GIT_STATUS_LIMIT 에서 자른다. */
 export async function readGitStatus(worktreePath: string, io: InspectIO = LOCAL_INSPECT): Promise<GitStatusResult> {
   const r = await io.git(['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all'], worktreePath)
-  return r.code === 0 ? parseStatusV2(r.stdout) : failed(r.stderr, 'git status 실패')
+  if (r.code !== 0) return failed(r.stderr, 'git status 실패')
+  const out = parseStatusV2(r.stdout)
+  // M12 R2 — 충돌이 있을 때만 어느 작업 중인지 본다(새로 고침마다 git 을 더 부르지 않게). [중단] 버튼이 이 값을 쓴다.
+  if (out.entries.some((e) => e.status === 'conflicted')) out.operation = await detectConflictOperation(worktreePath, io)
+  return out
+}
+
+/**
+ * Orca git/source-control/git-conflict-operation.ts detectConflictOperation — 순서도 같다(merge → rebase → cherry-pick).
+ * Orca 는 git 폴더의 파일·폴더를 직접 보지만, 원격(SSH)도 같은 길로 가게 git 에 묻는다(rev-parse --verify). 리베이스는 멈춘 커밋 REBASE_HEAD.
+ */
+export async function detectConflictOperation(worktreePath: string, io: InspectIO = LOCAL_INSPECT): Promise<GitConflictOperation> {
+  const has = async (ref: string): Promise<boolean> => (await io.git(['rev-parse', '-q', '--verify', ref], worktreePath)).code === 0
+  const [merge, rebase, pick] = await Promise.all(['MERGE_HEAD', 'REBASE_HEAD', 'CHERRY_PICK_HEAD'].map(has))
+  return merge ? 'merge' : rebase ? 'rebase' : pick ? 'cherry-pick' : 'unknown'
 }
 
 /** 분기 기준 대비(갈림점 ↔ HEAD, 커밋된 것만). baseRef 를 안 주면 Orca 기본값(origin/HEAD → origin/main …). */
