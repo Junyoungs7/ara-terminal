@@ -25,7 +25,7 @@ test('RGAP-1 원격 작업 단위 — 빠른 열기·검색·소스 제어가 �
     }
   })
   await connectNewSshProfile(page, { name: 'rgap-1', port: h.port, password: 'pw-rgap1' })
-  const hostKey = `tester@127.0.0.1:${h.port}`
+  const hostKey = `dev@127.0.0.1:${h.port}` // connectNewSshProfile 의 기본 사용자(fillNewProfile)
   const added = await page.evaluate(async (k) => (await window.ev.repos.addRemote(k, '~/shop')).ok, hostKey)
   expect(added).toBe(true)
 

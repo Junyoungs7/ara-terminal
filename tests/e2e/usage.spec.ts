@@ -4,7 +4,7 @@
 // 🔴 진짜 claude 를 띄우지 않는다 — 설정(agents.json)의 실행 명령을 가짜 node 스크립트의 절대 경로로 박는다(agents.spec 와 같은 규율).
 import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { test, expect, tempDir, rmDir } from './fixtures'
 
 const win = process.platform === 'win32'
@@ -56,6 +56,9 @@ test('USAGE-1★ 상태바 사용량(statusLine rate_limits) → 누르면 팝�
   git('commit', '-q', '-m', 'init')
   const script = join(userDataDir, 'e2e-home', '.ara', 'agent-hooks', win ? 'claude-statusline.cmd' : 'claude-statusline.sh')
   writeFileSync(join(userDataDir, 'agents.json'), JSON.stringify({ agents: { claude: { command: claude, env: { ARA_E2E_STATUSLINE_SCRIPT: script } } }, migratedAiCliFlags: true }))
+  // 피커의 판 감지는 설정의 명령이 아니라 PATH 의 `claude` 를 본다(detect.ts — where/which). 가짜 bin 을 PATH 앞에 둔다(AG-1 과 같은 규율).
+  const savedPath = process.env.PATH
+  process.env.PATH = bin + delimiter + (savedPath ?? '')
   try {
     const { app, page } = await launch(userDataDir)
     await page.click('.titlebar .tb-spaces [data-space="ai"]')
@@ -90,6 +93,7 @@ test('USAGE-1★ 상태바 사용량(statusLine rate_limits) → 누르면 팝�
     await page.mouse.click(5, 5)
     await expect(pop).toHaveCount(0)
   } finally {
+    process.env.PATH = savedPath
     rmDir(root)
   }
 })

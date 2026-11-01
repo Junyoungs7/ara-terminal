@@ -47,7 +47,7 @@ test('RUNON-1 실행 위치 고르기 — 동의 안 된 서버는 동의 화면
     // 목록: 이 PC + 저장된 SSH 서버(아직 동의 없음 표시).
     const pick = page.locator('[data-aiws="new-runon"]')
     await expect(pick).toHaveValue('local')
-    const hostKey = `tester@127.0.0.1:${h.port}`
+    const hostKey = `dev@127.0.0.1:${h.port}` // connectNewSshProfile 의 기본 사용자(fillNewProfile)
     await expect(pick.locator(`option[value="${hostKey}"]`)).toContainText('아라 데몬 설치 필요')
 
     // 서버를 고르면 동의 화면부터.

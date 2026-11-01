@@ -58,6 +58,9 @@ test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 Oriel
   await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toContain(
     `http://localhost:${fwd.localPort}/preview`
   )
+  // M9 R2: Oriel 은 spy 라 그 주소를 실제로 부르지 않는다 — 터널이 원격으로 닿는지는 main 에서 직접 불러 본다(BRW-1 과 같다).
+  await app.evaluate(async (_e, u) => void (await fetch(u).catch(() => null)), `http://localhost:${fwd.localPort}/preview`)
+  await expect.poll(() => tcpip.hits.length, { timeout: 20_000 }).toBeGreaterThan(0)
   expect(tcpip.hits[0]).toEqual({ destIP: '127.0.0.1', destPort: remote })
   // OS 기본 브라우저로는 새어 나가지 않았다.
   expect((await spyCalls(app)).external).toEqual([])

@@ -100,6 +100,9 @@ export async function connectWithRecovery(
     return await connectWithRecovery(deps, profileId, { ...opts, password: pw })
   }
 
+  // 부팅 복원(retry)의 network 실패는 모달로 묻지 않는다 — 복원 루프가 그 [확인]을 기다리며 멈춰
+  // 뒤 세션·칸 배치까지 서고(RESTORE-4), 그 칸의 오류 카드([재시도])가 같은 사실을 말한다.
+  if (opts.retry && res.reason === 'network') return { ok: false }
   await deps.showFailure(profileId, res)
   return { ok: false }
 }

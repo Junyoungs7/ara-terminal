@@ -147,7 +147,8 @@ test('AG-1★ 피커 → 가짜 claude 실행 → 첫 지시 전달(따옴표·&
     const tab = page.locator('.aiws-tab[data-agent-tab="claude"]')
     await expect(tab).toBeVisible()
     const [sid] = await agentSessionIds(page)
-    await expect.poll(() => termText(page, sid), { timeout: 20_000 }).toMatch(/FAKE-CLAUDE ARGS: .*--dangerously-skip-permissions/)
+    // M9 R2 부터 앞에 `--settings <긴 임시 경로>` 가 붙어 줄이 화면 폭에서 접힌다 — 버퍼 줄을 이어 붙여 본다.
+    await expect.poll(async () => (await termText(page, sid)).replace(/\n/g, ''), { timeout: 20_000 }).toMatch(/FAKE-CLAUDE ARGS: --settings \S+claude-settings-\S+\.json.*--dangerously-skip-permissions/)
     // 첫 지시: Windows 는 입력 상자가 뜬 뒤 입력으로(줄에 안 실림), POSIX 는 인자로. 어느 쪽이든 글자가 그대로 도착한다.
     if (win) {
       await expect.poll(() => termText(page, sid), { timeout: 30_000 }).toContain(`GOT: ${HARD}`)

@@ -149,3 +149,26 @@ describe('createOriel — 감지·링크 열기', () => {
     expect(calls.some((c) => c.includes('open'))).toBe(false)
   })
 })
+
+// r1-fix: AG-1·VAULT-1 이 깨졌을 때 첫 의심이 "--settings 경로가 PowerShell `&` 호출에서 깨진다"였다(실제 원인은 줄 접힘 — 시험 쪽).
+// 사용자 홈에 공백·한글이 있어도 그 줄이 진짜 PowerShell 5.1 → npm 식 .cmd 셔임(%*) 을 지나 CLI 에 인자 그대로 닿는지 고정한다.
+describe.runIf(process.platform === 'win32')('실행 한 줄을 진짜 PowerShell 로 — --settings 경로(공백·한글)', () => {
+  it('★ .cmd 셔임 뒤 CLI 가 받는 argv 가 계획과 같다(새 실행·재개)', async () => {
+    const { runProcess } = await import('../src/main/util/runProcess')
+    const dir = tmp()
+    const js = join(dir, 'argv.cjs')
+    writeFileSync(js, "process.stdout.write(JSON.stringify(process.argv.slice(2)))")
+    const cmd = join(dir, 'claude.cmd')
+    writeFileSync(cmd, ['@echo off', `node "${js}" %*`, ''].join('\r\n'))
+    mkdirSync(join(dir, '홍 길동'))
+    const settingsFile = join(dir, '홍 길동', 'claude-settings-abc.json')
+    const s = defaultAgentSettings()
+    s.agents.claude = { ...s.agents.claude, command: cmd }
+    for (const resume of [undefined, 'abc-123']) {
+      const p = planAgentLaunch({ agent: 'claude', settings: s, shell: 'powershell', extraArgs: ['--settings', settingsFile], ...(resume ? { resume } : {}) })
+      if (!p.ok) throw new Error('plan failed')
+      const r = await runProcess('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', p.line], { timeoutMs: 20_000 })
+      expect(JSON.parse(r.stdout.trim())).toEqual(['--settings', settingsFile, ...(resume ? ['--resume', resume] : ['--dangerously-skip-permissions'])])
+    }
+  }, 60_000)
+})

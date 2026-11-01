@@ -82,6 +82,20 @@ describe('connectWithRecovery — 그 밖', () => {
     expect(await connectWithRecovery(deps, 'p1')).toEqual({ ok: false })
     expect(showFailure).toHaveBeenCalledWith('p1', AUTH)
   })
+
+  it('★ 부팅 복원(retry)의 network 실패는 모달을 안 띄운다 — 복원이 [확인]을 기다리며 멈추지 않게(카드가 말한다)', async () => {
+    const NET: SshConnectResult = { ok: false, reason: 'network', message: 'ECONNREFUSED' }
+    const boot = rig([NET])
+    expect(await connectWithRecovery(boot.deps, 'p1', { retry: true })).toEqual({ ok: false })
+    expect(boot.showFailure).not.toHaveBeenCalled()
+    // 손으로 누른 접속은 그대로 안내한다. 부팅이라도 인증 실패는 안내한다([다시 입력] 갈래).
+    const manual = rig([NET])
+    await connectWithRecovery(manual.deps, 'p1')
+    expect(manual.showFailure).toHaveBeenCalledWith('p1', NET)
+    const auth = rig([AUTH])
+    await connectWithRecovery(auth.deps, 'p1', { retry: true })
+    expect(auth.showFailure).toHaveBeenCalledWith('p1', AUTH)
+  })
 })
 
 // ⚠️ **여기서 안 재는 것**: 서버가 같은 사유를 계속 돌려주고 사람이 계속 답하면 이 함수는 계속

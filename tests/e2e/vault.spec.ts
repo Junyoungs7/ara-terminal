@@ -84,8 +84,9 @@ test('VAULT-1★ 픽스처 claude 세션이 지난 세션 목록에 → 상세(�
     await expect(tab).toBeVisible()
     const sid = await page.evaluate(async () => (await window.ev.session.list()).filter((s) => s.space === 'ai').map((s) => s.id)[0])
     await expect
-      .poll(() => page.evaluate((s) => window.__evTerm(s)?.text() ?? '', sid), { timeout: 20_000 })
-      .toContain(`FAKE-CLAUDE ARGS: --resume ${ID}`)
+      // M9 R2 부터 앞에 `--settings <임시 경로>` 가 붙어(재개에도) 줄이 화면 폭에서 접힌다 — 줄을 이어 붙여 본다.
+      .poll(async () => (await page.evaluate((s) => window.__evTerm(s)?.text() ?? '', sid)).replace(/\n/g, ''), { timeout: 20_000 })
+      .toMatch(new RegExp(`FAKE-CLAUDE ARGS: --settings \\S+\\.json ?--resume ?${ID}`))
   } finally {
     process.env.PATH = savedPath
     rmDir(root)

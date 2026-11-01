@@ -32,7 +32,8 @@ test('MGD-1 설치 동의 화면 — 취소하면 서버에 아무것도 안 생
   const h = await ssh({ password: 'pw-mgd1', execHandler: remote.handler })
   await connectNewSshProfile(ara.page, { name: 'mgd-1', port: h.port, password: 'pw-mgd1' })
   // 접속만으로는 관리형 명령이 하나도 가지 않는다(터미널 공간 원칙). 셸 PID 질의(remoteCwd) 같은 접속 쪽 exec 은 따로 있다.
-  const ours = (): string[] => remote.cmds.filter((c) => c.includes('ara-server') || c.includes('uname'))
+  // 묻기(PROBE_SCRIPT)만 `uname -m` 을 쓴다 — 상태바 OS 칸의 sys.overview 도 `uname -s` 를 보내므로 그것과 가른다.
+  const ours = (): string[] => remote.cmds.filter((c) => c.includes('ara-server') || c.includes('uname -m'))
   expect(ours()).toEqual([])
   await openManaged(ara.page)
   await ara.page.click(`${drawer} [data-managed="install"]`)
