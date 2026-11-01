@@ -150,10 +150,14 @@
       "src/renderer/src/store/slices/rate-limits.ts",
       "src/renderer/src/store/slices/usage-provider-slices.ts",
       "src/renderer/src/components/status-bar/UsageRosterPanel.tsx",
-      "docs/site/content/docs/agents/usage-tracking.mdx"
+      "docs/site/content/docs/agents/usage-tracking.mdx",
+      "src/main/rate-limits/service",
+      "src/main/claude/statusline-script.ts",
+      "src/main/claude/statusline-install.ts",
+      "src/shared/claude-statusline-rate-limits.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-01",
