@@ -145,11 +145,13 @@ export function TitleBar({
               aria-selected={space.value === s}
               className={space.value === s ? 'on' : undefined}
               data-space={s}
+              aria-label={t('space.' + s)}
               title={`${t('space.' + s)} · ${keyOf('space.' + s)}` + (space.attention?.[s] ? ' · ' + t('space.attention') : '')}
               onClick={() => space.onPick(s)}
             >
               {s === 'term' ? <SquareTerminal aria-hidden /> : <Sparkles aria-hidden />}
-              {t('space.' + s)}
+              {/* 좁은 창에선 이 라벨만 접힌다(shell.css "타이틀바 — 좁을 때 접는 순서") — 이름은 aria-label·title 이 지킨다. */}
+              <span className="tb-spaces-label">{t('space.' + s)}</span>
               {space.attention?.[s] && <i className="tb-spaces-dot" role="img" aria-label={t('space.attention')} />}
             </button>
           ))}

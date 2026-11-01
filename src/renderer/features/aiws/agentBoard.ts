@@ -46,9 +46,21 @@ export function feedKindOf(prev: AgentStatusView | undefined, next: AgentStatusV
 
 /** 피드 상한 — 오래된 것부터 버린다. ponytail: 고정 상한·영속 없음(재시작하면 탭도 없다 — M4 데몬 때 다시 본다). */
 export const FEED_CAP = 200
-/** 최신이 위. 같은 시각이면 나중에 들어온 것(id 큰 것)이 위. */
+/**
+ * 최신이 위. 같은 시각이면 나중에 들어온 것(id 큰 것)이 위.
+ * **일 시작은 지금 일하는 중일 때만 남긴다** — 그 세션의 가장 새 항목일 때만. Orca 와 같다
+ * (components/activity/activity-pane-events.ts: 지난 이력은 done·blocked·waiting 만 줄이 되고
+ * working 은 살아 있는 지금 상태로만 붙는다). 한 턴이 끝나면 [끝남 · 승인 대기] 만 남는다.
+ */
 export function feedView(events: readonly FeedEvent[]): FeedEvent[] {
-  return [...events].sort((a, b) => b.at - a.at || b.id - a.id)
+  const seen = new Set<string>()
+  return [...events]
+    .sort((a, b) => b.at - a.at || b.id - a.id)
+    .filter((e) => {
+      const newest = !seen.has(e.sessionId)
+      seen.add(e.sessionId)
+      return e.kind !== 'working' || newest
+    })
 }
 
 /**

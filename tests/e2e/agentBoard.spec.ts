@@ -138,10 +138,12 @@ test('BOARD-1★ 가짜 claude 한 턴 — 터미널 공간에서 기다림 토�
     const glyph = page.locator('.aiws-tab[data-agent-tab="claude"] .ag-glyph')
     await expect(glyph).toHaveAttribute('data-agent-state', 'idle')
 
-    // 활동 피드 — 최신이 위: 끝남 · 승인 대기 · 일 시작. 줄을 누르면 그 탭으로.
+    // 활동 피드 — 최신이 위: 끝남 · 승인 대기. 일 시작(working)은 **지금 일하는 중일 때만** 줄이 된다 —
+    // Orca activity-pane-events.ts 와 같다(지난 이력은 done·blocked·waiting 만). 턴이 끝났으니 둘이다.
+    // 줄을 누르면 그 탭으로.
     await page.click(`${rail} [data-aiws="agents"]`)
     const rows = page.locator('.aiws-board[data-aiws="activity"] .aiws-feed-row')
-    await expect.poll(() => rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-feed')))).toEqual(['done', 'blocked', 'working'])
+    await expect.poll(() => rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-feed')))).toEqual(['done', 'blocked'])
     await rows.first().click()
     await expect(page.locator('[data-aiws="agent-ws"]')).toBeVisible()
 

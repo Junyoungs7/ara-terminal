@@ -50,8 +50,17 @@ describe('활동 피드(AI-09)', () => {
     expect(feedKindOf(v('idle'), v('idle', { source: 'hook:StopFailure' }))).toBeNull()
   })
   it('정렬 — 최신이 위, 같은 시각이면 나중에 들어온 것이 위', () => {
-    const e = (id: number, at: number): FeedEvent => ({ id, at, sessionId: 's', kind: 'working', estimated: false })
+    const e = (id: number, at: number): FeedEvent => ({ id, at, sessionId: 's' + id, kind: 'working', estimated: false })
     expect(feedView([e(1, 100), e(2, 300), e(3, 200), e(4, 300)]).map((x) => x.id)).toEqual([4, 2, 3, 1])
+  })
+  it('일 시작은 지금 일하는 중일 때만(Orca activity-pane-events) — 지난 working 은 안 남는다', () => {
+    const e = (id: number, kind: FeedEvent['kind'], sessionId = 's'): FeedEvent => ({ id, at: id, sessionId, kind, estimated: false })
+    // 한 턴: 작업 → 승인 대기 → 작업 → 끝남
+    const turn = [e(1, 'working'), e(2, 'blocked'), e(3, 'working'), e(4, 'done')]
+    expect(feedView(turn).map((x) => x.kind)).toEqual(['done', 'blocked'])
+    // 아직 일하는 중이면 그 한 줄은 맨 위에 남는다. 다른 세션의 작업 중은 그 세션 기준.
+    expect(feedView([...turn, e(5, 'working')]).map((x) => x.kind)).toEqual(['working', 'done', 'blocked'])
+    expect(feedView([e(1, 'working', 'a'), e(2, 'done', 'b')]).map((x) => x.sessionId)).toEqual(['b', 'a'])
   })
 })
 
