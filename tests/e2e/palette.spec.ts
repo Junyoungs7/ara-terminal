@@ -59,6 +59,8 @@ test('PAL-2b 닫았다 열면 검색어가 비어 있다', async ({ ara }) => {
 test('PAL-3★ 단축키 있는 기능·메뉴 명령·저장한 서버가 한 목록에 함께 나온다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-pal3' })
   await connectNewSshProfile(ara.page, { name: 'pal3-서버', port: h.port, password: 'pw-pal3' })
+  // 접속 직후 새 터미널이 포커스를 가져가는 중에 F1 을 누르면 사라진다(전체 실행 부하에서 반복) — 자리 잡은 뒤 누른다.
+  await expect.poll(() => ara.page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea'))).toBe(true)
   await ara.page.keyboard.press('F1')
   await expect(palette(ara.page)).toBeVisible()
   // 빈 검색어는 묶음(열린 창·최근 서버·숨긴 기능)만 보인다 — 표 전체는 치면 나온다(2.0 다듬기 R1).
@@ -109,6 +111,8 @@ test('PAL-5★ 찾아서 Enter 하면 그 기능이 실행된다', async ({ ara 
 test('PAL-6★ 팔레트에서 서버를 고르면 그 서버로 접속한다', async ({ ara, ssh }) => {
   const h = await ssh({ password: 'pw-pal6' })
   await connectNewSshProfile(ara.page, { name: 'pal6-서버', port: h.port, password: 'pw-pal6' })
+  // 접속 직후 새 터미널이 포커스를 가져가는 중에 F1 을 누르면 사라진다(전체 실행 부하에서 반복) — 자리 잡은 뒤 누른다.
+  await expect.poll(() => ara.page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea'))).toBe(true)
   const before = await ara.page.locator('.term-tabbar .ttab').count()
 
   await ara.page.keyboard.press('F1')
