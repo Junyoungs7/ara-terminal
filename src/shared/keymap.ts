@@ -36,6 +36,8 @@ export type KeymapAction =
   | 'agent.start.claude'
   | 'agent.start.codex'
   | 'agent.start.gemini'
+  // M5 AI-13 에이전트 탭 채팅 ↔ 터미널. Orca 는 Ctrl+Shift+J 인데 아라는 그 키가 하단 패널(bottom.toggle)이라 U 로 비켰다.
+  | 'agent.chatToggle'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
   | 'explorer.toggle'
@@ -142,6 +144,8 @@ const ALL_KEYS: readonly KeyBinding[] = [
   { action: 'agent.start.claude', category: 'ai', labelKo: 'Claude Code 에이전트 시작', win: 'Alt+1', mac: 'Opt+1', implemented: true },
   { action: 'agent.start.codex', category: 'ai', labelKo: 'Codex 에이전트 시작', win: 'Alt+2', mac: 'Opt+2', implemented: true },
   { action: 'agent.start.gemini', category: 'ai', labelKo: 'Gemini CLI 에이전트 시작', win: 'Alt+3', mac: 'Opt+3', implemented: true },
+  // M5 AI-13 — Ctrl+Shift+U 는 셸·리드라인 바인딩이 없다(R3.8 정책 안). 에이전트 탭이 보일 때만 뜻이 있다(AgentPane.tsx).
+  { action: 'agent.chatToggle', category: 'ai', labelKo: '에이전트 채팅 ↔ 터미널', win: 'Ctrl+Shift+U', mac: 'Cmd+Shift+U', implemented: true },
   // Ctrl+B 는 tmux prefix 이자 리드라인 커서 왼쪽 이동이었다. VS Code 탐색기 관례(Ctrl+Shift+E)로 옮기고 배선한다.
   { action: 'fileTree.toggle', category: 'view', labelKo: '파일 트리 토글', win: 'Ctrl+Shift+E', mac: 'Cmd+Shift+E', implemented: true },
   { action: 'sidebar.collapse', category: 'view', labelKo: '사이드바 접기', win: 'Ctrl+Shift+B', mac: 'Cmd+Shift+B', implemented: true },

@@ -13,6 +13,7 @@ import { useAiwsStore } from './store'
 import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
 import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
+import { clearDraft } from './chatDraft'
 
 export type AgentTab = {
   sessionId: string
@@ -46,6 +47,9 @@ type AgentState = {
   view: AiwsView
   /** 활동 피드(AI-09) — 상태 변화 이력, 들어온 순. 그릴 때 feedView 로 최신이 위. */
   feed: FeedEvent[]
+  /** M5 AI-13: 채팅으로 보는 탭(없으면 터미널). AI-14 기본은 터미널 — 이 앱 실행 동안만 기억한다. */
+  chatOn: Record<string, boolean>
+  toggleChat: (sessionId: string) => void
   loadAgents: (force?: boolean) => Promise<void>
   saveSettings: (next: AgentSettings) => Promise<void>
   /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
@@ -69,6 +73,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   viewing: null,
   view: 'worktree',
   feed: [],
+  chatOn: {},
 
   loadAgents: async (force) => {
     startStatus()
@@ -102,6 +107,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.sessionId === sessionId)
     if (!tab) return
     if (!tab.exited) void window.ev.session.destroy(sessionId)
+    clearDraft(sessionId)
     const pending = pendingNotes.get(sessionId)
     if (pending) clearTimeout(pending.timer)
     pendingNotes.delete(sessionId)
@@ -122,7 +128,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   // 탭을 보면 본 것(herdr: 그 칸으로 가면 seen = true).
   setViewing: (sessionId) => set((s) => ({ viewing: sessionId, ...(sessionId ? { seenById: { ...s.seenById, [sessionId]: true } } : {}) })),
 
-  setView: (view) => set({ view })
+  setView: (view) => set({ view }),
+
+  toggleChat: (sessionId) => set((s) => ({ chatOn: { ...s.chatOn, [sessionId]: !s.chatOn[sessionId] } }))
 }))
 
 /** 그 에이전트 탭으로 — 워크트리를 고르고 그 탭을 고른 뒤 가운데를 탭 화면으로(대시보드 카드·피드·알림이 같은 길). */

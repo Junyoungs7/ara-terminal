@@ -1,13 +1,15 @@
 import { useEffect, useState, type JSX } from 'react'
-import { FileText, Plus, X } from 'lucide-react'
+import { FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, type AgentId } from '@shared/agents'
 import type { Worktree } from '@shared/worktrees'
-import { matchBinding } from '@shared/keymap'
+import { isMac, KEYMAP, matchBinding } from '@shared/keymap'
 import { t } from '../../i18n'
 import { TerminalPane } from '../../terminal/TerminalPane'
 import { pickInitialAgent, useAgentStore } from './agentStore'
 import { displayOf } from './agentStatusView'
 import { AgentGlyph } from './AgentGlyph'
+import { AgentChatView } from './AgentChatView'
+import { canChat } from '@shared/agentChat'
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
@@ -102,6 +104,9 @@ export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Work
   )
 }
 
+const chatKey = KEYMAP.find((k) => k.action === 'agent.chatToggle')
+const CHAT_KEY = chatKey ? (isMac() ? chatKey.mac : chatKey.win) : ''
+
 /**
  * M3 AI-03 가운데 — 고른 작업 단위의 **에이전트 터미널 탭 줄**(시안 SW-final: 에이전트 탭 + 파일 탭 자리) + 그 탭의 터미널.
  * 터미널은 아라의 TerminalPane 그대로(로컬 PTY). 탭을 바꿔도 다른 탭의 xterm 은 붙은 채 숨긴다(스크롤백 유지).
@@ -113,8 +118,11 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
   const tabs = allTabs.filter((x) => x.worktreeId === worktree.id)
   const statusById = useAgentStore((s) => s.statusById)
   const seenById = useAgentStore((s) => s.seenById)
+  const chatOn = useAgentStore((s) => s.chatOn)
   const [picking, setPicking] = useState(false)
-  const shownId = tabs.length === 0 || picking ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]).sessionId
+  const shownTab = tabs.length === 0 || picking ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
+  const shownId = shownTab?.sessionId ?? null
+  const chatAgent = shownTab && canChat(shownTab.agent) ? shownTab.sessionId : null
   // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
   useEffect(() => {
     useAgentStore.getState().setViewing(shownId)
@@ -124,6 +132,13 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
   // 못 띄우면(설치 안 됨·꺼 둠) 피커를 열어 이유를 보게 한다. 이 화면이 떠 있을 때만 받는다(터미널 공간에선 무동작).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // M5 AI-13 채팅 ↔ 터미널(같은 세션). 채팅을 볼 수 있는 에이전트 탭이 보일 때만.
+      if (matchBinding(e, 'agent.chatToggle')) {
+        if (!chatAgent) return
+        e.preventDefault()
+        useAgentStore.getState().toggleChat(chatAgent)
+        return
+      }
       if (matchBinding(e, 'agent.start')) {
         e.preventDefault()
         setPicking(true)
@@ -139,11 +154,12 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [worktree.id, worktree.path])
+  }, [worktree.id, worktree.path, chatAgent])
   if (tabs.length === 0 || picking) {
     return <AgentPicker worktree={worktree} onLaunched={() => setPicking(false)} onCancel={tabs.length ? () => setPicking(false) : undefined} />
   }
   const active = tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]
+  const chatting = canChat(active.agent) && !!chatOn[active.sessionId]
   return (
     <div className="aiws-agentws" data-aiws="agent-ws">
       <div className="aiws-tabs" role="tablist" aria-label={t('aiws.agent.tabs')}>
@@ -188,6 +204,19 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
           <FileText className="aiws-tab-ic" aria-hidden />
           <span>{t('aiws.agent.files')}</span>
         </button>
+        {canChat(active.agent) && (
+          <button
+            type="button"
+            className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
+            data-aiws="chat-toggle"
+            aria-pressed={chatting}
+            title={`${t(chatting ? 'aiws.chat.toTerminal' : 'aiws.chat.toChat')} (${CHAT_KEY})`}
+            onClick={() => useAgentStore.getState().toggleChat(active.sessionId)}
+          >
+            {chatting ? <SquareTerminal className="aiws-tab-ic" aria-hidden /> : <MessageSquare className="aiws-tab-ic" aria-hidden />}
+            <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
+          </button>
+        )}
         <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setPicking(true)}>
           <Plus />
         </button>
@@ -198,9 +227,10 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
+      {chatting && <AgentChatView key={active.sessionId} tab={active} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
-        <div key={x.sessionId} className="aiws-term" hidden={x !== active}>
-          <TerminalPane sessionId={x.sessionId} active={x === active} local serverKey="localhost" agent />
+        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting}>
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting} local serverKey="localhost" agent />
         </div>
       ))}
     </div>

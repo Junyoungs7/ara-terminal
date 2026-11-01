@@ -52,15 +52,15 @@ const PASTE_SUB = 'ara'
  * 왜 파일이어야 하나: 아라에게 넘기는 것은 **경로**다(아래 intake 참고). 캡처는 디스크 경로가 비어
  * 있어 그대로는 넘길 것이 없다 — 여기서 실체를 만들어 주지 않으면 "붙였는데 아무 일도 안 일어난다".
  */
-async function saveClipFile(f: File): Promise<{ path: string } | { error: string }> {
+export async function saveClipFile(f: File, sub = PASTE_SUB): Promise<{ path: string } | { error: string }> {
   const fail = (why?: string): { error: string } => ({ error: why ? `${t('ara.drop.failed')} — ${why}` : t('ara.drop.failed') })
   const dir = await window.ev?.fs.downloadsDir().catch(() => '')
   if (!dir) return fail()
   const name = clipFileName(f.name, Date.now())
   const bytes = new Uint8Array(await f.arrayBuffer())
-  const r = await window.ev?.fs.saveBytes({ dir, sub: PASTE_SUB, name, bytes }).catch(() => null)
+  const r = await window.ev?.fs.saveBytes({ dir, sub, name, bytes }).catch(() => null)
   if (!r?.ok) return fail(r?.message)
-  return { path: joinPath(joinPath(dir, PASTE_SUB), name) }
+  return { path: joinPath(joinPath(dir, sub), name) }
 }
 
 /** 선택기에 쓰는 짧은 공급자 이름("Anthropic Claude" → "Anthropic"). */
