@@ -718,6 +718,60 @@
     "notes": "M10 R1(v2.2): WorktreeSidebar 창 캡처 키(에이전트 터미널 안에서도 — Orca allowInTerminal), AI 작업 공간에서만(KEYMAP 밖). 고른 작업 단위 → 지우기 확인(기존 대화상자), 본 작업 폴더 → 프로젝트를 목록에서 빼기 확인(Orca confirm-remove-folder). 뺀 것: '다시 묻지 않기'(skipDeleteWorktreeConfirm — Orca 기본 꺼짐), 키 바꾸기 설정"
   },
   {
+    "id": "WS-18",
+    "feature": "워크트리 체크포인트(메모·카드 상태)",
+    "orcaPaths": [
+      "docs/site/content/docs/cli/worktree-checkpoints.mdx",
+      "src/shared/worktree/meta-types.ts",
+      "src/shared/workspace-status-defaults.ts",
+      "src/renderer/src/components/sidebar/WorktreeMetaDialogDraft.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R2(v2.2 51b3bf4): Orca 의 체크포인트 = 되돌리기 지점이 아니라 작업 단위의 자유 메모(comment) + 카드 상태(todo/in-progress/in-review/completed). projects.json meta 에 저장, 줄 우클릭 '메모·상태…' 대화상자, 둘째 줄에 상태 칩·메모 첫 줄, 툴팁에 전문. 뺀 것: 에이전트가 쓰는 길(`orca worktree set --comment` — 아라엔 에이전트용 CLI 가 없음), 사용자 정의 상태·상태별 묶기·보드. 메모 상한 4000자(ponytail)."
+  },
+  {
+    "id": "WS-19",
+    "feature": "외부(아라 밖) 워크트리 감지·숨김·보이기",
+    "orcaPaths": [
+      "src/shared/worktree/ownership.ts",
+      "src/shared/worktree/visibility-sources.ts",
+      "src/shared/external-worktree-visibility.ts",
+      "src/shared/worktree-visibility-resolution.ts",
+      "src/renderer/src/components/sidebar/WorktreeVisibilityDialog.tsx",
+      "src/renderer/src/components/sidebar/HiddenWorktreeRecoveryList.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R2(v2.2 51b3bf4): 아라가 만든 것 = meta.createdAt(로컬·원격 생성 때 기록). 출처 claude(<repo>/.claude/worktrees)·gsd(.gsd-workspaces)·other. 기본값 Orca 그대로: 새 프로젝트는 다 숨김, 롤아웃(2026-11-01 UTC) 전 프로젝트는 other 만 보임, claude·gsd 는 늘 숨김. 프로젝트 머리 아래 '숨은 워크트리 n개' 카드 / 프로젝트 ⋯ '아라 밖 워크트리…' → 출처별 체크·하나씩 [보이기]/[숨기기](shownExternalPaths = Orca importedExternalWorktreePaths). 점프 목록도 숨긴 것 뺌. IPC repos:update(일부 칸). 뺀 것: unknown-legacy 배치 휴리스틱, 전역 기본값 설정, 사용자 정의 위치, 새 외부 워크트리 받은편지함."
+  },
+  {
+    "id": "WS-20",
+    "feature": "공유 경로(링크) + .worktreeinclude 와 겹침 정리",
+    "orcaPaths": [
+      "src/main/ipc/worktree-symlinks.ts",
+      "src/main/git/worktree-symlink-detection.ts",
+      "src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts",
+      "docs/site/content/docs/model/orca-yaml.mdx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R2(v2.2 51b3bf4): Orca Settings › Repository › Worktree Shared Paths(repo.symlinkPaths) 를 프로젝트 ⋯ '공유 경로…'(한 줄에 하나)로. 만들 때 폴더는 Windows 접합점→dir 심링크, 파일은 file 심링크, 있는 대상 보존. 만든 링크는 meta.linkedPaths 에 기록 → 지울 때 (기록 ∪ 지금 설정)을 lstat 으로 링크인 것만 unlink 한 뒤 git worktree remove(아라 메모 '접합점은 원본을 지운다'). .worktreeinclude 복사(1차)는 이미 링크된 자리를 건너뜀(링크 안으로 복사 = 원본에 씀). 시험: 링크로 쓴 파일이 본 폴더에 보임(양성 대조) → 지운 뒤 원본 그대로, 같은 이름 진짜 폴더는 안 지움(음성 대조). 뺀 것: APFS 클론, orca.yaml sharedDirectories(3차), 원격(막고 안내)."
+  },
+  {
+    "id": "WS-21",
+    "feature": "보존 브랜치 검토",
+    "orcaPaths": [
+      "src/main/git/worktree-branch-removal.ts",
+      "src/renderer/src/components/sidebar/preserved-branch-toast.tsx",
+      "src/renderer/src/components/sidebar/preserved-branch-batch-toast.tsx",
+      "src/renderer/src/components/sidebar/PreservedBranchBatchReviewDialog.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R2(v2.2 51b3bf4): 작업 단위 지우기 = 폴더 + 브랜치(branch -d, Orca 와 같음 — 1차의 '브랜치는 남김'을 바꿈). 체크아웃됨이면 prune 후 재시도, git 이 거절(미병합)하면 {branchName, head} 로 남기고 알림 센터 한 줄 + 사이드바 '남긴 브랜치 n개 [검토]' 띠 → 검토 대화상자(기본 전부 고름) → update-ref -d <ref> <head> 대조 삭제(그사이 움직였거나 체크아웃돼 있으면 거절) + branch.<name> 설정 지움. 원격 작업 단위도 같은 규칙(SSH git). 뺀 것: 스쿼시 병합 판정(병합된 트리면 -D), '늘 강제로 지우기' 설정, 여러 개 한꺼번에 지우기(아라는 한 개씩 지우므로 남긴 목록을 창이 사는 동안 모음)."
+  },
+  {
     "id": "CV-04",
     "feature": "에디터 옵션(줄바꿈·미니맵·글꼴·미리 보기 탭·변경 보기 기본) + 언어 하이라이트 확장",
     "orcaPaths": [
