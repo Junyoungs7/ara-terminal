@@ -21,7 +21,7 @@ import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
 import { createHookServer, installHooks } from './hooks'
-import { createAgentStatusTracker, promptBytes, submitDelayMs, type AgentStatusTracker } from './status'
+import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
@@ -153,13 +153,11 @@ export function registerAgentsFeature(deps: {
   })
   handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
   handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
-  // 채팅 입력 → PTY. 첫 지시와 같은 방식(괄호 붙여넣기 → 길이만큼 기다려 Enter) — 따옴표·줄바꿈이 셸·TUI 에 다시 읽히지 않는다.
+  // 채팅 입력 → PTY. 첫 지시와 같은 길(status.ts send — 입력 상자가 뜬 뒤 괄호 붙여넣기 → 길이만큼 기다려 Enter).
+  // 바로 쓰면 에이전트가 뜨기 전 셸(PowerShell PSReadLine 의 미리 읽기)이 글을 먹는다 — e2e CHAT-1 실패의 원인.
   handle('agents:chatSend', ({ sessionId, agent, text }) => {
     if (!isAgentId(agent) || typeof text !== 'string' || !text.trim() || !deps.sessions().has(sessionId)) return { ok: false }
-    const win = process.platform === 'win32'
-    deps.sessions().write(sessionId, promptBytes(agent, text, win))
-    setTimeout(() => deps.sessions().write(sessionId, '\r'), submitDelayMs(agent, text, win))
-    return { ok: true }
+    return { ok: ensureTracker().send(sessionId, text) }
   })
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {

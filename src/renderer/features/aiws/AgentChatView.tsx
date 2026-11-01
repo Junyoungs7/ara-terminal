@@ -163,6 +163,11 @@ export function AgentChatView({ tab, status, onTerminal }: { tab: AgentTab; stat
           </button>
         </div>
       )}
+      {status?.promptFailed && !blocked && (
+        <p className="aiws-note aiws-err" role="alert" data-aiws="chat-not-delivered">
+          {t('aiws.chat.notDelivered')}
+        </p>
+      )}
       {error && (
         <p className="aiws-note aiws-err" role="alert">
           {error}

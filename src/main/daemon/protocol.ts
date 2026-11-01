@@ -4,6 +4,7 @@
 // ⚠️ 이 파일은 데몬 번들(daemonEntry)에도 들어간다 — electron 을 import 하지 않는다.
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { join, posix } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import type { AgentLimits } from '@shared/resources'
 
 /**
@@ -47,8 +48,10 @@ export function encodeFrame(msg: unknown): string {
 /** 조각난 바이트 흐름에서 줄을 모아 JSON 으로 돌려준다. 깨진 줄은 건너뛴다. 상한을 넘으면 onOverflow(그 연결을 끊으라는 뜻). */
 export function createFrameParser(onMessage: (msg: unknown) => void, onOverflow: () => void = () => {}, max = FRAME_MAX_BYTES): (chunk: Buffer | string) => void {
   let pending = ''
+  // 소켓 조각 경계에 걸린 한글(UTF-8 여러 바이트)을 깨지 않게 — 남은 바이트는 디코더가 다음 조각까지 들고 있는다.
+  const dec = new StringDecoder('utf8')
   return (chunk) => {
-    pending += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    pending += typeof chunk === 'string' ? chunk : dec.write(chunk)
     let nl: number
     while ((nl = pending.indexOf('\n')) >= 0) {
       const line = pending.slice(0, nl)

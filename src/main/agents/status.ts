@@ -70,10 +70,14 @@ type Entry = {
   lastOutputAt: number
   prompt: { text: string; deadline: number } | null
   promptFailed: boolean
+  /** 입력 상자를 한 번이라도 봤다 — 그 뒤의 채팅 입력은 일하는 중에도 넣는다(Claude 는 턴 중 입력을 줄 세운다). */
+  composerSeen: boolean
 }
 
 export type AgentStatusTracker = SessionTap & {
   track(o: { sessionId: string; agent: AgentId; cols?: number; rows?: number; prompt?: string }): void
+  /** M5 채팅 입력 — 첫 지시와 같은 길(입력 상자가 뜬 뒤). 바로 쓰면 셸(PSReadLine 미리 읽기)이 먹는다. 추적 안 하는 탭이면 false. */
+  send(sessionId: string, text: string): boolean
   hook(e: HookEvent): void
   views(): AgentStatusView[]
 }
@@ -121,9 +125,13 @@ export function createAgentStatusTracker(deps: {
       e.promptFailed = true
       return
     }
-    if (!e.screen || !composerReady(e.agent, input, e.screen)) return
+    if (!e.screen) return
+    // 처음 한 번은 입력 상자가 보여야 넣는다(셸 단계엔 절대 안 침). 본 뒤에는 막힘(승인·질문 창)만 아니면 넣는다.
+    // 일하는 중(스피너가 계속 그림)엔 잠잠함을 기다리지 않는다 — 턴이 길면 제한 시간에 걸린다.
+    const ready = composerReady(e.agent, input, e.screen)
+    if (!ready && (!e.composerSeen || e.screen.state === 'blocked')) return
     const quiet = now() - e.lastOutputAt
-    if (quiet < PROMPT_QUIET_MS) {
+    if (ready && quiet < PROMPT_QUIET_MS) {
       schedule(id, e, PROMPT_QUIET_MS - quiet)
       return
     }
@@ -139,6 +147,7 @@ export function createAgentStatusTracker(deps: {
     const input = screenOf(e)
     const d = detectScreen(e.agent, input)
     if (!d.skip) e.screen = d
+    if (e.screen && composerReady(e.agent, input, e.screen)) e.composerSeen = true
     deliver(id, e, input)
     publish(id, e)
   }
@@ -165,7 +174,8 @@ export function createAgentStatusTracker(deps: {
         silentTimer: null,
         lastOutputAt: now(),
         prompt: prompt ? { text: prompt, deadline: now() + promptTimeout } : null,
-        promptFailed: false
+        promptFailed: false,
+        composerSeen: false
       }
       term.onTitleChange((t) => {
         e.title = t
@@ -178,6 +188,17 @@ export function createAgentStatusTracker(deps: {
       entries.set(sessionId, e)
       // 첫 지시가 있으면 출력이 없어도 제한 시간이 지나면 실패를 알린다.
       if (prompt) setTimeout(() => evaluate(sessionId), promptTimeout + 50)
+    },
+    send(sessionId, text) {
+      const e = entries.get(sessionId)
+      if (!e) return false
+      // 아직 못 넣은 것이 있으면 이어 붙인다(잃지 않게).
+      e.prompt = { text: e.prompt ? `${e.prompt.text}
+${text}` : text, deadline: now() + promptTimeout }
+      e.promptFailed = false
+      if (!e.evalTimer) evaluate(sessionId)
+      setTimeout(() => evaluate(sessionId), promptTimeout + 50)
+      return true
     },
     hook(ev) {
       const e = entries.get(ev.paneKey)

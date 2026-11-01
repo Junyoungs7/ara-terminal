@@ -13,6 +13,14 @@ describe('프레이밍(NDJSON)', () => {
     feed(wire.slice(11))
     expect(got).toEqual([{ a: 1 }, { b: '줄\n바꿈' }])
   })
+  it('조각 경계에 걸린 한글 바이트를 깨뜨리지 않는다(채팅 입력이 데몬 소켓을 지난다)', () => {
+    const got: unknown[] = []
+    const feed = createFrameParser((m) => got.push(m))
+    const bytes = Buffer.from(encodeFrame({ data: '한글 따옴표' }))
+    feed(bytes.subarray(0, 10)) // '한'(3바이트) 중간에서 자른다
+    feed(bytes.subarray(10))
+    expect(got).toEqual([{ data: '한글 따옴표' }])
+  })
   it('깨진 줄은 건너뛰고 다음 줄은 받는다', () => {
     const got: unknown[] = []
     const feed = createFrameParser((m) => got.push(m))
