@@ -503,10 +503,13 @@
     "orcaPaths": [
       "src/main/orcad",
       "src/main/managed-server/lifecycle/orcad-stdio-bridge-script.ts",
-      "src/main/managed-server/install/orcad-remote-host-support.ts"
+      "src/main/managed-server/install/orcad-remote-host-support.ts",
+      "src/shared/ssh-pending-pty-kill.ts",
+      "src/main/persistence/leasing-ssh-ptys/ssh-pty-lease-operations.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R4: 재시작 복귀 = 원격 탭 목록을 로컬(managed-servers.json tabs)에 두고 다시 켜면 '끊김'으로 → [다시 연결]로 attach(자동 재접속 없음, Orca 원격 PTY 바인딩 규칙). 끊긴 탭 닫기 = 서버 세션 종료(Orca 닫기 = 종료, 묻지 않음), 못 붙으면 kills 에 남겨 다음 연결 때(Orca SshPendingPtyKill)."
   },
   {
     "id": "DM-03",
@@ -520,7 +523,8 @@
       "src/renderer/src/components/managed-runtime/ManagedRuntimeRemoveDialog.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R4: 판 교체는 묻지 않음(동의 범위 안) + 교체했을 때 알림 센터 한 줄(push managed:updated)."
   },
   {
     "id": "DM-04",
@@ -535,7 +539,8 @@
       "src/main/ipc/worktree-logic.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R4: 원격 작업 단위의 파일 열기·빠른 열기·전체 검색·변경 비교·소스 제어는 \"원격 작업에서는 아직 지원하지 않습니다\"로 막음(Orca 는 원격 fs·git 으로 제공 — 다음 라운드)."
   },
   {
     "id": "DM-05",
@@ -547,7 +552,8 @@
       "src/renderer/src/components/settings/repository/execution/RepositoryHostSetupActions.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R4: 원격 에이전트 탭 붙여넣기 = 이미지는 그 서버 ~/.ara-paste 에 올리고 원격 경로(R2 pasteImage), 이미지 아닌 파일은 안내만. 터미널 연결을 빌린 경우 그 탭을 닫아도 연결은 남김(Orca: 연결은 대상의 것, SshBackend holdClient)."
   },
   {
     "id": "FD-01",
