@@ -98,5 +98,7 @@ test('SPACE-3 오른쪽 아이콘 바 — 아라를 열고 접는다, 타이틀�
   await page.keyboard.press('Control+Alt+2')
   await expect(page.locator('.rbar .rbar-item')).toHaveCount(4)
   await expect(page.locator('.rbar .rbar-item[data-rbar="explorer"]')).toBeEnabled()
-  for (const id of ['scm', 'checks']) await expect(page.locator(`.rbar .rbar-item[data-rbar="${id}"]`)).toBeDisabled()
+  // [소스 제어]는 M7 에서 살아났다 — [검사]만 아직 자리.
+  await expect(page.locator('.rbar .rbar-item[data-rbar="scm"]')).toBeEnabled()
+  await expect(page.locator('.rbar .rbar-item[data-rbar="checks"]')).toBeDisabled()
 })

@@ -417,12 +417,22 @@ handle('app:openLaunchDir', () => ({ opened: openHere?.ready() ?? false }))
 // 🔴 배포본에서는 읽지 않는다(app.isPackaged).
 if (!app.isPackaged && process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_ONSCREEN'] !== '1') {
   app.on('browser-window-created', (_e, w) => {
+    // 옮기기 전 자리를 남긴다 — 창 위치를 재는 시험(RDPV-21 다중 모니터 배치)은 이 값을 본다.
+    const g = globalThis as { __araIntendedBounds?: Map<number, { bounds: Electron.Rectangle; content: Electron.Rectangle }> }
+    const intended = (g.__araIntendedBounds ??= new Map())
     const park = (): void => {
-      if (!w.isDestroyed()) w.setPosition(-32000, -32000)
+      if (w.isDestroyed()) return
+      const b = w.getBounds()
+      if (b.x > -30000) intended.set(w.id, { bounds: b, content: w.getContentBounds() })
+      w.setPosition(-32000, -32000)
     }
     park()
     w.once('ready-to-show', park)
     w.once('show', park)
+    // 앱이 나중에 자리를 다시 잡는 창(RDP 펼침 등)도 다시 옮긴다.
+    w.on('move', () => {
+      if (!w.isDestroyed() && w.getBounds().x > -30000) park()
+    })
   })
 }
 

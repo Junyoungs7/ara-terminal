@@ -159,8 +159,10 @@ async function launch(userData) {
     args: [MAIN_JS, `--user-data-dir=${userData}`],
     cwd: ROOT,
     timeout: 60_000,
+    // ARA_E2E_ONSCREEN: e2e 의 '창을 처음부터 화면 밖에'(7318736)를 끈다 — 처음부터 가려진 창은 Chromium 이 첫 그리기를 늦춰
+    // 켜기·작업공간 지표가 부푼다(기준선과 같은 조건 = 첫 그림 뒤에 아래 launch() 가 화면 밖으로 옮김).
     // 멈춤 감시는 배포본에서 늘 켜지고 개발 실행에선 꺼진다 — 배포본 비용을 재려고 강제로 켠다(M0 FD-02).
-    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_HANG_WATCHDOG_FORCE: '1' }
+    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_HANG_WATCHDOG_FORCE: '1', ARA_E2E_ONSCREEN: '1' }
   })
   const page = await app.firstWindow()
   // 25분 측정 동안 사용자 화면을 가리지 않게 화면 밖으로(showInactive 라 포커스는 원래 안 뺏는다).

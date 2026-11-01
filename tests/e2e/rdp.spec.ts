@@ -142,7 +142,11 @@ async function spanWindows(app: ElectronApplication): Promise<WinInfo[]> {
   return app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .filter((w) => w.webContents.getURL().includes('rdpwin'))
-      .map((w) => ({ url: w.webContents.getURL(), bounds: w.getBounds(), content: w.getContentBounds() }))
+      // e2e 창은 화면 밖으로 옮겨진다(main/index.ts) — 앱이 잡은 원래 자리를 본다.
+      .map((w) => {
+        const parked = (globalThis as { __araIntendedBounds?: Map<number, { bounds: Electron.Rectangle; content: Electron.Rectangle }> }).__araIntendedBounds?.get(w.id)
+        return { url: w.webContents.getURL(), bounds: parked?.bounds ?? w.getBounds(), content: parked?.content ?? w.getContentBounds() }
+      })
   )
 }
 
