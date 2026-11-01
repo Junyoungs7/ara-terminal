@@ -71,6 +71,10 @@ describe('AI 작성 줄 — 표시 옮기기(사람이 고치면 사람 것)', (
       [4, 4]
     ])
   })
+  it('통째 Write — 끝 줄바꿈 뒤 빈 칸은 AI 줄이 아니다(e2e R3-3: 3줄 쓰면 표시 3)', () => {
+    expect(rangesOf(applyWrite(null, 'ai one\nai two\nai three\n', { kind: 'all' }).mask)).toEqual([[1, 3]])
+    expect(rangesOf(applyWrite(null, 'a\n\nb', { kind: 'all' }).mask)).toEqual([[1, 3]]) // 가운데 빈 줄은 쓴 줄
+  })
   it('원장 — 훅 → 파일 읽기 → 보이는 글 기준 범위, 큰 파일도 빠르게', async () => {
     const files = new Map<string, string>([['/w/a.ts', 'one\ntwo\nthree']])
     const l = createAiLines(async (p) => files.get(p) ?? null)
@@ -218,6 +222,13 @@ describe('[AI 로 쓰기] — 진짜 git + 가짜 에이전트', { timeout: 30_0
         return { code: 1, error: Object.assign(new Error('aborted'), { name: 'AbortError' }) }
       })
       expect(await generateScmText('commit', { root: d, x: c2.x, remote: false, settings, win: false, signal: ac.signal })).toMatchObject({ ok: false, code: 'canceled' })
+      // git 으로 맥락을 모으는 중의 취소(e2e R3-2) — 끊긴 git 이 빈 결과를 내도 noStaged 가 아니라 취소.
+      const ac2 = new AbortController()
+      const early = async (file: string, args: readonly string[], o?: RunOptions): Promise<RunResult> => {
+        if (args.includes('--cached')) ac2.abort()
+        return runProcess(file, args, o)
+      }
+      expect(await generateScmText('commit', { root: d, x: early, remote: false, settings, win: false, signal: ac2.signal })).toEqual({ ok: false, code: 'canceled', agent: 'claude' })
     } finally {
       rmSync(d, { recursive: true, force: true })
     }

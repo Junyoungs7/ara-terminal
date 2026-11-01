@@ -86,6 +86,12 @@ function failureOf(r: RunResult, c: Ctx, agent: AgentId): Extract<ScmAiResult, {
 }
 
 export async function generateScmText(kind: ScmAiKind, c: Ctx): Promise<ScmAiResult> {
+  const r = await generate(kind, c)
+  // git 으로 맥락을 모으는 중에 취소하면 git 이 끊겨 빈 결과 → noStaged·noBase 등으로 보인다. 취소는 오류가 아니다.
+  return !r.ok && c.signal?.aborted ? { ok: false, code: 'canceled', agent: scmAiAgentOf(c.settings.defaultAgent) } : r
+}
+
+async function generate(kind: ScmAiKind, c: Ctx): Promise<ScmAiResult> {
   const agent = scmAiAgentOf(c.settings.defaultAgent)
   const branch = (await out(c, ['symbolic-ref', '--short', '-q', 'HEAD'])) || null
   let prompt: string

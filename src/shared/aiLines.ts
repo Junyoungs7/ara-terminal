@@ -127,7 +127,8 @@ export function carryMask(prev: AiMask, next: readonly string[]): boolean[] {
 /** 에이전트가 쓴 뒤의 새 표시 — 옛 표시를 옮기고(사람이 그 사이 고친 줄은 사람 것) 방금 쓴 줄을 AI 로. */
 export function applyWrite(prev: AiMask | null, text: string, written: AiWritten): AiMask {
   const lines = splitLines(text)
-  if (written.kind === 'all') return { lines, mask: lines.map(() => true) }
+  // 끝 줄바꿈 뒤의 빈 '줄'은 에이전트가 쓴 줄이 아니다(split 이 남기는 빈 칸 — Monaco 는 빈 마지막 줄로 보인다).
+  if (written.kind === 'all') return { lines, mask: lines.map((l, i) => !(i === lines.length - 1 && l === '')) }
   const mask = prev ? carryMask(prev, lines) : lines.map(() => false)
   const nums = written.kind === 'lines' ? written.lines : linesOfSnippets(text, written.snippets)
   for (const n of nums) if (n >= 1 && n <= lines.length) mask[n - 1] = true

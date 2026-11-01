@@ -164,7 +164,7 @@ export async function openFile(path: string, line?: number, opts?: { preview?: b
     addFile(file, at)
     void window.ev.code.watch(wt.path, abs, host)
     startWatch()
-  }
+  } else if (!preview) useCodeStore.getState().pin(abs) // 두 번 누름: 앞 한 번 누름(미리 보기)의 읽기가 먼저 탭을 더했어도 고정은 지킨다
   useCodeStore.getState().setActive(wt.id, abs)
   remember()
   return { ok: true }
