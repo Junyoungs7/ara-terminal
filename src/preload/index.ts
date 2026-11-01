@@ -334,6 +334,7 @@ const api: EvApi = {
     rename: (id: string, title: string) => ipcRenderer.invoke('session:rename', { id, title }),
     autoTitle: (id: string, title: string) => ipcRenderer.invoke('session:autoTitle', { id, title }),
     attach: (id: string) => ipcRenderer.invoke('session:attach', { id }),
+    restored: () => ipcRenderer.invoke('session:restored'),
     pause: (id: string) => ipcRenderer.send('session:pause', { id }),
     resume: (id: string) => ipcRenderer.send('session:resume', { id }),
     onData: (id: string, cb: (chunk: Uint8Array) => void) => {

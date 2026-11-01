@@ -61,10 +61,17 @@ type SessionLogTee = { write(meta: Session, chunk: Uint8Array): void; close(sess
 // M3 R2: 출력·크기·종료를 엿보는 자리 — AI 작업 공간 에이전트 탭의 화면 판정(main/agents/status.ts)이 쓴다. 첫 에이전트 실행 때 걸린다.
 export type SessionTap = { data(meta: Session, chunk: Uint8Array): void; resize(id: string, cols: number, rows: number): void; exit(id: string): void }
 
+/**
+ * M11 R2: 터미널 공간 로컬 셸을 데몬에 만드는 자리(main/daemon/terminalShells.ts). create = 데몬에 만들어 adopt 까지(못 하면 false → 앱 안 PTY),
+ * claim = 켤 때 세워 둔 데몬 셸에 붙기, release = 아무도 안 찾은 세운 셸 끄기(끈 수).
+ */
+export type LocalDaemonHook = { create(spec: SessionSpec, id: string): Promise<boolean>; claim(id: string): Promise<boolean>; release(): number }
+
 export class MainSessionManager implements ISessionManager {
   private readonly handles = new Map<string, Handle>()
   private log: SessionLogTee | null = null
   private tap: SessionTap | null = null
+  private localDaemon: LocalDaemonHook | null = null
 
   constructor(private readonly sink: SessionSink) {}
 
@@ -77,7 +84,32 @@ export class MainSessionManager implements ISessionManager {
     this.tap = tap
   }
 
+  setLocalDaemon(hook: LocalDaemonHook | null): void {
+    this.localDaemon = hook
+  }
+
+  /** M11 R2: 화면 복원이 끝났다 — 아무도 다시 찾지 않은 데몬 셸을 끈다. */
+  releaseParked(): number {
+    return this.localDaemon?.release() ?? 0
+  }
+
   async create(spec: SessionSpec): Promise<string> {
+    // M11 R2: 터미널 공간 로컬 셸은 데몬에(재시작·업데이트를 넘는다). 복원이면 살아 있는 그 셸에 붙고, 못 하면 아래 앱 안 PTY.
+    if (this.localDaemon && spec.type === 'local' && spec.space !== 'ai') {
+      if (spec.reattach && (await this.localDaemon.claim(spec.reattach))) {
+        const h = this.handles.get(spec.reattach)
+        // 데몬이 기억한 것은 만들 때 모양 — 그 뒤 바뀐 이름·창·cwd 는 화면의 저장본이 맞다.
+        // 창은 부른 창(복원은 본창 — 떼어낸 창은 그 뒤 win:restore 가 다시 붙인다).
+        if (h) {
+          Object.assign(h.meta, { title: spec.title, manualTitle: spec.manualTitle, cwd: spec.cwd ?? h.meta.cwd })
+          if (spec.winId) h.meta.winId = spec.winId
+          else delete h.meta.winId
+        }
+        return spec.reattach
+      }
+      const id = randomUUID()
+      if (await this.localDaemon.create(spec, id)) return id
+    }
     // 로컬만 여기서 스폰. SSH는 연결(호스트키·vault)을 IPC 레이어가 처리 후 adopt()로 넘긴다.
     // id 를 먼저 만든다 — 에이전트 탭 셸 env 에 그 값(ARA_PANE_KEY)을 넣어야 훅이 "어느 탭인지" 말할 수 있다(M3 R2).
     const id = randomUUID()

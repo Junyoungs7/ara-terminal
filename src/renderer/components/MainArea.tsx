@@ -389,6 +389,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
            */
           if (item.kind === 'local') {
             const id = await restoreLocal({
+              // M11 R2: 그 셸이 데몬에 살아 있으면(앱 재시작·업데이트) 새로 안 띄우고 거기 붙는다 — 돌려받는 id 가 옛 id.
+              reattach: item.oldId,
               type: 'local',
               title: item.session.title,
               serverKey: item.session.serverKey,
@@ -478,6 +480,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         }
         } finally {
           setRestoreDone(true)
+          // M11 R2: 데몬에 살아 있었지만 이번 복원이 다시 찾지 않은 셸은 끈다(보이지 않는 셸을 PC 에 남기지 않는다). 취소면 복원이 덜 끝났다 — 끄지 않는다.
+          if (!cancelled) void window.ev?.session.restored?.().catch(() => null)
         }
       })()
       return () => {

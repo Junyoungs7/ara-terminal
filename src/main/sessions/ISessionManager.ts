@@ -24,6 +24,11 @@ export type SessionSpec = Pick<
 > & {
   /** M3 에이전트 탭 셸에 덧붙일 env(에이전트 설정·첫 지시). 메타에 안 실린다 — 스냅샷·목록에 지시 글이 남지 않게. */
   env?: Record<string, string>
+  /**
+   * M11 R2 F6 복원: 저장해 둔 그 세션 id. 그 셸이 데몬에 살아 있으면(앱 재시작·업데이트) 새로 띄우지 않고 거기 붙는다 — 돌려받는 id 가 이 값.
+   * 없으면 지금처럼 새 셸. 메타에 안 실린다.
+   */
+  reattach?: string
 }
 
 // main→renderer 스트림 싱크. IPC 레이어가 주입한다(세션 매니저는 IPC를 모른다).

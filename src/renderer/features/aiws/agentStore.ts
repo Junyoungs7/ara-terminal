@@ -15,6 +15,7 @@ import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
 import { clearDraft, readChatOn, writeChatOn } from './chatDraft'
 import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
+import { layoutOf, orderTabs, readTabLayout, restoreActive, writeTabLayout } from './tabLayout'
 
 export type AgentTab = {
   sessionId: string
@@ -279,17 +280,23 @@ function watchExit(sessionId: string): void {
 
 /**
  * M4 DM-01: 데몬에서 되살린 탭을 올린다. 워크트리는 cwd 로 찾는다(id 는 repoId::path) — 목록이 아직 안 올라왔으면 올라올 때 다시.
+ * M11 R2: cold 탭(데몬째 죽어 잃음)은 같은 에이전트·같은 폴더로 다시 띄운다(resume 이 있으면 재개). initial(켤 때 한 번)이면
+ * 지난 레이아웃(탭 순서·고른 탭·고른 작업 단위)을 되살리고, 그 뒤로 바뀔 때마다 남긴다.
  * ponytail: 끝내 못 찾는 탭(워크트리를 지움)은 안 보인 채 구독이 남는다 — 세션은 데몬에 살아 [백그라운드 에이전트 모두 종료]로 끈다.
  */
-function restoreTabs(list: AgentTabInfo[]): void {
+function restoreTabs(list: AgentTabInfo[], initial = false): void {
   let pending = list.filter((x) => !useAgentStore.getState().tabs.some((t) => t.sessionId === x.sessionId))
-  const place = (): boolean => {
+  const layout = initial ? readTabLayout() : null
+  const idMap = new Map<string, string>()
+  const place = async (): Promise<boolean> => {
     const all = Object.values(useAiwsStore.getState().worktreesByRepo).flat()
     const found: AgentTab[] = []
+    const cold: { info: AgentTabInfo; worktreeId: string; cwd: string }[] = []
     pending = pending.filter((x) => {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
+      if (w && x.cold) cold.push({ info: x, worktreeId: w.id, cwd: w.path })
       // M8 R4 cut = 앱을 다시 켰을 때의 원격 탭 — 붙지 않은 채 '끊김'으로(사람이 [다시 연결]).
-      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}), ...(x.genTitle ? { genTitle: x.genTitle } : {}) })
+      else if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}), ...(x.genTitle ? { genTitle: x.genTitle } : {}) })
       return !w
     })
     if (found.length) {
@@ -299,11 +306,56 @@ function restoreTabs(list: AgentTabInfo[]): void {
       }))
       found.filter((t) => !t.exited).forEach((t) => watchExit(t.sessionId))
     }
+    // 한 번에 하나씩(띄우는 순서 = 기록 순서). 실패한 탭은 알림 한 줄 — 지난 세션 목록에서 이어 할 수 있다.
+    let missed = 0
+    for (const c of cold) {
+      const r = await useAgentStore.getState().launchAgent({ agent: c.info.agent, worktreeId: c.worktreeId, cwd: c.cwd, ...(c.info.resume ? { resume: c.info.resume } : {}) })
+      if (!r.ok) {
+        missed += 1
+        continue
+      }
+      idMap.set(c.info.sessionId, r.sessionId)
+      const keep = { ...(c.info.name ? { name: c.info.name } : {}), ...(c.info.genTitle ? { genTitle: c.info.genTitle } : {}) }
+      if (Object.keys(keep).length) useAgentStore.setState((s) => ({ tabs: s.tabs.map((t) => (t.sessionId === r.sessionId ? { ...t, ...keep } : t)) }))
+    }
+    if (missed) pushNote({ kind: 'info', space: 'ai', title: t('aiws.restore.missed').replace('{n}', String(missed)), body: t('aiws.restore.missed.body') })
+    if (layout && (found.length || cold.length)) applyLayout()
     return pending.length === 0
   }
-  if (!place()) {
-    const unsub = useAiwsStore.subscribe(() => place() && unsub())
+  const applyLayout = (): void => {
+    if (!layout) return
+    useAgentStore.setState((s) => ({ tabs: orderTabs(s.tabs, layout, idMap), activeTabByWorktree: restoreActive(s.tabs, layout, idMap, s.activeTabByWorktree) }))
+    const aiws = useAiwsStore.getState()
+    const w = layout.worktree
+    if (!aiws.activeWorktreeId && w && Object.values(aiws.worktreesByRepo).flat().some((x) => x.id === w)) aiws.setActiveWorktree(w)
   }
+  // 자리 찾기가 겹치지 않게 줄 세운다(워크트리 목록이 바뀔 때마다 불린다 — cold 를 두 번 띄우지 않게).
+  let running: Promise<boolean> = Promise.resolve(false)
+  const run = (): Promise<boolean> => (running = running.then(place, () => false))
+  void run().then((done) => {
+    if (initial) saveLayoutFromNowOn(() => new Set(pending.map((x) => x.sessionId)))
+    if (done) return
+    const retry = (): void => void run().then((d) => d && unsub())
+    const unsub = useAiwsStore.subscribe(retry)
+    retry() // 첫 자리 찾기와 구독 사이에 목록이 올라왔을 수 있다
+  })
+}
+
+/** 켤 때 되살리기 뒤부터 레이아웃이 바뀔 때마다 남긴다(그 전에 남기면 빈 탭 줄이 지난 레이아웃을 덮는다). */
+function saveLayoutFromNowOn(pending: () => ReadonlySet<string>): void {
+  let prev = readTabLayout()
+  const save = (): void => {
+    const a = useAgentStore.getState()
+    prev = layoutOf(a.tabs, a.activeTabByWorktree, useAiwsStore.getState().activeWorktreeId, prev, pending())
+    writeTabLayout(prev)
+  }
+  save()
+  useAgentStore.subscribe((s, p) => {
+    if (s.tabs !== p.tabs || s.activeTabByWorktree !== p.activeTabByWorktree) save()
+  })
+  useAiwsStore.subscribe((s, p) => {
+    if (s.activeWorktreeId !== p.activeWorktreeId) save()
+  })
 }
 
 let statusStarted = false
@@ -328,7 +380,7 @@ function startStatus(): void {
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
   void window.ev.agents
     .tabs()
-    .then(restoreTabs)
+    .then((list) => restoreTabs(list, true))
     .catch(() => {})
   void window.ev.agents
     .statuses()

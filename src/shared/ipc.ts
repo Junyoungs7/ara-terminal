@@ -74,7 +74,8 @@ export type LegacyAiNotice = { projects: string[]; remote: number }
 /** noOriel: Oriel 이 없어 웹 도구 없이 띄웠다(앱 실행 중 처음 한 번만 — 알림 센터 한 줄). */
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string }
+/** M11 R2 cold = 데몬째 죽어(PC 재부팅 등) 잃은 탭 — 렌더러가 같은 에이전트·같은 폴더로 다시 띄운다(resume = CLI 세션 id 를 알면 재개). sessionId 는 옛 id(레이아웃 자리 찾기용). */
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string; cold?: true; resume?: string }
 /** M11 첫 지시로 지은 탭 제목(push 'agents:title' — Orca deriveGeneratedTabTitle). 보일지는 설정 tabAutoTitle. */
 export type AgentTitleEvent = { sessionId: string; title: string }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
@@ -319,6 +320,8 @@ export type InvokeContract = {
   'session:autoTitle': { req: { id: string; title: string }; res: { applied: boolean; title?: string } }
   // xterm 생성 직후 재생 버퍼를 인계받고 라이브 스트림을 연다(세션 전환·재마운트 후 스크롤백 복구).
   'session:attach': { req: { id: string }; res: { backlog: Uint8Array } }
+  // M11 R2 F6 복원이 끝났다(본창 한 번) — 데몬에 살아 있었지만 아무도 다시 찾지 않은 터미널 셸을 끈다. 끈 수.
+  'session:restored': { req: void; res: { released: number } }
   // window 도메인 (R2.6). 프레임리스 타이틀바의 신호등 버튼이 실제로 창을 조작한다.
   'window:focus': { req: void; res: { ok: true } }
   'window:minimize': { req: void; res: { ok: true } }
@@ -1156,6 +1159,8 @@ export type EvApi = {
     autoTitle(id: string, title: string): Promise<{ applied: boolean; title?: string }>
     // onData 구독 직후 호출 — 지금까지의 출력(backlog)을 받고 그 다음부터 라이브 이벤트가 온다.
     attach(id: string): Promise<{ backlog: Uint8Array }>
+    /** M11 R2 F6 복원 끝 — 다시 찾지 않은 데몬 셸 끄기. */
+    restored(): Promise<{ released: number }>
     pause(id: string): void
     resume(id: string): void
     // session:data:{id} 구독. 청크는 Uint8Array. 해지 함수 반환.

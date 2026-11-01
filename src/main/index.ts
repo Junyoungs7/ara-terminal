@@ -600,6 +600,8 @@ app.whenReady().then(async () => {
     accountEnv: (agent) => usage.accounts.launchEnv(agent),
     oriel
   })
+  // M11 R2 터미널 공간 로컬 셸도 데몬에(재시작·업데이트를 넘는다). 데몬은 에이전트와 같은 하나.
+  sessions.setLocalDaemon(agents.terminalDaemon)
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.

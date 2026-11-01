@@ -143,7 +143,8 @@ export function startDaemon(a: DaemonArgs): void {
 
   const create = (spec: DaemonCreateSpec): DaemonSessionInfo => {
     if (sessions.has(spec.id)) throw new Error('같은 id 의 세션이 있다')
-    const ptySpec = { type: 'local', cwd: spec.cwd, cols: spec.cols, rows: spec.rows, space: 'ai', env: spec.env } as SessionSpec
+    // M11 R2 터미널 공간 셸은 에이전트 표식 없이, 그 탭의 셸로.
+    const ptySpec = { type: 'local', cwd: spec.cwd, cols: spec.cols, rows: spec.rows, env: spec.env, ...(spec.space === 'terminal' ? { shell: spec.shell } : { space: 'ai' }) } as SessionSpec
     const backend = new PtyBackend(ptySpec, spec.id)
     const info: DaemonSessionInfo = { id: spec.id, pid: backend.pid, cwd: spec.cwd, cols: spec.cols ?? 80, rows: spec.rows ?? 24, meta: spec.meta ?? {} }
     const s: Session = { backend, info, replay: new ReplayBuffer() }
@@ -229,8 +230,9 @@ export function startDaemon(a: DaemonArgs): void {
         const msg = m as { type?: string; token?: unknown; rid?: number }
         if (!c.authed) {
           clearTimeout(helloTimer)
-          const ok = msg.type === 'hello' && tokenMatches(token, msg.token)
-          send(c, { type: 'hello', ok, protocol: DAEMON_PROTOCOL_VERSION, pid: process.pid, appVersion: a.appVersion, ...(ok ? {} : { error: 'token' }) })
+          // M11 R2: 내려가는 중이면 받지 않는다 — 막 다시 켠 앱이 끝나 가는 셸(터미널 복원)에 붙었다가 바로 잃지 않게. 앱은 새 데몬을 띄운다.
+          const ok = msg.type === 'hello' && tokenMatches(token, msg.token) && !shuttingDown
+          send(c, { type: 'hello', ok, protocol: DAEMON_PROTOCOL_VERSION, pid: process.pid, appVersion: a.appVersion, ...(ok ? {} : { error: shuttingDown ? 'shutting down' : 'token' }) })
           if (!ok) {
             log('hello rejected')
             socket.end()

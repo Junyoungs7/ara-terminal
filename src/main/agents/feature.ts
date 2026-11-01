@@ -29,6 +29,9 @@ import { isOptionValue, type ModelCatalog } from '@shared/agentOptions'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
+import { createTerminalDaemonHook, isTerminalInfo, terminalSessionOf } from '../daemon/terminalShells'
+import type { LocalDaemonHook } from '../sessions/MainSessionManager'
+import { pickColdTabs, readTabRecords, type AgentTabRecord } from './coldRestore'
 import { lowerPriority } from '../resources/hostProcs'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
@@ -57,7 +60,7 @@ export function registerAgentsFeature(deps: {
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -126,7 +129,18 @@ export function registerAgentsFeature(deps: {
   // M11 깨어있기(Orca AgentAwakeService) — 상태 원장 push 를 따라 '일하는 중' 탭을 센다. 설정이 끔이면 아무것도 안 막는다.
   const awake = createAgentAwake({ blocker: powerSaveBlocker, powerMonitor, log: (m) => logMainError('agent awake', new Error(m)) })
   awake.setMode(settings.awakeMode)
+  // M11 R2 콜드 복원 — 띄운 로컬 에이전트 탭 기록(coldRestore.ts). 끝나면 지운다(앱 종료의 detach 는 끝이 아니라 남는다).
+  const tabsFile = join(deps.userData, 'agent-tabs.json')
+  const tabRecords = readTabRecords(readJsonWithBackup<unknown>(tabsFile, null))
+  const saveTabRecords = (): void => {
+    try {
+      writeJsonAtomic(tabsFile, Object.fromEntries(tabRecords))
+    } catch {
+      /* 못 남기면 그 탭은 데몬째 죽었을 때 못 되살린다 */
+    }
+  }
   const forgetTab = (id: string): void => {
+    if (tabRecords.delete(id)) saveTabRecords()
     chat?.forget(id)
     tabMeta.delete(id)
     awake.forget(id)
@@ -206,6 +220,8 @@ export function registerAgentsFeature(deps: {
       return (await relocatedRuntime({ hostRoot: join(local, 'ARA', 'daemon-host'), version: app.getVersion(), execPath: process.execPath, resourcesPath: process.resourcesPath, log })) ?? inst
     },
     adopt: (backend, info) => {
+      // M11 R2 터미널 공간 셸(terminalShells.ts) — 에이전트 탭이 아니다.
+      if (isTerminalInfo(info)) return void deps.sessions().adopt(backend, terminalSessionOf(info), info.id)
       const tab = tabOf(info)
       deps.sessions().adopt(backend, { type: 'local', title: tab?.title ?? 'agent', serverKey: 'localhost', cwd: info.cwd, profileId: null, space: 'ai', cols: info.cols, rows: info.rows }, info.id)
     },
@@ -219,6 +235,7 @@ export function registerAgentsFeature(deps: {
       void ensureHooks()
     },
     log,
+    isTerminal: isTerminalInfo,
     // M4 R3 자원 상한 — 적용은 데몬이(우선순위·메모리 표본). 넘으면 알림 센터로만 — 끄는 것은 사람이(자원 관리자·탭의 [종료]).
     limits: () => agentLimitsOf(settings),
     memoryOver: (e) => {
@@ -227,6 +244,31 @@ export function registerAgentsFeature(deps: {
       pushSend(deps.mainWc(), 'agents:memoryOver', { sessionId: e.id, title, memory: e.memory, limit: e.limit })
     }
   })
+
+  // M11 R2: 터미널 셸이 데몬에 살므로 켤 때 미리 띄운다(첫 셸이 데몬 띄우기를 기다리지 않게 — Orca 도 켤 때 띄운다).
+  void daemon.warm()
+  const terminalDaemon = createTerminalDaemonHook(daemon, log)
+
+  /**
+   * M11 R2 콜드 복원: 데몬째 죽었던 탭(또는 앱 안 PTY 탭)을 한 번만 내준다 — 렌더러가 같은 에이전트·같은 폴더로 다시 띄운다(resume 이 있으면 재개).
+   * 내준 기록은 지운다(다시 띄운 탭은 새 기록을 남긴다). 원격 탭은 기록하지 않는다(M8 R4 '끊김' 규칙 그대로).
+   */
+  let coldHanded = false
+  const coldTabs = (): AgentTabInfo[] => {
+    if (coldHanded) return []
+    coldHanded = true
+    const { cold, drop } = pickColdTabs(tabRecords, (id) => deps.sessions().has(id), daemon.found())
+    const out = cold.map(([id, r]): AgentTabInfo => {
+      ensureChat().bind(id, { agent: r.agent, cwd: r.cwd, startedAt: r.startedAt })
+      const resume = ensureChat().resumeId(id)
+      const name = names.get(id)
+      const genTitle = genTitles.get(id)
+      return { sessionId: id, agent: r.agent, cwd: r.cwd, title: r.title, line: r.line, cold: true, ...(resume ? { resume } : {}), ...(name ? { name } : {}), ...(genTitle ? { genTitle } : {}) }
+    })
+    for (const id of [...drop, ...cold.map((x) => x[0])]) forgetTab(id)
+    if (cold.length || drop.length) log(`cold restore: ${cold.length} tab(s) to resume, ${drop.length} ended while closed`)
+    return out
+  }
 
   const detector = createAgentDetector()
   handle('agents:detect', ({ force }) => detector.detect(force === true))
@@ -264,7 +306,7 @@ export function registerAgentsFeature(deps: {
       const tab = tabOf(info)
       return tab?.host ? [{ ...tab, cut: true as const }] : []
     })
-    return [...restoredTabs.filter((t) => deps.sessions().has(t.sessionId)), ...cut]
+    return [...restoredTabs.filter((t) => deps.sessions().has(t.sessionId)), ...cut, ...coldTabs()]
   })
   handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
   handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
@@ -299,6 +341,9 @@ export function registerAgentsFeature(deps: {
   )
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {
+    // 완전 종료 = 다시 켜도 되살리지 않는다(사람이 끝냈다).
+    tabRecords.clear()
+    saveTabRecords()
     await daemon.shutdownAll()
     app.quit()
   })
@@ -418,6 +463,7 @@ export function registerAgentsFeature(deps: {
     const env = { ...plan.env, ...hookEnv }
     let sessionId: string = randomUUID()
     const startedAt = Date.now()
+    let local = false
     try {
       // 데몬 셸은 앱의 **지금** 환경을 받는다(데몬 환경은 띄운 순간에 굳는다 — 감지가 더한 PATH 등을 놓친다).
       const appEnv = Object.fromEntries(Object.entries(process.env).filter((x): x is [string, string] => typeof x[1] === 'string' && x[0] !== 'ELECTRON_RUN_AS_NODE'))
@@ -427,6 +473,7 @@ export function registerAgentsFeature(deps: {
       log(`daemon create failed — local PTY fallback: ${String(err)}`)
       logMainError('agent daemon', err)
       sessionId = await deps.sessions().create({ type: 'local', title, serverKey: 'localhost', cwd, profileId: null, space: 'ai', env })
+      local = true
       // 로컬 PTY 로 넘어가도 우선순위는 건다(메모리 표본은 데몬에만 있다).
       const pid = deps.sessions().ptyList().find((p) => p.id === sessionId)?.pid
       if (settings.lowPriority && pid) lowerPriority(pid)
@@ -435,6 +482,9 @@ export function registerAgentsFeature(deps: {
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
     ensureChat().bind(sessionId, { agent, cwd, startedAt })
     tabMeta.set(sessionId, { agent, cwd })
+    const record: AgentTabRecord = { agent, cwd, title, line: plan.line, startedAt, ...(local ? { local: true as const } : {}) }
+    tabRecords.set(sessionId, record)
+    saveTabRecords()
     if (typeof prompt === 'string') maybeName(sessionId, prompt)
     noteFirstPrompt(sessionId, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
@@ -450,7 +500,8 @@ export function registerAgentsFeature(deps: {
     },
     views: () => tracker?.views() ?? [],
     limits: () => agentLimitsOf(settings),
-    orielPath: () => settings.orielPath
+    orielPath: () => settings.orielPath,
+    terminalDaemon
   }
 }
 

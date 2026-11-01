@@ -86,6 +86,7 @@ export function registerSessionIpc(
     return applied === null ? { applied: false } : { applied: true, title: applied }
   })
   handle('session:attach', ({ id }) => ({ backlog: mgr.attach(id) }))
+  handle('session:restored', () => ({ released: mgr.releaseParked() }))
 
   on('session:input', (p) => {
     const { id, data } = p as { id: string; data: string }

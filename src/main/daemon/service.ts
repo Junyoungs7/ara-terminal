@@ -62,7 +62,7 @@ export type AgentDaemon = {
   ready: Promise<void>
   /** 데몬에 세션을 만든다(없으면 띄움). 실패하면 던진다 — 부른 쪽이 로컬 PTY 로 넘어간다. */
   create(spec: Omit<DaemonCreateSpec, 'id'> & { id: string }): Promise<DaemonSessionInfo>
-  /** 데몬 세션 모두 끄기(백그라운드 에이전트 모두 종료). 끈 수. */
+  /** 데몬 세션 모두 끄기(백그라운드 에이전트 모두 종료). 끈 수. M11 R2: 터미널 공간 셸(deps.isTerminal)은 안 끈다. */
   killAll(): Promise<number>
   /** 완전 종료: 세션까지 끝내고 데몬을 내린다. */
   shutdownAll(): Promise<void>
@@ -72,6 +72,16 @@ export type AgentDaemon = {
   owns(id: string): boolean
   /** M4 R3 자원 상한이 바뀌었다(설정 › 에이전트) — 붙어 있는 데몬 모두에게. 붙을 때는 deps.limits() 를 알아서 보낸다. */
   setLimits(limits: AgentLimits): void
+  /** M11 R2: 켤 때 데몬을 하나라도 찾았나(ready 뒤에 뜻이 있다). 못 찾았으면 데몬째 죽은 것(PC 재부팅 등) — 에이전트 탭은 세션 재개로 되살린다. */
+  found(): boolean
+  /** M11 R2: 지금 붙어 있나(새 터미널 셸을 기다림 없이 데몬에 만들 수 있나). */
+  connected(): boolean
+  /** M11 R2: 데몬을 미리 띄워 둔다(켤 때 — 첫 터미널 셸이 데몬 띄우기를 기다리지 않게). 붙었으면 true, 실패는 로그만 남기고 false. */
+  warm(): Promise<boolean>
+  /** M11 R2: 켤 때 붙지 않고 세워 둔 세션(deps.isTerminal)을 화면이 다시 찾았다 — 붙여 아라 세션으로. 없으면 false. */
+  claim(id: string): Promise<boolean>
+  /** M11 R2: 화면 복원이 끝났다 — 아무도 찾지 않은 세워 둔 세션은 끈다(보이지 않는 셸이 PC 에 남지 않게). 끈 수. */
+  releaseParked(): number
 }
 
 export function createAgentDaemon(deps: {
@@ -91,6 +101,11 @@ export function createAgentDaemon(deps: {
   limits?: () => AgentLimits
   /** 데몬이 알린 메모리 상한 넘음(세션마다 넘어설 때 한 번). */
   memoryOver?: (e: { id: string; memory: number; limit: number }) => void
+  /**
+   * M11 R2: 터미널 공간 셸인가 — 켤 때 바로 붙이지 않고 세워 둔다(화면이 저장한 레이아웃으로 claim 해야 그 자리에 선다),
+   * [백그라운드 에이전트 모두 종료]에서 뺀다.
+   */
+  isTerminal?: (info: DaemonSessionInfo) => boolean
   /** 판 규칙(Orca) — 시험이 판 올림을 흉내 낼 때만 준다. */
   protocol?: { current: number; previous: readonly number[] }
 }): AgentDaemon {
@@ -103,6 +118,9 @@ export function createAgentDaemon(deps: {
   // 다시 띄우기는 60초 안 3번까지(FD-04·utilityHost 와 같은 차단기 — 무한 재시작 금지).
   const breaker = new RecoveryCircuitBreaker({ windowMs: 60_000, maxRecoveries: 3 })
   let quitting = false
+  let foundAny = false
+  /** 켤 때 붙지 않고 세워 둔 세션(터미널 셸) — claim 을 기다린다. */
+  const parked = new Map<string, { conn: DaemonConnection; info: DaemonSessionInfo }>()
 
   const readToken = (path: string): string | null => {
     try {
@@ -116,12 +134,14 @@ export function createAgentDaemon(deps: {
     conn.onEvent((e) => {
       if (e.type === 'memoryOver') return deps.memoryOver?.(e)
       const b = backends.get(e.id)
-      if (!b) return
-      if (e.type === 'data') return b.emitData(e.data)
-      backends.delete(e.id)
-      b.emitExit(e.code, e.signal)
+      if (!b && !(e.type === 'exit' && parked.delete(e.id))) return
+      if (e.type === 'data') return b?.emitData(e.data)
+      if (b) {
+        backends.delete(e.id)
+        b.emitExit(e.code, e.signal)
+      }
       // 옛 판 데몬: 그 세션이 다 끝나면 놓는다 → 붙은 앱도 세션도 없으니 데몬이 스스로 내려간다(교체 완료).
-      if (kind === 'drain' && ![...backends.values()].some((x) => x.conn === conn)) {
+      if (kind === 'drain' && ![...backends.values(), ...parked.values()].some((x) => x.conn === conn)) {
         drains.delete(conn)
         conn.close()
       }
@@ -131,6 +151,7 @@ export function createAgentDaemon(deps: {
       drains.delete(conn)
       if (intentional || quitting) return
       // 데몬이 죽었다 — 그 세션들은 잃었다고 끝낸다.
+      for (const [id, p] of parked) if (p.conn === conn) parked.delete(id)
       const lost = [...backends.values()].filter((b) => b.conn === conn)
       deps.log(`agent daemon connection lost (${kind}) — ${lost.length} session(s) lost`)
       for (const b of lost) {
@@ -198,6 +219,7 @@ export function createAgentDaemon(deps: {
         deps.log(`agent daemon v${v} connect failed: ${String(e)}`)
       }
       if (!conn) continue
+      foundAny = true
       const verdict = judgeDaemon(conn.hello.protocol, CURRENT, PREVIOUS)
       if (verdict === 'ignore') {
         conn.close()
@@ -217,7 +239,10 @@ export function createAgentDaemon(deps: {
         conn.close() // 세션 없는 옛 판 — 놓으면 스스로 내려간다
         continue
       }
-      for (const info of list) await attach(conn, info, true)
+      for (const info of list) {
+        if (deps.isTerminal?.(info)) parked.set(info.id, { conn, info })
+        else await attach(conn, info, true)
+      }
     }
   })().catch((e) => deps.log(`agent daemon restore failed: ${String(e)}`))
 
@@ -235,7 +260,13 @@ export function createAgentDaemon(deps: {
     async killAll() {
       await ready
       let n = 0
-      for (const c of all()) n += await c.request<number>({ type: 'killAll' }).catch(() => 0)
+      for (const c of all()) {
+        const list = await c.request<DaemonSessionInfo[]>({ type: 'list' }).catch(() => [] as DaemonSessionInfo[])
+        for (const info of list) {
+          if (deps.isTerminal?.(info)) continue
+          await c.request({ type: 'kill', id: info.id }).then(() => (n += 1), () => {})
+        }
+      }
       return n
     },
     async shutdownAll() {
@@ -256,6 +287,28 @@ export function createAgentDaemon(deps: {
     owns: (id) => backends.has(id),
     setLimits(limits) {
       for (const c of all()) void c.request({ type: 'limits', limits }).catch(() => {})
+    },
+    found: () => foundAny,
+    connected: () => current !== null,
+    warm: () =>
+      ready.then(ensureCurrent).then(
+        () => true,
+        (e) => (deps.log(`agent daemon warm failed: ${String(e)}`), false)
+      ),
+    async claim(id) {
+      await ready
+      const p = parked.get(id)
+      if (!p) return false
+      parked.delete(id)
+      await attach(p.conn, p.info, false)
+      return backends.has(id)
+    },
+    releaseParked() {
+      const n = parked.size
+      for (const [id, p] of parked) void p.conn.request({ type: 'kill', id }).catch(() => {})
+      if (n) deps.log(`released ${n} unclaimed terminal session(s)`)
+      parked.clear()
+      return n
     }
   }
 }
