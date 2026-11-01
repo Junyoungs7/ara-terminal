@@ -774,5 +774,97 @@
     "orcaRef": "fdfcfb3551",
     "status": "planned",
     "notes": "M12 R2 에서 조사만(다음 라운드): Orca 는 사용자 PC 에 깔린 CLI 에이전트를 한 번 실행해 글을 받는다(claude -p --output-format …, codex exec … — 사용자 CLI 구독/로그인 그대로, API 키 과금 아님). 원격 작업 단위는 그 서버의 CLI 로(remote-execution)."
+  },
+  {
+    "id": "AI-20",
+    "feature": "재시작 칩(에이전트가 끝나면 같은 에이전트·같은 폴더로 다시 시작)",
+    "orcaPaths": [
+      "docs/site/content/docs/model/agents-sessions.mdx",
+      "src/renderer/src/components/terminal-pane/TerminalProcessExitOverlay.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): 탭 칩 + 끝난 탭 아래 줄([닫기]·[다시 시작]). 아라 에이전트 탭은 셸에 실행 줄을 치므로 '에이전트만 끝남'을 화면 마지막 줄의 셸 프롬프트로 판정(main/agents/status.ts shellPromptVisible, 입력 상자를 한 번 본 뒤만). 다시 시작 = 옛 탭(셸 남았으면 끔)을 닫고 같은 자리에 새 탭. Codex 계정 보존(Orca CodexRestartChip)은 뺌."
+  },
+  {
+    "id": "AI-21",
+    "feature": "에이전트 탭 제목(첫 지시로 지은 제목·에이전트가 정한 제목)",
+    "orcaPaths": [
+      "src/shared/agent-tab-title.ts",
+      "src/shared/agent-generated-tab-title-rules.ts",
+      "src/shared/tab-title-resolution.ts",
+      "src/shared/agent-title-decoration.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): shared/agentTabTitle.ts(deriveGeneratedTabTitle 원본 그대로 + Orca 시험 옮김). 순서 = 채팅 이름(AI-19) > 지난 세션 제목 > 첫 지시 제목(설정 tabAutoTitle, Orca tabAutoGenerateTitle 기본 꺼짐) > 살아 있는 OSC 제목(Claude 만 — 상태 글리프 뗌, 'Claude Code' 같은 이름뿐인 제목 버림). 첫 지시 제목은 main 이 agent-titles.json 에 남겨 데몬 탭 되살리기에도."
+  },
+  {
+    "id": "AI-22",
+    "feature": "질문/승인 카드(에이전트가 답을 기다릴 때 카드로 답 보내기)",
+    "orcaPaths": [
+      "src/shared/agent-hook-listener/interactive-tool.ts",
+      "src/shared/native-chat/input/native-chat-ask.ts",
+      "src/shared/native-chat-approval-envelope.ts",
+      "src/shared/native-chat-interactive-prompt.ts",
+      "src/shared/native-chat-ask-answer.ts",
+      "src/shared/native-chat/input/native-chat-answer-stepping.ts",
+      "src/renderer/src/components/native-chat/NativeChatInteractiveCard.tsx",
+      "src/renderer/src/components/native-chat/NativeChatQuestionCard.tsx",
+      "src/renderer/src/components/native-chat/NativeChatApprovalCard.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): 훅 PermissionRequest·AskUserQuestion → 상태에 카드 글(ask) → 채팅 보기에 카드(Orca 처럼 채팅 화면 흐름 — 터미널 보기는 TUI 그대로), 답은 TUI 키(숫자·→·Enter·Esc)로 1초 간격(agents:answer). 신호 = 시안 C 반전 칩(탭 상태 칩도). 훅이 있는 Claude 만 — Gemini 는 승인 훅이 없고 Codex 는 훅을 안 심어 카드 없음(화면 판정 막힘 줄만). 뺀 것: 대화 기록에서 남은 질문 찾기, Codex 비동기 질문, OMP 계획 검토, 미리 보기 메모 칸."
+  },
+  {
+    "id": "AI-23",
+    "feature": "컴퓨터 깨어있기(에이전트가 도는 동안 절전 막기)",
+    "orcaPaths": [
+      "src/main/agent-awake-service.ts",
+      "src/main/agent-awake-status-lease.ts",
+      "src/shared/computer-awake-mode.ts",
+      "src/renderer/src/components/settings/AgentAwakeSetting.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): main/agents/awake.ts — 끔(기본)/에이전트가 일할 때만/항상, powerSaveBlocker('prevent-display-sleep'), 2시간 소식 없는 '일하는 중'은 셈에서 뺌, 깨어나면 다시 맞춤. 설정 › 에이전트. macOS·Linux 어서션·상태바 표시 뺌. Windows 덮개 닫힘은 전원 계획(전역)이라 안 건드림."
+  },
+  {
+    "id": "AI-24",
+    "feature": "지난 세션 범위·필터·정렬·묶기",
+    "orcaPaths": [
+      "src/renderer/src/components/right-sidebar/AiVaultPanelControls.tsx",
+      "src/renderer/src/components/right-sidebar/ai-vault-view-defaults.ts",
+      "src/renderer/src/components/right-sidebar/ai-vault-sort-options.ts",
+      "src/renderer/src/components/right-sidebar/use-ai-vault-panel-scope.ts",
+      "src/shared/ai-vault-types.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): features/aiws/vaultView.ts — 범위 이 작업 단위(기본)/프로젝트/전체, 에이전트 켜고 끄기, 빈 세션 숨기기(아라는 첫 지시·제목 없음으로 판정), 정렬 업데이트(기본)·만든 시각(birthtime), 묶기 프로젝트(기본)·폴더·에이전트, 보기 설정은 localStorage."
+  },
+  {
+    "id": "AI-25",
+    "feature": "세션 전문 검색",
+    "orcaPaths": [
+      "src/main/ai-vault-search",
+      "src/main/ipc/ai-vault-search.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): 색인(SQLite FTS5) 대신 utility process(out/main/vaultSearchWorker.js)가 검색 때마다 최신 파일부터 한 줄씩 읽어 대화 글(하네스 주입·도구 입출력 제외)에서 대소문자 무시 부분 일치 — 결과 200·파일 3000 상한, 새 검색이 앞 것을 끊음. 새 의존성 없음·대화가 디스크 색인에 또 남지 않음(기능 문서의 비밀 색인 위험). 기록이 많아 느리면 워커 안에 (mtime·크기) 색인."
+  },
+  {
+    "id": "AI-26",
+    "feature": "세션 삭제",
+    "orcaPaths": [
+      "src/main/ai-vault/session-delete.ts",
+      "src/main/ai-vault/session-delete-target.ts",
+      "src/main/ipc/ai-vault-delete.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R1(v2.2): vault:delete — 확인 대화상자 뒤, 목록·검색에서 본 파일만, 휴지통(shell.trashItem). Claude 는 <프로젝트>/<id>/(하위 에이전트)·~/.claude/session-env/<id> 먼저, 기록 파일 마지막(Orca 순서). e2e 는 휴지통 대신 그냥 지움."
   }
 ]
