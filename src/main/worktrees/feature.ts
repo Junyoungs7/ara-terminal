@@ -37,6 +37,9 @@ export function registerWorktreesFeature(userData: string, remote?: (hostKey: st
   handle('worktrees:remove', ({ repoId, path, force }) => service.removeWorktree(repoId, path, force))
   handle('worktrees:stats', ({ repoId, path }) => service.worktreeStats(repoId, path))
   handle('worktrees:updateMeta', ({ worktreeId, updates }) => service.updateMeta(worktreeId, updates))
+  // M10 R2 WS-21 보존 브랜치 강제 지우기(Orca 이름) · WS-19·20 프로젝트 설정(Orca repos:update 의 일부 칸).
+  handle('worktrees:forceDeletePreservedBranch', ({ repoId, branchName, head }) => service.forceDeletePreservedBranch(repoId, branchName, head))
+  handle('repos:update', ({ repoId, updates }) => service.updateProject(repoId, updates))
   // M10 WS-15 프로젝트 그룹 — Orca projectGroups:* 이름.
   handle('projectGroups:list', () => service.listGroups())
   handle('projectGroups:create', ({ name }) => service.createGroup(name))

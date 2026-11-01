@@ -11,7 +11,8 @@ export function jumpList(
   query: string,
   visitedAt: ReadonlyMap<string, number>
 ): Worktree[] {
-  const others = worktrees.filter((w) => w.id !== activeId)
+  // M10 R2 WS-19 숨은 아라 밖 워크트리는 빼고(사이드바와 같은 목록).
+  const others = worktrees.filter((w) => w.id !== activeId && !w.hidden)
   if (!query.trim()) {
     return [...others].sort((a, b) => {
       const va = visitedAt.get(a.id)

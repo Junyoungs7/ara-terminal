@@ -83,15 +83,15 @@ test('WT-1★ AI 작업 공간 → 프로젝트 추가 → 새 작업(워크트�
     await expect(mainRow).toHaveAttribute('aria-current', 'true')
     await expect(page.locator('.titlebar .tb-path')).toHaveText('main')
 
-    // 지우기 — 확인 대화상자가 "브랜치는 남는다"고 말하고, 지우면 줄이 빠진다.
+    // 지우기 — 확인 대화상자가 브랜치도 지운다고 말하고, 지우면 줄이 빠진다. M10 R2 WS-21: 커밋 없는 브랜치는 같이 지운다(Orca).
     const pinned = page.locator(`${side} .aiws-row[data-pinned]`)
     await pinned.hover()
     await pinned.locator('[data-aiws="remove"]').click()
-    await expect(dialog(page)).toContainText('브랜치 feat-retry 는 남습니다')
+    await expect(dialog(page)).toContainText('브랜치 feat-retry 를 지웁니다')
     await dialogConfirm(page)
     await expect(page.locator(`${side} .aiws-row`).filter({ hasText: 'feat-retry' })).toHaveCount(0)
     const branches = execFileSync('git', ['branch', '--list', 'feat-retry'], { cwd: repo, encoding: 'utf8' })
-    expect(branches).toContain('feat-retry')
+    expect(branches.trim()).toBe('')
   } finally {
     rmDir(root)
   }

@@ -4,9 +4,11 @@ import {
   ArchiveRestore,
   ChevronDown,
   ChevronRight,
+  EyeOff,
   Folder,
   FolderPlus,
   GitBranch,
+  GitBranchPlus,
   ListTree,
   Loader2,
   Moon,
@@ -31,6 +33,7 @@ import { ContextMenu, type MenuItem } from '../../interactions/ContextMenu'
 import { useDialog } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { archiveWorktree, restoreWorktree, sleepWorktree, wakeWorktree, type SleepRefusal } from './sleep'
+import { CheckpointDialog, ExternalWorktreesDialog, PreservedBranchesDialog, SharedPathsDialog } from './WorktreeDialogs'
 
 type Menu = { x: number; y: number; items: MenuItem[]; pick: (id: string) => void }
 
@@ -42,6 +45,8 @@ type Menu = { x: number; y: number; items: MenuItem[]; pick: (id: string) => voi
  * M10(orcaRef fdfcfb3551): 프로젝트 그룹(WS-15 — 프로젝트 머리줄 우클릭/⋯ 의 "그룹으로 옮기기", 그룹 머리줄 접기·이름·지우기 —
  * Orca use-worktree-context-menu-commands·use-project-group-dialogs), 재우기·보관(WS-16 — 줄 우클릭·버튼, 보관함 토글),
  * 삭제 단축키(WS-17 — Orca workspace.delete, 늘 확인 대화상자를 거친다).
+ * M10 R2: 체크포인트(WS-18 — 줄 우클릭 "메모·상태", 둘째 줄에 상태·메모 첫 줄), 아라 밖 워크트리(WS-19 — "숨은 워크트리 n개" 카드·프로젝트 메뉴),
+ * 공유 경로(WS-20 — 프로젝트 메뉴), 남긴 브랜치 검토(WS-21 — 머리 아래 띠 → 검토 대화상자).
  */
 export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) => void; onRemove: (w: Worktree) => void }): JSX.Element {
   const s = useAiwsStore()
@@ -52,6 +57,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
   const seenById = useAgentStore((a) => a.seenById)
   const dialog = useDialog()
   const [menu, setMenu] = useState<Menu | null>(null)
+  const [cpFor, setCpFor] = useState<Worktree | null>(null)
+  const [extFor, setExtFor] = useState<Project | null>(null)
+  const [sharedFor, setSharedFor] = useState<Project | null>(null)
   // 프로젝트를 목록에서 빼기 — 디스크의 저장소·워크트리는 그대로(Orca confirm-remove-folder · repos:remove).
   const onRemoveProject = (repo: Project): void => {
     void dialog
@@ -119,6 +127,13 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
     openMenu(
       e,
       [
+        // WS-20 원격 프로젝트는 공유 경로를 막고 안내(원격 링크 만들기·끊기는 아직 없다 — .worktreeinclude 원격 복사와 같이 뺐다).
+        ...(repo.kind === 'git'
+          ? [
+              { id: 'external', label: t('aiws.ext.menu') },
+              { id: 'shared', label: t('aiws.shared.menu'), disabled: !!repo.host, ...(repo.host ? { hint: t('aiws.shared.remote') } : {}) }
+            ]
+          : []),
         {
           id: 'move',
           label: t('aiws.group.moveTo'),
@@ -128,7 +143,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         { id: 'remove-project', label: t('aiws.project.remove'), danger: true }
       ],
       (id) => {
-        if (id === 'new') void newGroupFor(repo)
+        if (id === 'external') setExtFor(repo)
+        else if (id === 'shared') setSharedFor(repo)
+        else if (id === 'new') void newGroupFor(repo)
         else if (id === 'ungroup') void s.moveProjectToGroup(repo.id, null)
         else if (id === 'remove-project') onRemoveProject(repo)
         else if (id.startsWith('to:')) void s.moveProjectToGroup(repo.id, id.slice(3))
@@ -162,6 +179,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         ? [{ id: 'restore', label: t('aiws.archive.restore') }]
         : [
             { id: 'pin', label: pinned ? t('aiws.side.unpin') : t('aiws.side.pin') },
+            { id: 'checkpoint', label: t('aiws.cp.menu') },
             w.sleep ? { id: 'wake', label: t('aiws.sleep.wake') } : { id: 'sleep', label: t('aiws.sleep.sleep') },
             ...(w.isMainWorktree
               ? []
@@ -172,6 +190,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           ],
       (id) => {
         if (id === 'pin') s.togglePin(w.id)
+        else if (id === 'checkpoint') setCpFor(w)
         else if (id === 'wake') void wake(w)
         else if (id === 'sleep') void sleepWorktree(w.id).then(refused)
         else if (id === 'archive') void archiveWorktree(w.id).then(refused)
@@ -238,6 +257,18 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           </button>
         </span>
       </div>
+      {s.preservedBranches.length > 0 && (
+        <div className="aiws-kept" data-aiws="kept-branches">
+          <GitBranchPlus className="aiws-row-ic" aria-hidden />
+          <span className="aiws-kept-txt">{t('aiws.branch.strip').replace('{n}', String(s.preservedBranches.length))}</span>
+          <button type="button" className="btn sec" data-aiws="branch-review" onClick={() => s.setBranchReviewOpen(true)}>
+            {t('aiws.branch.review')}
+          </button>
+          <button type="button" className="aiws-ic" data-aiws="branch-keep" title={t('aiws.branch.keepAll')} onClick={() => s.dismissPreservedBranches(s.preservedBranches)}>
+            <X />
+          </button>
+        </div>
+      )}
       {filterOpen && (
         <div className="aiws-filter">
           <input
@@ -319,6 +350,15 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
             )
           }
           if (r.kind === 'pending') return <PendingRow key={r.key} p={r.creation} />
+          if (r.kind === 'hidden') {
+            const repo = r.repo
+            return (
+              <button key={r.key} type="button" className="aiws-hidden-card" data-aiws="hidden-wt" data-repo={repo.id} onClick={() => setExtFor(repo)}>
+                <EyeOff className="aiws-row-ic" aria-hidden />
+                {t('aiws.ext.card').replace('{n}', String(r.count))}
+              </button>
+            )
+          }
           const w = r.worktree
           const active = s.activeWorktreeId === w.id
           const st = s.statsById[w.id]
@@ -348,7 +388,8 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
               data-archived={w.isArchived || undefined}
               tabIndex={0}
               aria-current={active || undefined}
-              title={w.path}
+              title={w.comment ? `${w.path}\n\n${w.comment}` : w.path}
+              data-status={w.workspaceStatus}
               onClick={() => pickWorktree(w)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') pickWorktree(w)
@@ -427,6 +468,8 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                 {r.showProject && <span className="aiws-row-proj">{r.repo.displayName}</span>}
                 {w.branch && shortBranch(w) !== w.displayName && <span className="aiws-mono">{shortBranch(w)}</span>}
                 {meta && <span>{meta}</span>}
+                {w.workspaceStatus && <span className="aiws-status">{t('aiws.status.' + w.workspaceStatus)}</span>}
+                {w.comment && <span className="aiws-row-cmt">{w.comment.split(/\r?\n/)[0]}</span>}
                 {st?.ok && st.added + st.removed > 0 && (
                   <span className="aiws-diffn">
                     <span className="p">+{st.added}</span> <span className="m">−{st.removed}</span>
@@ -451,6 +494,10 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         onClose={() => setMenu(null)}
       />
       {dialog.node}
+      {cpFor && <CheckpointDialog worktree={cpFor} onClose={() => setCpFor(null)} />}
+      {extFor && <ExternalWorktreesDialog repo={extFor} onClose={() => setExtFor(null)} />}
+      {sharedFor && <SharedPathsDialog repo={sharedFor} onClose={() => setSharedFor(null)} />}
+      {s.branchReviewOpen && s.preservedBranches.length > 0 && <PreservedBranchesDialog onClose={() => s.setBranchReviewOpen(false)} />}
     </aside>
   )
 }

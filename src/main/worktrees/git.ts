@@ -1,7 +1,7 @@
 // M2 워크트리 git 호출 — 전부 runProcess(셸 없음·인자 배열·시간 상한)로. Orca src/main/git/ 의 1차 핵심만 다시 썼다
 // (orcaRef 7a7f46f8a3). 각 함수 옆에 원본 경로. 빠진 것: 스캔 캐시·능력 캐시(git <2.36 -z 폴백)·WSL·sparse·ref 정비 일시정지.
-import { cp, lstat, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { cp, lstat, mkdir, readFile, stat, symlink, unlink } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { runProcess, type RunResult } from '../util/runProcess'
 import { createWorktreeCopyBudgetTracker, type WorktreeCopyBudget } from './copyBudget'
 import {
@@ -18,6 +18,7 @@ import {
   resolveWorktreeAddBaseRef,
   type BaseRef,
   type GitWorktreeInfo,
+  type PreservedBranch,
   type WorktreeCheckoutProgress
 } from '@shared/worktrees'
 
@@ -155,6 +156,9 @@ export async function copyIncludePaths(
   const failed: string[] = []
   const tracker = createWorktreeCopyBudgetTracker(budget)
   for (const p of relativePaths) {
+    // M10 R2: 공유 경로로 이미 링크된 자리(또는 그 아래)는 다시 복사하지 않는다(Orca: 공유한 경로는 include 복사 안 함) —
+    // 링크 안으로 복사하면 본 폴더 원본에 쓴다.
+    if (await lstat(join(worktreePath, p)).then(() => true, () => false)) continue
     const verdict = await tracker.admit(join(repoPath, p))
     if (!verdict.withinBudget) {
       failed.push(`${p} (${verdict.reason})`)
@@ -173,4 +177,108 @@ export async function copyIncludePaths(
 export async function listBaseRefs(repoPath: string, query = '', limit = 50): Promise<BaseRef[]> {
   const r = await git(['for-each-ref', BASE_REF_FORMAT, '--sort=-committerdate', 'refs/heads', 'refs/remotes', 'refs/tags'], repoPath)
   return r.code === 0 ? parseBaseRefs(r.stdout, query, limit) : []
+}
+
+// ── M10 R2 WS-20 공유 경로(Orca src/main/ipc/worktree-symlinks.ts — link 갈래) ──
+
+/** Orca worktreeSymlinkTypeCandidates — 폴더는 Windows 접합점(권한 불필요) 먼저, 파일은 file 심링크(Windows 는 개발자 모드가 없으면 실패 → 경고). */
+export function linkTypeCandidates(platform: string, isDirectory: boolean): ('junction' | 'dir' | 'file')[] {
+  if (!isDirectory) return ['file']
+  return platform === 'win32' ? ['junction', 'dir'] : ['dir']
+}
+
+/**
+ * 본 폴더의 경로를 새 워크트리에 링크로 만든다. 이미 있는 자리는 그대로 둔다(Orca: 있는 대상 보존). 원본이 없으면 건너뛴다.
+ * 만든 것과 못 만든 것을 돌려준다 — 만든 것은 지울 때 링크만 먼저 끊으려고 메타에 남긴다.
+ */
+export async function linkSharedPaths(
+  repoPath: string,
+  worktreePath: string,
+  relativePaths: readonly string[],
+  platform: string = process.platform
+): Promise<{ linked: string[]; failed: string[] }> {
+  const linked: string[] = []
+  const failed: string[] = []
+  for (const p of relativePaths) {
+    const source = join(repoPath, p)
+    const target = join(worktreePath, p)
+    const st = await stat(source).catch(() => null)
+    if (!st) continue
+    if (await lstat(target).then(() => true, () => false)) continue
+    try {
+      await mkdir(dirname(target), { recursive: true })
+      let done = false
+      let lastError: unknown
+      for (const type of linkTypeCandidates(platform, st.isDirectory())) {
+        try {
+          await symlink(source, target, type)
+          done = true
+          break
+        } catch (e) {
+          lastError = e
+        }
+      }
+      if (!done) throw lastError
+      linked.push(p)
+    } catch {
+      failed.push(p)
+    }
+  }
+  return { linked, failed }
+}
+
+/**
+ * 지우기 전에 **링크만** 끊는다(Orca removeWorktreeLinkedPaths) — 진짜 파일·폴더는 안 건드린다. 링크를 남긴 채 git·rm 이
+ * 폴더를 지우면 접합점을 따라 들어가 본 폴더 원본을 지울 수 있다(아라 메모: worktree junction 은 원본을 지운다).
+ */
+export async function unlinkSharedPaths(worktreePath: string, relativePaths: readonly string[]): Promise<void> {
+  for (const p of relativePaths) {
+    if (!isSafeIncludePath(p)) continue
+    const target = join(worktreePath, p)
+    try {
+      if ((await lstat(target)).isSymbolicLink()) await unlink(target)
+    } catch {
+      // 없거나 못 끊음 — 끊지 못한 링크가 남으면 git 이 거절하거나(링크 = 추적 안 된 것) 링크째 지운다
+    }
+  }
+}
+
+// ── M10 R2 WS-21 보존 브랜치(Orca src/main/git/worktree-branch-removal.ts) — 로컬·원격이 같은 규칙을 쓰게 git 실행만 받는다 ──
+
+export type GitRun = (args: string[]) => Promise<{ code: number; out: string; err: string }>
+export const localGitRun =
+  (repoPath: string): GitRun =>
+  async (args) => {
+    const r = await git(args, repoPath)
+    return { code: r.code, out: r.stdout, err: r.stderr }
+  }
+const CHECKED_OUT = /checked out at|used by worktree/i
+
+/**
+ * Orca deleteBranchAfterWorktreeRemoval — `branch -d`(병합 안 된 커밋 보호). git 이 거절하면 지우지 않고 남긴 브랜치로 알린다.
+ * 다른 워크트리에 체크아웃돼 있으면 낡은 등록일 수 있어 prune 후 한 번 더, 그래도면 조용히 둔다(Orca 'checked-out').
+ * 뺀 것: 스쿼시 병합 판정(병합된 트리면 -D — Orca deleteAlreadyMergedBranchAfterSafeDeleteFailure). 그런 브랜치는 검토로 온다.
+ */
+export async function deleteBranchAfterRemoval(run: GitRun, branchName: string, head: string): Promise<PreservedBranch | undefined> {
+  if (!branchName) return undefined
+  let r = await run(['branch', '-d', '--', branchName])
+  if (r.code !== 0 && CHECKED_OUT.test(r.err)) {
+    await run(['worktree', 'prune'])
+    r = await run(['branch', '-d', '--', branchName])
+    if (r.code !== 0 && CHECKED_OUT.test(r.err)) return undefined
+  }
+  return r.code === 0 ? undefined : { branchName, head }
+}
+
+/** Orca forceDeleteLocalBranch — 그사이 브랜치가 움직였으면(head 다름) 안 지운다(update-ref 대조 삭제). 체크아웃된 브랜치도 안 지운다. */
+export async function forceDeleteBranch(run: GitRun, branchName: string, head: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!branchName || /[\0\s]/.test(branchName) || branchName.startsWith('-') || !/^[0-9a-f]{40,64}$/i.test(head) || /^0+$/.test(head)) return { ok: false, message: branchName }
+  const list = await run(['worktree', 'list', '--porcelain'])
+  if (list.code === 0 && parseWorktreeList(list.out).some((w) => w.branch === `refs/heads/${branchName}`)) {
+    return { ok: false, message: `Local branch "${branchName}" is checked out in another worktree.` }
+  }
+  const r = await run(['update-ref', '-d', `refs/heads/${branchName}`, head])
+  if (r.code !== 0) return { ok: false, message: `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.` }
+  await run(['config', '--remove-section', `branch.${branchName}`])
+  return { ok: true }
 }

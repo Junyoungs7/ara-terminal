@@ -24,7 +24,16 @@ export type Project = {
   groupId?: string
   /** M10 WS-14 지운 작업 단위의 자동 이름(소문자) — 다시 내주지 않는다(Orca retired-name-registry: 같은 이름 = 같은 폴더 = 지난 대화가 보일 수 있다). */
   retiredNames?: string[]
+  /** M10 R2 WS-19 아라 밖 워크트리 보이기 — 출처별 프로젝트 설정(없으면 기본값, externalDefault). Orca `Repo.externalWorktreeVisibility`·sourcePreferences. */
+  externalVisibility?: Partial<Record<ExternalSource, ExternalVisibility>>
+  /** WS-19 하나씩 [보이기] 한 아라 밖 워크트리 경로(Orca `Repo.importedExternalWorktreePaths`). */
+  shownExternalPaths?: string[]
+  /** M10 R2 WS-20 공유 경로(Orca `Repo.symlinkPaths` — Settings › Repository › Worktree Shared Paths). 새 워크트리에 본 폴더 것을 링크로. */
+  sharedPaths?: string[]
 }
+
+/** M10 R2 repos:update 가 받는 칸(WS-19·20). 빈 배열·undefined = 지움. */
+export type ProjectUpdate = Partial<Pick<Project, 'externalVisibility' | 'shownExternalPaths' | 'sharedPaths'>>
 
 /** M10 WS-15 Orca `ProjectGroup`(src/shared/project-group-types.ts)의 부분집합 — 이름·접힘만(중첩·색·폴더 스캔은 뺐다). */
 export type ProjectGroup = { id: string; name: string; isCollapsed: boolean; createdAt: number }
@@ -33,9 +42,27 @@ export type ProjectGroup = { id: string; name: string; isCollapsed: boolean; cre
 export type SleepTab = { agent: import('./agents').AgentId; resume: string | null }
 
 /** M10 WS-16 작업 단위 메타(Orca `WorktreeMeta` 의 isArchived + 잠든 탭). main projects.json 에 산다. sleep 이 있으면(빈 배열도) 잠든 것. */
-export type WorktreeMeta = { isArchived?: boolean; sleep?: SleepTab[] }
-/** 바꿀 칸만. sleep: null = 깨움(IPC 는 undefined 를 못 실어 null 로 지운다). */
-export type WorktreeMetaUpdate = { isArchived?: boolean; sleep?: SleepTab[] | null }
+export type WorktreeMeta = {
+  isArchived?: boolean
+  sleep?: SleepTab[]
+  /** M10 R2 WS-18 체크포인트 — 자유 메모(Orca `WorktreeMeta.comment`, `orca worktree set --comment`). */
+  comment?: string
+  /** WS-18 카드 상태(Orca `workspaceStatus` 기본 넷). */
+  workspaceStatus?: WorkspaceStatus
+  /** WS-19 아라가 만든 시각(Orca `orcaCreatedAt` — 있으면 아라 것, 숨기지 않는다). */
+  createdAt?: number
+  /** WS-20 만들 때 링크로 만든 공유 경로 — 지울 때 링크를 먼저 끊는다. main 만 쓴다(목록엔 안 싣는다). */
+  linkedPaths?: string[]
+}
+/** 바꿀 칸만. sleep: null = 깨움(IPC 는 undefined 를 못 실어 null 로 지운다). comment ''·workspaceStatus null = 지움. */
+export type WorktreeMetaUpdate = { isArchived?: boolean; sleep?: SleepTab[] | null; comment?: string; workspaceStatus?: WorkspaceStatus | null }
+
+/** M10 R2 WS-18 Orca DEFAULT_WORKSPACE_STATUSES(src/shared/workspace-status-defaults.ts)의 id 넷. 사용자 정의 상태는 뺐다. */
+export const WORKSPACE_STATUSES = ['todo', 'in-progress', 'in-review', 'completed'] as const
+export type WorkspaceStatus = (typeof WORKSPACE_STATUSES)[number]
+export const isWorkspaceStatus = (v: unknown): v is WorkspaceStatus => typeof v === 'string' && (WORKSPACE_STATUSES as readonly string[]).includes(v)
+/** 메모 상한 — 사이드바·projects.json 이 붓지 않게. ponytail: Orca 는 상한을 안 둔다, 모자라면 늘린다. */
+export const WORKTREE_COMMENT_MAX = 4000
 
 /** Orca `GitWorktreeInfo`(src/shared/worktree/types.ts) 그대로. */
 export type GitWorktreeInfo = {
@@ -58,6 +85,10 @@ export type Worktree = GitWorktreeInfo & {
   id: string
   repoId: string
   displayName: string
+  /** M10 R2 WS-19 아라 밖에서 만든 워크트리의 출처(아라 것·본 폴더면 없음). */
+  external?: ExternalSource
+  /** WS-19 출처 설정으로 숨겨진 것 — 사이드바·점프는 빼고 "숨은 워크트리" 카드에 센다. */
+  hidden?: boolean
 } & WorktreeMeta
 
 /** Orca `CreateWorktreeArgs`(src/shared/worktree/create-types.ts)의 1차 부분집합. */
@@ -93,7 +124,9 @@ export type CreateWorktreeProgressEvent = { creationId: string; repoId: string }
 /** Orca `BaseRefSearchResult`(src/shared/repo-types.ts) + 종류(태그를 아라가 더했다). */
 export type BaseRef = { refName: string; kind: 'local' | 'remote' | 'tag' }
 
-export type RemoveWorktreeResult = { ok: true } | { ok: false; message: string }
+/** M10 R2 WS-21 git 이 `branch -d` 를 거절해 남긴 브랜치(Orca `RemoveWorktreeResult.preservedBranch`). head = 강제로 지울 때 대조할 커밋. */
+export type PreservedBranch = { branchName: string; head: string }
+export type RemoveWorktreeResult = { ok: true; preservedBranch?: PreservedBranch } | { ok: false; message: string }
 
 /**
  * 사이드바 +/− 줄 수 · 상태바 "main 에서 n 커밋 앞"(WS-05). base = 본 작업 폴더가 체크아웃한 브랜치.
@@ -411,6 +444,51 @@ export function isSafeIncludePath(relativePath: string): boolean {
   if (!relativePath || relativePath.startsWith('/') || /^[A-Za-z]:/.test(relativePath)) return false
   const segments = relativePath.split('/')
   return !segments.includes('..') && !segments.includes('') && segments[0] !== '.git'
+}
+
+// ── M10 R2 WS-19 아라 밖 워크트리(Orca src/shared/worktree/ownership.ts·visibility-sources.ts·external-worktree-visibility.ts) ──
+
+/** Orca BUILT_IN_WORKTREE_VISIBILITY_SOURCES(claude·gsd) + 그 밖(other). 사용자 정의 위치(customSources)는 뺐다. */
+export type ExternalSource = 'claude' | 'gsd' | 'other'
+export type ExternalVisibility = 'show' | 'hide'
+export const EXTERNAL_SOURCES: readonly ExternalSource[] = ['claude', 'gsd', 'other']
+const BUILT_IN_SOURCE_ROOTS: readonly [ExternalSource, string][] = [
+  ['claude', '.claude/worktrees'],
+  ['gsd', '.gsd-workspaces']
+]
+/** Orca EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT 의 아라판 — 이 전에 넣은 프로젝트는 "그 밖" 워크트리를 계속 보인다(전엔 다 보였다). */
+export const EXTERNAL_VISIBILITY_ROLLOUT_AT = Date.UTC(2026, 10, 1)
+
+const normPath = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** 출처 — 저장소 안 `.claude/worktrees/…`(Claude Code)·`.gsd-workspaces/…`(GSD), 나머지는 other. Orca createWorktreeVisibilitySourceMatcher. */
+export function externalSourceOf(repoPath: string, worktreePath: string): ExternalSource {
+  const wt = normPath(worktreePath)
+  for (const [id, rel] of BUILT_IN_SOURCE_ROOTS) if (wt.startsWith(normPath(repoPath) + '/' + rel + '/')) return id
+  return 'other'
+}
+
+/** 출처의 기본값(Orca effectiveExternalWorktreeVisibility·effectiveAgentWorktreeVisibility): 에이전트 임시(claude·gsd)는 늘 숨김, 그 밖은 옛 프로젝트만 보임. */
+export function externalVisibilityOf(project: Pick<Project, 'externalVisibility' | 'addedAt'>, source: ExternalSource): ExternalVisibility {
+  const set = project.externalVisibility?.[source]
+  if (set) return set
+  return source === 'other' && project.addedAt < EXTERNAL_VISIBILITY_ROLLOUT_AT ? 'show' : 'hide'
+}
+
+/**
+ * Orca toDetectedWorktree 의 아라판 — 본 폴더·아라가 만든 것(meta.createdAt)은 늘 보이고, 나머지는 하나씩 보인 경로 > 출처 설정.
+ * 뺀 것: Orca 배치 휴리스틱(unknown-legacy — 워크트리 뿌리 모양으로 추정)·전역 기본값·사용자 정의 위치.
+ */
+export function classifyExternal(
+  project: Pick<Project, 'path' | 'externalVisibility' | 'addedAt' | 'shownExternalPaths'>,
+  w: Pick<GitWorktreeInfo, 'path' | 'isMainWorktree'>,
+  meta: WorktreeMeta | undefined,
+  samePath: (a: string, b: string) => boolean
+): { external?: ExternalSource; hidden?: boolean } {
+  if (w.isMainWorktree || meta?.createdAt) return {}
+  const external = externalSourceOf(project.path, w.path)
+  const shown = (project.shownExternalPaths ?? []).some((p) => samePath(p, w.path)) || externalVisibilityOf(project, external) === 'show'
+  return shown ? { external } : { external, hidden: true }
 }
 
 // ── 분기 지점(WS-04) ──────────────────────────────────────────────────────────

@@ -12,12 +12,14 @@ const ev = {
     list: vi.fn(async () => [project]),
     pickFolder: vi.fn(async (): Promise<string | null> => 'C:/repo/sub'),
     add: vi.fn(async () => ({ ok: true as const, project })),
-    remove: vi.fn(async () => ({ ok: true })), searchBaseRefs: vi.fn() },
+    remove: vi.fn(async () => ({ ok: true })), searchBaseRefs: vi.fn(),
+    update: vi.fn(async (_id: string, u: object) => ({ ...project, ...u })) },
   worktrees: {
     list: vi.fn(async () => ({ ok: true as const, worktrees: [main] })),
     create: vi.fn(async () => ({ ok: true as const, worktree: feat })),
     cancelCreate: vi.fn(async () => ({ ok: true })),
-    remove: vi.fn(async () => ({ ok: true as const })),
+    remove: vi.fn(async (): Promise<{ ok: true; preservedBranch?: { branchName: string; head: string } }> => ({ ok: true as const })),
+    forceDeletePreservedBranch: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string }> => ({ ok: true })),
     stats: vi.fn(async () => ({ ok: true as const, base: 'main', ahead: 2, added: 5, removed: 1 })),
     onCreateProgress: vi.fn(() => () => {}),
     updateMeta: vi.fn(async (_id: string, u: { isArchived?: boolean; sleep?: unknown }) => (u.isArchived ? { isArchived: true } : {}))
@@ -98,6 +100,33 @@ describe('aiws store', () => {
     expect(store.useAiwsStore.getState().activeWorktreeId).toBe(main.id)
     expect(ev.worktrees.list).not.toHaveBeenCalled()
     expect(store.useAiwsStore.getState().openWithoutWorktree('nope')).toBeNull()
+  })
+
+  it('M10 R2 WS-21 남긴 브랜치 — git 이 남기면 목록에 든다. 강제로 지운 것만 빠지고 못 지운 것은 사유와 남는다', async () => {
+    store.useAiwsStore.setState({ repos: [project], worktreesByRepo: { r1: [main, feat] }, preservedBranches: [] })
+    const head = 'a'.repeat(40)
+    ev.worktrees.remove.mockResolvedValueOnce({ ok: true, preservedBranch: { branchName: 'feat', head } })
+    await store.useAiwsStore.getState().removeWorktree(feat.id)
+    const kept = store.useAiwsStore.getState().preservedBranches
+    expect(kept).toEqual([{ branchName: 'feat', head, repoId: 'r1', worktreeId: feat.id, worktreeName: 'feat' }])
+    ev.worktrees.forceDeletePreservedBranch.mockResolvedValueOnce({ ok: false, message: 'moved' })
+    expect(await store.useAiwsStore.getState().forceDeletePreservedBranches(kept)).toEqual([{ item: kept[0], message: 'moved' }])
+    expect(store.useAiwsStore.getState().preservedBranches).toHaveLength(1)
+    expect(await store.useAiwsStore.getState().forceDeletePreservedBranches(kept)).toEqual([])
+    expect(ev.worktrees.forceDeletePreservedBranch).toHaveBeenLastCalledWith('r1', 'feat', head)
+    expect(store.useAiwsStore.getState().preservedBranches).toEqual([])
+  })
+
+  it('M10 R2 WS-19·20 프로젝트 설정 — main 답으로 프로젝트를 바꾸고 그 목록을 다시 읽는다. 메모를 지우면 줄에서도 빠진다', async () => {
+    store.useAiwsStore.setState({ repos: [project], worktreesByRepo: { r1: [{ ...feat, comment: 'old', workspaceStatus: 'todo' }] } })
+    await store.useAiwsStore.getState().updateRepo('r1', { sharedPaths: ['deps'] })
+    expect(store.useAiwsStore.getState().repos[0].sharedPaths).toEqual(['deps'])
+    expect(ev.worktrees.list).toHaveBeenCalledWith('r1')
+    store.useAiwsStore.setState({ worktreesByRepo: { r1: [{ ...feat, comment: 'old', workspaceStatus: 'todo' }] } })
+    await store.useAiwsStore.getState().updateWorktreeMeta(feat.id, { comment: '', workspaceStatus: null })
+    const w = store.useAiwsStore.getState().worktreesByRepo.r1[0]
+    expect(w).not.toHaveProperty('comment')
+    expect(w).not.toHaveProperty('workspaceStatus')
   })
 
   it('지우기 — 목록·활성에서 빠지고, 프로젝트를 빼면 그 워크트리도 빠진다', async () => {

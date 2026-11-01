@@ -110,7 +110,7 @@ describe('원격 워크트리 경로·명령', () => {
     const f = fake((s) => (s.includes("'worktree' 'list'") ? { out: listing('worktree /r-a\nHEAD c\nbranch refs/heads/a\n\n') } : {}))
     expect(await remoteRemoveWorktree(f.run, '/r', '/r', false)).toEqual({ ok: false, message: '/r' })
     expect(await remoteRemoveWorktree(f.run, '/r', '/etc', true)).toEqual({ ok: false, message: '/etc' })
-    expect(await remoteRemoveWorktree(f.run, '/r', '/r-a/', true)).toEqual({ ok: true })
+    expect(await remoteRemoveWorktree(f.run, '/r', '/r-a/', true)).toMatchObject({ ok: true, target: { path: '/r-a' } })
     expect(f.scripts[f.scripts.length - 1]).toBe(`cd -- '/r' && exec git 'worktree' 'remove' '--force' '--' '/r-a'`)
   })
 

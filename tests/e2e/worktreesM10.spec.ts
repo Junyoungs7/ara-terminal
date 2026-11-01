@@ -84,10 +84,10 @@ test('WT-M10★ 자동 이름 → 프로젝트 그룹(만들기·접기) → 재
     await page.click(`${side} [data-aiws="archived"]`)
     await expect(row).toBeVisible()
 
-    // WS-17 삭제 단축키 — 고른 작업 단위에서 Ctrl+Shift+Backspace → 늘 확인 대화상자 → 지움(브랜치는 남음).
+    // WS-17 삭제 단축키 — 고른 작업 단위에서 Ctrl+Shift+Backspace → 늘 확인 대화상자 → 지움(M10 R2: 커밋 없는 브랜치도 같이).
     await row.click()
     await page.keyboard.press('Control+Shift+Backspace')
-    await expect(dialog(page)).toContainText(`브랜치 ${autoName} 는 남습니다`)
+    await expect(dialog(page)).toContainText(`브랜치 ${autoName} 를 지웁니다`)
     await dialogConfirm(page)
     await expect(page.locator(`${side} .aiws-row`).filter({ hasText: autoName })).toHaveCount(0)
     // 본 작업 폴더에서 누르면 "프로젝트를 목록에서 빼기" — 취소하면 그대로.

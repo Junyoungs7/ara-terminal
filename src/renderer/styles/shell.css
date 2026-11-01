@@ -9241,6 +9241,14 @@ button.sb-seg.upd:hover .val {
 .aiws-row:hover {
   background: var(--glass-hover);
 }
+/* M10 R2 숨은 워크트리 카드·대화상자 목록 줄(누름 규칙 위 — 누름이 이기게) */
+.aiws-hidden-card:hover {
+  background: var(--glass-hover);
+  color: var(--text-mid);
+}
+.aiws-ext-row:hover {
+  background: var(--glass-hover);
+}
 .aiws-row.act {
   background: var(--glass);
   box-shadow: inset 0 1px 0 var(--glass-hi);
@@ -12806,6 +12814,113 @@ button.sb-seg.upd:hover .val {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+/* M10 R2 작업 단위 2차 — 체크포인트(WS-18) 상태·메모 줄, 숨은 워크트리 카드(WS-19), 남긴 브랜치 띠(WS-21), 대화상자 목록. */
+.aiws-status {
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  color: var(--text-mid);
+}
+.aiws-row-cmt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-hidden-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-1) 0;
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-8);
+  border: 1px dashed var(--line-soft);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-kept {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.aiws-kept-txt {
+  flex: 1;
+  min-width: 0;
+}
+.aiws-dlg .aiws-cp-text {
+  resize: vertical;
+  font-family: var(--mono);
+}
+.aiws-cp-status,
+.aiws-ext-src {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.aiws-chip {
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-chip.on {
+  border-color: var(--line-strong);
+  background: var(--glass);
+  color: var(--text-hi);
+}
+.aiws-ext-src-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.aiws-ext-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  max-height: 40vh;
+  margin-top: var(--sp-4);
+  overflow-y: auto;
+}
+.aiws-ext-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius);
+}
+.aiws-ext-name {
+  font-family: var(--mono);
+  color: var(--text-hi);
+}
+.aiws-ext-path {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-ext-note,
+.aiws-ext-empty {
   color: var(--text-lo);
   font-size: var(--fs-micro);
 }

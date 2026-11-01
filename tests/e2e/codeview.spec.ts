@@ -122,6 +122,11 @@ test('CV-3 워크트리 점프 — Ctrl+Shift+J 로 다른 워크트리를 찾�
   try {
     execFileSync('git', ['worktree', 'add', '-q', '-b', 'feat-jump', join(root, 'shop-api-feat')], { cwd: repo, stdio: 'ignore' })
     await openProject(app, page, repo)
+    // M10 R2 WS-19: 손으로 만든 워크트리는 새 프로젝트에서 숨는다(Orca) — 숨은 워크트리 카드 → [보이기].
+    await page.click(`${side} [data-aiws="hidden-wt"]`)
+    await page.click('.aiws-dlg [data-aiws="ext-show"]')
+    await page.keyboard.press('Escape')
+    await expect(page.locator(`${side} .aiws-row`).filter({ hasText: 'feat-jump' })).toBeVisible()
     const pal = page.locator('[data-aiws="worktree-jump"]')
     // M12 R2: Ctrl+J 단독은 앱이 잡지 않는다(에이전트 터미널의 Claude Code 줄바꿈으로 간다).
     await page.keyboard.press('Control+J')

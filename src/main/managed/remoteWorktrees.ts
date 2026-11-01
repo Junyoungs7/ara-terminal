@@ -25,6 +25,14 @@ const LIST_TIMEOUT_MS = 30_000
 /** 로컬 WORKTREE_ADD_TIMEOUT_MS 와 같다 — 큰 저장소 체크아웃. */
 const ADD_TIMEOUT_MS = 10 * 60_000
 
+/** M10 R2 WS-21 원격 git 한 번 — 로컬과 같은 브랜치 정리 규칙(main/worktrees/git.ts GitRun)을 쓰게. */
+export const remoteGitRun =
+  (run: RemoteRun, repoPath: string) =>
+  async (args: string[]): Promise<{ code: number; out: string; err: string }> => {
+    const r = await run(remoteGitScript(repoPath, args))
+    return { code: r.code, out: r.out, err: r.err }
+  }
+
 const errOf = (r: ExecResult): string => `${r.err}${r.out}`.trim() || `exit ${r.code}`
 
 /** 원격 저장소 뿌리(하위 폴더면 뿌리로). git 이 아니거나 폴더가 없으면 null. `~` 는 홈으로 편다. */
@@ -73,11 +81,12 @@ export async function remoteAddWorktree(run: RemoteRun, repoPath: string, saniti
 }
 
 /** 목록에 있는 연결 워크트리만 지운다(본 폴더·남의 경로 불가 — 렌더러 값 불신). 폴더를 손으로 지운 등록은 prune. */
-export async function remoteRemoveWorktree(run: RemoteRun, repoPath: string, worktreePath: string, force: boolean): Promise<{ ok: true } | { ok: false; message: string }> {
+/** M10 R2: 지운 것(target)을 돌려준다 — 브랜치 정리(WS-21)가 그 브랜치·커밋을 쓴다. */
+export async function remoteRemoveWorktree(run: RemoteRun, repoPath: string, worktreePath: string, force: boolean): Promise<{ ok: true; target: GitWorktreeInfo } | { ok: false; message: string }> {
   const listed = (await remoteListWorktrees(run, repoPath)) ?? []
   const target = listed.find((w) => !w.isMainWorktree && sameRemotePath(w.path, worktreePath))
   if (!target) return { ok: false, message: worktreePath }
   let r = await run(remoteGitScript(repoPath, ['worktree', 'remove', ...(force ? ['--force'] : []), '--', target.path]), LIST_TIMEOUT_MS)
   if (r.code !== 0 && /is not a working tree/.test(r.err)) r = await run(remoteGitScript(repoPath, ['worktree', 'prune']))
-  return r.code === 0 ? { ok: true } : { ok: false, message: errOf(r) }
+  return r.code === 0 ? { ok: true, target } : { ok: false, message: errOf(r) }
 }

@@ -6,6 +6,7 @@
 //  · 정렬 — 본 작업 폴더가 먼저, 나머지는 이름순.
 // M10: 프로젝트 그룹(WS-15 — Orca group-by-repo 골든의 `project-group:` 머리줄 아래 프로젝트 머리줄이 한 칸 들어감, 접으면 머리줄만),
 //      보관(WS-16 — 보관한 줄은 빠지고, 보관함 보기면 보관한 줄만 한 묶음).
+// M10 R2: 숨은 아라 밖 워크트리(WS-19 — 줄에서 빼고 프로젝트 머리줄 아래 "숨은 워크트리 n개" 카드 한 줄, Orca hidden worktrees card).
 // 뺀 것: 그룹 중첩·계보(lineage) 들여쓰기·상태별 묶기·잠든 워크트리 숨기기(Orca 기본값 꺼짐)·호스트별 갈래·수동 정렬.
 import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
 import { isMac } from '@shared/keymap'
@@ -15,6 +16,7 @@ export type SidebarRow =
   | { kind: 'header'; key: string; group: 'pinned' | 'all' | 'repo' | 'group' | 'archived'; repo?: Project; projectGroup?: ProjectGroup; depth?: number; count: number }
   | { kind: 'item'; key: string; worktree: Worktree; repo: Project; pinned: boolean; showProject: boolean }
   | { kind: 'pending'; key: string; creation: PendingWorktreeCreation }
+  | { kind: 'hidden'; key: string; repo: Project; count: number }
 
 export type SidebarInput = {
   repos: readonly Project[]
@@ -46,7 +48,7 @@ export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
   const repoById = new Map(input.repos.map((r) => [r.id, r]))
   const archivedView = input.showArchived === true
   const visible = (repo: Project) =>
-    [...(input.worktreesByRepo[repo.id] ?? [])].filter((w) => !!w.isArchived === archivedView && matchesQuery(q, w, repo)).sort(compareWorktrees)
+    [...(input.worktreesByRepo[repo.id] ?? [])].filter((w) => !w.hidden && !!w.isArchived === archivedView && matchesQuery(q, w, repo)).sort(compareWorktrees)
   const pendingOf = (repoId: string) =>
     input.pending.filter((p) => p.repoId === repoId && (!q || p.name.toLowerCase().includes(q))).sort((a, b) => a.startedAt - b.startedAt)
   const item = (w: Worktree, repo: Project, pinned: boolean, showProject: boolean, prefix: string): SidebarRow => ({
@@ -90,10 +92,13 @@ export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
     const pend = pendingOf(repo.id)
     // 검색 중이면 맞는 줄이 없는 프로젝트는 머리줄도 숨긴다(검색이 아니면 빈 프로젝트도 보여야 + 를 누른다).
     if (q && list.length + pend.length === 0 && !repo.displayName.toLowerCase().includes(q)) return null
+    // 숨은 것은 검색과 무관하게 센다(보관한 것은 안 센다 — 보관함에 있다).
+    const hidden = (input.worktreesByRepo[repo.id] ?? []).filter((w) => w.hidden && !w.isArchived).length
     return [
       { kind: 'header', key: `repo:${repo.id}`, group: 'repo', repo, depth, count: list.length },
       ...pend.map((p): SidebarRow => ({ kind: 'pending', key: `pending:${p.creationId}`, creation: p })),
-      ...list.map((w) => item(w, repo, false, false, `repo:${repo.id}`))
+      ...list.map((w) => item(w, repo, false, false, `repo:${repo.id}`)),
+      ...(hidden > 0 && !q ? [{ kind: 'hidden', key: `hidden:${repo.id}`, repo, count: hidden } as const] : [])
     ]
   }
   const groups = input.groups ?? []

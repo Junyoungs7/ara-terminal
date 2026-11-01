@@ -1,5 +1,5 @@
 // M2 작업 단위 — 실제 git 으로(임시 폴더에 git init 한 저장소만. 사내 저장소에 닿지 않는다).
-// 프로젝트 등록 · 워크트리 목록(외부에서 만든 것 포함) · 생성(진행 이벤트·이름 겹침·.worktreeinclude) · 지우기(브랜치는 남김)
+// 프로젝트 등록 · 워크트리 목록(외부에서 만든 것 포함) · 생성(진행 이벤트·이름 겹침·.worktreeinclude) · 지우기(M10 R2: 브랜치도 -d 로 — 병합 안 된 것은 남김, worktreesM10R2.test.ts)
 // · 취소 · 재시작 정리 · 분기 지점.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -126,7 +126,7 @@ describe('워크트리', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     expect(new ProjectStore(join(dir, 'projects.json')).pending()).toEqual([])
   })
 
-  it('지우기 — 작업 폴더만, 브랜치는 남긴다. 본 폴더·목록에 없는 경로는 거절', async () => {
+  it('지우기 — 작업 폴더와 (병합된) 브랜치. 본 폴더·목록에 없는 경로는 거절', async () => {
     const svc = makeService()
     const p = await svc.addProject(repo)
     if (!p.ok) throw new Error('add')
@@ -138,7 +138,8 @@ describe('워크트리', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     expect((await svc.removeWorktree(p.project.id, r.worktree.path)).ok).toBe(false) // 커밋 안 된 변경 — git 이 거절
     expect((await svc.removeWorktree(p.project.id, r.worktree.path, true)).ok).toBe(true)
     expect(existsSync(r.worktree.path)).toBe(false)
-    expect((await sh(['branch', '--list', 'gone'])).trim()).not.toBe('')
+    // M10 R2 WS-21 커밋이 없는 브랜치는 병합된 것 — 같이 지운다(Orca 와 같다).
+    expect((await sh(['branch', '--list', 'gone'])).trim()).toBe('')
   })
 
   it('취소 — 시작 직후 끊으면 canceled 로 끝나고 폴더·브랜치·기록이 남지 않는다', async () => {
@@ -225,8 +226,8 @@ describe('M10 자동 이름 은퇴(WS-14) · 보관·잠듦 메타(WS-16) · 프
     if (!a.ok) throw new Error(a.message)
     expect((await svc.removeWorktree(p.project.id, a.worktree.path)).ok).toBe(true)
     expect(makeService().listProjects()[0].retiredNames).toEqual(['nautilus'])
-    // 브랜치 nautilus 는 남아 있다 — 은퇴 목록이 없어도 -2 로 갔겠지만, 브랜치를 지워도 은퇴가 nautilus 를 막는다.
-    await sh(['branch', '-D', 'nautilus'])
+    // M10 R2 브랜치 nautilus 도 지워졌다(커밋 없음 = 병합됨) — 브랜치가 없어도 은퇴가 nautilus 를 막는다.
+    expect((await sh(['branch', '--list', 'nautilus'])).trim()).toBe('')
     const b = await svc.createWorktree({ repoId: p.project.id, name: 'nautilus', creationId: 'n2', nameWasGenerated: true })
     expect(b.ok && b.worktree.branch).toBe('refs/heads/nautilus-2')
     // 사람이 친 이름이면 은퇴 목록을 안 본다.
@@ -245,13 +246,15 @@ describe('M10 자동 이름 은퇴(WS-14) · 보관·잠듦 메타(WS-16) · 프
     const r = await svc.createWorktree({ repoId: p.project.id, name: 'zz', creationId: 'm1' })
     if (!r.ok) throw new Error(r.message)
     const id = r.worktree.id
+    // M10 R2: 아라가 만든 작업 단위엔 createdAt(WS-19)이 늘 있다.
     expect(svc.updateMeta(id, { sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'nope', resume: 'x' }, { agent: 'codex', resume: 3 }] })).toEqual({
+      createdAt: expect.any(Number),
       sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }]
     })
     expect(svc.updateMeta(id, { isArchived: true })).toMatchObject({ isArchived: true, sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }] })
     const l = await makeService().listWorktrees(p.project.id)
     expect(l.ok && l.worktrees.find((w) => w.id === id)).toMatchObject({ isArchived: true, sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }] })
-    expect(svc.updateMeta(id, { isArchived: false, sleep: null })).toEqual({})
+    expect(svc.updateMeta(id, { isArchived: false, sleep: null })).toEqual({ createdAt: expect.any(Number) })
     const l2 = await svc.listWorktrees(p.project.id)
     expect(l2.ok && l2.worktrees.find((w) => w.id === id)).not.toHaveProperty('isArchived')
     expect(svc.updateMeta('nope::x', { isArchived: true })).toBeNull()

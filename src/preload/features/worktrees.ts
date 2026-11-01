@@ -2,7 +2,7 @@
 // Orca src/preload/api/worktrees-bridge.ts(orcaRef 7a7f46f8a3)의 모양 — 진행 채널 이름도 같다(createWorktree:progress).
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { EvApi } from '@shared/ipc'
-import type { CreateWorktreeArgs, CreateWorktreeProgressEvent, WorktreeMetaUpdate } from '@shared/worktrees'
+import type { CreateWorktreeArgs, CreateWorktreeProgressEvent, ProjectUpdate, WorktreeMetaUpdate } from '@shared/worktrees'
 
 export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups'> = {
   repos: {
@@ -11,7 +11,8 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups
     add: (path: string) => ipcRenderer.invoke('repos:add', { path }),
     addRemote: (hostKey: string, path: string) => ipcRenderer.invoke('repos:addRemote', { hostKey, path }),
     remove: (repoId: string) => ipcRenderer.invoke('repos:remove', { repoId }),
-    searchBaseRefs: (repoId: string, query: string) => ipcRenderer.invoke('repos:searchBaseRefs', { repoId, query })
+    searchBaseRefs: (repoId: string, query: string) => ipcRenderer.invoke('repos:searchBaseRefs', { repoId, query }),
+    update: (repoId: string, updates: ProjectUpdate) => ipcRenderer.invoke('repos:update', { repoId, updates })
   },
   worktrees: {
     list: (repoId: string) => ipcRenderer.invoke('worktrees:list', { repoId }),
@@ -20,6 +21,8 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups
     remove: (repoId: string, path: string, force?: boolean) => ipcRenderer.invoke('worktrees:remove', { repoId, path, force }),
     stats: (repoId: string, path: string) => ipcRenderer.invoke('worktrees:stats', { repoId, path }),
     updateMeta: (worktreeId: string, updates: WorktreeMetaUpdate) => ipcRenderer.invoke('worktrees:updateMeta', { worktreeId, updates }),
+    forceDeletePreservedBranch: (repoId: string, branchName: string, head: string) =>
+      ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', { repoId, branchName, head }),
     onCreateProgress: (cb: (e: CreateWorktreeProgressEvent) => void) => {
       const listener = (_e: IpcRendererEvent, d: CreateWorktreeProgressEvent) => cb(d)
       ipcRenderer.on('createWorktree:progress', listener)

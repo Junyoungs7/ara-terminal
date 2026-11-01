@@ -38,7 +38,7 @@ const base: SidebarInput = {
 }
 
 const keys = (rows: SidebarRow[]): string[] =>
-  rows.map((r) => (r.kind === 'header' ? `# ${r.key} (${r.count})` : r.kind === 'pending' ? `… ${r.creation.name}` : `${r.worktree.displayName}${r.showProject ? ` @${r.repo.displayName}` : ''}`))
+  rows.map((r) => (r.kind === 'header' ? `# ${r.key} (${r.count})` : r.kind === 'pending' ? `… ${r.creation.name}` : r.kind === 'hidden' ? `~ hidden ${r.count}` : `${r.worktree.displayName}${r.showProject ? ` @${r.repo.displayName}` : ''}`))
 
 describe('buildSidebarRows', () => {
   it('프로젝트별 묶음 — 본 폴더 먼저, 나머지는 이름순. 워크트리 없는 폴더 프로젝트도 한 줄', () => {

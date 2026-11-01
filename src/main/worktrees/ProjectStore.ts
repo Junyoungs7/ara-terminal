@@ -80,6 +80,20 @@ export class ProjectStore {
     this.flush()
   }
 
+  /** M10 R2 WS-19·20 프로젝트 설정(아라 밖 워크트리 보이기·공유 경로). 값 검사는 service 가 한다. undefined 칸은 지운다. */
+  updateProject(id: string, updates: Pick<Project, 'externalVisibility' | 'shownExternalPaths' | 'sharedPaths'>): Project | null {
+    const p = this.get(id)
+    if (!p) return null
+    for (const k of ['externalVisibility', 'shownExternalPaths', 'sharedPaths'] as const) {
+      if (!(k in updates)) continue
+      const v = updates[k]
+      if (v === undefined || (Array.isArray(v) && v.length === 0)) delete p[k]
+      else (p as Record<string, unknown>)[k] = v
+    }
+    this.flush()
+    return p
+  }
+
   // ── M10 WS-15 프로젝트 그룹(Orca projectGroups:*) ──
   groups(): ProjectGroup[] {
     return this.data.groups
@@ -131,6 +145,10 @@ export class ProjectStore {
     const next: WorktreeMeta = { ...this.data.meta[worktreeId], ...updates }
     if (!next.isArchived) delete next.isArchived
     if (!next.sleep) delete next.sleep
+    if (!next.comment) delete next.comment
+    if (!next.workspaceStatus) delete next.workspaceStatus
+    if (!next.createdAt) delete next.createdAt
+    if (!next.linkedPaths?.length) delete next.linkedPaths
     if (Object.keys(next).length === 0) delete this.data.meta[worktreeId]
     else this.data.meta[worktreeId] = next
     this.flush()

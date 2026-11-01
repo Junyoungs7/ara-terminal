@@ -58,6 +58,7 @@ import type {
   Worktree,
   WorktreeMeta,
   WorktreeMetaUpdate,
+  ProjectUpdate,
   WorktreeStats
 } from './worktrees'
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
@@ -600,6 +601,9 @@ export type InvokeContract = {
   'worktrees:stats': { req: { repoId: string; path: string }; res: WorktreeStats }
   // M10 WS-16 보관·잠든 탭(Orca worktrees:updateMeta). 모르는 작업 단위면 null.
   'worktrees:updateMeta': { req: { worktreeId: string; updates: WorktreeMetaUpdate }; res: WorktreeMeta | null }
+  // M10 R2 WS-21 남긴 브랜치 강제 지우기(Orca worktrees:forceDeletePreservedBranch) · WS-19·20 프로젝트 설정(Orca repos:update 일부).
+  'worktrees:forceDeletePreservedBranch': { req: { repoId: string; branchName: string; head: string }; res: { ok: true } | { ok: false; message: string } }
+  'repos:update': { req: { repoId: string; updates: ProjectUpdate }; res: Project | null }
   // M10 WS-15 프로젝트 그룹(Orca projectGroups:*).
   'projectGroups:list': { req: void; res: ProjectGroup[] }
   'projectGroups:create': { req: { name: string }; res: ProjectGroup | null }
@@ -1286,6 +1290,7 @@ export type EvApi = {
     addRemote(hostKey: string, path: string): Promise<InvokeRes<'repos:addRemote'>>
     remove(repoId: string): Promise<{ ok: boolean }>
     searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]>
+    update(repoId: string, updates: ProjectUpdate): Promise<Project | null>
   }
   worktrees: {
     list(repoId: string): Promise<InvokeRes<'worktrees:list'>>
@@ -1294,6 +1299,7 @@ export type EvApi = {
     remove(repoId: string, path: string, force?: boolean): Promise<RemoveWorktreeResult>
     stats(repoId: string, path: string): Promise<WorktreeStats>
     updateMeta(worktreeId: string, updates: WorktreeMetaUpdate): Promise<WorktreeMeta | null>
+    forceDeletePreservedBranch(repoId: string, branchName: string, head: string): Promise<InvokeRes<'worktrees:forceDeletePreservedBranch'>>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
   }

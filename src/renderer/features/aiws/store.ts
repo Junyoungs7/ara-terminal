@@ -6,8 +6,10 @@ import { create, type StateCreator } from 'zustand'
 import type {
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
+  PreservedBranch,
   Project,
   ProjectGroup,
+  ProjectUpdate,
   RemoveWorktreeResult,
   Worktree,
   WorktreeCheckoutProgress,
@@ -17,6 +19,11 @@ import type {
 } from '@shared/worktrees'
 import { WORKTREE_ID_SEPARATOR, composeWorktreeId } from '@shared/worktrees'
 import { creatureNameTier, normalizeSuggestedName, suggestionPathBasename } from '@shared/worktreeNames'
+import { pushNote } from '../../store/notify'
+import { t } from '../../i18n'
+
+/** M10 R2 WS-21 지운 작업 단위에서 git 이 남긴 브랜치 하나(Orca PreservedBranchCleanup). 이 창이 사는 동안만 — 브랜치는 저장소에 그대로 있다. */
+export type PreservedBranchItem = PreservedBranch & { repoId: string; worktreeId: string; worktreeName: string }
 
 /** Orca PendingWorktreeCreation(src/renderer/src/lib/pending-worktree-creation.ts)의 1차 부분집합. */
 export type PendingWorktreeCreation = {
@@ -86,6 +93,8 @@ export type RepoSlice = {
   /** M8 DM-04 관리형 서버의 원격 저장소 등록 → 그 워크트리 불러오기. 실패면 사유 글. */
   addRemoteRepo: (hostKey: string, path: string) => Promise<Project | string>
   removeRepo: (repoId: string) => Promise<void>
+  /** M10 R2 WS-19·20 프로젝트 설정(아라 밖 워크트리 보이기·공유 경로) — 바꾸면 그 목록을 다시 읽는다(숨김이 바뀐다). */
+  updateRepo: (repoId: string, updates: ProjectUpdate) => Promise<Project | null>
   /** M10 WS-15 프로젝트 그룹(Orca projectGroups 슬라이스 이름). */
   groups: ProjectGroup[]
   fetchGroups: () => Promise<void>
@@ -107,6 +116,14 @@ export type WorktreeSlice = {
   setActiveWorktree: (worktreeId: string | null) => void
   /** M10 WS-16 보관·잠든 탭을 main 에 남기고 이 창의 목록에도 얹는다. 실패면 null. */
   updateWorktreeMeta: (worktreeId: string, updates: WorktreeMetaUpdate) => Promise<WorktreeMeta | null>
+  /** M10 R2 WS-21 git 이 남긴 브랜치들(Orca "Review N Branches") · 검토 대화상자 열림. */
+  preservedBranches: PreservedBranchItem[]
+  branchReviewOpen: boolean
+  setBranchReviewOpen: (open: boolean) => void
+  /** 고른 것을 강제로 지운다(Orca forceDeletePreservedBranchBatch — 저장소마다 차례로). 지운 것은 목록에서 빠지고, 못 지운 것과 사유를 돌려준다. */
+  forceDeletePreservedBranches: (items: readonly PreservedBranchItem[]) => Promise<{ item: PreservedBranchItem; message: string }[]>
+  /** 남겨 두기로 한 것 — 목록에서만 뺀다(브랜치는 저장소에 그대로). */
+  dismissPreservedBranches: (items: readonly PreservedBranchItem[]) => void
   /** "워크트리 없이 열기" — 프로젝트 폴더 자체를 작업 단위로(git 호출 없음, 생성 시간 0). */
   openWithoutWorktree: (repoId: string) => string | null
   /** main 의 진행 이벤트 하나를 반영한다(구독자가 부른다 — 시험도 이것을 직접 부른다). */
@@ -161,6 +178,13 @@ const createRepoSlice: StateCreator<AiwsState, [], [], RepoSlice> = (set, get) =
     if (!get().repos.some((p) => p.id === r.project.id)) set((s) => ({ repos: [...s.repos, r.project] }))
     await get().fetchWorktrees(r.project.id)
     return r.project
+  },
+  updateRepo: async (repoId, updates) => {
+    const p = await window.ev.repos.update(repoId, updates)
+    if (!p) return null
+    set((s) => ({ repos: s.repos.map((x) => (x.id === repoId ? p : x)) }))
+    await get().fetchWorktrees(repoId)
+    return p
   },
   removeRepo: async (repoId) => {
     await window.ev.repos.remove(repoId)
@@ -235,6 +259,18 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
       .find((w) => w.id === worktreeId)
     if (!wt) return { ok: false, message: worktreeId }
     const r = await window.ev.worktrees.remove(wt.repoId, wt.path, force)
+    if (r.ok && r.preservedBranch) {
+      // WS-21 Orca preserved-branch-toast — 작업 폴더는 지웠고 브랜치는 남겼다. 누르면 검토 대화상자.
+      const item: PreservedBranchItem = { ...r.preservedBranch, repoId: wt.repoId, worktreeId, worktreeName: wt.displayName }
+      set((s) => ({ preservedBranches: [...s.preservedBranches.filter((b) => !(b.repoId === item.repoId && b.branchName === item.branchName)), item] }))
+      pushNote({
+        kind: 'info',
+        space: 'ai',
+        title: t('aiws.branch.kept').replace('{b}', item.branchName),
+        body: t('aiws.branch.keptBody').replace('{b}', item.branchName).replace('{w}', item.worktreeName),
+        go: () => get().setBranchReviewOpen(true)
+      })
+    }
     if (r.ok) {
       // M10 WS-14 main 이 자동 이름을 은퇴시켰다 — 이 창의 제안도 같은 이름을 피한다.
       const gone = normalizeSuggestedName(suggestionPathBasename(wt.path))
@@ -250,6 +286,20 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     return r
   },
   setActiveWorktree: (worktreeId) => set({ activeWorktreeId: worktreeId }),
+  preservedBranches: [],
+  branchReviewOpen: false,
+  setBranchReviewOpen: (branchReviewOpen) => set({ branchReviewOpen }),
+  forceDeletePreservedBranches: async (items) => {
+    const failed: { item: PreservedBranchItem; message: string }[] = []
+    for (const item of items) {
+      const r = await window.ev.worktrees.forceDeletePreservedBranch(item.repoId, item.branchName, item.head)
+      if (r.ok) get().dismissPreservedBranches([item])
+      else failed.push({ item, message: r.message })
+    }
+    return failed
+  },
+  dismissPreservedBranches: (items) =>
+    set((s) => ({ preservedBranches: s.preservedBranches.filter((b) => !items.some((x) => x.repoId === b.repoId && x.branchName === b.branchName)) })),
   updateWorktreeMeta: async (worktreeId, updates) => {
     const meta = await window.ev.worktrees.updateMeta(worktreeId, updates)
     if (!meta) return null
@@ -259,7 +309,7 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
         ...s.worktreesByRepo,
         [repoId]: (s.worktreesByRepo[repoId] ?? []).map((w) => {
           if (w.id !== worktreeId) return w
-          const { isArchived: _a, sleep: _s, ...rest } = w
+          const { isArchived: _a, sleep: _s, comment: _c, workspaceStatus: _ws, ...rest } = w
           return { ...rest, ...meta }
         })
       },
