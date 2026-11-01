@@ -12496,61 +12496,6 @@ button.sb-seg.upd:hover .val {
   flex: 1;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   M12 R3 — AI 작성 줄(에디터·diff 거터의 가는 막대, 강조색) · 소스 제어 [AI 로 쓰기] 진행 줄·초안 칸
-   ══════════════════════════════════════════════════════════════════════════ */
-.monaco-editor .ai-line-mark {
-  width: var(--sp-1) !important;
-  margin-left: var(--sp-1);
-  background: color-mix(in srgb, var(--accent) 70%, transparent);
-  border-radius: var(--radius-sm);
-}
-.scm-ai-busy {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--line);
-  color: var(--text-mid);
-  font-size: var(--fs-micro);
-}
-.scm-ai-busy > span {
-  flex: 1;
-}
-.scm-ai-ic {
-  width: var(--sp-6);
-  height: var(--sp-6);
-  flex: none;
-  color: var(--accent);
-}
-.scm-draft {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--line);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.scm-draft-head,
-.scm-draft-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-.scm-draft-head > span,
-.scm-draft-foot > span,
-.scm-draft-foot > input {
-  flex: 1;
-  min-width: 0;
-}
-.scm-draft-head > span {
-  color: var(--text-hi);
-}
-.scm-draft-foot > span {
-  color: var(--text-lo);
-  font-size: var(--fs-micro);
-}
-
 /* ── M11 에이전트 2차: 답할 일 = 반전 칩(시안 C) · 질문/승인 카드 · 재시작 · 지난 세션 범위·필터·검색 ── */
 .ag-ask-chip,
 .aiws-tab-state.ag-ask-chip {
