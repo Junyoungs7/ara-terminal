@@ -14,7 +14,7 @@ export const SETTINGS_GROUPS = ['aiws', 'app', 'global', 'terminal', 'security',
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number]
 
 export const SETTINGS_SECTIONS = [
-  'agents', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'browser', 'automations',
+  'agents', 'managed', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'browser', 'automations',
   'general', 'look', 'pet', 'font', 'keys', 'update',
   'ai', 'voice',
   'terminal', 'conn', 'features', 'log', 'history',
@@ -56,6 +56,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.preview', 'settings.agents.preview')
     ]
   },
+  // M8 DM-03 관리형 서버(features/managed/ManagedServersPanel.tsx) — 호스트별 동의·설치·업데이트·제거.
+  { id: 'managed', group: 'aiws', items: [i('managed.list', 'managed.list', 'managed.desc'), i('managed.install', 'managed.installable', 'managed.noTargets')] },
   soon('usage', 'aiws'),
   soon('git', 'aiws'),
   soon('editor', 'aiws'),

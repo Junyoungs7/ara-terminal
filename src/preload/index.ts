@@ -20,6 +20,7 @@ import { browserBridge } from './features/browser'
 import { resourcesBridge } from './features/resources'
 import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
+import { managedBridge } from './features/managed'
 import { vaultBridge } from './features/vault'
 import { codeBridge } from './features/code'
 import { gitInspectBridge } from './features/gitInspect'
@@ -258,6 +259,7 @@ const api: EvApi = {
   ...resourcesBridge,
   ...worktreesBridge,
   ...agentsBridge,
+  ...managedBridge,
   ...vaultBridge,
   ...codeBridge,
   ...gitInspectBridge,

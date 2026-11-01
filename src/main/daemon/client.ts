@@ -1,6 +1,7 @@
 // M4 DM-01 — 데몬에 붙는 앱 쪽 연결 하나. hello(토큰) → 요청/답(rid) + 사건(data·exit). 끊기면 onClose(데몬이 죽었는지는 부른 쪽이 가른다).
 // 출처: stablyai/orca @7a7f46f8a3 (MIT) src/main/daemon/{client,daemon-client-socket-connect,daemon-client-pending-requests}.ts — 핵심만.
-import { connect, type Socket } from 'node:net'
+import { connect } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { DAEMON_PROTOCOL_VERSION, createFrameParser, encodeFrame, type DaemonEvent, type DaemonHelloReply, type DaemonReply, type DaemonRequest } from './protocol'
 
 const CONNECT_TIMEOUT_MS = 3_000
@@ -22,8 +23,28 @@ export type DaemonConnection = {
 
 /** 붙고 hello 까지. 없으면(ENOENT·ECONNREFUSED) null — 데몬이 없다는 뜻. 토큰이 틀리면 던진다. */
 export function connectDaemon(socketPath: string, token: string, timeoutMs = CONNECT_TIMEOUT_MS): Promise<DaemonConnection | null> {
+  const socket = connect(socketPath)
+  return handshake(socket, token, timeoutMs, (send) => socket.once('connect', send), (e) => e.code === 'ENOENT' || e.code === 'ECONNREFUSED')
+}
+
+/**
+ * M8 DM-02: 이미 열린 양방향 흐름(원격 orcad 다리 — SSH exec 채널의 stdin/stdout)으로 같은 말을 한다. 흐름이 hello 전에 닫히면 던진다.
+ * 원격 데몬이 없으면 다리가 띄운다 — 그래서 "없음(null)"은 없다.
+ */
+export async function connectDaemonStream(stream: Duplex, token: string, timeoutMs = CONNECT_TIMEOUT_MS): Promise<DaemonConnection> {
+  const conn = await handshake(stream, token, timeoutMs, (send) => send(), () => false)
+  if (!conn) throw new Error('원격 데몬에 붙지 못함')
+  return conn
+}
+
+function handshake(
+  socket: Duplex,
+  token: string,
+  timeoutMs: number,
+  whenOpen: (send: () => void) => void,
+  absent: (e: NodeJS.ErrnoException) => boolean
+): Promise<DaemonConnection | null> {
   return new Promise((resolve, reject) => {
-    const socket: Socket = connect(socketPath)
     let settled = false
     const fail = (e: Error | null): void => {
       if (settled) return
@@ -34,7 +55,7 @@ export function connectDaemon(socketPath: string, token: string, timeoutMs = CON
       else resolve(null)
     }
     const timer = setTimeout(() => fail(new Error('데몬 연결 시간 초과')), timeoutMs)
-    socket.once('error', (e: NodeJS.ErrnoException) => fail(e.code === 'ENOENT' || e.code === 'ECONNREFUSED' ? null : e))
+    socket.once('error', (e: NodeJS.ErrnoException) => fail(absent(e) ? null : e))
 
     let hello: DaemonHelloReply | null = null
     let rid = 0
@@ -108,6 +129,6 @@ export function connectDaemon(socketPath: string, token: string, timeoutMs = CON
       if (!hello) return fail(new Error('데몬이 hello 전에 끊었다'))
       for (const cb of closeCbs) cb(intentional)
     })
-    socket.once('connect', () => socket.write(encodeFrame({ type: 'hello', protocol: DAEMON_PROTOCOL_VERSION, token })))
+    whenOpen(() => socket.write(encodeFrame({ type: 'hello', protocol: DAEMON_PROTOCOL_VERSION, token })))
   })
 }

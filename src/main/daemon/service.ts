@@ -15,8 +15,8 @@ import { spawnDaemon, type DaemonRuntime } from './launcher'
 /** 완전 종료 때 데몬이 내려가기를 기다리는 상한(데몬 쪽 상한 5초 + 여유). */
 const SHUTDOWN_WAIT_MS = 6_000
 
-/** 데몬 세션 하나를 아라 세션 파이프라인에 태우는 어댑터. */
-class DaemonBackend implements SessionBackend {
+/** 데몬 세션 하나를 아라 세션 파이프라인에 태우는 어댑터. M8: 원격 orcad 세션도 같은 것을 쓴다(main/managed/remoteAgents.ts). */
+export class DaemonBackend implements SessionBackend {
   private dataCb: ((d: string) => void) | null = null
   private exitCb: ((code: number, signal?: number) => void) | null = null
   private ended = false

@@ -44,6 +44,7 @@ import { registerResourcesFeature } from './resources/feature'
 import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
+import { registerManagedFeature } from './managed/feature'
 import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
 import { registerGitInspectFeature } from './git/feature'
@@ -586,6 +587,8 @@ app.whenReady().then(async () => {
   // M7 R1 WS-10 git 조회(main/git/feature.ts) — 변경 목록·분기 비교·파일 diff(읽기만).
   registerGitInspectFeature()
   registerScmFeature()
+  // M8 DM-02·03 관리형 서버(main/managed/feature.ts) — 호스트별 동의·설치·업데이트·제거. 동의 없는 서버에는 아무것도 깔지 않는다.
+  registerManagedFeature({ userData, sessions: () => sessions, profiles, appVersion: app.getVersion() })
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).

@@ -55,6 +55,7 @@ import type {
 } from './worktrees'
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDetail, VaultSession } from './vault'
+import type { ManagedConsentPlan, ManagedRecord } from './managedServers'
 import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
 import type { ModelCatalog, SlashItem } from './agentOptions'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
@@ -69,6 +70,10 @@ export type AgentLaunchOptions = { model?: string; effort?: string; permission?:
 export type AgentNameEvent = { sessionId: string; name: string }
 /** M4 R3: 에이전트 세션 트리 메모리가 상한을 넘었다(push 'agents:memoryOver', 넘어설 때 한 번). 바이트. */
 export type AgentMemoryOver = { sessionId: string; title: string; memory: number; limit: number }
+/** M8 DM-03 설정 › 관리형 서버 목록: 동의 기록 + 지금 SSH 로 열려 있는 호스트(설치 고르기). */
+export type ManagedListResult = { records: ManagedRecord[]; targets: { hostKey: string; label: string }[] }
+/** 제거(= 동의 철회) 결과. remnants 가 비어야 ok — 원격에서 잰 남은 것(dir·proc:N·cron:N·systemd:N·unknown:키). */
+export type ManagedRemoveResult = { ok: boolean; remnants: string[]; error?: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -592,6 +597,12 @@ export type InvokeContract = {
   'agents:quitCompletely': { req: void; res: void }
   // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
   'agents:legacyNotice': { req: void; res: LegacyAiNotice | null }
+  // M8 DM-02·03 관리형 서버(main/managed/feature.ts). 연결은 그 호스트로 열린 SSH 세션의 것을 빌린다.
+  'managed:list': { req: void; res: ManagedListResult }
+  'managed:plan': { req: { hostKey: string }; res: ManagedConsentPlan | { error: string } }
+  'managed:install': { req: { hostKey: string }; res: ManagedRecord }
+  'managed:check': { req: { hostKey: string }; res: ManagedRecord }
+  'managed:remove': { req: { hostKey: string }; res: ManagedRemoveResult }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
   'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
   // 상세는 마지막 목록에 있던 파일만 연다.
@@ -1224,6 +1235,14 @@ export type EvApi = {
     stats(repoId: string, path: string): Promise<WorktreeStats>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
+  }
+  // M8 관리형 서버(preload/features/managed.ts).
+  managed: {
+    list(): Promise<ManagedListResult>
+    plan(hostKey: string): Promise<ManagedConsentPlan | { error: string }>
+    install(hostKey: string): Promise<ManagedRecord>
+    check(hostKey: string): Promise<ManagedRecord>
+    remove(hostKey: string): Promise<ManagedRemoveResult>
   }
   // M3 에이전트(preload/features/agents.ts).
   agents: {
