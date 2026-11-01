@@ -16,7 +16,8 @@ import type { ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
 import type { SshProfile } from '@shared/types'
 import { runOnHosts } from '@shared/runOn'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
-import { connectSshClient, type ConnectFailure } from '../sessions/ssh/SshBackend'
+import { connectSshClient, holdClient, type ConnectFailure } from '../sessions/ssh/SshBackend'
+import { removeRemoteFiles, uploadPasteImage, type PasteResult } from '../sessions/ssh/pasteImage'
 import { hopCredentialsFrom } from '../ipc/registerSshIpc'
 import type { DaemonCreateSpec, DaemonSessionInfo } from '../daemon/protocol'
 import { TOKEN_BYTES, execSh, installHost, probeHost, uninstallHost } from './host'
@@ -30,6 +31,8 @@ export function registerManagedFeature(deps: {
   profiles: ProfileStore
   knownHosts: Pick<WorkspaceStore, 'getKnownHosts' | 'addKnownHost'>
   appVersion: string
+  /** M8 R4: 데몬 판을 바꿨을 때 알림 센터에 한 줄(묻지 않는 교체 — 동의 범위 안). */
+  updated?: (e: { hostKey: string; from: string; to: string }) => void
 }): ManagedFeature {
   const file = join(deps.userData, 'managed-servers.json')
   const log = (m: string): void => {
@@ -40,9 +43,18 @@ export function registerManagedFeature(deps: {
     }
   }
   cleanupTemp(file)
-  const raw = readJsonWithBackup<{ hosts?: unknown } | null>(file, null)
+  const raw = readJsonWithBackup<{ hosts?: unknown; tabs?: unknown; kills?: unknown } | null>(file, null)
   let records: ManagedRecord[] = Array.isArray(raw?.hosts) ? (raw.hosts as ManagedRecord[]).filter((r) => r && typeof r.hostKey === 'string' && typeof r.consentedAt === 'string') : []
-  const save = (): void => writeJsonAtomic(file, { hosts: records })
+  // M8 R4 앱을 다시 켰을 때 되살릴 원격 탭(Orca: 원격 PTY 바인딩을 로컬에 남겨 두고 다시 켜면 '끊김' 칸 → 사람이 다시 붙기). 서버에 묻지 않고 이것으로 그린다.
+  let tabs: SavedTab[] = Array.isArray(raw?.tabs) ? (raw.tabs as SavedTab[]).filter((x) => x && typeof x.hostKey === 'string' && typeof x.info?.id === 'string') : []
+  // 끊긴 채 닫은 탭 — 서버에 닿지 못해 못 끝낸 것. 다음에 그 서버에 붙을 때 끝낸다(Orca SshPendingPtyKill).
+  let kills: { hostKey: string; id: string }[] = Array.isArray(raw?.kills) ? (raw.kills as { hostKey: string; id: string }[]).filter((x) => x && typeof x.hostKey === 'string' && typeof x.id === 'string') : []
+  const save = (): void => writeJsonAtomic(file, { hosts: records, tabs, kills })
+  const dropTab = (id: string): void => {
+    if (!tabs.some((x) => x.info.id === id)) return
+    tabs = tabs.filter((x) => x.info.id !== id)
+    save()
+  }
   const now = (): string => new Date().toISOString()
   const put = (hostKey: string, patch: Partial<ManagedRecord> & { state: ManagedState }): ManagedRecord => {
     const prev = records.find((r) => r.hostKey === hostKey)
@@ -103,10 +115,17 @@ export function registerManagedFeature(deps: {
       return await p
     } catch (e) {
       // 자기 연결이 안 되면 열린 터미널 세션의 연결을 빌린다(R1 방식 — 한 번만 친 비밀번호로 접속한 경우).
+      // R4: 빌린 연결은 이 호스트의 연결이 된다 — 그 터미널 탭을 닫아도 셸만 닫히고 연결은 남아 원격 에이전트 탭이 안 끊긴다(Orca: 연결은 대상의 것).
       const t = targets().find((x) => x.hostKey === hostKey)
       const c = t ? deps.sessions().sshClient(t.sessionId) : null
-      if (c) return c
-      throw e
+      if (!t || !c) throw e
+      holdClient(c)
+      own.set(hostKey, c)
+      const drop = (): void => void (own.get(hostKey) === c && own.delete(hostKey))
+      c.on('close', drop)
+      c.on('error', drop)
+      log(`ssh ${hostKey} borrowed from terminal ${t.sessionId} (kept open when that tab closes)`)
+      return c
     }
   }
 
@@ -114,9 +133,35 @@ export function registerManagedFeature(deps: {
     adopt: (backend, info, hostKey) => {
       const title = typeof info.meta['title'] === 'string' ? info.meta['title'] : 'agent'
       deps.sessions().adopt(backend, { type: 'ssh', title, serverKey: hostKey, cwd: info.cwd, profileId: null, space: 'ai', cols: info.cols, rows: info.rows }, info.id)
+      tabs = [...tabs.filter((x) => x.info.id !== info.id), { hostKey, info: { id: info.id, pid: info.pid, cwd: info.cwd, cols: info.cols, rows: info.rows, meta: info.meta } }]
+      save()
+    },
+    gone: (id, hostKey) => {
+      dropTab(id)
+      // 이 탭에 붙여 넣은 이미지를 치운다(못 치운 것은 다음 붙여넣기의 하루 지난 것 청소가 걷는다).
+      const files = pasted.get(id)
+      pasted.delete(id)
+      const c = own.get(hostKey)
+      if (files && c) void removeRemoteFiles(c, files)
+    },
+    // 서버에 없는 저장 탭은 이미 끝난 것 — 지운다.
+    listed: (hostKey, ids) => {
+      const next = tabs.filter((x) => x.hostKey !== hostKey || ids.includes(x.info.id))
+      if (next.length === tabs.length) return
+      tabs = next
+      save()
     },
     log
   })
+  const pasted = new Map<string, string[]>()
+  /** 끊긴 채 닫아 못 끝낸 세션을 끝낸다(그 서버에 다시 붙을 때). */
+  const flushKills = async (hostKey: string, client: Client): Promise<void> => {
+    for (const k of kills.filter((x) => x.hostKey === hostKey)) {
+      await remote.kill(hostKey, client, k.id).catch(() => {})
+      kills = kills.filter((x) => x !== k)
+      save()
+    }
+  }
 
   /** 동의한 호스트 확인 + 판이 다르면 동의 범위 안에서 교체(돌고 있는 에이전트가 있으면 미룸). 동의가 없으면 아무것도 깔지 않는다. */
   const ensureReady = async (hostKey: string): Promise<ManagedRecord> => {
@@ -133,6 +178,10 @@ export function registerManagedFeature(deps: {
       // install(사용자가 손으로 지움 — 동의는 남아 있다) · update: 옛 데몬은 세션이 없으니 다리를 닫으면 스스로 내려간다.
       remote.detach(hostKey)
       await installHost(client, deps.appVersion)
+      if (d === 'update' && probe.installed) {
+        log(`orcad ${hostKey} updated ${probe.installed} -> ${deps.appVersion}`)
+        deps.updated?.({ hostKey, from: probe.installed, to: deps.appVersion })
+      }
       return put(hostKey, { state: 'installed', version: deps.appVersion })
     } catch (e) {
       return put(hostKey, { state: 'failed', note: e instanceof Error ? e.message : String(e) })
@@ -165,6 +214,8 @@ export function registerManagedFeature(deps: {
         return { ok: false, remnants }
       }
       records = records.filter((r) => r.hostKey !== hostKey)
+      tabs = tabs.filter((x) => x.hostKey !== hostKey)
+      kills = kills.filter((x) => x.hostKey !== hostKey)
       save()
       log(`orcad ${hostKey} removed — nothing left`)
       return { ok: true, remnants: [] }
@@ -186,7 +237,39 @@ export function registerManagedFeature(deps: {
       await remote.create(hostKey, await clientFor(hostKey), spec)
     },
     // 끊긴 원격 탭 [다시 연결] — 새 연결로 붙어 원격에 산 세션을 같은 id 로 되살린다(이미 붙은 것은 건너뛴다).
-    reconnect: async (hostKey) => remote.attach(hostKey, await clientFor(hostKey)),
+    reconnect: async (hostKey) => {
+      const c = await clientFor(hostKey)
+      await flushKills(hostKey, c)
+      return remote.attach(hostKey, c)
+    },
+    savedTabs: () => tabs.map((x) => x.info),
+    // 끊긴 원격 탭 닫기 — 잠깐 붙어서 끝낸다. 못 붙으면 기억해 두고 다음에 붙을 때 끝낸다(탭은 바로 닫힌다).
+    async kill(hostKey, id) {
+      dropTab(id)
+      try {
+        await remote.kill(hostKey, await clientFor(hostKey), id)
+        return true
+      } catch (e) {
+        log(`orcad ${hostKey} kill ${id} deferred: ${e instanceof Error ? e.message : String(e)}`)
+        if (records.some((r) => r.hostKey === hostKey)) {
+          kills = [...kills.filter((x) => x.id !== id), { hostKey, id }]
+          save()
+        }
+        return false
+      }
+    },
+    // 원격 에이전트 탭 붙여넣기 — 그 세션의 서버 연결로 ~/.ara-paste 에 올린다(R2 터미널과 같은 규칙).
+    async pasteImage(sessionId, bytes, mime) {
+      const hostKey = remote.hostOf(sessionId)
+      if (!hostKey) return null
+      try {
+        const r = await uploadPasteImage(await clientFor(hostKey), bytes, mime)
+        if (r.ok) pasted.set(sessionId, [...(pasted.get(sessionId) ?? []), r.path])
+        return r
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : String(e) }
+      }
+    },
     closeAll() {
       remote.closeAll()
       for (const c of own.values()) c.end()
@@ -203,8 +286,16 @@ export type ManagedFeature = {
   /** DM-05 원격 에이전트 세션 만들기(준비 포함). */
   launch(hostKey: string, spec: DaemonCreateSpec): Promise<void>
   reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
+  /** 앱을 다시 켰을 때 '끊김'으로 되살릴 원격 탭(서버에 묻지 않는다 — 자동 재접속 없음). */
+  savedTabs(): DaemonSessionInfo[]
+  /** 끊긴 원격 탭을 닫을 때 서버의 세션을 끝낸다. false = 못 붙어서 다음 연결 때로 미룸. */
+  kill(hostKey: string, id: string): Promise<boolean>
+  /** 원격 에이전트 탭이면 그 서버에 올린 경로, 아니면 null. */
+  pasteImage(sessionId: string, bytes: Buffer, mime: string): Promise<PasteResult | null>
   closeAll(): void
 }
+
+type SavedTab = { hostKey: string; info: DaemonSessionInfo }
 
 function failText(r: ConnectFailure): string {
   if (r.reason === 'hostKeyNew') return '처음 보는 서버 지문입니다 — 터미널에서 이 서버에 한 번 접속해 지문을 확인해 주세요.'

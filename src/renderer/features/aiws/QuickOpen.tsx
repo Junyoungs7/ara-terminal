@@ -5,7 +5,7 @@ import { FileText, Search } from 'lucide-react'
 import { rankQuickOpen } from '@shared/codeSearch'
 import { t } from '../../i18n'
 import { openFile, useCodeStore } from './codeStore'
-import { useAiwsStore } from './store'
+import { hostOfWorktree, useAiwsStore } from './store'
 
 type Listing = { files: string[]; truncated: boolean } | { error: string } | null
 
@@ -21,14 +21,16 @@ export function QuickOpen({ onClose, onOpened }: { onClose: () => void; onOpened
 
   useEffect(() => inputRef.current?.focus(), [])
   // 열 때마다 새로 받는다(Orca 와 같다 — 에이전트가 파일을 만들고 지우므로 묵은 목록을 들고 있지 않는다).
+  // M8 R4 원격 작업 단위 — 목록은 로컬 rg 로 받는다. 막고 안내(빈 목록·오류 대신).
+  const remote = !!wt && !!hostOfWorktree(wt.id)
   useEffect(() => {
-    if (!wt) return
+    if (!wt || remote) return
     let live = true
     void window.ev.code.listFiles(wt.path).then((r) => {
       if (live) setListing(r.ok ? { files: r.files, truncated: r.truncated } : { error: r.message })
     })
     return () => void (live = false)
-  }, [wt])
+  }, [wt, remote])
 
   const files = listing && 'files' in listing ? listing.files : null
   const shown = useMemo(() => (files ? rankQuickOpen(q, files, recent ?? []) : []), [q, files, recent])
@@ -47,7 +49,9 @@ export function QuickOpen({ onClose, onOpened }: { onClose: () => void; onOpened
 
   const note = !wt
     ? t('code.err.noWorktree')
-    : listing === null
+    : remote
+      ? t('aiws.remote.unsupported')
+      : listing === null
       ? t('qo.loading')
       : 'error' in listing
         ? listing.error

@@ -4,7 +4,7 @@ import { Bot, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Sparkle
 import { t } from '../../i18n'
 import type { AiwsLocation } from '.'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
-import { ensureAiwsLoaded, useAiwsStore } from './store'
+import { ensureAiwsLoaded, hostOfWorktree, useAiwsStore } from './store'
 import { WorktreeSidebar } from './WorktreeSidebar'
 import { NewWorkCard } from './NewWorkCard'
 import { AgentWorkspace } from './AgentPane'
@@ -113,6 +113,8 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
     const onPick = async (): Promise<void> => {
       const s = useAiwsStore.getState()
       const wt = s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined
+      // M8 R4 원격 작업 단위 — 이 PC 의 파일 창으로는 서버 파일을 못 고른다. 창을 열지 않고 안내.
+      if (wt && hostOfWorktree(wt.id)) return void ask({ title: t('code.err.openTitle'), message: t('aiws.remote.unsupported'), cancelLabel: null })
       const path = wt ? await window.ev.code.pick(wt.path) : null
       if (wt && !path) return
       const r = path ? await openFile(path) : { ok: false as const, message: t('code.err.noWorktree') }

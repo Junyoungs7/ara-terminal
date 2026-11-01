@@ -7,7 +7,7 @@ import { isMac } from '@shared/keymap'
 import { isInsidePath, onDiskChange } from '@shared/codeFiles'
 import { areWorktreePathsEqual, type Worktree } from '@shared/worktrees'
 import { QUICK_OPEN_RECENT_LIMIT } from '@shared/codeSearch'
-import { useAiwsStore } from './store'
+import { hostOfWorktree, useAiwsStore } from './store'
 import { t } from '../../i18n'
 
 export type CodeFile = {
@@ -100,6 +100,8 @@ function activeWorktree(): Worktree | undefined {
 export async function openFile(path: string, line?: number): Promise<{ ok: true } | { ok: false; message: string }> {
   const wt = activeWorktree()
   if (!wt) return { ok: false, message: t('code.err.noWorktree') }
+  // M8 R4 원격 작업 단위 — 파일은 로컬 디스크에서 읽는다. 막고 알린다(빠른 열기·검색·링크가 모두 이 길을 지난다).
+  if (hostOfWorktree(wt.id)) return { ok: false, message: t('aiws.remote.unsupported') }
   const abs = /^([a-zA-Z]:)?[\\/]/.test(path) ? path : `${wt.path.replace(/[\\/]+$/, '')}/${path}`.replace(/\//g, PLATFORM === 'win32' ? '\\' : '/')
   if (!isInsidePath(wt.path, abs, PLATFORM)) return { ok: false, message: t('code.err.outside') }
   const s = useCodeStore.getState()

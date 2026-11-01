@@ -16,6 +16,10 @@ export type RemoteAgents = {
   create(hostKey: string, client: Client, spec: DaemonCreateSpec): Promise<DaemonSessionInfo>
   /** 원격에 돌고 있는 세션 수(업데이트 미룸 판정). 붙어 있지 않으면 붙어서 잰다. */
   liveSessions(hostKey: string, client: Client): Promise<number>
+  /** M8 R4 탭 닫기 = 그 세션을 서버에서 끝낸다(Orca: 닫기 = 종료). 끊긴 탭이면 잠깐 붙어서 끝내고, 이 호스트에 붙은 탭이 없으면 다리를 닫는다. */
+  kill(hostKey: string, client: Client, id: string): Promise<void>
+  /** 이 세션이 붙은 호스트(원격 붙여넣기가 연결을 찾는다). */
+  hostOf(id: string): string | undefined
   /** 다리만 닫는다(세션은 원격에 산다). 제거 전에 부른다. */
   detach(hostKey: string): void
   connected(hostKey: string): boolean
@@ -27,6 +31,10 @@ export function createRemoteAgents(deps: {
   adopt: (backend: DaemonBackend, info: DaemonSessionInfo, hostKey: string) => void
   /** attach 로 되살린 세션(탭 복원·상태 판정 붙이기). adopt 뒤에 불린다. */
   restored?: (info: DaemonSessionInfo, hostKey: string) => void
+  /** 세션이 서버에서 정말 끝났다(잃음 아님) — 저장한 탭 목록에서 뺀다. */
+  gone?: (id: string, hostKey: string) => void
+  /** attach 가 받은 서버의 세션 목록 전부(저장한 탭 중 서버에 없는 것을 거른다). */
+  listed?: (hostKey: string, ids: string[]) => void
   log: (msg: string) => void
   /** 시험이 다리를 바꿔 끼울 때만. */
   bridge?: (client: Client) => Promise<DaemonConnection>
@@ -43,6 +51,7 @@ export function createRemoteAgents(deps: {
       if (!x) return
       if (e.type === 'data') return x.b.emitData(e.data)
       backends.delete(e.id)
+      deps.gone?.(e.id, x.host)
       x.b.emitExit(e.code, e.signal)
     })
     conn.onClose((intentional) => {
@@ -87,10 +96,16 @@ export function createRemoteAgents(deps: {
     }
   }
 
+  const detach = (hostKey: string): void => {
+    conns.get(hostKey)?.close()
+    conns.delete(hostKey)
+  }
+
   return {
     async attach(hostKey, client) {
       const conn = await ensure(hostKey, client)
       const list = await conn.request<DaemonSessionInfo[]>({ type: 'list' })
+      deps.listed?.(hostKey, list.map((x) => x.id))
       const fresh = list.filter((info) => !backends.has(info.id))
       for (const info of fresh) await adoptOne(hostKey, conn, info, true)
       return fresh
@@ -105,10 +120,14 @@ export function createRemoteAgents(deps: {
       const conn = await ensure(hostKey, client)
       return (await conn.request<DaemonSessionInfo[]>({ type: 'list' })).length
     },
-    detach(hostKey) {
-      conns.get(hostKey)?.close()
-      conns.delete(hostKey)
+    async kill(hostKey, client, id) {
+      const conn = await ensure(hostKey, client)
+      await conn.request({ type: 'kill', id })
+      deps.gone?.(id, hostKey)
+      if (![...backends.values()].some((x) => x.host === hostKey)) detach(hostKey)
     },
+    hostOf: (id) => backends.get(id)?.host,
+    detach,
     connected: (hostKey) => conns.has(hostKey),
     closeAll() {
       for (const c of conns.values()) c.close()

@@ -23,7 +23,7 @@ import {
 } from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { clipImages, filePaths, registerPasteTarget } from '../store/pasteFiles'
-import { PASTE_IMAGE_MAX_BYTES } from '@shared/pasteImage'
+import { PASTE_IMAGE_MAX_BYTES, pasteImageExt } from '@shared/pasteImage'
 import { pastePaths } from '../components/filePath'
 import { isAppShortcut } from '../../shared/keymap'
 import { t } from '../i18n'
@@ -607,6 +607,14 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
      */
     const takeFiles = (files: readonly File[]): boolean => {
       const paths = filePaths(files)
+      // M8 R4 원격 에이전트 탭(관리형 서버) — [파일] 탭 큐가 없다. 이미지는 경로가 있어도(복사한 png 파일) 그 서버에 올리고 원격 경로를 넣는다.
+      // 이미지가 아닌 파일은 올릴 길이 아직 없다 — 로컬 경로를 넣지 않고 알린다(서버에서 그 경로는 없는 파일이다).
+      if (!local && agent && paths.length > 0) {
+        const images = files.filter((f) => pasteImageExt(f.type))
+        if (images.length) void pasteRemoteImages(images)
+        if (images.length < files.length) notifyPasteFallback(t('paste.remoteAgentFile'))
+        return true
+      }
       // M8 herdr H10: 원격 세션에 붙인 클립보드 이미지는 SFTP 로 원격 임시 폴더(~/.ara-paste)에 올리고
       // **그 원격 경로**를 넣는다. 로컬 세션은 지금처럼 아무것도 안 한다(xterm 에 넘김).
       const images = local ? [] : clipImages(files, (f) => window.ev.app.pathForFile(f))

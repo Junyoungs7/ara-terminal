@@ -417,7 +417,8 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
       {active && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
-          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile && !shownDiff} local serverKey="localhost" agent />
+          {/* M8 R4 원격 탭은 원격 터미널로 — 붙여넣은 이미지·파일을 그 서버에 올리고 원격 경로를 넣는다(로컬 경로를 넣지 않는다). */}
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile && !shownDiff} local={!x.host} serverKey={x.host ?? 'localhost'} agent />
         </div>
       ))}
       {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}

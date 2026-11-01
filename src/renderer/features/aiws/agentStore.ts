@@ -5,11 +5,11 @@ import { create } from 'zustand'
 import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
 import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
-import { WORKTREE_ID_SEPARATOR, areWorktreePathsEqual } from '@shared/worktrees'
+import { areWorktreePathsEqual } from '@shared/worktrees'
 import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
 import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
-import { useAiwsStore } from './store'
+import { hostOfWorktree, useAiwsStore } from './store'
 import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
 import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
@@ -120,7 +120,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const ids = new Set(r.tabs.map((x) => x.sessionId))
     // 있던 탭은 그 자리에서 되살리고(같은 id — 터미널은 붙은 채라 원격 replay 가 그대로 그려진다), 이 창이 모르던 세션은 새 탭으로.
     const known = get().tabs.filter((x) => ids.has(x.sessionId))
-    set((s) => ({ tabs: s.tabs.map((x) => (ids.has(x.sessionId) ? { ...x, exited: false, lost: false } : x)) }))
+    // M8 R4 그 서버의 끊긴 탭 중 서버에 없는 것은 이미 끝났다 — '끊김'이 아니라 '종료'로.
+    set((s) => ({ tabs: s.tabs.map((x) => (ids.has(x.sessionId) ? { ...x, exited: false, lost: false } : x.host === hostKey && x.lost ? { ...x, lost: false } : x)) }))
     known.forEach((x) => watchExit(x.sessionId))
     restoreTabs(r.tabs)
     return null
@@ -130,6 +131,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.sessionId === sessionId)
     if (!tab) return
     if (!tab.exited) void window.ev.session.destroy(sessionId)
+    // M8 R4 끊긴 원격 탭 — 서버의 에이전트도 끝낸다(Orca: 닫기 = 종료, 묻지 않는다). 잠깐 붙어서 끝내고, 못 붙으면 다음에 그 서버에 붙을 때.
+    else if (tab.lost && tab.host) void window.ev.agents.killRemote(tab.host, sessionId).catch(() => {})
     clearDraft(sessionId)
     const pending = pendingNotes.get(sessionId)
     if (pending) clearTimeout(pending.timer)
@@ -172,11 +175,7 @@ export function revealAgent(sessionId: string): void {
   useAgentStore.getState().setView('worktree')
 }
 
-/** 그 작업 단위가 원격 저장소의 것이면 서버 hostKey(id = `${repoId}::${path}`). */
-export function hostOfWorktree(worktreeId: string): string | undefined {
-  const repoId = worktreeId.split(WORKTREE_ID_SEPARATOR)[0]
-  return useAiwsStore.getState().repos.find((r) => r.id === repoId)?.host
-}
+export { hostOfWorktree }
 
 /** 워크트리 이름(카드·피드·알림 줄). 지워졌으면 id 그대로. */
 export function worktreeName(worktreeId: string): string {
@@ -258,7 +257,8 @@ function restoreTabs(list: AgentTabInfo[]): void {
     const found: AgentTab[] = []
     pending = pending.filter((x) => {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
-      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}) })
+      // M8 R4 cut = 앱을 다시 켰을 때의 원격 탭 — 붙지 않은 채 '끊김'으로(사람이 [다시 연결]).
+      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}) })
       return !w
     })
     if (found.length) {
@@ -266,7 +266,7 @@ function restoreTabs(list: AgentTabInfo[]): void {
         tabs: [...s.tabs, ...found],
         activeTabByWorktree: { ...Object.fromEntries(found.map((t) => [t.worktreeId, t.sessionId])), ...s.activeTabByWorktree }
       }))
-      found.forEach((t) => watchExit(t.sessionId))
+      found.filter((t) => !t.exited).forEach((t) => watchExit(t.sessionId))
     }
     return pending.length === 0
   }

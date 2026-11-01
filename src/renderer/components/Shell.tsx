@@ -417,6 +417,15 @@ export function Shell() {
     []
   )
 
+  // M8 R4 관리형 서버의 데몬 판을 바꿨다(묻지 않는 교체 — 동의 범위 안, 돌던 에이전트가 없을 때만). 알림 센터에 한 줄.
+  useEffect(
+    () =>
+      window.ev?.managed?.onUpdated?.((e) =>
+        pushNote({ kind: 'info', space: 'ai', title: t('managed.note.updated').replace('{host}', e.hostKey).replace('{to}', e.to), body: t('managed.note.updated.body').replace('{from}', e.from) })
+      ),
+    []
+  )
+
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다
   // (탭바 ＋ · Ctrl+` · 복제). 여기서 또 부르면 두 번 부르는 것일 뿐이다.

@@ -5,7 +5,8 @@ import { create } from 'zustand'
 import type { DiffMode, GitBranchCompareResult, GitStatusResult } from '@shared/gitDiff'
 import { formatDiffComments, markSent, parseStoredComments, type DiffComment } from '@shared/diffComments'
 import type { Worktree } from '@shared/worktrees'
-import { useAiwsStore } from './store'
+import { hostOfWorktree, useAiwsStore } from './store'
+import { pushNote } from '../../store/notify'
 import { useAgentStore } from './agentStore'
 import { useCodeStore } from './codeStore'
 import { t } from '../../i18n'
@@ -136,6 +137,11 @@ function findWorktree(id?: string): Worktree | undefined {
 export function openDiff(filePath?: string, mode: DiffMode = 'unstaged', worktreeId?: string): boolean {
   const wt = findWorktree(worktreeId)
   if (!wt) return false
+  // M8 R4 원격 작업 단위 — 변경 비교는 로컬 git 을 읽는다. 빈 화면·오류 대신 막고 알린다(Orca 는 원격 git 으로 준다 — 다음 라운드).
+  if (hostOfWorktree(wt.id)) {
+    pushNote({ kind: 'info', space: 'ai', title: t('aiws.remote.unsupported'), body: t('diff.tab'), ctx: wt.displayName })
+    return false
+  }
   const s = useDiffStore.getState()
   const cur = s.byWorktree[wt.id]
   const list: DiffList = mode === 'branch' ? 'branch' : 'working'

@@ -68,6 +68,15 @@ export type ConnectFailure =
 
 export type ConnectOutcome = { ok: true; backend: SshBackend } | ConnectFailure
 
+/**
+ * M8 R4: 관리형 서버가 빌린 연결 — 터미널 탭을 닫아도 셸만 닫고 연결은 남긴다. 연결은 탭이 아니라 호스트의 것(Orca SshConnectionManager:
+ * 대상당 연결 하나, 탭을 닫아도 안 끊긴다). 그 연결 위의 원격 에이전트 탭이 같이 끊기지 않게. 끝내는 것은 빌린 쪽(managed closeAll).
+ */
+const held = new WeakSet<Client>()
+export function holdClient(c: Client): void {
+  held.add(c)
+}
+
 /** 셸 없이 **연결만**(M8: orcad·관리형 설치가 이 Client 위에 exec·sftp 채널을 연다). 끊을 때는 `client.end()` — 점프 홉·프록시 소켓도 같이 닫힌다. */
 export type ClientOutcome = { ok: true; client: Client } | ConnectFailure
 
@@ -464,6 +473,7 @@ export class SshBackend implements SessionBackend {
   kill(): void {
     this.stopCwd()
     const end = (): void => {
+      if (held.has(this.client)) return
       try {
         this.client.end()
       } catch {

@@ -230,4 +230,70 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     expect((await run2(`[ -e "$HOME/shop-feat" ] || [ -e "$HOME/shop-feat-2" ] && echo left; true`)).out.trim()).toBe('')
     c2.end()
   }, 180_000)
+
+  // M8 R4 — 앱 재시작 복귀(클라이언트 상태를 새로 만든 뒤 세션 조회 → 다시 연결) + 끊긴 탭 닫기 = 서버의 에이전트 끝내기 → 원격 세션 프로세스 0.
+  it('재시작 복귀 + 끊긴 탭 닫기 끝내기', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    const c1 = await connect(h.port, h.password)
+    await installHost(c1, '2.11.0')
+    const first = createRemoteAgents({ adopt: () => {}, log: () => {} })
+    await first.create(hostKey, c1, { id: 'keep', cwd: home, env: { ARA_T: '산' }, meta: { title: 'keep', host: hostKey } })
+    await first.create(hostKey, c1, { id: 'drop', cwd: home, env: {}, meta: { title: 'drop', host: hostKey } })
+    // 앱 종료 = 다리 닫기 + 연결 끊기. 세션은 서버에 산다.
+    first.closeAll()
+    c1.end()
+
+    // 다시 켠 앱: 새 상태(아무것도 모름). 끊긴 탭 'drop' 을 닫는다 → 잠깐 붙어서 끝낸다(붙은 탭이 없으니 다리도 닫는다).
+    const c2 = await connect(h.port, h.password)
+    const out = new Map<string, string>()
+    const exits = new Map<string, number>()
+    const backends = new Map<string, DaemonBackend>()
+    const gone: string[] = []
+    const listed: string[][] = []
+    const second = createRemoteAgents({
+      adopt: (b) => {
+        backends.set(b.id, b)
+        out.set(b.id, '')
+        b.onData((d) => out.set(b.id, out.get(b.id) + d))
+        b.onExit((code) => exits.set(b.id, code))
+      },
+      gone: (id) => gone.push(id),
+      listed: (_h, ids) => listed.push(ids),
+      log: () => {}
+    })
+    await second.kill(hostKey, c2, 'drop')
+    expect(gone).toEqual(['drop'])
+    expect(second.connected(hostKey)).toBe(false)
+    const end = Date.now() + 15_000
+    while ((await second.liveSessions(hostKey, c2)) !== 1) {
+      if (Date.now() > end) throw new Error('시간 초과: drop 세션 끝남')
+      await new Promise((r) => setTimeout(r, 200))
+    }
+
+    // [다시 연결] = 세션 조회 → 남은 것만 같은 id 로 되살아나고 화면이 돌아온다(서버에 없는 저장 탭은 listed 로 걸러진다).
+    const back = await second.attach(hostKey, c2)
+    expect(back.map((x) => [x.id, x.meta['host']])).toEqual([['keep', hostKey]])
+    expect(listed.at(-1)).toEqual(['keep'])
+    expect(second.hostOf('keep')).toBe(hostKey)
+    backends.get('keep')!.write('echo "back-$ARA_T"\n')
+    await waitFor(() => /back-산/.test(out.get('keep')!), 10_000, '되살린 뒤 입력')
+
+    // 붙은 탭 닫기(session.destroy → kill) → 끝 → 다리를 닫으면 데몬도 스스로 내려간다 → 원격 프로세스 0(설치 폴더만 남음).
+    backends.get('keep')!.kill()
+    await waitFor(() => exits.has('keep'), 10_000, 'keep 끝남')
+    expect(exits.get('keep')).not.toBe(AGENT_SESSION_LOST_EXIT)
+    expect(gone).toEqual(['drop', 'keep'])
+    second.detach(hostKey)
+    const end2 = Date.now() + 20_000
+    let left = remnantsOf((await execSh(c2, VERIFY_SCRIPT)).out)
+    while (left.some((x) => x.startsWith('proc:'))) {
+      if (Date.now() > end2) throw new Error(`시간 초과: 원격 프로세스 ${left.join(',')}`)
+      await new Promise((r) => setTimeout(r, 300))
+      left = remnantsOf((await execSh(c2, VERIFY_SCRIPT)).out)
+    }
+    expect(left).toEqual(['dir'])
+    expect(await uninstallHost(c2)).toEqual([])
+    c2.end()
+  }, 180_000)
 })

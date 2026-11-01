@@ -25,7 +25,10 @@ const ev = {
       pushStatus = cb
       return () => {}
     }),
-    onName: vi.fn(() => () => {}) // M5 AI-19
+    onName: vi.fn(() => () => {}), // M5 AI-19
+    // M8 R4 끊긴 원격 탭 닫기·다시 연결
+    killRemote: vi.fn(async () => true),
+    reconnect: vi.fn(async () => ({ ok: true as const, tabs: [] }))
   },
   session: {
     onExit: vi.fn((id: string, cb: (info: { id: string; exitCode: number }) => void) => {
@@ -100,6 +103,18 @@ describe('agentStore', () => {
     expect(ev.session.destroy).not.toHaveBeenCalledWith(a.sessionId) // 이미 끝난 셸
     expect(m.useAgentStore.getState().activeTabByWorktree.w1).toBeUndefined()
     expect(m.useAgentStore.getState().tabs.map((t) => t.worktreeId)).toEqual(['w2'])
+  })
+
+  it('M8 R4: 끊긴 원격 탭을 닫으면 서버 세션도 끝내고(로컬 잃음 탭은 아님), [다시 연결] 때 서버에 없던 끊긴 탭은 종료로', async () => {
+    const tab = (sessionId: string, host?: string) => ({ sessionId, agent: 'codex' as const, worktreeId: 'w', title: 't', line: 'l', exited: true, lost: true, ...(host ? { host } : {}) })
+    m.useAgentStore.setState({ tabs: [tab('r1', 'u@h:22'), tab('r2', 'u@h:22'), tab('l1')] })
+    m.useAgentStore.getState().closeTab('r1')
+    m.useAgentStore.getState().closeTab('l1')
+    expect(ev.agents.killRemote).toHaveBeenCalledTimes(1)
+    expect(ev.agents.killRemote).toHaveBeenCalledWith('u@h:22', 'r1')
+    expect(ev.session.destroy).not.toHaveBeenCalledWith('r1')
+    expect(await m.useAgentStore.getState().reconnectHost('u@h:22')).toBeNull()
+    expect(m.useAgentStore.getState().tabs).toMatchObject([{ sessionId: 'r2', exited: true, lost: false }])
   })
 })
 

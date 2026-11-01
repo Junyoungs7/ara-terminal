@@ -9,7 +9,7 @@ import { resolvePrimaryAction, type ScmConfirm, type ScmResult } from '@shared/s
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { t } from '../../i18n'
-import { useAiwsStore } from './store'
+import { hostOfWorktree, useAiwsStore } from './store'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -19,7 +19,9 @@ const CODES = new Set(['detached', 'noRemote', 'badTarget', 'forceProtected', 'e
 
 export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
   const wt = useAiwsStore((s) => (s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined))
-  const root = wt?.path ?? null
+  // M8 R4 원격 작업 단위 — 소스 제어는 로컬 git 을 쓴다. 막고 안내(Orca 는 원격 git 으로 준다 — 다음 라운드).
+  const remote = !!wt && !!hostOfWorktree(wt.id)
+  const root = remote ? null : (wt?.path ?? null)
   const [status, setStatus] = useState<GitStatusResult | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -144,7 +146,11 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
           <RefreshCw />
         </button>
       </div>
-      {!root ? (
+      {remote ? (
+        <div className="scm-msg" data-aiws="remote-unsupported">
+          {t('aiws.remote.unsupported')}
+        </div>
+      ) : !root ? (
         <div className="scm-msg">{t('code.err.noWorktree')}</div>
       ) : status && !status.ok ? (
         <div className="scm-msg err">{status.message}</div>

@@ -4,7 +4,7 @@
 // 이 파일은 AI 작업 공간 청크(features/aiws)에 산다 — 처음 열 때만 불러오고, 그때 진행 이벤트를 한 번 구독한다.
 import { create, type StateCreator } from 'zustand'
 import type { CreateWorktreeProgressEvent, CreateWorktreeResult, Project, RemoveWorktreeResult, Worktree, WorktreeCheckoutProgress, WorktreeStats } from '@shared/worktrees'
-import { composeWorktreeId } from '@shared/worktrees'
+import { WORKTREE_ID_SEPARATOR, composeWorktreeId } from '@shared/worktrees'
 
 /** Orca PendingWorktreeCreation(src/renderer/src/lib/pending-worktree-creation.ts)의 1차 부분집합. */
 export type PendingWorktreeCreation = {
@@ -245,4 +245,10 @@ export function ensureAiwsLoaded(): Promise<void> {
     loaded = null // 다음에 열 때 다시
   })
   return loaded
+}
+
+/** M8 그 작업 단위가 원격 저장소의 것이면 서버 hostKey(id = `${repoId}::${path}`). */
+export function hostOfWorktree(worktreeId: string): string | undefined {
+  const repoId = worktreeId.split(WORKTREE_ID_SEPARATOR)[0]
+  return useAiwsStore.getState().repos.find((r) => r.id === repoId)?.host
 }

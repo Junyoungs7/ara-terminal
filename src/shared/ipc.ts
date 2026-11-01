@@ -64,7 +64,7 @@ import type { ModelCatalog, SlashItem } from './agentOptions'
 export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string }
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
 export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice }
 /** M5 AI-19 채팅 이름(push 'agents:name'). */
@@ -75,6 +75,8 @@ export type AgentMemoryOver = { sessionId: string; title: string; memory: number
 export type ManagedListResult = { records: ManagedRecord[]; targets: { hostKey: string; label: string }[] }
 /** 제거(= 동의 철회) 결과. remnants 가 비어야 ok — 원격에서 잰 남은 것(dir·proc:N·cron:N·systemd:N·unknown:키). */
 export type ManagedRemoveResult = { ok: boolean; remnants: string[]; error?: string }
+/** M8 R4 관리형 서버의 데몬 판 교체(push 'managed:updated'). */
+export type ManagedUpdated = { hostKey: string; from: string; to: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -611,6 +613,8 @@ export type InvokeContract = {
   'managed:hosts': { req: void; res: RunOnHost[] }
   // M8 DM-05 끊긴 원격 탭 [다시 연결] = 새 SSH 연결로 같은 orcad 세션에 이어 붙기(같은 id, 원격 replay). 자동 재접속은 없다(2026-08-14 결정).
   'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string } }
+  // M8 R4 끊긴 원격 탭 닫기 = 서버의 세션도 끝낸다(Orca: 닫기 = 종료). 잠깐 붙어서 끝내고, 못 붙으면 다음 연결 때(false).
+  'agents:killRemote': { req: { hostKey: string; sessionId: string }; res: boolean }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
   'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
   // 상세는 마지막 목록에 있던 파일만 연다.
@@ -1253,6 +1257,8 @@ export type EvApi = {
     check(hostKey: string): Promise<ManagedRecord>
     remove(hostKey: string): Promise<ManagedRemoveResult>
     hosts(): Promise<RunOnHost[]>
+    /** M8 R4 데몬 판을 바꿨다(push 'managed:updated') — 알림 센터 한 줄. */
+    onUpdated(cb: (e: ManagedUpdated) => void): () => void
   }
   // M3 에이전트(preload/features/agents.ts).
   agents: {
@@ -1261,6 +1267,7 @@ export type EvApi = {
     setSettings(settings: AgentSettings): Promise<AgentSettings>
     launch(agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions, host?: string): Promise<AgentLaunchResult>
     reconnect(hostKey: string): Promise<InvokeRes<'agents:reconnect'>>
+    killRemote(hostKey: string, sessionId: string): Promise<boolean>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */

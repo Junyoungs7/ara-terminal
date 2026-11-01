@@ -542,7 +542,8 @@ app.whenReady().then(async () => {
   // F32: 탭을 별도 창으로 떼어내기 / 본창으로 되돌리기(세션은 main 에 있어 죽지 않는다).
   registerSessionWindowIpc(sessions, () => mainWindow)
   registerProfileIpc(profiles)
-  registerSshIpc(profiles, store, sessions)
+  // M8 R4 원격 에이전트 탭의 붙여넣기는 관리형 서버 연결로(아래에서 등록 — 부를 때 찾는다).
+  registerSshIpc(profiles, store, sessions, async (id, bytes, mime) => (managed ? managed.pasteImage(id, bytes, mime) : null))
   registerRdpIpc(profiles, getWebContents)
   registerRdpClipIpc()
   // 탐색기 독립 창은 세션을 소유하지 않지만 파일 전송·원격 표를 건다 — 그 알림은 그 창에도 간다.
@@ -593,7 +594,7 @@ app.whenReady().then(async () => {
   registerGitInspectFeature()
   registerScmFeature()
   // M8 DM-02·03 관리형 서버(main/managed/feature.ts) — 호스트별 동의·설치·업데이트·제거. 동의 없는 서버에는 아무것도 깔지 않는다.
-  managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion() })
+  managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion(), updated: (e) => pushSend(mainWc(), 'managed:updated', e) })
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).

@@ -41,7 +41,7 @@ export function registerAgentsFeature(deps: {
   home: string
   mainWc: () => WebContents | null
   /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
-  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect'> | null
+  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
 }): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
@@ -210,7 +210,12 @@ export function registerAgentsFeature(deps: {
   handle('agents:slash', ({ agent, cwd }) => (isAgentId(agent) && typeof cwd === 'string' ? scanSlash(agent, cwd, deps.home, userEnv) : []))
   handle('agents:tabs', async () => {
     await daemon.ready
-    return restoredTabs.filter((t) => deps.sessions().has(t.sessionId))
+    // M8 R4 원격 탭은 저장해 둔 목록에서 '끊김'으로(서버에 묻지 않는다 — 자동 재접속 없음, 사람이 [다시 연결]).
+    const cut = (deps.remote?.()?.savedTabs() ?? []).filter((info) => !deps.sessions().has(info.id)).flatMap((info) => {
+      const tab = tabOf(info)
+      return tab?.host ? [{ ...tab, cut: true as const }] : []
+    })
+    return [...restoredTabs.filter((t) => deps.sessions().has(t.sessionId)), ...cut]
   })
   handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
   handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
@@ -263,6 +268,12 @@ export function registerAgentsFeature(deps: {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  handle('agents:killRemote', async ({ hostKey, sessionId }) => {
+    const remote = deps.remote?.()
+    if (!remote || typeof hostKey !== 'string' || typeof sessionId !== 'string') return false
+    return remote.kill(hostKey, sessionId)
   })
 
   handle('agents:launch', async ({ agent, cwd, prompt, resume, options, host }): Promise<AgentLaunchResult> => {

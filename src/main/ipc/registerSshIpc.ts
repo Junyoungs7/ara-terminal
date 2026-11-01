@@ -202,7 +202,9 @@ export async function testProfile(
 export function registerSshIpc(
   profiles: ProfileStore,
   ws: WorkspaceStore,
-  sessions: MainSessionManager
+  sessions: MainSessionManager,
+  /** M8 R4 원격 에이전트 탭(관리형 서버 세션)의 붙여넣기 — 그 탭이 아니면 null. */
+  remotePaste?: (sessionId: string, bytes: Buffer, mime: string) => Promise<{ ok: true; path: string } | { ok: false; message: string } | null>
 ): void {
   handle('ssh:connect', ({ profileId, acceptHostKey, password, size, winId, retry }): Promise<SshConnectResult> =>
     connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, winId, retry === true)
@@ -211,8 +213,8 @@ export function registerSshIpc(
   // M8 herdr H10: 붙여넣은 이미지 → 원격 임시 경로. 로컬 세션은 여기 오지 않는다(렌더러가 원격일 때만 부른다).
   handle('ssh:pasteImage', async ({ sessionId, bytes, mime }) => {
     const b = sessions.sshBackend(sessionId)
-    if (!b) return { ok: false as const, message: '원격 세션이 아닙니다.' }
-    return await b.pasteImage(Buffer.from(bytes), mime)
+    if (b) return await b.pasteImage(Buffer.from(bytes), mime)
+    return (await remotePaste?.(sessionId, Buffer.from(bytes), mime)) ?? { ok: false as const, message: '원격 세션이 아닙니다.' }
   })
 
   handle('conn:test', ({ input }): Promise<ConnTestResult> => testProfile(profiles, ws, input))
