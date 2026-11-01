@@ -1,11 +1,12 @@
 // M9 R2 Oriel 연동 — 감지(version JSON)·후보 자리·에이전트별 실행 인자/env(사용자 설정 파일 안 씀)·링크 열기(Oriel → 실패면 OS 브라우저).
 // 진짜 Oriel 을 띄우지 않는다: run 을 바꿔 끼우고, 가짜 Oriel 폴더는 임시 폴더.
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion } from '../src/shared/oriel'
-import { araElectronForOriel, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV } from '../src/main/oriel/oriel'
+import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion, type OrielRunner } from '../src/shared/oriel'
+import { araElectronForOriel, araOrielRunner, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV } from '../src/main/oriel/oriel'
+import { ARA_HOST_APP_ENV, isBundledOrielDir, orielHostDir } from '../src/main/oriel/host'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
 
@@ -162,29 +163,38 @@ describe('OR-1 — ORIEL_ELECTRON(아라 Electron 공유)·링크 포커스·fil
     expect(araElectronForOriel([join(packaged, 'A.R.A.exe')])).toBeNull()
     expect(araElectronForOriel(['electron.exe', ''], () => true)).toBeNull() // 상대 경로는 Oriel 이 종료 코드 3
   })
-  it('version·open 에 env ORIEL_ELECTRON — 에이전트 MCP 설정(Claude·Codex·Gemini) env 에도', async () => {
+  it('version·open 은 runner(실행 파일·env) 그대로 — 에이전트 MCP 설정(Claude·Codex·Gemini)도 같은 runner', async () => {
     const { dir, versionJson } = fakeOriel()
-    const envs: (Record<string, string> | undefined)[] = []
+    const runner: OrielRunner = { command: 'C:/ARA/electron.exe', env: { ELECTRON_RUN_AS_NODE: '1', [ORIEL_ELECTRON_ENV]: 'C:/ARA/electron.exe' } }
+    const seen: [string, Record<string, string> | undefined][] = []
     const o = createOriel({
       candidates: () => [dir],
       openExternal: async () => {},
-      electron: 'C:/ARA/electron.exe',
+      runner: (d) => (d === dir ? runner : { command: 'x', env: {} }),
       platform: 'linux',
-      run: async (_f, args, opts) => {
-        envs.push(opts?.env)
+      run: async (f, args, opts) => {
+        seen.push([f, opts?.env])
         return args[1] === 'version' ? ok(versionJson) : ok('')
       }
     })
     await o.open('http://localhost:1')
-    expect(envs).toEqual([{ [ORIEL_ELECTRON_ENV]: 'C:/ARA/electron.exe' }, { [ORIEL_ELECTRON_ENV]: 'C:/ARA/electron.exe' }])
+    expect(seen).toEqual([
+      [runner.command, runner.env],
+      [runner.command, runner.env]
+    ])
+    const s = await o.status()
+    expect(s.installed && s.runner).toEqual(runner)
     const files: Record<string, string> = {}
     const write = (name: string, ext: string, body: string): string => ((files[name] = body), `C:/h/${name}.${ext}`)
-    orielLaunch('claude', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe')
-    expect(JSON.parse(files['oriel-mcp']).mcpServers.oriel.env).toEqual({ ORIEL_ELECTRON: 'C:/ARA/electron.exe' })
-    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe').args).toContain("mcp_servers.oriel.env={ORIEL_ELECTRON='C:/ARA/electron.exe'}")
-    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, "C:/it's/electron.exe").args).toEqual([])
-    orielLaunch('gemini', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe')
-    expect(JSON.parse(files['oriel-gemini']).mcpServers.oriel).toEqual({ command: 'node', args: ['D:/o/bin/oriel.mjs', 'mcp', '--launch'], env: { ORIEL_ELECTRON: 'C:/ARA/electron.exe' } })
+    orielLaunch('claude', 'D:/o/bin/oriel.mjs', write, runner)
+    expect(JSON.parse(files['oriel-mcp']).mcpServers.oriel).toEqual({ type: 'stdio', command: 'C:/ARA/electron.exe', args: ['D:/o/bin/oriel.mjs', 'mcp', '--launch'], env: runner.env })
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, runner).args).toEqual(
+      expect.arrayContaining(["mcp_servers.oriel.command='C:/ARA/electron.exe'", "mcp_servers.oriel.env={ELECTRON_RUN_AS_NODE='1',ORIEL_ELECTRON='C:/ARA/electron.exe'}"])
+    )
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, { command: "C:/it's/ARA.exe", env: {} }).args).toEqual([])
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, { command: 'C:/ARA.exe', env: { ORIEL_ELECTRON: "C:/it's/ARA.exe" } }).args).toEqual([])
+    orielLaunch('gemini', 'D:/o/bin/oriel.mjs', write, runner)
+    expect(JSON.parse(files['oriel-gemini']).mcpServers.oriel).toEqual({ command: 'C:/ARA/electron.exe', args: ['D:/o/bin/oriel.mjs', 'mcp', '--launch'], env: runner.env })
   })
   it('★ 전경 허락 PowerShell 은 사용자 동작({gesture})일 때만, open 직전에 끝까지 기다린 뒤 — MCP·에이전트 경로(인자 없음)는 절대 안 부른다', async () => {
     const { dir, versionJson } = fakeOriel()
@@ -226,6 +236,64 @@ describe('OR-1 — ORIEL_ELECTRON(아라 Electron 공유)·링크 포커스·fil
     expect(calls).toEqual([])
     expect(external).toEqual([])
   })
+})
+
+describe('OR-2 — 설치본 Oriel 호스트 모드(안 A)·node 없는 PC(아라 Electron + ELECTRON_RUN_AS_NODE)', () => {
+  const res = process.platform === 'win32' ? 'C:\\Program Files\\ARA\\resources' : '/opt/ARA/resources'
+  const bundled = join(res, 'oriel')
+  const base = { argv: ['ARA.exe', bundled], env: { [ARA_HOST_APP_ENV]: 'oriel' }, resourcesPath: res, packaged: true }
+  it('★ 호스트 모드 = 설치본 + env ARA_HOST_APP=oriel + argv[1] 이 정확히 <resources>/oriel 일 때만', () => {
+    expect(orielHostDir(base)).toBe(bundled)
+    if (process.platform === 'win32') {
+      expect(orielHostDir({ ...base, argv: ['ARA.exe', bundled.toUpperCase()] })).toBe(bundled) // 대소문자
+      expect(orielHostDir({ ...base, argv: ['ARA.exe', bundled.replace(/\\/g, '/') + '/'] })).toBe(bundled)
+    }
+  })
+  it('★ 아닌 경우는 전부 아라로 — 개발판·env 없음/다름·인자 위조', () => {
+    expect(orielHostDir({ ...base, packaged: false })).toBeNull() // 개발판은 default_app 이 Oriel 폴더를 띄운다
+    expect(orielHostDir({ ...base, env: {} })).toBeNull()
+    expect(orielHostDir({ ...base, env: { [ARA_HOST_APP_ENV]: 'Oriel ' } })).toBeNull()
+    expect(orielHostDir({ ...base, env: { [ARA_HOST_APP_ENV]: '1' } })).toBeNull()
+    expect(orielHostDir({ ...base, resourcesPath: undefined })).toBeNull()
+    const forged = ['', 'oriel', 'resources/oriel', join(res, 'oriel2'), join(res, 'oriel', 'src'), join(res, 'app.asar'), join(res, '..', 'oriel'), 'D:/AI/ai-browser', '--inspect']
+    for (const arg of forged) expect(orielHostDir({ ...base, argv: ['ARA.exe', arg] })).toBeNull()
+    expect(orielHostDir({ ...base, argv: ['ARA.exe'] })).toBeNull()
+    expect(orielHostDir({ ...base, argv: ['ARA.exe', '--foo', bundled] })).toBeNull() // 앱 폴더는 argv[1] 자리만
+    expect(isBundledOrielDir(join(res, 'x', '..', 'oriel'), res)).toBe(true) // 정규화 후 같은 곳
+  })
+  it('araOrielRunner — 늘 아라 Electron + ELECTRON_RUN_AS_NODE, 개발판은 ORIEL_ELECTRON, 설치본 동봉 자리만 ARA_HOST_APP', () => {
+    const exe = join(res, '..', 'ARA.exe')
+    expect(araOrielRunner(bundled, { execPath: exe, devElectron: null, resourcesPath: res })).toEqual({
+      command: exe,
+      env: { ELECTRON_RUN_AS_NODE: '1', [ORIEL_ELECTRON_ENV]: exe, [ARA_HOST_APP_ENV]: 'oriel' }
+    })
+    // 설치본에 설정한 체크아웃 — A.R.A.exe 로는 그 폴더를 못 띄운다 → Oriel 이 자기 node_modules electron 으로
+    expect(araOrielRunner('D:/AI/ai-browser', { execPath: exe, devElectron: null, resourcesPath: res })).toEqual({ command: exe, env: { ELECTRON_RUN_AS_NODE: '1' } })
+    // 개발판 — default_app 있는 electron 으로 어느 폴더든, 호스트 표시 없음
+    expect(araOrielRunner('D:/AI/ai-browser', { execPath: 'D:/x/electron.exe', devElectron: 'D:/x/electron.exe', resourcesPath: null })).toEqual({
+      command: 'D:/x/electron.exe',
+      env: { ELECTRON_RUN_AS_NODE: '1', [ORIEL_ELECTRON_ENV]: 'D:/x/electron.exe' }
+    })
+  })
+  it('boot.ts — 호스트 판별이 아라 모듈보다 먼저(index 는 정적 import 안 함), package.json main·빌드 입력이 boot', () => {
+    const boot = readFileSync(join(__dirname, '../src/main/boot.ts'), 'utf8')
+    expect(boot).not.toMatch(/^import[^\n]*['"]\.\/index['"]/m)
+    expect(boot).toMatch(/import\('\.\/index'\)/)
+    expect(boot).toContain("'src', 'main', 'main.mjs'")
+    expect(JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')).main).toBe('./out/main/boot.js')
+    expect(readFileSync(join(__dirname, '../electron.vite.config.ts'), 'utf8')).toContain("boot: resolve('src/main/boot.ts')")
+  })
+  const electron = join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe')
+  const cli = 'D:/AI/ai-browser/bin/oriel.mjs'
+  it.runIf(process.platform === 'win32' && existsSync(electron) && existsSync(cli))('★ 실제: 아라 Electron + ELECTRON_RUN_AS_NODE 로 `oriel.mjs version`(창 없음·읽기 전용) — electronPath = ORIEL_ELECTRON', async () => {
+    const { runProcess } = await import('../src/main/util/runProcess')
+    const runner = araOrielRunner('D:/AI/ai-browser', { execPath: electron, devElectron: electron, resourcesPath: null })
+    const r = await runProcess(runner.command, [cli, 'version'], { timeoutMs: 20_000, env: runner.env })
+    expect(r.error).toBeNull()
+    const info = parseOrielVersion(r.stdout)
+    expect(info?.electronPath).toBe(electron)
+    expect(info?.cliPath.replace(/\\/g, '/')).toBe(cli)
+  }, 30_000)
 })
 
 // r1-fix: AG-1·VAULT-1 이 깨졌을 때 첫 의심이 "--settings 경로가 PowerShell `&` 호출에서 깨진다"였다(실제 원인은 줄 접힘 — 시험 쪽).

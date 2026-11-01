@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import { runProcess, type RunOptions, type RunResult } from '../util/runProcess'
 import { isSafeExternal } from '../util/safeExternal'
-import { parseOrielVersion, type OrielStatus } from '@shared/oriel'
+import { NODE_RUNNER, parseOrielVersion, type OrielRunner, type OrielStatus } from '@shared/oriel'
+import { ARA_HOST_APP_ENV, isBundledOrielDir } from './host'
 
 type Run = (file: string, args: readonly string[], opts?: RunOptions) => Promise<RunResult>
 
@@ -30,6 +31,20 @@ export function araElectronForOriel(candidates: readonly string[], exists: (p: s
 }
 
 /**
+ * OR-2 — Oriel 폴더 dir 의 CLI 를 띄우는 법. 늘 아라 Electron(execPath) + `ELECTRON_RUN_AS_NODE=1`(node 없는 PC — M4 데몬과 같은 길,
+ * Electron 기본 fuse RunAsNode 켜짐: electron-builder.yml 에 electronFuses 없음). Oriel CLI 는 앱을 띄울 때 ELECTRON_* 를 걸러 낸다.
+ *  · 개발판(devElectron = araElectronForOriel, default_app 있음): ORIEL_ELECTRON = 그것 — 어느 Oriel 폴더든 띄운다.
+ *  · 설치본 + dir 이 `<resources>/oriel`: ORIEL_ELECTRON = A.R.A.exe + ARA_HOST_APP=oriel → main/boot.ts 가 Oriel 로 뜬다(안 A).
+ *  · 그 밖(설치본에 설정한 체크아웃 등): ORIEL_ELECTRON 없음 → Oriel 이 자기 node_modules electron 으로.
+ */
+export function araOrielRunner(dir: string, o: { execPath: string; devElectron: string | null; resourcesPath: string | null }): OrielRunner {
+  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
+  if (o.devElectron) env[ORIEL_ELECTRON_ENV] = o.devElectron
+  else if (o.resourcesPath && isBundledOrielDir(dir, o.resourcesPath)) Object.assign(env, { [ORIEL_ELECTRON_ENV]: o.execPath, [ARA_HOST_APP_ENV]: 'oriel' })
+  return { command: o.execPath, env }
+}
+
+/**
  * Windows 전경 잠금 — 사용자가 누른 링크에서만, `oriel open` 직전에 아라 메인의 **직접 자식** PowerShell 이
  * AllowSetForegroundWindow(-1)(ASFW_ANY)를 부른다(Oriel README open 항목). 손자(Oriel CLI 가 띄우는 것)는 권한이 없을 수 있다.
  * 에이전트·MCP 경로에서는 부르지 않는다 — 사용자 작업 중에 창이 앞으로 튀어나오면 안 된다(tests/oriel.test.ts 가 막는다).
@@ -52,12 +67,12 @@ export function createOriel(deps: {
   candidates: () => string[]
   openExternal: (url: string) => Promise<void>
   run?: Run
-  /** 아라 자신의 Electron(araElectronForOriel) — version·open 에 ORIEL_ELECTRON 으로. null 이면 Oriel 이 자기 electron. */
-  electron?: string | null
+  /** OR-2 Oriel 폴더별 CLI 실행법(araOrielRunner). 없으면 시스템 node(시험). */
+  runner?: (dir: string) => OrielRunner
   platform?: NodeJS.Platform
 }): Oriel {
   const run = deps.run ?? runProcess
-  const env = deps.electron ? { [ORIEL_ELECTRON_ENV]: deps.electron } : undefined
+  const runnerOf = deps.runner ?? (() => NODE_RUNNER)
   const platform = deps.platform ?? process.platform
   let cached: Promise<OrielStatus> | null = null
 
@@ -68,9 +83,10 @@ export function createOriel(deps: {
       if (!existsSync(cli)) continue
       // `version` 은 읽기 전용(앱을 띄우지 않는다) — 실행 중이면 토큰 인증까지 해서 pid 를 준다.
       // ORIEL_ELECTRON 을 같이 줘야 version 의 electronPath 가 실제로 띄울 바이너리다(동봉판은 자기 electron 이 없다).
-      const r = await run('node', [cli, 'version'], { timeoutMs: VERSION_TIMEOUT_MS, ...(env ? { env } : {}) })
+      const runner = runnerOf(dir)
+      const r = await run(runner.command, [cli, 'version'], { timeoutMs: VERSION_TIMEOUT_MS, env: runner.env })
       const info = r.error ? null : parseOrielVersion(r.stdout)
-      if (info && existsSync(info.electronPath) && existsSync(info.cliPath)) return { installed: true, info }
+      if (info && existsSync(info.electronPath) && existsSync(info.cliPath)) return { installed: true, info, runner }
     }
     return { installed: false, tried }
   }
@@ -94,7 +110,7 @@ export function createOriel(deps: {
           await run(ps, ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], { timeoutMs: FOREGROUND_TIMEOUT_MS })
         }
         // 종료 코드 0 열림 / 1 못 엶 / 2 URL 거부 / 3 실행·연결 실패 → 0 아니면 OS 기본 브라우저(oriel-integration.md 확정).
-        const r = await run('node', [s.info.cliPath, 'open', url], { timeoutMs: OPEN_TIMEOUT_MS, ...(env ? { env } : {}) })
+        const r = await run(s.runner.command, [s.info.cliPath, 'open', url], { timeoutMs: OPEN_TIMEOUT_MS, env: s.runner.env })
         if (!r.error) return 'oriel'
       }
       await deps.openExternal(url).catch(() => {})

@@ -4,7 +4,7 @@ import { app, shell } from 'electron'
 import { join } from 'node:path'
 import { handle } from '../ipc/handle'
 import { orielCandidates } from '@shared/oriel'
-import { araElectronForOriel, createOriel, type Oriel } from './oriel'
+import { araElectronForOriel, araOrielRunner, createOriel, type Oriel } from './oriel'
 
 /** @param setting 설정 › 에이전트의 Oriel 위치(빈 값 = 자동 — 설치본 동봉 자리·개발 PC 체크아웃). */
 export function registerOrielFeature(setting: () => string): Oriel {
@@ -13,8 +13,14 @@ export function registerOrielFeature(setting: () => string): Oriel {
     candidates: () =>
       process.env['ARA_E2E'] === '1' ? (process.env['ARA_E2E_ORIEL'] ? [process.env['ARA_E2E_ORIEL']] : []) : orielCandidates(setting(), app.isPackaged ? process.resourcesPath : null),
     openExternal: (url) => shell.openExternal(url),
-    // 결정(oriel-integration.md 확정): Oriel 은 아라의 Electron 으로 뜬다 — 후보 둘(실행 중 바이너리·cwd 의 node_modules)을 실재 확인.
-    electron: araElectronForOriel([process.execPath, join(process.cwd(), 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')])
+    // 결정(oriel-integration.md 확정): Oriel 은 아라의 Electron 으로 뜬다. 개발판 = 후보 둘(실행 중 바이너리·cwd 의 node_modules) 중 default_app 있는 것,
+    // 설치본 = A.R.A.exe 가 Oriel 호스트(OR-2 안 A, main/boot.ts). CLI 자체도 아라 Electron 을 node 로(node 없는 PC).
+    runner: (dir) =>
+      araOrielRunner(dir, {
+        execPath: process.execPath,
+        devElectron: araElectronForOriel([process.execPath, join(process.cwd(), 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')]),
+        resourcesPath: app.isPackaged ? process.resourcesPath : null
+      })
   })
   // 화면(링크 Ctrl+클릭·포트 [열기]·변경 기록)에서만 오는 IPC = 사용자 동작 → 전경 허락. MCP oriel_open 은 oriel.open(url) 그대로(허락 없음).
   handle('oriel:open', async ({ url }) => {

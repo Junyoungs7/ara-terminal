@@ -1,13 +1,21 @@
 // M9 R2 — Oriel(별도 창 브라우저, D:/AI/ai-browser) 연동의 순수 규칙. 결정(orca-bundle-decisions 2026-11-01): 브라우저는 무조건 Oriel —
 // 아라 안 브라우저 칸 없음, 링크 열기·에이전트 웹 작업(MCP) 모두 Oriel. 연동 기준: agent_talk/oriel-integration.md(Oriel HEAD 1dfc0a0).
-//  · 감지 = `node <appPath>/bin/oriel.mjs version` 의 JSON(설치: package name oriel + electronPath·cliPath 존재 — 존재 확인은 main)
+//  · 감지 = `<runner> <appPath>/bin/oriel.mjs version` 의 JSON(OR-2: runner = 아라 Electron + ELECTRON_RUN_AS_NODE — node 없는 PC)(설치: package name oriel + electronPath·cliPath 존재 — 존재 확인은 main)
 //  · 에이전트 MCP = 서버 이름 `oriel`, `mcp --launch`(꺼져 있으면 Oriel 이 스스로 뜬다 — 포커스 안 뺏음)
 // 사용자 설정 파일(~/.claude.json·~/.codex/config.toml·~/.gemini/settings.json)은 쓰지 않는다 — 실행 인자·env 로만.
 import type { AgentId } from './agents'
 
 export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean }
-/** 설정·알림이 보는 상태. installed=false 면 where 에 찾아본 자리들. */
-export type OrielStatus = { installed: true; info: OrielInfo } | { installed: false; tried: string[] }
+/**
+ * OR-2 — Oriel CLI(version·open·mcp)를 띄우는 법. 시스템 node 가 없는 PC 도 되게 아라 Electron + `ELECTRON_RUN_AS_NODE=1`
+ * (M4 데몬과 같은 길), 그 위에 Oriel 앱을 띄울 Electron(`ORIEL_ELECTRON`)·설치본 호스트 표시(`ARA_HOST_APP`)를 env 로 — main/oriel/oriel.ts araOrielRunner.
+ */
+export type OrielRunner = { command: string; env: Record<string, string> }
+/** 시스템 node 로(시험·예전 모양). */
+export const NODE_RUNNER: OrielRunner = { command: 'node', env: {} }
+
+/** 설정·알림이 보는 상태. installed=false 면 where 에 찾아본 자리들. runner = 감지에 쓴 실행법(open·에이전트 MCP 설정도 같은 것). */
+export type OrielStatus = { installed: true; info: OrielInfo; runner: OrielRunner } | { installed: false; tried: string[] }
 
 /** `oriel version` stdout → 정보. 필요한 칸이 없거나 JSON 이 아니면 null. */
 export function parseOrielVersion(stdout: string): OrielInfo | null {
@@ -43,15 +51,12 @@ export const ORIEL_INSTRUCTIONS =
 type OrielServer = { command: string; args: string[]; env?: Record<string, string> }
 
 /**
- * MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). electronPath 가 있으면 env `ORIEL_ELECTRON` —
- * `mcp --launch` 가 Oriel 을 그 Electron(= 감지 때 version 이 알려 준 바이너리, 아라 것)으로 띄운다(Oriel 89eb2b3).
+ * MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). command·env = 감지 때와 같은 runner — OR-2: 아라 Electron 을 node 로,
+ * env ORIEL_ELECTRON(`mcp --launch` 가 Oriel 을 그 Electron 으로 띄운다, Oriel 89eb2b3), 설치본이면 ARA_HOST_APP 도.
  */
-export function orielMcpServers(cliPath: string, electronPath?: string): { mcpServers: { oriel: OrielServer & { type: 'stdio' } } } {
-  return {
-    mcpServers: {
-      oriel: { type: 'stdio', command: 'node', args: [cliPath.replace(/\\/g, '/'), 'mcp', '--launch'], ...(electronPath ? { env: { ORIEL_ELECTRON: electronPath } } : {}) }
-    }
-  }
+export function orielMcpServers(cliPath: string, runner: OrielRunner = NODE_RUNNER): { mcpServers: { oriel: OrielServer & { type: 'stdio' } } } {
+  const env = Object.keys(runner.env).length ? { env: { ...runner.env } } : {}
+  return { mcpServers: { oriel: { type: 'stdio', command: runner.command, args: [cliPath.replace(/\\/g, '/'), 'mcp', '--launch'], ...env } } }
 }
 
 /**
@@ -69,24 +74,25 @@ export function orielLaunch(
   agent: AgentId,
   cliPath: string,
   write: (name: string, ext: string, body: string) => string,
-  electronPath?: string
+  runner: OrielRunner = NODE_RUNNER
 ): { args: string[]; env: Record<string, string> } {
   const cli = cliPath.replace(/\\/g, '/')
   if (agent === 'claude') {
     return {
-      args: ['--mcp-config', write('oriel-mcp', 'json', JSON.stringify(orielMcpServers(cli, electronPath), null, 2)), '--append-system-prompt-file', write('oriel-instructions', 'md', ORIEL_INSTRUCTIONS + '\n')],
+      args: ['--mcp-config', write('oriel-mcp', 'json', JSON.stringify(orielMcpServers(cli, runner), null, 2)), '--append-system-prompt-file', write('oriel-instructions', 'md', ORIEL_INSTRUCTIONS + '\n')],
       env: {}
     }
   }
   if (agent === 'codex') {
-    if (cli.includes("'") || electronPath?.includes("'")) return { args: [], env: {} }
+    const env = Object.entries(runner.env)
+    if ([cli, runner.command, ...env.flat()].some((v) => v.includes("'"))) return { args: [], env: {} }
     return {
       args: [
         '-c',
-        "mcp_servers.oriel.command='node'",
+        `mcp_servers.oriel.command='${runner.command}'`,
         '-c',
         `mcp_servers.oriel.args=['${cli}','mcp','--launch']`,
-        ...(electronPath ? ['-c', `mcp_servers.oriel.env={ORIEL_ELECTRON='${electronPath}'}`] : []),
+        ...(env.length ? ['-c', `mcp_servers.oriel.env={${env.map(([k, v]) => `${k}='${v}'`).join(',')}}`] : []),
         '-c',
         'mcp_servers.oriel.tool_timeout_sec=120',
         '-c',
@@ -95,14 +101,14 @@ export function orielLaunch(
       env: {}
     }
   }
-  return { args: [], env: { [GEMINI_DEFAULTS_ENV]: write('oriel-gemini', 'json', JSON.stringify(orielGeminiDefaults(cli, electronPath), null, 2)) } }
+  return { args: [], env: { [GEMINI_DEFAULTS_ENV]: write('oriel-gemini', 'json', JSON.stringify(orielGeminiDefaults(cli, runner), null, 2)) } }
 }
 
 /** Gemini 시스템 기본값 파일 env — 실행 하나에 파일 하나라 상태 훅(M9 R3)과 Oriel MCP 를 한 파일에 담는다(main agents/feature.ts). */
 export const GEMINI_DEFAULTS_ENV = 'GEMINI_CLI_SYSTEM_DEFAULTS_PATH'
 
 /** Gemini 시스템 기본값 파일에 담을 Oriel MCP(type 칸 없는 Gemini 모양). */
-export function orielGeminiDefaults(cliPath: string, electronPath?: string): { mcpServers: { oriel: OrielServer } } {
-  const { command, args, env } = orielMcpServers(cliPath, electronPath).mcpServers.oriel
+export function orielGeminiDefaults(cliPath: string, runner: OrielRunner = NODE_RUNNER): { mcpServers: { oriel: OrielServer } } {
+  const { command, args, env } = orielMcpServers(cliPath, runner).mcpServers.oriel
   return { mcpServers: { oriel: { command, args, ...(env ? { env } : {}) } } }
 }
