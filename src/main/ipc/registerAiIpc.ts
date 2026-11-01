@@ -3,7 +3,8 @@
 import { type WebContents } from 'electron'
 import { handle } from './handle'
 import type { AiEnd } from '@shared/types'
-import { AraSession, type AiPrefs, type KeyVault } from '../ai/AraSession'
+import { AraSession, type AiPrefs } from '../ai/AraSession'
+import type { KeyVault } from '../secrets/aiKeys'
 import { pushSend } from '../util/windowPush'
 
 // getWebContents: 창이 파괴된 뒤 도착하는 델타를 흘려보내기 위한 접근자(다른 도메인과 같은 패턴).

@@ -1,7 +1,8 @@
 import type { AiEngine, AiEngineEvent } from '@shared/aiEngine'
 import type { AiEnd } from '@shared/types'
 import { randomUUID } from 'node:crypto'
-import { AraSession, type AiPrefs, type KeyVault, type SessionTools } from '../AraSession'
+import { AraSession, type AiPrefs, type SessionTools } from '../AraSession'
+import type { KeyVault } from '../../secrets/aiKeys'
 import { appendTurn, readTurns } from '../apiChatLog'
 
 /**

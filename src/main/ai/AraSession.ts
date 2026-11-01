@@ -10,21 +10,9 @@
 import { maskSecrets } from '@shared/maskSecrets'
 import type { AiEnd, AiEnv, AiProvider, AiState, AiTurn } from '@shared/types'
 import { buildRequestCore } from './prompt'
+import { aiKeyVaultId, type KeyVault } from '../secrets/aiKeys'
 import type { ToolSpec, ToolCall, ToolResultMsg } from './providers'
 import { PROVIDERS, ProviderError, type AiRequest, type ProviderAdapter, type StreamChunk } from './providers'
-
-// vault 키 네임스페이스. ProfileStore 는 프로필 UUID 를 vault 키로 쓰므로 충돌하지 않는다(점이 든
-// 문자열은 UUID 가 아니다). 프로바이더별로 분리해 전환 시 재입력이 필요 없게 한다(설계 W5 §구조결정 3).
-export function aiKeyVaultId(provider: AiProvider): string {
-  return `ai.apiKey.${provider}`
-}
-
-export type KeyVault = {
-  get(key: string): string | null
-  set(key: string, value: string): void
-  delete(key: string): void
-  has(key: string): boolean
-}
 
 export type Usage = { input: number; output: number }
 
