@@ -238,7 +238,8 @@
       "src/shared/bundled-ripgrep.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 목록 = 서버 rg --files, 없으면 git ls-files -z --cached --others --exclude-standard. 상한 2만 그대로."
   },
   {
     "id": "WS-07",
@@ -254,7 +255,8 @@
       "src/renderer/src/components/editor/MonacoEditor.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 파일은 SFTP 로 읽기·쓰기(상한 50MB 앞부분 읽기 전용 규칙 같음). 경로는 POSIX 로 판정."
   },
   {
     "id": "WS-08",
@@ -268,7 +270,8 @@
       "src/shared/file-write-disk-precondition.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 저장도 쓰기 직전 원격 바이트 sha1 을 읽은 때 서명과 비교(충돌·지워짐 묻기 그대로). 밖에서 바뀜 감시는 SFTP stat(mtime·크기) 3초 폴링 → 다시 읽어 서명 판정."
   },
   {
     "id": "WS-09",
@@ -286,7 +289,8 @@
       "src/main/ripgrep/bundled-ripgrep-text-search.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 검색 = 서버 rg --json, 없으면 git grep --null(Orca text-search buildGitGrepArgs·ingestGitGrepLine). 2000개·15초·취소(채널 KILL+닫기)·100ms 묶음 같음."
   },
   {
     "id": "WS-10",
@@ -305,7 +309,8 @@
       "src/renderer/src/components/editor/DiffViewer.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 git status·branchCompare·diff 를 SSH exec 로(작업 폴더 쪽 글은 SFTP)."
   },
   {
     "id": "WS-11",
@@ -320,7 +325,8 @@
       "src/renderer/src/components/editor/DiffNotesSendMenu.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 주석은 렌더러 저장 — 원격 작업 단위에서도 같음(diff 가 열리면 됨)."
   },
   {
     "id": "WS-12",
@@ -340,7 +346,8 @@
       "src/main/git/source-control/commit-changes.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). stage·unstage·버리기·커밋·amend·풀을 그 서버의 git 으로(SSH exec)."
   },
   {
     "id": "WS-13",
@@ -354,7 +361,8 @@
       "src/main/git/remote.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 원격 푸시도 planPush(보호 브랜치 확인·강제 푸시 막음)·check-ref-format 그대로. 자격 증명은 그 서버의 것."
   },
   {
     "id": "TM-01",
@@ -540,11 +548,14 @@
       "src/renderer/src/store/slices/worktrees/listing/direct-ssh-authority.ts",
       "docs/site/content/docs/recipes/remote-worktrees.mdx",
       "docs/site/content/docs/ssh.mdx",
-      "src/main/ipc/worktree-logic.ts"
+      "src/main/ipc/worktree-logic.ts",
+      "src/main/providers/execution-host-provider-dispatch.ts",
+      "src/main/providers/ssh-filesystem-provider-sftp.ts",
+      "src/shared/text-search.ts"
     ],
     "orcaRef": "fdfcfb3551",
     "status": "porting",
-    "notes": "M8 R4: 원격 작업 단위의 파일 열기·빠른 열기·전체 검색·변경 비교·소스 제어는 \"원격 작업에서는 아직 지원하지 않습니다\"로 막음(Orca 는 원격 fs·git 으로 제공 — 다음 라운드)."
+    "notes": "M8 R4: 원격 작업 단위의 파일 열기·빠른 열기·전체 검색·변경 비교·소스 제어는 \"원격 작업에서는 아직 지원하지 않습니다\"로 막음(Orca 는 원격 fs·git 으로 제공 — 다음 라운드). M8 R5(v2.2): 원격 작업 단위에서도 동작 — main/work/backend.ts 한 자리에서 IPC 의 host 로 로컬/SSH 백엔드를 고름(Orca execution-host-provider-dispatch 호스트 축). 파일 열기·저장(SFTP, 서명 비교)·빠른 열기·검색(서버 rg, 없으면 git ls-files·git grep — rg 설치 안 함)·변경 비교·소스 제어(SSH exec git, 푸시 안전장치 그대로). 연결은 관리형 서버 호스트 연결(clientFor). [탐색기]는 원격이면 빠른 열기를 연다."
   },
   {
     "id": "DM-05",
