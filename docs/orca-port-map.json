@@ -13,7 +13,7 @@
       "docs/site/content/docs/agents/supported.mdx"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-02",
@@ -28,7 +28,7 @@
       "src/shared/agent-choice-args.ts"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-03",
@@ -41,7 +41,7 @@
       "src/renderer/src/store/slices/worktrees/create/host-planned-agent-launch.ts"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-04",
@@ -62,7 +62,7 @@
       "docs/site/content/docs/agents/hooks-memory.mdx"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-05",
@@ -71,7 +71,7 @@
       "src/main/agent-turn-idle-verdict.ts"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-06",
@@ -85,7 +85,7 @@
       "src/shared/agent-status-child-work.ts"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-07",
@@ -121,7 +121,7 @@
       "docs/site/content/docs/model/agents-sessions.mdx"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-09",
@@ -132,7 +132,7 @@
       "docs/site/content/docs/activity.mdx"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-10",
@@ -181,7 +181,7 @@
       "src/renderer/src/components/new-workspace/"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "WS-03",
@@ -211,7 +211,7 @@
       "src/renderer/src/components/sidebar/"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "WS-06",
@@ -356,7 +356,7 @@
       "docs/site/content/docs/model/agents-sessions.mdx"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "status": "porting"
   },
   {
     "id": "AI-12",
