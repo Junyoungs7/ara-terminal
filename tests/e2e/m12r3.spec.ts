@@ -172,7 +172,7 @@ test('R3-2 [AI 로 쓰기] 취소 · CLI 없음 안내', async ({ launch, userDa
       await window.ev.agents.setSettings({ ...s, agents: { ...s.agents, claude: { ...s.agents.claude, command: 'C:/nope/no-claude-here.cmd' } } })
     })
     await page.click(`${scm} [data-scm="ai"]`)
-    await expect(page.locator(`${scm} [data-scm="error"]`)).toContainText('Claude CLI 를 찾지 못했습니다', { timeout: 30_000 })
+    await expect(page.locator(`${scm} [data-scm="error"]`)).toContainText('CLI 를 찾지 못했습니다', { timeout: 30_000 })
   } finally {
     process.env.PATH = savedPath
     rmDir(root)
