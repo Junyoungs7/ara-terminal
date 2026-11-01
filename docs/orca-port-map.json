@@ -42,7 +42,7 @@
     ],
     "orcaRef": "7a7f46f8a3",
     "status": "porting",
-    "notes": "M9 R2(v2.2 4e4edae): 로컬 실행에 아라가 붙이는 인자·env(planAgentLaunch extraArgs·extraEnv, 접두 인자 바로 뒤·재개에도) — Oriel 전용 MCP(`oriel mcp --launch`): Claude --mcp-config(더하기만 — --strict-mcp-config 는 사용자 MCP 를 전부 끈다, Orca claude-background-run-isolation-real-cli.test 로 확인) + --append-system-prompt-file(웹은 Oriel, 끝나면 finish()), Codex -c mcp_servers.oriel.*·developer_instructions, Gemini env GEMINI_CLI_SYSTEM_DEFAULTS_PATH(지시 자리 없음). 사용자 설정 파일은 안 씀(~/.ara/agent-launch). Oriel 미설치면 그대로 띄우고 알림 센터 한 번. 원격 실행엔 안 붙임."
+    "notes": "M9 R2(v2.2 4e4edae): 로컬 실행에 아라가 붙이는 인자·env(planAgentLaunch extraArgs·extraEnv, 접두 인자 바로 뒤·재개에도) — Oriel 전용 MCP(`oriel mcp --launch`): Claude --mcp-config(더하기만 — --strict-mcp-config 는 사용자 MCP 를 전부 끈다, Orca claude-background-run-isolation-real-cli.test 로 확인) + --append-system-prompt-file(웹은 Oriel, 끝나면 finish()), Codex -c mcp_servers.oriel.*·developer_instructions, Gemini env GEMINI_CLI_SYSTEM_DEFAULTS_PATH(지시 자리 없음). 사용자 설정 파일은 안 씀(~/.ara/agent-launch). Oriel 미설치면 그대로 띄우고 알림 센터 한 번. 원격 실행엔 안 붙임. OR-1(v2.2 9ab4332): 세 CLI 의 Oriel MCP 설정에 env ORIEL_ELECTRON(감지 때 version 이 알려 준 Electron = 아라 것 — 결정: Electron 공유, 설치본은 default_app.asar 가 없어 아직 안 줌), Orca 해당 없음(아라 고유 연동)."
   },
   {
     "id": "AI-04",
