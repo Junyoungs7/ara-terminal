@@ -319,10 +319,14 @@
       "src/renderer/src/components/right-sidebar/source-control-primary-action.ts",
       "src/preload/api/git-operation-api.ts",
       "src/preload/api/git-bridge.ts",
-      "src/main/git/"
+      "src/main/git/",
+      "src/shared/source-control-primary-action-decision.ts",
+      "src/main/git/source-control/staging.ts",
+      "src/main/git/source-control/discard-changes.ts",
+      "src/main/git/source-control/commit-changes.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-13",
@@ -331,10 +335,12 @@
       "src/main/git/push-target-validation.ts",
       "src/main/ipc/worktree-push-target-setup.ts",
       "src/main/ipc/worktree-push-target-reconciliation.ts",
-      "src/renderer/src/components/right-sidebar/source-control/sync/"
+      "src/renderer/src/components/right-sidebar/source-control/sync/",
+      "src/shared/git-push-target-validation.ts",
+      "src/main/git/remote.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "TM-01",
