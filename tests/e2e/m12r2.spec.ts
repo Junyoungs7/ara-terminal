@@ -58,8 +58,9 @@ test('R2-1 미리 보기 탭 — 한 번 누름은 기울임 탭(다음 것이 �
     await file(page, 'a.txt').click()
     await expect(tab(page, 'a.txt')).toHaveAttribute('data-preview', 'true')
     await expect(page.locator('.code-ed .monaco-editor')).toBeVisible()
-    // Orca 기본: 미니맵 꺼짐.
-    await expect(page.locator('.code-ed .monaco-editor .minimap')).toHaveCount(0)
+    // Orca 기본: 미니맵 꺼짐. Monaco 는 꺼도 .minimap 노드를 남기고 폭만 0 으로 둔다(minimap.js setWidth(minimapWidth)) — 폭으로 본다.
+    await expect(page.locator('.code-ed .monaco-editor .minimap')).toHaveCount(1)
+    await expect.poll(() => page.locator('.code-ed .monaco-editor .minimap').evaluate((e) => e.getBoundingClientRect().width)).toBe(0)
     // 다음 한 번 누름이 같은 자리를 갈아 끼운다.
     await file(page, 'b.txt').click()
     await expect(tab(page, 'a.txt')).toHaveCount(0)

@@ -184,7 +184,8 @@ test('DIFF-2 분기 기준 갈래 · 바이너리는 비교를 안 그린다', a
     await expect(page.locator('[data-diff="base"]')).toContainText('main')
     await expect(page.locator('[data-aiws="diff-tab"]')).toContainText('변경 비교 · 2')
     await page.click('[data-diff-file="src/app.ts"]')
-    await expect(page.locator('[data-diff="view"] .diff-monaco .editor.modified .view-lines')).toContainText('const b = 20')
+    // 한 줄 보기(M12 R2 기본)는 지운 줄을 바뀐 쪽 에디터 안 view zone(.view-lines.line-delete)으로 그린다 — 그것은 빼고 본다.
+    await expect(page.locator('[data-diff="view"] .diff-monaco .editor.modified .view-lines:not(.line-delete)')).toContainText('const b = 20')
   } finally {
     rmDir(root)
   }
