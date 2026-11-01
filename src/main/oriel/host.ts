@@ -5,6 +5,8 @@ import { isAbsolute, resolve } from 'node:path'
 
 /** 아라가 Oriel CLI 를 부를 때 넣는 env. Oriel CLI 는 ELECTRON_*·NODE_OPTIONS 만 걸러 앱에 넘기므로(src/cli/mcp.mjs launchCommand) 앱까지 닿는다. */
 export const ARA_HOST_APP_ENV = 'ARA_HOST_APP'
+/** 같은 뜻의 인자 표식 — 앱 폴더(argv[1]) 바로 뒤(argv[2])에 있을 때만 인정. */
+export const ARA_HOST_ARG = '--ara-host=oriel'
 
 /** dir 이 설치본 동봉 자리 `<resources>/oriel` 과 정확히 같은가(절대 경로만, Windows 는 대소문자 무시). */
 export function isBundledOrielDir(dir: string, resourcesPath: string, platform: NodeJS.Platform = process.platform): boolean {
@@ -24,7 +26,10 @@ export function orielHostDir(o: {
   packaged: boolean
   platform?: NodeJS.Platform
 }): string | null {
-  if (!o.packaged || o.env[ARA_HOST_APP_ENV] !== 'oriel' || !o.resourcesPath) return null
+  // 기본 브라우저 등록 명령줄은 env 를 못 실어서 Oriel 이 `"<exe>" "<resources>\oriel" --ara-host=oriel -- "%1"` 로 등록한다
+  // → env 대신 앱 폴더 바로 뒤의 인자 표식도 받는다. 그 뒤(`--`·URL)는 Oriel 몫이라 보지 않는다.
+  const marked = o.env[ARA_HOST_APP_ENV] === 'oriel' || o.argv[2] === ARA_HOST_ARG
+  if (!o.packaged || !marked || !o.resourcesPath) return null
   const arg = o.argv[1] ?? ''
   return isBundledOrielDir(arg, o.resourcesPath, o.platform) ? resolve(o.resourcesPath, 'oriel') : null
 }

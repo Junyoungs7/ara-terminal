@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion, type OrielRunner } from '../src/shared/oriel'
 import { araElectronForOriel, araOrielRunner, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV } from '../src/main/oriel/oriel'
-import { ARA_HOST_APP_ENV, isBundledOrielDir, orielHostDir } from '../src/main/oriel/host'
+import { ARA_HOST_APP_ENV, ARA_HOST_ARG, isBundledOrielDir, orielHostDir } from '../src/main/oriel/host'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
 
@@ -248,6 +248,14 @@ describe('OR-2 — 설치본 Oriel 호스트 모드(안 A)·node 없는 PC(아�
       expect(orielHostDir({ ...base, argv: ['ARA.exe', bundled.toUpperCase()] })).toBe(bundled) // 대소문자
       expect(orielHostDir({ ...base, argv: ['ARA.exe', bundled.replace(/\\/g, '/') + '/'] })).toBe(bundled)
     }
+  })
+  it('★ 기본 브라우저 등록 명령줄(env 없음) — 앱 폴더 바로 뒤 --ara-host=oriel 표식만 인정', () => {
+    const reg = { ...base, env: {}, argv: ['ARA.exe', bundled, ARA_HOST_ARG, '--', 'https://example.com'] }
+    expect(orielHostDir(reg)).toBe(bundled)
+    expect(orielHostDir({ ...reg, packaged: false })).toBeNull()
+    expect(orielHostDir({ ...reg, argv: ['ARA.exe', bundled, '--', ARA_HOST_ARG] })).toBeNull() // 자리 다름
+    expect(orielHostDir({ ...reg, argv: ['ARA.exe', ARA_HOST_ARG, bundled] })).toBeNull()
+    expect(orielHostDir({ ...reg, argv: ['ARA.exe', join(res, 'oriel2'), ARA_HOST_ARG] })).toBeNull()
   })
   it('★ 아닌 경우는 전부 아라로 — 개발판·env 없음/다름·인자 위조', () => {
     expect(orielHostDir({ ...base, packaged: false })).toBeNull() // 개발판은 default_app 이 Oriel 폴더를 띄운다
