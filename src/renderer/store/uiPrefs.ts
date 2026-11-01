@@ -37,7 +37,8 @@ const DEFAULT_PREFS: UiPrefs = {
   voice: DEFAULT_VOICE,
   aiSpace: false,
   space: 'term',
-  notifyToast: true
+  notifyToast: true,
+  notifyAgents: true
 }
 
 export function useUiPrefs() {

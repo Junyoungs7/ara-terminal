@@ -374,6 +374,7 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         voice: voiceOf(undefined),
         aiSpace: false,
         notifyToast: true,
+        notifyAgents: true,
         space: 'term',
         uiScale: 'normal',
         mouseCursor: 'system',

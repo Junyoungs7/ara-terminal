@@ -1641,6 +1641,9 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
               <Row label={t('settings.notify.toast')} desc={t('settings.notify.toast.desc')} item="notify.toast">
                 <Toggle on={prefs.notifyToast} label={t('settings.notify.toast')} onChange={(notifyToast) => onPrefsChange({ notifyToast })} />
               </Row>
+              <Row label={t('settings.notify.agents')} desc={t('settings.notify.agents.desc')} item="notify.agents">
+                <Toggle on={prefs.notifyAgents} label={t('settings.notify.agents')} onChange={(notifyAgents) => onPrefsChange({ notifyAgents })} />
+              </Row>
               <Row label={t('settings.notify.sound')} desc={t('settings.notify.sound.desc')} item="notify.sound">
                 <span className="set-note">{t('aiws.soon')}</span>
               </Row>

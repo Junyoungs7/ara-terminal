@@ -41,9 +41,8 @@ import { commandChunks, WIN_CLEAR_GAP_MS } from '../../shared/shellInput'
 import { agentStatuses } from '../store/agentStatus'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
-import { aiBusyIn, aiRuns, benchRunOf, planAiLaunch, registerAiRun } from '../store/aiSessions'
+import { aiBusyIn, aiRuns, benchRunOf, planAiLaunch, registerAiRun, useAiSessions } from '../store/aiSessions'
 import { benchRows as buildBenchRows, hookRows, useAiWorkbench } from '../store/aiWorkbench'
-import { useAiQuietWatch } from '../store/aiQuietWatch'
 import { childrenOf, defaultTitle, type AiSessionState } from '@shared/aiSession'
 import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
 import { MAIN_WIN_ID } from '@shared/sessionWin'
@@ -403,9 +402,8 @@ export function Shell() {
   const mainRef = useRef<MainAreaHandle>(null)
   const selectSession = useCallback((id: string) => mainRef.current?.activateSession(id), [])
 
-  // #132: 조용한 AI 감시 — **화면 없이 항상 돈다**. 그게 이 기능의 목적이라(안 보고 있어도
-  // 알아챈다) 패널을 걷어내면서 로직만 남겼다. 사이드바 [AI] 의 노란 점이 그 결과다.
-  const { views: aiViews } = useAiQuietWatch(selectSession)
+  // 사이드바 [AI] 작업대 줄(S1 대상). 옛 대기 알림(aiQuietWatch)은 M3 S4 에서 지웠다 — 알림은 AI 작업 공간 에이전트가 보낸다.
+  const aiViews = useAiSessions(true)
 
   // M1 라운드 3 알림 센터 — 실험 기능(AI 작업 공간)을 켰을 때만 벨·토스트·맥박이 보인다(스위치와 같은 조건).
   // 누르면 그 공간·세션으로 가고 읽음이 된다. 지금 보는 공간을 저장소에 알려 그 공간의 맥박을 끈다.

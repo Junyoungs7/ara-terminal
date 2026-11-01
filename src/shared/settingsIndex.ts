@@ -62,7 +62,11 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   {
     id: 'notify',
     group: 'aiws',
-    items: [i('notify.toast', 'settings.notify.toast', 'settings.notify.toast.desc'), i('notify.sound', 'settings.notify.sound', 'settings.notify.sound.desc')]
+    items: [
+      i('notify.toast', 'settings.notify.toast', 'settings.notify.toast.desc'),
+      i('notify.agents', 'settings.notify.agents', 'settings.notify.agents.desc'),
+      i('notify.sound', 'settings.notify.sound', 'settings.notify.sound.desc')
+    ]
   },
   soon('browser', 'aiws'),
   soon('automations', 'aiws'),

@@ -117,10 +117,13 @@ describe('설정 › 알림', () => {
   it('자리만이던 섹션이 토스트 토글을 갖는다', () => {
     const sec = SETTINGS_INDEX.find((s) => s.id === 'notify')
     expect(sec?.soon).toBeUndefined()
-    expect(sec?.items.map((i) => i.id)).toEqual(['notify.toast', 'notify.sound'])
+    expect(sec?.items.map((i) => i.id)).toEqual(['notify.toast', 'notify.agents', 'notify.sound'])
   })
   it('notifyToast — 미지정이면 켬, false 만 끔', () => {
     expect(prefsFrom({} as UiState).notifyToast).toBe(true)
     expect(prefsFrom({ notifyToast: false } as UiState).notifyToast).toBe(false)
+    // M3 R3 에이전트 알림도 같은 규칙
+    expect(prefsFrom({} as UiState).notifyAgents).toBe(true)
+    expect(prefsFrom({ notifyAgents: false } as UiState).notifyAgents).toBe(false)
   })
 })

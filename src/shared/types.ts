@@ -320,8 +320,7 @@ export const AI_CONTEXT_LINES = 120
 // 우측 레일 — 터미널 옆에 붙어 **폭을 뺏는다.** #79(2026-08-14)부터 한 번에 하나만 열린다.
 // 여섯이었는데 2.0 에서 대화(ai) 하나만 남았다 — 지난 세션은 왼쪽 사이드바로, 미니 프리뷰는 삭제.
 // #132(2026-08-25): [AI 세션] 레일을 뺐다. 그 목록은 **사이드바 [AI] 작업대**로 갔고(왼쪽이 목록
-// 자리다), 조용함 감시는 화면 없이 계속 돈다(store/aiQuietWatch.ts) — 화면과 함께 지우면 그
-// 기능의 목적("안 보고 있어도 알아챈다")이 사라진다.
+// 자리다). 조용함 감시(aiQuietWatch)는 M3 S4 에서 지웠다 — 알림은 AI 작업 공간 에이전트(완료 알림)가 맡는다.
 export const RAIL_IDS = ['ai'] as const
 export type RailId = (typeof RAIL_IDS)[number]
 
@@ -398,6 +397,8 @@ export type UiPrefs = {
   space: Space
   /** M1 라운드 3 설정 › 알림 [앱 안 토스트]. 기본 켬 — 꺼도 벨 목록에는 모인다. */
   notifyToast: boolean
+  /** M3 R3 설정 › 알림 [에이전트 알림] — 에이전트 끝남·기다림·오류. 기본 켬. */
+  notifyAgents: boolean
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -553,6 +554,8 @@ export type UiState = {
   space?: Space
   /** M1 라운드 3 설정 › 알림. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
   notifyToast?: boolean
+  /** M3 R3 설정 › 알림 [에이전트 알림]. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
+  notifyAgents?: boolean
   // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
   // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
   // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.

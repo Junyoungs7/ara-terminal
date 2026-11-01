@@ -21,6 +21,7 @@ import { featuresOf } from '@shared/features'
 import { voiceOf } from '@shared/voice'
 import { spaceOf } from '@shared/space'
 import { applyMouseCursor } from '../cursorThemes'
+import { setAgentNotesEnabled } from '../store/notify'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -51,6 +52,7 @@ export const termPrefs: Omit<
   | 'aiSpace'
   | 'space'
   | 'notifyToast'
+  | 'notifyAgents'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -92,6 +94,7 @@ export function prefsFrom(
     | 'aiSpace'
     | 'space'
     | 'notifyToast'
+    | 'notifyAgents'
   >
 ): UiPrefs {
   return {
@@ -128,7 +131,9 @@ export function prefsFrom(
     aiSpace: ui.aiSpace === true,
     space: spaceOf(ui.space),
     // M1 라운드 3 — 미지정이면 켬(false 만 끔).
-    notifyToast: ui.notifyToast !== false
+    notifyToast: ui.notifyToast !== false,
+    // M3 R3 — 미지정이면 켬.
+    notifyAgents: ui.notifyAgents !== false
   }
 }
 
@@ -147,4 +152,6 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   termPrefs.cursorBlink = prefs.cursorBlink
   termPrefs.bell = prefs.bell
   termPrefs.termCompletion = prefs.termCompletion
+  // 에이전트 알림은 AI 작업 공간 청크가 상태를 받을 때 읽는다(store/notify).
+  setAgentNotesEnabled(prefs.notifyAgents)
 }
