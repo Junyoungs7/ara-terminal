@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Bell, CheckCheck, ChevronRight, CircleCheck, CircleQuestionMark, CircleX, Info, SlidersHorizontal, Sparkles, SquareTerminal, X } from 'lucide-react'
-import { dismissToast, hasUnread, readAllNotes, TOAST_LIFE, toastView, useNotes, type Note, type NoteKind } from '../store/notify'
+import { dismissToast, hasUnread, readAllNotes, setNoteOpener, TOAST_LIFE, toastView, useNotes, type Note, type NoteKind } from '../store/notify'
 import { t } from '../i18n'
 
 /**
@@ -8,6 +8,12 @@ import { t } from '../i18n'
  * `NotificationCardStack` · `activity-thread-row` · `ActivityTitlebarControls` 의 항목 구성).
  * 상태는 전부 store/notify.ts 가 갖는다. 여기는 그리기와 "누르면 이동"만 부른다(이동 자체는 Shell 이 안다).
  */
+
+/** 누르면 — Shell 의 이동(공간·세션) 뒤에 그 공간 안의 자리(go, M3 에이전트 탭)로. */
+const pickWith = (onPick: (n: Note) => void) => (n: Note) => {
+  onPick(n)
+  n.go?.()
+}
 
 const KIND_ICON: Record<NoteKind, typeof Bell> = { wait: CircleQuestionMark, done: CircleCheck, error: CircleX, info: Info }
 
@@ -52,6 +58,7 @@ export function NotifyBell({
 }) {
   const { notes } = useNotes()
   const wrap = useRef<HTMLSpanElement>(null)
+  const pick = pickWith(onPick)
   const un = hasUnread(notes)
 
   // 바깥을 누르거나 Esc — 닫힌다(시안). 캡처로 받아 터미널이 Esc 를 먹기 전에 닫는다.
@@ -77,7 +84,7 @@ export function NotifyBell({
   const old = notes.filter((n) => n.read)
   const now = Date.now()
   const item = (n: Note) => (
-    <button key={n.id} type="button" className={'ntf-item' + (n.read ? '' : ' unread')} data-note={n.id} onClick={() => onPick(n)}>
+    <button key={n.id} type="button" className={'ntf-item' + (n.read ? '' : ' unread')} data-note={n.id} onClick={() => pick(n)}>
       <NoteBody n={n} />
       <span className="ntf-time">{ago(n.at, now)}</span>
     </button>
@@ -141,6 +148,12 @@ export function NotifyBell({
 export function NotifyToasts({ onPick, onMore }: { onPick: (n: Note) => void; onMore: () => void }) {
   const { notes } = useNotes()
   const { shown, more } = toastView(notes)
+  const pick = pickWith(onPick)
+  // OS 알림을 눌러도 같은 길로 간다(store/notify openNoteVia). 토스트 자리는 늘 붙어 있다.
+  useEffect(() => {
+    setNoteOpener(pickWith(onPick))
+    return () => setNoteOpener(null)
+  }, [onPick])
   if (!shown.length) return null
   return (
     <div className="ntf-toasts" role="status" aria-live="polite">
@@ -158,8 +171,8 @@ export function NotifyToasts({ onPick, onMore }: { onPick: (n: Note) => void; on
           role="button"
           tabIndex={0}
           title={t('notify.goTip')}
-          onClick={() => onPick(n)}
-          onKeyDown={(e) => e.key === 'Enter' && onPick(n)}
+          onClick={() => pick(n)}
+          onKeyDown={(e) => e.key === 'Enter' && pick(n)}
         >
           <NoteBody n={n} />
           <button

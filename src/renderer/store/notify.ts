@@ -31,8 +31,10 @@ export type Note = {
   seen: boolean
   /** 토스트로 떠 있나(닫거나 수명이 다하면 false — 목록에는 남는다). */
   toast: boolean
+  /** 공간을 옮긴 뒤 그 안에서 갈 자리(M3 에이전트 탭 — AI 작업 공간 청크가 건다. Shell 은 그 상태를 모른다). */
+  go?: () => void
 }
-export type NoteInput = Pick<Note, 'kind' | 'space' | 'title'> & Partial<Pick<Note, 'target' | 'body' | 'ctx'>>
+export type NoteInput = Pick<Note, 'kind' | 'space' | 'title'> & Partial<Pick<Note, 'target' | 'body' | 'ctx' | 'go'>>
 
 /** 토스트는 한 번에 셋까지 — 넘치면 "+n" 알약(결정). */
 export const TOAST_MAX = 3
@@ -72,6 +74,20 @@ export function setNoteSpace(space: Space): void {
   patch((n) => n.space === space, { seen: true })
 }
 
+/** 설정 › 알림 [에이전트 알림](M3) — 끄면 에이전트 끝남·기다림·오류를 보내지 않는다(맥박도 없다). uiPrefs 가 건다. */
+let agentNotesOn = true
+export function setAgentNotesEnabled(on: boolean): void {
+  agentNotesOn = on
+}
+export const agentNotesEnabled = (): boolean => agentNotesOn
+
+/** 알림을 눌렀을 때의 이동(공간·세션 + go) — 화면(NotifyToasts)이 건다. OS 알림을 누를 때도 같은 길. */
+let opener: ((n: Note) => void) | null = null
+export function setNoteOpener(fn: ((n: Note) => void) | null): void {
+  opener = fn
+}
+export const openNoteVia = (n: Note): void => opener?.(n)
+
 /** 설정 › 알림 [앱 안 토스트] · 실험 기능. 끄면 떠 있던 토스트도 걷는다(목록·벨은 그대로). */
 export function setToastsEnabled(on: boolean): void {
   toastsOn = on
@@ -104,6 +120,7 @@ export const useNotes = (): State => useSyncExternalStore(subscribe, notesNow)
 export function resetNotes(): void {
   seq = 0
   toastsOn = true
+  agentNotesOn = true
   set([], 'term')
 }
 

@@ -21,6 +21,11 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
   const agentTabs = useAgentStore((a) => a.tabs)
   const statusById = useAgentStore((a) => a.statusById)
   const seenById = useAgentStore((a) => a.seenById)
+  // 줄을 고르면 가운데는 그 작업 단위로(대시보드·피드를 보고 있었어도).
+  const pickWorktree = (id: string): void => {
+    s.setActiveWorktree(id)
+    useAgentStore.getState().setView('worktree')
+  }
   const rows = useMemo(
     () =>
       buildSidebarRows({
@@ -131,9 +136,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
               tabIndex={0}
               aria-current={active || undefined}
               title={w.path}
-              onClick={() => s.setActiveWorktree(w.id)}
+              onClick={() => pickWorktree(w.id)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') s.setActiveWorktree(w.id)
+                if (e.key === 'Enter') pickWorktree(w.id)
               }}
             >
               <div className="aiws-row-l1">

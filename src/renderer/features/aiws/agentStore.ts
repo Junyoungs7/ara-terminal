@@ -5,7 +5,13 @@ import { create } from 'zustand'
 import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
 import type { AgentLaunchResult } from '@shared/ipc'
 import type { AgentStatusView } from '@shared/agentHooks'
+import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
+import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
+import { useAiwsStore } from './store'
+import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
+import { isLockedNow } from '../../store/lock'
+import { t } from '../../i18n'
 
 export type AgentTab = {
   sessionId: string
@@ -33,13 +39,20 @@ type AgentState = {
   seenById: Record<string, boolean>
   /** 지금 화면에 보이는 에이전트 탭(AI 작업 공간이 열려 있고 그 탭이 고른 탭). 없으면 null. */
   viewing: string | null
+  /** 가운데에 무엇을 그리나 — 고른 작업 단위(탭) · 대시보드(AI-08) · 활동 피드(AI-09). 레일이 바꾼다. */
+  view: AiwsView
+  /** 활동 피드(AI-09) — 상태 변화 이력, 들어온 순. 그릴 때 feedView 로 최신이 위. */
+  feed: FeedEvent[]
   loadAgents: (force?: boolean) => Promise<void>
   saveSettings: (next: AgentSettings) => Promise<void>
   launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string }) => Promise<AgentLaunchResult>
   setActiveTab: (worktreeId: string, sessionId: string) => void
   closeTab: (sessionId: string) => void
   setViewing: (sessionId: string | null) => void
+  setView: (view: AiwsView) => void
 }
+
+export type AiwsView = 'worktree' | 'dashboard' | 'activity'
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
   detected: null,
@@ -50,6 +63,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   statusById: {},
   seenById: {},
   viewing: null,
+  view: 'worktree',
+  feed: [],
 
   loadAgents: async (force) => {
     startStatus()
@@ -86,6 +101,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.sessionId === sessionId)
     if (!tab) return
     if (!tab.exited) void window.ev.session.destroy(sessionId)
+    const pending = pendingNotes.get(sessionId)
+    if (pending) clearTimeout(pending.timer)
+    pendingNotes.delete(sessionId)
     set((s) => {
       const tabs = s.tabs.filter((t) => t.sessionId !== sessionId)
       const { [sessionId]: _st, ...statusById } = s.statusById
@@ -101,21 +119,94 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   // 탭을 보면 본 것(herdr: 그 칸으로 가면 seen = true).
-  setViewing: (sessionId) => set((s) => ({ viewing: sessionId, ...(sessionId ? { seenById: { ...s.seenById, [sessionId]: true } } : {}) }))
+  setViewing: (sessionId) => set((s) => ({ viewing: sessionId, ...(sessionId ? { seenById: { ...s.seenById, [sessionId]: true } } : {}) })),
+
+  setView: (view) => set({ view })
 }))
+
+/** 그 에이전트 탭으로 — 워크트리를 고르고 그 탭을 고른 뒤 가운데를 탭 화면으로(대시보드 카드·피드·알림이 같은 길). */
+export function revealAgent(sessionId: string): void {
+  const tab = useAgentStore.getState().tabs.find((x) => x.sessionId === sessionId)
+  if (!tab) return
+  useAiwsStore.getState().setActiveWorktree(tab.worktreeId)
+  useAgentStore.getState().setActiveTab(tab.worktreeId, sessionId)
+  useAgentStore.getState().setView('worktree')
+}
+
+/** 워크트리 이름(카드·피드·알림 줄). 지워졌으면 id 그대로. */
+export function worktreeName(worktreeId: string): string {
+  return (
+    Object.values(useAiwsStore.getState().worktreesByRepo)
+      .flat()
+      .find((w) => w.id === worktreeId)?.displayName ?? worktreeId
+  )
+}
+
+/**
+ * 알림은 잠깐 늦춘다 — 잠깐 막혔다가 스스로 이어 가는 CLI 가 자기 알림을 거둘 수 있게(옛 aiQuietWatch 의 1.5초 규칙 그대로).
+ * 피드·보드는 즉시(그리는 것은 값이 싸다), 알림은 한 번 뜨면 사람이 치워야 한다.
+ */
+export const NOTE_DELAY_MS = 1_500
+const pendingNotes = new Map<string, { kind: FeedKind; timer: ReturnType<typeof setTimeout> }>()
+
+function sendAgentNote(sessionId: string, kind: FeedKind): void {
+  const s = useAgentStore.getState()
+  const tab = s.tabs.find((x) => x.sessionId === sessionId)
+  // 늦추는 사이 그 탭을 열었으면 보낼 것이 없다.
+  const nk = noteKindOf(kind, s.viewing === sessionId && typeof document !== 'undefined' && document.hasFocus(), agentNotesEnabled())
+  if (!tab || !nk) return
+  const title = t(`aiws.note.${kind}`).replace('{a}', AGENTS[tab.agent].label).replace('{w}', worktreeName(tab.worktreeId))
+  const note = pushNote({ kind: nk, space: 'ai', target: { type: 'task', id: sessionId }, title, body: t(`aiws.note.${kind}.body`), go: () => revealAgent(sessionId) })
+  // 앱이 뒤에 있을 때만 OS 알림(옛 aiQuietWatch 와 같은 방식 — 렌더러 Notification). 앞에 있으면 토스트·벨로 충분하다.
+  if (typeof document === 'undefined' || document.hasFocus()) return
+  try {
+    // 앱 잠금 중에는 내용 없이(작업 이름·에이전트를 화면 밖으로 흘리지 않는다).
+    const hide = isLockedNow()
+    const n = new Notification(hide ? t('lock.notify.title') : title, { body: hide ? t('lock.notify.body') : note.body, tag: `ara-agent-${sessionId}-${kind}` })
+    n.onclick = () => {
+      window.focus()
+      openNoteVia(note)
+    }
+  } catch {
+    // 알림 권한이 없거나 OS 가 막았다 — 토스트·벨·맥박은 그대로.
+  }
+}
+
+/** 상태가 바뀔 때 — 피드에 남기고 알림을 예약한다. 다른 종류로 바뀌면 걸린 예약은 거둔다(같은 종류의 도구 변화는 그대로 둔다). */
+function onTransition(prev: AgentStatusView | undefined, next: AgentStatusView, viewingNow: boolean, now = Date.now()): void {
+  const kind = feedKindOf(prev, next)
+  const pending = pendingNotes.get(next.sessionId)
+  if (pending && kind && pending.kind !== kind) {
+    clearTimeout(pending.timer)
+    pendingNotes.delete(next.sessionId)
+  }
+  if (!kind) return
+  useAgentStore.setState((s) => ({ feed: [...s.feed, { id: ++feedSeq, at: now, sessionId: next.sessionId, kind, estimated: next.estimated }].slice(-FEED_CAP) }))
+  if (!noteKindOf(kind, viewingNow, agentNotesEnabled())) return
+  pendingNotes.set(next.sessionId, {
+    kind,
+    timer: setTimeout(() => {
+      pendingNotes.delete(next.sessionId)
+      sendAgentNote(next.sessionId, kind)
+    }, NOTE_DELAY_MS)
+  })
+}
+let feedSeq = 0
 
 let statusStarted = false
 /** 상태 구독 — AI 작업 공간을 처음 열 때(피커가 감지를 부를 때) 한 번. 창이 늦게 떠도 지금까지의 상태를 받아 온다. */
 function startStatus(): void {
   if (statusStarted) return
   statusStarted = true
-  const apply = (v: AgentStatusView): void =>
-    useAgentStore.setState((s) => {
-      // 탭이 아직 안 올라왔어도(launch 응답보다 상태가 먼저) 상태는 담아 둔다 — 탭이 생기면 그대로 보인다.
-      const viewingNow = s.viewing === v.sessionId && typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
-      const seen = nextSeen(s.statusById[v.sessionId], v, s.seenById[v.sessionId] ?? true, viewingNow)
-      return { statusById: { ...s.statusById, [v.sessionId]: v }, seenById: { ...s.seenById, [v.sessionId]: seen } }
-    })
+  const apply = (v: AgentStatusView): void => {
+    const s = useAgentStore.getState()
+    const prev = s.statusById[v.sessionId]
+    // 탭이 아직 안 올라왔어도(launch 응답보다 상태가 먼저) 상태는 담아 둔다 — 탭이 생기면 그대로 보인다.
+    const viewingNow = s.viewing === v.sessionId && typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
+    const seen = nextSeen(prev, v, s.seenById[v.sessionId] ?? true, viewingNow)
+    useAgentStore.setState((x) => ({ statusById: { ...x.statusById, [v.sessionId]: v }, seenById: { ...x.seenById, [v.sessionId]: seen } }))
+    onTransition(prev, v, viewingNow)
+  }
   window.ev.agents.onStatus(apply)
   void window.ev.agents
     .statuses()

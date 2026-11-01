@@ -9889,6 +9889,114 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   color: var(--text-lo);
 }
+/* M3 R3 AI-08 대시보드(상태별 네 칸)·AI-09 활동 피드(시간순 줄). 카드·줄은 사이드바 .aiws-row 와 같은 유리 톤. */
+.aiws-board {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  padding: var(--sp-8);
+}
+.aiws-board-cols {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+.aiws-board-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.aiws-board-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-board-h b {
+  font-weight: 500;
+  color: var(--text-mid);
+}
+.aiws-card,
+.aiws-feed-row {
+  display: flex;
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--glass);
+  color: var(--text-mid);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-card {
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.aiws-card:hover,
+.aiws-feed-row:hover:not(:disabled) {
+  background: var(--glass-hover);
+}
+.aiws-card:focus-visible,
+.aiws-feed-row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-inset);
+}
+.aiws-card-l1 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--text-hi);
+}
+.aiws-card-l1 b {
+  font-weight: 500;
+}
+.aiws-card-st {
+  margin-left: auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-card-l2,
+.aiws-feed-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-card-l2 {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.aiws-feed-row {
+  align-items: center;
+  gap: var(--sp-3);
+  background: transparent;
+}
+.aiws-feed-row:disabled {
+  cursor: default;
+  color: var(--text-lo);
+}
+.aiws-feed-t {
+  flex: 1;
+}
+.aiws-feed-at {
+  flex: none;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+}
 .aiws-prompt-failed {
   display: flex;
   flex-direction: column;

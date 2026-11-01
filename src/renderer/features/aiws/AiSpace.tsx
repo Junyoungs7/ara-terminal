@@ -8,6 +8,8 @@ import { ensureAiwsLoaded, useAiwsStore } from './store'
 import { WorktreeSidebar } from './WorktreeSidebar'
 import { NewWorkCard } from './NewWorkCard'
 import { AgentWorkspace } from './AgentPane'
+import { ActivityFeed, AgentDashboard } from './AgentDashboard'
+import { useAgentStore, type AiwsView } from './agentStore'
 import { shortBranch } from './sidebarRows'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
@@ -27,20 +29,28 @@ const NAV: readonly { id: string; Icon: () => JSX.Element }[] = [
   { id: 'dashboard', Icon: () => <LayoutGrid /> }
 ]
 
+/** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 대시보드 = AI-08. 검색·자동화는 아직. */
+const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', dashboard: 'dashboard' }
+
 export function AiRail({ settingsOpen, onSettings }: { settingsOpen: boolean; onSettings: () => void }): JSX.Element {
+  const view = useAgentStore((s) => s.view)
   return (
     <div className="ai-rail" role="toolbar" aria-label={t('aiws.rail.label')}>
       {NAV.map(({ id, Icon }) => (
-        // 워크트리 목록은 M2 라운드 2 에 들어왔다 — 늘 펼쳐진 지금 화면이라 눌린 모양만. 나머지는 M3 이후.
+        // 워크트리(M2)·에이전트 활동 피드·대시보드(M3 R3)가 산다 — 고르면 가운데가 바뀐다. 검색·자동화는 아직.
         <button
           key={id}
           type="button"
-          className={'ai-rail-item' + (id === 'worktree' && !settingsOpen ? ' active' : '')}
+          className={'ai-rail-item' + (RAIL_VIEW[id] === view && !settingsOpen ? ' active' : '')}
           data-aiws={id}
-          disabled={id !== 'worktree'}
-          aria-pressed={id === 'worktree' ? !settingsOpen : undefined}
-          title={id === 'worktree' ? t('aiws.nav.' + id) : `${t('aiws.nav.' + id)} · ${t('aiws.soon')}`}
+          disabled={!RAIL_VIEW[id]}
+          aria-pressed={RAIL_VIEW[id] ? RAIL_VIEW[id] === view && !settingsOpen : undefined}
+          title={RAIL_VIEW[id] ? t('aiws.nav.' + id) : `${t('aiws.nav.' + id)} · ${t('aiws.soon')}`}
           aria-label={t('aiws.nav.' + id)}
+          onClick={() => {
+            const v = RAIL_VIEW[id]
+            if (v) useAgentStore.getState().setView(v)
+          }}
         >
           <Icon />
         </button>
@@ -69,6 +79,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
   // M2: 프로젝트·워크트리 상태를 처음 열 때 불러온다.
   useEffect(() => void ensureAiwsLoaded(), [])
   const [composer, setComposer] = useState<{ repoId?: string } | null>(null)
+  const view = useAgentStore((s) => s.view)
   const repos = useAiwsStore((s) => s.repos)
   const activeId = useAiwsStore((s) => s.activeWorktreeId)
   const byRepo = useAiwsStore((s) => s.worktreesByRepo)
@@ -109,9 +120,19 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
 
   return (
     <div className="aiws-home" role="region" aria-label={t('space.ai')}>
-      <WorktreeSidebar onNew={(repoId) => setComposer({ repoId })} onRemove={(w) => void remove(w)} />
+      <WorktreeSidebar
+        onNew={(repoId) => {
+          setComposer({ repoId })
+          useAgentStore.getState().setView('worktree')
+        }}
+        onRemove={(w) => void remove(w)}
+      />
       <div className="aiws-center">
-        {composer ? (
+        {view === 'dashboard' ? (
+          <AgentDashboard />
+        ) : view === 'activity' ? (
+          <ActivityFeed />
+        ) : composer ? (
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (
           // M3: 고른 작업 단위의 에이전트 탭 줄(없으면 피커).
