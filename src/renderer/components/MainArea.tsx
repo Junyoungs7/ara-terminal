@@ -96,7 +96,8 @@ type MainAreaProps = {
   // ssh 세션 복제(같은 프로필 재접속). local 은 MainArea.open() 으로 처리. Shell 이 주입(F4c).
   onDuplicateSession?: (session: Session) => void
   // F6: 프로필로 SSH 재접속(복원·재시도). Shell 이 주입 — 성공 시 새 세션 id 반환.
-  sshRestore?: (profileId: string, size?: { cols: number; rows: number }) => Promise<SshRestoreResult>
+  // boot: 부팅 복원(M8 TM-01 — 서버별 [시작 시 다시 연결]·백오프 재시도가 이때만 걸린다).
+  sshRestore?: (profileId: string, size?: { cols: number; rows: number }, boot?: boolean) => Promise<SshRestoreResult>
   // 탭바 ＋ 메뉴·빈 상태의 "SSH 연결…" → 연결 관리자 열기(Shell 소유).
   onOpenConnManager?: () => void
   // R5 설정 창 [정보] 섹션에 찍을 앱 버전(Shell 이 app.getVersion 으로 이미 들고 있다).
@@ -416,7 +417,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
                 : undefined
             const res =
               item.profileId && sshRestore
-                ? await sshRestore(item.profileId, savedSize)
+                ? await sshRestore(item.profileId, savedSize, true)
                 : ({ ok: false, reason: 'orphan' } as const)
             if (res.ok) {
               idMap.set(item.oldId, res.id)

@@ -30,6 +30,16 @@ export type SshProfile = {
   username: string
   auth: SshAuth
   group?: string
+  /**
+   * M8 TM-01 점프 호스트(OpenSSH ProxyJump 표기 `[user@]host[:port][,…]`). 앞에서부터 차례로 거친다.
+   * 홉의 자격은 같은 host:port 로 저장된 SSH 프로필에서 빌리고, 없으면 이 프로필의 **키** 인증만 빌린다
+   * (비밀번호는 다른 서버에 보내지 않는다 — sessions/ssh/SshBackend.ts hopCredentials).
+   */
+  jump?: string
+  /** M8 TM-01 첫 홉까지 거칠 프록시(`socks5://host:1080` · `http://host:8080`). 인증 프록시는 미지원. */
+  proxy?: string
+  /** M8 TM-01 앱 시작 시 이전 접속을 되살릴지. Orca 기본값(켬)을 따라 **없으면 켬** — 끌 때만 false 를 적는다. */
+  reconnectOnLaunch?: false
 }
 
 export type RdpProfile = {
@@ -80,6 +90,10 @@ export type ProfileInput = {
   secret?: string
   // rdp 전용(RdpProfile.multiMonitor). ssh 프로필에는 뜻이 없어 ProfileStore 가 무시한다.
   multiMonitor?: boolean
+  // ssh 전용(M8 TM-01, SshProfile 의 같은 이름 필드). 빈 문자열은 "없음"이다.
+  jump?: string
+  proxy?: string
+  reconnectOnLaunch?: boolean
 }
 
 // 호스트키 TOFU: 최초 접속 시 지문 확인 프롬프트 / 불일치 시 차단 경고.

@@ -36,6 +36,7 @@ export type RestoreError = {
    * 값을 늘릴 때는 `ko.json` 의 `restore.reason.<이름>` 도 같이 만든다.
    */
   reason:
+    | 'manual' // M8 TM-01: 그 서버는 [시작 시 다시 연결] 이 꺼져 있다
     | 'dropped'
     | 'noProfile'
     | 'network'

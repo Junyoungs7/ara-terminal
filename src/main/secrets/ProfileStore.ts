@@ -68,6 +68,12 @@ export class ProfileStore {
       secretRef = { store: 'vault', key }
     }
 
+    // M8 TM-01: 비어 있는 값은 적지 않는다(필드가 없는 것과 같은 뜻 — multiMonitor 와 같은 규칙).
+    const conn = {
+      ...(input.jump?.trim() ? { jump: input.jump.trim() } : {}),
+      ...(input.proxy?.trim() ? { proxy: input.proxy.trim() } : {}),
+      ...(input.reconnectOnLaunch === false ? { reconnectOnLaunch: false as const } : {})
+    }
     const profile: ConnectionProfile =
       input.authType === 'password'
         ? {
@@ -78,7 +84,8 @@ export class ProfileStore {
             port: input.port,
             username: input.username,
             auth: { type: 'password', secretRef: secretRef ?? { store: 'vault', key: id } },
-            group: input.group
+            group: input.group,
+            ...conn
           }
         : {
             id,
@@ -88,7 +95,8 @@ export class ProfileStore {
             port: input.port,
             username: input.username,
             auth: { type: 'key', keyPath: input.keyPath ?? '', ...(secretRef ? { secretRef } : {}) },
-            group: input.group
+            group: input.group,
+            ...conn
           }
 
     this.ws.upsertProfile(profile)

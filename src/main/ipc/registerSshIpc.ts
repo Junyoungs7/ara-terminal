@@ -9,7 +9,8 @@ import { handle } from './handle'
 import type { ProfileStore } from '../secrets/ProfileStore'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
-import { connectSsh } from '../sessions/ssh/SshBackend'
+import { connectSsh, type ConnectDeps } from '../sessions/ssh/SshBackend'
+import { withBackoff } from '../sessions/ssh/sshRoute'
 import { hostId } from '../sessions/ssh/hostkey'
 
 // 프로필 id → 연결 → 세션 편입. registerSshIpc(renderer 경유) 와 F23 MCP ssh_connect/session_create 가
@@ -38,7 +39,12 @@ export async function connectByProfile(
    * 그래서 떼어낸 창에서 재접속하면 새 세션이 본창에 떴다(출력·탭 전부 저쪽으로).
    * 안 주면 undefined = 본창이다(MCP `ssh_connect` 는 화면이 없으니 주지 않는다).
    */
-  winId?: string
+  winId?: string,
+  /**
+   * M8 TM-01: network 실패를 백오프로 몇 번 더 해 본다. **부팅 복원만** 준다 — 앱이 VPN·사내망보다 먼저
+   * 뜨는 아침에 첫 시도만 보고 카드를 띄우지 않으려는 것이다. 손으로 누른 접속은 바로 실패를 보여 준다.
+   */
+  retry?: boolean
 ): Promise<SshConnectResult> {
   const profile = profiles.get(profileId)
   if (!profile) return { ok: false, reason: 'network', message: '프로필을 찾을 수 없습니다.' }
@@ -58,14 +64,17 @@ export async function connectByProfile(
   }
 
   const paneId = randomUUID()
-  const outcome = await connectSsh(profile, {
-    knownHosts: ws.getKnownHosts(),
-    secret,
-    acceptHostKey,
-    onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
-    // 쓸 만한 치수만 넘긴다(`shared/termSize.ts`) — 옛 스냅샷의 9×4 로 원격 셸을 열지 않는다.
-    ...(size && usableSize(size.cols, size.rows) ? { size } : {})
-  })
+  const attempt = () =>
+    connectSsh(profile, {
+      knownHosts: ws.getKnownHosts(),
+      secret,
+      acceptHostKey,
+      onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
+      hopCredentials: hopCredentialsFrom(profiles),
+      // 쓸 만한 치수만 넘긴다(`shared/termSize.ts`) — 옛 스냅샷의 9×4 로 원격 셸을 열지 않는다.
+      ...(size && usableSize(size.cols, size.rows) ? { size } : {})
+    })
+  const outcome = retry ? await withBackoff(attempt, BOOT_RETRY) : await attempt()
 
   if (!outcome.ok) return outcome
 
@@ -88,6 +97,24 @@ export async function connectByProfile(
 }
 
 const TEST_TIMEOUT_MS = 8000
+
+// 부팅 복원 재시도: Orca 사다리의 앞 세 칸(1·2·5초). 세션 하나가 복원 전체를 붙잡지 않게 시간 상한을 둔다.
+const BOOT_RETRY = { maxAttempts: 4, budgetMs: 15_000 }
+
+/**
+ * M8 TM-01 점프 홉 자격: 같은 host:port(사용자를 적었으면 사용자까지)로 저장된 SSH 프로필의 인증을 빌린다.
+ * vault 에 비밀이 없으면(고아) 빌리지 않는다 — 그 홉은 connectSshClient 가 "자격 없음"으로 말한다.
+ */
+export function hopCredentialsFrom(profiles: ProfileStore): NonNullable<ConnectDeps['hopCredentials']> {
+  return (hop) => {
+    const p = profiles
+      .list()
+      .find((x): x is SshProfile => x.type === 'ssh' && x.host === hop.host && x.port === hop.port && x.username === hop.username)
+    if (!p) return null
+    const lookup = profiles.lookupSecret(p)
+    return lookup.ok ? { auth: p.auth, secret: lookup.secret } : null
+  }
+}
 
 /** TCP 로 닿는지만 본다(RDP 테스트). 열려 있으면 즉시 끊는다 — 서버에 세션을 남기지 않는다. */
 function probeTcp(host: string, port: number): Promise<ConnTestResult> {
@@ -152,14 +179,18 @@ export async function testProfile(
     auth:
       input.authType === 'password'
         ? { type: 'password', secretRef: { store: 'vault', key: input.id ?? 'test' } }
-        : { type: 'key', keyPath: input.keyPath ?? '' }
+        : { type: 'key', keyPath: input.keyPath ?? '' },
+    // M8 TM-01: 점프·프록시도 폼 값 그대로 시험한다(저장 전 확인이 이 버튼의 뜻이다).
+    ...(input.jump?.trim() ? { jump: input.jump.trim() } : {}),
+    ...(input.proxy?.trim() ? { proxy: input.proxy.trim() } : {})
   }
 
   const outcome = await connectSsh(profile, {
     knownHosts: ws.getKnownHosts(),
     secret,
     acceptHostKey: false,
-    onHostKeyAccepted: () => {}
+    onHostKeyAccepted: () => {},
+    hopCredentials: hopCredentialsFrom(profiles)
   })
   if (outcome.ok) {
     outcome.backend.kill()
@@ -173,9 +204,16 @@ export function registerSshIpc(
   ws: WorkspaceStore,
   sessions: MainSessionManager
 ): void {
-  handle('ssh:connect', ({ profileId, acceptHostKey, password, size, winId }): Promise<SshConnectResult> =>
-    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, winId)
+  handle('ssh:connect', ({ profileId, acceptHostKey, password, size, winId, retry }): Promise<SshConnectResult> =>
+    connectByProfile(profiles, ws, sessions, profileId, acceptHostKey === true, password, size, winId, retry === true)
   )
+
+  // M8 herdr H10: 붙여넣은 이미지 → 원격 임시 경로. 로컬 세션은 여기 오지 않는다(렌더러가 원격일 때만 부른다).
+  handle('ssh:pasteImage', async ({ sessionId, bytes, mime }) => {
+    const b = sessions.sshBackend(sessionId)
+    if (!b) return { ok: false as const, message: '원격 세션이 아닙니다.' }
+    return await b.pasteImage(Buffer.from(bytes), mime)
+  })
 
   handle('conn:test', ({ input }): Promise<ConnTestResult> => testProfile(profiles, ws, input))
 

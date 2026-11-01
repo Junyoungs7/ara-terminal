@@ -4,10 +4,13 @@ import { readFile } from 'node:fs/promises'
 import { StringDecoder } from 'node:string_decoder'
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
 import type { SessionBackend } from '../SessionBackend'
-import type { KnownHost, SshProfile } from '@shared/types'
+import type { Duplex } from 'node:stream'
+import type { KnownHost, SshAuth, SshProfile } from '@shared/types'
 import { fingerprintSha256, hostId, verifyHostKey } from './hostkey'
 import { logMainError } from '../../log/MainErrorLog'
 import { SHELL_PID_CMD, cwdLink, parseShellPid } from './remoteCwd'
+import { parseJump, parseProxy, proxySocket, type JumpHop } from './sshRoute'
+import { removeRemoteFiles, uploadPasteImage, type PasteResult } from './pasteImage'
 
 // 출력이 이만큼 멎으면 프롬프트가 뜬 것으로 보고 CWD 를 한 번 읽는다(remoteCwd.ts 참조).
 // 짧을수록 트리가 빨리 따라오지만, 명령 출력 중간중간 읽는 낭비가 는다.
@@ -19,6 +22,9 @@ const CWD_SETTLE_MS = 150
 // resize 로 따라잡았다(#158).
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
+
+// 세션을 닫을 때 붙여넣기 임시 파일 지우기를 기다리는 최대 시간. 넘으면 그냥 끊는다.
+const PASTE_CLEANUP_WAIT_MS = 3000
 
 // ~ 확장(개인키 경로). Windows/유닉스 홈 모두 대응.
 function expandHome(p: string): string {
@@ -47,29 +53,61 @@ export type ConnectDeps = {
    * 어느 쪽이든 렌더러가 붙으면 `session:resize` 가 뒤따라 온다 — 이 값이 틀려도 곧 교정된다.
    */
   size?: { cols: number; rows: number }
+  /**
+   * M8 TM-01 점프 홉의 자격(같은 host:port 로 저장된 SSH 프로필 — registerSshIpc 가 ProfileStore 에서 찾는다).
+   * null·미지정이면 대상 프로필이 키 인증일 때만 그 키를 빌린다(connectSshClient 주석).
+   */
+  hopCredentials?: (hop: JumpHop) => { auth: SshAuth; secret: string | null } | null
 }
 
-export type ConnectOutcome =
-  | { ok: true; backend: SshBackend }
+export type ConnectFailure =
   | { ok: false; reason: 'hostKeyNew'; hostId: string; algorithm: string; fingerprint: string }
   | { ok: false; reason: 'hostKeyMismatch'; hostId: string; algorithm: string; fingerprint: string; knownFingerprint: string }
   | { ok: false; reason: 'auth'; message: string }
   | { ok: false; reason: 'network'; message: string }
 
-// ssh2로 연결→호스트키 TOFU 검증→shell 채널을 연다. 실패는 구조화된 결과로 반환(예외 던지지 않음).
-// W4sat F21: 호출측(registerSshIpc)이 profile.type==='ssh' 를 이미 확인했다 — rdp 는 여기 오지 않는다.
-export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promise<ConnectOutcome> {
-  const id = hostId(profile.host, profile.port)
+export type ConnectOutcome = { ok: true; backend: SshBackend } | ConnectFailure
+
+/** 셸 없이 **연결만**(M8: orcad·관리형 설치가 이 Client 위에 exec·sftp 채널을 연다). 끊을 때는 `client.end()` — 점프 홉·프록시 소켓도 같이 닫힌다. */
+export type ClientOutcome = { ok: true; client: Client } | ConnectFailure
+
+type Endpoint = { host: string; port: number; username: string; auth: SshAuth; secret: string | null; label: string }
+
+// 인증 설정. 실패(개인키 못 읽음)는 문구로 돌려준다(호출측이 auth 사유로 낸다).
+async function applyAuth(cfg: ConnectConfig, auth: SshAuth, secret: string | null): Promise<string | null> {
+  if (auth.type === 'password') {
+    cfg.password = secret ?? ''
+    return null
+  }
+  try {
+    cfg.privateKey = await readFile(expandHome(auth.keyPath))
+  } catch (err) {
+    return `개인키를 읽을 수 없습니다: ${(err as Error).message}`
+  }
+  if (secret) cfg.passphrase = secret
+  return null
+}
+
+/**
+ * 한 홉 접속(인증·호스트키 TOFU 까지). sock 을 주면 TCP 대신 그 스트림 위로 붙는다(프록시·forwardOut).
+ *
+ * budget: `acceptHostKey` 는 **이번 시도에서 처음 만난 새 호스트키 하나만** 수락한다 — 사용자가 지문 창에서
+ * 본 것이 그 하나뿐이기 때문이다. 점프 체인에서 홉과 대상이 둘 다 처음이면 첫 시도는 홉의 지문을 묻고,
+ * 수락 후 재시도(홉은 이제 known)에서 대상의 지문을 또 묻는다. 한 번의 [신뢰]로 보지 않은 키까지 저장하지 않는다.
+ */
+async function dial(ep: Endpoint, deps: ConnectDeps, budget: { accept: number }, sock?: Duplex): Promise<ClientOutcome> {
+  const id = hostId(ep.host, ep.port)
 
   // hostVerifier 콜백이 채우는 상태. hostKeyRejection은 "거부한 이유"만 담는다(수락 시 null).
   let hostKeyState: { fingerprint: string } | null = null
-  let hostKeyRejection: ConnectOutcome | null = null
+  let hostKeyRejection: ConnectFailure | null = null
   let negotiatedAlg = ''
 
   const cfg: ConnectConfig = {
-    host: profile.host,
-    port: profile.port,
-    username: profile.username,
+    host: ep.host,
+    port: ep.port,
+    username: ep.username,
+    ...(sock ? { sock: sock as ConnectConfig['sock'] } : {}),
     // 복원·재접속 시 죽은 호스트에서 무한 대기 금지 — 10초 내 미연결이면 network 실패로 반환.
     readyTimeout: 10_000,
     // R6: keepalive. 사내망 방화벽·NAT 는 유휴 SSH 세션을 조용히 끊는데, 그러면 다음 입력에서야
@@ -84,7 +122,10 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
       const verdict = verifyHostKey(deps.knownHosts, id, negotiatedAlg, fp)
       if (verdict.kind === 'known') return true
       if (verdict.kind === 'new') {
-        if (deps.acceptHostKey) return true // 최초 접속 확인 완료 → 통과
+        if (deps.acceptHostKey && budget.accept > 0) {
+          budget.accept--
+          return true // 최초 접속 확인 완료 → 통과
+        }
         hostKeyRejection = { ok: false, reason: 'hostKeyNew', hostId: id, algorithm: negotiatedAlg, fingerprint: fp }
         return false
       }
@@ -101,22 +142,13 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
     }
   }
 
-  if (profile.auth.type === 'password') {
-    cfg.password = deps.secret ?? ''
-  } else {
-    // key 인증: 개인키 파일 읽기 + (있으면) 패스프레이즈.
-    try {
-      cfg.privateKey = await readFile(expandHome(profile.auth.keyPath))
-    } catch (err) {
-      return { ok: false, reason: 'auth', message: `개인키를 읽을 수 없습니다: ${(err as Error).message}` }
-    }
-    if (deps.secret) cfg.passphrase = deps.secret
-  }
+  const authErr = await applyAuth(cfg, ep.auth, ep.secret)
+  if (authErr) return { ok: false, reason: 'auth', message: ep.label + authErr }
 
-  return await new Promise<ConnectOutcome>((resolve) => {
+  return await new Promise<ClientOutcome>((resolve) => {
     const client = new Client()
     let settled = false
-    const done = (o: ConnectOutcome) => {
+    const done = (o: ClientOutcome) => {
       if (settled) return
       settled = true
       if (!o.ok) client.end()
@@ -127,20 +159,6 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
     client.on('handshake', (nego) => {
       negotiatedAlg = nego.serverHostKey
     })
-
-    const openShell = (): void => {
-      // 3인자 형태로 부른다: `env` 를 창 옵션과 같은 객체에 넣으면 ssh2 가 그 객체를 통째로 opts 로
-      // 해석해 **pty 요청의 term·크기가 사라진다**(ssh2 client.js shell() 의 인자 판별).
-      const cols = deps.size?.cols ?? FALLBACK_COLS
-      const rows = deps.size?.rows ?? FALLBACK_ROWS
-      client.shell({ term: 'xterm-256color', cols, rows }, {}, (err, channel) => {
-        if (err) {
-          done({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${err.message}` })
-          return
-        }
-        done({ ok: true, backend: new SshBackend(client, channel) })
-      })
-    }
 
     client.on('ready', () => {
       // 인증까지 성공(hostVerifier도 통과). 최초 접속이었다면 지문을 knownHosts에 기록.
@@ -154,7 +172,7 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
           })
         }
       }
-      openShell()
+      done({ ok: true, client })
     })
 
     client.on('error', (err: Error & { level?: string }) => {
@@ -163,7 +181,7 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
       // (2026-08-27 준영님 제보 — "이건 끊길 일이 아닌데"). keepalive 시간초과·서버 종료·소켓 오류가
       // 전부 이 길로 온다: 이제 userData/logs/main-error.log 에 남는다.
       if (settled) {
-        logMainError(`ssh:${profile.host}:${profile.port}`, err)
+        logMainError(`ssh:${ep.host}:${ep.port}`, err)
         return
       }
       // 호스트키 거부(hostVerifier=false)면 여기로 온다 → 저장해 둔 거부 이유를 그대로 반환.
@@ -176,13 +194,106 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
         return
       }
       const isAuth = err.level === 'client-authentication' || /authentication/i.test(err.message)
-      done({ ok: false, reason: isAuth ? 'auth' : 'network', message: err.message })
+      done({ ok: false, reason: isAuth ? 'auth' : 'network', message: ep.label + err.message })
     })
 
     try {
       client.connect(cfg)
     } catch (err) {
-      done({ ok: false, reason: 'network', message: (err as Error).message })
+      done({ ok: false, reason: 'network', message: ep.label + (err as Error).message })
+    }
+  })
+}
+
+function forwardOut(via: Client, host: string, port: number): Promise<Duplex> {
+  return new Promise((resolve, reject) => {
+    try {
+      via.forwardOut('127.0.0.1', 0, host, port, (err, ch) =>
+        err ? reject(new Error(`점프 채널 열기 실패(${host}:${port}): ${err.message}`)) : resolve(ch)
+      )
+    } catch (err) {
+      reject(err as Error) // 이미 끊긴 Client 는 콜백 대신 동기로 던진다
+    }
+  })
+}
+
+/**
+ * 프로필대로 **연결만** 한다: [프록시] → 점프 홉… → 대상. 각 홉은 앞 홉의 `forwardOut` 채널 위로 붙는다.
+ * 대상 Client 가 닫히면 그 아래 홉·프록시 소켓도 닫는다(누가 끊든 한 줄로 정리된다).
+ * 실패는 구조화된 결과로 반환(예외 던지지 않음) — 어느 홉에서 막혔는지는 message 머리 `[점프 …]` 로 붙는다.
+ */
+export async function connectSshClient(profile: SshProfile, deps: ConnectDeps): Promise<ClientOutcome> {
+  const hops = parseJump(profile.jump, profile.username)
+  if ('error' in hops) return { ok: false, reason: 'network', message: hops.error }
+  const proxy = parseProxy(profile.proxy)
+  if (proxy && 'error' in proxy) return { ok: false, reason: 'network', message: proxy.error }
+
+  const route: Endpoint[] = []
+  for (const h of hops) {
+    // 같은 서버로 저장된 프로필이 없으면 이 프로필의 **키** 인증만 빌린다(OpenSSH 도 같은 IdentityFile 을 쓴다).
+    // 비밀번호는 빌리지 않는다 — 대상의 비밀번호를 점프 서버에 보내는 셈이 된다.
+    const cred = deps.hopCredentials?.(h) ?? (profile.auth.type === 'key' ? { auth: profile.auth, secret: deps.secret } : null)
+    if (!cred) {
+      return {
+        ok: false,
+        reason: 'auth',
+        message: `점프 호스트 ${h.username}@${h.host}:${h.port} 의 자격 증명이 없습니다 — 그 서버를 SSH 프로필로 저장해 주세요.`
+      }
+    }
+    route.push({ ...h, ...cred, label: `[점프 ${h.username}@${h.host}:${h.port}] ` })
+  }
+  route.push({ host: profile.host, port: profile.port, username: profile.username, auth: profile.auth, secret: deps.secret, label: '' })
+
+  const up: Client[] = [] // 지금까지 붙은 홉들(실패·종료 시 걷는다)
+  let proxySock: Duplex | null = null
+  const teardown = (): void => {
+    for (const c of up) c.end()
+    proxySock?.destroy()
+  }
+  const budget = { accept: 1 }
+  for (const [i, ep] of route.entries()) {
+    let sock: Duplex | undefined
+    try {
+      if (i > 0) sock = await forwardOut(up[i - 1], ep.host, ep.port)
+      else if (proxy) sock = proxySock = await proxySocket(proxy, ep.host, ep.port)
+    } catch (err) {
+      teardown()
+      return { ok: false, reason: 'network', message: ep.label + (err as Error).message }
+    }
+    const r = await dial(ep, deps, budget, sock)
+    if (!r.ok) {
+      teardown()
+      return r
+    }
+    up.push(r.client)
+  }
+  const client = up.pop()!
+  if (up.length || proxySock) client.once('close', teardown)
+  return { ok: true, client }
+}
+
+// ssh2로 연결(점프·프록시 포함)→호스트키 TOFU 검증→shell 채널을 연다. 실패는 구조화된 결과로 반환(예외 던지지 않음).
+// W4sat F21: 호출측(registerSshIpc)이 profile.type==='ssh' 를 이미 확인했다 — rdp 는 여기 오지 않는다.
+export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promise<ConnectOutcome> {
+  const r = await connectSshClient(profile, deps)
+  if (!r.ok) return r
+  const client = r.client
+  const cols = deps.size?.cols ?? FALLBACK_COLS
+  const rows = deps.size?.rows ?? FALLBACK_ROWS
+  return await new Promise<ConnectOutcome>((resolve) => {
+    const fail = (why: string): void => {
+      client.end()
+      resolve({ ok: false, reason: 'network', message: `셸 채널 열기 실패: ${why}` })
+    }
+    try {
+      // 3인자 형태로 부른다: `env` 를 창 옵션과 같은 객체에 넣으면 ssh2 가 그 객체를 통째로 opts 로
+      // 해석해 **pty 요청의 term·크기가 사라진다**(ssh2 client.js shell() 의 인자 판별).
+      client.shell({ term: 'xterm-256color', cols, rows }, {}, (err, channel) => {
+        if (err) return fail(err.message)
+        resolve({ ok: true, backend: new SshBackend(client, channel) })
+      })
+    } catch (err) {
+      fail((err as Error).message)
     }
   })
 }
@@ -340,14 +451,37 @@ export class SshBackend implements SessionBackend {
   resume(): void {
     this.channel.resume()
   }
+  // M8 herdr H10: 이 세션이 원격 임시 폴더에 올린 붙여넣기 이미지. 세션이 닫힐 때 지운다.
+  private pasted: string[] = []
+
+  /** 클립보드 이미지를 이 연결의 SFTP 로 올리고 경로를 돌려준다(성공한 것만 정리 목록에 담는다). */
+  async pasteImage(bytes: Buffer, mime: string): Promise<PasteResult> {
+    const r = await uploadPasteImage(this.client, bytes, mime)
+    if (r.ok) this.pasted.push(r.path)
+    return r
+  }
+
   kill(): void {
     this.stopCwd()
+    const end = (): void => {
+      try {
+        this.client.end()
+      } catch {
+        // 이미 종료: 무시.
+      }
+    }
     try {
       this.channel.end()
-      this.client.end()
     } catch {
       // 이미 종료: 무시.
     }
+    if (this.pasted.length === 0) return end()
+    // 올린 이미지를 지우고 끊는다. 서버가 굼뜨면 기다리지 않는다 — 남은 것은 다음 업로드의 청소가 걷는다.
+    const timer = setTimeout(end, PASTE_CLEANUP_WAIT_MS)
+    void removeRemoteFiles(this.client, this.pasted.splice(0)).finally(() => {
+      clearTimeout(timer)
+      end()
+    })
   }
   onData(cb: (data: string) => void): void {
     // stdout + stderr 모두 터미널로. Buffer → utf8 문자열.

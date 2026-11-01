@@ -34,6 +34,10 @@ type Form = {
   secret: string
   // rdp 전용: 이 서버에 붙을 때 탭이 아니라 모니터 전체에 펼친다(2026-09-04).
   multiMonitor: boolean
+  // ssh 전용(M8 TM-01 고급 연결): 점프 호스트(ProxyJump 표기) · 프록시 URL · 앱 시작 시 다시 연결.
+  jump: string
+  proxy: string
+  reconnectOnLaunch: boolean
 }
 
 export const emptyForm: Form = {
@@ -52,7 +56,11 @@ export const emptyForm: Form = {
   // R6: 그룹 기본값은 없음(빈 값 = "기타"). 개발/운영 두 이름을 앱이 정해 주던 자리다.
   group: '',
   secret: '',
-  multiMonitor: false
+  multiMonitor: false,
+  jump: '',
+  proxy: '',
+  // Orca 기본값(Reconnect on launch 켬)을 따른다.
+  reconnectOnLaunch: true
 }
 
 function formFrom(p: ConnectionProfile): Form {
@@ -67,7 +75,10 @@ function formFrom(p: ConnectionProfile): Form {
     keyPath: p.type === 'ssh' && p.auth.type === 'key' ? p.auth.keyPath : '',
     group: p.group ?? '',
     secret: '', // 비밀은 vault에만 — 편집 시 빈 값(미입력 시 기존 비밀 유지)
-    multiMonitor: p.type === 'rdp' && p.multiMonitor === true
+    multiMonitor: p.type === 'rdp' && p.multiMonitor === true,
+    jump: p.type === 'ssh' ? (p.jump ?? '') : '',
+    proxy: p.type === 'ssh' ? (p.proxy ?? '') : '',
+    reconnectOnLaunch: p.type !== 'ssh' || p.reconnectOnLaunch !== false
   }
 }
 
@@ -230,7 +241,11 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     // rdp 도 비밀번호를 저장한다(2026-08-07) — 빈 값은 "그대로 두기"라 보내지 않는다.
     secret: form.secret !== '' ? form.secret : undefined,
     // rdp 전용. ssh 로 바꿔 저장하면 ProfileStore 가 버린다(그 타입엔 없는 필드다).
-    multiMonitor: form.type === 'rdp' ? form.multiMonitor : undefined
+    multiMonitor: form.type === 'rdp' ? form.multiMonitor : undefined,
+    // ssh 전용. 빈 값은 "없음" — ProfileStore 가 필드를 안 적는다.
+    ...(form.type === 'ssh'
+      ? { jump: form.jump.trim(), proxy: form.proxy.trim(), reconnectOnLaunch: form.reconnectOnLaunch }
+      : {})
   })
 
   // 폼 어디서든 Enter → 저장하고 접속. 텍스트 칸만 대상이다(체크박스·버튼에서 Enter 를 가로채면
@@ -543,6 +558,40 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                     />
                   </div>
                 )}
+                {/* M8 TM-01 고급 연결 — Orca 의 Advanced Connection(점프·프록시·Reconnect on launch). */}
+                <div className="pf-sec-t" style={{ marginTop: 16 }}>
+                  {t('conn.section.advanced')}
+                </div>
+                <div className="fld col-2">
+                  <label>{t('conn.field.jump')}</label>
+                  <input
+                    type="text"
+                    value={form.jump}
+                    placeholder={t('conn.field.jump.placeholder')}
+                    aria-label={t('conn.field.jump')}
+                    onChange={(e) => setForm({ ...form, jump: e.target.value })}
+                  />
+                </div>
+                <div className="pf-hint">{t('conn.jump.hint')}</div>
+                <div className="fld col-2" style={{ marginTop: 10 }}>
+                  <label>{t('conn.field.proxy')}</label>
+                  <input
+                    type="text"
+                    value={form.proxy}
+                    placeholder={t('conn.field.proxy.placeholder')}
+                    aria-label={t('conn.field.proxy')}
+                    onChange={(e) => setForm({ ...form, proxy: e.target.value })}
+                  />
+                </div>
+                <label className="fb-check" style={{ marginTop: 16 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.reconnectOnLaunch}
+                    onChange={(e) => setForm({ ...form, reconnectOnLaunch: e.target.checked })}
+                  />
+                  {t('conn.field.reconnectOnLaunch')}
+                </label>
+                <div className="pf-hint">{t('conn.reconnectOnLaunch.hint')}</div>
               </>
             )}
           </div>

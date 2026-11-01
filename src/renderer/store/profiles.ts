@@ -60,6 +60,10 @@ export function profileInput(p: ConnectionProfile, patch?: Partial<ProfileInput>
         type: 'ssh',
         authType: p.auth.type,
         keyPath: p.auth.type === 'key' ? p.auth.keyPath : undefined,
+        // M8 TM-01 — 저장은 통째 덮어쓰기라 여기서 빠지면 그룹 옮기기만 해도 점프·프록시가 사라진다.
+        jump: p.jump,
+        proxy: p.proxy,
+        reconnectOnLaunch: p.reconnectOnLaunch,
         ...patch
       }
 }
@@ -117,10 +121,11 @@ export function useProfiles() {
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      winId?: string
+      winId?: string,
+      retry?: boolean
     ): Promise<SshConnectResult> => {
       setConn((c) => ({ ...c, [profileId]: 'connecting' }))
-      const res = await window.ev.ssh.connect(profileId, acceptHostKey, password, size, winId)
+      const res = await window.ev.ssh.connect(profileId, acceptHostKey, password, size, winId, retry)
       setConn((c) => ({ ...c, [profileId]: res.ok ? 'connected' : 'error' }))
       return res
     },

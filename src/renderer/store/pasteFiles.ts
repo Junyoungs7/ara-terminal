@@ -76,6 +76,14 @@ export function filePaths(files: readonly File[]): string[] {
   return files.map((f) => window.ev.app.pathForFile(f)).filter((p) => p !== '')
 }
 
+/**
+ * M8 herdr H10: 붙여넣기 중 **경로 없는 이미지**(= 화면 캡처 등 클립보드 이미지). 파일을 복사한 것은 경로가 있어
+ * 기존 업로드 길로 간다. 이 판정은 paste 이벤트가 이미 준 File 만 본다 — 클립보드를 따로 읽지 않는다.
+ */
+export function clipImages(files: readonly File[], pathOf: (f: File) => string): File[] {
+  return files.filter((f) => f.type.startsWith('image/') && pathOf(f) === '')
+}
+
 // 테스트 전용 — 등록 목록을 비운다(모듈 스코프라 테스트끼리 샌다).
 export function __resetPasteTargets(): void {
   targets.length = 0

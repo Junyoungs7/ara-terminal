@@ -129,8 +129,11 @@ const api: EvApi = {
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      winId?: string
-    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, winId }),
+      winId?: string,
+      retry?: boolean
+    ) => ipcRenderer.invoke('ssh:connect', { profileId, acceptHostKey, password, size, winId, retry }),
+    pasteImage: (sessionId: string, bytes: Uint8Array, mime: string) =>
+      ipcRenderer.invoke('ssh:pasteImage', { sessionId, bytes, mime }),
     forgetHostKey: (profileId: string) => ipcRenderer.invoke('ssh:forgetHostKey', { profileId }),
     test: (input: ProfileInput) => ipcRenderer.invoke('conn:test', { input })
   },

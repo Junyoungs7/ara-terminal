@@ -359,8 +359,13 @@ export class MainSessionManager implements ISessionManager {
 
   // F7: 세션의 ssh2 커넥션 반환(SFTP 서브시스템 재사용용). 로컬/미존재 세션은 null.
   sshClient(id: string): Client | null {
+    return this.sshBackend(id)?.sshClient() ?? null
+  }
+
+  // M8 herdr H10: 붙여넣기 이미지 업로드·세션 끝 정리가 백엔드에 산다.
+  sshBackend(id: string): SshBackend | null {
     const b = this.handles.get(id)?.backend
-    return b instanceof SshBackend ? b.sshClient() : null
+    return b instanceof SshBackend ? b : null
   }
 
   /**

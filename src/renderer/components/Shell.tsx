@@ -833,7 +833,8 @@ export function Shell() {
        *    그러면 main 이 80×24 로 열어 **첫 프롬프트가 접힌다**(준영님 제보). 저장된 값이 정답이다.
        * 둘은 늘 같이 다니므로 한 인자로 묶었다 — 인자를 또 하나 늘리지 않는다.
        */
-      restore?: { size?: { cols: number; rows: number } }
+      // retry: M8 TM-01 — 부팅 복원만. main 이 network 실패를 백오프로 몇 번 더 해 본다.
+      restore?: { size?: { cols: number; rows: number }; retry?: boolean }
     ): Promise<boolean> => {
       const target = await lookup(profileId)
       if (target?.type === 'rdp') return openRdpProfile(profileId)
@@ -857,7 +858,7 @@ export function Shell() {
       const res = await connectWithRecovery(
         { connect, lookup, ask, askText, showFailure: showConnectFailure },
         profileId,
-        { acceptHostKey, password, size }
+        { acceptHostKey, password, size, ...(restore?.retry ? { retry: true } : {}) }
       )
       if (!res.ok) return false
       if (!restore) noteRecentServer(profileId) // 통합 검색 빈 쿼리의 [최근 서버]
@@ -925,11 +926,17 @@ export function Shell() {
    * ⚠️ `revealFiles`(접속하면 [파일] 탭으로) 는 복원에서 원치 않는다 — 그래서 `restore` 플래그를 준다.
    */
   const sshRestore = useCallback(
-    async (profileId: string, size?: { cols: number; rows: number }): Promise<SshRestoreResult> => {
+    async (profileId: string, size?: { cols: number; rows: number }, boot?: boolean): Promise<SshRestoreResult> => {
+      // M8 TM-01 [시작 시 다시 연결] 을 끈 서버는 부팅 때 붙지 않고 카드로 남는다(Orca: 그 호스트는 Connect 를 보여 준다).
+      // 카드의 [다시 접속](boot 아님)은 그대로 붙는다.
+      if (boot) {
+        const p = await lookup(profileId)
+        if (p?.type === 'ssh' && p.reconnectOnLaunch === false) return { ok: false, reason: 'manual' }
+      }
       let newId: string | null = null
       const ok = await connectProfileRef.current?.(profileId, undefined, undefined, (id) => {
         newId = id
-      }, undefined, { ...(size ? { size } : {}) })
+      }, undefined, { ...(size ? { size } : {}), ...(boot ? { retry: true } : {}) })
       if (ok && newId) return { ok: true, id: newId }
       /**
        * 사유는 `connectProfile` 이 **이미 화면으로 말했다**(호스트키 창·비밀번호 창·실패 안내).
@@ -944,7 +951,7 @@ export function Shell() {
        */
       return { ok: false, reason: 'shown' }
     },
-    []
+    [lookup]
   )
 
   // 세션 복제(F4c 우클릭 메뉴): ssh 세션은 같은 프로필로 새 접속(connectProfile 재사용).

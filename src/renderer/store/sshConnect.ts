@@ -27,7 +27,8 @@ export type ConnectDeps = {
     acceptHostKey?: boolean,
     password?: string,
     size?: { cols: number; rows: number },
-    winId?: string
+    winId?: string,
+    retry?: boolean
   ) => Promise<SshConnectResult>
   lookup: (id: string) => Promise<ConnectionProfile | undefined>
   ask: (spec: DialogSpec) => Promise<DialogResult>
@@ -44,6 +45,8 @@ export type ConnectOpts = {
   size?: { cols: number; rows: number }
   /** 부른 창(F32). 떼어낸 창이 자기 id 를 준다 — 안 주면 본창이다. */
   winId?: string
+  /** M8 TM-01: 부팅 복원 — main 이 network 실패를 백오프로 몇 번 더 해 본다. */
+  retry?: boolean
 }
 
 /**
@@ -59,7 +62,7 @@ export async function connectWithRecovery(
   profileId: string,
   opts: ConnectOpts = {}
 ): Promise<ConnectOk | { ok: false }> {
-  const res = await deps.connect(profileId, opts.acceptHostKey, opts.password, opts.size, opts.winId)
+  const res = await deps.connect(profileId, opts.acceptHostKey, opts.password, opts.size, opts.winId, opts.retry)
   if (res.ok) return { ok: true, id: res.id, ...(res.title ? { title: res.title } : {}) }
 
   if (res.reason === 'hostKeyNew') {

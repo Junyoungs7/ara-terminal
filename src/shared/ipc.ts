@@ -351,8 +351,18 @@ export type InvokeContract = {
       password?: string
       size?: { cols: number; rows: number }
       winId?: string
+      /** M8 TM-01: 부팅 복원만 true — network 실패를 백오프로 몇 번 더 해 본다(sshRoute.withBackoff). */
+      retry?: boolean
     }
     res: SshConnectResult
+  }
+  /**
+   * M8 herdr H10: 클립보드 이미지를 원격 세션의 임시 폴더(~/.ara-paste)로 올리고 그 경로를 돌려준다.
+   * 렌더러는 **사용자가 붙여넣었을 때만** 부른다(paste 이벤트). 세션이 닫히면 올린 파일을 지운다.
+   */
+  'ssh:pasteImage': {
+    req: { sessionId: string; bytes: Uint8Array; mime: string }
+    res: { ok: true; path: string } | { ok: false; message: string }
   }
   // 호스트키 재설정: 프로필의 knownHosts 항목 삭제 → 다음 접속이 다시 TOFU 확인이 된다.
   // 서버 재설치로 지문이 바뀐 경우 mismatch 차단을 푸는 유일한 경로(사용자 확인 후 호출).
@@ -895,9 +905,12 @@ export type EvApi = {
       acceptHostKey?: boolean,
       password?: string,
       size?: { cols: number; rows: number },
-      winId?: string
+      winId?: string,
+      retry?: boolean
     ): Promise<SshConnectResult>
     forgetHostKey(profileId: string): Promise<{ ok: true; removed: boolean }>
+    /** M8 herdr H10: 클립보드 이미지 → 원격 임시 경로. 사용자가 붙여넣었을 때만 부른다. */
+    pasteImage(sessionId: string, bytes: Uint8Array, mime: string): Promise<{ ok: true; path: string } | { ok: false; message: string }>
     /** [접속 테스트] — 저장하지 않고 폼 값으로 붙어 본다(ssh=인증까지, rdp=도달까지). */
     test(input: ProfileInput): Promise<ConnTestResult>
   }

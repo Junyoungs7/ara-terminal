@@ -22,7 +22,8 @@ import {
   shouldRecord
 } from '../store/history'
 import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
-import { filePaths, registerPasteTarget } from '../store/pasteFiles'
+import { clipImages, filePaths, registerPasteTarget } from '../store/pasteFiles'
+import { PASTE_IMAGE_MAX_BYTES } from '@shared/pasteImage'
 import { pastePaths } from '../components/filePath'
 import { isAppShortcut } from '../../shared/keymap'
 import { t } from '../i18n'
@@ -578,6 +579,23 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
     textarea?.addEventListener('compositionstart', onCompStart)
     textarea?.addEventListener('compositionend', onCompEnd)
 
+    // M8 herdr H10: 이미지 → 원격 경로. 실패는 조용히 버리지 않는다(붙인 사람은 붙었다고 믿는다).
+    const pasteRemoteImages = async (images: readonly File[]): Promise<void> => {
+      const got: string[] = []
+      for (const f of images) {
+        if (f.size > PASTE_IMAGE_MAX_BYTES) {
+          notifyPasteFallback(t('paste.image.tooBig'))
+          continue
+        }
+        const r = await window.ev.ssh
+          .pasteImage(sessionId, new Uint8Array(await f.arrayBuffer()), f.type)
+          .catch((e: unknown) => ({ ok: false as const, message: e instanceof Error ? e.message : String(e) }))
+        if (r.ok) got.push(r.path)
+        else notifyPasteFallback(`${t('paste.image.failed')} — ${r.message}`)
+      }
+      if (got.length) window.ev.session.input(sessionId, pastePaths(got))
+    }
+
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
     // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
     /**
@@ -589,6 +607,13 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
      */
     const takeFiles = (files: readonly File[]): boolean => {
       const paths = filePaths(files)
+      // M8 herdr H10: 원격 세션에 붙인 클립보드 이미지는 SFTP 로 원격 임시 폴더(~/.ara-paste)에 올리고
+      // **그 원격 경로**를 넣는다. 로컬 세션은 지금처럼 아무것도 안 한다(xterm 에 넘김).
+      const images = local ? [] : clipImages(files, (f) => window.ev.app.pathForFile(f))
+      if (paths.length === 0 && images.length > 0) {
+        void pasteRemoteImages(images)
+        return true
+      }
       // 텍스트 붙여넣기는 xterm 이 자기 textarea 로 처리한다(bracketed paste 포함) — 넘긴다.
       if (paths.length === 0) return false
       // 원격이라도 [파일] 탭이 그 세션에 붙어 있지 않으면 큐가 없다 → 경로 붙여넣기로 폴백.
