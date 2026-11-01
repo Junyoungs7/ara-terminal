@@ -43,7 +43,7 @@
   ; 그래서 electron-builder 의 정리가 못 본다 — 그 경로에서 도는 프로세스를 끄고 폴더를 지운다. 자리는 main/agents/feature.ts 의 hostRoot 와 같아야 한다.
   ${IfNot} ${isUpdated}
     SetShellVarContext current
-    nsExec::Exec `"$SYSDIR\WindowsPowerShell1.0\powershell.exe" -NoProfile -NonInteractive -C "Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('$LOCALAPPDATA\ARA\daemon-host', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $$_.ProcessId -Force }"`
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -C "Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('$LOCALAPPDATA\ARA\daemon-host', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $$_.ProcessId -Force }"`
     Pop $0
     Sleep 500
     RMDir /r "$LOCALAPPDATA\ARA\daemon-host"
