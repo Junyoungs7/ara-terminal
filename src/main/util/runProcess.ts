@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 
 /**
  * 제품(`src/main`)이 프로세스를 띄우는 **단 하나의 길**(셸이 필요한 ClaudeCliEngine 만 예외 —
@@ -40,6 +41,33 @@ export type RunResult = {
   error: Error | null
 }
 
+let cp949: TextDecoder | null | undefined
+/**
+ * 출력 바이트 → 글. UTF-8 이 아니면(Windows 의 cmd·where 등은 콘솔 코드 페이지 = 한국어 Windows 는 CP949 로 낸다)
+ * Windows 에서만 CP949(WHATWG euc-kr)로 **깨짐 없이** 읽힐 때 그것으로. 둘 다 아니면(UTF-8 과 CP949 가 섞인 git diff 등) 예전처럼 UTF-8.
+ */
+export function decodeOutput(b: Buffer, win = process.platform === 'win32'): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(b)
+  } catch {
+    if (win) {
+      if (cp949 === undefined) {
+        try {
+          cp949 = new TextDecoder('euc-kr', { fatal: true })
+        } catch {
+          cp949 = null // ICU 데이터에 없음 — UTF-8 로
+        }
+      }
+      try {
+        if (cp949) return cp949.decode(b)
+      } catch {
+        /* CP949 도 아님 */
+      }
+    }
+    return b.toString('utf8')
+  }
+}
+
 export function runProcess(file: string, args: readonly string[], opts: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
     const child = execFile(
@@ -51,20 +79,26 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
         timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
         windowsHide: true,
-        signal: opts.signal
+        signal: opts.signal,
+        encoding: 'buffer'
       },
       (err, stdout, stderr) => {
         const code = (err as { code?: unknown } | null)?.code
         resolve({
           code: typeof code === 'number' ? code : err ? 1 : 0,
-          stdout: String(stdout),
-          stderr: String(stderr),
+          stdout: decodeOutput(stdout),
+          stderr: decodeOutput(stderr),
           error: err
         })
       }
     )
-    if (opts.onStdout) child.stdout?.on('data', (d: Buffer | string) => opts.onStdout?.(String(d)))
-    if (opts.onStderr) child.stderr?.on('data', (d: Buffer | string) => opts.onStderr?.(String(d)))
+    // 흘려 받기는 UTF-8 그대로(git 진행·rg --json) — 조각 경계에서 글자가 갈리지 않게 StringDecoder 로.
+    const live = (s: NodeJS.ReadableStream | null, cb: (chunk: string) => void): void => {
+      const d = new StringDecoder('utf8')
+      s?.on('data', (b: Buffer) => cb(d.write(b)))
+    }
+    if (opts.onStdout) live(child.stdout, (c) => opts.onStdout?.(c))
+    if (opts.onStderr) live(child.stderr, (c) => opts.onStderr?.(c))
     if (opts.input !== undefined) {
       child.stdin?.on('error', () => {}) // 먼저 끝난 프로세스 — 결과는 콜백이 알린다
       child.stdin?.end(opts.input)

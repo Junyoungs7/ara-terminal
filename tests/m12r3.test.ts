@@ -21,7 +21,7 @@ import {
   truncateDiffForPrompt
 } from '../src/shared/scmAi'
 import { generateScmText, renameBranch } from '../src/main/scm/ai'
-import { runProcess, type RunOptions, type RunResult } from '../src/main/util/runProcess'
+import { decodeOutput, runProcess, type RunOptions, type RunResult } from '../src/main/util/runProcess'
 import { agentSettingsOf } from '../src/shared/agents'
 
 describe('AI 작성 줄 — 훅 본문에서 쓴 줄 뽑기', () => {
@@ -208,6 +208,26 @@ describe('[AI 로 쓰기] — 진짜 git + 가짜 에이전트', { timeout: 30_0
       rmSync(d, { recursive: true, force: true })
     }
   })
+  it('Windows — 설정 명령이 없는 경로면 cmd 를 띄우지 않고 noCli(cmd 는 "경로를 찾을 수 없습니다" 종료 1 이라 failed 로 보이던 것)', async () => {
+    const d = repo()
+    try {
+      writeFileSync(join(d, 'a.txt'), 'x\n')
+      g(d, 'add', '.')
+      const s =agentSettingsOf(null)
+      s.agents.claude.command = 'C:/nope/no-claude-here.cmd'
+      const local = fakeX(() => ({ code: 1, stderr: '지정된 경로를 찾을 수 없습니다.' }))
+      expect(await generateScmText('commit', { root: d, x: local.x, remote: false, settings: s, win: true })).toMatchObject({ ok: false, code: 'noCli' })
+      expect(local.calls).toHaveLength(0)
+      // 있는 경로(확장자 없이 줘도 PATHEXT 로)는 그대로 cmd 로 띄운다 — 양성 대조
+      writeFileSync(join(d, 'fake-claude.cmd'), '@echo off\r\n')
+      s.agents.claude.command = join(d, 'fake-claude')
+      const ok = fakeX(() => ({ stdout: 'Add x' }))
+      expect(await generateScmText('commit', { root: d, x: ok.x, remote: false, settings: s, win: true })).toMatchObject({ ok: true })
+      expect(ok.calls[0].args.slice(0, 3)).toEqual(['/d', '/c', join(d, 'fake-claude')])
+    } finally {
+      rmSync(d, { recursive: true, force: true })
+    }
+  })
   it('기업 MCP 거절이면 --strict-mcp-config 만 빼고 한 번 더 · 취소', async () => {
     const d = repo()
     try {
@@ -254,5 +274,20 @@ describe('[AI 로 쓰기] — 진짜 git + 가짜 에이전트', { timeout: 30_0
     } finally {
       rmSync(d, { recursive: true, force: true })
     }
+  })
+})
+
+describe('runProcess 출력 글자 — Windows cmd 오류는 CP949', () => {
+  const cp949 = Buffer.from('c1f6c1a4b5c820b0e6b7ceb8a620c3a3c0bb20bcf620bef8bdc0b4cfb4d92e', 'hex') // "지정된 경로를 찾을 수 없습니다."
+  it('CP949 바이트 → 올바른 한글(Windows 만), UTF-8 → 그대로, 섞이면 예전처럼 UTF-8', () => {
+    expect(decodeOutput(cp949, true)).toBe('지정된 경로를 찾을 수 없습니다.')
+    expect(decodeOutput(cp949, false)).toContain('\uFFFD')
+    expect(decodeOutput(Buffer.from('한글 ok ✓\n'), true)).toBe('한글 ok ✓\n')
+    const mixed = Buffer.concat([Buffer.from('+한글\n'), cp949])
+    expect(decodeOutput(mixed, true).startsWith('+한글\n')).toBe(true)
+  })
+  it('진짜 프로세스 — UTF-8 출력은 그대로 문자열로', async () => {
+    const r = await runProcess(process.execPath, ['-e', "process.stdout.write('한글')"])
+    expect(r.stdout).toBe('한글')
   })
 })

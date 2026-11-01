@@ -3,7 +3,7 @@
 // `cmd /d /c <실행 파일> <고정 인자>` 로 맡기고, 사용자 글(이름 짓기의 첫 요청)은 **stdin 으로만** 넣는다(인자에 안 끼운다).
 // 시험은 run 을 바꿔 끼운다 — 진짜 claude/codex/gemini 를 띄우지 않는다.
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { AGENTS, parseAgentCommand, quoteArg, type AgentId, type AgentSettings } from '@shared/agents'
 import {
   BUILTIN_SLASH,
@@ -42,6 +42,13 @@ export async function runAgentOnce(
   const opts: RunOptions = { cwd: o.cwd, env, timeoutMs: o.timeoutMs, input: o.input, maxBuffer: 4 * 1024 * 1024, signal: o.signal }
   if (!win) return run(cmd.binary, [...cmd.prefixArgs, ...o.args], opts)
   if (quoteArg(cmd.binary, 'cmd') === null) return { code: 1, stdout: '', stderr: '', error: new Error(`cmd 에 담을 수 없는 실행 파일: ${cmd.binary}`) }
+  // 경로로 준 실행 파일이 없으면 cmd 는 "경로를 찾을 수 없습니다"(종료 1)로 끝나 '실행 실패'로 보인다 — 띄우기 전에 ENOENT 로(= 못 찾음).
+  // 이름만 준 것은 cmd 가 PATH 에서 못 찾으면 9009 로 알린다. 확장자 없는 경로는 cmd 처럼 PATHEXT 를 붙여 본다.
+  if (/[\\/]/.test(cmd.binary)) {
+    const p = resolve(o.cwd ?? process.cwd(), cmd.binary)
+    const exts = ['', ...(process.env['PATHEXT'] || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)]
+    if (!exts.some((e) => existsSync(p + e))) return { code: 1, stdout: '', stderr: '', error: Object.assign(new Error(`실행 파일이 없습니다: ${cmd.binary}`), { code: 'ENOENT' }) }
+  }
   return run(process.env['ComSpec'] || 'cmd.exe', ['/d', '/c', cmd.binary, ...cmd.prefixArgs, ...o.args], opts)
 }
 
