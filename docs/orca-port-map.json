@@ -41,7 +41,8 @@
       "src/renderer/src/store/slices/worktrees/create/host-planned-agent-launch.ts"
     ],
     "orcaRef": "7a7f46f8a3",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M9 R2(v2.2 4e4edae): 로컬 실행에 아라가 붙이는 인자·env(planAgentLaunch extraArgs·extraEnv, 접두 인자 바로 뒤·재개에도) — Oriel 전용 MCP(`oriel mcp --launch`): Claude --mcp-config(더하기만 — --strict-mcp-config 는 사용자 MCP 를 전부 끈다, Orca claude-background-run-isolation-real-cli.test 로 확인) + --append-system-prompt-file(웹은 Oriel, 끝나면 finish()), Codex -c mcp_servers.oriel.*·developer_instructions, Gemini env GEMINI_CLI_SYSTEM_DEFAULTS_PATH(지시 자리 없음). 사용자 설정 파일은 안 씀(~/.ara/agent-launch). Oriel 미설치면 그대로 띄우고 알림 센터 한 번. 원격 실행엔 안 붙임."
   },
   {
     "id": "AI-04",
@@ -157,7 +158,8 @@
       "src/shared/claude-statusline-rate-limits.ts"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "porting"
+    "status": "porting",
+    "notes": "M9 R2(v2.2 4e4edae): statusLine 을 전역 ~/.claude/settings.json 에 심던 것(Orca statusline-install) 대신 아라가 띄우는 claude 에만 --settings — 사용자 원래 statusLine(프로젝트 local·프로젝트·사용자)이 있으면 `스크립트 pass | 원래 명령` 으로 같은 입력을 넘겨 원래 상태줄 그대로. R1 이 심은 전역 줄은 우리 표식 줄만 부팅 때 지움."
   },
   {
     "id": "WS-01",
