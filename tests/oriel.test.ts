@@ -1,11 +1,11 @@
 // M9 R2 Oriel 연동 — 감지(version JSON)·후보 자리·에이전트별 실행 인자/env(사용자 설정 파일 안 씀)·링크 열기(Oriel → 실패면 OS 브라우저).
 // 진짜 Oriel 을 띄우지 않는다: run 을 바꿔 끼우고, 가짜 Oriel 폴더는 임시 폴더.
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion } from '../src/shared/oriel'
-import { createOriel } from '../src/main/oriel/oriel'
+import { araElectronForOriel, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV } from '../src/main/oriel/oriel'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
 
@@ -147,6 +147,84 @@ describe('createOriel — 감지·링크 열기', () => {
     expect(await o.open('http://localhost:3000')).toBe('external')
     expect(external).toEqual(['http://localhost:3000'])
     expect(calls.some((c) => c.includes('open'))).toBe(false)
+  })
+})
+
+describe('OR-1 — ORIEL_ELECTRON(아라 Electron 공유)·링크 포커스·file:/UNC', () => {
+  it('araElectronForOriel — 절대 경로·실재·옆에 default_app.asar 가 있는 첫 후보만(설치본 A.R.A.exe 는 null)', () => {
+    const dev = tmp()
+    mkdirSync(join(dev, 'resources'))
+    writeFileSync(join(dev, 'electron.exe'), '')
+    writeFileSync(join(dev, 'resources', 'default_app.asar'), '')
+    const packaged = tmp()
+    writeFileSync(join(packaged, 'A.R.A.exe'), '')
+    expect(araElectronForOriel([join(packaged, 'A.R.A.exe'), join(dev, 'electron.exe')])).toBe(join(dev, 'electron.exe'))
+    expect(araElectronForOriel([join(packaged, 'A.R.A.exe')])).toBeNull()
+    expect(araElectronForOriel(['electron.exe', ''], () => true)).toBeNull() // 상대 경로는 Oriel 이 종료 코드 3
+  })
+  it('version·open 에 env ORIEL_ELECTRON — 에이전트 MCP 설정(Claude·Codex·Gemini) env 에도', async () => {
+    const { dir, versionJson } = fakeOriel()
+    const envs: (Record<string, string> | undefined)[] = []
+    const o = createOriel({
+      candidates: () => [dir],
+      openExternal: async () => {},
+      electron: 'C:/ARA/electron.exe',
+      platform: 'linux',
+      run: async (_f, args, opts) => {
+        envs.push(opts?.env)
+        return args[1] === 'version' ? ok(versionJson) : ok('')
+      }
+    })
+    await o.open('http://localhost:1')
+    expect(envs).toEqual([{ [ORIEL_ELECTRON_ENV]: 'C:/ARA/electron.exe' }, { [ORIEL_ELECTRON_ENV]: 'C:/ARA/electron.exe' }])
+    const files: Record<string, string> = {}
+    const write = (name: string, ext: string, body: string): string => ((files[name] = body), `C:/h/${name}.${ext}`)
+    orielLaunch('claude', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe')
+    expect(JSON.parse(files['oriel-mcp']).mcpServers.oriel.env).toEqual({ ORIEL_ELECTRON: 'C:/ARA/electron.exe' })
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe').args).toContain("mcp_servers.oriel.env={ORIEL_ELECTRON='C:/ARA/electron.exe'}")
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, "C:/it's/electron.exe").args).toEqual([])
+    orielLaunch('gemini', 'D:/o/bin/oriel.mjs', write, 'C:/ARA/electron.exe')
+    expect(JSON.parse(files['oriel-gemini']).mcpServers.oriel).toEqual({ command: 'node', args: ['D:/o/bin/oriel.mjs', 'mcp', '--launch'], env: { ORIEL_ELECTRON: 'C:/ARA/electron.exe' } })
+  })
+  it('★ 전경 허락 PowerShell 은 사용자 동작({gesture})일 때만, open 직전에 끝까지 기다린 뒤 — MCP·에이전트 경로(인자 없음)는 절대 안 부른다', async () => {
+    const { dir, versionJson } = fakeOriel()
+    const calls: string[] = []
+    const o = createOriel({
+      candidates: () => [dir],
+      openExternal: async () => {},
+      platform: 'win32',
+      run: async (file, args) => {
+        if (file.endsWith('powershell.exe')) {
+          calls.push('ps:start')
+          await new Promise((r) => setTimeout(r, 20))
+          calls.push(`ps:end:${args.at(-1) === FOREGROUND_SCRIPT}`)
+          return ok('')
+        }
+        calls.push(args[1])
+        return args[1] === 'version' ? ok(versionJson) : ok('')
+      }
+    })
+    await o.open('http://localhost:1') // MCP oriel_open 과 같은 부름
+    expect(calls.some((c) => c.startsWith('ps:'))).toBe(false)
+    calls.length = 0
+    await o.open('http://localhost:2', { gesture: true })
+    expect(calls).toEqual(['ps:start', 'ps:end:true', 'open'])
+    expect(FOREGROUND_SCRIPT).toContain('AllowSetForegroundWindow(-1)')
+  })
+  it('MCP oriel_open 은 사용자 동작 표시 없이 부른다(tools.ts) — IPC oriel:open 만 gesture', () => {
+    const tools = readFileSync(join(__dirname, '../src/main/mcp/tools.ts'), 'utf8')
+    expect(tools).toMatch(/ctx\.oriel\.open\(url\)/)
+    expect(tools).not.toMatch(/gesture/)
+    expect(readFileSync(join(__dirname, '../src/main/oriel/feature.ts'), 'utf8')).toMatch(/oriel\.open\([^)]*\{ gesture: true \}\)/)
+  })
+  it('file:·호스트 있는 file:·UNC 는 Oriel 에도 OS 에도 안 넘긴다(NTLM 유출)', async () => {
+    const { dir, versionJson } = fakeOriel()
+    const calls: string[][] = []
+    const external: string[] = []
+    const o = createOriel({ candidates: () => [dir], openExternal: async (u) => void external.push(u), run: async (f, a) => (calls.push([f, ...a]), ok(versionJson)) })
+    for (const u of ['file://server/share/a.txt', '\\\\server\\share\\a.txt', 'file:///C:/a.txt', 'file://localhost/C:/a.txt']) expect(await o.open(u, { gesture: true })).toBe(false)
+    expect(calls).toEqual([])
+    expect(external).toEqual([])
   })
 })
 

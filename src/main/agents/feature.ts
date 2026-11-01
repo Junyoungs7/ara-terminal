@@ -332,9 +332,9 @@ export function registerAgentsFeature(deps: {
     const os = await deps.oriel?.status()
     if (os?.installed) {
       try {
-        if (agent === 'gemini') Object.assign(geminiDefaults, orielGeminiDefaults(os.info.cliPath))
+        if (agent === 'gemini') Object.assign(geminiDefaults, orielGeminiDefaults(os.info.cliPath, os.info.electronPath))
         else {
-          const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body))
+          const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body), os.info.electronPath)
           extraArgs.push(...o.args)
           Object.assign(extraEnv, o.env)
         }

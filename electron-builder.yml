@@ -22,6 +22,12 @@ files:
 extraResources:
   - from: NOTICE
     to: NOTICE
+  # OR-1: Oriel(별도 창 브라우저) 동봉 → resources/oriel(감지 후보 첫째 — shared/oriel.ts orielCandidates).
+  # beforePack(scripts/stage-oriel.cjs)이 Oriel 원본(env ORIEL_SRC, 기본 D:/AI/ai-browser)의 bin·src·vendor·package.json 을
+  # .oriel-stage 로 복사하고 판을 ara-bundle.json 에 적는다. 원본이 없으면 경고만 하고 빈 폴더 = 동봉 없이.
+  - from: .oriel-stage
+    to: oriel
+beforePack: scripts/stage-oriel.cjs
 # node-pty 네이티브(.node) + conpty.dll 을 asar 밖으로 풀어야 useConptyDll 경로가 런타임에
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:

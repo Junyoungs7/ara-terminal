@@ -40,9 +40,18 @@ export function orielCandidates(setting: string, resourcesPath: string | null): 
 export const ORIEL_INSTRUCTIONS =
   'For any web check or browser test use the Oriel browser through its MCP tools oriel_* and browser_* - not another browser tool, not a local browser. Call finish() when the web task is done.'
 
-/** MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). */
-export function orielMcpServers(cliPath: string): { mcpServers: { oriel: { type: 'stdio'; command: string; args: string[] } } } {
-  return { mcpServers: { oriel: { type: 'stdio', command: 'node', args: [cliPath.replace(/\\/g, '/'), 'mcp', '--launch'] } } }
+type OrielServer = { command: string; args: string[]; env?: Record<string, string> }
+
+/**
+ * MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). electronPath 가 있으면 env `ORIEL_ELECTRON` —
+ * `mcp --launch` 가 Oriel 을 그 Electron(= 감지 때 version 이 알려 준 바이너리, 아라 것)으로 띄운다(Oriel 89eb2b3).
+ */
+export function orielMcpServers(cliPath: string, electronPath?: string): { mcpServers: { oriel: OrielServer & { type: 'stdio' } } } {
+  return {
+    mcpServers: {
+      oriel: { type: 'stdio', command: 'node', args: [cliPath.replace(/\\/g, '/'), 'mcp', '--launch'], ...(electronPath ? { env: { ORIEL_ELECTRON: electronPath } } : {}) }
+    }
+  }
 }
 
 /**
@@ -59,23 +68,25 @@ export function orielMcpServers(cliPath: string): { mcpServers: { oriel: { type:
 export function orielLaunch(
   agent: AgentId,
   cliPath: string,
-  write: (name: string, ext: string, body: string) => string
+  write: (name: string, ext: string, body: string) => string,
+  electronPath?: string
 ): { args: string[]; env: Record<string, string> } {
   const cli = cliPath.replace(/\\/g, '/')
   if (agent === 'claude') {
     return {
-      args: ['--mcp-config', write('oriel-mcp', 'json', JSON.stringify(orielMcpServers(cli), null, 2)), '--append-system-prompt-file', write('oriel-instructions', 'md', ORIEL_INSTRUCTIONS + '\n')],
+      args: ['--mcp-config', write('oriel-mcp', 'json', JSON.stringify(orielMcpServers(cli, electronPath), null, 2)), '--append-system-prompt-file', write('oriel-instructions', 'md', ORIEL_INSTRUCTIONS + '\n')],
       env: {}
     }
   }
   if (agent === 'codex') {
-    if (cli.includes("'")) return { args: [], env: {} }
+    if (cli.includes("'") || electronPath?.includes("'")) return { args: [], env: {} }
     return {
       args: [
         '-c',
         "mcp_servers.oriel.command='node'",
         '-c',
         `mcp_servers.oriel.args=['${cli}','mcp','--launch']`,
+        ...(electronPath ? ['-c', `mcp_servers.oriel.env={ORIEL_ELECTRON='${electronPath}'}`] : []),
         '-c',
         'mcp_servers.oriel.tool_timeout_sec=120',
         '-c',
@@ -84,14 +95,14 @@ export function orielLaunch(
       env: {}
     }
   }
-  return { args: [], env: { [GEMINI_DEFAULTS_ENV]: write('oriel-gemini', 'json', JSON.stringify(orielGeminiDefaults(cli), null, 2)) } }
+  return { args: [], env: { [GEMINI_DEFAULTS_ENV]: write('oriel-gemini', 'json', JSON.stringify(orielGeminiDefaults(cli, electronPath), null, 2)) } }
 }
 
 /** Gemini 시스템 기본값 파일 env — 실행 하나에 파일 하나라 상태 훅(M9 R3)과 Oriel MCP 를 한 파일에 담는다(main agents/feature.ts). */
 export const GEMINI_DEFAULTS_ENV = 'GEMINI_CLI_SYSTEM_DEFAULTS_PATH'
 
 /** Gemini 시스템 기본값 파일에 담을 Oriel MCP(type 칸 없는 Gemini 모양). */
-export function orielGeminiDefaults(cliPath: string): { mcpServers: { oriel: { command: string; args: string[] } } } {
-  const { command, args } = orielMcpServers(cliPath).mcpServers.oriel
-  return { mcpServers: { oriel: { command, args } } }
+export function orielGeminiDefaults(cliPath: string, electronPath?: string): { mcpServers: { oriel: OrielServer } } {
+  const { command, args, env } = orielMcpServers(cliPath, electronPath).mcpServers.oriel
+  return { mcpServers: { oriel: { command, args, ...(env ? { env } : {}) } } }
 }
