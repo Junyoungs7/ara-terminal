@@ -15,14 +15,16 @@ import { pushSend } from '../util/windowPush'
 import { logMainError, mainErrorLogPath } from '../log/MainErrorLog'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
-import { AGENTS, agentLimitsOf, agentSettingsOf, isAgentId, migrateAiCliFlags, planAgentLaunch, type AgentSettings } from '@shared/agents'
+import { AGENTS, agentLimitsOf, agentSettingsOf, isAgentId, migrateAiCliFlags, PERMISSION_CHOICES, planAgentLaunch, type AgentId, type AgentPermissionChoice, type AgentSettings } from '@shared/agents'
 import { HOOK_ENV, isHookSource, type AgentStatusView, type HookSource } from '@shared/agentHooks'
-import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
+import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
 import { createHookServer, installHooks } from './hooks'
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
+import { generateChatName, listModels, scanSlash } from './options'
+import { isOptionValue, type ModelCatalog } from '@shared/agentOptions'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
@@ -54,12 +56,47 @@ export function registerAgentsFeature(deps: {
   const savedHook = readJsonWithBackup<{ port?: unknown; token?: unknown } | null>(hookFile, null)
   // M5 AI-13: 채팅으로 보기 — transcript 감시(열린 채팅 화면만). 첫 훅·첫 열기 때 만든다.
   let chat: ChatWatcher | null = null
+  // e2e 는 사용자 설정 폴더(CLAUDE_CONFIG_DIR·CODEX_HOME)를 보지 않는다 — 임시 홈만.
+  const userEnv: NodeJS.ProcessEnv = process.env['ARA_E2E'] === '1' ? {} : process.env
   const ensureChat = (): ChatWatcher =>
-    (chat ??= createChatWatcher({ push: (e) => pushSend(deps.mainWc(), 'agents:chat', e), store: join(deps.userData, 'agent-chat.json'), home: deps.home, env: process.env['ARA_E2E'] === '1' ? {} : process.env }))
+    (chat ??= createChatWatcher({ push: (e) => pushSend(deps.mainWc(), 'agents:chat', e), store: join(deps.userData, 'agent-chat.json'), home: deps.home, env: userEnv }))
+
+  // M5 AI-19 채팅 이름 — 탭마다 첫 요청 한 번. 이름은 userData/agent-names.json(데몬에 산 탭은 다시 켜도 그대로), 탭이 끝나면 지운다.
+  const namesFile = join(deps.userData, 'agent-names.json')
+  const savedNames = readJsonWithBackup<unknown>(namesFile, null)
+  const names = new Map<string, string>(savedNames && typeof savedNames === 'object' ? Object.entries(savedNames).filter((x): x is [string, string] => typeof x[1] === 'string') : [])
+  const naming = new Set<string>()
+  const tabMeta = new Map<string, { agent: AgentId; cwd: string }>()
+  const saveNames = (): void => {
+    try {
+      writeJsonAtomic(namesFile, Object.fromEntries(names))
+    } catch {
+      /* 못 남기면 다시 켠 뒤 이름 없이 */
+    }
+  }
+  const maybeName = (sessionId: string, firstPrompt: unknown): void => {
+    const meta = tabMeta.get(sessionId)
+    if (!settings.chatNaming || !meta || typeof firstPrompt !== 'string' || !firstPrompt.trim() || names.has(sessionId) || naming.has(sessionId)) return
+    naming.add(sessionId) // 한 탭에 한 번(실패해도 다시 묻지 않는다 — Orca 도 첫 요청만)
+    void generateChatName({ agent: meta.agent, settings, cwd: meta.cwd, firstPrompt }).then((name) => {
+      if (!name || !tabMeta.has(sessionId)) return
+      names.set(sessionId, name)
+      saveNames()
+      pushSend(deps.mainWc(), 'agents:name', { sessionId, name })
+    })
+  }
+  const forgetTab = (id: string): void => {
+    chat?.forget(id)
+    tabMeta.delete(id)
+    if (names.delete(id)) saveNames()
+  }
+
   const hooks = createHookServer(
     (e) => {
       tracker?.hook(e)
       ensureChat().hook(e.paneKey, e.payload, e.source)
+      // Claude UserPromptSubmit·Gemini BeforeAgent 의 prompt = 사람이 친 첫 요청(터미널에서 친 것도).
+      maybeName(e.paneKey, e.payload['prompt'])
     },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null
   )
@@ -82,7 +119,7 @@ export function registerAgentsFeature(deps: {
       write: (id, data) => deps.sessions().write(id, data)
     })
     // 탭이 끝나면 기억한 transcript 경로도 지운다(앱 종료의 detach 는 exit 가 아니라 남는다 — 다시 켜면 바로 연다).
-    deps.sessions().setTap({ ...t, exit: (id) => (t.exit(id), chat?.forget(id)) })
+    deps.sessions().setTap({ ...t, exit: (id) => (t.exit(id), forgetTab(id)) })
     tracker = t
     return t
   }
@@ -100,7 +137,8 @@ export function registerAgentsFeature(deps: {
   const tabOf = (info: DaemonSessionInfo): AgentTabInfo | null => {
     const m = info.meta
     if (!isAgentId(m['agent']) || typeof m['title'] !== 'string') return null
-    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}) }
+    const name = names.get(info.id)
+    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}) }
   }
   const daemon = createAgentDaemon({
     runtimeDir: daemonRuntimeDir(deps.userData),
@@ -125,6 +163,7 @@ export function registerAgentsFeature(deps: {
       restoredTabs.push(tab)
       ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
       ensureChat().bind(info.id, { agent: tab.agent, cwd: info.cwd, startedAt: typeof info.meta['startedAt'] === 'number' ? info.meta['startedAt'] : 0 })
+      tabMeta.set(info.id, { agent: tab.agent, cwd: info.cwd })
       void ensureHooks()
     },
     log,
@@ -142,30 +181,49 @@ export function registerAgentsFeature(deps: {
   handle('agents:getSettings', () => settings)
   handle('agents:setSettings', ({ settings: next }) => {
     const before = agentLimitsOf(settings)
+    models.clear() // 명령 바꾸기·env 가 바뀌었을 수 있다 — 모델 목록은 다음에 다시 묻는다
     const saved = save(next)
     const after = agentLimitsOf(saved)
     if (before.lowPriority !== after.lowPriority || before.memoryBytes !== after.memoryBytes) daemon.setLimits(after)
     return saved
   })
   handle('agents:statuses', () => tracker?.views() ?? [])
+  // AI-15 모델 목록 — 설치된 CLI 에 처음 한 번 묻고 기억(같이 부르면 한 번만). 실패는 기억하지 않는다(다음에 다시).
+  const models = new Map<AgentId, Promise<ModelCatalog>>()
+  handle('agents:models', ({ agent, force }) => {
+    if (!isAgentId(agent)) return { error: 'unknown agent' }
+    if (force === true) models.delete(agent)
+    let p = models.get(agent)
+    if (!p) {
+      p = listModels(agent, settings).then((c) => {
+        if ('error' in c) models.delete(agent)
+        return c
+      })
+      models.set(agent, p)
+    }
+    return p
+  })
+  handle('agents:slash', ({ agent, cwd }) => (isAgentId(agent) && typeof cwd === 'string' ? scanSlash(agent, cwd, deps.home, userEnv) : []))
   handle('agents:tabs', async () => {
     await daemon.ready
     return restoredTabs.filter((t) => deps.sessions().has(t.sessionId))
   })
   handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
   handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
-  // 채팅 입력 → PTY. 첫 지시와 같은 길(status.ts send — 입력 상자가 뜬 뒤 괄호 붙여넣기 → 길이만큼 기다려 Enter).
+  // 채팅 입력 → PTY. 첫 지시와 같은 길(status.ts submit — 입력 상자가 뜬 뒤 괄호 붙여넣기 → 길이만큼 기다려 Enter).
   // 바로 쓰면 에이전트가 뜨기 전 셸(PowerShell PSReadLine 의 미리 읽기)이 글을 먹는다 — e2e CHAT-1 실패의 원인.
   handle('agents:chatSend', ({ sessionId, agent, text }) => {
     if (!isAgentId(agent) || typeof text !== 'string' || !text.trim() || !deps.sessions().has(sessionId)) return { ok: false }
-    return { ok: ensureTracker().send(sessionId, text) }
+    const ok = ensureTracker().submit(sessionId, text)
+    if (ok && !text.startsWith('/')) maybeName(sessionId, text)
+    return { ok }
   })
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {
     await daemon.shutdownAll()
     app.quit()
   })
-  handle('agents:launch', async ({ agent, cwd, prompt, resume }): Promise<AgentLaunchResult> => {
+  handle('agents:launch', async ({ agent, cwd, prompt, resume, options }): Promise<AgentLaunchResult> => {
     if (!isAgentId(agent)) return { ok: false, error: '모르는 에이전트' }
     try {
       if (typeof cwd !== 'string' || !statSync(cwd).isDirectory()) return { ok: false, error: `폴더가 아닙니다: ${cwd}` }
@@ -173,7 +231,7 @@ export function registerAgentsFeature(deps: {
       return { ok: false, error: `폴더가 없습니다: ${cwd}` }
     }
     const shell = defaultLaunchShell()
-    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined })
+    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined, options: launchOptionsOf(options) })
     if (!plan.ok) return plan
     const t = ensureTracker()
     // 훅: 서버를 열고(처음 한 번) 그 CLI 의 훅을 심는다(처음 한 번). 실패해도 실행은 한다 — 그 탭은 화면 판정('추정')만.
@@ -207,6 +265,8 @@ export function registerAgentsFeature(deps: {
     // 헤드리스 화면은 80×24 로 시작해 렌더러 터미널이 붙으며 보내는 resize 를 따라간다(SessionTap.resize).
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
     ensureChat().bind(sessionId, { agent, cwd, startedAt })
+    tabMeta.set(sessionId, { agent, cwd })
+    if (typeof prompt === 'string') maybeName(sessionId, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line }
@@ -219,5 +279,15 @@ export function registerAgentsFeature(deps: {
     },
     views: () => tracker?.views() ?? [],
     limits: () => agentLimitsOf(settings)
+  }
+}
+
+/** 렌더러가 보낸 첫 실행 옵션을 다시 거른다(값은 셸 한 줄에 들어간다). */
+function launchOptionsOf(v: unknown): { model?: string; effort?: string; permission?: AgentPermissionChoice } {
+  const o = (v && typeof v === 'object' ? v : {}) as AgentLaunchOptions
+  return {
+    ...(isOptionValue(o.model) ? { model: o.model } : {}),
+    ...(isOptionValue(o.effort) ? { effort: o.effort } : {}),
+    ...(PERMISSION_CHOICES.includes(o.permission as AgentPermissionChoice) ? { permission: o.permission } : {})
   }
 }

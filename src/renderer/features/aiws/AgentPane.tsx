@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import { FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
-import { AGENT_IDS, AGENTS, type AgentId } from '@shared/agents'
+import { AGENT_IDS, AGENTS, permissionChoicesFor, type AgentId, type AgentPermissionChoice } from '@shared/agents'
+import { effortLabel, type ModelCatalog } from '@shared/agentOptions'
 import type { Worktree } from '@shared/worktrees'
 import { isMac, KEYMAP, matchBinding } from '@shared/keymap'
 import { t } from '../../i18n'
@@ -12,7 +13,9 @@ import { AgentChatView } from './AgentChatView'
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
- * 설치 안 된 것은 보이되 못 고른다(설정 › 에이전트에서 끈 것은 안 보인다). 뺀 것: 모델·추론 강도 고르기(채팅 M5)·검색·최근 순서.
+ * 설치 안 된 것은 보이되 못 고른다(설정 › 에이전트에서 끈 것은 안 보인다). 뺀 것: 검색·최근 순서.
+ * M5 R2: 시작 전 초안 옵션(Orca draft session options) — 모델·추론 강도(AI-15, 설치된 CLI 가 알려 준 목록 — 지금은 Claude)·이번 탭 권한(AI-18)은
+ * 첫 실행 인자로(--model·--effort·권한 플래그). 비워 두면 CLI 기본값·설정 › 에이전트의 권한.
  */
 export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Worktree; onLaunched?: () => void; onCancel?: () => void }): JSX.Element {
   const detected = useAgentStore((s) => s.detected)
@@ -22,17 +25,37 @@ export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Work
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
+  const [model, setModel] = useState('')
+  const [effort, setEffort] = useState('')
+  const [permission, setPermission] = useState<AgentPermissionChoice | ''>('')
   useEffect(() => {
     if (!detected) void useAgentStore.getState().loadAgents()
   }, [detected])
   const chosen = agent ?? pickInitialAgent(settings, detected)
   const shown = AGENT_IDS.filter((id) => settings?.agents[id].enabled !== false)
+  // 모델 목록은 main 이 설치된 CLI 에 처음 한 번 묻고 기억한다(Claude 만 — 다른 에이전트는 칸을 안 그린다).
+  useEffect(() => {
+    setCatalog(null)
+    setModel('')
+    setEffort('')
+    setPermission('')
+    if (chosen !== 'claude' || !detected?.find((d) => d.id === chosen)?.installed) return
+    let alive = true
+    void window.ev.agents.models(chosen).then((c) => alive && setCatalog(c))
+    return () => {
+      alive = false
+    }
+  }, [chosen, detected])
+  const models = catalog && 'models' in catalog ? catalog.models : []
+  const efforts = (models.find((m) => m.id === model) ?? models.find((m) => m.isDefault))?.efforts ?? []
 
   const launch = async (): Promise<void> => {
     if (!chosen || busy) return
     setBusy(true)
     setError(null)
-    const r = await useAgentStore.getState().launchAgent({ agent: chosen, worktreeId: worktree.id, cwd: worktree.path, prompt })
+    const options = { ...(model ? { model } : {}), ...(effort && efforts.includes(effort) ? { effort } : {}), ...(permission ? { permission } : {}) }
+    const r = await useAgentStore.getState().launchAgent({ agent: chosen, worktreeId: worktree.id, cwd: worktree.path, prompt, options })
     setBusy(false)
     if (!r.ok) setError(r.error)
     else onLaunched?.()
@@ -67,6 +90,48 @@ export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Work
         </div>
       )}
       {detected && !detected.some((d) => d.installed) && <p className="aiws-note">{t('aiws.agent.none')}</p>}
+      {chosen && (
+        <div className="aiws-chat-opts" data-aiws="launch-options">
+          {models.length > 0 && (
+            <label className="aiws-pill">
+              <span>{t('aiws.opt.model')}</span>
+              <select data-aiws="opt-model" value={model} onChange={(e) => setModel(e.target.value)}>
+                <option value="">{t('aiws.opt.cliDefault')}</option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id} title={m.description}>
+                    {m.label}
+                    {m.isDefault ? ` · ${t('aiws.opt.default')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {efforts.length > 0 && (
+            <label className="aiws-pill">
+              <span>{t('aiws.opt.effort')}</span>
+              <select data-aiws="opt-effort" value={effort} onChange={(e) => setEffort(e.target.value)}>
+                <option value="">{t('aiws.opt.cliDefault')}</option>
+                {efforts.map((v) => (
+                  <option key={v} value={v}>
+                    {effortLabel(v)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="aiws-pill" title={t('aiws.opt.permission.title')}>
+            <span>{t('aiws.opt.permission')}</span>
+            <select data-aiws="opt-permission" value={permission} onChange={(e) => setPermission(e.target.value as AgentPermissionChoice | '')}>
+              <option value="">{`${t('aiws.opt.fromSettings')} · ${t('settings.agents.perm.' + (settings?.agents[chosen].permission ?? 'own'))}`}</option>
+              {permissionChoicesFor(chosen).map((c) => (
+                <option key={c} value={c}>
+                  {t('settings.agents.perm.' + c)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <label className="aiws-field">
         <span>{t('aiws.new.prompt')}</span>
         <textarea
@@ -184,6 +249,11 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
               />
             )}
             <span>{AGENTS[x.agent].label}</span>
+            {x.name && (
+              <span className="aiws-tab-name" data-aiws="tab-name" title={x.name}>
+                {x.name}
+              </span>
+            )}
             <span className="aiws-tab-state" title={x.lost ? t('aiws.agent.lost.title') : undefined}>{x.lost ? t('aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
             <button
               type="button"
@@ -224,7 +294,7 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
-      {chatting && <AgentChatView key={active.sessionId} tab={active} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
+      {chatting && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting}>
           <TerminalPane sessionId={x.sessionId} active={x === active && !chatting} local serverKey="localhost" agent />

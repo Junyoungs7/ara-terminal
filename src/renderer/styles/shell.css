@@ -10003,6 +10003,64 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
 }
 
+/* M5 R2 — 모델·강도·권한 pill(AI-15·18), 슬래시 목록(AI-16), 탭 이름(AI-19) */
+.aiws-chat-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.aiws-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-hair) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.aiws-pill select {
+  border: 0;
+  background: transparent;
+  color: var(--text-hi);
+  font: inherit;
+}
+.aiws-chat-slash {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--sp-1);
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-slash li {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-hair) var(--sp-2);
+  border-radius: var(--radius-sm);
+  cursor: var(--cur-hand, pointer);
+}
+.aiws-chat-slash li.on {
+  background: var(--sel-bg);
+}
+.aiws-chat-slash li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-mid);
+}
+.aiws-tab-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-mid);
+}
+
 /* 상태바 왼쪽 — "main 에서 n 커밋 앞" */
 .sb-seg-ic {
   width: 13px;

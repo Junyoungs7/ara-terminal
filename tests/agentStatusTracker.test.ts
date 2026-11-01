@@ -104,12 +104,12 @@ describe('원장', () => {
     expect(written).toEqual([])
   })
 
-  it('채팅 입력(send): 셸 단계엔 안 치고 입력 상자가 뜬 뒤 넣는다 — 본 뒤엔 일하는 중에도, 막힘(승인 창)엔 안 넣는다', async () => {
+  it('채팅 입력(submit): 셸 단계엔 안 치고 입력 상자가 뜬 뒤 넣는다 — 본 뒤엔 일하는 중에도, 막힘(승인 창)엔 안 넣는다', async () => {
     const { written } = make()
     t!.track({ sessionId: 's1', agent: 'claude' })
-    expect(t!.send('nope', 'x')).toBe(false)
+    expect(t!.submit('nope', 'x')).toBe(false)
     t!.data(meta('s1'), crlf('PS C:\\work> & claude --dangerously-skip-permissions'))
-    expect(t!.send('s1', 'hello "q" & 100%\n둘째')).toBe(true)
+    expect(t!.submit('s1', 'hello "q" & 100%\n둘째')).toBe(true)
     await sleep(600)
     expect(written).toEqual([]) // PSReadLine 이 미리 읽어 먹는 자리 — 절대 안 친다(e2e CHAT-1 의 원인)
     t!.data(meta('s1'), crlf(RULE, '❯ ', RULE, '  ? for shortcuts'))
@@ -118,13 +118,13 @@ describe('원장', () => {
     // 일하는 중 — 상자를 이미 봤으니 넣는다(Claude 가 턴 중 입력을 줄 세운다).
     t!.data(meta('s1'), crlf('', '✻ Thinking… (3s · esc to interrupt)'))
     await sleep(400)
-    t!.send('s1', 'second')
+    t!.submit('s1', 'second')
     await until(() => written.length === 4, 4000)
     expect(written[2]).toBe('\x1b[200~second\x1b[201~')
     // 승인 창(막힘)에는 안 넣는다 — 숫자·Enter 가 선택이 된다.
     t!.data(meta('s1'), crlf('', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', '', ' Enter to confirm · Esc to cancel'))
     await sleep(400)
-    t!.send('s1', 'third')
+    t!.submit('s1', 'third')
     await sleep(700)
     expect(written).toHaveLength(4)
   })

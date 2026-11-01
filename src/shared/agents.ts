@@ -6,6 +6,7 @@
 //  · 판 = app-version.ts parseCliVersion · agent-cli-version-probe.ts(시험은 runProcess 를 바꿔 끼운다 — 진짜 CLI 안 띄움).
 //  · 셸 PATH = startup/hydrate-shell-path.ts 의 표식 사이 값 읽기.
 import type { LaunchShell } from './aiCli'
+import { launchOptionArgs } from './agentOptions'
 
 export const AGENT_IDS = ['claude', 'codex', 'gemini'] as const
 export type AgentId = (typeof AGENT_IDS)[number]
@@ -111,6 +112,11 @@ export type AgentSettings = {
   lowPriority: boolean
   /** M4 R3 자원: 세션(프로세스 트리) 메모리 상한 MB — 넘으면 알림만(자동 종료 안 함). 0 = 끔(기본). */
   memoryCapMb: number
+  /**
+   * M5 AI-19 채팅 이름 자동 짓기(Orca nativeChatAutoName — 기본 켬). 첫 요청 글(4000자까지)을 그 탭의 에이전트에 한 번 더 보내
+   * 48자 이름을 받는다 — 대화 일부가 모델로 간다(설정에 그대로 적는다). 끄면 탭은 에이전트 이름만.
+   */
+  chatNaming: boolean
 }
 
 /** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
@@ -125,7 +131,8 @@ export function defaultAgentSettings(): AgentSettings {
     claudeRemoteControl: false,
     migratedAiCliFlags: false,
     lowPriority: true,
-    memoryCapMb: 0
+    memoryCapMb: 0,
+    chatNaming: true
   }
 }
 
@@ -164,6 +171,7 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.migratedAiCliFlags = src.migratedAiCliFlags === true
   base.lowPriority = src.lowPriority !== false
   base.memoryCapMb = memoryCapOf(src.memoryCapMb)
+  base.chatNaming = src.chatNaming !== false
   return base
 }
 
@@ -396,6 +404,8 @@ export function planAgentLaunch(o: {
   shell: LaunchShell
   /** M4 AI-07 지난 세션 재개 — 세션 id. 있으면 Orca buildAiVaultResumeCommand 처럼 실행 명령(바꾼 것 포함) + 재개 인자만(권한·사용자 인자·첫 지시 없음). */
   resume?: string
+  /** M5 R2 피커 초안(AI-15 모델·강도 → --model·--effort, AI-18 이번 탭 권한). 이 CLI 가 모르는 권한은 무시(설정값). */
+  options?: { model?: string; effort?: string; permission?: AgentPermissionChoice }
 }): LaunchPlan {
   const spec = AGENTS[o.agent]
   const prefs = o.settings.agents[o.agent]
@@ -405,9 +415,11 @@ export function planAgentLaunch(o: {
   const user = tokenizeArgs(prefs.args, backslash)
   if (!user.ok) return { ok: false, error: `인자가 올바르지 않습니다: ${user.error}` }
   const permissionShadowed = user.tokens.some((t) => spec.permissionFlags.includes(t.split('=')[0]))
-  const perm = prefs.permission === 'own' || permissionShadowed ? '' : (spec.permissionArgs[prefs.permission] ?? '')
+  const choice = o.options?.permission && permissionChoicesFor(o.agent).includes(o.options.permission) ? o.options.permission : prefs.permission
+  const perm = choice === 'own' || permissionShadowed ? '' : (spec.permissionArgs[choice] ?? '')
   const rc = o.agent === 'claude' && o.settings.claudeRemoteControl ? ['--rc'] : []
-  const args = o.resume ? [...cmd.prefixArgs, ...resumeArgs(o.agent, o.resume)] : [...cmd.prefixArgs, ...(perm ? perm.split(' ') : []), ...rc, ...user.tokens]
+  const picked = launchOptionArgs(o.agent, o.options ?? {})
+  const args = o.resume ? [...cmd.prefixArgs, ...resumeArgs(o.agent, o.resume)] : [...cmd.prefixArgs, ...(perm ? perm.split(' ') : []), ...rc, ...picked, ...user.tokens]
 
   const quoted: string[] = []
   for (const a of [cmd.binary, ...args]) {

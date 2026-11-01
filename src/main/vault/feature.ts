@@ -3,6 +3,7 @@
 // 하위 에이전트 폴더(subagents)는 건너뜀, 최신 파일 몇 개만 파싱, 파싱 결과는 (mtime·크기)로 캐시.
 // 성능 원칙: 목록은 화면을 **열 때** 읽고(감시·백그라운드 스캔 없음), 큰 파일은 머리·꼬리만 읽는다.
 // ponytail: main 에서 비동기 fs 로 읽는다(계획 5-3 은 utility process) — 파일 300개 × 128KB 상한이라 충분. 느리면 utilityHost 로.
+import { CHAT_NAME_OPENING } from '@shared/agentOptions'
 import { createHash } from 'node:crypto'
 import { open, readdir, readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
@@ -127,7 +128,8 @@ export function registerVaultFeature(deps: {
       if (s === undefined) {
         try {
           const p = await parseFile(f, TAIL_LIST, 0)
-          s = p?.id
+          // M5 AI-19 채팅 이름 짓기의 한 번짜리 실행(claude -p)은 지난 세션이 아니다 — Orca 도 같은 첫 줄로 숨긴다.
+          s = p?.id && !p.firstPrompt?.startsWith(CHAT_NAME_OPENING)
             ? { agent: f.agent, id: p.id, cwd: p.cwd, file: f.path, at: f.mtimeMs, title: p.title, firstPrompt: p.firstPrompt }
             : null
         } catch {

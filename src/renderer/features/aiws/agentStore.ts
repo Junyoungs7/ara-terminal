@@ -3,7 +3,7 @@
 // AI 작업 공간 청크 안에 산다 — 처음 열 때만 불러온다.
 import { create } from 'zustand'
 import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
-import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
+import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
 import { areWorktreePathsEqual } from '@shared/worktrees'
 import { AGENTS } from '@shared/agents'
@@ -28,6 +28,8 @@ export type AgentTab = {
   lost?: boolean
   /** 첫 지시(넣지 못했을 때 사람이 붙여 넣게 보여 준다). */
   prompt?: string
+  /** M5 AI-19 채팅 이름(첫 요청으로 지은 것). 없으면 에이전트 이름만. */
+  name?: string
 }
 
 type AgentState = {
@@ -53,7 +55,7 @@ type AgentState = {
   loadAgents: (force?: boolean) => Promise<void>
   saveSettings: (next: AgentSettings) => Promise<void>
   /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
-  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string }) => Promise<AgentLaunchResult>
+  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions }) => Promise<AgentLaunchResult>
   setActiveTab: (worktreeId: string, sessionId: string) => void
   closeTab: (sessionId: string) => void
   setViewing: (sessionId: string | null) => void
@@ -92,8 +94,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set({ settings: await window.ev.agents.setSettings(next) })
   },
 
-  launchAgent: async ({ agent, worktreeId, cwd, prompt, resume }) => {
-    const r = await window.ev.agents.launch(agent, cwd, prompt, resume)
+  launchAgent: async ({ agent, worktreeId, cwd, prompt, resume, options }) => {
+    const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options)
     if (!r.ok) return r
     const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
@@ -231,7 +233,7 @@ function restoreTabs(list: AgentTabInfo[]): void {
     const found: AgentTab[] = []
     pending = pending.filter((x) => {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
-      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}) })
+      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}) })
       return !w
     })
     if (found.length) {
@@ -263,6 +265,8 @@ function startStatus(): void {
     onTransition(prev, v, viewingNow)
   }
   window.ev.agents.onStatus(apply)
+  // M5 AI-19 — 이름이 정해지면 그 탭에(탭이 아직 없으면 버린다 — 되살릴 때 tabs() 가 다시 준다).
+  window.ev.agents.onName((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, name: e.name } : x)) })))
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
   void window.ev.agents
     .tabs()

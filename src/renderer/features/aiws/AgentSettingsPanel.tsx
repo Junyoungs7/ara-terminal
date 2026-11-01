@@ -60,6 +60,16 @@ export function AgentSettingsPanel(): JSX.Element {
       <Row label={t('settings.agents.rc')} desc={t('settings.agents.rc.desc')} item="agents.rc">
         <Toggle on={settings.claudeRemoteControl} label={t('settings.agents.rc')} onChange={(claudeRemoteControl) => save({ ...settings, claudeRemoteControl })} />
       </Row>
+      {/* M5 AI-19 Orca ChatNamingSetting — 첫 요청이 그 에이전트(모델)로 한 번 더 간다는 것을 그대로 적는다. */}
+      <Row label={t('settings.agents.naming')} desc={t('settings.agents.naming.desc')} item="agents.naming">
+        <Toggle on={settings.chatNaming} label={t('settings.agents.naming')} onChange={(chatNaming) => save({ ...settings, chatNaming })} />
+      </Row>
+      {/* M5 AI-18 Orca ChatPermissionSetting — 채팅은 그 터미널 세션이라 에이전트 권한을 따른다. 에이전트별 지금 값을 보여 준다. */}
+      <Row label={t('settings.agents.chatPermission')} desc={t('settings.agents.chatPermission.desc')} item="agents.chatPermission">
+        <span className="aiws-note" data-field="agents.chatPermission">
+          {AGENT_IDS.map((id) => `${AGENTS[id].label}: ${t('settings.agents.perm.' + settings.agents[id].permission)}`).join(' · ')}
+        </span>
+      </Row>
 
       {/* M4 DM-01 — 에이전트는 로컬 데몬에서 돌아 앱을 닫아도 산다. 끄는 길 둘(Orca Quit Completely). */}
       <div className="set-sec-t" data-item="agents.daemon">

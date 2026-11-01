@@ -88,7 +88,8 @@ const ev = {
     onStatus: vi.fn((cb: (s: AgentStatusView) => void) => {
       pushStatus = cb
       return () => {}
-    })
+    }),
+    onName: vi.fn(() => () => {}) // M5 AI-19
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
 }

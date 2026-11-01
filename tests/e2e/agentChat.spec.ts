@@ -1,4 +1,7 @@
-// M5 AI-13·12·17 — 터미널 에이전트를 채팅으로 보기. (작성만 — 이 라운드에서는 돌리지 않았다)
+// M5 AI-13·12·17 — 터미널 에이전트를 채팅으로 보기. (작성만 — R1·R2 모두 돌리지 않았다)
+// R2: 채팅 입력이 PTY 에 안 들어가던 실패(:130 GOT 없음)의 원인은 앱 — chatSend 가 에이전트가 뜨기 전에 바로 써서 PowerShell(PSReadLine 미리 읽기)이
+//     글을 먹었다. 이제 첫 지시와 같은 길(입력 상자를 본 뒤)로 넣으므로 이 시험은 상자를 기다리지 않고 바로 보낸다 — 그 경합이 곧 시험 대상이다.
+//     이름 짓기(AI-19)는 꺼 둔다(가짜 claude 를 한 번 더 띄우지 않게). `/` 목록(AI-16)은 기본 명령이 뜨는지만.
 // 🔴 진짜 claude 를 띄우지 않는다: 가짜 `claude`(node)가 입력 한 줄을 받으면 **픽스처 transcript jsonl** 에 사용자·어시스턴트 줄을 써 나가고
 //    설치된 진짜 훅 스크립트로 UserPromptSubmit(transcript_path 포함)을 보낸다 — 앱은 그 경로를 꼬리 읽기로 따라간다.
 // 🔴 기록·훅은 임시 홈(userData/e2e-home)에만. CLAUDE_CONFIG_DIR 도 그 안으로(Orca 시험 방식) — 사용자 실제 ~/.claude 는 안 건드린다.
@@ -95,7 +98,8 @@ test('CHAT-1★ 가짜 claude 의 transcript → 채팅 화면 · 채팅 입력 
     join(userDataDir, 'agents.json'),
     JSON.stringify({
       agents: { claude: { command: claude, env: { ARA_E2E_HOOK_SCRIPT: hookScript, ARA_E2E_TRANSCRIPT: transcript, CLAUDE_CONFIG_DIR: join(home, '.claude') } } },
-      migratedAiCliFlags: true
+      migratedAiCliFlags: true,
+      chatNaming: false
     })
   )
   const savedPath = process.env.PATH
@@ -136,6 +140,13 @@ test('CHAT-1★ 가짜 claude 의 transcript → 채팅 화면 · 채팅 입력 
     await tool.locator('summary').click()
     await expect(tool.locator('pre')).toHaveText('fake-1')
     expect(readFileSync(transcript, 'utf8')).toContain('"tool_result"')
+
+    // AI-16 — 맨 앞 `/` 면 명령 목록, Esc 로 닫는다(보내지 않음).
+    await input.fill('/cl')
+    await expect(chat.locator('[data-aiws="chat-slash"]')).toContainText('/clear')
+    await input.press('Escape')
+    await expect(chat.locator('[data-aiws="chat-slash"]')).toHaveCount(0)
+    await input.fill('')
 
     // 초안 — 보내지 않은 글은 터미널로 갔다 와도(Ctrl+Shift+U) 남는다.
     await input.fill('쓰다 만 글')

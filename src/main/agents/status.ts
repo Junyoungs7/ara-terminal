@@ -22,6 +22,8 @@ const RECENT_SCROLLBACK = 40
 const PROMPT_QUIET_MS = 300
 /** 이 안에 입력 상자가 안 보이면 넣지 않고 렌더러에 알린다(사람이 직접 친다). */
 export const PROMPT_TIMEOUT_MS = 45_000
+/** 평문으로 칠 슬래시 명령의 길이 상한(Orca: 1KiB 넘으면 붙여넣기). */
+const SLASH_PLAIN_MAX = 1024
 
 /**
  * 에이전트 입력 상자가 지금 화면에 떠 있나(첫 지시를 넣어도 되나). herdr 판정 위에 얹은 CLI 별 한 줄:
@@ -47,6 +49,9 @@ export function composerReady(agent: AgentId, input: ScreenInput, d: ScreenDetec
 /** 넣을 바이트. 괄호 붙여넣기(줄바꿈이 제출이 안 되게). codex 는 Windows 에서 입력 레코드로 읽어 괄호를 못 쓴다 — 줄바꿈을 Alt+Enter 로(Orca windowsInputRecordPasteNewline). */
 export function promptBytes(agent: AgentId, text: string, win: boolean): string {
   const t = text.replace(/\r\n?/g, '\n')
+  // 한 줄 슬래시 명령(`/model opus`·`/clear`)은 그대로 친다 — 붙여넣기로 감싸면 TUI 가 명령이 아니라 글로 받는다(Orca native-chat-paste-bytes:
+  // 짧은 한 줄은 평문, Enter 는 따로).
+  if (/^\/\S/.test(t) && !t.includes('\n') && t.length <= SLASH_PLAIN_MAX) return t
   if (agent === 'codex' && win) return t.replace(/\n/g, '\x1b\r')
   return `\x1b[200~${t}\x1b[201~`
 }
@@ -77,7 +82,7 @@ type Entry = {
 export type AgentStatusTracker = SessionTap & {
   track(o: { sessionId: string; agent: AgentId; cols?: number; rows?: number; prompt?: string }): void
   /** M5 채팅 입력 — 첫 지시와 같은 길(입력 상자가 뜬 뒤). 바로 쓰면 셸(PSReadLine 미리 읽기)이 먹는다. 추적 안 하는 탭이면 false. */
-  send(sessionId: string, text: string): boolean
+  submit(sessionId: string, text: string): boolean
   hook(e: HookEvent): void
   views(): AgentStatusView[]
 }
@@ -189,7 +194,7 @@ export function createAgentStatusTracker(deps: {
       // 첫 지시가 있으면 출력이 없어도 제한 시간이 지나면 실패를 알린다.
       if (prompt) setTimeout(() => evaluate(sessionId), promptTimeout + 50)
     },
-    send(sessionId, text) {
+    submit(sessionId, text) {
       const e = entries.get(sessionId)
       if (!e) return false
       // 아직 못 넣은 것이 있으면 이어 붙인다(잃지 않게).

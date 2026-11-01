@@ -49,15 +49,20 @@ import type {
   Worktree,
   WorktreeStats
 } from './worktrees'
-import type { AgentId, AgentSettings, DetectedAgent } from './agents'
+import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDetail, VaultSession } from './vault'
 import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
+import type { ModelCatalog, SlashItem } from './agentOptions'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string }
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string }
+/** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
+export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice }
+/** M5 AI-19 채팅 이름(push 'agents:name'). */
+export type AgentNameEvent = { sessionId: string; name: string }
 /** M4 R3: 에이전트 세션 트리 메모리가 상한을 넘었다(push 'agents:memoryOver', 넘어설 때 한 번). 바이트. */
 export type AgentMemoryOver = { sessionId: string; title: string; memory: number; limit: number }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
@@ -554,7 +559,7 @@ export type InvokeContract = {
   'agents:setSettings': { req: { settings: AgentSettings }; res: AgentSettings }
   // 명령줄·env 는 main 이 저장된 설정으로 만든다 — 렌더러는 에이전트·폴더·첫 지시만.
   // M4 AI-07: resume = 지난 세션 id — 첫 지시 대신 재개 인자로 띄운다.
-  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string }; res: AgentLaunchResult }
+  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
   // M4 DM-01: 켤 때 데몬에서 되살린 에이전트 탭 · 백그라운드 에이전트 모두 종료 · 완전 종료(에이전트까지 끝내고 앱 종료).
@@ -563,6 +568,9 @@ export type InvokeContract = {
   'agents:chatOpen': { req: { sessionId: string }; res: AgentChatSnapshot }
   'agents:chatClose': { req: { sessionId: string }; res: void }
   'agents:chatSend': { req: { sessionId: string; agent: AgentId; text: string }; res: { ok: boolean } }
+  // M5 R2 AI-15 설치된 CLI 의 모델 목록(처음 한 번 묻고 기억 — 설정을 바꾸면 다시). AI-16 `/` 목록(기본 + 명령·스킬 폴더).
+  'agents:models': { req: { agent: AgentId; force?: boolean }; res: ModelCatalog }
+  'agents:slash': { req: { agent: AgentId; cwd: string }; res: SlashItem[] }
   'agents:killBackground': { req: void; res: { killed: number } }
   'agents:quitCompletely': { req: void; res: void }
   // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
@@ -1174,7 +1182,7 @@ export type EvApi = {
     detect(force?: boolean): Promise<DetectedAgent[]>
     getSettings(): Promise<AgentSettings>
     setSettings(settings: AgentSettings): Promise<AgentSettings>
-    launch(agent: AgentId, cwd: string, prompt?: string, resume?: string): Promise<AgentLaunchResult>
+    launch(agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions): Promise<AgentLaunchResult>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */
@@ -1187,6 +1195,10 @@ export type EvApi = {
     chatClose(sessionId: string): Promise<void>
     chatSend(sessionId: string, agent: AgentId, text: string): Promise<{ ok: boolean }>
     onChat(cb: (e: AgentChatEvent) => void): () => void
+    models(agent: AgentId, force?: boolean): Promise<ModelCatalog>
+    slash(agent: AgentId, cwd: string): Promise<SlashItem[]>
+    /** M5 AI-19 채팅 이름이 정해짐. */
+    onName(cb: (e: AgentNameEvent) => void): () => void
     /** M4 R3 메모리 상한 넘음(알림 센터로). */
     onMemoryOver(cb: (e: AgentMemoryOver) => void): () => void
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */

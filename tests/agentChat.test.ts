@@ -120,6 +120,15 @@ describe('chatDraft(localStorage)', () => {
     clearDraft('s1')
     expect(mem.size).toBe(0)
   })
+  it('AI-14 탭별 채팅/터미널 선택 — 켠 것만 남고 깨진 값은 빈 것', async () => {
+    const mem = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, v), removeItem: (k: string) => mem.delete(k) })
+    const { readChatOn, writeChatOn } = await import('../src/renderer/features/aiws/chatDraft')
+    writeChatOn({ a: true, b: false })
+    expect(readChatOn()).toEqual({ a: true })
+    mem.set('aiws.chatOn', '{broken')
+    expect(readChatOn()).toEqual({})
+  })
 })
 
 describe('main 꼬리 읽기(createChatWatcher)', () => {
