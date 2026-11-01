@@ -763,17 +763,37 @@
   },
   {
     "id": "RV-02",
-    "feature": "AI 커밋 메시지·PR 본문·브랜치 이름 생성(소스 제어 [AI 로 쓰기])",
+    "feature": "AI 커밋 메시지·PR(MR) 본문·브랜치 이름 생성(소스 제어 [AI 로 쓰기])",
     "orcaPaths": [
       "src/main/text-generation/commit-message-text-generation.ts",
+      "src/main/text-generation/source-control-text-generation-requests.ts",
       "src/main/text-generation/source-control-agent-launch.ts",
+      "src/main/text-generation/source-control-remote-generation.ts",
+      "src/main/text-generation/pull-request-context.ts",
+      "src/main/text-generation/source-control-generation-limits.ts",
       "src/shared/commit-message-agent-spec.ts",
       "src/shared/commit-message-agent-specs-primary.ts",
-      "src/shared/commit-message-prompt.ts"
+      "src/shared/commit-message-agent-output.ts",
+      "src/shared/commit-message-prompt.ts",
+      "src/shared/commit-message-generation.ts",
+      "src/shared/pull-request-generation.ts",
+      "src/shared/branch-name-from-work.ts",
+      "src/shared/claude-background-run-isolation.ts",
+      "src/renderer/src/components/right-sidebar/source-control/commit/commit-message-composer.tsx"
     ],
     "orcaRef": "fdfcfb3551",
-    "status": "planned",
-    "notes": "M12 R2 에서 조사만(다음 라운드): Orca 는 사용자 PC 에 깔린 CLI 에이전트를 한 번 실행해 글을 받는다(claude -p --output-format …, codex exec … — 사용자 CLI 구독/로그인 그대로, API 키 과금 아님). 원격 작업 단위는 그 서버의 CLI 로(remote-execution)."
+    "status": "porting",
+    "notes": "M12 R3(v2.2 9a8b8a7): shared/scmAi.ts(프롬프트·출력 정리·truncateDiffForPrompt·sanitizeBranchSlug — Orca 그대로) + main/scm/ai.ts. 사용자 CLI 에이전트를 한 번 실행(claude -p text sonnet plan effort low strict-mcp · codex exec ephemeral read-only, 프롬프트 stdin, agents/options runAgentOnce = runProcess). 기본 에이전트가 gemini 면 claude(Orca 명세에 gemini 없음). Windows 는 --settings 훅 끄기를 안 실음(cmd 인용 — M5 모델 목록과 같은 한계), 기업 MCP 거절이면 strict 빼고 재시도. 원격 작업 단위 = 그 서버 CLI(sh -lc, 없으면 noCliRemote 안내). 진행 줄 [취소](AbortSignal)·60초·실패 까닭+CLI 말. 커밋 메시지 → 입력칸, MR 제목·본문 → 초안 칸([복사], 올리기 없음 — 묶음 11), 브랜치 이름 → 초안 칸 [이름 바꾸기]를 누를 때만 git branch -m. 뺀 것: 사용자 지정 명령·모델/강도 고르기·이슈 연결·MR 만들기 화면(GitLab 연동은 별도 2차)·첫 일에서 브랜치 자동 개명(3차). 브랜치 이름 맥락은 Orca 의 첫 지시 대신 이 브랜치 커밋·변경(소스 제어 패널에는 첫 지시가 없다)."
+  },
+  {
+    "id": "RV-03",
+    "feature": "AI 작성 줄 표시(Attribution — 에디터 거터·diff 에서 에이전트가 쓴 줄)",
+    "orcaPaths": [
+      "docs/site/content/docs/review/attribution.mdx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R3(v2.2 9a8b8a7): Orca @fdfcfb3551 은 문서만 있고 코드가 없다 — 문서의 판정 그대로 구현: 에이전트가 자기 도구로 쓴 줄 범위를 적고(Claude 훅 PostToolUse Edit/Write/MultiEdit — structuredPatch 의 + 줄, 없으면 new_string 위치 · Gemini AfterTool write_file/replace), 보기에 표시, 사람이 고친 줄은 사람 것, 아라 안에만(git 에 안 들어감). shared/aiLines.ts(줄 맞추기 O(n): 앞뒤 같은 줄 + 내용 해시 순서 잇기 — 같은 내용 줄이 여럿이면 근사) · main/code/aiLines.ts(메모리 원장, 500 파일·4MB, 훅 → 파일 읽기 → push code:aiLinesChanged) · renderer aiLines.ts(에디터·diff 바뀐 쪽 linesDecorations 막대, 400ms 묶음, AI 줄 없는 파일은 칠 때 안 물음). 한계: Codex 는 훅이 없어 표시 없음, 원격 작업 단위는 훅이 이 PC 로 안 와서 표시 없음, 앱을 끄면 사라짐. 뺀 것: diff 메타데이터 내보내기."
   },
   {
     "id": "AI-20",
