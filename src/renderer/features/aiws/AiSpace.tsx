@@ -12,6 +12,8 @@ import { ActivityFeed, AgentDashboard } from './AgentDashboard'
 import { VaultPanel } from './VaultPanel'
 import { useAgentStore, type AiwsView } from './agentStore'
 import { shortBranch } from './sidebarRows'
+import { openFile } from './codeStore'
+import { OPEN_FILE_EVENT } from '@shared/codeFiles'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -97,6 +99,24 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
   }, [crumbServer, crumbPath, status, onLocation])
   // 공간을 떠나면(언마운트) 타이틀바·상태바를 비운다.
   useEffect(() => () => onLocation(null), [onLocation])
+  // M6 "파일 열기" — 오른쪽 아이콘 바 [탐색기](RightBar, 진입 청크라 이 청크를 모른다)가 창 이벤트로 부른다.
+  // 고른 작업 단위 폴더에서 OS 파일 창을 열고, 고른 파일을 openFile 로(가운데 파일 탭). 2차 파일 탐색기가 이 자리를 넘겨받는다.
+  useEffect(() => {
+    const onPick = async (): Promise<void> => {
+      const s = useAiwsStore.getState()
+      const wt = s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined
+      const path = wt ? await window.ev.code.pick(wt.path) : null
+      if (wt && !path) return
+      const r = path ? await openFile(path) : { ok: false as const, message: t('code.err.noWorktree') }
+      if (!r.ok) return void ask({ title: t('code.err.openTitle'), message: r.message, cancelLabel: null })
+      // 대시보드·새 작업 카드가 떠 있어도 연 파일이 보이게 가운데를 작업 단위로.
+      setComposer(null)
+      useAgentStore.getState().setView('worktree')
+    }
+    const h = (): void => void onPick()
+    window.addEventListener(OPEN_FILE_EVENT, h)
+    return () => window.removeEventListener(OPEN_FILE_EVENT, h)
+  }, [ask])
 
   const remove = async (w: Worktree): Promise<void> => {
     const branch = shortBranch(w) || '-'
@@ -140,7 +160,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (
           // M3: 고른 작업 단위의 에이전트 탭 줄(없으면 피커).
-          <AgentWorkspace key={active.id} worktree={active} />
+          <AgentWorkspace key={active.id} worktree={active} ask={ask} />
         ) : (
           <div className="aiws-empty">
             <Sparkles className="aiws-home-ic" aria-hidden />

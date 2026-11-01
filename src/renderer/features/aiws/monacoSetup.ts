@@ -1,0 +1,74 @@
+// M6 WS-07 Monaco 준비 — Orca src/renderer/src/lib/monaco-setup.ts(orcaRef 7a7f46f8a3)의 1차 판.
+// CodeEditor 청크만 이 파일을 import 한다 → **파일을 처음 열 때만** Monaco(수 MB)와 워커가 불린다.
+//  · 워커: Vite 의 `?worker` 로 묶어 앱 안에서 띄운다(Orca 와 같은 갈래 — json·css·html·ts, 나머지는 편집기 기본 워커).
+//  · CDN 금지: @monaco-editor/react 는 설정이 없으면 jsdelivr 에서 Monaco 를 받아 온다 — loader.config({ monaco }) 로
+//    이 번들의 monaco 를 쓰게 한다(사내망·CSP script-src 'self'). 이 줄이 Editor 를 그리기 전에 돌아야 한다(모듈 맨 위).
+//  · 테마: 아라 토큰(tokens.css 의 CSS 변수)을 읽어 만든다 — 색 리터럴을 여기 두지 않는다. 배경 밝기로 다크/라이트 바탕을 고른다.
+// 뺀 것(Orca): 추가 언어 등록 16종(Vue·Svelte…), TS 워커 유휴 정지, 붙여넣기·diff 폐기 가드 — 필요해지면 그때.
+import * as monaco from 'monaco-editor'
+import { loader } from '@monaco-editor/react'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+
+globalThis.MonacoEnvironment = {
+  getWorker(_id: string, label: string) {
+    switch (label) {
+      case 'json':
+        return new jsonWorker()
+      case 'css':
+      case 'scss':
+      case 'less':
+        return new cssWorker()
+      case 'html':
+      case 'handlebars':
+      case 'razor':
+        return new htmlWorker()
+      case 'typescript':
+      case 'javascript':
+        return new tsWorker()
+      default:
+        return new editorWorker()
+    }
+  }
+}
+
+// 워크트리 밖 import 를 못 푸는 워커라 진단은 빨간 줄만 늘린다 — Orca 처럼 끄고 색칠·완성만 남긴다.
+const quiet = { noSemanticValidation: true, noSuggestionDiagnostics: true, noSyntaxValidation: true }
+monaco.typescript.typescriptDefaults.setDiagnosticsOptions(quiet)
+monaco.typescript.javascriptDefaults.setDiagnosticsOptions(quiet)
+
+loader.config({ monaco })
+
+/** 아라 토큰 → Monaco 테마. Monaco 는 #rrggbb(aa) 만 받으므로 그 꼴이 아닌 값(rgba 등)은 건너뛴다. */
+function defineAraTheme(): void {
+  const css = getComputedStyle(document.documentElement)
+  const hex = (name: string): string | null => {
+    const v = css.getPropertyValue(name).trim()
+    return /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v) ? v : null
+  }
+  const bg = hex('--bg-terminal') ?? hex('--bg-canvas')
+  const luma = bg ? 0.299 * parseInt(bg.slice(1, 3), 16) + 0.587 * parseInt(bg.slice(3, 5), 16) + 0.114 * parseInt(bg.slice(5, 7), 16) : 0
+  const pairs: [string, string][] = [
+    ['editor.background', '--bg-terminal'],
+    ['editor.foreground', '--text-hi'],
+    ['editorLineNumber.foreground', '--text-dim'],
+    ['editorLineNumber.activeForeground', '--text-mid'],
+    ['editor.lineHighlightBackground', '--bg-surface'],
+    ['editorCursor.foreground', '--accent'],
+    ['editorWidget.background', '--bg-raised'],
+    ['editorWidget.border', '--line'],
+    ['editorGutter.background', '--bg-terminal']
+  ]
+  const colors: Record<string, string> = {}
+  for (const [key, token] of pairs) {
+    const v = hex(token)
+    if (v) colors[key] = v
+  }
+  monaco.editor.defineTheme('ara', { base: luma > 128 ? 'vs' : 'vs-dark', inherit: true, rules: [], colors })
+}
+defineAraTheme()
+
+export { monaco }

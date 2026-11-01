@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
 import { FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, permissionChoicesFor, type AgentId, type AgentPermissionChoice } from '@shared/agents'
 import { effortLabel, type ModelCatalog } from '@shared/agentOptions'
@@ -10,6 +10,13 @@ import { pickInitialAgent, useAgentStore } from './agentStore'
 import { displayOf } from './agentStatusView'
 import { AgentGlyph } from './AgentGlyph'
 import { AgentChatView } from './AgentChatView'
+import type { DialogResult, DialogSpec } from '../../components/Dialog'
+import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
+import { areWorktreePathsEqual } from '@shared/worktrees'
+
+// M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
+const CodeEditor = lazy(() => import('./CodeEditor'))
+type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
@@ -176,7 +183,7 @@ const CHAT_KEY = chatKey ? (isMac() ? chatKey.mac : chatKey.win) : ''
  * 터미널은 아라의 TerminalPane 그대로(로컬 PTY). 탭을 바꿔도 다른 탭의 xterm 은 붙은 채 숨긴다(스크롤백 유지).
  * 탭이 없거나 [+] 를 누르면 피커.
  */
-export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Element {
+export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: AskFn }): JSX.Element {
   const allTabs = useAgentStore((s) => s.tabs)
   const activeId = useAgentStore((s) => s.activeTabByWorktree[worktree.id])
   const tabs = allTabs.filter((x) => x.worktreeId === worktree.id)
@@ -184,7 +191,12 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
   const seenById = useAgentStore((s) => s.seenById)
   const chatOn = useAgentStore((s) => s.chatOn)
   const [picking, setPicking] = useState(false)
-  const shownTab = tabs.length === 0 || picking ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
+  // M6 파일 탭 — 이 작업 단위에서 연 파일과 지금 보이는 파일(있으면 에이전트 탭 대신 에디터가 보인다).
+  const allFiles = useCodeStore((s) => s.files)
+  const files = allFiles.filter((f) => f.worktreeId === worktree.id)
+  const activeFilePath = useCodeStore((s) => s.activeByWorktree[worktree.id] ?? null)
+  const shownFile = activeFilePath ? files.find((f) => areWorktreePathsEqual(f.path, activeFilePath, PLATFORM)) : undefined
+  const shownTab = tabs.length === 0 || picking || shownFile ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
   const shownId = shownTab?.sessionId ?? null
   const chatAgent = shownTab ? shownTab.sessionId : null
   // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
@@ -219,11 +231,34 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [worktree.id, worktree.path, chatAgent])
-  if (tabs.length === 0 || picking) {
-    return <AgentPicker worktree={worktree} onLaunched={() => setPicking(false)} onCancel={tabs.length ? () => setPicking(false) : undefined} />
+  if ((tabs.length === 0 && files.length === 0) || picking) {
+    return (
+      <AgentPicker
+        worktree={worktree}
+        onLaunched={() => {
+          setPicking(false)
+          useCodeStore.getState().setActive(worktree.id, null)
+        }}
+        onCancel={tabs.length || files.length ? () => setPicking(false) : undefined}
+      />
+    )
   }
   const active = tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]
-  const chatting = !!chatOn[active.sessionId]
+  const chatting = !!active && !!chatOn[active.sessionId]
+  // 더러운 파일을 닫으면 아라 공용 대화상자로 묻는다 — 저장 / 저장 안 함 / 취소.
+  const closeFile = async (f: CodeFile): Promise<void> => {
+    if (f.dirty) {
+      const r = await ask({
+        title: t('code.close.title'),
+        message: t('code.close.msg').replace('{name}', baseName(f.path)),
+        confirmLabel: t('code.close.save'),
+        altLabel: t('code.close.discard')
+      })
+      if (r === 'cancel') return
+      if (r === 'confirm' && !(await useCodeStore.getState().editorOps?.save(f.path))) return
+    }
+    useCodeStore.getState().closeFile(f.path)
+  }
   return (
     <div className="aiws-agentws" data-aiws="agent-ws">
       <div className="aiws-tabs" role="tablist" aria-label={t('aiws.agent.tabs')}>
@@ -232,12 +267,15 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
             key={x.sessionId}
             role="tab"
             tabIndex={0}
-            aria-selected={x === active}
-            className={'aiws-tab' + (x === active ? ' on' : '')}
+            aria-selected={x === active && !shownFile}
+            className={'aiws-tab' + (x === active && !shownFile ? ' on' : '')}
             data-agent-tab={x.agent}
             data-state={x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
             title={x.line}
-            onClick={() => useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)}
+            onClick={() => {
+              useCodeStore.getState().setActive(worktree.id, null)
+              useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)
+            }}
           >
             {x.exited ? (
               <span className="aiws-tab-dot off" aria-hidden />
@@ -268,38 +306,76 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
             </button>
           </div>
         ))}
-        {/* 파일 탭 자리(시안) — 코드 보기는 M6. */}
-        <button type="button" className="aiws-tab" disabled title={`${t('aiws.agent.files')} · ${t('aiws.soon')}`}>
-          <FileText className="aiws-tab-ic" aria-hidden />
-          <span>{t('aiws.agent.files')}</span>
-        </button>
-        <button
-          type="button"
-          className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
-          data-aiws="chat-toggle"
-          aria-pressed={chatting}
-          title={`${t(chatting ? 'aiws.chat.toTerminal' : 'aiws.chat.toChat')} (${CHAT_KEY})`}
-          onClick={() => useAgentStore.getState().toggleChat(active.sessionId)}
-        >
-          {chatting ? <SquareTerminal className="aiws-tab-ic" aria-hidden /> : <MessageSquare className="aiws-tab-ic" aria-hidden />}
-          <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
-        </button>
+        {/* M6 파일 탭(시안 SW-final: 에이전트 탭 옆 `OrderRetryPolicy.java`). 더러우면 ● — 닫을 때 묻는다. */}
+        {files.map((f) => (
+          <div
+            key={f.path}
+            role="tab"
+            tabIndex={0}
+            aria-selected={f === shownFile}
+            className={'aiws-tab' + (f === shownFile ? ' on' : '')}
+            data-file-tab={baseName(f.path)}
+            data-dirty={f.dirty || undefined}
+            title={f.path}
+            onClick={() => useCodeStore.getState().setActive(worktree.id, f.path)}
+          >
+            <FileText className="aiws-tab-ic" aria-hidden />
+            <span>{baseName(f.path)}</span>
+            {f.dirty && (
+              <span className="code-dirty" data-code="dirty" title={t('code.dirty')}>
+                ●
+              </span>
+            )}
+            <button
+              type="button"
+              className="aiws-ic"
+              aria-label={t('code.close.tab')}
+              onClick={(e) => {
+                e.stopPropagation()
+                void closeFile(f)
+              }}
+            >
+              <X />
+            </button>
+          </div>
+        ))}
+        {active && !shownFile && (
+          <button
+            type="button"
+            className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
+            data-aiws="chat-toggle"
+            aria-pressed={chatting}
+            title={`${t(chatting ? 'aiws.chat.toTerminal' : 'aiws.chat.toChat')} (${CHAT_KEY})`}
+            onClick={() => useAgentStore.getState().toggleChat(active.sessionId)}
+          >
+            {chatting ? <SquareTerminal className="aiws-tab-ic" aria-hidden /> : <MessageSquare className="aiws-tab-ic" aria-hidden />}
+            <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
+          </button>
+        )}
         <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setPicking(true)}>
           <Plus />
         </button>
       </div>
-      {active.prompt && statusById[active.sessionId]?.promptFailed && (
+      {active && !shownFile && active.prompt && statusById[active.sessionId]?.promptFailed && (
         <div className="aiws-note aiws-err aiws-prompt-failed" role="alert" data-aiws="prompt-failed">
           <span>{t('aiws.agent.promptFailed')}</span>
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
-      {chatting && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
+      {active && chatting && !shownFile && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
-        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting}>
-          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting} local serverKey="localhost" agent />
+        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile}>
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile} local serverKey="localhost" agent />
         </div>
       ))}
+      {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}
+      {files.length > 0 && (
+        <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
+          <CodeEditor worktreeId={worktree.id} ask={ask} hidden={!shownFile} />
+        </Suspense>
+      )}
     </div>
   )
 }
+
+const baseName = (p: string): string => p.split(/[\\/]/).pop() ?? p

@@ -9,6 +9,14 @@ directories:
 files:
   - out/**/*
   - package.json
+  # M6: @vscode/ripgrep-universal 은 12개 플랫폼 rg 를 다 담고 온다(설치본에 다 넣으면 수십 MB). 이 빌드의
+  # 플랫폼·아키텍처 것 하나만 남긴다 — ${platform} = 빌드하는 OS(process.platform, 맥은 맥에서 빌드), ${arch} = 대상 아키텍처.
+  # 패키지의 lib/index.js(rgPath = bin/<platform>-<arch>/rg[.exe])는 그대로 두어 R2 전체 검색이 그 경로를 쓴다.
+  - "!node_modules/@vscode/ripgrep-universal/bin/!(${platform}-${arch})/**"
+  # M6: Monaco 는 렌더러 번들(out/renderer — CodeEditor 청크·워커)에 이미 들어 있다. dependencies 라 electron-builder 가
+  # node_modules 째(73MB) 또 싣던 것을 뺀다 — main 은 monaco 를 import 하지 않는다.
+  - "!node_modules/monaco-editor/**"
+  - "!node_modules/@monaco-editor/**"
 # M0 — 옮겨 온 코드의 고지(Orca MIT · herdr Apache-2.0 자리). 설치 폴더 resources/NOTICE 로 싣는다 —
 # 설정 › 정보 › [오픈소스 고지]가 이 자리를 가리킨다. tests/fontLicenses.test.ts 가 이 줄이 있는지 본다.
 extraResources:
@@ -22,6 +30,9 @@ asarUnpack:
 # %LOCALAPPDATA%\ARA\daemon-host\<판> 으로 복사해 거기서 띄운다(업데이트가 설치 폴더 프로세스를 죽이므로 — main/daemon/launcher.ts).
   - out/main/daemonEntry.js
   - out/main/chunks/**
+# M6: rg 는 실행 파일이라 asar 안에서는 못 띄운다 — 남은 한 플랫폼 것을 asar 밖(app.asar.unpacked)으로.
+# 쓰는 쪽은 rgPath 의 app.asar → app.asar.unpacked 로 바꿔 부른다(R2 WS-09).
+  - node_modules/@vscode/ripgrep-universal/bin/**
 # 자동 업데이트 (#98, 2026-08-23) — **배포 사이트와 같은 폴더**를 본다.
 # `site/` 를 사내 웹 루트에 올리면 설치본·blockmap·latest.yml 이 전부 `downloads/` 에 함께 있다
 # (`npm run site:stage` 가 거기로 복사한다). 그래서 다운로드 페이지와 업데이트 채널이 한 자리다.

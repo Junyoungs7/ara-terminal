@@ -2,6 +2,7 @@
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
 import type { LaunchShell } from './aiCli'
+import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
@@ -127,6 +128,9 @@ export type SessionLogReadResult =
   | { ok: false; message: string }
 
 // 파일 조작(이름 변경·새 폴더·삭제) 결과. canceled 는 진행 중 재귀 삭제를 사용자가 멈춘 경우.
+/** M6 코드 에디터 저장 요청. force = 디스크가 바뀌었어도 덮어쓰기(사람이 묻는 창에서 고른 뒤에만). */
+export type CodeWriteReq = { root: string; path: string; text: string; eol: 'lf' | 'crlf'; baseSig: string; force?: boolean }
+
 export type FileOpResult = { ok: true } | { ok: false; message: string; canceled?: boolean }
 
 // 전송 결과. 취소·실패 시 부분 파일 정리 여부를 함께 알린다(C-4).
@@ -580,6 +584,13 @@ export type InvokeContract = {
   // 상세는 마지막 목록에 있던 파일만 연다.
   'vault:detail': { req: { file: string }; res: VaultDetail }
   'vault:resumeCommand': { req: { agent: AgentId; id: string; cwd: string | null }; res: { ok: true; text: string } | { ok: false; error: string } }
+  // M6 WS-07·08 코드 에디터(main/code/feature.ts). root = 워크트리 폴더 — main 은 그 안의 경로만 받는다.
+  // pick = OS 파일 창(취소 = null). write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
+  'code:pick': { req: { root: string }; res: string | null }
+  'code:read': { req: { root: string; path: string }; res: CodeReadResult }
+  'code:write': { req: CodeWriteReq; res: CodeWriteResult }
+  'code:watch': { req: { root: string; path: string }; res: void }
+  'code:unwatch': { req: { path: string }; res: void }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1209,6 +1220,16 @@ export type EvApi = {
     list(cwds: string[]): Promise<VaultSession[]>
     detail(file: string): Promise<VaultDetail>
     resumeCommand(agent: AgentId, id: string, cwd: string | null): Promise<InvokeRes<'vault:resumeCommand'>>
+  }
+  // M6 코드 에디터(preload/features/code.ts).
+  code: {
+    pick(root: string): Promise<string | null>
+    read(root: string, path: string): Promise<CodeReadResult>
+    write(req: CodeWriteReq): Promise<CodeWriteResult>
+    /** 열린 파일만 감시한다 — 바뀌면 onChanged(모든 창). 탭을 닫을 때 unwatch. */
+    watch(root: string, path: string): Promise<void>
+    unwatch(path: string): Promise<void>
+    onChanged(cb: (e: { path: string }) => void): () => void
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

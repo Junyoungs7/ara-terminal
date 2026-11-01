@@ -93,8 +93,9 @@ test('SPACE-3 오른쪽 아이콘 바 — 아라를 열고 접는다, 타이틀�
   await expect(chat).toHaveAttribute('aria-pressed', 'true')
   await page.click('.tb-chat')
 
-  // AI 작업 공간 — 아래에 탐색기·소스 제어·검사 자리(비활성).
+  // AI 작업 공간 — 아래에 탐색기(M6: 파일 열기 — 살아 있음)·소스 제어·검사 자리(비활성).
   await page.keyboard.press('Control+Alt+2')
   await expect(page.locator('.rbar .rbar-item')).toHaveCount(4)
-  for (const id of ['explorer', 'scm', 'checks']) await expect(page.locator(`.rbar .rbar-item[data-rbar="${id}"]`)).toBeDisabled()
+  await expect(page.locator('.rbar .rbar-item[data-rbar="explorer"]')).toBeEnabled()
+  for (const id of ['scm', 'checks']) await expect(page.locator(`.rbar .rbar-item[data-rbar="${id}"]`)).toBeDisabled()
 })

@@ -45,6 +45,7 @@ import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerVaultFeature } from './vault/feature'
+import { registerCodeFeature } from './code/feature'
 import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
@@ -554,6 +555,8 @@ app.whenReady().then(async () => {
   agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc() })
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
+  // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
+  registerCodeFeature()
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
