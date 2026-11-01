@@ -387,6 +387,17 @@
     "status": "porting"
   },
   {
+    "id": "TM-02",
+    "feature": "터미널 로컬 셸 데몬 이전",
+    "orcaPaths": [
+      "src/main/daemon",
+      "src/main/ipc/pty/pane/terminal-spawn-restore.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R2(v2.2 388ba47): 터미널 공간 로컬 셸(SSH 아님 — 서버 무영향)을 DM-01 데몬에. MainSessionManager.create → main/daemon/terminalShells.ts, 켤 때 데몬 미리 띄움(첫 셸 3초 상한 — 넘으면 앱 안 PTY). 켤 때 터미널 셸은 세워 두고 F6 복원이 옛 id 로 reattach, 안 찾은 셸은 session:restored 로 끔. [백그라운드 에이전트 모두 종료]는 셸 제외, 완전 종료는 셸까지. 뺀 것: 출력 백프레셔(데몬까지 pause 안 넘김), 헤드리스 화면 직렬화(원래 출력 링 replay)."
+  },
+  {
     "id": "AI-11",
     "feature": "상태 표시 점(Orca 글리프 채택)",
     "orcaPaths": [
@@ -940,6 +951,19 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M11 R1(v2.2): vault:delete — 확인 대화상자 뒤, 목록·검색에서 본 파일만, 휴지통(shell.trashItem). Claude 는 <프로젝트>/<id>/(하위 에이전트)·~/.claude/session-env/<id> 먼저, 기록 파일 마지막(Orca 순서). e2e 는 휴지통 대신 그냥 지움."
+  },
+  {
+    "id": "AI-27",
+    "feature": "앱 재시작·업데이트 후 에이전트 복원",
+    "orcaPaths": [
+      "src/main/ipc/pty/host-env/saved-resume-admission.ts",
+      "src/main/ipc/pty/pane/terminal-spawn-restore.ts",
+      "src/main/daemon/terminal-history-cold-restore-info.ts",
+      "src/shared/agent-session-resume.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M11 R2(v2.2 388ba47): 데몬이 살아 있으면 1차 재부착 그대로(같은 id·PID·replay). 데몬째 죽었으면(재부팅) userData/agent-tabs.json 기록 → 같은 에이전트·같은 폴더로 --resume(CLI 세션 id 는 chat 의 transcript 머리, 모르면 새로), 데몬은 살았는데 없는 세션 = 꺼진 사이 끝남(되살리지 않음). 탭 순서·고른 탭·고른 작업 단위 = localStorage aiws.agentTabLayout. 뺀 것: 디스크 스크롤백 체크포인트(콜드 화면 복원), 채팅 소유 판정(chat-home/chat-writing — 아라 채팅 보기는 같은 PTY), WSL. 원격 탭은 M8 R4 '끊김' 그대로."
   },
   {
     "id": "US-01",
