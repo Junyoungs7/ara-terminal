@@ -1416,101 +1416,6 @@
   flex-direction: column;
 }
 
-/* ── 내장 브라우저 탭 줄 (2026-08-21) ──
-   높이는 **BrowserTabs.ts 의 TAB_STRIP_H(34) 와 같아야 한다** — 그 값으로 main 이 페이지 뷰를
-   이 줄 아래에 앉힌다. 어긋나면 페이지가 줄을 덮거나 그 사이가 빈다. */
-.app.browserwin {
-  height: 100vh;
-  background: var(--bg-canvas);
-  overflow: hidden;
-}
-.bw-tabs {
-  height: 34px;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: 0 var(--sp-3);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--line);
-}
-.bw-nav {
-  flex: none;
-}
-.bw-strip {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.bw-strip::-webkit-scrollbar {
-  display: none;
-}
-.bw-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: 0 var(--sp-6);
-  max-width: 240px;
-  border-right: 1px solid var(--line);
-  color: var(--text-lo);
-  font-size: var(--fs-md);
-  cursor: var(--cur-arrow, default);
-  user-select: none;
-}
-.bw-tab:hover {
-  background: var(--bg-raised);
-}
-.bw-tab.on {
-  color: var(--text-hi);
-  font-weight: 500;
-  background: var(--bg-canvas);
-}
-.bw-tab.on::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--accent);
-}
-/* 라벨은 오리진뿐이다(페이지 제목은 위장 가능 — BrowserTabs.publish 주석). 길면 줄인다. */
-.bw-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bw-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-lo);
-  flex: none;
-}
-.bw-dot.load {
-  background: var(--text-mid);
-}
-/* × 가 앉던 자리(M2 §5 ④). <button> 으로는 못 바꿨다 — 부모가 `role="tab"` 이라 중첩이 된다(M3 §4). */
-.bw-x {
-  display: grid;
-  place-items: center;
-  color: var(--text-lo);
-  font-size: var(--fs-md);
-  padding: 0 var(--sp-1);
-  cursor: var(--cur-hand, pointer);
-}
-.bw-x svg {
-  width: 12px;
-  height: 12px;
-}
-.bw-x:hover {
-  color: var(--err);
-}
-
 /* ── 포트 모니터 독립 창 (2026-08-21) ──
    진짜 OS 창이라 타이틀바가 없다(네이티브 프레임을 쓴다) — 탭 줄이 곧 창의 머리다.
    탭 문법은 본체와 같다: 각진 사각 + 하단 2px 인디케이터(G). */
@@ -11182,7 +11087,6 @@ button.sb-seg.upd:hover .val {
 .g-x:active,
 .xfer-cancel:active,
 .exp-tab-x:active,
-.bw-x:active,
 .pbtn:active:not(:disabled),
 .con-btn:active:not(:disabled),
 .con-app:active,
@@ -11234,7 +11138,6 @@ button.sb-seg.upd:hover .val {
 .frow:active,
 .exp-tab:active,
 .exp-node:active,
-.bw-tab:active,
 .pw-tab:active,
 .ttab:active,
 .bp-tab:active,

@@ -1,11 +1,11 @@
 // W2 F8 터미널 링크 라우팅 — 원격 셸이 찍은 `http://localhost:…` 의 localhost 는 **원격의** localhost 다.
-// Ctrl+클릭이 그것을 포워딩 + 내장 브라우저로 보내고, 나머지는 예전처럼 OS 기본 브라우저로 보낸다.
+// Ctrl+클릭이 그것을 포워딩 + Oriel로 보내고, 나머지는 예전처럼 OS 기본 브라우저로 보낸다.
 //
 // OS 브라우저는 절대 실제로 띄우지 않는다(spyShell 이 main 에서 가로챈다) — 검증 세션 오염 방지.
 import {
   test,
   expect,
-  browserWindows,
+  orielOpened,
   connectNewSshProfile,
   ctrlClickLink,
   dialog,
@@ -16,8 +16,8 @@ import {
   runCommand,
   sendInput,
   spyCalls,
-  spyShell,
-  windowInfos
+  spyOriel,
+  spyShell
 } from './fixtures'
 import type { Page } from '@playwright/test'
 
@@ -36,10 +36,11 @@ async function printRemote(page: Page, sessionId: string, url: string): Promise<
   await sendInput(page, sessionId, url + '\r\n')
 }
 
-// LINK-1 SSH 세션의 loopback URL → 포워딩이 생기고 내장 브라우저가 터널 입구를 연다
-test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 내장 브라우저로 연다', async ({ ara, ssh }) => {
+// LINK-1 SSH 세션의 loopback URL → 포워딩이 생기고 Oriel가 터널 입구를 연다
+test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 Oriel로 연다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const tcpip = makeTcpip()
   const remote = await reservedPort(11)
   const h = await ssh({ password: 'pw-link1', tcpipHandler: tcpip.handler })
@@ -54,7 +55,7 @@ test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 내�
   expect(fwd.remotePort).toBe(remote)
 
   // 창은 터널 입구(localhost:<localPort>)를 열고 경로는 원본 그대로 유지한다.
-  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toContain(
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toContain(
     `http://localhost:${fwd.localPort}/preview`
   )
   expect(tcpip.hits[0]).toEqual({ destIP: '127.0.0.1', destPort: remote })
@@ -63,18 +64,19 @@ test('LINK-1 원격 localhost 링크를 Ctrl+클릭하면 터널을 뚫고 내�
 })
 
 // LINK-2 로컬 셸의 링크 — 2026-09-10 준영님 제보 뒤로 규칙이 SSH 와 같다(linkTarget.ts planLink 주석):
-// **Ctrl+클릭 = 아라 브라우저 · Ctrl+Alt+클릭 = OS 브라우저.** 로컬 셸의 localhost 는 진짜 내 PC 라
+// **Ctrl+클릭 = Oriel · Ctrl+Alt+클릭 = OS 브라우저.** 로컬 셸의 localhost 는 진짜 내 PC 라
 // 어느 쪽이든 **터널은 만들지 않는다** — 이 검사가 처음부터 지키던 성질은 그것이다.
-test('LINK-2 로컬 셸의 localhost 링크는 터널 없이 — Ctrl+클릭은 아라 브라우저, Ctrl+Alt+클릭은 OS 브라우저', async ({ ara }) => {
+test('LINK-2 로컬 셸의 localhost 링크는 터널 없이 — Ctrl+클릭은 Oriel, Ctrl+Alt+클릭은 OS 브라우저', async ({ ara }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const sid = await newLocalShell(page)
   const port = await reservedPort(12)
   const url = `http://localhost:${port}/local`
   await runCommand(page, sid, `echo ${url}`)
   await ctrlClickLink(page, url)
 
-  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe(url)
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toBe(url)
   expect((await spyCalls(app)).external).toEqual([]) // OS 브라우저로 새지 않았다
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널도 안 팠다
 
@@ -84,12 +86,13 @@ test('LINK-2 로컬 셸의 localhost 링크는 터널 없이 — Ctrl+클릭은 
 })
 
 // LINK-4★ 2026-08-23 준영님 제보 6번 — **Ctrl+Alt+클릭은 OS 기본 브라우저로.**
-// Ctrl+클릭(LINK-1)은 원격 링크를 아라 브라우저로 연다. 즐겨찾기·로그인 세션이 있는 크롬으로
+// Ctrl+클릭(LINK-1)은 원격 링크를 Oriel로 연다. 즐겨찾기·로그인 세션이 있는 크롬으로
 // 열고 싶을 때가 있어서 수식자 하나로 그 선택을 준다 — 터널도 안 판다(OS 브라우저는 내 PC 의
 // loopback 을 볼 이유가 없다).
 test('LINK-4★ Ctrl+Alt+클릭이면 원격 링크도 OS 기본 브라우저로 간다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const h = await ssh({ password: 'pw-link4' })
   const sid = await connectNewSshProfile(page, { name: 'link4', port: h.port, password: 'pw-link4' })
 
@@ -98,18 +101,19 @@ test('LINK-4★ Ctrl+Alt+클릭이면 원격 링크도 OS 기본 브라우저로
   await ctrlClickLink(page, url, true)
 
   await expect.poll(async () => (await spyCalls(app)).external, { timeout: 20_000 }).toEqual([url])
-  expect(await browserWindows(app)).toHaveLength(0)
+  expect(await orielOpened(app)).toHaveLength(0)
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널을 만들지 않았다
 })
 
-// LINK-3 loopback 이 아닌 주소는 **터널 없이 아라 브라우저로** 간다.
+// LINK-3 loopback 이 아닌 주소는 **터널 없이 Oriel로** 간다.
 // 2026-08-22 제보 16 이후의 규칙이다(linkTarget.ts): 원격 세션이 찍은 링크는 그 세션의 맥락이라
 // 로그인 왕복이 같은 브라우저 프로필에서 이어져야 한다. OS 브라우저로 보내고 싶으면 Ctrl+Alt(LINK-4).
 // 호스트는 `.invalid`(RFC 2606 예약 — DNS 가 반드시 실패한다) — 검증이 바깥으로 요청을 내지 않는다.
 // 주소는 그대로 커밋되므로(오류 페이지) 어디를 열려 했는지는 그대로 보인다.
-test('LINK-3 loopback 아닌 https 도 터널 없이 아라 브라우저로 간다', async ({ ara, ssh }) => {
+test('LINK-3 loopback 아닌 https 도 터널 없이 Oriel로 간다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const h = await ssh({ password: 'pw-link3' })
   const sid = await connectNewSshProfile(page, { name: 'link3', port: h.port, password: 'pw-link3' })
 
@@ -117,7 +121,7 @@ test('LINK-3 loopback 아닌 https 도 터널 없이 아라 브라우저로 간�
   await printRemote(page, sid, url)
   await ctrlClickLink(page, url)
 
-  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe(url)
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toBe(url)
   expect((await spyCalls(app)).external).toEqual([]) // OS 브라우저로는 새지 않았다
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0) // 터널도 안 팠다
 })
@@ -130,6 +134,7 @@ test('LINK-3 loopback 아닌 https 도 터널 없이 아라 브라우저로 간�
 test('OAUTH-1 redirect_uri 의 콜백 포트를 그대로 포워딩하고 원본 URL 을 연다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const h = await ssh({ password: 'pw-oauth1' })
   const sid = await connectNewSshProfile(page, { name: 'oauth1', port: h.port, password: 'pw-oauth1' })
 
@@ -147,7 +152,7 @@ test('OAUTH-1 redirect_uri 의 콜백 포트를 그대로 포워딩하고 원본
   expect(fwd).toMatchObject({ sessionId: sid, remotePort: cb, localPort: cb, exact: true })
 
   // 창은 **원본** 인증 URL 을 연다(터널 입구가 아니다 — 리다이렉트가 그리로 돌아온다).
-  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe(url)
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toBe(url)
   expect((await spyCalls(app)).external).toEqual([])
 })
 
@@ -156,6 +161,7 @@ test('OAUTH-1 redirect_uri 의 콜백 포트를 그대로 포워딩하고 원본
 test('OAUTH-2 콜백 포트가 사용 중이면 창을 열지 않고 사유를 알린다', async ({ ara, ssh, holdPort }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const h = await ssh({ password: 'pw-oauth2' })
   const sid = await connectNewSshProfile(page, { name: 'oauth2', port: h.port, password: 'pw-oauth2' })
 
@@ -173,7 +179,7 @@ test('OAUTH-2 콜백 포트가 사용 중이면 창을 열지 않고 사유를 �
   await expect(dialog(page).locator('.dlg-detail .dlg-v')).toHaveText(String(cb))
 
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0)
-  expect(await windowInfos(app)).toHaveLength(1) // 내장 브라우저 창은 뜨지 않았다
+  expect(await orielOpened(app)).toHaveLength(0) // Oriel 로 보내지 않았다
   expect((await spyCalls(app)).external).toEqual([])
 })
 
@@ -181,6 +187,7 @@ test('OAUTH-2 콜백 포트가 사용 중이면 창을 열지 않고 사유를 �
 test('OAUTH-3 확인 다이얼로그를 취소하면 포워딩도 브라우저도 열리지 않는다', async ({ ara, ssh }) => {
   const { page, app } = ara
   await spyShell(app)
+  await spyOriel(app)
   const h = await ssh({ password: 'pw-oauth3' })
   const sid = await connectNewSshProfile(page, { name: 'oauth3', port: h.port, password: 'pw-oauth3' })
 
@@ -197,6 +204,6 @@ test('OAUTH-3 확인 다이얼로그를 취소하면 포워딩도 브라우저�
 
   // forward.create 이전에 return 하므로 흔적이 전혀 없어야 한다.
   expect(await page.evaluate(() => window.ev.forward.list())).toHaveLength(0)
-  expect(await windowInfos(app)).toHaveLength(1) // 내장 브라우저 창 없음(메인 창 하나뿐)
+  expect(await orielOpened(app)).toHaveLength(0) // Oriel 로 보내지 않았다
   expect((await spyCalls(app)).external).toEqual([])
 })

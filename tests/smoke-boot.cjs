@@ -15,7 +15,7 @@ const { tmpdir } = require('node:os')
 const pty = require('node-pty')
 const { killPtysAndExit } = require('./_ptyDrain.cjs')
 
-// M-6: userData 를 임시 경로로 격리한다(다른 하네스와 같은 패턴 — f6-restore.cjs·w2-browser.cjs 참고).
+// M-6: userData 를 임시 경로로 격리한다(다른 하네스와 같은 패턴 — f6-restore.cjs 참고).
 // 이 하네스는 자체 IPC 스텁만 쓰고 userData 파일을 직접 읽거나 쓰지 않지만, 격리하지 않으면 Electron
 // 이 기본 %APPDATA%\Electron(디스크 캐시·GPU 캐시·세션 잠금 등)을 쓴다 — 다른 worktree 에서 스모크가
 // 동시에 돌면 그 공유 경로에서 얽혀 어서션은 전부 PASS 인데 프로세스가 반환되지 않고 매달린다
@@ -1004,7 +1004,7 @@ const checks = []
   checks.push([
     // 정의부는 shared/settingsIndex.ts SETTINGS_SECTIONS(M1 1-A — 묶음: AI 작업 공간 → 앱 → 전역 → 터미널 → 보안·연동 → 고급 → 정보).
     '설정 목록 29섹션이 묶음 순서대로(AI 작업 공간이 맨 위 · M3 에서 실험 기능 섹션은 지웠다)',
-    f5.navSections.join(',') === 'agents,usage,git,editor,sessionSearch,notify,browser,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,about'
+    f5.navSections.join(',') === 'agents,usage,git,editor,sessionSearch,notify,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).

@@ -20,7 +20,7 @@ import { HOOK_ENV, isHookSource, type AgentStatusView, type HookSource } from '@
 import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
-import { createHookServer, installHooks } from './hooks'
+import { claudeStatusLineArgs, createHookServer, installHooks, writeLaunchFile } from './hooks'
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
 import { generateChatName, listModels, scanSlash } from './options'
@@ -31,6 +31,8 @@ import type { DaemonSessionInfo } from '../daemon/protocol'
 import { lowerPriority } from '../resources/hostProcs'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
+import { orielLaunch } from '@shared/oriel'
+import type { Oriel } from '../oriel/oriel'
 
 export function registerAgentsFeature(deps: {
   userData: string
@@ -44,7 +46,9 @@ export function registerAgentsFeature(deps: {
   mainWc: () => WebContents | null
   /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits } {
+  /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
+  oriel?: Pick<Oriel, 'status'>
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -119,6 +123,7 @@ export function registerAgentsFeature(deps: {
     return r
   }
   const installed = new Set<HookSource>()
+  let orielWarned = false
   const ensureTracker = (): AgentStatusTracker => {
     if (tracker) return tracker
     const t = createAgentStatusTracker({
@@ -291,11 +296,10 @@ export function registerAgentsFeature(deps: {
       return { ok: false, error: `폴더가 없습니다: ${cwd}` }
     }
     const shell = defaultLaunchShell()
-    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined, options: launchOptionsOf(options) })
-    if (!plan.ok) return plan
-    const t = ensureTracker()
     // 훅: 서버를 열고(처음 한 번) 그 CLI 의 훅을 심는다(처음 한 번). 실패해도 실행은 한다 — 그 탭은 화면 판정('추정')만.
     const hookEnv: Record<string, string> = {}
+    const extraArgs: string[] = []
+    const extraEnv: Record<string, string> = {}
     if (isHookSource(agent)) {
       const { port, token } = await ensureHooks()
       if (!installed.has(agent)) {
@@ -304,7 +308,34 @@ export function registerAgentsFeature(deps: {
         else logMainError(`agent hooks:${agent}`, new Error(r.message))
       }
       if (port > 0 && installed.has(agent)) Object.assign(hookEnv, { [HOOK_ENV.port]: String(port), [HOOK_ENV.token]: token })
+      // M9 R2 statusLine(사용량 실시간)은 이 claude 에만 --settings 로(전역 settings.json 안 건드림). 사용자 원래 상태줄은 그대로 보인다.
+      if (agent === 'claude' && hookEnv[HOOK_ENV.port]) {
+        try {
+          const configDir = settings.agents.claude.env['CLAUDE_CONFIG_DIR'] || userEnv['CLAUDE_CONFIG_DIR'] || join(deps.home, '.claude')
+          extraArgs.push(...claudeStatusLineArgs(deps.home, cwd, configDir))
+        } catch (e) {
+          logMainError('agent statusLine', e)
+        }
+      }
     }
+    // M9 R2 Oriel — 이 실행에만 Oriel 전용 MCP·지시(사용자 MCP 설정 파일은 안 씀). 없으면 그대로 띄우고 앱 실행 중 처음 한 번 알린다.
+    let noOriel = false
+    const os = await deps.oriel?.status()
+    if (os?.installed) {
+      try {
+        const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body))
+        extraArgs.push(...o.args)
+        Object.assign(extraEnv, o.env)
+      } catch (e) {
+        logMainError('agent oriel', e)
+      }
+    } else if (os && !orielWarned) {
+      orielWarned = true
+      noOriel = true
+    }
+    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined, options: launchOptionsOf(options), extraArgs, extraEnv })
+    if (!plan.ok) return plan
+    const t = ensureTracker()
     const title = `${AGENTS[agent].label} · ${basename(cwd) || cwd}`
     const env = { ...plan.env, ...hookEnv }
     let sessionId: string = randomUUID()
@@ -329,7 +360,7 @@ export function registerAgentsFeature(deps: {
     if (typeof prompt === 'string') maybeName(sessionId, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
-    return { ok: true, sessionId, title, line: plan.line }
+    return { ok: true, sessionId, title, line: plan.line, ...(noOriel ? { noOriel: true as const } : {}) }
   })
   return {
     stop: () => {
@@ -338,7 +369,8 @@ export function registerAgentsFeature(deps: {
       return hooks.stop()
     },
     views: () => tracker?.views() ?? [],
-    limits: () => agentLimitsOf(settings)
+    limits: () => agentLimitsOf(settings),
+    orielPath: () => settings.orielPath
   }
 }
 

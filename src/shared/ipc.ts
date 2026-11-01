@@ -41,7 +41,7 @@ import type {
   ReportSendResult
 } from './bugReport'
 import type { AgentStatusView } from './agentHooks'
-import type { BrowserTabView } from './browserWin'
+import type { OrielStatus } from './oriel'
 import type { ResourceSnapshot } from './resources'
 import type { UsageState } from './usage'
 import type {
@@ -63,7 +63,8 @@ import type { ModelCatalog, SlashItem } from './agentOptions'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
-export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
+/** noOriel: Oriel 이 없어 웹 도구 없이 띄웠다(앱 실행 중 처음 한 번만 — 알림 센터 한 줄). */
+export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
 export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
@@ -520,15 +521,6 @@ export type InvokeContract = {
   // 지난 세션 로그 창(2026-10-29). open 은 사이드바 [지난 세션] 행이, hello 는 막 뜬 그 창이 대상을 받을 때.
   'pastlog:open': { req: PastLogTarget; res: { ok: boolean } }
   'pastlog:hello': { req: Record<string, never>; res: PastLogTarget | null }
-  // 내장 브라우저 탭(2026-08-21). 탭 줄 렌더러 → main. 페이지 본문은 WebContentsView 라
-  // 이 채널들은 **우리 탭 줄에서만** 불린다(원격 페이지엔 preload 가 없다).
-  'browser:select': { req: { id: string }; res: { ok: true } }
-  'browser:closeTab': { req: { id: string }; res: { ok: true } }
-  // 오리진으로 닫기 — 포트 표의 [닫기]가 쓴다(그쪽은 탭 id 를 모르고 주소만 안다).
-  // 마지막 탭이면 창까지 닫히는 것은 closeTab 의 기존 규칙 그대로다.
-  'browser:closeOrigin': { req: { origin: string }; res: { ok: boolean } }
-  'browser:reload': { req: Record<string, never>; res: { ok: true } }
-  'browser:back': { req: Record<string, never>; res: { ok: true } }
   // F29 시스템 모니터 [로컬] 탭 — **세션과 무관한** 내 PC 통계. telemetry:* 와 달리 sessionId 가 없다:
   // 로컬 셸을 하나도 안 열어 둔 상태(SSH 만 쓰는 중)에서도 내 PC 를 보여 줘야 하기 때문이다.
   // 패널이 열려 있는 동안만 돈다 — 닫으면 stop 이 폴러를 끈다(원격 텔레메트리와 같은 규칙).
@@ -560,9 +552,9 @@ export type InvokeContract = {
   'forward:stop': { req: { id: string }; res: { ok: true } }
   // push 채널을 만들지 않는다: [모니터] 탭이 이미 telemetry:data 틱마다 다시 그리므로 그때 함께 부른다.
   'forward:list': { req: void; res: PortForward[] }
-  // W2 F8 내장 브라우저. http/https 만(app:openExternal 과 같은 isSafeExternal 게이트를 재사용 —
-  // 두 번째 화이트리스트를 만들지 않는다). 창 하나를 재사용해 navigate 한다.
-  'browser:open': { req: { url: string }; res: { ok: boolean } }
+  // M9 R2 Oriel(옛 내장 브라우저 자리 — 결정 :162 브라우저는 무조건 Oriel). http/https 만(isSafeExternal). 미설치·실패면 OS 기본 브라우저(via).
+  'oriel:open': { req: { url: string }; res: { ok: boolean; via?: 'oriel' | 'external' } }
+  'oriel:status': { req: { force?: boolean }; res: OrielStatus }
   // M0 0-7 FD-01 자원 관리자. 팝오버가 열린 동안만 렌더러가 2초마다 묻는다(상시 폴러 없음).
   'resources:snapshot': { req: void; res: ResourceSnapshot }
   // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
@@ -1027,16 +1019,6 @@ export type EvApi = {
     hello(): Promise<PastLogTarget | null>
     onShow(cb: (t: PastLogTarget) => void): () => void
   }
-  browserTabs: {
-    select(id: string): Promise<{ ok: true }>
-    closeTab(id: string): Promise<{ ok: true }>
-    /** 오리진으로 닫기 — 포트 표의 [닫기]. 열려 있지 않았으면 ok:false. */
-    closeOrigin(origin: string): Promise<{ ok: boolean }>
-    reload(): Promise<{ ok: true }>
-    back(): Promise<{ ok: true }>
-    /** 탭 목록 변경 — 브라우저 창의 탭 줄과 **본창**(포트 표)이 함께 받는다. */
-    onTabs(cb: (e: { tabs: BrowserTabView[]; activeId: string | null }) => void): () => void
-  }
   telemetry: {
     // 이미 구독 중인 세션에 다시 호출하면 즉시 한 바퀴 돈다 = [모니터] 탭 새로고침 버튼.
     start(sessionId: string): Promise<{ ok: true }>
@@ -1229,8 +1211,8 @@ export type EvApi = {
     stop(id: string): Promise<{ ok: true }>
     list(): Promise<PortForward[]>
   }
-  // W2 F8 내장 브라우저(별도 창 하나 재사용). 스킴이 http/https 가 아니면 ok:false 로 거부된다.
-  browser: { open(url: string): Promise<{ ok: boolean }> }
+  // M9 R2 Oriel(preload/features/oriel.ts). 링크를 Oriel 에서 — 미설치·실패면 OS 기본 브라우저. http/https 가 아니면 ok:false.
+  oriel: { open(url: string): Promise<{ ok: boolean; via?: 'oriel' | 'external' }>; status(force?: boolean): Promise<OrielStatus> }
   // M0 0-7 FD-01 자원 관리자(preload/features/resources.ts).
   resources: {
     snapshot(): Promise<ResourceSnapshot>

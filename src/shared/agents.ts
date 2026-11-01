@@ -117,6 +117,8 @@ export type AgentSettings = {
    * 48자 이름을 받는다 — 대화 일부가 모델로 간다(설정에 그대로 적는다). 끄면 탭은 에이전트 이름만.
    */
   chatNaming: boolean
+  /** M9 R2 Oriel 위치(체크아웃·설치 폴더 — bin/oriel.mjs 가 있는 곳). 빈 값 = 자동(설치본 동봉 자리·개발 PC D:/AI/ai-browser). */
+  orielPath: string
 }
 
 /** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
@@ -132,7 +134,8 @@ export function defaultAgentSettings(): AgentSettings {
     migratedAiCliFlags: false,
     lowPriority: true,
     memoryCapMb: 0,
-    chatNaming: true
+    chatNaming: true,
+    orielPath: ''
   }
 }
 
@@ -172,6 +175,7 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.lowPriority = src.lowPriority !== false
   base.memoryCapMb = memoryCapOf(src.memoryCapMb)
   base.chatNaming = src.chatNaming !== false
+  base.orielPath = textOf(src.orielPath).trim()
   return base
 }
 
@@ -406,6 +410,10 @@ export function planAgentLaunch(o: {
   resume?: string
   /** M5 R2 피커 초안(AI-15 모델·강도 → --model·--effort, AI-18 이번 탭 권한). 이 CLI 가 모르는 권한은 무시(설정값). */
   options?: { model?: string; effort?: string; permission?: AgentPermissionChoice }
+  /** M9 R2 아라가 붙이는 인자(statusLine `--settings`·Oriel MCP·지시) — 접두 인자 바로 뒤, 재개에도 붙는다. */
+  extraArgs?: readonly string[]
+  /** M9 R2 아라가 붙이는 env(Gemini Oriel 설정 경로). 사용자 env 위에 얹는다. */
+  extraEnv?: Record<string, string>
 }): LaunchPlan {
   const spec = AGENTS[o.agent]
   const prefs = o.settings.agents[o.agent]
@@ -419,7 +427,8 @@ export function planAgentLaunch(o: {
   const perm = choice === 'own' || permissionShadowed ? '' : (spec.permissionArgs[choice] ?? '')
   const rc = o.agent === 'claude' && o.settings.claudeRemoteControl ? ['--rc'] : []
   const picked = launchOptionArgs(o.agent, o.options ?? {})
-  const args = o.resume ? [...cmd.prefixArgs, ...resumeArgs(o.agent, o.resume)] : [...cmd.prefixArgs, ...(perm ? perm.split(' ') : []), ...rc, ...picked, ...user.tokens]
+  const pre = [...cmd.prefixArgs, ...(o.extraArgs ?? [])]
+  const args = o.resume ? [...pre, ...resumeArgs(o.agent, o.resume)] : [...pre, ...(perm ? perm.split(' ') : []), ...rc, ...picked, ...user.tokens]
 
   const quoted: string[] = []
   for (const a of [cmd.binary, ...args]) {
@@ -434,7 +443,7 @@ export function planAgentLaunch(o: {
 
   const body = quoted.join(' ')
   const line = o.shell === 'powershell' ? `& ${body}` : body
-  const env = { ...prefs.env, ...cmd.env, ...(argv ? { [PROMPT_ENV]: argv } : {}) }
+  const env = { ...prefs.env, ...cmd.env, ...o.extraEnv, ...(argv ? { [PROMPT_ENV]: argv } : {}) }
   return { ok: true, line, env, permissionShadowed, ...(prompt && !argv ? { deferredPrompt: prompt } : {}) }
 }
 

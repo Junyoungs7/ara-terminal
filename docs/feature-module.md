@@ -26,12 +26,11 @@ export type FeatureContrib = {
 }
 ```
 
-기여 목록을 실제로 메뉴·설정에 그리는 배선은 아직 없다 — 기여가 있는 첫 기능이 옮겨 올 때 단다(브라우저는 둘 다 비어 있다).
+기여 목록을 실제로 메뉴·설정에 그리는 배선은 아직 없다 — 기여가 있는 첫 기능이 옮겨 올 때 단다.
 
-## 실증: 내장 브라우저
+## 실증: 내장 브라우저 → Oriel (M9 R2)
 
-- main `src/main/browser/feature.ts` — `browser:*` IPC 6개. `registerForwardIpc` 가 부른다(`index.ts` 는 그대로).
-- preload `src/preload/features/browser.ts` — `browser`·`browserTabs`.
-- 렌더러 `src/renderer/features/browser/` — 탭 줄(`BrowserWindow.tsx`)이 #browserwin 창을 처음 열 때 불러온다.
-- 기여 `BROWSER_FEATURE`(`src/shared/browserWin.ts`) — 빈 목록.
-- 빌드: 진입 청크 2,190.71 → 2,188.34 kB, `BrowserWindow-*.js` 3.24 kB 로 갈라짐.
+내장 브라우저(첫 실증 기능)는 M9 R2 에서 지웠다(결정 :162 — 브라우저는 무조건 Oriel). 같은 틀로 Oriel 이 그 자리에 섰다:
+- main `src/main/oriel/feature.ts` — `oriel:open`·`oriel:status`. `index.ts` 가 부른다.
+- preload `src/preload/features/oriel.ts` — `oriel`.
+- 규칙 `src/shared/oriel.ts`(감지·에이전트별 실행 인자) — 렌더러 쪽 화면은 설정 › 에이전트의 Oriel 줄 하나.

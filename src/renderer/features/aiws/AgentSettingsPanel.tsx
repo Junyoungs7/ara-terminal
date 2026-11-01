@@ -5,6 +5,7 @@ import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
 import { Row, Toggle } from '../../components/SettingsPage'
 import { useDialog } from '../../components/Dialog'
+import type { OrielStatus } from '@shared/oriel'
 
 /**
  * M3 설정 › AI 작업 공간 › 에이전트 — Orca AgentDetectionCatalog(감지 목록·켜고 끄기) + AgentLaunchSettingsSection·AgentPermissionModeMenu
@@ -70,6 +71,7 @@ export function AgentSettingsPanel(): JSX.Element {
           {AGENT_IDS.map((id) => `${AGENTS[id].label}: ${t('settings.agents.perm.' + settings.agents[id].permission)}`).join(' · ')}
         </span>
       </Row>
+      <OrielRow path={settings.orielPath} onPath={(orielPath) => useAgentStore.getState().saveSettings({ ...settings, orielPath })} />
 
       {/* M4 DM-01 — 에이전트는 로컬 데몬에서 돌아 앱을 닫아도 산다. 끄는 길 둘(Orca Quit Completely). */}
       <div className="set-sec-t" data-item="agents.daemon">
@@ -179,5 +181,34 @@ export function AgentSettingsPanel(): JSX.Element {
         </code>
       </Row>
     </div>
+  )
+}
+
+/**
+ * M9 R2 Oriel — 에이전트 웹 도구(별도 창 브라우저). 설치 상태·위치·설치 안내. 위치를 바꾸면 다시 찾는다.
+ * 감지는 main 이 `oriel version` 으로(읽기 전용 — Oriel 을 띄우지 않는다).
+ */
+function OrielRow({ path, onPath }: { path: string; onPath: (p: string) => Promise<void> }): JSX.Element {
+  const [st, setSt] = useState<OrielStatus | null>(null)
+  const probe = (force: boolean): void => void window.ev?.oriel?.status(force).then(setSt).catch(() => setSt(null))
+  useEffect(() => probe(false), [])
+  const desc = !st ? t('aiws.agent.detecting') : st.installed ? t('settings.agents.oriel.found').replace('{v}', st.info.version).replace('{path}', st.info.appPath) : t('settings.agents.oriel.missing')
+  return (
+    <Row label={t('settings.agents.oriel')} desc={desc} item="agents.oriel">
+      <input
+        key={`o-${path}`}
+        className="aiws-input aiws-mono"
+        data-field="agents.oriel"
+        placeholder={t('settings.agents.oriel.auto')}
+        defaultValue={path}
+        onBlur={(e) => {
+          if (e.target.value.trim() === path) return
+          void onPath(e.target.value.trim()).then(() => probe(true))
+        }}
+      />
+      <button type="button" className="btn" data-aiws="oriel-redetect" onClick={() => probe(true)}>
+        {t('aiws.agent.redetect')}
+      </button>
+    </Row>
   )
 }

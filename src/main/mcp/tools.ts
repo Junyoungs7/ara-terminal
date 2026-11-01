@@ -25,7 +25,7 @@ import type { ProfileStore } from '../secrets/ProfileStore'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import type { ForwardService } from '../forward/PortForward'
 import type { SftpService } from '../sftp/SftpService'
-import type { BrowserService } from '../browser/BrowserTabs'
+import type { Oriel } from '../oriel/oriel'
 import type { RemoteConsoleService } from '../remote/RemoteConsoleService'
 import type { SessionLogService } from '../log/SessionLog'
 import type { HistoryStore } from '../history/HistoryStore'
@@ -45,12 +45,11 @@ export type ToolCtx = {
   sftp: SftpService
   approval: McpApprovalManager
   /**
-   * 내장 브라우저(2026-08-26). **없어서 아라가 로컬 브라우저를 띄웠다** — 준영님이 "8000 포트를
-   * 브라우저로 띄워달라" 했더니 `forward_create` 까지는 맞게 하고 그다음 PowerShell 로
-   * `Start-Process http://127.0.0.1:8000` 을 불러 엣지를 열었다. 다시 시키니 이번엔 다른 MCP
-   * 플러그인(playwright)을 찾아 썼다. 우리 화면 안에 브라우저가 있는데 거기 닿는 길이 없었다.
+   * 웹 보여 주기(2026-08-26 내장 브라우저 → M9 R2 Oriel). 길이 없으면 아라가 로컬 브라우저를 띄운다 — 준영님이 "8000 포트를
+   * 브라우저로 띄워달라" 했더니 `forward_create` 까지는 맞게 하고 그다음 PowerShell 로 엣지를 열었다(2026-08-26).
+   * 결정 :162 — 브라우저는 무조건 Oriel. 미설치면 OS 기본 브라우저.
    */
-  browser: BrowserService
+  oriel: Pick<Oriel, 'open'>
   /** F26 서버 콘솔의 고정 명령 표. 화면만 쓰던 것을 아라에게도 연다(2026-08-26). */
   remote: RemoteConsoleService
   /** 세션 기록(F12). 늦은 바인딩 — 로거는 userData 경로를 알아야 만들 수 있다. */
@@ -540,7 +539,7 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
     {
       description:
         '지금 연결돼 있는 포트 목록입니다(원격 포트 ↔ 내 PC 의 localPort). ' +
-        '화면 아래 [포트] 패널에 보이는 그 목록입니다. 브라우저로 열려면 localPort 를 browser_open 에 넘기세요.',
+        '화면 아래 [포트] 패널에 보이는 그 목록입니다. 브라우저로 열려면 localPort 를 oriel_open 에 넘기세요.',
       inputSchema: {},
       annotations: { readOnlyHint: true }
     },
@@ -554,7 +553,7 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
       description:
         '원격 서버의 포트를 내 PC 로 끌어옵니다(원격 127.0.0.1:remotePort → 내 PC 의 빈 포트). ' +
         '**웹 화면을 보여 드리려면 여기서 끝내지 마세요** — 돌려주는 localPort 로 ' +
-        '`browser_open("http://localhost:<localPort>")` 까지 해야 사용자 화면에 실제로 뜹니다. ' +
+        '`oriel_open("http://localhost:<localPort>")` 까지 해야 사용자 화면에 실제로 뜹니다. ' +
         '이 둘이 화면의 [포트] 패널 [열기] 버튼이 하는 일 그대로입니다.',
       inputSchema: { sessionId: z.string(), remotePort: z.number() }
     },
@@ -570,7 +569,7 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
     'forward_stop',
     'net',
     {
-      description: '포트 연결을 끊습니다. 그 주소를 보고 있던 브라우저 탭은 더 이상 열리지 않습니다.',
+      description: '포트 연결을 끊습니다. 그 주소를 보고 있던 Oriel 탭은 더 이상 열리지 않습니다.',
       inputSchema: { id: z.string() }
     },
     // writeAlways 로 올렸다(2026-08-26 감사). 사용자가 열어 둔 터널을 끊는 일이라 화면이 그만큼
@@ -583,48 +582,28 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
   )
 
   /**
-   * 아라 안의 브라우저(2026-08-26 준영님 제보). **이게 없어서 아라가 밖으로 나갔다.**
-   *
-   * 사용자 화면 안에서 웹을 보여 주는 유일한 길이다. 로컬 브라우저(Start-Process·open·xdg-open)나
-   * 다른 브라우저 자동화 도구를 쓰면 우리 창 밖에 뜬다 — 사용자가 원한 것은 늘 우리 창 안이다.
-   *
-   * 열리는 자리는 사람이 [포트] 패널 [열기]를 눌렀을 때와 **같은 창·같은 탭 줄**이다. 같은 오리진이
-   * 이미 떠 있으면 그 탭을 다시 쓴다(창이 늘지 않는다).
+   * 웹 주소를 사용자 화면에 띄운다(2026-08-26 준영님 제보 — 이게 없어서 아라가 밖으로 나갔다). M9 R2: 아라 안 브라우저 대신 **Oriel**
+   * (결정 :162 브라우저는 무조건 Oriel, 별도 창). 화면의 [포트] [열기]·터미널 링크와 같은 길 — Oriel 이 없으면 OS 기본 브라우저.
+   * 옛 browser_close 는 없앴다(아라는 Oriel 의 탭을 모른다).
    */
   T(
-    'browser_open',
+    'oriel_open',
     'net',
     {
       description:
-        '**아라 안의 브라우저**에 웹 주소를 띄웁니다. 사용자 화면 안에 탭으로 열립니다 — ' +
+        '**Oriel 브라우저**(아라와 함께 쓰는 별도 창 브라우저)에 웹 주소를 띄웁니다 — ' +
         '웹 페이지를 보여 드릴 때는 항상 이 도구를 쓰세요. ' +
-        '내 PC 의 브라우저를 실행하거나(Start-Process·open·xdg-open 등) 다른 브라우저 도구를 쓰지 마세요 — ' +
-        '그건 우리 창 밖에 떠서 사용자가 원한 화면이 아닙니다. ' +
+        '내 PC 의 브라우저를 직접 실행하지(Start-Process·open·xdg-open 등) 마세요. ' +
         '원격 서버의 웹을 보여 주려면 forward_create 로 포트를 끌어온 뒤 그 localPort 주소를 넘기세요. ' +
-        'http/https 만 열립니다.',
+        'Oriel 이 설치돼 있지 않으면 기본 브라우저로 열립니다. http/https 만 열립니다.',
       inputSchema: { url: z.string() }
     },
     async ({ url }) =>
-      g(null, 'browser_open', 'writeAlways', { url }, async () => {
-        // 스킴 게이트는 BrowserTabs.openTab 안의 isSafeExternal 이 본다 — 여기서 두 번 쓰지 않는다.
-        if (!ctx.browser.open(url)) return fail('열 수 없는 주소입니다(http/https 만 됩니다).')
-        return ok('아라 브라우저에 띄웠습니다.')
+      g(null, 'oriel_open', 'writeAlways', { url }, async () => {
+        const via = await ctx.oriel.open(url)
+        if (!via) return fail('열 수 없는 주소입니다(http/https 만 됩니다).')
+        return ok(via === 'oriel' ? 'Oriel 에 띄웠습니다.' : 'Oriel 이 없어 기본 브라우저로 열었습니다.')
       })
-  )
-
-  T(
-    'browser_close',
-    'net',
-    {
-      description:
-        '아라 브라우저에서 그 주소(오리진)의 탭을 닫습니다. 마지막 탭이면 브라우저 창이 함께 닫힙니다. ' +
-        'origin 은 "http://localhost:8000" 처럼 스킴+호스트+포트까지입니다.',
-      inputSchema: { origin: z.string() }
-    },
-    async ({ origin }) =>
-      g(null, 'browser_close', 'writeAlways', { origin }, async () =>
-        ctx.browser.closeOrigin(origin) ? ok('닫았습니다.') : fail('그 주소로 열린 탭이 없습니다.')
-      )
   )
 
   // ── 서버 상태 ──────────────────────────────────────────────────────────────

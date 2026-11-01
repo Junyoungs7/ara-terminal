@@ -301,7 +301,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         }
         // 포워딩이 필요 없는 원격 링크 — 터널을 만들지 않고 내장 브라우저로만 보낸다(제보 16번).
         if (plan.kind === 'inApp') {
-          void window.ev?.browser.open(plan.url)
+          void window.ev?.oriel.open(plan.url)
           return
         }
         // OAuth 링크는 터널을 여는 포트가 바깥쪽 URL 의 쿼리(redirect_uri)에 묻혀 있다 — 사용자가 보는
@@ -336,7 +336,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           })
           return
         }
-        void window.ev?.browser.open(localUrl(plan, res.forward.localPort))
+        void window.ev?.oriel.open(localUrl(plan, res.forward.localPort))
       },
       [ask]
     )
@@ -584,7 +584,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         })
         if (r !== 'confirm') return
         // 사내망 밖이면 안 열린다 — **조용히 넘어가지 않는다.** 실패는 화면이 말해야 한다.
-        const opened = await window.ev?.browser?.open(CHANGELOG_URL).catch(() => null)
+        const opened = await window.ev?.oriel?.open(CHANGELOG_URL).catch(() => null)
         if (!opened) showToast(t('update.done.notesFailed'))
       })()
     }, [detachedWinId, version, showToast, ask])

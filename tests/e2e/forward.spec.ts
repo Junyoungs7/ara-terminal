@@ -1,6 +1,6 @@
 // W2 F8 자동 포트포워딩 — [모니터] 탭 행에서 터널을 만들고, 배지로 끄고, [열기]로 내장 브라우저까지.
 // 원격은 ssh2 루프백 하네스다(exec = 포트 목록, direct-tcpip = 터널 목적지) — 실서버 접속 없음(DLP).
-import { test, expect, connectNewSshProfile, dialogConfirm, makeTcpip, makeTelemetry, newLocalShell, openBottomTool, portRow, portRows, portsListing, reservedPort, type TcpipHarness, type TeleHarness, windowInfos } from './fixtures'
+import { test, expect, connectNewSshProfile, dialogConfirm, makeTcpip, makeTelemetry, newLocalShell, openBottomTool, portRow, portRows, portsListing, reservedPort, type TcpipHarness, type TeleHarness, orielOpened, spyOriel } from './fixtures'
 import type { Locator, Page } from '@playwright/test'
 
 // 이 파일이 쓰는 ssh 팩토리 옵션만(전체 opts 타입을 끌고 오지 않는다 — monitor.spec.ts 와 같은 방식).
@@ -119,30 +119,24 @@ test('FWD-6 로컬 포트가 사용 중이면 다른 번호로 열고 배지에 
   await expect(dest).toContainText(`localhost:${list[0].localPort}`)
 })
 
-// BRW-1 [열기] → 내장 브라우저 창이 뜨고 제목은 오리진, 페이지는 **터널 너머** 원격이 그린다.
-// 창 내부 보안 불변식(window.ev 부재·sandbox·전용 파티션 …)은 `npm run w2:browser` 가 담당한다.
-test('BRW-1 [열기]가 터널 너머 페이지를 내장 브라우저로 띄운다', async ({ ara, ssh }) => {
+// BRW-1 [열기] → 포워딩을 만들고 그 입구(http://localhost:<로컬 포트>)를 **Oriel** 로 보낸다(M9 R2 — 아라 안 브라우저 없음, 결정 :162).
+// e2e 는 Oriel 을 띄우지 않는다(spyOriel 이 주소만 적는다). 터널이 진짜 원격으로 가는지는 main 에서 그 주소를 직접 불러 본다.
+test('BRW-1 [열기]가 터널 입구를 Oriel 로 보내고, 그 주소는 터널 너머 원격으로 닿는다', async ({ ara, ssh }) => {
   const { page, app } = ara
+  await spyOriel(app)
   const remote = await reservedPort(5)
   const tcpip = makeTcpip()
   const { row } = await monitorRow(page, ssh, 'brw1', remote, tcpip)
-  // [열기]는 이제 **한 번**이다: 포워딩이 없으면 만들고 곧바로 브라우저를 연다(준영님 제보로 합친 UX
-  // — PortMonitor.openPort). 예전 2단계(만들기 → 열기)를 전제하던 순서라 창 개수 단언이 어긋났다.
-  expect(await windowInfos(app)).toHaveLength(1) // 클릭 전 — 아직 메인 창뿐
+  // [열기]는 **한 번**이다: 포워딩이 없으면 만들고 곧바로 연다(준영님 제보로 합친 UX — PortMonitor.openPort).
   await row.locator('[data-action="forward.create"]').click()
   await expect(destOf(row)).toHaveCount(1, { timeout: 15_000 })
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toMatch(/^http:\/\/localhost:\d+$/)
+  const url = (await orielOpened(app))[0]
+  // 아라는 Oriel 의 탭을 모른다 — [닫기] 로 뒤집히지 않는다.
+  await expect(row.locator('[data-action="forward.open"]')).toHaveCount(1)
 
-  // 브라우저 창의 **제목은 고정**이다('A.R.A 브라우저') — 원격 페이지는 그 안의 탭(WebContentsView)에
-  // 살고 창 자체는 우리 탭 줄이라 file: 주소다. 예전엔 창 하나에 페이지 하나여서 제목·주소로
-  // 확인했는데, 탭이 생기면서 그 단서가 창 밖으로 옮겨 갔다(2026-08-22 #106).
-  await expect.poll(async () => (await windowInfos(app)).map((w) => w.title), { timeout: 25_000 }).toContain(
-    'A.R.A 브라우저'
-  )
-  // "그 주소가 지금 떠 있다"는 포트 행이 안다 — 버튼이 [열기]에서 [닫기]로 뒤집힌다(제보 1번).
-  await expect(row.locator('[data-action="browser.close"]')).toHaveCount(1, { timeout: 15_000 })
-
-  // 프로토콜 레벨 증거: 요청이 실제로 원격 127.0.0.1:<remotePort> 로 나갔다.
-  // 탭이 생기는 것(위)과 그 탭이 실제로 요청을 보내는 것은 한 박자 떨어져 있다 — 기다렸다 본다.
+  // 프로토콜 레벨 증거: 그 주소로 나간 요청이 실제로 원격 127.0.0.1:<remotePort> 로 갔다.
+  await app.evaluate(async (_e, u) => void (await fetch(u).catch(() => null)), url)
   await expect.poll(() => tcpip.hits.length, { timeout: 20_000 }).toBeGreaterThan(0)
   expect(tcpip.hits[0]).toEqual({ destIP: '127.0.0.1', destPort: remote })
 })

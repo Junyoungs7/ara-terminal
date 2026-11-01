@@ -16,7 +16,7 @@ import type {
   UpdateState
 } from '@shared/ipc'
 import type { LaunchShell } from '@shared/aiCli'
-import { browserBridge } from './features/browser'
+import { orielBridge } from './features/oriel'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
 import { worktreesBridge } from './features/worktrees'
@@ -254,8 +254,8 @@ const api: EvApi = {
       return () => ipcRenderer.removeListener('explorer:shown', listener)
     }
   },
-  // 내장 브라우저 — 기능 틀(preload/features/browser.ts).
-  ...browserBridge,
+  // M9 R2 Oriel — 기능 틀(preload/features/oriel.ts). 옛 내장 브라우저 자리.
+  ...orielBridge,
   // FD-01 자원 관리자 — 기능 틀(preload/features/resources.ts).
   ...resourcesBridge,
   // M9 AI-10 사용량(preload/features/usage.ts).

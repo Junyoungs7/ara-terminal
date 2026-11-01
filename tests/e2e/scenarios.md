@@ -459,23 +459,15 @@ document 에 넣고(파일), 텍스트는 실제 클립보드 + Playwright 의 �
 | FWD-7 | 로컬 바인드는 loopback 고정 | — | 사내망 IPv4 로 그 포트에 접속 시도 | 실패한다(127.0.0.1 만 리슨 — 사내망 피벗 차단) | 🧪 `tests/forward.test.ts` 판정 대상이 소켓 바인드 주소다 | PASS |
 | FWD-8 | 원격 목적지도 loopback 고정 · 세션당 상한 16 · 포트 값 검증 | — | 17번째 생성 / 잘못된 포트 값 | 거부된다. 하네스가 받은 `destIP === 127.0.0.1` | 🧪 `tests/forward.test.ts` (BRW-1 이 왕복으로 재확인) | PASS |
 
-## 24. 내장 브라우저 (W2 F8)
+## 24. 링크·포트 [열기] → Oriel (M9 R2 — 아라 안 브라우저 제거, 결정 :162)
 
-터널 입구를 여는 **별도 크로미움 창**. 창 내부 보안 불변식은 실제 앱 main 을 부팅해 검사하는
-스모크(`npm run w2:browser`, 28개 어서션)가 담당하고, Playwright 는 사용자 여정만 본다 —
-같은 것을 두 번 코드화하지 않는다.
+내장 브라우저 창(W2 F8)과 그 스모크(`w2:browser`, BRW-2~8)는 지웠다. [열기]·링크는 `oriel:open` 으로 가고 Oriel 이
+없거나 실패하면 OS 기본 브라우저다. e2e 는 Oriel 을 띄우지 않는다(spyOriel 이 주소만 적는다).
 
 | ID | 기능 | 전제 | 단계 | 기대 결과 | 자동화 | 상태 |
 |----|------|------|------|-----------|--------|------|
-| BRW-1 | [열기] → 새 창 + 오리진 제목 | FWD-1 | 행의 [열기] 클릭 | 창이 하나 뜨고 제목이 `http://localhost:<포트> — A.R.A 브라우저`, 페이지는 **터널 너머** 원격이 그린다 | ✅ | PASS |
-| BRW-2 | 창에 `window.ev` 없음 | 창 열림 | 페이지에서 `typeof window.ev` | `'undefined'`(preload 미주입 · sandbox · contextIsolation) | 🧪 스모크 `tests/w2-browser.cjs` | PASS |
-| BRW-3 | `file://` 는 창도 안 열린다 | — | `browser.open('file:///…')` | `{ok:false}` + 창 개수 불변 | 🧪 스모크 | PASS |
-| BRW-4 | 두 번째 열기는 창 재사용 | 창 열림 | 다른 URL 로 재호출 | 창 개수 그대로, URL 만 바뀐다 | 🧪 스모크 | PASS |
-| BRW-5 | 페이지가 제목을 위장 못 한다 | 창 열림 | 페이지가 `<title>` 을 바꾼다 | 창 제목은 여전히 오리진 | 🧪 스모크 | PASS |
-| BRW-6 | 페이지 안에서 `file://` 이동 차단 | 창 열림 | `location.href='file:///…'` | URL 유지 | 🧪 스모크 | PASS |
-| BRW-7 | 권한 요청 전부 거부 | 창 열림 | `permissions.query({name:'geolocation'})` | `'denied'` | 🧪 스모크 | PASS |
-| BRW-8 | 전용 파티션 · 다운로드 차단 · 인증서 오류 미가로채기 | 창 열림 | — | 앱 세션과 다른 `persist:ara-browser`, `will-download` 차단, `certificate-error` 핸들러 0개 | 🧪 스모크 | PASS |
-| BRW-M1 | 자체서명 https 원격 서버 | 사설 인증서 dev 서버 | [열기] | 열리지 않는다(인증서 오류 기본 거부 — 의도된 한계) | ⛔ 알려진 한계, 사설 CA 환경 필요 | 수동 |
+| BRW-1 | [열기] → 터널 입구를 Oriel 로 | FWD-1 | 행의 [열기] 클릭 | `oriel:open` 에 `http://localhost:<로컬 포트>` 가 가고, 그 주소로 보낸 요청이 **터널 너머** 원격 127.0.0.1:<포트> 로 닿는다. 버튼은 [열기] 그대로(아라는 Oriel 탭을 모른다) | ✅ (M9 R2 갱신, 미실행) | — |
+| BRW-M2 | Oriel 켜짐/꺼짐/미설치 | 실제 PC | [열기]·링크 Ctrl+클릭 | 켜짐·꺼짐: Oriel 에 탭(Oriel `open` 명령이 생긴 뒤), 미설치: OS 기본 브라우저 | 수동(USER-CHECKLIST) | 수동 |
 
 ## 25. 터미널 링크 라우팅 · OAuth (W2 F8, D4 확인 다이얼로그는 W2 보안수정)
 
@@ -491,12 +483,12 @@ OS 기본 브라우저는 실제로 띄우지 않는다 — main 의 `shell.open
 
 | ID | 기능 | 전제 | 단계 | 기대 결과 | 자동화 | 상태 |
 |----|------|------|------|-----------|--------|------|
-| LINK-1 | 원격 localhost 링크 | SSH 세션이 `http://localhost:<포트>/preview` 출력 | Ctrl+클릭 | 포워딩이 생기고 내장 브라우저가 **터널 입구**(`localhost:<로컬포트>/preview`)를 연다. OS 브라우저는 호출되지 않는다 | ✅ | PASS |
+| LINK-1 | 원격 localhost 링크 | SSH 세션이 `http://localhost:<포트>/preview` 출력 | Ctrl+클릭 | 포워딩이 생기고 Oriel 로 **터널 입구**(`localhost:<로컬포트>/preview`)를 연다. OS 브라우저는 호출되지 않는다 | ✅ | PASS |
 | LINK-2 | 로컬 셸의 같은 URL | 로컬 셸이 같은 URL 출력 | Ctrl+클릭 | 진짜 내 PC 이므로 종전대로 OS 기본 브라우저. 포워딩·내장 창 없음 | ✅ | PASS |
 | LINK-3 | 외부 https | SSH 세션이 `https://docs.example.com/guide` 출력 | Ctrl+클릭 | OS 기본 브라우저(터널을 팔 이유가 없다) | ✅ | PASS |
 | OAUTH-1 | `redirect_uri` 콜백 포트 | SSH 세션이 `…?redirect_uri=http%3A%2F%2Flocalhost%3A<cb>%2Fcallback` 출력 | Ctrl+클릭 → **D4 확인 다이얼로그**(포트·오리진 표시) 통과 | `<cb>` 를 **그 번호 그대로**(exact) 포워딩하고 **원본** 인증 URL 로 창이 열린다 | ✅ | PASS |
 | OAUTH-2 | 콜백 포트 선점 | `<cb>` 를 다른 프로그램이 사용 중 | Ctrl+클릭 → D4 확인 통과 | "포트 포워딩을 만들 수 없습니다" 다이얼로그(원격 포트 표시) + 창 안 열림 + 포워딩 0건. 임의 포트로 조용히 넘어가지 않는다 | ✅ | PASS |
-| OAUTH-3 (신규) | D4 확인 다이얼로그 취소 | 위와 동일 링크 | Ctrl+클릭 → **[취소]** | `forward.create` 자체가 호출되지 않는다 — 포워딩 0건, 내장 브라우저 창 없음, OS 브라우저 호출도 없음 | ✅ | PASS |
+| OAUTH-3 (신규) | D4 확인 다이얼로그 취소 | 위와 동일 링크 | Ctrl+클릭 → **[취소]** | `forward.create` 자체가 호출되지 않는다 — 포워딩 0건, Oriel 로 보낸 것 없음, OS 브라우저 호출도 없음 | ✅ | PASS |
 | OAUTH-M1 | 실제 구글 OAuth 왕복 | 실계정 · 원격 CLI | `gcloud auth login` 류 실행 후 링크 Ctrl+클릭 → D4 확인 | 인증이 끝나고 CLI 가 콜백을 받는다 | ⛔ 실계정·외부 접속(DLP) — 준영님 핸즈온 | **수동 필요** |
 
 ## 26. 세션 로그 (W2 F12)
@@ -798,7 +790,7 @@ push 이벤트일 뿐이라 실 클라이언트 없이 `app.evaluate` 로 main �
 | MCP-26 (신규, FIX-mcpshell) | MCP HTTP 본문 1MB 상한 | — | 1MB 초과 body POST | 413 거부, 상한 이내는 정상 처리 | 🧪 `mcp-server.test.ts` | PASS |
 | MCP-27 (신규, FIX-mcpshell) | 세션 종료 시 승인 매니저 유령 세션 정리 | 세션 생성 후 종료 | `session_destroy` | 상태바 인디케이터 목록에서 즉시 제거(`forget()`) | 🧪 `mcp-approval.test.ts` | PASS |
 | MCP-28★ (신규, 2026-08-26 제보) | **AI 가 연 세션이 화면에 뜬다** | 세션 0개 | 렌더러 store 를 거치지 않고 `window.ev.session.create` 직접 호출(= MCP 가 main 에서 만드는 것과 같은 상황) | 탭·패널이 생긴다. `session:opened` 알림을 끄면 세션은 살아 있는데 탭이 0개 — 준영님이 본 그 화면 | ✅ + 🧪 `mcp-server.test.ts`(MCP 왕복으로 알림 확인)·`sessions.test.ts`(create·adopt 양쪽) | PASS |
-| MCP-29★ (신규, 2026-08-26 제보) | **아라 브라우저에 띄운다** | — | `browser_open("http://localhost:8000")` | 우리 창 안 브라우저 탭에 열린다. `file://` 등 http/https 밖은 거부 | 🧪 `mcp-server.test.ts` | PASS |
+| MCP-29★ (신규, 2026-08-26 제보 · M9 R2 갱신) | **Oriel 에 띄운다** | — | `oriel_open("http://localhost:8000")` | Oriel 로 연다(없으면 기본 브라우저). `file://` 등 http/https 밖은 거부. 옛 browser_close 는 없앴다 | 🧪 `mcp-server.test.ts` | PASS |
 | MCP-30 (신규, 2026-08-26 감사) | 포워딩 중지도 승인을 받는다 | 포워딩 있음 | `forward_stop` | 승인 다이얼로그가 뜬다(전에는 `readOnly` 라 조용히 끊겼다) | 🧪 화이트리스트/등급 표 | PASS |
 | MCP-31★ (신규, 2026-08-26 지시) | **기본으로 켜져 있다** | 새 userData | 설정 [MCP] | 토글 on + 포트 노출. 아라가 우리 도구를 쓰는 길이 이것뿐이라 꺼진 채로 시작하면 반쪽이 된다 | ✅ MCP-1 | PASS |
 | MCP-32★ | 끄기 전에 무엇을 잃는지 말한다 | 켜짐 | 토글 off | *"끄면 아라가 이 앱의 도구를 하나도 쓸 수 없습니다"* + 취소하면 켜진 채로 | ✅ MCP-2 | PASS |

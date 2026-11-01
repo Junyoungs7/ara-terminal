@@ -203,34 +203,41 @@ export function hookCommand(scriptPath: string, win: boolean): string {
   return /^[A-Za-z]:\/[A-Za-z0-9_.:/~-]+$/.test(p) ? p : `"${p}"`
 }
 
-// ── M9 AI-10 Claude statusLine → 사용량(Orca src/main/claude/statusline-script.ts·statusline-install.ts·hook-settings.ts) ─────
+// ── M9 AI-10 Claude statusLine → 사용량(Orca src/main/claude/statusline-script.ts) ─────
 // Claude ≥2.1.80 는 statusLine 명령의 stdin JSON 에 `rate_limits`(5시간·주간)를 싣는다 — 사용량 엔드포인트를 두드리지 않고 실시간 값을 받는다.
+// M9 R2: **전역 settings.json 에 심지 않는다**(사용자 PC 침범 — 터미널에서 친 claude 상태줄이 비고, 사용자 statusLine 이 있으면 못 받았다).
+// 아라가 띄우는 claude 에만 `--settings <파일>` 로 준다. 사용자의 원래 statusLine 이 있으면 `<우리 스크립트> pass | <원래 명령>` —
+// 우리 스크립트가 같은 입력을 그대로 흘려보내고, 화면에 찍히는 것은 원래 명령의 출력이다.
 
 export const STATUSLINE_PATH = '/statusline/claude'
 export const statusLineScriptName = (win: boolean): string => `claude-statusline.${win ? 'cmd' : 'sh'}`
-/** 사용자가 지운 statusLine 과 처음 심는 것을 가르는 표식(같은 폴더). */
+/** R1 이 전역 설정에 심을 때 남긴 표식(같은 폴더). R2 정리(removeOurStatusLine) 뒤 지운다. */
 export const STATUSLINE_MARKER = 'claude-statusline.installed'
 /** statusLine 은 초당 몇 번 돈다 — 스크립트가 15초에 한 번만 curl 을 띄운다(Orca CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS). */
 const STATUSLINE_MIN_POST_SECONDS = 15
 
 /**
- * statusLine 스크립트. **아무것도 찍지 않는다**(터미널의 상태줄을 비워 둔다 — 사용자가 statusLine 을 쓰고 있으면 애초에 안 심는다).
- * 우리 에이전트 탭 밖(env 없음)·백그라운드 작업(CLAUDE_JOB_DIR)·구독이 아닌 입력(rate_limits 없음)·15초 안의 두 번째는 curl 없이 끝난다.
+ * statusLine 스크립트. 인자 없이 돌면 **아무것도 찍지 않는다**. `pass` 를 주면 받은 입력을 그대로 stdout 으로 흘린다(뒤에 사용자 명령이 파이프로 붙는다) —
+ * 일찍 끝나는 길(env 없음·백그라운드 작업 CLAUDE_JOB_DIR·rate_limits 없음·15초 안의 두 번째)에서도 흘린다.
+ * Windows 는 stdin 을 `findstr "^"` 로 받는다(바이트 그대로 — R1 의 more.com 은 코드페이지를 거쳐 한글 경로가 깨졌다).
  */
 export function statusLineScript(win: boolean): string {
   const { port, token, pane } = HOOK_ENV
   if (win) {
+    const findstr = '"%SystemRoot%\\System32\\findstr.exe"'
     return [
       '@echo off',
       'setlocal',
-      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
-      `if "%${pane}%"=="" exit /b 0`,
-      `if "%${port}%"=="" exit /b 0`,
-      `if "%${token}%"=="" exit /b 0`,
+      'set "ARA_SL_PASS="',
+      'if /i "%~1"=="pass" set "ARA_SL_PASS=1"',
+      'if not "%CLAUDE_JOB_DIR%"=="" goto :passonly',
+      `if "%${pane}%"=="" goto :passonly`,
+      `if "%${port}%"=="" goto :passonly`,
+      `if "%${token}%"=="" goto :passonly`,
       `set "ARA_SL_ID=%${pane}:~-36%"`,
       'set "ARA_SL_ID=%ARA_SL_ID::=_%"',
-      'set "ARA_SL_FILE=%TEMP%\\ara-claude-statusline-%ARA_SL_ID%.tmp"',
-      '"%SystemRoot%\\System32\\more.com" >"%ARA_SL_FILE%" 2>nul',
+      'set "ARA_SL_FILE=%TEMP%\\ara-claude-statusline-%ARA_SL_ID%-%RANDOM%.tmp"',
+      `${findstr} "^" >"%ARA_SL_FILE%" 2>nul`,
       'set "ARA_SL_STAMP=%TEMP%\\ara-claude-statusline-last-%ARA_SL_ID%.tmp"',
       'set "ARA_SL_NOW="',
       'set "ARA_SL_TIME=%TIME: =0%"',
@@ -243,49 +250,77 @@ export function statusLineScript(win: boolean): string {
       'if not defined ARA_SL_ELAPSED goto :probe',
       `if %ARA_SL_ELAPSED% GEQ 0 if %ARA_SL_ELAPSED% LSS ${STATUSLINE_MIN_POST_SECONDS} goto :cleanup`,
       ':probe',
-      '"%SystemRoot%\\System32\\findstr.exe" /c:\\"rate_limits\\" "%ARA_SL_FILE%" >nul 2>nul',
+      `${findstr} /c:\\"rate_limits\\" "%ARA_SL_FILE%" >nul 2>nul`,
       'if errorlevel 1 goto :cleanup',
       'if defined ARA_SL_NOW (>"%ARA_SL_STAMP%" echo %ARA_SL_NOW%)',
       `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%${port}%${STATUSLINE_PATH}" --connect-timeout 0.5 --max-time 1.5 -H "Content-Type: application/json" -H "${HOOK_TOKEN_HEADER}: %${token}%" -H "${HOOK_PANE_HEADER}: %${pane}%" --data-binary @"%ARA_SL_FILE%" >nul 2>&1`,
       ':cleanup',
+      'if defined ARA_SL_PASS type "%ARA_SL_FILE%"',
       'del "%ARA_SL_FILE%" >nul 2>nul',
+      'exit /b 0',
+      ':passonly',
+      `if defined ARA_SL_PASS ${findstr} "^"`,
       'exit /b 0',
       ''
     ].join('\r\n')
   }
   return [
     '#!/bin/sh',
+    'mode=$1',
     'payload=$(cat)',
-    '[ -n "$CLAUDE_JOB_DIR" ] && exit 0',
-    `if [ -z "$${port}" ] || [ -z "$${token}" ] || [ -z "$${pane}" ]; then exit 0; fi`,
-    'case "$payload" in *\'"rate_limits"\'*) ;; *) exit 0 ;; esac',
+    'out() { [ "$mode" = pass ] && printf \'%s\\n\' "$payload"; exit 0; }',
+    '[ -n "$CLAUDE_JOB_DIR" ] && out',
+    `if [ -z "$${port}" ] || [ -z "$${token}" ] || [ -z "$${pane}" ]; then out; fi`,
+    'case "$payload" in *\'"rate_limits"\'*) ;; *) out ;; esac',
     `stamp="\${TMPDIR:-/tmp}/ara-claude-statusline-last-$(printf '%s' "$${pane}" | tr -c 'A-Za-z0-9._-' '_')"`,
     'now=$(date +%s 2>/dev/null) || now=',
     'case "$now" in [1-9]*) ;; *) now= ;; esac',
     'if [ -n "$now" ] && [ -f "$stamp" ]; then',
     '  last=$(cat "$stamp" 2>/dev/null)',
-    '  case "$last" in [1-9]*) [ $((now - last)) -ge 0 ] && [ $((now - last)) -lt ' + STATUSLINE_MIN_POST_SECONDS + ' ] && exit 0 ;; esac',
+    '  case "$last" in [1-9]*) [ $((now - last)) -ge 0 ] && [ $((now - last)) -lt ' + STATUSLINE_MIN_POST_SECONDS + ' ] && out ;; esac',
     'fi',
     '[ -n "$now" ] && printf \'%s\' "$now" >"$stamp" 2>/dev/null',
     `printf '%s' "$payload" | curl -sS -X POST "http://127.0.0.1:\${${port}}${STATUSLINE_PATH}" --connect-timeout 0.5 --max-time 1.5 -H "Content-Type: application/json" -H "${HOOK_TOKEN_HEADER}: \${${token}}" -H "${HOOK_PANE_HEADER}: \${${pane}}" --data-binary @- >/dev/null 2>&1`,
-    'exit 0',
+    'out',
     ''
   ].join('\n')
 }
 
 const isOurStatusLine = (command: string): boolean => /[\\/]\.ara[\\/]agent-hooks[\\/]/.test(command) && command.includes('claude-statusline.')
+type StatusLineDef = Record<string, unknown> & { command: string }
+const statusLineOf = (settings: unknown): StatusLineDef | null => {
+  const sl = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Settings)['statusLine'] : null
+  return sl && typeof sl === 'object' && typeof (sl as { command?: unknown }).command === 'string' && (sl as { command: string }).command.trim() ? (sl as StatusLineDef) : null
+}
 
 /**
- * statusLine 자리를 채운 설정(순수). **사용자 statusLine 이 있으면 손대지 않는다**(Orca: 사용자 것이 사용량 피드보다 앞선다).
- * 비어 있는데 표식이 있으면 = 사용자가 지운 것 → 다시 안 심는다. 이미 같으면 null(파일을 안 고친다).
+ * 사용자의 원래 statusLine(높은 것부터: `<cwd>/.claude/settings.local.json` · `<cwd>/.claude/settings.json` · 사용자 settings.json).
+ * 우리 것(R1 이 전역에 심은 줄)은 건너뛴다. 없으면 null.
  */
-export function mergeStatusLine(settings: unknown, command: string, markerExists: boolean): Settings | null {
-  const base: Settings = settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Settings) : {}
-  const cur = base['statusLine'] as { command?: unknown } | undefined
-  const curCmd = cur && typeof cur === 'object' && typeof cur.command === 'string' ? cur.command : null
-  if (curCmd ? !isOurStatusLine(curCmd) : markerExists) return null
-  if (curCmd === command) return null
-  return { ...base, statusLine: { type: 'command', command } }
+export function userStatusLine(layers: readonly unknown[]): StatusLineDef | null {
+  for (const l of layers) {
+    const sl = statusLineOf(l)
+    if (sl && !isOurStatusLine(sl.command)) return sl
+  }
+  return null
+}
+
+/**
+ * `--settings` 로 넘길 설정(아라 에이전트 탭의 claude 에만). 사용자 statusLine 이 있으면 그 나머지 칸(padding 등)은 그대로 두고 명령만
+ * `<스크립트> pass | <원래 명령>` 으로 — 원래 명령이 같은 입력을 받아 같은 줄을 찍는다.
+ * ponytail: 원래 명령이 `a && b` 처럼 여러 개면 파이프는 첫 명령에만 붙는다(원래도 둘째는 남은 입력을 받았다). 그런 사용자가 나오면 셸 묶음으로.
+ */
+export function claudeLaunchSettings(scriptCommand: string, user: StatusLineDef | null): Settings {
+  return { statusLine: user ? { ...user, type: 'command', command: `${scriptCommand} pass | ${user.command}` } : { type: 'command', command: scriptCommand } }
+}
+
+/** R1 이 전역 settings.json 에 심은 우리 statusLine 을 뺀 설정. 우리 것이 아니거나 없으면 null(쓰지 않는다 — 남의 statusLine 은 그대로). */
+export function removeOurStatusLine(settings: unknown): Settings | null {
+  const sl = statusLineOf(settings)
+  if (!sl || !isOurStatusLine(sl.command)) return null
+  const next = { ...(settings as Settings) }
+  delete next['statusLine']
+  return next
 }
 
 type HookCmd = { type?: string; command?: unknown; timeout?: number }

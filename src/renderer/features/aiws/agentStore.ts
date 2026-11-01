@@ -104,7 +104,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const host = hostOfWorktree(worktreeId)
     const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options, host)
     if (!r.ok) return r
-    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}) }
+    // M9 R2 Oriel 이 없어 웹 도구 없이 띄웠다(main 이 앱 실행 중 처음 한 번만 알려 준다). 설치 안내는 설정 › 에이전트.
+    if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body') })
+    const tab: AgentTab ={ sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
     writeChatOn(chatOn)
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))

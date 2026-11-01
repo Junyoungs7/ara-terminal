@@ -51,7 +51,7 @@ type Rig = {
   approvalRequests: McpApprovalRequest[]
   // 화면으로 나간 "세션이 생겼다" 알림. 이게 비면 사용자에게 탭이 안 보인다(2026-08-26 제보).
   opened: Session[]
-  browserUrls: string[]
+  orielUrls: string[]
   panelsShown: string[]
   cleanup: () => Promise<void>
 }
@@ -66,7 +66,7 @@ async function makeRig(): Promise<Rig> {
   const dir = mkdtempSync(join(tmpdir(), 'ev-mcp-http-'))
   const opened: Session[] = []
   // 아라 브라우저에 띄운 주소. 비면 사용자 화면에 아무것도 안 뜬 것이다(2026-08-26 제보).
-  const browserUrls: string[] = []
+  const orielUrls: string[] = []
   const panelsShown: string[] = []
   const sessions = new MainSessionManager({
     data() {},
@@ -97,7 +97,7 @@ async function makeRig(): Promise<Rig> {
     ws,
     forwards,
     sftp,
-    browser: { open: (u: string) => { browserUrls.push(u); return u.startsWith('http') }, closeOrigin: () => true, current: () => null, close: () => {} },
+    oriel: { open: async (u: string) => (orielUrls.push(u), u.startsWith('http') ? ('oriel' as const) : false) },
     remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
     sessionLog: () => null,
     history: new HistoryStore(join(dir, 'history.json')),
@@ -129,7 +129,7 @@ async function makeRig(): Promise<Rig> {
     approval,
     approvalRequests,
     opened,
-    browserUrls,
+    orielUrls,
     panelsShown,
     cleanup: async () => {
       await server.stop()
@@ -260,7 +260,7 @@ describe('인증·트랜스포트(설계 §8 체크리스트 1)', () => {
       ws,
       forwards: createForwardService(() => null),
       ask: createAskUser({ ask: () => {}, askDone: () => {} }),
-      browser: { open: () => true, closeOrigin: () => true, current: () => null, close: () => {} },
+      oriel: { open: async () => 'oriel' as const },
       remote: { run: async () => ({ ok: false as const, reason: 'noSession' as const }), watch: () => {}, unwatch: () => {}, stopAll: () => {}, activeCount: () => 0 },
       sessionLog: () => null,
       history: new HistoryStore(join(dir, 'history.json')),
@@ -363,8 +363,6 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         'aisession_list',
         'aisession_send',
         'ask_user',
-        'browser_close',
-        'browser_open',
         'file_read',
         'file_write',
         'forward_create',
@@ -372,6 +370,8 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
         'forward_stop',
         'history_list',
         'log_read',
+        // M9 R2: browser_open → oriel_open(아라 안 브라우저 없음 — 결정 :162), browser_close 제거.
+        'oriel_open',
         // 2026-08-26: 결과가 많으면 글로 옮겨 적지 말고 **원래 그걸 보라고 만든 화면**을 연다.
         'panel_show',
         'record_list',
@@ -515,18 +515,18 @@ describe('툴 화이트리스트 경계(설계 §8 체크리스트 2)', () => {
    *
    * 도구가 없으면 모델은 밖에서 찾는다 — 세션 알림(#1)·서버 목록(#2)과 같은 뿌리다.
    */
-  it('★ browser_open 이 아라 브라우저에 띄운다(로컬 브라우저로 나가지 않는다)', async () => {
+  it('★ oriel_open 이 Oriel 에 띄운다(로컬 브라우저를 직접 부르지 않는다)', async () => {
     const rig = await makeRig()
     rigs.push(rig)
     const { client, transport } = makeClient(rig.port, rig.token)
     await client.connect(transport)
 
-    const res = await client.callTool({ name: 'browser_open', arguments: { url: 'http://localhost:8000' } })
+    const res = await client.callTool({ name: 'oriel_open', arguments: { url: 'http://localhost:8000' } })
     expect(res.isError).toBeFalsy()
-    expect(rig.browserUrls).toEqual(['http://localhost:8000'])
+    expect(rig.orielUrls).toEqual(['http://localhost:8000'])
 
     // http/https 밖은 열지 않는다 — 파일·앱 스킴으로 우리 창을 끌고 갈 수 없다.
-    const bad = await client.callTool({ name: 'browser_open', arguments: { url: 'file:///C:/Windows/win.ini' } })
+    const bad = await client.callTool({ name: 'oriel_open', arguments: { url: 'file:///C:/Windows/win.ini' } })
     expect(bad.isError).toBe(true)
     await client.close()
   })

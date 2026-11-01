@@ -1777,7 +1777,6 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                   </div>
                 )
               })}
-              <div className="set-note">{t('settings.features.browser')}</div>
             </>
           )}
 
@@ -2011,7 +2010,7 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                   type="button"
                   className="btn sec"
                   data-action="notes.open"
-                  onClick={() => void window.ev?.browser?.open(CHANGELOG_URL)}
+                  onClick={() => void window.ev?.oriel?.open(CHANGELOG_URL)}
                 >
                   {t('settings.notes.open')}
                 </button>

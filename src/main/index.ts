@@ -28,7 +28,6 @@ import { closeEditorsForSession } from './editor/EditorWindows'
 import { closePortWindow, portWindowContents } from './windows/PortWindow'
 import { closeExplorerWindow, explorerWindowContents } from './windows/ExplorerWindow'
 import { closePastLogWindow } from './windows/PastLogWindow'
-import { closeBrowserWindow } from './browser/BrowserTabs'
 import { anyWindowVisible } from './windows/visibleWindows'
 import { shouldLockSingleInstance, windowToRaise } from './windows/singleInstance'
 import { createOpenHere, folderToOpen } from './windows/openHere'
@@ -54,7 +53,8 @@ import { registerScmFeature } from './scm/feature'
 import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
-import { cleanupLegacyHooks } from './agents/hooks'
+import { cleanupLegacyHooks, cleanupOurStatusLine } from './agents/hooks'
+import { registerOrielFeature } from './oriel/feature'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { registerVoiceIpc, type VoiceRuntime } from './ipc/registerVoiceIpc'
@@ -230,8 +230,6 @@ function createWindow(): void {
     closeExplorerWindow()
     // 지난 세션 로그 창도 본창에 딸리지 않은 독립 창이다 — 같이 닫는다.
     closePastLogWindow()
-    // 내장 브라우저 창도 본창에 딸리지 않은 독립 창이다(parent 없음) — parent 가 해 주던 동반 닫힘을 여기서.
-    closeBrowserWindow()
   })
 
   /**
@@ -573,8 +571,9 @@ app.whenReady().then(async () => {
   // 넘길 수 있는 경로는 계약에 존재하지 않는다.
   const remoteSvc = registerRemoteIpc(sessions, getWebContents, profiles, explorerToo)
   remoteConsole = remoteSvc
-  // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
-  const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
+  const fwdIpc = registerForwardIpc(sessions, () => sessionLog?.dir ?? sessionDir)
+  // M9 R2 Oriel(main/oriel/feature.ts) — 링크·포트 [열기]·MCP oriel_open 이 Oriel 로(아라 안 브라우저 없음). 위치 설정은 에이전트 설정(아래에서 선다).
+  const oriel = registerOrielFeature(() => agents?.orielPath() ?? '')
   forwards = fwdIpc.forwards
   // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). M4 R3: 에이전트 상한(적용은 로컬 데몬)을 팝오버에 보여 준다 — 에이전트 기능이 아래에서 선다.
   registerResourcesFeature(sessions, () => agents?.limits() ?? NO_AGENT_LIMITS)
@@ -593,7 +592,7 @@ app.whenReady().then(async () => {
     const w = parseClaudeStatusLine(p)
     if (w) usage.ingestClaudeLive(w)
   }
-  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc(), remote: () => managed, onClaudeStatusLine: ingestStatusLine })
+  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc(), remote: () => managed, onClaudeStatusLine: ingestStatusLine, oriel })
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
@@ -675,8 +674,8 @@ app.whenReady().then(async () => {
       ws: store,
       forwards,
       sftp: sftpService,
-      // 아라 브라우저. 화면의 [포트]→[열기]가 쓰는 그 서비스를 그대로 넘긴다(같은 창·같은 탭 줄).
-      browser: fwdIpc.browser,
+      // M9 R2 Oriel — 화면의 [포트]→[열기]·링크와 같은 길.
+      oriel,
       // F26 서버 콘솔·기록·히스토리 — 화면만 쓰던 것을 아라에게도 연다(2026-08-26 전수 감사).
       remote: remoteSvc,
       sessionLog: () => sessionLog,
@@ -774,6 +773,8 @@ app.whenReady().then(async () => {
   // 새 훅(Orca 방식)은 에이전트를 처음 띄울 때 심는다(agents/feature.ts). e2e 는 임시 홈(hookHome).
   try {
     cleanupLegacyHooks(hookHome)
+    // M9 R2: R1 이 전역 settings.json 에 심은 우리 statusLine 을 지운다(우리 표식이 있는 줄만 — 남의 statusLine 은 읽기만).
+    cleanupOurStatusLine(hookHome)
   } catch (e) {
     logMainError('legacy agent hooks cleanup', e)
   }
@@ -843,7 +844,6 @@ app.on('before-quit', (e) => {
   quitStep('portWindow', () => closePortWindow())
   quitStep('explorerWindow', () => closeExplorerWindow())
   quitStep('pastLogWindow', () => closePastLogWindow())
-  quitStep('browserWindow', () => closeBrowserWindow())
   quitStep('remoteConsole', () => remoteConsole?.stopAll())
   quitStep('forwards', () => forwards?.stopAll())
   exitTrace('flushed')

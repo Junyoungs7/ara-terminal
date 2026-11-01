@@ -791,22 +791,28 @@ export async function windowInfos(app: ElectronApplication): Promise<{ title: st
 }
 
 /**
- * 내장 브라우저가 **지금 보고 있는 주소들**.
- *
- * 2026-08-21 탭 도입 전에는 창 하나가 곧 페이지였고 `창.webContents.getURL()` 이 그 주소였다.
- * 지금은 창의 최상위 contents 가 **우리 탭 줄**(file://index.html#browser)이고 원격 페이지는
- * 그 아래 WebContentsView 에 산다 — 창만 훑으면 언제나 빈 문자열이 나온다(LINK-1·OAUTH-1 이
- * 그래서 실패했다). 그래서 창이 아니라 **전용 파티션에 붙은 contents** 를 센다: 그 파티션에
- * 사는 것은 하드닝된 브라우저 탭뿐이다(BrowserService.BROWSER_PARTITION).
+ * M9 R2 — 아라 안 브라우저는 없다(결정 :162). 링크 Ctrl+클릭·포트 [열기]는 `oriel:open` 으로 간다.
+ * 그 main 핸들러를 가로채 **주소만 적는다** — Oriel 도 OS 브라우저도 띄우지 않는다(e2e 는 Oriel 을 미설치로 본다).
+ * 가로채기 전 핸들러를 지우므로 각 시험 처음에 부른다.
  */
-export async function browserWindows(app: ElectronApplication): Promise<{ title: string; url: string }[]> {
-  return app.evaluate(({ webContents, session }) => {
-    const ses = session.fromPartition('persist:ara-browser')
-    return webContents
-      .getAllWebContents()
-      .filter((wc) => !wc.isDestroyed() && wc.session === ses)
-      .map((wc) => ({ title: wc.getTitle(), url: wc.getURL() }))
+export async function spyOriel(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    const g = globalThis as unknown as { __araOriel?: string[] }
+    if (g.__araOriel) return
+    const opened: string[] = []
+    g.__araOriel = opened
+    ipcMain.removeHandler('oriel:open')
+    ipcMain.handle('oriel:open', (_e, { url }: { url: string }) => {
+      if (!/^https?:/.test(url)) return { ok: false }
+      opened.push(url)
+      return { ok: true, via: 'oriel' }
+    })
   })
+}
+
+/** spyOriel 이 적은 주소들(Oriel 로 보낸 순서). */
+export async function orielOpened(app: ElectronApplication): Promise<string[]> {
+  return app.evaluate(() => (globalThis as unknown as { __araOriel?: string[] }).__araOriel ?? [])
 }
 
 type ShellSpy = { external: string[]; paths: string[] }

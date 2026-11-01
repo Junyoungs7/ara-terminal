@@ -14,7 +14,7 @@ export const SETTINGS_GROUPS = ['aiws', 'app', 'global', 'terminal', 'security',
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number]
 
 export const SETTINGS_SECTIONS = [
-  'agents', 'managed', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'browser', 'automations',
+  'agents', 'managed', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'automations',
   'general', 'look', 'pet', 'font', 'keys', 'update',
   'ai', 'voice',
   'terminal', 'conn', 'features', 'log', 'history',
@@ -45,6 +45,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.rc', 'settings.agents.rc', 'settings.agents.rc.desc'),
       i('agents.naming', 'settings.agents.naming', 'settings.agents.naming.desc'),
       i('agents.chatPermission', 'settings.agents.chatPermission', 'settings.agents.chatPermission.desc'),
+      i('agents.oriel', 'settings.agents.oriel', 'settings.agents.oriel.missing'),
       i('agents.lowPriority', 'settings.agents.lowPriority', 'settings.agents.lowPriority.desc'),
       i('agents.memoryCap', 'settings.agents.memoryCap', 'settings.agents.memoryCap.desc'),
       i('agents.launch', 'settings.agents.launch'),
@@ -72,7 +73,6 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('notify.sound', 'settings.notify.sound', 'settings.notify.sound.desc')
     ]
   },
-  soon('browser', 'aiws'),
   soon('automations', 'aiws'),
 
   { id: 'general', group: 'app', items: [s('uiScale'), s('bootSplash'), i('dir.download', 'settings.dir.download', 'settings.dir.download.desc')] },

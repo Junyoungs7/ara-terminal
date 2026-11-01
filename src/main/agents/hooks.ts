@@ -4,10 +4,10 @@
 //
 // 성능 원칙: 서버는 **첫 에이전트 실행 때** 연다(AI 작업 공간을 안 쓰면 포트도 안 연다). 훅은 그 에이전트를 처음 띄울 때 심는다.
 import { createServer, type IncomingMessage, type Server } from 'node:http'
-import { randomBytes } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { HOOK_PANE_HEADER, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, LEGACY_HOOK_MARK, mergeHooks, mergeStatusLine, removeLegacyHooks, STATUSLINE_MARKER, STATUSLINE_PATH, statusLineScript, statusLineScriptName, type HookSource } from '@shared/agentHooks'
+import { claudeLaunchSettings, HOOK_PANE_HEADER, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, LEGACY_HOOK_MARK, mergeHooks, removeLegacyHooks, removeOurStatusLine, STATUSLINE_MARKER, STATUSLINE_PATH, statusLineScript, statusLineScriptName, userStatusLine, type HookSource } from '@shared/agentHooks'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { writeJsonAtomic } from '../util/atomicJson'
 
@@ -129,19 +129,13 @@ export function installHooks(home: string, source: HookSource, win = process.pla
         return { ok: false, message: `${cfg} 를 읽을 수 없어 훅을 심지 않았습니다: ${String(e)}` }
       }
     }
-    let next = mergeHooks(current, source, hookCommand(script, win))
+    const next = mergeHooks(current, source, hookCommand(script, win))
     if (source === 'claude') {
-      // M9 AI-10 statusLine(사용량 실시간) — 사용자 statusLine 이 있거나 사용자가 지웠으면(표식) 안 심는다.
+      // M9 AI-10 statusLine 스크립트 — 전역 설정에는 안 적는다(R2). 실행 때 claudeStatusLineArgs 가 --settings 로 준다.
       const sl = join(dir, statusLineScriptName(win))
       const slBody = statusLineScript(win)
-      const marker = join(dir, STATUSLINE_MARKER)
-      const merged = mergeStatusLine(next ?? current, hookCommand(sl, win), existsSync(marker))
-      if (merged) {
-        if (!existsSync(sl) || readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
-        if (!win) chmodSync(sl, 0o755)
-        writeFileSync(marker, '')
-        next = merged
-      } else if (existsSync(sl) && readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
+      if (!existsSync(sl) || readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
+      if (!win) chmodSync(sl, 0o755)
     }
     if (next) {
       mkdirSync(cfgDir, { recursive: true })
@@ -175,6 +169,55 @@ export function cleanupLegacyHooks(home: string): boolean {
     return false // 깨진 파일은 손대지 않는다
   }
   const next = removeLegacyHooks(parsed)
+  if (!next) return false
+  writeJsonAtomic(cfg, next)
+  return true
+}
+
+const readJson = (file: string): unknown => {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 실행 한 번에 넘길 파일(`<home>/.ara/agent-launch/<이름>-<내용 해시>.<확장자>`). 내용이 같으면 같은 파일 — 실행마다 쌓이지 않는다.
+ * 사용자 설정 폴더(~/.claude·~/.codex·~/.gemini)가 아니라 아라 폴더다.
+ */
+export function writeLaunchFile(home: string, name: string, ext: string, body: string): string {
+  const dir = join(home, '.ara', 'agent-launch')
+  const file = join(dir, `${name}-${createHash('sha256').update(body).digest('hex').slice(0, 12)}.${ext}`)
+  if (!existsSync(file)) {
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(file, body, 'utf8')
+  }
+  return file
+}
+
+/**
+ * M9 R2 — 아라 에이전트 탭의 claude 에만 statusLine 을 준다: `--settings <파일>`(전역 settings.json 은 안 건드린다).
+ * 사용자의 원래 statusLine(프로젝트 local·프로젝트·사용자 순)이 있으면 같은 입력을 넘겨 그 출력을 그대로 보인다.
+ * @param configDir 사용자 claude 설정 폴더(CLAUDE_CONFIG_DIR 또는 ~/.claude) — **읽기만**.
+ */
+export function claudeStatusLineArgs(home: string, cwd: string, configDir: string, win = process.platform === 'win32'): string[] {
+  const script = join(home, '.ara', 'agent-hooks', statusLineScriptName(win))
+  if (!existsSync(script)) return []
+  const user = userStatusLine([join(cwd, '.claude', 'settings.local.json'), join(cwd, '.claude', 'settings.json'), join(configDir, 'settings.json')].map(readJson))
+  return ['--settings', writeLaunchFile(home, 'claude-settings', 'json', JSON.stringify(claudeLaunchSettings(hookCommand(script, win), user), null, 2))]
+}
+
+/**
+ * M9 R2 — R1 이 `~/.claude/settings.json` 에 심은 우리 statusLine 을 지운다. **우리 표식(.ara/agent-hooks/claude-statusline.)이 있는 줄만** —
+ * 남의 statusLine 은 읽기만 하고 끝. 표식 파일도 지운다. 부팅마다 불러도 쓰는 것은 처음 한 번.
+ * @returns 지운 줄이 있었나
+ */
+export function cleanupOurStatusLine(home: string, configDir = join(home, '.claude')): boolean {
+  const marker = join(home, '.ara', 'agent-hooks', STATUSLINE_MARKER)
+  if (existsSync(marker)) rmSync(marker, { force: true })
+  const cfg = join(configDir, 'settings.json')
+  const next = removeOurStatusLine(readJson(cfg))
   if (!next) return false
   writeJsonAtomic(cfg, next)
   return true

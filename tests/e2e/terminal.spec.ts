@@ -1,5 +1,5 @@
 // 터미널 표준 동작 (R3) — 검색 · 스크롤백 · ANSI · URL · 글자 크기 · 자동 제목
-import { test, expect, newLocalShell, runCommand, expectTermText, sendInput, connectNewSshProfile, browserWindows, ctrlClickLink } from './fixtures'
+import { test, expect, newLocalShell, runCommand, expectTermText, sendInput, connectNewSshProfile, orielOpened, spyOriel, ctrlClickLink } from './fixtures'
 
 // TERM-1 Ctrl+Shift+F 터미널 내 검색(한글 포함)
 test('TERM-1 터미널 안에서 한글을 검색한다', async ({ ara }) => {
@@ -106,8 +106,8 @@ test('TERM-8 사용자가 정한 탭 이름은 셸 제목보다 우선한다', a
 })
 
 // TERM-9 URL 은 수식자 클릭으로만 열린다(R3.3). 2026-09-10(linkTarget.ts planLink) 뒤로 로컬 셸의
-// Ctrl+클릭은 **아라 브라우저**, Ctrl+Alt+클릭이 OS 브라우저(main 의 app:openExternal)다 — 둘 다 본다.
-test('TERM-9 URL 은 수식자 클릭으로만 열린다 — Ctrl 은 아라 브라우저, Ctrl+Alt 는 외부 브라우저', async ({ ara }) => {
+// Ctrl+클릭은 **Oriel**, Ctrl+Alt+클릭이 OS 브라우저(main 의 app:openExternal)다 — 둘 다 본다.
+test('TERM-9 URL 은 수식자 클릭으로만 열린다 — Ctrl 은 Oriel, Ctrl+Alt 는 외부 브라우저', async ({ ara }) => {
   const { page, app } = ara
   // 실제 브라우저를 띄우지 않도록 main 핸들러를 가로챈다(호출 여부만 기록).
   await app.evaluate(({ ipcMain }) => {
@@ -119,6 +119,7 @@ test('TERM-9 URL 은 수식자 클릭으로만 열린다 — Ctrl 은 아라 브
       return { ok: true }
     })
   })
+  await spyOriel(app)
   const id = await newLocalShell(page)
   await runCommand(page, id, 'echo https://example.invalid/docs')
   await expectTermText(page, id, /example\.invalid\/docs/)
@@ -128,10 +129,10 @@ test('TERM-9 URL 은 수식자 클릭으로만 열린다 — Ctrl 은 아라 브
   await link.click() // 수식자 없는 클릭 — 열리면 안 된다
   await page.waitForTimeout(600)
   expect(await app.evaluate(() => (globalThis as unknown as { __opened: string[] }).__opened)).toEqual([])
-  expect(await browserWindows(app)).toHaveLength(0)
+  expect(await orielOpened(app)).toHaveLength(0)
   // 호버 확정을 기다리는 클릭(fixtures ctrlClickLink — 맨 클릭으로 떨어지지 않게).
   await ctrlClickLink(page, 'https://example.invalid/docs')
-  await expect.poll(async () => (await browserWindows(app))[0]?.url ?? '', { timeout: 25_000 }).toBe('https://example.invalid/docs')
+  await expect.poll(async () => (await orielOpened(app))[0] ?? '', { timeout: 25_000 }).toBe('https://example.invalid/docs')
   expect(await app.evaluate(() => (globalThis as unknown as { __opened: string[] }).__opened)).toEqual([])
   await ctrlClickLink(page, 'https://example.invalid/docs', true)
   await expect

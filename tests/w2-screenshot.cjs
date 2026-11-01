@@ -2,7 +2,7 @@
 // 원격 자리에만 ssh2 하네스를 세운다(실서버 접속 없음 · 루프백·temp 한정).
 //
 //   ① [모니터] 탭 포트 행 [↗] → `→ localhost:N` 배지          → agent_talk/W2-forward-screenshot.png
-//   ② 배지 옆 [열기] → 내장 브라우저가 원격 페이지를 렌더       → agent_talk/W2-browser-screenshot.png
+//   ② (M9 R2 에서 뺐다 — 아라 안 브라우저 없음, [열기]는 Oriel)
 //   ③ 설정 [로그] 켜기 → 세션 출력이 파일로 남고 비밀은 ****     → agent_talk/W2-log-screenshot.png
 //
 // 포워딩 왕복은 진짜다: 브라우저 → 내 PC 127.0.0.1:N → ssh direct-tcpip → 하네스가 HTTP 로 응답한다.
@@ -22,7 +22,6 @@ app.setPath('userData', USER_DATA)
 require('../out/main/index.js')
 
 const SHOT_FWD = join(__dirname, '..', 'agent_talk', 'W2-forward-screenshot.png')
-const SHOT_BRW = join(__dirname, '..', 'agent_talk', 'W2-browser-screenshot.png')
 const SHOT_LOG = join(__dirname, '..', 'agent_talk', 'W2-log-screenshot.png')
 
 const checks = []
@@ -153,22 +152,7 @@ app.whenReady().then(async () => {
   const again = await js(`window.ev.forward.list()`)
   check('두 번 눌러도 포워딩 1건(멱등)', again.length === 1)
 
-  // ── ② [열기] → 내장 브라우저가 터널 너머 페이지를 렌더 ──
-  const before = BrowserWindow.getAllWindows().length
-  await js(`document.querySelector('.pmon-list .prow [data-action="forward.open"]')?.click()`)
-  const bw = await waitFor(() => BrowserWindow.getAllWindows().find((w) => w !== win) ?? null)
-  check('[열기] → 브라우저 창 1개 추가', bw !== null && BrowserWindow.getAllWindows().length === before + 1)
-  if (bw) {
-    if (bw.webContents.isLoading()) await new Promise((r) => bw.webContents.once('did-finish-load', r))
-    await wait(400)
-    const body = await bw.webContents.executeJavaScript(`document.body.innerText`).catch(() => '')
-    check('터널 왕복으로 원격 페이지가 렌더됨(한글)', body.includes('원격 개발 서버 미리보기'))
-    check('브라우저 창 제목에 오리진', bw.getTitle().includes('localhost:'))
-    check('브라우저 창에 window.ev 없음', (await bw.webContents.executeJavaScript(`typeof window.ev`)) === 'undefined')
-    await shoot(bw, SHOT_BRW, '내장 브라우저')
-    bw.close()
-    await wait(300)
-  }
+  // ② 내장 브라우저 장면은 M9 R2 에서 뺐다(아라 안 브라우저 없음 — [열기]는 Oriel).
 
   // ── ③ 설정 [로그] — 기본 off 확인 → 켜고 출력 → 파일·마스킹 확인 ──
   const logDir = join(USER_DATA, 'logs')
@@ -241,7 +225,7 @@ function finish(fatal) {
     console.log((pass ? 'PASS ' : 'FAIL ') + name)
     if (!pass) ok = false
   }
-  for (const p of [SHOT_FWD, SHOT_BRW, SHOT_LOG]) {
+  for (const p of [SHOT_FWD, SHOT_LOG]) {
     console.log((existsSync(p) ? 'SCREENSHOT ' : 'MISSING ') + p)
   }
   app.exit(ok ? 0 : 1)

@@ -23,8 +23,8 @@ import {
   type ProviderUsage
 } from '../src/shared/usage'
 import { createUsageService, CLAUDE_USAGE_URL, CODEX_USAGE_URL, type FetchLike } from '../src/main/usage/service'
-import { HOOK_ENV, mergeStatusLine, statusLineScript } from '../src/shared/agentHooks'
-import { createHookServer, installHooks } from '../src/main/agents/hooks'
+import { claudeLaunchSettings, HOOK_ENV, removeOurStatusLine, statusLineScript, userStatusLine } from '../src/shared/agentHooks'
+import { claudeStatusLineArgs, cleanupOurStatusLine, createHookServer, installHooks } from '../src/main/agents/hooks'
 
 const H = 3_600_000
 const NOW = Date.UTC(2026, 10, 1, 3, 0, 0)
@@ -262,32 +262,68 @@ describe('사용량 서비스(모의 네트워크)', () => {
   })
 })
 
-describe('statusLine 심기(Orca statusline-install)', () => {
-  it('비어 있으면 심고, 사용자 statusLine 은 손대지 않고, 지운 뒤(표식)엔 다시 안 심는다', () => {
-    expect(mergeStatusLine({ a: 1 }, 'C:/h/.ara/agent-hooks/claude-statusline.cmd', false)).toEqual({ a: 1, statusLine: { type: 'command', command: 'C:/h/.ara/agent-hooks/claude-statusline.cmd' } })
-    expect(mergeStatusLine({ statusLine: { type: 'command', command: 'my-line.sh' } }, 'x/.ara/agent-hooks/claude-statusline.sh', false)).toBeNull()
-    expect(mergeStatusLine({}, 'x/.ara/agent-hooks/claude-statusline.sh', true)).toBeNull()
-    expect(mergeStatusLine({ statusLine: { command: '/old/.ara/agent-hooks/claude-statusline.sh' } }, '/new/.ara/agent-hooks/claude-statusline.sh', true)).toMatchObject({ statusLine: { command: '/new/.ara/agent-hooks/claude-statusline.sh' } })
-    expect(mergeStatusLine({ statusLine: { type: 'command', command: '/h/.ara/agent-hooks/claude-statusline.sh' } }, '/h/.ara/agent-hooks/claude-statusline.sh', true)).toBeNull()
+describe('statusLine — 아라 claude 에만 --settings(M9 R2, 전역 settings.json 안 건드림)', () => {
+  it('사용자 원래 statusLine 고르기(local → 프로젝트 → 사용자), 우리 것(R1)은 건너뜀', () => {
+    const ours = { statusLine: { type: 'command', command: 'C:/h/.ara/agent-hooks/claude-statusline.cmd' } }
+    expect(userStatusLine([null, {}, ours])).toBeNull()
+    expect(userStatusLine([null, { statusLine: { type: 'command', command: 'proj-line', padding: 1 } }, { statusLine: { command: 'user-line' } }])).toEqual({ type: 'command', command: 'proj-line', padding: 1 })
+    expect(userStatusLine([{ statusLine: { command: '  ' } }, ours, { statusLine: { command: 'user-line' } }])?.command).toBe('user-line')
   })
-  it('installHooks(claude) 가 스크립트·표식·설정을 쓰고, 사용자 statusLine 이 있으면 그대로', () => {
+  it('--settings 내용: 원래 것이 없으면 스크립트만, 있으면 `스크립트 pass | 원래 명령`(나머지 칸 유지)', () => {
+    expect(claudeLaunchSettings('/h/.ara/agent-hooks/claude-statusline.sh', null)).toEqual({ statusLine: { type: 'command', command: '/h/.ara/agent-hooks/claude-statusline.sh' } })
+    expect(claudeLaunchSettings('/s.sh', { command: 'node hud.mjs', padding: 0 })).toEqual({ statusLine: { type: 'command', command: '/s.sh pass | node hud.mjs', padding: 0 } })
+  })
+  it('R1 정리: 우리 표식 줄만 지우고 남의 statusLine 은 그대로(null = 안 씀)', () => {
+    expect(removeOurStatusLine({ a: 1, statusLine: { type: 'command', command: 'C:/u/.ara/agent-hooks/claude-statusline.cmd' } })).toEqual({ a: 1 })
+    expect(removeOurStatusLine({ statusLine: { type: 'command', command: 'node omc-hud.mjs' } })).toBeNull()
+    expect(removeOurStatusLine({ a: 1 })).toBeNull()
+    expect(removeOurStatusLine(null)).toBeNull()
+  })
+  it('cleanupOurStatusLine — 임시 홈: 우리 것이면 지우고 표식도 지움, 남의 것·없는 파일은 손대지 않음', () => {
     const h = tmp()
     mkdirSync(join(h, '.claude'))
-    const winp = process.platform === 'win32'
-    expect(installHooks(h, 'claude', winp).ok).toBe(true)
-    const cfg = JSON.parse(readFileSync(join(h, '.claude', 'settings.json'), 'utf8'))
-    expect(cfg.statusLine.command).toContain('claude-statusline.')
-    expect(existsSync(join(h, '.ara', 'agent-hooks', 'claude-statusline.installed'))).toBe(true)
+    mkdirSync(join(h, '.ara', 'agent-hooks'), { recursive: true })
+    writeFileSync(join(h, '.ara', 'agent-hooks', 'claude-statusline.installed'), '')
+    writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ hooks: {}, statusLine: { type: 'command', command: `${h.replace(/\\/g, '/')}/.ara/agent-hooks/claude-statusline.cmd` } }))
+    expect(cleanupOurStatusLine(h)).toBe(true)
+    expect(JSON.parse(readFileSync(join(h, '.claude', 'settings.json'), 'utf8'))).toEqual({ hooks: {} })
+    expect(existsSync(join(h, '.ara', 'agent-hooks', 'claude-statusline.installed'))).toBe(false)
+    expect(cleanupOurStatusLine(h)).toBe(false)
     const u = tmp()
     mkdirSync(join(u, '.claude'))
-    writeFileSync(join(u, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'mine' } }))
-    expect(installHooks(u, 'claude', winp).ok).toBe(true)
-    expect(JSON.parse(readFileSync(join(u, '.claude', 'settings.json'), 'utf8')).statusLine.command).toBe('mine')
+    const mine = JSON.stringify({ statusLine: { type: 'command', command: 'node omc-hud.mjs' } })
+    writeFileSync(join(u, '.claude', 'settings.json'), mine)
+    expect(cleanupOurStatusLine(u)).toBe(false)
+    expect(readFileSync(join(u, '.claude', 'settings.json'), 'utf8')).toBe(mine)
+    expect(cleanupOurStatusLine(tmp())).toBe(false)
   })
-  it('스크립트는 아무것도 찍지 않는다(Windows: echo 없음), env 없으면 바로 나간다', () => {
+  it('installHooks(claude) 는 스크립트만 쓰고 전역 settings.json 에 statusLine 을 넣지 않는다', () => {
+    const h = tmp()
+    const winp = process.platform === 'win32'
+    expect(installHooks(h, 'claude', winp).ok).toBe(true)
+    expect(JSON.parse(readFileSync(join(h, '.claude', 'settings.json'), 'utf8')).statusLine).toBeUndefined()
+    expect(existsSync(join(h, '.ara', 'agent-hooks', winp ? 'claude-statusline.cmd' : 'claude-statusline.sh'))).toBe(true)
+    expect(existsSync(join(h, '.ara', 'agent-hooks', 'claude-statusline.installed'))).toBe(false)
+  })
+  it('claudeStatusLineArgs — 프로젝트 statusLine 을 읽어 --settings 파일을 ~/.ara/agent-launch 에 쓴다(같은 내용 = 같은 파일)', () => {
+    const h = tmp()
+    const cwd = tmp()
+    const winp = process.platform === 'win32'
+    expect(claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)).toEqual([]) // 스크립트가 아직 없으면 붙이지 않는다
+    expect(installHooks(h, 'claude', winp).ok).toBe(true)
+    mkdirSync(join(cwd, '.claude'))
+    writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: 'proj-hud' } }))
+    const a = claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)
+    expect(a[0]).toBe('--settings')
+    expect(a[1].startsWith(join(h, '.ara', 'agent-launch'))).toBe(true)
+    expect(JSON.parse(readFileSync(a[1], 'utf8')).statusLine.command).toMatch(/claude-statusline\.(cmd|sh) pass \| proj-hud$/)
+    expect(claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)).toEqual(a)
+  })
+  it('스크립트: 인자 없이는 아무것도 안 찍는다(echo 없음), env 검사가 stdin 읽기보다 앞(Windows)', () => {
     const w = statusLineScript(true).split('\r\n')
     expect(w.some((l) => /^echo /.test(l))).toBe(false)
-    expect(w.findIndex((l) => l.includes(`%${HOOK_ENV.pane}%"==""`))).toBeLessThan(w.findIndex((l) => l.includes('more.com')))
+    expect(w.findIndex((l) => l.includes(`%${HOOK_ENV.pane}%"==""`))).toBeLessThan(w.findIndex((l) => l.includes('findstr.exe" "^" >')))
+    expect(w.some((l) => l.includes('more.com'))).toBe(false)
     expect(statusLineScript(false)).toContain('"rate_limits"')
   })
 
@@ -328,6 +364,55 @@ describe('statusLine 심기(Orca statusline-install)', () => {
       await s.stop()
     }
   }, 20_000)
+
+  it('사용자 원래 statusLine 이 있으면 `스크립트 pass | 원래 명령`을 셸로 돌려 — 원래 명령이 같은 입력(한글·긴 줄 그대로)을 받아 그 출력이 그대로 나오고, rate_limits 도 받는다', async () => {
+    const winp = process.platform === 'win32'
+    const sh = winp ? (process.env['CLAUDE_CODE_GIT_BASH_PATH'] ?? 'C:/Program Files/Git/bin/bash.exe') : '/bin/sh'
+    if (!existsSync(sh)) return
+    const got: Record<string, unknown>[] = []
+    const s = createHookServer(() => {}, null, (p) => got.push(p))
+    try {
+      const { port, token } = await s.ensure()
+      const h = tmp()
+      const cwd = tmp()
+      expect(installHooks(h, 'claude', winp).ok).toBe(true)
+      // 사용자 statusLine(예: OMC HUD) 대역 — stdin JSON 을 읽어 한 줄을 찍는다.
+      const hud = `node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);process.stdout.write('HUD '+j.workspace.current_dir+' '+j.pad.length)})"`
+      mkdirSync(join(h, '.claude'), { recursive: true })
+      writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ statusLine: { type: 'command', command: hud } }))
+      const [, file] = claudeStatusLineArgs(h, cwd, join(h, '.claude'), winp)
+      const command = JSON.parse(readFileSync(file, 'utf8')).statusLine.command as string
+      expect(command.endsWith(`pass | ${hud}`)).toBe(true)
+      const run = (input: string, env: Record<string, string>): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const base = { ...process.env }
+          for (const k of Object.values(HOOK_ENV)) delete base[k]
+          delete base['CLAUDE_JOB_DIR']
+          // Claude 가 statusLine 명령을 셸에 넘기는 것과 같이 — 명령 한 줄째. Windows 의 Claude Code 는 Git Bash 로 돌린다
+          // (cmd 는 `C:/…` 맨 경로를 못 읽는다 — hookCommand 주석).
+          const child = spawn(sh, ['-c', command], { env: { ...base, ...env } })
+          const out: Buffer[] = []
+          child.stdout.on('data', (d: Buffer) => out.push(d))
+          child.on('error', reject)
+          child.on('close', (code) => (code === 0 ? resolve(Buffer.concat(out).toString('utf8')) : reject(new Error(`exit ${code}`))))
+          child.stdin.end(input)
+        })
+      const dir = 'D:/작업/프로젝트 한글'
+      const payload = JSON.stringify({ workspace: { current_dir: dir }, pad: 'x'.repeat(6000), rate_limits: { five_hour: { used_percentage: 41, resets_at: 1_800_000_000 } } })
+      // 아라 env 가 없어도(일찍 끝나는 길) 원래 명령은 같은 입력을 받는다.
+      expect((await run(payload, {})).trim()).toBe(`HUD ${dir} 6000`)
+      expect(got).toHaveLength(0)
+      const env = { [HOOK_ENV.port]: String(port), [HOOK_ENV.token]: token, [HOOK_ENV.pane]: randomUUID() }
+      expect((await run(payload, env)).trim()).toBe(`HUD ${dir} 6000`)
+      expect(got).toHaveLength(1)
+      expect(parseClaudeStatusLine(got[0])?.session?.usedPercent).toBe(41)
+      // 15초 안의 두 번째(보내지 않는 길)도 그대로 흘린다.
+      expect((await run(payload, env)).trim()).toBe(`HUD ${dir} 6000`)
+      expect(got).toHaveLength(1)
+    } finally {
+      await s.stop()
+    }
+  }, 30_000)
 })
 
 describe('화면 쪽(store/usage)', async () => {

@@ -1,6 +1,6 @@
 // 2.0 앱 잠금 — **맨 먼저** import 한다: 그 파일이 거는 키 가드가 다른 모든 키 리스너보다 앞서야 한다.
 import { initLock, subscribeLock, lockView, LOCK_HOST_ID } from './store/lock'
-import { StrictMode, Suspense } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Shell } from './components/Shell'
 import { EditorWindow, parseEditorHash } from './components/EditorWindow'
@@ -12,9 +12,7 @@ import { ExplorerWindow } from './components/ExplorerWindow'
 import { isExplorerWinHash } from '@shared/explorerWin'
 import { PastLogWindow } from './components/PastLogWindow'
 import { isPastLogWinHash } from '@shared/pastLogWin'
-import { BrowserTabStrip } from './features/browser'
 import { LockScreen } from './components/LockScreen'
-import { isBrowserWinHash } from '@shared/browserWin'
 import { installTooltips } from './store/tooltip'
 import { installErrorRing } from './store/errorRing'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -36,10 +34,6 @@ const rdpWinTarget = editorTarget ? null : parseRdpWinHash(window.location.hash)
 const sessionWinTarget = editorTarget || rdpWinTarget ? null : parseSessionWinHash(window.location.hash)
 // 포트 모니터 독립 창. 매개변수가 없다 — 어느 서버를 볼지는 창 안 탭이 정한다.
 const portWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && isPortWinHash(window.location.hash)
-// 내장 브라우저 탭 줄. 이 창의 본문(원격 페이지)은 main 이 WebContentsView 로 붙인다 —
-// 여기서 그리는 것은 줄 하나뿐이다.
-const browserWin =
-  !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && isBrowserWinHash(window.location.hash)
 // 탐색기 독립 창(2026-10-28). 포트 모니터와 같이 매개변수가 없다 — 대상은 창 안 좌측이 고른다.
 const explorerWin = isExplorerWinHash(window.location.hash)
 // 지난 세션 로그 창(2026-10-29). 매개변수 없음 — 어느 로그인지는 main 이 hello·show 로 건넨다.
@@ -68,7 +62,7 @@ for (const type of ['dragover', 'drop']) {
  * 2.0 앱 잠금 — 덮개는 본문(#root) **밖**에 따로 그린다. 잠기면 #root 를 inert·블러로 덮고 덮개만 살린다.
  * 본창은 시계(B), 나머지 창은 가운데 카드(A). 앱을 켤 때의 잠금은 어느 창이든 카드다(LockScreen 이 가른다).
  */
-const isMainWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && !browserWin && !explorerWin && !pastLogWin
+const isMainWin = !editorTarget && !rdpWinTarget && !sessionWinTarget && !portWin && !explorerWin && !pastLogWin
 const lockHost = document.createElement('div')
 lockHost.id = LOCK_HOST_ID
 document.body.appendChild(lockHost)
@@ -87,10 +81,6 @@ const renderApp = (): void =>
       <SessionWindow target={sessionWinTarget} />
     ) : portWin ? (
       <PortWindow />
-    ) : browserWin ? (
-      <Suspense fallback={null}>
-        <BrowserTabStrip />
-      </Suspense>
     ) : explorerWin ? (
       <ExplorerWindow />
     ) : pastLogWin ? (

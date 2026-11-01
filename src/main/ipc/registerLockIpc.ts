@@ -3,7 +3,6 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { handle } from './handle'
 import { pushSend } from '../util/windowPush'
-import { setBrowserLockHidden } from '../browser/BrowserTabs'
 import type { AppLock } from '../secrets/AppLock'
 import { isLockedState, type LockView } from '@shared/lock'
 import { comboMatchesInput, lockShortcutProblem } from '@shared/keymap'
@@ -34,16 +33,11 @@ export function registerLockIpc(lock: AppLock, sessionCount: () => number, getMa
     w.focus()
     pushSend(w.webContents, 'lock:hint')
   }
-  lock.setOnChange(() => {
-    // 브라우저 창의 원격 페이지(WebContentsView)는 HTML 덮개로 못 가린다 — 잠긴 동안 숨긴다.
-    setBrowserLockHidden(isLockedState(lock.state()))
-    broadcast()
-  })
-  setBrowserLockHidden(isLockedState(lock.state()))
+  lock.setOnChange(() => broadcast())
 
   /**
    * 잠금 단축키는 **main 이 먼저 잡는다**(before-input-event) — 모든 webContents(본창·떼어낸 창·탐색기·
-   * 포트·브라우저 탭 줄·**원격 페이지 뷰**·RDP)에서 같은 키가 같은 일을 하고, 그 키는 셸로 가지 않는다.
+   * 포트·RDP)에서 같은 키가 같은 일을 하고, 그 키는 셸로 가지 않는다.
    * 잠긴 동안 DevTools 가 열리면 바로 닫는다 — 열린 콘솔에서 IPC 를 부르면 덮개를 우회한다.
    */
   app.on('web-contents-created', (_e, wc) => {
