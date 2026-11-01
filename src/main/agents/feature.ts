@@ -29,6 +29,8 @@ import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
 import { lowerPriority } from '../resources/hostProcs'
+import type { ManagedFeature } from '../managed/feature'
+import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
 
 export function registerAgentsFeature(deps: {
   userData: string
@@ -38,6 +40,8 @@ export function registerAgentsFeature(deps: {
   /** 훅을 심을 홈(`~/.claude`·`~/.gemini`·`~/.ara/agent-hooks`). e2e 는 임시 폴더 — 사용자 설정을 시험 부산물로 바꾸지 않는다. */
   home: string
   mainWc: () => WebContents | null
+  /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
+  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect'> | null
 }): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
@@ -138,7 +142,7 @@ export function registerAgentsFeature(deps: {
     const m = info.meta
     if (!isAgentId(m['agent']) || typeof m['title'] !== 'string') return null
     const name = names.get(info.id)
-    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}) }
+    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}) }
   }
   const daemon = createAgentDaemon({
     runtimeDir: daemonRuntimeDir(deps.userData),
@@ -223,8 +227,50 @@ export function registerAgentsFeature(deps: {
     await daemon.shutdownAll()
     app.quit()
   })
-  handle('agents:launch', async ({ agent, cwd, prompt, resume, options }): Promise<AgentLaunchResult> => {
+  // ── M8 DM-05 원격(관리형 서버) ── 원격 탭은 훅 서버(127.0.0.1)에 닿지 않는다 → 상태는 화면 판정('추정')만. 채팅 보기·이름 짓기도
+  // 로컬 transcript·로컬 CLI 를 읽으므로 걸지 않는다. 명령줄은 POSIX 셸 기준(원격 로그인 셸)으로 만든다.
+  const launchRemote = async (host: string, agent: AgentId, cwd: string, prompt: string | undefined, resume: string | undefined, options: unknown): Promise<AgentLaunchResult> => {
+    const remote = deps.remote?.()
+    if (!remote) return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
+    const plan = planAgentLaunch({ agent, settings: remoteAgentSettings(settings, agent), prompt, shell: 'posix', resume, options: launchOptionsOf(options) })
+    if (!plan.ok) return plan
+    const title = `${AGENTS[agent].label} · ${remoteBaseName(cwd)}`
+    const sessionId = randomUUID()
+    const t = ensureTracker() // tap 을 세션보다 먼저 건다 - 로컬 실행과 같은 순서
+    try {
+      // env 는 에이전트 env 만(원격 환경 위에 덧붙는다 — 아라의 Windows 환경을 보내지 않는다).
+      await remote.launch(host, { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host } })
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    t.track({ sessionId, agent, prompt: plan.deferredPrompt })
+    deps.sessions().write(sessionId, plan.line + '\r')
+    return { ok: true, sessionId, title, line: plan.line }
+  }
+  handle('agents:reconnect', async ({ hostKey }) => {
+    const remote = deps.remote?.()
+    if (!remote || typeof hostKey !== 'string') return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
+    try {
+      const infos = await remote.reconnect(hostKey)
+      const tabs: AgentTabInfo[] = []
+      for (const info of infos) {
+        const tab = tabOf(info)
+        if (!tab) continue
+        ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
+        tabs.push(tab)
+      }
+      return { ok: true, tabs }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  handle('agents:launch', async ({ agent, cwd, prompt, resume, options, host }): Promise<AgentLaunchResult> => {
     if (!isAgentId(agent)) return { ok: false, error: '모르는 에이전트' }
+    if (typeof host === 'string' && host) {
+      if (typeof cwd !== 'string' || !cwd.startsWith('/')) return { ok: false, error: `원격 폴더가 아닙니다: ${cwd}` }
+      return launchRemote(host, agent, cwd, typeof prompt === 'string' ? prompt : undefined, typeof resume === 'string' && resume ? resume : undefined, options)
+    }
     try {
       if (typeof cwd !== 'string' || !statSync(cwd).isDirectory()) return { ok: false, error: `폴더가 아닙니다: ${cwd}` }
     } catch {

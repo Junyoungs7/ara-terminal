@@ -12,6 +12,7 @@ import { createRemoteAgents } from '../src/main/managed/remoteAgents'
 import type { DaemonBackend } from '../src/main/daemon/service'
 import { AGENT_SESSION_LOST_EXIT } from '../src/shared/agentHooks'
 import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, decideUpdate, remnantsOf, supportOf } from '../src/shared/managedServers'
+import { remoteAddWorktree, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../src/main/managed/remoteWorktrees'
 
 const DISTRO = process.env['ARA_TEST_WSL_DISTRO'] || 'Ubuntu'
 const WIN = process.platform === 'win32'
@@ -158,6 +159,75 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     expect(existsSync(`${sftpRoot}/.ara-server`)).toBe(false)
     // 한 번 더 재도 0(시간 차로 늦게 남는 것 없음).
     expect(remnantsOf((await execSh(c2, VERIFY_SCRIPT)).out)).toEqual([])
+    c2.end()
+  }, 180_000)
+
+  // M8 R3 DM-04·05 — 원격 git 저장소에서 워크트리 생성 → 그 워크트리에서 원격 에이전트 → SSH 끊김(탭 끊김, 원격 생존) → 다시 연결(같은 세션)
+  // → 워크트리 삭제 → 데몬 제거 흔적 0. 위 시험이 제거까지 마쳤으므로 같은 홈에 새로 설치한다.
+  it('Run on — 원격 워크트리 + 에이전트 + 끊김 → 다시 연결 + 삭제', async () => {
+    const h = harness!
+    const c1 = await connect(h.port, h.password)
+    const runOver = (c: Client): RemoteRun => (script, t) => execSh(c, script, t)
+    const run1 = runOver(c1)
+    // 원격 저장소(사용자가 고른 것 — 시험에선 홈 아래에 만든다).
+    const init = await run1('git init -q -b main "$HOME/shop" && cd "$HOME/shop" && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && echo ok')
+    expect(init.out.trim()).toBe('ok')
+
+    // 등록 — `~/…` 를 홈으로 펴고, 하위 폴더도 뿌리로.
+    const top = await remoteTopLevel(run1, '~/shop')
+    expect(top).toBe(`${home}/shop`)
+    expect(await remoteTopLevel(run1, '~/nope')).toBeNull()
+
+    // 워크트리 — Orca 형제 자리, 새 브랜치.
+    const made = await remoteAddWorktree(run1, top!, 'feat')
+    expect(made).toMatchObject({ ok: true, branch: 'feat', worktree: { path: `${home}/shop-feat`, branch: 'refs/heads/feat' } })
+    // 같은 이름 다시 → -2(브랜치·폴더가 이미 있다).
+    expect(await remoteAddWorktree(run1, top!, 'feat')).toMatchObject({ ok: true, branch: 'feat-2' })
+    expect((await remoteListWorktrees(run1, top!))?.map((w) => w.path)).toEqual([`${home}/shop`, `${home}/shop-feat`, `${home}/shop-feat-2`])
+
+    // 실행 위치 = 이 서버: 데몬 준비(설치) → 그 워크트리에서 원격 세션.
+    await installHost(c1, '2.11.0')
+    const out = new Map<string, string>()
+    const exits = new Map<string, number>()
+    const backends = new Map<string, DaemonBackend>()
+    const agents = createRemoteAgents({
+      adopt: (b) => {
+        backends.set(b.id, b)
+        out.set(b.id, '')
+        b.onData((d) => out.set(b.id, out.get(b.id) + d))
+        b.onExit((code) => exits.set(b.id, code))
+      },
+      log: () => {}
+    })
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    const wt = `${home}/shop-feat`
+    await agents.create(hostKey, c1, { id: 'run-on-1', cwd: wt, env: {}, meta: { agent: 'claude', title: 'Claude · shop-feat', host: hostKey } })
+    backends.get('run-on-1')!.write('echo "at-$(pwd)-$(git branch --show-current)"\n')
+    await waitFor(() => out.get('run-on-1')!.includes(`at-${wt}-feat`), 20_000, '원격 워크트리에서 셸')
+
+    // SSH 끊김 → 이 쪽 탭은 끊김(잃음 코드), 원격 세션은 산다.
+    c1.end()
+    await waitFor(() => exits.has('run-on-1'), 20_000, '다리 끊김')
+    expect(exits.get('run-on-1')).toBe(AGENT_SESSION_LOST_EXIT)
+
+    // [다시 연결] = 새 연결로 같은 세션(같은 id, 같은 cwd·meta), 입력이 이어진다. 자동으로 붙지 않는다 — 여기서 손으로 부른다.
+    const c2 = await connect(h.port, h.password)
+    out.set('run-on-1', '')
+    exits.clear()
+    const back = await agents.attach(hostKey, c2)
+    expect(back.map((x) => [x.id, x.cwd, x.meta['host']])).toEqual([['run-on-1', wt, hostKey]])
+    backends.get('run-on-1')!.write('echo "again-$((6*7))"\n')
+    await waitFor(() => /again-42/.test(out.get('run-on-1')!), 10_000, '이어 붙은 뒤 입력')
+
+    // 정리 — 데몬 제거(세션도 끝) → 워크트리 삭제(본 폴더는 거절) → 흔적 0.
+    const run2 = runOver(c2)
+    agents.detach(hostKey)
+    expect(await uninstallHost(c2)).toEqual([])
+    expect(await remoteRemoveWorktree(run2, top!, top!, false)).toEqual({ ok: false, message: top })
+    expect(await remoteRemoveWorktree(run2, top!, wt, false)).toEqual({ ok: true })
+    expect(await remoteRemoveWorktree(run2, top!, `${home}/shop-feat-2`, false)).toEqual({ ok: true })
+    expect((await remoteListWorktrees(run2, top!))?.map((w) => w.path)).toEqual([`${home}/shop`])
+    expect((await run2(`[ -e "$HOME/shop-feat" ] || [ -e "$HOME/shop-feat-2" ] && echo left; true`)).out.trim()).toBe('')
     c2.end()
   }, 180_000)
 })

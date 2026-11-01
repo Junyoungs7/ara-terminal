@@ -308,7 +308,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
                 {x.name}
               </span>
             )}
-            <span className="aiws-tab-state" title={x.lost ? t('aiws.agent.lost.title') : undefined}>{x.lost ? t('aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
+            <span className="aiws-tab-state" title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : undefined}>{x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
             <button
               type="button"
               className="aiws-ic"
@@ -413,6 +413,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
+      {active && active.lost && active.host && !shownFile && !shownDiff && <RemoteCut host={active.host} />}
       {active && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
@@ -430,6 +431,35 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <DiffView worktree={worktree} hidden={!shownDiff} />
         </Suspense>
       )}
+    </div>
+  )
+}
+
+/** M8 DM-05 끊긴 원격 탭 — 세션은 서버에 살아 있다. 자동으로 다시 붙지 않는다(2026-08-14 결정) — 사람이 [다시 연결]. */
+function RemoteCut({ host }: { host: string }): JSX.Element {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  return (
+    <div className="aiws-note aiws-err" role="alert" data-aiws="remote-cut">
+      <span>{t('aiws.agent.cut.note').replace('{host}', host)}</span>
+      <button
+        type="button"
+        className="btn sec"
+        data-aiws="remote-reconnect"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true)
+          setErr(null)
+          void useAgentStore
+            .getState()
+            .reconnectHost(host)
+            .then(setErr)
+            .finally(() => setBusy(false))
+        }}
+      >
+        {busy ? t('aiws.agent.cut.busy') : t('aiws.agent.cut.retry')}
+      </button>
+      {err && <span>{err}</span>}
     </div>
   )
 }

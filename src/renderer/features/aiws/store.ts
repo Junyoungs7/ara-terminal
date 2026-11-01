@@ -66,6 +66,8 @@ export type RepoSlice = {
   addRepo: (path: string) => Promise<Project | null>
   /** OS 폴더 고르기 → 등록 → 그 워크트리 불러오기. 취소면 null. */
   pickAndAddRepo: () => Promise<Project | null>
+  /** M8 DM-04 관리형 서버의 원격 저장소 등록 → 그 워크트리 불러오기. 실패면 사유 글. */
+  addRemoteRepo: (hostKey: string, path: string) => Promise<Project | string>
   removeRepo: (repoId: string) => Promise<void>
 }
 
@@ -124,6 +126,13 @@ const createRepoSlice: StateCreator<AiwsState, [], [], RepoSlice> = (set, get) =
     const project = await get().addRepo(path)
     if (project) await get().fetchWorktrees(project.id)
     return project
+  },
+  addRemoteRepo: async (hostKey, path) => {
+    const r = await window.ev.repos.addRemote(hostKey, path)
+    if (!r.ok) return r.message
+    if (!get().repos.some((p) => p.id === r.project.id)) set((s) => ({ repos: [...s.repos, r.project] }))
+    await get().fetchWorktrees(r.project.id)
+    return r.project
   },
   removeRepo: async (repoId) => {
     await window.ev.repos.remove(repoId)

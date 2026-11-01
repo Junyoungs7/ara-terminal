@@ -7,8 +7,10 @@ import { pushSend } from '../util/windowPush'
 import { logMainError } from '../log/MainErrorLog'
 import { ProjectStore } from './ProjectStore'
 import { createWorktreeService, type WorktreeService } from './service'
+import type { RemoteRun } from '../managed/remoteWorktrees'
 
-export function registerWorktreesFeature(userData: string): WorktreeService {
+/** remote = M8 DM-04 원격 저장소의 git 길(관리형 서버 기능이 뒤에 서므로 부를 때 찾는다). */
+export function registerWorktreesFeature(userData: string, remote?: (hostKey: string) => RemoteRun): WorktreeService {
   const service = createWorktreeService({
     store: new ProjectStore(join(userData, 'projects.json')),
     // 진행은 모든 창에 — 생성 중에 창을 떼어 내도 끝을 안다.
@@ -16,6 +18,7 @@ export function registerWorktreesFeature(userData: string): WorktreeService {
       for (const w of BrowserWindow.getAllWindows()) pushSend(w.webContents, 'createWorktree:progress', e)
     },
     warn: (msg) => logMainError('worktree-include', new Error(msg)),
+    ...(remote ? { remote } : {}),
     // e2e 는 사용자 홈(~/ara/workspaces)에 워크트리를 만들지 않는다 — 그 인스턴스의 임시 userData 안으로.
     ...(process.env.ARA_E2E ? { workspaceDir: join(userData, 'workspaces') } : {})
   })
@@ -25,6 +28,7 @@ export function registerWorktreesFeature(userData: string): WorktreeService {
     return res.canceled ? null : (res.filePaths[0] ?? null)
   })
   handle('repos:add', ({ path }) => service.addProject(path))
+  handle('repos:addRemote', ({ hostKey, path }) => service.addRemoteProject(hostKey, path))
   handle('repos:remove', ({ repoId }) => service.removeProject(repoId))
   handle('repos:searchBaseRefs', ({ repoId, query }) => service.searchBaseRefs(repoId, query))
   handle('worktrees:list', ({ repoId }) => service.listWorktrees(repoId))

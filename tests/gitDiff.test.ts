@@ -115,7 +115,8 @@ describe('주석 보존(재시작 뒤 다시 읽기)', () => {
   })
 })
 
-describe('실제 git — 변경 목록·분기 비교·파일 diff', () => {
+// 실제 git — 전체 실행 부하에서 기본 5초를 넘길 때가 있다(M8 R3). 시험 제한 시간만 늘린다.
+describe('실제 git — 변경 목록·분기 비교·파일 diff', { timeout: 30_000 }, () => {
   let repo: string
   const sh = async (...args: string[]): Promise<void> => {
     const r = await git(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], repo)

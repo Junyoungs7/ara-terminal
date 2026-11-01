@@ -9,6 +9,7 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees'> = {
     list: () => ipcRenderer.invoke('repos:list'),
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
     add: (path: string) => ipcRenderer.invoke('repos:add', { path }),
+    addRemote: (hostKey: string, path: string) => ipcRenderer.invoke('repos:addRemote', { hostKey, path }),
     remove: (repoId: string) => ipcRenderer.invoke('repos:remove', { repoId }),
     searchBaseRefs: (repoId: string, query: string) => ipcRenderer.invoke('repos:searchBaseRefs', { repoId, query })
   },

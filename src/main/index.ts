@@ -44,7 +44,7 @@ import { registerResourcesFeature } from './resources/feature'
 import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
-import { registerManagedFeature } from './managed/feature'
+import { registerManagedFeature, type ManagedFeature } from './managed/feature'
 import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
 import { registerGitInspectFeature } from './git/feature'
@@ -171,6 +171,8 @@ let ara: AraSession | null = null
 let mcp: McpRuntime | null = null
 // F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
 let agents: ReturnType<typeof registerAgentsFeature> | null = null
+// M8 관리형 서버(원격 orcad·원격 git) — 작업 단위·에이전트가 먼저 서므로 그쪽은 부를 때 이것을 찾는다.
+let managed: ManagedFeature | null = null
 let araChat: AraRuntime | null = null
 let voice: VoiceRuntime | null = null
 let mainWindow: BrowserWindow | null = null
@@ -574,12 +576,15 @@ app.whenReady().then(async () => {
   // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). M4 R3: 에이전트 상한(적용은 로컬 데몬)을 팝오버에 보여 준다 — 에이전트 기능이 아래에서 선다.
   registerResourcesFeature(sessions, () => agents?.limits() ?? NO_AGENT_LIMITS)
   // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
-  const worktrees = registerWorktreesFeature(userData)
+  const worktrees = registerWorktreesFeature(userData, (hostKey) => {
+    if (!managed) throw new Error('관리형 서버 기능이 아직 준비되지 않았습니다.')
+    return managed.run(hostKey)
+  })
   // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행·상태(훅 + 화면 판정). 옛 aiCliFlags 를 처음 한 번 옮긴다.
   // ⚠️ e2e 는 **진짜 홈을 건드리지 않는다.** 훅은 사용자 PC 의 `~/.claude/settings.json` 등을 고치는 일이라, 검사가 그걸 그대로 하면
   // 준영님 Claude Code 설정이 시험 부산물로 바뀐다(fixtures.ts 의 sandboxUserPaths 와 같은 규율).
   const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
-  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc() })
+  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc(), remote: () => managed })
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
@@ -588,7 +593,7 @@ app.whenReady().then(async () => {
   registerGitInspectFeature()
   registerScmFeature()
   // M8 DM-02·03 관리형 서버(main/managed/feature.ts) — 호스트별 동의·설치·업데이트·제거. 동의 없는 서버에는 아무것도 깔지 않는다.
-  registerManagedFeature({ userData, sessions: () => sessions, profiles, appVersion: app.getVersion() })
+  managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion() })
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
@@ -840,6 +845,8 @@ app.on('before-quit', (e) => {
   quitStep('mcp', () => void mcp?.server.stop())
   // F1a: 훅 리스너도 접는다(MCP 와 같은 이유 — 좀비 리스너 금지).
   quitStep('agentHooks', () => void agents?.stop())
+  // M8: 원격 다리·셸 없는 SSH 연결을 닫는다(원격 orcad 세션은 서버에 산다 — 다음에 [다시 연결]).
+  quitStep('managed', () => managed?.closeAll())
   // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.
   // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).

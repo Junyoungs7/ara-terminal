@@ -109,7 +109,7 @@ beforeEach(async () => {
   await sh(['commit', '-q', '-m', 'init'])
   await sh(['remote', 'add', 'origin', bare])
   await sh(['push', '-q', '-u', 'origin', 'main'])
-})
+}, 30_000) // git 7번(push 포함) — 전체 실행 부하에서 훅 기본 10초를 넘길 때가 있다. 시험 제한 시간만 늘린다.
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })

@@ -1,6 +1,7 @@
 // M8 DM-02·03 관리형 서버 — 기능 틀(docs/feature-module.md)의 main 등록 함수. 동의·설치·업데이트·제거 IPC 를 여기서 건다.
 // 동의 기록은 userData/managed-servers.json(호스트별). 기록이 있다 = 그 호스트에 동의했다. 철회 = 제거(검증해서 흔적 0 일 때만 기록을 지운다).
-// 연결은 새로 만들지 않는다 — 그 호스트로 열려 있는 SSH 세션의 ssh2 Client 를 빌린다(sftp·remote 콘솔과 같은 규칙). 연결 계층은 호출만.
+// 연결: M8 R3 부터 저장된 SSH 프로필로 **셸 없이** 따로 붙는다(connectSshClient — 터미널 탭 없이 AI 공간만으로). 그 연결이 안 되면(비밀번호를
+// 저장 안 함 등) 그 호스트로 열린 터미널 세션의 Client 를 빌린다(R1 방식). 원격 에이전트 다리는 자기 연결 위에 있어 터미널 탭을 닫아도 안 끊긴다.
 // 터미널 공간은 여기를 부르지 않는다 — 설치는 사람이 설정 › 관리형 서버에서 [설치]를 눌렀을 때만.
 import { appendFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -12,16 +13,24 @@ import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
 import { consentPlan, decideUpdate, hostKeyOf, type ManagedRecord, type ManagedState } from '@shared/managedServers'
 import type { ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
-import { TOKEN_BYTES, installHost, probeHost, uninstallHost } from './host'
+import type { SshProfile } from '@shared/types'
+import { runOnHosts } from '@shared/runOn'
+import type { WorkspaceStore } from '../workspace/WorkspaceStore'
+import { connectSshClient, type ConnectFailure } from '../sessions/ssh/SshBackend'
+import { hopCredentialsFrom } from '../ipc/registerSshIpc'
+import type { DaemonCreateSpec, DaemonSessionInfo } from '../daemon/protocol'
+import { TOKEN_BYTES, execSh, installHost, probeHost, uninstallHost } from './host'
+import type { RemoteRun } from './remoteWorktrees'
 import { ORCAD_PY } from './orcadScript'
 import { createRemoteAgents, type RemoteAgents } from './remoteAgents'
 
 export function registerManagedFeature(deps: {
   userData: string
   sessions: () => MainSessionManager
-  profiles: Pick<ProfileStore, 'get'>
+  profiles: ProfileStore
+  knownHosts: Pick<WorkspaceStore, 'getKnownHosts' | 'addKnownHost'>
   appVersion: string
-}): { remote: RemoteAgents; ensureReady(hostKey: string): Promise<ManagedRecord> } {
+}): ManagedFeature {
   const file = join(deps.userData, 'managed-servers.json')
   const log = (m: string): void => {
     try {
@@ -56,11 +65,49 @@ export function registerManagedFeature(deps: {
     }
     return [...seen.values()]
   }
-  const clientFor = (hostKey: string): Client => {
-    const t = targets().find((x) => x.hostKey === hostKey)
-    const c = t ? deps.sessions().sshClient(t.sessionId) : null
-    if (!c) throw new Error('이 서버로 열린 SSH 연결이 없습니다. 먼저 접속하세요.')
+  // ── 셸 없는 자기 연결(호스트마다 하나). 끊기면 지운다 — 다음에 부를 때 새로 붙는다(자동 재접속 없음). ──
+  const own = new Map<string, Client>()
+  const dialing = new Map<string, Promise<Client>>()
+  const profileOf = (hostKey: string): SshProfile | undefined => deps.profiles.list().find((p): p is SshProfile => p.type === 'ssh' && hostKeyOf(p) === hostKey)
+  const dialOwn = async (hostKey: string): Promise<Client> => {
+    const p = profileOf(hostKey)
+    if (!p) throw new Error('이 서버의 SSH 프로필이 없습니다.')
+    const lookup = deps.profiles.lookupSecret(p)
+    if (!lookup.ok) throw new Error('저장된 비밀번호가 없습니다 — 터미널에서 이 서버에 접속한 뒤 다시 해 보세요.')
+    const r = await connectSshClient(p, {
+      knownHosts: deps.knownHosts.getKnownHosts(),
+      secret: lookup.secret,
+      // 지문은 여기서 묻지 않는다(묻는 화면은 터미널 접속에 있다) — 처음 보는 서버는 사유만.
+      acceptHostKey: false,
+      onHostKeyAccepted: (id, host) => deps.knownHosts.addKnownHost(id, host),
+      hopCredentials: hopCredentialsFrom(deps.profiles)
+    })
+    if (!r.ok) throw new Error(failText(r))
+    const c = r.client
+    own.set(hostKey, c)
+    const drop = (): void => void (own.get(hostKey) === c && own.delete(hostKey))
+    c.on('close', drop)
+    c.on('error', drop)
+    log(`ssh ${hostKey} connected (no shell)`)
     return c
+  }
+  const clientFor = async (hostKey: string): Promise<Client> => {
+    const have = own.get(hostKey)
+    if (have) return have
+    let p = dialing.get(hostKey)
+    if (!p) {
+      p = dialOwn(hostKey).finally(() => dialing.delete(hostKey))
+      dialing.set(hostKey, p)
+    }
+    try {
+      return await p
+    } catch (e) {
+      // 자기 연결이 안 되면 열린 터미널 세션의 연결을 빌린다(R1 방식 — 한 번만 친 비밀번호로 접속한 경우).
+      const t = targets().find((x) => x.hostKey === hostKey)
+      const c = t ? deps.sessions().sshClient(t.sessionId) : null
+      if (c) return c
+      throw e
+    }
   }
 
   const remote = createRemoteAgents({
@@ -74,8 +121,8 @@ export function registerManagedFeature(deps: {
   /** 동의한 호스트 확인 + 판이 다르면 동의 범위 안에서 교체(돌고 있는 에이전트가 있으면 미룸). 동의가 없으면 아무것도 깔지 않는다. */
   const ensureReady = async (hostKey: string): Promise<ManagedRecord> => {
     if (!records.some((r) => r.hostKey === hostKey)) throw new Error('이 서버에는 설치 동의가 없습니다.')
-    const client = clientFor(hostKey)
     try {
+      const client = await clientFor(hostKey)
       const probe = await probeHost(client)
       const live = probe.installed ? await remote.liveSessions(hostKey, client).catch(() => 0) : 0
       const d = decideUpdate({ installed: probe.installed, app: deps.appVersion, liveSessions: live })
@@ -95,7 +142,7 @@ export function registerManagedFeature(deps: {
   handle('managed:list', (): ManagedListResult => ({ records, targets: targets().map(({ hostKey, label }) => ({ hostKey, label })) }))
   handle('managed:plan', async ({ hostKey }) => {
     try {
-      const probe = await probeHost(clientFor(hostKey))
+      const probe = await probeHost(await clientFor(hostKey))
       return consentPlan(hostKey, probe, Buffer.byteLength(ORCAD_PY), TOKEN_BYTES * 2, Buffer.byteLength(deps.appVersion))
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) }
@@ -110,7 +157,7 @@ export function registerManagedFeature(deps: {
   // 철회 = 제거. 원격에서 지우고 남은 것을 잰다 — 0 일 때만 기록을 지운다(남았으면 목록에 남겨 다시 [제거]할 수 있게).
   handle('managed:remove', async ({ hostKey }): Promise<ManagedRemoveResult> => {
     try {
-      const client = clientFor(hostKey)
+      const client = await clientFor(hostKey)
       remote.detach(hostKey)
       const remnants = await uninstallHost(client)
       if (remnants.length) {
@@ -126,5 +173,41 @@ export function registerManagedFeature(deps: {
     }
   })
 
-  return { remote, ensureReady }
+  handle('managed:hosts', () => runOnHosts(deps.profiles.list().filter((p): p is SshProfile => p.type === 'ssh'), records))
+
+  return {
+    remote,
+    ensureReady,
+    run: (hostKey) => async (script, timeoutMs) => execSh(await clientFor(hostKey), script, timeoutMs),
+    // DM-05: 실행 직전에 준비(동의 확인 · 판 비교 → 같으면 그대로, 다르면 동의 범위 안에서 교체, 돌고 있으면 미룸) → 원격 세션.
+    async launch(hostKey, spec) {
+      const rec = await ensureReady(hostKey)
+      if (rec.state === 'failed' || rec.state === 'missing') throw new Error(rec.note ?? '이 서버의 아라 데몬을 준비하지 못했습니다.')
+      await remote.create(hostKey, await clientFor(hostKey), spec)
+    },
+    // 끊긴 원격 탭 [다시 연결] — 새 연결로 붙어 원격에 산 세션을 같은 id 로 되살린다(이미 붙은 것은 건너뛴다).
+    reconnect: async (hostKey) => remote.attach(hostKey, await clientFor(hostKey)),
+    closeAll() {
+      remote.closeAll()
+      for (const c of own.values()) c.end()
+      own.clear()
+    }
+  }
+}
+
+export type ManagedFeature = {
+  remote: RemoteAgents
+  ensureReady(hostKey: string): Promise<ManagedRecord>
+  /** DM-04 원격 git — 그 서버에서 sh -c 한 번(연결은 clientFor). */
+  run(hostKey: string): RemoteRun
+  /** DM-05 원격 에이전트 세션 만들기(준비 포함). */
+  launch(hostKey: string, spec: DaemonCreateSpec): Promise<void>
+  reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
+  closeAll(): void
+}
+
+function failText(r: ConnectFailure): string {
+  if (r.reason === 'hostKeyNew') return '처음 보는 서버 지문입니다 — 터미널에서 이 서버에 한 번 접속해 지문을 확인해 주세요.'
+  if (r.reason === 'hostKeyMismatch') return '서버 지문이 저장된 것과 다릅니다 — 접속하지 않았습니다.'
+  return r.message
 }

@@ -24,6 +24,11 @@ function makeService() {
   return createWorktreeService({ store: new ProjectStore(join(dir, 'projects.json')), emit: (e) => events.push(e), workspaceDir: join(dir, 'ws') })
 }
 
+// 실제 git 을 여러 번 띄운다 — 전체 실행(병렬 부하)에서는 기본 5초(훅 10초)를 넘길 때가 있다(M8 R1·R2 보고의 들쭉날쭉 실패).
+// 시험 제한 시간만 늘린다(제품의 git 상한은 그대로).
+const GIT_TEST_TIMEOUT_MS = 30_000
+const GIT_HOOK_TIMEOUT_MS = 30_000
+
 beforeEach(async () => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), 'ara-wt-')))
   repo = join(dir, 'repo')
@@ -35,13 +40,13 @@ beforeEach(async () => {
   await sh(['add', '.'])
   await sh(['commit', '-q', '-m', 'init'])
   await sh(['tag', 'v1'])
-})
+}, GIT_HOOK_TIMEOUT_MS)
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('프로젝트 등록', () => {
+describe('프로젝트 등록', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   it('git 저장소는 뿌리로, git 아닌 폴더는 폴더 프로젝트로 — 같은 경로는 한 번만', async () => {
     const svc = makeService()
     mkdirSync(join(repo, 'sub'))
@@ -72,7 +77,7 @@ describe('프로젝트 등록', () => {
   })
 })
 
-describe('워크트리', () => {
+describe('워크트리', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   it('목록 — 본 폴더 + 외부에서 만든 워크트리도 보인다', async () => {
     const svc = makeService()
     const p = await svc.addProject(repo)
@@ -177,7 +182,7 @@ describe('워크트리', () => {
   })
 })
 
-describe('분기 지점(WS-04)', () => {
+describe('분기 지점(WS-04)', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   it('로컬 브랜치·태그(원격은 시험 저장소에 없다) — 검색어로 거른다', async () => {
     const svc = makeService()
     const p = await svc.addProject(repo)
@@ -193,7 +198,7 @@ describe('분기 지점(WS-04)', () => {
   })
 })
 
-describe('통계(WS-05 — +/− 줄 수 · main 에서 n 커밋 앞)', () => {
+describe('통계(WS-05 — +/− 줄 수 · main 에서 n 커밋 앞)', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   it('갈림점부터 커밋 수와 줄 수(커밋 안 한 변경 포함), 목록에 없는 경로는 거절', async () => {
     const svc = makeService()
     const p = await svc.addProject(repo)

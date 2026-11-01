@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
-import type { ManagedConsentPlan, ManagedRecord } from '@shared/managedServers'
+import type { ManagedRecord } from '@shared/managedServers'
 import type { ManagedListResult } from '@shared/ipc'
 import { t } from '../../i18n'
 import { Row } from '../../components/SettingsPage'
 import { useDialog } from '../../components/Dialog'
-
-const kb = (n: number): string => (n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`)
+import { askManagedConsent } from './consent'
 
 /**
  * M8 DM-03 설정 › AI 작업 공간 › 관리형 서버 — Orca managed-runtime(ManagedRuntimeInstallRow·RemoveDialog, orcaRef fdfcfb3551)의 1차.
@@ -35,16 +34,8 @@ export function ManagedServersPanel(): JSX.Element {
 
   const consent = (hostKey: string): Promise<void> =>
     run(hostKey, async () => {
-      const plan = await window.ev.managed.plan(hostKey)
-      if ('error' in plan) return setMsg(plan.error)
-      if (!plan.support.ok) {
-        await dialog.ask({ title: t('managed.consent.title'), message: t(`managed.unsupported.${plan.support.reason}`), detail: [{ label: t('managed.consent.host'), value: `${hostKey} · ${plan.probe.os || '?'} ${plan.probe.arch}` }], cancelLabel: null })
-        return
-      }
-      const r = await dialog.ask({ title: t('managed.consent.title'), message: t('managed.consent.message'), detail: consentRows(plan), confirmLabel: t('managed.install'), cancelLabel: t('managed.cancel') })
-      if (r !== 'confirm') return
-      const rec = await window.ev.managed.install(hostKey)
-      if (rec.state === 'failed') setMsg(rec.note ?? t('managed.state.failed'))
+      const r = await askManagedConsent(dialog.ask, hostKey)
+      if (typeof r === 'object') setMsg(r.error)
     })
 
   const remove = (hostKey: string): Promise<void> =>
@@ -104,16 +95,3 @@ function recordDesc(r: ManagedRecord, connected: boolean): string {
   return parts.filter(Boolean).join(' · ')
 }
 
-/** 동의 화면의 줄 — 무엇을(파일·크기) · 어디에 · 무엇이 상주 · 지우는 법. */
-function consentRows(p: ManagedConsentPlan): { label: string; value: string }[] {
-  return [
-    { label: t('managed.consent.host'), value: `${p.hostKey} · ${p.probe.os} ${p.probe.arch} · python ${p.probe.pyver}` },
-    { label: t('managed.consent.where'), value: `${p.dir} ${t('managed.consent.whereNote')}` },
-    { label: t('managed.consent.what'), value: p.files.map((f) => `${f.path} (${kb(f.bytes)})`).join(' · ') },
-    { label: t('managed.consent.runtime'), value: p.runtimeFiles.join(' · ') },
-    { label: t('managed.consent.resident'), value: `${p.process} — ${t('managed.consent.residentNote')}` },
-    { label: t('managed.consent.socket'), value: `${p.socket} ${t('managed.consent.socketNote')}` },
-    { label: t('managed.consent.never'), value: t('managed.consent.neverNote') },
-    { label: t('managed.consent.remove'), value: `${t('managed.consent.removeNote')} — ${p.manualRemove}` }
-  ]
-}

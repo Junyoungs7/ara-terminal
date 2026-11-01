@@ -39,6 +39,8 @@ import {
   type WorktreeStats,
   parseShortstat
 } from '@shared/worktrees'
+import { remoteAddWorktree, remoteBaseRefs, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../managed/remoteWorktrees'
+import { sameRemotePath } from '@shared/runOn'
 
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string }
 export type ListWorktreesResult = { ok: true; worktrees: Worktree[] } | { ok: false; message: string }
@@ -51,6 +53,8 @@ export type WorktreeServiceDeps = {
   workspaceDir?: string
   nestWorkspaces?: boolean
   warn?: (msg: string) => void
+  /** M8 DM-04: 원격 저장소(project.host)의 git 을 돌릴 길. 없으면 원격 프로젝트는 목록·생성이 실패로 답한다. */
+  remote?: (hostKey: string) => RemoteRun
 }
 
 function toWorktree(repoId: string, w: GitWorktreeInfo): Worktree {
@@ -74,7 +78,30 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
     await git(['branch', '-D', p.branch], p.repoPath)
   }
 
+  const runOn = (host: string): RemoteRun => {
+    if (!deps.remote) throw new Error('원격 저장소를 쓸 수 없습니다.')
+    return deps.remote(host)
+  }
+  /** 원격은 연결 실패(throw)도 실패 답으로 — 사이드바·생성 카드가 예외 없이 사유를 보인다. */
+  const remoteTry = async <T,>(job: () => Promise<T>, fail: (message: string) => T): Promise<T> => {
+    try {
+      return await job()
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   async function listFor(project: Project): Promise<ListWorktreesResult> {
+    if (project.host) {
+      const host = project.host
+      return remoteTry(
+        async () => {
+          const listed = await remoteListWorktrees(runOn(host), project.path)
+          return listed === null ? { ok: false, message: project.path } : { ok: true, worktrees: listed.filter((w) => !w.isBare).map((w) => toWorktree(project.id, w)) }
+        },
+        (message) => ({ ok: false, message })
+      )
+    }
     // 폴더 프로젝트 = 작업 단위 하나(그 폴더 자체). Orca folder workspace.
     if (project.kind === 'folder') {
       return { ok: true, worktrees: [toWorktree(project.id, { path: project.path, head: '', branch: '', isBare: false, isMainWorktree: true })] }
@@ -95,6 +122,18 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       // 저장소 하위 폴더를 골랐으면 뿌리로 올린다. git 이 아니면 폴더 프로젝트.
       const top = await gitTopLevel(rawPath)
       return { ok: true, project: deps.store.add(top ?? rawPath, top ? 'git' : 'folder', same) }
+    },
+
+    /** M8 DM-04: 관리형 서버의 원격 저장소 등록. 하위 폴더면 뿌리로. git 저장소만(원격 폴더 프로젝트는 뺐다). */
+    async addRemoteProject(hostKey: string, rawPath: string): Promise<AddProjectResult> {
+      if (typeof hostKey !== 'string' || !hostKey || typeof rawPath !== 'string' || !rawPath.trim()) return { ok: false, reason: 'notFound', message: String(rawPath) }
+      return remoteTry<AddProjectResult>(
+        async () => {
+          const top = await remoteTopLevel(runOn(hostKey), rawPath.trim())
+          return top ? { ok: true, project: deps.store.add(top, 'git', sameRemotePath, hostKey) } : { ok: false, reason: 'notFound', message: rawPath }
+        },
+        (message) => ({ ok: false, reason: 'notFound', message })
+      )
     },
 
     removeProject: (id: string): { ok: boolean } => ({ ok: deps.store.remove(id) }),
@@ -120,6 +159,23 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
         sanitized = sanitizeWorktreeName(String(args.name ?? ''))
       } catch {
         return fail({ ok: false, reason: 'invalidName', message: String(args.name) })
+      }
+      if (project.host) {
+        const host = project.host
+        inflight.set(creationId, new AbortController()) // 원격은 취소를 못 한다 — 같은 id 겹침만 막는다
+        try {
+          deps.emit({ creationId, repoId, phase: 'creating' })
+          const r = await remoteTry(
+            () => remoteAddWorktree(runOn(host), project.path, sanitized, args.baseBranch || undefined),
+            (message) => ({ ok: false as const, reason: 'git' as const, message })
+          )
+          if (!r.ok) return fail(r)
+          const worktree = toWorktree(repoId, r.worktree)
+          deps.emit({ creationId, repoId, phase: 'done', worktree })
+          return { ok: true, worktree }
+        } finally {
+          inflight.delete(creationId)
+        }
       }
 
       // 이름 고르기 — name, name-2, name-3 … 브랜치도 폴더도 비어 있는 첫 후보(Orca createLocalWorktree 의 resolve_name).
@@ -183,6 +239,10 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
     async removeWorktree(repoId: string, worktreePath: string, force = false): Promise<RemoveWorktreeResult> {
       const project = deps.store.get(repoId)
       if (!project || project.kind !== 'git') return { ok: false, message: repoId }
+      if (project.host) {
+        const host = project.host
+        return remoteTry(() => remoteRemoveWorktree(runOn(host), project.path, worktreePath, force === true), (message) => ({ ok: false, message }))
+      }
       // 렌더러가 보낸 경로는 신뢰하지 않는다 — git 목록에 있는 연결 워크트리만 지운다(본 폴더는 안 된다).
       const listed = (await listWorktrees(project.path)) ?? []
       const target = listed.find((w) => !w.isMainWorktree && same(w.path, worktreePath))
@@ -194,7 +254,8 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
     /** 사이드바 +/− · 상태바 "main 에서 n 커밋 앞". 목록에 있는 경로만(렌더러 값 불신). git 3번 — 행마다 부르므로 짧은 상한. */
     async worktreeStats(repoId: string, worktreePath: string): Promise<WorktreeStats> {
       const project = deps.store.get(repoId)
-      if (!project || project.kind !== 'git') return { ok: false }
+      // 원격은 +/− 를 안 잰다(행마다 SSH 3번 — 1차는 뺐다).
+      if (!project || project.kind !== 'git' || project.host) return { ok: false }
       const listed = (await listWorktrees(project.path)) ?? []
       const target = listed.find((w) => same(w.path, worktreePath))
       const main = listed.find((w) => w.isMainWorktree)
@@ -210,6 +271,10 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
 
     async searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]> {
       const project = deps.store.get(repoId)
+      if (project?.host) {
+        const host = project.host
+        return remoteTry(() => remoteBaseRefs(runOn(host), project.path, typeof query === 'string' ? query : ''), () => [])
+      }
       return project?.kind === 'git' ? listBaseRefs(project.path, typeof query === 'string' ? query : '') : []
     },
 

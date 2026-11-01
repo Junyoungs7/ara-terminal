@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
 import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
-import { areWorktreePathsEqual } from '@shared/worktrees'
+import { WORKTREE_ID_SEPARATOR, areWorktreePathsEqual } from '@shared/worktrees'
 import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
 import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
@@ -30,6 +30,8 @@ export type AgentTab = {
   prompt?: string
   /** M5 AI-19 채팅 이름(첫 요청으로 지은 것). 없으면 에이전트 이름만. */
   name?: string
+  /** M8 DM-05 원격(관리형 서버 hostKey). 잃음 = SSH 끊김 — 세션은 서버에 살아 [다시 연결]로 이어 붙는다. */
+  host?: string
 }
 
 type AgentState = {
@@ -57,6 +59,8 @@ type AgentState = {
   /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
   launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions }) => Promise<AgentLaunchResult>
   setActiveTab: (worktreeId: string, sessionId: string) => void
+  /** M8 DM-05 끊긴 원격 탭 [다시 연결] — 그 서버의 끊긴 탭을 모두 같은 세션으로 되살린다. 실패면 사유. */
+  reconnectHost: (hostKey: string) => Promise<string | null>
   closeTab: (sessionId: string) => void
   setViewing: (sessionId: string | null) => void
   setView: (view: AiwsView) => void
@@ -96,9 +100,11 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   launchAgent: async ({ agent, worktreeId, cwd, prompt, resume, options }) => {
-    const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options)
+    // M8 DM-05 실행 위치 = 그 작업 단위의 프로젝트 자리(원격 저장소면 그 서버). 모든 실행 길(새 작업·+ 탭·지난 세션 재개)이 여기를 지난다.
+    const host = hostOfWorktree(worktreeId)
+    const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options, host)
     if (!r.ok) return r
-    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}) }
+    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
     writeChatOn(chatOn)
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))
@@ -107,6 +113,18 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   setActiveTab: (worktreeId, sessionId) => set((s) => ({ activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: sessionId } })),
+
+  reconnectHost: async (hostKey) => {
+    const r = await window.ev.agents.reconnect(hostKey)
+    if (!r.ok) return r.error
+    const ids = new Set(r.tabs.map((x) => x.sessionId))
+    // 있던 탭은 그 자리에서 되살리고(같은 id — 터미널은 붙은 채라 원격 replay 가 그대로 그려진다), 이 창이 모르던 세션은 새 탭으로.
+    const known = get().tabs.filter((x) => ids.has(x.sessionId))
+    set((s) => ({ tabs: s.tabs.map((x) => (ids.has(x.sessionId) ? { ...x, exited: false, lost: false } : x)) }))
+    known.forEach((x) => watchExit(x.sessionId))
+    restoreTabs(r.tabs)
+    return null
+  },
 
   closeTab: (sessionId) => {
     const tab = get().tabs.find((t) => t.sessionId === sessionId)
@@ -152,6 +170,12 @@ export function revealAgent(sessionId: string): void {
   useAiwsStore.getState().setActiveWorktree(tab.worktreeId)
   useAgentStore.getState().setActiveTab(tab.worktreeId, sessionId)
   useAgentStore.getState().setView('worktree')
+}
+
+/** 그 작업 단위가 원격 저장소의 것이면 서버 hostKey(id = `${repoId}::${path}`). */
+export function hostOfWorktree(worktreeId: string): string | undefined {
+  const repoId = worktreeId.split(WORKTREE_ID_SEPARATOR)[0]
+  return useAiwsStore.getState().repos.find((r) => r.id === repoId)?.host
 }
 
 /** 워크트리 이름(카드·피드·알림 줄). 지워졌으면 id 그대로. */
@@ -234,7 +258,7 @@ function restoreTabs(list: AgentTabInfo[]): void {
     const found: AgentTab[] = []
     pending = pending.filter((x) => {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
-      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}) })
+      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}) })
       return !w
     })
     if (found.length) {

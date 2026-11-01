@@ -33,10 +33,12 @@ export class ProjectStore {
   }
 
   /** 같은 경로를 두 번 넣으면 있던 것을 돌려준다(Orca repos:add 와 같다). */
-  add(path: string, kind: ProjectKind, samePath: (a: string, b: string) => boolean): Project {
-    const existing = this.data.projects.find((p) => samePath(p.path, path))
+  add(path: string, kind: ProjectKind, samePath: (a: string, b: string) => boolean, host?: string): Project {
+    // M8 DM-04: 원격 저장소는 (서버, 경로) 짝이 같아야 같은 것. 이름에 서버를 붙여 사이드바에서 로컬과 가른다.
+    const existing = this.data.projects.find((p) => p.host === host && samePath(p.path, path))
     if (existing) return existing
-    const project: Project = { id: randomUUID(), path, displayName: basename(path) || path, kind, addedAt: Date.now() }
+    const name = host ? `${path.replace(/\/+$/, '').split('/').pop() || path} @ ${host.replace(/:22$/, '')}` : basename(path) || path
+    const project: Project = { id: randomUUID(), path, displayName: name, kind, addedAt: Date.now(), ...(host ? { host } : {}) }
     this.data.projects.push(project)
     this.flush()
     return project

@@ -8,6 +8,7 @@ export const managedBridge: Pick<EvApi, 'managed'> = {
     plan: (hostKey: string) => ipcRenderer.invoke('managed:plan', { hostKey }),
     install: (hostKey: string) => ipcRenderer.invoke('managed:install', { hostKey }),
     check: (hostKey: string) => ipcRenderer.invoke('managed:check', { hostKey }),
-    remove: (hostKey: string) => ipcRenderer.invoke('managed:remove', { hostKey })
+    remove: (hostKey: string) => ipcRenderer.invoke('managed:remove', { hostKey }),
+    hosts: () => ipcRenderer.invoke('managed:hosts')
   }
 }

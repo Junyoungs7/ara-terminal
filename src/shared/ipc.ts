@@ -56,6 +56,7 @@ import type {
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDetail, VaultSession } from './vault'
 import type { ManagedConsentPlan, ManagedRecord } from './managedServers'
+import type { RunOnHost } from './runOn'
 import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
 import type { ModelCatalog, SlashItem } from './agentOptions'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
@@ -63,7 +64,7 @@ import type { ModelCatalog, SlashItem } from './agentOptions'
 export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string }
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
 export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice }
 /** M5 AI-19 채팅 이름(push 'agents:name'). */
@@ -567,6 +568,8 @@ export type InvokeContract = {
   // 폴더 고르기 — 경로는 사용자가 OS 대화상자에서 고른 것만(렌더러가 지어내지 않는다). 취소 = null.
   'repos:pickFolder': { req: void; res: string | null }
   'repos:add': { req: { path: string }; res: { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string } }
+  // M8 DM-04 관리형 서버의 원격 저장소(경로는 그 서버의 것 — 사람이 친다. `~/…` 가능). git 저장소만.
+  'repos:addRemote': { req: { hostKey: string; path: string }; res: { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string } }
   'repos:remove': { req: { repoId: string }; res: { ok: boolean } }
   'repos:searchBaseRefs': { req: { repoId: string; query: string }; res: BaseRef[] }
   'worktrees:list': { req: { repoId: string }; res: { ok: true; worktrees: Worktree[] } | { ok: false; message: string } }
@@ -581,7 +584,8 @@ export type InvokeContract = {
   'agents:setSettings': { req: { settings: AgentSettings }; res: AgentSettings }
   // 명령줄·env 는 main 이 저장된 설정으로 만든다 — 렌더러는 에이전트·폴더·첫 지시만.
   // M4 AI-07: resume = 지난 세션 id — 첫 지시 대신 재개 인자로 띄운다.
-  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions }; res: AgentLaunchResult }
+  // M8 DM-05: host = 실행 위치(관리형 서버 hostKey). 있으면 원격 orcad 에 띄운다(cwd 는 그 서버 경로).
+  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions; host?: string }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
   // M4 DM-01: 켤 때 데몬에서 되살린 에이전트 탭 · 백그라운드 에이전트 모두 종료 · 완전 종료(에이전트까지 끝내고 앱 종료).
@@ -603,6 +607,10 @@ export type InvokeContract = {
   'managed:install': { req: { hostKey: string }; res: ManagedRecord }
   'managed:check': { req: { hostKey: string }; res: ManagedRecord }
   'managed:remove': { req: { hostKey: string }; res: ManagedRemoveResult }
+  // M8 DM-05 Run on — 고를 수 있는 서버(저장된 SSH 프로필 + 동의 기록).
+  'managed:hosts': { req: void; res: RunOnHost[] }
+  // M8 DM-05 끊긴 원격 탭 [다시 연결] = 새 SSH 연결로 같은 orcad 세션에 이어 붙기(같은 id, 원격 replay). 자동 재접속은 없다(2026-08-14 결정).
+  'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string } }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
   'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
   // 상세는 마지막 목록에 있던 파일만 연다.
@@ -1224,6 +1232,7 @@ export type EvApi = {
     list(): Promise<Project[]>
     pickFolder(): Promise<string | null>
     add(path: string): Promise<InvokeRes<'repos:add'>>
+    addRemote(hostKey: string, path: string): Promise<InvokeRes<'repos:addRemote'>>
     remove(repoId: string): Promise<{ ok: boolean }>
     searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]>
   }
@@ -1243,13 +1252,15 @@ export type EvApi = {
     install(hostKey: string): Promise<ManagedRecord>
     check(hostKey: string): Promise<ManagedRecord>
     remove(hostKey: string): Promise<ManagedRemoveResult>
+    hosts(): Promise<RunOnHost[]>
   }
   // M3 에이전트(preload/features/agents.ts).
   agents: {
     detect(force?: boolean): Promise<DetectedAgent[]>
     getSettings(): Promise<AgentSettings>
     setSettings(settings: AgentSettings): Promise<AgentSettings>
-    launch(agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions): Promise<AgentLaunchResult>
+    launch(agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions, host?: string): Promise<AgentLaunchResult>
+    reconnect(hostKey: string): Promise<InvokeRes<'agents:reconnect'>>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */

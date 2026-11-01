@@ -18,6 +18,8 @@ export type Project = {
   displayName: string
   kind: ProjectKind
   addedAt: number
+  /** M8 DM-04: 관리형 서버(hostKey `user@host:port`)의 원격 저장소. 있으면 path 는 그 서버의 POSIX 경로이고 git 은 SSH 로 돈다. */
+  host?: string
 }
 
 /** Orca `GitWorktreeInfo`(src/shared/worktree/types.ts) 그대로. */
