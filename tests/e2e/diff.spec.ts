@@ -109,7 +109,15 @@ test('DIFF-1★ 변경 → "변경 비교 · 2" 탭 → Monaco diff(나란히/�
     await expect(mon.locator('.modified .view-lines')).toContainText('const b = 20')
     await expect(mon.locator('.original .view-lines')).toContainText('const b = 2')
     await page.click('[data-diff-layout="inline"]')
-    await expect(mon.locator('.editor.original')).toBeHidden()
+    // Monaco 0.55 의 한 줄 보기는 원본 에디터를 DOM 에서 빼지 않고 폭만 0 으로 접는다 — '숨김'은 폭으로 본다.
+    // (원본 줄 번호 칸 35px 은 남는다 — 실측) 바뀐 쪽의 1/4 보다 좁으면 한 줄 보기다.
+    await expect
+      .poll(async () => {
+        const o = (await mon.locator('.editor.original').boundingBox())?.width ?? 0
+        const m = (await mon.locator('.editor.modified').boundingBox())?.width ?? 0
+        return m > 0 && o < m / 4
+      })
+      .toBe(true)
     await page.click('[data-diff-layout="split"]')
 
     // 바뀐 쪽 2줄을 고르고 의견 달기.
