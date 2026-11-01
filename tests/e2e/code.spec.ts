@@ -56,7 +56,9 @@ test('CODE-1★ AI 공간을 열고 파일을 안 열면 Monaco 청크가 안 �
   try {
     await openProject(app, page, repo)
     // 양성 대조를 위해 같은 검사를 열기 전·후 둘 다 한다 — 뒤에서 잡혀야 앞의 0 이 "없다"는 뜻이 된다.
-    expect(await monacoLoaded(page)).toEqual({ env: false, chunks: [] })
+    // file:// 의 동적 import 는 Resource Timing 에 안 잡힌다(실측 — 열고 나서도 0) — 청크 목록은 판정에 못 쓴다.
+    // MonacoEnvironment(첫 파일을 열 때 모듈이 설정)와 .monaco-editor 가 양쪽 판정이다.
+    expect((await monacoLoaded(page)).env).toBe(false)
     await expect(page.locator('.monaco-editor')).toHaveCount(0)
 
     await pickReturns(app, file)
@@ -66,7 +68,6 @@ test('CODE-1★ AI 공간을 열고 파일을 안 열면 Monaco 청크가 안 �
     await expect(page.locator(`${editor} .view-lines`)).toContainText('int max = 3;')
     const after = await monacoLoaded(page)
     expect(after.env).toBe(true)
-    expect(after.chunks.length).toBeGreaterThan(0)
     // CDN 로더를 껐다 — 밖으로 나간 요청이 없다.
     const cdn = await page.evaluate(() => performance.getEntriesByType('resource').filter((e) => /jsdelivr|unpkg|cdn/i.test(e.name)).length)
     expect(cdn).toBe(0)
