@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 // M6 R2 — WS-06 파일 목록(rg --files) · WS-09 전체 검색(rg --json). Orca src/main/ripgrep/(orcaRef fdfcfb3551)의 1차 판 — 로컬 워크트리만.
 // 스폰은 runProcess 하나로(tests/spawnBoundary.test.ts 래칫): 셸 없음 · 창 없음 · 시간·출력 상한. 끊기는 signal.
 import { join } from 'node:path'
@@ -22,7 +23,14 @@ import {
  */
 export function rgBinPath(appPath: string, platform: string, arch: string): string {
   const exe = platform === 'win32' ? 'rg.exe' : 'rg'
-  return join(appPath, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', `${platform}-${arch}`, exe).replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+  const at = (root: string): string =>
+    join(root, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', `${platform}-${arch}`, exe).replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+  // e2e·스모크처럼 `electron out/main/index.js` 로 띄우면 appPath 가 out/main 이다(데몬 launcher 와 같은 함정 — 그땐 조용히 결과 0).
+  // 두 단계 위(저장소 루트)에 있으면 그쪽. 설치본(app.asar)은 첫 후보 그대로.
+  const direct = at(appPath)
+  if (appPath.includes('app.asar') || existsSync(direct)) return direct
+  const up = at(join(appPath, '..', '..'))
+  return existsSync(up) ? up : direct
 }
 
 const LIST_TIMEOUT_MS = 10_000
