@@ -67,13 +67,9 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
     }
   }, [files])
 
-  // 열 때 준 줄로(openFile(path, line)).
+  // 열 때 준 줄로(openFile(path, line)). 에디터가 아직 안 떴으면(처음 여는 파일) onMount 가 같은 일을 한다.
   useEffect(() => {
-    const ed = editorRef.current
-    if (!ed || !file?.reveal || hidden) return
-    ed.revealLineInCenter(file.reveal.line)
-    ed.setPosition({ lineNumber: file.reveal.line, column: 1 })
-    ed.focus()
+    if (!hidden) revealOf(editorRef.current, file)
   }, [file?.reveal?.seq, file?.path, hidden])
 
   return (
@@ -107,6 +103,9 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
             options={{ readOnly: file.readOnly, automaticLayout: true, minimap: { enabled: false }, fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono') }}
             onMount={(ed) => {
               editorRef.current = ed
+              const st = useCodeStore.getState()
+              const a = st.activeByWorktree[worktreeId]
+              revealOf(ed, a ? st.files.find((f) => f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, a, PLATFORM)) : undefined)
               ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
                 const p = ed.getModel()?.uri.fsPath
                 if (p) void save(p, askRef.current)
@@ -117,6 +116,13 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
       )}
     </div>
   )
+}
+
+function revealOf(ed: ReturnType<typeof monaco.editor.create> | null, file: CodeFile | undefined): void {
+  if (!ed || !file?.reveal) return
+  ed.revealLineInCenter(file.reveal.line)
+  ed.setPosition({ lineNumber: file.reveal.line, column: 1 })
+  ed.focus()
 }
 
 const mb = (n: number): string => (n / 1024 / 1024).toFixed(1)
