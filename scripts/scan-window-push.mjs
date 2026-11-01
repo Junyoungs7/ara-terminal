@@ -14,7 +14,9 @@ const SEND_LIKE = /\.(send|postMessage)\(/
 //  - AraSession.send()      : 대화 턴을 시작하는 퍼블릭 API
 //  - ws.send() / sock.write : F25 RDP 릴레이의 WebSocket·TLS 소켓(창이 아니라 원격으로 나간다)
 //  - engine.send()          : #123 아라 엔진 — claude 프로세스의 **stdin** 으로 나간다(창이 아니다)
-const KNOWN_NON_PUSH = /\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(/
+//  - worker.postMessage()   : M0 FD-02 멈춤 감시 worker thread(창이 아니다)
+//  - child.postMessage()    : M0 0-6 utilityProcess(창이 아니다)
+const KNOWN_NON_PUSH = /\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(|\bworker\.postMessage\(|\bchild\.postMessage\(/
 
 function walk(dir) {
   let out = []

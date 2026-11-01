@@ -1,3 +1,4 @@
+import { pushSend } from './util/windowPush'
 // 앱 메뉴. setApplicationMenu 를 안 부르면 Electron 기본 메뉴가 붙고, 창이 frame:false 라 안 보여도
 // 그 가속키(Ctrl+R 새로고침·Ctrl+Shift+I·Ctrl+W·Ctrl+=/-/0 확대)는 살아 있다. Ctrl+R 은 bash 역검색이라
 // 터미널에서 누르면 앱이 새로고침된다 — 그래서 Windows/Linux 는 메뉴를 아예 없앤다(null).
@@ -26,7 +27,7 @@ export function appMenuTemplate(platform: NodeJS.Platform, dev: boolean): MenuIt
       id,
       label: menuEntryLabel(e, t),
       ...(accel ? { accelerator: accel, registerAccelerator: false } : {}),
-      click: (_i, w) => (w as BrowserWindow | undefined)?.webContents.send(MENU_PICK, id)
+      click: (_i, w) => pushSend((w as BrowserWindow | undefined)?.webContents, MENU_PICK, id)
     }
   }
   // ≡ 의 menuBarItems 와 같은 모양: ▸ 묶음은 sub.<id>, 빈 자리(AI 작업)는 비활성 "곧" 한 줄.
