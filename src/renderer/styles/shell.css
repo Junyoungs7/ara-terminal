@@ -9985,7 +9985,7 @@ button.sb-seg.upd:hover .val {
   background: transparent;
 }
 .aiws-feed-row:disabled {
-  cursor: default;
+  cursor: var(--cur-arrow, default);
   color: var(--text-lo);
 }
 .aiws-feed-t {
