@@ -3,6 +3,7 @@ import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { AgentMemoryOver, EvApi } from '@shared/ipc'
 import type { AgentId, AgentSettings } from '@shared/agents'
 import type { AgentStatusView } from '@shared/agentHooks'
+import type { AgentChatEvent } from '@shared/agentChat'
 
 export const agentsBridge: Pick<EvApi, 'agents'> = {
   agents: {
@@ -19,6 +20,14 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
       const listener = (_e: IpcRendererEvent, v: AgentStatusView): void => cb(v)
       ipcRenderer.on('agents:status', listener)
       return () => ipcRenderer.removeListener('agents:status', listener)
+    },
+    chatOpen: (sessionId: string) => ipcRenderer.invoke('agents:chatOpen', { sessionId }),
+    chatClose: (sessionId: string) => ipcRenderer.invoke('agents:chatClose', { sessionId }),
+    chatSend: (sessionId: string, agent: AgentId, text: string) => ipcRenderer.invoke('agents:chatSend', { sessionId, agent, text }),
+    onChat: (cb: (e: AgentChatEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, v: AgentChatEvent): void => cb(v)
+      ipcRenderer.on('agents:chat', listener)
+      return () => ipcRenderer.removeListener('agents:chat', listener)
     },
     onMemoryOver: (cb: (e: AgentMemoryOver) => void) => {
       const listener = (_e: IpcRendererEvent, v: AgentMemoryOver): void => cb(v)

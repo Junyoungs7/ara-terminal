@@ -21,7 +21,8 @@ import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
 import { createHookServer, installHooks } from './hooks'
-import { createAgentStatusTracker, type AgentStatusTracker } from './status'
+import { createAgentStatusTracker, promptBytes, submitDelayMs, type AgentStatusTracker } from './status'
+import { createChatWatcher, type ChatWatcher } from './chat'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
@@ -51,8 +52,15 @@ export function registerAgentsFeature(deps: {
   // M4: 훅 포트·토큰을 기억한다 — 데몬에 산 에이전트는 띄울 때의 포트로 훅을 보낸다(재시작 뒤에도 같은 자리에서 받게).
   const hookFile = join(deps.userData, 'agent-hooks.json')
   const savedHook = readJsonWithBackup<{ port?: unknown; token?: unknown } | null>(hookFile, null)
+  // M5 AI-13: 채팅으로 보기 — transcript 감시(열린 채팅 화면만). 첫 훅·첫 열기 때 만든다.
+  let chat: ChatWatcher | null = null
+  const ensureChat = (): ChatWatcher =>
+    (chat ??= createChatWatcher({ push: (e) => pushSend(deps.mainWc(), 'agents:chat', e), store: join(deps.userData, 'agent-chat.json'), home: deps.home, env: process.env['ARA_E2E'] === '1' ? {} : process.env }))
   const hooks = createHookServer(
-    (e) => tracker?.hook(e),
+    (e) => {
+      tracker?.hook(e)
+      if (e.source === 'claude') ensureChat().hook(e.paneKey, e.payload)
+    },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null
   )
   const ensureHooks = async (): Promise<{ port: number; token: string }> => {
@@ -73,7 +81,8 @@ export function registerAgentsFeature(deps: {
       push: (v) => pushSend(deps.mainWc(), 'agents:status', v),
       write: (id, data) => deps.sessions().write(id, data)
     })
-    deps.sessions().setTap(t)
+    // 탭이 끝나면 기억한 transcript 경로도 지운다(앱 종료의 detach 는 exit 가 아니라 남는다 — 다시 켜면 바로 연다).
+    deps.sessions().setTap({ ...t, exit: (id) => (t.exit(id), chat?.forget(id)) })
     tracker = t
     return t
   }
@@ -142,6 +151,16 @@ export function registerAgentsFeature(deps: {
     await daemon.ready
     return restoredTabs.filter((t) => deps.sessions().has(t.sessionId))
   })
+  handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
+  handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
+  // 채팅 입력 → PTY. 첫 지시와 같은 방식(괄호 붙여넣기 → 길이만큼 기다려 Enter) — 따옴표·줄바꿈이 셸·TUI 에 다시 읽히지 않는다.
+  handle('agents:chatSend', ({ sessionId, agent, text }) => {
+    if (!isAgentId(agent) || typeof text !== 'string' || !text.trim() || !deps.sessions().has(sessionId)) return { ok: false }
+    const win = process.platform === 'win32'
+    deps.sessions().write(sessionId, promptBytes(agent, text, win))
+    setTimeout(() => deps.sessions().write(sessionId, '\r'), submitDelayMs(agent, text, win))
+    return { ok: true }
+  })
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {
     await daemon.shutdownAll()
@@ -194,6 +213,7 @@ export function registerAgentsFeature(deps: {
   return {
     stop: () => {
       daemon.disconnect() // 세션·데몬은 산다 — 다음에 켜면 다시 붙는다
+      chat?.stop()
       return hooks.stop()
     },
     views: () => tracker?.views() ?? [],

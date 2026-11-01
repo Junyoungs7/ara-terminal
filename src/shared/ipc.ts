@@ -51,6 +51,7 @@ import type {
 } from './worktrees'
 import type { AgentId, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDetail, VaultSession } from './vault'
+import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
@@ -558,6 +559,10 @@ export type InvokeContract = {
   'agents:statuses': { req: void; res: AgentStatusView[] }
   // M4 DM-01: 켤 때 데몬에서 되살린 에이전트 탭 · 백그라운드 에이전트 모두 종료 · 완전 종료(에이전트까지 끝내고 앱 종료).
   'agents:tabs': { req: void; res: AgentTabInfo[] }
+  // M5 AI-13 채팅으로 보기: 열면 그때까지의 메시지(스냅숏) + 그 뒤로 'agents:chat' push. 닫으면 감시를 내린다.
+  'agents:chatOpen': { req: { sessionId: string }; res: AgentChatSnapshot }
+  'agents:chatClose': { req: { sessionId: string }; res: void }
+  'agents:chatSend': { req: { sessionId: string; agent: AgentId; text: string }; res: { ok: boolean } }
   'agents:killBackground': { req: void; res: { killed: number } }
   'agents:quitCompletely': { req: void; res: void }
   // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
@@ -1177,6 +1182,11 @@ export type EvApi = {
     killBackground(): Promise<{ killed: number }>
     quitCompletely(): Promise<void>
     onStatus(cb: (v: AgentStatusView) => void): () => void
+    /** M5 AI-13 채팅으로 보기(열린 채팅 화면만 감시). */
+    chatOpen(sessionId: string): Promise<AgentChatSnapshot>
+    chatClose(sessionId: string): Promise<void>
+    chatSend(sessionId: string, agent: AgentId, text: string): Promise<{ ok: boolean }>
+    onChat(cb: (e: AgentChatEvent) => void): () => void
     /** M4 R3 메모리 상한 넘음(알림 센터로). */
     onMemoryOver(cb: (e: AgentMemoryOver) => void): () => void
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */

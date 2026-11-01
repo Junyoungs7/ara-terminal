@@ -35,7 +35,7 @@ const TURN_CHARS = 2000
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
 /** 하네스가 사용자 턴처럼 끼워 넣는 글(Orca isKnownHarnessInjectedUserTurnText) — 첫 지시가 아니다. */
-const INJECTED = /^\s*<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|local-command-caveat|system-reminder|user-prompt-submit-hook|bash-input|bash-stdout|bash-stderr|environment_context|user_instructions)>/
+export const INJECTED = /^\s*<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|local-command-caveat|system-reminder|user-prompt-submit-hook|bash-input|bash-stdout|bash-stderr|environment_context|user_instructions)>/
 
 type Rec = Record<string, unknown>
 const rec = (v: unknown): Rec | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : null)
