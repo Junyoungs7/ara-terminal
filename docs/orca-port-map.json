@@ -531,20 +531,23 @@
       "src/renderer/src/store/slices/worktrees/listing/known-ssh-worktree-fetch.ts",
       "src/renderer/src/store/slices/worktrees/listing/direct-ssh-authority.ts",
       "docs/site/content/docs/recipes/remote-worktrees.mdx",
-      "docs/site/content/docs/ssh.mdx"
+      "docs/site/content/docs/ssh.mdx",
+      "src/main/ipc/worktree-logic.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "DM-05",
     "feature": "실행 위치 선택(Run on)",
     "orcaPaths": [
       "src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx",
-      "src/renderer/src/components/host-picker"
+      "src/renderer/src/components/host-picker",
+      "src/renderer/src/components/host-picker/HostCombobox.tsx",
+      "src/renderer/src/components/settings/repository/execution/RepositoryHostSetupActions.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "FD-01",
