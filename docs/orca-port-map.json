@@ -647,7 +647,7 @@
   },
   {
     "id": "CV-03",
-    "feature": "워크트리 점프 팔레트(Ctrl+J, 맥 Cmd+J)",
+    "feature": "워크트리 점프 팔레트(Ctrl+Shift+J, 맥 Cmd+Shift+J — AI 공간)",
     "orcaPaths": [
       "src/renderer/src/components/WorktreeJumpPalette.tsx",
       "src/renderer/src/lib/order-empty-query-worktrees.ts",
@@ -656,7 +656,7 @@
     ],
     "orcaRef": "fdfcfb3551",
     "status": "porting",
-    "notes": "M12 R1(v2.2): features/aiws/WorktreeJump.tsx·jumpList.ts. Orca 키는 Win/Linux Ctrl+Shift+J — 아라는 그 키가 하단 패널이라 Ctrl+J(AI 공간 안에서만). 뺀 것: 작업·열린 탭 줄, 필터 칩, 새 워크트리 줄, 숫자 키"
+    "notes": "M12 R1(v2.2): features/aiws/WorktreeJump.tsx·jumpList.ts. Orca 키는 Win/Linux Ctrl+Shift+J — 아라는 그 키가 하단 패널이라 Ctrl+J(AI 공간 안에서만). 뺀 것: 작업·열린 탭 줄, 필터 칩, 새 워크트리 줄, 숫자 키 / M12 R2(v2.2): 키 정리(메인 결정) — AI 공간 = Ctrl+Shift+J(Orca 키, KEYMAP worktree.jump space 'ai'), 같은 조합의 하단 패널(bottom.toggle)은 터미널 공간에서만(space 'term'). Ctrl+J 단독은 앱이 안 잡아 에이전트 터미널로(Claude Code 줄바꿈)"
   },
   {
     "id": "WS-14",
@@ -716,5 +716,63 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M10 R1(v2.2): WorktreeSidebar 창 캡처 키(에이전트 터미널 안에서도 — Orca allowInTerminal), AI 작업 공간에서만(KEYMAP 밖). 고른 작업 단위 → 지우기 확인(기존 대화상자), 본 작업 폴더 → 프로젝트를 목록에서 빼기 확인(Orca confirm-remove-folder). 뺀 것: '다시 묻지 않기'(skipDeleteWorktreeConfirm — Orca 기본 꺼짐), 키 바꾸기 설정"
+  },
+  {
+    "id": "CV-04",
+    "feature": "에디터 옵션(줄바꿈·미니맵·글꼴·미리 보기 탭·변경 보기 기본) + 언어 하이라이트 확장",
+    "orcaPaths": [
+      "src/shared/default-global-settings.ts",
+      "src/shared/global-settings-types.ts",
+      "src/renderer/src/components/editor/MonacoEditor.tsx",
+      "src/renderer/src/components/editor/file-editor-word-wrap-options.ts",
+      "src/renderer/src/lib/editor-font-zoom.ts",
+      "src/renderer/src/store/slices/editor/tabs/editor-preview-tab-setting.ts",
+      "src/renderer/src/store/slices/editor/tabs/workspace-editor-item.ts",
+      "src/renderer/src/lib/monaco-setup.ts",
+      "src/renderer/src/lib/monaco-languages/register-vue.ts",
+      "src/renderer/src/lib/monaco-languages/register-svelte.ts",
+      "src/renderer/src/lib/monaco-languages/register-astro.ts",
+      "src/renderer/src/lib/monaco-languages/register-glimmer.ts",
+      "src/renderer/src/lib/monaco-languages/register-cuda.ts",
+      "src/renderer/src/lib/monaco-languages/register-jsonl.ts",
+      "src/renderer/src/lib/monaco-languages/register-dotenv.ts",
+      "src/renderer/src/lib/monaco-languages/register-quarto.ts",
+      "src/renderer/src/lib/monaco-languages/register-shell-markdown-aliases.ts",
+      "src/renderer/src/lib/monaco-languages/monarch-embed-entry-budget.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R2(v2.2): 설정 › 편집기(shared/editorPrefs.ts, workspace.json ui.codeEditor) — Orca 기본값 그대로(줄바꿈 켬·미니맵 끔·글꼴 빈 값 = 터미널 글꼴, 크기 = 터미널 글자 크기·미리 보기 탭 켬·변경 보기 한 줄). 미리 보기 탭: 탐색기 한 번 누름 = 기울임 탭(안 고친 미리 보기를 그 자리에서 갈아 끼움), 고치거나 탭/파일 두 번 누름 = 고정. 언어: monarch 9종(Vue·Svelte·Astro·Glimmer·CUDA·JSONL·dotenv·Quarto·bash 별칭) + Orca 시험 8개 그대로. 뺀 것: shiki/TextMate 6종(Nim·Lean·Typst·Zig·Groovy·CMake — 새 의존성), 에디터 글자 확대(zoom), 자동 저장, diff 줄바꿈 따로"
+  },
+  {
+    "id": "RV-01",
+    "feature": "머지 충돌 3-way(에디터의 현재·공통 조상·들어오는 구역 색 + 충돌 띠 이동 + 진행 중 작업 [중단]) — 로컬·원격",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/monaco-conflict-decorations.ts",
+      "src/renderer/src/components/editor/text-line-offsets.ts",
+      "src/renderer/src/components/editor/ConflictComponents.tsx",
+      "src/renderer/src/components/editor/useEditorConflictNavigation.ts",
+      "src/renderer/src/store/slices/editor/actions/open-conflict-file.ts",
+      "src/shared/git-status-conflict-entries.ts",
+      "src/main/git/source-control/git-conflict-operation.ts",
+      "src/renderer/src/components/right-sidebar/source-control/listing/conflict-status-cards.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R2(v2.2): Orca 의 3-way 는 3칸 병합 편집기가 아니라 충돌 표시 줄 장식(features/aiws/conflictMarkers.ts — Orca 파일 거의 그대로, 시험 그대로). git status u 레코드 XY → 충돌 종류 7가지, 충돌이 있을 때만 진행 중 작업 감지(MERGE_HEAD·REBASE_HEAD·CHERRY_PICK_HEAD — 원격도 같은 git 길로, Orca 는 git 폴더 파일을 봄), scm:abort(merge/rebase/cherry-pick --abort). 소스 제어 [충돌 n] 칸(종류 꼬리표·도움말) → 에디터로 열기, + = 해결 표시. 뺀 것: 충돌 검토 목록 탭(ConflictReviewPanel)·자리 표시 화면(삭제 충돌)·'로컬에서 해결됨' 띠·AI 충돌 해결 지시·rebase --continue 버튼"
+  },
+  {
+    "id": "RV-02",
+    "feature": "AI 커밋 메시지·PR 본문·브랜치 이름 생성(소스 제어 [AI 로 쓰기])",
+    "orcaPaths": [
+      "src/main/text-generation/commit-message-text-generation.ts",
+      "src/main/text-generation/source-control-agent-launch.ts",
+      "src/shared/commit-message-agent-spec.ts",
+      "src/shared/commit-message-agent-specs-primary.ts",
+      "src/shared/commit-message-prompt.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "planned",
+    "notes": "M12 R2 에서 조사만(다음 라운드): Orca 는 사용자 PC 에 깔린 CLI 에이전트를 한 번 실행해 글을 받는다(claude -p --output-format …, codex exec … — 사용자 CLI 구독/로그인 그대로, API 키 과금 아님). 원격 작업 단위는 그 서버의 CLI 로(remote-execution)."
   }
 ]
