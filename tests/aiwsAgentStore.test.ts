@@ -1,9 +1,9 @@
 // M3 에이전트 — 렌더러 상태(features/aiws/agentStore.ts). window.ev 를 가짜로 세워 main 없이 돈다(진짜 CLI 안 띄움).
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultAgentSettings, type DetectedAgent } from '@shared/agents'
-import type { AgentStatusView } from '@shared/agentHooks'
+import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
 
-const exits = new Map<string, () => void>()
+const exits = new Map<string, (info?: { id: string; exitCode: number }) => void>()
 let pushStatus: ((v: AgentStatusView) => void) | null = null
 let n = 0
 const ev = {
@@ -19,14 +19,16 @@ const ev = {
       cwd === '/bad' ? { ok: false as const, error: '폴더가 없습니다' } : { ok: true as const, sessionId: `s${++n}`, title: `${agent} · x`, line: agent }
     ),
     statuses: vi.fn(async () => []),
+    // M4 DM-01: 켤 때 데몬에서 되살린 탭(여기선 없음).
+    tabs: vi.fn(async () => []),
     onStatus: vi.fn((cb: (v: AgentStatusView) => void) => {
       pushStatus = cb
       return () => {}
     })
   },
   session: {
-    onExit: vi.fn((id: string, cb: () => void) => {
-      exits.set(id, cb)
+    onExit: vi.fn((id: string, cb: (info: { id: string; exitCode: number }) => void) => {
+      exits.set(id, (info = { id, exitCode: 0 }) => cb(info))
       return () => exits.delete(id)
     }),
     destroy: vi.fn(async () => ({ ok: true }))
@@ -66,6 +68,15 @@ describe('agentStore', () => {
     exits.get('s1')!()
     s = m.useAgentStore.getState()
     expect(s.tabs[0].exited).toBe(true)
+  })
+
+  it('M4: 데몬이 죽어 끝난 탭은 잃음(종료와 구별)', async () => {
+    const r = await m.useAgentStore.getState().launchAgent({ agent: 'codex', worktreeId: 'wl', cwd: '/r' })
+    if (!r.ok) throw new Error('x')
+    exits.get(r.sessionId)!({ id: r.sessionId, exitCode: AGENT_SESSION_LOST_EXIT })
+    const tab = m.useAgentStore.getState().tabs.find((t) => t.sessionId === r.sessionId)!
+    expect(tab).toMatchObject({ exited: true, lost: true })
+    m.useAgentStore.getState().closeTab(r.sessionId)
   })
 
   it('실패는 탭을 안 만든다', async () => {

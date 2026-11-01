@@ -169,7 +169,7 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
               />
             )}
             <span>{AGENTS[x.agent].label}</span>
-            <span className="aiws-tab-state">{x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
+            <span className="aiws-tab-state" title={x.lost ? t('aiws.agent.lost.title') : undefined}>{x.lost ? t('aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
             <button
               type="button"
               className="aiws-ic"

@@ -3,8 +3,9 @@
 // AI 작업 공간 청크 안에 산다 — 처음 열 때만 불러온다.
 import { create } from 'zustand'
 import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
-import type { AgentLaunchResult } from '@shared/ipc'
-import type { AgentStatusView } from '@shared/agentHooks'
+import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
+import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
+import { areWorktreePathsEqual } from '@shared/worktrees'
 import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
 import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
@@ -22,6 +23,8 @@ export type AgentTab = {
   /** 셸에 친 한 줄(탭 제목 툴팁 — 무엇이 실행됐는지 감추지 않는다). */
   line: string
   exited: boolean
+  /** M4 DM-01: 데몬이 죽어 세션을 잃었다(종료와 구별해 그린다). */
+  lost?: boolean
   /** 첫 지시(넣지 못했을 때 사람이 붙여 넣게 보여 준다). */
   prompt?: string
 }
@@ -89,10 +92,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (!r.ok) return r
     const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}) }
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId } }))
-    const off = window.ev.session.onExit(r.sessionId, () => {
-      off()
-      set((s) => ({ tabs: s.tabs.map((t) => (t.sessionId === r.sessionId ? { ...t, exited: true } : t)) }))
-    })
+    watchExit(r.sessionId)
     return r
   },
 
@@ -194,6 +194,43 @@ function onTransition(prev: AgentStatusView | undefined, next: AgentStatusView, 
 }
 let feedSeq = 0
 
+/** 탭의 세션이 끝나면 '종료' — 데몬이 죽어 잃었으면 '잃음'(M4 DM-01). */
+function watchExit(sessionId: string): void {
+  const off = window.ev.session.onExit(sessionId, (info) => {
+    off()
+    const lost = info.exitCode === AGENT_SESSION_LOST_EXIT
+    useAgentStore.setState((s) => ({ tabs: s.tabs.map((t) => (t.sessionId === sessionId ? { ...t, exited: true, ...(lost ? { lost: true } : {}) } : t)) }))
+  })
+}
+
+/**
+ * M4 DM-01: 데몬에서 되살린 탭을 올린다. 워크트리는 cwd 로 찾는다(id 는 repoId::path) — 목록이 아직 안 올라왔으면 올라올 때 다시.
+ * ponytail: 끝내 못 찾는 탭(워크트리를 지움)은 안 보인 채 구독이 남는다 — 세션은 데몬에 살아 [백그라운드 에이전트 모두 종료]로 끈다.
+ */
+function restoreTabs(list: AgentTabInfo[]): void {
+  let pending = list.filter((x) => !useAgentStore.getState().tabs.some((t) => t.sessionId === x.sessionId))
+  const place = (): boolean => {
+    const all = Object.values(useAiwsStore.getState().worktreesByRepo).flat()
+    const found: AgentTab[] = []
+    pending = pending.filter((x) => {
+      const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
+      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: false, ...(x.prompt ? { prompt: x.prompt } : {}) })
+      return !w
+    })
+    if (found.length) {
+      useAgentStore.setState((s) => ({
+        tabs: [...s.tabs, ...found],
+        activeTabByWorktree: { ...Object.fromEntries(found.map((t) => [t.worktreeId, t.sessionId])), ...s.activeTabByWorktree }
+      }))
+      found.forEach((t) => watchExit(t.sessionId))
+    }
+    return pending.length === 0
+  }
+  if (!place()) {
+    const unsub = useAiwsStore.subscribe(() => place() && unsub())
+  }
+}
+
 let statusStarted = false
 /** 상태 구독 — AI 작업 공간을 처음 열 때(피커가 감지를 부를 때) 한 번. 창이 늦게 떠도 지금까지의 상태를 받아 온다. */
 function startStatus(): void {
@@ -209,6 +246,11 @@ function startStatus(): void {
     onTransition(prev, v, viewingNow)
   }
   window.ev.agents.onStatus(apply)
+  // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
+  void window.ev.agents
+    .tabs()
+    .then(restoreTabs)
+    .catch(() => {})
   void window.ev.agents
     .statuses()
     .then((list) => list.forEach(apply))

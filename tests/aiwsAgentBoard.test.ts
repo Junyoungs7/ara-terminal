@@ -84,6 +84,7 @@ const ev = {
     getSettings: vi.fn(async () => defaultAgentSettings()),
     launch: vi.fn(async (agent: string) => ({ ok: true as const, sessionId: 's1', title: agent, line: agent })),
     statuses: vi.fn(async () => []),
+    tabs: vi.fn(async () => []), // M4 DM-01: 데몬에서 되살린 탭(여기선 없음)
     onStatus: vi.fn((cb: (s: AgentStatusView) => void) => {
       pushStatus = cb
       return () => {}

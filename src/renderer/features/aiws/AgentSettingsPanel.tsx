@@ -4,6 +4,7 @@ import type { LaunchShell } from '@shared/aiCli'
 import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
 import { Row, Toggle } from '../../components/SettingsPage'
+import { useDialog } from '../../components/Dialog'
 
 /**
  * M3 설정 › AI 작업 공간 › 에이전트 — Orca AgentDetectionCatalog(감지 목록·켜고 끄기) + AgentLaunchSettingsSection·AgentPermissionModeMenu
@@ -16,6 +17,8 @@ export function AgentSettingsPanel(): JSX.Element {
   const detecting = useAgentStore((s) => s.detecting)
   const [sel, setSel] = useState<AgentId>('claude')
   const [shell, setShell] = useState<LaunchShell>('posix')
+  const [killed, setKilled] = useState<number | null>(null)
+  const dialog = useDialog()
   useEffect(() => {
     if (!detected) void useAgentStore.getState().loadAgents()
     void window.ev?.app.launchShell().then((s) => s && setShell(s))
@@ -57,6 +60,32 @@ export function AgentSettingsPanel(): JSX.Element {
       <Row label={t('settings.agents.rc')} desc={t('settings.agents.rc.desc')} item="agents.rc">
         <Toggle on={settings.claudeRemoteControl} label={t('settings.agents.rc')} onChange={(claudeRemoteControl) => save({ ...settings, claudeRemoteControl })} />
       </Row>
+
+      {/* M4 DM-01 — 에이전트는 로컬 데몬에서 돌아 앱을 닫아도 산다. 끄는 길 둘(Orca Quit Completely). */}
+      <div className="set-sec-t" data-item="agents.daemon">
+        {t('settings.agents.daemon')}
+      </div>
+      <div className="set-note">{t('settings.agents.daemon.desc')}</div>
+      <Row label={t('settings.agents.killBackground')} desc={killed === null ? t('settings.agents.killBackground.desc') : t('settings.agents.killBackground.done').replace('{n}', String(killed))} item="agents.killBackground">
+        <button type="button" className="btn" data-aiws="agents-kill-background" onClick={() => void window.ev.agents.killBackground().then((r) => setKilled(r.killed))}>
+          {t('settings.agents.killBackground')}
+        </button>
+      </Row>
+      <Row label={t('settings.agents.quitCompletely')} desc={t('settings.agents.quitCompletely.desc')} item="agents.quitCompletely">
+        <button
+          type="button"
+          className="btn"
+          data-aiws="agents-quit-completely"
+          onClick={() =>
+            void dialog
+              .ask({ title: t('settings.agents.quitCompletely'), message: t('settings.agents.quitCompletely.confirm'), tone: 'danger', confirmLabel: t('settings.agents.quitCompletely') })
+              .then((r) => void (r === 'confirm' && window.ev.agents.quitCompletely()))
+          }
+        >
+          {t('settings.agents.quitCompletely')}
+        </button>
+      </Row>
+      {dialog.node}
 
       <div className="set-sec-t" data-item="agents.launch">
         {t('settings.agents.launch')}

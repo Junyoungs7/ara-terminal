@@ -39,7 +39,7 @@ export function AgentDashboard(): JSX.Element {
                   <span className="aiws-card-l1">
                     <AgentGlyph display={display} estimated={st?.estimated ?? true} detail={st?.source} />
                     <b>{AGENTS[tab.agent].label}</b>
-                    <span className="aiws-card-st">{tab.exited ? t('aiws.agent.exited') : t('aiws.st.' + display)}</span>
+                    <span className="aiws-card-st">{tab.lost ? t('aiws.agent.lost') : tab.exited ? t('aiws.agent.exited') : t('aiws.st.' + display)}</span>
                   </span>
                   <span className="aiws-card-l2 aiws-mono">{worktreeName(tab.worktreeId)}</span>
                   {st?.tool && <span className="aiws-card-l2">{st.tool}</span>}
