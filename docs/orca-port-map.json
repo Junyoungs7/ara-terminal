@@ -428,7 +428,8 @@
     "feature": "파일·이미지 첨부, 초안 보존",
     "orcaPaths": [
       "src/main/native-chat/agent-session-attachments",
-      "src/main/acp/acp-prompt-content.ts"
+      "src/main/acp/acp-prompt-content.ts",
+      "src/renderer/src/components/native-chat/NativeChatComposer.tsx"
     ],
     "orcaRef": "fdfcfb3551",
     "status": "porting"
