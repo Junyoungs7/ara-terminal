@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agentLimitsOf,
   agentSettingsOf,
   defaultAgentSettings,
   extractLeadingEnvAssignments,
   firstCommandPath,
   mergePathSegments,
+  memoryCapOf,
   migrateAiCliFlags,
   parseAgentCommand,
   parseCliVersion,
@@ -181,5 +183,25 @@ describe('실행 한 줄 (AI-03)', () => {
     expect(quoteArg('@x', 'powershell')).toBe(`'@x'`)
     expect(quoteArg('a b', 'cmd')).toBe('"a b"')
     expect(quoteArg('a\nb', 'posix')).toBeNull()
+  })
+})
+
+describe('M4 R3 자원 상한 설정', () => {
+  it('기본: 낮은 우선순위 켬 · 메모리 상한 끔', () => {
+    expect(agentSettingsOf(null)).toMatchObject({ lowPriority: true, memoryCapMb: 0 })
+    expect(agentSettingsOf({ lowPriority: false, memoryCapMb: 4096 })).toMatchObject({ lowPriority: false, memoryCapMb: 4096 })
+  })
+
+  it('상한 칸·저장값은 1 MB ~ 1 TB 정수만, 그 밖은 끔(0)', () => {
+    expect(memoryCapOf('2048')).toBe(2048)
+    expect(memoryCapOf(' 512 ')).toBe(512)
+    expect(memoryCapOf(1536.7)).toBe(1536)
+    for (const bad of ['', '0', '-5', 'abc', 0.5, 2 ** 40, NaN, Infinity, null, undefined, {}]) expect(memoryCapOf(bad)).toBe(0)
+    expect(agentSettingsOf({ memoryCapMb: '1e9' }).memoryCapMb).toBe(0)
+  })
+
+  it('데몬에 보내는 상한은 바이트', () => {
+    expect(agentLimitsOf({ lowPriority: true, memoryCapMb: 2 })).toEqual({ lowPriority: true, memoryBytes: 2 * 1024 * 1024 })
+    expect(agentLimitsOf({ lowPriority: false, memoryCapMb: 0 })).toEqual({ lowPriority: false, memoryBytes: 0 })
   })
 })

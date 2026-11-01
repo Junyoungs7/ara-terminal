@@ -11376,6 +11376,21 @@ button.sb-seg.upd:hover .val {
   font-family: var(--mono);
   color: var(--text-mid);
 }
+.res-limits {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  padding: var(--sp-1) 0 var(--sp-2);
+}
+.res-tag {
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-2);
+}
+.res-row.over .mem {
+  color: var(--err);
+}
 .res-total {
   border-bottom: 1px solid var(--line);
   margin-bottom: var(--sp-2);

@@ -17,6 +17,8 @@ export type PtyUsage = {
   title: string
   type: string
   pid?: number
+  /** AI 작업 공간 에이전트 탭(로컬 데몬 세션 포함) — 상한(AgentLimits)이 걸리는 줄. */
+  agent?: boolean
   cpu: number
   memory: number
   procCount: number
@@ -28,11 +30,18 @@ export type ResourceSnapshot = {
   ptys: PtyUsage[]
   /** 앱 전체(앱 프로세스 + PTY 트리). */
   total: { cpu: number; memory: number }
+  /** 에이전트 상한(설정 › 에이전트) — 팝오버가 보여 준다. */
+  agentLimits: AgentLimits
 }
 
-/** 상한(M4 에서 구현 — Windows Job Object / macOS). 지금은 모양만. */
-export type ResourceLimit = { memoryBytes?: number; cpuPct?: number }
-export type ResourceLimitTarget = { kind: 'pty'; sessionId: string } | { kind: 'agent'; agentId: string }
+/**
+ * M4 에이전트 자원 상한(설정 › 에이전트 › 자원). 로컬 데몬이 적용한다 — 새 네이티브 의존 없이:
+ *  · lowPriority: 에이전트 셸(과 그 자손)을 낮은 우선순위로(os.setPriority). 자식은 부모 우선순위를 물려받는다.
+ *  · memoryBytes: 세션 트리 작업 세트가 넘으면 알림만(자동 종료 안 함). 0 = 끔.
+ * ponytail: 하드 상한(Windows Job Object·cgroup)이 아니다 — 넘어도 OS 가 막지 않는다. 필요하면 네이티브 의존과 함께 2차.
+ */
+export type AgentLimits = { lowPriority: boolean; memoryBytes: number }
+export const NO_AGENT_LIMITS: AgentLimits = { lowPriority: false, memoryBytes: 0 }
 
 export function appKind(type: string): AppProcKind {
   const t = type.toLowerCase()
@@ -76,7 +85,7 @@ export function collectSubtree(
 /** PTY 마다 셸 트리를 합산. 등록 순서대로 한 번만 센다(Orca collector 와 같은 규칙). */
 export function aggregatePtys(
   rows: readonly ProcRow[],
-  ptys: readonly { id: string; title: string; type: string; pid?: number }[]
+  ptys: readonly { id: string; title: string; type: string; pid?: number; agent?: boolean }[]
 ): PtyUsage[] {
   const byPid = new Map(rows.map((r) => [r.pid, r]))
   const kids = childrenIndex(rows)
@@ -98,10 +107,41 @@ export function aggregatePtys(
   })
 }
 
-export function snapshotOf(app: AppProc[], ptys: PtyUsage[], at = Date.now()): ResourceSnapshot {
+export function snapshotOf(app: AppProc[], ptys: PtyUsage[], at = Date.now(), agentLimits: AgentLimits = NO_AGENT_LIMITS): ResourceSnapshot {
   const sum = (xs: { cpu: number; memory: number }[]) =>
     xs.reduce((a, x) => ({ cpu: a.cpu + x.cpu, memory: a.memory + x.memory }), { cpu: 0, memory: 0 })
-  return { at, app, ptys, total: sum([...app, ...ptys]) }
+  return { at, app, ptys, total: sum([...app, ...ptys]), agentLimits }
+}
+
+/**
+ * 우선순위를 낮출 pid — roots(에이전트 셸) 트리 전부에서 이미 낮춘 것(done)을 뺀다.
+ * 셸을 띄울 때 한 번 낮추면 자식은 물려받지만, 스스로 우선순위를 되돌리는 도구가 있어 표본마다 트리를 다시 본다.
+ */
+export function priorityTargets(rows: readonly ProcRow[], roots: readonly number[], done: ReadonlySet<number>): number[] {
+  const byPid = new Map(rows.map((r) => [r.pid, r]))
+  const kids = childrenIndex(rows)
+  const out = new Set<number>()
+  for (const root of roots) for (const pid of collectSubtree(byPid, kids, root)) if (!done.has(pid)) out.add(pid)
+  return [...out]
+}
+
+/**
+ * 메모리 상한 판정 — **넘어설 때 한 번만** 알린다. over 는 이미 알린 세션(호출 사이에 들고 다닌다):
+ * 상한 아래로 내려오거나 세션이 없어지면 빠져서 다시 넘으면 또 알린다. cap 0 = 끔(아무것도 안 알리고 비운다).
+ * 돌려주는 것 = 이번에 새로 넘은 세션.
+ */
+export function overMemory(usage: readonly { id: string; memory: number }[], cap: number, over: Set<string>): { id: string; memory: number }[] {
+  const fresh: { id: string; memory: number }[] = []
+  const seen = new Set<string>()
+  for (const u of usage) {
+    seen.add(u.id)
+    if (cap > 0 && u.memory > cap) {
+      if (!over.has(u.id)) fresh.push(u)
+      over.add(u.id)
+    } else over.delete(u.id)
+  }
+  for (const id of over) if (!seen.has(id)) over.delete(id)
+  return fresh
 }
 
 /** `ps -eo pid=,ppid=,pcpu=,rss=` 출력(rss = KB). */

@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AGENT_SESSION_LOST_EXIT } from '@shared/agentHooks'
+import type { AgentLimits } from '@shared/resources'
 import type { SessionBackend } from '../sessions/SessionBackend'
 import { RecoveryCircuitBreaker } from '../stability/recoveryBreaker'
 import { connectDaemon, type DaemonConnection } from './client'
@@ -69,6 +70,8 @@ export type AgentDaemon = {
   disconnect(): void
   /** 이 세션은 데몬에 산다(앱이 꺼져도 남는다). */
   owns(id: string): boolean
+  /** M4 R3 자원 상한이 바뀌었다(설정 › 에이전트) — 붙어 있는 데몬 모두에게. 붙을 때는 deps.limits() 를 알아서 보낸다. */
+  setLimits(limits: AgentLimits): void
 }
 
 export function createAgentDaemon(deps: {
@@ -84,7 +87,15 @@ export function createAgentDaemon(deps: {
   /** 켤 때 되살린 세션(탭 복원·상태 판정). adopt 뒤에 불린다. */
   restored: (info: DaemonSessionInfo) => void
   log: (msg: string) => void
+  /** M4 R3: 지금 자원 상한(붙을 때마다 데몬에 보낸다). 안 주면 보내지 않는다. */
+  limits?: () => AgentLimits
+  /** 데몬이 알린 메모리 상한 넘음(세션마다 넘어설 때 한 번). */
+  memoryOver?: (e: { id: string; memory: number; limit: number }) => void
+  /** 판 규칙(Orca) — 시험이 판 올림을 흉내 낼 때만 준다. */
+  protocol?: { current: number; previous: readonly number[] }
 }): AgentDaemon {
+  const CURRENT = deps.protocol?.current ?? DAEMON_PROTOCOL_VERSION
+  const PREVIOUS = deps.protocol?.previous ?? PREVIOUS_DAEMON_PROTOCOL_VERSIONS
   const backends = new Map<string, DaemonBackend>()
   let current: DaemonConnection | null = null
   let connecting: Promise<DaemonConnection> | null = null
@@ -103,6 +114,7 @@ export function createAgentDaemon(deps: {
 
   const wire = (conn: DaemonConnection, kind: 'current' | 'drain'): void => {
     conn.onEvent((e) => {
+      if (e.type === 'memoryOver') return deps.memoryOver?.(e)
       const b = backends.get(e.id)
       if (!b) return
       if (e.type === 'data') return b.emitData(e.data)
@@ -146,11 +158,15 @@ export function createAgentDaemon(deps: {
   }
 
   const paths = (v: number) => daemonPaths(deps.runtimeDir, v)
+  // 옛 데몬(이 요청을 모름)은 오류로 답한다 — 상한 없이 계속 쓴다.
+  const sendLimits = async (conn: DaemonConnection): Promise<void> => {
+    if (deps.limits) await conn.request({ type: 'limits', limits: deps.limits() }).catch(() => {})
+  }
 
   const ensureCurrent = (): Promise<DaemonConnection> => {
     if (current) return Promise.resolve(current)
     connecting ??= (async () => {
-      const { socketPath, tokenPath } = paths(DAEMON_PROTOCOL_VERSION)
+      const { socketPath, tokenPath } = paths(CURRENT)
       const token = readToken(tokenPath)
       let conn = token ? await connectDaemon(socketPath, token).catch(() => null) : null
       if (!conn) {
@@ -161,6 +177,7 @@ export function createAgentDaemon(deps: {
       }
       current = conn
       wire(conn, 'current')
+      await sendLimits(conn) // 우선순위는 만들 때 걸리므로 create 보다 먼저
       return conn
     })().finally(() => {
       connecting = null
@@ -170,7 +187,7 @@ export function createAgentDaemon(deps: {
 
   // 켤 때: 있는 데몬에만 붙는다(토큰 파일이 없으면 띄운 적이 없다 — 아무것도 안 함).
   const ready = (async () => {
-    for (const v of [DAEMON_PROTOCOL_VERSION, ...PREVIOUS_DAEMON_PROTOCOL_VERSIONS]) {
+    for (const v of [CURRENT, ...PREVIOUS]) {
       const { socketPath, tokenPath } = paths(v)
       const token = readToken(tokenPath)
       if (!token) continue
@@ -181,7 +198,7 @@ export function createAgentDaemon(deps: {
         deps.log(`agent daemon v${v} connect failed: ${String(e)}`)
       }
       if (!conn) continue
-      const verdict = judgeDaemon(conn.hello.protocol)
+      const verdict = judgeDaemon(conn.hello.protocol, CURRENT, PREVIOUS)
       if (verdict === 'ignore') {
         conn.close()
         continue
@@ -191,9 +208,11 @@ export function createAgentDaemon(deps: {
       if (verdict === 'adopt') {
         current = conn
         wire(conn, 'current')
+        await sendLimits(conn)
       } else if (list.length) {
         drains.add(conn)
         wire(conn, 'drain')
+        await sendLimits(conn)
       } else {
         conn.close() // 세션 없는 옛 판 — 놓으면 스스로 내려간다
         continue
@@ -234,7 +253,10 @@ export function createAgentDaemon(deps: {
       quitting = true
       for (const c of all()) c.close()
     },
-    owns: (id) => backends.has(id)
+    owns: (id) => backends.has(id),
+    setLimits(limits) {
+      for (const c of all()) void c.request({ type: 'limits', limits }).catch(() => {})
+    }
   }
 }
 

@@ -70,10 +70,26 @@ export function ResourcePopover() {
         <div className="res-empty">{t('resources.noPty')}</div>
       ) : (
         <div className="res-list">
+          {/* M4 R3: 에이전트 상한(설정 › 에이전트 › 자원). 넘은 줄은 메모리를 오류 색으로 — 끄는 것은 사람이([종료]). */}
+          {snap.ptys.some((p) => p.agent) && (
+            <div className="res-limits" data-res="agent-limits">
+              {[
+                t('resources.limit.memory').replace('{v}', snap.agentLimits.memoryBytes > 0 ? formatBytes(snap.agentLimits.memoryBytes) : t('resources.limit.off')),
+                snap.agentLimits.lowPriority ? t('resources.limit.low') : ''
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          )}
           {snap.ptys.map((p) => (
-            <div className="res-row" key={p.id} data-session={p.id}>
+            <div
+              className={'res-row' + (p.agent && snap.agentLimits.memoryBytes > 0 && p.memory > snap.agentLimits.memoryBytes ? ' over' : '')}
+              key={p.id}
+              data-session={p.id}
+              data-agent={p.agent ? 'true' : undefined}
+            >
               <span className="name" title={p.title}>
-                {p.title} {p.pid != null && <span className="pid">{p.pid}</span>}
+                {p.agent && <span className="res-tag">{t('resources.agent')}</span>} {p.title} {p.pid != null && <span className="pid">{p.pid}</span>}
               </span>
               <span className="cpu">{p.pid != null ? cpuText(p.cpu) : '—'}</span>
               <span className="mem">{p.pid != null ? formatBytes(p.memory) : '—'}</span>

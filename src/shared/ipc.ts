@@ -57,6 +57,8 @@ export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
 export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string }
+/** M4 R3: 에이전트 세션 트리 메모리가 상한을 넘었다(push 'agents:memoryOver', 넘어설 때 한 번). 바이트. */
+export type AgentMemoryOver = { sessionId: string; title: string; memory: number; limit: number }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -1175,6 +1177,8 @@ export type EvApi = {
     killBackground(): Promise<{ killed: number }>
     quitCompletely(): Promise<void>
     onStatus(cb: (v: AgentStatusView) => void): () => void
+    /** M4 R3 메모리 상한 넘음(알림 센터로). */
+    onMemoryOver(cb: (e: AgentMemoryOver) => void): () => void
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */
     legacyNotice(): Promise<LegacyAiNotice | null>
   }

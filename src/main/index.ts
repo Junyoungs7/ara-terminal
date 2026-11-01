@@ -41,6 +41,7 @@ import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerReportIpc } from './ipc/registerReportIpc'
 import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerResourcesFeature } from './resources/feature'
+import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerVaultFeature } from './vault/feature'
@@ -541,8 +542,8 @@ app.whenReady().then(async () => {
   // 브라우저 서비스도 받아 둔다 — MCP 가 아라 브라우저에 닿는 유일한 길이다(2026-08-26).
   const fwdIpc = registerForwardIpc(sessions, () => mainWindow, () => sessionLog?.dir ?? sessionDir)
   forwards = fwdIpc.forwards
-  // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). 상한(M4)은 이 서비스에 붙는다.
-  registerResourcesFeature(sessions)
+  // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). M4 R3: 에이전트 상한(적용은 로컬 데몬)을 팝오버에 보여 준다 — 에이전트 기능이 아래에서 선다.
+  registerResourcesFeature(sessions, () => agents?.limits() ?? NO_AGENT_LIMITS)
   // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
   const worktrees = registerWorktreesFeature(userData)
   // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행·상태(훅 + 화면 판정). 옛 aiCliFlags 를 처음 한 번 옮긴다.

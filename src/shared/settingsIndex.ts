@@ -43,6 +43,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.detect', 'settings.agents.detect', 'settings.agents.redetect.desc'),
       i('agents.default', 'settings.agents.default'),
       i('agents.rc', 'settings.agents.rc', 'settings.agents.rc.desc'),
+      i('agents.lowPriority', 'settings.agents.lowPriority', 'settings.agents.lowPriority.desc'),
+      i('agents.memoryCap', 'settings.agents.memoryCap', 'settings.agents.memoryCap.desc'),
       i('agents.launch', 'settings.agents.launch'),
       i('agents.permission', 'settings.agents.permission', 'settings.agents.permission.desc'),
       i('agents.args', 'settings.agents.args', 'settings.agents.args.desc'),

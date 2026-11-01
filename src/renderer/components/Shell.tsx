@@ -5,6 +5,7 @@ import { AiHome, AiRail, type AiwsLocation } from '../features/aiws'
 import { RightBar } from './RightBar'
 import { NotifyBell, NotifyToasts } from './NotifyCenter'
 import { attention, installTestNotify, pushNote, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
+import { formatBytes } from '@shared/resources'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
@@ -400,6 +401,21 @@ export function Shell() {
       })
       .catch(() => {})
   }, [])
+
+  // M4 R3: 에이전트 세션 메모리가 상한을 넘었다(로컬 데몬이 넘어설 때 한 번 알린다). 자동으로 끄지 않는다 — 끄는 것은 사람이
+  // 자원 관리자 [종료]·탭 ✕ 로. AI 작업 공간을 안 열었어도 받게 여기(늘 떠 있는 본창)서 듣는다.
+  useEffect(
+    () =>
+      window.ev?.agents?.onMemoryOver?.((e) =>
+        pushNote({
+          kind: 'error',
+          space: 'ai',
+          title: t('aiws.note.memoryOver').replace('{t}', e.title || e.sessionId),
+          body: t('aiws.note.memoryOver.body').replace('{mem}', formatBytes(e.memory)).replace('{limit}', formatBytes(e.limit))
+        })
+      ),
+    []
+  )
 
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다

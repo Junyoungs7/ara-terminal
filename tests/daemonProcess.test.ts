@@ -3,7 +3,7 @@
 // · 세션이 다 끝나고 붙은 앱도 없으면 스스로 내려간다 · shutdown 은 세션까지 끝내고 내려간다.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { constants, getPriority, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -154,6 +154,32 @@ describe('데몬 프로세스(node)', () => {
     await until(() => exits === 2)
     expect(await a.request<DaemonSessionInfo[]>({ type: 'list' })).toEqual([])
     await a.request({ type: 'create', spec: { id: 'q3', cwd: dir, env: {}, meta: {} } })
+    void a.request({ type: 'shutdown' }).catch(() => {})
+    expect(await d.exited).toBe(0)
+  }, 60_000)
+
+  it('M4 R3 자원 상한: 낮은 우선순위는 만들 때 셸에 걸린다 · 메모리 상한을 넘으면 넘어설 때 한 번만 알린다', async () => {
+    const d = await startDaemon('caps', ['--sample-ms', '150'])
+    const a = (await connectDaemon(d.socketPath, d.token))!
+    const overs: DaemonEvent[] = []
+    a.onEvent((e) => void (e.type === 'memoryOver' && overs.push(e)))
+    // 상한 1바이트 — 셸 하나로도 넘는다.
+    await a.request({ type: 'limits', limits: { lowPriority: true, memoryBytes: 1 } })
+    const info = await a.request<DaemonSessionInfo>({ type: 'create', spec: { id: 'c1', cwd: dir, env: {}, meta: {} } })
+    expect(getPriority(info.pid)).toBe(constants.priority.PRIORITY_BELOW_NORMAL)
+    await until(() => overs.length > 0, 20_000)
+    // 표본이 여러 번 더 돌아도(150ms × 여럿) 같은 세션은 다시 안 알린다.
+    await new Promise((r) => setTimeout(r, 1_500))
+    expect(overs).toHaveLength(1)
+    expect(overs[0]).toMatchObject({ type: 'memoryOver', id: 'c1', limit: 1 })
+    expect((overs[0] as { memory: number }).memory).toBeGreaterThan(1)
+
+    // 끄면 그 뒤에 만드는 세션은 보통 우선순위 · 상한 0 이면 표본이 멈춘다(알림도 없다).
+    await a.request({ type: 'limits', limits: { lowPriority: false, memoryBytes: 0 } })
+    const plain = await a.request<DaemonSessionInfo>({ type: 'create', spec: { id: 'c2', cwd: dir, env: {}, meta: {} } })
+    expect(getPriority(plain.pid)).toBe(constants.priority.PRIORITY_NORMAL)
+    await new Promise((r) => setTimeout(r, 600))
+    expect(overs).toHaveLength(1)
     void a.request({ type: 'shutdown' }).catch(() => {})
     expect(await d.exited).toBe(0)
   }, 60_000)

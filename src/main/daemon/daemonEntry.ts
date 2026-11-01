@@ -2,14 +2,16 @@
 // 앱이 Electron 실행 파일을 ELECTRON_RUN_AS_NODE=1 로 띄운다(Orca daemon-launched-child-spawn.ts — 창·GPU 초기화 없이 node 로).
 // 출처: stablyai/orca @7a7f46f8a3 (MIT) src/main/daemon/{daemon-entry,daemon-server,session}.ts — 핵심만 다시 씀.
 // 뺀 것: 컨트롤/스트림 두 소켓(한 소켓), 바이너리 프레이밍, 헤드리스 에뮬레이터 직렬화(원래 출력 링), 디스크 기록(콜드 복원),
-// 엔드포인트 소유 프로토콜(link·rename), cgroup/launchd, 셸 준비 표식, 출력 백프레셔, 자원 상한(M4 다음 라운드).
+// 엔드포인트 소유 프로토콜(link·rename), cgroup/launchd, 셸 준비 표식, 출력 백프레셔. 자원 상한은 M4 R3 에서 가볍게(낮은 우선순위·메모리 알림).
 //
-// 생애: 요청이 없으면 아무것도 안 돈다(타이머 0 — 성능 원칙). 세션도 붙은 앱도 없으면 스스로 내려간다(사용자 PC 에 남지 않게).
+// 생애: 요청이 없으면 아무것도 안 돈다(타이머 0 — 성능 원칙. 메모리 상한을 켰고 세션이 있을 때만 표본 타이머). 세션도 붙은 앱도 없으면 스스로 내려간다(사용자 PC 에 남지 않게).
 // ⚠️ electron 을 import 하지 않는다(node 로 돈다).
 import { appendFileSync, existsSync, readFileSync, statSync, truncateSync, unlinkSync } from 'node:fs'
 import { connect, createServer, type Socket } from 'node:net'
 import { PtyBackend } from '../sessions/PtyBackend'
 import type { SessionSpec } from '../sessions/ISessionManager'
+import { createHostProcs, lowerPriority } from '../resources/hostProcs'
+import { NO_AGENT_LIMITS, aggregatePtys, overMemory, priorityTargets, type AgentLimits } from '@shared/resources'
 import {
   DAEMON_PROTOCOL_VERSION,
   ReplayBuffer,
@@ -30,9 +32,12 @@ const HELLO_TIMEOUT_MS = 5_000
 const SHUTDOWN_CAP_MS = 5_000
 /** 로그 상한(Orca daemon-file-log DEFAULT_MAX_BYTES) — 시작할 때 넘었으면 비운다. */
 const LOG_MAX_BYTES = 5 * 1024 * 1024
+/** 메모리 상한 표본 주기. 프로세스 표를 한 번 재는 값(Windows 는 PowerShell CIM 한 번)이 있어 촘촘히 돌리지 않는다. */
+const SAMPLE_MS = 10_000
 
 /** exitWithClients: 붙은 앱이 모두 떠나면 세션까지 끝내고 내려간다 — e2e 가 시험 뒤 데몬·가짜 에이전트를 남기지 않게(제품은 안 씀). */
-export type DaemonArgs = { socketPath: string; tokenPath: string; logFile?: string; appVersion?: string; exitWithClients?: boolean }
+/** sampleMs: 메모리 표본 주기(시험만 짧게 준다). */
+export type DaemonArgs = { socketPath: string; tokenPath: string; logFile?: string; appVersion?: string; exitWithClients?: boolean; sampleMs?: number }
 
 export function parseDaemonArgs(argv: string[]): DaemonArgs {
   const get = (k: string): string | undefined => {
@@ -42,7 +47,15 @@ export function parseDaemonArgs(argv: string[]): DaemonArgs {
   const socketPath = get('--socket')
   const tokenPath = get('--token')
   if (!socketPath || !tokenPath) throw new Error('usage: daemonEntry --socket <path> --token <path> [--log <file>] [--app-version <v>]')
-  return { socketPath, tokenPath, logFile: get('--log'), appVersion: get('--app-version'), exitWithClients: argv.includes('--exit-with-clients') }
+  const sampleMs = Number(get('--sample-ms'))
+  return {
+    socketPath,
+    tokenPath,
+    logFile: get('--log'),
+    appVersion: get('--app-version'),
+    exitWithClients: argv.includes('--exit-with-clients'),
+    ...(sampleMs > 0 ? { sampleMs } : {})
+  }
 }
 
 type Session = { backend: PtyBackend; info: DaemonSessionInfo; replay: ReplayBuffer }
@@ -74,6 +87,43 @@ export function startDaemon(a: DaemonArgs): void {
   const clients = new Set<Client>()
   let shuttingDown = false
 
+  // ── M4 R3 자원 상한 ── 앱이 'limits' 로 준다(설정 › 에이전트). 표본 타이머는 메모리 상한이 켜져 있고 세션이 있을 때만 돈다.
+  let limits: AgentLimits = NO_AGENT_LIMITS
+  const hostProcesses = createHostProcs()
+  const over = new Set<string>()
+  const lowered = new Set<number>()
+  let sampler: ReturnType<typeof setInterval> | null = null
+  let sampling = false
+  const sample = async (): Promise<void> => {
+    if (sampling) return
+    sampling = true
+    try {
+      const rows = await hostProcesses()
+      const list = [...sessions.values()].map((s) => ({ id: s.info.id, title: '', type: 'local', pid: s.info.pid }))
+      for (const u of overMemory(aggregatePtys(rows, list), limits.memoryBytes, over)) {
+        log(`memory over ${u.id} ${u.memory} > ${limits.memoryBytes}`)
+        broadcast(u.id, { type: 'memoryOver', id: u.id, memory: u.memory, limit: limits.memoryBytes }, false)
+      }
+      if (limits.lowPriority) {
+        const alive = new Set(rows.map((r) => r.pid))
+        for (const pid of lowered) if (!alive.has(pid)) lowered.delete(pid) // pid 재사용에 남의 프로세스를 건너뛰지 않게
+        for (const pid of priorityTargets(rows, list.map((x) => x.pid), lowered)) if (lowerPriority(pid)) lowered.add(pid)
+      }
+    } catch (e) {
+      log(`sample failed ${String(e)}`)
+    } finally {
+      sampling = false
+    }
+  }
+  const updateSampler = (): void => {
+    const want = limits.memoryBytes > 0 && sessions.size > 0 && !shuttingDown
+    if (want && !sampler) sampler = setInterval(() => void sample(), a.sampleMs ?? SAMPLE_MS)
+    else if (!want && sampler) {
+      clearInterval(sampler)
+      sampler = null
+    }
+  }
+
   const send = (c: Client, msg: unknown): void => {
     if (!c.socket.destroyed) c.socket.write(encodeFrame(msg))
   }
@@ -83,6 +133,7 @@ export function startDaemon(a: DaemonArgs): void {
 
   const exitNow = (why: string): void => {
     log(`exit: ${why}`)
+    if (sampler) clearInterval(sampler)
     server.close()
     process.exit(0)
   }
@@ -97,12 +148,16 @@ export function startDaemon(a: DaemonArgs): void {
     const info: DaemonSessionInfo = { id: spec.id, pid: backend.pid, cwd: spec.cwd, cols: spec.cols ?? 80, rows: spec.rows ?? 24, meta: spec.meta ?? {} }
     const s: Session = { backend, info, replay: new ReplayBuffer() }
     sessions.set(spec.id, s)
+    // 셸을 낮추면 그 안에서 띄우는 에이전트·빌드는 우선순위를 물려받는다(Windows BELOW_NORMAL·POSIX nice 모두).
+    if (limits.lowPriority && lowerPriority(info.pid)) lowered.add(info.pid)
+    updateSampler()
     backend.onData((data) => {
       s.replay.push(data)
       broadcast(spec.id, { type: 'data', id: spec.id, data }, true)
     })
     backend.onExit((code, signal) => {
       sessions.delete(spec.id)
+      updateSampler()
       log(`session exit ${spec.id} pid=${info.pid} code=${code}`)
       // 끝난 것은 붙은 앱 모두에게 — 목록이 어긋나지 않게.
       broadcast(spec.id, { type: 'exit', id: spec.id, code, ...(signal ? { signal } : {}) }, false)
@@ -143,11 +198,19 @@ export function startDaemon(a: DaemonArgs): void {
       case 'kill':
         sessions.get(r.id)?.backend.kill()
         return null
+      case 'limits': {
+        const l = r.limits
+        limits = { lowPriority: l?.lowPriority === true, memoryBytes: Number.isFinite(l?.memoryBytes) && l.memoryBytes > 0 ? l.memoryBytes : 0 }
+        log(`limits lowPriority=${limits.lowPriority} memoryBytes=${limits.memoryBytes}`)
+        updateSampler()
+        return null
+      }
       case 'killAll':
         for (const s of sessions.values()) s.backend.kill()
         return sessions.size
       case 'shutdown':
         shuttingDown = true
+        updateSampler()
         for (const s of sessions.values()) s.backend.kill()
         setTimeout(() => exitNow('shutdown cap'), SHUTDOWN_CAP_MS).unref()
         queueMicrotask(maybeExit)

@@ -319,12 +319,14 @@ export class MainSessionManager implements ISessionManager {
   }
 
   /** FD-01 자원 관리자: 세션별 셸 pid(로컬만). */
-  ptyList(): { id: string; title: string; type: string; pid?: number }[] {
+  ptyList(): { id: string; title: string; type: string; pid?: number; agent?: boolean }[] {
     return [...this.handles.values()].map((h) => ({
       id: h.meta.id,
       title: h.meta.title,
       type: h.meta.type,
-      pid: h.backend.pid
+      pid: h.backend.pid,
+      // M4: 에이전트 탭(데몬 세션 포함) — 자원 관리자가 상한과 함께 보여 준다.
+      ...(h.meta.space === 'ai' ? { agent: true } : {})
     }))
   }
 

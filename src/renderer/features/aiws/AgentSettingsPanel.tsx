@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { AGENT_IDS, AGENTS, envToLines, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
+import { AGENT_IDS, AGENTS, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
 import type { LaunchShell } from '@shared/aiCli'
 import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
@@ -86,6 +86,27 @@ export function AgentSettingsPanel(): JSX.Element {
         </button>
       </Row>
       {dialog.node}
+
+      {/* M4 R3 자원 상한 — 적용은 로컬 데몬이(우선순위는 다음 실행부터, 메모리 알림은 바로). 하드 상한이 아니다 — 넘어도 끄지 않는다. */}
+      <div className="set-sec-t" data-item="agents.resources">
+        {t('settings.agents.resources')}
+      </div>
+      <Row label={t('settings.agents.lowPriority')} desc={t('settings.agents.lowPriority.desc')} item="agents.lowPriority">
+        <Toggle on={settings.lowPriority} label={t('settings.agents.lowPriority')} onChange={(lowPriority) => save({ ...settings, lowPriority })} />
+      </Row>
+      <Row label={t('settings.agents.memoryCap')} desc={t('settings.agents.memoryCap.desc')} item="agents.memoryCap">
+        <input
+          key={`m-${settings.memoryCapMb}`}
+          className="aiws-input aiws-mono"
+          data-field="agents.memoryCap"
+          type="number"
+          min={0}
+          step={256}
+          placeholder={t('resources.limit.off')}
+          defaultValue={settings.memoryCapMb || ''}
+          onBlur={(e) => memoryCapOf(e.target.value) !== settings.memoryCapMb && save({ ...settings, memoryCapMb: memoryCapOf(e.target.value) })}
+        />
+      </Row>
 
       <div className="set-sec-t" data-item="agents.launch">
         {t('settings.agents.launch')}

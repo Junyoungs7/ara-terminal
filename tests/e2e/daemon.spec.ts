@@ -143,3 +143,52 @@ test('DM-1★ 에이전트 실행 → 앱 종료 → 다시 켬 → 같은 PID·
     rmDir(root)
   }
 })
+
+// M4 R3 자원 상한 — 낮은 우선순위가 에이전트(셸의 자식)까지 물려 내려가고, 메모리 상한을 넘으면 알림 센터에 한 번 뜬다(자동 종료 없음).
+// 끄는 것은 사람이: 자원 관리자 [터미널] 줄의 [종료]. 상한은 1 MB — 셸 하나로도 넘는다. 표본은 10초마다라 넉넉히 기다린다.
+test('DM-2 자원 상한: 낮은 우선순위 상속 · 메모리 넘음 알림 한 번 · 자원 관리자 에이전트 줄·상한 · [종료]', async ({ launch, userDataDir }) => {
+  const root = realpathSync(tempDir('ara-e2e-caps-'))
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  const fake = fakeClaude(bin)
+  const repo = makeRepo(root)
+  writeFileSync(
+    join(userDataDir, 'agents.json'),
+    JSON.stringify({ agents: { claude: { command: fake }, codex: { command: fake }, gemini: { command: fake } }, migratedAiCliFlags: true, lowPriority: true, memoryCapMb: 1 })
+  )
+  try {
+    const a = await launch(userDataDir)
+    await openAi(a.app, a.page, repo, true)
+    await a.page.click('[data-aiws="agent-picker"] .aiws-mode[data-agent="claude"]')
+    await a.page.click('[data-aiws="agent-launch"]')
+    const [sid] = await agentIds(a.page)
+    await expect.poll(async () => pidIn(await termText(a.page, sid)), { timeout: 30_000 }).not.toBeNull()
+    // 가짜 에이전트는 데몬 셸이 띄운 자식이다 — 셸에 건 우선순위를 물려받았어야 한다.
+    const { getPriority, constants } = await import('node:os')
+    expect(getPriority(pidIn(await termText(a.page, sid))!)).toBe(constants.priority.PRIORITY_BELOW_NORMAL)
+
+    // 넘음 알림(오류 토스트) — 한 번만
+    const toast = a.page.locator('.ntf-toasts .ntf-toast[data-kind="error"]', { hasText: '메모리가 상한을 넘었습니다' })
+    await expect(toast).toBeVisible({ timeout: 40_000 })
+    await a.page.waitForTimeout(12_000) // 표본 한 번 더
+    await a.page.click('.titlebar .tb-bell')
+    await expect(a.page.locator('.titlebar .ntf-menu .ntf-item', { hasText: '메모리가 상한을 넘었습니다' })).toHaveCount(1)
+
+    // 자원 관리자: 에이전트 줄 + 상한 줄, 넘은 줄 표시 → [종료]로 끈다(탭이 끝난다)
+    await a.page.keyboard.press('Escape')
+    await a.page.click('[data-action="statusbar.resources"]')
+    await a.page.click('[data-action="resources.tab.pty"]')
+    await expect(a.page.locator('.res-pop [data-res="agent-limits"]')).toContainText('1 MB')
+    const row = a.page.locator(`.res-pop .res-row[data-session="${sid}"]`)
+    await expect(row).toHaveAttribute('data-agent', 'true')
+    await expect(row).toHaveClass(/over/, { timeout: 10_000 })
+    await row.locator('[data-action="resources.pty.kill"]').click()
+    await row.locator('[data-action="resources.pty.killConfirm"]').click()
+    await expect.poll(() => agentIds(a.page), { timeout: 15_000 }).toEqual([])
+    await quitAra(a)
+  } finally {
+    const d = daemonPid(userDataDir)
+    if (d && alive(d)) process.kill(d)
+    rmDir(root)
+  }
+})

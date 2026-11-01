@@ -96,7 +96,17 @@ export type AgentSettings = {
   claudeRemoteControl: boolean
   /** 옛 터미널 AI 기본 플래그(`aiCliFlags`)를 한 번 옮겼나(migrateAiCliFlags). */
   migratedAiCliFlags: boolean
+  /**
+   * M4 R3 자원: 에이전트를 낮은 우선순위로(묶음 0/13). **기본 켬** — 에이전트가 빌드·시험을 돌려도 사람이 쓰는 편집기·터미널이
+   * 먼저 CPU 를 받는다. 다툼이 없으면 속도 차이가 없다(Windows BELOW_NORMAL 은 다툴 때만 밀린다).
+   */
+  lowPriority: boolean
+  /** M4 R3 자원: 세션(프로세스 트리) 메모리 상한 MB — 넘으면 알림만(자동 종료 안 함). 0 = 끔(기본). */
+  memoryCapMb: number
 }
+
+/** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
+export const MEMORY_CAP_MAX_MB = 1024 * 1024
 
 const defaultPrefs = (): AgentPrefs => ({ enabled: true, permission: DEFAULT_PERMISSION, args: '', env: {}, command: '' })
 
@@ -105,7 +115,9 @@ export function defaultAgentSettings(): AgentSettings {
     agents: { claude: defaultPrefs(), codex: defaultPrefs(), gemini: defaultPrefs() },
     defaultAgent: 'claude',
     claudeRemoteControl: false,
-    migratedAiCliFlags: false
+    migratedAiCliFlags: false,
+    lowPriority: true,
+    memoryCapMb: 0
   }
 }
 
@@ -141,7 +153,20 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   if (isAgentId(src.defaultAgent)) base.defaultAgent = src.defaultAgent
   base.claudeRemoteControl = src.claudeRemoteControl === true
   base.migratedAiCliFlags = src.migratedAiCliFlags === true
+  base.lowPriority = src.lowPriority !== false
+  base.memoryCapMb = memoryCapOf(src.memoryCapMb)
   return base
+}
+
+/** 저장값·입력 칸 → 메모리 상한 MB(정수). 범위 밖·숫자 아님 = 0(끔). */
+export function memoryCapOf(v: unknown): number {
+  const n = typeof v === 'string' ? Number(v.trim()) : v
+  return typeof n === 'number' && Number.isFinite(n) && n >= 1 && n <= MEMORY_CAP_MAX_MB ? Math.floor(n) : 0
+}
+
+/** 데몬에 보낼 상한(shared/resources AgentLimits). */
+export function agentLimitsOf(s: Pick<AgentSettings, 'lowPriority' | 'memoryCapMb'>): { lowPriority: boolean; memoryBytes: number } {
+  return { lowPriority: s.lowPriority, memoryBytes: s.memoryCapMb * 1024 * 1024 }
 }
 
 /** 설정 화면의 환경 변수 칸(`KEY=VALUE` 한 줄씩) → env. 형이 틀린 줄은 bad 로 돌려 화면이 알린다. */

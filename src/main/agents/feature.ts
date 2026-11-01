@@ -15,15 +15,17 @@ import { pushSend } from '../util/windowPush'
 import { logMainError, mainErrorLogPath } from '../log/MainErrorLog'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
-import { AGENTS, agentSettingsOf, isAgentId, migrateAiCliFlags, planAgentLaunch, type AgentSettings } from '@shared/agents'
+import { AGENTS, agentLimitsOf, agentSettingsOf, isAgentId, migrateAiCliFlags, planAgentLaunch, type AgentSettings } from '@shared/agents'
 import { HOOK_ENV, isHookSource, type AgentStatusView, type HookSource } from '@shared/agentHooks'
 import type { AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
+import type { AgentLimits } from '@shared/resources'
 import { createAgentDetector } from './detect'
 import { createHookServer, installHooks } from './hooks'
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
+import { lowerPriority } from '../resources/hostProcs'
 
 export function registerAgentsFeature(deps: {
   userData: string
@@ -33,7 +35,7 @@ export function registerAgentsFeature(deps: {
   /** 훅을 심을 홈(`~/.claude`·`~/.gemini`·`~/.ara/agent-hooks`). e2e 는 임시 폴더 — 사용자 설정을 시험 부산물로 바꾸지 않는다. */
   home: string
   mainWc: () => WebContents | null
-}): { stop(): Promise<void>; views(): AgentStatusView[] } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -115,13 +117,26 @@ export function registerAgentsFeature(deps: {
       ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
       void ensureHooks()
     },
-    log
+    log,
+    // M4 R3 자원 상한 — 적용은 데몬이(우선순위·메모리 표본). 넘으면 알림 센터로만 — 끄는 것은 사람이(자원 관리자·탭의 [종료]).
+    limits: () => agentLimitsOf(settings),
+    memoryOver: (e) => {
+      const title = deps.sessions().ptyList().find((p) => p.id === e.id)?.title ?? ''
+      log(`memory over ${e.id} ${e.memory} > ${e.limit}`)
+      pushSend(deps.mainWc(), 'agents:memoryOver', { sessionId: e.id, title, memory: e.memory, limit: e.limit })
+    }
   })
 
   const detector = createAgentDetector()
   handle('agents:detect', ({ force }) => detector.detect(force === true))
   handle('agents:getSettings', () => settings)
-  handle('agents:setSettings', ({ settings: next }) => save(next))
+  handle('agents:setSettings', ({ settings: next }) => {
+    const before = agentLimitsOf(settings)
+    const saved = save(next)
+    const after = agentLimitsOf(saved)
+    if (before.lowPriority !== after.lowPriority || before.memoryBytes !== after.memoryBytes) daemon.setLimits(after)
+    return saved
+  })
   handle('agents:statuses', () => tracker?.views() ?? [])
   handle('agents:tabs', async () => {
     await daemon.ready
@@ -166,6 +181,9 @@ export function registerAgentsFeature(deps: {
       log(`daemon create failed — local PTY fallback: ${String(err)}`)
       logMainError('agent daemon', err)
       sessionId = await deps.sessions().create({ type: 'local', title, serverKey: 'localhost', cwd, profileId: null, space: 'ai', env })
+      // 로컬 PTY 로 넘어가도 우선순위는 건다(메모리 표본은 데몬에만 있다).
+      const pid = deps.sessions().ptyList().find((p) => p.id === sessionId)?.pid
+      if (settings.lowPriority && pid) lowerPriority(pid)
     }
     // 헤드리스 화면은 80×24 로 시작해 렌더러 터미널이 붙으며 보내는 resize 를 따라간다(SessionTap.resize).
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
@@ -178,6 +196,7 @@ export function registerAgentsFeature(deps: {
       daemon.disconnect() // 세션·데몬은 산다 — 다음에 켜면 다시 붙는다
       return hooks.stop()
     },
-    views: () => tracker?.views() ?? []
+    views: () => tracker?.views() ?? [],
+    limits: () => agentLimitsOf(settings)
   }
 }

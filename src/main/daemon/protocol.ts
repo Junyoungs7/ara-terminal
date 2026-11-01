@@ -4,6 +4,7 @@
 // ⚠️ 이 파일은 데몬 번들(daemonEntry)에도 들어간다 — electron 을 import 하지 않는다.
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { join, posix } from 'node:path'
+import type { AgentLimits } from '@shared/resources'
 
 /**
  * 데몬은 앱 업데이트에도 살아남는다 — 그래서 선 위의 말은 판으로 묶는다(Orca PROTOCOL_VERSION).
@@ -131,7 +132,16 @@ export type DaemonRequest =
   | { rid: number; type: 'shutdown' }
   | { rid: number; type: 'write'; id: string; data: string }
   | { rid: number; type: 'resize'; id: string; cols: number; rows: number }
+  /**
+   * M4 R3 자원 상한(데몬 전체에 하나 — 설정 › 에이전트). 붙자마자·설정이 바뀔 때 앱이 보낸다. 우선순위는 그 뒤 만드는 세션부터,
+   * 메모리 상한은 바로. 덧붙인 요청이라 판(protocol)은 그대로다 — 이것을 모르는 옛 데몬은 '모르는 요청'으로 답하고 앱은 넘어간다.
+   */
+  | { rid: number; type: 'limits'; limits: AgentLimits }
 
 /** 데몬 → 앱: 답(rid) 또는 사건(data·exit). */
 export type DaemonReply = { type: 'reply'; rid: number; ok: boolean; error?: string; result?: unknown }
-export type DaemonEvent = { type: 'data'; id: string; data: string } | { type: 'exit'; id: string; code: number; signal?: number }
+export type DaemonEvent =
+  | { type: 'data'; id: string; data: string }
+  | { type: 'exit'; id: string; code: number; signal?: number }
+  /** 그 세션 트리의 작업 세트가 상한을 넘었다(넘어설 때 한 번 — overMemory). 붙은 앱 모두에게. */
+  | { type: 'memoryOver'; id: string; memory: number; limit: number }
