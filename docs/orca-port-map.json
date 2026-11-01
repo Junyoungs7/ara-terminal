@@ -228,10 +228,13 @@
       "src/renderer/src/components/quick-open-recent-validation.ts",
       "src/renderer/src/components/quick-open-search.ts",
       "src/renderer/src/components/use-quick-open-interaction.ts",
-      "src/main/ripgrep/"
+      "src/main/ripgrep/",
+      "src/shared/quick-open-path-search.ts",
+      "src/shared/quick-open-filter.ts",
+      "src/shared/bundled-ripgrep.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-07",
@@ -273,10 +276,13 @@
       "src/renderer/src/components/right-sidebar/SearchResultsPane.tsx",
       "src/renderer/src/components/right-sidebar/search-match-open.ts",
       "src/renderer/src/components/right-sidebar/search-rows.ts",
-      "src/main/ripgrep/"
+      "src/main/ripgrep/",
+      "src/shared/text-search.ts",
+      "src/shared/text-search-match-accumulator.ts",
+      "src/main/ripgrep/bundled-ripgrep-text-search.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-10",
