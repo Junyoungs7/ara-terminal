@@ -36,7 +36,8 @@ async function openProject(app: ElectronApplication, page: Page, repo: string): 
     d.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof d.showOpenDialog
   }, repo)
   await page.click(`${side} [data-aiws="add-project"]`)
-  const mainRow = page.locator(`${side} .aiws-row`).filter({ hasText: 'main' })
+  // 갓 추가한 저장소는 본 작업 폴더 한 줄뿐. 줄 이름이 브랜치(SCM-1 은 feature/retry)라서 'main' 글자로는 못 고른다.
+  const mainRow = page.locator(`${side} .aiws-row`).first()
   await mainRow.click()
   await expect(mainRow).toHaveAttribute('aria-current', 'true')
   await page.click('.rbar [data-rbar="scm"]')

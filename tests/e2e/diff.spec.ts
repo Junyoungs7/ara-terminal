@@ -109,7 +109,7 @@ test('DIFF-1★ 변경 → "변경 비교 · 2" 탭 → Monaco diff(나란히/�
     await expect(mon.locator('.modified .view-lines')).toContainText('const b = 20')
     await expect(mon.locator('.original .view-lines')).toContainText('const b = 2')
     await page.click('[data-diff-layout="inline"]')
-    await expect(mon.locator('.original')).toBeHidden()
+    await expect(mon.locator('.editor.original')).toBeHidden()
     await page.click('[data-diff-layout="split"]')
 
     // 바뀐 쪽 2줄을 고르고 의견 달기.
@@ -173,7 +173,7 @@ test('DIFF-2 분기 기준 갈래 · 바이너리는 비교를 안 그린다', a
     await expect(page.locator('[data-diff="base"]')).toContainText('main')
     await expect(page.locator('[data-aiws="diff-tab"]')).toContainText('변경 비교 · 2')
     await page.click('[data-diff-file="src/app.ts"]')
-    await expect(page.locator('[data-diff="view"] .diff-monaco .modified .view-lines')).toContainText('const b = 20')
+    await expect(page.locator('[data-diff="view"] .diff-monaco .editor.modified .view-lines')).toContainText('const b = 20')
   } finally {
     rmDir(root)
   }

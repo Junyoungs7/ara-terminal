@@ -57,6 +57,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
       minimap: { enabled: false },
       glyphMargin: true,
       renderSideBySide: !useDiffStore.getState().inline,
+      // Monaco 기본값은 폭 900px 이하면 [나란히]를 몰래 한 줄 보기로 바꾼다 — 사용자가 고른 보기를 그대로 지킨다.
+      useInlineViewWhenSpaceIsLimited: false,
       theme: 'ara',
       fontFamily: css.getPropertyValue('--mono')
     })
