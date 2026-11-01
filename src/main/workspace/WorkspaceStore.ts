@@ -4,7 +4,6 @@
 import type {
   DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile } from '@shared/types'
 import { cleanConnCollapsed, SCHEMA_VERSION } from '@shared/types'
-import type { AiLimit } from '@shared/aiEngine'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
 import { migrate } from './migrations'
@@ -173,12 +172,6 @@ export class WorkspaceStore {
   setAraPick(p: { engine?: 'cli' | 'api'; model?: string }): void {
     if (p.engine !== undefined) this.snapshot.ui.araEngine = p.engine
     if (p.model !== undefined) this.snapshot.ui.araModel = p.model
-    this.flush()
-  }
-
-  /** #24-1 마지막으로 받은 구독 한도. 새 값이 오면 덮어쓴다. */
-  setAraLimits(l: { five: AiLimit | null; week: AiLimit | null }): void {
-    this.snapshot.ui.araLimits = l
     this.flush()
   }
 

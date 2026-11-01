@@ -10,6 +10,10 @@ import { updateSeg } from '../store/updateNotify'
 import { openVoiceSettings, useVoice } from '../store/voice'
 import { GitBranch, ShieldAlert } from 'lucide-react'
 import { ResourcePopover } from '../features/resources'
+import { UsagePopover } from '../features/usage'
+import { liveWindow, useUsage } from '../store/usage'
+import { untilText } from '../store/araUsage'
+import type { UsageWindow } from '@shared/usage'
 
 /**
  * M0 0-7 FD-01 자원 관리자 칸(Orca ResourceUsageStatusSegment 를 따라 상태바 항목 → 팝오버).
@@ -40,6 +44,68 @@ function ResourceSegment() {
       {open && (
         <Suspense fallback={null}>
           <ResourcePopover />
+        </Suspense>
+      )}
+    </div>
+  )
+}
+
+/** 사용량 칩 하나 — `이름 ▬ 41% 2h10m`(시안 SW-final). 값이 없으면 —. */
+function UsageChip({ name, w, until }: { name: string; w: UsageWindow | null; until?: boolean }) {
+  const pct = w ? Math.round(w.usedPercent) : null
+  const left = until && w ? untilText(w.resetsAt, Date.now()) : ''
+  return (
+    <span className="usage-chip">
+      <span className="lbl">{name}</span>
+      <span className="sb-mbar" aria-hidden>
+        <i style={{ width: `${pct ?? 0}%` }} />
+      </span>
+      <span className={'val' + (pct === null ? ' na' : '')}>{pct === null ? NA : `${pct}%`}</span>
+      {left && <span className="until">{left}</span>}
+    </span>
+  )
+}
+
+/**
+ * M9 AI-10 사용량 칸(AI 작업 공간 상태바 왼쪽, 시안 SW-final): `Claude 5H ▬ % 남은시간 │ 주간 ▬ % │ Codex 5H ▬ %`.
+ * 누르면 팝오버(Claude·Codex 각각 5시간·주간·초기화 시각). 값은 main 사용량 서비스의 거울(store/usage.ts) — 여기서 조회하지 않는다.
+ */
+function UsageSegment() {
+  const u = useUsage()
+  const [open, setOpen] = useState(false)
+  // 남은 시간(분 단위)을 다시 그리는 시계 — AI 작업 공간 상태바가 떠 있는 동안만.
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+  const now = Date.now()
+  const cs = liveWindow(u.claude?.session ?? null, now)
+  const cw = liveWindow(u.claude?.weekly ?? null, now)
+  const xs = liveWindow(u.codex?.session ?? null, now)
+  // Codex 는 주간만 주는 요금제가 있다 — 5시간이 없으면 주간을 보인다.
+  const xw = xs ? null : liveWindow(u.codex?.weekly ?? null, now)
+  return (
+    <div className="res-ind usage-ind" ref={rootRef}>
+      <button type="button" className={'sb-seg usage' + (open ? ' on' : '')} data-action="statusbar.usage" title={t('usage.title')} onClick={() => setOpen((o) => !o)}>
+        <UsageChip name={`Claude ${t('usage.k.five')}`} w={cs} until />
+        <span className="usage-sep" aria-hidden />
+        <UsageChip name={t('usage.k.week')} w={cw} />
+        <span className="usage-sep" aria-hidden />
+        <UsageChip name={`Codex ${xw ? t('usage.k.week') : t('usage.k.five')}`} w={xs ?? xw} />
+      </button>
+      {open && (
+        <Suspense fallback={null}>
+          <UsagePopover />
         </Suspense>
       )}
     </div>
@@ -373,6 +439,7 @@ export function StatusBar({
       )}
       </>
       )}
+      {leftEmpty && <UsageSegment />}
       {leftEmpty && leftText && (
         <div className="sb-seg aiws-ahead">
           <GitBranch className="sb-seg-ic" aria-hidden />

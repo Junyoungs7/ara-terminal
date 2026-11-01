@@ -9,8 +9,8 @@ import { type WebContents } from 'electron'
 import { handle } from './handle'
 import { createAraChat, type AraChat, type AraChatDeps } from '../ai/AraChat'
 import { pushSend } from '../util/windowPush'
+import type { AiLimit } from '@shared/aiEngine'
 import { araModelOf } from '@shared/aiModels'
-import { araLimitsOf } from '@shared/aiEngine'
 import type { AraTarget } from '@shared/araPersona'
 import { listAraChats, listApiChats, projectDir, readChatMessages } from '../ai/araChats'
 import { chatPath } from '../ai/apiChatLog'
@@ -63,7 +63,9 @@ export function registerAraIpc(
   /** 대화 이름 저장소(2026-08-26). AraChat 은 이걸 모른다 — 이름은 화면의 일이라 여기서만 다룬다. */
   ws: WorkspaceStore,
   /** main 이 아는 세션인가(RDP 는 main 원장에 없어 모양만 본다). 모르는 id 는 "대상 없음"으로 읽는다. */
-  hasSession: (id: string) => boolean
+  hasSession: (id: string) => boolean,
+  /** M9 AI-10: 답 도중 온 구독 한도(rate_limit_event)는 사용량 저장소로 — 채팅 화면도 그 저장소를 읽는다(제거 A3). */
+  onLimits?: (l: { five: AiLimit | null; week: AiLimit | null }) => void
 ): AraRuntime {
   // 아라 채팅 v2: 지금 보는 세션. 렌더러가 탭이 바뀔 때마다 알린다(main 원장에는 "어느 탭을 보나"가 없다).
   let active: AraTarget | null = null
@@ -72,13 +74,8 @@ export function registerAraIpc(
     activeSession: () => active,
     savedModel: () => araModelOf(ws.get().ui.araModel),
     emit: (e) => {
-      // #24-1 한도는 Claude Code 가 답할 때만 온다 — 받은 것을 저장해 두고, 대화를 열면 곧바로 다시 보낸다.
-      if (e.t === 'limits') ws.setAraLimits({ five: e.five, week: e.week })
+      if (e.t === 'limits') return onLimits?.({ five: e.five, week: e.week })
       pushSend(getWebContents(), 'ara:event', e)
-      if (e.t === 'opened') {
-        const l = araLimitsOf(ws.get().ui.araLimits)
-        if (l) pushSend(getWebContents(), 'ara:event', { t: 'limits', ...l })
-      }
     }
   })
 

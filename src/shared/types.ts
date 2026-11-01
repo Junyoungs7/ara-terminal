@@ -1,5 +1,4 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
-import type { AiLimit } from './aiEngine'
 import type { FeatureShown } from './features'
 import type { VoicePrefs } from './voice'
 import type { Space } from './space'
@@ -477,11 +476,6 @@ export type UiState = {
    */
   araEngine?: 'cli' | 'api'
   araModel?: string
-  /**
-   * #24-1: 마지막으로 받은 구독 한도(rate_limit_event). 한도는 Claude Code 가 답할 때만 오므로,
-   * 저장해 두었다가 대화를 열면 바로 보여 준다. 읽을 때 araLimitsOf 로 모양을 검사한다(깨진 값 = 무시).
-   */
-  araLimits?: { five: AiLimit | null; week: AiLimit | null }
   // F12 [로그]: 세션 로그 기록·보존 기간. 미지정이면 꺼짐 / 30일.
   sessionLog?: boolean
   logRetentionDays?: number

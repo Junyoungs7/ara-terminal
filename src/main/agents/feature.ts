@@ -34,6 +34,8 @@ import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
 
 export function registerAgentsFeature(deps: {
   userData: string
+  /** M9 AI-10 — 에이전트 탭 Claude 의 statusLine 입력(JSON). 사용량 서비스가 rate_limits 만 읽는다. */
+  onClaudeStatusLine?: (payload: Record<string, unknown>) => void
   sessions: () => MainSessionManager
   /** 옛 설정 [AI] 의 터미널 AI 기본 플래그(workspace.json ui.aiCliFlags) — 처음 한 번 옮긴다. */
   readAiCliFlags: () => unknown
@@ -102,7 +104,8 @@ export function registerAgentsFeature(deps: {
       // Claude UserPromptSubmit·Gemini BeforeAgent 의 prompt = 사람이 친 첫 요청(터미널에서 친 것도).
       maybeName(e.paneKey, e.payload['prompt'])
     },
-    typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null
+    typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null,
+    (payload) => deps.onClaudeStatusLine?.(payload)
   )
   const ensureHooks = async (): Promise<{ port: number; token: string }> => {
     const r = await hooks.ensure()

@@ -43,6 +43,7 @@ import type {
 import type { AgentStatusView } from './agentHooks'
 import type { BrowserTabView } from './browserWin'
 import type { ResourceSnapshot } from './resources'
+import type { UsageState } from './usage'
 import type {
   BaseRef,
   CreateWorktreeArgs,
@@ -565,6 +566,9 @@ export type InvokeContract = {
   'resources:snapshot': { req: void; res: ResourceSnapshot }
   // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
   'resources:killPty': { req: { id: string }; res: { ok: boolean } }
+  // M9 AI-10 사용량(main/usage/feature.ts). 바뀔 때마다 'usage:update' 로 민다. refresh = 사람이 누른 새로 고침(조회 간격 무시).
+  'usage:get': { req: void; res: UsageState }
+  'usage:refresh': { req: void; res: UsageState }
   // M2 작업 단위(main/worktrees/feature.ts). 이름은 Orca 채널(repos:* · worktrees:*)을 따른다.
   'repos:list': { req: void; res: Project[] }
   // 폴더 고르기 — 경로는 사용자가 OS 대화상자에서 고른 것만(렌더러가 지어내지 않는다). 취소 = null.
@@ -1230,6 +1234,12 @@ export type EvApi = {
   resources: {
     snapshot(): Promise<ResourceSnapshot>
     killPty(id: string): Promise<{ ok: boolean }>
+  }
+  // M9 AI-10 사용량(preload/features/usage.ts).
+  usage: {
+    get(): Promise<UsageState>
+    refresh(): Promise<UsageState>
+    onUpdate(cb: (s: UsageState) => void): () => void
   }
   // M2 작업 단위(preload/features/worktrees.ts). Orca preload 의 repos·worktrees 모양.
   repos: {

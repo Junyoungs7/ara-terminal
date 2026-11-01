@@ -18,6 +18,7 @@ import type {
 import type { LaunchShell } from '@shared/aiCli'
 import { browserBridge } from './features/browser'
 import { resourcesBridge } from './features/resources'
+import { usageBridge } from './features/usage'
 import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
 import { managedBridge } from './features/managed'
@@ -257,6 +258,8 @@ const api: EvApi = {
   ...browserBridge,
   // FD-01 자원 관리자 — 기능 틀(preload/features/resources.ts).
   ...resourcesBridge,
+  // M9 AI-10 사용량(preload/features/usage.ts).
+  ...usageBridge,
   ...worktreesBridge,
   ...agentsBridge,
   ...managedBridge,

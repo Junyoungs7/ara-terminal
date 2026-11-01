@@ -1,6 +1,6 @@
-// 아라 채팅 v3(2026-10-20, B안) — 맥락 파싱(#21), 상태줄 문구(#21·#25), 선택지 표식(#23), 저장 한도(#24-1), 새 세션 규칙(#24-2).
+// 아라 채팅 v3(2026-10-20, B안) — 맥락 파싱(#21), 상태줄 문구(#21·#25), 선택지 표식(#23), 새 세션 규칙(#24-2).
 import { describe, it, expect } from 'vitest'
-import { araLimitsOf, parseStreamJson } from '../src/shared/aiEngine'
+import { parseStreamJson } from '../src/shared/aiEngine'
 import { reduceChat, riskyChoice, splitChoices } from '../src/renderer/store/araChatItems'
 import { statusSegs, untilText, usageTitle } from '../src/renderer/store/araUsage'
 import { buildPersona } from '../src/shared/araPersona'
@@ -80,19 +80,6 @@ describe('상태줄 문구', () => {
   it('API 모드는 한도가 와 있어도 토큰 줄', () => {
     const s = statusSegs('api', limits, { input: 10100, output: 2300, costUsd: null }, null, now)
     expect(s).toEqual([{ key: 'text', label: '', pct: null, note: '이번 대화 12.4k 토큰 (입력 10.1k · 출력 2.3k)' }])
-  })
-})
-
-describe('저장한 한도(ui.araLimits) 검사', () => {
-  it('정상 값은 그대로, 한쪽만 깨졌으면 그쪽만 null', () => {
-    const ok = { five: { pct: 25, resetsAt: 1700000000000 }, week: { pct: 22, resetsAt: null } }
-    expect(araLimitsOf(ok)).toEqual(ok)
-    expect(araLimitsOf({ five: { pct: 'x', resetsAt: 1 }, week: { pct: 22, resetsAt: null } })).toEqual({ five: null, week: { pct: 22, resetsAt: null } })
-  })
-  it('깨진 값은 무시(null)', () => {
-    for (const bad of [undefined, null, 'x', 1, {}, { five: null, week: null }, { five: { pct: 120, resetsAt: 1 } }, { five: { pct: 5, resetsAt: 'soon' } }, { week: { pct: 5 } }]) {
-      expect(araLimitsOf(bad)).toBeNull()
-    }
   })
 })
 

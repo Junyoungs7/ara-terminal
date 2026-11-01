@@ -7,7 +7,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { HOOK_PANE_HEADER, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, LEGACY_HOOK_MARK, mergeHooks, removeLegacyHooks, type HookSource } from '@shared/agentHooks'
+import { HOOK_PANE_HEADER, HOOK_TARGETS, HOOK_TOKEN_HEADER, hookCommand, hookScript, hookScriptName, isHookSource, LEGACY_HOOK_MARK, mergeHooks, mergeStatusLine, removeLegacyHooks, STATUSLINE_MARKER, STATUSLINE_PATH, statusLineScript, statusLineScriptName, type HookSource } from '@shared/agentHooks'
 import { BIND_HOST, hashToken, safeEqualHex } from '../mcp/McpServer'
 import { writeJsonAtomic } from '../util/atomicJson'
 
@@ -26,8 +26,13 @@ export type HookServer = {
 /**
  * @param saved 지난번 포트·토큰(M4 DM-01). 데몬에 산 에이전트는 **띄울 때의** 포트·토큰을 env 로 쥐고 있다 — 앱을 다시 켜도 같은 자리에서
  *   받아야 그 에이전트의 훅이 닿는다. 그 포트가 이미 쓰이면 새 포트로 연다(그 에이전트들은 화면 판정만).
+ * @param onStatusLine M9 AI-10 — Claude statusLine 입력 JSON(`/statusline/claude`). 사용량만 읽는다.
  */
-export function createHookServer(onEvent: (e: HookEvent) => void, saved?: { port: number; token: string } | null): HookServer {
+export function createHookServer(
+  onEvent: (e: HookEvent) => void,
+  saved?: { port: number; token: string } | null,
+  onStatusLine?: (payload: Record<string, unknown>) => void
+): HookServer {
   const token = saved?.token || randomBytes(32).toString('base64url')
   const expected = hashToken(token)
   let server: Server | null = null
@@ -36,8 +41,9 @@ export function createHookServer(onEvent: (e: HookEvent) => void, saved?: { port
   const handle = (req: IncomingMessage, end: (code: number) => void): void => {
     const got = req.headers[HOOK_TOKEN_HEADER]
     const m = HOOK_PATH.exec(req.url ?? '')
+    const statusLine = req.url === STATUSLINE_PATH
     const pane = req.headers[HOOK_PANE_HEADER]
-    const bad = req.method !== 'POST' ? 405 : typeof got !== 'string' || !safeEqualHex(hashToken(got), expected) ? 401 : !m || !isHookSource(m[1]) ? 404 : typeof pane !== 'string' || !pane ? 204 : 0
+    const bad = req.method !== 'POST' ? 405 : typeof got !== 'string' || !safeEqualHex(hashToken(got), expected) ? 401 : !statusLine && (!m || !isHookSource(m[1])) ? 404 : typeof pane !== 'string' || !pane ? 204 : 0
     const chunks: Buffer[] = []
     let size = 0
     // 본문은 늘 끝까지 흘려보낸다 — 안 읽으면 훅 쪽 curl 이 EPIPE·시간 초과를 본다.
@@ -50,7 +56,10 @@ export function createHookServer(onEvent: (e: HookEvent) => void, saved?: { port
       if (size <= BODY_MAX) {
         try {
           const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
-          if (payload && typeof payload === 'object') onEvent({ source: m![1] as HookSource, paneKey: pane as string, payload: payload as Record<string, unknown> })
+          if (payload && typeof payload === 'object') {
+            if (statusLine) onStatusLine?.(payload as Record<string, unknown>)
+            else onEvent({ source: m![1] as HookSource, paneKey: pane as string, payload: payload as Record<string, unknown> })
+          }
         } catch {
           // 깨진 본문은 아무 주장도 안 한다.
         }
@@ -120,7 +129,20 @@ export function installHooks(home: string, source: HookSource, win = process.pla
         return { ok: false, message: `${cfg} 를 읽을 수 없어 훅을 심지 않았습니다: ${String(e)}` }
       }
     }
-    const next = mergeHooks(current, source, hookCommand(script, win))
+    let next = mergeHooks(current, source, hookCommand(script, win))
+    if (source === 'claude') {
+      // M9 AI-10 statusLine(사용량 실시간) — 사용자 statusLine 이 있거나 사용자가 지웠으면(표식) 안 심는다.
+      const sl = join(dir, statusLineScriptName(win))
+      const slBody = statusLineScript(win)
+      const marker = join(dir, STATUSLINE_MARKER)
+      const merged = mergeStatusLine(next ?? current, hookCommand(sl, win), existsSync(marker))
+      if (merged) {
+        if (!existsSync(sl) || readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
+        if (!win) chmodSync(sl, 0o755)
+        writeFileSync(marker, '')
+        next = merged
+      } else if (existsSync(sl) && readFileSync(sl, 'utf8') !== slBody) writeFileSync(sl, slBody, 'utf8')
+    }
     if (next) {
       mkdirSync(cfgDir, { recursive: true })
       // writeJsonAtomic 은 기존 파일을 settings.json.bak 으로 밀어낸 뒤 바꾼다 — 남의 설정 파일이라 되돌릴 자리를 남긴다.

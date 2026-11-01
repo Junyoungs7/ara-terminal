@@ -12268,6 +12268,92 @@ button.sb-seg.upd:hover .val {
   background: var(--err-tint);
 }
 
+/* M9 AI-10 사용량 — AI 작업 공간 상태바 왼쪽 칩(시안 SW-final) + 팝오버(.res-pop 틀, 왼쪽에 붙음). 막대는 .sb-mbar 를 같이 쓴다. */
+.sb-seg.usage {
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text-mid);
+  cursor: var(--cur-hand, pointer);
+}
+.sb-seg.usage.on {
+  color: var(--text-hi);
+}
+.usage-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.usage-chip .val {
+  min-width: 4ch;
+}
+.usage-chip .until {
+  color: var(--text-lo);
+}
+.usage-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line-strong);
+}
+.usage-pop {
+  left: 0;
+  right: auto;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.usage-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-md);
+}
+.usage-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.usage-head .name {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.usage-head .plan,
+.usage-head .na,
+.usage-why,
+.usage-win .reset {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.usage-win {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-mid);
+}
+.usage-win .lbl {
+  width: 4ch;
+}
+.usage-win .pct {
+  width: 4ch;
+  text-align: right;
+  font-family: var(--mono);
+}
+.usage-refresh {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: var(--cur-hand, pointer);
+}
+
 /* M0 FD-04 오류 경계 대체 화면(components/ErrorBoundary.tsx). 영역 클래스(sidebar·main·drawer…)와 함께 붙어
    그 영역의 자리를 그대로 차지한다 — 여기서는 안쪽 배치만 정한다. */
 .eb-fallback {

@@ -23,7 +23,8 @@ import { loadMarkdown, Markdown } from './mdLazy'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
 import { AI_MODELS_BY_PROVIDER, AI_PROVIDER_LABELS, type AiProvider } from '@shared/types'
 import type { AraTarget } from '@shared/araPersona'
-import { statusSegs, usageTitle, type AraContext, type AraLimits, type AraUsage } from '../store/araUsage'
+import { statusSegs, usageTitle, type AraContext, type AraUsage } from '../store/araUsage'
+import { araLimitsFromUsage, useUsage } from '../store/usage'
 import { t } from '../i18n'
 
 // #125 아라 대화 v2 — **관제실**(설계 §9). 우측 레일의 그 자리에 산다.
@@ -81,8 +82,8 @@ export function AraChatPanel({
   const [home, setHome] = useState(false)
   // 어느 엔진으로 열려 있나(#126). **늘 보인다** — 돈도 능력도 다르다.
   const [engine, setEngine] = useState<'cli' | 'api'>('cli')
-  // 아라 채팅 v2 사용량. 한도는 **계정 값**이라 새 대화를 열어도 남긴다 — 이번 대화 사용량만 'opened' 에서 비운다.
-  const [limits, setLimits] = useState<AraLimits | null>(null)
+  // 아라 채팅 v2 사용량. 한도는 **계정 값** — M9 AI-10 부터 상태바와 같은 사용량 저장소를 읽는다(제거 A3). 이번 대화 사용량만 'opened' 에서 비운다.
+  const limits = araLimitsFromUsage(useUsage().claude)
   const [usage, setUsage] = useState<AraUsage | null>(null)
   // 맥락(v3 #21) — 이 대화의 것이라 'opened' 에서 비운다.
   const [ctx, setCtx] = useState<AraContext | null>(null)
@@ -203,10 +204,6 @@ export function AraChatPanel({
         setUsage(null)
         setCtx(null)
         setPhase('idle')
-        return
-      }
-      if (e.t === 'limits') {
-        setLimits({ five: e.five, week: e.week })
         return
       }
       if (e.t === 'context') {
