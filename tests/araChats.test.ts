@@ -5,10 +5,10 @@
  * 검사도 그쪽 파일 모양(`~/.claude/projects/<폴더>/<uuid>.jsonl`)을 그대로 만들어 놓고 읽는다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listAraChats, projectKey, projectDir, titleOf } from '../src/main/ai/araChats'
+import { listAraChats, listApiChats, projectKey, projectDir, readChatMessages } from '../src/main/ai/araChats'
 // registerAraIpc 는 ipc/handle.ts 를 거쳐 electron 을 잡는다. 여기서 보는 것은 id 모양 검증뿐이라
 // 껍데기로 세운다(tests/secrets.test.ts 와 같은 방식).
 vi.mock('electron', () => ({ ipcMain: { handle: () => {} }, app: { getPath: () => tmpdir() } }))
@@ -43,15 +43,21 @@ describe('프로젝트 폴더 이름', () => {
   })
 })
 
-describe('제목 다듬기', () => {
-  it('여러 줄·연속 공백을 한 줄로 접는다', () => {
-    expect(titleOf('  kvt \n\n 서버   열어줘 ')).toBe('kvt 서버 열어줘')
+// M5 R3(S6): 아라 전용 제목 다듬기 함수를 지우고 채팅 이름(AI-19)의 sanitizeChatName 으로 — 첫 줄, 48자(공백에서 끊기).
+describe('제목 다듬기(채팅 이름과 같은 규칙)', () => {
+  it('첫 줄만, 공백은 하나로', () => {
+    put(CWD, '12121212-1212-1212-1212-121212121212', [userLine('  kvt   서버 열어줘 \n\n 둘째 줄')])
+    expect(listAraChats(CWD, {}, home)[0].title).toBe('kvt 서버 열어줘')
   })
 
-  it('길면 자른다 — 목록 한 줄에 들어가야 한다', () => {
-    const t = titleOf('가'.repeat(200))
-    expect(t.length).toBeLessThanOrEqual(61)
-    expect(t.endsWith('…')).toBe(true)
+  it('길면 48자로 자른다 — 목록 한 줄에 들어가야 한다', () => {
+    put(CWD, '13131313-1313-1313-1313-131313131313', [userLine('가'.repeat(200))])
+    expect(listAraChats(CWD, {}, home)[0].title).toHaveLength(48)
+  })
+
+  it('[지금 보는 세션] 머리말은 제목이 아니다', () => {
+    put(CWD, '14141414-1414-1414-1414-141414141414', [userLine('[지금 보는 세션] 로컬 셸 · D:\\x\n배포 점검')])
+    expect(listAraChats(CWD, {}, home)[0].title).toBe('배포 점검')
   })
 })
 
@@ -128,5 +134,39 @@ describe('이어서 열 대화 id 검증', () => {
     ]) {
       expect(validResumeId(bad), String(bad)).toBeNull()
     }
+  })
+})
+
+/**
+ * M5 R3 — 옛 아라 채팅 기록은 **변환 없이 읽기만** 한다(계획 M5 S6: 이전 변환 없음).
+ * 엔진을 그대로 두어 저장 형식이 바뀌지 않았으므로 옛 기록은 전처럼 열리고 이어서도 열린다 —
+ * 여기서는 "열 때 파일을 건드리지 않는다"와 "두 저장소(CLI·API) 옛 줄이 그대로 읽힌다"를 본다.
+ */
+describe('옛 기록 읽기 전용 로드', () => {
+  it('★ CLI 기록(content 배열)·API 기록(content 문자열)을 읽고, 파일은 바이트·시각 그대로다', () => {
+    const id = '15151515-1515-1515-1515-151515151515'
+    put(CWD, id, [
+      hookLine,
+      { type: 'user', message: { content: [{ type: 'text', text: '[지금 보는 세션] 없음\n디스크 봐 줘' }] } },
+      { type: 'assistant', message: { content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text: '78% 입니다.' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }
+    ], 1_700_000_000_000)
+    const cli = join(projectDir(CWD, home), `${id}.jsonl`)
+    const before = { bytes: readFileSync(cli), at: statSync(cli).mtimeMs }
+    expect(readChatMessages(cli)).toEqual([
+      { role: 'user', text: '디스크 봐 줘' },
+      { role: 'assistant', text: '78% 입니다.' }
+    ])
+    expect(readFileSync(cli).equals(before.bytes)).toBe(true)
+    expect(statSync(cli).mtimeMs).toBe(before.at)
+
+    const apiDir = join(home, 'ara-chats')
+    mkdirSync(apiDir, { recursive: true })
+    const api = join(apiDir, `${id}.jsonl`)
+    writeFileSync(api, [JSON.stringify({ type: 'user', message: { content: '지난번 배포 점검' } }), JSON.stringify({ type: 'assistant', message: { content: '디스크 78% 였습니다.' } })].join('\n') + '\n', 'utf8')
+    const apiBytes = readFileSync(api)
+    expect(readChatMessages(api).map((m) => m.text)).toEqual(['지난번 배포 점검', '디스크 78% 였습니다.'])
+    expect(listApiChats(apiDir)[0]).toMatchObject({ id, title: '지난번 배포 점검', engine: 'api' })
+    expect(readFileSync(api).equals(apiBytes)).toBe(true)
   })
 })

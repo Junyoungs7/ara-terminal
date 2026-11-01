@@ -8276,6 +8276,11 @@ button.sb-seg.upd:hover .val {
   border-top: 1px solid var(--line);
   padding: var(--sp-4);
 }
+/* M5 R3 — 아라 입력도 ChatComposer: `/` 목록·첨부 칩이 입력칸 위에 선다(에이전트 탭 채팅과 같은 모양). */
+.ara-compose .aiws-chat-slash,
+.ara-compose .aiws-chat-files {
+  margin-bottom: var(--sp-2);
+}
 .ara-input {
   width: 100%;
   resize: none;

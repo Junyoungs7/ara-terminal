@@ -355,3 +355,25 @@ test('ARA2-8★ [지난 대화] 버튼 → 팝업에 목록 · 이름 붙이기 
   await b.page.locator('.ara-panel [data-action="ara.chats"]').click()
   await expect(b.page.locator(`.overlay.open .modal.ara-chats .ac-row[data-chat="${id}"] .ac-t`)).toHaveText('금요일 배포')
 })
+
+/**
+ * ARA2-9 M5 R3 — 아라 입력도 에이전트 탭 채팅과 같은 ChatComposer 다: 보내지 않은 초안이 재시작 뒤에도 남고
+ * (localStorage aiws.chatDraft.ara), 보내면 비워진다. 셀렉터(.ara-input·.ara-send)는 그대로다.
+ */
+test('ARA2-9 보내지 않은 초안은 재시작 뒤에도 남고, 보내면 비워진다', async ({ userDataDir, launch }) => {
+  const a = await launch(userDataDir)
+  await a.page.click('.tb-chat')
+  const input = a.page.locator('.ara-panel .ara-input')
+  await expect(input).toBeEnabled()
+  await input.fill('쓰다 만 질문')
+  await a.app.close()
+
+  const b = await launch(userDataDir)
+  await b.page.click('.tb-chat')
+  const again = b.page.locator('.ara-panel .ara-input')
+  await expect(again).toHaveValue('쓰다 만 질문')
+  await expect(again).toBeEnabled()
+  await again.press('Enter')
+  await expect(b.page.locator('.ara-panel .ara-me')).toHaveText('쓰다 만 질문')
+  await expect(again).toHaveValue('')
+})

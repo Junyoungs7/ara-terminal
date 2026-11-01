@@ -2,7 +2,6 @@
 // 도구는 접힌 묶음 한 줄, 되묻기는 맨 아래 홀로, 글 조각은 한 말풍선.
 import { describe, it, expect } from 'vitest'
 import {
-  appendPaths,
   clipFileName,
   dropAsk,
   openAsk,
@@ -119,14 +118,6 @@ describe('되묻기 카드', () => {
   })
 
   // ── #154 파일·이미지 끌어다 놓기 ──
-  it('★ 놓은 경로는 쓰던 글 뒤에 붙는다 — 덮어쓰지 않는다', () => {
-    expect(appendPaths('', ['C:/a.png'])).toBe('C:/a.png\n')
-    expect(appendPaths('이거 좀 봐 줘', ['C:/a.png', 'C:/b.log'])).toBe('이거 좀 봐 줘\nC:/a.png\nC:/b.log\n')
-    // 이미 줄을 바꿔 뒀어도 빈 줄이 겹치지 않는다.
-    expect(appendPaths('이거 좀 봐 줘\n', ['C:/a.png'])).toBe('이거 좀 봐 줘\nC:/a.png\n')
-    expect(appendPaths('그대로', [])).toBe('그대로')
-  })
-
   it('★ 캡처 이름에 시각이 앞에 붙고 수상한 문자는 지워진다(경로가 어긋나면 아라가 딴 파일을 읽는다)', () => {
     expect(clipFileName('image.png', 1_700_000_000_000)).toBe('1700000000000-image.png')
     expect(clipFileName('', 7)).toBe('7-image.png')

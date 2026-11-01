@@ -4,8 +4,6 @@ import type { AraChatEvent } from '../../main/ai/AraChat'
 import type { AraChatRow } from '../../main/ai/araChats'
 import type { AskRequest } from '../../main/mcp/askUser'
 import {
-  appendPaths,
-  clipFileName,
   dropAsk,
   openAsk,
   pickByKey,
@@ -18,8 +16,8 @@ import {
   splitChoices,
   type ChatItem
 } from '../store/araChatItems'
-import { filePaths, registerPasteTarget } from '../store/pasteFiles'
-import { joinPath } from './filePath'
+import { registerPasteTarget } from '../store/pasteFiles'
+import { ChatComposer, useChatInput } from '../features/aiws/ChatComposer'
 import { IconClose, IconHistory, IconPencil, IconPlus } from './icons'
 import { loadMarkdown, Markdown } from './mdLazy'
 import { ARA_MODELS, araModelLabel } from '@shared/aiModels'
@@ -45,23 +43,8 @@ const CAN_TYPE = new Set<Phase>(['idle', 'working'])
  * 임시 폴더가 아닌 이유: 대화 도중에도 대화가 끝난 뒤에도 아라가 그 파일을 다시 읽을 수 있어야 한다.
  */
 const PASTE_SUB = 'ara'
-
-/**
- * 경로 없는 파일(= 클립보드 캡처)을 디스크에 떨구고 그 경로를 돌려준다.
- *
- * 왜 파일이어야 하나: 아라에게 넘기는 것은 **경로**다(아래 intake 참고). 캡처는 디스크 경로가 비어
- * 있어 그대로는 넘길 것이 없다 — 여기서 실체를 만들어 주지 않으면 "붙였는데 아무 일도 안 일어난다".
- */
-export async function saveClipFile(f: File, sub = PASTE_SUB): Promise<{ path: string } | { error: string }> {
-  const fail = (why?: string): { error: string } => ({ error: why ? `${t('ara.drop.failed')} — ${why}` : t('ara.drop.failed') })
-  const dir = await window.ev?.fs.downloadsDir().catch(() => '')
-  if (!dir) return fail()
-  const name = clipFileName(f.name, Date.now())
-  const bytes = new Uint8Array(await f.arrayBuffer())
-  const r = await window.ev?.fs.saveBytes({ dir, sub, name, bytes }).catch(() => null)
-  if (!r?.ok) return fail(r?.message)
-  return { path: joinPath(joinPath(dir, sub), name) }
-}
+/** 아라 채팅 초안 자리(localStorage aiws.chatDraft.ara) — 에이전트 탭 초안과 같은 저장(M5 R3). */
+const DRAFT_KEY = 'ara'
 
 /** 선택기에 쓰는 짧은 공급자 이름("Anthropic Claude" → "Anthropic"). */
 const providerShort = (p: AiProvider): string => AI_PROVIDER_LABELS[p].split(' ')[0]
@@ -119,7 +102,9 @@ export function AraChatPanel({
   const [planReady, setPlanReady] = useState(false)
   // 사건 처리기는 한 번만 붙으므로(deps []) 최신 값을 ref 로 본다.
   const planOnRef = useRef(false)
-  const [draft, setDraft] = useState('')
+  // M5 R3: 입력은 에이전트 탭 채팅과 같은 ChatComposer — `/` 목록(사용자 명령·스킬)·첨부 칩·초안 보존.
+  // 첨부 실패는 대화 안에 남긴다(조용히 버리지 않는다).
+  const { draft, setDraft, intake, inputRef } = useChatInput(DRAFT_KEY, PASTE_SUB, (message) => setItems((cur) => reduceChat(cur, { t: 'error', message })))
   const [openTools, setOpenTools] = useState<Set<string>>(new Set())
   // 남은 시간을 초 단위로 다시 그리기 위한 시계(되묻기 카드가 열려 있을 때만 돈다).
   const [now, setNow] = useState(Date.now())
@@ -193,7 +178,6 @@ export function AraChatPanel({
     setChatsOpen(true)
   }
   const askRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
   // #154 파일이 패널 위로 들어와 있다 — 놓을 자리라는 표시(파일 트리의 .drag-over 와 같은 모양).
   const panelRef = useRef<HTMLDivElement>(null)
   const [dropping, setDropping] = useState(false)
@@ -361,7 +345,7 @@ export function AraChatPanel({
     const text = prefill?.text?.trim() ?? ''
     if (step === 'send') sendRef.current(text)
     else {
-      setDraft(text)
+      setDraft((d) => ({ ...d, text }))
       inputRef.current?.focus()
     }
     // prefill.text 는 at 과 함께 오므로 deps 에 at 만 둔다(옛 대화 화면이 쓰던 그 규칙).
@@ -393,43 +377,19 @@ export function AraChatPanel({
     void start()
   }, [start])
 
-  const send = (text: string): void => {
+  const send = (text: string): boolean => {
     const s = text.trim()
-    if (s === '' || !CAN_TYPE.has(phase)) return
+    if (s === '' || !CAN_TYPE.has(phase)) return false
     setItems((cur) => pushMine(cur, s))
     setPlanReady(false)
-    setDraft('')
     setPhase('working')
     void window.ev?.ara.send(s)
+    return true
   }
 
   // send 는 매 렌더 새로 만들어진다 — prefill 효과가 옛 것을 붙잡지 않게 ref 로 본다.
   const sendRef = useRef(send)
   sendRef.current = send
-
-  /**
-   * #154 파일·이미지 받아 넣기 — **끌어다 놓기도 붙여넣기도 여기 하나로 온다.** 화면을 캡처해
-   * 붙이는 일이 파일을 끌어 오는 일만큼 잦은데, 두 자리에 따로 쓰면 한쪽만 고치는 날이 온다.
-   *
-   * 넣는 것은 **경로 몇 줄**이다: 우클릭 [아라에게 묻기](Shell.onAskAiPaths)가 이미 그렇게 넘기고
-   * 아라는 경로를 받아 자기 도구로 읽는다 — 두 번째 첨부 규약을 만들지 않는다.
-   *
-   * 그리고 **보내지 않는다.** 입력칸에 얹기만 하는 것은 prefill 과 같은 규칙이다(무엇이 나갈지
-   * 보고 사람이 마무리한다) — 놓자마자 질문이 날아가면 되돌릴 자리가 없다.
-   */
-  const intake = useCallback(async (files: readonly File[]): Promise<void> => {
-    const paths = filePaths(files)
-    for (const f of files) {
-      if (window.ev.app.pathForFile(f)) continue
-      const r = await saveClipFile(f)
-      if ('path' in r) paths.push(r.path)
-      // 조용히 버리지 않는다 — 붙인 사람은 붙었다고 믿는다.
-      else setItems((cur) => reduceChat(cur, { t: 'error', message: r.error }))
-    }
-    if (paths.length === 0) return
-    setDraft((d) => appendPaths(d, paths))
-    inputRef.current?.focus()
-  }, [])
 
   /**
    * 붙여넣기(Ctrl+V). 파일·캡처만 받고 **글은 입력칸 몫**이라 그대로 넘긴다(false).
@@ -865,54 +825,45 @@ export function AraChatPanel({
 
         {/* 입력칸 — **보내기·중지 버튼이 같은 줄 안**에 있다(2026-08-25 준영님, 상용 서비스 배치).
             도는 중에는 같은 버튼이 [중지]가 된다: 자리를 옮기면 눈이 그때마다 버튼을 다시 찾는다. */}
-        <div className={'ara-box' + (CAN_TYPE.has(phase) ? '' : ' off')}>
-          <textarea
-            ref={inputRef}
-            className="ara-input"
-            rows={1}
-            value={draft}
-            placeholder={
-              ask
-                ? t('ara.answerFirst')
-                : active && active.type !== 'rdp'
-                  ? t('ara.placeholder.target').replace('{name}', () => active.title)
-                  : t('ara.placeholder')
-            }
-            disabled={!CAN_TYPE.has(phase)}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation() // 터미널 단축키가 가로채지 않게
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                // 되묻기가 열려 있으면 그 답으로 보낸다(자유 입력 선택지).
-                if (ask) answer(ask.askId, draft.trim() || '(빈 답)')
-                else send(draft)
-              }
-            }}
-          />
-          <button
-            type="button"
-            className={'ara-send' + (phase === 'working' ? ' stop' : '')}
-            disabled={phase === 'working' ? false : draft.trim() === '' || !CAN_TYPE.has(phase)}
-            title={t(phase === 'working' ? 'ara.stop' : 'ara.send')}
-            aria-label={t(phase === 'working' ? 'ara.stop' : 'ara.send')}
-            onClick={() => {
-              if (phase === 'working') void window.ev?.ara.interrupt()
-              else if (ask) answer(ask.askId, draft.trim() || '(빈 답)')
-              else send(draft)
-            }}
-          >
-            {phase === 'working' ? (
-              <svg viewBox="0 0 16 16" aria-hidden>
-                <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 16 16" aria-hidden>
-                <path d="M8 13V3M8 3L4 7M8 3l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </button>
-        </div>
+        <ChatComposer
+          draft={draft}
+          setDraft={setDraft}
+          inputRef={inputRef}
+          onSubmit={(text) => {
+            // 되묻기가 열려 있으면 그 답으로 보낸다(자유 입력 선택지 — 빈 답도 답이다).
+            if (!ask) return send(text)
+            answer(ask.askId, text.trim() || '(빈 답)')
+            return true
+          }}
+          // 숨은 세션(-p stream-json)은 TUI 기본 명령을 받는 자리가 아니다 — 사용자 명령·스킬만. API 엔진은 명령을 못 돌린다.
+          slashAgent={engine === 'cli' ? 'claude' : null}
+          slashCwd={cwd ?? ''}
+          builtins={false}
+          disabled={!CAN_TYPE.has(phase)}
+          placeholder={
+            ask
+              ? t('ara.answerFirst')
+              : active && active.type !== 'rdp'
+                ? t('ara.placeholder.target').replace('{name}', () => active.title)
+                : t('ara.placeholder')
+          }
+          busy={phase === 'working'}
+          onStop={() => void window.ev?.ara.interrupt()}
+          isolateKeys
+          rows={1}
+          cls={{ row: 'ara-box' + (CAN_TYPE.has(phase) ? '' : ' off'), input: 'ara-input', send: 'ara-send' + (phase === 'working' ? ' stop' : '') }}
+          sendLabel={t('ara.send')}
+          sendIcon={
+            <svg viewBox="0 0 16 16" aria-hidden>
+              <path d="M8 13V3M8 3L4 7M8 3l4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
+          stopIcon={
+            <svg viewBox="0 0 16 16" aria-hidden>
+              <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+            </svg>
+          }
+        />
         {/* 상태는 입력칸 아래 아주 얇게 — 늘 보이되 자리를 거의 안 먹는다. */}
         <div className="ara-st">
           <span className={'ara-dot' + (phase === 'working' ? ' run' : phase === 'closed' ? ' off' : '')} />

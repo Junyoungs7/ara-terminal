@@ -15,6 +15,7 @@ import { readdirSync, statSync, openSync, readSync, closeSync, readFileSync } fr
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { stripTarget } from '@shared/araPersona'
+import { sanitizeChatName } from '@shared/agentOptions'
 
 export type AraChatRow = {
   /** Claude Code 세션 id = 파일 이름. `--resume` 에 그대로 넘긴다. */
@@ -45,13 +46,6 @@ export function projectKey(cwd: string): string {
 
 export function projectDir(cwd: string, home = homedir()): string {
   return join(home, '.claude', 'projects', projectKey(cwd))
-}
-
-/** 제목으로 쓸 만큼만 다듬는다 — 목록 한 줄에 들어가야 한다. */
-export function titleOf(raw: string): string {
-  // 아라 채팅 v2: 메시지 앞의 [지금 보는 세션] 머리말은 모델 몫이다 — 제목은 사람이 친 글로.
-  const one = stripTarget(raw).replace(/\s+/g, ' ').trim()
-  return one.length > 60 ? one.slice(0, 60) + '…' : one
 }
 
 /**
@@ -89,7 +83,8 @@ function firstQuestion(path: string): string {
             ? (c[0] as { text: string }).text
             : ''
       // 사람이 친 것이 아니라 도구 결과·훅이 되돌아온 줄은 건너뛴다(질문처럼 보이지 않는다).
-      const title = titleOf(t)
+      // M5 R3(S6): 제목 다듬기는 채팅 이름(AI-19)과 같은 규칙 — 첫 줄, 48자. [지금 보는 세션] 머리말은 모델 몫이라 걷는다.
+      const title = sanitizeChatName(stripTarget(t)) ?? ''
       if (title) return title
     }
   } catch {
