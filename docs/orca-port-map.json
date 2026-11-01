@@ -1027,5 +1027,43 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M13 R1(v2.2 046e8a8): 계정 = userData/accounts/<cli>/<id>, 실행 env CLAUDE_CONFIG_DIR·CODEX_HOME(로컬 실행만, agents/feature.ts launch 에 두 줄). 시스템 기본 = env 안 붙임. 로그인 = claude auth login --claudeai · codex login(그 폴더 env, CLI 가 브라우저). 아라는 토큰 저장 안 함. Claude settings.json·CLAUDE.md 는 만들 때 복사, Codex config.toml 은 실행마다 복사(Orca 는 링크·미러 — junction 은 지울 때 원본 위험이라 복사). 계정별 사용량(설정 화면 열 때), 계정 전환 = 다시 묻기, 다른 계정 statusLine 실시간 값은 transcript_path 로 가려 버림. 뺀 것: 관찰 폴더 자동 감지·WSL·원격·장치 인증·붙여넣기 코드 로그인. 한계: 계정 탭의 Codex 채팅 보기·지난 세션은 기본 홈만 봄. M13 R2(v2.2 d7adda7): 복사 → Orca 처럼 링크 공유로 — Claude 는 claude-profile-provisioning 의 계정별 목록(CLAUDE_RUNTIME_STATE_ENTRIES·히스토리 폴더·숨은 항목·daemon*·agent-memory*)을 뺀 기본 폴더 항목 중 폴더=junction/symlink(agents·commands·skills·plugins…), 파일=내용이 다르면 복사(settings.json·CLAUDE.md…), Codex 는 codex-home-paths CODEX_SYSTEM_RESOURCE_ENTRIES 링크 + AGENTS.md·config.toml 복사. 만들 때·띄울 때마다. 계정 지우기는 removeAccountTree(lstat, 링크는 끊기만) 하나로. 뺀 것: .claude.json 상태 병합(copyState), CLAUDE.md 를 @~/.claude/CLAUDE.md 가져오기 줄로 쓰기(→ 복사), 히스토리 공유(shareClaudeProfileHistory·Codex sessions)."
+  },
+  {
+    "id": "IN-01",
+    "feature": "사내 GitLab 연동(MR 목록·MR 만들기, 기본 꺼짐)",
+    "orcaPaths": [
+      "src/main/gitlab/merge-request-list.ts",
+      "src/main/gitlab/merge-request-creation.ts",
+      "src/main/gitlab/mappers.ts",
+      "src/main/gitlab/gitlab-auth-and-rate-limit.ts",
+      "src/main/ipc/gitlab.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M15 R1(v2.2 a2510a4): 설정 › 연동(기본 꺼짐) — 주소 + 개인 토큰(safeStorage vault). Orca 는 glab CLI 로그인을 빌려 REST 를 부르지만 아라는 같은 REST v4 경로(projects/:id/merge_requests, user)를 PRIVATE-TOKEN 으로 직접(net.fetch). origin 호스트가 설정 주소와 다르면 토큰 안 보냄. 소스 제어에 MR 목록(펼칠 때만)·MR 초안 → [MR 만들기](누를 때만, 푸시 안 함). 꺼져 있으면 네트워크 0. 뺀 것: 이슈·할 일·파이프라인 잡·리뷰·병합·원격(관리형 서버) 작업 단위, 여러 GitLab 호스트."
+  },
+  {
+    "id": "IN-02",
+    "feature": "Slack 연결(사내 앱 Socket Mode, 기본 꺼짐)",
+    "orcaPaths": [
+      "src/cli/specs/connector.ts",
+      "cloud/apps/connector/src/slack-prompt-cards.ts",
+      "cloud/apps/connector/src/slack-events.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M15 R1(v2.2 a2510a4): Orca Cloud 대신 사내 Slack 앱에 Socket Mode(나가는 연결만 — apps.connections.open → WebSocket, 봉투 ack, disconnect 재연결, 토큰 오류는 멈춤). 토큰 app-level·bot 은 vault. 지정 채널·봇 DM 에서 지정 사용자(user id 목록, 비면 아무도)만. 명령 = 커넥터 이음새의 prompt·answer·watch 모양: 상태·질문·답(승인 허용/거부, 질문 하나·단일 선택 — 그 밖은 아라에서). 알림: 답할 차례·끝남. 뺀 것: start·send·cancel(밖에서 실행·이어 지시), reply, 스레드 대화 연결."
+  },
+  {
+    "id": "IN-03",
+    "feature": "AI 공간 첫 안내(온보딩)",
+    "orcaPaths": [
+      "src/renderer/src/components/onboarding/OnboardingFlow.tsx",
+      "src/renderer/src/components/onboarding/AgentStep.tsx",
+      "src/renderer/src/components/onboarding/should-show-onboarding.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M15 R1(v2.2 a2510a4): 처음 AI 공간에 들어올 때 지연 로드 덮개 — 에이전트 CLI 설치(감지·설치 명령)·로그인(사용량 조회의 missing-credentials), Oriel 감지, 관리형 서버 소개(설정 바로 가기). [닫기] 이번 실행만, [다시 보지 않기] localStorage. 뺀 것: 테마·알림·언어·Windows Terminal 단계, 체크리스트, 원격 측정. 시험 빌드에선 기본으로 안 뜸(aiws.onboarding.test 로 켬)."
   }
 ]
