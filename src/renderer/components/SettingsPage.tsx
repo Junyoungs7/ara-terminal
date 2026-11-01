@@ -1002,7 +1002,7 @@ function ProbeRow({ open }: { open: boolean }) {
  * 있을 수 있는데(그것이 이 기능이 생긴 이유다), 지우자고 그 줄들을 화면에 한 번 더 펼치면
  * 문제를 옮겨 놓는 것밖에 안 된다. 직접 보실 분을 위해 파일 자리만 한 줄 적는다.
  *
- * ⚠️ `ai:*` 통은 이 목록에 **안 나온다** — 디스크에 간 적이 없어 main 이 그 이름을 모른다.
+ * ⚠️ 에이전트 탭의 통(`AGENT_SCOPE`)은 이 목록에 **안 나온다** — 디스크에 간 적이 없어 main 이 그 이름을 모른다.
  *    그래서 "지울 것이 없다"는 사실을 아래 안내 한 줄로 대신 말한다.
  */
 function HistorySection({ ask, open }: { ask?: (spec: DialogSpec) => Promise<DialogResult>; open: boolean }) {

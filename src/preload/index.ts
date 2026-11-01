@@ -15,7 +15,7 @@ import type {
   RemoteData,
   UpdateState
 } from '@shared/ipc'
-import type { AiCliId, LaunchShell } from '@shared/aiCli'
+import type { LaunchShell } from '@shared/aiCli'
 import { browserBridge } from './features/browser'
 import { resourcesBridge } from './features/resources'
 import { worktreesBridge } from './features/worktrees'
@@ -318,7 +318,6 @@ const api: EvApi = {
     destroy: (id: string) => ipcRenderer.invoke('session:destroy', { id }),
     list: (): Promise<Session[]> => ipcRenderer.invoke('session:list'),
     rename: (id: string, title: string) => ipcRenderer.invoke('session:rename', { id, title }),
-    setAiCli: (id: string, aiCli: AiCliId | null) => ipcRenderer.invoke('session:setAiCli', { id, aiCli }),
     autoTitle: (id: string, title: string) => ipcRenderer.invoke('session:autoTitle', { id, title }),
     attach: (id: string) => ipcRenderer.invoke('session:attach', { id }),
     pause: (id: string) => ipcRenderer.send('session:pause', { id }),

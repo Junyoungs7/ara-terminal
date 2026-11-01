@@ -1,24 +1,13 @@
 // 옛 터미널 AI CLI 표(F27) — M3 S1 에서 터미널 쪽 실행(buildLaunch·최근 조합·기본 플래그)을 지우고 남은 것.
 //
-// 남은 쓰임: ① `Session.aiCli`(옛 스냅샷의 끊김 카드 — S3 에서 지운다)를 거르는 `aiCliOf`·`AI_CLIS[cli].bin`·`canResume`,
-// ② MCP 원격 카탈로그의 `validCliBin`, ③ 셸 문법 판정 `LaunchShell`·`shellFor`(에이전트 실행 계획이 쓴다).
+// 남은 쓰임: ① MCP 원격 카탈로그의 `validCliBin`, ② 셸 문법 판정 `LaunchShell`·`shellFor`(에이전트 실행 계획이 쓴다).
+// (M4 S3: 끊김 카드와 함께 `Session.aiCli` 를 거르던 `aiCliOf`·`canResume` 을 지웠다.)
 // 플래그 표(AI_CLIS[].flags)는 옛 설정 `ui.aiCliFlags` 의 id 를 읽는 근거라 남긴다(shared/agents.ts migrateAiCliFlags).
 
 export type AiCliId = 'claude' | 'codex' | 'gemini' | 'custom'
 
 /** 드롭다운 순서. Record 의 키 순서에 기대지 않는다. */
 export const AI_CLI_IDS: readonly AiCliId[] = ['claude', 'codex', 'gemini', 'custom']
-
-/**
- * 저장값 → 이 표에 있는 CLI 인가. 없으면 null.
- *
- * `Session.aiCli`(스냅샷에 실린다)는 손으로 고칠 수 있는 파일에서 돌아온다 — 모르는 이름이
- * `AI_CLIS[cli]` 로 들어가면 `undefined.bin` 이라 화면이 통째로 죽는다. 읽는 쪽에서 한 번 거른다
- * (uiScaleOf 와 같은 규칙: 저장값은 신뢰 경계 밖이다).
- */
-export function aiCliOf(v: unknown): AiCliId | null {
-  return AI_CLI_IDS.includes(v as AiCliId) ? (v as AiCliId) : null
-}
 
 export type AiCliFlag = {
   id: string
@@ -106,20 +95,6 @@ export function validCliBin(v: unknown): string | null {
  * 문법**을 쓴다(`;` + `if ($?)`).
  */
 export type LaunchShell = 'posix' | 'powershell' | 'cmd'
-
-/** 직전 대화를 이어서 시작하는 플래그의 id. 표에 이 id 를 가진 CLI 만 "이어서"가 성립한다. */
-const CONTINUE_FLAG = 'continue'
-
-/**
- * 이 CLI 는 **직전 대화를 이어서** 시작할 수 있나 (1.0.8 ② 끊김 카드).
- *
- * 지금은 claude(`-c`)뿐이다 — codex·gemini 에는 그런 플래그가 없다. 없는 기능을 있는 척하지
- * 않으려고 **표에 물어본다**: 카드의 버튼 글자([이어서 시작]/[다시 시작])와 실제로 붙는 플래그가
- * 같은 근거를 봐야 "이어서 시작을 눌렀는데 새 대화가 뜬다"가 안 생긴다.
- */
-export function canResume(cli: AiCliId): boolean {
-  return AI_CLIS[cli].flags.some((f) => f.id === CONTINUE_FLAG)
-}
 
 /**
  * 로컬 셸 종류 → 조립 규칙. `PtyBackend.shellKind` 는 pwsh 와 powershell 5.1 을 둘 다

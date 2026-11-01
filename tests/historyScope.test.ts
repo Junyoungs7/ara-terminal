@@ -1,4 +1,4 @@
-// 🔴 **AI CLI 에 친 문장이 디스크로 가지 않는가** (#204-1, 2026-09-21).
+// 🔴 **AI CLI 에 친 문장이 디스크로 가지 않는가** (#204-1, 2026-09-21 — M4 S3 부터는 AI 작업 공간 에이전트 탭).
 //
 // 왜 이 시험이 있나: AI CLI 세션도 `type: 'local'` 이라 히스토리 scope 가 `'local'` 이었다.
 // 그래서 Claude·Codex 에 친 **모든 문장**이 셸 명령과 같은 통에 쌓여 `history.json` 으로 갔다
@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  AGENT_SCOPE,
   historyScope,
   isEphemeralScope,
   appendHistory,
@@ -21,9 +22,8 @@ import {
 } from '../src/renderer/store/history'
 
 describe('historyScope — 통을 고르는 규칙은 한 곳에만 있다', () => {
-  it('AI CLI 세션은 자기 통으로 간다', () => {
-    expect(historyScope({ local: true, serverKey: 'local', aiCli: 'claude' })).toBe('ai:claude')
-    expect(historyScope({ local: true, serverKey: 'local', aiCli: 'codex' })).toBe('ai:codex')
+  it('AI 작업 공간 에이전트 탭은 자기 통으로 간다', () => {
+    expect(historyScope({ local: true, serverKey: 'localhost', agent: true })).toBe(AGENT_SCOPE)
   })
 
   it('로컬 셸은 local', () => {
@@ -33,28 +33,24 @@ describe('historyScope — 통을 고르는 규칙은 한 곳에만 있다', () 
   it('SSH 는 서버별', () => {
     expect(historyScope({ local: false, serverKey: '결제서버' })).toBe('결제서버')
   })
-
-  it('aiCli 가 local 보다 먼저다 — AI CLI 는 로컬 셸 위에서 도는데 통은 갈라져야 한다', () => {
-    expect(historyScope({ local: true, serverKey: 'local', aiCli: 'gemini' })).toBe('ai:gemini')
-  })
 })
 
-describe('isEphemeralScope — ai: 접두만 메모리 전용이다', () => {
-  it('ai: 통은 true', () => {
-    expect(isEphemeralScope('ai:claude')).toBe(true)
-    expect(isEphemeralScope('ai:custom')).toBe(true)
+describe('isEphemeralScope — 에이전트 통만 메모리 전용이다', () => {
+  it('에이전트 통은 true', () => {
+    expect(isEphemeralScope(AGENT_SCOPE)).toBe(true)
   })
 
-  it('나머지는 전부 false', () => {
+  it('나머지는 전부 false — 서버 통 이름은 프로필 이름이라 무엇이든 될 수 있다', () => {
     expect(isEphemeralScope('local')).toBe(false)
     expect(isEphemeralScope('결제서버')).toBe(false)
-    // 서버 이름에 ai 가 들어가도 접두가 아니면 아니다.
-    expect(isEphemeralScope('ai-서버')).toBe(false)
-    expect(isEphemeralScope('mail:ai')).toBe(false)
+    // 프로필 이름이 agent 여도 그 서버 기록은 디스크로 간다(에이전트 통은 NUL 로 시작한다).
+    expect(isEphemeralScope('agent')).toBe(false)
+    // M4 S3: 옛 터미널 AI 통은 더 없다.
+    expect(isEphemeralScope('ai:claude')).toBe(false)
   })
 })
 
-describe('🔴 ai: 통은 IPC 를 부르지 않는다 — 이 시험이 이 라운드의 본체다', () => {
+describe('🔴 에이전트 통은 IPC 를 부르지 않는다 — 이 시험이 이 라운드의 본체다', () => {
   const appended: { scope: string; command: string }[] = []
   const loaded: string[] = []
 
@@ -82,11 +78,11 @@ describe('🔴 ai: 통은 IPC 를 부르지 않는다 — 이 시험이 이 라�
     delete (globalThis as unknown as { window?: unknown }).window
   })
 
-  it('appendHistory("ai:claude") 는 window.ev.history.append 를 부르지 않는다', () => {
-    appendHistory('ai:claude', '우선 1~7을 먼저 작업해줘')
+  it('appendHistory(AGENT_SCOPE) 는 window.ev.history.append 를 부르지 않는다', () => {
+    appendHistory(AGENT_SCOPE, '우선 1~7을 먼저 작업해줘')
     expect(appended).toHaveLength(0)
     // 그래도 캐시에는 남는다 — 그 세션 안에서 고스트 자동완성은 계속 동작해야 한다.
-    expect(cachedHistory('ai:claude')).toEqual(['우선 1~7을 먼저 작업해줘'])
+    expect(cachedHistory(AGENT_SCOPE)).toEqual(['우선 1~7을 먼저 작업해줘'])
   })
 
   /**
@@ -98,8 +94,8 @@ describe('🔴 ai: 통은 IPC 를 부르지 않는다 — 이 시험이 이 라�
     expect(appended).toEqual([{ scope: 'local', command: 'npm run build' }])
   })
 
-  it('loadHistory("ai:claude") 도 IPC 를 안 부르고 빈 목록에서 시작한다', async () => {
-    expect(await loadHistory('ai:claude')).toEqual([])
+  it('loadHistory(AGENT_SCOPE) 도 IPC 를 안 부르고 빈 목록에서 시작한다', async () => {
+    expect(await loadHistory(AGENT_SCOPE)).toEqual([])
     expect(loaded).toHaveLength(0)
   })
 
@@ -175,23 +171,24 @@ describe('forgetCachedScope — 지운 뒤 캐시가 되살리지 못하게 한�
 describe('🔴 화면이 그 판정을 **실제로 쓰는가**', () => {
   const read = (p: string): string => readFileSync(join(__dirname, '..', p), 'utf8')
   const pane = read('src/renderer/terminal/TerminalPane.tsx')
-  const grid = read('src/renderer/components/PaneGrid.tsx')
+  const agentPane = read('src/renderer/features/aiws/AgentPane.tsx')
   const drawer = read('src/renderer/components/SettingsPage.tsx')
 
   it('TerminalPane 이 historyScope 를 지난다', () => {
-    expect(pane).toMatch(/const scope = historyScope\(\{ local, serverKey, aiCli \}\)/)
+    expect(pane).toMatch(/const scope = historyScope\(\{ local, serverKey, agent \}\)/)
   })
 
   it('옛 삼항식이 남아 있지 않다 — 남아 있으면 AI 세션이 조용히 local 통으로 돌아간다', () => {
     expect(pane).not.toMatch(/local \? 'local' : serverKey/)
   })
 
-  it('PaneGrid 가 aiCli 를 넘긴다 — 안 넘기면 prop 이 늘 undefined 라 갈래가 죽는다', () => {
-    expect(grid).toMatch(/aiCli=\{session\?\.aiCli\}/)
+  it('에이전트 칸(AgentPane)이 agent 를 넘긴다 — 안 넘기면 에이전트에 친 글이 디스크로 간다', () => {
+    expect(agentPane).toMatch(/<TerminalPane [^>]* agent \/>/)
+    expect(agentPane).not.toMatch(/aiCli=/)
   })
 
-  it('effect deps 에 aiCli 가 있다(첫 마운트에 prop 이 늦게 오는 경우)', () => {
-    expect(pane).toMatch(/\[sessionId, local, serverKey, aiCli\]/)
+  it('effect deps 에 agent 가 있다(첫 마운트에 prop 이 늦게 오는 경우)', () => {
+    expect(pane).toMatch(/\[sessionId, local, serverKey, agent\]/)
   })
 
   it('🔴 SettingsPage 가 history.clear 뒤에 forgetCachedScope 를 부른다', () => {

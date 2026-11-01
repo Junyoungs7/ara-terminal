@@ -3,7 +3,6 @@
 //
 // ⚠️ 비밀번호는 어디에도 남기지 않는다: 커밋 시점의 프롬프트 줄이 비밀번호 프롬프트면 그 입력은
 // 캐시·IPC·디스크 어느 쪽으로도 가지 않고 버려진다(shouldRecord).
-import type { AiCliId } from '@shared/aiCli'
 
 // scope 당 상한. main 의 HistoryStore 와 같은 값을 쓴다 — 렌더러 캐시가 더 길게 들고 있으면
 // 재시작 전후로 고스트 결과가 달라진다.
@@ -114,28 +113,29 @@ export function ghostFor(entries: readonly string[], input: string): string | nu
 
 // ── scope 고르기 ──
 
+/** 에이전트 탭 통. 서버 통 이름은 프로필 이름이라 무엇이든 될 수 있다 — 겹치지 않게 NUL 로 시작한다(디스크·main 에는 안 간다). */
+export const AGENT_SCOPE = '\u0000agent'
+
 /**
  * 이 세션의 히스토리 통. 규칙을 한 곳에만 둔다 — TerminalPane 의 삼항식을 여기로 옮겼다.
  *
- * AI CLI 세션은 자기 통(`ai:*`)으로 간다. 그 통은 **디스크에 안 남는다**(isEphemeralScope).
+ * AI 작업 공간 에이전트 탭은 자기 통(`AGENT_SCOPE`)으로 간다. 그 통은 **디스크에 안 남는다**(isEphemeralScope).
  * 이유는 두 가지다: ① Claude·Codex 에 친 문장은 명령이 아니라 **글**이라, 거기 그냥 친
  * 비밀번호를 명령줄 마스킹(maskSecrets)이 알아볼 수 없다 ② 셸 고스트 목록이 더러워진다 —
  * *"우선 1~7을 먼저 작업해줘"* 가 `cd` 옆에 뜬다.
  *
- * ⚠️ **우리 문으로 띄운 세션만** 이 갈래를 탄다. `Session.aiCli` 는 AI CLI 버튼으로 연 세션에만
- * 채워지므로(`MainSessionManager.ts:88`), 사용자가 로컬 터미널에 손으로 `claude` 를 치면 그
- * 세션은 여전히 `'local'` 이고 그 대화는 디스크로 간다. 그 구멍은 알고 남겨 둔 것이다 —
- * 🔴 살아 있는 신호로 scope 를 바꾸면 **세션 도중에 통이 갈라지고**(그때까지 쌓은 제안이 딴 통에
- * 남는다) xterm effect 가 재실행되어 **스크롤백이 증발한다.** 그 대가가 더 크다.
+ * ⚠️ 사용자가 터미널 공간의 로컬 셸에 손으로 `claude` 를 치면 그 세션은 여전히 `'local'` 이고 그 대화는 디스크로 간다.
+ * 알고 남겨 둔 구멍이다 — 살아 있는 신호로 scope 를 바꾸면 세션 도중에 통이 갈리고 xterm effect 가 재실행되어
+ * 스크롤백이 증발한다. (M4 S3: 옛 터미널 AI 의 `ai:<cli>` 통은 그 문이 사라져 이 하나로 줄였다.)
  */
-export function historyScope(s: { local: boolean; serverKey: string; aiCli?: AiCliId }): string {
-  if (s.aiCli) return `ai:${s.aiCli}`
+export function historyScope(s: { local: boolean; serverKey: string; agent?: boolean }): string {
+  if (s.agent) return AGENT_SCOPE
   return s.local ? 'local' : s.serverKey
 }
 
-/** 디스크에 안 남기는 통인가. `ai:` 접두가 그 표시다(main 은 이 접두를 아예 못 본다). */
+/** 디스크에 안 남기는 통인가(main 은 이 통을 아예 못 본다). */
 export function isEphemeralScope(scope: string): boolean {
-  return scope.startsWith('ai:')
+  return scope === AGENT_SCOPE
 }
 
 // ── scope 별 캐시 ──

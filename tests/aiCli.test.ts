@@ -1,7 +1,7 @@
 // 옛 터미널 AI CLI 표(shared/aiCli.ts)에서 M3 S1 뒤에 남은 것 — custom 이름 검증(MCP 원격 카탈로그), 셸 판정,
-// 옛 스냅샷 Session.aiCli 거르기·끊김 카드의 canResume. 조립(buildLaunch)·최근 조합·기본 플래그 시험은 그 코드와 함께 지웠다.
+// 조립(buildLaunch)·최근 조합·기본 플래그 시험은 그 코드와 함께, 끊김 카드(canResume·aiCliOf)는 M4 S3 에서 지웠다.
 import { describe, it, expect } from 'vitest'
-import { AI_CLI_IDS, canResume, aiCliOf, validCliBin, shellFor } from '../src/shared/aiCli'
+import { validCliBin, shellFor } from '../src/shared/aiCli'
 
 describe('custom CLI 이름 검증', () => {
   it('평범한 이름·절대 경로는 통과', () => {
@@ -47,29 +47,5 @@ describe('shellFor — 셸 종류에서 조립 규칙으로(#90)', () => {
   it("★ 'other' 는 Windows 면 cmd — PtyBackend 의 폴백이 cmd.exe 다", () => {
     expect(shellFor('other', 'win32')).toBe('cmd')
     expect(shellFor('other', 'other')).toBe('posix')
-  })
-})
-
-describe('canResume (끊김 카드 [이어서 시작])', () => {
-  it('canResume 는 표에서 나온다 — claude 만 true', () => {
-    expect(canResume('claude')).toBe(true)
-    expect(canResume('custom')).toBe(false)
-  })
-})
-
-
-// 스냅샷(workspace.json)은 손으로 고칠 수 있다. 모르는 이름이 AI_CLIS[cli] 로 들어가면
-// `undefined.bin` 이라 카드가 아니라 화면이 통째로 죽는다.
-describe('aiCliOf (저장값 거르기)', () => {
-  it('표에 있는 이름만 통과한다', () => {
-    for (const cli of AI_CLI_IDS) expect(aiCliOf(cli)).toBe(cli)
-  })
-
-  it('★ 모르는 값·빈 값·객체는 null — 없는 것으로 친다', () => {
-    expect(aiCliOf('claude-code')).toBeNull()
-    expect(aiCliOf('')).toBeNull()
-    expect(aiCliOf(undefined)).toBeNull()
-    expect(aiCliOf(null)).toBeNull()
-    expect(aiCliOf({ cli: 'claude' })).toBeNull()
   })
 })

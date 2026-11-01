@@ -200,7 +200,7 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
       )}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active}>
-          <TerminalPane sessionId={x.sessionId} active={x === active} local serverKey="localhost" aiCli={x.agent} />
+          <TerminalPane sessionId={x.sessionId} active={x === active} local serverKey="localhost" agent />
         </div>
       ))}
     </div>

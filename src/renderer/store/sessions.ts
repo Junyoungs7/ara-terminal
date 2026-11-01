@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSpec } from '../../main/sessions/ISessionManager'
 import type { SessionType } from '@shared/types'
-import type { AiCliId } from '@shared/aiCli'
 import { forgetSessionState } from './sessionState'
 import { sizeOf } from '../terminal/termRegistry'
 import { usableSize } from '@shared/termSize'
@@ -18,15 +17,6 @@ export type Session = {
   profileId?: string
   /** F32: 이 세션을 가진 창(없으면 본창). 소유의 단일 출처는 main 이고 여기는 사본이다. */
   winId?: string
-  /**
-   * #204: 이 탭에서 도는 AI CLI(우리 문으로 띄운 것만 — `MainSessionManager.ts:88`).
-   * 히스토리 통을 가르는 데 쓴다(`historyScope`) — AI 에 친 문장은 디스크로 안 간다.
-   *
-   * 세션을 넣는 문이 둘(만든 쪽의 `adopt` · main 의 `session:opened`)이라 **둘 다** 이 값을
-   * 들고 와야 한다. 어느 쪽이 먼저 닿을지 정해져 있지 않고, `adopt` 는 같은 id 를 두 번
-   * 넣지 않으므로 한쪽만 채우면 경합에 따라 값이 있다 없다 한다.
-   */
-  aiCli?: AiCliId
 }
 /**
  * 새 로컬 세션에 **지금 칸의 치수**를 싣는다(#201 D). SSH 는 `Shell.connectProfile` 이 처음부터
@@ -229,8 +219,8 @@ export function useSessions(winId?: string) {
    * `session:create` 의 응답과 `session:opened` 알림이 어느 순서로 도착해도 탭은 하나다.
    */
   const adopt = useCallback(
-    (id: string, title: string, serverKey: string, type: SessionType, profileId?: string, aiCli?: AiCliId) => {
-      setSessions((t) => (t.some((x) => x.id === id) ? t : [...t, { id, title, serverKey, type, profileId, aiCli }]))
+    (id: string, title: string, serverKey: string, type: SessionType, profileId?: string) => {
+      setSessions((t) => (t.some((x) => x.id === id) ? t : [...t, { id, title, serverKey, type, profileId }]))
       touch(id)
     },
     [touch]
@@ -272,8 +262,7 @@ export function useSessions(winId?: string) {
   const restoreLocal = useCallback(
     async (spec: SessionSpec): Promise<string> => {
       const { id } = await window.ev.session.create(withSize(spec, sizeOf(activeRef.current)))
-      // spec.aiCli 를 함께 넘긴다 — 이 문으로 들어온 AI CLI 탭이 히스토리 통을 가른다(#204).
-      adopt(id, spec.title, spec.serverKey, 'local', undefined, spec.aiCli)
+      adopt(id, spec.title, spec.serverKey, 'local')
       return id
     },
     [adopt]
@@ -354,8 +343,7 @@ export function useSessions(winId?: string) {
         serverKey: m.serverKey,
         type: m.type,
         ...(m.profileId ? { profileId: m.profileId } : {}),
-        ...(m.winId ? { winId: m.winId } : {}),
-        ...(m.aiCli ? { aiCli: m.aiCli } : {})
+        ...(m.winId ? { winId: m.winId } : {})
       }))
     // 비동기라 클로저의 sessions 는 낡았을 수 있다 — 지금 목록을 ref 에서 읽는다.
     const next = mergeMainSnapshot(listRef.current, mine)
@@ -381,7 +369,7 @@ export function useSessions(winId?: string) {
     const off = window.ev?.session.onOpened?.((m) => {
       // M3: AI 작업 공간 에이전트 탭은 그쪽 탭 줄이 그린다(Session.space).
       if ((m.winId ?? undefined) !== winId || m.space === 'ai') return
-      adopt(m.id, m.title, m.serverKey, m.type, m.profileId ?? undefined, m.aiCli)
+      adopt(m.id, m.title, m.serverKey, m.type, m.profileId ?? undefined)
     })
     return () => off?.()
   }, [winId, adopt])

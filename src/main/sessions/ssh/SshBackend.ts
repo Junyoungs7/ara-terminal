@@ -8,7 +8,6 @@ import type { KnownHost, SshProfile } from '@shared/types'
 import { fingerprintSha256, hostId, verifyHostKey } from './hostkey'
 import { logMainError } from '../../log/MainErrorLog'
 import { SHELL_PID_CMD, cwdLink, parseShellPid } from './remoteCwd'
-import { cleanupRemoteLegacyHooks } from '../../agents/remoteHookCleanup'
 
 // 출력이 이만큼 멎으면 프롬프트가 뜬 것으로 보고 CWD 를 한 번 읽는다(remoteCwd.ts 참조).
 // 짧을수록 트리가 빨리 따라오지만, 명령 출력 중간중간 읽는 낭비가 는다.
@@ -37,11 +36,6 @@ export type ConnectDeps = {
   acceptHostKey: boolean // 최초 접속 확인 다이얼로그 통과 여부
   // 최초 접속 시 지문을 knownHosts에 기록하는 콜백(부수효과는 호출측이 소유).
   onHostKeyAccepted: (id: string, host: KnownHost) => void
-  /**
-   * M3 S2(제거 A2): 옛 원격 상태 훅 **정리만**. 주면 셸이 뜬 뒤 뒤에서 그 서버의 `# ara-agent-hook` 줄과 `~/.claude/ara-tty-*` 를 지운다
-   * (remoteHookCleanup.ts). 심는 일은 이제 없다. 안 주면 아무것도 안 한다(접속 테스트·MCP 경로).
-   */
-  cleanupLegacyHooks?: boolean
   /**
    * #158 셸을 **아는 크기로 연다.** 주면 그 치수로 pty 를 요청하고, 안 주면 80×24 로 연다.
    *
@@ -145,7 +139,6 @@ export async function connectSsh(profile: SshProfile, deps: ConnectDeps): Promis
           return
         }
         done({ ok: true, backend: new SshBackend(client, channel) })
-        if (deps.cleanupLegacyHooks) void cleanupRemoteLegacyHooks(client)
       })
     }
 

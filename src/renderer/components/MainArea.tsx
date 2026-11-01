@@ -42,7 +42,6 @@ import { setSpanNotifier } from '../store/rdpSpanOpen'
 import { localUrl, planLink } from '../../shared/linkTarget'
 import { CHANGELOG_URL } from '../../shared/links'
 import { usableSize } from '../../shared/termSize'
-import { aiCliOf, type AiCliId } from '../../shared/aiCli'
 import { buildTmuxInput } from '../../shared/tmux'
 import type { DialogResult, DialogSpec } from './Dialog'
 import type { AiProvider, UiState } from '@shared/types'
@@ -100,13 +99,6 @@ type MainAreaProps = {
   sshRestore?: (profileId: string, size?: { cols: number; rows: number }) => Promise<SshRestoreResult>
   // 탭바 ＋ 메뉴·빈 상태의 "SSH 연결…" → 연결 관리자 열기(Shell 소유).
   onOpenConnManager?: () => void
-  /**
-   * 1.0.8 ②: 끊김 카드에서 그 AI 를 되살린다 — 성공하면 **새 세션 id**(카드 자리를 그것으로 갈아
-   * 끼운다). sshRestore 와 같은 결의 주입이다: 띄우는 일은 Shell 이 하고(플래그·최근 목록이 거기
-   * 있다), 화면 자리를 바꾸는 일은 여기서 한다.
-   */
-  /** sessionId: 카드가 얹힌 셸 — 거기 친다(2026-10-12). 돌려준 id 가 같으면 갈아 끼울 것이 없다. */
-  onResumeAi?: (cli: AiCliId, cwd: string, sessionId?: string) => Promise<string | null>
   // R5 설정 창 [정보] 섹션에 찍을 앱 버전(Shell 이 app.getVersion 으로 이미 들고 있다).
   version: string
   // 활성 세션의 OSC7 cwd(Shell 이 구독). 저장 트리거로만 쓴다 — cwd 가 바뀌면 스냅샷의 세션 cwd 도
@@ -164,7 +156,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onDuplicateSession,
       sshRestore,
       onOpenConnManager,
-      onResumeAi,
       version,
       activeCwd,
       ask,
@@ -415,36 +406,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             idMap.set(item.oldId, id)
             restoredIds.current.add(id) // 만든 **즉시** 담는다 — 몰아 담으면 그 사이가 또 경합이다
             if (!firstReal) firstReal = id
-            /**
-             * 🔴 **AI 세션은 셸 위에 카드를 얹는다**(1.0.9 — 1.0.8 의 방향을 뒤집었다).
-             *
-             * 앱을 끄면 pty 와 그 안의 CLI 가 함께 죽는다. 그 자리에 맨 셸만 띄우면 "AI 탭인데
-             * 아무것도 없는 셸"이라 무엇이 돌고 있었는지 단서가 없다(준영님 원 제보).
-             *
-             * 1.0.8 은 셸을 **안 띄우고** placeholder 로 뒀는데 실기에서 거의 안 떴다 —
-             * 카드는 `PaneGrid` 의 **칸 안에서만** 그려지고 AI 탭은 보통 배경 탭이다
-             * (준영님 스냅샷 실측: `aiCli=claude` 세션이 칸 밖에 있었다). 칸에 없으면 탭까지
-             * 사라져서 `panedIds` 로 좁혔더니, 이번엔 카드가 뜨는 경우가 거의 없어졌다.
-             *
-             * 그래서 **세션은 예전대로 만들고**(탭이 남는다) 그 **실 세션 id 에 오류를 얹는다** —
-             * `PaneGrid` 의 "쓰던 중 끊김" 갈래(`err && session`)가 터미널 **위에** 카드를 그린다.
-             * 그 배선은 2026-08-14 부터 있던 것이라 여기서 재사용만 한다.
-             *  · 배경 탭이어도 그 탭을 누르면 카드가 보인다
-             *  · 사라지는 탭이 없다
-             *  · [닫기]를 누르면 카드만 걷히고 **그 아래 셸이 그대로 남는다**
-             */
-            const aiCli = aiCliOf(item.session.aiCli)
-            if (aiCli) {
-              errs.set(id, {
-                sessionId: id,
-                profileId: null,
-                title: item.session.title,
-                serverKey: item.session.serverKey,
-                reason: 'aiEnded',
-                aiCli,
-                ...(item.session.cwd ? { cwd: item.session.cwd } : {})
-              })
-            }
           } else {
             // SSH: 프로필로 재접속. 실패(네트워크/인증/고아) 시 오류 패널(재시도) — 전체 실패 아님.
             // 저장해 둔 치수로 연다 — 없으면(옛 스냅샷) 예전대로 main 이 80×24 로 열고 마운트
@@ -868,48 +829,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     }, [])
 
     // F6 부분 복원 재시도: 오류 패널의 프로필로 재접속 → 성공 시 placeholder 를 실 세션으로 교체.
-    // 1.0.8 ②: 끝난 AI 세션 자리도 같은 버튼을 쓴다(재접속 대신 그 CLI 를 다시 띄운다).
     const retryRestore = useCallback(
       async (errId: string) => {
         const err = restoreErrors.get(errId)
         if (!err) return
-        /**
-         * 1.0.8 ②: 끝난 AI 세션 자리 — 재접속이 아니라 **그 CLI 를 그 폴더에서 다시** 띄운다
-         * (claude 면 `-c` 로 직전 대화를 이어서). SSH 재시도와 이후 절차는 같다: 새 세션 id 로
-         * 카드 자리를 갈아 끼우고 오류를 걷는다.
-         *
-         * ⚠️ M3 S1: 본창 Shell 은 onResumeAi 를 더는 넘기지 않는다(터미널 AI 실행을 지웠다) — 이 갈래는 S3(끊김 카드 삭제)까지 쉬고 있다.
-         * 🔴 먼저 이 칸에 초점을 준다. 띄우는 쪽(옛 Shell 터미널 AI 실행)이 끝에 `selectSession` 을
-         *    부르는데, 그것이 **초점 칸**의 세션을 갈아 끼운다(layout.showSession) — 다른 칸이
-         *    초점이면 새 세션이 그 칸에 들어가고 아래 replaceSession 이 이 칸에도 넣어 같은 세션이
-         *    두 칸을 차지한다(렌더는 첫 칸에만 붙고 나머지가 빈다). 버튼을 누르면 mousedown 이
-         *    대개 이 칸을 잡지만, 그 우연에 기대지 않는다.
-         */
-        if (err.aiCli) {
-          const cell = layout.cells.find((c) => c.sessionId === errId)
-          if (cell) layout.focus(cell.id)
-          // 카드 아래 셸이 살아 있으면 그 셸에 친다(2026-10-12 — AI 는 셸 안에서 돈다).
-          const here = list.some((x) => x.id === errId) ? errId : undefined
-          const id = err.cwd ? await onResumeAi?.(err.aiCli, err.cwd, here) : null
-          if (!id) {
-            showToast(t('restore.resumeFailed'))
-            return
-          }
-          if (id === errId) {
-            clearError(errId)
-            select(id)
-            return
-          }
-          layout.replaceSession(errId, id)
-          clearError(errId)
-          // 1.0.9: `errId` 가 이제 **실 세션**이다(카드가 셸 위에 얹힌다) — 그 셸은 여기서 끝난다.
-          // 안 닫으면 [이어서 시작] 한 번에 빈 셸 탭이 하나씩 쌓인다. 아래 SSH 갈래가 같은 이유로
-          // 같은 줄을 갖고 있다(placeholder 면 목록에 없어 아무 일도 안 한다 — 두 경로가 같은 코드를
-          // 쓸 수 있는 이유).
-          if (list.some((x) => x.id === errId)) close(errId)
-          select(id)
-          return
-        }
         if (!err.profileId || !sshRestore) return
         const res = await sshRestore(err.profileId)
         if (res.ok) {
@@ -931,7 +854,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           showToast(t('restore.retryFailed'))
         }
       },
-      [restoreErrors, sshRestore, layout, select, showToast, list, close, onResumeAi, clearError]
+      [restoreErrors, sshRestore, layout, select, showToast, list, close, clearError]
     )
 
     // 오류 패널 닫기: 재시도 포기 — 패널 제거 + 오류 정보 삭제.
@@ -944,7 +867,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
          *
          * 두 종류가 이 함수를 함께 쓴다:
          *  · 부팅 복원 실패 placeholder — 세션이 **없다**. 칸을 지우는 것이 곧 치우는 것이다
-         *  · 실 세션 위에 얹힌 카드(AI 끝남 · SSH 쓰던 중 끊김) — 세션이 **있다.**
+         *  · 실 세션 위에 얹힌 카드(SSH 쓰던 중 끊김) — 세션이 **있다.**
          *    칸을 지우면 **멀쩡한 셸까지 사라진다** — [닫기]를 누른 사람은 카드를 치운 것이지
          *    터미널을 닫은 것이 아니다(닫기는 탭의 ✕ 가 한다)
          *

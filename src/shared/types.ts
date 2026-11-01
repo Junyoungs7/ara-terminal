@@ -1,5 +1,4 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
-import type { AiCliId } from './aiCli'
 import type { AiLimit } from './aiEngine'
 import type { FeatureShown } from './features'
 import type { VoicePrefs } from './voice'
@@ -121,25 +120,6 @@ export type Session = {
    */
   winId?: string
   /**
-   * 이 탭에서 띄운 AI CLI(1.0.8 ②). **재시작 뒤 [이어서 시작] 카드를 띄우는 유일한 단서다.**
-   *
-   * 앱을 끄면 pty 와 그 안의 CLI 가 함께 죽는다. 이 값이 없던 시절 부팅 복원은 그 자리에 맨 셸을
-   * 다시 띄웠고, 사용자에게는 *"AI 세션 탭인데 아무것도 없는 셸"* 로 보였다 — 무엇이 돌고 있었는지
-   * 화면에 단서가 하나도 없었다(2026-09-10 준영님 제보).
-   *
-   * 되살릴 명령을 저장하지 않는다: CLI 이름 하나면 `AI_CLIS` 표가 나머지를 안다(플래그는 최근
-   * 목록이 갖고 있다). 대화 id 도 저장하지 않는다 — `claude -c` 가 그 폴더의 직전 대화를 알아서 집는다.
-   *
-   * 🔴 선택 필드라 `SCHEMA_VERSION` 은 올리지 않았다 — 올리면 옛 앱이 워크스페이스를 **통째로**
-   *    못 읽어(migrations.ts:49 → null → 기본 스냅샷) 사용자 눈엔 프로필이 전부 사라진다.
-   *    옛 앱은 이 키를 모르는 채 지금까지처럼 맨 셸로 복원한다(UiPrefs.termCompletion 과 같은 규칙).
-   *
-   * 로컬 세션만 채운다(원격 AI 는 SSH 복원이 셸을 되살려 사정이 다르다). M3 S1 에서 이 값을 쓰는 터미널 AI 실행을 지웠다 —
-   *    새로 채워지지 않고 옛 스냅샷에만 남는다(S3 에서 키째 지운다).
-   * 저장값은 신뢰 경계 밖이라 읽는 쪽이 `aiCliOf` 로 거른다.
-   */
-  aiCli?: AiCliId
-  /**
    * 이 세션이 **마지막으로 가졌던 터미널 치수**. 복원할 때 그 값으로 pty 를 연다.
    *
    * 왜 필요한가(2026-09-16 준영님 제보: *"껐다 키면 기존 세션 연결이 되는데 처음 경로 나올 때
@@ -148,7 +128,7 @@ export type Session = {
    * 따라잡아도 **이미 찍힌 줄은 그대로 남는다.**
    *
    * 여기 적어 두면 추측하지 않고 **그 세션이 실제로 쓰던 값**으로 연다.
-   * ⚠️ 선택 필드라 `SCHEMA_VERSION` 은 올리지 않는다(위 aiCli 와 같은 이유).
+   * ⚠️ 선택 필드라 `SCHEMA_VERSION` 은 올리지 않는다 — 올리면 옛 앱이 워크스페이스를 통째로 못 읽는다(migrations.ts).
    * ⚠️ **주인은 main 이다** — pty 를 가진 쪽이 진짜 치수를 안다. 렌더러가 따로 기억하지 않는다.
    */
   cols?: number

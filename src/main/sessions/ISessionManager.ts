@@ -6,8 +6,6 @@ import type { Session } from '@shared/types'
 // winId 는 **부른 창**이다: 떼어낸 창에서 연 새 탭은 그 창 것이어야 한다(안 주면 본창).
 // 없을 때 무슨 일이 났었나: 떼어낸 창이 만든 세션의 소유가 본창으로 잡혀 출력이 엉뚱한 창으로
 // 갔다 — 받는 쪽에 그 탭이 없으니 아무 데도 안 나왔다.
-// aiCli 는 **무엇이 돌았는지의 기억**이다(1.0.8 ②): 그 탭에서 띄운 CLI 이름을 세션 메타에
-// 남겨 스냅샷에 실린다 — 재시작 뒤 그 탭을 맨 셸이 아니라 [이어서 시작] 카드로 되살리는 단서다.
 export type SessionSpec = Pick<
   Session,
   | 'type'
@@ -18,7 +16,6 @@ export type SessionSpec = Pick<
   | 'title'
   | 'manualTitle'
   | 'winId'
-  | 'aiCli'
   // 복원이 **저장해 둔 치수**로 pty 를 연다(`Session.cols` 주석 — 안 주면 80×24 로 열려 첫
   // 프롬프트가 접힌다). 새 세션은 안 준다: 그때는 렌더러가 sizeOf 로 지금 칸을 잰다.
   | 'cols'

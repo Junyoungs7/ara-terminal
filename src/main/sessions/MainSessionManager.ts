@@ -8,7 +8,6 @@ import type { SessionBackend } from './SessionBackend'
 import { PtyBackend } from './PtyBackend'
 import { SshBackend } from './ssh/SshBackend'
 import { parseOsc7Cwd } from './osc7'
-import { aiCliOf } from '@shared/aiCli'
 import type { Session } from '@shared/types'
 import { usableSize } from '@shared/termSize'
 
@@ -94,9 +93,6 @@ export class MainSessionManager implements ISessionManager {
       manualTitle: spec.manualTitle,
       // 부른 창이 곧 주인이다(안 주면 본창). 이게 없으면 떼어낸 창에서 연 탭의 출력이 본창으로 간다.
       ...(spec.winId ? { winId: spec.winId } : {}),
-      // 1.0.8 ②: 이 탭에서 무엇이 돌았나. 렌더러가 보낸 값이라 표에 있는 이름만 받는다
-      // (그대로 스냅샷에 실려 다음 부팅의 [이어서 시작] 카드가 된다).
-      ...(aiCliOf(spec.aiCli) ? { aiCli: spec.aiCli } : {}),
       // M3: AI 작업 공간 에이전트 탭 — 터미널 공간이 건너뛰는 표시.
       ...(spec.space === 'ai' ? { space: 'ai' as const } : {})
     }
@@ -245,16 +241,6 @@ export class MainSessionManager implements ISessionManager {
     if (!h || !title) return
     h.meta.title = title
     h.meta.manualTitle = true
-  }
-
-  // 셸에 쳐 넣은 AI CLI 가 도는 동안만 남긴다 — 스냅샷에 실려 다음 부팅의 [이어서 시작] 카드가 된다.
-  // 렌더러가 보낸 값이라 표에 있는 이름만 받고, 그 밖의 값(null 포함)은 지운다.
-  setAiCli(id: string, aiCli: unknown): void {
-    const h = this.handles.get(id)
-    if (!h) return
-    const v = aiCliOf(aiCli)
-    if (v) h.meta.aiCli = v
-    else delete h.meta.aiCli
   }
 
   // R3.6: 셸이 보낸 OSC 0/2 제목. 사용자가 이름을 바꾼 세션은 건드리지 않는다.

@@ -63,8 +63,6 @@ export async function connectByProfile(
     secret,
     acceptHostKey,
     onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
-    // M3 S2(제거 A2): 옛 원격 상태 훅을 지우기만 한다(remoteHookCleanup.ts). 다음 판(M4)에서 이 줄째 지운다.
-    cleanupLegacyHooks: true,
     // 쓸 만한 치수만 넘긴다(`shared/termSize.ts`) — 옛 스냅샷의 9×4 로 원격 셸을 열지 않는다.
     ...(size && usableSize(size.cols, size.rows) ? { size } : {})
   })
