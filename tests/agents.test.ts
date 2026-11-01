@@ -86,6 +86,9 @@ describe('설정', () => {
     expect(s.defaultAgent).toBe('codex')
     expect(s.claudeRemoteControl).toBe(true)
     expect(agentSettingsOf(null).claudeRemoteControl).toBe(false) // 원격 제어 기본 꺼짐
+    // AI-14 새 탭 보기 — 기본 CLI(Claude 도: 터미널 + [채팅] 으로 보기), 모르는 값은 CLI
+    expect(agentSettingsOf(null).agents.claude.view).toBe('cli')
+    expect(agentSettingsOf({ agents: { codex: { view: 'chat' }, gemini: { view: 'x' } } }).agents).toMatchObject({ codex: { view: 'chat' }, gemini: { view: 'cli' } })
   })
   it('권한 선택지', () => {
     expect(permissionChoicesFor('claude')).toEqual(['own', 'ask', 'accept-edits', 'auto', 'full-access'])

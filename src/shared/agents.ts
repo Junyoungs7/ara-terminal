@@ -83,7 +83,15 @@ export type AgentPrefs = {
   env: Record<string, string>
   /** 실행 명령 바꾸기(Orca cmdOverrides) — 빈 값이면 bin. `FOO=1 npx claude` 처럼 앞 env 할당·접두 인자 허용. */
   command: string
+  /**
+   * M5 AI-14 새 탭을 무엇으로 보여 주나(Orca AgentChatChoiceControls 의 "Chat | CLI"). 'cli' = 터미널(채팅으로 보기는 [채팅] 으로),
+   * 'chat' = 같은 PTY 세션을 채팅 화면으로 먼저. 둘 다 PTY 대화형이다 — 원격 제어(--rc)·데몬 생존이 그대로.
+   */
+  view: AgentView
 }
+
+export const AGENT_VIEWS = ['cli', 'chat'] as const
+export type AgentView = (typeof AGENT_VIEWS)[number]
 
 export type AgentSettings = {
   agents: Record<AgentId, AgentPrefs>
@@ -108,7 +116,7 @@ export type AgentSettings = {
 /** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
 export const MEMORY_CAP_MAX_MB = 1024 * 1024
 
-const defaultPrefs = (): AgentPrefs => ({ enabled: true, permission: DEFAULT_PERMISSION, args: '', env: {}, command: '' })
+const defaultPrefs = (): AgentPrefs => ({ enabled: true, permission: DEFAULT_PERMISSION, args: '', env: {}, command: '', view: 'cli' })
 
 export function defaultAgentSettings(): AgentSettings {
   return {
@@ -147,7 +155,8 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
       permission: permissionChoicesFor(id).includes(permission) ? permission : DEFAULT_PERMISSION,
       args: textOf(a.args),
       env: envOf(a.env),
-      command: textOf(a.command)
+      command: textOf(a.command),
+      view: AGENT_VIEWS.includes(a.view as AgentView) ? (a.view as AgentView) : 'cli'
     }
   }
   if (isAgentId(src.defaultAgent)) base.defaultAgent = src.defaultAgent

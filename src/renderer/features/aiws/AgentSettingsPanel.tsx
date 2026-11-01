@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { AGENT_IDS, AGENTS, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
+import { AGENT_IDS, AGENT_VIEWS, AGENTS, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
 import type { LaunchShell } from '@shared/aiCli'
 import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
@@ -116,6 +116,16 @@ export function AgentSettingsPanel(): JSX.Element {
           {AGENT_IDS.map((id) => (
             <button type="button" key={id} className={sel === id ? 'on' : ''} onClick={() => setSel(id)}>
               {AGENTS[id].label}
+            </button>
+          ))}
+        </div>
+      </Row>
+      {/* M5 AI-14 Orca AgentOpensAsControl — 새 탭을 채팅으로 먼저 볼지. 둘 다 같은 PTY 세션(원격 제어·데몬 생존 그대로). */}
+      <Row label={t('settings.agents.view')} desc={t('settings.agents.view.desc')} item="agents.view">
+        <div className="seg-ctl" data-field="agents.view">
+          {AGENT_VIEWS.map((v) => (
+            <button type="button" key={v} data-value={v} className={prefs.view === v ? 'on' : ''} onClick={() => setAgent(sel, { view: v })}>
+              {t('settings.agents.view.' + v)}
             </button>
           ))}
         </div>

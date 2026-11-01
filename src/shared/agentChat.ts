@@ -4,7 +4,9 @@
 //    (하네스가 끼운 사용자 턴·isMeta 는 버리고 그 안의 tool_result 만 살린다, 끊김 문구는 조용한 시스템 줄)
 //  · 꼬리 읽기의 줄 자르기 = transcript-tail-boundary.ts(덜 쓴 마지막 줄은 다음 읽기로 미룬다)
 //  · 경로 = session-file-resolver.ts(훅이 준 transcript_path 가 우선, 없으면 세션 id 로 projects/*/<id>.jsonl)
-// 뺀 것: 편집 diff 블록·이미지 미리보기·붙여넣은 글 펼치기·하위 에이전트 구역·되감기·Codex/Gemini/Grok 해석(라운드 뒤).
+//  · R2: Codex = transcript-line-decoders-codex.ts(response_item 만 — event_msg 의 같은 말은 겹치므로 버림), Gemini = Orca 에 채팅 디코더가
+//    없어 ai-vault session-scanner-gemini-parsers.ts(type user/gemini) 모양에 toolCalls 를 도구 블록으로 더했다.
+// 뺀 것: 편집 diff 블록·이미지 미리보기·붙여넣은 글 펼치기·하위 에이전트 구역·되감기·Grok 해석·Codex 추론(reasoning) 줄.
 import type { AgentId } from './agents'
 import { INJECTED } from './vault'
 
@@ -22,11 +24,6 @@ export type ChatMessage = { id: string; role: 'user' | 'assistant' | 'system'; b
 export type AgentChatEvent = { sessionId: string; messages: ChatMessage[]; reset?: boolean }
 export type AgentChatSnapshot = { messages: ChatMessage[]; file: string | null }
 
-/** AI-14 기본값 자리 — 에이전트별 "채팅 | 터미널". Claude 는 원격 제어 때문에 PTY 대화형 + 채팅으로 보기(계획 M5).
- *  'terminal-chat' = 터미널로 열고 [채팅] 으로 같은 세션을 본다. 구조화 채팅('chat')은 아직 없다. 설정은 라운드 2. */
-export type AgentOpenMode = 'terminal' | 'terminal-chat'
-export const AGENT_OPEN_MODE: Record<AgentId, AgentOpenMode> = { claude: 'terminal-chat', codex: 'terminal', gemini: 'terminal' }
-export const canChat = (agent: AgentId): boolean => AGENT_OPEN_MODE[agent] === 'terminal-chat'
 
 /** 메모리·IPC 상한 — 이보다 오래된 메시지는 버린다(긴 대화의 화면은 꼬리가 중요하다). */
 export const CHAT_CAP = 2000
@@ -57,7 +54,7 @@ export function toolResultText(v: unknown): string {
 /** 접힌 도구 줄에 보일 한 줄 — 명령·파일·패턴. 나머지는 입력 JSON 머리. */
 export function toolSummary(name: string, input: unknown): string {
   const i = rec(input)
-  const pick = str(i?.command) ?? str(i?.file_path) ?? str(i?.notebook_path) ?? str(i?.pattern) ?? str(i?.url) ?? str(i?.query) ?? str(i?.description) ?? str(i?.prompt)
+  const pick = str(i?.command) ?? str(i?.file_path) ?? str(i?.absolute_path) ?? str(i?.dir_path) ?? str(i?.path) ?? str(i?.notebook_path) ?? str(i?.pattern) ?? str(i?.url) ?? str(i?.query) ?? str(i?.description) ?? str(i?.prompt)
   const s = pick ?? (i ? JSON.stringify(i) : '')
   return clip(s.replace(/\s+/g, ' ').trim(), SUMMARY_CHARS) || name
 }
@@ -115,13 +112,126 @@ export function decodeClaudeLine(line: string, fallbackId: string): Decoded | nu
   return { id, groupId: r.type === 'assistant' ? str(msg?.id) : null, role: r.type, blocks, results }
 }
 
+// ── Codex rollout(jsonl) ──
+/** Codex 가 사용자 턴에 끼우는 맥락(환경·지시·스킬) — 사람이 친 글이 아니다. */
+const CODEX_INJECTED = /^\s*(<(environment_context|user_instructions|user_shell_command|skill|turn_aborted)\b|# AGENTS\.md instructions)/i
+
+/** Codex 도구 인자 — function_call.arguments 는 JSON 글, shell 의 command 는 배열. */
+function codexInput(p: Rec): unknown {
+  let v: unknown = p.arguments ?? p.input ?? p.action
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v)
+    } catch {
+      return { command: v }
+    }
+  }
+  const r = rec(v)
+  return r && Array.isArray(r.command) ? { ...r, command: r.command.filter((x) => typeof x === 'string').join(' ') } : v
+}
+
+/** function_call_output.output — 글이거나 {output|content} 를 담은 JSON 글. */
+function codexOutput(v: unknown): string {
+  if (typeof v === 'string') {
+    try {
+      const r = rec(JSON.parse(v))
+      if (r) return toolResultText(r.output ?? r.content ?? v)
+    } catch {
+      /* 그냥 글 */
+    }
+    return v
+  }
+  const r = rec(v)
+  return toolResultText(r ? (r.content ?? r.output ?? r) : v)
+}
+
+/** Codex rollout 한 줄(Orca decodeCodexTranscriptLine 의 response_item 갈래 + 끊김). */
+export function decodeCodexLine(line: string, fallbackId: string): Decoded | null {
+  let r: Rec | null = null
+  try {
+    r = rec(JSON.parse(line))
+  } catch {
+    return null
+  }
+  const p = rec(r?.payload)
+  if (!r || !p) return null
+  const id = str(p.id) ?? fallbackId
+  if (r.type === 'event_msg') return p.type === 'turn_aborted' ? { id, groupId: null, role: 'system', blocks: [{ type: 'text', text: '[Request interrupted by user]' }], results: [] } : null
+  if (r.type !== 'response_item') return null
+  if (p.type === 'message' && (p.role === 'user' || p.role === 'assistant')) {
+    const items = Array.isArray(p.content) ? p.content : []
+    const blocks: ChatBlock[] = []
+    for (const it of items) {
+      const b = rec(it)
+      const text = str(b?.text)
+      if (b?.type === 'input_image') blocks.push({ type: 'image' })
+      else if (text && !(p.role === 'user' && CODEX_INJECTED.test(text))) blocks.push({ type: 'text', text })
+    }
+    return blocks.length ? { id, groupId: null, role: p.role, blocks, results: [] } : null
+  }
+  if (p.type === 'function_call' || p.type === 'custom_tool_call' || p.type === 'local_shell_call') {
+    const name = str(p.name) ?? (p.type === 'local_shell_call' ? 'shell' : 'tool')
+    const input = codexInput(p)
+    return { id, groupId: null, role: 'assistant', blocks: [{ type: 'tool', id: str(p.call_id) ?? id, name, summary: toolSummary(name, input) }], results: [] }
+  }
+  if (p.type === 'function_call_output' || p.type === 'custom_tool_call_output') {
+    const tid = str(p.call_id)
+    const out = rec(p.output)
+    return tid ? { id, groupId: null, role: 'user', blocks: [], results: [{ id: tid, text: clip(codexOutput(p.output), RESULT_CHARS), error: out?.success === false || p.is_error === true }] } : null
+  }
+  return null
+}
+
+// ── Gemini 세션(.json 통째 / .jsonl 줄) ──
+function geminiText(v: unknown): string | null {
+  if (typeof v === 'string') return str(v)
+  if (Array.isArray(v)) return str(v.map((x) => (typeof x === 'string' ? x : (str(rec(x)?.text) ?? ''))).join(''))
+  return null
+}
+
+/** Gemini 메시지 한 개(type user|gemini, content, toolCalls[{id,name,args,resultDisplay,status}]). 머리·$set 줄은 null. */
+export function decodeGeminiLine(line: string, fallbackId: string): Decoded | null {
+  let r: Rec | null = null
+  try {
+    r = rec(JSON.parse(line))
+  } catch {
+    return null
+  }
+  if (!r || (r.type !== 'user' && r.type !== 'gemini')) return null
+  const id = str(r.id) ?? fallbackId
+  const blocks: ChatBlock[] = []
+  const text = geminiText(r.content)
+  if (text && !(r.type === 'user' && INJECTED.test(text))) blocks.push({ type: 'text', text })
+  for (const c of Array.isArray(r.toolCalls) ? r.toolCalls : []) {
+    const t = rec(c)
+    if (!t) continue
+    const name = str(t.displayName) ?? str(t.name) ?? 'tool'
+    const result = geminiText(t.resultDisplay) ?? (Array.isArray(t.result) ? toolResultText(t.result.map((x) => rec(rec(rec(x)?.functionResponse)?.response)?.output ?? '')) : '')
+    blocks.push({ type: 'tool', id: str(t.id) ?? `${id}:${blocks.length}`, name, summary: toolSummary(name, t.args), ...(result || t.status ? { result: clip(result, RESULT_CHARS), error: t.status === 'error' } : {}) })
+  }
+  return blocks.length ? { id, groupId: null, role: r.type === 'user' ? 'user' : 'assistant', blocks, results: [] } : null
+}
+
+/** Gemini .json(통째로 다시 쓰는 옛 형식)을 줄로 — messages 를 한 줄씩. 깨졌으면 null(쓰는 중 — 다음 변경 때 다시). */
+export function geminiDocLines(text: string): string[] | null {
+  try {
+    const m = rec(JSON.parse(text))?.messages
+    return Array.isArray(m) ? m.map((x) => JSON.stringify(x)) : []
+  } catch {
+    return null
+  }
+}
+
+export type LineDecoder = (line: string, fallbackId: string) => Decoded | null
+export const DECODERS: Record<AgentId, LineDecoder> = { claude: decodeClaudeLine, codex: decodeCodexLine, gemini: decodeGeminiLine }
+
 export type ChatModel = {
   /** 새 줄들 → 바뀐 메시지(새 것 포함, 순서대로). */
   add(lines: readonly string[]): ChatMessage[]
   messages(): ChatMessage[]
 }
 
-export function createChatModel(cap = CHAT_CAP): ChatModel {
+export function createChatModel(cap = CHAT_CAP, decode: LineDecoder = decodeClaudeLine): ChatModel {
   let list: ChatMessage[] = []
   const index = new Map<string, number>() // 메시지 id → list 자리
   const groups = new Map<string, string>() // 응답 message.id → 메시지 id
@@ -138,7 +248,7 @@ export function createChatModel(cap = CHAT_CAP): ChatModel {
     add(lines) {
       const changed = new Set<string>()
       for (const line of lines) {
-        const d = decodeClaudeLine(line, `line-${seq++}`)
+        const d = decode(line, `line-${seq++}`)
         if (!d) continue
         for (const res of d.results) {
           const mid = owner.get(res.id)
@@ -203,11 +313,11 @@ export function mergeMessages(list: readonly ChatMessage[], incoming: readonly C
 // ── 세션 id → transcript 경로(Orca session-file-resolver 의 Claude 갈래) ──
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
-/** 훅 본문(transcript_path·session_id)에서 찾을 것. 경로가 .jsonl 이면 그것이 정답이다(파일 이름이 세션 id 와 다를 수 있다). */
+/** 훅 본문(transcript_path·session_id)에서 찾을 것. 경로가 .jsonl(Gemini 옛 형식은 .json)이면 그것이 정답이다(파일 이름이 세션 id 와 다를 수 있다). */
 export function transcriptHint(payload: Record<string, unknown>): { path: string | null; sessionId: string | null } {
   const p = str(payload['transcript_path'])
   const id = str(payload['session_id'])
-  return { path: p && p.toLowerCase().endsWith('.jsonl') ? p : null, sessionId: id && SAFE_ID.test(id) ? id : null }
+  return { path: p && /\.jsonl?$/i.test(p) ? p : null, sessionId: id && SAFE_ID.test(id) ? id : null }
 }
 
 /** 채팅 입력칸 → PTY 로 보낼 글. 첨부는 경로만(DLP — 파일 내용은 앱이 안 읽는다). 공백 든 경로는 큰따옴표로. */

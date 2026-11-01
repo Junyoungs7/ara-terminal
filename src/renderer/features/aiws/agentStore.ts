@@ -13,7 +13,7 @@ import { useAiwsStore } from './store'
 import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
 import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
-import { clearDraft } from './chatDraft'
+import { clearDraft, readChatOn, writeChatOn } from './chatDraft'
 
 export type AgentTab = {
   sessionId: string
@@ -47,7 +47,7 @@ type AgentState = {
   view: AiwsView
   /** 활동 피드(AI-09) — 상태 변화 이력, 들어온 순. 그릴 때 feedView 로 최신이 위. */
   feed: FeedEvent[]
-  /** M5 AI-13: 채팅으로 보는 탭(없으면 터미널). AI-14 기본은 터미널 — 이 앱 실행 동안만 기억한다. */
+  /** M5 AI-13: 채팅으로 보는 탭(없으면 터미널). AI-14: 새 탭은 설정 › 에이전트의 "채팅 | CLI" 를 따르고, 고른 것은 재시작 뒤에도(localStorage). */
   chatOn: Record<string, boolean>
   toggleChat: (sessionId: string) => void
   loadAgents: (force?: boolean) => Promise<void>
@@ -73,7 +73,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   viewing: null,
   view: 'worktree',
   feed: [],
-  chatOn: {},
+  chatOn: readChatOn(),
 
   loadAgents: async (force) => {
     startStatus()
@@ -96,7 +96,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const r = await window.ev.agents.launch(agent, cwd, prompt, resume)
     if (!r.ok) return r
     const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}) }
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId } }))
+    const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
+    writeChatOn(chatOn)
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))
     watchExit(r.sessionId)
     return r
   },
@@ -115,13 +117,15 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const tabs = s.tabs.filter((t) => t.sessionId !== sessionId)
       const { [sessionId]: _st, ...statusById } = s.statusById
       const { [sessionId]: _seen, ...seenById } = s.seenById
+      const { [sessionId]: _chat, ...chatOn } = s.chatOn
+      writeChatOn(chatOn)
       const active = { ...s.activeTabByWorktree }
       if (active[tab.worktreeId] === sessionId) {
         const rest = tabs.filter((t) => t.worktreeId === tab.worktreeId)
         if (rest.length) active[tab.worktreeId] = rest[rest.length - 1].sessionId
         else delete active[tab.worktreeId]
       }
-      return { tabs, activeTabByWorktree: active, statusById, seenById }
+      return { tabs, activeTabByWorktree: active, statusById, seenById, chatOn }
     })
   },
 
@@ -130,7 +134,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
 
   setView: (view) => set({ view }),
 
-  toggleChat: (sessionId) => set((s) => ({ chatOn: { ...s.chatOn, [sessionId]: !s.chatOn[sessionId] } }))
+  toggleChat: (sessionId) =>
+    set((s) => {
+      const chatOn = { ...s.chatOn, [sessionId]: !s.chatOn[sessionId] }
+      writeChatOn(chatOn)
+      return { chatOn }
+    })
 }))
 
 /** 그 에이전트 탭으로 — 워크트리를 고르고 그 탭을 고른 뒤 가운데를 탭 화면으로(대시보드 카드·피드·알림이 같은 길). */

@@ -59,7 +59,7 @@ export function registerAgentsFeature(deps: {
   const hooks = createHookServer(
     (e) => {
       tracker?.hook(e)
-      if (e.source === 'claude') ensureChat().hook(e.paneKey, e.payload)
+      ensureChat().hook(e.paneKey, e.payload, e.source)
     },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null
   )
@@ -124,6 +124,7 @@ export function registerAgentsFeature(deps: {
       if (!tab) return
       restoredTabs.push(tab)
       ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
+      ensureChat().bind(info.id, { agent: tab.agent, cwd: info.cwd, startedAt: typeof info.meta['startedAt'] === 'number' ? info.meta['startedAt'] : 0 })
       void ensureHooks()
     },
     log,
@@ -189,10 +190,11 @@ export function registerAgentsFeature(deps: {
     const title = `${AGENTS[agent].label} · ${basename(cwd) || cwd}`
     const env = { ...plan.env, ...hookEnv }
     let sessionId: string = randomUUID()
+    const startedAt = Date.now()
     try {
       // 데몬 셸은 앱의 **지금** 환경을 받는다(데몬 환경은 띄운 순간에 굳는다 — 감지가 더한 PATH 등을 놓친다).
       const appEnv = Object.fromEntries(Object.entries(process.env).filter((x): x is [string, string] => typeof x[1] === 'string' && x[0] !== 'ELECTRON_RUN_AS_NODE'))
-      const meta = { agent, title, line: plan.line, ...(plan.deferredPrompt ? { prompt: plan.deferredPrompt } : {}) }
+      const meta = { agent, title, line: plan.line, startedAt, ...(plan.deferredPrompt ? { prompt: plan.deferredPrompt } : {}) }
       await daemon.create({ id: sessionId, cwd, env: { ...appEnv, ...env }, meta })
     } catch (err) {
       log(`daemon create failed — local PTY fallback: ${String(err)}`)
@@ -204,6 +206,7 @@ export function registerAgentsFeature(deps: {
     }
     // 헤드리스 화면은 80×24 로 시작해 렌더러 터미널이 붙으며 보내는 resize 를 따라간다(SessionTap.resize).
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
+    ensureChat().bind(sessionId, { agent, cwd, startedAt })
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line }

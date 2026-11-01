@@ -4,8 +4,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { composeChatText, createChatModel, decodeClaudeLine, draftOf, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
-import { claudeProjectsDirs, createChatWatcher, INITIAL_TAIL_BYTES, resolveClaudeTranscript } from '../src/main/agents/chat'
+import { composeChatText, createChatModel, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
+import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
 const user = (uuid: string, content: unknown, extra: object = {}): string => J({ type: 'user', uuid, message: { role: 'user', content }, ...extra })
@@ -210,6 +210,115 @@ describe('main 꼬리 읽기(createChatWatcher)', () => {
     expect(msgs.length).toBeLessThan(n)
     expect(msgs.length).toBeGreaterThan(1000)
     expect(msgs.some((m) => m.id === 'o0')).toBe(false)
+    w.stop()
+  })
+})
+
+// R2 Codex·Gemini — 픽스처는 Orca 디코더 시험(transcript-line-decoders-codex)·ai-vault gemini 파서의 레코드 모양을 줄였다.
+describe('Codex·Gemini 해석', () => {
+  const ri = (payload: object): string => J({ type: 'response_item', timestamp: '2026-11-01T00:00:00Z', payload })
+  const codex = [
+    J({ type: 'session_meta', payload: { id: 'cx', cwd: 'C:\\w\\app', timestamp: '2026-11-01T00:00:00Z' } }),
+    ri({ type: 'message', role: 'user', content: [{ type: 'input_text', text: '<environment_context>\n  <cwd>C:\\w</cwd>\n</environment_context>' }] }),
+    ri({ type: 'message', role: 'user', id: 'cu1', content: [{ type: 'input_text', text: '테스트 돌려 줘' }] }),
+    J({ type: 'event_msg', payload: { type: 'user_message', message: '테스트 돌려 줘' } }), // 같은 말 — 겹치지 않게 버린다
+    ri({ type: 'function_call', id: 'fc1', name: 'shell', call_id: 'call_1', arguments: J({ command: ['bash', '-lc', 'npm test'] }) }),
+    ri({ type: 'function_call_output', call_id: 'call_1', output: J({ output: '3 passed', metadata: { exit_code: 0 } }) }),
+    ri({ type: 'message', role: 'assistant', id: 'ca1', content: [{ type: 'output_text', text: '다 통과했습니다' }] }),
+    J({ type: 'event_msg', payload: { type: 'turn_aborted' } })
+  ]
+  it('Codex: 주입 맥락·event_msg 겹침은 버리고 도구 호출에 결과가 붙는다', () => {
+    const m = createChatModel(undefined, DECODERS.codex)
+    m.add(codex)
+    const list = m.messages()
+    expect(list.map((x) => x.role)).toEqual(['user', 'assistant', 'assistant', 'system'])
+    expect(list[0].blocks).toEqual([{ type: 'text', text: '테스트 돌려 줘' }])
+    expect(list[1].blocks[0]).toEqual({ type: 'tool', id: 'call_1', name: 'shell', summary: 'bash -lc npm test', result: '3 passed', error: false })
+    expect(decodeCodexLine(codex[0], 'f')).toBeNull()
+  })
+  it('Gemini: user/gemini · toolCalls 는 도구 블록 · .json 문서는 messages 를 줄로', () => {
+    const doc = J({
+      sessionId: 'g-1',
+      messages: [
+        { id: 'g1', type: 'user', content: '파일 목록 보여 줘' },
+        { id: 'g2', type: 'gemini', content: '보겠습니다', toolCalls: [{ id: 'tc1', name: 'list_directory', args: { path: '.' }, resultDisplay: 'a.txt', status: 'success' }] },
+        { id: 'g3', type: 'info', content: 'x' }
+      ]
+    })
+    const lines = geminiDocLines(doc)!
+    const m = createChatModel(undefined, DECODERS.gemini)
+    m.add(lines)
+    expect(m.messages().map((x) => x.role)).toEqual(['user', 'assistant'])
+    expect(m.messages()[1].blocks[1]).toEqual({ type: 'tool', id: 'tc1', name: 'list_directory', summary: '.', result: 'a.txt', error: false })
+    expect(geminiDocLines('{"messages":[')).toBeNull() // 쓰는 중
+    expect(decodeGeminiLine(J({ $set: { lastUpdated: 'x' } }), 'f')).toBeNull()
+  })
+  it('훅 힌트 — Gemini 옛 .json 경로도 받는다', () => {
+    expect(transcriptHint({ transcript_path: '/h/.gemini/tmp/p/chats/session-1-abcd1234.json' }).path).toBe('/h/.gemini/tmp/p/chats/session-1-abcd1234.json')
+  })
+})
+
+describe('Codex·Gemini 파일 찾기(임시 폴더)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ara-chat2-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const pad = (n: number): string => String(n).padStart(2, '0')
+
+  it('Codex: 그 폴더(session_meta.cwd)·띄운 뒤에 시작한 rollout 중 가장 이른 것, 다른 탭 것은 뺀다', () => {
+    const now = Date.now()
+    const d = new Date(now)
+    const day = join(root, 'codex', 'sessions', String(d.getFullYear()), pad(d.getMonth() + 1), pad(d.getDate()))
+    mkdirSync(day, { recursive: true })
+    const roll = (name: string, cwd: string, at: number): string => {
+      const p = join(day, `rollout-${name}.jsonl`)
+      writeFileSync(p, J({ type: 'session_meta', payload: { cwd, timestamp: new Date(at).toISOString() } }) + '\n')
+      return p
+    }
+    const cwd = join(root, 'app')
+    roll('old', cwd, now - 60_000) // 띄우기 전 — 아님
+    roll('other', join(root, 'other'), now + 1000) // 다른 폴더 — 아님
+    const a = roll('a', cwd, now + 1000)
+    const b = roll('b', cwd, now + 2000)
+    const roots = codexSessionsDirs(join(root, 'nohome'), { CODEX_HOME: join(root, 'codex') })
+    expect(findCodexRollout(roots, cwd, now, new Set(), now)).toBe(a)
+    expect(findCodexRollout(roots, cwd, now, new Set([a]), now)).toBe(b)
+    expect(findCodexRollout(roots, join(root, 'none'), now, new Set(), now)).toBeNull()
+  })
+
+  it('Codex 탭은 훅 없이 rollout 을 찾아 채팅에 민다', async () => {
+    const home = join(root, 'h2')
+    const cwd = join(root, 'app2')
+    const d = new Date()
+    const day = join(home, '.codex', 'sessions', String(d.getFullYear()), pad(d.getMonth() + 1), pad(d.getDate()))
+    const events: AgentChatEvent[] = []
+    const w = createChatWatcher({ push: (e) => events.push(e), store: join(root, 's2.json'), home, env: {}, throttleMs: 20 })
+    w.bind('cx', { agent: 'codex', cwd, startedAt: Date.now() })
+    expect(w.open('cx')).toEqual({ messages: [], file: null }) // 아직 파일 없음 — 1초마다 다시
+    mkdirSync(day, { recursive: true })
+    const meta = J({ type: 'session_meta', payload: { cwd, timestamp: new Date().toISOString() } })
+    const said = J({ type: 'response_item', payload: { type: 'message', role: 'user', id: 'q', content: [{ type: 'input_text', text: '안녕' }] } })
+    writeFileSync(join(day, 'rollout-x.jsonl'), meta + '\n' + said + '\n')
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(events.flatMap((e) => e.messages.map((m) => m.id))).toContain('q')
+    w.stop()
+  })
+
+  it('Gemini: 훅 session_id → tmp/*/chats/session-…-<앞 8자>.json, 바뀌면 통째로 다시(reset)', async () => {
+    const home = join(root, 'h3')
+    const chats = join(home, '.gemini', 'tmp', 'hash1', 'chats')
+    mkdirSync(chats, { recursive: true })
+    const f = join(chats, 'session-2026-11-01T00-00-abcd1234.json')
+    const doc = (n: number): string => J({ sessionId: 'abcd1234-ffff', messages: Array.from({ length: n }, (_, i) => ({ id: `m${i}`, type: i % 2 ? 'gemini' : 'user', content: `글 ${i}` })) })
+    writeFileSync(f, doc(1))
+    expect(resolveGeminiTranscript('abcd1234-ffff', home)).toBe(f)
+    const events: AgentChatEvent[] = []
+    const w = createChatWatcher({ push: (e) => events.push(e), store: join(root, 's3.json'), home, throttleMs: 20 })
+    w.bind('g', { agent: 'gemini', cwd: root, startedAt: 0 })
+    w.hook('g', { session_id: 'abcd1234-ffff' }, 'gemini')
+    expect(w.open('g').messages.map((m) => m.id)).toEqual(['m0'])
+    writeFileSync(f, doc(3))
+    await new Promise((r) => setTimeout(r, 400))
+    expect(events.at(-1)).toMatchObject({ sessionId: 'g', reset: true })
+    expect(events.at(-1)!.messages.map((m) => m.id)).toEqual(['m0', 'm1', 'm2'])
     w.stop()
   })
 })

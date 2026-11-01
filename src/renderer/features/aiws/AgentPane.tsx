@@ -9,7 +9,6 @@ import { pickInitialAgent, useAgentStore } from './agentStore'
 import { displayOf } from './agentStatusView'
 import { AgentGlyph } from './AgentGlyph'
 import { AgentChatView } from './AgentChatView'
-import { canChat } from '@shared/agentChat'
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
@@ -122,7 +121,7 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
   const [picking, setPicking] = useState(false)
   const shownTab = tabs.length === 0 || picking ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
   const shownId = shownTab?.sessionId ?? null
-  const chatAgent = shownTab && canChat(shownTab.agent) ? shownTab.sessionId : null
+  const chatAgent = shownTab ? shownTab.sessionId : null
   // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
   useEffect(() => {
     useAgentStore.getState().setViewing(shownId)
@@ -159,7 +158,7 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
     return <AgentPicker worktree={worktree} onLaunched={() => setPicking(false)} onCancel={tabs.length ? () => setPicking(false) : undefined} />
   }
   const active = tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]
-  const chatting = canChat(active.agent) && !!chatOn[active.sessionId]
+  const chatting = !!chatOn[active.sessionId]
   return (
     <div className="aiws-agentws" data-aiws="agent-ws">
       <div className="aiws-tabs" role="tablist" aria-label={t('aiws.agent.tabs')}>
@@ -204,19 +203,17 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
           <FileText className="aiws-tab-ic" aria-hidden />
           <span>{t('aiws.agent.files')}</span>
         </button>
-        {canChat(active.agent) && (
-          <button
-            type="button"
-            className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
-            data-aiws="chat-toggle"
-            aria-pressed={chatting}
-            title={`${t(chatting ? 'aiws.chat.toTerminal' : 'aiws.chat.toChat')} (${CHAT_KEY})`}
-            onClick={() => useAgentStore.getState().toggleChat(active.sessionId)}
-          >
-            {chatting ? <SquareTerminal className="aiws-tab-ic" aria-hidden /> : <MessageSquare className="aiws-tab-ic" aria-hidden />}
-            <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
-          </button>
-        )}
+        <button
+          type="button"
+          className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
+          data-aiws="chat-toggle"
+          aria-pressed={chatting}
+          title={`${t(chatting ? 'aiws.chat.toTerminal' : 'aiws.chat.toChat')} (${CHAT_KEY})`}
+          onClick={() => useAgentStore.getState().toggleChat(active.sessionId)}
+        >
+          {chatting ? <SquareTerminal className="aiws-tab-ic" aria-hidden /> : <MessageSquare className="aiws-tab-ic" aria-hidden />}
+          <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
+        </button>
         <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setPicking(true)}>
           <Plus />
         </button>
