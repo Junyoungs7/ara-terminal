@@ -6,6 +6,7 @@
 //  · 훅 우선·화면은 빈자리 = src/main/agent-hooks/README.md "Precedence"(2분 침묵 규칙 포함)
 // 화면이 훅을 덮는 한 가지(살아 있는 막힘 표시)는 herdr detect/mod.rs AgentDetection.visible_blocker 주석에서 왔다.
 import type { ScreenDetection } from './agentScreen'
+import { deriveInteractivePrompt } from './agentAsk'
 
 /** 훅을 심는 CLI. Codex 는 훅이 신뢰 해시(config.toml)를 요구해 이번 판에 안 심는다 — 화면 판정('추정')으로만 본다. */
 export const HOOK_SOURCES = ['claude', 'gemini'] as const
@@ -28,7 +29,15 @@ export type AgentChild = {
 }
 
 /** 훅으로 들은 한 칸(pane = 에이전트 탭 세션)의 상태. */
-export type HookPane = { state: RunState; kind?: BlockKind; tool?: string; children: AgentChild[]; at: number }
+export type HookPane = {
+  state: RunState
+  kind?: BlockKind
+  tool?: string
+  children: AgentChild[]
+  at: number
+  /** M11 질문/승인 카드 글(Orca interactivePrompt — AskUserQuestion 입력 또는 {approval}). 막힘일 때만. */
+  ask?: string
+}
 
 /** 화면에 내보내는 상태(main → 렌더러 `agents:status`). 봄/안 봄(done·idle)은 렌더러가 가른다. */
 export type AgentStatusView = {
@@ -44,6 +53,12 @@ export type AgentStatusView = {
   source: string
   /** 첫 지시를 준비된 뒤 넣으려다 못 넣었다(제한 시간). */
   promptFailed?: boolean
+  /** M11 질문/승인 카드 글(훅이 막힘을 알릴 때만 — 화면 판정 막힘은 카드 없음). shared/agentAsk parseInteractivePrompt 로 읽는다. */
+  ask?: string
+  /** M11 에이전트가 OSC 로 정한 작업 요약 제목(agentLiveTitle — 입력 상자를 본 뒤의 것만). */
+  title?: string
+  /** M11 에이전트가 끝나고 셸만 남았다(main/agents/status.ts shellPromptVisible) — 재시작 칩. */
+  agentExited?: true
 }
 
 const CHILD_ID_MAX = 64
@@ -65,6 +80,13 @@ function withChild(children: AgentChild[], id: string, patch: Partial<AgentChild
  * Claude: 자식(agent_id 가 붙은 이벤트)의 도구 이벤트는 자식 줄만 바꾸고, 자식이 승인·질문을 기다리면 그 막힘은 부모로 올린다(Orca 와 같다).
  */
 export function applyHookEvent(prev: HookPane | null, source: HookSource, payload: Record<string, unknown>, now: number): HookPane | null {
+  const next = applyHookEventInner(prev, source, payload, now)
+  // M11: 카드 글은 막힘 동안만 산다(막힘이 풀리면 카드도 내린다 — Orca: post-tool 이벤트가 답한 카드를 되살리지 않는다).
+  if (next && next.state !== 'blocked' && next.ask !== undefined) return { ...next, ask: undefined }
+  return next
+}
+
+function applyHookEventInner(prev: HookPane | null, source: HookSource, payload: Record<string, unknown>, now: number): HookPane | null {
   const event = str(payload, 'hook_event_name')
   if (!event) return null
   const base: HookPane = prev ?? { state: 'idle', children: [], at: now }
@@ -87,7 +109,7 @@ export function applyHookEvent(prev: HookPane | null, source: HookSource, payloa
 
   if (agentId) {
     // 자식의 도구 이벤트. 막힘만 부모로 — 나머지는 자식 줄의 "지금 하는 일"이다.
-    if (waits) return { ...base, state: 'blocked', kind, children: withChild(base.children, agentId, { agentType, state: 'blocked', tool }, now), at: now }
+    if (waits) return { ...base, state: 'blocked', kind, ask: deriveInteractivePrompt(tool, payload['tool_input'], event), children: withChild(base.children, agentId, { agentType, state: 'blocked', tool }, now), at: now }
     if (event === 'PreToolUse' || event === 'PostToolUse' || event === 'PostToolUseFailure') {
       const children = withChild(base.children, agentId, { agentType, state: 'working', tool: event === 'PreToolUse' ? tool : undefined }, now)
       // 그 자식의 막힘이 풀렸으면 부모도 일하는 중으로 되돌린다.
@@ -97,7 +119,7 @@ export function applyHookEvent(prev: HookPane | null, source: HookSource, payloa
     return null
   }
 
-  if (waits) return { ...base, state: 'blocked', kind, tool, at: now }
+  if (waits) return { ...base, state: 'blocked', kind, tool, ask: deriveInteractivePrompt(tool, payload['tool_input'], event), at: now }
   if (event === 'UserPromptSubmit') return { ...base, state: 'working', kind: undefined, tool: undefined, at: now }
   if (event === 'PreToolUse') return { ...base, state: 'working', kind: undefined, tool, at: now }
   if (event === 'PostToolUse' || event === 'PostToolUseFailure') return { ...base, state: 'working', kind: undefined, tool: undefined, at: now }
@@ -126,7 +148,7 @@ export function resolveStatus(
     const p = hook.pane
     if (screen?.visibleBlocker && p.state !== 'blocked') return { sessionId, state: 'blocked', kind: 'permission', estimated: true, children, source: `screen:${screen.rule}` }
     if (p.state === 'working' && now - p.at > HOOK_SILENT_MS && screen?.visibleIdle) return { sessionId, state: 'idle', estimated: true, children, source: `screen:${screen.rule}` }
-    return { sessionId, state: p.state, kind: p.kind, tool: p.tool, estimated: false, children, source: `hook:${hook.event}` }
+    return { sessionId, state: p.state, kind: p.kind, tool: p.tool, estimated: false, children, source: `hook:${hook.event}`, ...(p.ask ? { ask: p.ask } : {}) }
   }
   if (!screen || screen.skip) return prev ?? { sessionId, state: null, estimated: true, children, source: 'none' }
   if (screen.state === 'unknown') return { sessionId, state: null, estimated: true, children, source: 'screen:unknown' }

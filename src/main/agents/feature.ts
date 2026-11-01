@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { app, type WebContents } from 'electron'
+import { app, powerMonitor, powerSaveBlocker, type WebContents } from 'electron'
 import { handle } from '../ipc/handle'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
 import { pushSend } from '../util/windowPush'
@@ -33,6 +33,10 @@ import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
 import { GEMINI_DEFAULTS_ENV, orielGeminiDefaults, orielLaunch } from '@shared/oriel'
 import type { Oriel } from '../oriel/oriel'
+import { createAgentAwake } from './awake'
+import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
+import { promptBytes } from './status'
+import { ASK_MAX_GROUPS, ASK_MAX_TEXT, ASK_STEP_MS, type AskAnswerKeyGroup } from '@shared/agentAsk'
 
 export function registerAgentsFeature(deps: {
   userData: string
@@ -95,10 +99,34 @@ export function registerAgentsFeature(deps: {
       pushSend(deps.mainWc(), 'agents:name', { sessionId, name })
     })
   }
+  // M11 탭 제목(Orca deriveGeneratedTabTitle) — 첫 지시(실행 지시·훅의 첫 요청·채팅 입력)로 한 번. 데몬에 산 탭은 다시 켜도 그대로(agent-titles.json).
+  const titlesFile = join(deps.userData, 'agent-titles.json')
+  const savedTitles = readJsonWithBackup<unknown>(titlesFile, null)
+  const genTitles = new Map<string, string>(savedTitles && typeof savedTitles === 'object' ? Object.entries(savedTitles).filter((x): x is [string, string] => typeof x[1] === 'string') : [])
+  const saveTitles = (): void => {
+    try {
+      writeJsonAtomic(titlesFile, Object.fromEntries(genTitles))
+    } catch {
+      /* 못 남기면 다시 켠 뒤 생성 제목 없이 */
+    }
+  }
+  const noteFirstPrompt = (sessionId: string, prompt: unknown): void => {
+    if (genTitles.has(sessionId) || !tabMeta.has(sessionId) || typeof prompt !== 'string' || prompt.startsWith('/')) return
+    const title = deriveGeneratedTabTitle(prompt)
+    if (!title) return
+    genTitles.set(sessionId, title)
+    saveTitles()
+    pushSend(deps.mainWc(), 'agents:title', { sessionId, title })
+  }
+  // M11 깨어있기(Orca AgentAwakeService) — 상태 원장 push 를 따라 '일하는 중' 탭을 센다. 설정이 끔이면 아무것도 안 막는다.
+  const awake = createAgentAwake({ blocker: powerSaveBlocker, powerMonitor, log: (m) => logMainError('agent awake', new Error(m)) })
+  awake.setMode(settings.awakeMode)
   const forgetTab = (id: string): void => {
     chat?.forget(id)
     tabMeta.delete(id)
+    awake.forget(id)
     if (names.delete(id)) saveNames()
+    if (genTitles.delete(id)) saveTitles()
   }
 
   const hooks = createHookServer(
@@ -107,6 +135,7 @@ export function registerAgentsFeature(deps: {
       ensureChat().hook(e.paneKey, e.payload, e.source)
       // Claude UserPromptSubmit·Gemini BeforeAgent 의 prompt = 사람이 친 첫 요청(터미널에서 친 것도).
       maybeName(e.paneKey, e.payload['prompt'])
+      noteFirstPrompt(e.paneKey, e.payload['prompt'])
     },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null,
     (payload) => deps.onClaudeStatusLine?.(payload)
@@ -127,7 +156,10 @@ export function registerAgentsFeature(deps: {
   const ensureTracker = (): AgentStatusTracker => {
     if (tracker) return tracker
     const t = createAgentStatusTracker({
-      push: (v) => pushSend(deps.mainWc(), 'agents:status', v),
+      push: (v) => {
+        pushSend(deps.mainWc(), 'agents:status', v)
+        awake.observe(v.sessionId, v.state === 'working')
+      },
       write: (id, data) => deps.sessions().write(id, data)
     })
     // 탭이 끝나면 기억한 transcript 경로도 지운다(앱 종료의 detach 는 exit 가 아니라 남는다 — 다시 켜면 바로 연다).
@@ -150,7 +182,8 @@ export function registerAgentsFeature(deps: {
     const m = info.meta
     if (!isAgentId(m['agent']) || typeof m['title'] !== 'string') return null
     const name = names.get(info.id)
-    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}) }
+    const genTitle = genTitles.get(info.id)
+    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}), ...(genTitle ? { genTitle } : {}) }
   }
   const daemon = createAgentDaemon({
     runtimeDir: daemonRuntimeDir(deps.userData),
@@ -197,6 +230,7 @@ export function registerAgentsFeature(deps: {
     const saved = save(next)
     const after = agentLimitsOf(saved)
     if (before.lowPriority !== after.lowPriority || before.memoryBytes !== after.memoryBytes) daemon.setLimits(after)
+    awake.setMode(saved.awakeMode)
     return saved
   })
   handle('agents:statuses', () => tracker?.views() ?? [])
@@ -233,7 +267,24 @@ export function registerAgentsFeature(deps: {
     if (!isAgentId(agent) || typeof text !== 'string' || !text.trim() || !deps.sessions().has(sessionId)) return { ok: false }
     const ok = ensureTracker().submit(sessionId, text)
     if (ok && !text.startsWith('/')) maybeName(sessionId, text)
+    if (ok) noteFirstPrompt(sessionId, text)
     return { ok }
+  })
+  // M11 질문/승인 카드의 답(Orca sendNativeChatAskAnswer) — 키 묶음을 ASK_STEP_MS 간격으로 그대로, 글은 붙여넣기 바이트로. 그 탭이 끝나면 멈춘다.
+  handle('agents:answer', ({ sessionId, groups }) => {
+    const meta = tabMeta.get(sessionId)
+    const steps = (Array.isArray(groups) ? groups : []).slice(0, ASK_MAX_GROUPS).flatMap((g: AskAnswerKeyGroup): string[] => {
+      if (g && typeof g === 'object' && 'raw' in g && typeof g.raw === 'string' && g.raw.length <= 8) return [g.raw]
+      if (g && typeof g === 'object' && 'text' in g && typeof g.text === 'string' && g.text.length <= ASK_MAX_TEXT) return [promptBytes(meta?.agent ?? 'claude', g.text, process.platform === 'win32')]
+      return []
+    })
+    if (!steps.length || !deps.sessions().has(sessionId)) return { ok: false }
+    steps.forEach((data, i) =>
+      setTimeout(() => {
+        if (deps.sessions().has(sessionId)) deps.sessions().write(sessionId, data)
+      }, i * ASK_STEP_MS)
+    )
+    return { ok: true }
   })
   // M10 WS-16 재우기 — 닫기 전에 탭마다 CLI 세션 id 를 받아 둔다(닫으면 transcript 경로를 잊는다).
   handle('agents:resumeIds', ({ sessionIds }) =>
@@ -377,6 +428,7 @@ export function registerAgentsFeature(deps: {
     ensureChat().bind(sessionId, { agent, cwd, startedAt })
     tabMeta.set(sessionId, { agent, cwd })
     if (typeof prompt === 'string') maybeName(sessionId, prompt)
+    noteFirstPrompt(sessionId, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line, ...(noOriel ? { noOriel: true as const } : {}) }
@@ -385,6 +437,7 @@ export function registerAgentsFeature(deps: {
     stop: () => {
       daemon.disconnect() // 세션·데몬은 산다 — 다음에 켜면 다시 붙는다
       chat?.stop()
+      awake.dispose()
       return hooks.stop()
     },
     views: () => tracker?.views() ?? [],

@@ -208,7 +208,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
         ) : view === 'activity' ? (
           <ActivityFeed />
         ) : view === 'sessions' ? (
-          <VaultPanel />
+          <VaultPanel ask={ask} />
         ) : composer ? (
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (

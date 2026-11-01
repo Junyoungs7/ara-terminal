@@ -5,9 +5,13 @@
 // ponytail: main 에서 비동기 fs 로 읽는다(계획 5-3 은 utility process) — 파일 300개 × 128KB 상한이라 충분. 느리면 utilityHost 로.
 import { CHAT_NAME_OPENING } from '@shared/agentOptions'
 import { createHash } from 'node:crypto'
-import { open, readdir, readFile, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { open, readdir, readFile, rm, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { basename, dirname, extname, join, resolve, sep } from 'node:path'
+import { shell as electronShell } from 'electron'
 import { handle } from '../ipc/handle'
+import { startUtilityHost, type UtilityHost } from '../stability/utilityHost'
+import type { SearchFile } from './search'
 import { readJsonWithBackup } from '../util/atomicJson'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import { agentSettingsOf, isAgentId, planAgentLaunch, type AgentId } from '@shared/agents'
@@ -17,8 +21,10 @@ import {
   parseGeminiDocument,
   parseSessionLines,
   resumeCommandText,
+  SEARCH_MIN_CHARS,
   sortSessions,
   type ParsedSession,
+  type VaultSearchResult,
   type VaultSession
 } from '@shared/vault'
 
@@ -30,7 +36,7 @@ const DOC_MAX = 4 * 1024 * 1024
 /** 최신 파일 몇 개만 파싱한다(Orca session-newest-files). */
 const MAX_FILES = 300
 
-type FileHit = { agent: AgentId; path: string; mtimeMs: number; size: number }
+type FileHit = SearchFile
 
 async function walk(dir: string, depth: number, out: string[], ext: RegExp): Promise<void> {
   let ents
@@ -75,6 +81,10 @@ export function registerVaultFeature(deps: {
   /** 세션 기록을 찾을 홈. e2e 는 임시 홈(main/index.ts hookHome) — 시험이 사용자 실제 기록을 읽지 않는다. */
   home: string
   userData: string
+  /** M11 전문 검색 utility process 모듈(기본 out/main/vaultSearchWorker.js). */
+  searchWorker?: string
+  /** M11 삭제 = 휴지통으로(Orca moveToTrash). 시험이 바꾼다. */
+  trash?: (path: string) => Promise<void>
 }): void {
   const roots: { agent: AgentId; dir: string; depth: number; ext: RegExp }[] = [
     { agent: 'claude', dir: join(deps.home, '.claude', 'projects'), depth: 1, ext: /\.jsonl$/i },
@@ -98,7 +108,8 @@ export function registerVaultFeature(deps: {
     }
   }
 
-  handle('vault:list', async ({ cwds }) => {
+  /** 세 뿌리의 세션 파일 전부(최신 먼저). 목록은 앞 MAX_FILES 개, 전문 검색은 전부(SEARCH_MAX_FILES 까지). */
+  const allFiles = async (): Promise<FileHit[]> => {
     const hits: FileHit[] = []
     for (const r of roots) {
       const paths: string[] = []
@@ -107,20 +118,28 @@ export function registerVaultFeature(deps: {
       for (const p of r.agent === 'gemini' ? paths.filter((x) => basename(dirname(x)) === 'chats') : paths) {
         try {
           const st = await stat(p)
-          hits.push({ agent: r.agent, path: p, mtimeMs: st.mtimeMs, size: st.size })
+          hits.push({ agent: r.agent, path: p, mtimeMs: st.mtimeMs, size: st.size, createdAt: st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs })
         } catch {
           // 읽는 사이 지워졌다
         }
       }
     }
     hits.sort((a, b) => b.mtimeMs - a.mtimeMs)
-    const newest = hits.slice(0, MAX_FILES)
-    known.clear()
-    for (const f of newest) known.set(f.path, f)
+    return hits
+  }
+  const hashMap = (cwds: unknown): Map<string, string> => {
     const byHash = new Map<string, string>()
     for (const c of Array.isArray(cwds) ? cwds.filter((x): x is string => typeof x === 'string') : []) {
       for (const v of new Set([c, c.replace(/\//g, '\\'), c.replace(/\\/g, '/')])) byHash.set(createHash('sha256').update(v).digest('hex'), c)
     }
+    return byHash
+  }
+
+  handle('vault:list', async ({ cwds }) => {
+    const newest = (await allFiles()).slice(0, MAX_FILES)
+    known.clear()
+    for (const f of newest) known.set(f.path, f)
+    const byHash = hashMap(cwds)
     const out: VaultSession[] = []
     for (const f of newest) {
       const key = `${f.mtimeMs}:${f.size}`
@@ -130,7 +149,7 @@ export function registerVaultFeature(deps: {
           const p = await parseFile(f, TAIL_LIST, 0)
           // M5 AI-19 채팅 이름 짓기의 한 번짜리 실행(claude -p)은 지난 세션이 아니다 — Orca 도 같은 첫 줄로 숨긴다.
           s = p?.id && !p.firstPrompt?.startsWith(CHAT_NAME_OPENING)
-            ? { agent: f.agent, id: p.id, cwd: p.cwd, file: f.path, at: f.mtimeMs, title: p.title, firstPrompt: p.firstPrompt }
+            ? { agent: f.agent, id: p.id, cwd: p.cwd, file: f.path, at: f.mtimeMs, createdAt: f.createdAt, title: p.title, firstPrompt: p.firstPrompt }
             : null
         } catch {
           s = null
@@ -166,4 +185,88 @@ export function registerVaultFeature(deps: {
     if (!plan.ok) return plan
     return { ok: true, text: resumeCommandText(plan.line, typeof cwd === 'string' ? cwd : null, shell) }
   })
+
+  // ── M11 전문 검색(utility process — 처음 검색할 때 띄운다) ──
+  let worker: UtilityHost | null = null
+  let reqSeq = 0
+  const waiting = new Map<number, (m: Record<string, unknown>) => void>()
+  const ensureWorker = (): UtilityHost =>
+    (worker ??= startUtilityHost({
+      modulePath: deps.searchWorker ?? join(__dirname, 'vaultSearchWorker.js'),
+      serviceName: 'ara-vault-search',
+      onMessage: (m) => {
+        const r = m as Record<string, unknown>
+        const done = typeof r?.['id'] === 'number' ? waiting.get(r['id']) : undefined
+        if (done) {
+          waiting.delete(r['id'] as number)
+          done(r)
+        }
+      },
+      onGiveUp: () => {
+        for (const done of waiting.values()) done({ ok: false, error: 'search worker stopped' })
+        waiting.clear()
+        worker = null
+      }
+    }))
+  handle('vault:search', async ({ query, cwds }): Promise<VaultSearchResult> => {
+    const q = typeof query === 'string' ? query.trim() : ''
+    if (q.length < SEARCH_MIN_CHARS) return { ok: true, sessions: [], scanned: 0, truncated: false }
+    const files = await allFiles()
+    const id = ++reqSeq
+    // 앞선 요청은 버린다(워커도 새 id 를 보면 그만둔다).
+    for (const [k, done] of waiting) {
+      waiting.delete(k)
+      done({ ok: false, error: 'superseded' })
+    }
+    const r = await new Promise<Record<string, unknown>>((res) => {
+      waiting.set(id, res)
+      if (!ensureWorker().post({ id, query: q, files })) {
+        waiting.delete(id)
+        res({ ok: false, error: 'search worker not running' })
+      }
+    })
+    if (r['ok'] !== true) return { ok: false, error: String(r['error'] ?? 'search failed') }
+    const byHash = hashMap(cwds)
+    const out: VaultSession[] = []
+    for (const h of (r['hits'] as { file: FileHit; session: ParsedSession; snippet: string }[]) ?? []) {
+      const f = h.file
+      const s: VaultSession = { agent: f.agent, id: h.session.id!, cwd: h.session.cwd, file: f.path, at: f.mtimeMs, createdAt: f.createdAt, title: h.session.title, firstPrompt: h.session.firstPrompt }
+      // 목록 밖(오래된) 파일도 상세·재개·삭제가 되게 이번에 본 파일로 올린다.
+      known.set(f.path, f)
+      cache.set(f.path, { key: `${f.mtimeMs}:${f.size}`, s })
+      out.push({ ...s, ...(f.agent === 'gemini' && !s.cwd ? { cwd: await geminiCwd(f.path, byHash) } : {}), snippet: h.snippet })
+    }
+    return { ok: true, sessions: out, scanned: Number(r['scanned']) || 0, truncated: r['truncated'] === true }
+  })
+
+  // ── M11 삭제(Orca session-delete: 확인은 렌더러가, 여기선 목록에 있던 파일만 · 휴지통으로) ──
+  // e2e 는 임시 홈의 픽스처를 사용자 휴지통에 넣지 않는다(PC 침범 금지) — 그냥 지운다.
+  const trash = deps.trash ?? (process.env['ARA_E2E'] === '1' ? (p: string) => rm(p, { recursive: true, force: true }) : (p: string) => electronShell.trashItem(p))
+  handle('vault:delete', async ({ file }) => {
+    const f = typeof file === 'string' ? known.get(file) : undefined
+    if (!f) return { ok: false, error: '목록에 없는 파일입니다. 새로 고침 하세요.' }
+    try {
+      for (const p of deleteTargets(f.agent, f.path, deps.home)) {
+        if (existsSync(p)) await trash(p)
+      }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+    known.delete(f.path)
+    cache.delete(f.path)
+    return { ok: true }
+  })
+}
+
+/**
+ * 지울 것들(Orca sessionDeleteRemovals) — 딸린 것 먼저, 기록 파일은 마지막(중간에 실패하면 목록에 남아 다시 지울 수 있게).
+ * claude: `<프로젝트 폴더>/<세션 id>/`(하위 에이전트 기록) · `~/.claude/session-env/<세션 id>/` · 기록 파일. 나머지: 기록 파일만.
+ * 파일 기록 되감기 백업(file-history)은 사용자 파일의 사본이라 남긴다(Orca 같음).
+ */
+export function deleteTargets(agent: AgentId, file: string, home: string): string[] {
+  const path = resolve(file)
+  if (agent !== 'claude') return [path]
+  const stem = basename(path, extname(path))
+  if (!stem || stem === '.' || stem === '..' || stem.includes(sep)) return [path]
+  return [join(dirname(path), stem), join(home, '.claude', 'session-env', stem), path]
 }

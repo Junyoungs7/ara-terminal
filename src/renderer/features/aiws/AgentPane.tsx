@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
-import { FileDiff, FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
+import { FileDiff, FileText, MessageSquare, Plus, RotateCw, SquareTerminal, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, permissionChoicesFor, type AgentId, type AgentPermissionChoice } from '@shared/agents'
 import { effortLabel, type ModelCatalog } from '@shared/agentOptions'
 import type { Worktree } from '@shared/worktrees'
@@ -14,6 +14,7 @@ import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { areWorktreePathsEqual } from '@shared/worktrees'
 import { changeCount, openDiff, useDiffStore } from './diffStore'
+import { resolveAgentTabTitle } from '@shared/agentTabTitle'
 
 // M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
 const CodeEditor = lazy(() => import('./CodeEditor'))
@@ -200,6 +201,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const statusById = useAgentStore((s) => s.statusById)
   const seenById = useAgentStore((s) => s.seenById)
   const chatOn = useAgentStore((s) => s.chatOn)
+  const autoTitle = useAgentStore((s) => s.settings?.tabAutoTitle === true)
   const [picking, setPicking] = useState(false)
   // M6 파일 탭 — 이 작업 단위에서 연 파일과 지금 보이는 파일(있으면 에이전트 탭 대신 에디터가 보인다).
   const allFiles = useCodeStore((s) => s.files)
@@ -305,12 +307,20 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               />
             )}
             <span>{AGENTS[x.agent].label}</span>
-            {x.name && (
-              <span className="aiws-tab-name" data-aiws="tab-name" title={x.name}>
-                {x.name}
-              </span>
-            )}
-            <span className="aiws-tab-state" title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : undefined}>{x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
+            {/* M11 탭 제목(Orca 순서: 채팅 이름 > 지난 세션 제목 > 첫 지시 제목(설정) > 에이전트가 정한 제목). */}
+            <TabTitle title={resolveAgentTabTitle(x, statusById[x.sessionId]?.title, autoTitle)} />
+            {(() => {
+              const d = displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)
+              // 답할 일(승인·질문) = 반전 칩(시안 C).
+              const ask = !x.exited && (d === 'blocked' || d === 'question')
+              return (
+                <span className={'aiws-tab-state' + (ask ? ' ag-ask-chip' : '')} data-aiws={ask ? 'tab-ask' : undefined} title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : undefined}>
+                  {x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${d}`)}
+                </span>
+              )
+            })()}
+            {/* M11 재시작 칩(Orca Restart chip) — 끝난 탭. 끊긴 원격 탭은 [다시 연결]이 맞다(세션이 서버에 산다). */}
+            {(x.exited ? !(x.lost && x.host) : statusById[x.sessionId]?.agentExited) && <RestartChip sessionId={x.sessionId} />}
             <button
               type="button"
               className="aiws-ic"
@@ -419,6 +429,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         </div>
       )}
       {active && active.lost && active.host && !shownFile && !shownDiff && <RemoteCut host={active.host} />}
+      {active && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !shownFile && !shownDiff && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
       {active && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
@@ -442,6 +453,72 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <DiffView worktree={worktree} hidden={!shownDiff} />
         </Suspense>
       )}
+    </div>
+  )
+}
+
+function TabTitle({ title }: { title: string }): JSX.Element | null {
+  return title ? (
+    <span className="aiws-tab-name" data-aiws="tab-name" title={title}>
+      {title}
+    </span>
+  ) : null
+}
+
+/** M11 재시작 — 탭 칩과 끝난 탭 아래 줄이 같은 동작(같은 자리에서 같은 에이전트·같은 폴더로 새로). */
+function useRestart(sessionId: string): { busy: boolean; err: string | null; run: () => void } {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  return {
+    busy,
+    err,
+    run: () => {
+      if (busy) return
+      setBusy(true)
+      setErr(null)
+      void useAgentStore
+        .getState()
+        .restartTab(sessionId)
+        .then(setErr)
+        .finally(() => setBusy(false))
+    }
+  }
+}
+
+function RestartChip({ sessionId }: { sessionId: string }): JSX.Element {
+  const r = useRestart(sessionId)
+  return (
+    <button
+      type="button"
+      className="aiws-ic ag-restart"
+      data-aiws="restart-chip"
+      aria-label={t('aiws.agent.restart')}
+      title={r.err ?? t('aiws.agent.restart')}
+      disabled={r.busy}
+      onClick={(e) => {
+        e.stopPropagation()
+        r.run()
+      }}
+    >
+      <RotateCw />
+    </button>
+  )
+}
+
+/** Orca TerminalProcessExitOverlay — 끝난 탭의 출력은 그대로 두고 아래에 [닫기]·[다시 시작]. */
+function ExitedBar({ sessionId, shellAlive }: { sessionId: string; shellAlive: boolean }): JSX.Element {
+  const r = useRestart(sessionId)
+  return (
+    <div className="aiws-note aiws-exited" role="status" data-aiws="exited-bar">
+      <span>{t(shellAlive ? 'aiws.agent.exitedShell' : 'aiws.agent.exitedNote')}</span>
+      <button type="button" className="btn sec" onClick={() => useAgentStore.getState().closeTab(sessionId)}>
+        {t('aiws.agent.close')}
+      </button>
+      <button type="button" className="btn pri" data-aiws="restart" disabled={r.busy} onClick={r.run}>
+        <RotateCw aria-hidden />
+        {t('aiws.agent.restart')}
+      </button>
+      {r.err && <span className="aiws-err">{r.err}</span>}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { loadMarkdown, Markdown } from '../../components/mdLazy'
 import { registerPasteTarget } from '../../store/pasteFiles'
 import { ChatComposer, useChatInput } from './ChatComposer'
 import type { AgentTab } from './agentStore'
+import { AgentAskCard } from './AgentAskCard'
 
 /** 한 번에 그리는 메시지 수 — 위로 [이전 메시지] 를 누르면 이만큼 더(Orca 의 older-history 창). */
 const PAGE = 200
@@ -152,7 +153,9 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
           <Row key={m.id} m={m} onTerminal={onTerminal} />
         ))}
       </div>
-      {blocked && (
+      {/* M11 질문/승인 카드(훅이 질문·승인 글을 준 막힘) — 없으면 예전처럼 '터미널에서 답하기' 줄. */}
+      {blocked && status?.ask && !tab.exited && <AgentAskCard sessionId={sid} agent={tab.agent} ask={status.ask} onTerminal={onTerminal} />}
+      {blocked && !status?.ask && (
         <div className="aiws-chat-blocked" role="status" data-aiws="chat-blocked">
           <span>{t('aiws.chat.blocked')}</span>
           <button type="button" className="btn sec" onClick={onTerminal}>

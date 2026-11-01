@@ -119,7 +119,16 @@ export type AgentSettings = {
   chatNaming: boolean
   /** M9 R2 Oriel 위치(체크아웃·설치 폴더 — bin/oriel.mjs 가 있는 곳). 빈 값 = 자동(설치본 동봉 자리·개발 PC D:/AI/ai-browser). */
   orielPath: string
+  /** M11 깨어있기(Orca computerAwakeMode — 기본 끔): off · auto(에이전트가 일하는 동안만) · on(늘). */
+  awakeMode: AwakeMode
+  /** M11 첫 지시로 탭 제목 짓기(Orca tabAutoGenerateTitle — 기본 꺼짐). 끄면 에이전트가 정한 제목(OSC)을 쓴다. */
+  tabAutoTitle: boolean
 }
+
+/** M11 깨어있기 모드(Orca shared/computer-awake-mode.ts). */
+export const AWAKE_MODES = ['off', 'auto', 'on'] as const
+export type AwakeMode = (typeof AWAKE_MODES)[number]
+export const isAwakeMode = (v: unknown): v is AwakeMode => (AWAKE_MODES as readonly unknown[]).includes(v)
 
 /** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
 export const MEMORY_CAP_MAX_MB = 1024 * 1024
@@ -135,7 +144,9 @@ export function defaultAgentSettings(): AgentSettings {
     lowPriority: true,
     memoryCapMb: 0,
     chatNaming: true,
-    orielPath: ''
+    orielPath: '',
+    awakeMode: 'off',
+    tabAutoTitle: false
   }
 }
 
@@ -176,6 +187,8 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.memoryCapMb = memoryCapOf(src.memoryCapMb)
   base.chatNaming = src.chatNaming !== false
   base.orielPath = textOf(src.orielPath).trim()
+  base.awakeMode = isAwakeMode(src.awakeMode) ? src.awakeMode : 'off'
+  base.tabAutoTitle = src.tabAutoTitle === true
   return base
 }
 

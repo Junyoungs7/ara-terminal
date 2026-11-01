@@ -52,7 +52,9 @@ export default defineConfig({
           boot: resolve('src/main/boot.ts'),
           index: resolve('src/main/index.ts'),
           hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts'),
-          daemonEntry: resolve('src/main/daemon/daemonEntry.ts')
+          daemonEntry: resolve('src/main/daemon/daemonEntry.ts'),
+          // vaultSearchWorker: M11 지난 세션 전문 검색 utility process(main/vault/feature.ts 가 out/main/vaultSearchWorker.js 를 띄운다).
+          vaultSearchWorker: resolve('src/main/vault/searchWorker.ts')
         }
       }
     }

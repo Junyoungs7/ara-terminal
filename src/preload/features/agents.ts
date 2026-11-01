@@ -1,6 +1,7 @@
 // M3 에이전트 — 기능 틀(docs/feature-module.md)의 preload 다리. preload/index.ts 가 api 에 펼쳐 넣는다.
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, EvApi } from '@shared/ipc'
+import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, AgentTitleEvent, EvApi } from '@shared/ipc'
+import type { AskAnswerKeyGroup } from '@shared/agentAsk'
 import type { AgentId, AgentSettings } from '@shared/agents'
 import type { AgentStatusView } from '@shared/agentHooks'
 import type { AgentChatEvent } from '@shared/agentChat'
@@ -43,6 +44,12 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
       const listener = (_e: IpcRendererEvent, v: AgentMemoryOver): void => cb(v)
       ipcRenderer.on('agents:memoryOver', listener)
       return () => ipcRenderer.removeListener('agents:memoryOver', listener)
-    }
+    },
+    onTitle: (cb: (e: AgentTitleEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, v: AgentTitleEvent): void => cb(v)
+      ipcRenderer.on('agents:title', listener)
+      return () => ipcRenderer.removeListener('agents:title', listener)
+    },
+    answer: (sessionId: string, groups: AskAnswerKeyGroup[]) => ipcRenderer.invoke('agents:answer', { sessionId, groups })
   }
 }

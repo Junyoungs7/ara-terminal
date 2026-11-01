@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { AGENT_IDS, AGENT_VIEWS, AGENTS, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
+import { AGENT_IDS, AGENT_VIEWS, AGENTS, AWAKE_MODES, isAwakeMode, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
 import type { LaunchShell } from '@shared/aiCli'
 import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
@@ -64,6 +64,20 @@ export function AgentSettingsPanel(): JSX.Element {
       {/* M5 AI-19 Orca ChatNamingSetting — 첫 요청이 그 에이전트(모델)로 한 번 더 간다는 것을 그대로 적는다. */}
       <Row label={t('settings.agents.naming')} desc={t('settings.agents.naming.desc')} item="agents.naming">
         <Toggle on={settings.chatNaming} label={t('settings.agents.naming')} onChange={(chatNaming) => save({ ...settings, chatNaming })} />
+      </Row>
+      {/* M11 Orca tabAutoGenerateTitle(기본 꺼짐) — 끄면 에이전트가 정한 제목. */}
+      <Row label={t('settings.agents.tabTitle')} desc={t('settings.agents.tabTitle.desc')} item="agents.tabTitle">
+        <Toggle on={settings.tabAutoTitle} label={t('settings.agents.tabTitle')} onChange={(tabAutoTitle) => save({ ...settings, tabAutoTitle })} />
+      </Row>
+      {/* M11 Orca AgentAwakeSetting — 항상 / 에이전트가 일할 때만 / 끔(기본). */}
+      <Row label={t('settings.agents.awake')} desc={t('settings.agents.awake.desc')} item="agents.awake">
+        <select className="aiws-input" data-field="agents.awake" value={settings.awakeMode} onChange={(e) => isAwakeMode(e.target.value) && save({ ...settings, awakeMode: e.target.value })}>
+          {AWAKE_MODES.map((m) => (
+            <option key={m} value={m}>
+              {t('settings.agents.awake.' + m)}
+            </option>
+          ))}
+        </select>
       </Row>
       {/* M5 AI-18 Orca ChatPermissionSetting — 채팅은 그 터미널 세션이라 에이전트 권한을 따른다. 에이전트별 지금 값을 보여 준다. */}
       <Row label={t('settings.agents.chatPermission')} desc={t('settings.agents.chatPermission.desc')} item="agents.chatPermission">

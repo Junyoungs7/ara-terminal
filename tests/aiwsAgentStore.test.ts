@@ -26,6 +26,7 @@ const ev = {
       return () => {}
     }),
     onName: vi.fn(() => () => {}), // M5 AI-19
+    onTitle: vi.fn(() => () => {}), // M11
     // M8 R4 끊긴 원격 탭 닫기·다시 연결
     killRemote: vi.fn(async () => true),
     reconnect: vi.fn(async () => ({ ok: true as const, tabs: [] }))
@@ -81,6 +82,26 @@ describe('agentStore', () => {
     const tab = m.useAgentStore.getState().tabs.find((t) => t.sessionId === r.sessionId)!
     expect(tab).toMatchObject({ exited: true, lost: true })
     m.useAgentStore.getState().closeTab(r.sessionId)
+  })
+
+  it('M11 재시작 칩: 끝난 탭 자리에 같은 에이전트·같은 폴더로 새 탭(옛 탭은 닫힘, 지난 세션 제목 이어 감), 첫 지시 제목은 생성', async () => {
+    const { useAiwsStore } = await import('../src/renderer/features/aiws/store')
+    useAiwsStore.setState({ worktreesByRepo: { r: [{ id: 'wr', repoId: 'r', path: '/repo-r', displayName: 'r' } as never] } })
+    const st = m.useAgentStore.getState()
+    const a = await st.launchAgent({ agent: 'codex', worktreeId: 'wr', cwd: '/repo-r', prompt: 'Can you please fix the login bug?', vaultTitle: '지난 제목' })
+    const b = await st.launchAgent({ agent: 'gemini', worktreeId: 'wr', cwd: '/repo-r' })
+    if (!a.ok || !b.ok) throw new Error('x')
+    expect(m.useAgentStore.getState().tabs[0]).toMatchObject({ genTitle: 'Fix the login bug', vaultTitle: '지난 제목' })
+    expect(await st.restartTab(a.sessionId)).toBeNull() // 살아 있는 탭은 아무 일도 안 한다
+    exits.get(a.sessionId)!()
+    expect(await m.useAgentStore.getState().restartTab(a.sessionId)).toBeNull()
+    const s = m.useAgentStore.getState()
+    expect(ev.agents.launch).toHaveBeenLastCalledWith('codex', '/repo-r', undefined, undefined, undefined, undefined)
+    expect(s.tabs.map((x) => x.agent)).toEqual(['codex', 'gemini']) // 같은 자리
+    expect(s.tabs[0].sessionId).not.toBe(a.sessionId)
+    expect(s.tabs[0]).toMatchObject({ exited: false, vaultTitle: '지난 제목' })
+    expect(s.activeTabByWorktree.wr).toBe(s.tabs[0].sessionId)
+    useAiwsStore.setState({ worktreesByRepo: {} })
   })
 
   it('실패는 탭을 안 만든다', async () => {

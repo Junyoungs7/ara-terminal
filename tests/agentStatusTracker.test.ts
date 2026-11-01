@@ -1,6 +1,6 @@
 // M3 R2 — main 상태 원장(status.ts): 헤드리스 화면 판정 + 훅 + 첫 지시 전달(준비된 뒤 입력). 진짜 CLI 대신 화면 바이트를 흘린다.
 import { afterEach, describe, expect, it } from 'vitest'
-import { composerReady, createAgentStatusTracker, promptBytes, submitDelayMs, type AgentStatusTracker } from '../src/main/agents/status'
+import { composerReady, createAgentStatusTracker, promptBytes, shellPromptVisible, submitDelayMs, type AgentStatusTracker } from '../src/main/agents/status'
 import { detectScreen } from '../src/shared/agentScreen'
 import type { AgentStatusView } from '../src/shared/agentHooks'
 import type { Session } from '../src/shared/types'
@@ -127,5 +127,65 @@ describe('원장', () => {
     t!.submit('s1', 'third')
     await sleep(700)
     expect(written).toHaveLength(4)
+  })
+
+  it('M11 탭 제목: 셸이 정한 제목은 안 쓰고, 입력 상자를 본 뒤 Claude 가 정한 제목은 글리프를 떼고 싣는다', async () => {
+    const { pushed } = make()
+    t!.track({ sessionId: 's1', agent: 'claude' })
+    const osc = (title: string): Uint8Array => new TextEncoder().encode(`]0;${title}`)
+    t!.data(meta('s1'), osc('C:\Windows\pwsh.exe'))
+    t!.data(meta('s1'), crlf('PS C:\work> claude'))
+    await sleep(400)
+    expect(pushed.some((v) => v.title)).toBe(false)
+    t!.data(meta('s1'), crlf('Welcome to Claude Code', '', RULE, '❯ ', RULE, '  ? for shortcuts'))
+    t!.data(meta('s1'), osc('✳ Fix login bug'))
+    await until(() => pushed.at(-1)?.title === 'Fix login bug')
+    // 스피너 글리프(일하는 중 표시)로 바뀌어도 제목은 같다 — 상태는 화면 판정이 따로 정한다.
+    t!.data(meta('s1'), osc('⠂ Fix login bug'))
+    await sleep(400)
+    expect(pushed.at(-1)?.title).toBe('Fix login bug')
+  })
+
+  it('M11 질문/승인 카드 글: 훅 PermissionRequest·AskUserQuestion 이 막힘에 글을 싣고, 풀리면 내린다', async () => {
+    const { pushed } = make()
+    t!.track({ sessionId: 's1', agent: 'claude' })
+    t!.hook({ source: 'claude', paneKey: 's1', payload: { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm -rf build' } } })
+    expect(JSON.parse(pushed.at(-1)!.ask!)).toEqual({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
+    t!.hook({ source: 'claude', paneKey: 's1', payload: { hook_event_name: 'PostToolUse', tool_name: 'Bash' } })
+    expect(pushed.at(-1)).toMatchObject({ state: 'working' })
+    expect(pushed.at(-1)?.ask).toBeUndefined()
+    const q = { questions: [{ question: 'Which?', options: [{ label: 'A' }, { label: 'B' }] }] }
+    t!.hook({ source: 'claude', paneKey: 's1', payload: { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: q } })
+    expect(pushed.at(-1)).toMatchObject({ state: 'blocked', kind: 'question' })
+    expect(JSON.parse(pushed.at(-1)!.ask!)).toEqual(q)
+  })
+
+  it('M11 에이전트만 끝남: 입력 상자를 본 뒤 셸 프롬프트가 마지막 줄이면 agentExited, 다시 입력 상자가 보이면 풀린다', async () => {
+    const { pushed } = make()
+    t!.track({ sessionId: 's1', agent: 'claude' })
+    t!.data(meta('s1'), crlf('PS C:' + String.fromCharCode(92) + 'work> claude'))
+    await sleep(400)
+    expect(pushed.some((v) => v.agentExited)).toBe(false) // 시작 전 셸은 끝남이 아니다
+    t!.data(meta('s1'), crlf('Welcome to Claude Code', '', RULE, '❯ ', RULE))
+    await sleep(400)
+    t!.data(meta('s1'), crlf('', 'Resume this session with:', 'claude --resume 1234', 'PS C:' + String.fromCharCode(92) + 'work>'))
+    await until(() => pushed.at(-1)?.agentExited === true)
+    t!.data(meta('s1'), crlf('Welcome to Claude Code', '', RULE, '❯ ', RULE))
+    await until(() => pushed.at(-1)?.agentExited === undefined)
+  })
+})
+
+describe('shellPromptVisible', () => {
+  const bs = String.fromCharCode(92)
+  it.each([
+    ['PS C:' + bs + 'work>', true],
+    ['C:' + bs + 'work>', true],
+    ['user@host:~/repo$', true],
+    ['~/repo %', true],
+    ['❯ ', false],
+    ['› Ask Codex to do anything', false],
+    ['Total cost: $3', false]
+  ])('%s → %s', (line, want) => {
+    expect(shellPromptVisible('banner' + String.fromCharCode(10) + line + String.fromCharCode(10))).toBe(want)
   })
 })

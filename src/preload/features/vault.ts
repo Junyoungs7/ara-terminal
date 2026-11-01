@@ -7,6 +7,8 @@ export const vaultBridge: Pick<EvApi, 'vault'> = {
   vault: {
     list: (cwds: string[]) => ipcRenderer.invoke('vault:list', { cwds }),
     detail: (file: string) => ipcRenderer.invoke('vault:detail', { file }),
-    resumeCommand: (agent: AgentId, id: string, cwd: string | null) => ipcRenderer.invoke('vault:resumeCommand', { agent, id, cwd })
+    resumeCommand: (agent: AgentId, id: string, cwd: string | null) => ipcRenderer.invoke('vault:resumeCommand', { agent, id, cwd }),
+    search: (query: string, cwds: string[]) => ipcRenderer.invoke('vault:search', { query, cwds }),
+    delete: (file: string) => ipcRenderer.invoke('vault:delete', { file })
   }
 }

@@ -44,6 +44,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.default', 'settings.agents.default'),
       i('agents.rc', 'settings.agents.rc', 'settings.agents.rc.desc'),
       i('agents.naming', 'settings.agents.naming', 'settings.agents.naming.desc'),
+      i('agents.tabTitle', 'settings.agents.tabTitle', 'settings.agents.tabTitle.desc'),
+      i('agents.awake', 'settings.agents.awake', 'settings.agents.awake.desc'),
       i('agents.chatPermission', 'settings.agents.chatPermission', 'settings.agents.chatPermission.desc'),
       i('agents.oriel', 'settings.agents.oriel', 'settings.agents.oriel.missing'),
       i('agents.lowPriority', 'settings.agents.lowPriority', 'settings.agents.lowPriority.desc'),

@@ -22,7 +22,18 @@ export type VaultSession = {
   /** CLI 가 붙인 제목(claude custom-title·ai-title). */
   title: string | null
   firstPrompt: string | null
+  /** M11 만든 시각(ms, 파일 birthtime — 없으면 mtime). 정렬 '만든 시각'(Orca AiVaultSort 'created'). */
+  createdAt?: number
+  /** M11 전문 검색이 찾은 자리(검색 결과 줄에만). */
+  snippet?: string
 }
+
+/** M11 전문 검색 결과. tooShort = 두 글자 미만(검색 안 함). */
+export type VaultSearchResult = { ok: true; sessions: VaultSession[]; scanned: number; truncated: boolean } | { ok: false; error: string }
+export type VaultDeleteResult = { ok: true } | { ok: false; error: string }
+/** 전문 검색 최소 글자 수·최대 결과(Orca 는 SQLite FTS — 아라는 utility process 가 매번 읽는다). */
+export const SEARCH_MIN_CHARS = 2
+export const SEARCH_MAX_RESULTS = 200
 
 export type VaultDetail = { ok: true; session: VaultSession; turns: VaultTurn[] } | { ok: false; error: string }
 
@@ -53,7 +64,16 @@ export function textOfContent(content: unknown): string | null {
   return parts.length ? parts.join('\n') : null
 }
 
-type Acc = { id: string | null; cwd: string | null; title: string | null; aiTitle: string | null; firstPrompt: string | null; turns: VaultTurn[] }
+type Acc = {
+  id: string | null
+  cwd: string | null
+  title: string | null
+  aiTitle: string | null
+  firstPrompt: string | null
+  turns: VaultTurn[]
+  /** M11 전문 검색 — 사람·에이전트 글(하네스 주입 제외)을 자르기 전에 받는다. */
+  sink?: (text: string) => void
+}
 
 function pushTurn(acc: Acc, role: VaultTurn['role'], text: string | null, keep: number): void {
   if (!text) return
@@ -61,6 +81,7 @@ function pushTurn(acc: Acc, role: VaultTurn['role'], text: string | null, keep: 
     if (INJECTED.test(text)) return
     acc.firstPrompt ??= text.trim()
   }
+  acc.sink?.(text)
   acc.turns.push({ role, text: text.length > TURN_CHARS ? text.slice(0, TURN_CHARS) + '…' : text })
   if (acc.turns.length > keep) acc.turns.shift()
 }
@@ -95,8 +116,8 @@ function consume(agent: AgentId, acc: Acc, r: Rec, keep: number): void {
 export type ParsedSession = { id: string | null; cwd: string | null; title: string | null; firstPrompt: string | null; turns: VaultTurn[] }
 
 /** jsonl 줄들 → 세션 요지. 깨진 줄(머리·꼬리 경계·쓰는 중)은 건너뛴다. */
-export function parseSessionLines(agent: AgentId, lines: Iterable<string>, keep = DETAIL_TURNS): ParsedSession {
-  const acc: Acc = { id: null, cwd: null, title: null, aiTitle: null, firstPrompt: null, turns: [] }
+export function parseSessionLines(agent: AgentId, lines: Iterable<string>, keep = DETAIL_TURNS, sink?: (text: string) => void): ParsedSession {
+  const acc: Acc = { id: null, cwd: null, title: null, aiTitle: null, firstPrompt: null, turns: [], sink }
   for (const line of lines) {
     if (!line.trim()) continue
     let r: Rec | null = null
@@ -111,8 +132,8 @@ export function parseSessionLines(agent: AgentId, lines: Iterable<string>, keep 
 }
 
 /** gemini 옛 형식(json 문서 하나: sessionId·messages[]). */
-export function parseGeminiDocument(text: string, keep = DETAIL_TURNS): ParsedSession {
-  const acc: Acc = { id: null, cwd: null, title: null, aiTitle: null, firstPrompt: null, turns: [] }
+export function parseGeminiDocument(text: string, keep = DETAIL_TURNS, sink?: (text: string) => void): ParsedSession {
+  const acc: Acc = { id: null, cwd: null, title: null, aiTitle: null, firstPrompt: null, turns: [], sink }
   let doc: Rec | null = null
   try {
     doc = rec(JSON.parse(text))
@@ -164,4 +185,16 @@ export function resumeCommandText(line: string, cwd: string | null, shell: Launc
   if (shell === 'powershell') return `Set-Location -LiteralPath ${q}; ${line}`
   if (shell === 'cmd') return `cd /d ${q} && ${line}`
   return `cd ${q} && ${line}`
+}
+
+/**
+ * M11 전문 검색의 맞춤 — 대소문자 무시 부분 일치(Orca 는 FTS5 토큰 검색). 처음 맞은 자리 앞뒤로 잘라 한 줄 조각을 돌려준다.
+ * 줄바꿈은 공백으로. 맞지 않으면 null.
+ */
+export function matchSnippet(text: string, needle: string, radius = 60): string | null {
+  const i = text.toLowerCase().indexOf(needle)
+  if (i < 0) return null
+  const from = Math.max(0, i - radius)
+  const to = Math.min(text.length, i + needle.length + radius)
+  return ((from > 0 ? '…' : '') + text.slice(from, to) + (to < text.length ? '…' : '')).replace(/\s+/g, ' ').trim()
 }

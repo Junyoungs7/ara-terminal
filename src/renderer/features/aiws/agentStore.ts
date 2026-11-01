@@ -14,6 +14,7 @@ import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
 import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
 import { clearDraft, readChatOn, writeChatOn } from './chatDraft'
+import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
 
 export type AgentTab = {
   sessionId: string
@@ -32,6 +33,10 @@ export type AgentTab = {
   name?: string
   /** M8 DM-05 원격(관리형 서버 hostKey). 잃음 = SSH 끊김 — 세션은 서버에 살아 [다시 연결]로 이어 붙는다. */
   host?: string
+  /** M11 지난 세션에서 재개했을 때 그 세션 제목(Orca aiVaultTitle). */
+  vaultTitle?: string
+  /** M11 첫 지시로 지은 제목(Orca generatedTitle — 설정 tabAutoTitle 이 켜졌을 때만 보인다). */
+  genTitle?: string
 }
 
 type AgentState = {
@@ -57,7 +62,9 @@ type AgentState = {
   loadAgents: (force?: boolean) => Promise<void>
   saveSettings: (next: AgentSettings) => Promise<void>
   /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
-  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions }) => Promise<AgentLaunchResult>
+  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions; vaultTitle?: string }) => Promise<AgentLaunchResult>
+  /** M11 재시작 칩(Orca Restart chip) — 끝난 탭(또는 에이전트만 끝난 탭) 자리에서 같은 에이전트·같은 폴더로 새로 띄운다. 실패면 사유. */
+  restartTab: (sessionId: string) => Promise<string | null>
   setActiveTab: (worktreeId: string, sessionId: string) => void
   /** M8 DM-05 끊긴 원격 탭 [다시 연결] — 그 서버의 끊긴 탭을 모두 같은 세션으로 되살린다. 실패면 사유. */
   reconnectHost: (hostKey: string) => Promise<string | null>
@@ -99,19 +106,41 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set({ settings: await window.ev.agents.setSettings(next) })
   },
 
-  launchAgent: async ({ agent, worktreeId, cwd, prompt, resume, options }) => {
+  launchAgent: async ({ agent, worktreeId, cwd, prompt, resume, options, vaultTitle }) => {
     // M8 DM-05 실행 위치 = 그 작업 단위의 프로젝트 자리(원격 저장소면 그 서버). 모든 실행 길(새 작업·+ 탭·지난 세션 재개)이 여기를 지난다.
     const host = hostOfWorktree(worktreeId)
     const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options, host)
     if (!r.ok) return r
     // M9 R2 Oriel 이 없어 웹 도구 없이 띄웠다(main 이 앱 실행 중 처음 한 번만 알려 준다). 설치 안내는 설정 › 에이전트.
     if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body') })
-    const tab: AgentTab ={ sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}) }
+    // M11 실행 지시로 지은 제목 — main 도 같은 규칙으로 짓지만 그 push 는 launch 응답보다 먼저 와 버려진다(되살리기용으로 main 이 남긴다).
+    const genTitle = prompt ? deriveGeneratedTabTitle(prompt) : null
+    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
     writeChatOn(chatOn)
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))
     watchExit(r.sessionId)
     return r
+  },
+
+  restartTab: async (sessionId) => {
+    const old = get().tabs.find((x) => x.sessionId === sessionId)
+    // 끝난 탭(셸까지 끝남) 또는 에이전트만 끝나고 셸이 남은 탭(main 화면 판정 agentExited — 그 셸은 닫는다).
+    if (!old || !(old.exited || get().statusById[sessionId]?.agentExited)) return null
+    const w = Object.values(useAiwsStore.getState().worktreesByRepo)
+      .flat()
+      .find((x) => x.id === old.worktreeId)
+    if (!w) return t('aiws.agent.restart.noWorktree')
+    const r = await get().launchAgent({ agent: old.agent, worktreeId: old.worktreeId, cwd: w.path, ...(old.vaultTitle ? { vaultTitle: old.vaultTitle } : {}) })
+    if (!r.ok) return r.error
+    // 새 탭(끝에 붙음)을 옛 탭 자리로 옮기고 옛 탭은 닫는다(셸이 남아 있으면 closeTab 이 끈다).
+    set((s) => {
+      const fresh = s.tabs.find((x) => x.sessionId === r.sessionId)
+      return fresh ? { tabs: s.tabs.filter((x) => x !== fresh).flatMap((x) => (x.sessionId === sessionId ? [x, fresh] : [x])) } : {}
+    })
+    get().closeTab(sessionId)
+    get().setActiveTab(old.worktreeId, r.sessionId)
+    return null
   },
 
   setActiveTab: (worktreeId, sessionId) => set((s) => ({ activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: sessionId } })),
@@ -260,7 +289,7 @@ function restoreTabs(list: AgentTabInfo[]): void {
     pending = pending.filter((x) => {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
       // M8 R4 cut = 앱을 다시 켰을 때의 원격 탭 — 붙지 않은 채 '끊김'으로(사람이 [다시 연결]).
-      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}) })
+      if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}), ...(x.genTitle ? { genTitle: x.genTitle } : {}) })
       return !w
     })
     if (found.length) {
@@ -294,6 +323,8 @@ function startStatus(): void {
   window.ev.agents.onStatus(apply)
   // M5 AI-19 — 이름이 정해지면 그 탭에(탭이 아직 없으면 버린다 — 되살릴 때 tabs() 가 다시 준다).
   window.ev.agents.onName((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, name: e.name } : x)) })))
+  // M11 첫 지시로 지은 제목 — 터미널에서 친 첫 요청(훅)·채팅 입력. 실행 지시의 것은 launchAgent 가 바로 붙인다.
+  window.ev.agents.onTitle((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, genTitle: e.title } : x)) })))
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
   void window.ev.agents
     .tabs()

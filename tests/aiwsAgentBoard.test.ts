@@ -89,7 +89,8 @@ const ev = {
       pushStatus = cb
       return () => {}
     }),
-    onName: vi.fn(() => () => {}) // M5 AI-19
+    onName: vi.fn(() => () => {}), // M5 AI-19
+    onTitle: vi.fn(() => () => {}) // M11
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
 }

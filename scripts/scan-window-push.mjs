@@ -16,7 +16,8 @@ const SEND_LIKE = /\.(send|postMessage)\(/
 //  - engine.send()          : #123 아라 엔진 — claude 프로세스의 **stdin** 으로 나간다(창이 아니다)
 //  - worker.postMessage()   : M0 FD-02 멈춤 감시 worker thread(창이 아니다)
 //  - child.postMessage()    : M0 0-6 utilityProcess(창이 아니다)
-const KNOWN_NON_PUSH = /\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(|\bworker\.postMessage\(|\bchild\.postMessage\(/
+//  - parentPort.postMessage(): M11 utility process 안에서 main 으로(창이 아니다 — main/vault/searchWorker.ts)
+const KNOWN_NON_PUSH = /\bparentPort\.postMessage\(|\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(|\bworker\.postMessage\(|\bchild\.postMessage\(/
 
 function walk(dir) {
   let out = []

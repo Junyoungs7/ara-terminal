@@ -59,7 +59,8 @@ import type {
   WorktreeStats
 } from './worktrees'
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
-import type { VaultDetail, VaultSession } from './vault'
+import type { VaultDeleteResult, VaultDetail, VaultSearchResult, VaultSession } from './vault'
+import type { AskAnswerKeyGroup } from './agentAsk'
 import type { ManagedConsentPlan, ManagedRecord } from './managedServers'
 import type { RunOnHost } from './runOn'
 import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
@@ -70,7 +71,9 @@ export type LegacyAiNotice = { projects: string[]; remote: number }
 /** noOriel: Oriel 이 없어 웹 도구 없이 띄웠다(앱 실행 중 처음 한 번만 — 알림 센터 한 줄). */
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true }
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string }
+/** M11 첫 지시로 지은 탭 제목(push 'agents:title' — Orca deriveGeneratedTabTitle). 보일지는 설정 tabAutoTitle. */
+export type AgentTitleEvent = { sessionId: string; title: string }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
 export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice }
 /** M5 AI-19 채팅 이름(push 'agents:name'). */
@@ -634,11 +637,16 @@ export type InvokeContract = {
   'agents:killRemote': { req: { hostKey: string; sessionId: string }; res: boolean }
   // M10 WS-16 재우기 — 탭(세션)들의 CLI 세션 id(깨울 때 resume). 모르면 null.
   'agents:resumeIds': { req: { sessionIds: string[] }; res: Record<string, string | null> }
+  // M11 질문/승인 카드의 답 — 키 묶음을 ASK_STEP_MS 간격으로 그 탭 PTY 에(Orca sendNativeChatAskAnswer). 글 묶음은 붙여넣기로.
+  'agents:answer': { req: { sessionId: string; groups: AskAnswerKeyGroup[] }; res: { ok: boolean } }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
   'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
   // 상세는 마지막 목록에 있던 파일만 연다.
   'vault:detail': { req: { file: string }; res: VaultDetail }
   'vault:resumeCommand': { req: { agent: AgentId; id: string; cwd: string | null }; res: { ok: true; text: string } | { ok: false; error: string } }
+  // M11 세션 전문 검색(utility process) · 삭제(휴지통 — 목록에 있던 파일만).
+  'vault:search': { req: { query: string; cwds: string[] }; res: VaultSearchResult }
+  'vault:delete': { req: { file: string }; res: VaultDeleteResult }
   // M7 R1 WS-10 git 조회(main/git/feature.ts) — 읽기만. 이름은 Orca git-inspection-api. 공유 API = agent_talk/m7-shared-api.md.
   'git:status': { req: { worktreePath: string; host?: string }; res: GitStatusResult }
   'git:branchCompare': { req: { worktreePath: string; baseRef?: string; host?: string }; res: GitBranchCompareResult }
@@ -1318,6 +1326,9 @@ export type EvApi = {
     onName(cb: (e: AgentNameEvent) => void): () => void
     /** M4 R3 메모리 상한 넘음(알림 센터로). */
     onMemoryOver(cb: (e: AgentMemoryOver) => void): () => void
+    /** M11 첫 지시로 지은 탭 제목 · 질문/승인 카드 답 보내기. */
+    onTitle(cb: (e: AgentTitleEvent) => void): () => void
+    answer(sessionId: string, groups: AskAnswerKeyGroup[]): Promise<{ ok: boolean }>
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */
     legacyNotice(): Promise<LegacyAiNotice | null>
   }
@@ -1326,6 +1337,8 @@ export type EvApi = {
     list(cwds: string[]): Promise<VaultSession[]>
     detail(file: string): Promise<VaultDetail>
     resumeCommand(agent: AgentId, id: string, cwd: string | null): Promise<InvokeRes<'vault:resumeCommand'>>
+    search(query: string, cwds: string[]): Promise<VaultSearchResult>
+    delete(file: string): Promise<VaultDeleteResult>
   }
   // M7 R1 git 조회(preload/features/gitInspect.ts). diff 는 연 파일만 부른다.
   gitInspect: {

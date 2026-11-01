@@ -13,6 +13,7 @@ import { applyHookEvent, HOOK_SILENT_MS, resolveStatus, type AgentStatusView, ty
 import type { Session } from '@shared/types'
 import type { SessionTap } from '../sessions/MainSessionManager'
 import type { HookEvent } from './hooks'
+import { agentLiveTitle } from '@shared/agentTabTitle'
 
 /** 출력 뒤 판정까지(스로틀). 이 사이 출력은 한 번으로 묶인다. */
 const EVAL_MS = 250
@@ -62,6 +63,20 @@ export function submitDelayMs(agent: AgentId, text: string, win: boolean): numbe
   return 500 + Math.ceil(bytes / (win ? 64 : 4096)) + (agent === 'codex' && win ? text.length * 3 : 0)
 }
 
+/**
+ * M11 에이전트가 끝나고 셸만 남았나 — 아라 에이전트 탭은 셸에 실행 줄을 친다(Orca 는 패인 프로세스 종료로 본다). 입력 상자를 한 번 본 뒤
+ * 화면 마지막 줄이 셸 프롬프트면 끝난 것. PowerShell `PS C:\x>` · cmd `C:\x>` · posix `user@host:~/x$`·`~/x %`.
+ * ponytail: 프롬프트 모양 판정 — 사용자가 프롬프트를 크게 바꿨으면 못 알아본다(그때는 셸이 끝날 때만 재시작 칩).
+ */
+export function shellPromptVisible(screen: string): boolean {
+  const last = screen
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim())
+    .pop() ?? ''
+  return /^PS .+>$/.test(last) || /^[A-Za-z]:\\[^>]*>$/.test(last) || /^\S*[@:~/]\S*\s?[$#%]$/.test(last)
+}
+
 type Entry = {
   agent: AgentId
   term: Terminal
@@ -77,6 +92,8 @@ type Entry = {
   promptFailed: boolean
   /** 입력 상자를 한 번이라도 봤다 — 그 뒤의 채팅 입력은 일하는 중에도 넣는다(Claude 는 턴 중 입력을 줄 세운다). */
   composerSeen: boolean
+  /** M11 에이전트가 끝나고 셸 프롬프트만 남았다(재시작 칩). 입력 상자가 다시 보이면 풀린다. */
+  agentExited: boolean
 }
 
 export type AgentStatusTracker = SessionTap & {
@@ -110,7 +127,11 @@ export function createAgentStatusTracker(deps: {
   }
 
   const publish = (id: string, e: Entry): void => {
-    const view = { ...resolveStatus(id, e.hook, e.screen, e.view, now()), ...(e.promptFailed ? { promptFailed: true } : {}) }
+    // M11 탭 제목: 에이전트가 OSC 로 정한 작업 요약 — 입력 상자를 본 뒤(셸이 아니라 에이전트가 쓴 제목)만. 상태 글리프는 떼서 비교한다(스피너마다 밀지 않게).
+    const title = e.composerSeen ? agentLiveTitle(e.agent, e.title) : null
+    // 앞 상태를 그대로 쓰는 갈래(화면 판정 건너뜀)에서도 제목·끝남은 지금 값으로.
+    const { title: _title, agentExited: _exited, ...base } = resolveStatus(id, e.hook, e.screen, e.view, now())
+    const view = { ...base, ...(e.promptFailed ? { promptFailed: true } : {}), ...(title ? { title } : {}), ...(e.agentExited ? { agentExited: true as const } : {}) }
     if (JSON.stringify(view) === JSON.stringify(e.view)) return
     e.view = view
     deps.push(view)
@@ -152,7 +173,10 @@ export function createAgentStatusTracker(deps: {
     const input = screenOf(e)
     const d = detectScreen(e.agent, input)
     if (!d.skip) e.screen = d
-    if (e.screen && composerReady(e.agent, input, e.screen)) e.composerSeen = true
+    // 마지막 줄이 셸 프롬프트면 에이전트는 없다(위에 남은 입력 상자 그림은 지난 화면이다).
+    const shell = shellPromptVisible(input.screen)
+    if (!shell && e.screen && composerReady(e.agent, input, e.screen)) e.composerSeen = true
+    e.agentExited = e.composerSeen && shell
     deliver(id, e, input)
     publish(id, e)
   }
@@ -180,7 +204,8 @@ export function createAgentStatusTracker(deps: {
         lastOutputAt: now(),
         prompt: prompt ? { text: prompt, deadline: now() + promptTimeout } : null,
         promptFailed: false,
-        composerSeen: false
+        composerSeen: false,
+        agentExited: false
       }
       term.onTitleChange((t) => {
         e.title = t
