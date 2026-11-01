@@ -10813,6 +10813,163 @@ button.sb-seg.upd:hover .val {
   }
 }
 
+/* M7 R2 WS-12 소스 제어 — 오른쪽 패널(AI 작업 공간 오른쪽 끝, 아이콘 바 [소스 제어]). 폭은 왼쪽 목록(.aiws-search)과 같다. */
+.aiws-scm {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-canvas);
+  border-left: 1px solid var(--line);
+}
+.scm-branch {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.scm-commit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.scm-message {
+  resize: vertical;
+}
+.scm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.scm-primary {
+  flex: 1;
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--glass-hi);
+  color: var(--text-hi);
+  font: inherit;
+  cursor: var(--cur-hand, pointer);
+}
+.scm-primary:disabled {
+  background: var(--bg-raised);
+  color: var(--text-lo);
+  cursor: var(--cur-arrow, default);
+}
+.scm-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.scm-more > button {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-mid);
+  font: inherit;
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.scm-more > button:hover:not(:disabled) {
+  background: var(--glass-hover);
+}
+.scm-more > button:disabled {
+  color: var(--text-lo);
+  cursor: var(--cur-arrow, default);
+}
+.scm-msg {
+  padding: var(--sp-2) var(--sp-4);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.scm-msg.err {
+  color: var(--text-hi);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+.scm-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: var(--sp-4);
+}
+.scm-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-4) var(--sp-1);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.scm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-3);
+}
+.scm-row:hover {
+  background: var(--glass-hover);
+}
+.scm-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+  border: none;
+  background: none;
+  color: var(--text-mid);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.scm-name {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-hi);
+}
+.scm-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.scm-st {
+  flex: none;
+  min-width: var(--sp-5);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  text-align: center;
+  color: var(--text-lo);
+}
+.scm-st.modified,
+.scm-st.renamed,
+.scm-st.copied {
+  color: var(--warn);
+}
+.scm-st.added,
+.scm-st.untracked {
+  color: var(--ok);
+}
+.scm-st.deleted,
+.scm-st.conflicted {
+  color: var(--err);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    §PRESS — 누름 반응(:active).  2026-09-04
    ══════════════════════════════════════════════════════════════════════════

@@ -17,6 +17,8 @@ import { QuickOpen } from './QuickOpen'
 import { SearchPanel } from './SearchPanel'
 import { isMac } from '@shared/keymap'
 import { OPEN_FILE_EVENT } from '@shared/codeFiles'
+import { SCM_STATE_EVENT, SCM_TOGGLE_EVENT } from '@shared/scm'
+import { ScmPanel } from './ScmPanel'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -143,6 +145,18 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
     if (v !== 'worktree' && v !== 'search') useAgentStore.getState().setView('worktree')
   }
 
+  // M7 R2 WS-12 오른쪽 [소스 제어] 패널 — RightBar(진입 청크)가 창 이벤트로 켜고 끈다. 열림은 여기가 쥐고 알린다(눌림 표시).
+  const [scm, setScm] = useState(false)
+  useEffect(() => {
+    const h = (): void => setScm((v) => !v)
+    window.addEventListener(SCM_TOGGLE_EVENT, h)
+    return () => window.removeEventListener(SCM_TOGGLE_EVENT, h)
+  }, [])
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: scm }))
+  }, [scm])
+  useEffect(() => () => void window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: false })), [])
+
   const remove = async (w: Worktree): Promise<void> => {
     const branch = shortBranch(w) || '-'
     const yes = await ask({
@@ -199,6 +213,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           </div>
         )}
       </div>
+      {scm && <ScmPanel ask={ask} />}
     </div>
   )
 }

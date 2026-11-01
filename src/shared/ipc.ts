@@ -4,6 +4,7 @@
 import type { LaunchShell } from './aiCli'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { SearchFile, SearchOptions } from './codeSearch'
+import type { PushConfirm, ScmResult } from './scm'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
@@ -600,6 +601,15 @@ export type InvokeContract = {
     res: { ok: true; total: number; truncated: boolean; cancelled: boolean } | { ok: false; message: string }
   }
   'code:searchCancel': { req: { id: string }; res: void }
+  // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
+  // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
+  'scm:stage': { req: { root: string; paths: string[] }; res: ScmResult }
+  'scm:unstage': { req: { root: string; paths: string[] }; res: ScmResult }
+  'scm:discard': { req: { root: string; path: string }; res: ScmResult }
+  'scm:commit': { req: { root: string; message: string }; res: ScmResult }
+  'scm:amend': { req: { root: string; message: string; confirmed?: boolean }; res: ScmResult }
+  'scm:push': { req: { root: string; force?: boolean; confirmed?: PushConfirm[] }; res: ScmResult }
+  'scm:pull': { req: { root: string; merge?: boolean }; res: ScmResult }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1244,6 +1254,16 @@ export type EvApi = {
     searchCancel(id: string): Promise<void>
     /** 검색 결과 묶음(새로 맞은 것만) — 같은 파일이 여러 묶음에 나뉘어 올 수 있다(이어 붙인다). */
     onSearchBatch(cb: (e: { id: string; files: SearchFile[] }) => void): () => void
+  }
+  // M7 R2 소스 제어 — git 쓰기(preload/features/scm.ts). 조회는 gitInspect(M7 R1).
+  scm: {
+    stage(root: string, paths: string[]): Promise<ScmResult>
+    unstage(root: string, paths: string[]): Promise<ScmResult>
+    discard(root: string, path: string): Promise<ScmResult>
+    commit(root: string, message: string): Promise<ScmResult>
+    amend(root: string, message: string, confirmed?: boolean): Promise<ScmResult>
+    push(root: string, force?: boolean, confirmed?: PushConfirm[]): Promise<ScmResult>
+    pull(root: string, merge?: boolean): Promise<ScmResult>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {
