@@ -617,5 +617,45 @@
     ],
     "orcaRef": "7a7f46f8a3",
     "status": "ported"
+  },
+  {
+    "id": "CV-01",
+    "feature": "파일 탐색기(트리·열기·새 파일/폴더·이름 바꾸기·휴지통 삭제·끌어 옮기기·git 상태 색·폴더 감시) — 터미널 [파일] 탭과 한 구현(FileTree), 로컬/원격은 work/backend",
+    "orcaPaths": [
+      "src/renderer/src/components/right-sidebar/FileExplorer.tsx",
+      "src/renderer/src/components/right-sidebar/file-explorer-row-projection.ts",
+      "src/renderer/src/components/right-sidebar/file-explorer-watch-reconcile.ts",
+      "src/renderer/src/components/right-sidebar/file-explorer-row-context-menu.tsx",
+      "docs/site/content/docs/editing/file-explorer.mdx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R1(v2.2): AI 작업 공간 오른쪽 [탐색기] 패널 = components/FileTree 에 work 세션(작업 단위 폴더, code:fsList·fsOp·watchTree — main/work/backend.ts fs·watchTree, 원격은 SftpService 재사용). 폴더 ▸ 펼침·숫자 자연 정렬·끌어 옮기기는 터미널 [파일] 탭에도. 뺀 것: 이름 필터 투영·가상 스크롤·폴더에서 찾기·OS 클립보드 파일 복사·원격 작업 단위 업로드/다운로드·ignored 색"
+  },
+  {
+    "id": "CV-02",
+    "feature": "PDF·이미지·오디오/비디오 뷰어(가운데 파일 탭, 지연 로드)",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/MediaViewer.tsx",
+      "src/renderer/src/components/editor/ImageViewer.tsx",
+      "src/renderer/src/components/editor/PdfViewer.tsx",
+      "src/shared/media-file-extensions.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R1(v2.2): features/aiws/MediaView.tsx(lazy) — code:readBytes(종류별 상한까지 통째) → Blob URL. PDF 는 Chromium 내장 보기(iframe) — Orca 의 pdfjs-dist 는 새 의존성이라 보고만. 뺀 것: 이미지 확대·끌기, Range 스트리밍(orca-media: 프로토콜)"
+  },
+  {
+    "id": "CV-03",
+    "feature": "워크트리 점프 팔레트(Ctrl+J, 맥 Cmd+J)",
+    "orcaPaths": [
+      "src/renderer/src/components/WorktreeJumpPalette.tsx",
+      "src/renderer/src/lib/order-empty-query-worktrees.ts",
+      "src/renderer/src/lib/worktree-palette-search.ts",
+      "src/shared/keybindings/definitions-core-1.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M12 R1(v2.2): features/aiws/WorktreeJump.tsx·jumpList.ts. Orca 키는 Win/Linux Ctrl+Shift+J — 아라는 그 키가 하단 패널이라 Ctrl+J(AI 공간 안에서만). 뺀 것: 작업·열린 탭 줄, 필터 칩, 새 워크트리 줄, 숫자 키"
   }
 ]
