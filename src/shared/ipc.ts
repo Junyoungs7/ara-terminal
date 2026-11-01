@@ -47,6 +47,7 @@ import type { OrielStatus } from './oriel'
 import type { ResourceSnapshot } from './resources'
 import type { AccountAction, AccountActionResult, AccountProvider, ProviderUsage, UsagePrefs, UsageState } from './usage'
 import type { AgentSummary, StatsReport } from './usageStats'
+import type { GitLabMr, GitLabMrState, GitLabResult, GitLabSave, IntegrationsState, SlackSave } from './integrations'
 import type {
   BaseRef,
   CreateWorktreeArgs,
@@ -588,6 +589,13 @@ export type InvokeContract = {
   'usage:account': { req: AccountAction; res: AccountActionResult }
   'usage:accountUsage': { req: { provider: AccountProvider; id: string | null }; res: ProviderUsage }
   'usage:stats': { req: { force?: boolean }; res: { summary: AgentSummary; report: StatsReport | null; error?: string } }
+  // M15 연동(main/integrations/feature.ts). 바뀔 때 'integrations:update'(Slack 연결 상태). 토큰은 보내기만 — 돌아오는 건 있다/없다뿐.
+  'integrations:get': { req: void; res: IntegrationsState }
+  'integrations:setGitlab': { req: GitLabSave; res: IntegrationsState }
+  'integrations:setSlack': { req: SlackSave; res: IntegrationsState }
+  'gitlab:test': { req: void; res: GitLabResult<{ user: string }> }
+  'gitlab:mrs': { req: { cwd: string; state: GitLabMrState }; res: GitLabResult<{ project: string; mrs: GitLabMr[] }> }
+  'gitlab:createMr': { req: { cwd: string; title: string; description: string; target: string }; res: GitLabResult<{ mr: GitLabMr }> }
   // M2 작업 단위(main/worktrees/feature.ts). 이름은 Orca 채널(repos:* · worktrees:*)을 따른다.
   'repos:list': { req: void; res: Project[] }
   // 폴더 고르기 — 경로는 사용자가 OS 대화상자에서 고른 것만(렌더러가 지어내지 않는다). 취소 = null.
@@ -1286,6 +1294,18 @@ export type EvApi = {
     account(a: AccountAction): Promise<AccountActionResult>
     accountUsage(provider: AccountProvider, id: string | null): Promise<ProviderUsage>
     stats(force?: boolean): Promise<{ summary: AgentSummary; report: StatsReport | null; error?: string }>
+  }
+  // M15 연동(preload/features/integrations.ts).
+  integrations: {
+    get(): Promise<IntegrationsState>
+    setGitlab(p: GitLabSave): Promise<IntegrationsState>
+    setSlack(p: SlackSave): Promise<IntegrationsState>
+    onUpdate(cb: (s: IntegrationsState) => void): () => void
+  }
+  gitlab: {
+    test(): Promise<InvokeRes<'gitlab:test'>>
+    mrs(cwd: string, state: GitLabMrState): Promise<InvokeRes<'gitlab:mrs'>>
+    createMr(cwd: string, mr: { title: string; description: string; target: string }): Promise<InvokeRes<'gitlab:createMr'>>
   }
   // M2 작업 단위(preload/features/worktrees.ts). Orca preload 의 repos·worktrees 모양.
   repos: {

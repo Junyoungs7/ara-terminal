@@ -14,7 +14,7 @@ export const SETTINGS_GROUPS = ['aiws', 'app', 'global', 'terminal', 'security',
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number]
 
 export const SETTINGS_SECTIONS = [
-  'agents', 'managed', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'automations',
+  'agents', 'managed', 'usage', 'git', 'integrations', 'editor', 'sessionSearch', 'notify', 'automations',
   'general', 'look', 'pet', 'font', 'keys', 'update',
   'ai', 'voice',
   'terminal', 'conn', 'features', 'log', 'history',
@@ -73,6 +73,17 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
     ]
   },
   soon('git', 'aiws'),
+  // M15 IN-01 연동 — 사내 GitLab(기본 꺼짐, features/integrations).
+  {
+    id: 'integrations',
+    group: 'aiws',
+    items: [
+      i('gitlab.enable', 'gitlab.set.enable', 'gitlab.set.enable.desc'),
+      i('gitlab.url', 'gitlab.set.url', 'gitlab.set.url.desc'),
+      i('gitlab.token', 'gitlab.set.token', 'gitlab.set.token.desc'),
+      i('gitlab.test', 'gitlab.set.test')
+    ]
+  },
   // M12 R2 에디터 옵션(Orca 기본값 — shared/editorPrefs.ts).
   {
     id: 'editor',
@@ -190,7 +201,19 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   },
   soon('remote', 'security'),
   soon('mobile', 'security'),
-  soon('slack', 'security'),
+  // M15 IN-02 Slack(Socket Mode, 기본 꺼짐, features/integrations).
+  {
+    id: 'slack',
+    group: 'security',
+    items: [
+      i('slack.enable', 'slack.set.enable', 'slack.set.enable.desc'),
+      i('slack.appToken', 'slack.set.appToken', 'slack.set.appToken.desc'),
+      i('slack.botToken', 'slack.set.botToken', 'slack.set.botToken.desc'),
+      i('slack.channel', 'slack.set.channel', 'slack.set.channel.desc'),
+      i('slack.users', 'slack.set.users', 'slack.set.users.desc'),
+      i('slack.notify', 'slack.set.notify', 'slack.set.notify.desc')
+    ]
+  },
   soon('privacy', 'security'),
 
   {

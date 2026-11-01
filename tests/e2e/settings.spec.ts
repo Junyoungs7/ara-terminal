@@ -29,7 +29,7 @@ test('SET-1 설정 페이지가 세 진입점 모두에서 열리고 묶음 순�
   await expect(page.locator(`${drawer} .sp-nav .sp-group`).first()).toContainText('AI 작업 공간')
   const sections = await page.locator(`${drawer} .sp-nav [data-section]`).evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.section))
   expect(sections).toEqual([
-    'agents', 'managed', 'usage', 'git', 'editor', 'sessionSearch', 'notify', 'automations',
+    'agents', 'managed', 'usage', 'git', 'integrations', 'editor', 'sessionSearch', 'notify', 'automations',
     'general', 'look', 'pet', 'font', 'keys', 'update',
     'ai', 'voice',
     'terminal', 'conn', 'features', 'log', 'history',

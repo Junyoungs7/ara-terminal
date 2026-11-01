@@ -5,7 +5,8 @@
 // M12 R2: 머지 충돌 칸(Orca) — 충돌 파일은 에디터로 열고(3-way 색 구역), + 로 해결 표시, 진행 중인 병합·리베이스·체리픽은 [중단].
 // M12 R3 RV-02 [AI 로 쓰기](Orca commit-message-composer·text-generation) — 커밋 메시지는 입력칸에, MR 제목·본문·브랜치 이름은 초안 칸에
 // 채우기만 한다(커밋·푸시·이름 바꾸기·MR 올리기는 사용자가 누를 때). 진행 줄에 [취소], 실패는 까닭 + CLI 말 앞부분.
-import { useCallback, useEffect, useState, type JSX } from 'react'
+// M15 IN-01 사내 GitLab(설정에서 켰을 때만, 로컬 작업 단위만): MR 초안 → [MR 만들기], 아래에 이 저장소 MR 목록(펼칠 때만 조회).
+import { Suspense, useCallback, useEffect, useState, type JSX } from 'react'
 import { Copy, Minus, Plus, RefreshCw, Sparkles, Undo2, X } from 'lucide-react'
 import type { GitStatusEntry, GitStatusResult } from '@shared/gitDiff'
 import { resolvePrimaryAction, type ScmConfirm, type ScmResult } from '@shared/scm'
@@ -17,6 +18,7 @@ import { pushNote } from '../../store/notify'
 import { t } from '../../i18n'
 import { hostOfWorktree, useAiwsStore } from './store'
 import { openFile } from './codeStore'
+import { GitLabMrCreate, GitLabMrList } from '../integrations'
 import { useDiffStore } from './diffStore'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
@@ -278,6 +280,11 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
                       <Copy className="scm-ai-ic" aria-hidden />
                       {t('scm.ai.copy')}
                     </button>
+                    {!host && root && (
+                      <Suspense fallback={null}>
+                        <GitLabMrCreate cwd={root} title={draft.title} body={draft.body} base={draft.base} />
+                      </Suspense>
+                    )}
                   </div>
                 </>
               ) : (
@@ -298,6 +305,11 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
                 </div>
               )}
             </div>
+          )}
+          {!host && root && (
+            <Suspense fallback={null}>
+              <GitLabMrList cwd={root} />
+            </Suspense>
           )}
           {err && (
             <div className="scm-msg err" data-scm="error">

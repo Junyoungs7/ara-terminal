@@ -50,6 +50,7 @@ import type { SettingsTarget } from '../store/settingsNav'
 import { AgentSettings } from '../features/aiws'
 import { ManagedServers } from '../features/managed'
 import { UsageSettings } from '../features/usage'
+import { GitLabSettings, SlackSettings } from '../features/integrations'
 
 // 설정 페이지 (F5 드로어 → 2.0 가운데 창 → M1 1-A **전체 화면 + 검색**, 시안 SW-final 설정 장면).
 // 묶음·섹션·항목 목록은 shared/settingsIndex.ts 한 곳에 있다(검색·딥링크가 그 표를 읽는다).
@@ -1587,6 +1588,18 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
           {section === 'usage' && open && (
             <Suspense fallback={null}>
               <UsageSettings />
+            </Suspense>
+          )}
+
+          {/* M15 연동 — 열렸을 때만(GitLab · Slack). */}
+          {section === 'integrations' && open && (
+            <Suspense fallback={null}>
+              <GitLabSettings />
+            </Suspense>
+          )}
+          {section === 'slack' && open && (
+            <Suspense fallback={null}>
+              <SlackSettings />
             </Suspense>
           )}
 

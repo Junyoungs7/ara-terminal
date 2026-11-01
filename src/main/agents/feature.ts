@@ -60,7 +60,7 @@ export function registerAgentsFeature(deps: {
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean } } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -320,7 +320,7 @@ export function registerAgentsFeature(deps: {
     return { ok }
   })
   // M11 질문/승인 카드의 답(Orca sendNativeChatAskAnswer) — 키 묶음을 ASK_STEP_MS 간격으로 그대로, 글은 붙여넣기 바이트로. 그 탭이 끝나면 멈춘다.
-  handle('agents:answer', ({ sessionId, groups }) => {
+  const answer = (sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean } => {
     const meta = tabMeta.get(sessionId)
     const steps = (Array.isArray(groups) ? groups : []).slice(0, ASK_MAX_GROUPS).flatMap((g: AskAnswerKeyGroup): string[] => {
       if (g && typeof g === 'object' && 'raw' in g && typeof g.raw === 'string' && g.raw.length <= 8) return [g.raw]
@@ -334,7 +334,8 @@ export function registerAgentsFeature(deps: {
       }, i * ASK_STEP_MS)
     )
     return { ok: true }
-  })
+  }
+  handle('agents:answer', ({ sessionId, groups }) => answer(sessionId, groups))
   // M10 WS-16 재우기 — 닫기 전에 탭마다 CLI 세션 id 를 받아 둔다(닫으면 transcript 경로를 잊는다).
   handle('agents:resumeIds', ({ sessionIds }) =>
     Object.fromEntries((Array.isArray(sessionIds) ? sessionIds : []).filter((id): id is string => typeof id === 'string').map((id) => [id, ensureChat().resumeId(id)]))
@@ -501,7 +502,10 @@ export function registerAgentsFeature(deps: {
     views: () => tracker?.views() ?? [],
     limits: () => agentLimitsOf(settings),
     orielPath: () => settings.orielPath,
-    terminalDaemon
+    terminalDaemon,
+    // M15 Slack(main/integrations) — 탭 목록(띄운 순서)과 카드 답(같은 길).
+    tabs: () => [...tabMeta].map(([sessionId, m]) => ({ sessionId, agent: m.agent, cwd: m.cwd })),
+    answer
   }
 }
 

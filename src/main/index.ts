@@ -49,6 +49,7 @@ import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
 import { registerGitInspectFeature } from './git/feature'
 import { registerScmFeature } from './scm/feature'
+import { registerIntegrationsFeature } from './integrations/feature'
 import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
@@ -611,6 +612,15 @@ app.whenReady().then(async () => {
   registerScmFeature()
   // M8 DM-02·03 관리형 서버(main/managed/feature.ts) — 호스트별 동의·설치·업데이트·제거. 동의 없는 서버에는 아무것도 깔지 않는다.
   managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion(), updated: (e) => pushSend(mainWc(), 'managed:updated', e) })
+  // M15 연동(main/integrations/feature.ts) — 사내 GitLab·Slack(Socket Mode). 둘 다 기본 꺼짐, 꺼져 있으면 네트워크 0. 토큰은 vault.
+  // e2e 는 ARA_E2E_SLACK_API 로 모의 Slack 을 가리킨다(진짜 slack.com 에 닿지 않는다).
+  registerIntegrationsFeature({
+    userData,
+    vault: secrets,
+    mainWc,
+    agents: () => agents,
+    ...(process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_SLACK_API'] ? { slackApi: process.env['ARA_E2E_SLACK_API'] } : {})
+  })
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).

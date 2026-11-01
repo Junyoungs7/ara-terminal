@@ -1,0 +1,60 @@
+/* M15 AI 공간 첫 안내 — 첫 안내 청크와 함께 불러온다. */
+.aiws-onb {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  background: var(--scrim);
+}
+.aiws-onb-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+}
+.aiws-onb-title {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.aiws-onb-desc,
+.aiws-onb-note {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-onb-sec {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.aiws-onb-h {
+  color: var(--text-hi);
+}
+.aiws-onb-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.aiws-onb-name {
+  min-width: 110px;
+  color: var(--text-mid);
+}
+.aiws-onb-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+}

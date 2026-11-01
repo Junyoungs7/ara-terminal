@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
 import type { Worktree } from '@shared/worktrees'
 import { Bot, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Sparkles, Zap } from 'lucide-react'
 import { t } from '../../i18n'
@@ -22,6 +22,20 @@ import { SCM_STATE_EVENT, SCM_TOGGLE_EVENT } from '@shared/scm'
 import { ScmPanel } from './ScmPanel'
 import { ExplorerPanel } from './ExplorerPanel'
 import { WorktreeJump } from './WorktreeJump'
+// M15 IN-03 첫 안내 — 처음 AI 공간에 들어왔을 때만 불러온다(다시 보지 않기 뒤에는 청크도 안 받는다).
+const AiOnboarding = lazy(() => import('./AiOnboarding').then((m) => ({ default: m.AiOnboarding })))
+const ONBOARDING_KEY = 'aiws.onboarding.closed'
+let onboardingSeen = false
+const onboardingDue = (): boolean => {
+  if (onboardingSeen) return false
+  try {
+    // 시험 빌드(e2e)는 기존 시험이 이 덮개에 막히지 않게 기본으로 안 띄운다 — 첫 안내 시험만 'aiws.onboarding.test' 로 켠다.
+    if (window.ev?.app?.testHooks && localStorage.getItem('aiws.onboarding.test') !== '1') return false
+    return localStorage.getItem(ONBOARDING_KEY) !== '1'
+  } catch {
+    return false
+  }
+}
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -124,6 +138,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
   // KEYMAP 에 넣지 않는다: 넣으면 isAppShortcut 이 터미널 공간의 xterm 에서도 이 키를 삼켜 셸의 Ctrl+P(리드라인 이전 명령)가 죽는다.
   // 창 캡처 단계에서 받아 에이전트 터미널·Monaco 보다 먼저 가져간다(Orca 도 전역). 한글 입력 상태면 e.key 가 'ㅔ' 라 e.code 로 본다.
   const [quick, setQuick] = useState(false)
+  const [onboarding, setOnboarding] = useState(onboardingDue)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.code !== 'KeyP' || e.shiftKey || e.altKey || !(isMac() ? e.metaKey : e.ctrlKey)) return
@@ -225,6 +240,16 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
       {right === 'scm' && <ScmPanel ask={ask} onOpened={showFile} />}
       {right === 'explorer' && <ExplorerPanel onOpened={showFile} />}
       <WorktreeJump onJumped={() => setComposer(null)} />
+      {onboarding && (
+        <Suspense fallback={null}>
+          <AiOnboarding
+            onClose={() => {
+              onboardingSeen = true
+              setOnboarding(false)
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
