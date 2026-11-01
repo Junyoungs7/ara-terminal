@@ -104,8 +104,8 @@
       "src/renderer/src/components/settings/SessionHistorySettingsPane.tsx",
       "docs/site/content/docs/agents/session-history.mdx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-08",
