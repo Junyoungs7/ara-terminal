@@ -252,7 +252,8 @@ function createWindow(): void {
     let ask = false
     try {
       ask = shouldAskBeforeQuit({
-        sessionCount: sessions?.sessionsOfWindow(undefined).length ?? 0,
+        // M4 DM-01: 데몬에 사는 에이전트 세션은 앱을 꺼도 산다 — "끝나는 세션" 수에 넣지 않는다.
+        sessionCount: sessions?.sessionsOfWindow(undefined).filter((id) => !sessions?.survivesQuit(id)).length ?? 0,
         quitting, // ← 교착 가드. 이 줄을 지우면 [종료]를 눌러도 앱이 안 꺼진다(선언부 주석)
         // 답할 사람이 있는가. SessionWindows.ts 의 close 핸들러와 같은 확인이다 —
         // isDestroyed 접근 자체가 던질 수 있어 통째로 try 안에 둔다(FIX-destroyed 패턴).

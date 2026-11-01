@@ -56,6 +56,8 @@ import type { VaultDetail, VaultSession } from './vault'
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
+/** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -555,6 +557,10 @@ export type InvokeContract = {
   'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
+  // M4 DM-01: 켤 때 데몬에서 되살린 에이전트 탭 · 백그라운드 에이전트 모두 종료 · 완전 종료(에이전트까지 끝내고 앱 종료).
+  'agents:tabs': { req: void; res: AgentTabInfo[] }
+  'agents:killBackground': { req: void; res: { killed: number } }
+  'agents:quitCompletely': { req: void; res: void }
   // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
   'agents:legacyNotice': { req: void; res: LegacyAiNotice | null }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
@@ -1168,6 +1174,10 @@ export type EvApi = {
     launch(agent: AgentId, cwd: string, prompt?: string, resume?: string): Promise<AgentLaunchResult>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
+    /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */
+    tabs(): Promise<AgentTabInfo[]>
+    killBackground(): Promise<{ killed: number }>
+    quitCompletely(): Promise<void>
     onStatus(cb: (v: AgentStatusView) => void): () => void
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */
     legacyNotice(): Promise<LegacyAiNotice | null>

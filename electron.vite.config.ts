@@ -46,7 +46,12 @@ export default defineConfig({
     build: {
       externalizeDeps: true,
       rollupOptions: {
-        input: { index: resolve('src/main/index.ts'), hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts') }
+        // daemonEntry: M4 DM-01 로컬 터미널 데몬 — main 이 out/main/daemonEntry.js 를 ELECTRON_RUN_AS_NODE 로 따로 띄운다(main/daemon/launcher.ts).
+        input: {
+          index: resolve('src/main/index.ts'),
+          hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts'),
+          daemonEntry: resolve('src/main/daemon/daemonEntry.ts')
+        }
       }
     }
   },

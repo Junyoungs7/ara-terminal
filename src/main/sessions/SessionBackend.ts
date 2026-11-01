@@ -15,4 +15,6 @@ export interface SessionBackend {
   onCwd?(cb: (cwd: string) => void): void
   /** 로컬 셸의 OS pid — 자원 관리자(FD-01)가 그 트리를 잰다. ssh2 채널은 프로세스가 없어 없다. */
   readonly pid?: number
+  /** M4 DM-01: 앱이 꺼질 때 죽이지 않고 놓는다(데몬에 사는 에이전트 PTY). 있으면 destroyAll 이 kill 대신 이것을 부른다. */
+  detach?(): void
 }

@@ -136,6 +136,9 @@ export function resolveStatus(
 // ── 훅 설치(Orca 방식): ~/.ara/agent-hooks/<cli>-hook.(cmd|sh) 스크립트 + 각 CLI 설정 파일에 그 스크립트를 부르는 줄 ─────
 
 /** 훅 스크립트가 읽는 env 셋. 에이전트 탭 셸에만 넣는다 — 터미널 공간 셸에는 없다(그 셸에서 직접 친 claude 는 훅이 아무 일도 안 한다). */
+/** M4 DM-01: 데몬이 죽어 잃은 에이전트 세션의 종료 코드(main/daemon/service.ts 가 낸다) — 탭이 "잃음"으로 그린다. */
+export const AGENT_SESSION_LOST_EXIT = -32768
+
 export const HOOK_ENV = { port: 'ARA_AGENT_HOOK_PORT', token: 'ARA_AGENT_HOOK_TOKEN', pane: 'ARA_PANE_KEY' } as const
 export const HOOK_TOKEN_HEADER = 'x-ara-agent-hook-token'
 export const HOOK_PANE_HEADER = 'x-ara-pane-key'

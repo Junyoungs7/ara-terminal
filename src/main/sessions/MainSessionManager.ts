@@ -391,6 +391,18 @@ export class MainSessionManager implements ISessionManager {
    *    떼어낸 창 닫기의 [세션 종료]). 그쪽은 앱이 살아 있고 화면이 사실을 알아야 한다.
    */
   destroyAll(): void {
-    for (const id of [...this.handles.keys()]) this.destroy(id, false)
+    for (const [id, h] of [...this.handles]) {
+      // M4 DM-01: 데몬에 사는 세션은 죽이지 않고 놓는다 — 다음에 켜면 다시 붙는다.
+      if (h.backend.detach) {
+        if (h.timer) clearTimeout(h.timer)
+        this.handles.delete(id)
+        h.backend.detach()
+      } else this.destroy(id, false)
+    }
+  }
+
+  /** M4 DM-01: 앱이 꺼져도 사는 세션인가(데몬 세션). 본창 닫기 확인의 "끝나는 세션" 수에서 뺀다. */
+  survivesQuit(id: string): boolean {
+    return !!this.handles.get(id)?.backend.detach
   }
 }

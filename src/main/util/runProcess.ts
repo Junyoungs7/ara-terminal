@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 
 /**
  * 제품(`src/main`)이 프로세스를 띄우는 **단 하나의 길**(셸이 필요한 ClaudeCliEngine 만 예외 —
@@ -61,4 +61,13 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
     )
     if (opts.onStderr) child.stderr?.on('data', (d: Buffer | string) => opts.onStderr?.(String(d)))
   })
+}
+
+/**
+ * M4 DM-01: 앱보다 오래 사는 프로세스(로컬 터미널 데몬)를 띄운다 — 셸 없이·창 없이·앱과 떼어(detached).
+ * runProcess 와 같은 규칙(셸 안 거침·인자 배열·windowsHide)이되 끝을 기다리지 않는다: stdout/stderr 만 관으로 주고,
+ * 준비를 확인한 쪽이 관을 끊고 `unref()` 해서 놓는다. env 는 덧붙이지 않고 **통째로** 받는다(데몬은 앱의 환경 전체를 물려받아야 한다).
+ */
+export function spawnDetached(file: string, args: readonly string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): ChildProcess {
+  return spawn(file, [...args], { cwd: opts.cwd, env: opts.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
 }

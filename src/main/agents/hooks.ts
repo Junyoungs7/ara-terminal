@@ -23,8 +23,12 @@ export type HookServer = {
   stop(): Promise<void>
 }
 
-export function createHookServer(onEvent: (e: HookEvent) => void): HookServer {
-  const token = randomBytes(32).toString('base64url')
+/**
+ * @param saved 지난번 포트·토큰(M4 DM-01). 데몬에 산 에이전트는 **띄울 때의** 포트·토큰을 env 로 쥐고 있다 — 앱을 다시 켜도 같은 자리에서
+ *   받아야 그 에이전트의 훅이 닿는다. 그 포트가 이미 쓰이면 새 포트로 연다(그 에이전트들은 화면 판정만).
+ */
+export function createHookServer(onEvent: (e: HookEvent) => void, saved?: { port: number; token: string } | null): HookServer {
+  const token = saved?.token || randomBytes(32).toString('base64url')
   const expected = hashToken(token)
   let server: Server | null = null
   let starting: Promise<number> | null = null
@@ -66,11 +70,18 @@ export function createHookServer(onEvent: (e: HookEvent) => void): HookServer {
             if (!res.headersSent) res.writeHead(500).end()
           }
         })
-        s.once('error', () => resolve(0))
-        s.listen(0, BIND_HOST, () => {
-          const a = s.address()
-          resolve(typeof a === 'object' && a ? a.port : 0)
-        })
+        let listening = false
+        const listen = (port: number): void => {
+          s.once('error', () => {
+            if (!listening) port ? listen(0) : resolve(0)
+          })
+          s.listen(port, BIND_HOST, () => {
+            listening = true
+            const a = s.address()
+            resolve(typeof a === 'object' && a ? a.port : 0)
+          })
+        }
+        listen(saved?.port && saved.port > 0 && saved.port < 65536 ? saved.port : 0)
         server = s
       })
       return { port: await starting, token }

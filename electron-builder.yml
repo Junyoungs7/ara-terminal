@@ -18,6 +18,10 @@ extraResources:
 # conpty/conpty.dll 을 상대경로로 로드할 수 있다(패키지본에서 종료 창·지연 재발 방지).
 asarUnpack:
   - node_modules/node-pty/**
+# M4 DM-01: 데몬 진입점과 그 조각(chunks)도 asar 밖으로 — 데몬은 Electron 을 node 로 띄워 이 파일을 읽고, Windows 는 이 폴더째
+# %LOCALAPPDATA%\ARA\daemon-host\<판> 으로 복사해 거기서 띄운다(업데이트가 설치 폴더 프로세스를 죽이므로 — main/daemon/launcher.ts).
+  - out/main/daemonEntry.js
+  - out/main/chunks/**
 # 자동 업데이트 (#98, 2026-08-23) — **배포 사이트와 같은 폴더**를 본다.
 # `site/` 를 사내 웹 루트에 올리면 설치본·blockmap·latest.yml 이 전부 `downloads/` 에 함께 있다
 # (`npm run site:stage` 가 거기로 복사한다). 그래서 다운로드 페이지와 업데이트 채널이 한 자리다.

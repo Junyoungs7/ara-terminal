@@ -38,4 +38,15 @@
   ${IfNot} ${isKeepShortcuts}
     Delete "$DESKTOP\A.R.A.lnk"
   ${EndIf}
+  ; M4 DM-01 로컬 터미널 데몬 — 진짜 제거일 때만(업데이트는 ${isUpdated} 라 건너뛴다: 업데이트 뒤에도 에이전트가 살아야 한다).
+  ; 데몬은 설치 폴더 밖 %LOCALAPPDATA%\ARA\daemon-host\<판> 에서 돈다(main/daemon/launcher.ts — NSIS 의 설치 폴더 프로세스 정리를 피하려고).
+  ; 그래서 electron-builder 의 정리가 못 본다 — 그 경로에서 도는 프로세스를 끄고 폴더를 지운다. 자리는 main/agents/feature.ts 의 hostRoot 와 같아야 한다.
+  ${IfNot} ${isUpdated}
+    SetShellVarContext current
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell1.0\powershell.exe" -NoProfile -NonInteractive -C "Get-CimInstance -ClassName Win32_Process | ? {$$_.Path -and $$_.Path.StartsWith('$LOCALAPPDATA\ARA\daemon-host', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $$_.ProcessId -Force }"`
+    Pop $0
+    Sleep 500
+    RMDir /r "$LOCALAPPDATA\ARA\daemon-host"
+    RMDir "$LOCALAPPDATA\ARA"
+  ${EndIf}
 !macroend

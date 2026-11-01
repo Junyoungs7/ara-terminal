@@ -40,7 +40,7 @@ afterAll(() => {
 })
 
 /** 데몬 하나를 node 로 띄우고 ready 를 기다린다. 셸은 가벼운 것(cmd / sh)으로 — PtyBackend 의 셸 고르기 규칙(PWSH·SHELL env)을 그대로 탄다. */
-async function startDaemon(name: string): Promise<{ child: ChildProcess; socketPath: string; token: string; exited: Promise<number | null> }> {
+async function startDaemon(name: string, extra: string[] = []): Promise<{ child: ChildProcess; socketPath: string; token: string; exited: Promise<number | null> }> {
   const runtime = join(dir, name)
   const { socketPath, tokenPath } = daemonPaths(runtime)
   const token = `t-${name}-${Math.random().toString(36).slice(2)}`
@@ -48,7 +48,7 @@ async function startDaemon(name: string): Promise<{ child: ChildProcess; socketP
   writeFileSync(tokenPath, token, { mode: 0o600 })
   // 임시 폴더의 번들이 저장소의 node-pty 를 찾게(앱에선 node_modules 옆에 놓인다).
   const env = { ...process.env, NODE_PATH: resolve('node_modules'), ...(win ? { PWSH: 'cmd.exe' } : { SHELL: '/bin/sh' }) }
-  const child = spawn(process.execPath, [entry, '--socket', socketPath, '--token', tokenPath, '--log', join(runtime, 'daemon.log'), '--app-version', 'test'], {
+  const child = spawn(process.execPath, [entry, '--socket', socketPath, '--token', tokenPath, '--log', join(runtime, 'daemon.log'), '--app-version', 'test', ...extra], {
     cwd: dir,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -134,6 +134,14 @@ describe('데몬 프로세스(node)', () => {
     b.close()
     expect(await d.exited).toBe(0)
   }, 60_000)
+
+  it('--exit-with-clients(e2e 용): 앱이 떠나면 세션째 내려간다', async () => {
+    const d = await startDaemon('e2e', ['--exit-with-clients'])
+    const a = (await connectDaemon(d.socketPath, d.token))!
+    await a.request({ type: 'create', spec: { id: 'e1', cwd: dir, env: {}, meta: {} } })
+    a.close()
+    expect(await d.exited).toBe(0)
+  }, 30_000)
 
   it('shutdown 은 세션까지 끝내고 내려간다(완전 종료)', async () => {
     const d = await startDaemon('quit')

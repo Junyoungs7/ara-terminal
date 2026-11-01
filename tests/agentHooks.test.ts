@@ -254,6 +254,22 @@ describe('훅 서버(127.0.0.1) + 실제 훅 스크립트', () => {
     expect(got).toEqual([{ source: 'claude', paneKey: 'p1', payload: { hook_event_name: 'PreToolUse', tool_name: 'Bash' } }])
   })
 
+  it('M4: 지난번 포트·토큰으로 다시 연다(데몬에 산 에이전트의 훅이 재시작 뒤에도 닿게) — 그 포트가 쓰이면 새 포트', async () => {
+    const a = createHookServer(() => {})
+    servers.push(a)
+    const first = await a.ensure()
+    await a.stop()
+    const b = createHookServer(() => {}, first)
+    servers.push(b)
+    expect(await b.ensure()).toEqual(first)
+    const c = createHookServer(() => {}, first) // b 가 그 포트를 쥐고 있다
+    servers.push(c)
+    const third = await c.ensure()
+    expect(third.port).toBeGreaterThan(0)
+    expect(third.port).not.toBe(first.port)
+    expect(third.token).toBe(first.token)
+  })
+
   it('심은 훅 스크립트를 셸로 실행하면(가짜 CLI 대신 직접) 서버가 받고 stdout 은 {} — env 가 없으면 아무것도 안 보낸다', async () => {
     const win = process.platform === 'win32'
     if (!win && !existsSync('/bin/sh')) return

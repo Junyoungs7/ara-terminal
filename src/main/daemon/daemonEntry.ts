@@ -31,7 +31,8 @@ const SHUTDOWN_CAP_MS = 5_000
 /** 로그 상한(Orca daemon-file-log DEFAULT_MAX_BYTES) — 시작할 때 넘었으면 비운다. */
 const LOG_MAX_BYTES = 5 * 1024 * 1024
 
-export type DaemonArgs = { socketPath: string; tokenPath: string; logFile?: string; appVersion?: string }
+/** exitWithClients: 붙은 앱이 모두 떠나면 세션까지 끝내고 내려간다 — e2e 가 시험 뒤 데몬·가짜 에이전트를 남기지 않게(제품은 안 씀). */
+export type DaemonArgs = { socketPath: string; tokenPath: string; logFile?: string; appVersion?: string; exitWithClients?: boolean }
 
 export function parseDaemonArgs(argv: string[]): DaemonArgs {
   const get = (k: string): string | undefined => {
@@ -41,7 +42,7 @@ export function parseDaemonArgs(argv: string[]): DaemonArgs {
   const socketPath = get('--socket')
   const tokenPath = get('--token')
   if (!socketPath || !tokenPath) throw new Error('usage: daemonEntry --socket <path> --token <path> [--log <file>] [--app-version <v>]')
-  return { socketPath, tokenPath, logFile: get('--log'), appVersion: get('--app-version') }
+  return { socketPath, tokenPath, logFile: get('--log'), appVersion: get('--app-version'), exitWithClients: argv.includes('--exit-with-clients') }
 }
 
 type Session = { backend: PtyBackend; info: DaemonSessionInfo; replay: ReplayBuffer }
@@ -191,7 +192,13 @@ export function startDaemon(a: DaemonArgs): void {
       clearTimeout(helloTimer)
       clients.delete(c)
       // 토큰이 틀린 연결이 끊긴 것으로는 내려가지 않는다(남이 두드려서 우리 데몬이 꺼지면 안 된다).
-      if (c.authed) maybeExit()
+      if (!c.authed) return
+      if (a.exitWithClients && ![...clients].some((x) => x.authed) && !shuttingDown) {
+        shuttingDown = true
+        for (const s of sessions.values()) s.backend.kill()
+        setTimeout(() => exitNow('exit-with-clients cap'), SHUTDOWN_CAP_MS).unref()
+      }
+      maybeExit()
     })
   })
 

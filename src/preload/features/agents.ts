@@ -11,6 +11,9 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
     setSettings: (settings: AgentSettings) => ipcRenderer.invoke('agents:setSettings', { settings }),
     launch: (agent: AgentId, cwd: string, prompt?: string, resume?: string) => ipcRenderer.invoke('agents:launch', { agent, cwd, prompt, resume }),
     statuses: () => ipcRenderer.invoke('agents:statuses'),
+    tabs: () => ipcRenderer.invoke('agents:tabs'),
+    killBackground: () => ipcRenderer.invoke('agents:killBackground'),
+    quitCompletely: () => ipcRenderer.invoke('agents:quitCompletely'),
     legacyNotice: () => ipcRenderer.invoke('agents:legacyNotice'),
     onStatus: (cb: (v: AgentStatusView) => void) => {
       const listener = (_e: IpcRendererEvent, v: AgentStatusView): void => cb(v)
