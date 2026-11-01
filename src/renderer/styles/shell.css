@@ -9815,6 +9815,86 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   color: var(--text-lo);
 }
+
+/* M3 R2 AI-11 에이전트 상태 글리프(Orca StatusIndicator 모양). '추정'(화면 판정)은 점선 고리. */
+.ag-glyph {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.ag-glyph.est {
+  outline: 1px dashed var(--text-lo);
+  outline-offset: 1px;
+}
+.ag-spin {
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--text-mid);
+  border-top-color: transparent;
+  animation: ai-key-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-spin {
+    animation: none;
+    border-top-color: var(--text-mid);
+  }
+}
+.ag-q {
+  width: 12px;
+  height: 12px;
+  color: var(--warn);
+}
+.ag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.ag-dot.done {
+  background: var(--ok);
+}
+.ag-dot.idle {
+  background: var(--idle);
+}
+.ag-dot.unknown {
+  box-shadow: inset 0 0 0 1px var(--text-lo);
+}
+/* 서브에이전트 자식 줄(AI-06) — 워크트리 줄 아래 들여 쓴 작은 줄 */
+.ag-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-left: var(--sp-6);
+}
+.ag-child {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.ag-child-name,
+.ag-child-tool {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ag-child-tool {
+  font-family: var(--mono);
+  color: var(--text-lo);
+}
+.aiws-prompt-failed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+}
 .aiws-term {
   flex: 1;
   min-height: 0;

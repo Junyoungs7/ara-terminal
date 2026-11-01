@@ -1,8 +1,10 @@
 // M3 에이전트 — 렌더러 상태(features/aiws/agentStore.ts). window.ev 를 가짜로 세워 main 없이 돈다(진짜 CLI 안 띄움).
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultAgentSettings, type DetectedAgent } from '@shared/agents'
+import type { AgentStatusView } from '@shared/agentHooks'
 
 const exits = new Map<string, () => void>()
+let pushStatus: ((v: AgentStatusView) => void) | null = null
 let n = 0
 const ev = {
   agents: {
@@ -15,7 +17,12 @@ const ev = {
     setSettings: vi.fn(async (s: unknown) => s),
     launch: vi.fn(async (agent: string, cwd: string) =>
       cwd === '/bad' ? { ok: false as const, error: '폴더가 없습니다' } : { ok: true as const, sessionId: `s${++n}`, title: `${agent} · x`, line: agent }
-    )
+    ),
+    statuses: vi.fn(async () => []),
+    onStatus: vi.fn((cb: (v: AgentStatusView) => void) => {
+      pushStatus = cb
+      return () => {}
+    })
   },
   session: {
     onExit: vi.fn((id: string, cb: () => void) => {
@@ -35,7 +42,7 @@ afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window
 })
 beforeEach(() => {
-  m.useAgentStore.setState({ tabs: [], activeTabByWorktree: {}, detected: null, settings: null })
+  m.useAgentStore.setState({ tabs: [], activeTabByWorktree: {}, detected: null, settings: null, statusById: {}, seenById: {}, viewing: null })
 })
 
 describe('agentStore', () => {
@@ -81,5 +88,29 @@ describe('agentStore', () => {
     expect(ev.session.destroy).not.toHaveBeenCalledWith(a.sessionId) // 이미 끝난 셸
     expect(m.useAgentStore.getState().activeTabByWorktree.w1).toBeUndefined()
     expect(m.useAgentStore.getState().tabs.map((t) => t.worktreeId)).toEqual(['w2'])
+  })
+})
+
+describe('에이전트 상태(R2) — 봄/안 봄', () => {
+  const v = (sessionId: string, state: AgentStatusView['state'], extra: Partial<AgentStatusView> = {}): AgentStatusView => ({ sessionId, state, estimated: false, children: [], source: 'hook:x', ...extra })
+  it('처음 열 때 상태를 구독하고, 안 보는 탭이 일하다 쉬면 끝남(안 봄), 그 탭을 열면 본 것', async () => {
+    await m.useAgentStore.getState().loadAgents()
+    expect(pushStatus).not.toBeNull()
+    pushStatus!(v('s9', 'working'))
+    pushStatus!(v('s9', 'idle'))
+    expect(m.useAgentStore.getState().seenById['s9']).toBe(false)
+    m.useAgentStore.getState().setViewing('s9')
+    expect(m.useAgentStore.getState().seenById['s9']).toBe(true)
+    // 다시 일하면 본 것(다음 끝을 새로 알릴 수 있게).
+    pushStatus!(v('s9', 'working'))
+    expect(m.useAgentStore.getState().seenById['s9']).toBe(true)
+  })
+  it('탭을 닫으면 상태도 지운다', async () => {
+    await m.useAgentStore.getState().launchAgent({ agent: 'codex', worktreeId: 'w1', cwd: '/ok' })
+    const id = m.useAgentStore.getState().tabs[0].sessionId
+    pushStatus!(v(id, 'blocked', { kind: 'question' }))
+    expect(m.useAgentStore.getState().statusById[id]?.kind).toBe('question')
+    m.useAgentStore.getState().closeTab(id)
+    expect(m.useAgentStore.getState().statusById[id]).toBeUndefined()
   })
 })

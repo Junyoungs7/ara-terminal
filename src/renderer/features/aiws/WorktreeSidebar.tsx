@@ -4,16 +4,23 @@ import type { Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore, type PendingWorktreeCreation } from './store'
 import { buildSidebarRows, shortBranch } from './sidebarRows'
+import { useAgentStore } from './agentStore'
+import { aggregate, displayOf } from './agentStatusView'
+import { AgentChildRows, AgentGlyph } from './AgentGlyph'
 
 /**
  * M2 라운드 2 WS-05 — AI 작업 공간 왼쪽 워크트리 목록(시안 SW-final-ai). Orca components/sidebar/WorktreeList·WorktreeCard·
  * PendingWorktreeRow·SidebarFilter·SidebarGroupByToggle(orcaRef 7a7f46f8a3)의 핵심만: 프로젝트 묶음·고정·이름 검색·묶기 전환·
- * 만드는 중 줄(진행·취소·실패 [다시]/[지우기]). 상태 점은 자리만(에이전트 상태는 M3).
+ * 만드는 중 줄(진행·취소·실패 [다시]/[지우기]). M3 R2: 줄 앞 상태 글리프 = 그 작업 단위 에이전트 탭들 중 손댈 일이 큰 것(AI-11),
+ * 그 아래 서브에이전트 자식 줄(AI-06).
  */
 export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) => void; onRemove: (w: Worktree) => void }): JSX.Element {
   const s = useAiwsStore()
   const [filterOpen, setFilterOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const agentTabs = useAgentStore((a) => a.tabs)
+  const statusById = useAgentStore((a) => a.statusById)
+  const seenById = useAgentStore((a) => a.seenById)
   const rows = useMemo(
     () =>
       buildSidebarRows({
@@ -110,6 +117,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           const w = r.worktree
           const active = s.activeWorktreeId === w.id
           const st = s.statsById[w.id]
+          const live = agentTabs.filter((x) => x.worktreeId === w.id && !x.exited)
+          const glyph = aggregate(live.map((x) => ({ display: displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true), estimated: statusById[x.sessionId]?.estimated ?? true })))
+          const children = live.flatMap((x) => statusById[x.sessionId]?.children ?? [])
           const meta = r.repo.kind === 'folder' ? t('aiws.wt.folder') : w.isMainWorktree ? t('aiws.wt.default') : !w.branch ? t('aiws.wt.detached') : st?.ok && st.ahead > 0 ? t('aiws.wt.ahead').replace('{n}', String(st.ahead)) : ''
           return (
             <div
@@ -127,8 +137,8 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
               }}
             >
               <div className="aiws-row-l1">
-                {/* 상태 점 자리 — 에이전트 상태는 M3. 지금은 고른 줄만 밝힌다. */}
-                <span className="aiws-dot" aria-hidden />
+                {/* 에이전트가 없으면 빈 점(고른 줄만 밝힌다), 있으면 상태 글리프(AI-11). */}
+                {glyph ? <AgentGlyph display={glyph.display} estimated={glyph.estimated} /> : <span className="aiws-dot" aria-hidden />}
                 {r.repo.kind === 'folder' ? <Folder className="aiws-row-ic" aria-hidden /> : <GitBranch className="aiws-row-ic" aria-hidden />}
                 <span className="aiws-row-name">{w.displayName}</span>
                 <span className="aiws-row-acts">
@@ -170,6 +180,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                   </span>
                 )}
               </div>
+              <AgentChildRows items={children} />
             </div>
           )
         })}

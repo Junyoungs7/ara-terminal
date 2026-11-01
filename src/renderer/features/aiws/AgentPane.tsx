@@ -5,6 +5,8 @@ import type { Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { TerminalPane } from '../../terminal/TerminalPane'
 import { pickInitialAgent, useAgentStore } from './agentStore'
+import { displayOf } from './agentStatusView'
+import { AgentGlyph } from './AgentGlyph'
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
@@ -108,7 +110,15 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
   const allTabs = useAgentStore((s) => s.tabs)
   const activeId = useAgentStore((s) => s.activeTabByWorktree[worktree.id])
   const tabs = allTabs.filter((x) => x.worktreeId === worktree.id)
+  const statusById = useAgentStore((s) => s.statusById)
+  const seenById = useAgentStore((s) => s.seenById)
   const [picking, setPicking] = useState(false)
+  const shownId = tabs.length === 0 || picking ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]).sessionId
+  // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
+  useEffect(() => {
+    useAgentStore.getState().setViewing(shownId)
+    return () => useAgentStore.getState().setViewing(null)
+  }, [shownId])
   if (tabs.length === 0 || picking) {
     return <AgentPicker worktree={worktree} onLaunched={() => setPicking(false)} onCancel={tabs.length ? () => setPicking(false) : undefined} />
   }
@@ -124,13 +134,21 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
             aria-selected={x === active}
             className={'aiws-tab' + (x === active ? ' on' : '')}
             data-agent-tab={x.agent}
-            data-state={x.exited ? 'exited' : 'running'}
+            data-state={x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
             title={x.line}
             onClick={() => useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)}
           >
-            <span className={'aiws-tab-dot' + (x.exited ? ' off' : '')} aria-hidden />
+            {x.exited ? (
+              <span className="aiws-tab-dot off" aria-hidden />
+            ) : (
+              <AgentGlyph
+                display={displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}
+                estimated={statusById[x.sessionId]?.estimated ?? true}
+                detail={[statusById[x.sessionId]?.tool, statusById[x.sessionId]?.source].filter(Boolean).join(' · ')}
+              />
+            )}
             <span>{AGENTS[x.agent].label}</span>
-            <span className="aiws-tab-state">{x.exited ? t('aiws.agent.exited') : t('aiws.agent.running')}</span>
+            <span className="aiws-tab-state">{x.exited ? t('aiws.agent.exited') : t(`aiws.st.${displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)}`)}</span>
             <button
               type="button"
               className="aiws-ic"
@@ -153,6 +171,12 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
           <Plus />
         </button>
       </div>
+      {active.prompt && statusById[active.sessionId]?.promptFailed && (
+        <div className="aiws-note aiws-err aiws-prompt-failed" role="alert" data-aiws="prompt-failed">
+          <span>{t('aiws.agent.promptFailed')}</span>
+          <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      )}
       {tabs.map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active}>
           <TerminalPane sessionId={x.sessionId} active={x === active} local serverKey="localhost" aiCli={x.agent} />
