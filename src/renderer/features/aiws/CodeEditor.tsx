@@ -10,6 +10,7 @@ import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { codeEditorOptions } from './editorOptions'
 import { buildGitConflictDecorations, findGitConflictBlocks, getNextConflictNavigationIndex, hasGitConflictMarkers } from './conflictMarkers'
 import { useEditorPrefs } from '../../store/editorPrefs'
+import { watchAiLines } from './aiLines'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 type Model = ReturnType<typeof monaco.editor.createModel>
@@ -18,7 +19,7 @@ type Model = ReturnType<typeof monaco.editor.createModel>
  * M6 WS-07·08 — AI 작업 공간 가운데의 코드 에디터(Monaco). AgentPane 이 lazy 로 부른다 — 이 청크(+monacoSetup)가 Monaco 를 끌고 온다.
  * Orca components/editor/MonacoEditor.tsx·ExternalFileChangeBanner(orcaRef 7a7f46f8a3)의 1차 판: 파일마다 모델 하나(경로 = 모델 uri),
  * 더러움 = 저장한 뒤의 버전과 다름(VS Code 와 같은 alternativeVersionId), Ctrl+S 저장, 밖에서 바뀌면 띠로 안내.
- * 뺀 것: 비교(M7)·자동 저장·마크다운 미리보기·여러 분할. M12 R2: 설정 › 편집기 옵션·미리 보기 탭·충돌 표시(Orca 방식).
+ * 뺀 것: 비교(M7)·자동 저장·마크다운 미리보기·여러 분할. M12 R2: 설정 › 편집기 옵션·미리 보기 탭·충돌 표시(Orca 방식). M12 R3: AI 작성 줄 거터.
  */
 
 const uriOf = (path: string) => monaco.Uri.file(path)
@@ -147,6 +148,12 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
               const a = st.activeByWorktree[worktreeId]
               revealOf(ed, a ? st.files.find((f) => f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, a, PLATFORM)) : undefined)
               watchConflicts(ed, setConflictLines, setConflictAt)
+              // M12 R3 AI 작성 줄(로컬 파일만 — 원격 에이전트 훅은 이 PC 로 안 온다).
+              watchAiLines(ed, () => {
+                const m = ed.getModel()
+                const f = m ? fileOf(m) : undefined
+                return f && !f.host ? f.path : null
+              })
               ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
                 const p = ed.getModel()?.uri.fsPath
                 if (p) void save(p, askRef.current)

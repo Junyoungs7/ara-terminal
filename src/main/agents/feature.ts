@@ -24,6 +24,7 @@ import { claudeLaunchArgs, createHookServer, geminiLaunchDefaults, installHooks,
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
 import { generateChatName, listModels, scanSlash } from './options'
+import { ingestAiWrite } from '../code/aiLines'
 import { isOptionValue, type ModelCatalog } from '@shared/agentOptions'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
@@ -137,6 +138,7 @@ export function registerAgentsFeature(deps: {
     (e) => {
       tracker?.hook(e)
       ensureChat().hook(e.paneKey, e.payload, e.source)
+      ingestAiWrite(e.payload) // M12 R3 RV-03 AI 작성 줄(쓰기 도구의 끝만)
       // Claude UserPromptSubmit·Gemini BeforeAgent 의 prompt = 사람이 친 첫 요청(터미널에서 친 것도).
       maybeName(e.paneKey, e.payload['prompt'])
       noteFirstPrompt(e.paneKey, e.payload['prompt'])

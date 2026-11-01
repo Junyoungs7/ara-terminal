@@ -7,6 +7,7 @@ import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { BytesResult } from './media'
 import type { SearchFile, SearchOptions } from './codeSearch'
 import type { PushConfirm, ScmResult } from './scm'
+import type { ScmAiKind, ScmAiResult } from './scmAi'
 import type {
   WorkspaceSnapshot,
   WorkspaceSaveInput,
@@ -677,6 +678,8 @@ export type InvokeContract = {
   'code:readBytes': { req: { root: string; path: string; host?: string }; res: BytesResult }
   'code:watchTree': { req: { root: string; host?: string }; res: void }
   'code:unwatchTree': { req: { root: string; host?: string }; res: void }
+  // M12 R3 RV-03 AI 작성 줄 — path 의 지금 보이는 글(text) 기준 AI 줄 범위([처음, 끝], 1부터). 바뀌면 push code:aiLinesChanged { path }.
+  'code:aiLines': { req: { path: string; text: string }; res: [number, number][] }
   // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
   // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
   'scm:stage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
@@ -688,6 +691,10 @@ export type InvokeContract = {
   'scm:pull': { req: { root: string; merge?: boolean; host?: string }; res: ScmResult }
   // M12 R2 머지 충돌 — 진행 중인 병합·리베이스·체리픽 중단(Orca abortMerge·abortRebase).
   'scm:abort': { req: { root: string; op: 'merge' | 'rebase' | 'cherry-pick'; host?: string }; res: ScmResult }
+  // M12 R3 RV-02 [AI 로 쓰기] — 커밋 메시지·MR 제목/본문·브랜치 이름(CLI 에이전트 한 번, 원격은 그 서버 CLI). 결과는 채우기만.
+  'scm:ai': { req: { root: string; kind: ScmAiKind; host?: string }; res: ScmAiResult }
+  'scm:aiCancel': { req: { root: string; host?: string }; res: void }
+  'scm:renameBranch': { req: { root: string; name: string; host?: string }; res: { ok: boolean; message?: string } }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1375,6 +1382,8 @@ export type EvApi = {
     watchTree(root: string, host?: string): Promise<void>
     unwatchTree(root: string, host?: string): Promise<void>
     onTreeChanged(cb: (e: { root: string }) => void): () => void
+    aiLines(path: string, text: string): Promise<[number, number][]>
+    onAiLinesChanged(cb: (e: { path: string }) => void): () => void
   }
   // M7 R2 소스 제어 — git 쓰기(preload/features/scm.ts). 조회는 gitInspect(M7 R1).
   scm: {
@@ -1386,6 +1395,9 @@ export type EvApi = {
     push(root: string, force?: boolean, confirmed?: PushConfirm[], host?: string): Promise<ScmResult>
     pull(root: string, merge?: boolean, host?: string): Promise<ScmResult>
     abort(root: string, op: 'merge' | 'rebase' | 'cherry-pick', host?: string): Promise<ScmResult>
+    ai(root: string, kind: ScmAiKind, host?: string): Promise<ScmAiResult>
+    aiCancel(root: string, host?: string): Promise<void>
+    renameBranch(root: string, name: string, host?: string): Promise<{ ok: boolean; message?: string }>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

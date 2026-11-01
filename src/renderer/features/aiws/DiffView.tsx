@@ -9,6 +9,7 @@ import { monaco } from './monacoSetup'
 import { changeCount, sendCommentsToAgent, useDiffStore, type DiffSel } from './diffStore'
 import { hostOfWorktree } from './store'
 import { editorFont } from './editorOptions'
+import { watchAiLines } from './aiLines'
 
 /**
  * M7 R1 WS-10·11 — 가운데 **"변경 비교 · n" 탭**의 본문. AgentPane 이 lazy 로 부른다(monacoSetup 을 같이 끌고 온다 — diff 탭을 안 열면 안 불린다).
@@ -32,6 +33,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
   const host = useRef<HTMLDivElement>(null)
   const edRef = useRef<ReturnType<typeof monaco.editor.createDiffEditor> | null>(null)
+  const aiPathRef = useRef<string | null>(null)
+  aiPathRef.current = sel ? `${worktree.path}/${sel.path}` : null
   const decoRef = useRef<ReturnType<ReturnType<ReturnType<typeof monaco.editor.createDiffEditor>['getModifiedEditor']>['createDecorationsCollection']> | null>(null)
 
   // 목록 줄 — 작업 중이면 영역(스테이지됨/안 됨/추적 안 됨)마다 한 줄(같은 파일이 둘이면 두 줄, 보는 쪽이 다르다).
@@ -67,6 +70,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     })
     edRef.current = ed
     decoRef.current = ed.getModifiedEditor().createDecorationsCollection()
+    // M12 R3 AI 작성 줄 — 바뀐 쪽(오른쪽)에. 원격 작업 단위는 표시 없음.
+    watchAiLines(ed.getModifiedEditor(), () => (aiPathRef.current && !hostOfWorktree(worktree.id) ? aiPathRef.current : null))
     return () => {
       const m = ed.getModel()
       ed.dispose()

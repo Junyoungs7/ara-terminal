@@ -8,11 +8,13 @@ import { pushSend } from '../util/windowPush'
 import { isInsidePath } from '@shared/codeFiles'
 import { workBackend } from '../work/backend'
 import { listFilesOn, searchTextOn } from './search'
+import { registerAiLines } from './aiLines'
 import { MEDIA_MAX_BYTES, mediaOf } from '@shared/media'
 
 const outside = { ok: false as const, message: '작업 단위 폴더 밖의 파일입니다.' }
 
 export function registerCodeFeature(): void {
+  registerAiLines() // M12 R3 RV-03 AI 작성 줄
   const inside = (root: unknown, path: unknown, host: unknown): path is string =>
     typeof root === 'string' && typeof path === 'string' && isInsidePath(root, path, workBackend(host).platform)
   // 열린 탭 수만큼 센다 — 같은 파일을 두 창이 열어도 마지막이 닫을 때 감시를 푼다. 키 = 호스트 + 경로(두 서버의 같은 경로는 다른 파일).

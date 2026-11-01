@@ -3,10 +3,15 @@
 // 목록은 M7 R1 의 조회(gitInspect.status)를 쓰고, 쓰기는 scm:* — 쓰고 나면 다시 읽는다. 파일을 누르면 R1 의 diff 탭(창 이벤트 aiws:open-diff).
 // 원격 작업(푸시·풀)은 **사용자가 누를 때만**(묶음 11). 결과는 알림 센터 토스트로.
 // M12 R2: 머지 충돌 칸(Orca) — 충돌 파일은 에디터로 열고(3-way 색 구역), + 로 해결 표시, 진행 중인 병합·리베이스·체리픽은 [중단].
+// M12 R3 RV-02 [AI 로 쓰기](Orca commit-message-composer·text-generation) — 커밋 메시지는 입력칸에, MR 제목·본문·브랜치 이름은 초안 칸에
+// 채우기만 한다(커밋·푸시·이름 바꾸기·MR 올리기는 사용자가 누를 때). 진행 줄에 [취소], 실패는 까닭 + CLI 말 앞부분.
 import { useCallback, useEffect, useState, type JSX } from 'react'
-import { Minus, Plus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
+import { Copy, Minus, Plus, RefreshCw, Sparkles, Undo2, X } from 'lucide-react'
 import type { GitStatusEntry, GitStatusResult } from '@shared/gitDiff'
 import { resolvePrimaryAction, type ScmConfirm, type ScmResult } from '@shared/scm'
+import type { ScmAiKind, ScmAiResult } from '@shared/scmAi'
+import { AGENTS } from '@shared/agents'
+import { writeClipboard } from '../../store/clipboardWrite'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { t } from '../../i18n'
@@ -29,6 +34,9 @@ export function ScmPanel({ ask, onOpened }: { ask: AskFn; onOpened?: () => void 
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  // M12 R3 [AI 로 쓰기] — 쓰는 중인 종류 · 초안(MR 제목·본문 / 브랜치 이름).
+  const [aiBusy, setAiBusy] = useState<ScmAiKind | null>(null)
+  const [draft, setDraft] = useState<{ kind: 'mr'; title: string; body: string; base: string } | { kind: 'branch'; name: string } | null>(null)
 
   const refresh = useCallback(async () => {
     if (!root) return setStatus(null)
@@ -124,6 +132,30 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : ''), cancelLabel: null })
     const yes = await ask({ title: t('scm.abort.title.' + op), message: t('scm.abort.msg'), tone: 'danger', confirmLabel: t('scm.abort.go') })
     if (yes === 'confirm') await run('abort', () => window.ev.scm.abort(root!, op, host), { done: t('scm.note.aborted'), fail: t('scm.note.abortFail') })
   }
+  const aiErrText = (r: Extract<ScmAiResult, { ok: false }>): string =>
+    t('scm.ai.err.' + r.code).replace('{agent}', r.agent ? AGENTS[r.agent].label : 'AI') + (r.message ? `\n${r.message}` : '')
+  const aiWrite = async (kind: ScmAiKind): Promise<void> => {
+    if (!root || aiBusy) return
+    setAiBusy(kind)
+    setErr(null)
+    try {
+      const r = await window.ev.scm.ai(root, kind, host)
+      if (!r.ok) return void (r.code !== 'canceled' && setErr(aiErrText(r)))
+      if (kind === 'commit') setMessage(r.text ?? '')
+      else if (kind === 'mr') setDraft({ kind: 'mr', title: r.title ?? '', body: r.body ?? '', base: r.base ?? '' })
+      else setDraft({ kind: 'branch', name: r.slug ?? '' })
+    } finally {
+      setAiBusy(null)
+    }
+  }
+  const renameBranch = async (name: string): Promise<void> => {
+    if (!root || !name.trim()) return
+    const r = await window.ev.scm.renameBranch(root, name.trim(), host)
+    const body = r.message && CODES.has(r.message) ? t('scm.err.' + r.message) : r.message
+    pushNote({ kind: r.ok ? 'done' : 'error', space: 'ai', title: r.ok ? t('scm.ai.renamed') : t('scm.ai.renameFail'), body, ctx: wt?.displayName })
+    if (r.ok) setDraft(null)
+    await refresh()
+  }
   const openDiff = (e: GitStatusEntry): void => {
     window.dispatchEvent(new CustomEvent('aiws:open-diff', { detail: { filePath: e.path, mode: e.area === 'staged' ? 'staged' : 'unstaged' } }))
   }
@@ -197,8 +229,7 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
               <button type="button" className="scm-primary" data-scm="primary" data-kind={primary.kind} disabled={primary.disabled} title={t(primary.titleKey)} onClick={() => void doPrimary()}>
                 {busy ? t('scm.busy.' + busy) : t('scm.kind.' + primary.kind) + (primary.count ? ` ${primary.count}` : '')}
               </button>
-              {/* 2차(묶음 11) — 자리만. */}
-              <button type="button" className="aiws-ic" data-scm="ai" disabled title={`${t('scm.aiWrite')} · ${t('aiws.soon')}`} aria-label={t('scm.aiWrite')}>
+              <button type="button" className="aiws-ic" data-scm="ai" disabled={!!aiBusy || staged.length === 0} title={t('scm.ai.commit')} aria-label={t('scm.ai.commit')} onClick={() => void aiWrite('commit')}>
                 <Sparkles />
               </button>
             </div>
@@ -212,8 +243,62 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
               <button type="button" data-scm="forcePush" disabled={!!busy || !status?.ok || !status.branch} onClick={() => void doPush(true)}>
                 {t('scm.forcePush')}
               </button>
+              <button type="button" data-scm="aiMr" disabled={!!aiBusy || !status?.ok || !status.branch} title={t('scm.ai.mrTip')} onClick={() => void aiWrite('mr')}>
+                {t('scm.ai.mr')}
+              </button>
+              <button type="button" data-scm="aiBranch" disabled={!!aiBusy || !status?.ok || !status.branch} title={t('scm.ai.branchTip')} onClick={() => void aiWrite('branch')}>
+                {t('scm.ai.branch')}
+              </button>
             </div>
           </div>
+          {aiBusy && (
+            <div className="scm-ai-busy" role="status" data-scm="aiBusy" data-kind={aiBusy}>
+              <Sparkles className="scm-ai-ic" aria-hidden />
+              <span>{t('scm.ai.busy').replace('{agent}', 'AI')}</span>
+              <button type="button" className="btn sec" data-scm="aiCancel" onClick={() => void window.ev.scm.aiCancel(root, host)}>
+                {t('scm.ai.cancel')}
+              </button>
+            </div>
+          )}
+          {draft && (
+            <div className="scm-draft" data-scm="draft" data-kind={draft.kind}>
+              <div className="scm-draft-head">
+                <span>{draft.kind === 'mr' ? t('scm.ai.mr') : t('scm.ai.branchName')}</span>
+                <button type="button" className="aiws-ic" data-scm="draftClose" title={t('scm.ai.close')} aria-label={t('scm.ai.close')} onClick={() => setDraft(null)}>
+                  <X />
+                </button>
+              </div>
+              {draft.kind === 'mr' ? (
+                <>
+                  <input className="aiws-input" data-field="scm.mrTitle" aria-label={t('scm.ai.mrTitle')} placeholder={t('scm.ai.mrTitle')} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+                  <textarea className="aiws-input scm-message" data-field="scm.mrBody" rows={8} spellCheck={false} aria-label={t('scm.ai.mrBody')} placeholder={t('scm.ai.mrBody')} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
+                  <div className="scm-draft-foot">
+                    <span>{t('scm.ai.mrHint').replace('{base}', draft.base || '-')}</span>
+                    <button type="button" className="btn sec" data-scm="mrCopy" onClick={() => void writeClipboard(`${draft.title}\n\n${draft.body}`, true)}>
+                      <Copy className="scm-ai-ic" aria-hidden />
+                      {t('scm.ai.copy')}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="scm-draft-foot">
+                  <input
+                    className="aiws-input"
+                    data-field="scm.branchName"
+                    aria-label={t('scm.ai.branchName')}
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void renameBranch(draft.name)
+                    }}
+                  />
+                  <button type="button" className="btn sec" data-scm="branchRename" disabled={!draft.name.trim()} onClick={() => void renameBranch(draft.name)}>
+                    {t('scm.ai.rename')}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {err && (
             <div className="scm-msg err" data-scm="error">
               {err}

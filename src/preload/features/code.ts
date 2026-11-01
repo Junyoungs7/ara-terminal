@@ -31,6 +31,12 @@ export const codeBridge: Pick<EvApi, 'code'> = {
       const listener = (_e: IpcRendererEvent, d: { root: string }) => cb(d)
       ipcRenderer.on('code:treeChanged', listener)
       return () => ipcRenderer.removeListener('code:treeChanged', listener)
+    },
+    aiLines: (path: string, text: string) => ipcRenderer.invoke('code:aiLines', { path, text }),
+    onAiLinesChanged: (cb: (e: { path: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, d: { path: string }) => cb(d)
+      ipcRenderer.on('code:aiLinesChanged', listener)
+      return () => ipcRenderer.removeListener('code:aiLinesChanged', listener)
     }
   }
 }

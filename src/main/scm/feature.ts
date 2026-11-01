@@ -1,10 +1,14 @@
 // M7 R2 WS-12·13 소스 제어 — 기능 틀(docs/feature-module.md)의 main 등록 함수. git 쓰기 IPC 는 전부 여기서 건다.
 // root = 워크트리 폴더(절대 경로), paths = 그 기준 '/' 경로(M7 R1 git:status 의 entry.path 그대로). 렌더러 값은 다시 거른다.
 // M8 R5: host 가 있으면 원격 작업 단위 — 같은 함수(푸시 안전장치 WS-13 포함)를 SSH exec 로(work/backend). 원격 git 의 자격 증명은 그 서버의 것.
-import { isAbsolute } from 'node:path'
+import { isAbsolute, join } from 'node:path'
+import { app } from 'electron'
 import { handle } from '../ipc/handle'
 import { workBackend } from '../work/backend'
 import type { PushConfirm } from '@shared/scm'
+import { agentSettingsOf } from '@shared/agents'
+import { readJsonWithBackup } from '../util/atomicJson'
+import { generateScmText, renameBranch } from './ai'
 import { abortOperation, amend, commit, discardPath, pull, push, safeRelPaths, stagePaths, unstagePaths } from './git'
 
 const bad = { ok: false as const, message: 'bad request' }
@@ -33,4 +37,22 @@ export function registerScmFeature(): void {
   handle('scm:pull', ({ root, merge, host }) => (okRoot(root) ? pull(root, merge === true, x(host)) : bad))
   // M12 R2 — op 는 셋 중 하나만(git 인자로 그대로 들어간다).
   handle('scm:abort', ({ root, op, host }) => (okRoot(root) && (op === 'merge' || op === 'rebase' || op === 'cherry-pick') ? abortOperation(root, op, x(host)) : bad))
+  // M12 R3 RV-02 [AI 로 쓰기] — 작업 단위마다 하나씩(진행 중이면 busy). 에이전트 설정은 부를 때마다 agents.json 에서(설정을 바꾸면 바로).
+  const running = new Map<string, AbortController>()
+  const keyOf = (root: string, host: unknown): string => `${typeof host === 'string' ? host : ''}\0${root}`
+  handle('scm:ai', async ({ root, kind, host }) => {
+    if (!okRoot(root) || (kind !== 'commit' && kind !== 'mr' && kind !== 'branch')) return { ok: false, code: 'failed', message: 'bad request' }
+    const k = keyOf(root, host)
+    if (running.has(k)) return { ok: false, code: 'busy' }
+    const ac = new AbortController()
+    running.set(k, ac)
+    try {
+      const settings = agentSettingsOf(readJsonWithBackup<unknown>(join(app.getPath('userData'), 'agents.json'), null))
+      return await generateScmText(kind, { root, x: x(host), remote: typeof host === 'string' && !!host, settings, signal: ac.signal })
+    } finally {
+      running.delete(k)
+    }
+  })
+  handle('scm:aiCancel', ({ root, host }) => void running.get(keyOf(String(root), host))?.abort())
+  handle('scm:renameBranch', ({ root, name, host }) => (okRoot(root) && typeof name === 'string' ? renameBranch(root, name.trim(), x(host)) : bad))
 }

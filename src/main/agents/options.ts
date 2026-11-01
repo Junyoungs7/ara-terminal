@@ -31,7 +31,7 @@ const FILE_BYTES = 256 * 1024
 
 /** 그 에이전트를 한 번 띄운다(설정의 명령 바꾸기·env 그대로). 담을 수 없는 실행 파일이면 error. */
 export async function runAgentOnce(
-  o: { agent: AgentId; settings: AgentSettings; args: readonly string[]; input: string; cwd?: string; timeoutMs: number },
+  o: { agent: AgentId; settings: AgentSettings; args: readonly string[]; input: string; cwd?: string; timeoutMs: number; signal?: AbortSignal },
   run: Run = runProcess,
   win = process.platform === 'win32'
 ): Promise<RunResult> {
@@ -39,7 +39,7 @@ export async function runAgentOnce(
   const cmd = parseAgentCommand(AGENTS[o.agent].bin, prefs.command, win ? 'literal' : 'escape')
   if (!cmd.ok) return { code: 1, stdout: '', stderr: '', error: new Error(cmd.error) }
   const env = { ...prefs.env, ...cmd.env }
-  const opts: RunOptions = { cwd: o.cwd, env, timeoutMs: o.timeoutMs, input: o.input, maxBuffer: 4 * 1024 * 1024 }
+  const opts: RunOptions = { cwd: o.cwd, env, timeoutMs: o.timeoutMs, input: o.input, maxBuffer: 4 * 1024 * 1024, signal: o.signal }
   if (!win) return run(cmd.binary, [...cmd.prefixArgs, ...o.args], opts)
   if (quoteArg(cmd.binary, 'cmd') === null) return { code: 1, stdout: '', stderr: '', error: new Error(`cmd 에 담을 수 없는 실행 파일: ${cmd.binary}`) }
   return run(process.env['ComSpec'] || 'cmd.exe', ['/d', '/c', cmd.binary, ...cmd.prefixArgs, ...o.args], opts)
