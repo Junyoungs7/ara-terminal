@@ -1,18 +1,47 @@
-import { useMemo, useState, type JSX } from 'react'
-import { Folder, FolderPlus, GitBranch, ListTree, Loader2, Pin, PinOff, Plus, RotateCw, Search, Trash2, X } from 'lucide-react'
-import type { Worktree } from '@shared/worktrees'
+import { useEffect, useMemo, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderPlus,
+  GitBranch,
+  ListTree,
+  Loader2,
+  Moon,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  RotateCw,
+  Search,
+  Sun,
+  Trash2,
+  X
+} from 'lucide-react'
+import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore, type PendingWorktreeCreation } from './store'
-import { buildSidebarRows, shortBranch } from './sidebarRows'
+import { DELETE_KEY_HINT, buildSidebarRows, isDeleteWorkspaceKey, shortBranch } from './sidebarRows'
 import { useAgentStore } from './agentStore'
 import { aggregate, displayOf } from './agentStatusView'
 import { AgentChildRows, AgentGlyph } from './AgentGlyph'
+import { ContextMenu, type MenuItem } from '../../interactions/ContextMenu'
+import { useDialog } from '../../components/Dialog'
+import { pushNote } from '../../store/notify'
+import { archiveWorktree, restoreWorktree, sleepWorktree, wakeWorktree, type SleepRefusal } from './sleep'
+
+type Menu = { x: number; y: number; items: MenuItem[]; pick: (id: string) => void }
 
 /**
  * M2 라운드 2 WS-05 — AI 작업 공간 왼쪽 워크트리 목록(시안 SW-final-ai). Orca components/sidebar/WorktreeList·WorktreeCard·
  * PendingWorktreeRow·SidebarFilter·SidebarGroupByToggle(orcaRef 7a7f46f8a3)의 핵심만: 프로젝트 묶음·고정·이름 검색·묶기 전환·
  * 만드는 중 줄(진행·취소·실패 [다시]/[지우기]). M3 R2: 줄 앞 상태 글리프 = 그 작업 단위 에이전트 탭들 중 손댈 일이 큰 것(AI-11),
  * 그 아래 서브에이전트 자식 줄(AI-06).
+ * M10(orcaRef fdfcfb3551): 프로젝트 그룹(WS-15 — 프로젝트 머리줄 우클릭/⋯ 의 "그룹으로 옮기기", 그룹 머리줄 접기·이름·지우기 —
+ * Orca use-worktree-context-menu-commands·use-project-group-dialogs), 재우기·보관(WS-16 — 줄 우클릭·버튼, 보관함 토글),
+ * 삭제 단축키(WS-17 — Orca workspace.delete, 늘 확인 대화상자를 거친다).
  */
 export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) => void; onRemove: (w: Worktree) => void }): JSX.Element {
   const s = useAiwsStore()
@@ -21,11 +50,136 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
   const agentTabs = useAgentStore((a) => a.tabs)
   const statusById = useAgentStore((a) => a.statusById)
   const seenById = useAgentStore((a) => a.seenById)
-  // 줄을 고르면 가운데는 그 작업 단위로(대시보드·피드를 보고 있었어도).
-  const pickWorktree = (id: string): void => {
-    s.setActiveWorktree(id)
-    useAgentStore.getState().setView('worktree')
+  const dialog = useDialog()
+  const [menu, setMenu] = useState<Menu | null>(null)
+  // 프로젝트를 목록에서 빼기 — 디스크의 저장소·워크트리는 그대로(Orca confirm-remove-folder · repos:remove).
+  const onRemoveProject = (repo: Project): void => {
+    void dialog
+      .ask({ title: t('aiws.project.remove'), message: t('aiws.project.removeMsg').replace('{p}', repo.displayName).replace('{path}', repo.path), confirmLabel: t('aiws.project.removeConfirm') })
+      .then((r) => {
+        if (r === 'confirm') void useAiwsStore.getState().removeRepo(repo.id)
+      })
   }
+
+  const note = (title: string, body?: string): void => void pushNote({ kind: 'info', space: 'ai', title, ...(body ? { body } : {}) })
+  const refused = (r: SleepRefusal | null): void => {
+    if (r) note(t('aiws.sleep.refused.' + r))
+  }
+  const wake = async (w: Worktree): Promise<void> => {
+    const missed = await wakeWorktree(w.id)
+    if (missed > 0) note(t('aiws.sleep.missed').replace('{n}', String(missed)).replace('{w}', w.displayName), t('aiws.sleep.missed.body'))
+  }
+  // 줄을 고르면 가운데는 그 작업 단위로(대시보드·피드를 보고 있었어도). 잠든 것이면 깨운다(Orca: 다시 열면 깨어남). 보관함의 줄은 고르지 않는다.
+  const pickWorktree = (w: Worktree): void => {
+    if (w.isArchived) return
+    s.setActiveWorktree(w.id)
+    useAgentStore.getState().setView('worktree')
+    if (w.sleep) void wake(w)
+  }
+
+  // WS-17 삭제 단축키 — 고른 작업 단위를 지운다(늘 확인 대화상자). 본 작업 폴더면 프로젝트를 목록에서 빼기(Orca confirm-remove-folder).
+  // 창 캡처 단계 — 에이전트 터미널(xterm)보다 먼저(Orca allowInTerminal). KEYMAP 밖: 터미널 공간에선 뜻이 없다(Ctrl+P 와 같은 이유).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!isDeleteWorkspaceKey(e)) return
+      const st = useAiwsStore.getState()
+      const w = st.activeWorktreeId ? Object.values(st.worktreesByRepo).flat().find((x) => x.id === st.activeWorktreeId) : undefined
+      if (!w) return
+      e.preventDefault()
+      e.stopPropagation()
+      const repo = st.repos.find((r) => r.id === w.repoId)
+      if (!w.isMainWorktree) onRemove(w)
+      else if (repo) onRemoveProject(repo)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onRemoveProject 는 dialog.ask 만 쓴다(매 렌더 새 함수지만 같은 일)
+  }, [onRemove])
+
+  const openMenu = (e: ReactMouseEvent, items: MenuItem[], pick: (id: string) => void): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    // 우클릭이면 커서 자리, ⋯ 버튼이면 그 버튼 아래.
+    const ctx = e.type === 'contextmenu'
+    setMenu({ x: ctx ? e.clientX : r.left, y: ctx ? e.clientY : r.bottom, items, pick })
+  }
+
+  const newGroupFor = async (repo: Project): Promise<void> => {
+    const name = await dialog.askText({
+      title: t('aiws.group.newTitle'),
+      message: t('aiws.group.newMsg').replace('{p}', repo.displayName),
+      input: { placeholder: t('aiws.group.namePh') }
+    })
+    if (!name?.trim()) return
+    const g = await s.createProjectGroup(name.trim())
+    if (g) await s.moveProjectToGroup(repo.id, g.id)
+  }
+  const projectMenu = (e: ReactMouseEvent, repo: Project): void =>
+    openMenu(
+      e,
+      [
+        {
+          id: 'move',
+          label: t('aiws.group.moveTo'),
+          submenu: [...s.groups.map((g) => ({ id: 'to:' + g.id, label: g.name, disabled: repo.groupId === g.id })), { id: 'new', label: t('aiws.group.new') }]
+        },
+        ...(repo.groupId ? [{ id: 'ungroup', label: t('aiws.group.ungroup') }] : []),
+        { id: 'remove-project', label: t('aiws.project.remove'), danger: true }
+      ],
+      (id) => {
+        if (id === 'new') void newGroupFor(repo)
+        else if (id === 'ungroup') void s.moveProjectToGroup(repo.id, null)
+        else if (id === 'remove-project') onRemoveProject(repo)
+        else if (id.startsWith('to:')) void s.moveProjectToGroup(repo.id, id.slice(3))
+      }
+    )
+  const groupMenu = (e: ReactMouseEvent, g: ProjectGroup): void =>
+    openMenu(
+      e,
+      [
+        { id: 'rename', label: t('aiws.group.rename') },
+        { id: 'delete', label: t('aiws.group.delete'), danger: true }
+      ],
+      (id) => {
+        if (id === 'rename') {
+          void dialog.askText({ title: t('aiws.group.rename'), message: g.name, input: { value: g.name, placeholder: t('aiws.group.namePh') } }).then((name) => {
+            if (name?.trim()) void s.updateProjectGroup(g.id, { name: name.trim() })
+          })
+        } else if (id === 'delete') {
+          void dialog
+            .ask({ title: t('aiws.group.delete'), message: t('aiws.group.deleteMsg').replace('{g}', g.name), tone: 'danger', confirmLabel: t('aiws.group.delete') })
+            .then((r) => {
+              if (r === 'confirm') void s.deleteProjectGroup(g.id)
+            })
+        }
+      }
+    )
+  const rowMenu = (e: ReactMouseEvent, w: Worktree, pinned: boolean): void =>
+    openMenu(
+      e,
+      w.isArchived
+        ? [{ id: 'restore', label: t('aiws.archive.restore') }]
+        : [
+            { id: 'pin', label: pinned ? t('aiws.side.unpin') : t('aiws.side.pin') },
+            w.sleep ? { id: 'wake', label: t('aiws.sleep.wake') } : { id: 'sleep', label: t('aiws.sleep.sleep') },
+            ...(w.isMainWorktree
+              ? []
+              : [
+                  { id: 'archive', label: t('aiws.archive.archive') },
+                  { id: 'remove', label: t('aiws.side.remove'), danger: true, hint: DELETE_KEY_HINT }
+                ])
+          ],
+      (id) => {
+        if (id === 'pin') s.togglePin(w.id)
+        else if (id === 'wake') void wake(w)
+        else if (id === 'sleep') void sleepWorktree(w.id).then(refused)
+        else if (id === 'archive') void archiveWorktree(w.id).then(refused)
+        else if (id === 'restore') void restoreWorktree(w.id)
+        else if (id === 'remove') onRemove(w)
+      }
+    )
+
   const rows = useMemo(
     () =>
       buildSidebarRows({
@@ -34,9 +188,11 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         pending: Object.values(s.pendingWorktreeCreations),
         pinnedIds: s.pinnedIds,
         query: filterOpen ? query : '',
-        groupBy: s.groupBy
+        groupBy: s.groupBy,
+        groups: s.groups,
+        showArchived: s.showArchived
       }),
-    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy]
+    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy, s.groups, s.showArchived]
   )
 
   return (
@@ -63,6 +219,16 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
             onClick={() => s.setGroupBy(s.groupBy === 'repo' ? 'none' : 'repo')}
           >
             <ListTree />
+          </button>
+          <button
+            type="button"
+            className={'aiws-ic' + (s.showArchived ? ' on' : '')}
+            data-aiws="archived"
+            title={t('aiws.archive.box')}
+            aria-pressed={s.showArchived}
+            onClick={() => s.setShowArchived(!s.showArchived)}
+          >
+            <Archive />
           </button>
           <button type="button" className="aiws-ic" data-aiws="add-project" title={t('aiws.side.addProject')} onClick={() => void s.pickAndAddRepo()}>
             <FolderPlus />
@@ -101,19 +267,53 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
             </button>
           </div>
         )}
-        {s.repos.length > 0 && rows.length === 0 && <div className="aiws-side-empty">{t('aiws.side.noMatch')}</div>}
+        {s.repos.length > 0 && rows.length === 0 && <div className="aiws-side-empty">{s.showArchived ? t('aiws.archive.empty') : t('aiws.side.noMatch')}</div>}
         {rows.map((r) => {
-          if (r.kind === 'header') {
-            const label = r.group === 'pinned' ? t('aiws.side.pinned') : r.group === 'all' ? t('aiws.side.all') : (r.repo?.displayName ?? '')
+          if (r.kind === 'header' && r.group === 'group' && r.projectGroup) {
+            const g = r.projectGroup
+            const toggle = (): void => void s.updateProjectGroup(g.id, { isCollapsed: !g.isCollapsed })
             return (
-              <div key={r.key} className="aiws-grp" data-group={r.key} title={r.repo?.path}>
+              <div
+                key={r.key}
+                className="aiws-grp aiws-pgrp"
+                data-group={r.key}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!g.isCollapsed}
+                onClick={toggle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') toggle()
+                }}
+                onContextMenu={(e) => groupMenu(e, g)}
+              >
+                {g.isCollapsed ? <ChevronRight className="aiws-grp-ic" aria-hidden /> : <ChevronDown className="aiws-grp-ic" aria-hidden />}
+                <span className="aiws-grp-name">{g.name}</span>
+                <b>{r.count}</b>
+                <button type="button" className="aiws-ic aiws-grp-act" data-aiws="group-menu" title={t('aiws.more')} onClick={(e) => groupMenu(e, g)}>
+                  <MoreHorizontal />
+                </button>
+              </div>
+            )
+          }
+          if (r.kind === 'header') {
+            const repo = r.repo
+            const label =
+              r.group === 'pinned' ? t('aiws.side.pinned') : r.group === 'all' ? t('aiws.side.all') : r.group === 'archived' ? t('aiws.archive.box') : (repo?.displayName ?? '')
+            return (
+              <div key={r.key} className={'aiws-grp' + (r.depth ? ' d1' : '')} data-group={r.key} title={repo?.path} onContextMenu={repo ? (e) => projectMenu(e, repo) : undefined}>
                 {r.group === 'pinned' && <Pin className="aiws-grp-ic" aria-hidden />}
+                {r.group === 'archived' && <Archive className="aiws-grp-ic" aria-hidden />}
                 <span className="aiws-grp-name">{label}</span>
                 <b>{r.count}</b>
-                {r.repo && (
-                  <button type="button" className="aiws-ic aiws-grp-act" data-aiws="new-in" title={t('aiws.side.newWork')} onClick={() => onNew(r.repo?.id)}>
-                    <Plus />
-                  </button>
+                {repo && (
+                  <>
+                    <button type="button" className="aiws-ic aiws-grp-act" data-aiws="project-menu" title={t('aiws.more')} onClick={(e) => projectMenu(e, repo)}>
+                      <MoreHorizontal />
+                    </button>
+                    <button type="button" className="aiws-ic" data-aiws="new-in" title={t('aiws.side.newWork')} onClick={() => onNew(repo.id)}>
+                      <Plus />
+                    </button>
+                  </>
                 )}
               </div>
             )
@@ -122,31 +322,79 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           const w = r.worktree
           const active = s.activeWorktreeId === w.id
           const st = s.statsById[w.id]
+          const sleeping = !!w.sleep
           const live = agentTabs.filter((x) => x.worktreeId === w.id && !x.exited)
           const glyph = aggregate(live.map((x) => ({ display: displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true), estimated: statusById[x.sessionId]?.estimated ?? true })))
           const children = live.flatMap((x) => statusById[x.sessionId]?.children ?? [])
-          const meta = r.repo.kind === 'folder' ? t('aiws.wt.folder') : w.isMainWorktree ? t('aiws.wt.default') : !w.branch ? t('aiws.wt.detached') : st?.ok && st.ahead > 0 ? t('aiws.wt.ahead').replace('{n}', String(st.ahead)) : ''
+          const meta = sleeping
+            ? t('aiws.sleep.asleep')
+            : r.repo.kind === 'folder'
+              ? t('aiws.wt.folder')
+              : w.isMainWorktree
+                ? t('aiws.wt.default')
+                : !w.branch
+                  ? t('aiws.wt.detached')
+                  : st?.ok && st.ahead > 0
+                    ? t('aiws.wt.ahead').replace('{n}', String(st.ahead))
+                    : ''
           return (
             <div
               key={r.key}
               role="listitem"
-              className={'aiws-row' + (active ? ' act' : '')}
+              className={'aiws-row' + (active ? ' act' : '') + (sleeping ? ' sleeping' : '')}
               data-wt={w.id}
               data-pinned={r.pinned || undefined}
+              data-sleeping={sleeping || undefined}
+              data-archived={w.isArchived || undefined}
               tabIndex={0}
               aria-current={active || undefined}
               title={w.path}
-              onClick={() => pickWorktree(w.id)}
+              onClick={() => pickWorktree(w)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') pickWorktree(w.id)
+                if (e.key === 'Enter') pickWorktree(w)
               }}
+              onContextMenu={(e) => rowMenu(e, w, r.pinned)}
             >
               <div className="aiws-row-l1">
-                {/* 에이전트가 없으면 빈 점(고른 줄만 밝힌다), 있으면 상태 글리프(AI-11). */}
-                {glyph ? <AgentGlyph display={glyph.display} estimated={glyph.estimated} /> : <span className="aiws-dot" aria-hidden />}
+                {/* 잠듦이면 달, 에이전트가 없으면 빈 점(고른 줄만 밝힌다), 있으면 상태 글리프(AI-11). */}
+                {sleeping ? (
+                  <Moon className="aiws-row-ic" aria-hidden />
+                ) : glyph ? (
+                  <AgentGlyph display={glyph.display} estimated={glyph.estimated} />
+                ) : (
+                  <span className="aiws-dot" aria-hidden />
+                )}
                 {r.repo.kind === 'folder' ? <Folder className="aiws-row-ic" aria-hidden /> : <GitBranch className="aiws-row-ic" aria-hidden />}
                 <span className="aiws-row-name">{w.displayName}</span>
                 <span className="aiws-row-acts">
+                  {w.isArchived ? (
+                    <button
+                      type="button"
+                      className="aiws-ic"
+                      data-aiws="restore"
+                      title={t('aiws.archive.restore')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void restoreWorktree(w.id)
+                      }}
+                    >
+                      <ArchiveRestore />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="aiws-ic"
+                      data-aiws={sleeping ? 'wake' : 'sleep'}
+                      title={sleeping ? t('aiws.sleep.wake') : t('aiws.sleep.sleep')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (sleeping) void wake(w)
+                        else void sleepWorktree(w.id).then(refused)
+                      }}
+                    >
+                      {sleeping ? <Sun /> : <Moon />}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="aiws-ic"
@@ -164,7 +412,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                       type="button"
                       className="aiws-ic"
                       data-aiws="remove"
-                      title={t('aiws.side.remove')}
+                      title={`${t('aiws.side.remove')} (${DELETE_KEY_HINT})`}
                       onClick={(e) => {
                         e.stopPropagation()
                         onRemove(w)
@@ -190,6 +438,19 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           )
         })}
       </div>
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={menu?.items ?? []}
+        onPick={(id) => {
+          const m = menu
+          setMenu(null)
+          m?.pick(id)
+        }}
+        onClose={() => setMenu(null)}
+      />
+      {dialog.node}
     </aside>
   )
 }
@@ -216,7 +477,7 @@ function PendingRow({ p }: { p: PendingWorktreeCreation }): JSX.Element {
                 title={t('aiws.pending.retry')}
                 onClick={() => {
                   s.removePendingWorktreeCreation(p.creationId)
-                  void s.createWorktree({ repoId: p.repoId, name: p.name, baseBranch: p.baseBranch })
+                  void s.createWorktree({ repoId: p.repoId, name: p.name, baseBranch: p.baseBranch, nameWasGenerated: p.nameWasGenerated })
                 }}
               >
                 <RotateCw />

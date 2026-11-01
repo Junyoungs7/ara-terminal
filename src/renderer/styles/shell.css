@@ -9209,6 +9209,22 @@ button.sb-seg.upd:hover .val {
 .aiws-grp-act {
   margin-left: auto;
 }
+/* M10 WS-15 프로젝트 그룹 머리줄(누르면 접기) · 그룹 안 프로젝트 머리줄은 한 칸 들임. */
+.aiws-pgrp {
+  cursor: var(--cur-hand, pointer);
+  color: var(--text-hi);
+}
+.aiws-pgrp:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-inset);
+}
+.aiws-grp.d1 {
+  padding-left: var(--sp-8);
+}
+/* M10 WS-16 잠든 줄 — 흐리게(Orca sleeping dim). 이중 감쇠 금지라 opacity 대신 한 단계 아래 토큰. */
+.aiws-row.sleeping .aiws-row-l1 {
+  color: var(--text-lo);
+}
 .aiws-row {
   display: flex;
   flex-direction: column;

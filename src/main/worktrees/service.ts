@@ -37,8 +37,14 @@ import {
   type RemoveWorktreeResult,
   type Worktree,
   type WorktreeStats,
+  type ProjectGroup,
+  type SleepTab,
+  type WorktreeMeta,
+  WORKTREE_ID_SEPARATOR,
   parseShortstat
 } from '@shared/worktrees'
+import { creatureNameTier, normalizeSuggestedName, suggestionPathBasename } from '@shared/worktreeNames'
+import { isAgentId } from '@shared/agents'
 import { remoteAddWorktree, remoteBaseRefs, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../managed/remoteWorktrees'
 import { sameRemotePath } from '@shared/runOn'
 
@@ -70,6 +76,14 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
   const warn = deps.warn ?? (() => {})
   const same = (a: string, b: string): boolean => areWorktreePathsEqual(a, b, platform)
   const inflight = new Map<string, AbortController>()
+  /** M10 WS-16 메타(보관·잠든 탭)를 얹는다. */
+  const withMeta = (w: Worktree): Worktree => ({ ...w, ...deps.store.meta(w.id) })
+  /** M10 WS-14 지운 작업 단위가 자동 이름이었으면 그 이름을 은퇴시키고, 메타도 지운다(Orca addRetiredWorktreeName — 자동 이름만). */
+  const afterRemove = (repoId: string, path: string): void => {
+    deps.store.forgetMeta(composeWorktreeId(repoId, path))
+    const name = normalizeSuggestedName(suggestionPathBasename(path))
+    if (creatureNameTier(name) !== null) deps.store.retireName(repoId, name)
+  }
 
   /** 반쯤 만든 것 치우기 — 우리가 비어 있던 자리에 만든 폴더와 그 등록, 그리고 -b 로 막 만든 브랜치. */
   async function cleanupFailedCreation(p: PendingCreation): Promise<void> {
@@ -97,19 +111,19 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       return remoteTry(
         async () => {
           const listed = await remoteListWorktrees(runOn(host), project.path)
-          return listed === null ? { ok: false, message: project.path } : { ok: true, worktrees: listed.filter((w) => !w.isBare).map((w) => toWorktree(project.id, w)) }
+          return listed === null ? { ok: false, message: project.path } : { ok: true, worktrees: listed.filter((w) => !w.isBare).map((w) => withMeta(toWorktree(project.id, w))) }
         },
         (message) => ({ ok: false, message })
       )
     }
     // 폴더 프로젝트 = 작업 단위 하나(그 폴더 자체). Orca folder workspace.
     if (project.kind === 'folder') {
-      return { ok: true, worktrees: [toWorktree(project.id, { path: project.path, head: '', branch: '', isBare: false, isMainWorktree: true })] }
+      return { ok: true, worktrees: [withMeta(toWorktree(project.id, { path: project.path, head: '', branch: '', isBare: false, isMainWorktree: true }))] }
     }
     const listed = await listWorktrees(project.path)
     if (listed === null) return { ok: false, message: project.path }
     // 외부(터미널·다른 도구)에서 만든 워크트리도 git 목록에 있으니 그대로 보인다. bare 줄은 작업 폴더가 아니다.
-    return { ok: true, worktrees: listed.filter((w) => !w.isBare).map((w) => toWorktree(project.id, w)) }
+    return { ok: true, worktrees: listed.filter((w) => !w.isBare).map((w) => withMeta(toWorktree(project.id, w))) }
   }
 
   return {
@@ -181,9 +195,13 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       // 이름 고르기 — name, name-2, name-3 … 브랜치도 폴더도 비어 있는 첫 후보(Orca createLocalWorktree 의 resolve_name).
       const settings = { workspaceDir, nestWorkspaces }
       const root = computeWorkspaceRoot(project.path, workspaceDir)
+      // M10 WS-14 자동 이름이면 지운 이름을 건너뛴다(시도 횟수엔 안 친다 — Orca resolve_name).
+      const retired = args.nameWasGenerated === true && creatureNameTier(sanitized) !== null ? new Set(project.retiredNames ?? []) : null
       let picked: { path: string; branch: string } | null = null
-      for (let suffix = 1; suffix <= WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS && !picked; suffix += 1) {
+      for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS && !picked; suffix += 1) {
         const candidate = worktreeCreateCandidate(sanitized, suffix)
+        if (retired?.has(normalizeSuggestedName(candidate))) continue
+        attempts += 1
         const branch = branchNameFor(candidate)
         if (await branchExists(project.path, branch)) continue
         const path = ensurePathWithinWorkspace(computeWorktreePath(candidate, project.path, settings), root)
@@ -241,14 +259,18 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       if (!project || project.kind !== 'git') return { ok: false, message: repoId }
       if (project.host) {
         const host = project.host
-        return remoteTry(() => remoteRemoveWorktree(runOn(host), project.path, worktreePath, force === true), (message) => ({ ok: false, message }))
+        const r = await remoteTry(() => remoteRemoveWorktree(runOn(host), project.path, worktreePath, force === true), (message): RemoveWorktreeResult => ({ ok: false, message }))
+        if (r.ok) afterRemove(repoId, worktreePath)
+        return r
       }
       // 렌더러가 보낸 경로는 신뢰하지 않는다 — git 목록에 있는 연결 워크트리만 지운다(본 폴더는 안 된다).
       const listed = (await listWorktrees(project.path)) ?? []
       const target = listed.find((w) => !w.isMainWorktree && same(w.path, worktreePath))
       if (!target) return { ok: false, message: worktreePath }
       const r = await removeWorktree(project.path, target.path, force === true)
-      return r.code === 0 ? { ok: true } : { ok: false, message: `${r.stderr}${r.stdout}`.trim() || String(r.error) }
+      if (r.code !== 0) return { ok: false, message: `${r.stderr}${r.stdout}`.trim() || String(r.error) }
+      afterRemove(repoId, target.path)
+      return { ok: true }
     },
 
     /** 사이드바 +/− · 상태바 "main 에서 n 커밋 앞". 목록에 있는 경로만(렌더러 값 불신). git 3번 — 행마다 부르므로 짧은 상한. */
@@ -276,6 +298,40 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
         return remoteTry(() => remoteBaseRefs(runOn(host), project.path, typeof query === 'string' ? query : ''), () => [])
       }
       return project?.kind === 'git' ? listBaseRefs(project.path, typeof query === 'string' ? query : '') : []
+    },
+
+    // ── M10 WS-15 프로젝트 그룹(Orca projectGroups:*) — 렌더러 값은 모양을 보고 받는다 ──
+    listGroups: (): ProjectGroup[] => deps.store.groups(),
+    createGroup: (name: unknown): ProjectGroup | null => (typeof name === 'string' && name.trim() ? deps.store.createGroup(name.trim()) : null),
+    updateGroup: (groupId: unknown, updates: unknown): ProjectGroup | null => {
+      if (typeof groupId !== 'string' || !updates || typeof updates !== 'object') return null
+      const u = updates as { name?: unknown; isCollapsed?: unknown }
+      return deps.store.updateGroup(groupId, {
+        ...(typeof u.name === 'string' ? { name: u.name } : {}),
+        ...(typeof u.isCollapsed === 'boolean' ? { isCollapsed: u.isCollapsed } : {})
+      })
+    },
+    deleteGroup: (groupId: unknown): boolean => typeof groupId === 'string' && deps.store.deleteGroup(groupId),
+    moveProject: (projectId: unknown, groupId: unknown): Project | null =>
+      typeof projectId === 'string' && (groupId === null || typeof groupId === 'string') ? deps.store.moveProject(projectId, groupId) : null,
+
+    /** M10 WS-16 보관·잠든 탭. 아는 프로젝트의 작업 단위 id 만(렌더러 값 불신). 잠든 탭은 모양을 걸러 받는다. */
+    updateMeta(worktreeId: unknown, updates: unknown): WorktreeMeta | null {
+      if (typeof worktreeId !== 'string' || !updates || typeof updates !== 'object') return null
+      if (!deps.store.get(worktreeId.split(WORKTREE_ID_SEPARATOR)[0])) return null
+      const u = updates as { isArchived?: unknown; sleep?: unknown }
+      const next: WorktreeMeta = {}
+      if ('isArchived' in u) next.isArchived = u.isArchived === true || undefined
+      if ('sleep' in u) {
+        next.sleep = Array.isArray(u.sleep)
+          ? u.sleep.flatMap((x): SleepTab[] => {
+              const r = x as { agent?: unknown; resume?: unknown } | null
+              if (!r || !isAgentId(r.agent)) return []
+              return [{ agent: r.agent, resume: typeof r.resume === 'string' && r.resume ? r.resume : null }]
+            })
+          : undefined
+      }
+      return deps.store.updateMeta(worktreeId, next)
     },
 
     /** 기동 때 한 번 — 앱이 죽어 남은 생성 기록을 git 목록과 맞춰 정리한다(WS-03). */

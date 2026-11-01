@@ -3,8 +3,20 @@
 // 라운드 2(WS-05): 핀·묶기 방식·+/− 통계를 더했다. 읽음·감지 스캔·호스트 소유·PR 연동은 2차.
 // 이 파일은 AI 작업 공간 청크(features/aiws)에 산다 — 처음 열 때만 불러오고, 그때 진행 이벤트를 한 번 구독한다.
 import { create, type StateCreator } from 'zustand'
-import type { CreateWorktreeProgressEvent, CreateWorktreeResult, Project, RemoveWorktreeResult, Worktree, WorktreeCheckoutProgress, WorktreeStats } from '@shared/worktrees'
+import type {
+  CreateWorktreeProgressEvent,
+  CreateWorktreeResult,
+  Project,
+  ProjectGroup,
+  RemoveWorktreeResult,
+  Worktree,
+  WorktreeCheckoutProgress,
+  WorktreeMeta,
+  WorktreeMetaUpdate,
+  WorktreeStats
+} from '@shared/worktrees'
 import { WORKTREE_ID_SEPARATOR, composeWorktreeId } from '@shared/worktrees'
+import { creatureNameTier, normalizeSuggestedName, suggestionPathBasename } from '@shared/worktreeNames'
 
 /** Orca PendingWorktreeCreation(src/renderer/src/lib/pending-worktree-creation.ts)의 1차 부분집합. */
 export type PendingWorktreeCreation = {
@@ -13,6 +25,8 @@ export type PendingWorktreeCreation = {
   name: string
   /** [다시] 가 같은 값으로 다시 만들 수 있게. */
   baseBranch?: string
+  /** M10 WS-14 자동 이름이었나([다시]도 지운 이름을 건너뛰게). */
+  nameWasGenerated?: boolean
   startedAt: number
   phase: CreateWorktreeProgressEvent['phase']
   path?: string
@@ -54,6 +68,9 @@ export type SidebarSlice = {
   pinnedIds: string[]
   groupBy: SidebarGroupBy
   statsById: Record<string, WorktreeStats>
+  /** M10 WS-16 보관함 보기(보관한 작업 단위만 보이고 [복원]). 이 창의 보기 상태 — 저장 안 함. */
+  showArchived: boolean
+  setShowArchived: (on: boolean) => void
   togglePin: (worktreeId: string) => void
   setGroupBy: (g: SidebarGroupBy) => void
   /** +/− 줄 수 · 커밋 앞(행마다 git 3번 — 목록을 다시 읽을 때만). */
@@ -69,6 +86,13 @@ export type RepoSlice = {
   /** M8 DM-04 관리형 서버의 원격 저장소 등록 → 그 워크트리 불러오기. 실패면 사유 글. */
   addRemoteRepo: (hostKey: string, path: string) => Promise<Project | string>
   removeRepo: (repoId: string) => Promise<void>
+  /** M10 WS-15 프로젝트 그룹(Orca projectGroups 슬라이스 이름). */
+  groups: ProjectGroup[]
+  fetchGroups: () => Promise<void>
+  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  updateProjectGroup: (groupId: string, updates: { name?: string; isCollapsed?: boolean }) => Promise<void>
+  deleteProjectGroup: (groupId: string) => Promise<void>
+  moveProjectToGroup: (projectId: string, groupId: string | null) => Promise<void>
 }
 
 export type WorktreeSlice = {
@@ -76,11 +100,13 @@ export type WorktreeSlice = {
   activeWorktreeId: string | null
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
   fetchWorktrees: (repoId: string) => Promise<void>
-  createWorktree: (args: { repoId: string; name: string; baseBranch?: string; creationId?: string }) => Promise<CreateWorktreeResult>
+  createWorktree: (args: { repoId: string; name: string; baseBranch?: string; creationId?: string; nameWasGenerated?: boolean }) => Promise<CreateWorktreeResult>
   cancelWorktreeCreation: (creationId: string) => Promise<void>
   removePendingWorktreeCreation: (creationId: string) => void
   removeWorktree: (worktreeId: string, force?: boolean) => Promise<RemoveWorktreeResult>
   setActiveWorktree: (worktreeId: string | null) => void
+  /** M10 WS-16 보관·잠든 탭을 main 에 남기고 이 창의 목록에도 얹는다. 실패면 null. */
+  updateWorktreeMeta: (worktreeId: string, updates: WorktreeMetaUpdate) => Promise<WorktreeMeta | null>
   /** "워크트리 없이 열기" — 프로젝트 폴더 자체를 작업 단위로(git 호출 없음, 생성 시간 0). */
   openWithoutWorktree: (repoId: string) => string | null
   /** main 의 진행 이벤트 하나를 반영한다(구독자가 부른다 — 시험도 이것을 직접 부른다). */
@@ -93,6 +119,8 @@ const createSidebarSlice: StateCreator<AiwsState, [], [], SidebarSlice> = (set) 
   pinnedIds: readLocal(PINS_KEY, [], isStringArray),
   groupBy: readLocal<SidebarGroupBy>(GROUP_KEY, 'repo', isGroupBy),
   statsById: {},
+  showArchived: false,
+  setShowArchived: (showArchived) => set({ showArchived }),
   togglePin: (id) =>
     set((s) => {
       const pinnedIds = s.pinnedIds.includes(id) ? s.pinnedIds.filter((x) => x !== id) : [...s.pinnedIds, id]
@@ -141,6 +169,32 @@ const createRepoSlice: StateCreator<AiwsState, [], [], RepoSlice> = (set, get) =
       const active = s.activeWorktreeId?.startsWith(repoId + '::') ? null : s.activeWorktreeId
       return { repos: s.repos.filter((p) => p.id !== repoId), worktreesByRepo: rest, activeWorktreeId: active }
     })
+  },
+  groups: [],
+  fetchGroups: async () => {
+    set({ groups: await window.ev.projectGroups.list() })
+  },
+  createProjectGroup: async (name) => {
+    const g = await window.ev.projectGroups.create(name)
+    if (g) set((s) => ({ groups: [...s.groups, g] }))
+    return g
+  },
+  updateProjectGroup: async (groupId, updates) => {
+    // 접기는 바로 보이게 먼저 바꾸고 main 답으로 맞춘다.
+    set((s) => ({ groups: s.groups.map((g) => (g.id === groupId ? { ...g, ...updates } : g)) }))
+    const g = await window.ev.projectGroups.update(groupId, updates)
+    if (g) set((s) => ({ groups: s.groups.map((x) => (x.id === groupId ? g : x)) }))
+  },
+  deleteProjectGroup: async (groupId) => {
+    if (!(await window.ev.projectGroups.delete(groupId))) return
+    set((s) => ({
+      groups: s.groups.filter((g) => g.id !== groupId),
+      repos: s.repos.map((p) => (p.groupId === groupId ? { ...p, groupId: undefined } : p))
+    }))
+  },
+  moveProjectToGroup: async (projectId, groupId) => {
+    const p = await window.ev.projectGroups.moveProject(projectId, groupId)
+    if (p) set((s) => ({ repos: s.repos.map((x) => (x.id === projectId ? p : x)) }))
   }
 })
 
@@ -156,15 +210,15 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     // 통계는 기다리지 않는다 — 목록이 먼저 보이고 +/− 는 뒤따라 찬다. 실패해도 목록은 그대로.
     for (const w of r.worktrees) void get().fetchStats(w).catch(() => {})
   },
-  createWorktree: async ({ repoId, name, baseBranch, creationId = crypto.randomUUID() }) => {
+  createWorktree: async ({ repoId, name, baseBranch, creationId = crypto.randomUUID(), nameWasGenerated }) => {
     set((s) => ({
       pendingWorktreeCreations: {
         ...s.pendingWorktreeCreations,
-        [creationId]: { creationId, repoId, name, baseBranch, startedAt: Date.now(), phase: 'start', output: '' }
+        [creationId]: { creationId, repoId, name, baseBranch, ...(nameWasGenerated ? { nameWasGenerated } : {}), startedAt: Date.now(), phase: 'start', output: '' }
       }
     }))
     // 결과는 진행 이벤트(done/failed)로도 온다 — 상태 반영은 applyCreateProgress 한 곳에서.
-    return window.ev.worktrees.create({ creationId, repoId, name, baseBranch })
+    return window.ev.worktrees.create({ creationId, repoId, name, baseBranch, ...(nameWasGenerated ? { nameWasGenerated } : {}) })
   },
   cancelWorktreeCreation: async (creationId) => {
     await window.ev.worktrees.cancelCreate(creationId)
@@ -182,14 +236,38 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     if (!wt) return { ok: false, message: worktreeId }
     const r = await window.ev.worktrees.remove(wt.repoId, wt.path, force)
     if (r.ok) {
+      // M10 WS-14 main 이 자동 이름을 은퇴시켰다 — 이 창의 제안도 같은 이름을 피한다.
+      const gone = normalizeSuggestedName(suggestionPathBasename(wt.path))
       set((s) => ({
         worktreesByRepo: { ...s.worktreesByRepo, [wt.repoId]: (s.worktreesByRepo[wt.repoId] ?? []).filter((w) => w.id !== worktreeId) },
-        activeWorktreeId: s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId
+        activeWorktreeId: s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId,
+        repos:
+          creatureNameTier(gone) === null
+            ? s.repos
+            : s.repos.map((p) => (p.id === wt.repoId && !p.retiredNames?.includes(gone) ? { ...p, retiredNames: [...(p.retiredNames ?? []), gone] } : p))
       }))
     }
     return r
   },
   setActiveWorktree: (worktreeId) => set({ activeWorktreeId: worktreeId }),
+  updateWorktreeMeta: async (worktreeId, updates) => {
+    const meta = await window.ev.worktrees.updateMeta(worktreeId, updates)
+    if (!meta) return null
+    const repoId = worktreeId.split(WORKTREE_ID_SEPARATOR)[0]
+    set((s) => ({
+      worktreesByRepo: {
+        ...s.worktreesByRepo,
+        [repoId]: (s.worktreesByRepo[repoId] ?? []).map((w) => {
+          if (w.id !== worktreeId) return w
+          const { isArchived: _a, sleep: _s, ...rest } = w
+          return { ...rest, ...meta }
+        })
+      },
+      // 보관하면 고른 줄에서 내린다(목록에서 사라진다).
+      activeWorktreeId: meta.isArchived && s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId
+    }))
+    return meta
+  },
   openWithoutWorktree: (repoId) => {
     const repo = get().repos.find((p) => p.id === repoId)
     if (!repo) return null
@@ -239,7 +317,8 @@ let loaded: Promise<void> | null = null
 export function ensureAiwsLoaded(): Promise<void> {
   loaded ??= (async () => {
     const s = useAiwsStore.getState()
-    await s.fetchRepos()
+    // 그룹을 못 읽어도 목록은 보인다(그룹 밖으로).
+    await Promise.all([s.fetchRepos(), s.fetchGroups().catch(() => {})])
     await Promise.all(useAiwsStore.getState().repos.map((p) => s.fetchWorktrees(p.id)))
   })().catch(() => {
     loaded = null // 다음에 열 때 다시

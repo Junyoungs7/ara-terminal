@@ -3,9 +3,10 @@
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
-import type { PendingCreation, Project, ProjectKind } from '@shared/worktrees'
+import type { PendingCreation, Project, ProjectGroup, ProjectKind, WorktreeMeta } from '@shared/worktrees'
 
-type ProjectsFile = { schemaVersion: 1; projects: Project[]; pending: PendingCreation[] }
+// M10: groups(WS-15 프로젝트 그룹) · meta(WS-16 보관·잠듦 — 작업 단위 id 별). 옛 파일엔 없다 → 빈 값.
+type ProjectsFile = { schemaVersion: 1; projects: Project[]; pending: PendingCreation[]; groups: ProjectGroup[]; meta: Record<string, WorktreeMeta> }
 
 export class ProjectStore {
   private data: ProjectsFile
@@ -16,7 +17,9 @@ export class ProjectStore {
     this.data = {
       schemaVersion: 1,
       projects: Array.isArray(raw?.projects) ? raw.projects : [],
-      pending: Array.isArray(raw?.pending) ? raw.pending : []
+      pending: Array.isArray(raw?.pending) ? raw.pending : [],
+      groups: Array.isArray(raw?.groups) ? raw.groups : [],
+      meta: raw?.meta && typeof raw.meta === 'object' && !Array.isArray(raw.meta) ? raw.meta : {}
     }
   }
 
@@ -49,6 +52,8 @@ export class ProjectStore {
     const before = this.data.projects.length
     this.data.projects = this.data.projects.filter((p) => p.id !== id)
     if (this.data.projects.length === before) return false
+    // 그 프로젝트 작업 단위들의 메타도 같이(id = `${repoId}::${path}`).
+    for (const k of Object.keys(this.data.meta)) if (k.startsWith(id + '::')) delete this.data.meta[k]
     this.flush()
     return true
   }
@@ -64,6 +69,77 @@ export class ProjectStore {
 
   endPending(creationId: string): void {
     this.data.pending = this.data.pending.filter((p) => p.creationId !== creationId)
+    this.flush()
+  }
+
+  // ── M10 WS-14 지운 자동 이름 ──
+  retireName(projectId: string, name: string): void {
+    const p = this.get(projectId)
+    if (!p || p.retiredNames?.includes(name)) return
+    p.retiredNames = [...(p.retiredNames ?? []), name]
+    this.flush()
+  }
+
+  // ── M10 WS-15 프로젝트 그룹(Orca projectGroups:*) ──
+  groups(): ProjectGroup[] {
+    return this.data.groups
+  }
+
+  createGroup(name: string): ProjectGroup {
+    const group: ProjectGroup = { id: randomUUID(), name, isCollapsed: false, createdAt: Date.now() }
+    this.data.groups.push(group)
+    this.flush()
+    return group
+  }
+
+  updateGroup(id: string, updates: { name?: string; isCollapsed?: boolean }): ProjectGroup | null {
+    const g = this.data.groups.find((x) => x.id === id)
+    if (!g) return null
+    if (typeof updates.name === 'string' && updates.name.trim()) g.name = updates.name.trim()
+    if (typeof updates.isCollapsed === 'boolean') g.isCollapsed = updates.isCollapsed
+    this.flush()
+    return g
+  }
+
+  /** 그룹만 지운다 — 안의 프로젝트는 그룹 밖으로(Orca 기본: 담긴 프로젝트는 지우지 않음). */
+  deleteGroup(id: string): boolean {
+    const before = this.data.groups.length
+    this.data.groups = this.data.groups.filter((g) => g.id !== id)
+    if (this.data.groups.length === before) return false
+    for (const p of this.data.projects) if (p.groupId === id) delete p.groupId
+    this.flush()
+    return true
+  }
+
+  /** groupId = null 이면 그룹에서 뺀다. 없는 그룹이면 null. */
+  moveProject(projectId: string, groupId: string | null): Project | null {
+    const p = this.get(projectId)
+    if (!p || (groupId !== null && !this.data.groups.some((g) => g.id === groupId))) return null
+    if (groupId === null) delete p.groupId
+    else p.groupId = groupId
+    this.flush()
+    return p
+  }
+
+  // ── M10 WS-16 작업 단위 메타(보관·잠듦) ──
+  meta(worktreeId: string): WorktreeMeta | undefined {
+    return this.data.meta[worktreeId]
+  }
+
+  /** undefined 인 칸은 지운다. 남은 게 없으면 항목째. */
+  updateMeta(worktreeId: string, updates: WorktreeMeta): WorktreeMeta {
+    const next: WorktreeMeta = { ...this.data.meta[worktreeId], ...updates }
+    if (!next.isArchived) delete next.isArchived
+    if (!next.sleep) delete next.sleep
+    if (Object.keys(next).length === 0) delete this.data.meta[worktreeId]
+    else this.data.meta[worktreeId] = next
+    this.flush()
+    return next
+  }
+
+  forgetMeta(worktreeId: string): void {
+    if (!(worktreeId in this.data.meta)) return
+    delete this.data.meta[worktreeId]
     this.flush()
   }
 }

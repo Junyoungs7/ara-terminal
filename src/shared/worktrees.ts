@@ -20,7 +20,22 @@ export type Project = {
   addedAt: number
   /** M8 DM-04: 관리형 서버(hostKey `user@host:port`)의 원격 저장소. 있으면 path 는 그 서버의 POSIX 경로이고 git 은 SSH 로 돈다. */
   host?: string
+  /** M10 WS-15 프로젝트 그룹(Orca `Repo.projectGroupId`). 없으면 그룹 밖. */
+  groupId?: string
+  /** M10 WS-14 지운 작업 단위의 자동 이름(소문자) — 다시 내주지 않는다(Orca retired-name-registry: 같은 이름 = 같은 폴더 = 지난 대화가 보일 수 있다). */
+  retiredNames?: string[]
 }
+
+/** M10 WS-15 Orca `ProjectGroup`(src/shared/project-group-types.ts)의 부분집합 — 이름·접힘만(중첩·색·폴더 스캔은 뺐다). */
+export type ProjectGroup = { id: string; name: string; isCollapsed: boolean; createdAt: number }
+
+/** M10 WS-16 잠든 탭 하나 — 깨울 때 다시 띄울 것(Orca sleep record 의 아라판). resume = 그 CLI 의 세션 id(모르면 null — 깨울 때 못 이어 띄운다). */
+export type SleepTab = { agent: import('./agents').AgentId; resume: string | null }
+
+/** M10 WS-16 작업 단위 메타(Orca `WorktreeMeta` 의 isArchived + 잠든 탭). main projects.json 에 산다. sleep 이 있으면(빈 배열도) 잠든 것. */
+export type WorktreeMeta = { isArchived?: boolean; sleep?: SleepTab[] }
+/** 바꿀 칸만. sleep: null = 깨움(IPC 는 undefined 를 못 실어 null 로 지운다). */
+export type WorktreeMetaUpdate = { isArchived?: boolean; sleep?: SleepTab[] | null }
 
 /** Orca `GitWorktreeInfo`(src/shared/worktree/types.ts) 그대로. */
 export type GitWorktreeInfo = {
@@ -43,7 +58,7 @@ export type Worktree = GitWorktreeInfo & {
   id: string
   repoId: string
   displayName: string
-}
+} & WorktreeMeta
 
 /** Orca `CreateWorktreeArgs`(src/shared/worktree/create-types.ts)의 1차 부분집합. */
 export type CreateWorktreeArgs = {
@@ -53,6 +68,8 @@ export type CreateWorktreeArgs = {
   baseBranch?: string
   /** 렌더러가 만든 id — 진행 이벤트·취소가 이것으로 맞물린다. */
   creationId: string
+  /** M10 WS-14 이름 칸을 비워 자동 이름(바다 생물)을 쓴다 — main 이 지운 이름(retiredNames)을 건너뛴다(Orca nameWasGenerated). */
+  nameWasGenerated?: boolean
 }
 
 export type CreateWorktreeResult =

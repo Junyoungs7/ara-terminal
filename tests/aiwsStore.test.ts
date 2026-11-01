@@ -19,7 +19,15 @@ const ev = {
     cancelCreate: vi.fn(async () => ({ ok: true })),
     remove: vi.fn(async () => ({ ok: true as const })),
     stats: vi.fn(async () => ({ ok: true as const, base: 'main', ahead: 2, added: 5, removed: 1 })),
-    onCreateProgress: vi.fn(() => () => {})
+    onCreateProgress: vi.fn(() => () => {}),
+    updateMeta: vi.fn(async (_id: string, u: { isArchived?: boolean; sleep?: unknown }) => (u.isArchived ? { isArchived: true } : {}))
+  },
+  projectGroups: {
+    list: vi.fn(async () => [{ id: 'g1', name: 'Work', isCollapsed: false, createdAt: 0 }]),
+    create: vi.fn(async (name: string) => ({ id: 'g2', name, isCollapsed: false, createdAt: 1 })),
+    update: vi.fn(async () => null),
+    delete: vi.fn(async () => true),
+    moveProject: vi.fn(async (_p: string, groupId: string | null) => ({ ...project, ...(groupId ? { groupId } : {}) }))
   }
 }
 
@@ -126,5 +134,40 @@ describe('aiws store', () => {
   it('[다시] 를 위해 분기 지점을 pending 에 남긴다', async () => {
     await store.useAiwsStore.getState().createWorktree({ repoId: 'r1', name: 'x', baseBranch: 'v1', creationId: 'fixed' })
     expect(store.useAiwsStore.getState().pendingWorktreeCreations.fixed).toMatchObject({ name: 'x', baseBranch: 'v1' })
+  })
+
+  // ── M10 ──
+  it('WS-15 그룹 — 처음 열 때 불러오고, 만들기·옮기기·지우기(안의 프로젝트는 그룹 밖으로)', async () => {
+    store.useAiwsStore.setState({ repos: [project], groups: [] })
+    const s = store.useAiwsStore.getState()
+    await s.fetchGroups()
+    const g = await s.createProjectGroup('Side')
+    expect(store.useAiwsStore.getState().groups.map((x) => x.name)).toEqual(['Work', 'Side'])
+    await s.moveProjectToGroup('r1', g?.id ?? '')
+    expect(store.useAiwsStore.getState().repos[0].groupId).toBe('g2')
+    await s.updateProjectGroup('g2', { isCollapsed: true }) // main 이 null 이어도 바로 보인 값은 남는다
+    expect(store.useAiwsStore.getState().groups.find((x) => x.id === 'g2')?.isCollapsed).toBe(true)
+    await s.deleteProjectGroup('g2')
+    expect(store.useAiwsStore.getState().repos[0].groupId).toBeUndefined()
+  })
+
+  it('WS-16 메타 — 보관하면 목록 항목에 얹히고 고른 줄에서 내린다, 풀면 지운다', async () => {
+    store.useAiwsStore.setState({ worktreesByRepo: { r1: [main, feat] }, activeWorktreeId: feat.id })
+    await store.useAiwsStore.getState().updateWorktreeMeta(feat.id, { isArchived: true })
+    expect(store.useAiwsStore.getState().worktreesByRepo.r1[1]).toMatchObject({ isArchived: true })
+    expect(store.useAiwsStore.getState().activeWorktreeId).toBeNull()
+    await store.useAiwsStore.getState().updateWorktreeMeta(feat.id, { isArchived: false })
+    expect(store.useAiwsStore.getState().worktreesByRepo.r1[1]).not.toHaveProperty('isArchived')
+  })
+
+  it('WS-14 자동 이름 — nameWasGenerated 를 main 에 넘기고, 자동 이름 작업 단위를 지우면 이 창의 은퇴 목록에도 얹는다', async () => {
+    const s = store.useAiwsStore.getState()
+    await s.createWorktree({ repoId: 'r1', name: 'nautilus', nameWasGenerated: true })
+    expect(ev.worktrees.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'nautilus', nameWasGenerated: true }))
+    const sea = { ...feat, id: 'r1::C:/ws/nautilus', path: 'C:/ws/nautilus' }
+    store.useAiwsStore.setState({ repos: [project], worktreesByRepo: { r1: [main, sea, feat] } })
+    await s.removeWorktree(sea.id)
+    await s.removeWorktree(feat.id)
+    expect(store.useAiwsStore.getState().repos[0].retiredNames).toEqual(['nautilus'])
   })
 })

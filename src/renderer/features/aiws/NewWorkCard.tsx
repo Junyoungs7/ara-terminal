@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useEffect, useMemo, useState, type JSX } from 'react'
 import type { BaseRef } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore } from './store'
@@ -7,6 +7,7 @@ import { RUN_ON_LOCAL, projectsOn, runOnStep, type RunOnHost, type RunOnTarget }
 import { pickInitialAgent, useAgentStore } from './agentStore'
 import { useDialog } from '../../components/Dialog'
 import { askManagedConsent } from '../managed/consent'
+import { getSuggestedCreatureName, getWorkspaceSeedName } from '@shared/worktreeNames'
 
 /**
  * M2 라운드 2 WS-02·WS-04 — 새 작업 만들기. Orca NewWorkspaceComposerCard·new-workspace/ComposerBaseRefPicker
@@ -14,6 +15,7 @@ import { askManagedConsent } from '../managed/consent'
  * M3: 에이전트 + 첫 지시 — 만든 뒤 그 작업 단위에서 띄운다. 뺀 것: 이슈/PR 연결·설정 스크립트·고급 옵션.
  * M8 DM-05: 맨 위 **실행 위치**(Orca host-picker — 로컬 / 관리형 서버). 서버를 고르면 그 서버의 원격 저장소만 보이고, 동의 안 된 서버는 동의 화면부터.
  * 원격 저장소는 경로를 쳐서 더한다(`~/…` 가능). 워크트리로/없이·분기 지점·에이전트는 로컬과 같은 칸 — 실행은 그 서버의 orcad 에서.
+ * M10 WS-14 이름 칸은 비워도 된다(Orca "Automatic name") — 첫 지시의 영문 조각, 없으면 바다 생물 이름(shared/worktreeNames.ts).
  */
 const REF_SEARCH_DEBOUNCE_MS = 150
 
@@ -86,7 +88,10 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
   }, [repoId, refQuery, isGit])
 
   const effectiveMode = isGit ? mode : 'none'
-  const canCreate = !!repo && (effectiveMode === 'none' || name.trim() !== '')
+  const canCreate = !!repo
+  // WS-14 자동 이름 — 모든 프로젝트의 워크트리 폴더 이름 + 이 프로젝트의 지운 자동 이름을 피한다. 카드를 여는 동안 고정(무작위가 깜빡이지 않게).
+  const byRepo = useAiwsStore((s) => s.worktreesByRepo)
+  const creature = useMemo(() => getSuggestedCreatureName(byRepo, Math.random, repo?.retiredNames), [byRepo, repo?.retiredNames])
 
   // M3: 에이전트 + 첫 지시 — 만들고 나면 그 작업 단위에서 바로 띄운다(Orca 새 작업 카드의 에이전트 고르기).
   const detected = useAgentStore((s) => s.detected)
@@ -116,7 +121,9 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
     }
     // 바로 닫는다 — 진행은 사이드바 줄이 보여 준다(WS-03). 다 만들어지면 그 워크트리를 고르고 에이전트를 띄운다.
     onClose()
-    void st.createWorktree({ repoId: repo.id, name: name.trim(), baseBranch: base || undefined }).then((r) => {
+    const seed = getWorkspaceSeedName({ explicitName: name, prompt: agent ? prompt : '', fallbackName: creature })
+    const nameWasGenerated = !name.trim() && seed === creature
+    void st.createWorktree({ repoId: repo.id, name: seed, baseBranch: base || undefined, nameWasGenerated }).then((r) => {
       if (!r.ok) return
       useAiwsStore.getState().setActiveWorktree(r.worktree.id)
       launch(r.worktree.id, r.worktree.path)
@@ -219,7 +226,7 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
                   autoFocus
                   className="aiws-input"
                   data-aiws="new-name"
-                  placeholder={t('aiws.new.namePh')}
+                  placeholder={t('aiws.new.nameAuto').replace('{name}', getWorkspaceSeedName({ explicitName: '', prompt: agent ? prompt : '', fallbackName: creature }))}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {

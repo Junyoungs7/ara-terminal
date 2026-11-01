@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 import type { AgentId } from '@shared/agents'
 import { createChatModel, DECODERS, geminiDocLines, takeLines, transcriptHint, type AgentChatEvent, type AgentChatSnapshot, type ChatMessage, type ChatModel } from '@shared/agentChat'
 import { readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
+import { parseGeminiDocument, parseSessionLines } from '@shared/vault'
 
 /** 처음 열 때 끝에서 이만큼만 읽는다(긴 대화 — Orca 꼬리 읽기). 잘린 첫 줄은 버린다. */
 export const INITIAL_TAIL_BYTES = 2 * 1024 * 1024
@@ -141,6 +142,8 @@ export type ChatWatcher = {
   close(paneKey: string): void
   /** 탭이 끝남 — 기억한 경로도 지운다. */
   forget(paneKey: string): void
+  /** M10 WS-16 재우기: 그 탭의 CLI 세션 id(깨울 때 resume) — transcript 머리에서 읽는다. 모르면 null. */
+  resumeId(paneKey: string): string | null
   stop(): void
 }
 
@@ -304,6 +307,10 @@ export function createChatWatcher(deps: { push: (e: AgentChatEvent) => void; sto
       return { messages: w.model.messages(), file: w.path }
     },
     close: stopOne,
+    resumeId(paneKey) {
+      const path = findPath(paneKey)
+      return path ? resumeIdFromTranscript(agentOf(paneKey), path) : null
+    },
     forget(paneKey) {
       stopOne(paneKey)
       bound.delete(paneKey)
@@ -314,3 +321,23 @@ export function createChatWatcher(deps: { push: (e: AgentChatEvent) => void; sto
     }
   }
 }
+
+/** transcript 머리(64KB)에서 세션 id — 지난 세션 목록(vault)과 같은 해석(Claude sessionId·Codex session_meta·Gemini 문서 sessionId). */
+export function resumeIdFromTranscript(agent: AgentId, path: string): string | null {
+  try {
+    if (agent === 'gemini' && path.toLowerCase().endsWith('.json')) return parseGeminiDocument(readFileSync(path, 'utf8')).id
+    const fd = openSync(path, 'r')
+    try {
+      const buf = Buffer.alloc(RESUME_HEAD_BYTES)
+      const n = readSync(fd, buf, 0, buf.length, 0)
+      const lines = buf.subarray(0, n).toString('utf8').split('\n')
+      if (n === buf.length) lines.pop() // 잘린 끝 줄
+      return parseSessionLines(agent, lines).id
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    return null
+  }
+}
+const RESUME_HEAD_BYTES = 64 * 1024

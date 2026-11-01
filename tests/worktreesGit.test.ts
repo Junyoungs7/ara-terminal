@@ -214,3 +214,68 @@ describe('통계(WS-05 — +/− 줄 수 · main 에서 n 커밋 앞)', { timeou
     expect(await svc.worktreeStats(p.project.id, join(dir, 'nope'))).toEqual({ ok: false })
   })
 })
+
+// ── M10 ──
+describe('M10 자동 이름 은퇴(WS-14) · 보관·잠듦 메타(WS-16) · 프로젝트 그룹(WS-15)', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
+  it('자동 이름 작업 단위를 지우면 그 이름을 은퇴시키고, 다음 자동 생성은 그 이름을 건너뛴다(사람이 친 이름은 은퇴 안 함)', async () => {
+    const svc = makeService()
+    const p = await svc.addProject(repo)
+    if (!p.ok) throw new Error('add')
+    const a = await svc.createWorktree({ repoId: p.project.id, name: 'nautilus', creationId: 'n1', nameWasGenerated: true })
+    if (!a.ok) throw new Error(a.message)
+    expect((await svc.removeWorktree(p.project.id, a.worktree.path)).ok).toBe(true)
+    expect(makeService().listProjects()[0].retiredNames).toEqual(['nautilus'])
+    // 브랜치 nautilus 는 남아 있다 — 은퇴 목록이 없어도 -2 로 갔겠지만, 브랜치를 지워도 은퇴가 nautilus 를 막는다.
+    await sh(['branch', '-D', 'nautilus'])
+    const b = await svc.createWorktree({ repoId: p.project.id, name: 'nautilus', creationId: 'n2', nameWasGenerated: true })
+    expect(b.ok && b.worktree.branch).toBe('refs/heads/nautilus-2')
+    // 사람이 친 이름이면 은퇴 목록을 안 본다.
+    const c = await svc.createWorktree({ repoId: p.project.id, name: 'nautilus', creationId: 'n3' })
+    expect(c.ok && c.worktree.branch).toBe('refs/heads/nautilus')
+    const d = await svc.createWorktree({ repoId: p.project.id, name: 'my-fix', creationId: 'n4' })
+    if (!d.ok) throw new Error(d.message)
+    await svc.removeWorktree(p.project.id, d.worktree.path)
+    expect(makeService().listProjects()[0].retiredNames).toEqual(['nautilus'])
+  })
+
+  it('보관·잠든 탭은 목록에 얹혀 오고 다시 켜도 남는다. 지우면 메타도 지운다. 모르는 프로젝트·잘못된 모양은 거절', async () => {
+    const svc = makeService()
+    const p = await svc.addProject(repo)
+    if (!p.ok) throw new Error('add')
+    const r = await svc.createWorktree({ repoId: p.project.id, name: 'zz', creationId: 'm1' })
+    if (!r.ok) throw new Error(r.message)
+    const id = r.worktree.id
+    expect(svc.updateMeta(id, { sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'nope', resume: 'x' }, { agent: 'codex', resume: 3 }] })).toEqual({
+      sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }]
+    })
+    expect(svc.updateMeta(id, { isArchived: true })).toMatchObject({ isArchived: true, sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }] })
+    const l = await makeService().listWorktrees(p.project.id)
+    expect(l.ok && l.worktrees.find((w) => w.id === id)).toMatchObject({ isArchived: true, sleep: [{ agent: 'claude', resume: 'abc' }, { agent: 'codex', resume: null }] })
+    expect(svc.updateMeta(id, { isArchived: false, sleep: null })).toEqual({})
+    const l2 = await svc.listWorktrees(p.project.id)
+    expect(l2.ok && l2.worktrees.find((w) => w.id === id)).not.toHaveProperty('isArchived')
+    expect(svc.updateMeta('nope::x', { isArchived: true })).toBeNull()
+    expect(svc.updateMeta(id, 'bad')).toBeNull()
+    svc.updateMeta(id, { isArchived: true })
+    await svc.removeWorktree(p.project.id, r.worktree.path)
+    expect(new ProjectStore(join(dir, 'projects.json')).meta(id)).toBeUndefined()
+  })
+
+  it('프로젝트 그룹 — 만들기·옮기기·이름·접기·지우기(안의 프로젝트는 그룹 밖으로), 다시 켜도 남는다', async () => {
+    const svc = makeService()
+    const p = await svc.addProject(repo)
+    if (!p.ok) throw new Error('add')
+    expect(svc.createGroup('  ')).toBeNull()
+    const g = svc.createGroup('Work')
+    if (!g) throw new Error('group')
+    expect(svc.moveProject(p.project.id, 'missing')).toBeNull()
+    expect(svc.moveProject(p.project.id, g.id)?.groupId).toBe(g.id)
+    expect(svc.updateGroup(g.id, { name: 'Job', isCollapsed: true, junk: 1 })).toMatchObject({ name: 'Job', isCollapsed: true })
+    const again = makeService()
+    expect(again.listGroups()).toMatchObject([{ id: g.id, name: 'Job', isCollapsed: true }])
+    expect(again.listProjects()[0].groupId).toBe(g.id)
+    expect(svc.deleteGroup(g.id)).toBe(true)
+    expect(svc.listProjects()[0].groupId).toBeUndefined()
+    expect(svc.moveProject(p.project.id, null)?.groupId).toBeUndefined()
+  })
+})

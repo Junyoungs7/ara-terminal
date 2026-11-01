@@ -2,9 +2,9 @@
 // Orca src/preload/api/worktrees-bridge.ts(orcaRef 7a7f46f8a3)의 모양 — 진행 채널 이름도 같다(createWorktree:progress).
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { EvApi } from '@shared/ipc'
-import type { CreateWorktreeArgs, CreateWorktreeProgressEvent } from '@shared/worktrees'
+import type { CreateWorktreeArgs, CreateWorktreeProgressEvent, WorktreeMetaUpdate } from '@shared/worktrees'
 
-export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees'> = {
+export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups'> = {
   repos: {
     list: () => ipcRenderer.invoke('repos:list'),
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
@@ -19,10 +19,19 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees'> = {
     cancelCreate: (creationId: string) => ipcRenderer.invoke('worktrees:cancelCreate', { creationId }),
     remove: (repoId: string, path: string, force?: boolean) => ipcRenderer.invoke('worktrees:remove', { repoId, path, force }),
     stats: (repoId: string, path: string) => ipcRenderer.invoke('worktrees:stats', { repoId, path }),
+    updateMeta: (worktreeId: string, updates: WorktreeMetaUpdate) => ipcRenderer.invoke('worktrees:updateMeta', { worktreeId, updates }),
     onCreateProgress: (cb: (e: CreateWorktreeProgressEvent) => void) => {
       const listener = (_e: IpcRendererEvent, d: CreateWorktreeProgressEvent) => cb(d)
       ipcRenderer.on('createWorktree:progress', listener)
       return () => ipcRenderer.removeListener('createWorktree:progress', listener)
     }
+  },
+  // M10 WS-15 Orca projectGroups:*
+  projectGroups: {
+    list: () => ipcRenderer.invoke('projectGroups:list'),
+    create: (name: string) => ipcRenderer.invoke('projectGroups:create', { name }),
+    update: (groupId: string, updates: { name?: string; isCollapsed?: boolean }) => ipcRenderer.invoke('projectGroups:update', { groupId, updates }),
+    delete: (groupId: string) => ipcRenderer.invoke('projectGroups:delete', { groupId }),
+    moveProject: (projectId: string, groupId: string | null) => ipcRenderer.invoke('projectGroups:moveProject', { projectId, groupId })
   }
 }

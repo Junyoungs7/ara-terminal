@@ -235,6 +235,10 @@ export function registerAgentsFeature(deps: {
     if (ok && !text.startsWith('/')) maybeName(sessionId, text)
     return { ok }
   })
+  // M10 WS-16 재우기 — 닫기 전에 탭마다 CLI 세션 id 를 받아 둔다(닫으면 transcript 경로를 잊는다).
+  handle('agents:resumeIds', ({ sessionIds }) =>
+    Object.fromEntries((Array.isArray(sessionIds) ? sessionIds : []).filter((id): id is string => typeof id === 'string').map((id) => [id, ensureChat().resumeId(id)]))
+  )
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {
     await daemon.shutdownAll()

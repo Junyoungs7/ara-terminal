@@ -36,6 +36,13 @@ export function registerWorktreesFeature(userData: string, remote?: (hostKey: st
   handle('worktrees:cancelCreate', ({ creationId }) => service.cancelCreate(creationId))
   handle('worktrees:remove', ({ repoId, path, force }) => service.removeWorktree(repoId, path, force))
   handle('worktrees:stats', ({ repoId, path }) => service.worktreeStats(repoId, path))
+  handle('worktrees:updateMeta', ({ worktreeId, updates }) => service.updateMeta(worktreeId, updates))
+  // M10 WS-15 프로젝트 그룹 — Orca projectGroups:* 이름.
+  handle('projectGroups:list', () => service.listGroups())
+  handle('projectGroups:create', ({ name }) => service.createGroup(name))
+  handle('projectGroups:update', ({ groupId, updates }) => service.updateGroup(groupId, updates))
+  handle('projectGroups:delete', ({ groupId }) => service.deleteGroup(groupId))
+  handle('projectGroups:moveProject', ({ projectId, groupId }) => service.moveProject(projectId, groupId))
   // 지난번에 앱이 죽어 남은 생성 기록 정리(WS-03). 기동을 막지 않는다.
   void service.reconcilePending().catch((e) => logMainError('worktree-reconcile', e))
   return service

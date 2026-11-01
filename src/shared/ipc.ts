@@ -51,8 +51,11 @@ import type {
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
   Project,
+  ProjectGroup,
   RemoveWorktreeResult,
   Worktree,
+  WorktreeMeta,
+  WorktreeMetaUpdate,
   WorktreeStats
 } from './worktrees'
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
@@ -585,6 +588,14 @@ export type InvokeContract = {
   'worktrees:cancelCreate': { req: { creationId: string }; res: { ok: boolean } }
   'worktrees:remove': { req: { repoId: string; path: string; force?: boolean }; res: RemoveWorktreeResult }
   'worktrees:stats': { req: { repoId: string; path: string }; res: WorktreeStats }
+  // M10 WS-16 보관·잠든 탭(Orca worktrees:updateMeta). 모르는 작업 단위면 null.
+  'worktrees:updateMeta': { req: { worktreeId: string; updates: WorktreeMetaUpdate }; res: WorktreeMeta | null }
+  // M10 WS-15 프로젝트 그룹(Orca projectGroups:*).
+  'projectGroups:list': { req: void; res: ProjectGroup[] }
+  'projectGroups:create': { req: { name: string }; res: ProjectGroup | null }
+  'projectGroups:update': { req: { groupId: string; updates: { name?: string; isCollapsed?: boolean } }; res: ProjectGroup | null }
+  'projectGroups:delete': { req: { groupId: string }; res: boolean }
+  'projectGroups:moveProject': { req: { projectId: string; groupId: string | null }; res: Project | null }
   // M3 에이전트(main/agents/feature.ts). 감지는 force 면 로그인 셸 PATH 도 다시 읽는다.
   'agents:detect': { req: { force?: boolean }; res: DetectedAgent[] }
   'agents:getSettings': { req: void; res: AgentSettings }
@@ -621,6 +632,8 @@ export type InvokeContract = {
   'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string } }
   // M8 R4 끊긴 원격 탭 닫기 = 서버의 세션도 끝낸다(Orca: 닫기 = 종료). 잠깐 붙어서 끝내고, 못 붙으면 다음 연결 때(false).
   'agents:killRemote': { req: { hostKey: string; sessionId: string }; res: boolean }
+  // M10 WS-16 재우기 — 탭(세션)들의 CLI 세션 id(깨울 때 resume). 모르면 null.
+  'agents:resumeIds': { req: { sessionIds: string[] }; res: Record<string, string | null> }
   // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
   'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
   // 상세는 마지막 목록에 있던 파일만 연다.
@@ -1253,8 +1266,17 @@ export type EvApi = {
     cancelCreate(creationId: string): Promise<{ ok: boolean }>
     remove(repoId: string, path: string, force?: boolean): Promise<RemoveWorktreeResult>
     stats(repoId: string, path: string): Promise<WorktreeStats>
+    updateMeta(worktreeId: string, updates: WorktreeMetaUpdate): Promise<WorktreeMeta | null>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
+  }
+  // M10 WS-15 프로젝트 그룹(preload/features/worktrees.ts).
+  projectGroups: {
+    list(): Promise<ProjectGroup[]>
+    create(name: string): Promise<ProjectGroup | null>
+    update(groupId: string, updates: { name?: string; isCollapsed?: boolean }): Promise<ProjectGroup | null>
+    delete(groupId: string): Promise<boolean>
+    moveProject(projectId: string, groupId: string | null): Promise<Project | null>
   }
   // M8 관리형 서버(preload/features/managed.ts).
   managed: {
@@ -1275,6 +1297,7 @@ export type EvApi = {
     launch(agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions, host?: string): Promise<AgentLaunchResult>
     reconnect(hostKey: string): Promise<InvokeRes<'agents:reconnect'>>
     killRemote(hostKey: string, sessionId: string): Promise<boolean>
+    resumeIds(sessionIds: string[]): Promise<Record<string, string | null>>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */

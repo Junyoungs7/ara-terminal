@@ -1,7 +1,7 @@
 // M2 라운드 2 WS-05 — 사이드바 줄(필터·핀·정렬·묶기). 순수 함수라 화면 없이 돈다.
 import { describe, expect, it } from 'vitest'
 import type { Project, Worktree } from '@shared/worktrees'
-import { buildSidebarRows, type SidebarInput, type SidebarRow } from '../src/renderer/features/aiws/sidebarRows'
+import { buildSidebarRows, isDeleteWorkspaceKey, type SidebarInput, type SidebarRow } from '../src/renderer/features/aiws/sidebarRows'
 import type { PendingWorktreeCreation } from '../src/renderer/features/aiws/store'
 
 const api: Project = { id: 'api', path: 'C:/api', displayName: 'api', kind: 'git', addedAt: 0 }
@@ -90,5 +90,57 @@ describe('buildSidebarRows', () => {
       '# pinned (1)', 'alpha @api',
       '# all (5)', '… new-thing', 'main @api', 'main @web', 'notes @notes', 'fix-login @web', 'zeta @api'
     ])
+  })
+
+  // ── M10 WS-15 프로젝트 그룹 ──
+  it('그룹 — 그룹 머리줄 아래 그 프로젝트들이 한 칸 들어가고, 그룹 밖 프로젝트는 뒤에', () => {
+    const rows = buildSidebarRows({ ...base, repos: [api, { ...web, groupId: 'g1' }, notes], groups: [{ id: 'g1', name: 'Work', isCollapsed: false, createdAt: 0 }] })
+    expect(keys(rows)).toEqual([
+      '# project-group:g1 (1)',
+      '# repo:web (2)', 'main', 'fix-login',
+      '# repo:api (3)', 'main', 'alpha', 'zeta',
+      '# repo:notes (1)', 'notes'
+    ])
+    expect(rows.find((r) => r.kind === 'header' && r.key === 'repo:web')).toMatchObject({ depth: 1 })
+    expect(rows.find((r) => r.kind === 'header' && r.key === 'repo:api')).toMatchObject({ depth: 0 })
+  })
+
+  it('그룹 — 접으면 머리줄만, 빈 그룹도 보인다, 없는 그룹을 가리키는 프로젝트는 그룹 밖', () => {
+    const rows = buildSidebarRows({
+      ...base,
+      repos: [{ ...api, groupId: 'g1' }, { ...web, groupId: 'gone' }, notes],
+      groups: [
+        { id: 'g1', name: 'Work', isCollapsed: true, createdAt: 0 },
+        { id: 'g2', name: 'Empty', isCollapsed: false, createdAt: 1 }
+      ]
+    })
+    expect(keys(rows)).toEqual(['# project-group:g1 (1)', '# project-group:g2 (0)', '# repo:web (2)', 'main', 'fix-login', '# repo:notes (1)', 'notes'])
+  })
+
+  it('그룹 — 검색 중엔 맞는 프로젝트가 없는 그룹을 숨긴다. 한 목록 보기에선 그룹을 안 쓴다', () => {
+    const input = { ...base, repos: [{ ...api, groupId: 'g1' }, { ...web, groupId: 'g2' }, notes], groups: [{ id: 'g1', name: 'A', isCollapsed: false, createdAt: 0 }, { id: 'g2', name: 'B', isCollapsed: false, createdAt: 1 }] }
+    expect(keys(buildSidebarRows({ ...input, query: 'fix' }))).toEqual(['# project-group:g2 (1)', '# repo:web (1)', 'fix-login'])
+    expect(keys(buildSidebarRows({ ...input, groupBy: 'none' }))[0]).toBe('# all (6)')
+  })
+
+  // ── M10 WS-16 보관 ──
+  it('보관 — 목록·고정에서 빠지고, 보관함 보기면 보관한 줄만 한 묶음', () => {
+    const archived = { ...apiZeta, isArchived: true }
+    const input = { ...base, worktreesByRepo: { ...base.worktreesByRepo, api: [archived, apiMain, apiAlpha] }, pinnedIds: [archived.id] }
+    expect(keys(buildSidebarRows(input))).toEqual(['# repo:api (2)', 'main', 'alpha', '# repo:web (2)', 'main', 'fix-login', '# repo:notes (1)', 'notes'])
+    expect(keys(buildSidebarRows({ ...input, showArchived: true }))).toEqual(['# archived (1)', 'zeta @api'])
+    expect(buildSidebarRows({ ...base, showArchived: true })).toEqual([])
+  })
+})
+
+describe('isDeleteWorkspaceKey (M10 WS-17 — Orca workspace.delete = Mod+Shift+Backspace)', () => {
+  const k = (o: Partial<KeyboardEvent>) => ({ key: 'Backspace', shiftKey: true, altKey: false, ctrlKey: false, metaKey: false, ...o })
+  it('Windows 는 Ctrl+Shift+Backspace, 맥은 Cmd+Shift+Backspace 만', () => {
+    expect(isDeleteWorkspaceKey(k({ ctrlKey: true }), false)).toBe(true)
+    expect(isDeleteWorkspaceKey(k({ metaKey: true }), true)).toBe(true)
+    expect(isDeleteWorkspaceKey(k({ ctrlKey: true, shiftKey: false }), false)).toBe(false)
+    expect(isDeleteWorkspaceKey(k({ ctrlKey: true, altKey: true }), false)).toBe(false)
+    expect(isDeleteWorkspaceKey(k({ metaKey: true }), false)).toBe(false)
+    expect(isDeleteWorkspaceKey(k({ ctrlKey: true, key: 'Delete' }), false)).toBe(false)
   })
 })

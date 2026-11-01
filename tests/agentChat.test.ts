@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { composeChatText, createChatModel, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
-import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript } from '../src/main/agents/chat'
+import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
 const user = (uuid: string, content: unknown, extra: object = {}): string => J({ type: 'user', uuid, message: { role: 'user', content }, ...extra })
@@ -328,6 +328,31 @@ describe('Codex·Gemini 파일 찾기(임시 폴더)', () => {
     await new Promise((r) => setTimeout(r, 400))
     expect(events.at(-1)).toMatchObject({ sessionId: 'g', reset: true })
     expect(events.at(-1)!.messages.map((m) => m.id)).toEqual(['m0', 'm1', 'm2'])
+    w.stop()
+  })
+})
+
+describe('M10 WS-16 재우기 — transcript 머리에서 CLI 세션 id(resumeIdFromTranscript)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ara-resume-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const put = (name: string, text: string): string => {
+    const f = join(root, name)
+    writeFileSync(f, text)
+    return f
+  }
+  it('Claude sessionId · Codex session_meta · Gemini 문서 · 없거나 깨지면 null', () => {
+    expect(resumeIdFromTranscript('claude', put('c.jsonl', [J({ type: 'summary' }), J({ type: 'user', sessionId: 'abc-123', message: { content: 'hi' } })].join('\n')))).toBe('abc-123')
+    expect(resumeIdFromTranscript('codex', put('x.jsonl', J({ type: 'session_meta', payload: { id: 'cx-9', cwd: '/w' } }) + '\n'))).toBe('cx-9')
+    expect(resumeIdFromTranscript('gemini', put('g.json', J({ sessionId: 'gm-1', messages: [] })))).toBe('gm-1')
+    expect(resumeIdFromTranscript('claude', put('bad.jsonl', 'not json\n'))).toBeNull()
+    expect(resumeIdFromTranscript('claude', join(root, 'missing.jsonl'))).toBeNull()
+  })
+  it('감시자 — 훅이 준 경로의 세션 id, 모르는 탭은 null', () => {
+    const f = put('h.jsonl', J({ type: 'user', sessionId: 'sid-7' }) + '\n')
+    const w = createChatWatcher({ push: () => {}, store: join(root, 's.json'), home: root, throttleMs: 20 })
+    w.hook('p1', { hook_event_name: 'SessionStart', transcript_path: f, session_id: 'sid-7' })
+    expect(w.resumeId('p1')).toBe('sid-7')
+    expect(w.resumeId('p2')).toBeNull()
     w.stop()
   })
 })

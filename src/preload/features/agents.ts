@@ -13,6 +13,7 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
     launch: (agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions, host?: string) => ipcRenderer.invoke('agents:launch', { agent, cwd, prompt, resume, options, host }),
     reconnect: (hostKey: string) => ipcRenderer.invoke('agents:reconnect', { hostKey }),
     killRemote: (hostKey: string, sessionId: string) => ipcRenderer.invoke('agents:killRemote', { hostKey, sessionId }),
+    resumeIds: (sessionIds: string[]) => ipcRenderer.invoke('agents:resumeIds', { sessionIds }),
     models: (agent: AgentId, force?: boolean) => ipcRenderer.invoke('agents:models', { agent, force }),
     slash: (agent: AgentId, cwd: string) => ipcRenderer.invoke('agents:slash', { agent, cwd }),
     onName: (cb: (e: AgentNameEvent) => void) => {
