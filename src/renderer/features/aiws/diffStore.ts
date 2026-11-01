@@ -6,7 +6,6 @@ import type { DiffMode, GitBranchCompareResult, GitStatusResult } from '@shared/
 import { formatDiffComments, markSent, parseStoredComments, type DiffComment } from '@shared/diffComments'
 import type { Worktree } from '@shared/worktrees'
 import { hostOfWorktree, useAiwsStore } from './store'
-import { pushNote } from '../../store/notify'
 import { useAgentStore } from './agentStore'
 import { useCodeStore } from './codeStore'
 import { t } from '../../i18n'
@@ -101,8 +100,10 @@ export const useDiffStore = create<DiffState>()((set, get) => {
     refresh: async (wt) => {
       const list = (get().byWorktree[wt.id] ?? empty()).list
       patchWt(wt.id, { loading: true })
-      if (list === 'working') patchWt(wt.id, { working: await window.ev.gitInspect.status(wt.path), loading: false })
-      else patchWt(wt.id, { branch: await window.ev.gitInspect.branchCompare(wt.path), loading: false })
+      // M8 R5 원격 작업 단위 — 같은 조회를 그 서버의 git 으로(host).
+      const host = hostOfWorktree(wt.id)
+      if (list === 'working') patchWt(wt.id, { working: await window.ev.gitInspect.status(wt.path, host), loading: false })
+      else patchWt(wt.id, { branch: await window.ev.gitInspect.branchCompare(wt.path, undefined, host), loading: false })
     },
     addComment: (wtPath, c) => putComments(wtPath, (l) => [...l, { ...c, id: crypto.randomUUID(), createdAt: Date.now() }]),
     editComment: (wtPath, id, body) =>
@@ -137,11 +138,6 @@ function findWorktree(id?: string): Worktree | undefined {
 export function openDiff(filePath?: string, mode: DiffMode = 'unstaged', worktreeId?: string): boolean {
   const wt = findWorktree(worktreeId)
   if (!wt) return false
-  // M8 R4 원격 작업 단위 — 변경 비교는 로컬 git 을 읽는다. 빈 화면·오류 대신 막고 알린다(Orca 는 원격 git 으로 준다 — 다음 라운드).
-  if (hostOfWorktree(wt.id)) {
-    pushNote({ kind: 'info', space: 'ai', title: t('aiws.remote.unsupported'), body: t('diff.tab'), ctx: wt.displayName })
-    return false
-  }
   const s = useDiffStore.getState()
   const cur = s.byWorktree[wt.id]
   const list: DiffList = mode === 'branch' ? 'branch' : 'working'

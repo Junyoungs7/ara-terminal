@@ -3,7 +3,8 @@
 // 뺀 것: 상태 읽기 합치기·캐시·줄 수 통계·서브모듈·WSL·이미지 미리보기·충돌 작업 감지. 공유 API = agent_talk/m7-shared-api.md.
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { git } from '../worktrees/git'
+import { git as localGit } from '../worktrees/git'
+import type { RunResult } from '../util/runProcess'
 import {
   DEFAULT_BASE_REF_ARGS,
   DIFF_READ_MAX_BYTES,
@@ -18,16 +19,32 @@ import {
   type GitStatusResult
 } from '@shared/gitDiff'
 
+/**
+ * M8 R5 — 조회가 쓰는 두 가지(git 한 번 · 작업 폴더의 파일 글). 로컬이 기본, 원격 작업 단위는 work/backend 가 SSH 판을 넘긴다.
+ * readText: 없으면 '', DIFF_READ_MAX_BYTES 를 넘으면 null.
+ */
+export type InspectIO = { git: (args: string[], cwd: string) => Promise<RunResult>; readText: (root: string, rel: string) => Promise<string | null> }
+export const LOCAL_INSPECT: InspectIO = {
+  git: (args, cwd) => localGit(args, cwd),
+  readText: async (root, rel) => {
+    const p = join(root, rel)
+    const st = await stat(p).catch(() => null)
+    if (!st?.isFile()) return ''
+    return st.size > DIFF_READ_MAX_BYTES ? null : readFile(p, 'utf8')
+  }
+}
+
 const failed = (stderr: string, fallback: string): { ok: false; message: string } => ({ ok: false, message: stderr.trim() || fallback })
 
 /** 작업 중 변경(스테이지됨·안 됨·추적 안 됨). Orca status-read 의 인자 그대로 + -z. ponytail: 출력은 runProcess 상한(16MB) 안에서 통째로 — 목록은 GIT_STATUS_LIMIT 에서 자른다. */
-export async function readGitStatus(worktreePath: string): Promise<GitStatusResult> {
-  const r = await git(['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all'], worktreePath)
+export async function readGitStatus(worktreePath: string, io: InspectIO = LOCAL_INSPECT): Promise<GitStatusResult> {
+  const r = await io.git(['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all'], worktreePath)
   return r.code === 0 ? parseStatusV2(r.stdout) : failed(r.stderr, 'git status 실패')
 }
 
 /** 분기 기준 대비(갈림점 ↔ HEAD, 커밋된 것만). baseRef 를 안 주면 Orca 기본값(origin/HEAD → origin/main …). */
-export async function readBranchCompare(worktreePath: string, baseRef?: string): Promise<GitBranchCompareResult> {
+export async function readBranchCompare(worktreePath: string, baseRef?: string, io: InspectIO = LOCAL_INSPECT): Promise<GitBranchCompareResult> {
+  const git = io.git
   let base = typeof baseRef === 'string' && baseRef.trim() ? baseRef.trim() : null
   if (base?.startsWith('-')) return { ok: false, message: `잘못된 기준: ${base}` }
   if (!base) {
@@ -45,13 +62,9 @@ export async function readBranchCompare(worktreePath: string, baseRef?: string):
 
 type Side = { rev: string; path: string } | { disk: string }
 /** 한쪽 글. 없으면 ''(추가·삭제), 상한을 넘으면 null(tooLarge). */
-async function readSide(worktreePath: string, side: Side): Promise<string | null> {
-  if ('disk' in side) {
-    const p = join(worktreePath, side.disk)
-    const st = await stat(p).catch(() => null)
-    if (!st?.isFile()) return ''
-    return st.size > DIFF_READ_MAX_BYTES ? null : readFile(p, 'utf8')
-  }
+async function readSide(worktreePath: string, side: Side, io: InspectIO): Promise<string | null> {
+  if ('disk' in side) return io.readText(worktreePath, side.disk)
+  const git = io.git
   const spec = `${side.rev}:${side.path}`
   const size = await git(['cat-file', '-s', spec], worktreePath)
   if (size.code !== 0) return ''
@@ -61,7 +74,7 @@ async function readSide(worktreePath: string, side: Side): Promise<string | null
 }
 
 /** 파일 하나의 양쪽 글 — **연 파일만** 부른다(목록은 이름만). */
-export async function readFileDiff(a: GitDiffArgs): Promise<GitDiffResult> {
+export async function readFileDiff(a: GitDiffArgs, io: InspectIO = LOCAL_INSPECT): Promise<GitDiffResult> {
   if (!isSafeRelPath(a.filePath) || (a.oldPath !== undefined && !isSafeRelPath(a.oldPath))) return { ok: false, message: '잘못된 경로입니다.' }
   const old = a.oldPath ?? a.filePath
   let sides: [Side, Side]
@@ -70,7 +83,7 @@ export async function readFileDiff(a: GitDiffArgs): Promise<GitDiffResult> {
   else if (a.mode === 'branch' && typeof a.mergeBase === 'string' && /^[0-9a-f]{7,64}$/i.test(a.mergeBase)) sides = [{ rev: a.mergeBase, path: old }, { rev: 'HEAD', path: a.filePath }]
   else return { ok: false, message: '잘못된 비교 방식입니다.' }
   try {
-    const [original, modified] = await Promise.all(sides.map((s) => readSide(a.worktreePath, s)))
+    const [original, modified] = await Promise.all(sides.map((s) => readSide(a.worktreePath, s, io)))
     if (original === null || modified === null) return { ok: true, kind: 'tooLarge' }
     return buildDiffResult(original, modified)
   } catch (e) {

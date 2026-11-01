@@ -141,7 +141,8 @@ export type SessionLogReadResult =
 
 // 파일 조작(이름 변경·새 폴더·삭제) 결과. canceled 는 진행 중 재귀 삭제를 사용자가 멈춘 경우.
 /** M6 코드 에디터 저장 요청. force = 디스크가 바뀌었어도 덮어쓰기(사람이 묻는 창에서 고른 뒤에만). */
-export type CodeWriteReq = { root: string; path: string; text: string; eol: 'lf' | 'crlf'; baseSig: string; force?: boolean }
+// M8 R5 host = 원격 작업 단위의 서버(hostKey) — 있으면 main 이 SSH 백엔드로(main/work/backend). code:*·git:*·scm:* 공통.
+export type CodeWriteReq = { root: string; path: string; text: string; eol: 'lf' | 'crlf'; baseSig: string; force?: boolean; host?: string }
 
 export type FileOpResult = { ok: true } | { ok: false; message: string; canceled?: boolean }
 
@@ -625,33 +626,33 @@ export type InvokeContract = {
   'vault:detail': { req: { file: string }; res: VaultDetail }
   'vault:resumeCommand': { req: { agent: AgentId; id: string; cwd: string | null }; res: { ok: true; text: string } | { ok: false; error: string } }
   // M7 R1 WS-10 git 조회(main/git/feature.ts) — 읽기만. 이름은 Orca git-inspection-api. 공유 API = agent_talk/m7-shared-api.md.
-  'git:status': { req: { worktreePath: string }; res: GitStatusResult }
-  'git:branchCompare': { req: { worktreePath: string; baseRef?: string }; res: GitBranchCompareResult }
+  'git:status': { req: { worktreePath: string; host?: string }; res: GitStatusResult }
+  'git:branchCompare': { req: { worktreePath: string; baseRef?: string; host?: string }; res: GitBranchCompareResult }
   'git:diff': { req: GitDiffArgs; res: GitDiffResult }
   // M6 WS-07·08 코드 에디터(main/code/feature.ts). root = 워크트리 폴더 — main 은 그 안의 경로만 받는다.
   // pick = OS 파일 창(취소 = null). write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
   'code:pick': { req: { root: string }; res: string | null }
-  'code:read': { req: { root: string; path: string }; res: CodeReadResult }
+  'code:read': { req: { root: string; path: string; host?: string }; res: CodeReadResult }
   'code:write': { req: CodeWriteReq; res: CodeWriteResult }
-  'code:watch': { req: { root: string; path: string }; res: void }
-  'code:unwatch': { req: { path: string }; res: void }
+  'code:watch': { req: { root: string; path: string; host?: string }; res: void }
+  'code:unwatch': { req: { path: string; host?: string }; res: void }
   // M6 R2 WS-06 빠른 열기 목록(rg --files, 워크트리 기준 '/' 경로, 2만 개 상한) · WS-09 전체 검색(rg --json).
   // search 는 결과를 code:searchBatch 로 묶어 보내고, 끝나면 합계·잘림·취소를 돌려준다. id = 렌더러가 검색마다 새로 만든다.
-  'code:listFiles': { req: { root: string }; res: { ok: true; files: string[]; truncated: boolean } | { ok: false; message: string } }
+  'code:listFiles': { req: { root: string; host?: string }; res: { ok: true; files: string[]; truncated: boolean } | { ok: false; message: string } }
   'code:search': {
-    req: { id: string; root: string; options: SearchOptions }
+    req: { id: string; root: string; options: SearchOptions; host?: string }
     res: { ok: true; total: number; truncated: boolean; cancelled: boolean } | { ok: false; message: string }
   }
   'code:searchCancel': { req: { id: string }; res: void }
   // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
   // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
-  'scm:stage': { req: { root: string; paths: string[] }; res: ScmResult }
-  'scm:unstage': { req: { root: string; paths: string[] }; res: ScmResult }
-  'scm:discard': { req: { root: string; path: string }; res: ScmResult }
-  'scm:commit': { req: { root: string; message: string }; res: ScmResult }
-  'scm:amend': { req: { root: string; message: string; confirmed?: boolean }; res: ScmResult }
-  'scm:push': { req: { root: string; force?: boolean; confirmed?: PushConfirm[] }; res: ScmResult }
-  'scm:pull': { req: { root: string; merge?: boolean }; res: ScmResult }
+  'scm:stage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
+  'scm:unstage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
+  'scm:discard': { req: { root: string; path: string; host?: string }; res: ScmResult }
+  'scm:commit': { req: { root: string; message: string; host?: string }; res: ScmResult }
+  'scm:amend': { req: { root: string; message: string; confirmed?: boolean; host?: string }; res: ScmResult }
+  'scm:push': { req: { root: string; force?: boolean; confirmed?: PushConfirm[]; host?: string }; res: ScmResult }
+  'scm:pull': { req: { root: string; merge?: boolean; host?: string }; res: ScmResult }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1307,34 +1308,34 @@ export type EvApi = {
   }
   // M7 R1 git 조회(preload/features/gitInspect.ts). diff 는 연 파일만 부른다.
   gitInspect: {
-    status(worktreePath: string): Promise<GitStatusResult>
-    branchCompare(worktreePath: string, baseRef?: string): Promise<GitBranchCompareResult>
+    status(worktreePath: string, host?: string): Promise<GitStatusResult>
+    branchCompare(worktreePath: string, baseRef?: string, host?: string): Promise<GitBranchCompareResult>
     diff(args: GitDiffArgs): Promise<GitDiffResult>
   }
   // M6 코드 에디터(preload/features/code.ts).
   code: {
     pick(root: string): Promise<string | null>
-    read(root: string, path: string): Promise<CodeReadResult>
+    read(root: string, path: string, host?: string): Promise<CodeReadResult>
     write(req: CodeWriteReq): Promise<CodeWriteResult>
     /** 열린 파일만 감시한다 — 바뀌면 onChanged(모든 창). 탭을 닫을 때 unwatch. */
-    watch(root: string, path: string): Promise<void>
-    unwatch(path: string): Promise<void>
+    watch(root: string, path: string, host?: string): Promise<void>
+    unwatch(path: string, host?: string): Promise<void>
     onChanged(cb: (e: { path: string }) => void): () => void
-    listFiles(root: string): Promise<InvokeRes<'code:listFiles'>>
-    search(id: string, root: string, options: SearchOptions): Promise<InvokeRes<'code:search'>>
+    listFiles(root: string, host?: string): Promise<InvokeRes<'code:listFiles'>>
+    search(id: string, root: string, options: SearchOptions, host?: string): Promise<InvokeRes<'code:search'>>
     searchCancel(id: string): Promise<void>
     /** 검색 결과 묶음(새로 맞은 것만) — 같은 파일이 여러 묶음에 나뉘어 올 수 있다(이어 붙인다). */
     onSearchBatch(cb: (e: { id: string; files: SearchFile[] }) => void): () => void
   }
   // M7 R2 소스 제어 — git 쓰기(preload/features/scm.ts). 조회는 gitInspect(M7 R1).
   scm: {
-    stage(root: string, paths: string[]): Promise<ScmResult>
-    unstage(root: string, paths: string[]): Promise<ScmResult>
-    discard(root: string, path: string): Promise<ScmResult>
-    commit(root: string, message: string): Promise<ScmResult>
-    amend(root: string, message: string, confirmed?: boolean): Promise<ScmResult>
-    push(root: string, force?: boolean, confirmed?: PushConfirm[]): Promise<ScmResult>
-    pull(root: string, merge?: boolean): Promise<ScmResult>
+    stage(root: string, paths: string[], host?: string): Promise<ScmResult>
+    unstage(root: string, paths: string[], host?: string): Promise<ScmResult>
+    discard(root: string, path: string, host?: string): Promise<ScmResult>
+    commit(root: string, message: string, host?: string): Promise<ScmResult>
+    amend(root: string, message: string, confirmed?: boolean, host?: string): Promise<ScmResult>
+    push(root: string, force?: boolean, confirmed?: PushConfirm[], host?: string): Promise<ScmResult>
+    pull(root: string, merge?: boolean, host?: string): Promise<ScmResult>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

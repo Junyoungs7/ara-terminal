@@ -19,9 +19,9 @@ const CODES = new Set(['detached', 'noRemote', 'badTarget', 'forceProtected', 'e
 
 export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
   const wt = useAiwsStore((s) => (s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined))
-  // M8 R4 원격 작업 단위 — 소스 제어는 로컬 git 을 쓴다. 막고 안내(Orca 는 원격 git 으로 준다 — 다음 라운드).
-  const remote = !!wt && !!hostOfWorktree(wt.id)
-  const root = remote ? null : (wt?.path ?? null)
+  // M8 R5 원격 작업 단위 — 같은 패널, git 은 그 서버에서(main 이 SSH exec 로 — 푸시 안전장치도 같다). host 만 실어 보낸다.
+  const host = wt ? hostOfWorktree(wt.id) : undefined
+  const root = wt?.path ?? null
   const [status, setStatus] = useState<GitStatusResult | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -29,8 +29,8 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
 
   const refresh = useCallback(async () => {
     if (!root) return setStatus(null)
-    setStatus(await window.ev.gitInspect.status(root))
-  }, [root])
+    setStatus(await window.ev.gitInspect.status(root, host))
+  }, [root, host])
   useEffect(() => {
     void refresh()
     const onFocus = (): void => void refresh()
@@ -81,28 +81,28 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
     upstream
   })
 
-  const pushOp = (force: boolean) => (c: ScmConfirm[]) => window.ev.scm.push(root!, force, c.filter((x) => x !== 'pushed') as ('protected' | 'force')[])
+  const pushOp = (force: boolean) => (c: ScmConfirm[]) => window.ev.scm.push(root!, force, c.filter((x) => x !== 'pushed') as ('protected' | 'force')[], host)
   const pushNoteText = { done: t('scm.note.pushed'), fail: t('scm.note.pushFail') }
   const doPush = (force = false): Promise<boolean> => run('push', pushOp(force), pushNoteText)
   const doPrimary = async (): Promise<void> => {
     switch (primary.kind) {
       case 'commit':
-        if (await run('commit', () => window.ev.scm.commit(root!, message))) setMessage('')
+        if (await run('commit', () => window.ev.scm.commit(root!, message, host))) setMessage('')
         return
       case 'stage':
-        return void run('stage', () => window.ev.scm.stage(root!, changes.map((e) => e.path)))
+        return void run('stage', () => window.ev.scm.stage(root!, changes.map((e) => e.path), host))
       case 'push':
       case 'publish':
         return void doPush()
       case 'pull':
-        return void run('pull', () => window.ev.scm.pull(root!, false), { done: t('scm.note.pulled'), fail: t('scm.note.pullFail') })
+        return void run('pull', () => window.ev.scm.pull(root!, false, host), { done: t('scm.note.pulled'), fail: t('scm.note.pullFail') })
       case 'sync':
-        if (await run('pull', () => window.ev.scm.pull(root!, true), { done: t('scm.note.pulled'), fail: t('scm.note.pullFail') })) await doPush()
+        if (await run('pull', () => window.ev.scm.pull(root!, true, host), { done: t('scm.note.pulled'), fail: t('scm.note.pullFail') })) await doPush()
     }
   }
   const discard = async (e: GitStatusEntry): Promise<void> => {
     const yes = await ask({ title: t('scm.discard.title'), message: t('scm.discard.msg').replace('{path}', e.path), tone: 'danger', confirmLabel: t('scm.discard.go') })
-    if (yes === 'confirm') await run('discard', () => window.ev.scm.discard(root!, e.path))
+    if (yes === 'confirm') await run('discard', () => window.ev.scm.discard(root!, e.path, host))
   }
   const openDiff = (e: GitStatusEntry): void => {
     window.dispatchEvent(new CustomEvent('aiws:open-diff', { detail: { filePath: e.path, mode: e.area === 'staged' ? 'staged' : 'unstaged' } }))
@@ -122,11 +122,11 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
           </button>
         )}
         {e.area === 'staged' ? (
-          <button type="button" className="aiws-ic" data-scm="unstage" title={t('scm.unstage')} aria-label={t('scm.unstage')} disabled={!!busy} onClick={() => void run('unstage', () => window.ev.scm.unstage(root!, [e.path]))}>
+          <button type="button" className="aiws-ic" data-scm="unstage" title={t('scm.unstage')} aria-label={t('scm.unstage')} disabled={!!busy} onClick={() => void run('unstage', () => window.ev.scm.unstage(root!, [e.path], host))}>
             <Minus />
           </button>
         ) : (
-          <button type="button" className="aiws-ic" data-scm="stage" title={t('scm.stage')} aria-label={t('scm.stage')} disabled={!!busy} onClick={() => void run('stage', () => window.ev.scm.stage(root!, [e.path]))}>
+          <button type="button" className="aiws-ic" data-scm="stage" title={t('scm.stage')} aria-label={t('scm.stage')} disabled={!!busy} onClick={() => void run('stage', () => window.ev.scm.stage(root!, [e.path], host))}>
             <Plus />
           </button>
         )}
@@ -146,11 +146,7 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
           <RefreshCw />
         </button>
       </div>
-      {remote ? (
-        <div className="scm-msg" data-aiws="remote-unsupported">
-          {t('aiws.remote.unsupported')}
-        </div>
-      ) : !root ? (
+      {!root ? (
         <div className="scm-msg">{t('code.err.noWorktree')}</div>
       ) : status && !status.ok ? (
         <div className="scm-msg err">{status.message}</div>
@@ -180,7 +176,7 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
               </button>
             </div>
             <div className="scm-more">
-              <button type="button" data-scm="amend" disabled={!!busy || !status?.ok || !status.head} onClick={() => void run('amend', (c) => window.ev.scm.amend(root, message, c.includes('pushed'))).then((ok) => ok && setMessage(''))}>
+              <button type="button" data-scm="amend" disabled={!!busy || !status?.ok || !status.head} onClick={() => void run('amend', (c) => window.ev.scm.amend(root, message, c.includes('pushed'), host)).then((ok) => ok && setMessage(''))}>
                 {t('scm.amend')}
               </button>
               <button type="button" data-scm="push" disabled={!!busy || !status?.ok || !status.branch} onClick={() => void doPush()}>
@@ -201,7 +197,7 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
               <>
                 <div className="scm-sec">
                   <span>{t('scm.staged').replace('{n}', String(staged.length))}</span>
-                  <button type="button" className="aiws-ic" data-scm="unstageAll" title={t('scm.unstageAll')} aria-label={t('scm.unstageAll')} disabled={!!busy} onClick={() => void run('unstage', () => window.ev.scm.unstage(root, staged.map((e) => e.path)))}>
+                  <button type="button" className="aiws-ic" data-scm="unstageAll" title={t('scm.unstageAll')} aria-label={t('scm.unstageAll')} disabled={!!busy} onClick={() => void run('unstage', () => window.ev.scm.unstage(root, staged.map((e) => e.path), host))}>
                     <Minus />
                   </button>
                 </div>
@@ -211,7 +207,7 @@ export function ScmPanel({ ask }: { ask: AskFn }): JSX.Element {
             <div className="scm-sec">
               <span>{t('scm.changes').replace('{n}', String(changes.length))}</span>
               {changes.length > 0 && (
-                <button type="button" className="aiws-ic" data-scm="stageAll" title={t('scm.stageAll')} aria-label={t('scm.stageAll')} disabled={!!busy} onClick={() => void run('stage', () => window.ev.scm.stage(root, changes.map((e) => e.path)))}>
+                <button type="button" className="aiws-ic" data-scm="stageAll" title={t('scm.stageAll')} aria-label={t('scm.stageAll')} disabled={!!busy} onClick={() => void run('stage', () => window.ev.scm.stage(root, changes.map((e) => e.path), host))}>
                   <Plus />
                 </button>
               )}

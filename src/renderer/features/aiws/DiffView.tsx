@@ -7,6 +7,7 @@ import type { Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { monaco } from './monacoSetup'
 import { changeCount, sendCommentsToAgent, useDiffStore, type DiffSel } from './diffStore'
+import { hostOfWorktree } from './store'
 
 /**
  * M7 R1 WS-10·11 — 가운데 **"변경 비교 · n" 탭**의 본문. AgentPane 이 lazy 로 부른다(monacoSetup 을 같이 끌고 온다 — diff 탭을 안 열면 안 불린다).
@@ -80,7 +81,7 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     setDraft(null)
     if (!sel) return
     let alive = true
-    void window.ev.gitInspect.diff({ worktreePath: worktree.path, filePath: sel.path, oldPath: sel.oldPath, mode: sel.mode, mergeBase }).then((r) => alive && setDiff(r))
+    void window.ev.gitInspect.diff({ worktreePath: worktree.path, filePath: sel.path, oldPath: sel.oldPath, mode: sel.mode, mergeBase, host: hostOfWorktree(worktree.id) }).then((r) => alive && setDiff(r))
     return () => {
       alive = false
     }

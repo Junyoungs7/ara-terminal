@@ -4,8 +4,8 @@ import type { EvApi } from '@shared/ipc'
 
 export const gitInspectBridge: Pick<EvApi, 'gitInspect'> = {
   gitInspect: {
-    status: (worktreePath) => ipcRenderer.invoke('git:status', { worktreePath }),
-    branchCompare: (worktreePath, baseRef) => ipcRenderer.invoke('git:branchCompare', { worktreePath, baseRef }),
+    status: (worktreePath, host) => ipcRenderer.invoke('git:status', { worktreePath, host }),
+    branchCompare: (worktreePath, baseRef, host) => ipcRenderer.invoke('git:branchCompare', { worktreePath, baseRef, host }),
     diff: (args) => ipcRenderer.invoke('git:diff', args)
   }
 }

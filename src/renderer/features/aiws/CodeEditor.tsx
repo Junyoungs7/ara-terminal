@@ -137,7 +137,7 @@ async function save(path: string, ask: AskFn): Promise<boolean> {
   if (!f || !m || f.readOnly) return false
   const version = m.getAlternativeVersionId()
   const text = m.getValue()
-  const req = { root: f.root, path: f.path, text, eol: f.eol, baseSig: f.sig }
+  const req = { root: f.root, path: f.path, text, eol: f.eol, baseSig: f.sig, host: f.host }
   let r = await window.ev.code.write(req)
   if (!r.ok && 'conflict' in r) {
     const missing = r.conflict === 'missing'

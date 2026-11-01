@@ -4,12 +4,12 @@ import type { EvApi } from '@shared/ipc'
 
 export const scmBridge: Pick<EvApi, 'scm'> = {
   scm: {
-    stage: (root, paths) => ipcRenderer.invoke('scm:stage', { root, paths }),
-    unstage: (root, paths) => ipcRenderer.invoke('scm:unstage', { root, paths }),
-    discard: (root, path) => ipcRenderer.invoke('scm:discard', { root, path }),
-    commit: (root, message) => ipcRenderer.invoke('scm:commit', { root, message }),
-    amend: (root, message, confirmed) => ipcRenderer.invoke('scm:amend', { root, message, confirmed }),
-    push: (root, force, confirmed) => ipcRenderer.invoke('scm:push', { root, force, confirmed }),
-    pull: (root, merge) => ipcRenderer.invoke('scm:pull', { root, merge })
+    stage: (root, paths, host) => ipcRenderer.invoke('scm:stage', { root, paths, host }),
+    unstage: (root, paths, host) => ipcRenderer.invoke('scm:unstage', { root, paths, host }),
+    discard: (root, path, host) => ipcRenderer.invoke('scm:discard', { root, path, host }),
+    commit: (root, message, host) => ipcRenderer.invoke('scm:commit', { root, message, host }),
+    amend: (root, message, confirmed, host) => ipcRenderer.invoke('scm:amend', { root, message, confirmed, host }),
+    push: (root, force, confirmed, host) => ipcRenderer.invoke('scm:push', { root, force, confirmed, host }),
+    pull: (root, merge, host) => ipcRenderer.invoke('scm:pull', { root, merge, host })
   }
 }

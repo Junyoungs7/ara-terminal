@@ -21,16 +21,15 @@ export function QuickOpen({ onClose, onOpened }: { onClose: () => void; onOpened
 
   useEffect(() => inputRef.current?.focus(), [])
   // 열 때마다 새로 받는다(Orca 와 같다 — 에이전트가 파일을 만들고 지우므로 묵은 목록을 들고 있지 않는다).
-  // M8 R4 원격 작업 단위 — 목록은 로컬 rg 로 받는다. 막고 안내(빈 목록·오류 대신).
-  const remote = !!wt && !!hostOfWorktree(wt.id)
+  // M8 R5 원격 작업 단위 — 목록은 그 서버에서(main 이 SSH 로 rg, 없으면 git ls-files). 받는 동안 '불러오는 중'.
   useEffect(() => {
-    if (!wt || remote) return
+    if (!wt) return
     let live = true
-    void window.ev.code.listFiles(wt.path).then((r) => {
+    void window.ev.code.listFiles(wt.path, hostOfWorktree(wt.id)).then((r) => {
       if (live) setListing(r.ok ? { files: r.files, truncated: r.truncated } : { error: r.message })
     })
     return () => void (live = false)
-  }, [wt, remote])
+  }, [wt])
 
   const files = listing && 'files' in listing ? listing.files : null
   const shown = useMemo(() => (files ? rankQuickOpen(q, files, recent ?? []) : []), [q, files, recent])
@@ -49,9 +48,7 @@ export function QuickOpen({ onClose, onOpened }: { onClose: () => void; onOpened
 
   const note = !wt
     ? t('code.err.noWorktree')
-    : remote
-      ? t('aiws.remote.unsupported')
-      : listing === null
+    : listing === null
       ? t('qo.loading')
       : 'error' in listing
         ? listing.error

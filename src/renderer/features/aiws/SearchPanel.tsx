@@ -27,8 +27,8 @@ function Line({ m }: { m: SearchMatch }): JSX.Element {
 
 export function SearchPanel({ hidden, onOpened }: { hidden: boolean; onOpened: () => void }): JSX.Element {
   const wt = useAiwsStore((s) => (s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined))
-  // M8 R4 원격 작업 단위 — 검색은 로컬 rg 로 돈다. 막고 안내.
-  const remote = !!wt && !!hostOfWorktree(wt.id)
+  // M8 R5 원격 작업 단위 — 검색은 그 서버에서(main 이 SSH 로 rg, 없으면 git grep). 상한·취소·진행 표시는 로컬과 같다.
+  const host = wt ? hostOfWorktree(wt.id) : undefined
   const [query, setQuery] = useState('')
   const [regex, setRegex] = useState(false)
   const [caseSensitive, setCase] = useState(false)
@@ -74,19 +74,19 @@ export function SearchPanel({ hidden, onOpened }: { hidden: boolean; onOpened: (
     setFiles([])
     setFolded({})
     setOpenErr(null)
-    if (!wt || !query || remote) return setStatus({ state: 'idle' })
+    if (!wt || !query) return setStatus({ state: 'idle' })
     const root = wt.path
     const timer = setTimeout(() => {
       const id = `${Date.now()}-${Math.random()}`
       current.current = id
       setStatus({ state: 'running' })
-      void window.ev.code.search(id, root, { query, regex, caseSensitive, include, exclude }).then((r) => {
+      void window.ev.code.search(id, root, { query, regex, caseSensitive, include, exclude }, host).then((r) => {
         if (current.current !== id) return
         setStatus(r.ok ? (r.cancelled ? { state: 'idle' } : { state: 'done', total: r.total, truncated: r.truncated }) : { state: 'error', message: r.message })
       })
     }, DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [wt, remote, query, regex, caseSensitive, include, exclude])
+  }, [wt, host, query, regex, caseSensitive, include, exclude])
   // 패널이 사라지면(공간을 떠남) 도는 검색을 끊는다.
   useEffect(() => cancel, [])
 
@@ -142,9 +142,9 @@ export function SearchPanel({ hidden, onOpened }: { hidden: boolean; onOpened: (
         <input type="text" className="aiws-input" data-field="search.include" spellCheck={false} placeholder={t('search.include')} aria-label={t('search.include')} value={include} onChange={(e) => setInclude(e.target.value)} />
         <input type="text" className="aiws-input" data-field="search.exclude" spellCheck={false} placeholder={t('search.exclude')} aria-label={t('search.exclude')} value={exclude} onChange={(e) => setExclude(e.target.value)} />
       </div>
-      {(summary || openErr || !wt || remote) && (
-        <div className={'srch-status' + (status.state === 'error' || openErr ? ' err' : '')} data-search="status" data-aiws={remote ? 'remote-unsupported' : undefined}>
-          <span>{remote ? t('aiws.remote.unsupported') : (openErr ?? (wt ? summary : t('code.err.noWorktree')))}</span>
+      {(summary || openErr || !wt) && (
+        <div className={'srch-status' + (status.state === 'error' || openErr ? ' err' : '')} data-search="status">
+          <span>{openErr ?? (wt ? summary : t('code.err.noWorktree'))}</span>
           {status.state === 'running' && (
             <button type="button" className="aiws-ic" data-search="cancel" title={t('search.cancel')} aria-label={t('search.cancel')} onClick={cancel}>
               <X />

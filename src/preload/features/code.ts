@@ -6,17 +6,17 @@ import type { SearchFile } from '@shared/codeSearch'
 export const codeBridge: Pick<EvApi, 'code'> = {
   code: {
     pick: (root: string) => ipcRenderer.invoke('code:pick', { root }),
-    read: (root: string, path: string) => ipcRenderer.invoke('code:read', { root, path }),
+    read: (root: string, path: string, host?: string) => ipcRenderer.invoke('code:read', { root, path, host }),
     write: (req) => ipcRenderer.invoke('code:write', req),
-    watch: (root: string, path: string) => ipcRenderer.invoke('code:watch', { root, path }),
-    unwatch: (path: string) => ipcRenderer.invoke('code:unwatch', { path }),
+    watch: (root: string, path: string, host?: string) => ipcRenderer.invoke('code:watch', { root, path, host }),
+    unwatch: (path: string, host?: string) => ipcRenderer.invoke('code:unwatch', { path, host }),
     onChanged: (cb: (e: { path: string }) => void) => {
       const listener = (_e: IpcRendererEvent, d: { path: string }) => cb(d)
       ipcRenderer.on('code:changed', listener)
       return () => ipcRenderer.removeListener('code:changed', listener)
     },
-    listFiles: (root: string) => ipcRenderer.invoke('code:listFiles', { root }),
-    search: (id, root, options) => ipcRenderer.invoke('code:search', { id, root, options }),
+    listFiles: (root: string, host?: string) => ipcRenderer.invoke('code:listFiles', { root, host }),
+    search: (id, root, options, host) => ipcRenderer.invoke('code:search', { id, root, options, host }),
     searchCancel: (id: string) => ipcRenderer.invoke('code:searchCancel', { id }),
     onSearchBatch: (cb) => {
       const listener = (_e: IpcRendererEvent, d: { id: string; files: SearchFile[] }) => cb(d)

@@ -24,6 +24,7 @@ import { TOKEN_BYTES, execSh, installHost, probeHost, uninstallHost } from './ho
 import type { RemoteRun } from './remoteWorktrees'
 import { ORCAD_PY } from './orcadScript'
 import { createRemoteAgents, type RemoteAgents } from './remoteAgents'
+import { setRemoteClients } from '../work/backend'
 
 export function registerManagedFeature(deps: {
   userData: string
@@ -128,6 +129,8 @@ export function registerManagedFeature(deps: {
       return c
     }
   }
+  // M8 R5 원격 작업 단위의 파일·검색·git(work/backend)도 이 호스트 연결을 쓴다(동의와 무관 — 워크트리처럼 SSH 만).
+  setRemoteClients(clientFor)
 
   const remote = createRemoteAgents({
     adopt: (backend, info, hostKey) => {

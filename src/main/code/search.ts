@@ -3,15 +3,21 @@ import { existsSync } from 'node:fs'
 // 스폰은 runProcess 하나로(tests/spawnBoundary.test.ts 래칫): 셸 없음 · 창 없음 · 시간·출력 상한. 끊기는 signal.
 import { join } from 'node:path'
 import { runProcess } from '../util/runProcess'
+import type { Exec, WorkBackend } from '../work/backend'
 import {
+  GIT_LIST_ARGS,
   QUICK_OPEN_LISTING_MAX,
   SEARCH_MAX_RESULTS,
   SEARCH_TIMEOUT_MS,
+  buildGitGrepArgs,
   buildListArgs,
   buildSearchArgs,
+  gitGrepMatcher,
+  ingestGitGrepLine,
   ingestRgJsonLine,
   newSearchAcc,
   normalizeRgPath,
+  type SearchAcc,
   type SearchFile,
   type SearchOptions
 } from '@shared/codeSearch'
@@ -43,11 +49,14 @@ const win = process.platform === 'win32'
 export type ListResult = { ok: true; files: string[]; truncated: boolean } | { ok: false; message: string }
 
 /** 워크트리 파일 목록(.gitignore 존중, 숨김 파일 포함, 도구 폴더 제외) — 2만 개에서 끊는다. */
-export async function listFiles(rg: string, root: string): Promise<ListResult> {
+export const listFiles = (rg: string, root: string): Promise<ListResult> => listFilesWith(runProcess, rg, buildListArgs(win), root)
+
+/** NUL 로 나눈 목록을 내는 명령(rg --files · M8 R5 원격 git ls-files)을 exec(로컬 runProcess · 원격 SSH)로. */
+export async function listFilesWith(exec: Exec, file: string, args: string[], root: string): Promise<ListResult> {
   const ac = new AbortController()
   let buf = ''
   let count = 0
-  const r = await runProcess(rg, buildListArgs(win), {
+  const r = await exec(file, args, {
     cwd: root,
     timeoutMs: LIST_TIMEOUT_MS,
     maxBuffer: LIST_MAX_BUFFER,
@@ -78,7 +87,19 @@ export const SEARCH_BATCH_MS = 100
  * 전체 검색 — rg --json 을 줄 단위로 읽어 모으고, SEARCH_BATCH_MS 마다 **새로 맞은 것만** onBatch 로 넘긴다.
  * 결과 2000개·15초에서 멈추고(truncated), signal 로 끊으면 cancelled. 정규식 오류 등 rg 의 실패(종료 2)는 rg 의 말을 그대로.
  */
-export async function searchText(rg: string, root: string, o: SearchOptions, signal: AbortSignal, onBatch: (files: SearchFile[]) => void): Promise<SearchDone> {
+export const searchText = (rg: string, root: string, o: SearchOptions, signal: AbortSignal, onBatch: (files: SearchFile[]) => void): Promise<SearchDone> =>
+  searchWith(runProcess, rg, buildSearchArgs(o, win), (l, acc) => ingestRgJsonLine(l, acc, SEARCH_MAX_RESULTS), root, signal, onBatch)
+
+/** 줄 단위 출력(rg --json · M8 R5 원격 git grep)을 ingest 로 모은다. 상한·시간·취소·묶음 규칙은 하나. */
+export async function searchWith(
+  exec: Exec,
+  file: string,
+  args: string[],
+  ingest: (line: string, acc: SearchAcc) => 'continue' | 'stop',
+  root: string,
+  signal: AbortSignal,
+  onBatch: (files: SearchFile[]) => void
+): Promise<SearchDone> {
   const acc = newSearchAcc()
   const stop = new AbortController()
   const cancel = (): void => stop.abort()
@@ -98,10 +119,10 @@ export async function searchText(rg: string, root: string, o: SearchOptions, sig
   }
   const timer = setInterval(flush, SEARCH_BATCH_MS)
   const take = (line: string): void => {
-    if (!stop.signal.aborted && ingestRgJsonLine(line, acc, SEARCH_MAX_RESULTS) === 'stop') stop.abort()
+    if (!stop.signal.aborted && ingest(line, acc) === 'stop') stop.abort()
   }
   try {
-    const r = await runProcess(rg, buildSearchArgs(o, win), {
+    const r = await exec(file, args, {
       cwd: root,
       timeoutMs: SEARCH_TIMEOUT_MS,
       maxBuffer: SEARCH_MAX_BUFFER,
@@ -127,4 +148,18 @@ export async function searchText(rg: string, root: string, o: SearchOptions, sig
     clearInterval(timer)
     signal.removeEventListener('abort', cancel)
   }
+}
+
+// ── M8 R5 백엔드(work/backend)로 — 로컬은 앱의 rg, 원격은 서버의 rg, 서버에 rg 가 없으면 git(ls-files·grep). 상한·시간·취소·묶음은 위와 같다. ──
+
+export async function listFilesOn(b: WorkBackend, root: string): Promise<ListResult> {
+  const rg = await b.rg()
+  return rg ? listFilesWith(b.exec, rg, buildListArgs(b.win), root) : listFilesWith(b.exec, 'git', GIT_LIST_ARGS, root)
+}
+
+export async function searchTextOn(b: WorkBackend, root: string, o: SearchOptions, signal: AbortSignal, onBatch: (files: SearchFile[]) => void): Promise<SearchDone> {
+  const rg = await b.rg()
+  if (rg) return searchWith(b.exec, rg, buildSearchArgs(o, b.win), (l, acc) => ingestRgJsonLine(l, acc, SEARCH_MAX_RESULTS), root, signal, onBatch)
+  const re = gitGrepMatcher(o)
+  return searchWith(b.exec, 'git', buildGitGrepArgs(o), (l, acc) => ingestGitGrepLine(l, re, acc, SEARCH_MAX_RESULTS), root, signal, onBatch)
 }

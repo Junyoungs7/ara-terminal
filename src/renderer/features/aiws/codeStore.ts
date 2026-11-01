@@ -15,6 +15,8 @@ export type CodeFile = {
   worktreeId: string
   /** 워크트리 폴더 — main 은 이 안의 경로만 받는다. */
   root: string
+  /** M8 R5 원격 작업 단위의 서버(hostKey) — 읽기·쓰기·감시를 main 이 SSH 로 한다. 없으면 이 PC. */
+  host?: string
   /** 마지막으로 디스크에서 읽은(또는 저장한) 글. 다시 읽으면 loadSeq 가 오른다 → 에디터가 모델에 넣는다. */
   text: string
   eol: 'lf' | 'crlf'
@@ -51,7 +53,8 @@ type CodeState = {
 }
 
 export const PLATFORM = isMac() ? 'darwin' : typeof navigator !== 'undefined' && /Win/i.test(navigator.platform) ? 'win32' : 'linux'
-const same = (a: string, b: string): boolean => areWorktreePathsEqual(a, b, PLATFORM)
+// 원격 경로('/…')는 Windows 에서도 POSIX 로 견준다(대소문자를 가른다).
+const same = (a: string, b: string): boolean => areWorktreePathsEqual(a, b, PLATFORM === 'win32' && a.startsWith('/') ? 'linux' : PLATFORM)
 const patch = (path: string, p: Partial<CodeFile>) => (s: CodeState) => ({ files: s.files.map((f) => (same(f.path, path) ? { ...f, ...p } : f)) })
 
 export const useCodeStore = create<CodeState>()((set, get) => ({
@@ -68,14 +71,14 @@ export const useCodeStore = create<CodeState>()((set, get) => ({
   reloadFromDisk: async (path) => {
     const f = get().files.find((x) => same(x.path, path))
     if (!f) return
-    const r = await window.ev.code.read(f.root, f.path)
+    const r = await window.ev.code.read(f.root, f.path, f.host)
     if (!r.ok) return set(patch(path, { conflict: r.missing ? 'missing' : f.conflict }))
     set(patch(path, { text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: f.loadSeq + 1 }))
   },
   closeFile: (path) => {
     const f = get().files.find((x) => same(x.path, path))
     if (!f) return
-    void window.ev.code.unwatch(f.path)
+    void window.ev.code.unwatch(f.path, f.host)
     get().editorOps?.dispose(f.path)
     set((s) => {
       const files = s.files.filter((x) => x !== f)
@@ -100,10 +103,11 @@ function activeWorktree(): Worktree | undefined {
 export async function openFile(path: string, line?: number): Promise<{ ok: true } | { ok: false; message: string }> {
   const wt = activeWorktree()
   if (!wt) return { ok: false, message: t('code.err.noWorktree') }
-  // M8 R4 원격 작업 단위 — 파일은 로컬 디스크에서 읽는다. 막고 알린다(빠른 열기·검색·링크가 모두 이 길을 지난다).
-  if (hostOfWorktree(wt.id)) return { ok: false, message: t('aiws.remote.unsupported') }
-  const abs = /^([a-zA-Z]:)?[\\/]/.test(path) ? path : `${wt.path.replace(/[\\/]+$/, '')}/${path}`.replace(/\//g, PLATFORM === 'win32' ? '\\' : '/')
-  if (!isInsidePath(wt.path, abs, PLATFORM)) return { ok: false, message: t('code.err.outside') }
+  // M8 R5 원격 작업 단위 — 서버 경로(POSIX)로 열고, 읽기·쓰기·감시는 main 이 SSH 로(host). 빠른 열기·검색·링크가 모두 이 길을 지난다.
+  const host = hostOfWorktree(wt.id)
+  const platform = host ? 'linux' : PLATFORM
+  const abs = /^([a-zA-Z]:)?[\\/]/.test(path) ? path : `${wt.path.replace(/[\\/]+$/, '')}/${path}`.replace(/\//g, platform === 'win32' ? '\\' : '/')
+  if (!isInsidePath(wt.path, abs, platform)) return { ok: false, message: t('code.err.outside') }
   const s = useCodeStore.getState()
   const reveal = line && line > 0 ? { line, seq: Date.now() } : null
   const rel = abs.slice(wt.path.replace(/[\\/]+$/, '').length).replace(/\\/g, '/').replace(/^\/+/, '')
@@ -118,13 +122,13 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
     remember()
     return { ok: true }
   }
-  const r = await window.ev.code.read(wt.path, abs)
+  const r = await window.ev.code.read(wt.path, abs, host)
   if (!r.ok) return { ok: false, message: r.message }
   // 읽는 사이 같은 파일을 또 열었으면(연타) 하나만.
   if (!useCodeStore.getState().files.some((f) => same(f.path, abs))) {
-    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal }
+    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal }
     useCodeStore.setState((x) => ({ files: [...x.files, file] }))
-    void window.ev.code.watch(wt.path, abs)
+    void window.ev.code.watch(wt.path, abs, host)
     startWatch()
   }
   useCodeStore.getState().setActive(wt.id, abs)
@@ -140,7 +144,7 @@ function startWatch(): void {
   window.ev.code.onChanged(async ({ path }) => {
     const f = useCodeStore.getState().files.find((x) => same(x.path, path))
     if (!f) return
-    const r = await window.ev.code.read(f.root, f.path)
+    const r = await window.ev.code.read(f.root, f.path, f.host)
     if (!r.ok && !r.missing) return
     // 읽는 사이 더러워졌을 수 있다 — 판정은 지금 상태로.
     const now = useCodeStore.getState().files.find((x) => same(x.path, path))

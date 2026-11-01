@@ -175,8 +175,13 @@ export function ingestRgJsonLine(line: string, acc: SearchAcc, max = SEARCH_MAX_
   }
   const text = raw.replace(/\r?\n$/, '')
   const bytes = /[^\x00-\x7f]/.test(text) ? enc.encode(text) : null
-  let ranges = (d.submatches ?? []).map((s): [number, number] => [charAt(bytes, s.start), charAt(bytes, s.end)])
-  if (ranges.length === 0) ranges = [[0, 0]]
+  const ranges = (d.submatches ?? []).map((s): [number, number] => [charAt(bytes, s.start), charAt(bytes, s.end)])
+  return pushMatch(acc, path, d.line_number ?? 0, text, ranges, Math.max(1, d.submatches?.length ?? 0), max)
+}
+
+/** 맞은 줄 하나를 모은다(rg·git grep 공통). 줄이 500자보다 길면 첫 맞음을 가운데 두고 자른다(앞뒤 '…'). */
+function pushMatch(acc: SearchAcc, path: string, line: number, text: string, found: [number, number][], count: number, max: number): 'continue' | 'stop' {
+  let ranges: [number, number][] = found.length ? found : [[0, 0]]
   let shown = text
   if (text.length > SEARCH_LINE_MAX) {
     const from = Math.max(0, Math.min(ranges[0][0] - Math.floor(SEARCH_LINE_MAX / 4), text.length - SEARCH_LINE_MAX))
@@ -189,11 +194,61 @@ export function ingestRgJsonLine(line: string, acc: SearchAcc, max = SEARCH_MAX_
   }
   let f = acc.files.get(path)
   if (!f) acc.files.set(path, (f = { path, matches: [] }))
-  f.matches.push({ line: d.line_number ?? 0, text: shown, ranges })
-  acc.total += Math.max(1, d.submatches?.length ?? 0)
+  f.matches.push({ line, text: shown, ranges })
+  acc.total += count
   if (acc.total >= max) {
     acc.truncated = true
     return 'stop'
   }
   return 'continue'
+}
+
+// ── 원격 대체 길(M8 R5) — 서버에 rg 가 없을 때 git 으로(원격 작업 단위는 늘 git 워크트리다). 서버에 rg 를 깔지 않는다. ──
+// Orca src/shared/text-search.ts buildGitGrepArgs·ingestGitGrepLine(SSH 쪽 rg 없음 갈래, orcaRef fdfcfb3551)의 1차 판.
+
+/** 빠른 열기 목록 — 추적 + 추적 안 됐지만 무시 안 된 파일(rg --files 와 같은 집합). */
+export const GIT_LIST_ARGS = ['-c', 'core.quotePath=false', 'ls-files', '-z', '--cached', '--others', '--exclude-standard']
+
+/** rg 글롭 → git pathspec. '/' 없는 글롭은 어느 폴더에서든 이름으로 맞는다(rg 와 같게 앞에 `**` 폴더를 붙인다). */
+const gitGlob = (g: string, exclude: boolean): string => `:(${exclude ? 'exclude,' : ''}glob)${g.includes('/') ? g.replace(/^\/+/, '') : `**/${g}`}`
+
+/** git grep 인자(cwd = 워크트리). --null 로 이름 속 ':' 를 가른다. 서브모듈은 안 내려간다(Orca 와 같다). */
+export function buildGitGrepArgs(o: SearchOptions): string[] {
+  const args = ['-c', 'submodule.recurse=false', '-c', 'grep.column=false', 'grep', '-n', '-I', '--null', '--no-color', '--untracked']
+  if (!o.caseSensitive) args.push('-i')
+  args.push(o.regex ? '--extended-regexp' : '--fixed-strings', '-e', o.query, '--')
+  const inc = splitGlobs(o.include)
+  args.push(...(inc.length ? inc.map((g) => gitGlob(g, false)) : ['.']), ...splitGlobs(o.exclude).map((g) => gitGlob(g, true)))
+  return args
+}
+
+/** 맞은 자리를 다시 찾는 JS 정규식(git grep 은 줄만 준다). git 은 되고 JS 는 안 되는 식이면 null — 줄 전체를 칠한다. */
+export function gitGrepMatcher(o: Pick<SearchOptions, 'query' | 'regex' | 'caseSensitive'>): RegExp | null {
+  try {
+    return new RegExp(o.regex ? o.query : o.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), o.caseSensitive ? 'g' : 'gi')
+  } catch {
+    return null
+  }
+}
+
+/** git grep --null 한 줄(`경로 NUL 줄번호 NUL 내용`)을 모은다. 상한·자르기는 rg 갈래와 같다. */
+export function ingestGitGrepLine(line: string, re: RegExp | null, acc: SearchAcc, max = SEARCH_MAX_RESULTS): 'continue' | 'stop' {
+  if (acc.total >= max) return 'stop'
+  const a = line.indexOf('\0')
+  const b = a === -1 ? -1 : line.indexOf('\0', a + 1)
+  if (b === -1) return 'continue'
+  const path = normalizeRgPath(line.slice(0, a))
+  const no = line.slice(a + 1, b)
+  if (path === null || !/^\d+$/.test(no)) return 'continue'
+  const text = line.slice(b + 1).replace(/\r$/, '')
+  const ranges: [number, number][] = []
+  if (re) {
+    re.lastIndex = 0
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+      ranges.push([m.index, m.index + m[0].length])
+      if (m[0].length === 0) re.lastIndex++
+    }
+  }
+  if (!ranges.length) ranges.push([0, text.length])
+  return pushMatch(acc, path, Number(no), text, ranges, ranges.length, max)
 }

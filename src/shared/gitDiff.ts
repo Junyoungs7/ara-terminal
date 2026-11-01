@@ -15,7 +15,8 @@ export type GitBranchCompareResult =
   | { ok: false; message: string }
 /** diff 를 볼 쪽. unstaged = 인덱스↔디스크(untracked 포함), staged = HEAD↔인덱스, branch = 갈림점↔HEAD(Orca getBranchDiff). */
 export type DiffMode = 'unstaged' | 'staged' | 'branch'
-export type GitDiffArgs = { worktreePath: string; filePath: string; oldPath?: string; mode: DiffMode; mergeBase?: string }
+/** host = 원격 작업 단위의 서버(M8 R5) — 있으면 main 이 SSH 로 읽는다. */
+export type GitDiffArgs = { worktreePath: string; filePath: string; oldPath?: string; mode: DiffMode; mergeBase?: string; host?: string }
 /** 한 파일의 양쪽 글. 바이너리·너무 큼은 글 없이 kind 로(Orca buildDiffResult). */
 export type GitDiffResult =
   | { ok: true; kind: 'text'; original: string; modified: string }
