@@ -38,8 +38,10 @@ test('WT-M10★ 자동 이름 → 프로젝트 그룹(만들기·접기) → 재
     await page.selectOption('[data-aiws="new-agent"]', '')
     await expect(page.locator('[data-aiws="new-create"]')).toBeEnabled()
     await page.click('[data-aiws="new-create"]')
-    const auto = page.locator(`${side} .aiws-row:not([data-wt$="shop-api"])`).first()
+    // 만드는 중 줄(.aiws-pending, data-wt 없음)은 이름만 먼저 보인다 — git 이 끝난 진짜 줄을 기다린다(worktrees.spec 과 같은 끝 상태).
+    const auto = page.locator(`${side} .aiws-row[data-wt]:not([data-wt$="shop-api"])`).first()
     await expect(auto).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(`${side} .aiws-pending`)).toHaveCount(0)
     const autoName = (await auto.locator('.aiws-row-name').innerText()).trim()
     expect(autoName).toMatch(/^[a-z][a-z-]*$/)
     expect(execFileSync('git', ['branch', '--list', autoName], { cwd: repo, encoding: 'utf8' })).toContain(autoName)

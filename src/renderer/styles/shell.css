@@ -679,6 +679,10 @@
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
 }
+/* 뿌리 고정(AI 탐색기, FileTree pinned)이면 hidden — 위 display:flex 가 [hidden] 을 덮지 않게. */
+.fpath-row[hidden] {
+  display: none;
+}
 /* **칸처럼 보인다** — 누르면 고칠 수 있다는 걸 모양이 말해야 한다(연필 버튼을 없앤 자리). */
 .fpath-box {
   flex: 1;
