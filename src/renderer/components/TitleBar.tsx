@@ -35,7 +35,6 @@ export function TitleBar({
   title,
   crumb,
   reportNews = 0,
-  chat,
   features,
   space,
   bell
@@ -51,8 +50,6 @@ export function TitleBar({
   crumb?: { server: string; path: string | null }
   /** R16: 새 소식이 있는 내 신고 수. 0 보다 크면 [내 신고] 가 든 메뉴 제목에 빨간 점, 항목 라벨에 개수. */
   reportNews?: number
-  /** 2.0: 오른쪽 [채팅] 버튼 — 아라 채팅 열고 닫기(단축키 ai.toggle 과 같은 동작). 없으면 안 그린다(세션 창). */
-  chat?: { open: boolean; onToggle: () => void }
   /** 2.0 설정 › 기능 — 끈 기능은 메뉴에서 뺀다. 없으면 전부. */
   features?: FeatureShown
   /**
@@ -61,7 +58,7 @@ export function TitleBar({
    * attention: 그 공간에 손댈 일이 생겼을 때 버튼 옆 맥박 점. 신호는 라운드 3 알림 센터(store/notify.ts 의 attention)가 채운다.
    */
   space?: { value: Space; onPick: (s: Space) => void; attention?: Partial<Record<Space, boolean>> }
-  /** M1 라운드 3 알림 벨(NotifyBell) — [채팅] 왼쪽 자리만 내준다. 본창(Shell)만 넘긴다. */
+  /** M1 라운드 3 알림 벨(NotifyBell) — 타이틀바 오른쪽 자리만 내준다. 본창(Shell)만 넘긴다. */
   bell?: React.ReactNode
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(제목 행 오른쪽).
@@ -110,7 +107,6 @@ export function TitleBar({
     const b = KEYMAP.find((k) => k.action === action)
     return b ? keyText(isMac() ? b.mac : b.win) : ''
   }
-  const chatKey = keyOf('ai.toggle')
 
   // 2.0 4단계: 신호등 점 → 시안 Z-final 의 얇은 선 − □ ×(닫기 호버만 빨강 바탕). 기능·선택자는 그대로.
   const glyph = (body: React.ReactNode) => (
@@ -203,26 +199,9 @@ export function TitleBar({
       {/* 세션 창 — 검색창 자리에 **이 창이 무엇인지**를 놓는다(작업표시줄 제목과 같은 문구). */}
       {title && <div className="tb-title">{title}</div>}
       <div className="tb-spacer" />
-      {/* 2.0: 오른쪽 = 아라 채팅만. 우측 액티비티 바가 없어져 여닫는 자리가 여기 하나다(시안 Z-final). */}
       {bell}
-      {chat && (
-        <button
-          type="button"
-          className={'tb-chat' + (chat.open ? ' on' : '')}
-          aria-pressed={chat.open}
-          data-action="chat.toggle"
-          title={t('titlebar.chat.tip')}
-          onClick={chat.onToggle}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-          </svg>
-          <span>{t('titlebar.chat')}</span>
-          <kbd className="kbd">{chatKey}</kbd>
-        </button>
-      )}
       {/* M1(구성안 3-2): [?] 버튼은 지웠다 — 도움말 메뉴·`?` 키·통합 검색(F1)으로 충분하다.
-          FB-ui2(FB-0006): 채팅은 위 [채팅] 버튼, 설정은 좌측 레일·메뉴(파일>설정)·단축키(Ctrl+,)가 맡는다. */}
+          FB-ui2(FB-0006): 채팅은 우측 아이콘 바 맨 위 아라, 설정은 좌측 레일·메뉴(파일>설정)·단축키(Ctrl+,)가 맡는다. */}
       <div className="tb-controls">
         {/* M3: 셋 다 <button> 이다 — 키보드로 닫을 수 있어야 한다(전에는 마우스로만 닿았다). */}
         <button type="button" className="tb-ctl min" title={t('titlebar.min')} onClick={() => void window.ev?.window.minimize()}>

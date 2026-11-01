@@ -85,14 +85,14 @@ test('SPACE-3 오른쪽 아이콘 바 — 아라를 열고 접는다, 타이틀�
   await chat.click()
   await expect(page.locator('.ara-panel')).toBeVisible()
   await expect(chat).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.tb-chat')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-rbar="chat"]')).toHaveAttribute('aria-pressed', 'true')
   await chat.click()
   await expect(page.locator('.ara-panel')).toHaveCount(0)
-  await expect(page.locator('.tb-chat')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('[data-rbar="chat"]')).toHaveAttribute('aria-pressed', 'false')
   // 타이틀바 [채팅]으로 열면 바도 눌린다(한 상태).
-  await page.click('.tb-chat')
+  await page.click('[data-rbar="chat"]')
   await expect(chat).toHaveAttribute('aria-pressed', 'true')
-  await page.click('.tb-chat')
+  await page.click('[data-rbar="chat"]')
 
   // AI 작업 공간 — 아래에 탐색기(M6: 파일 열기 — 살아 있음)·소스 제어·검사 자리(비활성).
   await page.keyboard.press('Control+Alt+2')

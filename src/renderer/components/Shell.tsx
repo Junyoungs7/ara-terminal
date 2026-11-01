@@ -1262,8 +1262,6 @@ export function Shell() {
         }
         reportNews={myReports.unread}
         features={features}
-        // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
-        chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
         space={{ value: space, onPick: pickSpace, attention: attention(notes, space) }}
         bell={
           <NotifyBell

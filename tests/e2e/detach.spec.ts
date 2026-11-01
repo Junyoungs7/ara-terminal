@@ -376,7 +376,7 @@ test('DETACH-5 떼어낸 창은 작업 창이다 — 트리·설정이 없다', 
   await expect(win.locator('.sidebar')).toHaveCount(0)
   // 2.0: 본창의 설정은 좌측 레일, 채팅은 타이틀바 [채팅] — 어느 클래스로도 이 창엔 없어야 한다.
   await expect(win.locator('[data-activity="settings"]')).toHaveCount(0)
-  await expect(win.locator('[data-activity="ai"], .tb-chat')).toHaveCount(0)
+  await expect(win.locator('[data-activity="ai"], [data-rbar="chat"]')).toHaveCount(0)
   // 있어야 하는 것: 탭바 · 분할 그리드 · 하단바 토글.
   await expect(win.locator('.term-tabbar')).toHaveCount(1)
   await expect(win.locator('.pane-grid')).toHaveCount(1)

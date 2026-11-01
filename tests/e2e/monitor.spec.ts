@@ -134,7 +134,7 @@ test('BOTTOM-1★ 하단 패널이 탭으로 열리고 우측 레일과 같이 �
 
   // ★ 우측 레일과 **같이** 열린다 — 세로만 먹으니 터미널 폭에 영향이 없다.
   //   (2.0: 미리보기가 지워져 오른쪽 레일은 [채팅] 하나다 — 그것을 연다.)
-  await page.click('.tb-chat')
+  await page.click('[data-rbar="chat"]')
   await expect(page.locator('.ara-panel')).toBeVisible()
   await expect(bp).toBeVisible()
 

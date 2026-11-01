@@ -222,34 +222,6 @@
 .tb-spacer {
   flex: 1;
 }
-/* 2.0 [채팅] — 아라 채팅 열고 닫기(시안 Z-final `.tb-btn`). 우측 액티비티 바의 [아라]가 여기로 왔다. */
-.tb-chat {
-  -webkit-app-region: no-drag;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  height: 24px;
-  padding: 0 var(--sp-4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: none;
-  color: var(--text-hi);
-  font-family: var(--ui);
-  font-size: var(--fs-micro);
-  cursor: var(--cur-hand, pointer);
-  transition: var(--dur-quick);
-}
-.tb-chat svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  /* 아이콘만 파랑(다듬기 R3) — 오른쪽 위 유일한 여닫는 자리라 눈이 찾는다. */
-  color: var(--accent-bright);
-}
-.tb-chat:hover,
-.tb-chat.on {
-  background: var(--glass);
-}
 .tb-quick {
   -webkit-app-region: no-drag;
   display: flex;
@@ -9108,13 +9080,12 @@ button.sb-seg.upd:hover .val {
    M3 3-b 에서 AI 작업 공간이 기본 공개돼 [터미널 | AI 작업]·벨이 늘 서자, 900px·배율 1.25 에서
    타이틀바가 948px 을 요구했다(SCALE-3·5·6). 줄어드는 칸(검색칸·경로)은 이미 다 줄어 있었고,
    남은 건 안 줄어드는 글자들이다 — 뜻이 다른 자리에 또 있는 것부터 버린다.
-   ① ≤1150px: 단축키 칩(검색칸 F1·[채팅] Alt+A) — 툴팁·메뉴에 같은 것이 있다.
+   ① ≤1150px: 단축키 칩(검색칸 F1) — 툴팁·메뉴에 같은 것이 있다.
    ② ≤1150px: 공간 스위치 라벨 — 아이콘만 남는다. 이름은 aria-label·title 이 지키고, 맥박 점은 남는다.
    ③ ≤980px: 검색칸 → 돋보기 아이콘만(누르면 같은 가운데 창이 열린다). 서버 이름도 말줄임을 허락한다.
    창 버튼·벨·≡ 는 끝까지 남긴다 — 다른 입구가 없다. */
 @media (max-width: 1150px) {
   .tb-omni .tb-omni-key,
-  .tb-chat .kbd,
   .tb-spaces-label {
     display: none;
   }
