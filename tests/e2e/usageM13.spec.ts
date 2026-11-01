@@ -25,6 +25,17 @@ setTimeout(() => {
   if (process.platform === 'win32') spawnSync('cmd.exe', ['/d', '/c', script], { input, stdio: ['pipe', 'ignore', 'ignore'] })
   else spawnSync('/bin/sh', [script], { input, stdio: ['pipe', 'ignore', 'ignore'] })
   out('STATUSLINE-SENT\n')
+  // 통계 '띄운 에이전트' 는 Orca 처럼 탭이 처음 '일하는 중' 이 될 때 센다(main/usage/stats.ts) — 입력 상자만 그리고 쉬는 가짜는 0 이다.
+  // 그래서 설치된 진짜 훅 스크립트로 한 턴(UserPromptSubmit → Stop)을 흘린다(agentBoard.spec 와 같은 길).
+  const hook = process.env.ARA_E2E_HOOK_SCRIPT
+  const send = (event) => {
+    if (!hook) return
+    const body = JSON.stringify({ hook_event_name: event })
+    if (process.platform === 'win32') spawnSync('cmd.exe', ['/d', '/c', hook], { input: body, stdio: ['pipe', 'ignore', 'ignore'] })
+    else spawnSync('/bin/sh', [hook], { input: body, stdio: ['pipe', 'ignore', 'ignore'] })
+  }
+  send('UserPromptSubmit')
+  setTimeout(() => send('Stop'), 1500)
 }, 500)
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.on('data', (d) => { if (String(d) === '\u0003') process.exit(0) })
@@ -57,7 +68,8 @@ test('USAGE-M13★ 컨텍스트 줄 · % 남음 전환 · 설정 › 계정·사
   git('add', '.')
   git('commit', '-q', '-m', 'init')
   const script = join(userDataDir, 'e2e-home', '.ara', 'agent-hooks', win ? 'claude-statusline.cmd' : 'claude-statusline.sh')
-  writeFileSync(join(userDataDir, 'agents.json'), JSON.stringify({ agents: { claude: { command: claude, env: { ARA_E2E_STATUSLINE_SCRIPT: script } } }, migratedAiCliFlags: true }))
+  const hookScript = join(userDataDir, 'e2e-home', '.ara', 'agent-hooks', win ? 'claude-hook.cmd' : 'claude-hook.sh')
+  writeFileSync(join(userDataDir, 'agents.json'), JSON.stringify({ agents: { claude: { command: claude, env: { ARA_E2E_STATUSLINE_SCRIPT: script, ARA_E2E_HOOK_SCRIPT: hookScript } } }, migratedAiCliFlags: true }))
   const savedPath = process.env.PATH
   process.env.PATH = bin + delimiter + (savedPath ?? '')
   try {
