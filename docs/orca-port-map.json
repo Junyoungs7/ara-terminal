@@ -242,10 +242,12 @@
       "src/renderer/src/store/slices/editor.ts",
       "src/main/ipc/filesystem/",
       "src/preload/api/filesystem-api.ts",
-      "src/preload/api/fs-bridge.ts"
+      "src/preload/api/fs-bridge.ts",
+      "src/renderer/src/lib/monaco-setup.ts",
+      "src/renderer/src/components/editor/MonacoEditor.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-08",
@@ -255,10 +257,11 @@
       "src/main/ipc/filesystem/filesystem-write-handlers.ts",
       "src/renderer/src/runtime/runtime-file-write-disk-precondition.ts",
       "src/renderer/src/components/editor/ExternalFileChangeBanner.tsx",
-      "src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx"
+      "src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx",
+      "src/shared/file-write-disk-precondition.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "WS-09",
