@@ -45,14 +45,15 @@ type AgentState = {
   feed: FeedEvent[]
   loadAgents: (force?: boolean) => Promise<void>
   saveSettings: (next: AgentSettings) => Promise<void>
-  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string }) => Promise<AgentLaunchResult>
+  /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
+  launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string }) => Promise<AgentLaunchResult>
   setActiveTab: (worktreeId: string, sessionId: string) => void
   closeTab: (sessionId: string) => void
   setViewing: (sessionId: string | null) => void
   setView: (view: AiwsView) => void
 }
 
-export type AiwsView = 'worktree' | 'dashboard' | 'activity'
+export type AiwsView = 'worktree' | 'dashboard' | 'activity' | 'sessions'
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
   detected: null,
@@ -83,8 +84,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set({ settings: await window.ev.agents.setSettings(next) })
   },
 
-  launchAgent: async ({ agent, worktreeId, cwd, prompt }) => {
-    const r = await window.ev.agents.launch(agent, cwd, prompt)
+  launchAgent: async ({ agent, worktreeId, cwd, prompt, resume }) => {
+    const r = await window.ev.agents.launch(agent, cwd, prompt, resume)
     if (!r.ok) return r
     const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}) }
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId } }))

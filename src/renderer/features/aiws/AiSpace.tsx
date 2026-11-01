@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react'
 import type { Worktree } from '@shared/worktrees'
-import { Bot, GitBranch, LayoutGrid, Search, SlidersHorizontal, Sparkles, Zap } from 'lucide-react'
+import { Bot, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Sparkles, Zap } from 'lucide-react'
 import { t } from '../../i18n'
 import type { AiwsLocation } from '.'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
@@ -9,6 +9,7 @@ import { WorktreeSidebar } from './WorktreeSidebar'
 import { NewWorkCard } from './NewWorkCard'
 import { AgentWorkspace } from './AgentPane'
 import { ActivityFeed, AgentDashboard } from './AgentDashboard'
+import { VaultPanel } from './VaultPanel'
 import { useAgentStore, type AiwsView } from './agentStore'
 import { shortBranch } from './sidebarRows'
 
@@ -24,13 +25,14 @@ type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 const NAV: readonly { id: string; Icon: () => JSX.Element }[] = [
   { id: 'worktree', Icon: () => <GitBranch /> },
   { id: 'agents', Icon: () => <Bot /> },
+  { id: 'sessions', Icon: () => <History /> },
   { id: 'search', Icon: () => <Search /> },
   { id: 'automations', Icon: () => <Zap /> },
   { id: 'dashboard', Icon: () => <LayoutGrid /> }
 ]
 
-/** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 대시보드 = AI-08. 검색·자동화는 아직. */
-const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', dashboard: 'dashboard' }
+/** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 지난 세션 = AI-07(M4), 대시보드 = AI-08. 검색·자동화는 아직. */
+const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', sessions: 'sessions', dashboard: 'dashboard' }
 
 export function AiRail({ settingsOpen, onSettings }: { settingsOpen: boolean; onSettings: () => void }): JSX.Element {
   const view = useAgentStore((s) => s.view)
@@ -132,6 +134,8 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           <AgentDashboard />
         ) : view === 'activity' ? (
           <ActivityFeed />
+        ) : view === 'sessions' ? (
+          <VaultPanel />
         ) : composer ? (
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (

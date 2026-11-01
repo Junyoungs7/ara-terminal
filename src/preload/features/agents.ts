@@ -9,7 +9,7 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
     detect: (force?: boolean) => ipcRenderer.invoke('agents:detect', { force }),
     getSettings: () => ipcRenderer.invoke('agents:getSettings'),
     setSettings: (settings: AgentSettings) => ipcRenderer.invoke('agents:setSettings', { settings }),
-    launch: (agent: AgentId, cwd: string, prompt?: string) => ipcRenderer.invoke('agents:launch', { agent, cwd, prompt }),
+    launch: (agent: AgentId, cwd: string, prompt?: string, resume?: string) => ipcRenderer.invoke('agents:launch', { agent, cwd, prompt, resume }),
     statuses: () => ipcRenderer.invoke('agents:statuses'),
     legacyNotice: () => ipcRenderer.invoke('agents:legacyNotice'),
     onStatus: (cb: (v: AgentStatusView) => void) => {

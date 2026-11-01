@@ -51,6 +51,7 @@ import type {
   WorktreeStats
 } from './worktrees'
 import type { AgentId, AgentSettings, DetectedAgent } from './agents'
+import type { VaultDetail, VaultSession } from './vault'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
@@ -550,11 +551,17 @@ export type InvokeContract = {
   // 저장값은 main 이 agentSettingsOf 로 다시 거른다(렌더러 값 불신). 거른 값을 돌려준다.
   'agents:setSettings': { req: { settings: AgentSettings }; res: AgentSettings }
   // 명령줄·env 는 main 이 저장된 설정으로 만든다 — 렌더러는 에이전트·폴더·첫 지시만.
-  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string }; res: AgentLaunchResult }
+  // M4 AI-07: resume = 지난 세션 id — 첫 지시 대신 재개 인자로 띄운다.
+  'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
   // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
   'agents:legacyNotice': { req: void; res: LegacyAiNotice | null }
+  // M4 AI-07 지난 에이전트 세션(main/vault/feature.ts) — 로컬 CLI 기록 읽기만. cwds = 아는 폴더(gemini 프로젝트 해시 맞추기).
+  'vault:list': { req: { cwds: string[] }; res: VaultSession[] }
+  // 상세는 마지막 목록에 있던 파일만 연다.
+  'vault:detail': { req: { file: string }; res: VaultDetail }
+  'vault:resumeCommand': { req: { agent: AgentId; id: string; cwd: string | null }; res: { ok: true; text: string } | { ok: false; error: string } }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1158,12 +1165,18 @@ export type EvApi = {
     detect(force?: boolean): Promise<DetectedAgent[]>
     getSettings(): Promise<AgentSettings>
     setSettings(settings: AgentSettings): Promise<AgentSettings>
-    launch(agent: AgentId, cwd: string, prompt?: string): Promise<AgentLaunchResult>
+    launch(agent: AgentId, cwd: string, prompt?: string, resume?: string): Promise<AgentLaunchResult>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     onStatus(cb: (v: AgentStatusView) => void): () => void
     /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */
     legacyNotice(): Promise<LegacyAiNotice | null>
+  }
+  // M4 AI-07 지난 에이전트 세션(preload/features/vault.ts).
+  vault: {
+    list(cwds: string[]): Promise<VaultSession[]>
+    detail(file: string): Promise<VaultDetail>
+    resumeCommand(agent: AgentId, id: string, cwd: string | null): Promise<InvokeRes<'vault:resumeCommand'>>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

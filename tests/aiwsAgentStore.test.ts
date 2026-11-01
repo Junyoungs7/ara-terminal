@@ -59,7 +59,7 @@ describe('agentStore', () => {
   it('실행 → 그 작업 단위의 탭이 되고 활성, 셸이 끝나면 종료', async () => {
     const r = await m.useAgentStore.getState().launchAgent({ agent: 'codex', worktreeId: 'w1', cwd: '/repo', prompt: 'hi' })
     expect(r.ok).toBe(true)
-    expect(ev.agents.launch).toHaveBeenCalledWith('codex', '/repo', 'hi')
+    expect(ev.agents.launch).toHaveBeenCalledWith('codex', '/repo', 'hi', undefined) // 4번째 = 재개 id(M4 AI-07), 새 실행은 없음
     let s = m.useAgentStore.getState()
     expect(s.tabs).toMatchObject([{ sessionId: 's1', agent: 'codex', worktreeId: 'w1', exited: false }])
     expect(s.activeTabByWorktree.w1).toBe('s1')

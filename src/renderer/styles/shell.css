@@ -9750,6 +9750,58 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   font-family: var(--mono);
 }
+/* M4 AI-07 지난 세션 — 피드 줄 모양을 쓰고, 고른 줄 밑에 상세(메타·버튼·최근 턴)를 편다. */
+.aiws-vault-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.aiws-vault-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.aiws-vault-agent {
+  flex: none;
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.aiws-vault-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+.aiws-vault-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-vault-meta dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-mid);
+}
+.aiws-vault-turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.aiws-vault-turn {
+  margin: 0;
+  color: var(--text-mid);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aiws-vault-turn b {
+  color: var(--text-hi);
+  font-weight: 500;
+}
 .aiws-prompt-failed {
   display: flex;
   flex-direction: column;

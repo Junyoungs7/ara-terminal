@@ -58,7 +58,7 @@ export function registerAgentsFeature(deps: {
   handle('agents:getSettings', () => settings)
   handle('agents:setSettings', ({ settings: next }) => save(next))
   handle('agents:statuses', () => tracker?.views() ?? [])
-  handle('agents:launch', async ({ agent, cwd, prompt }): Promise<AgentLaunchResult> => {
+  handle('agents:launch', async ({ agent, cwd, prompt, resume }): Promise<AgentLaunchResult> => {
     if (!isAgentId(agent)) return { ok: false, error: '모르는 에이전트' }
     try {
       if (typeof cwd !== 'string' || !statSync(cwd).isDirectory()) return { ok: false, error: `폴더가 아닙니다: ${cwd}` }
@@ -66,7 +66,7 @@ export function registerAgentsFeature(deps: {
       return { ok: false, error: `폴더가 없습니다: ${cwd}` }
     }
     const shell = defaultLaunchShell()
-    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell })
+    const plan = planAgentLaunch({ agent, settings, prompt: typeof prompt === 'string' ? prompt : undefined, shell, resume: typeof resume === 'string' && resume ? resume : undefined })
     if (!plan.ok) return plan
     const t = ensureTracker()
     // 훅: 서버를 열고(처음 한 번) 그 CLI 의 훅을 심는다(처음 한 번). 실패해도 실행은 한다 — 그 탭은 화면 판정('추정')만.

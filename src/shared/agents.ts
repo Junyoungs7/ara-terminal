@@ -360,6 +360,8 @@ export function planAgentLaunch(o: {
   settings: AgentSettings
   prompt?: string
   shell: LaunchShell
+  /** M4 AI-07 지난 세션 재개 — 세션 id. 있으면 Orca buildAiVaultResumeCommand 처럼 실행 명령(바꾼 것 포함) + 재개 인자만(권한·사용자 인자·첫 지시 없음). */
+  resume?: string
 }): LaunchPlan {
   const spec = AGENTS[o.agent]
   const prefs = o.settings.agents[o.agent]
@@ -371,7 +373,7 @@ export function planAgentLaunch(o: {
   const permissionShadowed = user.tokens.some((t) => spec.permissionFlags.includes(t.split('=')[0]))
   const perm = prefs.permission === 'own' || permissionShadowed ? '' : (spec.permissionArgs[prefs.permission] ?? '')
   const rc = o.agent === 'claude' && o.settings.claudeRemoteControl ? ['--rc'] : []
-  const args = [...cmd.prefixArgs, ...(perm ? perm.split(' ') : []), ...rc, ...user.tokens]
+  const args = o.resume ? [...cmd.prefixArgs, ...resumeArgs(o.agent, o.resume)] : [...cmd.prefixArgs, ...(perm ? perm.split(' ') : []), ...rc, ...user.tokens]
 
   const quoted: string[] = []
   for (const a of [cmd.binary, ...args]) {
@@ -379,7 +381,7 @@ export function planAgentLaunch(o: {
     if (q === null) return { ok: false, error: `이 셸(${o.shell})에 담을 수 없는 글자가 든 인자: ${a}` }
     quoted.push(q)
   }
-  const prompt = o.prompt?.trim() ? o.prompt : ''
+  const prompt = !o.resume && o.prompt?.trim() ? o.prompt : ''
   const argv = o.shell === 'posix' ? prompt : ''
   const ref = `"$${PROMPT_ENV}"`
   if (argv) quoted.push(...(spec.prompt === 'flag-prompt-interactive' ? ['--prompt-interactive', ref] : [ref]))
@@ -388,4 +390,9 @@ export function planAgentLaunch(o: {
   const line = o.shell === 'powershell' ? `& ${body}` : body
   const env = { ...prefs.env, ...cmd.env, ...(argv ? { [PROMPT_ENV]: argv } : {}) }
   return { ok: true, line, env, permissionShadowed, ...(prompt && !argv ? { deferredPrompt: prompt } : {}) }
+}
+
+/** 재개 인자(Orca ai-vault-resume-command buildAgentResumeInvocation): codex 는 하위 명령, claude·gemini 는 `--resume`. */
+export function resumeArgs(agent: AgentId, sessionId: string): string[] {
+  return agent === 'codex' ? ['resume', sessionId] : ['--resume', sessionId]
 }

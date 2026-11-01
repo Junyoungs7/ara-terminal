@@ -20,6 +20,7 @@ import { browserBridge } from './features/browser'
 import { resourcesBridge } from './features/resources'
 import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
+import { vaultBridge } from './features/vault'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLogTarget } from '@shared/pastLogWin'
 import type { PastLog } from '@shared/ipc'
@@ -251,6 +252,7 @@ const api: EvApi = {
   ...resourcesBridge,
   ...worktreesBridge,
   ...agentsBridge,
+  ...vaultBridge,
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),
     stop: (sessionId: string) => ipcRenderer.invoke('telemetry:stop', { sessionId }),
