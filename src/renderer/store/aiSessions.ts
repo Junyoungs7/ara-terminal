@@ -274,17 +274,10 @@ export function useAiSessions(active: boolean) {
     // 도착하는 즉시 온다 — 그래서 "화면은 즉시"가 성립한다.
     const t = setInterval(() => void tick(), POLL_MS)
     const offAgent = subscribeAgent(() => void tick())
-    // 사용자가 끝낸 세션의 **제거**는 상태와 다른 창구로 온다(shared/ipc.ts 의 `agent.onExit`).
-    // 셸은 남는다 — 스냅샷의 AI 표시만 걷는다(안 걷으면 다음 부팅에 끝난 AI 의 [이어서 시작] 카드가 뜬다).
-    const offExit = window.ev?.agent.onExit((id) => {
-      forgetAiSession(id)
-      void window.ev?.session.setAiCli(id, null)
-    })
     listeners.add(tick)
     return () => {
       clearInterval(t)
       offAgent()
-      offExit?.()
       listeners.delete(tick)
     }
   }, [tick, active])

@@ -11,7 +11,6 @@ import { parseOsc7Cwd } from './osc7'
 import { aiCliOf } from '@shared/aiCli'
 import type { Session } from '@shared/types'
 import { usableSize } from '@shared/termSize'
-import type { HookSink } from '../agent/AgentHookServer'
 
 // 백프레셔 메커니즘 1: flush당 상한 바이트. 초과 시 즉시 flush.
 const FLUSH_BYTE_BUDGET = 64 * 1024
@@ -60,11 +59,13 @@ type Handle = {
 
 // F12 세션 로그 tee. main/index.ts 가 늦게 주입한다(로거는 userData 경로를 알아야 만들 수 있다).
 type SessionLogTee = { write(meta: Session, chunk: Uint8Array): void; close(sessionId: string): void }
+// M3 R2: 출력·크기·종료를 엿보는 자리 — AI 작업 공간 에이전트 탭의 화면 판정(main/agents/status.ts)이 쓴다. 첫 에이전트 실행 때 걸린다.
+export type SessionTap = { data(meta: Session, chunk: Uint8Array): void; resize(id: string, cols: number, rows: number): void; exit(id: string): void }
 
 export class MainSessionManager implements ISessionManager {
   private readonly handles = new Map<string, Handle>()
   private log: SessionLogTee | null = null
-  private hookSink: HookSink | null = null
+  private tap: SessionTap | null = null
 
   constructor(private readonly sink: SessionSink) {}
 
@@ -73,19 +74,13 @@ export class MainSessionManager implements ISessionManager {
     this.log = log
   }
 
-  // F1b: 훅 서버(늦은 바인딩 — setLog 와 같은 이유로 이 객체는 부팅 뒤에 생긴다).
-  // 세션을 만드는 두 길(렌더러의 ssh:connect · MCP 의 ssh_connect)이 **같은 것을 보게** 하려고
-  // 여기 둔다. 훅이 말하는 것은 세션의 상태이고, 세션을 아는 것은 이 객체다.
-  setHooks(sink: HookSink | null): void {
-    this.hookSink = sink
-  }
-  hooks(): HookSink | null {
-    return this.hookSink
+  setTap(tap: SessionTap | null): void {
+    this.tap = tap
   }
 
   async create(spec: SessionSpec): Promise<string> {
     // 로컬만 여기서 스폰. SSH는 연결(호스트키·vault)을 IPC 레이어가 처리 후 adopt()로 넘긴다.
-    // id 를 먼저 만든다 — 셸 env 에 그 값을 넣어야 훅이 "어느 탭인지" 말할 수 있다(F1a).
+    // id 를 먼저 만든다 — 에이전트 탭 셸 env 에 그 값(ARA_PANE_KEY)을 넣어야 훅이 "어느 탭인지" 말할 수 있다(M3 R2).
     const id = randomUUID()
     const backend = new PtyBackend(spec, id)
     const meta: Session = {
@@ -110,8 +105,7 @@ export class MainSessionManager implements ISessionManager {
   }
 
   // 외부에서 준비한 백엔드(예: 연결된 SshBackend)를 세션으로 편입. 로컬과 동일 파이프라인.
-  // id 를 받는 이유(F1b): SSH 는 **셸을 열기 전에** 그 셸의 env 에 세션 id 를 넣어야 한다
-  // (`ARA_PANE`). 편입하고 나서 id 를 정하면 그때는 이미 셸이 떠 있다.
+  // id 를 받을 수 있다(F1b 때 원격 셸 env 용이었다 — M3 S2 로 그 쓰임은 없어졌고 호출부는 미리 만든 id 를 그대로 넘긴다).
   adopt(backend: SessionBackend, meta: Omit<Session, 'id'>, id: string = randomUUID()): string {
     const full: Session = { id, ...meta }
     this.register(backend, full)
@@ -146,6 +140,7 @@ export class MainSessionManager implements ISessionManager {
       this.flush(id) // 종료 전 잔여 출력 방출
       this.log?.close(id) // 남은 꼬리를 흘려보내고 파일을 닫는다
       this.handles.delete(id)
+      this.tap?.exit(id)
       // #201 B-4: 핸들은 방금 지웠고(`destroy()` 길이면 kill 전에 이미 지워졌다) 라우터의 `winIdOf(id)` 는
       // 비어 본창으로 떨어진다. 창은 **이 클로저의 meta** 로 알린다 — 핸들의 meta 와 같은 객체라
       // moveToWindow 가 옮긴 값이 그대로 살아 있다. 지우는 순서를 뒤로 미는 대신 이렇게 한 이유:
@@ -195,6 +190,7 @@ export class MainSessionManager implements ISessionManager {
     // F12: 링버퍼에 넣는 바로 그 자리에 tee. attached 여부와 무관하게 기록한다
     // (부팅 복원 중 출력도 남아야 "작업 내역"이 된다).
     this.log?.write(h.meta, out)
+    this.tap?.data(h.meta, out)
     if (h.attached) this.sink.data(id, out)
   }
 
@@ -297,6 +293,7 @@ export class MainSessionManager implements ISessionManager {
      */
     if (!h || !usableSize(cols, rows)) return
     h.backend.resize(cols, rows)
+    this.tap?.resize(id, cols, rows)
     // 복원이 이 값으로 pty 를 연다(`Session.cols` 주석) — snapshot() 이 meta 를 그대로 싣는다.
     h.meta.cols = cols
     h.meta.rows = rows

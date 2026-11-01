@@ -1,450 +1,293 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
-import { request as httpRequest } from 'node:http'
-import { networkInterfaces, tmpdir } from 'node:os'
+// M3 R2 AI-04 훅(Orca 방식)·S2 정리·AI-06 자식 줄·훅 + 화면 합치기. 사용자 실제 ~/.claude 는 안 건드린다 — 전부 임시 홈.
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { request } from 'node:http'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createAgentHookServer, type AgentHookServerHandle } from '../src/main/agent/AgentHookServer'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
-  HOOK_MARK,
+  applyHookEvent,
+  HOOK_ENV,
   HOOK_PANE_HEADER,
+  HOOK_SILENT_MS,
   HOOK_TOKEN_HEADER,
-  hookTtyFile,
-  installClaudeHooks,
+  hookCommand,
+  hookScript,
   mergeHooks,
-  tokenInSettings
-} from '../src/main/agent/claudeHooks'
-import { CLAUDE_HOOK_EVENTS, type AgentStatus } from '../src/shared/agentStatus'
+  removeLegacyHooks,
+  resolveStatus,
+  type HookPane
+} from '../src/shared/agentHooks'
+import type { ScreenDetection } from '../src/shared/agentScreen'
+import { cleanupLegacyHooks, createHookServer, installHooks, type HookEvent } from '../src/main/agents/hooks'
 
-// F1a 훅 — 설치(남의 훅을 지키는가)와 수신(인증·매핑·귀속)의 검사.
+const T = 1_700_000_000_000
+const ev = (hook_event_name: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ hook_event_name, ...extra })
+const run = (events: Record<string, unknown>[], source: 'claude' | 'gemini' = 'claude'): HookPane | null =>
+  events.reduce<HookPane | null>((p, e, i) => applyHookEvent(p, source, e, T + i) ?? p, null)
 
-const dirs: string[] = []
-const servers: AgentHookServerHandle[] = []
-const tmp = (): string => {
-  const d = mkdtempSync(join(tmpdir(), 'ara-hook-'))
-  dirs.push(d)
-  return d
-}
-
-afterEach(async () => {
-  for (const s of servers.splice(0)) await s.stop()
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+describe('훅 이벤트 → 상태(Orca claude-events·provider-event-routing)', () => {
+  it('claude 한 턴: 제출 → 도구 → 승인 대기 → 도구 → 끝', () => {
+    expect(run([ev('UserPromptSubmit')])?.state).toBe('working')
+    expect(run([ev('UserPromptSubmit'), ev('PreToolUse', { tool_name: 'Bash' })])).toMatchObject({ state: 'working', tool: 'Bash' })
+    expect(run([ev('UserPromptSubmit'), ev('PermissionRequest', { tool_name: 'Bash' })])).toMatchObject({ state: 'blocked', kind: 'permission' })
+    expect(run([ev('PermissionRequest', { tool_name: 'Bash' }), ev('PostToolUse', { tool_name: 'Bash' })])?.state).toBe('working')
+    expect(run([ev('UserPromptSubmit'), ev('Stop')])?.state).toBe('idle')
+    expect(run([ev('UserPromptSubmit'), ev('StopFailure')])?.state).toBe('idle')
+  })
+  it('AskUserQuestion 은 질문 막힘(물음표)', () => {
+    expect(run([ev('PreToolUse', { tool_name: 'AskUserQuestion' })])).toMatchObject({ state: 'blocked', kind: 'question' })
+  })
+  it('모르는 이벤트·이름 없는 본문은 아무 주장도 안 한다', () => {
+    expect(applyHookEvent(null, 'claude', ev('Notification'), T)).toBeNull()
+    expect(applyHookEvent(null, 'claude', {}, T)).toBeNull()
+    expect(applyHookEvent(null, 'gemini', ev('SessionStart'), T)).toBeNull()
+  })
+  it('gemini: BeforeAgent·BeforeTool = 일함, AfterAgent = 끝', () => {
+    expect(run([ev('BeforeAgent')], 'gemini')?.state).toBe('working')
+    expect(run([ev('BeforeAgent'), ev('BeforeTool', { tool_name: 'run_shell_command' })], 'gemini')).toMatchObject({ state: 'working', tool: 'run_shell_command' })
+    expect(run([ev('BeforeAgent'), ev('AfterAgent')], 'gemini')?.state).toBe('idle')
+  })
 })
 
-const settingsPath = (home: string): string => join(home, '.claude', 'settings.json')
-const readSettings = (home: string): Record<string, never> => JSON.parse(readFileSync(settingsPath(home), 'utf8'))
-const writeSettings = (home: string, v: unknown): void => {
-  mkdirSync(join(home, '.claude'), { recursive: true })
-  writeFileSync(settingsPath(home), typeof v === 'string' ? v : JSON.stringify(v, null, 2), 'utf8')
-}
+describe('서브에이전트 자식 줄(AI-06, Orca claude-subagent-roster)', () => {
+  it('SubagentStart → 자식 줄, 자식의 도구 이벤트는 그 줄만 바꾸고 부모는 그대로', () => {
+    const p = run([
+      ev('UserPromptSubmit'),
+      ev('SubagentStart', { agent_id: 'a1', agent_type: 'Explore' }),
+      ev('PreToolUse', { agent_id: 'a1', agent_type: 'Explore', tool_name: 'Grep' })
+    ])
+    expect(p?.state).toBe('working')
+    expect(p?.tool).toBeUndefined()
+    expect(p?.children).toEqual([{ id: 'a1', agentType: 'Explore', state: 'working', tool: 'Grep', startedAt: T + 1 }])
+  })
+  it('자식이 승인을 기다리면 부모도 막힘, 자식이 다시 일하면 부모도 풀린다', () => {
+    const blocked = run([ev('UserPromptSubmit'), ev('SubagentStart', { agent_id: 'a1' }), ev('PermissionRequest', { agent_id: 'a1', tool_name: 'Bash' })])
+    expect(blocked?.state).toBe('blocked')
+    expect(blocked?.children[0].state).toBe('blocked')
+    const resumed = applyHookEvent(blocked, 'claude', ev('PostToolUse', { agent_id: 'a1', tool_name: 'Bash' }), T + 9)
+    expect(resumed?.state).toBe('working')
+    expect(resumed?.children[0].state).toBe('working')
+  })
+  it('SubagentStop(또는 자식의 StopFailure)이면 그 줄이 빠진다, 시작 없이 온 자식도 줄이 생긴다', () => {
+    expect(run([ev('SubagentStart', { agent_id: 'a1' }), ev('SubagentStop', { agent_id: 'a1' })])?.children).toEqual([])
+    expect(run([ev('SubagentStart', { agent_id: 'a1' }), ev('StopFailure', { agent_id: 'a1' })])?.children).toEqual([])
+    expect(run([ev('PreToolUse', { agent_id: 'a9', tool_name: 'Read' })])?.children.map((c) => c.id)).toEqual(['a9'])
+  })
+  it('너무 긴 id 는 줄을 만들지 않는다(Orca 64자 상한)', () => {
+    expect(run([ev('SubagentStart', { agent_id: 'x'.repeat(65) })])?.children).toEqual([])
+  })
+})
 
-/** 심긴 그대로의 훅 한 줄(문자열을 다시 만들지 않는다 — 파일에 들어간 바이트를 본다). */
-const installedCommand = (home: string, event: string): string => {
-  installClaudeHooks(home)
-  const hooks = (readSettings(home) as unknown as { hooks: Record<string, { hooks: { command: string }[] }[]> }).hooks
-  return hooks[event]!.at(-1)!.hooks[0]!.command
-}
+const det = (o: Partial<ScreenDetection>): ScreenDetection => ({ state: 'idle', skip: false, visibleBlocker: false, visibleIdle: false, visibleWorking: false, rule: 'r', ...o })
+const pane = (o: Partial<HookPane>): HookPane => ({ state: 'working', children: [], at: T, ...o })
 
-/**
- * #162 훅 한 줄을 **진짜 POSIX 셸에 태운다.** 이 한 줄이 이 라운드의 전부라 눈으로 읽어서는 안 된다 —
- * env 가 있을 때 파일을 안 읽는지, 없을 때 읽는지, 어느 경우에도 `exit 0` 인지는 돌려 봐야 안다.
- *
- * curl 은 **셸 함수로 가린다**: PATH 도 실행권한도 안 건드리고 어느 셸에서나 함수가 먼저 잡힌다.
- * 훅 한 줄이 curl 의 stdout·stderr 를 버리므로 인자는 fd 3 으로 빼낸다.
- */
-function posixShell(): string {
-  if (process.platform !== 'win32') return '/bin/sh'
-  const roots = [process.env['ProgramFiles'] ?? 'C:\\Program Files', 'C:\\Program Files', 'C:\\Program Files (x86)']
-  for (const r of roots) {
-    const p = join(r, 'Git', 'bin', 'bash.exe')
-    if (existsSync(p)) return p
+describe('훅 + 화면 합치기(훅 우선, 화면은 \'추정\')', () => {
+  it('훅이 있으면 훅이 이긴다(추정 아님)', () => {
+    const v = resolveStatus('s', { pane: pane({ state: 'working' }), event: 'PreToolUse' }, det({ state: 'idle' }), null, T)
+    expect(v).toMatchObject({ state: 'working', estimated: false, source: 'hook:PreToolUse' })
+  })
+  it('훅이 없으면 화면 판정이 추정으로 채운다', () => {
+    expect(resolveStatus('s', null, det({ state: 'blocked', rule: 'live_strong_blocker' }), null, T)).toMatchObject({ state: 'blocked', estimated: true, source: 'screen:live_strong_blocker' })
+    expect(resolveStatus('s', null, det({ state: 'unknown', rule: null }), null, T).state).toBeNull()
+  })
+  it('살아 있는 막힘 UI 는 훅의 "일하는 중"을 덮는다(gemini 는 승인 훅이 없다)', () => {
+    expect(resolveStatus('s', { pane: pane({}), event: 'BeforeTool' }, det({ state: 'blocked', visibleBlocker: true }), null, T)).toMatchObject({ state: 'blocked', estimated: true })
+  })
+  it('훅이 2분 넘게 "일하는 중"에서 말이 없고 화면이 쉬면 쉼(추정) — Esc 로 끊은 턴', () => {
+    const h = { pane: pane({ at: T }), event: 'PreToolUse' }
+    expect(resolveStatus('s', h, det({ state: 'idle', visibleIdle: true }), null, T + HOOK_SILENT_MS - 1).state).toBe('working')
+    expect(resolveStatus('s', h, det({ state: 'idle', visibleIdle: true }), null, T + HOOK_SILENT_MS + 1)).toMatchObject({ state: 'idle', estimated: true })
+  })
+  it('화면이 건너뛰라고 하면(대화 기록 보기) 앞 상태를 둔다', () => {
+    const prev = resolveStatus('s', null, det({ state: 'working' }), null, T)
+    expect(resolveStatus('s', null, det({ state: 'unknown', skip: true }), prev, T)).toBe(prev)
+  })
+})
+
+describe('설정 병합 — 남의 훅은 그대로', () => {
+  const cmd = 'C:/Users/u/.ara/agent-hooks/claude-hook.cmd'
+  const others = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'notify-send done' }] }], PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'guard.sh' }] }] }, model: 'opus' }
+  it('우리 줄을 이벤트마다 더하고, 남의 줄·다른 키는 그대로, 두 번째는 바뀐 게 없다(null)', () => {
+    const next = mergeHooks(others, 'claude', cmd) as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>; model: string }
+    expect(next.model).toBe('opus')
+    expect(next.hooks.Stop[0].hooks[0].command).toBe('notify-send done')
+    expect(next.hooks.Stop[1].hooks[0].command).toBe(cmd)
+    expect(next.hooks.PreToolUse[0]).toEqual({ matcher: 'Bash', hooks: [{ type: 'command', command: 'guard.sh' }] })
+    expect(next.hooks.PreToolUse[1].matcher).toBe('*')
+    expect(Object.keys(next.hooks)).toEqual(expect.arrayContaining(['PermissionRequest', 'SubagentStart', 'SubagentStop', 'UserPromptSubmit']))
+    expect(mergeHooks(next, 'claude', cmd)).toBeNull()
+  })
+  it('옮긴 홈의 옛 우리 줄은 바꿔 끼운다(파일 이름으로 가림)', () => {
+    const old = mergeHooks({}, 'claude', 'D:/old/.ara/agent-hooks/claude-hook.cmd')
+    const next = mergeHooks(old, 'claude', cmd) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+    expect(next.hooks.Stop).toHaveLength(1)
+    expect(next.hooks.Stop[0].hooks[0].command).toBe(cmd)
+  })
+  it('gemini 는 matcher 없이 밀리초 제한 시간', () => {
+    const next = mergeHooks({}, 'gemini', '/h/.ara/agent-hooks/gemini-hook.sh') as { hooks: Record<string, { matcher?: string; hooks: { timeout: number }[] }[]> }
+    expect(Object.keys(next.hooks)).toEqual(['BeforeAgent', 'AfterAgent', 'BeforeTool', 'AfterTool'])
+    expect(next.hooks.BeforeTool[0].matcher).toBeUndefined()
+    expect(next.hooks.BeforeTool[0].hooks[0].timeout).toBe(10_000)
+  })
+})
+
+describe('S2 정리 — 옛 `# ara-agent-hook` 줄만 지운다', () => {
+  const legacy = (event: string): { type: string; command: string; timeout: number } => ({
+    type: 'command',
+    command: `ARA_P="$ARA_HOOK_PORT"; [ -n "$ARA_P" ] && curl -sS -m 2 -X POST "http://127.0.0.1:$ARA_P/hook/claude/${event}" >/dev/null 2>&1; exit 0 # ara-agent-hook`,
+    timeout: 5
+  })
+  const mixed = {
+    theme: 'dark',
+    hooks: {
+      Stop: [{ hooks: [{ type: 'command', command: 'notify-send done' }, legacy('Stop')] }],
+      Notification: [{ hooks: [legacy('Notification')] }],
+      PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'C:/Users/u/.ara/agent-hooks/claude-hook.cmd' }] }, { hooks: [legacy('PreToolUse')] }]
+    }
   }
-  // 조용히 건너뛰지 않는다(#150): 못 찾으면 이 검사는 아무것도 안 지키면서 초록이 된다.
-  throw new Error('Git Bash 를 못 찾았다 — 훅 한 줄을 실제 셸로 검증할 수 없다')
-}
-
-function runHook(cmd: string, env: Record<string, string>, opts?: { setE?: boolean }): { code: number; curl: string } {
-  const dir = tmp()
-  const log = join(dir, 'curl.log').replace(/\\/g, '/')
-  const script = `${opts?.setE ? 'set -e\n' : ''}exec 3> "${log}"\ncurl() { printf '%s\\n' "$*" >&3; }\n${cmd}\n`
-  const r = spawnSync(posixShell(), ['-c', script], { env: { PATH: process.env['PATH'] ?? '', ...env }, encoding: 'utf8' })
-  return { code: r.status ?? -1, curl: readFileSync(log, 'utf8').trim() }
-}
-
-/** 원격 폴백 파일 하나를 그 홈에 놓는다(원격에서 `remoteHooks.publish` 가 하는 일). */
-function putTtyFile(home: string, tty: string, line: string): void {
-  mkdirSync(join(home, '.claude'), { recursive: true })
-  writeFileSync(join(home, '.claude', hookTtyFile(tty)), `${line}\n`, 'utf8')
-}
-
-describe('훅 설치 — 병합이지 덮어쓰기가 아니다', () => {
-  it('사용자 훅과 다른 설정을 그대로 둔다', () => {
-    const home = tmp()
-    const mine = { type: 'command' as const, command: 'node my-own-hook.mjs' }
-    writeSettings(home, {
-      env: { FOO: '1' },
-      permissions: { defaultMode: 'auto' },
-      hooks: { Stop: [{ hooks: [mine] }], PreCompact: [{ hooks: [mine] }] }
-    })
-
-    const { install } = installClaudeHooks(home)
-    expect(install.ok).toBe(true)
-    const after = readSettings(home) as unknown as {
-      env: unknown
-      permissions: unknown
-      hooks: Record<string, { hooks: { command: string }[] }[]>
-    }
-    // 우리와 무관한 키·이벤트는 손대지 않는다.
-    expect(after.env).toEqual({ FOO: '1' })
-    expect(after.permissions).toEqual({ defaultMode: 'auto' })
-    expect(after.hooks.PreCompact).toEqual([{ hooks: [mine] }])
-    // 우리가 쓰는 이벤트에서도 사용자 훅은 살아남고, 우리 것이 뒤에 붙는다.
-    const stop = after.hooks.Stop!
-    expect(stop[0]).toEqual({ hooks: [mine] })
-    expect(stop.at(-1)!.hooks[0]!.command).toContain(HOOK_MARK)
-    // 표에 있는 이벤트는 전부 심긴다.
-    for (const e of CLAUDE_HOOK_EVENTS) expect(JSON.stringify(after.hooks[e])).toContain(HOOK_MARK)
-  })
-
-  it('두 번 심어도 늘지 않는다(우리 것만 갈아 끼운다)', () => {
-    const home = tmp()
-    installClaudeHooks(home)
-    const first = readSettings(home)
-    installClaudeHooks(home)
-    // 토큰까지 그대로 재사용하므로 파일이 **완전히 같다**(매 기동마다 사용자 파일을 흔들지 않는다).
-    expect(readSettings(home)).toEqual(first)
-  })
-
-  it('심어 둔 토큰을 되찾아 그대로 쓴다', () => {
-    const home = tmp()
-    const a = installClaudeHooks(home)
-    const b = installClaudeHooks(home)
-    expect(b.token).toBe(a.token)
-    expect(tokenInSettings(readSettings(home))).toBe(a.token)
-  })
-
-  it('설정 파일이 없으면 첫 설치다(정상)', () => {
-    const home = tmp()
-    const { install } = installClaudeHooks(home)
-    expect(install).toEqual({ ok: true, path: settingsPath(home) })
-  })
-
-  it('깨진 JSON 은 **덮어쓰지 않고** 사유를 말한다', () => {
-    const home = tmp()
-    writeSettings(home, '{ "hooks": ')
-    const { install } = installClaudeHooks(home)
-    expect(install.ok).toBe(false)
-    expect(install.ok === false && install.reason).toBe('parse')
-    // 남의 파일은 한 글자도 안 바뀐다.
-    expect(readFileSync(settingsPath(home), 'utf8')).toBe('{ "hooks": ')
-  })
-
-  it('모양이 어긋난 값에도 던지지 않는다 — 훅 설치가 부팅을 막으면 안 된다', () => {
-    const merged = mergeHooks({ hooks: { Stop: 'nonsense', PreToolUse: [{ hooks: 'nope' }] } }, 'tok')
-    expect(merged.hooks!.Stop).toHaveLength(1)
-    expect(merged.hooks!.PreToolUse).toHaveLength(1)
-    expect(JSON.stringify(merged.hooks!.Stop)).toContain(HOOK_MARK)
-  })
-
-  it('우리 훅만 골라 빼고 같은 항목의 사용자 훅은 남긴다', () => {
-    const mine = { type: 'command' as const, command: 'echo mine' }
-    const ours = { type: 'command' as const, command: `curl ... # ${HOOK_MARK}` }
-    const merged = mergeHooks({ hooks: { Stop: [{ hooks: [mine, ours] }] } }, 'tok')
-    const stop = merged.hooks!.Stop!
-    expect(stop[0]).toEqual({ hooks: [mine] })
-    expect(stop).toHaveLength(2)
-  })
-
-  it('훅 한 줄은 포트가 없으면 아무 일도 안 하고, 무슨 일이 있어도 exit 0 이다', () => {
-    const cmd = installedCommand(tmp(), 'Stop')
-    expect(cmd).toContain('ARA_P="$ARA_HOOK_PORT"')
-    expect(cmd).toContain('[ -n "$ARA_P" ] && curl')
-    expect(cmd).toContain('exit 0')
-    expect(cmd).toContain('127.0.0.1')
-    // 이벤트는 URL 에 있다(페이로드를 파싱하지 않는 이유).
-    expect(cmd).toContain('/hook/claude/Stop')
-  })
-
-  /**
-   * #162 — sshd 가 env 를 버리는 서버에서도 켜지게 하는 두 번째 길. **로컬은 그대로여야 한다.**
-   * 아래 다섯은 전부 심긴 문자열을 실제 셸에 태운 결과다(눈으로 읽은 것이 아니다).
-   */
-  describe('#162 훅 한 줄을 실제 셸에 태운다', () => {
-    it('env 가 있으면 env 를 쓴다 — 폴백 파일이 있어도 안 읽는다(로컬 경로 불변)', () => {
-      const home = tmp()
-      const cmd = installedCommand(home, 'Stop')
-      putTtyFile(home, '/dev/pts/3', '111 file-pane')
-      const r = runHook(cmd, {
-        HOME: home.replace(/\\/g, '/'),
-        SSH_TTY: '/dev/pts/3',
-        ARA_HOOK_PORT: '222',
-        ARA_PANE: 'env-pane'
-      })
-      expect(r.code).toBe(0)
-      expect(r.curl).toContain('127.0.0.1:222/hook/claude/Stop')
-      expect(r.curl).toContain(`${HOOK_PANE_HEADER}: env-pane`)
-      expect(r.curl).not.toContain('file-pane')
-    })
-
-    it('env 가 없으면 자기 tty 의 폴백 파일에서 포트·탭을 읽는다 — 이게 이 라운드의 요점이다', () => {
-      const home = tmp()
-      const cmd = installedCommand(home, 'PreToolUse')
-      putTtyFile(home, '/dev/pts/7', '43905 pane-from-file')
-      const r = runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/7' })
-      expect(r.code).toBe(0)
-      expect(r.curl).toContain('127.0.0.1:43905/hook/claude/PreToolUse')
-      expect(r.curl).toContain(`${HOOK_PANE_HEADER}: pane-from-file`)
-    })
-
-    it('남의 tty 파일은 안 읽는다 — 같은 서버의 다른 탭 것을 가로채면 그게 오귀속이다', () => {
-      const home = tmp()
-      const cmd = installedCommand(home, 'Stop')
-      putTtyFile(home, '/dev/pts/3', '111 other-tab')
-      const r = runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/9' })
-      expect(r.code).toBe(0)
-      expect(r.curl).toBe('')
-    })
-
-    it('둘 다 없으면 curl 을 아예 안 부른다 — 빈 파일도, SSH_TTY 가 없어도(로컬 윈도우)', () => {
-      const home = tmp()
-      const cmd = installedCommand(home, 'Stop')
-      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/') })).toEqual({ code: 0, curl: '' })
-      putTtyFile(home, '/dev/pts/5', '')
-      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/5' })).toEqual({ code: 0, curl: '' })
-    })
-
-    it('폴백 파일 이름은 원격이 준 문자열로도 `~/.claude` 밖을 못 나간다', () => {
-      expect(hookTtyFile('/dev/pts/3')).toBe('ara-tty-3')
-      // readlink 의 답은 그 서버가 정한다 — 마지막 슬래시 뒤만 남겨 경로가 되지 못하게 한다.
-      expect(hookTtyFile('/dev/../../../etc/cron.d/pwn')).toBe('ara-tty-pwn')
-      expect(hookTtyFile('')).toBe('')
-      expect(hookTtyFile('/dev/pts/')).toBe('') // 이름이 없으면 안 쓴다
-    })
-
-    it('`set -e` 여도 exit 0 이다 — 0이 아니면 PreToolUse 가 남의 도구 실행을 막는다', () => {
-      const home = tmp()
-      const cmd = installedCommand(home, 'PreToolUse')
-      expect(runHook(cmd, { HOME: home.replace(/\\/g, '/'), SSH_TTY: '/dev/pts/9' }, { setE: true }).code).toBe(0)
+  it('표식 줄만 빠지고, 같은 묶음의 남의 줄·새 훅·다른 키는 남는다. 비어 버린 이벤트는 사라진다', () => {
+    expect(removeLegacyHooks(mixed)).toEqual({
+      theme: 'dark',
+      hooks: {
+        Stop: [{ hooks: [{ type: 'command', command: 'notify-send done' }] }],
+        PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'C:/Users/u/.ara/agent-hooks/claude-hook.cmd' }] }]
+      }
     })
   })
+  it('표식이 없으면 null(파일을 안 고친다)', () => {
+    expect(removeLegacyHooks({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo ara-agent' }] }] } })).toBeNull()
+    expect(removeLegacyHooks(null)).toBeNull()
+  })
 
-  it('#160 종료 훅도 심긴다 — matcher 없이(reason 을 안 가린다)', () => {
-    const home = tmp()
-    installClaudeHooks(home)
-    const hooks = (readSettings(home) as unknown as { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]> })
-      .hooks
-    const end = hooks.SessionEnd!.at(-1)!
-    expect(end.hooks[0]!.command).toContain('/hook/claude/SessionEnd')
-    // `clear`·`logout`·`prompt_input_exit`·`other` 를 **전부** 받는다. `reason` 마다 갈리는 것은
-    // 맞지만(isCliGone) 그 판단은 본문을 읽어서 하지 매처로 하지 않는다 — 매처로 쪼개면
-    // 이벤트 하나가 URL 여러 개가 되고, 아직 모르는 `reason` 이 조용히 통째로 사라진다.
-    expect(end.matcher).toBeUndefined()
+  const homes: string[] = []
+  const home = (): string => {
+    const h = mkdtempSync(join(tmpdir(), 'ara-hook-home-'))
+    homes.push(h)
+    return h
+  }
+  afterEach(() => {
+    for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true })
+  })
+
+  it('파일로: 정리 1회 후 다시 불러도 쓰지 않는다, .bak 이 남는다, 깨진 JSON 은 손대지 않는다', () => {
+    const h = home()
+    mkdirSync(join(h, '.claude'))
+    const cfg = join(h, '.claude', 'settings.json')
+    writeFileSync(cfg, JSON.stringify(mixed))
+    expect(cleanupLegacyHooks(h)).toBe(true)
+    const after = JSON.parse(readFileSync(cfg, 'utf8'))
+    expect(JSON.stringify(after)).not.toContain('ara-agent-hook')
+    expect(after.hooks.Stop[0].hooks[0].command).toBe('notify-send done')
+    expect(existsSync(cfg + '.bak')).toBe(true)
+    expect(cleanupLegacyHooks(h)).toBe(false)
+    writeFileSync(cfg, '{ broken ara-agent-hook')
+    expect(cleanupLegacyHooks(h)).toBe(false)
+    expect(readFileSync(cfg, 'utf8')).toBe('{ broken ara-agent-hook')
+    expect(cleanupLegacyHooks(home())).toBe(false) // 파일 없음
+  })
+
+  it('installHooks: 스크립트 + 설정 병합, 남의 훅 보존, 깨진 설정은 안 고친다', () => {
+    const h = home()
+    mkdirSync(join(h, '.claude'))
+    const cfg = join(h, '.claude', 'settings.json')
+    writeFileSync(cfg, JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine.sh' }] }] } }))
+    const r = installHooks(h, 'claude', true)
+    expect(r.ok).toBe(true)
+    const script = join(h, '.ara', 'agent-hooks', 'claude-hook.cmd')
+    expect(readFileSync(script, 'utf8')).toBe(hookScript('claude', true))
+    const s = JSON.parse(readFileSync(cfg, 'utf8'))
+    expect(s.hooks.Stop[0].hooks[0].command).toBe('mine.sh')
+    expect(s.hooks.Stop[1].hooks[0].command).toBe(hookCommand(script, true))
+    const g = home()
+    mkdirSync(join(g, '.gemini'))
+    writeFileSync(join(g, '.gemini', 'settings.json'), '{ nope')
+    expect(installHooks(g, 'gemini', true).ok).toBe(false)
+    expect(readFileSync(join(g, '.gemini', 'settings.json'), 'utf8')).toBe('{ nope')
   })
 })
 
-// ── 수신 서버 ────────────────────────────────────────────────────────────────
-
-async function post(
-  port: number,
-  path: string,
-  headers: Record<string, string>,
-  body = '{}'
-): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers }, (res) => {
-      res.resume()
-      res.on('end', () => resolve(res.statusCode ?? 0))
-    })
-    req.on('error', reject)
-    req.end(body)
+describe('훅 명령·스크립트 모양', () => {
+  it('Windows: 슬래시 맨 경로(공백 있으면 큰따옴표), POSIX: 안전하면 맨 경로', () => {
+    expect(hookCommand('C:\\Users\\u\\.ara\\agent-hooks\\claude-hook.cmd', true)).toBe('C:/Users/u/.ara/agent-hooks/claude-hook.cmd')
+    expect(hookCommand('C:\\Users\\Jun Young\\.ara\\agent-hooks\\claude-hook.cmd', true)).toBe('"C:/Users/Jun Young/.ara/agent-hooks/claude-hook.cmd"')
+    expect(hookCommand('/home/u/.ara/agent-hooks/claude-hook.sh', false)).toBe('/home/u/.ara/agent-hooks/claude-hook.sh')
   })
-}
-
-async function rig(
-  token = 'tok-1'
-): Promise<{ port: number; server: AgentHookServerHandle; pushed: AgentStatus[]; exited: string[] }> {
-  const pushed: AgentStatus[] = []
-  const exited: string[] = []
-  const server = createAgentHookServer({
-    token,
-    onStatus: (s) => void pushed.push(s),
-    onExit: (id) => void exited.push(id),
-    bindPort: 0
+  it('스크립트는 먼저 {} 를 찍고, env 가 없으면 0 으로 나간다', () => {
+    const w = hookScript('claude', true).split('\r\n')
+    expect(w.indexOf('echo {}')).toBeLessThan(w.findIndex((l) => l.includes('exit /b 0')))
+    expect(w.at(-2)).toBe('exit /b 0')
+    const p = hookScript('gemini', false).split('\n')
+    expect(p[1]).toBe('printf "{}\\n"')
+    expect(p.at(-2)).toBe('exit 0')
   })
-  servers.push(server)
-  const port = await server.start()
-  expect(port).toBeGreaterThan(0)
-  return { port, server, pushed, exited }
-}
-
-/** claude 가 `SessionEnd` 훅의 stdin 으로 흘려보내는 것과 같은 모양(번들 `cli.js`: `{...,reason}`). */
-const endBody = (reason: string): string =>
-  JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 'c-1', cwd: 'D:/work/app', reason })
-
-const hookHeaders = (token: string, pane: string): Record<string, string> => ({
-  [HOOK_TOKEN_HEADER]: token,
-  [HOOK_PANE_HEADER]: pane
 })
 
-describe('훅 수신 — 인증·귀속·매핑', () => {
-  it('토큰이 틀리면 상태가 안 바뀐다', async () => {
-    const { port, server } = await rig()
-    expect(await post(port, '/hook/claude/Stop', hookHeaders('wrong', 'p1'))).toBe(401)
-    expect(await post(port, '/hook/claude/Stop', { [HOOK_PANE_HEADER]: 'p1' })).toBe(401)
-    expect(server.statuses()).toEqual([])
+describe('훅 서버(127.0.0.1) + 실제 훅 스크립트', () => {
+  const servers: { stop(): Promise<void> }[] = []
+  afterEach(async () => {
+    for (const s of servers.splice(0)) await s.stop()
+  })
+  const post = (port: number, path: string, headers: Record<string, string>, body: string): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const req = request({ host: '127.0.0.1', port, path, method: 'POST', headers }, (res) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      })
+      req.on('error', reject)
+      req.end(body)
+    })
+
+  it('토큰이 맞는 POST 만 받는다, 칸 키가 없으면 주장하지 않는다', async () => {
+    const got: HookEvent[] = []
+    const s = createHookServer((e) => got.push(e))
+    servers.push(s)
+    const { port, token } = await s.ensure()
+    expect(port).toBeGreaterThan(0)
+    expect(await s.ensure()).toEqual({ port, token }) // 두 번째는 같은 서버
+    const body = JSON.stringify(ev('PreToolUse', { tool_name: 'Bash' }))
+    expect(await post(port, '/hook/claude', { [HOOK_TOKEN_HEADER]: 'wrong', [HOOK_PANE_HEADER]: 'p1' }, body)).toBe(401)
+    expect(await post(port, '/hook/nope', { [HOOK_TOKEN_HEADER]: token, [HOOK_PANE_HEADER]: 'p1' }, body)).toBe(404)
+    expect(await post(port, '/hook/claude', { [HOOK_TOKEN_HEADER]: token }, body)).toBe(204)
+    expect(got).toHaveLength(0)
+    expect(await post(port, '/hook/claude', { [HOOK_TOKEN_HEADER]: token, [HOOK_PANE_HEADER]: 'p1' }, body)).toBe(204)
+    expect(got).toEqual([{ source: 'claude', paneKey: 'p1', payload: { hook_event_name: 'PreToolUse', tool_name: 'Bash' } }])
   })
 
-  it('탭을 모르면(ARA_PANE 없음) 아무 주장도 안 한다 — 아라 대화가 띄운 헤드리스 claude 가 그렇다', async () => {
-    const { port, server } = await rig()
-    expect(await post(port, '/hook/claude/Stop', { [HOOK_TOKEN_HEADER]: 'tok-1' })).toBe(204)
-    expect(server.statuses()).toEqual([])
-  })
-
-  it('표에 있는 이벤트가 상태를 만들고 화면으로 밀린다', async () => {
-    const { port, server, pushed } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()[0]).toMatchObject({ sessionId: 'p1', cli: 'claude', state: 'working' })
-    expect(pushed).toHaveLength(1)
-
-    await post(port, '/hook/claude/Notification', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()[0]!.state).toBe('waiting')
-    expect(pushed).toHaveLength(2)
-  })
-
-  it('모르는 이벤트는 상태를 안 바꾸고 화면도 안 흔든다', async () => {
-    const { port, server, pushed } = await rig()
-    await post(port, '/hook/claude/Notification', hookHeaders('tok-1', 'p1'))
-    const started = server.statuses()[0]!.stateStartedAt
-    await post(port, '/hook/claude/SubagentStop', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()[0]!.state).toBe('waiting')
-    expect(server.statuses()[0]!.stateStartedAt).toBe(started)
-    expect(pushed).toHaveLength(2) // 상태가 안 바뀌어도 들은 것은 밀린다(updatedAt 이 움직였다)
-  })
-
-  it('큰 페이로드를 흘려보낸다 — PostToolUse 는 파일 내용을 통째로 싣고 온다', async () => {
-    const { port, server } = await rig()
-    const big = JSON.stringify({ tool_response: 'x'.repeat(2_000_000) })
-    expect(await post(port, '/hook/claude/PostToolUse', hookHeaders('tok-1', 'p1'), big)).toBe(204)
-    expect(server.statuses()[0]!.state).toBe('working')
-  })
-
-  it('모르는 경로·메서드는 거절한다', async () => {
-    const { port } = await rig()
-    expect(await post(port, '/hook/codex/Stop', hookHeaders('tok-1', 'p1'))).toBe(404)
-    // 프로토타입 오염 경로 — `in` 으로 짰으면 여기서 상태가 만들어진다.
-    expect(await post(port, '/hook/constructor/Stop', hookHeaders('tok-1', 'p1'))).toBe(404)
-    expect(await post(port, '/nope', hookHeaders('tok-1', 'p1'))).toBe(404)
-  })
-
-  it('★ Ctrl+D 로 끝냈다(`other`) — 줄이 사라지고, **같은 토큰으로 다시 살아난다**', async () => {
-    const { port, server, exited } = await rig()
-    // ① 일하는 중
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()[0]!.state).toBe('working')
-
-    // ② 탭은 그대로 둔 채 claude 만 나간다. Ctrl+D·Ctrl+C·SIGTERM·오류 종료가 전부 `other` 다
-    //    (번들 `cli.js` 의 `j8(A=0,Q="other")` 기본값이라 구분이 애초에 없다).
-    //    2026-09-01 저녁 준영님 결정: **크래시가 같이 사라지는 값을 치르고** other 를 지운다.
-    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('other'))).toBe(204)
-    expect(server.statuses()).toEqual([]) // `확인 불가` 로 남는 것이 아니라 **없다**
-    expect(exited).toEqual(['p1'])
-
-    // ③ **토큰은 살아 있다.** 세션이 죽은 게 아니라 CLI 만 죽었다 — 같은 탭에서 다시 띄우면
-    //    그 훅은 같은 토큰으로 온다. `forget`(토큰까지 지운다)을 쓰지 않은 이유가 이 줄이다.
-    expect(await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))).toBe(204)
-    expect(server.statuses()[0]!.state).toBe('working')
-  })
-
-  it('#160 나갔다고 들으면 `작업 중`에서 안 굳는다 — 안 지우는 종료도 상태는 바뀐다', async () => {
-    const { port, server, pushed, exited } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    // 모르는 `reason` — 지우지는 않지만 `작업 중` 으로 굳어 있으면 그게 #160 의 거짓말이다.
-    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('some_future_reason'))
-    expect(server.statuses()[0]!.state).toBe('unverifiable')
-    expect(pushed.at(-1)!.state).toBe('unverifiable') // 화면까지 밀린다(원장만 바뀌면 줄은 그대로다)
-    expect(exited).toEqual([])
-  })
-
-  it('`reason` 을 못 읽으면 `확인 불가` 다 — 모르는 종료를 내려간 것으로 치지 않는다', async () => {
-    const { port, server, exited } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    for (const body of ['{}', 'not json', '{"reason":123}', '{"reason":"bypass_permissions_disabled"}']) {
-      expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), body)).toBe(204)
-      expect(server.statuses()[0]!.state).toBe('unverifiable')
-      expect(exited).toEqual([])
+  it('심은 훅 스크립트를 셸로 실행하면(가짜 CLI 대신 직접) 서버가 받고 stdout 은 {} — env 가 없으면 아무것도 안 보낸다', async () => {
+    const win = process.platform === 'win32'
+    if (!win && !existsSync('/bin/sh')) return
+    const got: HookEvent[] = []
+    const s = createHookServer((e) => got.push(e))
+    servers.push(s)
+    const { port, token } = await s.ensure()
+    const h = mkdtempSync(join(tmpdir(), 'ara-hook-run-'))
+    try {
+      expect(installHooks(h, 'claude', win).ok).toBe(true)
+      const script = join(h, '.ara', 'agent-hooks', win ? 'claude-hook.cmd' : 'claude-hook.sh')
+      const runScript = (env: Record<string, string>): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const base = { ...process.env }
+          for (const k of Object.values(HOOK_ENV)) delete base[k]
+          const child = win ? spawn('cmd.exe', ['/d', '/c', script], { env: { ...base, ...env } }) : spawn('/bin/sh', [script], { env: { ...base, ...env } })
+          let out = ''
+          child.stdout.on('data', (d: Buffer) => (out += d.toString()))
+          child.on('error', reject)
+          child.on('close', (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(`exit ${code}`))))
+          child.stdin.end(JSON.stringify(ev('Stop', { session_id: '한글 "따옴표" & %PATH%' })))
+        })
+      expect(await runScript({})).toBe('{}')
+      expect(got).toHaveLength(0)
+      expect(await runScript({ [HOOK_ENV.port]: String(port), [HOOK_ENV.token]: token, [HOOK_ENV.pane]: 'tab-1' })).toBe('{}')
+      expect(got).toEqual([{ source: 'claude', paneKey: 'tab-1', payload: { hook_event_name: 'Stop', session_id: '한글 "따옴표" & %PATH%' } }])
+    } finally {
+      rmSync(h, { recursive: true, force: true })
     }
   })
+})
 
-  it('🔴 사용자가 `/exit` 로 끝냈다 — 줄이 사라지고, **같은 토큰으로 다시 살아난다**', async () => {
-    const { port, server, exited } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()).toHaveLength(1)
-
-    // ① 상태가 통째로 사라진다 — `확인 불가` 로 남는 것이 아니라 **없다**
-    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('prompt_input_exit'))).toBe(204)
-    expect(server.statuses()).toEqual([])
-    // ② 그 사실이 화면 쪽으로 밀린다. 이 창구가 없던 것이 #160 이 지우기를 못 쓴 이유였다
-    expect(exited).toEqual(['p1'])
-
-    // ③ 🔴 **토큰은 안 지웠다.** `forget` 을 썼으면 여기가 401 이고 그 탭의 줄은 영영 안 살아난다
-    //    (원격은 더 나쁘다 — 그 호스트의 열쇠는 재접속 전엔 못 되찾는다).
-    expect(await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))).toBe(204)
-    expect(server.statuses()[0]).toMatchObject({ sessionId: 'p1', state: 'working' })
-  })
-
-  it('`/logout` 도 사람이 끝낸 것이다', async () => {
-    const { port, server, exited } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('logout'))
-    expect(server.statuses()).toEqual([])
-    expect(exited).toEqual(['p1'])
-  })
-
-  it('`/clear` 는 나간 것이 아니다 — 줄이 사라지지 않는다(곧 SessionStart 가 따라온다)', async () => {
-    const { port, server, exited } = await rig()
-    await post(port, '/hook/claude/PreToolUse', hookHeaders('tok-1', 'p1'))
-    await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), endBody('clear'))
-    expect(server.statuses()).toHaveLength(1)
-    expect(exited).toEqual([])
-    await post(port, '/hook/claude/SessionStart', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()[0]!.state).toBe('working')
-  })
-
-  it('본문을 통째로 담지 않는다 — 앞머리(4KB)를 넘으면 모르는 종료로 친다', async () => {
-    const { port, server, exited } = await rig()
-    // 담는 양에 상한이 있다는 것을 이 검사가 붙든다: 상한이 없으면 여기서 1MB 를 그대로 파싱하고
-    // (`prompt_input_exit` 를 읽어 지우고) 지나가, 다음 사람이 상한을 지워도 아무도 못 잡는다.
-    const big = `${endBody('prompt_input_exit')}${'x'.repeat(1_000_000)}`
-    expect(await post(port, '/hook/claude/SessionEnd', hookHeaders('tok-1', 'p1'), big)).toBe(204)
-    expect(exited).toEqual([])
-    expect(server.statuses()[0]!.state).toBe('unverifiable')
-  })
-
-  it('세션이 끝나면 그 상태를 잊는다', async () => {
-    const { port, server } = await rig()
-    await post(port, '/hook/claude/Stop', hookHeaders('tok-1', 'p1'))
-    expect(server.statuses()).toHaveLength(1)
-    server.forget('p1')
-    expect(server.statuses()).toEqual([])
-  })
-
-  it('LAN 주소로는 안 들린다 — 루프백 고정 바인드(MCP 와 같은 규율)', async () => {
-    const { port } = await rig()
-    const lan = Object.values(networkInterfaces())
-      .flat()
-      .find((n) => n && n.family === 'IPv4' && n.address !== '127.0.0.1')
-    if (!lan) return // 랜 주소가 없는 기계(CI 컨테이너)에서는 확인할 것이 없다
-    await expect(
-      new Promise((resolve, reject) => {
-        // 대개는 ECONNREFUSED 로 즉시 거절되고, 방화벽이 SYN 을 버리면 아무 답도 안 온다 —
-        // 둘 다 "안 들린다"라 상한을 짧게 둔다(검사 시간을 2초 쓸 이유가 없다).
-        const req = httpRequest({ host: lan.address, port, path: '/hook/claude/Stop', method: 'POST', timeout: 500 }, () =>
-          resolve('ok')
-        )
-        req.on('error', reject)
-        req.on('timeout', () => req.destroy(new Error('timeout')))
-        req.end()
-      })
-    ).rejects.toBeTruthy()
-  })
+// execFileSync 는 curl 이 이 PC 에 있는지 한 번 확인하는 데만 쓴다(없으면 위 실행 시험이 실패 사유를 말하게).
+it('curl 이 있다(훅 스크립트의 전제)', () => {
+  const out = execFileSync(process.platform === 'win32' ? `${process.env['SystemRoot']}\\System32\\curl.exe` : 'curl', ['--version'], { encoding: 'utf8' })
+  expect(out).toMatch(/^curl /)
 })

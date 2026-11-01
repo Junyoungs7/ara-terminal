@@ -10,30 +10,13 @@ import type { AgentStatus } from '@shared/agentStatus'
  */
 const byId = new Map<string, AgentStatus>()
 const listeners = new Set<() => void>()
-let started = false
 
 function emit(): void {
   listeners.forEach((f) => f())
 }
 
-/** 첫 구독자가 배선한다 — 창이 늦게 떠도 `agent:state` 로 그 사이 것을 받아 온다(MCP 패널과 같은 규칙). */
-function start(): void {
-  if (started) return
-  started = true
-  window.ev?.agent.onStatus((s) => {
-    byId.set(s.sessionId, s)
-    emit()
-  })
-  void window.ev?.agent
-    .state()
-    .then((st) => {
-      for (const s of st.statuses) byId.set(s.sessionId, s)
-      emit()
-    })
-    .catch(() => {
-      // 못 받아도 화면은 돈다 — 그때 모든 세션이 `unverifiable` 로 보인다(그게 사실이다).
-    })
-}
+// M3 S2: 이 사본을 채우던 옛 훅 서버(`agent:*` IPC)는 지워졌다 — 이제 늘 비어 있다. 읽는 쪽(터미널 AI 작업대·대기 알림)은
+// S1·S4 에서 이 파일과 함께 지운다. AI 작업 공간 에이전트 상태는 features/aiws/agentStore.ts(`agents:status`).
 
 export function agentStatuses(): AgentStatus[] {
   return [...byId.values()]
@@ -50,7 +33,6 @@ export function forgetAgentStatus(sessionId: string): void {
 
 /** 상태가 바뀔 때마다 불린다. 해지 함수 반환. */
 export function subscribeAgent(cb: () => void): () => void {
-  start()
   listeners.add(cb)
   return () => void listeners.delete(cb)
 }

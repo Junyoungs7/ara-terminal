@@ -57,16 +57,14 @@ export async function connectByProfile(
     secret = lookup.secret
   }
 
-  // F1b: 세션 id 를 **접속 전에** 만든다 — 그 값이 원격 셸의 `ARA_PANE` 이 되고, 그래야 사용자가
-  // 직접 친 `claude` 의 훅도 자기가 어느 탭인지 말할 수 있다(편입 후엔 이미 셸이 떠 있다).
   const paneId = randomUUID()
-  const hookSink = sessions.hooks()
   const outcome = await connectSsh(profile, {
     knownHosts: ws.getKnownHosts(),
     secret,
     acceptHostKey,
     onHostKeyAccepted: (id, host) => ws.addKnownHost(id, host),
-    ...(hookSink ? { hooks: { sink: hookSink, paneId } } : {}),
+    // M3 S2(제거 A2): 옛 원격 상태 훅을 지우기만 한다(remoteHookCleanup.ts). 다음 판(M4)에서 이 줄째 지운다.
+    cleanupLegacyHooks: true,
     // 쓸 만한 치수만 넘긴다(`shared/termSize.ts`) — 옛 스냅샷의 9×4 로 원격 셸을 열지 않는다.
     ...(size && usableSize(size.cols, size.rows) ? { size } : {})
   })

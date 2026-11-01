@@ -45,7 +45,7 @@ import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
-import { registerAgentIpc, type AgentRuntime } from './ipc/registerAgentIpc'
+import { cleanupLegacyHooks } from './agents/hooks'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { registerVoiceIpc, type VoiceRuntime } from './ipc/registerVoiceIpc'
@@ -162,7 +162,7 @@ let ara: AraSession | null = null
 // 이것뿐이라 꺼진 채로 시작하면 아라가 반쪽이 된다. 설정 [MCP]에서 끌 수는 있다(확인을 받는다).
 let mcp: McpRuntime | null = null
 // F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
-let agent: AgentRuntime | null = null
+let agents: { stop(): Promise<void> } | null = null
 let araChat: AraRuntime | null = null
 let voice: VoiceRuntime | null = null
 let mainWindow: BrowserWindow | null = null
@@ -499,7 +499,6 @@ app.whenReady().then(async () => {
     (id) => {
       forwards?.stopSession(id)
       mcp?.approval.forget(id) // S3: 세션 종료 시 승인 매니저의 유령 항목도 같이 지운다(GAP #6).
-      agent?.server.forget(id) // F1a: 그 탭의 에이전트 상태도 지운다 — 죽은 세션의 상태가 곧 유령이다.
       // 커넥션이 없으면 저장할 길이 없다 — 그 세션으로 연 편집기 창도 함께 닫는다.
       closeEditorsForSession(id)
     },
@@ -543,8 +542,11 @@ app.whenReady().then(async () => {
   registerResourcesFeature(sessions)
   // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
   registerWorktreesFeature(userData)
-  // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행. 옛 aiCliFlags 를 처음 한 번 옮긴다.
-  registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags })
+  // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행·상태(훅 + 화면 판정). 옛 aiCliFlags 를 처음 한 번 옮긴다.
+  // ⚠️ e2e 는 **진짜 홈을 건드리지 않는다.** 훅은 사용자 PC 의 `~/.claude/settings.json` 등을 고치는 일이라, 검사가 그걸 그대로 하면
+  // 준영님 Claude Code 설정이 시험 부산물로 바뀐다(fixtures.ts 의 sandboxUserPaths 와 같은 규율).
+  const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
+  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc() })
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(
@@ -702,22 +704,13 @@ app.whenReady().then(async () => {
   mcp.approval.setAraTarget(() => araChat?.active()?.id ?? null)
   registerWindowIpc(() => mainWindow)
   registerLockIpc(appLock, () => sessions.snapshot().length, () => mainWindow)
-  /**
-   * F1a 훅 기반 에이전트 상태 — **창을 만들기 전에** 포트를 잡는다.
-   *
-   * 순서가 이유의 전부다: 포트는 `ARA_HOOK_PORT` 로 셸에 물려주는 값이라, 세션이 하나라도 먼저
-   * 뜨면 그 탭의 `claude` 는 갈 곳을 모른 채 돌게 된다(그 탭만 영영 `unverifiable` 이다).
-   * 리슨에 실패해도 앱은 그대로 뜬다 — 상태 표시가 부팅을 막을 이유가 없다.
-   */
-  // ⚠️ e2e 는 **진짜 홈을 건드리지 않는다.** 이 기능은 사용자 PC 의 `~/.claude/settings.json` 을
-  // 고치는 일이라, 검사가 그걸 그대로 하면 준영님 Claude Code 설정이 테스트 부산물로 바뀐다
-  // (fixtures.ts 의 sandboxUserPaths 와 같은 규율 — 그쪽은 휴지통·다운로드를 임시 userData 로 돌린다).
-  const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
-  agent = registerAgentIpc(hookHome, () => mainWc())
-  await agent.start().catch((e: unknown) => logMainError('agent hook server', e))
-  // F1b: 원격도 같은 서버로 듣는다. SSH 가 붙을 때 역터널을 열고 그 호스트의 토큰을 등록하는 자리라
-  // 세션 매니저가 들고 있는다(늦은 바인딩 — 훅 서버는 부팅 뒤에 생긴다).
-  sessions.setHooks(agent.server)
+  // M3 S2(제거 A1): 옛 아라 훅(`# ara-agent-hook`)을 `~/.claude/settings.json` 에서 지운다 — 표식이 없으면 읽기만 한다(정리는 사실상 한 번).
+  // 새 훅(Orca 방식)은 에이전트를 처음 띄울 때 심는다(agents/feature.ts). e2e 는 임시 홈(hookHome).
+  try {
+    cleanupLegacyHooks(hookHome)
+  } catch (e) {
+    logMainError('legacy agent hooks cleanup', e)
+  }
   createWindow()
 
   app.on('activate', () => {
@@ -800,7 +793,7 @@ app.on('before-quit', (e) => {
   // 가능해야 한다(좀비 리스너 없음).
   quitStep('mcp', () => void mcp?.server.stop())
   // F1a: 훅 리스너도 접는다(MCP 와 같은 이유 — 좀비 리스너 금지).
-  quitStep('agentHooks', () => void agent?.server.stop())
+  quitStep('agentHooks', () => void agents?.stop())
   // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.
   // 다중 모니터 창이 떠 있으면 먼저 없앤다: 그 창의 렌더러가 아직 살아 있으면 방금 닫은 릴레이로
   // 다시 붙으려 든다(창이 앱 창과 수명이 묶여 있지 않다 — RdpWindows.ts 주석 참고).

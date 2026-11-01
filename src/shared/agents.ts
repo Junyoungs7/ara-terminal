@@ -329,6 +329,8 @@ export type LaunchPlan =
       env: Record<string, string>
       /** 사용자 인자에 권한 플래그가 있어 권한 모드 플래그를 붙이지 않았다. */
       permissionShadowed: boolean
+      /** Windows 셸: 첫 지시를 줄에 싣지 않고 에이전트 입력 상자가 뜬 뒤 입력으로 넣는다(main/agents/status.ts). */
+      deferredPrompt?: string
     }
   | { ok: false; error: string }
 
@@ -348,11 +350,10 @@ export function quoteArg(arg: string, shell: LaunchShell): string | null {
 
 /**
  * 에이전트 실행 한 줄(Orca planAgentPaneLaunch 의 핵심만). 순서: 실행 파일 · 접두 인자 · 권한 플래그 · `--rc` · 사용자 인자 · 첫 지시.
- * 첫 지시는 env(`ARA_AGENT_PROMPT`)로 싣고 줄에는 그 참조만 쓴다:
- *   posix `"$ARA_AGENT_PROMPT"` · powershell `$env:ARA_AGENT_PROMPT` · cmd 는 지연 확장(`cmd /v:on /c … "!ARA_AGENT_PROMPT!"`)
- *   — 셋 다 셸이 줄을 읽은 **뒤에** 값을 펴므로 지시 글 안의 `& ; $ "` 가 명령이 되지 않는다.
- * ponytail: powershell 5.1 은 네이티브 명령에 넘기는 인자 안의 `"` 를 이스케이프하지 않아 지시 글의 큰따옴표가
- * 갈라질 수 있다(7.3+ 는 괜찮다). npm `.cmd` 셔임도 `%*` 로 다시 읽는다. 잦으면 준비된 뒤 붙여 넣기(Orca stdin-after-start)로.
+ * 첫 지시:
+ *   posix — env(`ARA_AGENT_PROMPT`)로 싣고 줄에는 참조 `"$ARA_AGENT_PROMPT"` 만(셸이 줄을 읽은 뒤에 값을 펴므로 `& ; $ "` 가 명령이 안 된다).
+ *   powershell·cmd — **줄에 싣지 않는다**(`deferredPrompt`). 5.1 은 네이티브 인자 속 `"` 를 이스케이프하지 않고, npm `.cmd` 셔임은
+ *   `%*` 로 다시 읽어 `&`·`%`·줄바꿈이 깨진다(M3 R1 한계). 에이전트 입력 상자가 뜬 뒤 입력으로 넣는다(Orca stdin-after-start).
  */
 export function planAgentLaunch(o: {
   agent: AgentId
@@ -379,11 +380,12 @@ export function planAgentLaunch(o: {
     quoted.push(q)
   }
   const prompt = o.prompt?.trim() ? o.prompt : ''
-  const ref = o.shell === 'posix' ? `"$${PROMPT_ENV}"` : o.shell === 'powershell' ? `$env:${PROMPT_ENV}` : `"!${PROMPT_ENV}!"`
-  if (prompt) quoted.push(...(spec.prompt === 'flag-prompt-interactive' ? ['--prompt-interactive', ref] : [ref]))
+  const argv = o.shell === 'posix' ? prompt : ''
+  const ref = `"$${PROMPT_ENV}"`
+  if (argv) quoted.push(...(spec.prompt === 'flag-prompt-interactive' ? ['--prompt-interactive', ref] : [ref]))
 
   const body = quoted.join(' ')
-  const line = o.shell === 'powershell' ? `& ${body}` : o.shell === 'cmd' && prompt ? `cmd /v:on /d /c ${body}` : body
-  const env = { ...prefs.env, ...cmd.env, ...(prompt ? { [PROMPT_ENV]: prompt } : {}) }
-  return { ok: true, line, env, permissionShadowed }
+  const line = o.shell === 'powershell' ? `& ${body}` : body
+  const env = { ...prefs.env, ...cmd.env, ...(argv ? { [PROMPT_ENV]: argv } : {}) }
+  return { ok: true, line, env, permissionShadowed, ...(prompt && !argv ? { deferredPrompt: prompt } : {}) }
 }

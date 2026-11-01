@@ -6,6 +6,7 @@ import type { SessionBackend } from './SessionBackend'
 import type { SessionSpec } from './ISessionManager'
 import { SHELL_INTEGRATION } from './osc7'
 import { shellFor, type LaunchShell } from '@shared/aiCli'
+import { HOOK_ENV } from '@shared/agentHooks'
 
 // OSC7 주입 방식이 셸마다 달라 종류를 판별한다(powershell=시작 인자, bash=환경변수, 그 외=stdin 폴백).
 type ShellKind = 'powershell' | 'bash' | 'other'
@@ -183,16 +184,14 @@ export class PtyBackend implements SessionBackend {
   }
 
   /**
-   * paneId(= 세션 id)는 **훅이 어느 탭인지 말하게 하는 값**이다(F1a). 셸 env 에 넣어 두면
-   * 사용자가 직접 친 `claude` 도 그 셸의 자식이라 물려받는다 — 우리가 띄운 것만 아는 것이 아니라
-   * **그 탭에서 도는 것을 안다**(docs/orca-analysis.md §3). 포트(`ARA_HOOK_PORT`)는 세션마다 같은
-   * 값이라 main 의 process.env 에 한 번만 심고 여기서 그대로 물려받는다.
+   * paneId(= 세션 id)는 AI 작업 공간 에이전트 탭에만 `ARA_PANE_KEY` 로 넣는다 — 훅이 어느 탭인지 말하게(M3 R2 AI-04).
+   * 터미널 공간 셸에는 아무것도 넣지 않는다(S2 — 옛 `ARA_PANE`·`ARA_HOOK_PORT` 주입 제거).
    */
   constructor(spec: SessionSpec, paneId?: string) {
     const { file, args: baseArgs, kind } = resolveShell(spec)
     // M3: 에이전트 탭은 설정의 env·첫 지시를 싣는다(spec.env). 이름이 env 모양인 것만.
     const extra = Object.fromEntries(Object.entries(spec.env ?? {}).filter(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string'))
-    const base = { ...(process.env as Record<string, string>), ...extra, ...(paneId ? { ARA_PANE: paneId } : {}) }
+    const base = { ...(process.env as Record<string, string>), ...extra, ...(paneId && spec.space === 'ai' ? { [HOOK_ENV.pane]: paneId } : {}) }
     const { args, env } = withShellIntegration(kind, baseArgs, base)
     const win = process.platform === 'win32'
     // Windows conpty 종료 경로 안정화: useConptyDll=true 는 kill() 시 node-pty 가

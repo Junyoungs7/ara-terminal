@@ -15,7 +15,6 @@ import type {
   RemoteData,
   UpdateState
 } from '@shared/ipc'
-import type { AgentStatus } from '@shared/agentStatus'
 import type { AiCliId, LaunchShell } from '@shared/aiCli'
 import { browserBridge } from './features/browser'
 import { resourcesBridge } from './features/resources'
@@ -474,20 +473,6 @@ const api: EvApi = {
       const listener = (_e: IpcRendererEvent, p: { on: boolean }) => cb(p.on)
       ipcRenderer.on('voice:bypass', listener)
       return () => ipcRenderer.removeListener('voice:bypass', listener)
-    }
-  },
-  // F1a 에이전트 상태 — 훅이 말해 준 것을 받아만 본다(쓰는 함수가 없다는 것이 계약이다).
-  agent: {
-    state: () => ipcRenderer.invoke('agent:state'),
-    onStatus: (cb: (s: AgentStatus) => void) => {
-      const listener = (_e: IpcRendererEvent, s: AgentStatus) => cb(s)
-      ipcRenderer.on('agent:status', listener)
-      return () => ipcRenderer.removeListener('agent:status', listener)
-    },
-    onExit: (cb: (sessionId: string) => void) => {
-      const listener = (_e: IpcRendererEvent, p: { sessionId: string }) => cb(p.sessionId)
-      ipcRenderer.on('agent:exit', listener)
-      return () => ipcRenderer.removeListener('agent:exit', listener)
     }
   },
   lock: {

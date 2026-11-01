@@ -24,7 +24,6 @@ import {
   type UiPrefs
 } from '@shared/types'
 import type { DiagProbeStatus, GpuInfo, UpdateState } from '@shared/ipc'
-import type { AgentHookState, RemoteHookReport } from '@shared/agentStatus'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
 import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
@@ -535,68 +534,6 @@ function AiSection({
 }
 
 /**
- * F1a 에이전트 상태 훅 — **심겼나, 안 심겼으면 왜.**
- *
- * 이 줄이 필요한 이유: 훅이 없으면 AI 세션 상태가 전부 "모름"으로 남는데, 그게 **버그처럼 보인다.**
- * 실패는 대개 사람이 고칠 것(깨진 `settings.json`·쓰기 권한)이라 사유를 그대로 보여 준다.
- * 다시 심는 버튼은 두지 않는다 — 설치는 기동 때 한 번이고, 고친 뒤 앱을 다시 켜면 된다.
- *
- * ⚠️ #162 **열릴 때마다 다시 묻는다.** 이 설정 페이지는 언마운트되지 않으므로(`open` 클래스만 토글된다)
- * 마운트 한 번에 한 번 묻는 것은 곧 **앱 기동 직후 한 번**이다 — 그때는 붙은 서버가 없어서
- * 원격 줄이 영영 "아직 붙은 서버가 없습니다"로 굳는다.
- */
-function AgentHookRow({ open }: { open: boolean }) {
-  const [state, setState] = useState<AgentHookState | null>(null)
-  useEffect(() => {
-    if (!open) return
-    void window.ev?.agent
-      .state()
-      .then(setState)
-      .catch(() => {})
-  }, [open])
-  if (!state) return null
-  return (
-    <>
-      <Row label={t('settings.ai.hook')} desc={t('settings.ai.hook.desc')} item="ai.hook">
-        <span className="v" data-field="ai.hook">
-          {state.install.ok
-            ? `${t('settings.ai.hook.on')} · 127.0.0.1:${state.port}`
-            : `${t('settings.ai.hook.off')} — ${state.install.message}`}
-        </span>
-      </Row>
-      <Row label={t('settings.ai.hook.remote')} desc={t('settings.ai.hook.remote.desc')} item="ai.hook.remote">
-        <span className="v" data-field="ai.hook.remote">
-          {state.remote.length === 0
-            ? t('settings.ai.hook.remote.none')
-            : state.remote.map((r) => (
-                <div key={r.server} data-server={r.server}>{`${r.server} — ${remoteHookLine(r)}`}</div>
-              ))}
-        </span>
-      </Row>
-    </>
-  )
-}
-
-/**
- * #162 원격 서버 한 줄. **성공만 말하면 반쪽이다** — 심겼는데도 상태가 안 뜨는 서버가 있고
- * (env 를 버리는 sshd + /proc 없는 원격), 그때 사용자가 할 수 있는 일이 정확히 하나 있다.
- * 그 한 줄(`AcceptEnv …`)을 여기서 말한다. 예전에는 실패조차 `main-error.log` 로만 갔다.
- */
-function remoteHookLine(r: RemoteHookReport): string {
-  if (!r.install.ok) {
-    if (r.install.reason === 'skipped') return t('settings.ai.hook.remote.skipped')
-    return `${t('settings.ai.hook.remote.off')} — ${r.install.message}`
-  }
-  const fallback =
-    r.fallback === 'pending'
-      ? t('settings.ai.hook.remote.pending')
-      : r.fallback
-        ? t('settings.ai.hook.remote.tty')
-        : t('settings.ai.hook.remote.env')
-  return `${t('settings.ai.hook.remote.on')} · ${fallback}`
-}
-
-/**
  * AI CLI 기본 플래그 (2026-08-20 · A-79).
  *
  * 우클릭 [AI 실행 ▸] 이 **최근에 쓴 조합이 없을 때** 붙일 플래그다. 시작 창을 없애면서
@@ -1039,7 +976,7 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
  */
 function GpuRow({ open, version }: { open: boolean; version: string }) {
   const [gpu, setGpu] = useState<GpuInfo | null>(null)
-  // AgentHookRow 와 같은 이유로 **열릴 때마다** 묻는다(#162 — 이 설정 페이지는 언마운트되지 않으므로
+  // **열릴 때마다** 묻는다(#162 — 이 설정 페이지는 언마운트되지 않으므로
   // 마운트 한 번에 한 번은 곧 "기동 직후 한 번"이고, 그때는 터미널조차 아직 없다).
   useEffect(() => {
     if (!open) return
@@ -1692,7 +1629,6 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
               <div className="set-sec-t" data-sec="ai.cli" data-item="ai.cli">
                 {t('settings.ai.cliSec')}
               </div>
-              <AgentHookRow open={open} />
               <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
             </>
           )}

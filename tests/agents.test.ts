@@ -119,7 +119,7 @@ describe('실행 한 줄 (AI-03)', () => {
     patch?.(x)
     return x
   }
-  it('claude 기본 = Yolo + 지시는 env 참조(posix·powershell·cmd)', () => {
+  it('claude 기본 = Yolo + 지시는 posix 만 env 참조, Windows 셸은 줄에 안 싣고 나중에 입력(deferredPrompt)', () => {
     const p = planAgentLaunch({ agent: 'claude', settings: s(), prompt: 'a & b; $(rm -rf /) "x"', shell: 'posix' })
     expect(p).toEqual({
       ok: true,
@@ -127,10 +127,12 @@ describe('실행 한 줄 (AI-03)', () => {
       env: { ARA_AGENT_PROMPT: 'a & b; $(rm -rf /) "x"' },
       permissionShadowed: false
     })
-    const ps = planAgentLaunch({ agent: 'claude', settings: s(), prompt: 'hi', shell: 'powershell' })
-    expect(ps.ok && ps.line).toBe('& claude --dangerously-skip-permissions $env:ARA_AGENT_PROMPT')
-    const cmd = planAgentLaunch({ agent: 'claude', settings: s(), prompt: 'hi', shell: 'cmd' })
-    expect(cmd.ok && cmd.line).toBe('cmd /v:on /d /c claude --dangerously-skip-permissions "!ARA_AGENT_PROMPT!"')
+    // 따옴표·&·%·한글·줄바꿈 — 5.1·.cmd 셔임이 다시 읽어 깨던 글자. 줄에도 env 에도 안 들어가고 그대로 남는다.
+    const hard = '"따옴표" & 100% 확인\n둘째 줄 !x! ^'
+    const ps = planAgentLaunch({ agent: 'claude', settings: s(), prompt: hard, shell: 'powershell' })
+    expect(ps).toEqual({ ok: true, line: '& claude --dangerously-skip-permissions', env: {}, permissionShadowed: false, deferredPrompt: hard })
+    const cmd = planAgentLaunch({ agent: 'gemini', settings: s(), prompt: hard, shell: 'cmd' })
+    expect(cmd).toEqual({ ok: true, line: 'gemini --yolo', env: {}, permissionShadowed: false, deferredPrompt: hard })
   })
   it('지시가 없으면 env 도 참조도 없다', () => {
     const p = planAgentLaunch({ agent: 'codex', settings: s(), prompt: '  ', shell: 'posix' })

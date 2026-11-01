@@ -37,7 +37,7 @@ import type {
   ReportSendReq,
   ReportSendResult
 } from './bugReport'
-import type { AgentHookState, AgentStatus } from './agentStatus'
+import type { AgentStatusView } from './agentHooks'
 import type { AiCliId, AiCliRecent } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { ResourceSnapshot } from './resources'
@@ -267,14 +267,6 @@ export type InvokeContract = {
   'session:resize': { req: { id: string; cols: number; rows: number }; res: { ok: true } }
   'session:destroy': { req: { id: string }; res: { ok: true } }
   'session:list': { req: void; res: Session[] }
-  /**
-   * F1a 에이전트 상태 — 훅 서버 포트·설치 결과·지금까지 들은 상태.
-   *
-   * ⚠️ **`session:activity`(세션별 마지막 출력 시각)를 대체한다.** 그 채널은 "60초 조용하면
-   * 기다리는 중"이라는 추론의 유일한 입력이었고, F1a 에서 그 판정을 걷어내며 함께 지웠다 —
-   * 데이터를 남겨 두면 다음 사람이 같은 추론을 다시 만든다(docs/orca-analysis.md §3).
-   */
-  'agent:state': { req: void; res: AgentHookState }
   // 탭 이름 변경(R2.1). main 의 meta.title 이 진실이라(persist 가 session:list 를 저장한다)
   // 여기서 갱신해야 재시작 후에도 이름이 남는다.
   'session:rename': { req: { id: string; title: string }; res: { ok: true } }
@@ -561,6 +553,8 @@ export type InvokeContract = {
   'agents:setSettings': { req: { settings: AgentSettings }; res: AgentSettings }
   // 명령줄·env 는 main 이 저장된 설정으로 만든다 — 렌더러는 에이전트·폴더·첫 지시만.
   'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string }; res: AgentLaunchResult }
+  // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
+  'agents:statuses': { req: void; res: AgentStatusView[] }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -1084,19 +1078,6 @@ export type EvApi = {
     scopes(): Promise<{ path: string; scopes: { scope: string; count: number }[] }>
     clear(scope?: string): Promise<{ ok: true }>
   }
-  /**
-   * F1a 에이전트 상태 — **CLI 가 훅으로 말해 준 것**. 화면은 받아 그릴 뿐 만들지 않는다.
-   * 쓰는 함수가 없다는 것이 계약이다: 렌더러가 상태를 주장할 길이 표면에 존재하지 않는다.
-   */
-  agent: {
-    state(): Promise<AgentHookState>
-    onStatus(cb: (s: AgentStatus) => void): () => void
-    /**
-     * 사용자가 자기 손으로 끝낸 세션(`/exit`·`/logout`) — **그 줄은 이제 없다.**
-     * 상태 채널과 갈라 둔 이유가 그것이다: `AgentStatus` 에는 "없음"을 담을 값이 없다.
-     */
-    onExit(cb: (sessionId: string) => void): () => void
-  }
   // W4 F23 MCP 조종 모드. **getToken 이 없다는 것이 계약이다** — issueToken 응답에만 원문이 존재.
   mcp: {
     getState(): Promise<McpState>
@@ -1194,6 +1175,9 @@ export type EvApi = {
     getSettings(): Promise<AgentSettings>
     setSettings(settings: AgentSettings): Promise<AgentSettings>
     launch(agent: AgentId, cwd: string, prompt?: string): Promise<AgentLaunchResult>
+    /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
+    statuses(): Promise<AgentStatusView[]>
+    onStatus(cb: (v: AgentStatusView) => void): () => void
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

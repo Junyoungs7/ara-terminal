@@ -50,8 +50,6 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.command', 'settings.agents.command', 'settings.agents.command.desc'),
       i('agents.preview', 'settings.agents.preview'),
       i('ai.cli', 'settings.ai.cliSec'),
-      i('ai.hook', 'settings.ai.hook', 'settings.ai.hook.desc'),
-      i('ai.hook.remote', 'settings.ai.hook.remote', 'settings.ai.hook.remote.desc'),
       i('ai.cliPick', 'settings.ai.cliPick', 'settings.ai.cliPick.desc'),
       i('ai.cliFlags', 'settings.ai.cliFlags', 'settings.ai.cliFlags.desc')
     ]
