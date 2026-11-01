@@ -657,5 +657,64 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M12 R1(v2.2): features/aiws/WorktreeJump.tsx·jumpList.ts. Orca 키는 Win/Linux Ctrl+Shift+J — 아라는 그 키가 하단 패널이라 Ctrl+J(AI 공간 안에서만). 뺀 것: 작업·열린 탭 줄, 필터 칩, 새 워크트리 줄, 숫자 키"
+  },
+  {
+    "id": "WS-14",
+    "feature": "브랜치 자동 이름(새 작업 이름 칸을 비우면 첫 지시의 영문 조각 → 없으면 바다 생물 이름, 지운 자동 이름은 다시 안 냄)",
+    "orcaPaths": [
+      "src/shared/worktree-name-suggestion.ts",
+      "src/shared/marine-creatures.ts",
+      "src/shared/marine-creature-names-primary.ts",
+      "src/shared/marine-creature-names-secondary.ts",
+      "src/shared/worktree/retired-name-registry.ts",
+      "src/renderer/src/components/sidebar/worktree-name-suggestions.ts",
+      "src/shared/workspace-name.ts",
+      "src/renderer/src/lib/new-workspace.ts",
+      "src/main/ipc/worktree-remote.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R1(v2.2): shared/worktreeNames.ts·marineCreatures.ts, NewWorkCard 이름 칸 선택(placeholder 에 지을 이름), main 은 nameWasGenerated 면 projects.json retiredNames 를 건너뜀, 지울 때 자동 이름이면 은퇴. 뺀 것: 은퇴 목록 압축(exhaustedTiers), PR/이슈 번호 시드, 첫 일로 이름 바꾸기(묶음 5 3차)"
+  },
+  {
+    "id": "WS-15",
+    "feature": "프로젝트 그룹(사이드바에서 프로젝트를 이름 붙인 묶음으로 — 만들기·옮기기·빼기·이름·접기·지우기)",
+    "orcaPaths": [
+      "src/shared/project-group-types.ts",
+      "src/main/ipc/repos/project-group-handlers.ts",
+      "src/renderer/src/store/project-groups/project-group-mutations.ts",
+      "src/renderer/src/components/sidebar/use-worktree-context-menu-commands.ts",
+      "src/renderer/src/components/sidebar/worktree-list/rows/use-project-group-dialogs.ts",
+      "src/shared/sidebar-list/project-group-sections.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R1(v2.2): projects.json groups + Project.groupId, IPC projectGroups:list·create·update·delete·moveProject(Orca 이름), sidebarRows 그룹 머리줄 → 프로젝트 머리줄 한 칸 들임(묶기 '프로젝트별'일 때만, 핀·필터와 같이). 프로젝트 머리줄 우클릭/⋯ 메뉴(그룹으로 옮기기·새 그룹·그룹에서 빼기·목록에서 빼기). 뺀 것: 그룹 중첩·색·폴더 스캔 가져오기·끌어 옮기기·탭 순서"
+  },
+  {
+    "id": "WS-16",
+    "feature": "워크트리 재우기·깨우기·보관·복원",
+    "orcaPaths": [
+      "src/main/ipc/worktrees/sleep/register-worktree-sleep-handlers.ts",
+      "src/renderer/src/components/sidebar/sleep-worktree-flow.ts",
+      "src/renderer/src/components/sidebar/use-worktree-sleep-state.ts",
+      "src/shared/worktree/meta-types.ts",
+      "src/renderer/src/components/sidebar/visible-worktrees.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R1(v2.2): features/aiws/sleep.ts. 재우기 = 에이전트 탭의 CLI 세션 id(agents:resumeIds — transcript 머리)를 받아 projects.json meta.sleep 에 남기고 탭을 닫음, 줄은 흐림·달. 깨우기(줄 고르기·버튼) = resume 으로 다시 띄움(id 모르면 수를 알림). 보관 = meta.isArchived(목록·핀에서 빠짐, 살아 있는 탭은 먼저 재움), 보관함 토글에서 복원. 원격 작업 단위: 재우기 막음(세션 기록이 서버 — 깨울 때 되살릴 id 를 못 읽음), 보관은 동작. 뺀 것: 잠든 작업 단위 숨기기 필터(Orca 기본 꺼짐)·VM 일시정지·여러 개 한꺼번에"
+  },
+  {
+    "id": "WS-17",
+    "feature": "작업 단위 삭제 단축키(Ctrl+Shift+Backspace, 맥 Cmd — 늘 확인)",
+    "orcaPaths": [
+      "src/shared/keybindings/definitions-core-1.ts",
+      "src/renderer/src/components/sidebar/delete-worktree-flow.ts",
+      "src/renderer/src/app-shell/use-global-keybindings.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M10 R1(v2.2): WorktreeSidebar 창 캡처 키(에이전트 터미널 안에서도 — Orca allowInTerminal), AI 작업 공간에서만(KEYMAP 밖). 고른 작업 단위 → 지우기 확인(기존 대화상자), 본 작업 폴더 → 프로젝트를 목록에서 빼기 확인(Orca confirm-remove-folder). 뺀 것: '다시 묻지 않기'(skipDeleteWorktreeConfirm — Orca 기본 꺼짐), 키 바꾸기 설정"
   }
 ]
