@@ -220,11 +220,15 @@ export function createAgentDaemon(deps: {
       return n
     },
     async shutdownAll() {
-      await ready
-      quitting = true
       // 답을 기다리지 않는다 — 데몬은 세션을 끝내고 내려가며 연결을 끊는다(그 끊김이 곧 끝). 상한을 넘으면 그냥 간다(앱 종료가 막히지 않게).
-      const closed = Promise.all(all().map((c) => new Promise<void>((r) => (c.onClose(() => r()), void c.request({ type: 'shutdown' }).catch(() => r())))))
-      await Promise.race([closed, new Promise((r) => setTimeout(r, SHUTDOWN_WAIT_MS))])
+      // ready 도 상한 안이다: 켤 때 되살리기가 무응답 데몬에 걸려 있으면(list·attach 요청마다 15초) 완전 종료가 그만큼 밀렸다.
+      const closing = (async () => {
+        await ready
+        quitting = true
+        await Promise.all(all().map((c) => new Promise<void>((r) => (c.onClose(() => r()), void c.request({ type: 'shutdown' }).catch(() => r())))))
+      })()
+      await Promise.race([closing, new Promise((r) => setTimeout(r, SHUTDOWN_WAIT_MS))])
+      quitting = true
     },
     disconnect() {
       quitting = true

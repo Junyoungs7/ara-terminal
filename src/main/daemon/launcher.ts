@@ -20,7 +20,11 @@ export type DaemonRuntime = { execPath: string; entryPath: string }
 /** 설치 런타임 그대로: 실행 파일 + (asar 밖으로 풀린) out/main/daemonEntry.js. */
 export function installRuntime(appPath: string, execPath: string): DaemonRuntime {
   const base = appPath.includes('app.asar') ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  return { execPath, entryPath: join(base, 'out', 'main', 'daemonEntry.js') }
+  // appPath 는 실행 방식마다 다르다 — 설치본·`electron .`(dev) 은 앱 루트(→ out/main 아래), e2e·스모크처럼
+  // `electron out/main/index.js` 로 띄우면 이미 out/main 이다. 앞엣것만 가정하면 out/main/out/main 이 되어 데몬이
+  // 못 뜨고 조용히 로컬 PTY 로 떨어졌다(DM-1, 2026-11-01). 있는 쪽을 쓴다.
+  const nested = join(base, 'out', 'main', 'daemonEntry.js')
+  return { execPath, entryPath: existsSync(nested) ? nested : join(base, 'daemonEntry.js') }
 }
 
 /**

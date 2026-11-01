@@ -238,7 +238,18 @@ export async function quitAra(a: Ara): Promise<void> {
     new Promise<boolean>((r) => setTimeout(() => r(false), 20_000))
   ])
   polling = false // 다른 쪽이 먼저 끝났으면 폴링 타이머를 더 걸지 않는다(워커 해체를 늦추지 않게).
-  await a.app.close().catch(() => {})
+  // 🔴 close() 에 상한을 둔다(DM-1, 2026-11-01). Playwright 는 앱 프로세스의 'close'(= stdio 관이 전부 닫힘)를 기다리는데,
+  // 앱이 띄운 **앱보다 오래 사는 자식**(M4 데몬)이 그 관의 핸들을 물려받아 쥐고 있으면 앱이 죽어도 'close' 가 안 온다
+  // (Windows CreateProcess 핸들 상속으로 추정 — 앱은 이미 `quit` 까지 찍었다. 아래 harness-close-stuck 줄이 찍히면 그 확인이다).
+  // 상한 없이 기다리면 시험이 120초 타임아웃으로 죽었다.
+  const closeTimedOut = await Promise.race([
+    a.app.close().then(
+      () => false,
+      () => false
+    ),
+    new Promise<boolean>((r) => setTimeout(() => r(true), 10_000))
+  ])
+  if (wentDown && closeTimedOut) noteHang(`harness-close-stuck ${Date.now() - t0}ms  (앱은 quit 까지 갔다 — 자식이 stdio 관을 쥐고 있다)`)
   if (wentDown) return
 
   // close 를 못 봤다. **앱이 안 내려간 것과 우리가 못 알아챈 것은 다르다** — 추적 파일이 가른다.
