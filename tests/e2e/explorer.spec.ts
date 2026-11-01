@@ -502,7 +502,7 @@ test('EXP-12 폴더만 골라 다른 서버에 붙여넣으면 안내가 뜬다'
 // 윈도우 탐색기를 흉내 내는 것이 값어치가 아니라, **폴더를 찾은 다음 개발자가 하는 일**이
 // 그 자리에서 바로 이어지는 것이 값어치다. 그래서 이 셋은 탐색기에 없는 것들이다.
 
-test('WB-1★ 로컬 폴더 우클릭에 아라 연결점 셋이 있다', async ({ ara }) => {
+test('WB-1★ 로컬 폴더 우클릭에 아라 연결점이 있다(M3 S1: AI CLI 시작은 빠졌다)', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
   const ex = await openExplorer(ara)
@@ -511,7 +511,7 @@ test('WB-1★ 로컬 폴더 우클릭에 아라 연결점 셋이 있다', async 
   await pane(ex).locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
   const menu = ex.locator('.ctx-menu')
   await expect(menu.locator('[data-action="file.terminal"]')).toBeVisible()
-  await expect(menu.locator('[data-action="file.aicli"]')).toBeVisible()
+  await expect(menu.locator('[data-action="file.aicli"]')).toHaveCount(0)
   await expect(menu.locator('[data-action="file.saveWork"]')).toBeVisible()
   await ex.keyboard.press('Escape')
 })
@@ -566,36 +566,7 @@ test('WB-3★ [아라에게 물어보기]가 경로를 아라 입력창에 얹�
   }
 })
 
-// WB-4★ #90 이후 [이 폴더에서 AI CLI 시작]이 **로컬에도** 붙는다.
-// 그전에는 "이 창은 서버에 접속해서 시작"이라 원격 폴더에만 있었다 — 내 PC 에서도 되면서
-// 그 전제가 사라졌다.
-//
-// 2026-08-18(cc72bcb): **시작 창을 없앴다.** 창이 묻던 넷 중 서버·폴더는 화면이 이미 알고
-// (지금 세션·지금 폴더), CLI·플래그는 거의 안 바뀐다 — 이제 누르면 **바로 터미널로 나간다**.
-// 그래서 확인할 것도 창이 아니라 "그 폴더로 가는 줄이 셸에 들어갔는가"다.
-test('WB-4★ 로컬 폴더에서 AI CLI 를 시작하면 그 폴더로 가는 줄이 셸에 들어간다', async ({ ara }) => {
-  const { page } = ara
-  const dir = makeLocalFixture('ara-wb4-')
-  try {
-    const sessionId = await newLocalShell(page)
-    const ex = await openExplorer(ara)
-    await openLocalFiles(ex)
-    const p = pane(ex)
-    await gotoPath(ex, dir)
-
-    await p.locator('.ftree').click({ button: 'right', position: { x: 10, y: 4 } })
-    await ex.click('.ctx-menu [data-action="file.aicli"]')
-
-    // 창은 뜨지 않는다.
-    await expect(page.locator('.aicli-modal')).toHaveCount(0)
-    // 셸에 들어간 줄에 그 폴더와 CLI 이름이 함께 있다(기본 CLI = claude).
-    await expect.poll(() => termText(page, sessionId), { timeout: 20_000 }).toContain(basename(dir))
-    expect(await termText(page, sessionId)).toContain('claude')
-  } finally {
-    // 셸이 그 폴더로 cd 해 잡고 있다 — 바로 지우면 EBUSY(#88 R1). 세션을 닫고 재시도하는 헬퍼로.
-    await cleanupFixture(page, dir)
-  }
-})
+// WB-4(로컬 폴더에서 AI CLI 시작)는 M3 S1 에서 기능과 함께 지웠다 — 에이전트는 AI 작업 공간에서 띄운다.
 
 // WB-5★ [작업 프로필로 저장] — 2026-08-28 감사 ③.
 //

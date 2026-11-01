@@ -1,5 +1,4 @@
 // IPC 타입 계약 (단일 진실). main 핸들러·preload 브리지·renderer 호출부가 이 파일을 import한다.
-import type { WorktreeResult } from './gitWorktree'
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
 import type { LaunchShell } from './aiCli'
@@ -38,7 +37,7 @@ import type {
   ReportSendResult
 } from './bugReport'
 import type { AgentStatusView } from './agentHooks'
-import type { AiCliId, AiCliRecent } from './aiCli'
+import type { AiCliId } from './aiCli'
 import type { BrowserTabView } from './browserWin'
 import type { ResourceSnapshot } from './resources'
 import type {
@@ -53,6 +52,8 @@ import type {
 } from './worktrees'
 import type { AgentId, AgentSettings, DetectedAgent } from './agents'
 /** M3 에이전트 실행 결과 — line 은 셸에 친 한 줄(지시 글은 env 참조로만 들어 있다). */
+/** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
+export type LegacyAiNotice = { projects: string[]; remote: number }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string } | { ok: false; error: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
@@ -190,9 +191,6 @@ export type InvokeContract = {
   'ui:setGroups': { req: { groups: string[]; order?: string[]; parents?: Record<string, string> }; res: { ok: true } }
   // 작업 프로필 목록(서버+폴더 즐겨찾기). 그룹 목록과 같은 형태 — 전체를 통째로 덮어쓴다.
   'ui:setWorkProfiles': { req: { list: WorkProfile[] }; res: { ok: true } }
-  // F27 AI CLI 최근 목록. 작업 프로필과 같은 형태(전체를 통째로 덮어쓴다) — 상한은 렌더러가 지키고
-  // main 은 배열인지만 본다(WorkProfile 과 같은 규칙).
-  'ui:setAiCliRecent': { req: { list: AiCliRecent[] }; res: { ok: true } }
   // 폰트 설정(F5). ui.font{term,sizePx,lineHeight} 만 갱신 + 즉시 flush(재시작 후 유지).
   'ui:setFont': { req: FontConfig; res: { ok: true } }
   // 사이드바 폭·접힘·활성 탭(R4.3). setFont 와 같은 좁은 필드 갱신 — 전체 스냅샷 저장(workspace:save)과
@@ -555,6 +553,8 @@ export type InvokeContract = {
   'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
+  // M3 S1 데이터 이전 안내(한 번) — 옛 작업대 로컬 폴더를 프로젝트로 옮겼거나 원격 줄이 있었으면 그 내용. 한 번 받으면 null.
+  'agents:legacyNotice': { req: void; res: LegacyAiNotice | null }
   // W2 F12 로그 폴더 열기. 기록 on/off·보존기간은 ui:setPrefs 로 간다(전용 설정 채널 없음).
   'sessionlog:reveal': { req: void; res: { ok: boolean } }
   // ── W3 F16 아라 (AI 어시스턴트) ──
@@ -612,17 +612,6 @@ export type InvokeContract = {
   'ara:send': { req: { text: string }; res: { ok: true } }
   /** 아라 채팅 v2: 지금 보는 세션(활성 탭). 바뀔 때마다 온다 — null 이면 대상 없음. main 이 모양을 거른다. */
   'ara:active': { req: { active: { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null } | null }; res: { ok: true } }
-  /**
-   * #128 AI 세션(작업대) 목록 저장. workspace:save 와 따로인 이유는 types.ts 의 aiSessions 주석 참고 —
-   * 그 페이로드는 세 필드 화이트리스트로 막혀 있고 여기는 주인이 다르다.
-   */
-  'aisession:save': { req: { list: unknown }; res: { ok: true } }
-  /**
-   * #133 세션 분리 — 로컬 `git worktree`. 렌더러는 **폴더와 이름만** 넘기고 명령은 main 이 만든다
-   * (F26 이 세운 규칙 그대로: 렌더러가 명령 문자열을 넘길 수 없다). 원격은 remote:run 의
-   * `git.worktree.*` 가 같은 일을 한다.
-   */
-  'git:worktreeAdd': { req: { path: string; name: string }; res: WorktreeResult }
   /** #136 계획 먼저 켜기/끄기 · 계획 승인. 둘 다 도는 중에 모드만 갈아 끼운다. */
   'ara:planMode': { req: { on: boolean }; res: { ok: true } }
   'ara:approvePlan': { req: void; res: { ok: true } }
@@ -749,7 +738,6 @@ export type EvApi = {
     setPrefs(prefs: UiPrefs): Promise<{ ok: true }>
     setGroups(groups: string[], order?: string[], parents?: Record<string, string>): Promise<{ ok: true }>
     setWorkProfiles(list: WorkProfile[]): Promise<{ ok: true }>
-    setAiCliRecent(list: AiCliRecent[]): Promise<{ ok: true }>
     setFont(font: FontConfig): Promise<{ ok: true }>
     setSidebar(sidebar: SidebarState): Promise<{ ok: true }>
   }
@@ -1109,10 +1097,6 @@ export type EvApi = {
     /** 아라 채팅 v2: 지금 보는 세션을 main 에 알린다. */
     setActive(active: { id: string; type: 'local' | 'ssh' | 'rdp'; title: string; cwd: string | null } | null): Promise<{ ok: true }>
     planMode(on: boolean): Promise<{ ok: true }>
-    /** #128 작업대 목록 저장(아라 대화와 다른 물건이지만 같은 ara 표면에 둔다). */
-    saveSessions(list: unknown): Promise<{ ok: true }>
-    /** #133 세션 분리(로컬). 원격은 remote.run('git.worktree.add') 쪽이다. */
-    worktreeAdd(path: string, name: string): Promise<WorktreeResult>
     approvePlan(): Promise<{ ok: true }>
     model(model: string): Promise<{ ok: true }>
     /** 지난 대화 목록(최근 순). 이름이 없으면 첫 질문이 title 로 온다. */
@@ -1178,6 +1162,8 @@ export type EvApi = {
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
     onStatus(cb: (v: AgentStatusView) => void): () => void
+    /** M3 S1 데이터 이전 안내 — 부팅 때 한 번(받으면 비워진다). */
+    legacyNotice(): Promise<LegacyAiNotice | null>
   }
   // W2 F12 세션 로그 폴더 열기.
   sessionLog: {

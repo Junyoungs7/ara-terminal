@@ -38,16 +38,13 @@ describe('컨텍스트 메뉴 뷰포트 보정', () => {
 })
 
 describe('트리 컨텍스트 메뉴 레지스트리', () => {
-  // F27 에서 'aicli.start'(AI CLI 시작) 가 새 세션 바로 아래로 들어왔다 — 접속 계열끼리 모으고
-  // 프로필 편집·삭제는 그대로 뒤에 남긴다(위험 항목은 여전히 맨 마지막).
-  it('서버 노드는 연결·새 세션·AI 세션·정보 수정·복제·호스트키 재설정·삭제 7종', () => {
+  // 프로필 편집·삭제는 접속 계열 뒤에 남긴다(위험 항목은 여전히 맨 마지막).
+  // M3 S1: [여기서 AI 세션](aicli.start)은 뺐다 — 에이전트는 AI 작업 공간에서 띄운다.
+  it('서버 노드는 연결·새 세션·정보 수정·복제·호스트키 재설정·삭제 6종', () => {
     const ids = treeMenu('server').map((m) => m.id)
     expect(ids).toEqual([
       'server.connect',
       'server.newSession',
-      // 2026-08-18 에 뺐다가 #131(2026-08-25)에서 되돌렸다. 그때 뺀 이유는 "폴더를 물을 창이
-      // 없다"였는데, 이제 물을 필요가 없다 — **그 서버의 홈**에서 시작한다(설계 §10.6).
-      'aicli.start',
       'server.edit',
       'server.duplicate',
       'server.forgetHostKey',
@@ -63,11 +60,10 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
   it('세션 행은 전환·이름 변경·종료, 그룹 헤더는 새 연결', () => {
     // R2.1: 트리 세션에도 이름 변경을 붙였다(탭 더블클릭과 같은 편집을 연다).
     // 2026-08-17 제보 ①: 셋뿐이라 "여기서 할 게 없다"였다 — 세션에만 있는 것(지금 그 세션이
-    // 서 있는 폴더)을 쓰는 셋을 더 넣었다. 복제·AI CLI·즐겨찾기 저장 전부 그 폴더를 쓴다.
+    // 서 있는 폴더)을 쓰는 것을 더 넣었다(M3 S1 에서 AI CLI 는 빠졌다).
     expect(treeMenu('session').map((m) => m.id)).toEqual([
       'session.focus',
       'session.duplicate',
-      'aicli.start',
       'work.save',
       'session.rename',
       'session.close'
@@ -120,24 +116,23 @@ describe('트리 컨텍스트 메뉴 레지스트리', () => {
 })
 
 describe('터미널 우클릭 리스트 메뉴 (기본값)', () => {
-  // 2026-08-18(준영님 제보): 평면 여덟 줄이던 것을 묶었다 — 분할 둘은 [분할 ▸], CLI 셋은
-  // [AI 실행 ▸] 서브메뉴로. 그래서 메뉴 목록은 CONTEXT_ACTIONS 와 **더 이상 1:1 이 아니다.**
+  // 2026-08-18(준영님 제보): 평면 여덟 줄이던 것을 묶었다 — 분할 둘은 [분할 ▸](CLI 셋의 [AI 실행 ▸] 은
+  // M3 S1 에서 지웠다). 그래서 메뉴 목록은 CONTEXT_ACTIONS 와 **더 이상 1:1 이 아니다.**
   // 대신 지켜야 할 것은 "레지스트리에 있는 항목이 하나도 빠지지 않는가"다.
   it('CONTEXT_ACTIONS 가 하나도 빠짐없이 메뉴에 오른다(이중 정의 없음)', () => {
     const flat = terminalMenu().flatMap((m) => [m.id, ...(m.submenu?.map((x) => x.id) ?? [])])
     for (const a of CONTEXT_ACTIONS) expect(flat).toContain(a.id)
   })
 
-  it('★ 묶음 둘이 서브메뉴로 있다 — 같은 일의 변형은 펼치지 않는다', () => {
+  it('★ 분할은 서브메뉴로 있다 — 같은 일의 변형은 펼치지 않는다', () => {
     const menu = terminalMenu()
     const split = menu.find((m) => m.id === 'split')
     expect(split?.submenu?.map((m) => m.id)).toEqual(['split.horizontal', 'split.vertical'])
-    const ai = menu.find((m) => m.id === 'aicli.run')
-    expect(ai?.submenu?.map((m) => m.id)).toEqual([
-      'aicli.run.claude',
-      'aicli.run.codex',
-      'aicli.run.gemini'
-    ])
+  })
+
+  it('★ M3 S1: 터미널 우클릭에 AI 실행 입구가 없다(아라에게 묻기는 전역이라 남는다)', () => {
+    const flat = terminalMenu().flatMap((m) => [m.id, ...(m.submenu?.map((x) => x.id) ?? [])])
+    expect(flat.some((id) => id.startsWith('aicli'))).toBe(false)
   })
 
   it('★ 이름이 짧다 — 이 메뉴는 터미널 위에서 열리므로 대상을 설명할 필요가 없다', () => {

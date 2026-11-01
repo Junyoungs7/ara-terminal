@@ -1,11 +1,9 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
-import type { AiCliId, AiCliRecent } from './aiCli'
-import type { AiSessionState } from './aiSession'
+import type { AiCliId } from './aiCli'
 import type { AiLimit } from './aiEngine'
 import type { FeatureShown } from './features'
 import type { VoicePrefs } from './voice'
 import type { Space } from './space'
-export type { AiCliRecent }
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
 // v3: 탭바 순환 토글을 제거(R1.4) — 스타일을 바꿀 UI 가 없어졌으므로 남아 있는 radial/palette 를 다시 list 로 내린다.
@@ -136,7 +134,8 @@ export type Session = {
    *    못 읽어(migrations.ts:49 → null → 기본 스냅샷) 사용자 눈엔 프로필이 전부 사라진다.
    *    옛 앱은 이 키를 모르는 채 지금까지처럼 맨 셸로 복원한다(UiPrefs.termCompletion 과 같은 규칙).
    *
-   * 로컬 세션만 채운다(원격 AI 는 SSH 복원이 셸을 되살려 사정이 다르다 — Shell.runAiCliNow).
+   * 로컬 세션만 채운다(원격 AI 는 SSH 복원이 셸을 되살려 사정이 다르다). M3 S1 에서 이 값을 쓰는 터미널 AI 실행을 지웠다 —
+   *    새로 채워지지 않고 옛 스냅샷에만 남는다(S3 에서 키째 지운다).
    * 저장값은 신뢰 경계 밖이라 읽는 쪽이 `aiCliOf` 로 거른다.
    */
   aiCli?: AiCliId
@@ -379,8 +378,6 @@ export type UiPrefs = {
   aiProvider: AiProvider
   aiModels: Record<AiProvider, string>
   aiCompatibleBaseUrl: string
-  // 2026-08-20 [AI]: CLI 별 기본 플래그. 하이드레이트가 끝난 값이라 네 CLI 가 모두 들어 있다.
-  aiCliFlags: Record<AiCliId, string[]>
   /** #138 아라가 부를 호칭. 빈 문자열이면 아직 안 받았다. */
   araCallName: string
   /** #138 첫 인사를 한 번 지났나. **건너뛰어도 참**이다 — 매번 물으면 관문이 된다. */
@@ -391,9 +388,7 @@ export type UiPrefs = {
   features: FeatureShown
   /** 2.1 설정 › 음성. voiceOf 가 채운 확정값. bypass 는 여기 없다(저장하지 않는 값 — shared/voice.ts). */
   voice: VoicePrefs
-  /** M1 설정 › 고급 › 실험 기능 — AI 작업 공간 스위치를 보일까. 기본 끔(M3 에서 기본으로 연다). */
-  aiSpace: boolean
-  /** M1 마지막으로 고른 공간(재시작 후 유지). 그릴 공간은 shownSpace 가 정한다. */
+  /** M1 마지막으로 고른 공간(재시작 후 유지). M3 부터 AI 작업 공간은 기본 공개(옛 실험 기능 토글 ui.aiSpace 는 읽지 않는다). */
   space: Space
   /** M1 라운드 3 설정 › 알림 [앱 안 토스트]. 기본 켬 — 꺼도 벨 목록에는 모인다. */
   notifyToast: boolean
@@ -409,9 +404,9 @@ export type UiPrefs = {
 export type SidebarState = {
   collapsed: boolean
   /** 'past' = [지난 세션](2.0 에서 우측 레일 → 사이드바). 세션 수명 동안만 — 하이드레이트가 conn 으로 되돌린다. */
-  activeTab: 'conn' | 'file' | 'ai' | 'past'
+  activeTab: 'conn' | 'file' | 'past'
   /** 다듬기 R6: [지난 세션]으로 가기 직전에 보던 탭 — 레일 [사이드바] 아이콘이 그리로 돌아간다(nextSidebar). */
-  lastTab?: 'conn' | 'file' | 'ai'
+  lastTab?: 'conn' | 'file'
   width: number
   // #13(2026-10-08)~2.0: `bottom`(하단 패널 열림 상태)이 여기 있었다. 2.0 에서 하단 패널은 늘 닫힌 채
   // 시작하므로 필드를 지웠다 — 옛 파일에 남은 값은 hydrateSidebar 가 버린다.
@@ -536,10 +531,8 @@ export type UiState = {
   // 작업 프로필: "이 서버의 이 폴더"를 이름 붙여 저장해 둔 목록. 연결 프로필(ConnectionProfile)과
   // 별개다 — 하나의 서버에 여러 작업 위치가 붙을 수 있고, 로컬 폴더도 같은 목록에 들어간다.
   workProfiles?: WorkProfile[]
-  // F27: AI CLI 를 시작한 조합(서버+폴더+CLI+플래그) 최근 목록. 작업 프로필과 달리 **저장이 전제가
-  // 아니다** — 시작하면 저절로 쌓이고, 상한(AI_CLI_RECENT_MAX)을 넘으면 오래된 것부터 버린다.
-  // 비밀은 없다(서버는 profileId 로만 참조).
-  aiCliRecent?: AiCliRecent[]
+  // M3 S1 옛 키(터미널 AI 최근 조합) — 쓰는 곳이 없다. 데이터 이전(main/agents/legacyImport.ts)이 한 번 지운다.
+  aiCliRecent?: unknown
   /** #138 호칭. 미지정이면 빈 문자열(callNameOf 가 클램프한다). */
   araCallName?: string
   araWelcomeSeen?: boolean
@@ -549,16 +542,14 @@ export type UiState = {
   features?: Partial<FeatureShown>
   /** 2.1 설정 › 음성. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 voiceOf 로 클램프한다. */
   voice?: Partial<VoicePrefs>
-  /** M1 실험 기능 · 공간. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 prefsFrom 에서 클램프한다. */
-  aiSpace?: boolean
+  /** M1 공간. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 prefsFrom 에서 클램프한다. */
   space?: Space
   /** M1 라운드 3 설정 › 알림. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
   notifyToast?: boolean
   /** M3 R3 설정 › 알림 [에이전트 알림]. 🔴 선택 필드 — 없으면 켬(prefsFrom). */
   notifyAgents?: boolean
-  // 2026-08-20: CLI 별 **기본 플래그**(id 만). 최근 목록이 비었을 때 쓴다 — 시작 창을 없애면서
-  // 플래그를 고를 자리가 사라져 새로 설치한 사람은 맨몸 `claude` 로 떴다. 키가 없으면 카탈로그
-  // 기본값, 빈 배열이면 "전부 껐다" — 읽는 쪽(aiCliFlagsOf)이 그 차이를 지킨다.
+  // M3 S1 옛 키(터미널 AI CLI 기본 플래그, id 만). 에이전트 설정(agents.json)이 처음 한 번 옮기고
+  // (shared/agents.ts migrateAiCliFlags) 데이터 이전(main/agents/legacyImport.ts)이 그 뒤 지운다.
   aiCliFlags?: Partial<Record<string, string[]>>
   window?: WindowBounds // F6: 복원 대상. 최초 실행 시 없음.
 }
@@ -702,14 +693,11 @@ export type WorkspaceSnapshot = {
   /** F32 R2. 없으면 떼어낸 창이 없었다는 뜻(구버전 스냅샷 포함) — 마이그레이션이 필요 없다. */
   windows?: DetachedWindowState[]
   /**
-   * #128 AI 세션(작업대). 스키마 6 에서 생겼고 마이그레이션은 **빈 배열**이다 —
-   * 옛 사용자에게 없던 것을 지어내지 않는다.
-   *
-   * `WorkspaceSaveInput` 에 넣지 않는다. 그 페이로드는 **세 필드 화이트리스트**로 막혀 있고
-   * (신뢰 경계), 여기는 주인이 다르다 — 탭 레이아웃을 저장하는 MainArea 가 작업대 목록까지
-   * 들고 다닐 이유가 없다. 창 자리(windows)·설정(ui)처럼 **자기 채널로 따로 flush** 한다.
+   * #128 옛 AI 세션(작업대) — 스키마 6 에서 생겼다. M3 S1 에서 터미널 AI 와 함께 지웠다: 쓰는 곳이 없고,
+   * 데이터 이전(main/agents/legacyImport.ts)이 로컬 폴더를 AI 작업 공간 프로젝트로 한 번 옮긴 뒤 키째 지운다.
+   * 신뢰 경계 밖 옛 값이라 모양을 모른다(shared/aiSession.ts legacyAiSessions 가 거른다).
    */
-  aiSessions: AiSessionState[]
+  aiSessions?: unknown
 }
 
 // 렌더러가 소유한 부분만 = workspace:save 페이로드. profiles·knownHosts·ui 의 주인은 main 이고

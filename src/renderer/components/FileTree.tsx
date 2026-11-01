@@ -214,7 +214,6 @@ export function FileTree({
   onCdTerminal,
   onTailFile,
   onSaveWork,
-  onAiCli,
   onTerminalHere,
   onAskAiPaths,
   onReveal,
@@ -232,8 +231,6 @@ export function FileTree({
   onTailFile?: (absPath: string) => void
   // 지금 보고 있는 폴더를 작업 프로필로 저장(서버+경로 즐겨찾기). 상위가 이름을 물어본다.
   onSaveWork?: (absPath: string) => void
-  // F27: 원격 폴더 우클릭 [이 폴더에서 AI CLI 시작] → 그 폴더가 채워진 창을 상위(Shell)가 연다.
-  onAiCli?: (absPath: string) => void
   /** #88 R1: 지금 보고 있는 폴더에서 새 셸을 연다(로컬=내 PC, 원격=그 서버). */
   onTerminalHere?: (absPath: string) => void
   /** #88 R1: 고른 파일·폴더를 아라 입력창에 얹는다(경로만 — 내용은 사용자가 물으며 붙인다). */
@@ -932,10 +929,6 @@ export function FileTree({
           // 경로만 넘긴다 — 내용을 통째로 싣지 않는다(#80 예산 · 무엇이 가는지 사용자가 본다).
           if (targets.length > 0) onAskAiPaths?.(targets.map((e) => joinPath(path, e.name)))
           return
-        case 'file.aicli':
-          // #88 R1: 폴더를 골랐으면 그 폴더, 아니면 **지금 보고 있는 폴더**([여기서 터미널]과 같은 규칙).
-          onAiCli?.(targets[0] && targets[0].type === 'dir' ? joinPath(path, targets[0].name) : path)
-          return
         case 'file.tail':
           if (targets[0]) onTailFile?.(joinPath(path, targets[0].name))
           return
@@ -991,7 +984,6 @@ export function FileTree({
       pasteHere,
       onTailFile,
       onSaveWork,
-      onAiCli,
       onTerminalHere,
       onAskAiPaths,
       path,
@@ -1508,8 +1500,6 @@ export function FileTree({
             // #89: 로컬 파일 하나일 때만. 원격은 실체가 이 PC 에 없어 OS 가 열 수 없다.
             canOpenWith: !backend.remote && selFiles === 1 && sel.length === 1,
             canTail: backend.remote && Boolean(onTailFile),
-            // #90 부터 로컬에도 붙는다(내 PC 에서도 AI CLI 를 시작할 수 있다).
-            canAiCli: Boolean(onAiCli),
             canTerminal: Boolean(onTerminalHere),
             canAskAi: Boolean(onAskAiPaths),
             // #88 R2·R3: 잘라내기·새 파일·[윈도우 탐색기에서 보기]는 로컬만. 원격은 현행 유지.

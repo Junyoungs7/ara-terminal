@@ -5,9 +5,6 @@ import type { ConnState } from '../store/profiles'
 import type { Session } from '../store/sessions'
 import { ConnTree, type TreeTarget } from './ConnTree'
 import { FileTree, type ActiveFileSession } from './FileTree'
-import { AiBenchTree } from './AiBenchTree'
-import type { WorkbenchRow } from '../store/aiWorkbench'
-import type { AiSessionState } from '@shared/aiSession'
 import type { DialogSpec, DialogResult } from './Dialog'
 import type { TreeActionId } from '../interactions/actions'
 import type { TmuxListResult } from '../../shared/tmuxList'
@@ -18,10 +15,10 @@ import { Compass, History, SlidersHorizontal, Wrench } from 'lucide-react'
 import { KEYMAP, isMac, type KeymapAction } from '../../shared/keymap'
 import { PastLogPanel } from './PastLogPanel'
 
-export type SidebarTab = 'conn' | 'file' | 'ai' | 'past'
+export type SidebarTab = 'conn' | 'file' | 'past'
 
 // 2026-08-19 준영님 확정: [연결]·[파일]은 **왼쪽 아이콘 레일**로 나갔다(IntelliJ 툴윈도우 방식).
-// 다듬기 R6(2026-10-28): 머리 탭 [연결 | 파일 | AI] 가 생겨 레일의 [파일]·[AI 작업대]는 뺐다.
+// 다듬기 R6(2026-10-28): 머리 탭 [연결 | 파일] 이 생겨 레일의 [파일]은 뺐다(M3 S1: [AI 세션] 탭은 지웠다 — AI 작업 공간으로).
 // 남은 [연결] 글리프가 사이드바 자체의 여닫이다(nextSidebar 'sidebar').
 const ConnIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -34,7 +31,6 @@ const ConnIcon = () => (
 const TAB_LABEL: Record<SidebarTab, string> = {
   conn: 'sidebar.tab.conn',
   file: 'sidebar.tab.file',
-  ai: 'sidebar.tab.ai',
   past: 'pastlog.title'
 }
 
@@ -179,17 +175,11 @@ export function Sidebar({
   onCdTerminal,
   onTailFile,
   onSaveWork,
-  onAiCli,
   onTerminalHere,
   onAskAiPaths,
   onRevealFiles,
   ask,
   askText,
-  benchRows,
-  onBenchOpen,
-  onBenchRemove,
-  onBenchSplit,
-  onNewBench,
   onPastClose,
   onPastOpenCurrent,
   onPick
@@ -227,18 +217,10 @@ export function Sidebar({
   onTailFile: (absPath: string) => void
   // 파일 트리 우클릭 [이 위치를 작업 프로필로 저장] — 지금 보고 있는 폴더를 넘긴다.
   onSaveWork: (absPath: string) => void
-  // F27: [파일] 탭 원격 폴더 우클릭 → AI CLI 시작 창(그 폴더가 채워진 채로). Shell 이 연다.
-  onAiCli: (absPath: string) => void
   // #88 R1: 아라 연결점 — 이 폴더에서 새 셸 / 고른 것을 아라 입력창에.
   // 작업대와 **같은 동작**이어야 한다(같은 트리인데 자리마다 다르면 안 된다 — 스모크가 잡았다).
   onTerminalHere: (absPath: string) => void
   onAskAiPaths: (paths: string[]) => void
-  // #129 [AI] 작업대 목록 — 행·열기·지우기·새로 만들기. 목록의 주인은 store/aiWorkbench.ts 다.
-  benchRows: WorkbenchRow[]
-  onBenchOpen: (s: AiSessionState, sessionId: string | null) => void
-  onBenchRemove: (s: AiSessionState) => void
-  onBenchSplit: (s: AiSessionState) => void
-  onNewBench: () => void
   /** 2.0 [지난 세션] — 우측 레일에서 사이드바로 왔다. 닫기 = 사이드바 접기, [진행 중] = 하단 [세션 기록]. */
   onPastClose: () => void
   onPastOpenCurrent: () => void
@@ -258,12 +240,12 @@ export function Sidebar({
     <div className={'sidebar' + (collapsed ? ' collapsed' : '')}>
       {/* 2.0 [지난 세션] — 자기 머리(제목·새로고침·닫기)가 있어 사이드바 머리 대신 그것을 쓴다(높이 같음). */}
       {tab === 'past' && <PastLogPanel open={!collapsed} onClose={onPastClose} onOpenCurrent={onPastOpenCurrent} />}
-      {/* 2.0 다듬기 R5: 시안 Z-final 머리 = [연결 | 파일 | AI] 탭. R6 부터 이 셋을 고르는 자리는 여기뿐이다(레일엔 [사이드바] 여닫이만).
+      {/* 2.0 다듬기 R5: 시안 Z-final 머리 = [연결 | 파일] 탭(M3 S1 에서 [AI] 를 뺐다). R6 부터 이 셋을 고르는 자리는 여기뿐이다(레일엔 [사이드바] 여닫이만).
           고른 탭은 레일과 같은 `tab`(shownTab) 이고, 누르면 레일과 같은 onPick 으로 간다.
           이미 보고 있는 탭은 다시 눌러도 아무 일 없다(레일의 "다시 누르면 접기"는 머리 탭에선 뜻밖이다). */}
       {tab !== 'past' && (
       <div className="sb-tabs" role="tablist" aria-label={t('sidebar.rail.label')}>
-        {(['conn', 'file', 'ai'] as const).map((id) => {
+        {(['conn', 'file'] as const).map((id) => {
           const disabled = id === 'file' && !fileSession
           return (
             <button
@@ -282,15 +264,6 @@ export function Sidebar({
           )
         })}
         <div className="sb-tab-spacer" />
-        {/* #129 새 작업대 — 지금 보고 있는 세션의 폴더에서 AI CLI 를 띄운다(= 작업대를 만든다).
-            AI CLI 시작(Ctrl+Shift+L)과 **같은 길**이다 — 만드는 문이 둘로 갈리면 안 된다. */}
-        {tab === 'ai' && (
-          <button type="button" className="sb-act" data-action="bench.new" title={t('bench.new')} onClick={onNewBench}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        )}
         {/* 새 연결 — 연결 관리자 모달 열기. [파일] 을 보고 있을 때는 뜻이 없어 내린다. */}
         {tab === 'conn' && (
           <button type="button" className="sb-act" title={t('sidebar.act.newConn')} onClick={onNewConn}>
@@ -335,7 +308,6 @@ export function Sidebar({
           onCdTerminal={onCdTerminal}
           onTailFile={onTailFile}
           onSaveWork={onSaveWork}
-          onAiCli={onAiCli}
           // #88 R1: 아라 연결점은 **파일 화면 어디서나** 같아야 한다 — 작업대에만 있고 여기 없으면
           // 같은 트리인데 자리마다 다르게 동작한다(스모크가 그 어긋남을 잡았다).
           onTerminalHere={onTerminalHere}
@@ -343,17 +315,6 @@ export function Sidebar({
           onReveal={onRevealFiles}
           ask={ask}
           askText={askText}
-        />
-      </div>
-      <div className={'sb-panel' + (tab === 'ai' ? ' active' : '')} role="tabpanel">
-        <AiBenchTree
-          rows={benchRows}
-          // 경과 열의 시계는 이 패널을 보고 있을 때만 돈다([파일] 트리와 같은 규칙).
-          active={tab === 'ai'}
-          activeSessionId={activeSessionId}
-          onOpen={onBenchOpen}
-          onRemove={onBenchRemove}
-          onSplit={onBenchSplit}
         />
       </div>
     </div>

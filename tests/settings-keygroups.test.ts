@@ -21,9 +21,9 @@ describe('설정 [단축키] 그룹이 KEYMAP 카테고리를 빠짐없이 덮�
     const aiGroup = KEY_GROUPS.find((g) => g.cats.includes('ai'))
     expect(aiGroup).toBeTruthy()
     const rows = KEYMAP.filter((b) => b.implemented && aiGroup!.cats.includes(b.category)).map((b) => b.action)
-    // 2026-08-23: 아라 대화를 숨기면 대화용 두 키는 KEYMAP 에서 빠지고 **AI CLI 시작만 남는다**
-    // (features.AI_ENTRY). 그래도 이 그룹은 비면 안 된다 — 비면 설정 [단축키]에 빈 제목이 뜬다.
-    expect(rows).toEqual(expect.arrayContaining(AI_ENTRY ? ['ai.ask', 'ai.toggle', 'ai.cli'] : ['ai.cli']))
+    // 2026-08-23: 아라 대화를 숨기면 대화용 두 키는 KEYMAP 에서 빠지고 **에이전트 시작만 남는다**
+    // (features.AI_ENTRY · M3 S1 에서 옛 AI CLI 시작 자리를 물려받았다). 그래도 이 그룹은 비면 안 된다 — 비면 설정 [단축키]에 빈 제목이 뜬다.
+    expect(rows).toEqual(expect.arrayContaining(AI_ENTRY ? ['ai.ask', 'ai.toggle', 'agent.start'] : ['agent.start']))
     expect(rows.length).toBeGreaterThan(0)
   })
 })

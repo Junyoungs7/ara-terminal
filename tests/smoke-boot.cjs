@@ -797,7 +797,8 @@ const checks = []
     'R7: 파일 우클릭 메뉴(새 폴더 · 아라 연결점 · 작업 프로필 · 삭제)',
     // 순서를 통째로 박지 않고 **있어야 할 것**만 본다 — 아라 연결점이 더 붙어도 이 검사가
     // 깨지지 않되, 빠지면 잡힌다(그게 이 화면이 탐색기와 갈리는 자리다).
-    ['file.mkdir', 'file.aicli', 'file.terminal', 'file.saveWork', 'file.delete'].every((x) => f7.fileMenu.includes(x))
+    // M3 S1: [이 폴더에서 AI CLI 시작](file.aicli)은 빠졌다 — 남아 있으면 잡는다.
+    ['file.mkdir', 'file.terminal', 'file.saveWork', 'file.delete'].every((x) => f7.fileMenu.includes(x)) && !f7.fileMenu.includes('file.aicli')
   ])
   // #88 R2: 탐색기 따라잡기 칸들. 로컬 세션에서 우클릭한 메뉴라 **로컬 전용 항목까지** 다 있어야 한다.
   checks.push([
@@ -872,13 +873,13 @@ const checks = []
 
   checks.push(['터미널 우클릭 기본 = 리스트 메뉴', f4c.listOpen === true])
   // 2026-08-18: 평면 여덟 줄에서 **묶음 둘**(분할 ▸ 가로/세로 · AI 실행 ▸ CLI 셋)로 바뀌었다.
-  // 첫 단계는 여전히 여덟 줄인데 그중 둘이 서브메뉴 부모다(자식은 호버해야 그려진다).
+  // M3 S1: [AI 실행 ▸]을 지워 첫 단계는 일곱 줄, 그중 [분할] 하나가 서브메뉴 부모다(자식은 호버해야 그려진다).
   // (tmux 항목은 SSH 세션일 때만 붙는다 — 여기는 로컬 셸이라 없다.)
   const ctxWanted = AI_ENTRY
-    ? 'copy,paste,split,aicli.run,session.duplicate,log.save,ai.ask,pane.close'
-    : 'copy,paste,split,aicli.run,session.duplicate,log.save,pane.close'
-  checks.push([`리스트 첫 단계 = 실동작 ${AI_ENTRY ? 6 : 5} + 묶음 2`, f4c.listItems.join(',') === ctxWanted])
-  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_ENTRY ? 8 : 7)])
+    ? 'copy,paste,split,session.duplicate,log.save,ai.ask,pane.close'
+    : 'copy,paste,split,session.duplicate,log.save,pane.close'
+  checks.push([`리스트 첫 단계 = 실동작 ${AI_ENTRY ? 6 : 5} + 묶음 1`, f4c.listItems.join(',') === ctxWanted])
+  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_ENTRY ? 7 : 6)])
   // R3.8 재배치 반영 — 힌트도 keymap 단일 소스에서 나오므로 자동으로 Ctrl+Shift 계열이 된다.
   // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
@@ -1002,8 +1003,8 @@ const checks = []
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
     // 정의부는 shared/settingsIndex.ts SETTINGS_SECTIONS(M1 1-A — 묶음: AI 작업 공간 → 앱 → 전역 → 터미널 → 보안·연동 → 고급 → 정보).
-    '설정 목록 30섹션이 묶음 순서대로(AI 작업 공간이 맨 위)',
-    f5.navSections.join(',') === 'agents,usage,git,editor,sessionSearch,notify,browser,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,experimental,about'
+    '설정 목록 29섹션이 묶음 순서대로(AI 작업 공간이 맨 위 · M3 에서 실험 기능 섹션은 지웠다)',
+    f5.navSections.join(',') === 'agents,usage,git,editor,sessionSearch,notify,browser,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
@@ -1214,19 +1215,19 @@ const checks = []
   // 2026-08-18: 'aicli.start' 를 **뺐다**(창을 없애면서 — 서버 행에는 폴더도 세션도 없어
   // 물어볼 곳이 사라졌다. 붙은 뒤 터미널 우클릭이 그 자리다) → 8 → 7항목.
   // #131 에서 **되돌아왔다**: 서버 행에서 바로 작업대를 연다(그 자리가 이미 아는 것은 묻지 않고,
-  // 폴더는 그 서버에 붙었을 때의 홈으로 잡는다 — actions.tsx:290). newSession 다음 자리다 → 8항목.
-  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 8항목(작업대·tmux 포함)', ux.serverMenu.length === 8])
-  checks.push(['서버 메뉴 항목 구성(연결/새세션/작업대/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,aicli.start,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
+  // 폴더는 그 서버에 붙었을 때의 홈으로 잡는다). M3 S1 에서 터미널 AI 와 함께 다시 뺐다 → 7항목.
+  checks.push(['트리 서버 노드 우클릭 → 컨텍스트 메뉴 7항목(tmux 포함)', ux.serverMenu.length === 7])
+  checks.push(['서버 메뉴 항목 구성(연결/새세션/수정/복제/호스트키/삭제/tmux)', ux.serverMenu.join(',') === 'server.connect,server.newSession,server.edit,server.duplicate,server.forgetHostKey,server.delete,session.tmux'])
   checks.push(['삭제 항목만 위험 톤', ux.dangerCount === 1])
   checks.push(['컨텍스트 메뉴 키보드 이동(↑↓)', ux.kbdCursor === 1])
   checks.push(['바깥 클릭으로 메뉴 닫힘', ux.menuClosedByBackdrop === true])
   // R2.1: 트리 세션 메뉴에 "이름 변경"이 추가됐다(탭 더블클릭과 같은 인라인 편집을 연다).
   // 2026-08-17 제보 ①: 셋뿐이라 "여기서 할 게 없다"였다 — **그 세션이 서 있는 폴더**를 쓰는
-  // 셋을 더했다(복제·AI CLI 시작·즐겨찾기 저장). 서버 행에서 열면 폴더를 다시 골라야 한다.
+  // 셋을 더했다(복제·AI CLI 시작·즐겨찾기 저장 — M3 S1 에서 AI CLI 는 뺐다). 서버 행에서 열면 폴더를 다시 골라야 한다.
   checks.push([
-    '세션 행 우클릭 → 전환/복제/AI CLI/즐겨찾기/이름 변경/종료/tmux 7항목',
+    '세션 행 우클릭 → 전환/복제/즐겨찾기/이름 변경/종료/tmux 6항목',
     ux.sessionMenu.join(',') ===
-      'session.focus,session.duplicate,aicli.start,work.save,session.rename,session.close,session.tmux'
+      'session.focus,session.duplicate,work.save,session.rename,session.close,session.tmux'
   ])
   // R6: 그룹 헤더 메뉴에 이름 변경·삭제가 붙었다(smoke 프로필은 전부 '개발' 그룹이라 실그룹 메뉴가 뜬다).
   checks.push([

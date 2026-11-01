@@ -43,6 +43,7 @@ import { registerForwardIpc } from './ipc/registerForwardIpc'
 import { registerResourcesFeature } from './resources/feature'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
+import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { cleanupLegacyHooks } from './agents/hooks'
@@ -162,7 +163,7 @@ let ara: AraSession | null = null
 // 이것뿐이라 꺼진 채로 시작하면 아라가 반쪽이 된다. 설정 [MCP]에서 끌 수는 있다(확인을 받는다).
 let mcp: McpRuntime | null = null
 // F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
-let agents: { stop(): Promise<void> } | null = null
+let agents: ReturnType<typeof registerAgentsFeature> | null = null
 let araChat: AraRuntime | null = null
 let voice: VoiceRuntime | null = null
 let mainWindow: BrowserWindow | null = null
@@ -541,12 +542,14 @@ app.whenReady().then(async () => {
   // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). 상한(M4)은 이 서비스에 붙는다.
   registerResourcesFeature(sessions)
   // M2 작업 단위(main/worktrees/feature.ts) — 프로젝트·워크트리. 저장은 userData/projects.json.
-  registerWorktreesFeature(userData)
+  const worktrees = registerWorktreesFeature(userData)
   // M3 에이전트(main/agents/feature.ts) — 감지·실행 설정(userData/agents.json)·실행·상태(훅 + 화면 판정). 옛 aiCliFlags 를 처음 한 번 옮긴다.
   // ⚠️ e2e 는 **진짜 홈을 건드리지 않는다.** 훅은 사용자 PC 의 `~/.claude/settings.json` 등을 고치는 일이라, 검사가 그걸 그대로 하면
   // 준영님 Claude Code 설정이 시험 부산물로 바뀐다(fixtures.ts 의 sandboxUserPaths 와 같은 규율).
   const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
   agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc() })
+  // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
+  registerLegacyAiImport(store, (path) => worktrees.addProject(path))
   // F12: 저장된 설정으로 로거를 만들고 기동 시 1회 보존 스윕(우리 이름 패턴의 .log 만 지운다).
   const savedUi = store.get().ui
   sessionLog = createSessionLog(
@@ -623,6 +626,8 @@ app.whenReady().then(async () => {
       remote: remoteSvc,
       sessionLog: () => sessionLog,
       history,
+      // M3 S1(제거 A5): MCP aisession_* 가 읽는 AI 작업 공간 에이전트 상태.
+      agents: () => agents?.views() ?? [],
       // 아라가 "이거 보세요" 하고 화면 아래 패널을 연다. 유효한 이름일 때만 보낸다 —
       // 아무 문자열이나 렌더러로 흘리면 화면이 없는 탭을 열려다 조용히 아무 일도 안 한다.
       showPanel: (panel: string) => {

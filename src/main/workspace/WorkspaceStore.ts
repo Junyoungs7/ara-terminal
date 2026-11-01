@@ -2,10 +2,9 @@
 // 로드: path → .bak → 마이그레이션 → 실패 시 기본 스냅샷(안전 부팅).
 // 저장: 30초 디바운스 주기 flush + before-quit 동기 flush 이중화. atomic + .bak.
 import type {
-  DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile, AiCliRecent } from '@shared/types'
+  DetachedWindowState, WorkspaceSnapshot, WorkspaceSaveInput, ConnectionProfile, KnownHost, FontConfig, WindowBounds, UiPrefs, SidebarState, WorkProfile } from '@shared/types'
 import { cleanConnCollapsed, SCHEMA_VERSION } from '@shared/types'
 import type { AiLimit } from '@shared/aiEngine'
-import { aiSessionsOf } from '@shared/aiSession'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
 import { migrate } from './migrations'
@@ -50,13 +49,16 @@ export class WorkspaceStore {
   }
 
   /**
-   * #128 AI 세션(작업대) 목록. update() 의 세 필드 화이트리스트를 건드리지 않으려고 따로 둔다
-   * (창 자리·설정과 같은 결). 저장값은 신뢰 경계 밖이라 aiSessionsOf 로 모양을 맞춰 받는다.
+   * M3 S1 데이터 이전 끝 — 옛 터미널 AI 의 키(작업대 aiSessions · 최근 조합 ui.aiCliRecent · 기본 플래그 ui.aiCliFlags)를
+   * 지운다(main/agents/legacyImport.ts 가 옮긴 뒤 부른다). 지울 것이 없으면 쓰지 않는다 — 두 번 불러도 같다.
    */
-  setAiSessions(list: unknown): void {
-    this.snapshot.aiSessions = aiSessionsOf(list)
-    if (this.timer) return
-    this.timer = setTimeout(() => this.flush(), FLUSH_DEBOUNCE_MS)
+  clearLegacyAi(): void {
+    const ui = this.snapshot.ui
+    if (this.snapshot.aiSessions === undefined && ui.aiCliRecent === undefined && ui.aiCliFlags === undefined) return
+    delete this.snapshot.aiSessions
+    delete ui.aiCliRecent
+    delete ui.aiCliFlags
+    this.flush()
   }
 
   /**
@@ -148,12 +150,6 @@ export class WorkspaceStore {
   // ── 작업 프로필(서버+폴더 즐겨찾기). 그룹 목록과 같은 자리·같은 규칙(저빈도, 즉시 flush). ──
   setWorkProfiles(list: WorkProfile[]): void {
     this.snapshot.ui.workProfiles = list
-    this.flush()
-  }
-
-  // ── F27 AI CLI 최근 목록. 작업 프로필과 같은 자리·같은 규칙(전체 덮어쓰기, 즉시 flush). ──
-  setAiCliRecent(list: AiCliRecent[]): void {
-    this.snapshot.ui.aiCliRecent = list
     this.flush()
   }
 

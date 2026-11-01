@@ -226,7 +226,6 @@ function wire() {
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
   ipcMain.handle('fs:drives', () => ({ drives: [] }))
   ipcMain.handle('agent:state', () => null)
-  ipcMain.handle('aisession:save', ok)
   ipcMain.handle('ai:getState', () => ({ hasKey: true, provider: 'anthropic', model: '', turns: [], streaming: false, usage: { input: 0, output: 0 }, droppedTurns: 0 }))
   ipcMain.handle('remote:run', () => ({ ok: false, out: '', err: 'perf-probe' }))
   ipcMain.handle('remote:watch', ok)

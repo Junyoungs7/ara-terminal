@@ -9,7 +9,7 @@ import type { SessionState } from '../store/sessionState'
  * 정한다: 세 자리가 각자 인라인으로 칠하던 것이 곧 "같은 점이 세 가지 뜻"의 원인이었다.
  *
  * 툴팁이 **필수**인 이유는 §6("상태는 색 + 형태로 이중 표현")이다. 6px 원에 형태를 더 넣을
- * 자리가 없으므로(테두리·점선은 그 크기에서 뭉갠다 — AiBenchTree 의 `.unk` 주석이 같은 판단)
+ * 자리가 없으므로(테두리·점선은 그 크기에서 뭉갠다 — 지운 옛 작업대 점(AiBenchTree)도 같은 판단이었다)
  * 글자가 그 몫을 진다.
  */
 export function StateDot({ cls, state }: { cls: string; state: SessionState }): JSX.Element {

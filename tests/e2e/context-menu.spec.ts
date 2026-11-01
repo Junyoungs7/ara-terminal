@@ -16,12 +16,11 @@ test('CTX-1 터미널 우클릭 기본은 리스트 메뉴다', async ({ ara }) 
     els.map((e) => (e as HTMLElement).dataset.action)
   )
   // 2026-08-18(ff5f462): 평면 여덟 줄을 **묶었다**. 가로·세로 분할은 한 일의 두 방향이고 CLI 셋도
-  // 그렇다 — 펼쳐 두면 고를 것이 늘어난 것처럼 보인다. 그래서 [분할]·[AI 실행]은 서브메뉴 부모다.
+  // 그렇다 — 펼쳐 두면 고를 것이 늘어난 것처럼 보인다. 그래서 [분할]은 서브메뉴 부모다(M3 S1: [AI 실행 ▸]은 지웠다).
   expect(actions).toEqual([
     'copy',
     'paste',
     'split',
-    'aicli.run',
     'session.duplicate',
     'log.save',
     'ai.ask',
@@ -109,7 +108,6 @@ test('CTX-6 사이드바 우클릭 메뉴가 상황별로 구성된다', async (
   expect(await actions()).toEqual([
     'session.focus',
     'session.duplicate',
-    'aicli.start',
     'work.save',
     'session.rename',
     'session.close'

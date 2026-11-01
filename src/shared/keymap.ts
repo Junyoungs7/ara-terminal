@@ -30,12 +30,12 @@ export type KeymapAction =
   | 'clipboard.paste'
   | 'ai.ask'
   | 'ai.toggle'
-  | 'ai.cli'
-  // R14: 우클릭 [AI 실행 ▸ …] 을 키 하나로. 이름을 **ActionId 와 똑같이** 둔다 — 메뉴 힌트가 저절로 붙는다
-  // (actions.tsx 의 hintFor 가 같은 이름을 KEYMAP 에서 찾는다).
-  | 'aicli.run.claude'
-  | 'aicli.run.codex'
-  | 'aicli.run.gemini'
+  // M3 S1(제거 A8): 옛 터미널 AI 실행 키(Ctrl+Shift+L · Alt+1·2·3)를 AI 작업 공간 "에이전트 시작"에 다시 걸었다.
+  // AI 작업 공간에서 워크트리를 고른 동안만 뜻이 있다(features/aiws/AgentPane.tsx 가 받는다).
+  | 'agent.start'
+  | 'agent.start.claude'
+  | 'agent.start.codex'
+  | 'agent.start.gemini'
   | 'fileTree.toggle'
   | 'sidebar.collapse'
   | 'explorer.toggle'
@@ -61,7 +61,7 @@ export type KeymapAction =
   | 'app.lock'
   // 2.1 음성 — 짧게 누르면 패널 켜고/끄기, 켜진 채 누르고 있으면 말하기(누르고 말하기 모드).
   | 'voice.toggle'
-  // M1 라운드 2 공간 전환 — 실험 기능(설정 › 고급)을 켰을 때만 뜻이 있다(꺼져 있으면 받는 쪽이 흘려보낸다).
+  // M1 라운드 2 공간 전환(M3 부터 늘 — 옛 실험 기능 게이트는 지웠다).
   | 'space.term'
   | 'space.ai'
 
@@ -133,17 +133,15 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 메뉴바가 implemented 를 보고 자동으로 따라온다.
   { action: 'ai.ask', category: 'ai', labelKo: 'AI에게 질문', win: 'Ctrl+Shift+A', mac: 'Cmd+Shift+A', implemented: true },
   { action: 'ai.toggle', category: 'ai', labelKo: 'AI 창 토글', win: 'Alt+A', mac: 'Opt+A', implemented: true },
-  // F27: AI CLI 한 번에 시작. Ctrl+Shift+L(Launch) — 미사용 Ctrl+Shift+* 조합이라 R3.8 정책 그대로다
-  // (Ctrl+L 단독은 셸 화면 지우기라 건드리지 않는다).
-  { action: 'ai.cli', category: 'ai', labelKo: 'AI CLI 시작', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+L', implemented: true },
-  // R14(준영님 확정): Alt+1·2·3 = Claude·Codex·Gemini. 순서는 actions.tsx 의 AI_CLIS 표를 따른다(시험이 문다).
-  // 대가: bash/리드라인은 Alt+숫자를 **반복 횟수 인자**(`Alt+3 x` = xxx)로 쓴다 — 아라 터미널에선 그걸 잃는다.
-  // Ctrl+1-9 처럼 범위 표기(Alt+1-3) 대신 셋을 따로 둔다 — 범위는 dispatchAction 이 못 쏴서 통합 검색(F1)에서
-  // 실행이 안 되고 메뉴 힌트도 못 단다.
+  // M3 S1(제거 A8): 옛 "AI CLI 시작"·"Claude Code 실행" 등의 키 자리를 AI 작업 공간 "에이전트 시작"이 물려받았다.
+  // Ctrl+Shift+L(Launch) = 피커 열기, Alt+1·2·3 = 그 에이전트를 지금 워크트리에서 바로 실행(순서는 shared/agents.ts AGENT_IDS — 시험이 문다).
+  // 충돌: 같은 키를 쓰는 다른 줄이 없다(tests/agentKeys.test.ts). 터미널 공간에서는 받는 쪽이 없어 아무 일도 안 한다 —
+  // KEYMAP 에 있으니 xterm 이 셸로 넘기지도 않는다(옛 Alt+1·2·3 이 리드라인 반복 인자를 가져간 것과 같은 대가).
   // ponytail: mac 의 Opt+숫자는 e.key 가 '¡' 같은 기호로 와서 안 맞는다. mac 배포가 생기면 e.code 로 승격.
-  { action: 'aicli.run.claude', category: 'ai', labelKo: 'Claude Code 실행', win: 'Alt+1', mac: 'Opt+1', implemented: true },
-  { action: 'aicli.run.codex', category: 'ai', labelKo: 'Codex 실행', win: 'Alt+2', mac: 'Opt+2', implemented: true },
-  { action: 'aicli.run.gemini', category: 'ai', labelKo: 'Gemini 실행', win: 'Alt+3', mac: 'Opt+3', implemented: true },
+  { action: 'agent.start', category: 'ai', labelKo: '에이전트 시작', win: 'Ctrl+Shift+L', mac: 'Cmd+Shift+L', implemented: true },
+  { action: 'agent.start.claude', category: 'ai', labelKo: 'Claude Code 에이전트 시작', win: 'Alt+1', mac: 'Opt+1', implemented: true },
+  { action: 'agent.start.codex', category: 'ai', labelKo: 'Codex 에이전트 시작', win: 'Alt+2', mac: 'Opt+2', implemented: true },
+  { action: 'agent.start.gemini', category: 'ai', labelKo: 'Gemini CLI 에이전트 시작', win: 'Alt+3', mac: 'Opt+3', implemented: true },
   // Ctrl+B 는 tmux prefix 이자 리드라인 커서 왼쪽 이동이었다. VS Code 탐색기 관례(Ctrl+Shift+E)로 옮기고 배선한다.
   { action: 'fileTree.toggle', category: 'view', labelKo: '파일 트리 토글', win: 'Ctrl+Shift+E', mac: 'Cmd+Shift+E', implemented: true },
   { action: 'sidebar.collapse', category: 'view', labelKo: '사이드바 접기', win: 'Ctrl+Shift+B', mac: 'Cmd+Shift+B', implemented: true },
@@ -183,10 +181,10 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // 2.1 음성(가안 — PLAN-v2-voice). Ctrl+Shift+Space 는 셸·리드라인 바인딩이 없다(Ctrl+Space 는 set-mark 라 Shift 를 얹었다).
   // 회사 PC 한글 IME 가 이 조합을 먹는지는 준영님 확인 항목이다.
   { action: 'voice.toggle', category: 'ai', labelKo: '음성 켜기/끄기 · 누르고 말하기', win: 'Ctrl+Shift+Space', mac: 'Cmd+Shift+Space', implemented: true },
-  // M1 라운드 2 공간 전환. Ctrl+Alt+숫자 — 탭 번호(Ctrl+1-9)·AI CLI(Alt+1-3)와는 수식키가 달라 안 겹친다
+  // M1 라운드 2 공간 전환. Ctrl+Alt+숫자 — 탭 번호(Ctrl+1-9)·에이전트 시작(Alt+1-3)과는 수식키가 달라 안 겹친다
   // (modifiersMatch 가 Ctrl·Alt 를 둘 다 본다). xterm 은 이 조합을 ESC+숫자(리드라인 M-숫자 = 반복 인자)로 보내는데
   // Alt+1-3 이 이미 그 자리를 가져갔고 셸은 같은 일을 Alt+숫자로 한다. 한국어 배열엔 AltGr 이 없고, AltGr 배열은
-  // e.key 가 숫자가 아니라(² 등) 안 맞는다. ponytail: mac Opt+숫자는 aicli.run.* 과 같은 e.key 한계.
+  // e.key 가 숫자가 아니라(² 등) 안 맞는다. ponytail: mac Opt+숫자는 agent.start.* 와 같은 e.key 한계.
   { action: 'space.term', category: 'view', labelKo: '공간: 터미널', win: 'Ctrl+Alt+1', mac: 'Cmd+Opt+1', implemented: true },
   { action: 'space.ai', category: 'view', labelKo: '공간: AI 작업', win: 'Ctrl+Alt+2', mac: 'Cmd+Opt+2', implemented: true },
   LOCK_KEY

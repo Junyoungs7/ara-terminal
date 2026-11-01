@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from 'react'
 import { FileText, Plus, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, type AgentId } from '@shared/agents'
 import type { Worktree } from '@shared/worktrees'
+import { matchBinding } from '@shared/keymap'
 import { t } from '../../i18n'
 import { TerminalPane } from '../../terminal/TerminalPane'
 import { pickInitialAgent, useAgentStore } from './agentStore'
@@ -119,6 +120,26 @@ export function AgentWorkspace({ worktree }: { worktree: Worktree }): JSX.Elemen
     useAgentStore.getState().setViewing(shownId)
     return () => useAgentStore.getState().setViewing(null)
   }, [shownId])
+  // M3 S1(제거 A8): 옛 터미널 AI 키 — Ctrl+Shift+L = 피커, Alt+1·2·3 = 그 에이전트를 이 워크트리에서 바로(첫 지시 없이).
+  // 못 띄우면(설치 안 됨·꺼 둠) 피커를 열어 이유를 보게 한다. 이 화면이 떠 있을 때만 받는다(터미널 공간에선 무동작).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (matchBinding(e, 'agent.start')) {
+        e.preventDefault()
+        setPicking(true)
+        return
+      }
+      const agent = AGENT_IDS.find((id) => matchBinding(e, `agent.start.${id}`))
+      if (!agent) return
+      e.preventDefault()
+      void useAgentStore
+        .getState()
+        .launchAgent({ agent, worktreeId: worktree.id, cwd: worktree.path })
+        .then((r) => !r.ok && setPicking(true))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [worktree.id, worktree.path])
   if (tabs.length === 0 || picking) {
     return <AgentPicker worktree={worktree} onLaunched={() => setPicking(false)} onCancel={tabs.length ? () => setPicking(false) : undefined} />
   }

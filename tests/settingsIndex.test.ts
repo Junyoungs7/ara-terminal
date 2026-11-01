@@ -31,7 +31,7 @@ describe('설정 색인', () => {
     const ids = SETTINGS_INDEX.flatMap((d) => d.items.map((x) => x.id))
     expect(ids.length).toBe(new Set(ids).size)
     expect(sectionOfItem('ai.key')).toBe('ai')
-    expect(sectionOfItem('ai.cliFlags')).toBe('agents')
+    expect(sectionOfItem('agents.permission')).toBe('agents')
     expect(sectionOfItem('probe')).toBe('advanced')
     expect(sectionOfItem('sec.mcp')).toBe('mcp')
   })

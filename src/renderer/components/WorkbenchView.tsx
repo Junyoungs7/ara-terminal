@@ -99,8 +99,6 @@ type Props = {
   onSendInput: (text: string) => void
   /** ↗ 칸 — 하단 패널의 그 탭을 열거나 새 세션을 만든다. cwd 는 [여기서 터미널]이 넘긴다. */
   onLaunch: (id: WbLaunchId, profileId: string | null, cwd?: string) => void
-  /** #88 R1: 그 폴더가 채워진 AI CLI 시작 창(#90 부터 내 PC 도 대상이 된다). */
-  onAiCli: (profileId: string | null, path: string) => void
   /**
    * [작업 프로필로 저장] — 즐겨찾기 목록의 주인은 Shell 이라 여기서 만들지 않고 올려보낸다
    * (사이드바 트리의 같은 메뉴와 **같은 함수**에 도착해야 한다).
@@ -128,7 +126,6 @@ export function WorkbenchView({
   onAskAi,
   onSendInput,
   onLaunch,
-  onAiCli,
   onSaveWork,
   reveal,
   onWorkAction
@@ -392,7 +389,6 @@ export function WorkbenchView({
                   // #88 R1 아라 연결점 — 탐색기에 없는 것들이다(준영님: "차이점은 우리 아라와
                   // 연결된다는 점"). 대상이 로컬이든 서버든 같은 자리에서 이어진다.
                   onTerminalHere={(p) => onLaunch('term', isLocal ? null : target.profileId, p)}
-                  onAiCli={(p) => onAiCli(isLocal ? null : target.profileId, p)}
                   onSaveWork={(p) => onSaveWork(isLocal ? null : target.profileId, p)}
                   onAskAiPaths={(paths) => onAskAi(paths.join('\n'))}
                 />

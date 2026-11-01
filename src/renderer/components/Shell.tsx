@@ -1,10 +1,10 @@
 import { AI_ENTRY, featuresOf, type FeatureShown } from '@shared/features'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { shownSpace, type Space } from '@shared/space'
+import type { Space } from '@shared/space'
 import { AiHome, AiRail, type AiwsLocation } from '../features/aiws'
 import { RightBar } from './RightBar'
 import { NotifyBell, NotifyToasts } from './NotifyCenter'
-import { attention, installTestNotify, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
+import { attention, installTestNotify, pushNote, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
 import { TitleBar } from './TitleBar'
 import { Sidebar, SidebarRail } from './Sidebar'
 import { MainArea, type MainAreaHandle, type SshRestoreResult } from './MainArea'
@@ -35,16 +35,8 @@ import { checkToast, runUpdateAction, useUpdateState } from '../store/updateNoti
 import { primeCwd } from '../store/cwdPrime'
 import { spanRdp } from '../store/rdpSpanOpen'
 import { useWorkProfiles } from '../store/workProfiles'
-import { useAiCliRecent } from '../store/aiCliRecent'
-import { AI_CLI_LOCAL, AI_CLIS, aiCliFlagsOf, buildLaunch, resumeFlags, type AiCliId } from '../../shared/aiCli'
-import { commandChunks, WIN_CLEAR_GAP_MS } from '../../shared/shellInput'
-import { agentStatuses } from '../store/agentStatus'
 import { useTelemetry } from '../store/telemetry'
 import { useStatsHistory } from '../store/sysMonitor'
-import { aiBusyIn, aiRuns, benchRunOf, planAiLaunch, registerAiRun, useAiSessions } from '../store/aiSessions'
-import { benchRows as buildBenchRows, hookRows, useAiWorkbench } from '../store/aiWorkbench'
-import { childrenOf, defaultTitle, type AiSessionState } from '@shared/aiSession'
-import { branchFor, parseWorktreeOut, validWorktreeName, type WorktreeResult } from '@shared/gitWorktree'
 import { MAIN_WIN_ID } from '@shared/sessionWin'
 import { SysMonitorPanel } from './SysMonitorPanel'
 import { groupsOf, noneGroup, removeFromLayout, renameInLayout, useGroupList, type GroupLayout } from '../store/groups'
@@ -108,7 +100,7 @@ installTestNotify(window.ev?.app?.testHooks)
 
 export function Shell() {
   // R4.3: 폭·접힘·활성 탭이 한 상태로 묶여 workspace.json 에 저장된다(그전엔 렌더러 지역 상태).
-  const { sidebar, update: updateSidebar, preview: previewSidebar, revealAi } = useSidebar()
+  const { sidebar, update: updateSidebar, preview: previewSidebar } = useSidebar()
   // 드래그 중에는 사이드바 폭 트랜지션을 끈다(0.22s ease 가 걸린 채로 끌면 폭이 커서를 따라오지 않는다).
   const [resizing, setResizing] = useState(false)
   // 빈 문자열로 시작한다 — 예전엔 '0.1.0' 이 박혀 있었다. 아래 getVersion() 은 `.catch(() => {})`
@@ -178,40 +170,17 @@ export function Shell() {
   // F17 AI 부트스트랩 폼. 열림 상태만 여기 있고, 폼 값은 모달 안에만 산다(경로·이름이 렌더러
   // 상태 트리 위로 올라오지 않는다 — F16 이 API 키를 다루는 것과 같은 절제).
   const [bootstrapOpen, setBootstrapOpen] = useState(false)
-  // F27 AI CLI. **창은 2026-08-18 에 없앴다**(준영님 확정) — 창이 묻던 넷 중 서버·폴더는
-  // 화면이 이미 알고, CLI 는 우클릭 [AI 실행 ▸] 이 고르며, 플래그는 마지막 값을 재사용한다.
-  // 최근 목록은 남는다: 그게 "마지막에 쓴 CLI·플래그"의 유일한 기억이다.
-  const aiCliRecent = useAiCliRecent()
-  // 단축키 핸들러가 이 함수보다 위에서 선언돼 ref 로 잇는다(connectProfileRef 와 같은 이유 —
-  // 선언 순서 때문이지 다른 이유는 없다).
-  const runAiCliRef = useRef<
-    | ((
-        cli?: 'claude' | 'codex' | 'gemini',
-        atPath?: string,
-        forSessionId?: string | null,
-        forProfileId?: string,
-        resume?: boolean
-      ) => Promise<string | null>)
-    | null
-  >(null)
-
-  // #129 작업대 목록 — 껐다 켜도 남는다. 살아 있는지는 F30 의 실행 기록·세션 목록과 맞춰 본다.
-  const bench = useAiWorkbench()
   // 작업 프로필(서버+폴더 즐겨찾기). 트리에 행을 만들지 않고 팝업 목록으로만 보여 준다.
   const [workOpen, setWorkOpen] = useState(false)
   const work = useWorkProfiles()
   // FB-ui2: 설정 창 열림 상태의 실제 주인은 MainArea(Ctrl+, keydown 이 거기 배선돼 있다) — 액티비티
   // 바의 활성 표시만을 위한 미러(MainArea.onSettingsOpenChange 가 채운다).
   const [settingsActive, setSettingsActive] = useState(false)
-  // 설정 [AI] 의 CLI 기본 플래그. settingsActive 와 같은 미러다(prefs 의 주인은 MainArea) —
-  // 최근 조합이 없을 때 우클릭 [AI 실행 ▸] 이 쓴다.
-  const [aiCliFlags, setAiCliFlags] = useState<Record<string, string[]>>(() => aiCliFlagsOf(undefined))
   // 2.0 설정 › 기능 — 같은 미러(주인은 MainArea 의 prefs). 끈 기능은 하단 탭·메뉴·레일에서 빠진다.
   const [features, setFeatures] = useState<FeatureShown>(() => featuresOf(undefined))
-  // M1 라운드 2 공간 — 같은 미러(주인은 MainArea 의 prefs: aiSpace = 설정 › 고급 › 실험 기능, space = 마지막 공간).
-  // 실험 기능이 꺼져 있으면 저장값과 무관하게 터미널 공간이다(shownSpace) — 스위치·오른쪽 아이콘 바도 없다.
-  const [spaceSt, setSpaceSt] = useState<{ on: boolean; space: Space }>({ on: false, space: 'term' })
-  const space = shownSpace({ aiSpace: spaceSt.on, space: spaceSt.space })
+  // M1 라운드 2 공간 — 같은 미러(주인은 MainArea 의 prefs.space = 마지막 공간). M3 부터 AI 작업 공간은 기본 공개라
+  // 스위치·오른쪽 아이콘 바·알림 센터가 늘 보인다(옛 실험 기능 게이트는 지웠다).
+  const [space, setSpaceMirror] = useState<Space>('term')
   // M2 WS-05: AI 작업 공간에서 고른 워크트리 — 타이틀바 `프로젝트 / 워크트리 / 브랜치`·상태바 "main 에서 n 커밋 앞".
   const [aiLoc, setAiLoc] = useState<AiwsLocation | null>(null)
   const pickSpace = useCallback((s: Space) => mainRef.current?.setSpace(s), [])
@@ -402,10 +371,7 @@ export function Shell() {
   const mainRef = useRef<MainAreaHandle>(null)
   const selectSession = useCallback((id: string) => mainRef.current?.activateSession(id), [])
 
-  // 사이드바 [AI] 작업대 줄(S1 대상). 옛 대기 알림(aiQuietWatch)은 M3 S4 에서 지웠다 — 알림은 AI 작업 공간 에이전트가 보낸다.
-  const aiViews = useAiSessions(true)
-
-  // M1 라운드 3 알림 센터 — 실험 기능(AI 작업 공간)을 켰을 때만 벨·토스트·맥박이 보인다(스위치와 같은 조건).
+  // M1 라운드 3 알림 센터 — 벨·토스트·맥박(M3 부터 늘 보인다).
   // 누르면 그 공간·세션으로 가고 읽음이 된다. 지금 보는 공간을 저장소에 알려 그 공간의 맥박을 끈다.
   const { notes } = useNotes()
   const [bellOpen, setBellOpen] = useState(false)
@@ -419,36 +385,21 @@ export function Shell() {
     },
     [pickSpace, selectSession]
   )
-
-  // 작업대 줄. 살아 있는 세션 찾기는 **F30 실행 기록**(어느 터미널에서 무엇이 도는가)을 통해서다 —
-  // 같은 사실을 두 곳에서 다르게 세지 않는다.
-  //
-  // 🔴 그 뒤에 **훅만 말해 준 세션**을 덧붙인다: 준영님이 터미널에 직접 `claude` 를 치면 우리
-  // 문(`AI CLI 시작`)을 안 지나 적립도 실행 기록도 없지만, 훅은 그 세션의 상태를 받고 있다.
-  // 목록에 있고 없고를 정하는 것은 우리가 띄웠는지가 아니라 **훅이 말을 걸어 왔는지**다.
-  const benchList = useMemo(() => {
-    const runs = aiRuns()
-    const alive = new Set(sessions.sessions.map((x) => x.id))
-    const seen = new Map(aiViews.map((v) => [v.run.sessionId, v]))
-    const rows = buildBenchRows(bench.list, {
-      // AI 가 **지금 도는** 탭만 — 셸은 AI 보다 오래 산다(AI 가 내려가면 그 줄은 `쉬는 중`).
-      sessionOf: (b) => benchRunOf(b, runs, alive, agentStatuses())?.sessionId ?? null,
-      seen: (sid) => seen.get(sid) ?? null,
-      serverOf: (b) =>
-        b.kind === 'remote' ? (profiles.find((p) => p.id === b.profileId)?.name ?? '') : t('conn.group.local'),
-      pathExists: (b) => bench.paths[b.cwd],
-      profileExists: (id) => profiles.some((p) => p.id === id)
-    })
-    const taken = new Set(rows.map((r) => r.sessionId).filter((x): x is string => x !== null))
-    return [...rows, ...hookRows(aiViews, taken, t('conn.group.local'))]
-  }, [bench.list, bench.paths, sessions.sessions, profiles, aiViews])
-
-  // ① AI 를 켜면 사이드바가 [AI] 로 간다(2026-09-01 준영님). **터미널 탭은 안 옮긴다** — 옮기면
-  // 사용자 밑에서 물건이 움직인다(orca-analysis §3). 바뀌는 것은 사이드바 뷰뿐이고, 언제 바꿀지는
-  // store/sidebar.ts 의 `revealAiTab` 이 혼자 정한다(뺏지 않을 조건 넷이 거기 적혀 있다).
+  // M3 S1 데이터 이전 안내(한 번) — 옛 [AI 세션] 작업대의 로컬 폴더를 AI 작업 공간 프로젝트로 옮겼거나 원격 줄이 있었으면
+  // 알림 센터에 한 줄. main 이 한 번 주고 비운다(main/agents/legacyImport.ts) — 다음 부팅엔 안 뜬다.
   useEffect(() => {
-    revealAi(benchList.map((r) => r.sessionId).filter((x): x is string => x !== null))
-  }, [benchList, revealAi])
+    void window.ev?.agents
+      ?.legacyNotice()
+      .then((n) => {
+        if (!n) return
+        const body = [
+          n.projects.length > 0 ? t('aiws.legacy.projects').replace('{list}', n.projects.join(', ')) : '',
+          n.remote > 0 ? t('aiws.legacy.remote').replace('{n}', String(n.remote)) : ''
+        ]
+        pushNote({ kind: 'info', space: 'ai', title: t('aiws.legacy.title'), body: body.filter(Boolean).join(' ') })
+      })
+      .catch(() => {})
+  }, [])
 
   // 새 로컬 셸은 MainArea 경로로만 연다 — 세션 생성과 패널 배치가 한 곳에 있어야 한다(R1.2).
   // [파일] 탭으로 넘기는 일은 **MainArea.openLocal** 이 한다 — 셸을 여는 길이 거기로 모인다
@@ -559,10 +510,6 @@ export function Shell() {
       } else if (matchBinding(e, 'explorer.toggle')) {
         e.preventDefault()
         openExplorer()
-      } else if (matchBinding(e, 'ai.cli')) {
-        // F27 진입점 ② — 아무것도 정해지지 않은 빈 창(마지막에 쓴 조합이 채워진다).
-        e.preventDefault()
-        void runAiCliRef.current?.()
       } else if (matchBinding(e, 'palette.all')) {
         // F31 통합 검색. 여기서 받는 이유는 프로필·즐겨찾기 목록이 이 컴포넌트에 있어서다.
         e.preventDefault()
@@ -587,15 +534,15 @@ export function Shell() {
         // #91: 서버 콘솔은 [서버 작업대] 창에 흡수됐다 — 같은 창을 연다.
         e.preventDefault()
         openExplorer()
-      } else if (spaceSt.on && (matchBinding(e, 'space.term') || matchBinding(e, 'space.ai'))) {
-        // M1 공간 전환(Ctrl+Alt+1·2). 실험 기능이 꺼져 있으면 받지 않는다(스위치가 없는 화면에서 공간이 바뀌면 안 된다).
+      } else if (matchBinding(e, 'space.term') || matchBinding(e, 'space.ai')) {
+        // M1 공간 전환(Ctrl+Alt+1·2).
         e.preventDefault()
         pickSpace(matchBinding(e, 'space.ai') ? 'ai' : 'term')
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, toggleBottomBar, openExplorer, spaceSt.on, pickSpace])
+  }, [openConnManager, updateSidebar, bugReport.open, toggleBottom, toggleBottomBar, openExplorer, pickSpace])
 
   // F14: 터미널 Ctrl+V 로 넘어온 파일 업로드가 시작되면 [파일] 탭을 펼친다 —
   // 전송 큐(진행률·취소)가 그 안에 있어서 접혀 있으면 아무 일도 안 일어난 것처럼 보인다.
@@ -788,223 +735,6 @@ export function Shell() {
     [sessions]
   )
 
-  /**
-   * #133 세션 분리 — 같은 저장소를 **형제 폴더에 새 브랜치로** 하나 더 펼친다(git worktree).
-   * 폴더를 복사하는 것과 다르다: git 이 아는 방식이라 브랜치·머지가 그대로 성립한다.
-   *
-   * 실패는 **git 이 준 말 그대로** 보여 준다 — "이미 있는 브랜치", "커밋 안 된 변경" 같은 것을
-   * 우리가 다시 쓰면 원인을 못 찾는다.
-   */
-  /**
-   * 원격 분리 — 그 서버에서 `git worktree add` 를 돌린다(§10.3 규칙 6). 명령 조립은 카탈로그가
-   * 하고(렌더러는 폴더·이름만 넘긴다), 결과는 우리가 심은 표식으로 읽는다(git 문구는 판마다 다르다).
-   */
-  const splitRemote = useCallback(
-    async (b: AiSessionState, name: string): Promise<WorktreeResult> => {
-      const sid = sessions.sessions.find((x) => x.type === 'ssh' && x.profileId === b.profileId)?.id
-      if (!sid) return { ok: false, reason: 'git', message: t('bench.split.needConn') }
-      const r = await window.ev?.remote.run(sid, 'git.worktree.add', { path: b.cwd, name })
-      if (!r || !r.ok) return { ok: false, reason: 'git', message: r ? String(r.reason) : '' }
-      return parseWorktreeOut(r.out)
-    },
-    [sessions.sessions]
-  )
-
-  const splitBench = useCallback(
-    async (b: AiSessionState) => {
-      const name = await askText({
-        title: t('bench.split'),
-        message: t('bench.split.msg').replace('{p}', b.cwd),
-        input: { placeholder: 'refactor' },
-        confirmLabel: t('bench.split.btn'),
-        cancelLabel: t('dlg.cancel')
-      })
-      const clean = validWorktreeName(name)
-      if (clean === null) {
-        if (name) mainRef.current?.toast(t('bench.split.badName'))
-        return
-      }
-      const r =
-        b.kind === 'remote'
-          ? await splitRemote(b, clean)
-          : await window.ev?.ara.worktreeAdd(b.cwd, clean)
-      if (!r) return
-      if (!r.ok) {
-        // noDir 도 제 문구로(#201 F) — 원격은 표식 원문(`ARA-WT no-such-dir`)이 그대로 나갔다.
-        mainRef.current?.toast(r.reason === 'git' ? r.message : t('bench.split.' + r.reason))
-        return
-      }
-      bench.addChild(b, r.path, branchFor(clean))
-      mainRef.current?.toast(t('bench.split.done').replace('{p}', r.path))
-    },
-    [askText, bench, splitRemote]
-  )
-
-  /**
-   * 2026-08-18 제보 ⑤: 우클릭 [AI 실행 ▸ Claude] — **창을 띄우지 않는다.**
-   *
-   * 창이 묻던 넷 중 서버·폴더는 화면이 이미 안다(지금 세션·지금 cwd). 나머지 둘(CLI·플래그)에서
-   * CLI 는 누른 항목이고, 플래그는 **그 CLI 로 마지막에 시작할 때 쓴 값**을 재사용한다 —
-   * 준영님은 늘 같은 조합을 쓰시는데 매번 고르게 하고 있었다.
-   *
-   * 최근 값이 없으면 플래그 없이 맨몸으로 띄운다(`claude` 한 줄). 그게 싫으면 창에서 한 번
-   * 골라 주시면 그 뒤로는 기억한다 — 창은 **다르게 하고 싶을 때**만 필요하다.
-   *
-   * 🔴 **2026-10-12 준영님 결정: 그 셸에 친다**(D(#168) 의 "새 AI 세션"을 되돌렸다).
-   * D 는 새 pty 의 프로세스를 곧 CLI 로 만들었는데, 그 값이 둘이었다: ① 띄울 때마다 셸·conpty
-   * 기동을 통째로 기다린다(실측 3.5~4.6s 검은 화면 — conpty.dll 고정비 ~3s + PowerShell ~0.8s),
-   * ② Ctrl+C 로 끝내면 탭이 `[프로세스 종료]` 껍데기로 남고 원래 셸로 안 돌아간다(#15).
-   * 이제는 `cd … && claude` 를 **그 셸에** 친다 — 끝나면 같은 셸 프롬프트로 돌아온다.
-   * 그 셸에서 AI 가 이미 돌면(또는 RDP·다른 서버면) 같은 자리에 **보통 새 탭**을 열고 거기 친다
-   * (`planAiLaunch` — 판정 근거와 한계는 `aiBusyIn` 주석).
-   *
-   * 작업대 기록·실행 기록·최근 조합은 그대로 남긴다(아래 `send`). [AI] 목록이 그 셸을
-   * 가리키고, AI 가 내려가면 그 줄은 `쉬는 중` 이 된다 — 셸은 닫지 않는다.
-   */
-  const runAiCliNow = useCallback(
-    async (
-      cli?: 'claude' | 'codex' | 'gemini',
-      atPath?: string,
-      /** 이 세션의 셸에 친다(우클릭). 안 주면 활성 세션이 후보, null 이면 후보 없이 새 탭. */
-      forSessionId?: string | null,
-      /** 자리를 정한다: 서버 profileId 또는 `AI_CLI_LOCAL`. 후보가 그 자리가 아니면 새 탭. */
-      forProfileId?: string,
-      /**
-       * 1.0.8 ②: 끊김 카드의 [이어서 시작] — **직전 대화를 이어서** 띄운다(claude 의 `-c`).
-       * 플래그를 여기서 손대지 않고 `resumeFlags` 에 맡긴다: `-r`/`-c` 가 배타라는 판정이
-       * 화면마다 갈리면 안 된다(그 함수의 주석 참고).
-       */
-      resume?: boolean
-    ): Promise<string | null> => {
-      const cand =
-        forSessionId === undefined ? (activeSession ?? undefined) : sessions.sessions.find((x) => x.id === forSessionId)
-      const plan = planAiLaunch(
-        cand,
-        forProfileId,
-        cand ? aiBusyIn(cand.id, aiRuns(), agentStatuses()) : false,
-        AI_CLI_LOCAL
-      )
-      // 새 탭으로 갈 때도 폴더는 후보의 것을 쓴다 — 우클릭한 그 폴더에서 띄우는 것이 요청이다.
-      const path = atPath ?? (cand ? cwdBy[cand.id] : undefined)
-      if (!plan || !path) {
-        // 폴더를 모르는 세션(막 뜬 셸)에서는 아무 데서나 띄우지 않는다 — 어디서 도는지 모르는
-        // AI 를 만드느니 안내하고 만다(창이 있던 시절에는 여기서 물었다).
-        mainRef.current?.toast(t('aicli.noCwd'))
-        return null
-      }
-      // CLI 를 안 주면 마지막에 쓴 것. 그것도 없으면 claude(사내 기본).
-      const engine = cli ?? ((aiCliRecent.list[0]?.cli as 'claude' | 'codex' | 'gemini' | undefined) ?? 'claude')
-      const target = plan.place
-      const remote = target !== AI_CLI_LOCAL
-      const last = aiCliRecent.list.find((r) => r.cli === engine && r.profileId === target)
-      // 최근에 쓴 조합이 있으면 그대로, 없으면 **설정 [AI] 의 기본 플래그**(2026-08-20 · A-79).
-      const saved = last?.flags ?? aiCliFlags[engine] ?? []
-      // 되살리는 길이면 "이어서"로 갈아 끼운다(claude 뿐 — 나머지는 저장된 조합 그대로).
-      const flags = resume ? resumeFlags(engine, saved) : saved
-      // 한 줄 조립은 aiCli.buildLaunch 하나다(셸마다 문법이 다르다 — powershell 5.1 은 `&&` 가
-      // 파서 오류, #90). 원격은 늘 posix, 로컬은 이 PC 의 기본 셸(PtyBackend.resolveShell 과 같은 판정).
-      const shell = remote ? 'posix' : ((await window.ev?.app.launchShell()) ?? 'powershell')
-      const line = buildLaunch({ cli: engine, flags, path, shell })
-      if (!line) return null
-      const send = (sid: string): void => {
-        // 치던 줄을 비우고 보낸다(shellInput.commandChunks — 반쯤 친 명령 뒤에 이어붙지 않게. 윈도우 셸은 Esc 를 따로).
-        commandChunks(line, shell).forEach((c, i) => {
-          if (i === 0) window.ev?.session.input(sid, c)
-          else setTimeout(() => window.ev?.session.input(sid, c), WIN_CLEAR_GAP_MS * i)
-        })
-        // 최근 목록에는 **사용자가 고른 조합**(saved)을 남긴다 — 되살리며 우리가 끼운 `-c` 까지
-        // 기억하면, 카드에서 한 번 이어 시작한 뒤로 평소 시작까지 조용히 `-c` 가 된다.
-        aiCliRecent.record({ profileId: target, path, cli: engine, flags: saved })
-        // F30: 이 세션에서 AI 가 돈다고 알린다 — [AI 세션] 패널과 `aiBusyIn` 이 이 등록을 본다.
-        registerAiRun({ sessionId: sid, cli: engine, path, startedAt: Date.now() })
-        // 1.0.8 ②: 스냅샷에 "이 셸에서 무엇이 돌았나"를 싣는다 — 다음 부팅의 [이어서 시작] 카드.
-        // AI 가 내려가면 aiSessions 의 onExit 이 걷는다.
-        void window.ev?.session.setAiCli(sid, engine)
-        // #129: 여기가 **작업대를 만드는 유일한 문**이다(설계 §10.6 — 만들고 잊지 않는다).
-        bench.record({
-          kind: remote ? 'remote' : 'local',
-          ...(remote ? { profileId: target } : {}),
-          cwd: path,
-          engine,
-          // 플래그에 그 인자가 들어 있으면 켜진 것이다 — 화면이 그 사실을 상시 표시한다(§6 확정 2).
-          skipPerms: flags.some((f) => f.includes('dangerously-skip-permissions'))
-        })
-        // 우클릭한 세션이 화면 밖일 수 있다 — 친 곳을 보여 준다(2026-09-10 제보: 칸은 `showSession`
-        // 만 바꾼다, 탭만 활성으로 만들면 화면은 옛 세션 그대로다).
-        selectSession(sid)
-      }
-      if (plan.kind === 'type') {
-        send(plan.sessionId)
-        return plan.sessionId
-      }
-      if (plan.kind === 'newRemote') {
-        // 같은 서버에 셸을 하나 더 열고 거기 친다. 6번째 인자(`{}`)는 [파일] 탭으로 넘기지 않게 —
-        // 방금 띄운 AI 를 파일 화면이 가린다. 치수는 그대로 지금 칸에서 잰다(restore.size 없음).
-        // ponytail: 그 서버의 **첫** 접속이면 원격 훅 설치(remoteHooks)와 경합해 이번 claude 만 훅 없이
-        // 뜰 수 있다(목록에 `확인 불가`). 두 번째부터는 파일이 이미 같다. 잦으면 설치 완료를 기다린다.
-        void connectProfileRef.current?.(target, undefined, undefined, send, undefined, {})
-        return null
-      }
-      const sid = await sessions.restoreLocal({
-        type: 'local',
-        title: `${AI_CLIS[engine].bin} · ${defaultTitle(path)}`,
-        serverKey: 'localhost',
-        cwd: path,
-        profileId: null,
-        shell: undefined
-      })
-      if (!sid) return null
-      // 막 뜬 셸에 바로 친다 — conpty 가 입력을 버퍼에 담아 두고 셸이 읽기 시작하면 받는다
-      // (D 이전 openBench 가 같은 순서였다).
-      send(sid)
-      return sid
-    },
-    [activeSession, cwdBy, aiCliRecent, sessions, aiCliFlags, bench, selectSession]
-  )
-  runAiCliRef.current = runAiCliNow
-
-  /**
-   * 1.0.8 ②: 재시작 뒤 남은 **끊김 카드**의 [이어서 시작]/[다시 시작].
-   *
-   * 되살리는 길은 처음 띄울 때와 **같은 함수**(runAiCliNow)를 지난다 — openBench 와 같은 이유로,
-   * 두 벌로 갈리면 "처음엔 되는데 되살리면 플래그가 다르다"가 생긴다. 새 세션 id 를 돌려주는
-   * 이유는 카드 자리(placeholder)를 그 세션으로 갈아 끼워야 해서다(MainArea.retryRestore).
-   *
-   * `custom` 은 되살리지 않는다: 실행할 bin 을 스냅샷에 남기지 않으므로(남기면 손으로 고친 파일이
-   * 곧 실행 인자가 된다) 무엇을 띄울지 알 수 없다. 우리가 심는 값도 claude·codex·gemini 뿐이다.
-   */
-  const resumeAi = useCallback(
-    // 카드가 얹힌 **그 셸**에 친다(셸이 있으면) — 새 탭을 만들고 카드 자리를 닫던 D 의 순서가 필요 없다.
-    async (cli: AiCliId, cwd: string, sessionId?: string): Promise<string | null> =>
-      cli === 'custom'
-        ? null
-        : ((await runAiCliNow(cli, cwd, sessionId ?? null, AI_CLI_LOCAL, true)) ?? null),
-    [runAiCliNow]
-  )
-
-  /**
-   * #129 작업대를 연다 — **살아 있으면 그 탭으로, 아니면 그 자리에서 다시 띄운다.**
-   * 다시 띄우는 길은 처음 만들 때와 **같은 함수**(runAiCliNow)를 지난다. 두 벌로 갈리면
-   * "처음엔 되는데 되살리면 플래그가 다르다" 같은 것이 생긴다.
-   */
-  const openBench = useCallback(
-    async (b: AiSessionState, sessionId: string | null) => {
-      if (sessionId) {
-        selectSession(sessionId)
-        return
-      }
-      const cli = b.engine === 'custom' ? 'claude' : b.engine
-      // 쉬는 줄: AI 가 내려간 **그 셸**이 살아 있으면 거기 다시 친다(누를 때마다 새 탭이 쌓이지 않게).
-      // 없으면 그 자리(로컬·그 서버)에 새 탭 — 판정은 runAiCliNow 의 planAiLaunch 가 한다.
-      const alive = new Set(sessions.sessions.map((x) => x.id))
-      const shellId = benchRunOf(b, aiRuns(), alive)?.sessionId
-      const place = b.kind === 'remote' ? (b.profileId ?? undefined) : AI_CLI_LOCAL
-      // 그 셸이 없으면 null — 활성 세션(남의 폴더에 서 있는 셸)에 치지 않고 새 탭으로 간다.
-      void runAiCliRef.current?.(cli, b.cwd, shellId ?? null, place)
-    },
-    [selectSession, sessions.sessions]
-  )
-
   // 지금 보고 있는 위치를 작업 프로필로 저장 — 이름만 물어본다(대상 서버·경로는 화면이 이미 안다).
   //
   // 2026-08-28 감사 ③: 작업대(WorkbenchView)의 파일 화면에도 이 항목이 살아야 한다 —
@@ -1135,12 +865,6 @@ export function Shell() {
   // 다른 이유는 없다 — 값은 매 렌더 최신으로 갱신된다).
   const connectProfileRef = useRef<typeof connectProfile | null>(null)
   connectProfileRef.current = connectProfile
-
-  // F27 launchAiCli 는 2026-08-18 에 사라졌다(창과 함께). 그 함수가 하던 접속·폴더 만들기·
-  // CLI 설치 확인은 **창이 있어야만 성립하던 절차**다 — 이제는 이미 붙어 있는 세션의 그 폴더에
-  // 한 줄 보낼 뿐이라(runAiCliNow) 접속도 이동도 필요 없다. 잃은 것은 "없는 폴더 만들기"와
-  // "CLI 설치 여부 확인" 둘 — 전자는 mkdir 를 직접 치면 되고, 후자는 command not found 가
-  // 터미널에 그대로 보인다(우리가 미리 확인해 주던 것을 셸이 말해 준다).
 
   // E2E seam 바인딩(위 안내 참고): 실 connectProfile 을 노출. 프로덕션 동작엔 영향 없음.
   useEffect(() => {
@@ -1313,9 +1037,6 @@ export function Shell() {
         else if (id === 'session.duplicate') {
           const sess = sessions.sessions.find((x) => x.id === target.sessionId)
           if (sess) duplicateSession(sess)
-        } else if (id === 'aicli.start') {
-          // 창이 없어졌다(2026-08-18) — 그 세션의 폴더에서 마지막에 쓴 CLI 로 바로 띄운다.
-          void runAiCliNow(undefined, cwdBy[target.sessionId], target.sessionId)
         } else if (id === 'work.save') {
           const path = cwdBy[target.sessionId]
           // 폴더를 아직 모르는 세션(막 뜬 셸·RDP)은 저장할 위치가 없다 — 조용히 넘긴다.
@@ -1405,14 +1126,6 @@ export function Shell() {
         case 'server.newSession':
           void connectProfile(p.id) // 무조건 새 세션
           return
-        // #131 [여기서 AI 세션] — 서버 행은 세션이 아니라 서버를 고른 것이라 **새 셸**을 열고 거기 친다
-        // (null = 활성 세션을 후보로 삼지 않는다). 2026-10-12 부터 AI 는 셸 안에서 돈다.
-        case 'aicli.start':
-          // 폴더는 **그 서버의 홈**이다(`~`). 갓 붙은 세션은 cwd 가 아직 안 왔고, 그걸 기다리느니
-          // 홈에서 시작하는 편이 낫다 — 사용자는 CLI 안에서 옮겨 갈 수 있다. `~` 는 따옴표 밖에
-          // 두는 규칙(aiCli.quotePosix)이 이미 있어서 그대로 펼쳐진다.
-          void runAiCliRef.current?.(undefined, '~', null, p.id)
-          return
         case 'server.edit':
           openConnManager({ mode: 'select', profileId: p.id })
           return
@@ -1452,8 +1165,7 @@ export function Shell() {
       storedGroups,
       groupLayout,
       saveGroups,
-      moveGroup,
-      runAiCliNow
+      moveGroup
     ]
   )
 
@@ -1492,10 +1204,6 @@ export function Shell() {
         if (sid) window.ev?.session.input(sid, a.text)
         return
       }
-      // D(#168): 탐색기가 보고 있는 서버로 띄운다(활성 세션에 밀어 넣지 않는다).
-      case 'aiCli':
-        void runAiCliNow(undefined, a.path, undefined, a.profileId ?? AI_CLI_LOCAL)
-        return
       case 'saveWork':
         void saveWorkProfile(a.path, a.profileId)
         return
@@ -1540,19 +1248,17 @@ export function Shell() {
         features={features}
         // 2.0: 우측 액티비티 바가 없어졌다 — 채팅을 여닫는 자리는 타이틀바 버튼과 단축키(ai.toggle) 둘이다.
         chat={AI_ENTRY ? { open: aiOpen, onToggle: () => toggleRail('ai') } : undefined}
-        space={spaceSt.on ? { value: space, onPick: pickSpace, attention: attention(notes, space) } : undefined}
+        space={{ value: space, onPick: pickSpace, attention: attention(notes, space) }}
         bell={
-          spaceSt.on ? (
-            <NotifyBell
-              open={bellOpen}
-              onOpenChange={setBellOpen}
-              onPick={openNote}
-              onSettings={() => {
-                setBellOpen(false)
-                openSettings('notify')
-              }}
-            />
-          ) : undefined
+          <NotifyBell
+            open={bellOpen}
+            onOpenChange={setBellOpen}
+            onPick={openNote}
+            onSettings={() => {
+              setBellOpen(false)
+              openSettings('notify')
+            }}
+          />
         }
         // F31 통합 검색창 — 타이틀바 가운데에 박아 넣는다. 실행은 전부 **원래 길**로 돌려보낸다
         // (dispatchAction / 메뉴 명령 / connectProfile) — 팔레트 전용 배선을 만들지 않는다.
@@ -1567,7 +1273,6 @@ export function Shell() {
             onEnable={(id) => mainRef.current?.showFeature(id)}
             sessions={paletteSessions}
             explorerOpen={explorerOpen}
-            spaceOn={spaceSt.on}
             onRun={(run) => {
               if (run.do === 'action') dispatchAction(run.action)
               else if (run.do === 'session') selectSession(run.sessionId)
@@ -1648,9 +1353,6 @@ export function Shell() {
           }
           fileCwd={activeCwd}
           onSaveWork={(absPath: string) => void saveWorkProfile(absPath)}
-          // F27 진입점 ③ — 트리에서 고른 폴더가 그대로 채워진다. 대상 서버는 지금 그 트리가 보고 있는
-          // 세션의 프로필이다(SSH 세션에서만 메뉴에 뜬다 — FileTree.canAiCli).
-          onAiCli={(absPath) => void runAiCliNow(undefined, absPath)}
           // #88 R1: 아라 연결점 — 작업대와 같은 동작이어야 한다(같은 트리, 같은 메뉴).
           onTerminalHere={(absPath) => {
             const pid = activeSession?.profileId
@@ -1675,24 +1377,6 @@ export function Shell() {
           onRevealFiles={revealFiles}
           ask={ask}
           askText={askText}
-          benchRows={benchList}
-          onBenchOpen={(b, sid) => void openBench(b, sid)}
-          onBenchRemove={(b) => {
-            // 분리 세션(worktree)의 부모를 지우면 자식도 함께 사라진다 — 먼저 알린다(§10.3 규칙 4).
-            const kids = childrenOf(bench.list, b.id)
-            if (kids.length === 0) {
-              bench.remove(b.id)
-              return
-            }
-            void ask({
-              title: t('bench.remove'),
-              message: t('bench.remove.kids').replace('{n}', String(kids.length)).replace('{t}', b.title),
-              confirmLabel: t('bench.remove'),
-              tone: 'danger'
-            }).then((r) => r === 'confirm' && bench.remove(b.id))
-          }}
-          onBenchSplit={(b) => void splitBench(b)}
-          onNewBench={() => void runAiCliNow()}
           onPastClose={() => updateSidebar({ collapsed: true })}
           onPastOpenCurrent={() => openBottom('log')}
           onCdTerminal={(absPath) => {
@@ -1814,9 +1498,6 @@ export function Shell() {
           onDuplicateSession={duplicateSession}
           sshRestore={sshRestore}
           onOpenConnManager={() => openConnManager(null)}
-          onRunAiCli={runAiCliNow}
-          // 1.0.8 ②: 재시작 뒤 남은 끊김 카드에서 그 AI 를 되살린다(새 세션 id 를 돌려준다).
-          onResumeAi={resumeAi}
           activeCwd={activeCwd}
           ask={ask}
           onAskAi={(text) => {
@@ -1826,9 +1507,8 @@ export function Shell() {
           onSettingsOpenChange={setSettingsActive}
           onRevealFiles={revealFiles}
           onOpenLog={() => openBottom('log')}
-          onAiCliFlags={setAiCliFlags}
           onFeatures={setFeatures}
-          onSpace={setSpaceSt}
+          onSpace={setSpaceMirror}
           spaceView={
             space === 'ai' ? (
               <Suspense fallback={null}>
@@ -1858,8 +1538,8 @@ export function Shell() {
           />
           </ErrorBoundary>
         )}
-        {/* M1: 오른쪽 끝 아이콘 바 — 실험 기능을 켰을 때만. 아라 채팅은 타이틀바 [채팅]·Alt+A 와 같은 상태·같은 토글이다. */}
-        {spaceSt.on && AI_ENTRY && <RightBar space={space} chatOpen={aiOpen} onChat={() => toggleRail('ai')} />}
+        {/* M1: 오른쪽 끝 아이콘 바. 아라 채팅은 타이틀바 [채팅]·Alt+A 와 같은 상태·같은 토글이다. */}
+        {AI_ENTRY && <RightBar space={space} chatOpen={aiOpen} onChat={() => toggleRail('ai')} />}
       </div>
       <StatusBar
         leftEmpty={space === 'ai'}
@@ -1912,7 +1592,7 @@ export function Shell() {
         onRename={(id) => void renameWorkProfile(id)}
         onDelete={(id) => void deleteWorkProfile(id)}
       />
-      {spaceSt.on && <NotifyToasts onPick={openNote} onMore={() => setBellOpen(true)} />}
+      <NotifyToasts onPick={openNote} onMore={() => setBellOpen(true)} />
       {dialog.node}
       {bugReport.node}
       {myReports.node}

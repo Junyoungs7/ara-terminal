@@ -19,7 +19,7 @@ export const SETTINGS_SECTIONS = [
   'ai', 'voice',
   'terminal', 'conn', 'features', 'log', 'history',
   'security', 'mcp', 'remote', 'mobile', 'slack', 'privacy',
-  'advanced', 'experimental',
+  'advanced',
   'about'
 ] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
@@ -48,10 +48,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.args', 'settings.agents.args', 'settings.agents.args.desc'),
       i('agents.env', 'settings.agents.env', 'settings.agents.env.desc'),
       i('agents.command', 'settings.agents.command', 'settings.agents.command.desc'),
-      i('agents.preview', 'settings.agents.preview'),
-      i('ai.cli', 'settings.ai.cliSec'),
-      i('ai.cliPick', 'settings.ai.cliPick', 'settings.ai.cliPick.desc'),
-      i('ai.cliFlags', 'settings.ai.cliFlags', 'settings.ai.cliFlags.desc')
+      i('agents.preview', 'settings.agents.preview')
     ]
   },
   soon('usage', 'aiws'),
@@ -175,8 +172,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('dir.app', 'settings.dir.app', 'settings.dir.app.desc')
     ]
   },
-  // M1 라운드 2: 첫 실험 토글 — AI 작업 공간(M3 에서 기본으로 연다).
-  { id: 'experimental', group: 'advanced', items: [i('exp.aiSpace', 'settings.exp.aiSpace', 'settings.exp.aiSpace.desc')] },
+  // M1 라운드 2 의 실험 기능(AI 작업 공간 토글)은 M3 에서 기본 공개로 바뀌며 섹션째 지웠다.
 
   {
     id: 'about',

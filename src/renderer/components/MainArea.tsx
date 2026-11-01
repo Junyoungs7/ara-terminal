@@ -11,7 +11,7 @@ import { useLayout, toLayoutNode, allPanesRdp, splitFiller, serial, MAX_PANES, t
 import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import type { Space } from '@shared/space'
 import { ContextInteractions } from '../interactions/ContextInteractions'
-import { aiCliRunOfKey, type ActionId } from '../interactions/actions'
+import type { ActionId } from '../interactions/actions'
 import { getSelection } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
@@ -85,7 +85,7 @@ export type MainAreaHandle = {
   setAiModel: (provider: AiProvider, model: string) => void
   /** 2.0 통합 검색 Ctrl+Enter — 숨긴 기능을 설정에서 켠다(prefs 의 주인이 여기다). */
   showFeature: (id: FeatureId) => void
-  /** M1 공간 전환 — 고른 공간을 저장한다(prefs 의 주인이 여기다). 실험 기능이 꺼져 있으면 부르는 쪽이 안 부른다. */
+  /** M1 공간 전환 — 고른 공간을 저장한다(prefs 의 주인이 여기다). */
   setSpace: (space: Space) => void
 }
 
@@ -100,11 +100,6 @@ type MainAreaProps = {
   sshRestore?: (profileId: string, size?: { cols: number; rows: number }) => Promise<SshRestoreResult>
   // 탭바 ＋ 메뉴·빈 상태의 "SSH 연결…" → 연결 관리자 열기(Shell 소유).
   onOpenConnManager?: () => void
-  /**
-   * 2026-08-18: 우클릭 [AI 실행 ▸ …] — **창 없이** 지금 세션·지금 폴더에서 바로 띄운다.
-   * 플래그는 그 CLI 로 마지막에 시작할 때 쓴 값을 재사용한다(Shell 이 최근 목록을 갖고 있다).
-   */
-  onRunAiCli?: (cli: 'claude' | 'codex' | 'gemini') => void
   /**
    * 1.0.8 ②: 끊김 카드에서 그 AI 를 되살린다 — 성공하면 **새 세션 id**(카드 자리를 그것으로 갈아
    * 끼운다). sshRestore 와 같은 결의 주입이다: 띄우는 일은 Shell 이 하고(플래그·최근 목록이 거기
@@ -132,17 +127,12 @@ type MainAreaProps = {
   onSettingsOpenChange?: (open: boolean) => void
   /** 새 로컬 셸을 열면 사이드바를 [파일] 탭으로 — 사이드바 상태의 주인은 Shell 이라 요청만 한다. */
   onRevealFiles?: () => void
-  /**
-   * 2026-08-20: AI CLI 기본 플래그(설정 [AI]). onSettingsOpenChange 와 같은 미러 —
-   * prefs 의 주인이 여기라, 실행하는 쪽(Shell.runAiCliNow)에 값을 올려 준다.
-   */
-  onAiCliFlags?: (flags: Record<string, string[]>) => void
   /** 아라 채팅 v2: API 모드 공급자·모델(설정 ui.aiProvider · ui.aiModels) 미러 — 채팅 선택기가 쓴다. */
   onAiApi?: (a: { provider: AiProvider; model: string }) => void
-  /** 2.0 설정 › 기능 미러 — 하단 탭·메뉴·레일을 거르는 Shell 이 쓴다(onAiCliFlags 와 같은 형태). */
+  /** 2.0 설정 › 기능 미러 — 하단 탭·메뉴·레일을 거르는 Shell 이 쓴다(onSettingsOpenChange 와 같은 미러). */
   onFeatures?: (f: FeatureShown) => void
-  /** M1 실험 기능(AI 작업 공간)·마지막 공간 미러 — 타이틀바 스위치·레일·상태바를 고르는 Shell 이 쓴다. */
-  onSpace?: (s: { on: boolean; space: Space }) => void
+  /** M1 마지막 공간 미러 — 타이틀바 스위치·레일·상태바를 고르는 Shell 이 쓴다. */
+  onSpace?: (space: Space) => void
   /**
    * M1 AI 작업 공간의 가운데. 주면 탭 줄·칸 격자·하단 패널을 **숨기고**(언마운트하지 않는다 — 터미널이 다시
    * 붙지 않게) 이 노드를 그린다. 설정 덮개·토스트·창들은 그대로 이 컴포넌트 안에 남는다.
@@ -174,7 +164,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onDuplicateSession,
       sshRestore,
       onOpenConnManager,
-      onRunAiCli,
       onResumeAi,
       version,
       activeCwd,
@@ -184,7 +173,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       onOpenLog,
       onSettingsOpenChange,
       onRevealFiles,
-      onAiCliFlags,
       onAiApi,
       onFeatures,
       onSpace,
@@ -553,19 +541,15 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     }, [settingsOpen, onSettingsOpenChange])
 
     useEffect(() => {
-      onAiCliFlags?.(prefs.aiCliFlags)
-    }, [prefs.aiCliFlags, onAiCliFlags])
-
-    useEffect(() => {
       onFeatures?.(prefs.features)
     }, [prefs.features, onFeatures])
 
     useEffect(() => {
-      onSpace?.({ on: prefs.aiSpace, space: prefs.space })
-    }, [prefs.aiSpace, prefs.space, onSpace])
+      onSpace?.(prefs.space)
+    }, [prefs.space, onSpace])
 
-    // M1 라운드 3: 토스트는 알림 센터가 보일 때(실험 기능) + 설정 › 알림 [앱 안 토스트] 가 켜졌을 때만.
-    useEffect(() => setToastsEnabled(prefs.aiSpace && prefs.notifyToast), [prefs.aiSpace, prefs.notifyToast])
+    // M1 라운드 3: 토스트는 설정 › 알림 [앱 안 토스트] 가 켜졌을 때만(M3 부터 알림 센터는 늘 보인다).
+    useEffect(() => setToastsEnabled(prefs.notifyToast), [prefs.notifyToast])
 
     useEffect(() => {
       onAiApi?.({ provider: prefs.aiProvider, model: prefs.aiModels[prefs.aiProvider] })
@@ -894,7 +878,8 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
          * (claude 면 `-c` 로 직전 대화를 이어서). SSH 재시도와 이후 절차는 같다: 새 세션 id 로
          * 카드 자리를 갈아 끼우고 오류를 걷는다.
          *
-         * 🔴 먼저 이 칸에 초점을 준다. 띄우는 쪽(Shell.runAiCliNow)이 끝에 `selectSession` 을
+         * ⚠️ M3 S1: 본창 Shell 은 onResumeAi 를 더는 넘기지 않는다(터미널 AI 실행을 지웠다) — 이 갈래는 S3(끊김 카드 삭제)까지 쉬고 있다.
+         * 🔴 먼저 이 칸에 초점을 준다. 띄우는 쪽(옛 Shell 터미널 AI 실행)이 끝에 `selectSession` 을
          *    부르는데, 그것이 **초점 칸**의 세션을 갈아 끼운다(layout.showSession) — 다른 칸이
          *    초점이면 새 세션이 그 칸에 들어가고 아래 replaceSession 이 이 칸에도 넣어 같은 세션이
          *    두 칸을 차지한다(렌더는 첫 칸에만 붙고 나머지가 빈다). 버튼을 누르면 mousedown 이
@@ -1255,15 +1240,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 선택 영역이 있으면 그 텍스트를 컴포저에 프리필한다('copy' 가 쓰는 같은 함수).
             onAskAi?.(sid ? getSelection(sid) : '')
             return
-          case 'aicli.run.claude':
-            onRunAiCli?.('claude')
-            return
-          case 'aicli.run.codex':
-            onRunAiCli?.('codex')
-            return
-          case 'aicli.run.gemini':
-            onRunAiCli?.('gemini')
-            return
           case 'log.save':
             // 2026-08-13 감사: "추후 지원" 토스트만 내고 있었는데 로그 패널의 [내려받기]는
             // 이미 동작했다. 그 패널을 여는 것으로 잇는다 — 없는 기능인 척하지 않는다.
@@ -1299,7 +1275,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           if (input) window.ev.session.input(sid, input)
         }
       },
-      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi, onRunAiCli, onOpenLog, askText]
+      [focusedSessionId, doSplit, closePane, layout.focusedId, duplicateSession, showToast, onAskAi, onOpenLog, askText]
     )
 
     // 탭 순환(Ctrl+] / Ctrl+[) — 탭바에 보이는 순서(= sessions 배열)를 따른다.
@@ -1426,14 +1402,6 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           e.preventDefault()
           openSettings()
         } else {
-          // R14 Alt+1·2·3 — 우클릭 [AI 실행 ▸ …] 과 같은 onAction 길. 떼어낸 창엔 onRunAiCli 가 없어
-          // 아무 일도 안 한다(메뉴를 감추는 TerminalMenuCaps.runAiCli 와 같은 판정).
-          const run = onRunAiCli ? aiCliRunOfKey(e) : null
-          if (run) {
-            e.preventDefault()
-            void onAction(run)
-            return
-          }
           const n = matchNumber(e, 'tab.byNumber')
           if (n) {
             e.preventDefault()
@@ -1461,8 +1429,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
       toggleTerminal,
       list,
       activateSession,
-      onAction,
-      onRunAiCli
+      onAction
     ])
 
     /**
@@ -1605,7 +1572,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           /* #201 A-4: **핸들러가 없으면 그 항목을 안 그린다.** 떼어낸 창(F32)에는 아라도 연결
              트리도 없어서 그 셋이 눌러도 아무 일이 없었다 — 없는 기능은 메뉴에서 뺀다.
              판정은 prop 의 존재 여부다(새 플래그를 만들지 않는다 — 다음 prop 도 이 규칙을 탄다). */
-          caps={{ askAi: Boolean(onAskAi), runAiCli: Boolean(onRunAiCli), saveLog: Boolean(onOpenLog) }}
+          caps={{ askAi: Boolean(onAskAi), saveLog: Boolean(onOpenLog) }}
           cheatsheetOpen={cheatsheetOpen}
           onCheatsheetChange={setCheatsheetOpen}
           commandBookOpen={commandBookOpen}

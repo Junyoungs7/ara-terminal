@@ -50,7 +50,6 @@ const api: EvApi = {
     setGroups: (groups: string[], order?: string[], parents?: Record<string, string>) =>
       ipcRenderer.invoke('ui:setGroups', { groups, order, parents }),
     setWorkProfiles: (list) => ipcRenderer.invoke('ui:setWorkProfiles', { list }),
-    setAiCliRecent: (list) => ipcRenderer.invoke('ui:setAiCliRecent', { list }),
     setFont: (font) => ipcRenderer.invoke('ui:setFont', font),
     setSidebar: (sidebar) => ipcRenderer.invoke('ui:setSidebar', sidebar)
   },
@@ -441,8 +440,6 @@ const api: EvApi = {
     chats: () => ipcRenderer.invoke('ara:chats'),
     renameChat: (id: string, name: string) => ipcRenderer.invoke('ara:renameChat', { id, name }),
     chatLog: (id: string) => ipcRenderer.invoke('ara:chatLog', { id }),
-    saveSessions: (list: unknown) => ipcRenderer.invoke('aisession:save', { list }),
-    worktreeAdd: (path: string, name: string) => ipcRenderer.invoke('git:worktreeAdd', { path, name }),
     approvePlan: () => ipcRenderer.invoke('ara:approvePlan'),
     model: (model: string) => ipcRenderer.invoke('ara:model', { model }),
     interrupt: () => ipcRenderer.invoke('ara:interrupt'),

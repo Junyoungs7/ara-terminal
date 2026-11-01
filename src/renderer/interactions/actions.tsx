@@ -2,7 +2,7 @@ import { AI_ENTRY, featureOf, type FeatureShown } from '@shared/features'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
-import { KEYMAP, isMac, keyText, matchBinding, type KeymapAction } from '../../shared/keymap'
+import { KEYMAP, isMac, keyText, type KeymapAction } from '../../shared/keymap'
 import type { TmuxListResult } from '../../shared/tmuxList'
 import { MENUBAR, menuEntryId, menuEntryLabel, menuGroups, type MenuEntry } from '../../shared/menubar'
 import type { SortKey, SortSpec } from '../store/fileView'
@@ -22,11 +22,6 @@ export type ActionId =
   | 'paste'
   | 'split.horizontal'
   | 'split.vertical'
-  // 2026-08-18: 우클릭에서 **바로** 실행하는 AI CLI. 창을 띄우지 않는다 — 서버도 폴더도
-  // 화면이 이미 안다(지금 세션·지금 cwd). 다르게 하고 싶을 때만 [AI CLI 시작…] 창으로 간다.
-  | 'aicli.run.claude'
-  | 'aicli.run.codex'
-  | 'aicli.run.gemini'
   | 'session.duplicate'
   | 'log.save'
   | 'ai.ask'
@@ -123,7 +118,7 @@ export const CONTEXT_ACTIONS: readonly ContextAction[] = ALL_CONTEXT_ACTIONS.fil
 
 // 터미널 우클릭 메뉴 항목. CONTEXT_ACTIONS 를 그대로 쓴다(이중 정의 금지) — 모양만 세로 리스트다.
 // #67 이후 이 리스트가 유일한 모양이다(라디얼·팔레트 제거). 단축키 힌트는 keymap 단일 소스에서 온다.
-// ActionId 9개(split×2/session.duplicate/log.save/ai.ask/pane.close/aicli.run×3)는 KeymapAction 과 이름이 같다.
+// ActionId 6개(split×2/session.duplicate/log.save/ai.ask/pane.close)는 KeymapAction 과 이름이 같다.
 // (2026-08-16: 여기 `navigator.userAgent.includes('Mac')` 로 **두 번째** mac 판정이 있었다.
 //  keymap 은 `navigator.platform` 을 본다 — 두 판정이 어긋나면 단축키 동작과 표기가 갈린다.
 //  판정은 shared/keymap.ts 의 isMac() 하나만 쓴다.)
@@ -207,17 +202,6 @@ export function terminalMenu(tmux?: TmuxListResult | 'loading', caps?: TerminalM
           { id: 'split.vertical', label: '세로', hint: hintFor('split.vertical') }
         ]
       })
-      if (has('runAiCli')) {
-        out.push({
-          id: 'aicli.run',
-          label: 'AI 실행',
-          icon: ICON_AI,
-          submenu: AI_CLIS.map((c) => {
-            const hint = hintFor(`aicli.run.${c.id}`)
-            return { id: `aicli.run.${c.id}`, label: c.label, ...(hint ? { hint } : {}) }
-          })
-        })
-      }
       /**
        * tmux (2026-08-22 준영님 제보 11·32 — "tmux 를 GUI 기능으로").
        *
@@ -240,12 +224,6 @@ const ICON_SPLIT = svg(
   </>,
   { strokeLinecap: 'butt' }
 )
-const ICON_AI = svg(
-  <>
-    <path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4L12 3z" />
-    <path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15z" />
-  </>
-)
 
 /**
  * 터미널 우클릭 메뉴에서 **이 창이 실제로 할 수 있는 일**.
@@ -261,26 +239,8 @@ const ICON_AI = svg(
 export type TerminalMenuCaps = {
   /** [아라에게 묻기] — `onAskAi` */
   askAi?: boolean
-  /** [AI 실행 ▸ …] — `onRunAiCli` */
-  runAiCli?: boolean
   /** [로그] — `onOpenLog` */
   saveLog?: boolean
-}
-
-/**
- * 우클릭에서 바로 띄울 CLI. 목록의 주인은 shared/aiCli.ts 다 — 여기는 표시 순서만 정한다.
- * R14: 단축키 Alt+1·2·3 도 이 순서다(tests/aiCliKeys.test.ts 가 KEYMAP 과 맞춰 본다).
- */
-export const AI_CLIS: readonly { id: 'claude' | 'codex' | 'gemini'; label: string }[] = [
-  { id: 'claude', label: 'Claude Code' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'gemini', label: 'Gemini' }
-]
-
-/** 눌린 키가 AI CLI 실행 단축키(Alt+1·2·3)면 그 메뉴 id. 실행은 메뉴와 같은 onAction 이 한다. */
-export function aiCliRunOfKey(e: KeyboardEvent): ActionId | null {
-  const c = AI_CLIS.find((x) => matchBinding(e, `aicli.run.${x.id}`))
-  return c ? `aicli.run.${c.id}` : null
 }
 
 // ── 트리·탭바 컨텍스트 메뉴 액션 (F4c 레지스트리와 같은 파일 = 단일 출처) ──
@@ -306,8 +266,6 @@ export type TreeActionId =
   | 'group.delete'
   | 'local.new'
   | 'ssh.open'
-  // F27: AI CLI 한 번에 시작(접속+폴더+실행). 서버 우클릭에서 열면 그 서버가 이미 정해진 채로 뜬다.
-  | 'aicli.start'
   // 작업 프로필(서버+폴더 즐겨찾기): 팝업 열기 / 지금 위치를 그 목록에 저장.
   | 'work.open'
   | 'work.save'
@@ -334,9 +292,6 @@ const TREE_MENUS = {
   server: [
     'server.connect',
     'server.newSession',
-    // #131: 서버 행에서 바로 작업대. 그 자리가 이미 아는 것(서버)은 묻지 않는다 — 폴더는
-    // 그 서버에 붙었을 때의 홈이다(설계 §10.6, F27 의 "저장이 전제가 되면 안 된다"와 같은 원칙).
-    'aicli.start',
     'server.edit',
     'server.duplicate',
     'server.forgetHostKey',
@@ -345,9 +300,10 @@ const TREE_MENUS = {
   // W4sat F21: RDP는 세션·호스트키 개념이 없다(외부 앱 실행뿐) — 그 항목들을 뺀 축소판.
   serverRdp: ['server.connect', 'server.edit', 'server.duplicate', 'server.delete'],
   // 제보 ①: 세션 행 메뉴가 서버 행(일곱)에 비해 셋뿐이라 "여기서 할 수 있는 게 없다"였다.
-  // 세션에는 **서버에 없는 것**이 있다 — 지금 그 세션이 서 있는 폴더다. 즐겨찾기 저장·AI CLI
-  // 시작이 그 폴더를 그대로 쓴다(서버 행에서 열면 폴더를 다시 골라야 한다).
-  session: ['session.focus', 'session.duplicate', 'aicli.start', 'work.save', 'session.rename', 'session.close'],
+  // 세션에는 **서버에 없는 것**이 있다 — 지금 그 세션이 서 있는 폴더다. 즐겨찾기 저장이
+  // 그 폴더를 그대로 쓴다(서버 행에서 열면 폴더를 다시 골라야 한다).
+  // M3 S1: 터미널 쪽 AI 실행([여기서 AI 세션])은 뺐다 — 에이전트는 AI 작업 공간에서 띄운다.
+  session: ['session.focus', 'session.duplicate', 'work.save', 'session.rename', 'session.close'],
   // 즐겨찾기 행(사이드바 트리 · 작업대 창 — 같은 목록이라 같은 메뉴를 쓴다).
   fav: ['work.goto', 'work.rename', 'work.delete'],
   // 탭 우클릭(R2.2). 트리 세션 메뉴와 같은 액션 id 를 공유한다 — 이름만 다른 중복 정의 금지.
@@ -365,9 +321,7 @@ const TREE_MENUS = {
   // 사이드바 빈 영역 우클릭 — 트리 어디를 눌러도 새 셸·새 연결·새 그룹을 만들 수 있게 한다
   // (＋ 새 로컬 셸 행을 대체). group.new 는 R6 에서 실제로 배선됐다.
   sidebar: ['local.new', 'ssh.open', 'group.new', 'work.open'],
-  // 탭바 ＋ 버튼: 로컬 셸 / SSH 연결 / AI CLI 시작(F27 진입점 ①).
-  // 탭바 ＋ 는 세션을 **만드는** 자리다. AI CLI 는 이미 붙어 있는 세션에서 그 폴더로 띄우는
-  // 것이라 여기 있을 이유가 없었다(2026-08-18 창 제거와 함께 뺐다 — 터미널 우클릭이 그 자리다).
+  // 탭바 ＋ 버튼: 로컬 셸 / SSH 연결 — 세션을 **만드는** 자리다.
   add: ['local.new', 'ssh.open'],
   // FB-ui2: 연결 관리자 좌측 프로필 목록 우클릭(프로필 행). "정보 수정"·"복제"·"삭제"는 트리의
   // server.* 액션을 그대로 쓴다 — RDP 프로필에도 4항목 다 그대로 뜬다(SSH 전용 항목인
@@ -440,8 +394,6 @@ export function tmuxMenuItem(query: TmuxListResult | 'loading'): MenuItem {
 // 고정 배열 네 벌을 만드는 대신 여기 한 함수가 조합한다. 위험 항목(삭제)은 언제나 마지막.
 export type FileActionId =
   | 'file.open'
-  // F27 진입점 ③ — 이 폴더가 채워진 채로 AI CLI 시작 창이 열린다(원격 폴더 하나를 고른 때만).
-  | 'file.aicli'
   // #88 R1(2026-08-16) 아라 연결점 — 탐색기에 **없는 것**들이다. 여기가 이 앱의 파일 화면이
   // 윈도우 탐색기와 갈리는 자리다(준영님: "차이점은 우리 아라와 연결된다는 점이지").
   | 'file.terminal'
@@ -477,8 +429,6 @@ export type FileActionId =
 
 // canTail = 원격 파일 하나 선택(W1 F13). 로컬 파일에는 붙지 않는다 — tail 은 원격 셸에서 도는 명령이다.
 // 편집(file.edit)은 파일 하나일 때만 — 로컬·원격 모두 되고, 폴더·다중 선택에는 안 붙는다.
-// canAiCli = 폴더 하나 선택(F27). **#90 부터 로컬에도 붙는다** — 내 PC 에서도 AI CLI 를 시작할
-//   수 있게 되면서 "이 창은 서버에 접속해서 시작"이라는 전제가 사라졌다.
 // #88 R1: [여기서 터미널]·[아라에게 묻기]가 아라 연결점이다. 탐색기에는 없는 것들이고,
 //   개발자가 파일 화면에서 실제로 다음에 하는 일이다(폴더를 찾았으면 거기서 뭔가를 친다).
 // canOpenWith = 로컬 파일 하나(#89). 원격은 파일 실체가 이 PC 에 없어 OS 가 열 수 없다 —
@@ -488,7 +438,6 @@ export function fileMenu(ctx: {
   isDir: boolean
   canDownload: boolean
   canTail?: boolean
-  canAiCli?: boolean
   canOpenWith?: boolean
   /** #88 R1: 이 폴더에서 새 셸을 연다(로컬=내 PC, 원격=그 서버). */
   canTerminal?: boolean
@@ -504,7 +453,6 @@ export function fileMenu(ctx: {
   if (ctx.count === 1) {
     if (ctx.isDir) {
       ids.push('file.open')
-      if (ctx.canAiCli) ids.push('file.aicli')
       // R15(신고 #3): 원격 폴더는 하위 구조째 받는다.
       if (ctx.canDownload) ids.push('file.download', 'file.downloadAs')
     } else {
@@ -527,9 +475,6 @@ export function fileMenu(ctx: {
   ids.push('file.newFile') // 원격에도(형제 점검 F — SftpService.makeFile, 있는 파일은 안 건드린다)
   ids.push('file.view')
   // ── 아라 연결점(#88 R1) — 대상은 **지금 보고 있는 폴더**다(선택과 무관).
-  //    [AI CLI 시작]도 여기 합류한다: 폴더를 골랐으면 그 폴더, 아니면 보고 있는 폴더.
-  //    빈 영역 우클릭이 "여기서 시작"으로 읽히는 게 자연스럽다([여기서 터미널]과 짝이 맞는다).
-  if (ctx.canAiCli && !(ctx.count === 1 && ctx.isDir)) ids.push('file.aicli')
   //    윈도우 탐색기를 흉내 내는 칸들 아래에 모아 둔다: 여기부터가 우리 것이다.
   if (ctx.canTerminal) ids.push('file.terminal')
   if (ctx.canAskAi && ctx.count > 0) ids.push('file.askAi')

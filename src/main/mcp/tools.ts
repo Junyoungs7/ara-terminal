@@ -9,7 +9,7 @@
 // profile:*(vault 자격증명 CRUD) · ssh:forgetHostKey(TOFU 우회) · ai:*(챗봇 자체 조종) · window:* ·
 // fs:*(로컬 파일시스템 전체 브라우징) · 레이아웃/분할(workspace:save 레이스 — 설계 §1.4).
 import { randomUUID } from 'node:crypto'
-import { aiSessionsOf } from '@shared/aiSession'
+import type { AgentStatusView } from '@shared/agentHooks'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -66,6 +66,8 @@ export type ToolCtx = {
   uploadsDir: string // userData/mcp-uploads — 업로드 소스도 여기 안으로 한정.
   /** AI 가 사람에게 되묻는 길(#125). 헤드리스에는 그 도구가 없어서 우리가 만든다 — askUser.ts 참고. */
   ask: AskUserManager
+  /** M3 S1(제거 A5): AI 작업 공간 에이전트 상태(main/agents 상태 원장). aisession_list 가 읽는다. 없으면 상태 모름. */
+  agents?: () => AgentStatusView[]
 }
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -248,41 +250,40 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
   )
 
   /**
-   * #134 아라가 작업대를 **지휘한다**.
+   * #134 아라가 에이전트를 **지휘한다** — *"세 세션 다 테스트 돌리고 실패한 것만 알려 줘"*.
    *
-   * 설계 §11 이 "만들지는 않되 막지도 않는다"로 남겨 둔 자리다. #128~#133 으로 두 전제가
-   * 갖춰져서(작업대에 id 가 있고, 명령을 넣는 길이 이미 있다) 이제 도구 둘이면 성립한다:
-   *   *"세 세션 다 테스트 돌리고 실패한 것만 알려 줘"*
-   *
-   * **`aisession_create` 는 안 만든다.** 모델은 `session_create` + `session_input` 로 이미 만들 수
-   * 있고, 여기에 또 만들면 실행 줄 조립이 두 벌로 갈린다(렌더러의 runAiCliNow 가 원본이다).
-   * 새로 필요한 것은 "무엇이 작업대인가"를 아는 일과 거기에 말을 거는 일뿐이다.
+   * M3 S1(제거 A5): 옛 터미널 작업대는 지웠다. 같은 두 도구가 이제 **AI 작업 공간 에이전트 탭**(Orca 에이전트 목록 —
+   * main/agents 상태 원장의 훅·화면 판정)을 읽는다. 이름은 그대로 둔다 — 외부 Claude 설정·감사 로그가 이 이름을 안다.
+   * **만들기(`aisession_create`)는 여전히 없다** — 에이전트는 사람이 AI 작업 공간에서 띄운다(권한 모드·첫 지시가 거기 있다).
    */
   T(
     'aisession_list',
     'ai',
     {
       description:
-        '사용자가 만들어 둔 **AI 작업대** 목록입니다(서버·폴더·엔진). 터미널 세션 목록(session_list)과 다릅니다 — ' +
-        '이쪽은 "AI CLI 를 띄워 둔 자리"고, 지금 살아 있는 것에는 sessionId 가 붙습니다. ' +
-        'sessionId 가 있는 것에만 aisession_send 로 말을 걸 수 있습니다.',
+        'AI 작업 공간에서 돌고 있는 **에이전트 탭** 목록입니다(Claude Code·Codex·Gemini CLI). 터미널 세션 목록(session_list)과 다릅니다. ' +
+        'state: working(일하는 중) · blocked(승인·질문 대기, blockKind 가 이유) · idle(입력 대기) · null(아직 모름). ' +
+        'estimated=true 는 훅이 아니라 화면으로 추정한 값입니다. aisession_send 는 이 id 로 말을 겁니다.',
       inputSchema: {},
       annotations: { readOnlyHint: true }
     },
     async () =>
       g(null, 'aisession_list', 'readOnly', {}, async () => {
-        const live = ctx.sessions.snapshot()
-        const rows = aiSessionsOf(ctx.ws.get().aiSessions).map((b) => ({
-          id: b.id,
-          title: b.title,
-          kind: b.kind,
-          cwd: b.cwd,
-          engine: b.engine,
-          ...(b.worktree ? { branch: b.worktree.branch } : {}),
-          // 살아 있는 터미널 찾기 — 폴더가 같은 그 서버(또는 로컬) 세션이다.
-          sessionId:
-            live.find((s) => s.cwd === b.cwd && (b.kind === 'remote' ? s.type === 'ssh' : s.type === 'local'))?.id ?? null
-        }))
+        const status = new Map((ctx.agents?.() ?? []).map((v) => [v.sessionId, v]))
+        const rows = ctx.sessions
+          .snapshot()
+          .filter((s) => s.space === 'ai')
+          .map((s) => {
+            const v = status.get(s.id)
+            return {
+              id: s.id,
+              title: s.title,
+              cwd: s.cwd ?? null,
+              state: v?.state ?? null,
+              estimated: v?.estimated ?? true,
+              ...(v?.kind ? { blockKind: v.kind } : {})
+            }
+          })
         return ok(JSON.stringify(rows))
       })
   )
@@ -292,21 +293,17 @@ export function buildAraTools(ctx: ToolCtx, caller: () => Caller = () => 'extern
     'ai',
     {
       description:
-        '살아 있는 AI 작업대에 지시를 보냅니다(그 터미널에 사람이 타이핑하는 것과 같습니다). ' +
-        'aisession_list 가 준 id 를 쓰세요. 줄바꿈은 우리가 붙입니다 — 보낸 즉시 실행됩니다.',
+        'AI 작업 공간의 에이전트 탭에 지시를 보냅니다(그 에이전트 입력 상자에 사람이 치고 Enter 를 누르는 것과 같습니다). ' +
+        'aisession_list 가 준 id 를 쓰세요. 보낸 즉시 제출됩니다.',
       inputSchema: { id: z.string(), text: z.string() }
     },
     async ({ id, text }) => {
-      const bench = aiSessionsOf(ctx.ws.get().aiSessions).find((b) => b.id === id)
-      if (!bench) return fail('그런 작업대가 없습니다.')
-      const live = ctx.sessions
-        .snapshot()
-        .find((s) => s.cwd === bench.cwd && (bench.kind === 'remote' ? s.type === 'ssh' : s.type === 'local'))
-      if (!live) return fail('그 작업대는 지금 떠 있지 않습니다(사람이 사이드바 [AI] 에서 열어야 합니다).')
-      // 승인 게이트는 **그 세션 것**으로 지난다 — 작업대라고 해서 무르게 하지 않는다.
+      const live = ctx.sessions.snapshot().find((s) => s.id === id && s.space === 'ai')
+      if (!live) return fail('그런 에이전트 탭이 없습니다(aisession_list 의 id 를 쓰세요).')
+      // 승인 게이트는 **그 세션 것**으로 지난다 — 에이전트라고 해서 무르게 하지 않는다.
       return g(live.id, 'aisession_send', 'sessionInput', { id, text }, async () => {
-        ctx.sessions.write(live.id, `${text}
-`)
+        // ponytail: 한 줄 + Enter(CR — 에이전트 TUI 의 제출 키). 여러 줄은 첫 줄에서 제출된다 — 필요하면 agents/status.ts 의 promptBytes(괄호 붙여넣기)로.
+        ctx.sessions.write(live.id, `${text}\r`)
         return ok('전송함')
       })
     }

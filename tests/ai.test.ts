@@ -366,13 +366,11 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
       expect(JSON.stringify(ara.getState().turns)).not.toContain(SENTINEL)
 
       store.setPrefs({
-        aiCliFlags: { claude: [], codex: [], gemini: [], custom: [] },
         araCallName: '',
         araWelcomeSeen: true,
         bootSplash: false,
         features: featuresOf(undefined),
         voice: voiceOf(undefined),
-        aiSpace: false,
         notifyToast: true,
         notifyAgents: true,
         space: 'term',

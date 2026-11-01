@@ -13,7 +13,7 @@ import { logMainError } from '../log/MainErrorLog'
 import { defaultLaunchShell } from '../sessions/PtyBackend'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import { AGENTS, agentSettingsOf, isAgentId, migrateAiCliFlags, planAgentLaunch, type AgentSettings } from '@shared/agents'
-import { HOOK_ENV, isHookSource, type HookSource } from '@shared/agentHooks'
+import { HOOK_ENV, isHookSource, type AgentStatusView, type HookSource } from '@shared/agentHooks'
 import type { AgentLaunchResult } from '@shared/ipc'
 import { createAgentDetector } from './detect'
 import { createHookServer, installHooks } from './hooks'
@@ -27,7 +27,7 @@ export function registerAgentsFeature(deps: {
   /** 훅을 심을 홈(`~/.claude`·`~/.gemini`·`~/.ara/agent-hooks`). e2e 는 임시 폴더 — 사용자 설정을 시험 부산물로 바꾸지 않는다. */
   home: string
   mainWc: () => WebContents | null
-}): { stop(): Promise<void> } {
+}): { stop(): Promise<void>; views(): AgentStatusView[] } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -88,5 +88,5 @@ export function registerAgentsFeature(deps: {
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line }
   })
-  return { stop: () => hooks.stop() }
+  return { stop: () => hooks.stop(), views: () => tracker?.views() ?? [] }
 }

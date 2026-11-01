@@ -34,7 +34,7 @@ test('SET-1 설정 페이지가 세 진입점 모두에서 열리고 묶음 순�
     'ai', 'voice',
     'terminal', 'conn', 'features', 'log', 'history',
     'security', 'mcp', 'remote', 'mobile', 'slack', 'privacy',
-    'advanced', 'experimental',
+    'advanced',
     'about'
   ])
   for (const s of ['agents', 'general', 'terminal', 'font', 'security', 'log', 'ai', 'mcp', 'keys', 'update', 'advanced', 'about']) {
@@ -218,10 +218,10 @@ test('SET-ACT★ 좌측 레일은 다섯(R6), 하단 탭줄은 기본 노출 여
     .locator('.bottom-panel .bp-tab')
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.bottom))
 
-  // R5·R6: [연결|파일|AI] 는 사이드바 머리 탭(.sb-tab)으로 올라갔고 레일엔 [사이드바] 하나가 남았다.
+  // R5·R6: [연결|파일] 은 사이드바 머리 탭(.sb-tab)으로 올라갔고 레일엔 [사이드바] 하나가 남았다(M3 S1: [AI] 탭은 지웠다).
   expect(railIds).toEqual(['sidebar', 'pastlog', 'explorer', 'bottombar', 'settings'])
   // 옮겨 간 탭이 사라진 게 아니다 — 머리 탭에 그대로 있다.
-  expect(await page.locator('.sb-tab').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab))).toEqual(['conn', 'file', 'ai'])
+  expect(await page.locator('.sb-tab').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.tab))).toEqual(['conn', 'file'])
   // 하단 탭줄 = BOTTOM_IDS 에서 기본 숨김(k8s·applog)을 뺀 순서 그대로.
   expect(dockIds).toEqual(['monitor', 'sys', 'ps', 'svc', 'disk', 'pkg', 'ctr', 'log'])
   // 오른쪽에 아이콘 바가 다시 생기면 2.0 원칙(오른쪽 = 채팅)이 깨진다.
@@ -287,7 +287,9 @@ test('SET-12★ 옮긴 설정 항목이 새 자리에 있다', async ({ ara }) =
     await page.click(`${drawer} .sp-nav [data-section="${section}"]`)
     for (const it of items) await expect(page.locator(`${drawer} .sp-pane [data-item="${it}"]`).first()).toBeAttached()
   }
-  await at('agents', ['ai.cli', 'ai.cliPick', 'ai.cliFlags'])
+  // M3 S1: 옛 [AI CLI 기본 플래그] 줄(ai.cli·ai.cliPick·ai.cliFlags)은 지웠다 — 에이전트 설정이 그 자리다.
+  await at('agents', ['agents.detect', 'agents.permission', 'agents.args'])
+  await expect(page.locator(`${drawer} .sp-pane [data-item="ai.cliFlags"]`)).toHaveCount(0)
   await at('terminal', ['termCompletion', 'cursorStyle', 'cursorBlink', 'bell', 'copyOnSelect', 'scrollback'])
   await at('update', ['update'])
   await at('mcp', ['mcp.enable', 'sec.mcp'])

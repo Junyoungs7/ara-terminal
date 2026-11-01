@@ -9,7 +9,6 @@ import {
   type UiPrefs
 } from '@shared/types'
 import { applyTermPrefsToAll } from '../terminal/termRegistry'
-import { aiCliFlagsOf } from '../../shared/aiCli'
 import { featuresOf } from '@shared/features'
 import { DEFAULT_VOICE } from '@shared/voice'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
@@ -29,13 +28,11 @@ const DEFAULT_PREFS: UiPrefs = {
   aiProvider: DEFAULT_AI_PROVIDER,
   aiModels: aiModelsOf(undefined),
   aiCompatibleBaseUrl: '',
-  aiCliFlags: aiCliFlagsOf(undefined),
   araCallName: '',
   araWelcomeSeen: false,
   bootSplash: true,
   features: featuresOf(undefined),
   voice: DEFAULT_VOICE,
-  aiSpace: false,
   space: 'term',
   notifyToast: true,
   notifyAgents: true

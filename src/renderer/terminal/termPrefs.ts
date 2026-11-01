@@ -15,7 +15,6 @@ import {
   type UiPrefs,
   type UiState
 } from '@shared/types'
-import { aiCliFlagsOf } from '../../shared/aiCli'
 import { callNameOf } from '@shared/araPersona'
 import { featuresOf } from '@shared/features'
 import { voiceOf } from '@shared/voice'
@@ -42,14 +41,11 @@ export const termPrefs: Omit<
   | 'aiModels'
   | 'voice'
   | 'aiCompatibleBaseUrl'
-  // AI CLI 기본 플래그도 xterm 이 읽어 갈 값이 아니다(터미널에 밀어 넣을 한 줄을 만들 때만 쓴다).
-  | 'aiCliFlags'
   // 호칭도 xterm 과 무관하다(#138) — main 의 엔진이 말투 파일에 쓴다.
   | 'araCallName'
   | 'araWelcomeSeen'
   | 'bootSplash'
   | 'features'
-  | 'aiSpace'
   | 'space'
   | 'notifyToast'
   | 'notifyAgents'
@@ -85,13 +81,11 @@ export function prefsFrom(
     | 'aiProvider'
     | 'aiModels'
     | 'aiCompatibleBaseUrl'
-    | 'aiCliFlags'
     | 'araCallName'
     | 'araWelcomeSeen'
     | 'bootSplash'
     | 'features'
     | 'voice'
-    | 'aiSpace'
     | 'space'
     | 'notifyToast'
     | 'notifyAgents'
@@ -118,7 +112,6 @@ export function prefsFrom(
     // 손상·구버전 스냅샷은 aiProviderOf/aiModelsOf 가 기본값으로 내린다(main 이 같은 함수로 다시 클램프한다).
     aiProvider: aiProviderOf(ui.aiProvider),
     aiModels: aiModelsOf(ui.aiModels),
-    aiCliFlags: aiCliFlagsOf(ui.aiCliFlags),
     aiCompatibleBaseUrl: typeof ui.aiCompatibleBaseUrl === 'string' ? ui.aiCompatibleBaseUrl : '',
     // #138 호칭 — 시스템 프롬프트에 들어가는 값이라 줄바꿈·길이를 여기서 자른다.
     araCallName: callNameOf(ui.araCallName),
@@ -127,8 +120,6 @@ export function prefsFrom(
     bootSplash: ui.bootSplash !== false,
     features: featuresOf(ui.features),
     voice: voiceOf(ui.voice),
-    // M1 실험 기능 — 미지정이면 끔(지금과 똑같은 화면).
-    aiSpace: ui.aiSpace === true,
     space: spaceOf(ui.space),
     // M1 라운드 3 — 미지정이면 켬(false 만 끔).
     notifyToast: ui.notifyToast !== false,

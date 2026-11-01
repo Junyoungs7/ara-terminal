@@ -195,7 +195,6 @@ function wire() {
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
   ipcMain.handle('fs:drives', () => ({ drives: [] }))
   ipcMain.handle('agent:state', () => null)
-  ipcMain.handle('aisession:save', () => ({ ok: true }))
   // hasKey:true — 안 그러면 SettingsDrawer 가 열릴 때마다 [AI] 섹션으로 튄다(설정 [일반] 을 보여줘야 한다).
   ipcMain.handle('ai:getState', () => ({ hasKey: true, provider: 'anthropic', model: '', turns: [], streaming: false, usage: { input: 0, output: 0 }, droppedTurns: 0 }))
 }

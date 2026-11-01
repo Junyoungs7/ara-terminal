@@ -32,6 +32,5 @@ export type ExplorerAct =
   | { kind: 'askAi'; text: string }
   | { kind: 'sendInput'; text: string }
   | { kind: 'launch'; id: 'port' | 'sys' | 'term'; profileId: string | null; cwd?: string }
-  | { kind: 'aiCli'; profileId: string | null; path: string }
   | { kind: 'saveWork'; profileId: string | null; path: string }
   | { kind: 'workAction'; id: string; workId: string }

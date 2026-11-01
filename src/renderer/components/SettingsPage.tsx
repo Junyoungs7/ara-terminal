@@ -25,7 +25,6 @@ import {
 } from '@shared/types'
 import type { DiagProbeStatus, GpuInfo, UpdateState } from '@shared/ipc'
 import { validateBaseUrl } from '../../shared/aiBaseUrl'
-import { AI_CLI_IDS, AI_CLIS, toggleFlag, type AiCliId } from '../../shared/aiCli'
 import { FONT_OPTIONS, stackFor } from '../terminal/fontStacks'
 import { termRenderer } from '../terminal/webglChoice'
 import { writeClipboard } from '../store/clipboardWrite'
@@ -529,61 +528,6 @@ function AiSection({
         {t('settings.ai.note.prefix')}
         {AI_PROVIDER_LABELS[provider]} API({host}){t('settings.ai.note.suffix')}
       </div>
-    </>
-  )
-}
-
-/**
- * AI CLI 기본 플래그 (2026-08-20 · A-79).
- *
- * 우클릭 [AI 실행 ▸] 이 **최근에 쓴 조합이 없을 때** 붙일 플래그다. 시작 창을 없애면서
- * (2026-08-18) 플래그를 고르는 화면이 통째로 사라졌는데, 준영님 PC 는 최근 목록에 조합이 남아
- * 있어 티가 안 났다 — **새로 설치한 동료는 맨몸 `claude`** 로 떴다.
- *
- * 플래그가 있는 CLI 만 줄이 뜬다(2026-08-23 부터 claude·codex·gemini 셋). 표에 플래그를 더하면
- * 줄이 저절로 생긴다 — 여기에 CLI 이름을 다시 적지 않는다.
- *
- * `--dangerously-skip-permissions` 를 기본으로 켜 두는 것은 가벼운 결정이 아니다. 카탈로그가
- * 그렇게 정해 뒀고 준영님이 늘 쓰시는 조합이지만, **끌 자리가 있어야 켜 둘 수 있다** — 이 줄이
- * 그 자리다. 설명 문구에 무엇을 끄는 플래그인지 적어 둔다.
- */
-/** 플래그가 있는 CLI 만 고를 수 있다 — custom 은 사용자가 직접 적는 것이라 표가 없다. */
-const FLAGGED_CLIS = AI_CLI_IDS.filter((cli) => AI_CLIS[cli].flags.length > 0)
-
-/**
- * AI CLI 기본 플래그(2026-08-25 준영님 요청으로 **하나씩** 보이게 고쳤다).
- *
- * 전에는 세 CLI 의 플래그가 한꺼번에 세 줄로 깔려 있었다. 그 줄들은 서로 무관한데 같이 보여서
- * "지금 어느 것을 고치는 중인가"가 흐렸다 — 위 프로바이더처럼 **세그먼트로 하나만** 본다.
- *
- * 세그먼트를 **프로바이더에 묶지 않은** 이유: 다른 축이다. 서버에서 `codex` 를 띄우면서 아라 대화의
- * API 는 anthropic 일 수 있다. 묶어 두면 한쪽을 고치려다 다른 쪽이 따라 바뀐다.
- */
-function AiCliFlagRows({ prefs, onPrefsChange }: { prefs: UiPrefs; onPrefsChange: (p: Partial<UiPrefs>) => void }) {
-  const [cli, setCli] = useState<AiCliId>(FLAGGED_CLIS[0] ?? 'claude')
-  const set = (flags: string[]) => onPrefsChange({ aiCliFlags: { ...prefs.aiCliFlags, [cli]: flags } })
-  const on = prefs.aiCliFlags[cli] ?? []
-  return (
-    <>
-      <Row label={t('settings.ai.cliPick')} desc={t('settings.ai.cliPick.desc')} item="ai.cliPick">
-        <Seg value={cli} options={FLAGGED_CLIS} onChange={setCli} labelKey={(v) => 'settings.ai.cli.' + v} />
-      </Row>
-      <Row label={`${t('settings.ai.cliFlags')} — ${AI_CLIS[cli].bin}`} desc={t('settings.ai.cliFlags.desc')} item="ai.cliFlags">
-        <div className="cliflags">
-          {AI_CLIS[cli].flags.map((f) => (
-            <label key={f.id} className="cliflag" data-flag={`${cli}.${f.id}`}>
-              <input
-                type="checkbox"
-                checked={on.includes(f.id)}
-                // 배타 그룹(-r/-c)은 toggleFlag 가 처리한다 — 여기서 또 해석하지 않는다.
-                onChange={() => set(toggleFlag(cli, on, f.id))}
-              />
-              <span>{t(f.labelKey)}</span>
-              <code>{f.arg}</code>
-            </label>
-          ))}
-        </div>
-      </Row>
     </>
   )
 }
@@ -1626,17 +1570,13 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                   <AgentSettings />
                 </Suspense>
               )}
-              <div className="set-sec-t" data-sec="ai.cli" data-item="ai.cli">
-                {t('settings.ai.cliSec')}
-              </div>
-              <AiCliFlagRows prefs={prefs} onPrefsChange={onPrefsChange} />
             </>
           )}
 
           {section === 'update' && <UpdateRow />}
 
           {section === 'notify' && (
-            // M1 라운드 3: 알림 센터(벨·토스트·공간 맥박)는 AI 작업 공간(실험 기능)을 켰을 때 보인다.
+            // M1 라운드 3: 알림 센터(벨·토스트·공간 맥박). M3 부터 AI 작업 공간이 기본 공개라 늘 보인다.
             <>
               <Row label={t('settings.notify.toast')} desc={t('settings.notify.toast.desc')} item="notify.toast">
                 <Toggle on={prefs.notifyToast} label={t('settings.notify.toast')} onChange={(notifyToast) => onPrefsChange({ notifyToast })} />
@@ -1648,13 +1588,6 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                 <span className="set-note">{t('aiws.soon')}</span>
               </Row>
             </>
-          )}
-
-          {section === 'experimental' && (
-            // M1 라운드 2: 켜면 타이틀바에 공간 스위치 [터미널 | AI 작업] 이 생긴다. 끄면 스위치와 AI 작업 화면이 함께 사라진다.
-            <Row label={t('settings.exp.aiSpace')} desc={t('settings.exp.aiSpace.desc')} item="exp.aiSpace">
-              <Toggle on={prefs.aiSpace} label={t('settings.exp.aiSpace')} onChange={(aiSpace) => onPrefsChange({ aiSpace })} />
-            </Row>
           )}
 
           {section === 'advanced' && (

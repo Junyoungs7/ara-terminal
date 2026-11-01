@@ -3,11 +3,10 @@ import { MENUBAR, menuBarItems, type MenuEntry } from '../src/renderer/interacti
 import { KEYMAP } from '../src/shared/keymap'
 import { readFileSync } from 'node:fs'
 import {
-  AI_REVEAL_GRACE_MS,
   clampSidebarWidth,
   DEFAULT_SIDEBAR,
+  hydrateSidebar,
   nextSidebar,
-  revealAiTab,
   shownTab,
   SIDEBAR_MAX,
   SIDEBAR_MIN
@@ -157,8 +156,8 @@ describe('좌측 레일 여닫이 규칙(nextSidebar)', () => {
 
 // 다듬기 R6(2026-10-28 준영님): 레일의 [파일]·[AI 작업대]를 빼고 남은 [연결] 아이콘 = 사이드바 여닫이.
 describe('레일 [사이드바] 여닫이(nextSidebar "sidebar")', () => {
-  type Tab = 'conn' | 'file' | 'ai' | 'past'
-  const st = (collapsed: boolean, activeTab: Tab, lastTab?: 'conn' | 'file' | 'ai') => ({
+  type Tab = 'conn' | 'file' | 'past'
+  const st = (collapsed: boolean, activeTab: Tab, lastTab?: 'conn' | 'file') => ({
     collapsed,
     activeTab,
     width: 264,
@@ -166,71 +165,33 @@ describe('레일 [사이드바] 여닫이(nextSidebar "sidebar")', () => {
   })
 
   it('★ 접혀 있으면 마지막에 보던 탭으로 편다(activeTab 은 그대로)', () => {
-    expect(nextSidebar(st(true, 'ai'), 'sidebar')).toEqual({ collapsed: false })
+    expect(nextSidebar(st(true, 'conn'), 'sidebar')).toEqual({ collapsed: false })
     expect(nextSidebar(st(true, 'file'), 'sidebar')).toEqual({ collapsed: false })
   })
 
-  it('★ conn·file·ai 를 펴 보고 있으면 접는다', () => {
-    for (const tab of ['conn', 'file', 'ai'] as const) expect(nextSidebar(st(false, tab), 'sidebar')).toEqual({ collapsed: true })
+  it('★ conn·file 을 펴 보고 있으면 접는다', () => {
+    for (const tab of ['conn', 'file'] as const) expect(nextSidebar(st(false, tab), 'sidebar')).toEqual({ collapsed: true })
   })
 
-  it('★ [지난 세션]을 보고 있으면(펴짐·접힘 모두) 마지막 conn/file/ai 탭으로 돌아간다', () => {
-    expect(nextSidebar(st(false, 'past', 'ai'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'ai' })
+  it('★ [지난 세션]을 보고 있으면(펴짐·접힘 모두) 마지막 conn/file 탭으로 돌아간다', () => {
+    expect(nextSidebar(st(false, 'past', 'conn'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'conn' })
     expect(nextSidebar(st(true, 'past', 'file'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'file' })
     expect(nextSidebar(st(false, 'past'), 'sidebar')).toEqual({ collapsed: false, activeTab: 'conn' })
   })
 
   it('[지난 세션]으로 갈 때 직전 탭을 lastTab 으로 기억한다 — 위 규칙이 돌아갈 자리', () => {
     expect(nextSidebar(st(false, 'file'), 'past')).toEqual({ collapsed: false, activeTab: 'past', lastTab: 'file' })
-    const s1 = { ...st(false, 'ai'), ...nextSidebar(st(false, 'ai'), 'past') }
-    expect({ ...s1, ...nextSidebar(s1, 'sidebar') }.activeTab).toBe('ai')
+    const s1 = { ...st(false, 'conn'), ...nextSidebar(st(false, 'conn'), 'past') }
+    expect({ ...s1, ...nextSidebar(s1, 'sidebar') }.activeTab).toBe('conn')
   })
 })
 
-// 2026-09-01 준영님: "세션에서 claude 또는 다른 ai 를 키면 자동으로 AI 세션 탭 이동 필요."
-// 화면을 뺏는 기능이라 **안 뺏을 조건**이 곧 이 기능의 전부다 — 넷이 그대로 케이스다.
-describe('★ AI 자동 전환(revealAiTab)', () => {
-  const NOW = 1_700_000_000_000
-  const OLD = NOW - AI_REVEAL_GRACE_MS - 1
-  const call = (o: Partial<Parameters<typeof revealAiTab>[0]> = {}) =>
-    revealAiTab({ live: ['s1'], known: new Set(), activeTab: 'conn', switchedAt: OLD, now: NOW, ...o })
-
-  it('훅이 처음 말을 걸어 온 세션이 생기면 [AI] 로 간다', () => {
-    expect(call().patch).toEqual({ activeTab: 'ai' })
-  })
-
-  it('① 이미 [AI] 를 보고 있으면 아무 일도 하지 않는다', () => {
-    expect(call({ activeTab: 'ai' }).patch).toBeNull()
-  })
-
-  it('★ ② 방금 손으로 [파일] 을 골랐으면 뺏지 않는다 — 파일을 뒤지는 중에 바뀌는 것이 제일 나쁘다', () => {
-    expect(call({ activeTab: 'file', switchedAt: NOW - 1_000 }).patch).toBeNull()
-    // 유예가 지나면 다시 따라온다(영영 안 가면 그건 기능이 없는 것이다).
-    expect(call({ activeTab: 'file', switchedAt: OLD }).patch).toEqual({ activeTab: 'ai' })
-  })
-
-  it('★ ③ 접힘을 건드리지 않는다 — 접은 것은 의도다', () => {
-    expect(call().patch).not.toHaveProperty('collapsed')
-  })
-
-  it('★ ④ 같은 세션이 상태를 여러 번 보내도 처음 한 번만 — claude 는 도구를 부를 때마다 보낸다', () => {
-    const first = call()
-    expect(revealAiTab({ live: ['s1'], known: first.known, activeTab: 'conn', switchedAt: OLD, now: NOW }).patch).toBeNull()
-  })
-
-  it('둘째 AI 가 새로 뜨면 그때는 간다', () => {
-    const first = call()
-    expect(
-      revealAiTab({ live: ['s1', 's2'], known: first.known, activeTab: 'conn', switchedAt: OLD, now: NOW }).patch
-    ).toEqual({ activeTab: 'ai' })
-  })
-
-  it('사라진 세션은 잊는다 — 집합이 앱 수명 동안 자라지 않게', () => {
-    expect([...call({ live: ['s2'], known: new Set(['s1']) }).known]).toEqual(['s2'])
-  })
-
-  it('AI 가 하나도 없으면 아무 일도 하지 않는다', () => {
-    expect(call({ live: [] }).patch).toBeNull()
+// M3 S1(제거 A9): 사이드바 [AI 세션] 탭을 지웠다 — 옛 저장값 activeTab·lastTab = 'ai' 는 하이드레이트가 버린다.
+describe('★ 지운 [AI] 탭 저장값', () => {
+  it('activeTab ai → conn, lastTab ai → 없음', () => {
+    const h = hydrateSidebar({ activeTab: 'ai', lastTab: 'ai' } as unknown as Parameters<typeof hydrateSidebar>[0])
+    expect(h.activeTab).toBe('conn')
+    expect(h).not.toHaveProperty('lastTab')
   })
 })
 

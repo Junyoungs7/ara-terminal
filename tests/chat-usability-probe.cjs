@@ -93,7 +93,6 @@ function wire() {
   ipcMain.handle('fs:downloadsDir', () => ({ dir: app.getPath('userData') }))
   ipcMain.handle('fs:drives', () => ({ drives: [] }))
   ipcMain.handle('agent:state', () => null)
-  ipcMain.handle('aisession:save', () => ({ ok: true }))
   ipcMain.handle('ai:getState', () => ({ hasKey: true, provider: 'anthropic', model: '', turns: [], streaming: false, usage: { input: 0, output: 0 }, droppedTurns: 0 }))
 
   // ── 아라 — 진짜 claude 를 안 띄운다. 사건은 이 파일이 밀어 넣는다 ──

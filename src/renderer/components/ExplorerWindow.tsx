@@ -65,7 +65,6 @@ export function ExplorerWindow() {
         onAskAi={(text) => act({ kind: 'askAi', text })}
         onSendInput={(text) => act({ kind: 'sendInput', text })}
         onLaunch={(id, profileId, cwd) => act({ kind: 'launch', id, profileId, ...(cwd ? { cwd } : {}) })}
-        onAiCli={(profileId, path) => act({ kind: 'aiCli', profileId, path })}
         onSaveWork={(profileId, path) => act({ kind: 'saveWork', profileId, path })}
         reveal={reveal}
         onWorkAction={(id, workId) => act({ kind: 'workAction', id, workId })}
