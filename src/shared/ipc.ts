@@ -44,7 +44,8 @@ import type {
 import type { AgentStatusView } from './agentHooks'
 import type { OrielStatus } from './oriel'
 import type { ResourceSnapshot } from './resources'
-import type { UsageState } from './usage'
+import type { AccountAction, AccountActionResult, AccountProvider, ProviderUsage, UsagePrefs, UsageState } from './usage'
+import type { AgentSummary, StatsReport } from './usageStats'
 import type {
   BaseRef,
   CreateWorktreeArgs,
@@ -577,6 +578,11 @@ export type InvokeContract = {
   // M9 AI-10 사용량(main/usage/feature.ts). 바뀔 때마다 'usage:update' 로 민다. refresh = 사람이 누른 새로 고침(조회 간격 무시).
   'usage:get': { req: void; res: UsageState }
   'usage:refresh': { req: void; res: UsageState }
+  // M13 %사용/%남음·Gemini 켜기 · 계정(추가·지우기·이름·고르기·로그인) · 계정 하나의 사용량(사람이 열 때만) · 통계(요약 + 30일 토큰, utility process).
+  'usage:setPrefs': { req: UsagePrefs; res: UsageState }
+  'usage:account': { req: AccountAction; res: AccountActionResult }
+  'usage:accountUsage': { req: { provider: AccountProvider; id: string | null }; res: ProviderUsage }
+  'usage:stats': { req: { force?: boolean }; res: { summary: AgentSummary; report: StatsReport | null; error?: string } }
   // M2 작업 단위(main/worktrees/feature.ts). 이름은 Orca 채널(repos:* · worktrees:*)을 따른다.
   'repos:list': { req: void; res: Project[] }
   // 폴더 고르기 — 경로는 사용자가 OS 대화상자에서 고른 것만(렌더러가 지어내지 않는다). 취소 = null.
@@ -1260,6 +1266,10 @@ export type EvApi = {
     get(): Promise<UsageState>
     refresh(): Promise<UsageState>
     onUpdate(cb: (s: UsageState) => void): () => void
+    setPrefs(p: UsagePrefs): Promise<UsageState>
+    account(a: AccountAction): Promise<AccountActionResult>
+    accountUsage(provider: AccountProvider, id: string | null): Promise<ProviderUsage>
+    stats(force?: boolean): Promise<{ summary: AgentSummary; report: StatsReport | null; error?: string }>
   }
   // M2 작업 단위(preload/features/worktrees.ts). Orca preload 의 repos·worktrees 모양.
   repos: {

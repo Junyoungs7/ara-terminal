@@ -54,7 +54,9 @@ export default defineConfig({
           hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts'),
           daemonEntry: resolve('src/main/daemon/daemonEntry.ts'),
           // vaultSearchWorker: M11 지난 세션 전문 검색 utility process(main/vault/feature.ts 가 out/main/vaultSearchWorker.js 를 띄운다).
-          vaultSearchWorker: resolve('src/main/vault/searchWorker.ts')
+          vaultSearchWorker: resolve('src/main/vault/searchWorker.ts'),
+          // usageStatsWorker: M13 통계(30일 토큰) utility process — main/usage/stats.ts 가 out/main/usageStatsWorker.js 를 열 때만 띄운다.
+          usageStatsWorker: resolve('src/main/usage/statsWorker.ts')
         }
       }
     }

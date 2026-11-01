@@ -27,12 +27,12 @@ export type HookServer = {
 /**
  * @param saved 지난번 포트·토큰(M4 DM-01). 데몬에 산 에이전트는 **띄울 때의** 포트·토큰을 env 로 쥐고 있다 — 앱을 다시 켜도 같은 자리에서
  *   받아야 그 에이전트의 훅이 닿는다. 그 포트가 이미 쓰이면 새 포트로 연다(그 에이전트들은 화면 판정만).
- * @param onStatusLine M9 AI-10 — Claude statusLine 입력 JSON(`/statusline/claude`). 사용량만 읽는다.
+ * @param onStatusLine M9 AI-10 — Claude statusLine 입력 JSON(`/statusline/claude`)과 탭(pane). 사용량·컨텍스트(M13)만 읽는다.
  */
 export function createHookServer(
   onEvent: (e: HookEvent) => void,
   saved?: { port: number; token: string } | null,
-  onStatusLine?: (payload: Record<string, unknown>) => void
+  onStatusLine?: (payload: Record<string, unknown>, pane: string) => void
 ): HookServer {
   const token = saved?.token || randomBytes(32).toString('base64url')
   const expected = hashToken(token)
@@ -58,7 +58,7 @@ export function createHookServer(
         try {
           const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
           if (payload && typeof payload === 'object') {
-            if (statusLine) onStatusLine?.(payload as Record<string, unknown>)
+            if (statusLine) onStatusLine?.(payload as Record<string, unknown>, pane as string)
             else onEvent({ source: m![1] as HookSource, paneKey: pane as string, payload: payload as Record<string, unknown> })
           }
         } catch {

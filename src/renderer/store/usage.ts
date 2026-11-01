@@ -1,7 +1,7 @@
 // M9 AI-10 사용량 — 화면 쪽 저장소 하나(main usage 서비스의 거울). 상태바 칸·팝오버·아라 채팅 상태줄이 모두 이것을 읽는다(제거 A3).
 // 처음 구독할 때 한 번 묻고, 뒤로는 main 이 'usage:update' 로 민다. 렌더러는 스스로 조회하지 않는다.
 import { useSyncExternalStore } from 'react'
-import { EMPTY_USAGE, type ProviderUsage, type UsageState, type UsageWindow } from '@shared/usage'
+import { EMPTY_USAGE, type ProviderUsage, type UsagePrefs, type UsageState, type UsageWindow } from '@shared/usage'
 import type { AraLimits } from './araUsage'
 import { t } from '../i18n'
 
@@ -70,4 +70,12 @@ export function resetAtText(resetsAt: number, now: number): string {
   const d = new Date(resetsAt)
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
   return d.toDateString() === new Date(now).toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()}(${DAYS[d.getDay()]}) ${hm}`
+}
+
+/** M13 %사용/%남음·Gemini 켜기(설정 › 계정·사용량). main 이 저장하고 새 상태를 민다. */
+export function setUsagePrefs(p: UsagePrefs): void {
+  void window.ev?.usage
+    ?.setPrefs(p)
+    .then(set)
+    .catch(() => {})
 }

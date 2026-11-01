@@ -44,7 +44,6 @@ import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerUsageFeature } from './usage/feature'
-import { parseClaudeStatusLine } from '@shared/usage'
 import { registerManagedFeature, type ManagedFeature } from './managed/feature'
 import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
@@ -587,12 +586,20 @@ app.whenReady().then(async () => {
   // 준영님 Claude Code 설정이 시험 부산물로 바뀐다(fixtures.ts 의 sandboxUserPaths 와 같은 규율).
   const hookHome = process.env['ARA_E2E'] === '1' ? join(userData, 'e2e-home') : app.getPath('home')
   // M9 AI-10 사용량(main/usage/feature.ts) — CLI 로그인 자격(읽기만)으로 Claude·Codex 구독 사용량. 같은 홈(e2e 는 임시 홈·환경 무시).
-  const usage = registerUsageFeature({ home: hookHome, env: process.env['ARA_E2E'] === '1' ? {} : process.env, mainWindow: () => mainWindow, mainWc })
-  const ingestStatusLine = (p: Record<string, unknown>): void => {
-    const w = parseClaudeStatusLine(p)
-    if (w) usage.ingestClaudeLive(w)
-  }
-  agents = registerAgentsFeature({ userData, sessions: () => sessions, readAiCliFlags: () => store.get().ui.aiCliFlags, home: hookHome, mainWc: () => mainWc(), remote: () => managed, onClaudeStatusLine: ingestStatusLine, oriel })
+  // M13: 계정 여러 개(고른 계정 env 를 에이전트 실행에) · 컨텍스트 사용량(statusLine, 탭별) · 통계(상태 원장의 '일하는 중' 전환).
+  const usage = registerUsageFeature({ home: hookHome, env: process.env['ARA_E2E'] === '1' ? {} : process.env, userData, mainWindow: () => mainWindow, mainWc })
+  agents = registerAgentsFeature({
+    userData,
+    sessions: () => sessions,
+    readAiCliFlags: () => store.get().ui.aiCliFlags,
+    home: hookHome,
+    mainWc: () => mainWc(),
+    remote: () => managed,
+    onClaudeStatusLine: (p, pane) => usage.ingestStatusLine(p, pane),
+    onAgentWorking: (id, working) => usage.stats.observe(id, working),
+    accountEnv: (agent) => usage.accounts.launchEnv(agent),
+    oriel
+  })
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
@@ -759,7 +766,7 @@ app.whenReady().then(async () => {
     (id) => sessions.has(id),
     // 아라 채팅 rate_limit_event(5H·주간 % 는 0~100, 초기화 ms) → 사용량 저장소(Claude 5시간 300분·주간 10080분).
     (l) =>
-      usage.ingestClaudeLive({
+      usage.service.ingestClaudeLive({
         session: l.five && { usedPercent: l.five.pct, windowMinutes: 300, resetsAt: l.five.resetsAt },
         weekly: l.week && { usedPercent: l.week.pct, windowMinutes: 10080, resetsAt: l.week.resetsAt }
       })

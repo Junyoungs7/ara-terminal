@@ -40,8 +40,12 @@ import { ASK_MAX_GROUPS, ASK_MAX_TEXT, ASK_STEP_MS, type AskAnswerKeyGroup } fro
 
 export function registerAgentsFeature(deps: {
   userData: string
-  /** M9 AI-10 — 에이전트 탭 Claude 의 statusLine 입력(JSON). 사용량 서비스가 rate_limits 만 읽는다. */
-  onClaudeStatusLine?: (payload: Record<string, unknown>) => void
+  /** M9 AI-10 — 에이전트 탭 Claude 의 statusLine 입력(JSON)과 탭 id. 사용량 서비스가 rate_limits·context_window(M13)만 읽는다. */
+  onClaudeStatusLine?: (payload: Record<string, unknown>, pane: string) => void
+  /** M13 통계 — 탭이 '일하는 중'으로 들어가고 나올 때. */
+  onAgentWorking?: (sessionId: string, working: boolean) => void
+  /** M13 계정 — 고른 Claude·Codex 계정의 실행 env(CLAUDE_CONFIG_DIR·CODEX_HOME). 시스템 기본이면 빈 객체. 로컬 실행에만. */
+  accountEnv?: (agent: 'claude' | 'codex') => Record<string, string>
   sessions: () => MainSessionManager
   /** 옛 설정 [AI] 의 터미널 AI 기본 플래그(workspace.json ui.aiCliFlags) — 처음 한 번 옮긴다. */
   readAiCliFlags: () => unknown
@@ -138,7 +142,7 @@ export function registerAgentsFeature(deps: {
       noteFirstPrompt(e.paneKey, e.payload['prompt'])
     },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null,
-    (payload) => deps.onClaudeStatusLine?.(payload)
+    (payload, pane) => deps.onClaudeStatusLine?.(payload, pane)
   )
   const ensureHooks = async (): Promise<{ port: number; token: string }> => {
     const r = await hooks.ensure()
@@ -159,6 +163,7 @@ export function registerAgentsFeature(deps: {
       push: (v) => {
         pushSend(deps.mainWc(), 'agents:status', v)
         awake.observe(v.sessionId, v.state === 'working')
+        deps.onAgentWorking?.(v.sessionId, v.state === 'working')
       },
       write: (id, data) => deps.sessions().write(id, data)
     })
@@ -355,7 +360,8 @@ export function registerAgentsFeature(deps: {
     // M9 R3: 훅 줄은 이 실행에만(Claude --settings · Gemini 시스템 기본값 파일) — 사용자 settings.json 은 안 건드린다.
     const hookEnv: Record<string, string> = {}
     const extraArgs: string[] = []
-    const extraEnv: Record<string, string> = {}
+    // M13 고른 계정(Orca: 계정 폴더 env) — 사용자 설정의 CLAUDE_CONFIG_DIR·CODEX_HOME 보다 앞선다(시스템 기본을 고르면 안 붙는다).
+    const extraEnv: Record<string, string> = agent === 'claude' || agent === 'codex' ? { ...deps.accountEnv?.(agent) } : {}
     // Gemini 시스템 기본값 파일은 env 하나라 훅·Oriel MCP 를 한 파일에 담는다.
     const geminiDefaults: Record<string, unknown> = {}
     if (isHookSource(agent)) {
@@ -370,7 +376,7 @@ export function registerAgentsFeature(deps: {
       if (hookEnv[HOOK_ENV.port]) {
         try {
           if (agent === 'claude') {
-            const configDir = settings.agents.claude.env['CLAUDE_CONFIG_DIR'] || userEnv['CLAUDE_CONFIG_DIR'] || join(deps.home, '.claude')
+            const configDir = extraEnv['CLAUDE_CONFIG_DIR'] || settings.agents.claude.env['CLAUDE_CONFIG_DIR'] || userEnv['CLAUDE_CONFIG_DIR'] || join(deps.home, '.claude')
             extraArgs.push(...claudeLaunchArgs(deps.home, cwd, configDir))
           } else Object.assign(geminiDefaults, geminiLaunchDefaults(deps.home))
         } catch (e) {

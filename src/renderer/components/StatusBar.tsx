@@ -13,7 +13,7 @@ import { ResourcePopover } from '../features/resources'
 import { UsagePopover } from '../features/usage'
 import { liveWindow, useUsage } from '../store/usage'
 import { untilText } from '../store/araUsage'
-import type { UsageWindow } from '@shared/usage'
+import { displayedPercent, type UsagePercentageDisplay, type UsageWindow } from '@shared/usage'
 
 /**
  * M0 0-7 FD-01 자원 관리자 칸(Orca ResourceUsageStatusSegment 를 따라 상태바 항목 → 팝오버).
@@ -51,8 +51,9 @@ function ResourceSegment() {
 }
 
 /** 사용량 칩 하나 — `이름 ▬ 41% 2h10m`(시안 SW-final). 값이 없으면 —. */
-function UsageChip({ name, w, until }: { name: string; w: UsageWindow | null; until?: boolean }) {
-  const pct = w ? Math.round(w.usedPercent) : null
+function UsageChip({ name, w, until, display }: { name: string; w: UsageWindow | null; until?: boolean; display: UsagePercentageDisplay }) {
+  // M13 %사용/%남음(설정 › 계정·사용량) — 막대와 숫자가 같은 값.
+  const pct = w ? displayedPercent(w.usedPercent, display) : null
   const left = until && w ? untilText(w.resetsAt, Date.now()) : ''
   return (
     <span className="usage-chip">
@@ -94,14 +95,21 @@ function UsageSegment() {
   const xs = liveWindow(u.codex?.session ?? null, now)
   // Codex 는 주간만 주는 요금제가 있다 — 5시간이 없으면 주간을 보인다.
   const xw = xs ? null : liveWindow(u.codex?.weekly ?? null, now)
+  const d = u.prefs.display
   return (
     <div className="res-ind usage-ind" ref={rootRef}>
       <button type="button" className={'sb-seg usage' + (open ? ' on' : '')} data-action="statusbar.usage" title={t('usage.title')} onClick={() => setOpen((o) => !o)}>
-        <UsageChip name={`Claude ${t('usage.k.five')}`} w={cs} until />
+        <UsageChip name={`Claude ${t('usage.k.five')}`} w={cs} until display={d} />
         <span className="usage-sep" aria-hidden />
-        <UsageChip name={t('usage.k.week')} w={cw} />
+        <UsageChip name={t('usage.k.week')} w={cw} display={d} />
         <span className="usage-sep" aria-hidden />
-        <UsageChip name={`Codex ${xw ? t('usage.k.week') : t('usage.k.five')}`} w={xs ?? xw} />
+        <UsageChip name={`Codex ${xw ? t('usage.k.week') : t('usage.k.five')}`} w={xs ?? xw} display={d} />
+        {u.prefs.gemini && (
+          <>
+            <span className="usage-sep" aria-hidden />
+            <UsageChip name="Gemini" w={liveWindow(u.gemini?.session ?? null, now)} display={d} />
+          </>
+        )}
       </button>
       {open && (
         <Suspense fallback={null}>

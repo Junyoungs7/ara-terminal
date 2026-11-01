@@ -61,7 +61,17 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   },
   // M8 DM-03 관리형 서버(features/managed/ManagedServersPanel.tsx) — 호스트별 동의·설치·업데이트·제거.
   { id: 'managed', group: 'aiws', items: [i('managed.list', 'managed.list', 'managed.desc'), i('managed.install', 'managed.installable', 'managed.noTargets')] },
-  soon('usage', 'aiws'),
+  {
+    id: 'usage',
+    group: 'aiws',
+    items: [
+      // M13 계정·사용량(features/usage/UsageSettingsPanel.tsx)
+      i('usage.display', 'usage.set.display', 'usage.set.display.desc'),
+      i('usage.gemini', 'usage.set.gemini', 'usage.set.gemini.desc'),
+      i('usage.accounts', 'usage.set.accounts', 'usage.set.accounts.desc'),
+      i('usage.stats', 'usage.set.stats', 'usage.set.stats.desc')
+    ]
+  },
   soon('git', 'aiws'),
   // M12 R2 에디터 옵션(Orca 기본값 — shared/editorPrefs.ts).
   {

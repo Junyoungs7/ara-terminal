@@ -4,9 +4,10 @@
 // 🔴 토큰: CLI 의 자격 파일은 **읽기만** 한다. 토큰은 요청 헤더에만 실리고, 상태·로그·오류 글에 들어가지 않는다. 아라는 따로 저장하지 않는다.
 // 🔴 요청은 Orca 와 같은 두 엔드포인트만.
 // 뺀 것: macOS 키체인 읽기(맥은 ~/.claude/.credentials.json 이 없으면 '알 수 없음' — 에이전트 탭 statusLine 이 오면 채워진다)·
-//  계정 여러 개·프록시 탐지(Electron net.fetch 가 시스템 프록시를 쓴다)·Codex app-server RPC.
+//  프록시 탐지(Electron net.fetch 가 시스템 프록시를 쓴다)·Codex app-server RPC.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fetchGeminiUsage, type PostLike } from './gemini'
 import {
   applyStalePolicy,
   classifyHttpFailure,
@@ -19,8 +20,13 @@ import {
   parseRetryAfterMs,
   refreshPlan,
   REQUEST_TIMEOUT_MS,
+  MAX_CONTEXT_ENTRIES,
+  type AccountProvider,
+  type AccountsView,
+  type ContextUsage,
   type ProviderUsage,
   type UsageFailure,
+  type UsagePrefs,
   type UsageProvider,
   type UsageState,
   type UsageWindow
@@ -132,35 +138,65 @@ export type UsageService = {
   refresh(force?: boolean): Promise<UsageState>
   /** 15분 주기 — 창이 활성일 때만(Retry-After 는 지킨다). */
   poll(): Promise<void>
-  /** 에이전트 탭 statusLine·아라 채팅 rate_limit_event 의 실시간 값. */
-  ingestClaudeLive(w: { session: UsageWindow | null; weekly: UsageWindow | null }): void
+  /** 에이전트 탭 statusLine·아라 채팅 rate_limit_event 의 실시간 값. account = 그 값을 낸 Claude 계정(null = 시스템 기본) — 지금 고른 계정이 아니면 버린다. */
+  ingestClaudeLive(w: { session: UsageWindow | null; weekly: UsageWindow | null }, account?: string | null): void
+  /** M13 에이전트 탭(pane)의 컨텍스트 사용량. */
+  ingestContext(pane: string, c: ContextUsage): void
+  /** M13 계정 목록이 바뀌었다 — 고른 계정이 바뀐 프로바이더는 값을 비우고 다시 묻는다(Orca: 계정 전환 = 다시 묻기). */
+  setAccounts(v: AccountsView): void
+  setPrefs(p: UsagePrefs): void
+  /** M13 계정 하나의 사용량(계정 목록에서 — 사람이 열 때만). 지금 고른 계정이면 저장소 값. */
+  accountUsage(p: AccountProvider, dir: string): Promise<ProviderUsage>
 }
 
 export function createUsageService(deps: {
   claudeDir: () => string
   codexDir: () => string
   fetch: FetchLike
+  /** M13 Gemini — prefs.gemini 가 켜졌을 때만 묻는다. */
+  gemini?: { dir: () => string; post: PostLike; bin: () => Promise<string | null> }
+  accounts?: AccountsView
+  prefs?: UsagePrefs
   push: (s: UsageState) => void
   /** 창이 보이고 포커스가 있나 — 아니면 배경 조회를 쉰다(Orca shouldBackgroundPoll). */
   windowActive: () => boolean
   now?: () => number
 }): UsageService {
   const now = deps.now ?? Date.now
-  let state: UsageState = EMPTY_USAGE
-  const checkedAt: Record<UsageProvider, number | null> = { claude: null, codex: null }
-  const lastRetryAt: Record<UsageProvider, number> = { claude: 0, codex: 0 }
-  const streak: Record<UsageProvider, number> = { claude: 0, codex: 0 }
+  let state: UsageState = { ...EMPTY_USAGE, ...(deps.accounts ? { accounts: deps.accounts } : {}), ...(deps.prefs ? { prefs: deps.prefs } : {}) }
+  const checkedAt: Record<UsageProvider, number | null> = { claude: null, codex: null, gemini: null }
+  const lastRetryAt: Record<UsageProvider, number> = { claude: 0, codex: 0, gemini: 0 }
+  const streak: Record<UsageProvider, number> = { claude: 0, codex: 0, gemini: 0 }
+  const providers = (): UsageProvider[] => (state.prefs.gemini && deps.gemini ? ['claude', 'codex', 'gemini'] : ['claude', 'codex'])
+  const fetchFresh = (p: UsageProvider): Promise<ProviderUsage> =>
+    p === 'claude'
+      ? fetchClaudeUsage(deps.claudeDir(), deps.fetch, now)
+      : p === 'codex'
+        ? fetchCodexUsage(deps.codexDir(), deps.fetch, now)
+        : fetchGeminiUsage({ dir: deps.gemini!.dir(), post: deps.gemini!.post, geminiBin: deps.gemini!.bin, now })
+  const reset = (p: UsageProvider): void => {
+    state = { ...state, [p]: null }
+    checkedAt[p] = null
+    lastRetryAt[p] = 0
+    streak[p] = 0
+  }
   const inflight: Partial<Record<UsageProvider, Promise<void>>> = {}
+  const generation: Record<UsageProvider, number> = { claude: 0, codex: 0, gemini: 0 }
 
   const set = (p: UsageProvider, v: ProviderUsage): void => {
     state = { ...state, [p]: v }
     deps.push(state)
   }
 
-  const fetchOne = (p: UsageProvider): Promise<void> =>
-    (inflight[p] ??= (async () => {
+  const fetchOne = (p: UsageProvider): Promise<void> => {
+    const running = inflight[p]
+    if (running) return running
+    const job: Promise<void> = (async () => {
       if (!state[p]) set(p, { provider: p, session: null, weekly: null, updatedAt: 0, status: 'fetching' })
-      const fresh = await (p === 'claude' ? fetchClaudeUsage(deps.claudeDir(), deps.fetch, now) : fetchCodexUsage(deps.codexDir(), deps.fetch, now))
+      const gen = generation[p]
+      const fresh = await fetchFresh(p)
+      // 묻는 사이 계정이 바뀌었으면 옛 계정의 답은 버린다.
+      if (gen !== generation[p]) return
       const t = now()
       checkedAt[p] = t
       streak[p] = fresh.status === 'error' ? Math.min(streak[p] + 1, MAX_ACTIVE_FAILURE_STREAK) : 0
@@ -172,8 +208,11 @@ export function createUsageService(deps: {
       }
       set(p, applyStalePolicy(fresh, cur?.status === 'fetching' ? null : cur, t))
     })().finally(() => {
-      delete inflight[p]
-    }))
+      if (inflight[p] === job) delete inflight[p]
+    })
+    inflight[p] = job
+    return job
+  }
 
   const retryAfterActive = (p: UsageProvider): boolean => Boolean(state[p]?.retryAtMs && state[p]!.retryAtMs! > now())
 
@@ -181,20 +220,49 @@ export function createUsageService(deps: {
     state: () => state,
     async refresh(force = false) {
       const t = now()
-      const targets = force ? (['claude', 'codex'] as const) : refreshPlan(state, { now: t, checkedAt, lastRetryAt, streak })
+      const targets = force ? providers() : refreshPlan(state, { now: t, checkedAt, lastRetryAt, streak }, providers())
       for (const p of targets) if (state[p]?.status === 'error') lastRetryAt[p] = t
       await Promise.all(targets.map(fetchOne))
       return state
     },
     async poll() {
       if (!deps.windowActive()) return
-      await Promise.all((['claude', 'codex'] as const).filter((p) => !retryAfterActive(p)).map(fetchOne))
+      await Promise.all(providers().filter((p) => !retryAfterActive(p)).map(fetchOne))
     },
-    ingestClaudeLive(w) {
+    ingestClaudeLive(w, account = null) {
+      if (account !== state.accounts.claude.active) return
       const next = mergeLiveClaude(state.claude, w, now())
       if (!next) return
       streak.claude = 0
       set('claude', next)
+    },
+    ingestContext(pane, c) {
+      const prev = state.context[pane]
+      if (prev && prev.usedPercent === c.usedPercent && prev.model === c.model && prev.windowTokens === c.windowTokens) return
+      const entries = Object.entries({ ...state.context, [pane]: c }).sort((a, b) => b[1].at - a[1].at).slice(0, MAX_CONTEXT_ENTRIES)
+      state = { ...state, context: Object.fromEntries(entries) }
+      deps.push(state)
+    },
+    setAccounts(v) {
+      const changed = (['claude', 'codex'] as const).filter((p) => v[p].active !== state.accounts[p].active)
+      state = { ...state, accounts: v }
+      for (const p of changed) {
+        generation[p]++
+        delete inflight[p]
+        reset(p)
+      }
+      deps.push(state)
+      if (changed.length) void Promise.all(changed.map(fetchOne))
+    },
+    setPrefs(p) {
+      const geminiOn = p.gemini && !state.prefs.gemini
+      state = { ...state, prefs: p }
+      if (!p.gemini) reset('gemini')
+      deps.push(state)
+      if (geminiOn && deps.gemini) void fetchOne('gemini')
+    },
+    accountUsage(p, dir) {
+      return p === 'claude' ? fetchClaudeUsage(dir, deps.fetch, now) : fetchCodexUsage(dir, deps.fetch, now)
     }
   }
 }

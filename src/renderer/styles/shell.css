@@ -12329,6 +12329,150 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-1) var(--sp-3);
   cursor: var(--cur-hand, pointer);
 }
+/* M13 사용량 팝오버 꼬리(계정·통계 · 새로 고침)·고른 계정 이름·컨텍스트 줄. */
+.usage-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+}
+.usage-foot .usage-refresh {
+  align-self: auto;
+}
+.usage-head .acct {
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.usage-ctx .ctx-name {
+  width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* M13 설정 › 계정·사용량 — 계정 목록·통계(features/usage/UsageSettingsPanel.tsx). */
+.acct-block,
+.stats-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0 var(--sp-6);
+}
+.acct-title {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.acct-row.on {
+  border-color: var(--line-strong);
+  background: var(--bg-raised);
+}
+.acct-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 16ch;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text-hi);
+  cursor: var(--cur-hand, pointer);
+  padding: 0;
+}
+.acct-dot {
+  width: var(--sp-4);
+  height: var(--sp-4);
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+.acct-row.on .acct-dot {
+  background: var(--text-hi);
+  border-color: var(--text-hi);
+}
+.acct-usage {
+  flex: 1;
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+}
+.acct-usage.na {
+  font-family: inherit;
+  color: var(--text-lo);
+}
+.acct-actions,
+.acct-foot,
+.stats-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.stats-head {
+  justify-content: space-between;
+}
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.stat-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+}
+.stat-val {
+  color: var(--text-hi);
+  font-size: var(--fs-xl);
+  font-family: var(--mono);
+}
+.stat-lbl {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.stats-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-hair);
+  height: calc(var(--sp-9) * 5);
+  border-bottom: 1px solid var(--line);
+}
+.stats-chart .bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.stats-chart .bar i {
+  display: block;
+  width: 100%;
+  background: var(--text-mid);
+  border-radius: var(--sp-hair) var(--sp-hair) 0 0;
+}
+.stats-models {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-micro);
+}
+.stats-models th,
+.stats-models td {
+  text-align: right;
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+}
+.stats-models th:first-child,
+.stats-models td:first-child {
+  text-align: left;
+}
+.stats-models th {
+  color: var(--text-lo);
+  font-family: inherit;
+  font-weight: 500;
+}
 
 /* M0 FD-04 오류 경계 대체 화면(components/ErrorBoundary.tsx). 영역 클래스(sidebar·main·drawer…)와 함께 붙어
    그 영역의 자리를 그대로 차지한다 — 여기서는 안쪽 배치만 정한다. */

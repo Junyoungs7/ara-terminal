@@ -11,6 +11,10 @@ export const usageBridge: Pick<EvApi, 'usage'> = {
       const listener = (_e: IpcRendererEvent, s: UsageState): void => cb(s)
       ipcRenderer.on('usage:update', listener)
       return () => ipcRenderer.removeListener('usage:update', listener)
-    }
+    },
+    setPrefs: (p) => ipcRenderer.invoke('usage:setPrefs', p),
+    account: (a) => ipcRenderer.invoke('usage:account', a),
+    accountUsage: (provider, id) => ipcRenderer.invoke('usage:accountUsage', { provider, id }),
+    stats: (force) => ipcRenderer.invoke('usage:stats', { force })
   }
 }
