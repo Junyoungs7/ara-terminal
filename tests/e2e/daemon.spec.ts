@@ -161,6 +161,8 @@ test('DM-2 자원 상한: 낮은 우선순위 상속 · 메모리 넘음 알림 
     await openAi(a.app, a.page, repo, true)
     await a.page.click('[data-aiws="agent-picker"] .aiws-mode[data-agent="claude"]')
     await a.page.click('[data-aiws="agent-launch"]')
+    // DM-1 처럼 탭이 선 뒤에 id 를 읽는다 — 먼저 읽으면 빈 목록이라 sid 가 undefined 다.
+    await expect(a.page.locator('.aiws-tab[data-agent-tab="claude"]')).toBeVisible()
     const [sid] = await agentIds(a.page)
     await expect.poll(async () => pidIn(await termText(a.page, sid)), { timeout: 30_000 }).not.toBeNull()
     // 가짜 에이전트는 데몬 셸이 띄운 자식이다 — 셸에 건 우선순위를 물려받았어야 한다.
