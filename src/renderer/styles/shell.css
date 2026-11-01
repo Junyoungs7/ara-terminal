@@ -897,6 +897,59 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* M12 CV-01 트리(Orca) — 펼친 폴더의 하위 줄은 깊이만큼 들여 쓴다(--fdepth 는 줄이 단다). 꺾쇠 칸은 파일 줄에도 비워 두어 아이콘 열을 맞춘다. */
+.frow {
+  padding-left: calc(var(--sp-4) + var(--fdepth, 0) * var(--sp-6));
+}
+.frow .ftw {
+  width: var(--sp-6);
+  height: var(--sb-icon);
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin-right: calc(-1 * var(--sp-2));
+  color: var(--text-lo);
+}
+.frow .ftw svg {
+  width: var(--sp-6);
+  height: var(--sp-6);
+  transition: transform var(--dur-quick);
+}
+.frow .ftw.open svg {
+  transform: rotate(90deg);
+}
+/* git 상태 색(Orca) — 소스 제어 패널 글자(.scm-st)와 같은 색. 폴더는 아래에 바뀐 것이 있으면 이름만 옅게 물든다. */
+.frow.git-modified .fn,
+.frow.git-renamed .fn {
+  color: var(--warn);
+}
+.frow.git-added .fn,
+.frow.git-untracked .fn {
+  color: var(--ok);
+}
+.frow.git-deleted .fn,
+.frow.git-conflicted .fn {
+  color: var(--err);
+}
+.frow.git-dirty .fn {
+  color: color-mix(in srgb, var(--warn) 70%, var(--text-mid));
+}
+/* 끌어 옮기기 — 놓을 폴더 줄. */
+.frow.drop-on,
+.ftree.drop-on {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.sftp-path-bar .fpin-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-mid);
+  text-transform: uppercase;
+}
 /* mtime(상대시간) · 크기 — 이름 뒤 메타 열. 좁아지면 이름이 먼저 살아남는다. */
 .frow .fmt {
   flex: none;
@@ -12283,3 +12336,71 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-2);
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   M12 — AI 작업 공간 파일 탐색기 패널 · 뷰어 · 워크트리 점프(Ctrl+J)
+   ══════════════════════════════════════════════════════════════════════════ */
+.aiws-explorer {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-canvas);
+  border-left: 1px solid var(--line);
+}
+.media-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.media-view[hidden] {
+  display: none;
+}
+.media-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: var(--sp-8);
+}
+.media-stage img,
+.media-stage video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.media-stage audio {
+  width: 100%;
+  max-width: 480px;
+}
+.media-stage iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  align-self: stretch;
+  justify-self: stretch;
+}
+.media-note {
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  text-align: center;
+}
+.media-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-6);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.wj-meta {
+  margin-left: auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+}

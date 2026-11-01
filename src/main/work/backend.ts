@@ -3,9 +3,14 @@
 // 출처: stablyai/orca @fdfcfb3551 (MIT) src/main/providers/execution-host-provider-dispatch.ts — 호스트 축(기능 단위), 모르는 호스트는
 // 이 PC 로 물러서지 않는다(원격 연결이 안 되면 실패로 끝난다).
 import { app } from 'electron'
-import { unwatchFile, watchFile, type Stats } from 'node:fs'
+import { unwatchFile, watchFile, watch as fsWatch, type Stats } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import type { Client } from 'ssh2'
 import type { CodeReadResult, CodeWriteResult } from '@shared/codeFiles'
+import type { FileListResult, FileOpResult } from '@shared/ipc'
+import type { BytesResult } from '@shared/media'
+import * as LocalFs from '../fs/LocalFs'
+import { friendly } from '../util/fsError'
 import { runProcess } from '../util/runProcess'
 import { readCode, writeCode } from '../code/io'
 import { rgBinPath } from '../code/search'
@@ -29,6 +34,29 @@ export type WorkBackend = {
   inspect: InspectIO
   /** 열린 파일 감시 — 바뀌면 onChange. 돌려준 함수로 멈춘다. */
   watch(path: string, onChange: () => void): () => void
+  /** M12 CV-01 파일 탐색기 — 터미널 [파일] 탭(LocalFs·SftpService)과 같은 계약. remove 는 로컬 = 휴지통, 원격 = 영구(서버에 휴지통이 없다). */
+  fs: {
+    list(path: string): Promise<FileListResult>
+    rename(path: string, name: string): Promise<FileOpResult>
+    mkdir(dir: string, name: string): Promise<FileOpResult>
+    newFile(dir: string, name: string): Promise<FileOpResult>
+    remove(paths: string[]): Promise<FileOpResult>
+    move(paths: string[], destDir: string): Promise<FileOpResult>
+    /** M12 CV-02 뷰어 — 파일 통째(상한 max 바이트). */
+    readBytes(path: string, max: number): Promise<BytesResult>
+  }
+  /** 작업 단위 폴더 감시(탐색기) — 무언가 바뀌면 onChange(묶어서). */
+  watchTree(root: string, onChange: () => void): () => void
+}
+
+/** 폴더 감시 묶음 — 에이전트가 파일을 수십 개 쓰는 동안 목록을 수십 번 다시 읽지 않게. */
+export const TREE_WATCH_DEBOUNCE_MS = 300
+/** .git 안에서는 스테이징(index)·브랜치(HEAD)만 본다 — 나머지(objects·logs)는 git 명령마다 흔들린다. */
+export function treeEventCounts(rel: string | null): boolean {
+  if (!rel) return true
+  const p = rel.split('\\').join('/')
+  if (p !== '.git' && !p.startsWith('.git/')) return true
+  return p === '.git/index' || p === '.git/HEAD'
 }
 
 /** 열린 로컬 파일 감시 간격. ponytail: stat 폴링(열린 파일만 — 몇 개). 많이 열게 되면 폴더 감시(@parcel/watcher, Orca)로. */
@@ -50,6 +78,45 @@ const LOCAL: WorkBackend = {
     }
     watchFile(path, { interval: WATCH_MS, persistent: false }, listener)
     return () => unwatchFile(path, listener)
+  },
+  fs: {
+    list: LocalFs.list,
+    rename: LocalFs.renameEntry,
+    mkdir: LocalFs.makeDir,
+    newFile: LocalFs.makeFile,
+    remove: LocalFs.trash,
+    move: LocalFs.moveEntries,
+    async readBytes(path, max) {
+      try {
+        const st = await stat(path)
+        if (!st.isFile()) return { ok: false, message: '파일이 아닙니다.' }
+        if (st.size > max) return { ok: false, tooBig: true, size: st.size, message: '' }
+        return { ok: true, data: new Uint8Array(await readFile(path)) }
+      } catch (e) {
+        return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
+      }
+    }
+  },
+  // Orca 는 @parcel/watcher — 새 의존성 없이 node 재귀 감시(Windows·macOS 는 OS 가, Linux 는 node 20+ 가 재귀).
+  watchTree(root, onChange) {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let w: ReturnType<typeof fsWatch> | null = null
+    try {
+      w = fsWatch(root, { recursive: true, persistent: false }, (_ev, name) => {
+        if (!treeEventCounts(typeof name === 'string' ? name : null) || timer) return
+        timer = setTimeout(() => {
+          timer = null
+          onChange()
+        }, TREE_WATCH_DEBOUNCE_MS)
+      })
+      w.on('error', () => w?.close())
+    } catch {
+      /* 폴더가 없음·권한 — 감시 없이(직접 [새로 고침]) */
+    }
+    return () => {
+      if (timer) clearTimeout(timer)
+      w?.close()
+    }
   }
 }
 

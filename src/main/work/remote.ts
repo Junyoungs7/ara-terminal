@@ -11,8 +11,13 @@ import { remotePathArg, shArg } from '@shared/runOn'
 import type { RunOptions, RunResult } from '../util/runProcess'
 import { friendly } from '../util/fsError'
 import { codeOf, writeCode } from '../code/io'
+import { SftpService } from '../sftp/SftpService'
+import type { FileOpResult } from '@shared/ipc'
 import type { Exec, WorkBackend } from './backend'
 
+/** 원격 탐색기 폴더 감시 간격. ponytail: 원격 inotify 가 없어(서버에 아무것도 안 깐다) 이 간격마다 '바뀌었을 수 있음'을 알리고
+ *  렌더러가 펼친 폴더만 다시 읽는다. 폴더를 많이 펼치면 SFTP readdir 이 늘어난다 — 문제가 되면 펼친 폴더 mtime 만 stat 으로. */
+export const REMOTE_TREE_POLL_MS = 5000
 /** 열린 원격 파일 감시 간격. ponytail: 파일마다 SFTP stat 1회/3초 — 많이 열면 원격 inotify(Orca relay 의 watch)로. */
 export const REMOTE_WATCH_MS = 3000
 /** 감시가 연결 실패를 만나면 이만큼 쉰다(끊긴 서버에 3초마다 다시 접속하지 않게). */
@@ -131,6 +136,18 @@ export function remoteBackend(client: () => Promise<Client>): WorkBackend {
     }
   }
   const sftp = async (): Promise<SFTPWrapper> => sftpOf(await client())
+  // M12 CV-01 탐색기 — 터미널 [파일] 탭의 SFTP 조작(SftpService: 링크 해석·이름 검증·EXCL 새 파일·재귀 삭제)을 그대로 쓴다. 세션 id 자리는 안 쓴다.
+  const svc = async (): Promise<SftpService> => {
+    const c = await client()
+    return new SftpService(() => c, () => {})
+  }
+  const op = async (fn: (s: SftpService) => Promise<FileOpResult>): Promise<FileOpResult> => {
+    try {
+      return await fn(await svc())
+    } catch (e) {
+      return { ok: false, message: (e as Error).message }
+    }
+  }
   // 서버에 rg 가 있나(연결마다 한 번). 없으면 git ls-files·git grep — 원격에 rg 를 깔지 않는다.
   const rgOf = new WeakMap<Client, Promise<string | null>>()
   return {
@@ -168,6 +185,51 @@ export function remoteBackend(client: () => Promise<Client>): WorkBackend {
         if (!st?.isFile()) return ''
         return st.size > DIFF_READ_MAX_BYTES ? null : (await readAll(s, p)).toString('utf8')
       }
+    },
+    fs: {
+      list: async (path) => {
+        try {
+          return await (await svc()).list('', path)
+        } catch (e) {
+          return { ok: false, message: (e as Error).message }
+        }
+      },
+      rename: (path, name) => op((s) => s.rename('', path, name)),
+      mkdir: (dir, name) => op((s) => s.mkdir('', dir, name)),
+      newFile: (dir, name) => op((s) => s.makeFile('', dir, name)),
+      remove: (paths) => op((s) => s.remove('', `work-rm-${Date.now()}`, paths)),
+      // SFTP rename 한 번(같은 서버 안). 덮어쓰지 않는다 — 있으면 멈춘다(로컬 moveEntries 와 같은 규칙).
+      async move(paths, destDir) {
+        try {
+          const s = await sftp()
+          for (const src of paths) {
+            const name = src.replace(/\/+$/, '').split('/').pop() ?? ''
+            const dest = posixJoin(destDir, name)
+            if (dest === src) continue
+            if (destDir === src || destDir.startsWith(src.replace(/\/+$/, '') + '/')) return { ok: false, message: `폴더를 자기 안으로 옮길 수 없습니다: ${name}` }
+            if (await statOf(s, dest).then(() => true, () => false)) return { ok: false, message: `이미 있습니다: ${name}` }
+            await new Promise<void>((res, rej) => s.rename(src, dest, (e) => (e ? rej(e) : res())))
+          }
+          return { ok: true }
+        } catch (e) {
+          return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
+        }
+      },
+      async readBytes(path, max) {
+        try {
+          const s = await sftp()
+          const st = await statOf(s, path)
+          if (!st.isFile()) return { ok: false, message: '파일이 아닙니다.' }
+          if (st.size > max) return { ok: false, tooBig: true, size: st.size, message: '' }
+          return { ok: true, data: new Uint8Array(await readAll(s, path)) }
+        } catch (e) {
+          return { ok: false, message: friendly(e as NodeJS.ErrnoException) }
+        }
+      }
+    },
+    watchTree(_root, onChange) {
+      const timer = setInterval(onChange, REMOTE_TREE_POLL_MS)
+      return () => clearInterval(timer)
     },
     // 밖에서 바뀜 — mtime·크기가 달라지면 알린다(렌더러가 다시 읽어 **서명**으로 판정). 연결이 안 되면 잠깐 쉰다.
     watch(path, onChange) {

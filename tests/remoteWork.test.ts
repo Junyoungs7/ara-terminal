@@ -213,4 +213,32 @@ describe.skipIf(!READY)('원격 작업 단위 — WSL 의 git 저장소를 SSH(e
     expect((await execOn(c, 'git', ['--git-dir', `${home}/origin.git`, 'rev-parse', 'feature'])).stdout.trim()).toBe(head)
     expect((await sh('git rev-parse --abbrev-ref @{u}')).stdout.trim()).toBe('origin/feature')
   }, 180_000)
+
+  // M12 CV-01·02 원격 작업 단위 탐색기 — 터미널 [파일] 탭의 SFTP 조작(SftpService)을 그대로: 목록·새 폴더/파일·끌어 옮기기·이름 바꾸기·영구 삭제·뷰어 바이트.
+  it('탐색기 — 목록 → 새 폴더·새 파일 → 옮기기(덮어쓰지 않음) → 이름 바꾸기 → 삭제 → 바이트 읽기(상한)', async () => {
+    const c = client!
+    const b = remoteBackend(async () => c)
+    const root = `${home}/repo`
+    const sh = (script: string) => execOn(c, 'sh', ['-c', script], { cwd: root, timeoutMs: 30_000 })
+    const ok = (r: { ok: boolean; message?: string }) => expect(r, r.message).toMatchObject({ ok: true })
+
+    const l1 = await b.fs.list(root)
+    if (!l1.ok) throw new Error(l1.message)
+    expect(l1.entries.find((e) => e.name === 'src')?.type).toBe('dir')
+    ok(await b.fs.mkdir(root, 'm12'))
+    ok(await b.fs.newFile(`${root}/m12`, 'x.txt'))
+    expect(await b.fs.newFile(`${root}/m12`, 'x.txt')).toMatchObject({ ok: false }) // 있는 파일은 안 건드린다
+    ok(await b.fs.move([`${root}/m12/x.txt`], `${root}/src`))
+    expect((await sh('ls src')).stdout).toContain('x.txt')
+    expect(await b.fs.move([`${root}/m12`], `${root}/m12`)).toMatchObject({ ok: false }) // 자기 안으로는 못 옮긴다
+    ok(await b.fs.newFile(`${root}/m12`, 'x.txt'))
+    expect(await b.fs.move([`${root}/m12/x.txt`], `${root}/src`)).toMatchObject({ ok: false }) // 덮어쓰지 않는다
+    ok(await b.fs.rename(`${root}/m12/x.txt`, 'y.txt'))
+    ok(await b.fs.remove([`${root}/m12`]))
+    expect((await sh('ls')).stdout).not.toContain('m12')
+    const bytes = await b.fs.readBytes(`${root}/src/b.ts`, 1024)
+    expect(bytes.ok && Buffer.from(bytes.data).toString('utf8')).toBe('const hello = 1\n')
+    expect(await b.fs.readBytes(`${root}/src/b.ts`, 3)).toMatchObject({ ok: false, tooBig: true })
+    ok(await b.fs.remove([`${root}/src/x.txt`]))
+  }, 120_000)
 })

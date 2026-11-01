@@ -7,6 +7,7 @@ import { isMac } from '@shared/keymap'
 import { isInsidePath, onDiskChange } from '@shared/codeFiles'
 import { areWorktreePathsEqual, type Worktree } from '@shared/worktrees'
 import { QUICK_OPEN_RECENT_LIMIT } from '@shared/codeSearch'
+import { mediaOf, type MediaKind } from '@shared/media'
 import { hostOfWorktree, useAiwsStore } from './store'
 import { t } from '../../i18n'
 
@@ -30,6 +31,8 @@ export type CodeFile = {
   loadSeq: number
   /** 열 때 가리킬 줄(1부터). seq 가 바뀌면 에디터가 그 줄로 간다. */
   reveal: { line: number; seq: number } | null
+  /** M12 CV-02 뷰어 탭(PDF·이미지·오디오/비디오) — 글을 읽지 않는다. 바이트는 탭이 보일 때 뷰어가 읽는다. */
+  media?: MediaKind
 }
 
 /** 에디터 청크가 걸어 두는 손잡이 — 모델의 지금 글로 저장, 탭을 닫을 때 모델 정리. 에디터가 아직 안 떴으면 null. */
@@ -78,8 +81,10 @@ export const useCodeStore = create<CodeState>()((set, get) => ({
   closeFile: (path) => {
     const f = get().files.find((x) => same(x.path, path))
     if (!f) return
-    void window.ev.code.unwatch(f.path, f.host)
-    get().editorOps?.dispose(f.path)
+    if (!f.media) {
+      void window.ev.code.unwatch(f.path, f.host)
+      get().editorOps?.dispose(f.path)
+    }
     set((s) => {
       const files = s.files.filter((x) => x !== f)
       const active = s.activeByWorktree[f.worktreeId]
@@ -119,6 +124,17 @@ export async function openFile(path: string, line?: number): Promise<{ ok: true 
   if (open) {
     useCodeStore.setState(patch(abs, reveal ? { reveal } : {}))
     s.setActive(open.worktreeId, open.path)
+    remember()
+    return { ok: true }
+  }
+  // M12 CV-02 — 뷰어로 여는 종류면 글로 읽지 않고 뷰어 탭(감시·저장 없음).
+  const media = mediaOf(abs)
+  if (media) {
+    if (!useCodeStore.getState().files.some((f) => same(f.path, abs))) {
+      const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: '', eol: 'lf', sig: '', bytes: 0, readOnly: true, dirty: false, conflict: null, loadSeq: 0, reveal: null, media: media.kind }
+      useCodeStore.setState((x) => ({ files: [...x.files, file] }))
+    }
+    useCodeStore.getState().setActive(wt.id, abs)
     remember()
     return { ok: true }
   }

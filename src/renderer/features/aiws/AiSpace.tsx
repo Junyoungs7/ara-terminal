@@ -4,7 +4,7 @@ import { Bot, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Sparkle
 import { t } from '../../i18n'
 import type { AiwsLocation } from '.'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
-import { ensureAiwsLoaded, hostOfWorktree, useAiwsStore } from './store'
+import { ensureAiwsLoaded, useAiwsStore } from './store'
 import { WorktreeSidebar } from './WorktreeSidebar'
 import { NewWorkCard } from './NewWorkCard'
 import { AgentWorkspace } from './AgentPane'
@@ -12,15 +12,16 @@ import { ActivityFeed, AgentDashboard } from './AgentDashboard'
 import { VaultPanel } from './VaultPanel'
 import { useAgentStore, type AiwsView } from './agentStore'
 import { shortBranch } from './sidebarRows'
-import { openFile } from './codeStore'
 import { QuickOpen } from './QuickOpen'
 import { SearchPanel } from './SearchPanel'
 import { isMac } from '@shared/keymap'
-import { OPEN_FILE_EVENT } from '@shared/codeFiles'
+import { EXPLORER_STATE_EVENT, EXPLORER_TOGGLE_EVENT } from '@shared/codeFiles'
 import { OPEN_DIFF_EVENT, type DiffMode } from '@shared/gitDiff'
 import { openDiff } from './diffStore'
 import { SCM_STATE_EVENT, SCM_TOGGLE_EVENT } from '@shared/scm'
 import { ScmPanel } from './ScmPanel'
+import { ExplorerPanel } from './ExplorerPanel'
+import { WorktreeJump } from './WorktreeJump'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -107,26 +108,6 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
   }, [crumbServer, crumbPath, status, onLocation])
   // 공간을 떠나면(언마운트) 타이틀바·상태바를 비운다.
   useEffect(() => () => onLocation(null), [onLocation])
-  // M6 "파일 열기" — 오른쪽 아이콘 바 [탐색기](RightBar, 진입 청크라 이 청크를 모른다)가 창 이벤트로 부른다.
-  // 고른 작업 단위 폴더에서 OS 파일 창을 열고, 고른 파일을 openFile 로(가운데 파일 탭). 2차 파일 탐색기가 이 자리를 넘겨받는다.
-  useEffect(() => {
-    const onPick = async (): Promise<void> => {
-      const s = useAiwsStore.getState()
-      const wt = s.activeWorktreeId ? Object.values(s.worktreesByRepo).flat().find((w) => w.id === s.activeWorktreeId) : undefined
-      // M8 R5 원격 작업 단위 — 이 PC 의 파일 창으로는 서버 파일을 못 고른다. 그 서버의 파일 목록(빠른 열기)에서 고른다.
-      if (wt && hostOfWorktree(wt.id)) return setQuick(true)
-      const path = wt ? await window.ev.code.pick(wt.path) : null
-      if (wt && !path) return
-      const r = path ? await openFile(path) : { ok: false as const, message: t('code.err.noWorktree') }
-      if (!r.ok) return void ask({ title: t('code.err.openTitle'), message: r.message, cancelLabel: null })
-      // 대시보드·새 작업 카드가 떠 있어도 연 파일이 보이게 가운데를 작업 단위로.
-      setComposer(null)
-      useAgentStore.getState().setView('worktree')
-    }
-    const h = (): void => void onPick()
-    window.addEventListener(OPEN_FILE_EVENT, h)
-    return () => window.removeEventListener(OPEN_FILE_EVENT, h)
-  }, [ask])
   // M7 WS-10 diff 탭 열기 — 진입 청크·R2 소스 제어 패널이 창 이벤트로(detail = { filePath?, mode? }). 공유 API = agent_talk/m7-shared-api.md.
   useEffect(() => {
     const h = (e: Event): void => {
@@ -160,17 +141,30 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
     if (v !== 'worktree' && v !== 'search') useAgentStore.getState().setView('worktree')
   }
 
-  // M7 R2 WS-12 오른쪽 [소스 제어] 패널 — RightBar(진입 청크)가 창 이벤트로 켜고 끈다. 열림은 여기가 쥐고 알린다(눌림 표시).
-  const [scm, setScm] = useState(false)
+  // M7 R2 WS-12 오른쪽 [소스 제어] · M12 CV-01 [탐색기] 패널 — RightBar(진입 청크)가 창 이벤트로 켜고 끈다. 오른쪽 자리는 하나(Orca 오른쪽 사이드바 탭) —
+  // 하나를 열면 다른 것은 닫힌다. 열림은 여기가 쥐고 알린다(눌림 표시).
+  const [right, setRight] = useState<'scm' | 'explorer' | null>(null)
   useEffect(() => {
-    const h = (): void => setScm((v) => !v)
-    window.addEventListener(SCM_TOGGLE_EVENT, h)
-    return () => window.removeEventListener(SCM_TOGGLE_EVENT, h)
+    const s = (): void => setRight((v) => (v === 'scm' ? null : 'scm'))
+    const x = (): void => setRight((v) => (v === 'explorer' ? null : 'explorer'))
+    window.addEventListener(SCM_TOGGLE_EVENT, s)
+    window.addEventListener(EXPLORER_TOGGLE_EVENT, x)
+    return () => {
+      window.removeEventListener(SCM_TOGGLE_EVENT, s)
+      window.removeEventListener(EXPLORER_TOGGLE_EVENT, x)
+    }
   }, [])
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: scm }))
-  }, [scm])
-  useEffect(() => () => void window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: false })), [])
+    window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: right === 'scm' }))
+    window.dispatchEvent(new CustomEvent(EXPLORER_STATE_EVENT, { detail: right === 'explorer' }))
+  }, [right])
+  useEffect(
+    () => () => {
+      window.dispatchEvent(new CustomEvent(SCM_STATE_EVENT, { detail: false }))
+      window.dispatchEvent(new CustomEvent(EXPLORER_STATE_EVENT, { detail: false }))
+    },
+    []
+  )
 
   const remove = async (w: Worktree): Promise<void> => {
     const branch = shortBranch(w) || '-'
@@ -228,7 +222,9 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           </div>
         )}
       </div>
-      {scm && <ScmPanel ask={ask} />}
+      {right === 'scm' && <ScmPanel ask={ask} />}
+      {right === 'explorer' && <ExplorerPanel onOpened={showFile} />}
+      <WorktreeJump onJumped={() => setComposer(null)} />
     </div>
   )
 }

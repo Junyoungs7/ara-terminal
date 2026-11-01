@@ -19,6 +19,8 @@ import { changeCount, openDiff, useDiffStore } from './diffStore'
 const CodeEditor = lazy(() => import('./CodeEditor'))
 // M7 WS-10 diff 탭도 Monaco 를 쓴다 — 탭을 처음 열 때만 불린다.
 const DiffView = lazy(() => import('./DiffView'))
+// M12 CV-02 뷰어(PDF·이미지·AV) — 뷰어 탭이 보일 때만 불린다.
+const MediaView = lazy(() => import('./MediaView'))
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
 /**
@@ -422,9 +424,14 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         </div>
       ))}
       {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}
-      {files.length > 0 && (
+      {files.some((f) => !f.media) && (
         <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
-          <CodeEditor worktreeId={worktree.id} ask={ask} hidden={!shownFile} />
+          <CodeEditor worktreeId={worktree.id} ask={ask} hidden={!shownFile || Boolean(shownFile.media)} />
+        </Suspense>
+      )}
+      {shownFile?.media && (
+        <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
+          <MediaView key={shownFile.path} file={shownFile} />
         </Suspense>
       )}
       {diff && (

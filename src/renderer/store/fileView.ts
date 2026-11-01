@@ -2,6 +2,7 @@
 // 렌더러에서만 판단한다: 목록은 이미 다 읽어 왔고, 무엇을 보여 줄지는 화면의 문제다
 // (숨김 하나 토글할 때마다 서버에 다시 물으면 원격에서 그대로 지연이 된다).
 import type { FileEntry } from '@shared/ipc'
+import type { GitStatusEntry } from '@shared/gitDiff'
 
 export type SortKey = 'name' | 'ext' | 'size' | 'mtime'
 export type SortSpec = { key: SortKey; asc: boolean }
@@ -45,12 +46,48 @@ export function viewEntries(
     let d = 0
     if (opts.sort.key === 'size') d = a.size - b.size
     else if (opts.sort.key === 'mtime') d = a.mtime - b.mtime
-    else if (opts.sort.key === 'ext') d = extOf(a.name).localeCompare(extOf(b.name), 'ko')
+    else if (opts.sort.key === 'ext') d = extOf(a.name).localeCompare(extOf(b.name), 'ko', NATURAL)
     // 이름 정렬은 이 동률 처리가 그대로 맡는다. 다른 기준도 값이 같으면 이름으로 갈라야
     // 새로고침할 때마다 줄 순서가 흔들리지 않는다(크기 0인 파일이 수십 개인 폴더에서 티가 난다).
-    if (d === 0) d = a.name.localeCompare(b.name, 'ko')
+    if (d === 0) d = a.name.localeCompare(b.name, 'ko', NATURAL)
     return d * dir
   })
+  return out
+}
+
+/** M12 CV-01 Orca 이름 순서 — 숫자를 수로(9·99·100, 사전순 100·99 가 아니라). */
+const NATURAL: Intl.CollatorOptions = { numeric: true }
+
+/** 트리 한 줄 — name = 지금 폴더 기준 상대 경로(조작이 joinPath(path, name) 으로 그대로 돈다), label = 보이는 이름. */
+export type TreeRow = FileEntry & { label: string; depth: number }
+
+/**
+ * M12 CV-01 펼친 폴더를 줄로 편다(Orca file-explorer-row-projection). open = 상대 경로 → 그 폴더 목록.
+ * 같은 정렬·숨김을 층마다 쓰고, 이름 검색은 맨 위 층만(지금 폴더 안 — 터미널 [파일] 탭의 원래 뜻 그대로).
+ */
+export function treeRows(
+  entries: readonly FileEntry[],
+  open: Readonly<Record<string, readonly FileEntry[]>>,
+  opts: { showHidden: boolean; sort: SortSpec; filter: string },
+  sep: string
+): TreeRow[] {
+  const out: TreeRow[] = []
+  const walk = (list: readonly FileEntry[], prefix: string, depth: number): void => {
+    for (const e of viewEntries(list, depth === 0 ? opts : { ...opts, filter: '' })) {
+      const name = prefix ? prefix + sep + e.name : e.name
+      out.push({ ...e, name, label: e.name, depth })
+      const kids = e.type === 'dir' ? open[name] : undefined
+      if (kids) walk(kids, name, depth + 1)
+    }
+  }
+  walk(entries, '', 0)
+  return out
+}
+
+/** 접을 때 그 아래 펼침도 함께 지운다. */
+export function closeOpen<T>(open: Readonly<Record<string, T>>, key: string, sep: string): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const [k, v] of Object.entries(open)) if (k !== key && !k.startsWith(key + sep)) out[k] = v
   return out
 }
 
@@ -63,4 +100,17 @@ export function pushHistory(h: History, path: string): History {
   if (h.stack[h.idx] === path) return h
   const stack = [...h.stack.slice(0, h.idx + 1), path]
   return { stack, idx: stack.length - 1 }
+}
+
+/** M12 CV-01 git 상태 → 파일 줄 색 표·폴더(아래에 바뀐 것이 있음) 집합. 키 = 작업 단위 기준 '/' 경로. 순수 — 단위 시험 대상. */
+export function gitDecorations(entries: readonly GitStatusEntry[]): { files: Map<string, string>; dirs: Set<string> } {
+  const files = new Map<string, string>()
+  const dirs = new Set<string>()
+  for (const e of entries) {
+    // 스테이징·작업 트리 양쪽에 있으면 작업 트리 쪽(지금 디스크 상태)이 이긴다.
+    if (!files.has(e.path) || e.area !== 'staged') files.set(e.path, e.status)
+    const parts = e.path.split('/')
+    for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'))
+  }
+  return { files, dirs }
 }

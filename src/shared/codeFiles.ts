@@ -67,5 +67,7 @@ export type CodeReadResult =
 
 export type CodeWriteResult = { ok: true; sig: string } | { ok: false; conflict: 'changed' | 'missing' } | { ok: false; message: string }
 
-/** 오른쪽 아이콘 바 [탐색기] → AI 작업 공간 "파일 열기"(창 이벤트 — 진입 청크의 RightBar 가 AI 공간 청크를 import 하지 않게). */
-export const OPEN_FILE_EVENT = 'aiws:open-file'
+/** 오른쪽 아이콘 바 [탐색기] → AI 작업 공간 탐색기 패널 켜고 끄기(M12 — 창 이벤트, 진입 청크의 RightBar 가 AI 공간 청크를 import 하지 않게). */
+export const EXPLORER_TOGGLE_EVENT = 'ara:explorer-toggle'
+/** 탐색기 패널이 열렸나 — AI 작업 공간이 알리고 RightBar 가 눌림 표시를 맞춘다. detail = boolean. */
+export const EXPLORER_STATE_EVENT = 'ara:explorer-state'

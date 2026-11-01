@@ -44,7 +44,8 @@ const LANGS = monaco.languages.getLanguages()
 export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: string; ask: AskFn; hidden: boolean }): JSX.Element {
   const files = useCodeStore((s) => s.files)
   const activePath = useCodeStore((s) => s.activeByWorktree[worktreeId] ?? null)
-  const file = activePath ? files.find((f) => f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, activePath, PLATFORM)) : undefined
+  // M12: 뷰어 탭(media)은 MediaView 가 그린다 — 여기서는 글 파일만.
+  const file = activePath ? files.find((f) => !f.media && f.worktreeId === worktreeId && areWorktreePathsEqual(f.path, activePath, PLATFORM)) : undefined
   const editorRef = useRef<ReturnType<typeof monaco.editor.create> | null>(null)
   const askRef = useRef(ask)
   askRef.current = ask
@@ -58,6 +59,7 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
   // 디스크에서 다시 읽은 글(loadSeq 가 오름)을 모델에 넣는다 — 실행 취소로 되돌릴 수 있게 편집으로 넣는다.
   useEffect(() => {
     for (const f of files) {
+      if (f.media) continue
       const m = monaco.editor.getModel(uriOf(f.path))
       if (!m || (appliedSeq.get(keyOf(m)) ?? 0) >= f.loadSeq) continue
       appliedSeq.set(keyOf(m), f.loadSeq)

@@ -117,7 +117,7 @@ test('TREE-1★ 사이드바 트리를 Tab·화살표·Enter 로 조작한다', 
   await expect(grp).toHaveAttribute('aria-expanded', 'true')
 })
 
-// TREE-2★ 파일 목록도 같은 규칙(트리가 아니라 listbox — 여기엔 펼침이 없다)
+// TREE-2★ 파일 목록도 같은 규칙(listbox — M12 부터 폴더 ▸ 펼침이 있지만 data-open 으로 표시한다. aria-expanded 는 option 의 속성이 아니다)
 test('TREE-2★ 파일 목록을 화살표로 훑는다', async ({ ara }) => {
   const { page } = ara
   await newLocalShell(page)
@@ -131,7 +131,7 @@ test('TREE-2★ 파일 목록을 화살표로 훑는다', async ({ ara }) => {
   await page.keyboard.press('ArrowDown')
   const second = await page.evaluate(() => document.activeElement?.textContent ?? '')
   expect(second).not.toBe(first)
-  // 목록에는 펼침이 없다 — → 를 눌러도 aria-expanded 가 생기지 않는다.
+  // 화살표가 펼치지 않는다 — → 를 눌러도 aria-expanded 가 생기지 않는다(펼침은 ▸ 누름·M12 data-open).
   await expect(page.locator('.ftree [role="option"][aria-expanded]')).toHaveCount(0)
 })
 

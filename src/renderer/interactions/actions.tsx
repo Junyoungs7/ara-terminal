@@ -422,6 +422,9 @@ export type FileActionId =
   | 'file.sort.size'
   | 'file.sort.mtime'
   | 'file.hidden'
+  // M12 CV-01 Orca 탐색기 — 경로 복사(절대)·상대 경로 복사(작업 단위 폴더 기준). AI 작업 공간 탐색기에서만.
+  | 'file.copyPath'
+  | 'file.copyRelPath'
   // #88 R3 로컬 전용 — 압축·속성·보안 탭이 필요하면 여기서 진짜 탐색기로 넘긴다.
   // 20년치 기능을 따라 그리는 대신 한 줄로 넘겨주는 쪽을 골랐다(준영님 확인 대상).
   | 'file.reveal'
@@ -445,6 +448,8 @@ export function fileMenu(ctx: {
   canAskAi?: boolean
   /** #88 R2 로컬 전용 — 잘라내기(이동)·[탐색기에서 보기]. (새 파일은 #201 F 에서 원격에도 열었다.) */
   local?: boolean
+  /** M12 경로 복사 두 칸(AI 작업 공간 탐색기). */
+  copyPath?: boolean
   /** #88 R2 보기 상태. 라벨이 지금 무엇이 켜져 있는지를 말한다(체크 표시 대신 ✓·↑↓ 글리프). */
   sort?: SortSpec
   showHidden?: boolean
@@ -463,6 +468,7 @@ export function fileMenu(ctx: {
     }
     if (!ctx.isDir && ctx.canTail) ids.push('file.tail')
     ids.push('file.rename')
+    if (ctx.copyPath) ids.push('file.copyPath', 'file.copyRelPath')
   } else if (ctx.count > 1 && ctx.canDownload) {
     ids.push('file.download', 'file.downloadAs')
   }

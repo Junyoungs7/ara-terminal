@@ -4,6 +4,7 @@
 import type { LaunchShell } from './aiCli'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
+import type { BytesResult } from './media'
 import type { SearchFile, SearchOptions } from './codeSearch'
 import type { PushConfirm, ScmResult } from './scm'
 import type {
@@ -103,7 +104,8 @@ export type { PastLog }
  * osAtCopy: 복사하던 순간 OS 클립보드의 파일 목록(붙여넣기 때 "그 뒤로 바뀌었나"를 이걸로 가른다).
  */
 export type FileClipData = {
-  session: { id: string; type: 'local' | 'ssh'; serverKey?: string } | null
+  // M12: 'work' = AI 작업 공간 탐색기(작업 단위 폴더 — host 가 있으면 원격).
+  session: { id: string; type: 'local' | 'ssh'; serverKey?: string } | { id: string; type: 'work'; root: string; host?: string; serverKey?: string } | null
   dir: string
   entries: FileEntry[]
   mode: 'copy' | 'cut'
@@ -146,6 +148,13 @@ export type SessionLogReadResult =
 export type CodeWriteReq = { root: string; path: string; text: string; eol: 'lf' | 'crlf'; baseSig: string; force?: boolean; host?: string }
 
 export type FileOpResult = { ok: true } | { ok: false; message: string; canceled?: boolean }
+/** M12 CV-01 탐색기 조작(code:fsOp) — root = 작업 단위 폴더, host = 원격 작업 단위의 서버. */
+export type CodeFsOp =
+  | { op: 'rename'; path: string; name: string }
+  | { op: 'mkdir' | 'newFile'; dir: string; name: string }
+  | { op: 'remove'; paths: string[] }
+  | { op: 'move'; paths: string[]; dir: string }
+export type CodeFsOpReq = { root: string; host?: string } & CodeFsOp
 
 // 전송 결과. 취소·실패 시 부분 파일 정리 여부를 함께 알린다(C-4).
 export type SftpXferResult =
@@ -622,8 +631,7 @@ export type InvokeContract = {
   'git:branchCompare': { req: { worktreePath: string; baseRef?: string; host?: string }; res: GitBranchCompareResult }
   'git:diff': { req: GitDiffArgs; res: GitDiffResult }
   // M6 WS-07·08 코드 에디터(main/code/feature.ts). root = 워크트리 폴더 — main 은 그 안의 경로만 받는다.
-  // pick = OS 파일 창(취소 = null). write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
-  'code:pick': { req: { root: string }; res: string | null }
+  // write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
   'code:read': { req: { root: string; path: string; host?: string }; res: CodeReadResult }
   'code:write': { req: CodeWriteReq; res: CodeWriteResult }
   'code:watch': { req: { root: string; path: string; host?: string }; res: void }
@@ -636,6 +644,12 @@ export type InvokeContract = {
     res: { ok: true; total: number; truncated: boolean; cancelled: boolean } | { ok: false; message: string }
   }
   'code:searchCancel': { req: { id: string }; res: void }
+  // M12 CV-01 파일 탐색기(작업 단위 폴더 안만) · CV-02 뷰어 바이트 · 폴더 감시(바뀌면 code:treeChanged { root }).
+  'code:fsList': { req: { root: string; path: string; host?: string }; res: FileListResult }
+  'code:fsOp': { req: CodeFsOpReq; res: FileOpResult }
+  'code:readBytes': { req: { root: string; path: string; host?: string }; res: BytesResult }
+  'code:watchTree': { req: { root: string; host?: string }; res: void }
+  'code:unwatchTree': { req: { root: string; host?: string }; res: void }
   // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
   // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
   'scm:stage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
@@ -1296,7 +1310,6 @@ export type EvApi = {
   }
   // M6 코드 에디터(preload/features/code.ts).
   code: {
-    pick(root: string): Promise<string | null>
     read(root: string, path: string, host?: string): Promise<CodeReadResult>
     write(req: CodeWriteReq): Promise<CodeWriteResult>
     /** 열린 파일만 감시한다 — 바뀌면 onChanged(모든 창). 탭을 닫을 때 unwatch. */
@@ -1308,6 +1321,12 @@ export type EvApi = {
     searchCancel(id: string): Promise<void>
     /** 검색 결과 묶음(새로 맞은 것만) — 같은 파일이 여러 묶음에 나뉘어 올 수 있다(이어 붙인다). */
     onSearchBatch(cb: (e: { id: string; files: SearchFile[] }) => void): () => void
+    fsList(root: string, path: string, host?: string): Promise<FileListResult>
+    fsOp(req: CodeFsOpReq): Promise<FileOpResult>
+    readBytes(root: string, path: string, host?: string): Promise<BytesResult>
+    watchTree(root: string, host?: string): Promise<void>
+    unwatchTree(root: string, host?: string): Promise<void>
+    onTreeChanged(cb: (e: { root: string }) => void): () => void
   }
   // M7 R2 소스 제어 — git 쓰기(preload/features/scm.ts). 조회는 gitInspect(M7 R1).
   scm: {

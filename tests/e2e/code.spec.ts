@@ -40,6 +40,14 @@ async function monacoLoaded(page: Page): Promise<{ env: boolean; chunks: string[
   }))
 }
 
+/** M12 탐색기 패널 — [탐색기]로 열고 폴더를 펴서 파일을 누른다(Orca: 한 번 누름 = 가운데 탭으로 열기). */
+async function openInExplorer(page: Page, dir: string, name: string): Promise<void> {
+  const panel = page.locator('[data-aiws="explorer"]')
+  if (!(await panel.isVisible())) await page.click('.rbar [data-rbar="explorer"]')
+  await panel.locator(`.frow[data-path="${dir}"]`).click()
+  await panel.locator(`.frow:has(.fn:text-is("${name}"))`).click()
+}
+
 async function openProject(app: ElectronApplication, page: Page, repo: string): Promise<void> {
   await page.click('.titlebar .tb-spaces [data-space="ai"]')
   await expect(page.locator(side)).toBeVisible()
@@ -52,7 +60,7 @@ async function openProject(app: ElectronApplication, page: Page, repo: string): 
 
 test('CODE-1★ AI 공간을 열고 파일을 안 열면 Monaco 청크가 안 불린다 → 열면 불린다', async ({ ara }) => {
   const { app, page } = ara
-  const { root, repo, file } = makeRepo()
+  const { root, repo } = makeRepo()
   try {
     await openProject(app, page, repo)
     // 양성 대조를 위해 같은 검사를 열기 전·후 둘 다 한다 — 뒤에서 잡혀야 앞의 0 이 "없다"는 뜻이 된다.
@@ -61,8 +69,7 @@ test('CODE-1★ AI 공간을 열고 파일을 안 열면 Monaco 청크가 안 �
     expect((await monacoLoaded(page)).env).toBe(false)
     await expect(page.locator('.monaco-editor')).toHaveCount(0)
 
-    await pickReturns(app, file)
-    await page.click('.rbar [data-rbar="explorer"]')
+    await openInExplorer(page, 'src', 'OrderRetryPolicy.java')
     await expect(page.locator('.aiws-tab[data-file-tab="OrderRetryPolicy.java"]')).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator(editor)).toBeVisible()
     await expect(page.locator(`${editor} .view-lines`)).toContainText('int max = 3;')
@@ -81,8 +88,7 @@ test('CODE-2★ 파일 열기 → 수정(더러움 ●) → Ctrl+S 저장 → �
   const { root, repo, file } = makeRepo()
   try {
     await openProject(app, page, repo)
-    await pickReturns(app, file)
-    await page.click('.rbar [data-rbar="explorer"]')
+    await openInExplorer(page, 'src', 'OrderRetryPolicy.java')
     const tab = page.locator('.aiws-tab[data-file-tab="OrderRetryPolicy.java"]')
     await expect(page.locator(editor)).toBeVisible()
 
@@ -112,8 +118,7 @@ test('CODE-3★ 밖에서 변경 — 깨끗하면 조용히 다시 읽기, 더�
   const { root, repo, file } = makeRepo()
   try {
     await openProject(app, page, repo)
-    await pickReturns(app, file)
-    await page.click('.rbar [data-rbar="explorer"]')
+    await openInExplorer(page, 'src', 'OrderRetryPolicy.java')
     const lines = page.locator(`${editor} .view-lines`)
     await expect(lines).toContainText('int max = 3;')
 
