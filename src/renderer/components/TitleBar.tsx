@@ -56,12 +56,12 @@ export function TitleBar({
   /** 2.0 설정 › 기능 — 끈 기능은 메뉴에서 뺀다. 없으면 전부. */
   features?: FeatureShown
   /**
-   * M1 라운드 2 공간 스위치 `[터미널 | AI 작업]`. 실험 기능(설정 › 고급)이 꺼져 있으면 Shell 이 안 넘긴다 —
-   * 그러면 스위치도, ≡ [보기] 의 "공간:" 두 줄도 없다(지금과 똑같은 화면).
+   * M1 라운드 2 공간 스위치 `[터미널 | AI 작업]`. 본창(Shell)만 넘긴다(M3 부터 늘) — 안 받은 창(떼어낸 창 등)은
+   * 스위치도, ≡ [보기] 의 "공간:" 두 줄도 없다.
    * attention: 그 공간에 손댈 일이 생겼을 때 버튼 옆 맥박 점. 신호는 라운드 3 알림 센터(store/notify.ts 의 attention)가 채운다.
    */
   space?: { value: Space; onPick: (s: Space) => void; attention?: Partial<Record<Space, boolean>> }
-  /** M1 라운드 3 알림 벨(NotifyBell) — [채팅] 왼쪽 자리만 내준다. 실험 기능이 꺼져 있으면 Shell 이 안 넘긴다. */
+  /** M1 라운드 3 알림 벨(NotifyBell) — [채팅] 왼쪽 자리만 내준다. 본창(Shell)만 넘긴다. */
   bell?: React.ReactNode
 }) {
   // 열린 최상위 메뉴 인덱스(닫힘 = null) + 그 메뉴를 펼칠 좌표(제목 행 오른쪽).

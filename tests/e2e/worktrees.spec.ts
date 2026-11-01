@@ -6,7 +6,6 @@ import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test, expect, tempDir, rmDir, dialog, dialogConfirm } from './fixtures'
 
-const drawer = '.settings-page.open'
 const side = '.aiws-side'
 
 function makeRepo(): { root: string; repo: string } {
@@ -22,15 +21,11 @@ function makeRepo(): { root: string; repo: string } {
   return { root, repo }
 }
 
-test('WT-1★ 실험 기능 → 프로젝트 추가 → 새 작업(워크트리) → 사이드바 → 핀 → 워크트리 없이 열기 → 지우기', async ({ ara }) => {
+test('WT-1★ AI 작업 공간 → 프로젝트 추가 → 새 작업(워크트리) → 사이드바 → 핀 → 워크트리 없이 열기 → 지우기', async ({ ara }) => {
   const { app, page } = ara
   const { root, repo } = makeRepo()
   try {
-    // 실험 기능 켜기 → AI 작업 공간.
-    await page.keyboard.press('Control+,')
-    await page.click(`${drawer} .sp-nav [data-section="experimental"]`)
-    await page.click(`${drawer} .set-row[data-item="exp.aiSpace"] .set-toggle`)
-    await page.keyboard.press('Escape')
+    // AI 작업 공간(M3 부터 기본 공개 — 실험 기능 토글 없음).
     await page.click('.titlebar .tb-spaces [data-space="ai"]')
     await expect(page.locator(side)).toBeVisible()
     await expect(page.locator(`${side} [data-aiws="new"]`)).toBeDisabled() // 프로젝트가 없으면 새 작업도 없다

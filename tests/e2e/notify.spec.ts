@@ -1,5 +1,5 @@
 // M1 라운드 3 — 알림 센터(토스트 + 타이틀바 벨) + 공간 스위치 맥박 점(시안 SW-final).
-// 실험 기능(AI 작업 공간)을 켰을 때만 보인다. 알림은 시험 훅 `window.__araTestNotify` 로 만든다
+// M3 부터 늘 보인다(옛 실험 기능 게이트는 지웠다). 알림은 시험 훅 `window.__araTestNotify` 로 만든다
 // (ARA_E2E=1 · 비패키지에서만 설치 — store/notify.ts). AI 쪽 wait 신호는 M3 에 들어온다.
 import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
@@ -14,26 +14,15 @@ type NoteIn = { kind: 'wait' | 'done' | 'error' | 'info'; space: 'term' | 'ai'; 
 const notify = (page: Page, n: NoteIn) =>
   page.evaluate((x) => (window as unknown as { __araTestNotify(n: unknown): number }).__araTestNotify(x), n)
 
-async function setAiSpace(page: Page, on: boolean): Promise<void> {
-  await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .sp-nav [data-section="experimental"]`)
-  const toggle = page.locator(`${drawer} .set-row[data-item="exp.aiSpace"] .set-toggle`)
-  await toggle.click()
-  if (on) await expect(toggle).toHaveClass(/\bon\b/)
-  else await expect(toggle).not.toHaveClass(/\bon\b/)
-  await page.keyboard.press('Escape')
-}
-
-test('NOTIFY-1 꺼진 기본 상태 — 벨·토스트가 없다', async ({ ara }) => {
+test('NOTIFY-1 기본 공개(M3) — 실험 기능을 켜지 않아도 벨이 있고 알림은 토스트로 뜬다', async ({ ara }) => {
   const { page } = ara
-  await notify(page, { kind: 'wait', space: 'ai', title: '보이면 안 됨' })
-  await expect(page.locator(bell)).toHaveCount(0)
-  await expect(page.locator('.ntf-toasts')).toHaveCount(0)
+  await expect(page.locator(bell)).toBeVisible()
+  await notify(page, { kind: 'info', space: 'term', title: '보여야 함' })
+  await expect(page.locator(toasts)).toHaveCount(1)
 })
 
 test('NOTIFY-2★ 알림 보내기 → 토스트 → 벨 점 → 맥박 → 토스트 눌러 이동 → 드롭다운 → 모두 읽음', async ({ ara }) => {
   const { page } = ara
-  await setAiSpace(page, true)
   await expect(page.locator(bell)).toBeVisible()
   await expect(page.locator(`${bell} .tb-bell-dot`)).toHaveCount(0)
 
@@ -96,7 +85,6 @@ test('NOTIFY-2★ 알림 보내기 → 토스트 → 벨 점 → 맥박 → 토�
 
 test('NOTIFY-3 맥박 켜짐·꺼짐 — 그 공간으로 가면 꺼지고 돌아와도 다시 안 켜진다 · 끝남은 맥박 없음', async ({ ara }) => {
   const { page } = ara
-  await setAiSpace(page, true)
   await notify(page, { kind: 'done', space: 'ai', title: '끝남' })
   await expect(page.locator(`${sw} .tb-spaces-dot`)).toHaveCount(0)
   await notify(page, { kind: 'wait', space: 'ai', title: '기다림' })
@@ -115,7 +103,6 @@ test('NOTIFY-3 맥박 켜짐·꺼짐 — 그 공간으로 가면 꺼지고 돌�
 test('NOTIFY-4 reduced-motion 이면 맥박은 멈춘 점 · 설정에서 토스트를 끄면 벨에만 모인다', async ({ ara }) => {
   const { page } = ara
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await setAiSpace(page, true)
   await notify(page, { kind: 'wait', space: 'ai', title: '기다림' })
   const dot = page.locator(`${sw} [data-space="ai"] .tb-spaces-dot`)
   await expect(dot).toBeVisible()

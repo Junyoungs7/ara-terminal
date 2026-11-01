@@ -9,7 +9,6 @@ import { test, expect, tempDir, rmDir } from './fixtures'
 import type { ElectronApplication, Page } from '@playwright/test'
 
 const win = process.platform === 'win32'
-const drawer = '.settings-page.open'
 const side = '.aiws-side'
 
 /**
@@ -108,12 +107,8 @@ async function agentSessionIds(page: Page): Promise<string[]> {
 
 const termText = (page: Page, sid: string): Promise<string> => page.evaluate((s) => window.__evTerm(s)?.text() ?? '', sid)
 
-/** 실험 기능 켜기 → AI 작업 공간 → 프로젝트 추가(폴더 창은 바꿔 끼움) → 본 폴더 줄 고르기. */
+/** AI 작업 공간(M3 부터 기본 공개) → 프로젝트 추가(폴더 창은 바꿔 끼움) → 본 폴더 줄 고르기. */
 async function openRepo(app: ElectronApplication, page: Page, repo: string): Promise<void> {
-  await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .sp-nav [data-section="experimental"]`)
-  await page.click(`${drawer} .set-row[data-item="exp.aiSpace"] .set-toggle`)
-  await page.keyboard.press('Escape')
   await page.click('.titlebar .tb-spaces [data-space="ai"]')
   await app.evaluate(({ dialog: d }, p) => {
     d.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as typeof d.showOpenDialog

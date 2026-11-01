@@ -1,38 +1,34 @@
 // M1 라운드 2 — 상단 공간 전환 [터미널 | AI 작업] + 오른쪽 아이콘 바(시안 SW-final).
-// 실험 기능(설정 › 고급 › 실험 기능)을 켰을 때만 스위치가 보인다. 꺼진 기본 상태는 지금과 똑같은 화면이어야 한다.
+// M3 부터 기본 공개 — 옛 실험 기능 토글(설정 › 고급 › 실험 기능)은 섹션째 지웠다. 스위치는 늘 보인다.
 import { test, expect, persist, quitAra } from './fixtures'
 
 const drawer = '.settings-page.open'
 const sw = '.titlebar .tb-spaces'
 
-async function setAiSpace(page: import('@playwright/test').Page, on: boolean): Promise<void> {
-  await page.keyboard.press('Control+,')
-  await page.click(`${drawer} .sp-nav [data-section="experimental"]`)
-  const toggle = page.locator(`${drawer} .set-row[data-item="exp.aiSpace"] .set-toggle`)
-  await toggle.click()
-  if (on) await expect(toggle).toHaveClass(/\bon\b/)
-  else await expect(toggle).not.toHaveClass(/\bon\b/)
-  await page.keyboard.press('Escape')
-}
-
-test('SPACE-1 꺼진 기본 상태 — 스위치·오른쪽 아이콘 바·메뉴의 "공간:" 이 없다', async ({ ara }) => {
+test('SPACE-1 기본 공개(M3) — 처음부터 스위치·오른쪽 아이콘 바·메뉴의 "공간:" 이 있고, 실험 기능 섹션은 없다', async ({ ara }) => {
   const { page } = ara
-  await expect(page.locator(sw)).toHaveCount(0)
-  await expect(page.locator('.rbar')).toHaveCount(0)
-  // 공간 키도 먹지 않는다 — 터미널 레일 그대로.
-  await page.keyboard.press('Control+Alt+2')
-  await expect(page.locator('.ai-rail')).toHaveCount(0)
-  await expect(page.locator('.lrail')).toBeVisible()
+  await expect(page.locator(sw)).toBeVisible()
+  await expect(page.locator(`${sw} [data-space="term"]`)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.rbar')).toBeVisible()
   await page.click('.titlebar .tb-burger')
   await page.click('.tb-menu span:text-is("보기")')
-  await expect(page.locator('.ctx-menu .ctx-item[data-action="space.ai"]')).toHaveCount(0)
+  await expect(page.locator('.ctx-menu .ctx-item[data-action="space.ai"]')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  // 공간 키가 처음부터 먹는다.
+  await page.keyboard.press('Control+Alt+2')
+  await expect(page.locator('.ai-rail')).toBeVisible()
+  await page.keyboard.press('Control+Alt+1')
+  await expect(page.locator('.lrail')).toBeVisible()
+  // 설정에 실험 기능 섹션·토글이 없다.
+  await page.keyboard.press('Control+,')
+  await expect(page.locator(`${drawer} .sp-nav [data-section="experimental"]`)).toHaveCount(0)
+  await expect(page.locator(`${drawer} [data-item="exp.aiSpace"]`)).toHaveCount(0)
   await page.keyboard.press('Escape')
 })
 
-test('SPACE-2★ 실험 기능 켜기 → 스위치 → AI 작업 공간 전환·되돌리기 → 재시작 유지', async ({ userDataDir, launch }) => {
+test('SPACE-2★ 스위치 → AI 작업 공간 전환·되돌리기 → 재시작 유지', async ({ userDataDir, launch }) => {
   const a1 = await launch(userDataDir)
   const page = a1.page
-  await setAiSpace(page, true)
   await expect(page.locator(sw)).toBeVisible()
   await expect(page.locator(`${sw} [data-space="term"]`)).toHaveAttribute('aria-selected', 'true')
 
@@ -40,9 +36,10 @@ test('SPACE-2★ 실험 기능 켜기 → 스위치 → AI 작업 공간 전환�
   await page.click(`${sw} [data-space="ai"]`)
   await expect(page.locator(`${sw} [data-space="ai"]`)).toHaveAttribute('aria-selected', 'true')
   await expect(page.locator('.ai-rail')).toBeVisible()
-  // M2 라운드 2: 워크트리 목록이 들어왔다 — 레일의 [워크트리]는 지금 화면(눌림), 나머지는 아직 비활성.
+  // M2 라운드 2: 워크트리 목록이 들어왔다 — 레일의 [워크트리]는 지금 화면(눌림). M3 R3a 에서 [에이전트]·[대시보드]가 살아났고
+  // 나머지([검색] 등)는 아직 비활성.
   await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="worktree"]')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="agents"]')).toBeDisabled()
+  await expect(page.locator('.ai-rail .ai-rail-item[data-aiws="search"]')).toBeDisabled()
   await expect(page.locator('.lrail')).toHaveCount(0)
   await expect(page.locator('.aiws-home .aiws-side')).toBeVisible()
   await expect(page.locator('.sidebar')).toBeHidden()
@@ -67,7 +64,7 @@ test('SPACE-2★ 실험 기능 켜기 → 스위치 → AI 작업 공간 전환�
   await persist(page)
   await quitAra(a1)
 
-  // 재시작 — 실험 기능과 마지막 공간(AI 작업)이 그대로.
+  // 재시작 — 마지막 공간(AI 작업)이 그대로.
   const a2 = await launch(userDataDir)
   await expect(a2.page.locator(`${sw} [data-space="ai"]`)).toHaveAttribute('aria-selected', 'true', { timeout: 20_000 })
   await expect(a2.page.locator('.ai-rail')).toBeVisible()
@@ -77,19 +74,10 @@ test('SPACE-2★ 실험 기능 켜기 → 스위치 → AI 작업 공간 전환�
   await a2.page.click('.tb-menu span:text-is("보기")')
   await a2.page.click('.ctx-menu .ctx-item[data-action="space.term"]')
   await expect(a2.page.locator('.lrail')).toBeVisible()
-
-  // 실험 기능을 끄면 저장값과 무관하게 터미널 공간 + 스위치 없음.
-  await a2.page.keyboard.press('Control+Alt+2')
-  await expect(a2.page.locator('.ai-rail')).toBeVisible()
-  await setAiSpace(a2.page, false)
-  await expect(a2.page.locator(sw)).toHaveCount(0)
-  await expect(a2.page.locator('.ai-rail')).toHaveCount(0)
-  await expect(a2.page.locator('.lrail')).toBeVisible()
 })
 
 test('SPACE-3 오른쪽 아이콘 바 — 아라를 열고 접는다, 타이틀바 [채팅]과 같은 상태', async ({ ara }) => {
   const { page } = ara
-  await setAiSpace(page, true)
   const chat = page.locator('.rbar .rbar-item[data-rbar="chat"]')
   // 터미널 공간은 아라만.
   await expect(page.locator('.rbar .rbar-item')).toHaveCount(1)
