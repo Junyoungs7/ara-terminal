@@ -412,6 +412,20 @@ if (shouldLockSingleInstance({ packaged: app.isPackaged, allowMulti: process.env
 // 잠금이 없는 실행(dev·하네스)은 openHere 가 없어 늘 빈손이다. 핸들러는 늘 건다(없으면 invoke 가 main 로그에 오류를 찍는다).
 handle('app:openLaunchDir', () => ({ opened: openHere?.ready() ?? false }))
 
+// e2e·스모크·성능 측정: 시험 창을 화면 밖에 띄운다 — 준영님 화면을 가리지 않게(2026-11-01 제보: "창이 켜졌다 꺼졌다 해서 채팅하기 힘듦").
+// 그려지기는 그대로 그려진다(Playwright 가 DOM·스크린샷을 그대로 본다). 창 위치 자체를 재는 시험만 ARA_E2E_ONSCREEN=1.
+// 🔴 배포본에서는 읽지 않는다(app.isPackaged).
+if (!app.isPackaged && process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_ONSCREEN'] !== '1') {
+  app.on('browser-window-created', (_e, w) => {
+    const park = (): void => {
+      if (!w.isDestroyed()) w.setPosition(-32000, -32000)
+    }
+    park()
+    w.once('ready-to-show', park)
+    w.once('show', park)
+  })
+}
+
 app.whenReady().then(async () => {
   // 기본 메뉴 가속키(Ctrl+R 새로고침 등)를 끈다 — 이유는 appMenu.ts. 창을 만들기 전에.
   const menu = appMenuTemplate(process.platform, !app.isPackaged)
