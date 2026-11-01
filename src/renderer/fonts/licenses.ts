@@ -5,10 +5,11 @@ export type FontLicense = { name: string; copyright: string; source: string }
 /**
  * M0 — 옮겨 온 **코드**의 고지(폰트 표와 같은 모양으로 설정 › 정보에 그린다). 원문은 저장소 루트 NOTICE 이고
  * electron-builder 가 설치 폴더 resources/NOTICE 로 싣는다. tests/fontLicenses.test.ts 가 NOTICE 와 이 표를 맞춘다.
- * herdr(Apache-2.0)는 아직 옮기지 않았다 — 옮길 때 NOTICE 의 자리를 채우고 여기에 한 줄 더한다.
+ * herdr(Apache-2.0)는 M3 라운드 2 에서 화면 매니페스트·판정 엔진을 옮겼다(저장소에 저작권 줄이 없어 '기여자'로 적는다).
  */
 export const CODE_NOTICES: { name: string; copyright: string; license: string }[] = [
-  { name: 'Orca (stablyai/orca)', copyright: 'Copyright (c) 2026 Lovecast Inc.', license: 'MIT License' }
+  { name: 'Orca (stablyai/orca)', copyright: 'Copyright (c) 2026 Lovecast Inc.', license: 'MIT License' },
+  { name: 'herdr (herdrdev/herdr) — 에이전트 화면 매니페스트', copyright: 'Copyright herdr contributors', license: 'Apache License 2.0' }
 ]
 
 export const LICENSES: FontLicense[] = [
