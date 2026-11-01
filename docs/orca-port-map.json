@@ -501,20 +501,26 @@
     "id": "DM-02",
     "feature": "orcad(호스트 서버 데몬)",
     "orcaPaths": [
-      "src/main/orcad"
+      "src/main/orcad",
+      "src/main/managed-server/lifecycle/orcad-stdio-bridge-script.ts",
+      "src/main/managed-server/install/orcad-remote-host-support.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "DM-03",
     "feature": "관리형 서버 자동 설치·업데이트",
     "orcaPaths": [
       "src/main/managed-server",
-      "src/renderer/src/components/managed-runtime"
+      "src/renderer/src/components/managed-runtime",
+      "src/main/managed-server/install/orcad-remote-install.ts",
+      "src/main/managed-server/install/orcad-remote-decommission.ts",
+      "src/main/managed-server/lifecycle/orcad-managed-update-decision.ts",
+      "src/renderer/src/components/managed-runtime/ManagedRuntimeRemoveDialog.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "DM-04",
