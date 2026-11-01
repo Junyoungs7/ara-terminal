@@ -365,49 +365,63 @@
       "src/renderer/src/components/native-chat",
       "src/main/native-chat",
       "src/main/ipc/native-chat.ts",
-      "docs/site/content/docs/agents/native-chat.mdx"
+      "docs/site/content/docs/agents/native-chat.mdx",
+      "src/renderer/src/components/native-chat/NativeChatMessageList.tsx"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-13",
     "feature": "터미널 에이전트를 채팅으로 보기",
     "orcaPaths": [
-      "src/renderer/src/store/terminals/terminal-chat-pane-layout-owner.ts"
+      "src/renderer/src/store/terminals/terminal-chat-pane-layout-owner.ts",
+      "src/main/native-chat/session-file-resolver.ts",
+      "src/main/native-chat/transcript-line-decoders-codex.ts",
+      "src/main/native-chat/codex-rollout-history-source.ts",
+      "src/main/ai-vault/session-scanner-gemini-parsers.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-14",
     "feature": "에이전트별 채팅/터미널 기본 선택",
     "orcaPaths": [
       "src/renderer/src/components/settings/AgentChatChoiceControls.tsx",
-      "src/renderer/src/components/settings/native-chat-provider-choice.ts"
+      "src/renderer/src/components/settings/native-chat-provider-choice.ts",
+      "src/shared/native-chat/native-chat-providers.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-15",
     "feature": "모델·추론강도·모드 선택",
     "orcaPaths": [
       "src/main/claude/claude-model-catalog-probe.ts",
-      "src/main/acp/acp-model-catalog-probe.ts"
+      "src/main/acp/acp-model-catalog-probe.ts",
+      "src/shared/claude-model-list-probe.ts",
+      "src/main/claude/claude-structured-model-catalog.ts",
+      "src/shared/agent-session-option-catalog-claude-codex.ts",
+      "src/shared/native-chat-paste-bytes.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-16",
     "feature": "슬래시 명령·스킬 목록",
     "orcaPaths": [
       "src/main/claude/claude-slash-command-catalog.ts",
-      "src/main/acp/acp-at-rest-commands.ts"
+      "src/main/acp/acp-at-rest-commands.ts",
+      "src/main/claude/claude-at-rest-commands.ts",
+      "src/main/claude/claude-command-folder-scan.ts",
+      "src/shared/skill-metadata.ts",
+      "src/shared/native-chat/input/native-chat-picker-triggers.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-17",
@@ -416,28 +430,32 @@
       "src/main/native-chat/agent-session-attachments",
       "src/main/acp/acp-prompt-content.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-18",
     "feature": "채팅 권한 설정",
     "orcaPaths": [
       "src/renderer/src/components/settings/ChatPermissionSetting.tsx",
-      "src/shared/agent-chat-permission-mode.ts"
+      "src/shared/agent-chat-permission-mode.ts",
+      "src/shared/agent-chat-permission-support.ts",
+      "src/shared/tui-agent-permission-choice.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-19",
     "feature": "채팅 이름 자동 생성",
     "orcaPaths": [
       "src/renderer/src/components/settings/ChatNamingSetting.tsx",
-      "src/main/text-generation/conversation-name-generation-request.ts"
+      "src/main/text-generation/conversation-name-generation-request.ts",
+      "src/shared/conversation-name-generation.ts",
+      "src/shared/commit-message-agent-specs-primary.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "DM-01",
