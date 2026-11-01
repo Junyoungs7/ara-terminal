@@ -363,10 +363,14 @@
       "src/main/ssh/config/ssh-g-config-resolution.ts",
       "src/main/ssh/connection/ssh-connection.ts",
       "src/main/ssh/system-transport/system-ssh-args.ts",
-      "docs/site/content/docs/ssh.mdx"
+      "docs/site/content/docs/ssh.mdx",
+      "src/main/ssh/connection/ssh-connect-config.ts",
+      "src/main/ssh/connection/ssh-connection-timing.ts",
+      "src/main/ssh/connection/ssh-connection-reconnect.ts",
+      "src/main/ssh/sftp-upload.ts"
     ],
-    "orcaRef": "7a7f46f8a3",
-    "status": "planned"
+    "orcaRef": "fdfcfb3551",
+    "status": "porting"
   },
   {
     "id": "AI-11",
