@@ -67,7 +67,7 @@ describe('mac 메뉴 막대 = ≡ 메뉴', () => {
   it('누르면 그 창에 menu:pick(id) 을 보낸다', () => {
     const item = (appMenus[0].submenu as MenuItemConstructorOptions[])[0]
     const sent: unknown[] = []
-    const win = { webContents: { send: (...a: unknown[]) => sent.push(a) } }
+    const win = { webContents: { isDestroyed: () => false, send: (...a: unknown[]) => sent.push(a) } } // pushSend 가드가 isDestroyed 를 본다
     ;(item.click as (...a: unknown[]) => void)(item, win, {})
     expect(sent).toEqual([['menu:pick', item.id]])
   })
