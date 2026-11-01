@@ -46,6 +46,7 @@ import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
+import { registerGitInspectFeature } from './git/feature'
 import { registerScmFeature } from './scm/feature'
 import { registerLegacyAiImport } from './agents/legacyImport'
 import { registerAiIpc } from './ipc/registerAiIpc'
@@ -558,6 +559,8 @@ app.whenReady().then(async () => {
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
   registerCodeFeature()
+  // M7 R1 WS-10 git 조회(main/git/feature.ts) — 변경 목록·분기 비교·파일 diff(읽기만).
+  registerGitInspectFeature()
   registerScmFeature()
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).
   registerLegacyAiImport(store, (path) => worktrees.addProject(path))

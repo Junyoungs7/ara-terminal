@@ -1,0 +1,79 @@
+// M7 R1 WS-10 git **조회만**(읽기) — 변경 목록·분기 비교·파일 한 개의 양쪽 글. 쓰기(stage/commit/push)는 R2(main/scm).
+// Orca src/main/git/source-control/{status-read,branch-compare,file-diff,branch-diff,diff-result}.ts(orcaRef fdfcfb3551)의 1차 판.
+// 뺀 것: 상태 읽기 합치기·캐시·줄 수 통계·서브모듈·WSL·이미지 미리보기·충돌 작업 감지. 공유 API = agent_talk/m7-shared-api.md.
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { git } from '../worktrees/git'
+import {
+  DEFAULT_BASE_REF_ARGS,
+  DIFF_READ_MAX_BYTES,
+  buildDiffResult,
+  isSafeRelPath,
+  parseNameStatusZ,
+  parseStatusV2,
+  pickDefaultBaseRef,
+  type GitBranchCompareResult,
+  type GitDiffArgs,
+  type GitDiffResult,
+  type GitStatusResult
+} from '@shared/gitDiff'
+
+const failed = (stderr: string, fallback: string): { ok: false; message: string } => ({ ok: false, message: stderr.trim() || fallback })
+
+/** 작업 중 변경(스테이지됨·안 됨·추적 안 됨). Orca status-read 의 인자 그대로 + -z. ponytail: 출력은 runProcess 상한(16MB) 안에서 통째로 — 목록은 GIT_STATUS_LIMIT 에서 자른다. */
+export async function readGitStatus(worktreePath: string): Promise<GitStatusResult> {
+  const r = await git(['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all'], worktreePath)
+  return r.code === 0 ? parseStatusV2(r.stdout) : failed(r.stderr, 'git status 실패')
+}
+
+/** 분기 기준 대비(갈림점 ↔ HEAD, 커밋된 것만). baseRef 를 안 주면 Orca 기본값(origin/HEAD → origin/main …). */
+export async function readBranchCompare(worktreePath: string, baseRef?: string): Promise<GitBranchCompareResult> {
+  let base = typeof baseRef === 'string' && baseRef.trim() ? baseRef.trim() : null
+  if (base?.startsWith('-')) return { ok: false, message: `잘못된 기준: ${base}` }
+  if (!base) {
+    const d = await git([...DEFAULT_BASE_REF_ARGS], worktreePath)
+    base = d.code === 0 ? pickDefaultBaseRef(d.stdout) : null
+    if (!base) return { ok: false, message: '비교할 기준 브랜치(origin/main·main 등)를 찾지 못했습니다.' }
+  }
+  const mb = await git(['merge-base', base, 'HEAD'], worktreePath)
+  if (mb.code !== 0) return failed(mb.stderr, `${base} 와의 갈림점을 찾지 못했습니다.`)
+  const mergeBase = mb.stdout.trim()
+  const r = await git(['-c', 'core.quotePath=false', 'diff', '--name-status', '-z', '-M', mergeBase, 'HEAD', '--'], worktreePath)
+  if (r.code !== 0) return failed(r.stderr, 'git diff 실패')
+  return { ok: true, baseRef: base, mergeBase, ...parseNameStatusZ(r.stdout) }
+}
+
+type Side = { rev: string; path: string } | { disk: string }
+/** 한쪽 글. 없으면 ''(추가·삭제), 상한을 넘으면 null(tooLarge). */
+async function readSide(worktreePath: string, side: Side): Promise<string | null> {
+  if ('disk' in side) {
+    const p = join(worktreePath, side.disk)
+    const st = await stat(p).catch(() => null)
+    if (!st?.isFile()) return ''
+    return st.size > DIFF_READ_MAX_BYTES ? null : readFile(p, 'utf8')
+  }
+  const spec = `${side.rev}:${side.path}`
+  const size = await git(['cat-file', '-s', spec], worktreePath)
+  if (size.code !== 0) return ''
+  if (Number(size.stdout.trim()) > DIFF_READ_MAX_BYTES) return null
+  const r = await git(['cat-file', 'blob', spec], worktreePath)
+  return r.code === 0 ? r.stdout : ''
+}
+
+/** 파일 하나의 양쪽 글 — **연 파일만** 부른다(목록은 이름만). */
+export async function readFileDiff(a: GitDiffArgs): Promise<GitDiffResult> {
+  if (!isSafeRelPath(a.filePath) || (a.oldPath !== undefined && !isSafeRelPath(a.oldPath))) return { ok: false, message: '잘못된 경로입니다.' }
+  const old = a.oldPath ?? a.filePath
+  let sides: [Side, Side]
+  if (a.mode === 'unstaged') sides = [{ rev: '', path: a.filePath }, { disk: a.filePath }]
+  else if (a.mode === 'staged') sides = [{ rev: 'HEAD', path: old }, { rev: '', path: a.filePath }]
+  else if (a.mode === 'branch' && typeof a.mergeBase === 'string' && /^[0-9a-f]{7,64}$/i.test(a.mergeBase)) sides = [{ rev: a.mergeBase, path: old }, { rev: 'HEAD', path: a.filePath }]
+  else return { ok: false, message: '잘못된 비교 방식입니다.' }
+  try {
+    const [original, modified] = await Promise.all(sides.map((s) => readSide(a.worktreePath, s)))
+    if (original === null || modified === null) return { ok: true, kind: 'tooLarge' }
+    return buildDiffResult(original, modified)
+  } catch (e) {
+    return { ok: false, message: String((e as Error)?.message ?? e) }
+  }
+}

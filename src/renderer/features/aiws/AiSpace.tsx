@@ -17,6 +17,8 @@ import { QuickOpen } from './QuickOpen'
 import { SearchPanel } from './SearchPanel'
 import { isMac } from '@shared/keymap'
 import { OPEN_FILE_EVENT } from '@shared/codeFiles'
+import { OPEN_DIFF_EVENT, type DiffMode } from '@shared/gitDiff'
+import { openDiff } from './diffStore'
 import { SCM_STATE_EVENT, SCM_TOGGLE_EVENT } from '@shared/scm'
 import { ScmPanel } from './ScmPanel'
 
@@ -123,6 +125,17 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
     window.addEventListener(OPEN_FILE_EVENT, h)
     return () => window.removeEventListener(OPEN_FILE_EVENT, h)
   }, [ask])
+  // M7 WS-10 diff 탭 열기 — 진입 청크·R2 소스 제어 패널이 창 이벤트로(detail = { filePath?, mode? }). 공유 API = agent_talk/m7-shared-api.md.
+  useEffect(() => {
+    const h = (e: Event): void => {
+      const d = (e as CustomEvent<{ filePath?: string; mode?: DiffMode } | undefined>).detail
+      if (!openDiff(typeof d?.filePath === 'string' ? d.filePath : undefined, d?.mode === 'staged' || d?.mode === 'branch' ? d.mode : 'unstaged')) return
+      setComposer(null)
+      useAgentStore.getState().setView('worktree')
+    }
+    window.addEventListener(OPEN_DIFF_EVENT, h)
+    return () => window.removeEventListener(OPEN_DIFF_EVENT, h)
+  }, [])
 
   // M6 R2 WS-06 빠른 열기 = Ctrl+P(맥 Cmd+P) — **AI 작업 공간에서만**(이 컴포넌트는 그 공간에서만 붙는다). Orca 의 Go to File 키.
   // KEYMAP 에 넣지 않는다: 넣으면 isAppShortcut 이 터미널 공간의 xterm 에서도 이 키를 삼켜 셸의 Ctrl+P(리드라인 이전 명령)가 죽는다.

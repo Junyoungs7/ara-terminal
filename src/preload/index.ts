@@ -22,6 +22,7 @@ import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
 import { vaultBridge } from './features/vault'
 import { codeBridge } from './features/code'
+import { gitInspectBridge } from './features/gitInspect'
 import { scmBridge } from './features/scm'
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from '@shared/explorerWin'
 import type { PastLogTarget } from '@shared/pastLogWin'
@@ -256,6 +257,7 @@ const api: EvApi = {
   ...agentsBridge,
   ...vaultBridge,
   ...codeBridge,
+  ...gitInspectBridge,
   ...scmBridge,
   telemetry: {
     start: (sessionId: string) => ipcRenderer.invoke('telemetry:start', { sessionId }),

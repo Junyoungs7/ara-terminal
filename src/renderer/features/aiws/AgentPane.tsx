@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
-import { FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
+import { FileDiff, FileText, MessageSquare, Plus, SquareTerminal, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, permissionChoicesFor, type AgentId, type AgentPermissionChoice } from '@shared/agents'
 import { effortLabel, type ModelCatalog } from '@shared/agentOptions'
 import type { Worktree } from '@shared/worktrees'
@@ -13,9 +13,12 @@ import { AgentChatView } from './AgentChatView'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { areWorktreePathsEqual } from '@shared/worktrees'
+import { changeCount, openDiff, useDiffStore } from './diffStore'
 
 // M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
 const CodeEditor = lazy(() => import('./CodeEditor'))
+// M7 WS-10 diff 탭도 Monaco 를 쓴다 — 탭을 처음 열 때만 불린다.
+const DiffView = lazy(() => import('./DiffView'))
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
 /**
@@ -24,7 +27,7 @@ type AskFn = (spec: DialogSpec) => Promise<DialogResult>
  * M5 R2: 시작 전 초안 옵션(Orca draft session options) — 모델·추론 강도(AI-15, 설치된 CLI 가 알려 준 목록 — 지금은 Claude)·이번 탭 권한(AI-18)은
  * 첫 실행 인자로(--model·--effort·권한 플래그). 비워 두면 CLI 기본값·설정 › 에이전트의 권한.
  */
-export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Worktree; onLaunched?: () => void; onCancel?: () => void }): JSX.Element {
+export function AgentPicker({ worktree, onLaunched, onCancel, onDiff }: { worktree: Worktree; onLaunched?: () => void; onCancel?: () => void; onDiff?: () => void }): JSX.Element {
   const detected = useAgentStore((s) => s.detected)
   const settings = useAgentStore((s) => s.settings)
   const detecting = useAgentStore((s) => s.detecting)
@@ -159,6 +162,11 @@ export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Work
         </p>
       )}
       <div className="aiws-new-foot">
+        {onDiff && (
+          <button type="button" className="btn sec" data-aiws="diff-open" onClick={onDiff}>
+            {t('diff.open')}
+          </button>
+        )}
         <button type="button" className="btn sec" disabled={detecting} onClick={() => void useAgentStore.getState().loadAgents(true)}>
           {t('aiws.agent.redetect')}
         </button>
@@ -195,8 +203,11 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const allFiles = useCodeStore((s) => s.files)
   const files = allFiles.filter((f) => f.worktreeId === worktree.id)
   const activeFilePath = useCodeStore((s) => s.activeByWorktree[worktree.id] ?? null)
-  const shownFile = activeFilePath ? files.find((f) => areWorktreePathsEqual(f.path, activeFilePath, PLATFORM)) : undefined
-  const shownTab = tabs.length === 0 || picking || shownFile ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
+  // M7 "변경 비교 · n" 탭 — 열려 있고(diff 상태가 있음) 보이면 가운데가 diff. 파일 탭보다 위다(openDiff 가 파일 탭을 내린다).
+  const diff = useDiffStore((s) => s.byWorktree[worktree.id])
+  const shownDiff = useDiffStore((s) => !!s.shownByWorktree[worktree.id]) && !!diff
+  const shownFile = activeFilePath && !shownDiff ? files.find((f) => areWorktreePathsEqual(f.path, activeFilePath, PLATFORM)) : undefined
+  const shownTab = tabs.length === 0 || picking || shownFile || shownDiff ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
   const shownId = shownTab?.sessionId ?? null
   const chatAgent = shownTab ? shownTab.sessionId : null
   // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
@@ -231,7 +242,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [worktree.id, worktree.path, chatAgent])
-  if ((tabs.length === 0 && files.length === 0) || picking) {
+  if ((tabs.length === 0 && files.length === 0 && !diff) || picking) {
     return (
       <AgentPicker
         worktree={worktree}
@@ -239,7 +250,11 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           setPicking(false)
           useCodeStore.getState().setActive(worktree.id, null)
         }}
-        onCancel={tabs.length || files.length ? () => setPicking(false) : undefined}
+        onCancel={tabs.length || files.length || diff ? () => setPicking(false) : undefined}
+        onDiff={() => {
+          setPicking(false)
+          openDiff(undefined, 'unstaged', worktree.id)
+        }}
       />
     )
   }
@@ -267,13 +282,14 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             key={x.sessionId}
             role="tab"
             tabIndex={0}
-            aria-selected={x === active && !shownFile}
-            className={'aiws-tab' + (x === active && !shownFile ? ' on' : '')}
+            aria-selected={x === active && !shownFile && !shownDiff}
+            className={'aiws-tab' + (x === active && !shownFile && !shownDiff ? ' on' : '')}
             data-agent-tab={x.agent}
             data-state={x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
             title={x.line}
             onClick={() => {
               useCodeStore.getState().setActive(worktree.id, null)
+              useDiffStore.getState().setShown(worktree.id, false)
               useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)
             }}
           >
@@ -317,7 +333,10 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             data-file-tab={baseName(f.path)}
             data-dirty={f.dirty || undefined}
             title={f.path}
-            onClick={() => useCodeStore.getState().setActive(worktree.id, f.path)}
+            onClick={() => {
+              useDiffStore.getState().setShown(worktree.id, false)
+              useCodeStore.getState().setActive(worktree.id, f.path)
+            }}
           >
             <FileText className="aiws-tab-ic" aria-hidden />
             <span>{baseName(f.path)}</span>
@@ -339,7 +358,39 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             </button>
           </div>
         ))}
-        {active && !shownFile && (
+        {/* M7 WS-10 "변경 비교 · n"(시안 SW-final 가운데 탭). 안 열었으면 탭 줄 끝의 [변경 비교] 버튼으로 연다. */}
+        {diff ? (
+          <div
+            role="tab"
+            tabIndex={0}
+            aria-selected={shownDiff}
+            className={'aiws-tab' + (shownDiff ? ' on' : '')}
+            data-aiws="diff-tab"
+            onClick={() => {
+              useCodeStore.getState().setActive(worktree.id, null)
+              useDiffStore.getState().setShown(worktree.id, true)
+            }}
+          >
+            <FileDiff className="aiws-tab-ic" aria-hidden />
+            <span>{changeCount(diff) === null ? t('diff.tab') : t('diff.tabN').replace('{n}', String(changeCount(diff)))}</span>
+            <button
+              type="button"
+              className="aiws-ic"
+              aria-label={t('diff.close')}
+              onClick={(e) => {
+                e.stopPropagation()
+                useDiffStore.getState().close(worktree.id)
+              }}
+            >
+              <X />
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="aiws-ic" data-aiws="diff-open" aria-label={t('diff.open')} title={t('diff.open')} onClick={() => openDiff(undefined, 'unstaged', worktree.id)}>
+            <FileDiff />
+          </button>
+        )}
+        {active && !shownFile && !shownDiff && (
           <button
             type="button"
             className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
@@ -356,22 +407,27 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <Plus />
         </button>
       </div>
-      {active && !shownFile && active.prompt && statusById[active.sessionId]?.promptFailed && (
+      {active && !shownFile && !shownDiff && active.prompt && statusById[active.sessionId]?.promptFailed && (
         <div className="aiws-note aiws-err aiws-prompt-failed" role="alert" data-aiws="prompt-failed">
           <span>{t('aiws.agent.promptFailed')}</span>
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
-      {active && chatting && !shownFile && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
+      {active && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.map((x) => (
-        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile}>
-          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile} local serverKey="localhost" agent />
+        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile && !shownDiff} local serverKey="localhost" agent />
         </div>
       ))}
       {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}
       {files.length > 0 && (
         <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
           <CodeEditor worktreeId={worktree.id} ask={ask} hidden={!shownFile} />
+        </Suspense>
+      )}
+      {diff && (
+        <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
+          <DiffView worktree={worktree} hidden={!shownDiff} />
         </Suspense>
       )}
     </div>

@@ -2,6 +2,7 @@
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
 import type { LaunchShell } from './aiCli'
+import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { SearchFile, SearchOptions } from './codeSearch'
 import type { PushConfirm, ScmResult } from './scm'
@@ -586,6 +587,10 @@ export type InvokeContract = {
   // 상세는 마지막 목록에 있던 파일만 연다.
   'vault:detail': { req: { file: string }; res: VaultDetail }
   'vault:resumeCommand': { req: { agent: AgentId; id: string; cwd: string | null }; res: { ok: true; text: string } | { ok: false; error: string } }
+  // M7 R1 WS-10 git 조회(main/git/feature.ts) — 읽기만. 이름은 Orca git-inspection-api. 공유 API = agent_talk/m7-shared-api.md.
+  'git:status': { req: { worktreePath: string }; res: GitStatusResult }
+  'git:branchCompare': { req: { worktreePath: string; baseRef?: string }; res: GitBranchCompareResult }
+  'git:diff': { req: GitDiffArgs; res: GitDiffResult }
   // M6 WS-07·08 코드 에디터(main/code/feature.ts). root = 워크트리 폴더 — main 은 그 안의 경로만 받는다.
   // pick = OS 파일 창(취소 = null). write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
   'code:pick': { req: { root: string }; res: string | null }
@@ -1239,6 +1244,12 @@ export type EvApi = {
     list(cwds: string[]): Promise<VaultSession[]>
     detail(file: string): Promise<VaultDetail>
     resumeCommand(agent: AgentId, id: string, cwd: string | null): Promise<InvokeRes<'vault:resumeCommand'>>
+  }
+  // M7 R1 git 조회(preload/features/gitInspect.ts). diff 는 연 파일만 부른다.
+  gitInspect: {
+    status(worktreePath: string): Promise<GitStatusResult>
+    branchCompare(worktreePath: string, baseRef?: string): Promise<GitBranchCompareResult>
+    diff(args: GitDiffArgs): Promise<GitDiffResult>
   }
   // M6 코드 에디터(preload/features/code.ts).
   code: {

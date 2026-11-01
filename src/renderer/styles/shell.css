@@ -9857,6 +9857,200 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   font-size: var(--fs-micro);
 }
+/* M7 WS-10·11 변경 비교 탭 — 왼쪽 변경 목록 · 오른쪽 Monaco diff · 줄 주석. 띠(.code-bar)는 코드 에디터 것을 같이 쓴다. */
+.diff-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.diff-view[hidden] {
+  display: none;
+}
+.diff-list {
+  width: 264px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--bg-canvas);
+}
+.diff-list-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.diff-seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.diff-list-head .diff-seg {
+  flex: 1;
+}
+.diff-seg-btn {
+  flex: 1;
+  padding: var(--sp-1) var(--sp-3);
+  background: none;
+  border: 0;
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  cursor: var(--cur-hand, pointer);
+}
+.diff-seg-btn.on {
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+.diff-meta {
+  margin: 0;
+  padding: var(--sp-1) var(--sp-3);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.diff-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.diff-row {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  background: none;
+  border: 0;
+  color: var(--text-mid);
+  text-align: left;
+  cursor: var(--cur-hand, pointer);
+}
+.diff-row:hover {
+  background: var(--bg-surface);
+}
+.diff-row.on {
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+.diff-letter {
+  flex: none;
+  width: var(--sp-4);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.diff-letter.s-A,
+.diff-letter.s-U {
+  color: var(--ok);
+}
+.diff-letter.s-D {
+  color: var(--err);
+}
+.diff-letter.s-M,
+.diff-letter.s-R {
+  color: var(--warn);
+}
+.diff-name {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.diff-area,
+.diff-cnt {
+  flex: none;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.diff-cnt {
+  color: var(--text-hi);
+}
+.diff-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diff-bar .btn svg {
+  width: 14px;
+  height: 14px;
+}
+.diff-monaco {
+  flex: 1;
+  min-height: 0;
+}
+.diff-monaco[hidden] {
+  display: none;
+}
+.diff-draft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-surface);
+}
+.diff-draft-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.diff-cmts {
+  flex: none;
+  max-height: 30%;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.diff-cmt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+}
+.diff-cmt[data-sent] .diff-cmt-body {
+  color: var(--text-lo);
+}
+.diff-cmt-loc {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.diff-cmt-body {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-hi);
+}
+/* Monaco 장식(DiffView 가 바뀐 쪽 에디터에 붙인다) — 주석 단 줄. */
+.diff-cmt-line {
+  box-shadow: inset 2px 0 0 var(--line-strong);
+}
+.diff-cmt-glyph {
+  background: var(--text-mid);
+  border-radius: var(--radius-sm);
+  margin-left: var(--sp-1);
+  width: var(--sp-2) !important;
+}
 /* M6 R2 WS-06 빠른 열기(Ctrl+P) — 통합 검색(.cp-*)과 같은 덮개 창 모양. 선택자는 따로 둔다(e2e 가 두 창을 헷갈리지 않게). */
 .qo-scrim {
   position: fixed;
