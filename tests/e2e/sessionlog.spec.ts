@@ -21,7 +21,8 @@ const logDir = (userData: string): string => join(userData, 'logs')
 
 function logFiles(userData: string): string[] {
   try {
-    return readdirSync(logDir(userData)).filter((f) => f.endsWith('.log'))
+    // 세션 로그만 센다(`YYYYMMDD-HHMMSS_<이름>_<id>.log`). M11 R2 부터 켤 때 데몬을 미리 띄워 같은 폴더에 agent-daemon.log 등이 생긴다.
+    return readdirSync(logDir(userData)).filter((f) => /^\d{8}-\d{6}_.+\.log$/.test(f))
   } catch {
     return [] // 아직 디렉토리 자체가 없다 = 기록 없음
   }
