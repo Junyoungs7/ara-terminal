@@ -189,6 +189,9 @@ export const RENDERER_RECOVERY_STALL_MS = 10_000
 const RENDERER_RECOVERY_DEV_STALL_MS = 60_000
 const RENDERER_RECOVERY_STALL_CAP_FACTOR = 2
 export const RENDERER_RECOVERY_STALL_SCOPE = 'renderer-recovery-stalled'
+/** 어느 단계를 돌렸나 — main-error.log 에 `renderer-recovery-step` 아래 줄로(e2e STAB-1 이 도달 단계를 읽는다). */
+export const RENDERER_RECOVERY_STEP_SCOPE = 'renderer-recovery-step'
+const RECOVERY_STEP_NAMES = ['reload', 'loadEntry', 'recreate'] as const
 
 export type RendererRecoveryOptions = {
   /** 앱 첫 화면을 처음부터 다시 싣는다(index.ts 의 loadURL/loadFile). reload 가 멈췄을 때 두 번째 단계. */
@@ -235,6 +238,7 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
   // "Observers can only be added once!"(NOTREACHED)로 앱째 죽는다(2026-11-01 실측, ME-1 E3). Orca 도 타이머 뒤에
   // 다시 불러온다(createMainWindow-recovery-reload-watchdog.test.ts 가 250ms 를 흘려 보낸다) — 같은 값으로 미룬다.
   const runStep = (): void => {
+    logMainError(RENDERER_RECOVERY_STEP_SCOPE, RECOVERY_STEP_NAMES[step])
     if (step === 2) {
       // 이 창의 감시는 여기서 끝난다 — 새 창은 createWindow 가 자기 감시를 단다.
       clearStall()
@@ -285,12 +289,12 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
     attempt()
   }
   /** 이벤트·감시가 같이 부르는 하나의 복구 경로. */
-  const recover = (scope: string, why: string, pid: number): void => {
+  const recover = (scope: string, why: string, pid: number, startStep = 0): void => {
     if (pending || win.isDestroyed() || isQuitting()) return
     pending = true
     deadPid = pid
     lastPid = 0
-    step = 0
+    step = startStep
     logMainError(scope, why)
     attempt()
   }
@@ -301,7 +305,12 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
     const pid = wc.getOSProcessId() || lastPid
     const alive = pid > 0 && pidAlive(pid)
     if (pid > 0 && alive) lastPid = pid
-    if (crashed || (pid > 0 && !alive)) recover(RENDERER_GONE_WATCHDOG_SCOPE, `crashed=${crashed} pid=${pid} alive=${alive}`, pid)
+    if (!crashed && !(pid > 0 && !alive)) return
+    // 🔴 프로세스는 없는데 Chromium 은 모른다(isCrashed false, 이벤트 없음) — 이 webContents 는 아직 죽은 렌더러에 붙어 있어
+    // reload·loadFile 의 내비게이션이 그 프로세스로 가서 영영 커밋되지 않는다(c47c539 STAB-1 ×5 중 실패 2건이 이 모양:
+    // 감시가 잡음, loading:true·did-finish-load 0. 116b4f6 ×5 는 5건 모두 두 단계 정체 뒤 창 새로 만들기까지 갔다). 같은 webContents 로는 안 살아나므로 곧장 창을 새로 만든다 —
+    // 빈 화면 ~20초(정체 10초 ×2)를 줄인다. Chromium 이 아는 죽음(isCrashed)은 이벤트 길과 같이 reload 부터.
+    recover(RENDERER_GONE_WATCHDOG_SCOPE, `crashed=${crashed} pid=${pid} alive=${alive}`, pid, crashed ? 0 : 2)
   }
   wc.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit' || win.isDestroyed() || isQuitting()) return

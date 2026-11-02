@@ -13,20 +13,36 @@ const readJson = <T>(p: string): T | null => {
   }
 }
 
-// STAB-1 렌더러가 죽으면 main 이 다시 불러온다(창을 다시 띄우지 않고 같은 창에서 다시 그린다).
-test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시 그려진다', async ({ ara, userDataDir }) => {
+// STAB-1 렌더러가 죽으면 main 이 다시 그린다 — 같은 창에서 다시 불러오기·첫 화면 다시 싣기, 또는 본창을 새로 만들기.
+// 어느 단계로 살아났든 **지금의 본창**에 앱이 다시 그려졌는지를 본다(옛 창 참조를 쥐지 않는다 — 116b4f6 ×5 "Object has been destroyed").
+test('STAB-1 렌더러 강제 크래시 → 자동 복구로 화면이 다시 그려진다', async ({ ara, userDataDir }) => {
   // 크래시·재로드 확인을 main 안에서 한 번에 한다. 페이지 핸들(bw/page)을 거쳐 poll 하면 렌더러가 죽는 순간
   // Playwright 의 CDP 세션이 "Cannot find context" 로 꼬여 앱은 살아났는데도 술어가 끝까지 false 다(2026-11-01 실측).
-  const r = await ara.app.evaluate(async ({ BrowserWindow }) => {
-    const w = BrowserWindow.getAllWindows()[0]
-    const wc = w.webContents
+  const r = await ara.app.evaluate(async ({ BrowserWindow, app: eApp }) => {
+    const first = BrowserWindow.getAllWindows()[0]
+    const firstId = first.id
+    const wc = first.webContents
+    // 지금의 본창 — 복구가 창을 새로 만들면 바뀐다. 쓸 때마다 다시 찾는다(가장 최근에 만든 살아 있는 창).
+    const current = (): Electron.BrowserWindow | null =>
+      BrowserWindow.getAllWindows()
+        .filter((w) => !w.isDestroyed() && !w.webContents.isDestroyed())
+        .sort((x, y) => y.id - x.id)[0] ?? null
+    // 옛 webContents 는 창 새로 만들기 뒤 사라진다 — 거기에 묻는 것은 전부 이걸 거친다.
+    const safe = <T>(f: () => T, fallback: T): T => {
+      try {
+        return f()
+      } catch {
+        return fallback
+      }
+    }
     const sleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms))
-    // 양성 대조: 죽었고(gone) 다시 불러왔다(loads)는 것까지 본다 — 안 죽어도 .app 은 있으니 그것만으론 통과가 공짜다.
-    // 횟수까지 센다 — 다시 불러온 뒤 또 죽거나 또 불러오면(제품 버그) 여기서 드러난다.
+    // 양성 대조: 죽었고(gone 또는 제품 로그) 다시 불러왔다(loads)는 것까지 본다 — 안 죽어도 .app 은 있으니 그것만으론 통과가 공짜다.
+    // 횟수까지 센다 — 다시 불러온 뒤 또 죽거나 또 불러오면(제품 버그) 여기서 드러난다. 새로 만든 창의 첫 로드도 센다.
     const gone: string[] = []
     let loads = 0
     const onGone = (_e: unknown, d: { reason: string }): void => void gone.push(d.reason)
     const onLoad = (): void => void loads++
+    const onCreated = (_e: unknown, c: Electron.WebContents): void => void c.on('did-finish-load', onLoad)
     // 크래시 전에 렌더러가 답하는지 먼저 본다 — 이미 멈춰 있었으면 그건 크래시 복구가 아니라 제품 멈춤이다(따로 실패로 드러낸다).
     const preApp = await Promise.race([
       wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false),
@@ -43,12 +59,13 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     }
     wc.on('render-process-gone', onGone)
     wc.on('did-finish-load', onLoad)
+    eApp.on('web-contents-created', onCreated)
     // 2026-11-02 dca03a1 재실행: forcefullyCrashRenderer 뒤 40초 동안 render-process-gone 이 없고 렌더러도 답하지 않았다
     // ({gone:'',loads:0,probeTimeouts:9,crashed:false}). 이 API 는 시험 장치일 뿐(제품은 안 쓴다) — 5초 안에 죽지 않으면
-    // 그 사실(fcrAlive)을 남기고 OS 가 프로세스를 끝내게 한다(TerminateProcess). 그래도 gone 이 안 오면 그건 진짜 문제로 실패한다.
+    // 그 사실(fcrAlive)을 남기고 OS 가 프로세스를 끝내게 한다(TerminateProcess).
     wc.forcefullyCrashRenderer()
     const fcrBy = Date.now() + 5_000
-    while (gone.length === 0 && Date.now() < fcrBy) await sleep(100)
+    while (gone.length === 0 && loads === 0 && Date.now() < fcrBy) await sleep(100)
     const fcrGone = gone.length > 0
     const fcrAlive = fcrGone ? false : alive()
     if (!fcrGone && fcrAlive) process.kill(pid)
@@ -62,9 +79,10 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     let probeTimeouts = 0
     const probeBy = Date.now() + 20_000
     while (!app && Date.now() < probeBy) {
-      if (!wc.isDestroyed() && !wc.isCrashed() && !wc.isLoadingMainFrame()) {
+      const c = current()?.webContents
+      if (c && safe(() => !c.isCrashed() && !c.isLoadingMainFrame(), false)) {
         const v = await Promise.race([
-          wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false),
+          c.executeJavaScript('!!document.querySelector(".app")').catch(() => false),
           sleep(2_000).then(() => 'timeout' as const)
         ])
         if (v === 'timeout') probeTimeouts++
@@ -72,8 +90,12 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
       }
       if (!app) await sleep(250)
     }
-    wc.removeListener('render-process-gone', onGone)
-    wc.removeListener('did-finish-load', onLoad)
+    eApp.removeListener('web-contents-created', onCreated)
+    safe(() => {
+      wc.removeListener('render-process-gone', onGone)
+      wc.removeListener('did-finish-load', onLoad)
+    }, undefined)
+    const now = current()
     return {
       preApp,
       pid,
@@ -84,9 +106,12 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
       loads,
       app,
       probeTimeouts,
-      crashed: wc.isCrashed(),
-      loading: wc.isLoadingMainFrame(),
-      url: wc.getURL()
+      windowRecreated: !!now && now.id !== firstId,
+      oldDestroyed: first.isDestroyed(),
+      windows: BrowserWindow.getAllWindows().length,
+      crashed: now ? safe(() => now.webContents.isCrashed(), null) : null,
+      loading: now ? safe(() => now.webContents.isLoadingMainFrame(), null) : null,
+      url: now ? safe(() => now.webContents.getURL(), '') : ''
     }
   })
   // 복구 경로 — 제품(stability.ts)이 main-error.log 에 남긴 줄로 센다: 'render-process-gone'(이벤트) / '…-watchdog'(감시).
@@ -99,23 +124,38 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     }
   })()
   const scopes = [...log.matchAll(/^\[[^\]]+\] (render-process-gone(?:-watchdog)?)$/gm)].map((m) => m[1])
-  // 다시 불러오기가 정체해서 다음 단계(첫 화면 다시 싣기·창 새로 만들기)로 넘어간 횟수 — 진단용(기대값엔 안 넣는다).
+  // 다시 불러오기가 정체해서 다음 단계로 넘어간 횟수, 제품이 실제로 돌린 단계(reload → loadEntry → recreate).
   const stalls = [...log.matchAll(/^\[[^\]]+\] renderer-recovery-stalled$/gm)].length
+  const steps = [...log.matchAll(/^\[[^\]]+\] renderer-recovery-step\r?\n(\w+)$/gm)].map((m) => m[1])
+  const stage = steps.at(-1) ?? 'none'
   const recoveryPath = scopes.length === 1 ? (scopes[0] === 'render-process-gone' ? 'event' : 'watchdog') : `${scopes.length}:${scopes.join(',')}`
   const goneCount = r.gone.split(',').filter(Boolean).length
-  // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
-  // 복구는 정확히 한 번(이벤트 또는 감시), 다시 불러오기 한 번, 크래시 전에도 답했어야 한다.
+  // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 도달 단계, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
+  // 복구는 정확히 한 번(이벤트 또는 감시), 로드 완료 한 번(같은 창이든 새 창이든), 지금의 본창에 앱, 크래시 전에도 답했어야 한다.
   // 이벤트로 복구했으면 gone 도 한 번(이유는 crashed·killed 어느 쪽이든). 감시로 복구했으면 gone 은 0(안 옴) 또는 1(늦게 옴).
+  // 창 새로 만들기 단계면 창이 바뀌고 옛 창은 없어야 한다(창 둘이 남으면 실패). 다른 단계면 같은 창이어야 한다.
   expect(
-    { preApp: r.preApp, recoveryPath, goneOk: recoveryPath === 'event' ? goneCount === 1 : goneCount <= 1, loads: r.loads, app: r.app },
-    JSON.stringify({ ...r, recoveryPath, scopes, stalls })
+    {
+      preApp: r.preApp,
+      recoveryPath,
+      goneOk: recoveryPath === 'event' ? goneCount === 1 : goneCount <= 1,
+      stageOk: ['reload', 'loadEntry', 'recreate'].includes(stage),
+      windowOk: stage === 'recreate' ? r.windowRecreated && r.oldDestroyed && r.windows === 1 : !r.windowRecreated,
+      loads: r.loads,
+      app: r.app
+    },
+    JSON.stringify({ ...r, recoveryPath, scopes, stage, steps, stalls })
   ).toEqual({
     preApp: true,
     recoveryPath: recoveryPath === 'watchdog' ? 'watchdog' : 'event',
     goneOk: true,
+    stageOk: true,
+    windowOk: true,
     loads: 1,
     app: true
   })
+  // 도달 단계를 보고서에 남긴다(메인이 ×N 돌릴 때 어느 길이 얼마나 나오는지 센다).
+  test.info().annotations.push({ type: 'stab1-stage', description: `${recoveryPath}/${stage}` })
 })
 
 // STAB-2 main 을 5초 막으면 감시 워커가 표식을 남기고, 다음 실행이 로그 폴더에 보고 파일을 쓴다.

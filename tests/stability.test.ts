@@ -38,6 +38,7 @@ import {
   RENDERER_GONE_WATCHDOG_SCOPE,
   RENDERER_LIVENESS_INTERVAL_MS,
   RENDERER_RECOVERY_STALL_SCOPE,
+  RENDERER_RECOVERY_STEP_SCOPE,
   reportPreviousHang,
   shouldRunHangWatchdog,
   testBlockMainMs
@@ -435,21 +436,22 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
     expect(logged).toEqual([])
   })
 
-  it('이벤트 없이 프로세스가 사라지면 감시가 한 번 다시 불러온다', () => {
-    const { wc, alive } = fakeWindow()
+  it('이벤트 없이 프로세스가 사라지면(Chromium 은 모름) 감시가 곧장 창을 새로 만든다 — 한 번', () => {
+    const { wc, alive, loadEntry, recreateWindow } = fakeWindow()
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS)
     alive.delete(100) // 죽었다, isCrashed 도 false, 이벤트도 없다(실측 모양)
     wc.pid = 0 // 죽은 뒤 pid 를 못 돌려줘도 마지막으로 본 pid 로 판정
-    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10)
-    expect(wc.reloads).toBe(1)
-    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE])
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10 + STALL * 3)
+    expect({ reloads: wc.reloads, loadEntry: loadEntry.mock.calls.length, recreate: recreateWindow.mock.calls.length }).toEqual({ reloads: 0, loadEntry: 0, recreate: 1 })
+    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE, RENDERER_RECOVERY_STEP_SCOPE])
   })
 
-  it('isCrashed 만 서도 감시가 복구한다', () => {
-    const { wc } = fakeWindow()
+  it('isCrashed 가 서면(Chromium 이 앎) 감시도 다시 불러오기부터', () => {
+    const { wc, recreateWindow } = fakeWindow()
     wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
     expect(wc.reloads).toBe(1)
+    expect(recreateWindow).not.toHaveBeenCalled()
   })
 
   it('이벤트가 오면 250ms 뒤 복구하고, 뒤이은 감시는 같은 죽음으로 본다', () => {
@@ -461,12 +463,12 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
     expect(wc.reloads).toBe(1)
     vi.advanceTimersByTime(STALL * 3)
     expect(wc.reloads).toBe(1)
-    expect(logged).toEqual([RENDERER_GONE_EVENT_SCOPE])
+    expect(logged).toEqual([RENDERER_GONE_EVENT_SCOPE, RENDERER_RECOVERY_STEP_SCOPE])
   })
 
   it('감시가 먼저 복구한 뒤 늦게 온 이벤트는 다시 부르지 않는다(실리기 전·후 둘 다)', () => {
-    const { wc, alive, startLoad } = fakeWindow({ autoLoad: false })
-    alive.delete(100)
+    const { wc, startLoad } = fakeWindow({ autoLoad: false })
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
     expect(wc.reloads).toBe(1)
     wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 }) // 새 문서가 실리기 전
@@ -475,25 +477,25 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
     wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 }) // 새 렌더러가 산 뒤
     vi.advanceTimersByTime(STALL * 3)
     expect(wc.reloads).toBe(1)
-    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE])
+    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE, RENDERER_RECOVERY_STEP_SCOPE])
   })
 
   it('복구된 새 렌더러가 또 죽으면 다시 복구한다', () => {
-    const { wc, alive } = fakeWindow()
-    alive.delete(100)
+    const { wc } = fakeWindow()
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 3)
     expect(wc.reloads).toBe(1)
-    alive.delete(200)
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 3)
     expect(wc.reloads).toBe(2)
   })
 
   it('응답 없음이면 바로 확인한다 — 살아서 멈춘 렌더러는 다시 부르지 않는다', () => {
-    const { wc, alive } = fakeWindow()
+    const { wc } = fakeWindow()
     wc.emit('unresponsive')
     vi.advanceTimersByTime(300)
     expect(wc.reloads).toBe(0)
-    alive.delete(100)
+    wc.crashed = true
     wc.emit('unresponsive')
     vi.advanceTimersByTime(300)
     expect(wc.reloads).toBe(1)
@@ -508,8 +510,8 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
   })
 
   it('다시 불러오기가 정체하면 첫 화면 다시 싣기 → 그것도 정체하면 창 새로 만들기(각 한 번)', () => {
-    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
-    alive.delete(100)
+    const { wc, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
     expect(wc.reloads).toBe(1)
     vi.advanceTimersByTime(STALL - 1_000)
@@ -521,12 +523,19 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
     expect(recreateWindow).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(STALL * 10)
     expect({ reloads: wc.reloads, loadEntry: loadEntry.mock.calls.length, recreate: recreateWindow.mock.calls.length }).toEqual({ reloads: 1, loadEntry: 1, recreate: 1 })
-    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE, RENDERER_RECOVERY_STALL_SCOPE, RENDERER_RECOVERY_STALL_SCOPE])
+    expect(logged).toEqual([
+      RENDERER_GONE_WATCHDOG_SCOPE,
+      RENDERER_RECOVERY_STEP_SCOPE,
+      RENDERER_RECOVERY_STALL_SCOPE,
+      RENDERER_RECOVERY_STEP_SCOPE,
+      RENDERER_RECOVERY_STALL_SCOPE,
+      RENDERER_RECOVERY_STEP_SCOPE
+    ])
   })
 
   it('정체 뒤 첫 화면 다시 싣기로 실리면 거기서 끝난다', () => {
-    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
-    alive.delete(100)
+    const { wc, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300 + STALL + 300)
     expect(loadEntry).toHaveBeenCalledTimes(1)
     wc.emit('did-finish-load')
@@ -535,8 +544,8 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
   })
 
   it('진행(dom-ready)이 보이면 상한(2배)까지 기다린다', () => {
-    const { wc, alive, loadEntry } = fakeWindow({ autoLoad: false })
-    alive.delete(100)
+    const { wc, loadEntry } = fakeWindow({ autoLoad: false })
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
     wc.emit('dom-ready')
     vi.advanceTimersByTime(STALL + 100)
@@ -548,19 +557,20 @@ describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
   it('단계도 같은 한도에 센다 — 한도를 넘으면 자동은 멈추고 창 새로 만들기도 안 한다', () => {
     const show = vi.fn(() => new Promise(() => {})) // 답이 없는 확인 창
     ;(dialog as { showMessageBox?: unknown }).showMessageBox = show
-    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: true })
+    const { wc, loadEntry, recreateWindow } = fakeWindow({ autoLoad: true })
     // 1·2번째 죽음은 정상 복구(한도 2개 씀)
-    alive.delete(100)
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
-    alive.delete(200)
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
     expect(wc.reloads).toBe(2)
     // 3번째는 정체 — reload 가 한도의 마지막, 다음 단계(첫 화면 다시 싣기)는 한도 초과 → 확인 창
     wc.reload = () => {
       wc.reloads++
       wc.loading = true
+      wc.crashed = false
     }
-    alive.delete(200)
+    wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300 + STALL + 300)
     expect(wc.reloads).toBe(3)
     expect(loadEntry).not.toHaveBeenCalled()
