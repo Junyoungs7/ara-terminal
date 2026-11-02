@@ -103,6 +103,39 @@
   Pop $R0
 !macroend
 
+;
+; UB-2 — 1.x(appId com.verygood.ara)가 깔린 PC 에 2.x 를 깔면 **1.x 를 먼저 조용히 지운다**. 데이터 %APPDATA%\A.R.A 는 그대로(준영님 2026-11-02).
+; UB-1 에서 appId 가 com.junyoung.ara 로 바뀌어 GUID(= appId 의 UUID v5, electron-builder 이름공간 50e065bc-3134-11e6-9bab-38c9862bdaf3)가 달라졌다:
+;   1.x de1cde4d-a29e-5c46-87e0-3dc2fcc68610 · 2.x 3f3cd31f-007b-592e-9f92-55e3a9738842 (OFA-1x electron-builder.yml appId, electron-builder 24·26 같은 식)
+; 그대로 두면 2.x 는 1.x 를 모른다 → 같은 %LOCALAPPDATA%\Programs\ARA 에 덮어 깔리고 제어판에 ARA 가 둘 남는다.
+; 방법: electron-builder 의 옛 판 제거(templates/nsis/include/installUtil.nsh uninstallOldVersion)는 제 키에 UninstallString 이 없으면
+; UNINSTALL_REGISTRY_KEY_2 를 본다. 거기에 1.x 의 제거 키를 걸면 **업데이트와 같은 길**을 탄다 — 설치 단추를 누른 뒤·파일을 풀기 전에,
+; 앱 실행 중 처리(CHECK_APP_RUNNING — 같은 폴더라 1.x 도 잡힌다, 1.x 제거 프로그램도 /S 로 제 폴더를 한 번 더 본다) 뒤,
+; 제거 프로그램을 임시 폴더로 복사해 `/S /KEEP_APP_DATA --updated _?=<1.x 폴더>` 로 ExecWait(실패하면 5번 다시, 그다음 다시 시도/취소).
+; 설치 범위: SHELL_CONTEXT 하나, "모든 사용자" 설치면 HKCU 도(installSection.nsh) — 1.x 가 어느 쪽에 있든 2.x 가 같은 범위면 지운다.
+; 데이터: 1.x 는 deleteAppDataOnUninstall 을 안 켰고(OFA-1x electron-builder.yml nsis: 에 없음 — 기본 false) 거기에 --updated 라 지우는 길이 없다.
+;   (켰더라도 지우는 곳은 $APPDATA\ARA·ara 다 — A.R.A 는 index.ts 가 고정한 이름이라 안 닿는다.)
+; electron-builder 는 이 키를 appId 에 '\' 가 있을 때만 -D 로 정의한다 — 우리 appId 엔 없어 겹치지 않는다(겹치면 !define 이 빌드를 깬다 = 알아챈다).
+; 2.x 제거 프로그램도 이 키를 지우게 되는데, 그때 1.x 는 이미 없다(찌꺼기를 치울 뿐).
+!define ARA_V1_GUID "de1cde4d-a29e-5c46-87e0-3dc2fcc68610"
+!define UNINSTALL_REGISTRY_KEY_2 "Software\Microsoft\Windows\CurrentVersion\Uninstall\${ARA_V1_GUID}"
+
+; 위 길은 2.x 를 깔 범위에서만 1.x 를 찾는다. 1.x 를 "모든 사용자"로만 깔았던 PC 에 2.x 가 처음이면 설치 범위 기본값을 "모든 사용자"로
+; 둔다(electron-builder 가 옛 설치의 범위를 따르는 것과 같게 — initMultiUser 는 2.x 키만 본다). 여기선 아무것도 지우지 않는다(창에서 취소하면 1.x 그대로).
+; 관리자일 때만 — 아니면 그 단추가 꺼져 있다(MULTIUSER_INSTALLMODE_ALLOW_ELEVATION 없음). 관리자 아닌데 "나만"으로 깔면 1.x(모든 사용자)는 남는다.
+!macro customInit
+  ${If} $hasPerMachineInstallation == "0"
+  ${AndIf} $hasPerUserInstallation == "0"
+  ${AndIf} ${UAC_IsAdmin}
+    ReadRegStr $R0 HKLM "${UNINSTALL_REGISTRY_KEY_2}" UninstallString
+    ReadRegStr $R1 HKCU "${UNINSTALL_REGISTRY_KEY_2}" UninstallString
+    ${If} $R0 != ""
+    ${AndIf} $R1 == ""
+      !insertmacro setInstallModePerAllUsers
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\아라.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\ara.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
