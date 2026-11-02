@@ -453,7 +453,7 @@ describe('ara.cmd · installer.nsh · electron-builder', () => {
     const b = readFileSync(join(repo, 'resources/win32/bin/ara.cmd'))
     expect([...b].every((c) => c < 0x80)).toBe(true)
     const s = b.toString('latin1')
-    expect(s).toMatch(/if "%~1"=="" \(\r\n\s+set "ELECTRON_RUN_AS_NODE="\r\n\s+start "" "%EXE%"/)
+    expect(s).toMatch(/if "%~1"=="" \(\r?\n\s+set "ELECTRON_RUN_AS_NODE="\r?\n\s+start "" "%EXE%"/)
     expect(s).toContain('set "ELECTRON_RUN_AS_NODE=1"')
     expect(s).toContain('app.asar.unpacked\\out\\main\\araCli.js')
   })
