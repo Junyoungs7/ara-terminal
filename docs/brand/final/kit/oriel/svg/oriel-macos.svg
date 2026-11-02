@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Oriel">
+  <defs><linearGradient id="oriel-plate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242325"/><stop offset="1" stop-color="#151516"/></linearGradient></defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#oriel-plate)"/>
+  <defs><linearGradient id="oriel-mac-a" gradientUnits="userSpaceOnUse" x1="506.2" y1="298.0" x2="503.4" y2="717.0"><stop offset="0" stop-color="#F99956"/><stop offset=".5" stop-color="#EE7C50"/><stop offset="1" stop-color="#D35251"/></linearGradient><linearGradient id="oriel-mac-b" gradientUnits="userSpaceOnUse" x1="302.4" y1="560.2" x2="499.4" y2="513.3"><stop offset="0" stop-color="#E5595C"/><stop offset=".5" stop-color="#F5725B"/><stop offset="1" stop-color="#EC7852"/></linearGradient></defs>
+  <path d="M506.86 196.75 C523.28 364.86 739.75 535.13 829.44 528.98 C681.94 539.09 528.47 640.79 502.61 827.25 C504.03 617.08 505.44 406.92 506.86 196.75Z" fill="url(#oriel-mac-a)"/>
+  <path d="M502.61 827.25 C516.43 727.60 335.17 570.86 194.56 585.94 C489.44 554.30 532.77 462.08 506.86 196.75 C505.44 406.92 504.03 617.08 502.61 827.25Z" fill="url(#oriel-mac-b)"/>
+</svg>

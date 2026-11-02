@@ -1,0 +1,12 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>ARA·Oriel 아이콘 키트</title>
+<style>body{margin:0;font:12px 'Segoe UI',sans-serif}.r{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:16px}
+.d{background:#141416;color:#ccc}.l{background:#FCF6EF;color:#333}figure{margin:0;text-align:center}img{display:block;margin:auto}</style>
+<body><script>
+const f=['color','color-dark','flat','mono','macos','wordmark','wordmark-dark']
+for (const bg of ['l','d']) for (const n of ['ara','oriel']) {
+  let h=`<div class="r ${bg}">`
+  for (const v of f) h+=`<figure><img src="${n}/svg/${n}-${v}.svg" height="120" style="color:${bg==='d'?'#eee':'#222'}"><figcaption>${n}-${v}</figcaption></figure>`
+  document.write(h+'</div>')
+}
+</script>
+<p style="padding:0 16px">mono 는 currentColor — &lt;img&gt; 로는 검정으로 보인다(인라인 SVG 로 넣으면 글자색을 따른다).</p></body></html>

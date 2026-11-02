@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>작은 크기 판 — 작업 표시줄</title>
+<style>
+body{margin:0;font:12px Segoe UI,sans-serif}
+.bar{display:flex;gap:28px;align-items:center;padding:14px 18px}
+.dark{background:#202020;color:#ddd}.light{background:#F3F3F3;color:#222}
+.cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+.z img{image-rendering:pixelated}
+</style>
+<body></body>
+<script>
+const sizes=[16,20,24,32,48]
+for (const bg of ['dark','light']) for (const zoom of [1,6]) {
+  const bar=document.createElement('div'); bar.className='bar '+bg+(zoom>1?' z':'')
+  bar.insertAdjacentHTML('beforeend',`<b style="width:90px">${bg==='dark'?'#202020':'#F3F3F3'} ×${zoom}</b>`)
+  for (const n of ['ara','oriel']) for (const s of sizes)
+    bar.insertAdjacentHTML('beforeend',`<div class="cell"><img src="../kit/${n}/png/${n}-${s}.png" width="${s*zoom}" height="${s*zoom}"><span>${n} ${s}</span></div>`)
+  document.body.appendChild(bar)
+}
+</script>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="ARA">
+  <defs><linearGradient id="ara-light-a" gradientUnits="userSpaceOnUse" x1="713.3" y1="291.8" x2="701.1" y2="625.2"><stop offset="0" stop-color="#08103B"/><stop offset=".5" stop-color="#142161"/><stop offset="1" stop-color="#6665D4"/></linearGradient><linearGradient id="ara-light-b" gradientUnits="userSpaceOnUse" x1="849.7" y1="481.3" x2="564.3" y2="780.4"><stop offset="0" stop-color="#806DC9"/><stop offset=".5" stop-color="#313176"/><stop offset="1" stop-color="#35398D"/></linearGradient></defs>
+  <path d="M526.75 689.19 C556.08 542.37 495.07 499.19 61.44 612.50 C356.09 535.50 642.27 338.03 718.38 151.87 C600.01 441.40 647.73 478.37 962.56 493.57 C778.89 450.29 604.70 535.79 526.75 689.19Z" fill="url(#ara-light-a)"/>
+  <path d="M962.56 493.57 C827.38 487.04 513.75 738.00 476.79 872.13 C496.50 800.62 516.82 738.95 526.75 689.19 C604.70 535.79 778.89 450.29 962.56 493.57Z" fill="url(#ara-light-b)"/>
+</svg>

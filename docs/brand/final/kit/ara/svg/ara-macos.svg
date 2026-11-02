@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="ARA">
+  <defs><linearGradient id="ara-plate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242325"/><stop offset="1" stop-color="#151516"/></linearGradient></defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#ara-plate)"/>
+  <defs><linearGradient id="ara-mac-a" gradientUnits="userSpaceOnUse" x1="653.8" y1="356.9" x2="645.2" y2="591.8"><stop offset="0" stop-color="#5E61DA"/><stop offset=".5" stop-color="#6868E1"/><stop offset="1" stop-color="#6662D7"/></linearGradient><linearGradient id="ara-mac-b" gradientUnits="userSpaceOnUse" x1="749.9" y1="490.4" x2="548.9" y2="701.1"><stop offset="0" stop-color="#8A72D8"/><stop offset=".5" stop-color="#A68DF8"/><stop offset="1" stop-color="#9688FC"/></linearGradient></defs>
+  <path d="M522.40 636.84 C543.06 533.40 500.07 502.97 194.56 582.80 C402.16 528.56 603.78 389.43 657.40 258.27 C574.01 462.26 607.63 488.31 829.44 499.01 C700.04 468.52 577.31 528.76 522.40 636.84Z" fill="url(#ara-mac-a)"/>
+  <path d="M829.44 499.01 C734.20 494.42 513.23 671.23 487.20 765.73 C501.08 715.35 515.39 671.90 522.40 636.84 C577.31 528.76 700.04 468.52 829.44 499.01Z" fill="url(#ara-mac-b)"/>
+</svg>

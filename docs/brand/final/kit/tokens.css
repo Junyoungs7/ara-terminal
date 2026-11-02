@@ -1,0 +1,13 @@
+/* 브랜드 토큰 — 생성물(scripts/build_kit.py). 마크·로고 자리에서만 쓴다(UI 신호색 아님). */
+:root {
+  --ara-light-a: #1C2C75; --ara-light-a-g0: #08103B; --ara-light-a-g1: #142161; --ara-light-a-g2: #6665D4;
+  --ara-light-b: #373784; --ara-light-b-g0: #806DC9; --ara-light-b-g1: #313176; --ara-light-b-g2: #35398D;
+  --ara-dark-a: #686AE2; --ara-dark-a-g0: #5E61DA; --ara-dark-a-g1: #6868E1; --ara-dark-a-g2: #6662D7;
+  --ara-dark-b: #9C88F8; --ara-dark-b-g0: #8A72D8; --ara-dark-b-g1: #A68DF8; --ara-dark-b-g2: #9688FC;
+  --ara-small-a: #5E61DA; --ara-small-b: #A68DF8;
+  --oriel-light-a: #E87A53; --oriel-light-a-g0: #F69353; --oriel-light-a-g1: #E6784F; --oriel-light-a-g2: #D95C57;
+  --oriel-light-b: #F78467; --oriel-light-b-g0: #DE585C; --oriel-light-b-g1: #F0735F; --oriel-light-b-g2: #FDA481;
+  --oriel-dark-a: #EE7B51; --oriel-dark-a-g0: #F99956; --oriel-dark-a-g1: #EE7C50; --oriel-dark-a-g2: #D35251;
+  --oriel-dark-b: #F5775B; --oriel-dark-b-g0: #E5595C; --oriel-dark-b-g1: #F5725B; --oriel-dark-b-g2: #EC7852;
+  --oriel-small-a: #F69353; --oriel-small-b: #DE585C;
+}

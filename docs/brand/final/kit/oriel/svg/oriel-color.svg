@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Oriel">
+  <defs><linearGradient id="oriel-light-a" gradientUnits="userSpaceOnUse" x1="503.7" y1="208.2" x2="499.7" y2="802.9"><stop offset="0" stop-color="#F69353"/><stop offset=".5" stop-color="#E6784F"/><stop offset="1" stop-color="#D95C57"/></linearGradient><linearGradient id="oriel-light-b" gradientUnits="userSpaceOnUse" x1="214.4" y1="580.5" x2="494.1" y2="513.8"><stop offset="0" stop-color="#DE585C"/><stop offset=".5" stop-color="#F0735F"/><stop offset="1" stop-color="#FDA481"/></linearGradient></defs>
+  <path d="M504.70 64.55 C528.01 303.16 835.26 544.83 962.56 536.09 C753.20 550.45 535.38 694.80 498.68 959.45 C500.68 661.15 502.69 362.85 504.70 64.55Z" fill="url(#oriel-light-a)"/>
+  <path d="M498.68 959.45 C518.29 818.01 261.02 595.54 61.44 616.95 C479.98 572.04 541.48 441.15 504.70 64.55 C502.69 362.85 500.68 661.15 498.68 959.45Z" fill="url(#oriel-light-b)"/>
+</svg>
