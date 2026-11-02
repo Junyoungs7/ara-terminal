@@ -209,7 +209,7 @@ function createWindow(): void {
   const bounds = store?.get().ui.window
   // G1 OS 재질(측정용 ARA_GLASS_MATERIAL, 기본 없음 = CSS 바탕). 글라스가 켜진 채 켤 때만 깐다 — 켠 뒤
   // 끄면 body 가 불투명 abyss 로 덮는다(renderer/glass.ts). 재질이 비치려면 창 바탕이 투명이어야 한다.
-  const material = glassOn(store?.get().ui.glass === true, process.env['ARA_GLASS'])
+  const material = glassOn(store?.get().ui.glass !== false, process.env['ARA_GLASS'])
     ? glassMaterialOf(process.env['ARA_GLASS_MATERIAL'], process.platform)
     : null
   const win = new BrowserWindow({
