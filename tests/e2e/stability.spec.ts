@@ -14,7 +14,7 @@ const readJson = <T>(p: string): T | null => {
 }
 
 // STAB-1 렌더러가 죽으면 main 이 다시 불러온다(창을 다시 띄우지 않고 같은 창에서 다시 그린다).
-test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시 그려진다', async ({ ara }) => {
+test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시 그려진다', async ({ ara, userDataDir }) => {
   // 크래시·재로드 확인을 main 안에서 한 번에 한다. 페이지 핸들(bw/page)을 거쳐 poll 하면 렌더러가 죽는 순간
   // Playwright 의 CDP 세션이 "Cannot find context" 로 꼬여 앱은 살아났는데도 술어가 끝까지 false 다(2026-11-01 실측).
   const r = await ara.app.evaluate(async ({ BrowserWindow }) => {
@@ -89,11 +89,28 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
       url: wc.getURL()
     }
   })
+  // 복구 경로 — 제품(stability.ts)이 main-error.log 에 남긴 줄로 센다: 'render-process-gone'(이벤트) / '…-watchdog'(감시).
+  // Electron 43 은 렌더러가 죽어도 이벤트를 간헐로 안 보낸다(2026-11-02) — 그때는 감시가 복구한다. 어느 길이든 제품이 한 번 복구했는지를 본다.
+  const log = (() => {
+    try {
+      return readFileSync(join(userDataDir, 'logs', 'main-error.log'), 'utf8')
+    } catch {
+      return ''
+    }
+  })()
+  const scopes = [...log.matchAll(/^\[[^\]]+\] (render-process-gone(?:-watchdog)?)$/gm)].map((m) => m[1])
+  const recoveryPath = scopes.length === 1 ? (scopes[0] === 'render-process-gone' ? 'event' : 'watchdog') : `${scopes.length}:${scopes.join(',')}`
+  const goneCount = r.gone.split(',').filter(Boolean).length
   // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
-  // gone 은 한 번(이유는 crashed·killed 어느 쪽이든 — 장치가 다르면 이유가 다르다), 다시 불러오기 한 번, 크래시 전에도 답했어야 한다.
-  expect({ preApp: r.preApp, goneCount: r.gone.split(',').filter(Boolean).length, loads: r.loads, app: r.app }, JSON.stringify(r)).toEqual({
+  // 복구는 정확히 한 번(이벤트 또는 감시), 다시 불러오기 한 번, 크래시 전에도 답했어야 한다.
+  // 이벤트로 복구했으면 gone 도 한 번(이유는 crashed·killed 어느 쪽이든). 감시로 복구했으면 gone 은 0(안 옴) 또는 1(늦게 옴).
+  expect(
+    { preApp: r.preApp, recoveryPath, goneOk: recoveryPath === 'event' ? goneCount === 1 : goneCount <= 1, loads: r.loads, app: r.app },
+    JSON.stringify({ ...r, recoveryPath, scopes })
+  ).toEqual({
     preApp: true,
-    goneCount: 1,
+    recoveryPath: recoveryPath === 'watchdog' ? 'watchdog' : 'event',
+    goneOk: true,
     loads: 1,
     app: true
   })

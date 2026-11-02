@@ -154,10 +154,37 @@ const rendererRecoveryPrompt = (): MessageBoxOptions => ({
 
 /** 렌더러가 죽으면 다시 불러온다. 60초 안 3번을 넘으면 자동은 멈추고 사용자에게 묻는다(창은 한 번에 하나). */
 const RENDERER_RELOAD_DELAY_MS = 250
+/**
+ * STAB-2판: 죽음 감시 주기. Electron 43 에서 렌더러가 실제로 죽었는데 render-process-gone 이 40초 넘게 안 오는 일이
+ * 간헐로 있었다(2026-11-02 STAB-1 진단 — fcrGone:false·pidAliveAtEnd:false·loads:0). 이벤트 하나에만 기대지 않고
+ * main 이 주기적으로 본다. 한 번 = isCrashed() + getOSProcessId() + OpenProcess 한 번(process.kill(pid, 0)) —
+ * 마이크로초 단위라 2초마다 돌아도 유휴 CPU 에 안 잡힌다. getAppMetrics(모든 자식 순회)는 쓰지 않는다.
+ */
+export const RENDERER_LIVENESS_INTERVAL_MS = 2_000
 
-export function installRendererRecovery(win: BrowserWindow, isQuitting: () => boolean): void {
+/** 복구가 어느 길로 시작됐나 — main-error.log 에 이 이름으로 남는다(e2e STAB-1 이 읽는다). */
+export const RENDERER_GONE_EVENT_SCOPE = 'render-process-gone'
+export const RENDERER_GONE_WATCHDOG_SCOPE = 'render-process-gone-watchdog'
+
+/** pid 가 아직 살아 있나. 신호 0 = 존재 확인만(Windows: OpenProcess + GetExitCodeProcess). EPERM 은 있다는 뜻. */
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+export function installRendererRecovery(win: BrowserWindow, isQuitting: () => boolean, pidAlive: (pid: number) => boolean = isPidAlive): void {
   const breaker = new RecoveryCircuitBreaker({ windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS, maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES })
   let prompting = false
+  // 복구를 걸었고 새 렌더러가 아직 확인되지 않았다 — 이 사이에 오는 이벤트·감시는 같은 죽음이다(두 번 부르지 않는다).
+  let pending = false
+  // 복구를 건 죽은 렌더러의 pid. 새 렌더러는 이것과 다른 살아 있는 pid 로 확인한다.
+  let deadPid = 0
+  // 마지막으로 본 렌더러 pid — 죽은 뒤 getOSProcessId 가 0 을 돌려줘도 그 pid 로 확인한다.
+  let lastPid = 0
   const wc = win.webContents
   // 🔴 render-process-gone 처리기 **안에서 바로** reload 하면 Electron 40 에서 Chromium 이
   // "Observers can only be added once!"(NOTREACHED)로 앱째 죽는다(2026-11-01 실측, ME-1 E3). Orca 도 타이머 뒤에
@@ -167,9 +194,13 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
       if (!win.isDestroyed()) wc.reload()
     }, RENDERER_RELOAD_DELAY_MS)
   }
-  wc.on('render-process-gone', (_e, details) => {
-    if (details.reason === 'clean-exit' || win.isDestroyed() || isQuitting()) return
-    logMainError('render-process-gone', `${details.reason} (exitCode ${details.exitCode})`)
+  /** 이벤트·감시가 같이 부르는 하나의 복구 경로. */
+  const recover = (scope: string, why: string, pid: number): void => {
+    if (pending || win.isDestroyed() || isQuitting()) return
+    pending = true
+    deadPid = pid
+    lastPid = 0
+    logMainError(scope, why)
     if (breaker.registerRecoveryAttempt(Date.now()).allowed) {
       reload()
       return
@@ -187,7 +218,38 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
       })
       .catch((e: unknown) => logMainError('renderer-recovery prompt', e))
       .finally(() => (prompting = false))
+  }
+  /** 지금 렌더러가 죽었나. 살아 있는 새 렌더러를 보면 pending 을 푼다. */
+  const check = (): void => {
+    if (win.isDestroyed() || isQuitting()) return
+    const crashed = wc.isCrashed()
+    const pid = wc.getOSProcessId() || lastPid
+    const alive = pid > 0 && pidAlive(pid)
+    if (pending) {
+      if (!crashed && alive && pid !== deadPid) pending = false
+      return
+    }
+    if (pid > 0 && alive) lastPid = pid
+    if (crashed || (pid > 0 && !alive)) recover(RENDERER_GONE_WATCHDOG_SCOPE, `crashed=${crashed} pid=${pid} alive=${alive}`, pid)
+  }
+  wc.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit' || win.isDestroyed() || isQuitting()) return
+    // 감시가 먼저 복구를 걸었고 새 렌더러가 이미 살아 있으면 이 이벤트는 늦게 온 옛 죽음이다.
+    if (!pending && !wc.isCrashed()) {
+      const pid = wc.getOSProcessId()
+      if (pid > 0 && pid !== deadPid && pidAlive(pid)) return
+    }
+    recover(RENDERER_GONE_EVENT_SCOPE, `${details.reason} (exitCode ${details.exitCode})`, wc.getOSProcessId() || lastPid)
   })
+  // 새 문서가 다 불러와졌으면 새 렌더러가 산 것이다.
+  wc.on('did-finish-load', () => {
+    if (pending && !wc.isCrashed()) pending = false
+  })
+  // 응답 없음 — 죽었는지 바로 한 번 본다. 살아서 멈춘 렌더러는 다시 부르지 않는다(Orca 도 본창 멈춤엔 자동 재로드가 없다).
+  wc.on('unresponsive', check)
+  const timer = setInterval(check, RENDERER_LIVENESS_INTERVAL_MS)
+  timer.unref?.()
+  win.on('closed', () => clearInterval(timer))
 }
 
 // ───────── FD-04 안전 그래픽 모드 ─────────

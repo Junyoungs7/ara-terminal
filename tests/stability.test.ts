@@ -7,6 +7,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: () => tmpdir() }, dialog: {}, utilityProcess: {} }))
+const logged = vi.hoisted(() => [] as string[])
+vi.mock('../src/main/log/MainErrorLog', () => ({ logMainError: (scope: string) => void logged.push(scope) }))
 
 import { consumeHangDetectionMarker, createHangWatchdogDetectionLoop, hangDetectionMarkerPath, writeHangDetectionMarker } from '../src/main/stability/hangDetection'
 import { RecoveryCircuitBreaker } from '../src/main/stability/recoveryBreaker'
@@ -27,7 +29,17 @@ import {
   setEventLoopDelayProbe,
   startEventLoopDelayProbe
 } from '../src/main/stability/eventLoopProbe'
-import { devTiming, HANG_REPORT_FILE, reportPreviousHang, shouldRunHangWatchdog, testBlockMainMs } from '../src/main/stability/stability'
+import {
+  devTiming,
+  HANG_REPORT_FILE,
+  installRendererRecovery,
+  RENDERER_GONE_EVENT_SCOPE,
+  RENDERER_GONE_WATCHDOG_SCOPE,
+  RENDERER_LIVENESS_INTERVAL_MS,
+  reportPreviousHang,
+  shouldRunHangWatchdog,
+  testBlockMainMs
+} from '../src/main/stability/stability'
 import { startUtilityHost, type UtilityChild } from '../src/main/stability/utilityHost'
 
 let dir: string
@@ -366,5 +378,116 @@ describe('testCrash 훅', () => {
     off()
     crashArea('sidebar')
     expect(hits).toBe(1)
+  })
+})
+
+// STAB-2판: render-process-gone 이 안 와도 감시가 복구한다. 이벤트·감시가 겹쳐도 다시 불러오기는 한 번.
+describe('FD-04 렌더러 죽음 감시', () => {
+  function fakeWindow() {
+    const wc = Object.assign(new EventEmitter(), { crashed: false, pid: 100, reloads: 0 }) as EventEmitter & {
+      crashed: boolean
+      pid: number
+      reloads: number
+      isCrashed: () => boolean
+      getOSProcessId: () => number
+      reload: () => void
+    }
+    wc.isCrashed = () => wc.crashed
+    wc.getOSProcessId = () => wc.pid
+    wc.reload = () => {
+      wc.reloads++
+      wc.crashed = false
+      wc.pid = 200
+      alive.add(200)
+    }
+    const win = Object.assign(new EventEmitter(), { webContents: wc, isDestroyed: () => false })
+    const alive = new Set([100])
+    installRendererRecovery(win as never, () => false, (pid) => alive.has(pid))
+    return { win, wc, alive }
+  }
+  beforeEach(() => {
+    vi.useFakeTimers()
+    logged.length = 0
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('살아 있는 동안은 아무것도 안 한다', () => {
+    const { wc } = fakeWindow()
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10)
+    expect(wc.reloads).toBe(0)
+    expect(logged).toEqual([])
+  })
+
+  it('이벤트 없이 프로세스가 사라지면 감시가 한 번 다시 불러온다', () => {
+    const { wc, alive } = fakeWindow()
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS)
+    alive.delete(100) // 죽었다, isCrashed 도 false, 이벤트도 없다(실측 모양)
+    wc.pid = 0 // 죽은 뒤 pid 를 못 돌려줘도 마지막으로 본 pid 로 판정
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10)
+    expect(wc.reloads).toBe(1)
+    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE])
+  })
+
+  it('isCrashed 만 서도 감시가 복구한다', () => {
+    const { wc } = fakeWindow()
+    wc.crashed = true
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
+    expect(wc.reloads).toBe(1)
+  })
+
+  it('이벤트가 오면 바로(250ms 뒤) 복구하고, 뒤이은 감시는 같은 죽음으로 본다', () => {
+    const { wc, alive } = fakeWindow()
+    alive.delete(100)
+    wc.crashed = true
+    wc.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
+    vi.advanceTimersByTime(300)
+    expect(wc.reloads).toBe(1)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10)
+    expect(wc.reloads).toBe(1)
+    expect(logged).toEqual([RENDERER_GONE_EVENT_SCOPE])
+  })
+
+  it('감시가 먼저 복구한 뒤 늦게 온 이벤트는 다시 부르지 않는다', () => {
+    const { wc, alive } = fakeWindow()
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
+    expect(wc.reloads).toBe(1)
+    // 다시 불러오는 사이(새 렌더러 확인 전)에 온 이벤트
+    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 })
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS) // 새 렌더러(200) 확인 → pending 풀림
+    // 새 렌더러가 산 뒤에 온 옛 이벤트
+    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 })
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
+    expect(wc.reloads).toBe(1)
+    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE])
+  })
+
+  it('복구된 새 렌더러가 또 죽으면 다시 복구한다', () => {
+    const { wc, alive } = fakeWindow()
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 3)
+    expect(wc.reloads).toBe(1)
+    alive.delete(200)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 3)
+    expect(wc.reloads).toBe(2)
+  })
+
+  it('응답 없음이면 바로 확인한다 — 살아서 멈춘 렌더러는 다시 부르지 않는다', () => {
+    const { wc, alive } = fakeWindow()
+    wc.emit('unresponsive')
+    vi.advanceTimersByTime(300)
+    expect(wc.reloads).toBe(0)
+    alive.delete(100)
+    wc.emit('unresponsive')
+    vi.advanceTimersByTime(300)
+    expect(wc.reloads).toBe(1)
+  })
+
+  it('창이 닫히면 감시를 멈춘다', () => {
+    const { win, wc } = fakeWindow()
+    win.emit('closed')
+    wc.crashed = true
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
+    expect(wc.reloads).toBe(0)
   })
 })
