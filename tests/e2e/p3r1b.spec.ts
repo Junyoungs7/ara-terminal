@@ -111,7 +111,7 @@ test('P3B-3★ HTML 미리 보기 — 샌드박스(앱에 못 닿음)·상대 �
   const { root, repo } = makeRepo()
   try {
     await openProject(app, page, repo)
-    await row(page, 'site').click()
+    await row(page, 'site/').click() // 폴더 줄 이름은 'site/'(FileTree .fn)
     await row(page, 'index.html').dblclick()
     await expect(view(page, 'source')).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator('.code-ed .monaco-editor')).toBeVisible()

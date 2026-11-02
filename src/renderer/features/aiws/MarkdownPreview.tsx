@@ -42,7 +42,7 @@ function Link({ href, children }: { href?: string; children?: React.ReactNode })
       role={web || local ? 'link' : undefined}
       data-href={h}
       onClick={() => {
-        if (web) void window.ev.app.openExternal(h)
+        if (web) void window.ev.oriel.open(h)
         else if (local && ctx) void openFile(resolveRel(ctx.file, h))
       }}
     >

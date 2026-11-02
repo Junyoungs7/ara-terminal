@@ -50,10 +50,10 @@ export default function NewTabOmnibox({ worktree, onClose, onPick }: { worktree:
   const rows = useMemo((): Row[] => {
     const { forced, query } = parseOmniboxQuery(q)
     const lq = query.toLowerCase()
-    const search: Row | null = query ? { key: 'search', icon: Search, label: t('omni.search').replace('{q}', query), run: () => window.ev.app.openExternal(OMNIBOX_SEARCH_URL + encodeURIComponent(query)) } : null
+    const search: Row | null = query ? { key: 'search', icon: Search, label: t('omni.search').replace('{q}', query), run: () => window.ev.oriel.open(OMNIBOX_SEARCH_URL + encodeURIComponent(query)) } : null
     if (forced) return search ? [search] : []
     const url = omniboxUrlOf(query)
-    const urlRow: Row | null = url ? { key: 'url', icon: Globe, label: t('omni.url').replace('{url}', url), run: () => window.ev.app.openExternal(url) } : null
+    const urlRow: Row | null = url ? { key: 'url', icon: Globe, label: t('omni.url').replace('{url}', url), run: () => window.ev.oriel.open(url) } : null
     const show = (sid: string): void => {
       useCodeStore.getState().setActive(worktree.id, null)
       useDiffStore.getState().setShown(worktree.id, false)

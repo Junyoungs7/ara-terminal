@@ -20,12 +20,12 @@ export default function HtmlPreview({ file }: DocProps): JSX.Element {
       live = false
     }
   }, [file.root, file.path, file.host, remote, reload, file.sig])
-  // 미리 보기 안의 웹 링크 — main 이 이동을 막고 알려 준다. 묻고 바깥 브라우저로(Orca: External HTTP(S) links require confirmation).
+  // 미리 보기 안의 웹 링크 — main 이 이동을 막고 알려 준다. 묻고 Oriel 로(Orca: External HTTP(S) links require confirmation). 여는 곳은 Oriel(미설치·실패면 OS 기본 브라우저).
   const grant = src && 'url' in src ? new URL(src.url).hostname : null
   useEffect(() => {
     if (!grant) return
     return window.ev.code.onDocLink(({ url, grant: g }) => {
-      if (g === grant && window.confirm(t('doc.html.linkConfirm').replace('{url}', url))) void window.ev.app.openExternal(url)
+      if (g === grant && window.confirm(t('doc.html.linkConfirm').replace('{url}', url))) void window.ev.oriel.open(url)
     })
   }, [grant])
   const rel = file.path.slice(file.root.replace(/[\\/]+$/, '').length).replace(/\\/g, '/').replace(/^\/+/, '')
