@@ -27,6 +27,7 @@ import { generateChatName, listModels, scanSlash } from './options'
 import { ingestAiWrite } from '../code/aiLines'
 import { isOptionValue, type ModelCatalog } from '@shared/agentOptions'
 import { createAgentDaemon, daemonRuntimeDir } from '../daemon/service'
+import { withAraCliPath } from '../cli/childPath'
 import { installRuntime, relocatedRuntime } from '../daemon/launcher'
 import type { DaemonSessionInfo } from '../daemon/protocol'
 import { createTerminalDaemonHook, isTerminalInfo, terminalSessionOf } from '../daemon/terminalShells'
@@ -469,7 +470,7 @@ export function registerAgentsFeature(deps: {
       // 데몬 셸은 앱의 **지금** 환경을 받는다(데몬 환경은 띄운 순간에 굳는다 — 감지가 더한 PATH 등을 놓친다).
       const appEnv = Object.fromEntries(Object.entries(process.env).filter((x): x is [string, string] => typeof x[1] === 'string' && x[0] !== 'ELECTRON_RUN_AS_NODE'))
       const meta = { agent, title, line: plan.line, startedAt, ...(plan.deferredPrompt ? { prompt: plan.deferredPrompt } : {}) }
-      await daemon.create({ id: sessionId, cwd, env: { ...appEnv, ...env }, meta })
+      await daemon.create({ id: sessionId, cwd, env: withAraCliPath({ ...appEnv, ...env }), meta })
     } catch (err) {
       log(`daemon create failed — local PTY fallback: ${String(err)}`)
       logMainError('agent daemon', err)

@@ -6,6 +6,7 @@ import type { SessionSpec } from '../sessions/ISessionManager'
 import type { LocalDaemonHook } from '../sessions/MainSessionManager'
 import type { DaemonSessionInfo } from './protocol'
 import type { AgentDaemon } from './service'
+import { withAraCliPath } from '../cli/childPath'
 
 /**
  * 첫 셸이 데몬 띄우기를 기다리는 상한. 데몬은 켤 때 미리 띄우므로(warm) 보통은 이미 붙어 있다. 판이 바뀐 뒤 첫 실행은 런타임 복사(수백 MB)로
@@ -35,9 +36,9 @@ export function terminalSessionOf(info: DaemonSessionInfo): Omit<Session, 'id'> 
   }
 }
 
-/** 데몬 셸은 앱의 지금 환경을 받는다(에이전트와 같은 이유 — 데몬 환경은 띄운 순간에 굳는다). */
+/** 데몬 셸은 앱의 지금 환경을 받는다(에이전트와 같은 이유 — 데몬 환경은 띄운 순간에 굳는다). PATH 맨 앞에 ara 폴더(정리 1, cli/childPath.ts). */
 export const appEnv = (): Record<string, string> =>
-  Object.fromEntries(Object.entries(process.env).filter((x): x is [string, string] => typeof x[1] === 'string' && x[0] !== 'ELECTRON_RUN_AS_NODE'))
+  withAraCliPath(Object.fromEntries(Object.entries(process.env).filter((x): x is [string, string] => typeof x[1] === 'string' && x[0] !== 'ELECTRON_RUN_AS_NODE')))
 
 const within = (p: Promise<boolean>, ms: number): Promise<boolean> =>
   Promise.race([p, new Promise<boolean>((r) => setTimeout(() => r(false), ms).unref?.())])

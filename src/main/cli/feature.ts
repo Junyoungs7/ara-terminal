@@ -3,6 +3,7 @@
 //  · 설정의 [CLI 설치]·[제거](install.ts) · 번들 스킬 [설치](bundledSkill.ts) — 사람이 눌렀을 때만.
 //  · 에이전트 띄우기는 본창 렌더러가 한다(앱의 [+] 와 같은 길) — 'cli:launchAgent' 로 부탁하고 'cli:launchAgentResult' 로 답을 받는다.
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import type { WebContents } from 'electron'
 import type { AgentLaunchResult } from '@shared/ipc'
 import type { AgentId } from '@shared/agents'
@@ -15,6 +16,7 @@ import { startCliServer, type CliServerHandle } from './server'
 import { createCliHandlers, type CliDeps } from './handlers'
 import { cliInstallStatus, installCli, realInstallDeps, uninstallCli } from './install'
 import { bundledSkillSource, bundledSkillStatus, installBundledSkill } from './bundledSkill'
+import { setupAraCliChildPath } from './childPath'
 
 /** 렌더러가 탭을 띄우는 데 기다리는 상한 — 에이전트 감지가 처음이면 몇 초 걸린다. */
 const LAUNCH_TIMEOUT_MS = 60_000
@@ -78,6 +80,9 @@ export function registerCliFeature(deps: {
   void startCliServer({ userData: deps.userData, appVersion: deps.appVersion, handlers, log: logMainError })
     .then((s) => (server = s))
     .catch((e) => logMainError('cli server', e))
+
+  // 정리 1: 아라가 띄우는 PTY 의 PATH 맨 앞에 ara 폴더(childPath.ts) — [CLI 설치] 없이 에이전트 탭에서 `ara`. araCli.js 는 이 번들 옆(out/main).
+  setupAraCliChildPath({ platform: process.platform, isPackaged: deps.isPackaged, resourcesPath: deps.resourcesPath, userData: deps.userData, execPath: process.execPath, cliEntryCandidates: [join(__dirname, 'araCli.js'), join(__dirname, '..', 'araCli.js')], log: (m) => logMainError('cli child path', new Error(m)) })
 
   const install = () => realInstallDeps({ isPackaged: deps.isPackaged, resourcesPath: deps.resourcesPath })
   handle('cli:status', () => cliInstallStatus(install()))

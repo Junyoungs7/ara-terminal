@@ -574,7 +574,7 @@
   "mcpsrv.set.list.desc": "에이전트별·프로젝트별 MCP 서버 — 보기·추가·지우기",
   "cli.title": "ara 명령줄(CLI)",
   "cli.set.desc": "터미널·에이전트에서 ara 로 작업 단위·터미널 다루기 — PATH 등록·번들 스킬",
-  "cli.note": "[CLI 설치]는 사용자 PATH 에 아라 설치 폴더의 bin(ara.cmd 하나)을 한 줄 넣습니다. 새로 연 터미널부터 ara 가 보이고, [제거]로 그 한 줄만 뺍니다. 인자 없는 ara 는 지금처럼 그 폴더에서 아라를 엽니다.",
+  "cli.note": "아라가 띄운 에이전트·터미널 탭에서는 설치 없이 ara 가 됩니다. [CLI 설치]는 그 밖의 터미널용 — 사용자 PATH 에 아라 설치 폴더의 bin(ara.cmd 하나)을 한 줄 넣습니다. 새로 연 터미널부터 ara 가 보이고, [제거]로 그 한 줄만 뺍니다. 인자 없는 ara 는 지금처럼 그 폴더에서 아라를 엽니다.",
   "cli.state.installed": "등록됨",
   "cli.state.not_installed": "등록 안 됨",
   "cli.state.unsupported": "여기서는 등록할 수 없음",

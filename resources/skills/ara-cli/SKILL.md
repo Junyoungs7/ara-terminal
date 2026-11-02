@@ -14,7 +14,7 @@ description: >-
 ## 시작
 
 - 늘 `--json` 을 붙인다. 답은 `{"ok":true,"result":...}` 또는 `{"ok":false,"error":{"code","message","nextSteps"}}`.
-- `ara` 가 없으면(명령을 못 찾음) 그렇다고 말하고 멈춘다 — 사용자가 아라 설정 › 스킬 › [CLI 설치]를 눌러야 한다(새로 연 터미널부터 보인다).
+- 아라가 띄운 에이전트 탭·터미널 탭에서는 `ara` 가 늘 있다(그 탭의 PATH 맨 앞). 그 밖의 터미널에서 `ara` 가 없으면(명령을 못 찾음) 그렇다고 말하고 멈춘다 — 사용자가 아라 설정 › 스킬 › [CLI 설치]를 눌러야 한다(새로 연 터미널부터 보인다).
 - `ara status --json` 이 `running:false` 면 아라가 꺼져 있다. `ara open --json` 이 켜 준다.
 - 모르는 명령을 치면 비슷한 명령을 `nextSteps` 로 알려 준다(`Did you mean: ara worktree list`).
 

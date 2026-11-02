@@ -7,6 +7,7 @@ import type { SessionSpec } from './ISessionManager'
 import { SHELL_INTEGRATION } from './osc7'
 import { shellFor, type LaunchShell } from '@shared/aiCli'
 import { HOOK_ENV } from '@shared/agentHooks'
+import { withAraCliPath } from '../cli/childPath'
 
 // OSC7 주입 방식이 셸마다 달라 종류를 판별한다(powershell=시작 인자, bash=환경변수, 그 외=stdin 폴백).
 type ShellKind = 'powershell' | 'bash' | 'other'
@@ -185,13 +186,14 @@ export class PtyBackend implements SessionBackend {
 
   /**
    * paneId(= 세션 id)는 AI 작업 공간 에이전트 탭에만 `ARA_PANE_KEY` 로 넣는다 — 훅이 어느 탭인지 말하게(M3 R2 AI-04).
-   * 터미널 공간 셸에는 아무것도 넣지 않는다(S2 — 옛 `ARA_PANE`·`ARA_HOOK_PORT` 주입 제거).
+   * 터미널 공간 셸에는 그것을 넣지 않는다(S2 — 옛 `ARA_PANE`·`ARA_HOOK_PORT` 주입 제거). PATH 의 ara 폴더·ARA_USER_DATA_PATH 는 양쪽 다(정리 1).
    */
   constructor(spec: SessionSpec, paneId?: string) {
     const { file, args: baseArgs, kind } = resolveShell(spec)
     // M3: 에이전트 탭은 설정의 env·첫 지시를 싣는다(spec.env). 이름이 env 모양인 것만.
     const extra = Object.fromEntries(Object.entries(spec.env ?? {}).filter(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string'))
-    const base = { ...(process.env as Record<string, string>), ...extra, ...(paneId && spec.space === 'ai' ? { [HOOK_ENV.pane]: paneId } : {}) }
+    // 정리 1: PATH 맨 앞에 ara 폴더(cli/childPath.ts — 앱 안 PTY 만. 데몬 프로세스에선 그대로, 앱이 보낸 env 에 이미 있다).
+    const base = withAraCliPath({ ...(process.env as Record<string, string>), ...extra, ...(paneId && spec.space === 'ai' ? { [HOOK_ENV.pane]: paneId } : {}) })
     const { args, env } = withShellIntegration(kind, baseArgs, base)
     const win = process.platform === 'win32'
     // Windows conpty 종료 경로 안정화: useConptyDll=true 는 kill() 시 node-pty 가
