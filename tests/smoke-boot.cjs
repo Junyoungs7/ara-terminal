@@ -571,6 +571,9 @@ const checks = []
     splitKey(); await wait(350)
     splitKey(); await wait(350)
     splitKey(); await wait(350)
+    // 분할은 한 줄로 서서(MainArea splitQueue) 하나씩 새 셸을 연 **뒤에** 칸을 놓는다 — 셸이 늦게 뜨는 판에선 350ms×3 안에
+    // 넷째 칸이 아직 없다(2026-11-02 dca03a1: atFour 실패인데 350ms 뒤 afterFifth=4·토스트는 통과). R4.1 과 같은 대기(최대 5초).
+    for (let i = 0; i < 50 && paneCount() < 4; i++) await wait(100)
     const atFour = paneCount()
     // 5번째 분할 시도 → 차단(패널 수 유지) + 토스트 노출.
     splitKey(); await wait(350)
@@ -618,6 +621,9 @@ const checks = []
     const srvNode = document.querySelector('.tree .srv-node')
     if (srvNode) dbl(srvNode)
     await wait(900)
+    // 접속은 main 이 셸(conpty)을 띄운 뒤 답한다 — 앞 F4a 가 셸 넷을 막 띄운 직후라 900ms 안에 탭이 없을 수 있다
+    // (51b3bf4·5c6d93c·dca03a1 에서 이 검사와 뒤따르는 탭 dot 3개가 함께 실패). 탭이 생길 때까지(최대 10초) 기다린다.
+    for (let i = 0; i < 100 && document.querySelectorAll('.term-tabbar .ttab').length <= localTabsBefore; i++) await wait(100)
     // FB-tabs: 그룹 래퍼(.tg)는 완전히 없어야 한다 — 있으면 회귀.
     const tabGroups = document.querySelectorAll('.term-tabbar .tg').length
     const sshTabs = document.querySelectorAll('.term-tabbar .ttab').length

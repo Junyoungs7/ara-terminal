@@ -293,7 +293,11 @@ function createWindow(): void {
   // 최대화 중 bounds 를 저장하면 다음 기동이 "최대화 크기의 일반 창"으로 뜨므로 건너뛴다(R2.6).
   const saveBounds = () => {
     if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return
-    store?.setWindowBounds(win.getBounds())
+    // e2e 화면 밖 창(아래 park, 비패키지 ARA_E2E 만 — 배포본엔 이 Map 이 없다): 옮긴 자리를 저장하면 다음 기동이
+    // 모니터 밖에 창을 만든다 — 사용자에겐 없는 길이고 거기서 크기가 어긋났다(RESTORE-6 폭 +16 @x=-21845, +12 @모니터 왼쪽 바깥).
+    const b = win.getBounds()
+    const parked = (globalThis as { __araIntendedBounds?: Map<number, { bounds: Electron.Rectangle }> }).__araIntendedBounds?.get(win.id)
+    store?.setWindowBounds(parked ? { ...b, x: parked.bounds.x, y: parked.bounds.y } : b)
   }
   win.on('resize', saveBounds)
   win.on('move', saveBounds)

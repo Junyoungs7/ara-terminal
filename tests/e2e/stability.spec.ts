@@ -27,9 +27,31 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     let loads = 0
     const onGone = (_e: unknown, d: { reason: string }): void => void gone.push(d.reason)
     const onLoad = (): void => void loads++
+    // 크래시 전에 렌더러가 답하는지 먼저 본다 — 이미 멈춰 있었으면 그건 크래시 복구가 아니라 제품 멈춤이다(따로 실패로 드러낸다).
+    const preApp = await Promise.race([
+      wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false),
+      sleep(2_000).then(() => 'timeout' as const)
+    ])
+    const pid = wc.getOSProcessId()
+    const alive = (): boolean => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
     wc.on('render-process-gone', onGone)
     wc.on('did-finish-load', onLoad)
+    // 2026-11-02 dca03a1 재실행: forcefullyCrashRenderer 뒤 40초 동안 render-process-gone 이 없고 렌더러도 답하지 않았다
+    // ({gone:'',loads:0,probeTimeouts:9,crashed:false}). 이 API 는 시험 장치일 뿐(제품은 안 쓴다) — 5초 안에 죽지 않으면
+    // 그 사실(fcrAlive)을 남기고 OS 가 프로세스를 끝내게 한다(TerminateProcess). 그래도 gone 이 안 오면 그건 진짜 문제로 실패한다.
     wc.forcefullyCrashRenderer()
+    const fcrBy = Date.now() + 5_000
+    while (gone.length === 0 && Date.now() < fcrBy) await sleep(100)
+    const fcrGone = gone.length > 0
+    const fcrAlive = fcrGone ? false : alive()
+    if (!fcrGone && fcrAlive) process.kill(pid)
     const reloadBy = Date.now() + 20_000
     while (loads === 0 && Date.now() < reloadBy) await sleep(250)
     // 🔴 executeJavaScript 에 상한을 건다. Electron 43 의 구현(electron.exe 안 lib/browser)은 ① 불러오는 중이면
@@ -53,6 +75,11 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     wc.removeListener('render-process-gone', onGone)
     wc.removeListener('did-finish-load', onLoad)
     return {
+      preApp,
+      pid,
+      fcrGone,
+      fcrAlive,
+      pidAliveAtEnd: alive(),
       gone: gone.join(','),
       loads,
       app,
@@ -63,7 +90,13 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     }
   })
   // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
-  expect({ gone: r.gone, loads: r.loads, app: r.app }, JSON.stringify(r)).toEqual({ gone: 'crashed', loads: 1, app: true })
+  // gone 은 한 번(이유는 crashed·killed 어느 쪽이든 — 장치가 다르면 이유가 다르다), 다시 불러오기 한 번, 크래시 전에도 답했어야 한다.
+  expect({ preApp: r.preApp, goneCount: r.gone.split(',').filter(Boolean).length, loads: r.loads, app: r.app }, JSON.stringify(r)).toEqual({
+    preApp: true,
+    goneCount: 1,
+    loads: 1,
+    app: true
+  })
 })
 
 // STAB-2 main 을 5초 막으면 감시 워커가 표식을 남기고, 다음 실행이 로그 폴더에 보고 파일을 쓴다.
