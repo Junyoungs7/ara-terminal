@@ -12,6 +12,7 @@ vi.mock('../src/main/log/MainErrorLog', () => ({ logMainError: (scope: string) =
 
 import { consumeHangDetectionMarker, createHangWatchdogDetectionLoop, hangDetectionMarkerPath, writeHangDetectionMarker } from '../src/main/stability/hangDetection'
 import { RecoveryCircuitBreaker } from '../src/main/stability/recoveryBreaker'
+import { dialog } from 'electron'
 import {
   applyGpuFallbackCommandLineSwitches,
   engageGpuFallbackAfterCrashBurst,
@@ -36,6 +37,7 @@ import {
   RENDERER_GONE_EVENT_SCOPE,
   RENDERER_GONE_WATCHDOG_SCOPE,
   RENDERER_LIVENESS_INTERVAL_MS,
+  RENDERER_RECOVERY_STALL_SCOPE,
   reportPreviousHang,
   shouldRunHangWatchdog,
   testBlockMainMs
@@ -382,28 +384,43 @@ describe('testCrash 훅', () => {
 })
 
 // STAB-2판: render-process-gone 이 안 와도 감시가 복구한다. 이벤트·감시가 겹쳐도 다시 불러오기는 한 번.
-describe('FD-04 렌더러 죽음 감시', () => {
-  function fakeWindow() {
-    const wc = Object.assign(new EventEmitter(), { crashed: false, pid: 100, reloads: 0 }) as EventEmitter & {
+// 다시 불러오기가 안 끝나면(정체) 첫 화면 다시 싣기 → 창 새로 만들기, 모두 같은 60초 3번 한도.
+describe('FD-04 렌더러 죽음 감시·복구 정체', () => {
+  const STALL = 10_000
+  function fakeWindow(o: { autoLoad?: boolean } = {}) {
+    const autoLoad = o.autoLoad ?? true
+    const alive = new Set([100])
+    const wc = Object.assign(new EventEmitter(), { crashed: false, pid: 100, reloads: 0, loading: false }) as EventEmitter & {
       crashed: boolean
       pid: number
       reloads: number
+      loading: boolean
       isCrashed: () => boolean
       getOSProcessId: () => number
+      isLoadingMainFrame: () => boolean
       reload: () => void
     }
     wc.isCrashed = () => wc.crashed
     wc.getOSProcessId = () => wc.pid
-    wc.reload = () => {
-      wc.reloads++
+    wc.isLoadingMainFrame = () => wc.loading
+    // 새 렌더러(200)가 뜬다. autoLoad 면 문서가 다 실리고, 아니면 불러오는 중에 멈춘다(STAB-1 실패 모양).
+    const startLoad = (): void => {
       wc.crashed = false
       wc.pid = 200
       alive.add(200)
+      wc.loading = !autoLoad
+      if (autoLoad) wc.emit('did-finish-load')
     }
+    wc.reload = () => {
+      wc.reloads++
+      startLoad()
+    }
+    const loadEntry = vi.fn(startLoad)
+    const recreateWindow = vi.fn()
     const win = Object.assign(new EventEmitter(), { webContents: wc, isDestroyed: () => false })
-    const alive = new Set([100])
-    installRendererRecovery(win as never, () => false, (pid) => alive.has(pid))
-    return { win, wc, alive }
+    const breaker = new RecoveryCircuitBreaker({ windowMs: 60_000, maxRecoveries: 3 })
+    installRendererRecovery(win as never, () => false, { loadEntry, recreateWindow, pidAlive: (pid) => alive.has(pid), breaker, stallMs: STALL })
+    return { win, wc, alive, loadEntry, recreateWindow, startLoad }
   }
   beforeEach(() => {
     vi.useFakeTimers()
@@ -435,29 +452,28 @@ describe('FD-04 렌더러 죽음 감시', () => {
     expect(wc.reloads).toBe(1)
   })
 
-  it('이벤트가 오면 바로(250ms 뒤) 복구하고, 뒤이은 감시는 같은 죽음으로 본다', () => {
+  it('이벤트가 오면 250ms 뒤 복구하고, 뒤이은 감시는 같은 죽음으로 본다', () => {
     const { wc, alive } = fakeWindow()
     alive.delete(100)
     wc.crashed = true
     wc.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 1 })
     vi.advanceTimersByTime(300)
     expect(wc.reloads).toBe(1)
-    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 10)
+    vi.advanceTimersByTime(STALL * 3)
     expect(wc.reloads).toBe(1)
     expect(logged).toEqual([RENDERER_GONE_EVENT_SCOPE])
   })
 
-  it('감시가 먼저 복구한 뒤 늦게 온 이벤트는 다시 부르지 않는다', () => {
-    const { wc, alive } = fakeWindow()
+  it('감시가 먼저 복구한 뒤 늦게 온 이벤트는 다시 부르지 않는다(실리기 전·후 둘 다)', () => {
+    const { wc, alive, startLoad } = fakeWindow({ autoLoad: false })
     alive.delete(100)
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
     expect(wc.reloads).toBe(1)
-    // 다시 불러오는 사이(새 렌더러 확인 전)에 온 이벤트
-    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 })
-    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS) // 새 렌더러(200) 확인 → pending 풀림
-    // 새 렌더러가 산 뒤에 온 옛 이벤트
-    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 })
-    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
+    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 }) // 새 문서가 실리기 전
+    startLoad()
+    wc.emit('did-finish-load')
+    wc.emit('render-process-gone', {}, { reason: 'killed', exitCode: 1 }) // 새 렌더러가 산 뒤
+    vi.advanceTimersByTime(STALL * 3)
     expect(wc.reloads).toBe(1)
     expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE])
   })
@@ -489,5 +505,68 @@ describe('FD-04 렌더러 죽음 감시', () => {
     wc.crashed = true
     vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS * 5)
     expect(wc.reloads).toBe(0)
+  })
+
+  it('다시 불러오기가 정체하면 첫 화면 다시 싣기 → 그것도 정체하면 창 새로 만들기(각 한 번)', () => {
+    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
+    expect(wc.reloads).toBe(1)
+    vi.advanceTimersByTime(STALL - 1_000)
+    expect(loadEntry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1_000 + 300)
+    expect(loadEntry).toHaveBeenCalledTimes(1)
+    expect(recreateWindow).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(STALL)
+    expect(recreateWindow).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(STALL * 10)
+    expect({ reloads: wc.reloads, loadEntry: loadEntry.mock.calls.length, recreate: recreateWindow.mock.calls.length }).toEqual({ reloads: 1, loadEntry: 1, recreate: 1 })
+    expect(logged).toEqual([RENDERER_GONE_WATCHDOG_SCOPE, RENDERER_RECOVERY_STALL_SCOPE, RENDERER_RECOVERY_STALL_SCOPE])
+  })
+
+  it('정체 뒤 첫 화면 다시 싣기로 실리면 거기서 끝난다', () => {
+    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: false })
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300 + STALL + 300)
+    expect(loadEntry).toHaveBeenCalledTimes(1)
+    wc.emit('did-finish-load')
+    vi.advanceTimersByTime(STALL * 5)
+    expect(recreateWindow).not.toHaveBeenCalled()
+  })
+
+  it('진행(dom-ready)이 보이면 상한(2배)까지 기다린다', () => {
+    const { wc, alive, loadEntry } = fakeWindow({ autoLoad: false })
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
+    wc.emit('dom-ready')
+    vi.advanceTimersByTime(STALL + 100)
+    expect(loadEntry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(STALL)
+    expect(loadEntry).toHaveBeenCalledTimes(1)
+  })
+
+  it('단계도 같은 한도에 센다 — 한도를 넘으면 자동은 멈추고 창 새로 만들기도 안 한다', () => {
+    const show = vi.fn(() => new Promise(() => {})) // 답이 없는 확인 창
+    ;(dialog as { showMessageBox?: unknown }).showMessageBox = show
+    const { wc, alive, loadEntry, recreateWindow } = fakeWindow({ autoLoad: true })
+    // 1·2번째 죽음은 정상 복구(한도 2개 씀)
+    alive.delete(100)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
+    alive.delete(200)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300)
+    expect(wc.reloads).toBe(2)
+    // 3번째는 정체 — reload 가 한도의 마지막, 다음 단계(첫 화면 다시 싣기)는 한도 초과 → 확인 창
+    wc.reload = () => {
+      wc.reloads++
+      wc.loading = true
+    }
+    alive.delete(200)
+    vi.advanceTimersByTime(RENDERER_LIVENESS_INTERVAL_MS + 300 + STALL + 300)
+    expect(wc.reloads).toBe(3)
+    expect(loadEntry).not.toHaveBeenCalled()
+    expect(show).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(STALL * 5)
+    expect(recreateWindow).not.toHaveBeenCalled()
+    expect(show).toHaveBeenCalledTimes(1)
   })
 })

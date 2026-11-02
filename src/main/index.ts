@@ -236,10 +236,20 @@ function createWindow(): void {
   })
 
   mainWindow = win
-  // FD-04: 렌더러가 죽으면 다시 불러온다(횟수 제한 — stability.ts).
-  installRendererRecovery(win, () => quitting)
+  // FD-04: 렌더러가 죽으면 다시 불러온다 → 안 끝나면 첫 화면 다시 싣기 → 그래도 안 되면 본창 새로 만들기(횟수 제한 — stability.ts).
+  installRendererRecovery(win, () => quitting, {
+    loadEntry: () => loadApp(win),
+    // 새 창을 먼저 만들고 옛 창을 없앤다 — 반대면 창 0개(window-all-closed → 종료). destroy 는 close(종료 확인)를 안 지난다.
+    recreateWindow: () => {
+      if (quitting) return
+      createWindow()
+      if (!win.isDestroyed()) win.destroy()
+    }
+  })
   win.on('closed', () => {
-    if (mainWindow === win) mainWindow = null
+    // 복구로 바꿔 낀 옛 창이면(mainWindow 가 이미 새 창) 딸린 창들을 닫지 않는다.
+    if (mainWindow !== win) return
+    mainWindow = null
     // 탐색기 창은 본창 없이는 아무것도 못 한다([연결]·[AI 에 묻기]가 본창에 도착한다) — 같이 닫는다.
     closeExplorerWindow()
     // 지난 세션 로그 창도 본창에 딸리지 않은 독립 창이다 — 같이 닫는다.
@@ -306,10 +316,14 @@ function createWindow(): void {
   // 숨기지는 않는다(숨은 창은 Chromium 이 rAF 를 늦춰 xterm 렌더가 틀어진다) — 포커스만 안 뺏는다.
   win.once('ready-to-show', () => (process.env['ARA_E2E'] === '1' ? win.showInactive() : win.show()))
 
+  loadApp(win)
+}
+
+function loadApp(win: BrowserWindow): void {
   if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void win.loadURL(process.env['ELECTRON_RENDERER_URL']).catch((e: unknown) => logMainError('main window load', e))
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    void win.loadFile(join(__dirname, '../renderer/index.html')).catch((e: unknown) => logMainError('main window load', e))
   }
 }
 

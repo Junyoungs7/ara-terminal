@@ -152,7 +152,10 @@ const rendererRecoveryPrompt = (): MessageBoxOptions => ({
   detail: t('rendererRecovery.detail')
 })
 
-/** 렌더러가 죽으면 다시 불러온다. 60초 안 3번을 넘으면 자동은 멈추고 사용자에게 묻는다(창은 한 번에 하나). */
+/**
+ * 렌더러가 죽으면 다시 불러온다. 다시 불러오기가 안 끝나면 첫 화면을 처음부터 싣고, 그래도 안 되면 본창을 새로 만든다.
+ * 단계마다 60초 안 3번 한도에 센다 — 넘으면 자동은 멈추고 사용자에게 묻는다(창은 한 번에 하나).
+ */
 const RENDERER_RELOAD_DELAY_MS = 250
 /**
  * STAB-2판: 죽음 감시 주기. Electron 43 에서 렌더러가 실제로 죽었는데 render-process-gone 이 40초 넘게 안 오는 일이
@@ -176,23 +179,110 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
-export function installRendererRecovery(win: BrowserWindow, isQuitting: () => boolean, pidAlive: (pid: number) => boolean = isPidAlive): void {
-  const breaker = new RecoveryCircuitBreaker({ windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS, maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES })
+/**
+ * 복구 로드 정체 상한. Orca(renderer-recovery-reload-watchdog.ts)는 45초(현장 복구가 30.4초까지 걸림)·dev 180초,
+ * 진행(커밋·dom-ready)이 있으면 2배까지 늘린다. 아라 본창은 로컬 파일 한 장이고 STAB-1 실패(2026-11-02 c47c539 ×5 중 2)는
+ * 다시 불러오기가 **아예 안 끝나는**(loading:true, did-finish-load 0) 모양이라 10초로 줄였다 — 진행이 보이면 2배(20초)까지 기다린다.
+ * dev(vite 서버)는 첫 컴파일이 느려 60초.
+ */
+export const RENDERER_RECOVERY_STALL_MS = 10_000
+const RENDERER_RECOVERY_DEV_STALL_MS = 60_000
+const RENDERER_RECOVERY_STALL_CAP_FACTOR = 2
+export const RENDERER_RECOVERY_STALL_SCOPE = 'renderer-recovery-stalled'
+
+export type RendererRecoveryOptions = {
+  /** 앱 첫 화면을 처음부터 다시 싣는다(index.ts 의 loadURL/loadFile). reload 가 멈췄을 때 두 번째 단계. */
+  loadEntry: () => void
+  /** 본창을 새로 만든다(부팅과 같은 복원). 그것도 멈췄을 때 마지막 단계. */
+  recreateWindow: () => void
+  pidAlive?: (pid: number) => boolean
+  /** 창을 새로 만들어도 같은 60초 3번 한도를 쓰도록 index.ts 가 하나를 넘겨 준다. */
+  breaker?: RecoveryCircuitBreaker
+  stallMs?: number
+}
+
+const sharedRendererBreaker = new RecoveryCircuitBreaker({ windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS, maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES })
+
+export function installRendererRecovery(win: BrowserWindow, isQuitting: () => boolean, opts: RendererRecoveryOptions): void {
+  const pidAlive = opts.pidAlive ?? isPidAlive
+  const breaker = opts.breaker ?? sharedRendererBreaker
+  const stallMs = opts.stallMs ?? (!app.isPackaged && process.env['ELECTRON_RENDERER_URL'] ? RENDERER_RECOVERY_DEV_STALL_MS : RENDERER_RECOVERY_STALL_MS)
   let prompting = false
-  // 복구를 걸었고 새 렌더러가 아직 확인되지 않았다 — 이 사이에 오는 이벤트·감시는 같은 죽음이다(두 번 부르지 않는다).
+  // 복구를 걸었고 새 문서가 아직 다 안 실렸다(did-finish-load 전) — 이 사이에 오는 이벤트·감시는 같은 죽음이다(두 번 부르지 않는다).
+  // 이 사이에 새 렌더러가 또 죽거나 멈추면 정체 타이머가 다음 단계로 넘긴다.
   let pending = false
-  // 복구를 건 죽은 렌더러의 pid. 새 렌더러는 이것과 다른 살아 있는 pid 로 확인한다.
+  // 복구를 건 죽은 렌더러의 pid — 늦게 온 옛 이벤트를 가른다.
   let deadPid = 0
   // 마지막으로 본 렌더러 pid — 죽은 뒤 getOSProcessId 가 0 을 돌려줘도 그 pid 로 확인한다.
   let lastPid = 0
+  // 정체 단계: 0 = reload, 1 = loadEntry, 2 = 창 새로 만들기.
+  let step = 0
+  let stallTimer: ReturnType<typeof setTimeout> | null = null
+  let stallCapAt = 0
+  let progressed = false
   const wc = win.webContents
+  const clearStall = (): void => {
+    if (stallTimer) clearTimeout(stallTimer)
+    stallTimer = null
+  }
+  const armStall = (): void => {
+    clearStall()
+    progressed = false
+    stallTimer = setTimeout(onStall, Math.max(0, Math.min(stallMs, stallCapAt - Date.now())))
+    stallTimer.unref?.()
+  }
   // 🔴 render-process-gone 처리기 **안에서 바로** reload 하면 Electron 40 에서 Chromium 이
   // "Observers can only be added once!"(NOTREACHED)로 앱째 죽는다(2026-11-01 실측, ME-1 E3). Orca 도 타이머 뒤에
   // 다시 불러온다(createMainWindow-recovery-reload-watchdog.test.ts 가 250ms 를 흘려 보낸다) — 같은 값으로 미룬다.
-  const reload = (): void => {
+  const runStep = (): void => {
+    if (step === 2) {
+      // 이 창의 감시는 여기서 끝난다 — 새 창은 createWindow 가 자기 감시를 단다.
+      clearStall()
+      clearInterval(timer)
+      opts.recreateWindow()
+      return
+    }
+    stallCapAt = Date.now() + stallMs * RENDERER_RECOVERY_STALL_CAP_FACTOR
+    armStall()
     setTimeout(() => {
-      if (!win.isDestroyed()) wc.reload()
+      if (win.isDestroyed()) return
+      if (step === 0) wc.reload()
+      else opts.loadEntry()
     }, RENDERER_RELOAD_DELAY_MS)
+  }
+  /** 한도 안이면 이번 단계를 돌리고, 넘으면 사용자에게 묻는다(창은 한 번에 하나). [다시 불러오기]는 처음 단계부터. */
+  const attempt = (): void => {
+    if (breaker.registerRecoveryAttempt(Date.now()).allowed) {
+      runStep()
+      return
+    }
+    clearStall()
+    if (prompting) return
+    prompting = true
+    void dialog
+      .showMessageBox(win, rendererRecoveryPrompt())
+      .then(({ response }) => {
+        if (isQuitting() || win.isDestroyed()) return
+        if (response === 0) {
+          breaker.reset()
+          step = 0
+          attempt()
+        } else app.quit()
+      })
+      .catch((e: unknown) => logMainError('renderer-recovery prompt', e))
+      .finally(() => (prompting = false))
+  }
+  function onStall(): void {
+    stallTimer = null
+    if (!pending || win.isDestroyed() || isQuitting()) return
+    // 진행 중인 로드는 상한까지 마저 기다린다(Orca 와 같다 — 진행을 차갑게 다시 시작하지 않는다).
+    if (progressed && Date.now() < stallCapAt) {
+      armStall()
+      return
+    }
+    step = Math.min(step + 1, 2)
+    logMainError(RENDERER_RECOVERY_STALL_SCOPE, `${stallMs}ms 안에 다시 불러오기가 안 끝남 → ${step === 1 ? 'loadEntry' : 'recreateWindow'} (loading=${wc.isLoadingMainFrame()} crashed=${wc.isCrashed()})`)
+    attempt()
   }
   /** 이벤트·감시가 같이 부르는 하나의 복구 경로. */
   const recover = (scope: string, why: string, pid: number): void => {
@@ -200,56 +290,45 @@ export function installRendererRecovery(win: BrowserWindow, isQuitting: () => bo
     pending = true
     deadPid = pid
     lastPid = 0
+    step = 0
     logMainError(scope, why)
-    if (breaker.registerRecoveryAttempt(Date.now()).allowed) {
-      reload()
-      return
-    }
-    if (prompting) return
-    prompting = true
-    void dialog
-      .showMessageBox(win, rendererRecoveryPrompt())
-      .then(({ response }) => {
-        if (isQuitting()) return
-        if (response === 0) {
-          breaker.reset()
-          reload()
-        } else app.quit()
-      })
-      .catch((e: unknown) => logMainError('renderer-recovery prompt', e))
-      .finally(() => (prompting = false))
+    attempt()
   }
-  /** 지금 렌더러가 죽었나. 살아 있는 새 렌더러를 보면 pending 을 푼다. */
+  /** 지금 렌더러가 죽었나. 복구 중(pending)에는 정체 타이머가 맡는다. */
   const check = (): void => {
-    if (win.isDestroyed() || isQuitting()) return
+    if (pending || win.isDestroyed() || isQuitting()) return
     const crashed = wc.isCrashed()
     const pid = wc.getOSProcessId() || lastPid
     const alive = pid > 0 && pidAlive(pid)
-    if (pending) {
-      if (!crashed && alive && pid !== deadPid) pending = false
-      return
-    }
     if (pid > 0 && alive) lastPid = pid
     if (crashed || (pid > 0 && !alive)) recover(RENDERER_GONE_WATCHDOG_SCOPE, `crashed=${crashed} pid=${pid} alive=${alive}`, pid)
   }
   wc.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit' || win.isDestroyed() || isQuitting()) return
-    // 감시가 먼저 복구를 걸었고 새 렌더러가 이미 살아 있으면 이 이벤트는 늦게 온 옛 죽음이다.
+    // 감시가 먼저 복구했고 새 렌더러가 이미 살아 있으면 이 이벤트는 늦게 온 옛 죽음이다.
     if (!pending && !wc.isCrashed()) {
       const pid = wc.getOSProcessId()
       if (pid > 0 && pid !== deadPid && pidAlive(pid)) return
     }
     recover(RENDERER_GONE_EVENT_SCOPE, `${details.reason} (exitCode ${details.exitCode})`, wc.getOSProcessId() || lastPid)
   })
-  // 새 문서가 다 불러와졌으면 새 렌더러가 산 것이다.
+  // 새 문서가 다 실렸으면 복구가 끝난 것이다.
   wc.on('did-finish-load', () => {
-    if (pending && !wc.isCrashed()) pending = false
+    if (!pending || wc.isCrashed()) return
+    pending = false
+    clearStall()
   })
+  const markProgress = (): void => void (progressed = true)
+  wc.on('did-navigate', markProgress)
+  wc.on('dom-ready', markProgress)
   // 응답 없음 — 죽었는지 바로 한 번 본다. 살아서 멈춘 렌더러는 다시 부르지 않는다(Orca 도 본창 멈춤엔 자동 재로드가 없다).
   wc.on('unresponsive', check)
   const timer = setInterval(check, RENDERER_LIVENESS_INTERVAL_MS)
   timer.unref?.()
-  win.on('closed', () => clearInterval(timer))
+  win.on('closed', () => {
+    clearInterval(timer)
+    clearStall()
+  })
 }
 
 // ───────── FD-04 안전 그래픽 모드 ─────────

@@ -99,6 +99,8 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
     }
   })()
   const scopes = [...log.matchAll(/^\[[^\]]+\] (render-process-gone(?:-watchdog)?)$/gm)].map((m) => m[1])
+  // 다시 불러오기가 정체해서 다음 단계(첫 화면 다시 싣기·창 새로 만들기)로 넘어간 횟수 — 진단용(기대값엔 안 넣는다).
+  const stalls = [...log.matchAll(/^\[[^\]]+\] renderer-recovery-stalled$/gm)].length
   const recoveryPath = scopes.length === 1 ? (scopes[0] === 'render-process-gone' ? 'event' : 'watchdog') : `${scopes.length}:${scopes.join(',')}`
   const goneCount = r.gone.split(',').filter(Boolean).length
   // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
@@ -106,7 +108,7 @@ test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시
   // 이벤트로 복구했으면 gone 도 한 번(이유는 crashed·killed 어느 쪽이든). 감시로 복구했으면 gone 은 0(안 옴) 또는 1(늦게 옴).
   expect(
     { preApp: r.preApp, recoveryPath, goneOk: recoveryPath === 'event' ? goneCount === 1 : goneCount <= 1, loads: r.loads, app: r.app },
-    JSON.stringify({ ...r, recoveryPath, scopes })
+    JSON.stringify({ ...r, recoveryPath, scopes, stalls })
   ).toEqual({
     preApp: true,
     recoveryPath: recoveryPath === 'watchdog' ? 'watchdog' : 'event',
