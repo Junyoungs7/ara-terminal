@@ -12,7 +12,7 @@ import { matchBinding, matchArrow, matchNumber } from '../../shared/keymap'
 import type { Space } from '@shared/space'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import type { ActionId } from '../interactions/actions'
-import { getSelection } from '../terminal/termRegistry'
+import { getSelection, resetTermModes } from '../terminal/termRegistry'
 import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
 import { SettingsPage, SIZE_MAX, SIZE_MIN } from './SettingsPage'
@@ -1168,6 +1168,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
             // 선택 영역이 있으면 그 텍스트를 컴포저에 프리필한다('copy' 가 쓰는 같은 함수).
             onAskAi?.(sid ? getSelection(sid) : '')
             return
+          case 'terminal.reset':
+            if (sid && resetTermModes(sid)) showToast(t('ctx.termReset'))
+            return
           case 'log.save':
             // 2026-08-13 감사: "추후 지원" 토스트만 내고 있었는데 로그 패널의 [내려받기]는
             // 이미 동작했다. 그 패널을 여는 것으로 잇는다 — 없는 기능인 척하지 않는다.
@@ -1320,6 +1323,9 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           // Ctrl+Shift+A — 우클릭 메뉴 [AI에게 질문] 과 같은 경로(선택 텍스트를 아는 쪽이 여기다).
           e.preventDefault()
           void onAction('ai.ask')
+        } else if (matchBinding(e, 'terminal.reset')) {
+          e.preventDefault()
+          void onAction('terminal.reset')
         } else if (matchBinding(e, 'log.save')) {
           // Ctrl+Shift+S — 우클릭 [로그] 와 같은 길(로그 패널을 열고, 저장은 그 패널의 [내려받기]).
           // 표에는 implemented:true 로 올라 키를 먹고 있었는데 이 분기가 없어 무동작이었다.

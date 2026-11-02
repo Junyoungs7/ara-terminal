@@ -10,9 +10,7 @@ import {
   applyGroupDrop,
   dropZone,
   groupDropVerdict,
-  groupTree,
-  matchProfile,
-  parentGroupOf,
+  groupServers,
   type DropPlace,
   type GroupLayout
 } from '../store/groups'
@@ -289,29 +287,10 @@ export function ConnTree({
   // 검색 중에는 걸린 프로필이 없는 그룹을 숨긴다 — 필터 결과가 빈 헤더 목록으로 보이지 않게.
   const none = t('conn.group.none')
   const layout = groupLayout ?? {}
-  // #193: 검색은 **부모 그룹 이름으로도** 걸린다. 자식 그룹에 들어간 서버도 사용자 머릿속에서는
-  // 여전히 "운영 안"이라, 부모 이름을 쳤는데 안 나오면 검색이 거짓말을 한다.
-  const visible = profiles.filter((p) =>
-    matchProfile(p, query, p.group ? parentGroupOf(p.group, groups, layout.parents) : undefined)
-  )
-  const byGroup = new Map<string, ConnectionProfile[]>()
-  for (const g of groups) byGroup.set(g, [])
-  for (const p of visible) {
-    const g = p.group || none
-    if (!byGroup.has(g)) byGroup.set(g, [])
-    byGroup.get(g)!.push(p)
-  }
+  // M15 R2 WS-22: 묶기는 store/groups.ts groupServers — AI 작업 공간의 호스트별 묶음(store/hostSections.ts)과 같은 구현.
+  const { byGroup, nodes } = groupServers(profiles, groups, layout, query)
   const searching = query.trim().length > 0
   const listOf = (g: string): ConnectionProfile[] => byGroup.get(g) ?? []
-  // 2단 트리. 이름 목록은 화면에 그릴 것 그대로다 — 저장된 부모 관계에 **지금 없는 이름**이 있으면
-  // groupTree 가 무시하고 그 그룹을 최상위로 올린다(옛 앱이 지운 그룹의 흔적).
-  const nodes = groupTree([...byGroup.keys()], layout).flatMap((n) => {
-    // 검색 중 자식은 걸린 것만 남기고, 부모는 자기 것이 없어도 **걸린 자식이 있으면 남는다**
-    // (안 그러면 자식이 부모와 함께 사라져 검색 결과가 거짓이 된다).
-    const children = searching ? n.children.filter((c) => listOf(c).length > 0) : n.children
-    if (searching && listOf(n.name).length === 0 && children.length === 0) return []
-    return [{ name: n.name, children }]
-  })
 
   // ── #193 드래그 ────────────────────────────────────────────────────────────
   // 우클릭 메뉴는 그대로 둔다. 드래그는 **더하는 길**이지 대체가 아니다 — 키보드로만 쓰는 사람에게서
@@ -559,7 +538,7 @@ export function ConnTree({
           )}
         </div>
       )}
-      {profiles.length > 0 && visible.length === 0 && <div className="empty">{t('conn.search.noMatch')}</div>}
+      {profiles.length > 0 && [...byGroup.values()].every((l) => l.length === 0) && <div className="empty">{t('conn.search.noMatch')}</div>}
       {/* 즐겨찾기(작업 프로필) — 서버+폴더를 한 번에 연다. 검색 중에는 감춘다(검색 대상은 서버다). */}
       {!searching && workProfiles && workProfiles.length > 0 && (
         <div className="srv-group" key="__fav">

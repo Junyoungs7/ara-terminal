@@ -18,6 +18,7 @@ import type {
 import type { LaunchShell } from '@shared/aiCli'
 import { glassMaterialOf } from '@shared/glass'
 import { orielBridge } from './features/oriel'
+import { localNetworkBridge } from './features/localNetwork'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
 import { automationsBridge } from './features/automations'
@@ -263,6 +264,8 @@ const api: EvApi = {
   },
   // M9 R2 Oriel — 기능 틀(preload/features/oriel.ts). 옛 내장 브라우저 자리.
   ...orielBridge,
+  // M15 R2 TM-04 macOS 로컬 네트워크(preload/features/localNetwork.ts).
+  ...localNetworkBridge,
   // FD-01 자원 관리자 — 기능 틀(preload/features/resources.ts).
   ...resourcesBridge,
   // M14 R1 자동화·스킬·MCP(preload/features/automations.ts).

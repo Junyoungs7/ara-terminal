@@ -50,6 +50,7 @@ const OUTPUT_TAIL_CHARS = 4000
 // 핀·묶기 방식은 이 PC 의 보기 설정이다(Orca 는 worktree meta 로 main 에 둔다 — 여러 창·기기 동기화가 필요해지면 옮긴다).
 const PINS_KEY = 'aiws.pinnedWorktrees'
 const GROUP_KEY = 'aiws.groupBy'
+const HOSTS_FOLDED_KEY = 'aiws.collapsedHosts'
 export type SidebarGroupBy = 'repo' | 'none'
 
 function readLocal<T>(key: string, fallback: T, ok: (v: unknown) => v is T): T {
@@ -80,6 +81,9 @@ export type SidebarSlice = {
   setShowArchived: (on: boolean) => void
   togglePin: (worktreeId: string) => void
   setGroupBy: (g: SidebarGroupBy) => void
+  /** M15 R2 WS-22 접은 호스트 묶음(이 PC 의 보기 설정 — 핀과 같은 자리). */
+  collapsedHosts: string[]
+  toggleHost: (hostKey: string) => void
   /** +/− 줄 수 · 커밋 앞(행마다 git 3번 — 목록을 다시 읽을 때만). */
   fetchStats: (w: Worktree) => Promise<void>
 }
@@ -135,6 +139,13 @@ export type AiwsState = RepoSlice & WorktreeSlice & SidebarSlice
 const createSidebarSlice: StateCreator<AiwsState, [], [], SidebarSlice> = (set) => ({
   pinnedIds: readLocal(PINS_KEY, [], isStringArray),
   groupBy: readLocal<SidebarGroupBy>(GROUP_KEY, 'repo', isGroupBy),
+  collapsedHosts: readLocal(HOSTS_FOLDED_KEY, [], isStringArray),
+  toggleHost: (key) =>
+    set((s) => {
+      const collapsedHosts = s.collapsedHosts.includes(key) ? s.collapsedHosts.filter((x) => x !== key) : [...s.collapsedHosts, key]
+      writeLocal(HOSTS_FOLDED_KEY, collapsedHosts)
+      return { collapsedHosts }
+    }),
   statsById: {},
   showArchived: false,
   setShowArchived: (showArchived) => set({ showArchived }),

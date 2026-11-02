@@ -72,7 +72,8 @@ export class ProfileStore {
     const conn = {
       ...(input.jump?.trim() ? { jump: input.jump.trim() } : {}),
       ...(input.proxy?.trim() ? { proxy: input.proxy.trim() } : {}),
-      ...(input.reconnectOnLaunch === false ? { reconnectOnLaunch: false as const } : {})
+      ...(input.reconnectOnLaunch === false ? { reconnectOnLaunch: false as const } : {}),
+      ...(input.forwardAgent === true ? { forwardAgent: true as const } : {})
     }
     const profile: ConnectionProfile =
       input.authType === 'password'

@@ -7,9 +7,9 @@ import { CONTEXT_ACTIONS } from '../src/renderer/interactions/actions'
 // 두 컴포넌트를 지우면서 함께 지웠다 — 남은 모양은 리스트 하나뿐이라 좌표 계산이 없다.
 
 describe('컨텍스트 액션 단일 레지스트리', () => {
-  it('6개 항목(분할 둘은 서브메뉴로 빠졌다 — 2026-08-18)', () => {
-    // 2026-08-23: 아라 대화를 숨기면 [아라에게 묻기] 한 줄이 빠져 다섯이 된다(features.AI_ENTRY).
-    expect(CONTEXT_ACTIONS).toHaveLength(AI_ENTRY ? 6 : 5)
+  it('7개 항목(분할 둘은 서브메뉴로 빠졌다 — 2026-08-18 · M15 R2 [터미널 초기화] 하나 더)', () => {
+    // 2026-08-23: 아라 대화를 숨기면 [아라에게 묻기] 한 줄이 빠져 여섯이 된다(features.AI_ENTRY).
+    expect(CONTEXT_ACTIONS).toHaveLength(AI_ENTRY ? 7 : 6)
   })
 
   // "추후 지원" 항목이 없다는 것을 여기서 두 번 셌었다(future 플래그가 빈 배열인가 · 실동작

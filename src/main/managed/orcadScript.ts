@@ -9,7 +9,7 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 # Same wire protocol as the local daemon (src/main/daemon/protocol.ts): NDJSON, hello+token, create/list/attach/write/resize/kill/killAll/shutdown.
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
-import codecs, errno, fcntl, hmac, json, os, pty, selectors, signal, socket, struct, subprocess, sys, termios, time
+import codecs, errno, fcntl, hmac, json, os, pty, selectors, signal, socket, stat, struct, subprocess, sys, termios, time
 
 PROTOCOL = 1
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +18,8 @@ TOKEN = os.path.join(DIR, 'token')
 PIDF = os.path.join(DIR, 'orcad.pid')
 LOGF = os.path.join(DIR, 'orcad.log')
 VERF = os.path.join(DIR, 'version')
+# Stable SSH agent path (herdr ssh_agent idea): sessions get SSH_AUTH_SOCK=AGENT, each connect repoints it to its own forwarded socket.
+AGENT = os.path.join(DIR, 'agent.sock')
 MARK = 'ARA_ORCAD_HOME'
 LOG_MAX = 1 << 20
 REPLAY_CAP = 2 * 1024 * 1024
@@ -57,6 +59,8 @@ class Session(object):
             env[str(k)] = str(v)
         env['TERM'] = 'xterm-256color'
         env[MARK] = DIR
+        if os.path.islink(AGENT):
+            env['SSH_AUTH_SOCK'] = AGENT
         shell = env.get('SHELL') or '/bin/sh'
         pid, fd = pty.fork()
         if pid == 0:
@@ -442,8 +446,27 @@ def try_connect():
         return None
 
 
+def publish_agent():
+    """Point AGENT at this connection's forwarded agent (only a user-owned socket). Atomic: new link, then rename over."""
+    src = os.environ.get('SSH_AUTH_SOCK') or ''
+    if not src or not os.path.isabs(src) or src == AGENT:
+        return
+    try:
+        st = os.stat(src)
+        if not stat.S_ISSOCK(st.st_mode) or st.st_uid != os.geteuid():
+            return
+        tmp = AGENT + '.%d' % os.getpid()
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(src, tmp)
+        os.rename(tmp, AGENT)
+    except OSError as e:
+        log('agent link failed: %s' % e)
+
+
 def bridge():
     """stdin/stdout <-> daemon socket. Starts the daemon if it is not running. Ends when either side closes."""
+    publish_agent()
     s = try_connect()
     if s is None:
         env = dict(os.environ)

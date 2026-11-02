@@ -61,7 +61,7 @@ const ALL_MENUBAR: readonly MenuDef[] = [
   },
   {
     title: '편집',
-    items: [{ action: 'clipboard.copy' }, { action: 'clipboard.paste' }, { action: 'terminal.search' }]
+    items: [{ action: 'clipboard.copy' }, { action: 'clipboard.paste' }, { action: 'terminal.search' }, { action: 'terminal.reset' }]
   },
   {
     title: '보기',

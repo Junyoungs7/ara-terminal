@@ -14,8 +14,8 @@ export const managedDirShown = `~/${MANAGED_DIR}`
 
 /** 설치하는 파일(동의 화면에 그대로 보인다). orcad.py 크기는 부르는 쪽이 채운다. */
 export const MANAGED_FILES = ['orcad.py', 'token', 'version'] as const
-/** 돌 때만 생기는 파일(모두 설치 폴더 안 — 제거하면 함께 사라진다). */
-export const MANAGED_RUNTIME_FILES = ['orcad.sock', 'orcad.pid', 'orcad.log'] as const
+/** 돌 때만 생기는 파일(모두 설치 폴더 안 — 제거하면 함께 사라진다). agent.sock 은 SSH agent 포워딩을 켠 연결의 에이전트를 가리키는 링크(M15 R2 TM-05). */
+export const MANAGED_RUNTIME_FILES = ['orcad.sock', 'orcad.pid', 'orcad.log', 'agent.sock'] as const
 /** 원격 프로세스에 붙는 표식(환경 변수) — 제거 검증이 이것으로 "아라가 띄운 것"을 센다. orcad.py 의 MARK 와 같아야 한다. */
 export const MANAGED_MARK = 'ARA_ORCAD_HOME'
 

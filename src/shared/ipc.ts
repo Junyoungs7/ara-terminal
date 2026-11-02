@@ -49,6 +49,7 @@ import type {
 } from './bugReport'
 import type { AgentStatusView } from './agentHooks'
 import type { OrielStatus } from './oriel'
+import type { LocalNetworkTestResult } from './localNetwork'
 import type { ResourceSnapshot } from './resources'
 import type { AccountAction, AccountActionResult, AccountProvider, ProviderUsage, UsagePrefs, UsageState } from './usage'
 import type { AgentSummary, StatsReport } from './usageStats'
@@ -584,6 +585,10 @@ export type InvokeContract = {
   // M9 R2 Oriel(옛 내장 브라우저 자리 — 결정 :162 브라우저는 무조건 Oriel). http/https 만(isSafeExternal). 미설치·실패면 OS 기본 브라우저(via).
   'oriel:open': { req: { url: string }; res: { ok: boolean; via?: 'oriel' | 'external' } }
   'oriel:status': { req: { force?: boolean }; res: OrielStatus }
+  // M15 R2 TM-04 macOS 로컬 네트워크(main/localNetwork/feature.ts) — 권한 창 띄우기·시스템 설정 열기·같은 망 TCP 시험. 맥이 아니면 ok:false.
+  'localNetwork:request': { req: void; res: { ok: boolean } }
+  'localNetwork:openSettings': { req: void; res: { ok: boolean } }
+  'localNetwork:test': { req: { host: string; port: number }; res: LocalNetworkTestResult }
   // M0 0-7 FD-01 자원 관리자. 팝오버가 열린 동안만 렌더러가 2초마다 묻는다(상시 폴러 없음).
   'resources:snapshot': { req: void; res: ResourceSnapshot }
   // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
@@ -1316,6 +1321,8 @@ export type EvApi = {
   }
   // M9 R2 Oriel(preload/features/oriel.ts). 링크를 Oriel 에서 — 미설치·실패면 OS 기본 브라우저. http/https 가 아니면 ok:false.
   oriel: { open(url: string): Promise<{ ok: boolean; via?: 'oriel' | 'external' }>; status(force?: boolean): Promise<OrielStatus> }
+  // M15 R2 TM-04 macOS 로컬 네트워크(preload/features/localNetwork.ts).
+  localNetwork: { request(): Promise<{ ok: boolean }>; openSettings(): Promise<{ ok: boolean }>; test(host: string, port: number): Promise<LocalNetworkTestResult> }
   // M0 0-7 FD-01 자원 관리자(preload/features/resources.ts).
   resources: {
     snapshot(): Promise<ResourceSnapshot>

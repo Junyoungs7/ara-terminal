@@ -80,7 +80,15 @@ export function holdClient(c: Client): void {
 /** 셸 없이 **연결만**(M8: orcad·관리형 설치가 이 Client 위에 exec·sftp 채널을 연다). 끊을 때는 `client.end()` — 점프 홉·프록시 소켓도 같이 닫힌다. */
 export type ClientOutcome = { ok: true; client: Client } | ConnectFailure
 
-type Endpoint = { host: string; port: number; username: string; auth: SshAuth; secret: string | null; label: string }
+type Endpoint = { host: string; port: number; username: string; auth: SshAuth; secret: string | null; label: string; forwardAgent?: boolean }
+
+/**
+ * M15 R2 TM-05 SSH agent 포워딩에 빌려줄 이 PC 의 에이전트(Orca ssh-auth-resolution resolveDefaultAgentSocket 과 같은 순서):
+ * SSH_AUTH_SOCK, 없으면 Windows 는 OpenSSH 에이전트 파이프. 없으면 undefined(포워딩 안 함 — 접속은 그대로).
+ */
+export function localAgentSocket(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
+  return env['SSH_AUTH_SOCK'] || (platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+}
 
 // 인증 설정. 실패(개인키 못 읽음)는 문구로 돌려준다(호출측이 auth 사유로 낸다).
 async function applyAuth(cfg: ConnectConfig, auth: SshAuth, secret: string | null): Promise<string | null> {
@@ -149,6 +157,14 @@ async function dial(ep: Endpoint, deps: ConnectDeps, budget: { accept: number },
       }
       return false
     }
+  }
+
+  // M15 R2 TM-05: 켠 프로필의 대상에만(점프 홉엔 안 빌려준다). ssh2 는 이 연결의 모든 셸·exec 채널에 포워딩을 요청한다.
+  // 에이전트를 주면 인증 후보에도 들어가지만 순서가 비밀번호·개인키 뒤라 지금 인증은 그대로다.
+  const agent = ep.forwardAgent ? localAgentSocket() : undefined
+  if (agent) {
+    cfg.agent = agent
+    cfg.agentForward = true
   }
 
   const authErr = await applyAuth(cfg, ep.auth, ep.secret)
@@ -251,7 +267,7 @@ export async function connectSshClient(profile: SshProfile, deps: ConnectDeps): 
     }
     route.push({ ...h, ...cred, label: `[점프 ${h.username}@${h.host}:${h.port}] ` })
   }
-  route.push({ host: profile.host, port: profile.port, username: profile.username, auth: profile.auth, secret: deps.secret, label: '' })
+  route.push({ host: profile.host, port: profile.port, username: profile.username, auth: profile.auth, secret: deps.secret, label: '', forwardAgent: profile.forwardAgent === true })
 
   const up: Client[] = [] // 지금까지 붙은 홉들(실패·종료 시 걷는다)
   let proxySock: Duplex | null = null

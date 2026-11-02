@@ -68,6 +68,8 @@ export type KeymapAction =
   | 'space.ai'
   // M12 R2 워크트리 점프(Orca Ctrl+Shift+J·맥 Cmd+Shift+J) — AI 공간에서만. 같은 조합이 터미널 공간에선 하단 패널(bottom.toggle)이다(space 칸).
   | 'worktree.jump'
+  // M15 R2 TM-03 Reset Terminal(Orca 는 우클릭에만 — 아라는 단축키도). 죽은 TUI 가 남긴 입력 모드를 끈다(termRegistry.resetTermModes).
+  | 'terminal.reset'
 
 import { AI_ENTRY } from './features'
 import { DEFAULT_LOCK_SHORTCUT } from './lock'
@@ -131,6 +133,8 @@ const ALL_KEYS: readonly KeyBinding[] = [
   // Ctrl+D 단독은 EOF(셸 종료) 다 — R2 에서 가로챈 것을 셸에 돌려준다.
   { action: 'session.duplicate', category: 'tab', labelKo: '세션 복제', win: 'Ctrl+Shift+D', mac: 'Cmd+Shift+D', implemented: true },
   // Ctrl+F 단독은 리드라인 커서 오른쪽 이동.
+  // M15 R2: Ctrl+Shift+R — 셸 키(단일 Ctrl+R 역검색)와 수식키가 달라 안 겹친다. Electron 기본 메뉴의 강제 새로고침은 개발판 Dev 메뉴에만 있다(appMenu.ts).
+  { action: 'terminal.reset', category: 'panel', labelKo: '터미널 초기화(입력 모드)', win: 'Ctrl+Shift+R', mac: 'Cmd+Shift+R', implemented: true },
   { action: 'terminal.search', category: 'search', labelKo: '터미널 내 검색', win: 'Ctrl+Shift+F', mac: 'Cmd+Shift+F', implemented: true },
   { action: 'clipboard.copy', category: 'clipboard', labelKo: '복사', win: 'Ctrl+Shift+C', mac: 'Cmd+Shift+C', implemented: true },
   { action: 'clipboard.paste', category: 'clipboard', labelKo: '붙여넣기', win: 'Ctrl+Shift+V', mac: 'Cmd+Shift+V', implemented: true },

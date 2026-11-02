@@ -26,6 +26,9 @@ import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore, type PendingWorktreeCreation } from './store'
 import { DELETE_KEY_HINT, buildSidebarRows, isDeleteWorkspaceKey, shortBranch } from './sidebarRows'
+import { LOCAL_HOST, hostSections } from '../../store/hostSections'
+import type { ConnectionProfile } from '@shared/types'
+import type { GroupLayout } from '../../store/groups'
 import { useAgentStore } from './agentStore'
 import { aggregate, displayOf } from './agentStatusView'
 import { AgentChildRows, AgentGlyph } from './AgentGlyph'
@@ -199,6 +202,26 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
       }
     )
 
+  // M15 R2 WS-22 호스트별 묶음 — 서버 이름·순서는 터미널 연결 사이드바(프로필·그룹)에서. 저장소 목록이 바뀔 때 한 번 다시 읽는다(폴링 없음).
+  const [conn, setConn] = useState<{ profiles: ConnectionProfile[]; groups: string[]; layout: GroupLayout }>({ profiles: [], groups: [], layout: {} })
+  const remote = s.repos.some((r) => r.host)
+  useEffect(() => {
+    if (!remote) return
+    let alive = true
+    void Promise.all([window.ev.profile.list(), window.ev.workspace.load()])
+      .then(([profiles, snap]) => {
+        if (alive) setConn({ profiles, groups: snap.ui.groups ?? [], layout: { order: snap.ui.groupOrder, parents: snap.ui.groupParents } })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [remote, s.repos])
+  const hosts = useMemo(
+    () => (remote ? hostSections(new Set(s.repos.map((r) => r.host ?? LOCAL_HOST)), conn.profiles, conn.groups, conn.layout) : undefined),
+    [remote, s.repos, conn]
+  )
+
   const rows = useMemo(
     () =>
       buildSidebarRows({
@@ -209,9 +232,11 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         query: filterOpen ? query : '',
         groupBy: s.groupBy,
         groups: s.groups,
-        showArchived: s.showArchived
+        showArchived: s.showArchived,
+        hosts,
+        collapsedHosts: s.collapsedHosts
       }),
-    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy, s.groups, s.showArchived]
+    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy, s.groups, s.showArchived, hosts, s.collapsedHosts]
   )
 
   return (
@@ -300,6 +325,31 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         )}
         {s.repos.length > 0 && rows.length === 0 && <div className="aiws-side-empty">{s.showArchived ? t('aiws.archive.empty') : t('aiws.side.noMatch')}</div>}
         {rows.map((r) => {
+          if (r.kind === 'header' && r.group === 'host' && r.host) {
+            const h = r.host
+            const toggle = (): void => s.toggleHost(h.key)
+            return (
+              <div
+                key={r.key}
+                className="aiws-grp aiws-pgrp"
+                data-group={r.key}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!r.collapsed}
+                title={h.key === LOCAL_HOST ? undefined : h.key}
+                onClick={toggle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') toggle()
+                }}
+              >
+                {r.collapsed ? <ChevronRight className="aiws-grp-ic" aria-hidden /> : <ChevronDown className="aiws-grp-ic" aria-hidden />}
+                <span className="aiws-grp-name">
+                  {h.key === LOCAL_HOST ? t('aiws.side.hostLocal') : h.group ? `${h.group} › ${h.label}` : h.label}
+                </span>
+                <b>{r.count}</b>
+              </div>
+            )
+          }
           if (r.kind === 'header' && r.group === 'group' && r.projectGroup) {
             const g = r.projectGroup
             const toggle = (): void => void s.updateProjectGroup(g.id, { isCollapsed: !g.isCollapsed })

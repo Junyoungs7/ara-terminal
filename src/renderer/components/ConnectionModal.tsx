@@ -38,6 +38,8 @@ type Form = {
   jump: string
   proxy: string
   reconnectOnLaunch: boolean
+  /** M15 R2 TM-05 — 기본 끔(내 키를 서버에 빌려주는 일이라 켤 때만). */
+  forwardAgent: boolean
 }
 
 export const emptyForm: Form = {
@@ -60,7 +62,8 @@ export const emptyForm: Form = {
   jump: '',
   proxy: '',
   // Orca 기본값(Reconnect on launch 켬)을 따른다.
-  reconnectOnLaunch: true
+  reconnectOnLaunch: true,
+  forwardAgent: false
 }
 
 function formFrom(p: ConnectionProfile): Form {
@@ -78,7 +81,8 @@ function formFrom(p: ConnectionProfile): Form {
     multiMonitor: p.type === 'rdp' && p.multiMonitor === true,
     jump: p.type === 'ssh' ? (p.jump ?? '') : '',
     proxy: p.type === 'ssh' ? (p.proxy ?? '') : '',
-    reconnectOnLaunch: p.type !== 'ssh' || p.reconnectOnLaunch !== false
+    reconnectOnLaunch: p.type !== 'ssh' || p.reconnectOnLaunch !== false,
+    forwardAgent: p.type === 'ssh' && p.forwardAgent === true
   }
 }
 
@@ -244,7 +248,7 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
     multiMonitor: form.type === 'rdp' ? form.multiMonitor : undefined,
     // ssh 전용. 빈 값은 "없음" — ProfileStore 가 필드를 안 적는다.
     ...(form.type === 'ssh'
-      ? { jump: form.jump.trim(), proxy: form.proxy.trim(), reconnectOnLaunch: form.reconnectOnLaunch }
+      ? { jump: form.jump.trim(), proxy: form.proxy.trim(), reconnectOnLaunch: form.reconnectOnLaunch, forwardAgent: form.forwardAgent }
       : {})
   })
 
@@ -592,6 +596,16 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                   {t('conn.field.reconnectOnLaunch')}
                 </label>
                 <div className="pf-hint">{t('conn.reconnectOnLaunch.hint')}</div>
+                <label className="fb-check">
+                  <input
+                    type="checkbox"
+                    data-field="forwardAgent"
+                    checked={form.forwardAgent}
+                    onChange={(e) => setForm({ ...form, forwardAgent: e.target.checked })}
+                  />
+                  {t('conn.field.forwardAgent')}
+                </label>
+                <div className="pf-hint">{t('conn.forwardAgent.hint')}</div>
               </>
             )}
           </div>

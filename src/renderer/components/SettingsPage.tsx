@@ -325,6 +325,41 @@ export function Row({ label, desc, item, children }: { label: string; desc?: str
   )
 }
 
+/**
+ * M15 R2 TM-04 macOS 로컬 네트워크(Orca 설정 › 개발자 권한의 Local Network 줄 + 연결 시험). 맥에서만 그린다.
+ * macOS 는 권한 상태를 앱에 알려 주지 않는다 — [권한 요청]으로 창을 띄우고, 안 뜨면 [시스템 설정 열기], 됐는지는 [시험]으로 본다.
+ */
+function LocalNetworkRow() {
+  const [host, setHost] = useState('')
+  const [port, setPort] = useState('22')
+  const [msg, setMsg] = useState('')
+  const test = async () => {
+    setMsg(t('settings.localNet.testing'))
+    const r = await window.ev.localNetwork.test(host, Number(port))
+    setMsg(r.ok ? t('settings.localNet.ok') : t('settings.localNet.fail.' + (r.failure ?? 'failed')))
+  }
+  return (
+    <Row label={t('settings.localNet')} desc={t('settings.localNet.desc')}>
+      <div className="row">
+        <button type="button" className="btn sec" data-action="localNet.request" onClick={() => void window.ev.localNetwork.request().then(() => setMsg(t('settings.localNet.requested')))}>
+          {t('settings.localNet.request')}
+        </button>
+        <button type="button" className="btn sec" data-action="localNet.open" onClick={() => void window.ev.localNetwork.openSettings()}>
+          {t('settings.localNet.open')}
+        </button>
+      </div>
+      <div className="row">
+        <input type="text" className="ai-key-input" data-field="localNet.host" spellCheck={false} placeholder="192.168.0.10" value={host} onChange={(e) => setHost(e.target.value)} />
+        <input type="text" className="ai-key-input" data-field="localNet.port" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value)} />
+        <button type="button" className="btn" data-action="localNet.test" disabled={!host.trim()} onClick={() => void test()}>
+          {t('settings.localNet.test')}
+        </button>
+      </div>
+      {msg && <div className="sr-desc" role="status">{msg}</div>}
+    </Row>
+  )
+}
+
 // 모델 추천 칩(자유 입력 인풋 위) — provider 가 바뀌면 목록도 바뀐다. compatible 은 추천이 없다
 // (게이트웨이마다 모델명이 다르다) — 인풋만 보인다.
 function ModelPicker({ provider, value, onChange }: { provider: AiProvider; value: string; onChange: (v: string) => void }) {
@@ -1817,6 +1852,7 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                   <span className="v">{prefs.scrollback.toLocaleString('ko-KR')}</span>
                 </div>
               </Row>
+              {isMac && <LocalNetworkRow />}
             </>
           )}
 

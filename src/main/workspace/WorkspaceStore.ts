@@ -7,6 +7,7 @@ import { cleanConnCollapsed, SCHEMA_VERSION } from '@shared/types'
 import { writeJsonAtomic, readJsonWithBackup, cleanupTemp } from '../util/atomicJson'
 import { defaultSnapshot } from './defaults'
 import { migrate } from './migrations'
+import { preserveIfCorrupt, readNewestSnapshot, rotateSnapshot } from './restoreSnapshots'
 
 const FLUSH_DEBOUNCE_MS = 30_000
 
@@ -23,7 +24,10 @@ export class WorkspaceStore {
   }
 
   private loadFromDisk(): WorkspaceSnapshot {
-    const raw = readJsonWithBackup<Record<string, unknown> | null>(this.path, null)
+    // M15 R2 TM-06: 깨진 본 파일은 덮어쓰기 전에 보존하고, 본 파일·.bak 이 다 안 되면 가장 최근 스냅샷(restoreSnapshots.ts).
+    preserveIfCorrupt(this.path)
+    const raw =
+      readJsonWithBackup<Record<string, unknown> | null>(this.path, null) ?? readNewestSnapshot<Record<string, unknown>>(this.path)
     if (raw === null) return defaultSnapshot(this.appVersion)
     if (raw.schemaVersion === SCHEMA_VERSION) return raw as unknown as WorkspaceSnapshot
     // 버전 불일치 → 마이그레이션 시도, 실패 시 안전 부팅
@@ -95,6 +99,7 @@ export class WorkspaceStore {
     this.snapshot.savedAt = new Date().toISOString()
     this.snapshot.app.version = this.appVersion
     writeJsonAtomic(this.path, this.snapshot)
+    rotateSnapshot(this.path)
   }
 
   // ── 프로필/knownHosts (F3). 프로필 변경은 저빈도·중요 상태이므로 즉시 flush. ──

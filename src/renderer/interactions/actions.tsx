@@ -26,6 +26,8 @@ export type ActionId =
   | 'log.save'
   | 'ai.ask'
   | 'pane.close'
+  // M15 R2 TM-03 — KeymapAction 과 같은 이름(힌트가 KEYMAP 에서 온다).
+  | 'terminal.reset'
   // 2026-08-22(제보 11·32): tmux 를 터미널 우클릭에도 붙였다. **트리 메뉴와 같은 id** 를 쓴다 —
   // 두 자리가 같은 일을 하므로 이름이 갈리면 처리도 두 벌이 된다(TreeActionId 쪽이 원본).
   | 'session.tmux.new'
@@ -94,6 +96,12 @@ const ALL_CONTEXT_ACTIONS: readonly ContextAction[] = [
         <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
       </>
     )
+  },
+  {
+    // M15 R2 TM-03 Reset Terminal(Orca TerminalContextMenu) — 화면 내용·셸은 그대로, 남은 입력 모드만 끈다.
+    id: 'terminal.reset',
+    labelKo: '터미널 초기화',
+    icon: svg(<path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8M3 3v5h5" />)
   },
   {
     // 이력(뒤집힌 결정이라 남긴다): FB-ui2(FB-0005) 때는 detach 였다 — 패널만 빠지고 세션은 탭에

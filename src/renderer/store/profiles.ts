@@ -64,6 +64,7 @@ export function profileInput(p: ConnectionProfile, patch?: Partial<ProfileInput>
         jump: p.jump,
         proxy: p.proxy,
         reconnectOnLaunch: p.reconnectOnLaunch,
+        forwardAgent: p.forwardAgent,
         ...patch
       }
 }

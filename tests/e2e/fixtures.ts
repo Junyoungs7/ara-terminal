@@ -27,6 +27,8 @@ type TermProbe = {
   selectAll: () => void
   getSelection: () => string
   text: () => string
+  /** M15 R2 Reset Terminal 확인용 */
+  modes?: () => { mouse: string; paste: boolean }
 }
 declare global {
   interface Window {

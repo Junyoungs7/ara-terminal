@@ -59,6 +59,7 @@ import { registerAiIpc } from './ipc/registerAiIpc'
 import { registerMcpIpc, type McpRuntime } from './ipc/registerMcpIpc'
 import { cleanupLegacyHooks, cleanupOurGlobalHooks, cleanupOurStatusLine } from './agents/hooks'
 import { registerOrielFeature } from './oriel/feature'
+import { registerLocalNetworkFeature } from './localNetwork/feature'
 import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { registerVoiceIpc, type VoiceRuntime } from './ipc/registerVoiceIpc'
@@ -587,6 +588,8 @@ app.whenReady().then(async () => {
   const fwdIpc = registerForwardIpc(sessions, () => sessionLog?.dir ?? sessionDir)
   // M9 R2 Oriel(main/oriel/feature.ts) — 링크·포트 [열기]·MCP oriel_open 이 Oriel 로(아라 안 브라우저 없음). 위치 설정은 에이전트 설정(아래에서 선다).
   const oriel = registerOrielFeature(() => agents?.orielPath() ?? '')
+  // M15 R2 TM-04 macOS 로컬 네트워크(main/localNetwork/feature.ts) — 맥이 아니면 핸들러가 ok:false 만.
+  registerLocalNetworkFeature()
   forwards = fwdIpc.forwards
   // M0 0-7 FD-01 자원 관리자(main/resources/feature.ts). M4 R3: 에이전트 상한(적용은 로컬 데몬)을 팝오버에 보여 준다 — 에이전트 기능이 아래에서 선다.
   registerResourcesFeature(sessions, () => agents?.limits() ?? NO_AGENT_LIMITS)

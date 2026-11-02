@@ -123,6 +123,40 @@ export function groupTree(names: readonly string[], layout: GroupLayout = {}): G
   }))
 }
 
+/**
+ * 서버를 그룹으로 묶는다 — 터미널 연결 사이드바(ConnTree)와 AI 작업 공간의 호스트별 묶음(store/hostSections.ts)이 **같이 쓰는 한 구현**
+ * (M15 R2 WS-22). 그룹 미지정 서버는 "기타"로. 검색 중이면 걸린 서버가 없는 그룹은 빠지고, 부모는 걸린 자식이 있으면 남는다.
+ * 서버 순서는 받은 순서 그대로(사이드바가 그리는 순서).
+ */
+export function groupServers(
+  profiles: readonly ConnectionProfile[],
+  groups: readonly string[],
+  layout: GroupLayout = {},
+  query = ''
+): { byGroup: Map<string, ConnectionProfile[]>; nodes: GroupNode[] } {
+  const none = noneGroup()
+  // #193: 검색은 **부모 그룹 이름으로도** 걸린다. 자식 그룹에 들어간 서버도 사용자 머릿속에서는
+  // 여전히 "운영 안"이라, 부모 이름을 쳤는데 안 나오면 검색이 거짓말을 한다.
+  const visible = profiles.filter((p) => matchProfile(p, query, p.group ? parentGroupOf(p.group, groups, layout.parents) : undefined))
+  const byGroup = new Map<string, ConnectionProfile[]>()
+  for (const g of groups) byGroup.set(g, [])
+  for (const p of visible) {
+    const g = p.group || none
+    if (!byGroup.has(g)) byGroup.set(g, [])
+    byGroup.get(g)!.push(p)
+  }
+  const searching = query.trim().length > 0
+  const listOf = (g: string): ConnectionProfile[] => byGroup.get(g) ?? []
+  // 2단 트리. 저장된 부모 관계에 **지금 없는 이름**이 있으면 groupTree 가 무시하고 그 그룹을 최상위로 올린다(옛 앱이 지운 그룹의 흔적).
+  const nodes = groupTree([...byGroup.keys()], layout).flatMap((n) => {
+    // 검색 중 자식은 걸린 것만 남기고, 부모는 자기 것이 없어도 **걸린 자식이 있으면 남는다**.
+    const children = searching ? n.children.filter((c) => listOf(c).length > 0) : n.children
+    if (searching && listOf(n.name).length === 0 && children.length === 0) return []
+    return [{ name: n.name, children }]
+  })
+  return { byGroup, nodes }
+}
+
 /** 화면에 그려지는 순서 그대로 편 이름 목록(부모 바로 뒤에 그 자식들). */
 export function flatGroups(nodes: readonly GroupNode[]): string[] {
   return nodes.flatMap((n) => [n.name, ...n.children])

@@ -3,10 +3,12 @@ import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { CursorStyle } from '@shared/types'
 import { usableSize } from '../../shared/termSize'
+import { buildProcessBoundaryGround } from '../../shared/terminalModeReset'
 
 // 세션별 xterm 인스턴스 레지스트리 — 우클릭 메뉴 '복사'(F4c) + F5 폰트 실시간 적용 + R3.2 검색.
 // TerminalPane 이 mount 시 등록, unmount 시 해제. UI 상태가 아니므로 스토어가 아닌 모듈 맵으로 관리.
-type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon }
+/** conpty: 로컬 Windows 셸(ConPTY) — Reset Terminal 이 포커스 보고(?1004)를 남긴다. */
+type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon; conpty?: boolean }
 const terms = new Map<string, Entry>()
 
 /**
@@ -47,6 +49,8 @@ if (typeof window !== 'undefined') {
       theme: e.term.options.theme,
       selectAll: () => e.term.selectAll(),
       getSelection: () => e.term.getSelection(),
+      // M15 R2 TM-03 Reset Terminal 확인용(마우스 추적·bracketed paste 가 꺼졌나).
+      modes: () => ({ mouse: e.term.modes.mouseTrackingMode, paste: e.term.modes.bracketedPasteMode }),
       // WebGL 렌더러가 붙으면 화면 내용이 canvas 로 가서 DOM textContent 가 비어 있다.
       // 렌더러 종류와 무관하게 버퍼를 읽는 유일한 경로.
       text: () => {
@@ -81,6 +85,18 @@ export function sizeOf(sessionId: string | null): { cols: number; rows: number }
    * 복원이 그대로 실어 보낸다. 여기는 **새 세션이 지금 칸에 뜨는 경우**만 답하면 된다.
    */
   return null
+}
+
+/**
+ * M15 R2 TM-03 Reset Terminal(Orca 우클릭 [Reset Terminal]) — 죽은 TUI 가 남긴 입력 모드(마우스 추적·bracketed paste·
+ * 대체 화면·kitty 키보드·커서 숨김)를 xterm 쪽에서 끈다. 셸에는 아무것도 안 보낸다(화면 내용도 그대로). 칸이 없으면 false.
+ * ponytail: 화면 쪽만 — 데몬·SSH 출력 링 replay 는 원래 바이트라 다시 붙으면 옛 모드가 되살아날 수 있다(Orca 는 호스트 모델도 바닥으로). 그때 다시 누른다.
+ */
+export function resetTermModes(sessionId: string): boolean {
+  const e = terms.get(sessionId)
+  if (!e) return false
+  e.term.write(buildProcessBoundaryGround({ keepFocusReporting: e.conpty === true }))
+  return true
 }
 
 export function getSelection(sessionId: string): string {

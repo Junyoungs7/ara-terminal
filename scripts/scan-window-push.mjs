@@ -17,7 +17,8 @@ const SEND_LIKE = /\.(send|postMessage)\(/
 //  - worker.postMessage()   : M0 FD-02 멈춤 감시 worker thread(창이 아니다)
 //  - child.postMessage()    : M0 0-6 utilityProcess(창이 아니다)
 //  - parentPort.postMessage(): M11 utility process 안에서 main 으로(창이 아니다 — main/vault/searchWorker.ts)
-const KNOWN_NON_PUSH = /\bparentPort\.postMessage\(|\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(|\bworker\.postMessage\(|\bchild\.postMessage\(/
+//  - udp.send()             : M15 R2 macOS 로컬 네트워크 권한 창 띄우기(UDP 멀티캐스트 1바이트 — main/localNetwork/feature.ts)
+const KNOWN_NON_PUSH = /\bparentPort\.postMessage\(|\bara\.send\(|\bws\.send\(|\bengine\??\.send\(|\bchat\.send\(|\bsession\.send\(|\bworker\.postMessage\(|\bchild\.postMessage\(|\budp\.send\(/
 
 function walk(dir) {
   let out = []

@@ -678,7 +678,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
     host.addEventListener('dragleave', onDragLeave)
     host.addEventListener('drop', onDrop)
     fitRef.current = fit
-    registerTerm(sessionId, { term, fit, search }) // 선택 복사(F4c)·폰트 적용(F5)·검색(R3.2)
+    registerTerm(sessionId, { term, fit, search, conpty: isWindows && local }) // 선택 복사(F4c)·폰트 적용(F5)·검색(R3.2)
 
     // R3.1 선택 즉시 복사(X11·PuTTY 관례). 드래그가 끝난 시점 한 번만 — onSelectionChange 는
     // 드래그 중 수십 번 발화해 클립보드를 그만큼 두드린다.

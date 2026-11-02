@@ -40,6 +40,11 @@ export type SshProfile = {
   proxy?: string
   /** M8 TM-01 앱 시작 시 이전 접속을 되살릴지. Orca 기본값(켬)을 따라 **없으면 켬** — 끌 때만 false 를 적는다. */
   reconnectOnLaunch?: false
+  /**
+   * M15 R2 TM-05 SSH agent 포워딩(OpenSSH ForwardAgent). **없으면 끔** — 켤 때만 true 를 적는다. 켜면 이 PC 의 ssh-agent
+   * (SSH_AUTH_SOCK · Windows 는 OpenSSH 에이전트 파이프)를 그 서버에 빌려준다 — 서버 관리자가 그 동안 내 키로 인증할 수 있으니 믿는 서버에서만.
+   */
+  forwardAgent?: true
 }
 
 export type RdpProfile = {
@@ -94,6 +99,7 @@ export type ProfileInput = {
   jump?: string
   proxy?: string
   reconnectOnLaunch?: boolean
+  forwardAgent?: boolean
 }
 
 // 호스트키 TOFU: 최초 접속 시 지문 확인 프롬프트 / 불일치 시 차단 경고.

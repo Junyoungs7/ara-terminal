@@ -7,13 +7,16 @@
 // M10: 프로젝트 그룹(WS-15 — Orca group-by-repo 골든의 `project-group:` 머리줄 아래 프로젝트 머리줄이 한 칸 들어감, 접으면 머리줄만),
 //      보관(WS-16 — 보관한 줄은 빠지고, 보관함 보기면 보관한 줄만 한 묶음).
 // M10 R2: 숨은 아라 밖 워크트리(WS-19 — 줄에서 빼고 프로젝트 머리줄 아래 "숨은 워크트리 n개" 카드 한 줄, Orca hidden worktrees card).
-// 뺀 것: 그룹 중첩·계보(lineage) 들여쓰기·상태별 묶기·잠든 워크트리 숨기기(Orca 기본값 꺼짐)·호스트별 갈래·수동 정렬.
+// M15 R2 WS-22: 호스트별 묶음(Orca host sections — 호스트 머리줄 아래 그 호스트의 고정·프로젝트 줄). 호스트가 둘 이상일 때만(로컬만이면 예전 그대로).
+//   호스트 순서·이름은 store/hostSections.ts(터미널 사이드바 그룹과 같은 구현).
+// 뺀 것: 그룹 중첩·계보(lineage) 들여쓰기·상태별 묶기·잠든 워크트리 숨기기(Orca 기본값 꺼짐)·수동 정렬.
 import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
 import { isMac } from '@shared/keymap'
 import type { PendingWorktreeCreation, SidebarGroupBy } from './store'
+import { LOCAL_HOST, type HostSection } from '../../store/hostSections'
 
 export type SidebarRow =
-  | { kind: 'header'; key: string; group: 'pinned' | 'all' | 'repo' | 'group' | 'archived'; repo?: Project; projectGroup?: ProjectGroup; depth?: number; count: number }
+  | { kind: 'header'; key: string; group: 'pinned' | 'all' | 'repo' | 'group' | 'archived' | 'host'; repo?: Project; projectGroup?: ProjectGroup; host?: HostSection; collapsed?: boolean; depth?: number; count: number }
   | { kind: 'item'; key: string; worktree: Worktree; repo: Project; pinned: boolean; showProject: boolean }
   | { kind: 'pending'; key: string; creation: PendingWorktreeCreation }
   | { kind: 'hidden'; key: string; repo: Project; count: number }
@@ -28,6 +31,10 @@ export type SidebarInput = {
   groups?: readonly ProjectGroup[]
   /** 보관함 보기 — 보관한 줄만. */
   showArchived?: boolean
+  /** M15 R2 WS-22 호스트 순서(hostSections). 둘 이상이면 호스트 머리줄로 묶는다. */
+  hosts?: readonly HostSection[]
+  /** 접은 호스트 key — 머리줄만 남는다. */
+  collapsedHosts?: readonly string[]
 }
 
 export const shortBranch = (w: Pick<Worktree, 'branch'>): string => w.branch.replace(/^refs\/heads\//, '')
@@ -43,6 +50,7 @@ export function matchesQuery(q: string, w: Worktree, repo: Project): boolean {
 }
 
 export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
+  if (input.hosts && input.hosts.length > 1 && !input.showArchived) return hostRows(input, input.hosts)
   const q = input.query.trim().toLowerCase()
   const pins = new Set(input.pinnedIds)
   const repoById = new Map(input.repos.map((r) => [r.id, r]))
@@ -112,6 +120,24 @@ export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
     if (!g.isCollapsed) rows.push(...blocks)
   }
   for (const repo of input.repos) if (!repo.groupId || !known.has(repo.groupId)) rows.push(...(projectBlock(repo, 0) ?? []))
+  return rows
+}
+
+/** 호스트마다 그 호스트 저장소만으로 줄을 만들고 머리줄을 얹는다. 키에 호스트를 붙인다(고정·전체 머리줄이 호스트마다 하나씩 생긴다). */
+function hostRows(input: SidebarInput, hosts: readonly HostSection[]): SidebarRow[] {
+  const folded = new Set(input.collapsedHosts ?? [])
+  const searching = input.query.trim().length > 0
+  const rows: SidebarRow[] = []
+  for (const h of hosts) {
+    const repos = input.repos.filter((r) => (r.host ?? LOCAL_HOST) === h.key)
+    // 빈 프로젝트 그룹은 로컬 묶음에만(어느 호스트 것도 아니다) — 서버 묶음에는 그 서버 프로젝트가 든 그룹만.
+    const groups = h.key === LOCAL_HOST ? input.groups : input.groups?.filter((g) => repos.some((r) => r.groupId === g.id))
+    const sub = buildSidebarRows({ ...input, repos, groups, hosts: undefined })
+    if (searching && sub.length === 0) continue
+    const collapsed = folded.has(h.key)
+    rows.push({ kind: 'header', key: `host:${h.key}`, group: 'host', host: h, collapsed, count: sub.filter((r) => r.kind === 'item').length })
+    if (!collapsed) for (const r of sub) rows.push({ ...r, key: `${h.key}|${r.key}` } as SidebarRow)
+  }
   return rows
 }
 
