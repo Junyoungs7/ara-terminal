@@ -111,7 +111,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   },
   // M14 R1 AU-01~03 예약 실행·스킬·MCP 서버(features/automations — 섹션을 열 때만 불러온다).
   { id: 'automations', group: 'aiws', items: [i('auto.list', 'auto.set.list', 'auto.set.list.desc')] },
-  { id: 'skills', group: 'aiws', items: [i('skills.list', 'skills.set.list', 'skills.set.list.desc')] },
+  // M14 R2 `ara` CLI 등록·번들 스킬은 스킬 섹션 맨 위(features/cli/CliSection).
+  { id: 'skills', group: 'aiws', items: [i('cli.install', 'cli.title', 'cli.set.desc'), i('skills.list', 'skills.set.list', 'skills.set.list.desc')] },
   { id: 'mcpServers', group: 'aiws', items: [i('mcpsrv.list', 'mcpsrv.set.list', 'mcpsrv.set.list.desc')] },
 
   { id: 'general', group: 'app', items: [s('uiScale'), s('bootSplash'), i('dir.download', 'settings.dir.download', 'settings.dir.download.desc')] },

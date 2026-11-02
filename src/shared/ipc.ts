@@ -4,6 +4,7 @@
 import type { Automation, AutomationDispatchRequest, AutomationDispatchResult, AutomationInput, AutomationsState } from './automations/automations-types'
 import type { SkillAddTarget, SkillScan } from './skills'
 import type { McpServerDraft, McpView } from './mcp/agentMcp'
+import type { BundledSkillStatus, CliInstallStatus } from './araCli'
 import type { LaunchShell } from './aiCli'
 import type { GlassMaterial } from './glass'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
@@ -77,6 +78,8 @@ import type { ModelCatalog, SlashItem } from './agentOptions'
 /** M3 S1 데이터 이전 안내 — 프로젝트로 가져온 옛 작업대 폴더 이름들 · 옮기지 못한 원격 줄 수. */
 export type LegacyAiNotice = { projects: string[]; remote: number }
 /** noOriel: Oriel 이 없어 웹 도구 없이 띄웠다(앱 실행 중 처음 한 번만 — 알림 센터 한 줄). */
+/** M14 R2 CLI → 렌더러: 이 작업 단위에 에이전트 탭을 띄워 달라(앱의 [+] 와 같은 길). */
+export type CliLaunchAgentRequest = { reqId: string; agent: AgentId; worktreeId: string; cwd: string; prompt?: string }
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
 /** M11 R2 cold = 데몬째 죽어(PC 재부팅 등) 잃은 탭 — 렌더러가 같은 에이전트·같은 폴더로 다시 띄운다(resume = CLI 세션 id 를 알면 재개). sessionId 는 옛 id(레이아웃 자리 찾기용). */
@@ -824,6 +827,13 @@ export type InvokeContract = {
   'mcpServers:add': { req: { project: string; server: McpServerDraft }; res: { ok: true } | { ok: false; error: string } }
   'mcpServers:remove': { req: { project: string; name: string }; res: { ok: true } | { ok: false; error: string } }
   'mcpServers:open': { req: { path: string }; res: boolean }
+  // M14 R2 `ara` CLI(main/cli/feature.ts). 등록·번들 스킬 설치는 사람이 눌렀을 때만. 'cli:launchAgent'(본창 push)에 렌더러가 cli:launchAgentResult 로 답한다.
+  'cli:status': { req: void; res: CliInstallStatus }
+  'cli:install': { req: void; res: CliInstallStatus }
+  'cli:uninstall': { req: void; res: CliInstallStatus }
+  'cli:skillStatus': { req: void; res: BundledSkillStatus }
+  'cli:skillInstall': { req: { rootId: string }; res: { ok: true; path: string } | { ok: false; error: string } }
+  'cli:launchAgentResult': { req: { reqId: string; result: AgentLaunchResult }; res: void }
 }
 
 /**
@@ -1525,6 +1535,19 @@ export type EvApi = {
     add(project: string, server: McpServerDraft): Promise<InvokeRes<'mcpServers:add'>>
     remove(project: string, name: string): Promise<InvokeRes<'mcpServers:remove'>>
     open(path: string): Promise<boolean>
+  }
+  // M14 R2 `ara` CLI(preload/features/cli.ts).
+  cli: {
+    status(): Promise<CliInstallStatus>
+    install(): Promise<CliInstallStatus>
+    uninstall(): Promise<CliInstallStatus>
+    skillStatus(): Promise<BundledSkillStatus>
+    skillInstall(rootId: string): Promise<InvokeRes<'cli:skillInstall'>>
+    launchAgentResult(reqId: string, result: AgentLaunchResult): Promise<void>
+    /** CLI 가 에이전트 탭을 부탁했다(본창만). */
+    onLaunchAgent(cb: (req: CliLaunchAgentRequest) => void): () => void
+    /** CLI 가 그 프로젝트의 작업 단위(메모·상태·지우기)를 바꿨다 — 사이드바가 다시 읽는다. */
+    onWorktreesChanged(cb: (e: { repoId: string }) => void): () => void
   }
 }
 

@@ -79,8 +79,12 @@ describe('배선 — 설치 스크립트와 second-instance', () => {
       expect(nsh).toContain('WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\\' + name + '"')
       expect(nsh).toContain('DeleteRegKey SHELL_CONTEXT "${ARA_APP_PATHS}\\' + name + '"')
     }
-    // Path 값을 걸면 설치 폴더가 아라가 여는 모든 셸의 PATH 에 붙는다(머리주석)
-    expect(nsh).not.toMatch(/"Path"/)
+    // Path 값을 걸면 설치 폴더가 아라가 여는 모든 셸의 PATH 에 붙는다(머리주석).
+    // M14 R2: "Path" 는 제거 때 사용자 PATH(HKCU "Environment")에서 [CLI 설치]의 bin 한 줄을 빼는 자리에만 나온다.
+    const pathLines = nsh.split(/\r?\n/).filter((l) => l.includes('"Path"'))
+    expect(pathLines.length).toBeGreaterThan(0)
+    expect(pathLines.filter((l) => !l.includes('"Environment"') && !l.includes("t \"Path\""))).toEqual([])
+    expect(pathLines.filter((l) => l.includes('ARA_APP_PATHS'))).toEqual([])
     expect(read('electron-builder.yml')).toMatch(/include: resources\/installer\.nsh/)
   })
 

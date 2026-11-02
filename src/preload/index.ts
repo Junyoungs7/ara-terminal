@@ -21,6 +21,7 @@ import { orielBridge } from './features/oriel'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
 import { automationsBridge } from './features/automations'
+import { cliBridge } from './features/cli'
 import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
 import { managedBridge } from './features/managed'
@@ -266,6 +267,8 @@ const api: EvApi = {
   ...resourcesBridge,
   // M14 R1 자동화·스킬·MCP(preload/features/automations.ts).
   ...automationsBridge,
+  // M14 R2 `ara` CLI(preload/features/cli.ts).
+  ...cliBridge,
   // M9 AI-10 사용량(preload/features/usage.ts).
   ...usageBridge,
   ...worktreesBridge,

@@ -46,6 +46,7 @@ import { registerAgentsFeature } from './agents/feature'
 import { registerUsageFeature } from './usage/feature'
 import { registerAutomationsFeature } from './automations/feature'
 import { registerSkillsFeature } from './skills/feature'
+import { registerCliFeature } from './cli/feature'
 import { registerMcpServersFeature } from './mcpServers/feature'
 import { registerManagedFeature, type ManagedFeature } from './managed/feature'
 import { registerVaultFeature } from './vault/feature'
@@ -177,6 +178,8 @@ let ara: AraSession | null = null
 let mcp: McpRuntime | null = null
 // F1a: 훅 수신 서버(로컬). CLI 가 자기 상태를 말해 오는 자리 — 종료 때 리스너를 접는다(좀비 금지).
 let agents: ReturnType<typeof registerAgentsFeature> | null = null
+// M14 R2 `ara` CLI 받는 자리(main/cli/feature.ts) — 종료 때 파이프를 닫고 ara-runtime.json 을 지운다.
+let cli: ReturnType<typeof registerCliFeature> | null = null
 // M8 관리형 서버(원격 orcad·원격 git) — 작업 단위·에이전트가 먼저 서므로 그쪽은 부를 때 이것을 찾는다.
 let managed: ManagedFeature | null = null
 let araChat: AraRuntime | null = null
@@ -620,6 +623,20 @@ app.whenReady().then(async () => {
   })
   // M11 R2 터미널 공간 로컬 셸도 데몬에(재시작·업데이트를 넘는다). 데몬은 에이전트와 같은 하나.
   sessions.setLocalDaemon(agents.terminalDaemon)
+  // M14 R2 `ara` CLI(main/cli/feature.ts) — 받는 자리(named pipe + 토큰, userData/ara-runtime.json)는 늘, PATH 등록·번들 스킬은 설정에서 누를 때만.
+  cli = registerCliFeature({
+    userData,
+    appVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    // 번들 스킬 원본 후보 — 설치본 resources · 개발 저장소(e2e 는 appPath 가 out/main 이라 두 칸 위) · 작업 폴더. existsSync 로 고른다.
+    skillSourceDirs: [process.resourcesPath, join(app.getAppPath(), 'resources'), join(app.getAppPath(), '..', '..', 'resources'), join(process.cwd(), 'resources')],
+    home: hookHome,
+    env: toolEnv,
+    worktrees,
+    sessions: () => sessions ?? null,
+    mainWc
+  })
   // M4 AI-07 지난 세션(main/vault/feature.ts) — 같은 홈(e2e 는 임시 홈 — 시험이 사용자 실제 ~/.claude·~/.codex 를 읽지 않는다).
   registerVaultFeature({ home: hookHome, userData })
   // M6 WS-07·08 코드 에디터(main/code/feature.ts) — 워크트리 안 파일 읽기·안전 저장·열린 파일 감시.
@@ -898,6 +915,8 @@ app.on('before-quit', (e) => {
   quitStep('mcp', () => void mcp?.server.stop())
   // F1a: 훅 리스너도 접는다(MCP 와 같은 이유 — 좀비 리스너 금지).
   quitStep('agentHooks', () => void agents?.stop())
+  // M14 R2 `ara` CLI 파이프 — 좀비 리스너 금지, 남은 ara-runtime.json 은 CLI 가 "꺼짐"으로 읽는다.
+  quitStep('cli', () => void cli?.stop())
   // M8: 원격 다리·셸 없는 SSH 연결을 닫는다(원격 orcad 세션은 서버에 산다 — 다음에 [다시 연결]).
   quitStep('managed', () => managed?.closeAll())
   // F25: 내장 RDP 릴레이(loopback 리스너)도 함께 닫는다 — 좀비 리스너 금지.

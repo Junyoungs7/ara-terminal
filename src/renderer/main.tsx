@@ -72,6 +72,8 @@ createRoot(lockHost).render(<LockScreen variant={isMainWin ? 'clock' : 'card'} /
 const renderApp = (): void => {
   // M14 R1 예약 실행 — 본창만 띄우기를 받는다(받으면 그때 AI 작업 공간 코드를 불러온다). 잠긴 채 켜면 풀린 뒤부터.
   if (isMainWin) void import('./features/automations/dispatch').then((m) => m.installAutomationDispatch())
+  // M14 R2 `ara` CLI — 에이전트 탭 부탁·작업 단위 바뀜(본창만).
+  if (isMainWin) void import('./features/cli/dispatch').then((m) => m.installCliDispatch())
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* M0 FD-04 앱 전체 경계 — 큰 영역 경계(Shell·MainArea)를 빠져나온 오류의 마지막 자리. */}

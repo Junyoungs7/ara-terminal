@@ -16,6 +16,93 @@
 
 !define ARA_APP_PATHS "Software\Microsoft\Windows\CurrentVersion\App Paths"
 
+;
+; M14 R2 `ara` CLI — 설정에서 [CLI 설치]를 누르면 사용자 PATH 에 "$INSTDIR\resources\bin" 이 붙는다(main/cli/install.ts).
+; 앱을 지우면 그 한 줄도 뺀다 — Orca config/nsis/orca-user-path-cleanup.nsh(orcaRef ec112c6b01)를 이름만 바꿔 그대로:
+; 다른 항목은 바이트 그대로, 값 종류(REG_EXPAND_SZ/REG_SZ)도 그대로, NSIS 문자열 한도에 걸려 잘렸을 수 있으면 손대지 않는다.
+; PowerShell·reg.exe 없이 레지스트리 API 만(제거 때 보안 제품 규칙에 걸리지 않게 — Orca 주석).
+!define ARA_HKEY_CURRENT_USER 0x80000001
+!define ARA_KEY_QUERY_VALUE 0x20019
+!define ARA_REG_SZ 1
+!define ARA_REG_EXPAND_SZ 2
+
+!macro ARA_REMOVE_USER_PATH_ENTRY DIR
+  Push $R0
+  Push $R1
+  Push $R2
+  Push $R3
+  Push $R4
+  Push $R5
+  Push $R6
+  Push $R7
+  Push $R8
+  Push $R9
+  StrCpy $R9 "${DIR}"
+  ReadRegStr $R0 HKCU "Environment" "Path"
+  StrLen $R1 $R0
+  IntOp $R2 ${NSIS_MAX_STRLEN} - 1
+  ${If} $R0 != ""
+  ${AndIf} $R1 < $R2
+    StrCpy $R8 ""
+    System::Call 'advapi32::RegOpenKeyEx(p ${ARA_HKEY_CURRENT_USER}, t "Environment", i 0, i ${ARA_KEY_QUERY_VALUE}, *p .R6) i .R7'
+    ${If} $R7 == 0
+      System::Call 'advapi32::RegQueryValueEx(p R6, t "Path", p 0, *i .R4, p 0, p 0) i .R7'
+      System::Call 'advapi32::RegCloseKey(p R6)'
+      ${If} $R7 == 0
+        StrCpy $R8 $R4
+      ${EndIf}
+    ${EndIf}
+    StrCpy $R3 ""
+    StrCpy $R4 ""
+    StrCpy $R5 0
+    StrCpy $R2 1
+    StrCpy $R7 0
+    ${Do}
+      StrCpy $R6 $R0 1 $R5
+      ${If} $R6 == ";"
+      ${OrIf} $R6 == ""
+        ${If} $R4 == $R9
+        ${OrIf} $R4 == "$R9\"
+          StrCpy $R7 1
+        ${ElseIf} $R2 == 1
+          StrCpy $R3 $R4
+          StrCpy $R2 0
+        ${Else}
+          StrCpy $R3 "$R3;$R4"
+        ${EndIf}
+        StrCpy $R4 ""
+        ${If} $R6 == ""
+          ${ExitDo}
+        ${EndIf}
+      ${Else}
+        StrCpy $R4 "$R4$R6"
+      ${EndIf}
+      IntOp $R5 $R5 + 1
+    ${Loop}
+    ${If} $R7 == 1
+    ${AndIf} $R8 != ""
+      ${If} $R3 == ""
+        DeleteRegValue HKCU "Environment" "Path"
+      ${ElseIf} $R8 == ${ARA_REG_EXPAND_SZ}
+        WriteRegExpandStr HKCU "Environment" "Path" $R3
+      ${ElseIf} $R8 == ${ARA_REG_SZ}
+        WriteRegStr HKCU "Environment" "Path" $R3
+      ${EndIf}
+      SendMessage 0xFFFF 0x1A 0 "STR:Environment" /TIMEOUT=5000
+    ${EndIf}
+  ${EndIf}
+  Pop $R9
+  Pop $R8
+  Pop $R7
+  Pop $R6
+  Pop $R5
+  Pop $R4
+  Pop $R3
+  Pop $R2
+  Pop $R1
+  Pop $R0
+!macroend
+
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\아라.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   WriteRegStr SHELL_CONTEXT "${ARA_APP_PATHS}\ara.exe" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
@@ -48,5 +135,7 @@
     Sleep 500
     RMDir /r "$LOCALAPPDATA\ARA\daemon-host"
     RMDir "$LOCALAPPDATA\ARA"
+    ; M14 R2 `ara` CLI — [CLI 설치]로 붙인 사용자 PATH 한 줄(업데이트는 같은 자리라 둔다).
+    !insertmacro ARA_REMOVE_USER_PATH_ENTRY "$INSTDIR\resources\bin"
   ${EndIf}
 !macroend

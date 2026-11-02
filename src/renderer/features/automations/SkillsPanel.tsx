@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react'
 import { SKILL_ADD_TARGETS, SKILL_AGENTS, skillDeleteBlock, type DiscoveredSkill, type SkillAddTarget, type SkillAgent, type SkillScan } from '@shared/skills'
 import { t } from '../../i18n'
 import { useDialog } from '../../components/Dialog'
+import { CliSection } from '../cli/CliSection'
 
 const NAMES: Record<SkillAgent, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' }
 
@@ -42,6 +43,8 @@ export function SkillsPanel(): JSX.Element {
   const linkedRoots = (scan?.roots ?? []).filter((r) => r.realPath)
   return (
     <div className="acct-block" data-skills="panel">
+      {/* M14 R2 `ara` CLI 등록 · 번들 스킬 ara-cli(에이전트가 CLI 를 쓰는 법) */}
+      <CliSection onSkillInstalled={load} />
       <div className="set-note">{t('skills.note')}</div>
       <div className="acct-foot">
         <select className="aiws-input" data-field="skills.agent" value={agent} onChange={(e) => setAgent(e.target.value as SkillAgent | 'all')}>
