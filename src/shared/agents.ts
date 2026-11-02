@@ -117,7 +117,7 @@ export type AgentSettings = {
    * 48자 이름을 받는다 — 대화 일부가 모델로 간다(설정에 그대로 적는다). 끄면 탭은 에이전트 이름만.
    */
   chatNaming: boolean
-  /** M9 R2 Oriel 위치(체크아웃·설치 폴더 — bin/oriel.mjs 가 있는 곳). 빈 값 = 자동(설치본 동봉 자리·개발 PC D:/AI/ai-browser). */
+  /** M9 R2 Oriel 위치(체크아웃·설치 폴더 — bin/oriel.mjs 가 있는 곳). 빈 값 = 자동(Oriel 단독 설치본·개발 PC D:/AI/ai-browser). */
   orielPath: string
   /** M11 깨어있기(Orca computerAwakeMode — 기본 끔): off · auto(에이전트가 일하는 동안만) · on(늘). */
   awakeMode: AwakeMode

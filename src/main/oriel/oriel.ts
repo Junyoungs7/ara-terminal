@@ -1,11 +1,10 @@
 // M9 R2 — Oriel 감지·링크 열기(main). 순수 규칙은 shared/oriel.ts. 아라 안 브라우저는 없앴다(결정 :162 — 브라우저는 무조건 Oriel).
 // 프로세스는 runProcess(셸 안 거침·시간 상한). 시험은 run 을 바꿔 끼운다 — 진짜 Oriel 을 띄우지 않는다.
 import { existsSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { runProcess, type RunOptions, type RunResult } from '../util/runProcess'
 import { isSafeExternal } from '../util/safeExternal'
 import { NODE_RUNNER, parseOrielVersion, pickOriel, type OrielInfo, type OrielKind, type OrielRunner, type OrielStatus } from '@shared/oriel'
-import { ARA_HOST_APP_ENV, isBundledOrielDir } from './host'
 
 type Run = (file: string, args: readonly string[], opts?: RunOptions) => Promise<RunResult>
 
@@ -14,41 +13,14 @@ const OPEN_TIMEOUT_MS = 15_000
 /** 전경 허락 PowerShell 상한 — 실측 0.9~1.2초(Add-Type 컴파일, 2026-11-02 이 PC). 넘으면 포기하고 open 은 그대로. */
 const FOREGROUND_TIMEOUT_MS = 5_000
 
-/** Oriel CLI 가 읽는 env(Oriel 89eb2b3) — Oriel 을 띄울 Electron 실행 파일. 아라는 자기 Electron 을 준다(결정: Electron 공유). */
-export const ORIEL_ELECTRON_ENV = 'ORIEL_ELECTRON'
-
 /**
- * Oriel 을 띄울 아라 자신의 Electron(절대 경로). 후보 = 실행 중 바이너리(개발·e2e 는 node_modules/electron/dist 의 것) →
- * cwd 의 node_modules electron. 실재 + 옆에 `resources/default_app.asar` 가 있는 것만 — 그 파일이 있어야 Electron 이
- * 인자로 받은 **다른 앱 폴더**(Oriel)를 띄운다. 설치본 A.R.A.exe 는 자기 app.asar 를 먼저 읽어(default_app 없음) Oriel 폴더를
- * 줘도 **아라가 하나 더 뜬다** → 그때는 null(ORIEL_ELECTRON 을 안 준다). 설치본 공유는 결정 필요(or1-done.md).
+ * Oriel 폴더 dir 의 CLI 를 띄우는 법(UB-1: 아라와 Oriel 은 따로 설치하는 호환 제품 — Electron 을 같이 쓰지 않는다).
+ *  · 단독 설치본: 자기 Oriel.exe + `ELECTRON_RUN_AS_NODE=1` — 앱도 그 Oriel.exe 로 뜬다(CLI 기본값).
+ *  · 그 밖(개발 체크아웃·설정에 적은 폴더): 아라 Electron(execPath) + `ELECTRON_RUN_AS_NODE=1`(node 없는 PC — M4 데몬과 같은 길)
+ *    — 앱은 Oriel 이 스스로 정한 Electron 으로 뜬다. `ORIEL_ELECTRON` 은 Oriel 쪽 개발·시험용이라 아라는 넣지 않는다.
  */
-export function araElectronForOriel(candidates: readonly string[], exists: (p: string) => boolean = existsSync): string | null {
-  for (const p of candidates) {
-    if (p && isAbsolute(p) && exists(p) && exists(join(dirname(p), 'resources', 'default_app.asar'))) return p
-  }
-  return null
-}
-
-/**
- * OR-2 — Oriel 폴더 dir 의 CLI 를 띄우는 법. 늘 아라 Electron(execPath) + `ELECTRON_RUN_AS_NODE=1`(node 없는 PC — M4 데몬과 같은 길,
- * Electron 기본 fuse RunAsNode 켜짐: electron-builder.yml 에 electronFuses 없음). Oriel CLI 는 앱을 띄울 때 ELECTRON_* 를 걸러 낸다.
- *  · 개발판(devElectron = araElectronForOriel, default_app 있음): ORIEL_ELECTRON = 그것 — 어느 Oriel 폴더든 띄운다.
- *  · 설치본 + dir 이 `<resources>/oriel`: ORIEL_ELECTRON = A.R.A.exe + ARA_HOST_APP=oriel → main/boot.ts 가 Oriel 로 뜬다(안 A).
- *  · 그 밖(설치본에 설정한 체크아웃 등): ORIEL_ELECTRON 없음 → Oriel 이 자기 node_modules electron 으로.
- */
-export function araOrielRunner(
-  dir: string,
-  o: { execPath: string; devElectron: string | null; resourcesPath: string | null },
-  exists: (p: string) => boolean = existsSync
-): OrielRunner {
-  // OR-3 단독 설치본은 자기 Oriel.exe 를 node 로(ELECTRON_RUN_AS_NODE) — 앱도 그 Oriel.exe 로 뜬다(CLI 기본값). 아라 Electron·ARA_HOST_APP 은 안 준다.
-  const own = standaloneOrielExe(dir, exists)
-  if (own) return { command: own, env: { ELECTRON_RUN_AS_NODE: '1' } }
-  const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
-  if (o.devElectron) env[ORIEL_ELECTRON_ENV] = o.devElectron
-  else if (o.resourcesPath && isBundledOrielDir(dir, o.resourcesPath)) Object.assign(env, { [ORIEL_ELECTRON_ENV]: o.execPath, [ARA_HOST_APP_ENV]: 'oriel' })
-  return { command: o.execPath, env }
+export function araOrielRunner(dir: string, execPath: string, exists: (p: string) => boolean = existsSync): OrielRunner {
+  return { command: standaloneOrielExe(dir, exists) ?? execPath, env: { ELECTRON_RUN_AS_NODE: '1' } }
 }
 
 /** OR-3 단독 설치본의 실행 파일 이름(Oriel 설치 파일 f52f95d — Windows 전용 배포). */
@@ -64,16 +36,15 @@ export function standaloneOrielExe(dir: string, exists: (p: string) => boolean =
   return exists(exe) ? exe : null
 }
 
-/** OR-3 설정 칸에 설치 폴더(`…/Programs/oriel`)를 적어도 받는다 — 그 안의 resources/app 이 앱 폴더. */
+/** OR-3 설정 칸에 설치 폴더(`…/Programs/Oriel`)를 적어도 받는다 — 그 안의 resources/app 이 앱 폴더. */
 export function orielAppDir(dir: string, exists: (p: string) => boolean = existsSync): string {
   const app = join(dir, 'resources', 'app')
   return exists(join(app, 'bin', 'oriel.mjs')) && exists(join(dir, ORIEL_EXE)) ? app : dir
 }
 
 /** OR-3 Oriel 앱 폴더의 종류(설정 화면 표시·우선순위 근거). */
-export function orielKindOf(dir: string, resourcesPath: string | null, exists: (p: string) => boolean = existsSync): OrielKind {
-  if (standaloneOrielExe(dir, exists)) return 'standalone'
-  return resourcesPath && isBundledOrielDir(dir, resourcesPath) ? 'bundled' : 'dev'
+export function orielKindOf(dir: string, exists: (p: string) => boolean = existsSync): OrielKind {
+  return standaloneOrielExe(dir, exists) ? 'standalone' : 'dev'
 }
 
 const powershellExe = (): string => join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
@@ -108,7 +79,7 @@ export function createOriel(deps: {
   candidates: () => string[]
   openExternal: (url: string) => Promise<void>
   run?: Run
-  /** OR-2 Oriel 폴더별 CLI 실행법(araOrielRunner). 없으면 시스템 node(시험). */
+  /** Oriel 폴더별 CLI 실행법(araOrielRunner). 없으면 시스템 node(시험). */
   runner?: (dir: string) => OrielRunner
   /** OR-3 앱 폴더의 종류(orielKindOf). 없으면 dev(시험). */
   kindOf?: (dir: string) => OrielKind
@@ -124,7 +95,7 @@ export function createOriel(deps: {
   const kindOf = deps.kindOf ?? ((): OrielKind => 'dev')
   const processPath = deps.processPath ?? ((pid: number) => (platform === 'win32' ? processPathWin(run, pid) : Promise.resolve(null)))
 
-  // OR-3: 후보를 모두(동시에) 물어보고 고른다 — 실행 중인 것 > 후보 순서(단독 > 동봉 > dev). `version` 은 읽기 전용(앱을 띄우지 않는다).
+  // OR-3: 후보를 모두(동시에) 물어보고 고른다 — 실행 중인 것 > 후보 순서(단독 > dev). `version` 은 읽기 전용(앱을 띄우지 않는다).
   const probe = async (): Promise<OrielStatus> => {
     const tried = deps.candidates()
     const found = (
@@ -133,7 +104,7 @@ export function createOriel(deps: {
           const dir = orielAppDir(raw)
           const cli = join(dir, 'bin', 'oriel.mjs')
           if (!existsSync(cli)) return null
-          // 실행 중이면 토큰 인증까지 해서 pid 를 준다. ORIEL_ELECTRON 을 같이 줘야 version 의 electronPath 가 실제로 띄울 바이너리다.
+          // 실행 중이면 토큰 인증까지 해서 pid 를 준다.
           const runner = runnerOf(dir)
           const r = await run(runner.command, [cli, 'version'], { timeoutMs: VERSION_TIMEOUT_MS, env: runner.env })
           const info = r.error ? null : parseOrielVersion(r.stdout)

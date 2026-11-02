@@ -47,9 +47,7 @@ export default defineConfig({
       externalizeDeps: true,
       rollupOptions: {
         // daemonEntry: M4 DM-01 로컬 터미널 데몬 — main 이 out/main/daemonEntry.js 를 ELECTRON_RUN_AS_NODE 로 따로 띄운다(main/daemon/launcher.ts).
-        // boot: OR-2 진입점(package.json main) — Oriel 호스트 모드면 Oriel, 아니면 index 를 불러온다(src/main/boot.ts).
         input: {
-          boot: resolve('src/main/boot.ts'),
           index: resolve('src/main/index.ts'),
           hangWatchdogWorker: resolve('src/main/stability/hangWatchdogWorker.ts'),
           daemonEntry: resolve('src/main/daemon/daemonEntry.ts'),

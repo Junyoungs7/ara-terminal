@@ -31,7 +31,7 @@ userData    %APPDATA%\A.R.A                    ← 프로필 · 호스트키 · 
 | `package.json` `productName` | `A.R.A` | userData · 설치 경로 · 실행 파일명 · 바로가기 이름 |
 | `package.json` `name` | `ara` | 안 바꾼다(npm 패키지명) |
 | `electron-builder.yml` `productName` | `A.R.A` | 설치본 파일명 `A.R.A Setup x.y.z.exe` |
-| `electron-builder.yml` `appId` | `com.verygood.ara` | 🔴 **안 바꾼다** — 이게 "같은 앱"의 신원이고, 바꾸면 업데이트가 **새 앱 설치**가 된다 |
+| `electron-builder.yml` `appId` | `com.verygood.ara` | 🔴 **안 바꾼다** — 이게 "같은 앱"의 신원이고, 바꾸면 업데이트가 **새 앱 설치**가 된다 — ⚠ 2026-11-02 UB-1 에서 2.0 은 `com.junyoung.ara` 로 바꿨다(2.0 은 설치한 사람이 없어 이전 처리 불필요) |
 | `latest.yml` 의 `url`/`path` | `A.R.A Setup …exe` | 파일명이 바뀐다 → **자동 업데이트 경로가 갈린다**(아래 ⚠️) |
 | `i18n` `app.name` | 화면 문구 | 상태바·[정보]·설명서 |
 | 사이트 · README · 설명서 | `A.R.A` 표기 | 문구만 |

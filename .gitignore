@@ -66,5 +66,3 @@ video/public/vo/
 # 성능 계측용 빌드 산출물(tests/perf-*.cjs 가 만든다) — 21MB, 커밋 대상 아님
 out-perf/
 
-# OR-1 설치본 Oriel 동봉 준비 폴더(electron-builder beforePack — scripts/stage-oriel.cjs 가 매 빌드 다시 채운다)
-.oriel-stage/

@@ -3,9 +3,9 @@
   "productName": "ARA",
   "version": "2.0.0",
   "description": "ARA — AI Terminal",
-  "author": "VERYGOOD",
+  "author": "Junyoung",
   "license": "MIT",
-  "main": "./out/main/boot.js",
+  "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

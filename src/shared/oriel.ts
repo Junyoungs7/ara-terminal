@@ -1,19 +1,19 @@
 // M9 R2 — Oriel(별도 창 브라우저, D:/AI/ai-browser) 연동의 순수 규칙. 결정(orca-bundle-decisions 2026-11-01): 브라우저는 무조건 Oriel —
 // 아라 안 브라우저 칸 없음, 링크 열기·에이전트 웹 작업(MCP) 모두 Oriel. 연동 기준: agent_talk/oriel-integration.md(Oriel HEAD 1dfc0a0).
-//  · 감지 = `<runner> <appPath>/bin/oriel.mjs version` 의 JSON(OR-2: runner = 아라 Electron + ELECTRON_RUN_AS_NODE — node 없는 PC)(설치: package name oriel + electronPath·cliPath 존재 — 존재 확인은 main)
+//  · 감지 = `<runner> <appPath>/bin/oriel.mjs version` 의 JSON(runner = Oriel.exe 또는 아라 Electron + ELECTRON_RUN_AS_NODE — node 없는 PC)(설치: package name oriel + electronPath·cliPath 존재 — 존재 확인은 main)
 //  · 에이전트 MCP = 서버 이름 `oriel`, `mcp --launch`(꺼져 있으면 Oriel 이 스스로 뜬다 — 포커스 안 뺏음)
 // 사용자 설정 파일(~/.claude.json·~/.codex/config.toml·~/.gemini/settings.json)은 쓰지 않는다 — 실행 인자·env 로만.
 import type { AgentId } from './agents'
 
 export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean; pid?: number }
 /**
- * OR-3 — 어느 Oriel 인가. standalone = Oriel 설치 파일로 깐 것(`%LOCALAPPDATA%\Programs\oriel`, 자기 Oriel.exe 로 뜬다),
- * bundled = 아라 설치본 동봉(`<resources>/oriel`, 아라 Electron 공유), dev = 그 밖(개발 체크아웃·설정에 적은 폴더).
+ * OR-3 — 어느 Oriel 인가. standalone = Oriel 설치 파일로 깐 것(`%LOCALAPPDATA%\Programs\Oriel`, 자기 Oriel.exe 로 뜬다),
+ * dev = 그 밖(개발 체크아웃·설정에 적은 폴더). UB-1: 아라 설치본에는 Oriel 을 넣지 않는다(따로 설치하는 호환 제품).
  */
-export type OrielKind = 'standalone' | 'bundled' | 'dev'
+export type OrielKind = 'standalone' | 'dev'
 /**
- * OR-2 — Oriel CLI(version·open·mcp)를 띄우는 법. 시스템 node 가 없는 PC 도 되게 아라 Electron + `ELECTRON_RUN_AS_NODE=1`
- * (M4 데몬과 같은 길), 그 위에 Oriel 앱을 띄울 Electron(`ORIEL_ELECTRON`)·설치본 호스트 표시(`ARA_HOST_APP`)를 env 로 — main/oriel/oriel.ts araOrielRunner.
+ * Oriel CLI(version·open·mcp)를 띄우는 법. 시스템 node 가 없는 PC 도 되게 Electron 실행 파일 + `ELECTRON_RUN_AS_NODE=1`
+ * (M4 데몬과 같은 길) — main/oriel/oriel.ts araOrielRunner.
  */
 export type OrielRunner = { command: string; env: Record<string, string> }
 /** 시스템 node 로(시험·예전 모양). */
@@ -42,15 +42,15 @@ export function parseOrielVersion(stdout: string): OrielInfo | null {
 }
 
 /**
- * 찾아볼 자리(앞이 먼저 = OR-3 우선순위의 뒷부분: 단독 설치본 > 동봉판 > dev). 설정값이 있으면 그것만(경로 고정).
+ * 찾아볼 자리(앞이 먼저 = OR-3 우선순위의 뒷부분: 단독 설치본 > dev). 설정값이 있으면 그것만(경로 고정).
+ * 단독 설치본 = `%LOCALAPPDATA%\Programs\Oriel`(사용자별 설치 — Windows 경로는 대소문자 무시라 예전 `oriel` 폴더도 같다), 앱 폴더는 `resources/app`(asar 없음).
  * 하드코딩 경로는 후보일 뿐 — 없으면 '미설치'. 실행 중인 것이 맨 앞이라는 규칙은 감지 뒤에 pickOriel 이.
  */
-export function orielCandidates(setting: string, resourcesPath: string | null, localAppData: string | null = null): string[] {
+export function orielCandidates(setting: string, localAppData: string | null = null): string[] {
   if (setting.trim()) return [setting.trim()]
   const slash = (p: string): string => p.replace(/\\/g, '/')
   return [
-    ...(localAppData ? [`${slash(localAppData)}/Programs/oriel/resources/app`] : []),
-    ...(resourcesPath ? [`${slash(resourcesPath)}/oriel`] : []),
+    ...(localAppData ? [`${slash(localAppData)}/Programs/Oriel/resources/app`] : []),
     'D:/AI/ai-browser'
   ]
 }
@@ -72,8 +72,7 @@ export const ORIEL_INSTRUCTIONS =
 type OrielServer = { command: string; args: string[]; env?: Record<string, string> }
 
 /**
- * MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). command·env = 감지 때와 같은 runner — OR-2: 아라 Electron 을 node 로,
- * env ORIEL_ELECTRON(`mcp --launch` 가 Oriel 을 그 Electron 으로 띄운다, Oriel 89eb2b3), 설치본이면 ARA_HOST_APP 도.
+ * MCP 서버 정의(Claude --mcp-config·Gemini settings 같은 모양). command·env = 감지 때와 같은 runner(Oriel.exe 또는 아라 Electron 을 node 로).
  */
 export function orielMcpServers(cliPath: string, runner: OrielRunner = NODE_RUNNER): { mcpServers: { oriel: OrielServer & { type: 'stdio' } } } {
   const env = Object.keys(runner.env).length ? { env: { ...runner.env } } : {}
