@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
 import type { Worktree } from '@shared/worktrees'
-import { Bot, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Sparkles, Zap } from 'lucide-react'
+import { Bot, FolderGit2, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Zap } from 'lucide-react'
 import { t } from '../../i18n'
 import type { AiwsLocation } from '.'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
@@ -231,7 +231,7 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           <AgentWorkspace key={active.id} worktree={active} ask={ask} />
         ) : (
           <div className="aiws-empty">
-            <Sparkles className="aiws-home-ic" aria-hidden />
+            <FolderGit2 className="aiws-home-ic" aria-hidden />
             <b>{t('aiws.home.title')}</b>
             <span>{t('aiws.home.desc')}</span>
           </div>

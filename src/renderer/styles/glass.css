@@ -111,6 +111,25 @@
   }
 }
 
+/* ── G2 고른 행 = 앰버 왼쪽 막대(시안 C .row.act) — 워크트리·서버·세션·파일·탐색기 행. 포커스 링이 있으면 링이 이긴다. ── */
+:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on):not(:focus-visible) {
+  box-shadow: inset 2px 0 0 var(--sig-user), inset 0 1px 0 var(--glass-hi);
+}
+
+/* ── G2 상태 글리프 — 막힘(승인·질문) = 반전 칩, 일하는 중 고리는 시안 크기(점보다 크게) ── */
+:root[data-glass='on'] .ag-glyph:is([data-agent-state='blocked'], [data-agent-state='question']) {
+  background: var(--text-hi);
+}
+:root[data-glass='on'] .ag-glyph:is([data-agent-state='blocked'], [data-agent-state='question']) .ag-q {
+  width: 9px;
+  height: 9px;
+  color: var(--bg-abyss);
+}
+:root[data-glass='on'] .ag-spin {
+  width: 11px;
+  height: 11px;
+}
+
 /* ── 대기 = 슬레이트 ── */
 :root[data-glass='on'] .ag-dot.idle {
   background: var(--sig-slate);
@@ -143,12 +162,32 @@
   }
 
   /* 구조 면: 틴트만 */
-  :root[data-glass='on'] :is(.titlebar, .statusbar, .lrail, .sidebar, .aiws-side, .ai-rail, .rbar, .ara-panel, .sp-nav) {
+  :root[data-glass='on'] :is(.titlebar, .statusbar, .lrail, .sidebar, .aiws-side, .aiws-search, .aiws-scm, .aiws-explorer, .ai-rail, .rbar, .ara-panel, .sp-nav) {
     background: var(--gl-1);
     border-color: var(--gl-edge);
   }
-  :root[data-glass='on'] .titlebar {
+  /* 면 경계 하이라이트 — 빛이 위에서 오는 한 줄(타이틀바·상태바)과 오른쪽 패널의 안쪽 가장자리. */
+  :root[data-glass='on'] :is(.titlebar, .statusbar) {
     box-shadow: inset 0 1px 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] :is(.ara-panel, .aiws-scm, .aiws-explorer) {
+    box-shadow: inset 1px 0 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] :is(.aiws-side, .aiws-search, .aiws-scm, .aiws-explorer) .aiws-side-head {
+    border-color: var(--gl-edge);
+  }
+  /* G2 AI 공간 — .main 의 불투명 바닥이 왼쪽 워크트리 목록(.aiws-side)을 덮어 유리가 안 보였다.
+     AI 공간일 때만 .main 을 비우고, 가운데(.aiws-center — 에이전트 터미널·대시보드)는 불투명 바닥 + 아주 옅은 정적 빛.
+     터미널 공간의 .main·.pane-grid 는 그대로(불투명). */
+  :root[data-glass='on'] .main.space-ai {
+    background: transparent;
+  }
+  :root[data-glass='on'] .aiws-center {
+    background: var(--gl-center);
+  }
+  /* 사용량 막대 홈 — 반투명 상태바·아라 패널 위에서 빈 몫이 묻히지 않게. 채움은 --accent(글라스 = 앰버). */
+  :root[data-glass='on'] :is(.sb-mbar, .ara-us .mb) {
+    background: var(--gl-track);
   }
   /* 구조 면 안에서 면을 다시 칠하던 머리·탭 줄 — 비워서 유리가 이어지게 */
   :root[data-glass='on'] .sb-tabs {

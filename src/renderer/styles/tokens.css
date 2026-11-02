@@ -134,6 +134,10 @@
   --gl-hl: rgba(255, 255, 255, 0.09);
   --gl-in: rgba(0, 0, 0, 0.28);
   --gl-blur: blur(28px) saturate(1.6);
+  /* G2 가운데 작업 면(AI 공간 .aiws-center) — 불투명 터미널 바닥 + 위쪽에 아주 옅은 AI 빛(정적). 시안 C 의 가운데 결. */
+  --gl-center: radial-gradient(70% 55% at 50% 0%, rgba(91, 110, 255, 0.07) 0, transparent 70%), var(--bg-terminal);
+  /* 사용량 막대 홈 — 반투명 상태바 위에서도 비어 있는 몫이 보이게(시안 C .bar 바닥). */
+  --gl-track: rgba(255, 255, 255, 0.12);
   /* 신호색(시안 C 색 의미 — 결정 orca-bundle-decisions.md 2026-11-01). 브랜드색이 아니다 — 브랜드는 마크 자리에만.
      AI = 인디고→애저→스카이 · 사람·포커스·선택 = 앰버 · 답할 일 = 반전(--text-hi 면) · 대기 = 슬레이트. */
   --sig-ai-a: #5b4bff;

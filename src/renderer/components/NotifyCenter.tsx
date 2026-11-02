@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Bell, CheckCheck, ChevronRight, CircleCheck, CircleQuestionMark, CircleX, Info, SlidersHorizontal, Sparkles, SquareTerminal, X } from 'lucide-react'
+import { Bell, Bot, CheckCheck, ChevronRight, CircleCheck, CircleQuestionMark, CircleX, Info, SlidersHorizontal, SquareTerminal, X } from 'lucide-react'
 import { dismissToast, hasUnread, readAllNotes, setNoteOpener, TOAST_LIFE, toastView, useNotes, type Note, type NoteKind } from '../store/notify'
 import { t } from '../i18n'
 
@@ -35,7 +35,7 @@ function NoteBody({ n }: { n: Note }) {
         <span className="ntf-t">{n.title}</span>
         {n.body && <span className="ntf-body">{n.body}</span>}
         <span className="ntf-m">
-          {n.space === 'term' ? <SquareTerminal aria-hidden /> : <Sparkles aria-hidden />}
+          {n.space === 'term' ? <SquareTerminal aria-hidden /> : <Bot aria-hidden />}
           {t('space.' + n.space)}
           {n.ctx && ` · ${n.ctx}`}
         </span>

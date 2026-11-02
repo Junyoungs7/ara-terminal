@@ -3,7 +3,7 @@ import { ContextMenu } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
 import { menuEntryById, SPACE_ACTIONS, type MenuEntry } from '../../shared/menubar'
 import { SPACES, type Space } from '@shared/space'
-import { Sparkles, SquareTerminal } from 'lucide-react'
+import { Bot, SquareTerminal } from 'lucide-react'
 import type { FeatureShown } from '@shared/features'
 import { dispatchAction, isMac, keyText, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
@@ -145,7 +145,7 @@ export function TitleBar({
               title={`${t('space.' + s)} · ${keyOf('space.' + s)}` + (space.attention?.[s] ? ' · ' + t('space.attention') : '')}
               onClick={() => space.onPick(s)}
             >
-              {s === 'term' ? <SquareTerminal aria-hidden /> : <Sparkles aria-hidden />}
+              {s === 'term' ? <SquareTerminal aria-hidden /> : <Bot aria-hidden />}
               {/* 좁은 창에선 이 라벨만 접힌다(shell.css "타이틀바 — 좁을 때 접는 순서") — 이름은 aria-label·title 이 지킨다. */}
               <span className="tb-spaces-label">{t('space.' + s)}</span>
               {space.attention?.[s] && <i className="tb-spaces-dot" role="img" aria-label={t('space.attention')} />}

@@ -134,8 +134,8 @@ export function prefsFrom(
     notifyAgents: ui.notifyAgents !== false,
     // M12 R2 — 미지정 칸은 Orca 기본값.
     codeEditor: editorPrefsOf(ui.codeEditor),
-    // G1 — 미지정이면 끔(true 만 켬).
-    glass: ui.glass === true
+    // G2 — 미지정이면 켬(false 만 끔). G1 A/B 에서 켬/끔 유휴 GPU 차이 없음.
+    glass: ui.glass !== false
   }
 }
 

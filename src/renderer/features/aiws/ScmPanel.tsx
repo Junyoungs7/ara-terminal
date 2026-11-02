@@ -7,7 +7,7 @@
 // 채우기만 한다(커밋·푸시·이름 바꾸기·MR 올리기는 사용자가 누를 때). 진행 줄에 [취소], 실패는 까닭 + CLI 말 앞부분.
 // M15 IN-01 사내 GitLab(설정에서 켰을 때만, 로컬 작업 단위만): MR 초안 → [MR 만들기], 아래에 이 저장소 MR 목록(펼칠 때만 조회).
 import { Suspense, useCallback, useEffect, useState, type JSX } from 'react'
-import { Copy, Minus, Plus, RefreshCw, Sparkles, Undo2, X } from 'lucide-react'
+import { Copy, Minus, PenLine, Plus, RefreshCw, Undo2, X } from 'lucide-react'
 import type { GitStatusEntry, GitStatusResult } from '@shared/gitDiff'
 import { resolvePrimaryAction, type ScmConfirm, type ScmResult } from '@shared/scm'
 import type { ScmAiKind, ScmAiResult } from '@shared/scmAi'
@@ -232,7 +232,7 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
                 {busy ? t('scm.busy.' + busy) : t('scm.kind.' + primary.kind) + (primary.count ? ` ${primary.count}` : '')}
               </button>
               <button type="button" className="aiws-ic" data-scm="ai" disabled={!!aiBusy || staged.length === 0} title={t('scm.ai.commit')} aria-label={t('scm.ai.commit')} onClick={() => void aiWrite('commit')}>
-                <Sparkles />
+                <PenLine />
               </button>
             </div>
             <div className="scm-more">
@@ -255,7 +255,7 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
           </div>
           {aiBusy && (
             <div className="scm-ai-busy" role="status" data-scm="aiBusy" data-kind={aiBusy}>
-              <Sparkles className="scm-ai-ic" aria-hidden />
+              <PenLine className="scm-ai-ic" aria-hidden />
               <span>{t('scm.ai.busy').replace('{agent}', 'AI')}</span>
               <button type="button" className="btn sec" data-scm="aiCancel" onClick={() => void window.ev.scm.aiCancel(root, host)}>
                 {t('scm.ai.cancel')}

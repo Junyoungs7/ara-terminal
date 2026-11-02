@@ -390,7 +390,7 @@ export type UiPrefs = {
   notifyAgents: boolean
   /** M12 R2 설정 › 편집기(AI 작업 공간 코드 에디터·변경 비교). editorPrefsOf 가 채운 확정값. */
   codeEditor: EditorPrefs
-  /** G1 설정 › 모양 [글라스](시안 C). 기본 끔 — 성능 A/B 뒤 메인이 기본값을 정한다. ARA_GLASS 가 덮는다(shared/glass.ts). */
+  /** G1 설정 › 모양 [글라스](시안 C). G2 부터 기본 켬(미지정 = 켬, false 만 끔). ARA_GLASS 가 덮는다(shared/glass.ts). */
   glass: boolean
 }
 

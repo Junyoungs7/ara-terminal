@@ -38,7 +38,7 @@ const DEFAULT_PREFS: UiPrefs = {
   notifyToast: true,
   notifyAgents: true,
   codeEditor: DEFAULT_EDITOR_PREFS,
-  glass: false
+  glass: true
 }
 
 export function useUiPrefs() {
