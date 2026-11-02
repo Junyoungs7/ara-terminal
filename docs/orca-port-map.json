@@ -1052,7 +1052,22 @@
     ],
     "orcaRef": "fdfcfb3551",
     "status": "porting",
-    "notes": "M15 R1(v2.2 a2510a4): Orca Cloud 대신 사내 Slack 앱에 Socket Mode(나가는 연결만 — apps.connections.open → WebSocket, 봉투 ack, disconnect 재연결, 토큰 오류는 멈춤). 토큰 app-level·bot 은 vault. 지정 채널·봇 DM 에서 지정 사용자(user id 목록, 비면 아무도)만. 명령 = 커넥터 이음새의 prompt·answer·watch 모양: 상태·질문·답(승인 허용/거부, 질문 하나·단일 선택 — 그 밖은 아라에서). 알림: 답할 차례·끝남. 뺀 것: start·send·cancel(밖에서 실행·이어 지시), reply, 스레드 대화 연결."
+    "notes": "M15 R1(v2.2 a2510a4): Orca Cloud 대신 사내 Slack 앱에 Socket Mode(나가는 연결만 — apps.connections.open → WebSocket, 봉투 ack, disconnect 재연결, 토큰 오류는 멈춤). 토큰 app-level·bot 은 vault. 지정 채널·봇 DM 에서 지정 사용자(user id 목록, 비면 아무도)만. 명령 = 커넥터 이음새의 prompt·answer·watch 모양: 상태·질문·답(승인 허용/거부, 질문 하나·단일 선택 — 그 밖은 아라에서). 알림: 답할 차례·끝남. 뺀 것: reply. (start·send·cancel·턴 결과·스레드 대화 연결은 IN-02b → IN-04.)"
+  },
+  {
+    "id": "IN-04",
+    "feature": "커넥터 이음새 — 밖의 대화(Slack 스레드) ↔ 에이전트 탭: 시작·이어 지시·취소·턴 결과",
+    "orcaPaths": [
+      "src/cli/specs/connector.ts",
+      "src/main/external-conversations/external-conversation-seam.ts",
+      "src/main/external-conversations/external-conversation-cancel.ts",
+      "src/main/external-conversations/external-conversation-send.ts",
+      "src/main/external-conversations/external-conversation-types.ts",
+      "src/main/connector-cloud/connector-turn-events.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "IN-02b(v2.2 07b2fc1): 운반을 모르는 이음새 main/integrations/connector.ts(ConversationKey source·externalId, Delivery accepted/refused 사유, 배달 id 영수증 = 같은 글 두 번은 한 번만) 위에 Slack 이 운반 하나로 꽂힘(사내 협업 툴 3차 대비). start = ara CLI agent.launch 길(작업 단위 선택자 → 렌더러 [+]) + 스레드에 이음, send = M3 안전 입력(tracker.submit), cancel = Orca 그대로(승인 대기 거부·질문 대기는 앱에서·일하는 중 Esc 한 번·쉬는 중 그대로), watch = 3초 훑기의 prompt·turn-ended(이어진 스레드로, 나머지는 알림 채널). 턴 결과 = 화면 뒤쪽 15줄·1500자·maskSecrets+토큰 모양 가림. 시작·이어 지시는 설정 스위치(기본 꺼짐), 허용 사용자 목록 유지, git 쓰기 명령 없음. 바꾼 것: 답 대기 중 send 는 붙잡지 않고 거절, 에이전트 셋 다 허용(Orca 는 claude·codex), 대화 이음은 메모리만(Orca 는 작업 단위에 저장·세션 재개), 턴 결과는 Stop 훅 last_assistant_message 대신 화면 글. 뺀 것: reopen(닫힌 세션 다시 열기), reply(에이전트가 스레드에 직접 쓰기), Orca Cloud·outbox."
   },
   {
     "id": "IN-03",
