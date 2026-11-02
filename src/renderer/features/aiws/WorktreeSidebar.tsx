@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   Archive,
   ArchiveRestore,
   ChevronDown,
   ChevronRight,
+  Eraser,
   EyeOff,
   Folder,
   FolderPlus,
@@ -22,7 +23,7 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
+import { lineageChildren, lineageDescendants, type Project, type ProjectGroup, type Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { useAiwsStore, type PendingWorktreeCreation } from './store'
 import { DELETE_KEY_HINT, buildSidebarRows, isDeleteWorkspaceKey, shortBranch } from './sidebarRows'
@@ -37,6 +38,9 @@ import { useDialog } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { archiveWorktree, restoreWorktree, sleepWorktree, wakeWorktree, type SleepRefusal } from './sleep'
 import { CheckpointDialog, ExternalWorktreesDialog, PreservedBranchesDialog, SharedPathsDialog } from './WorktreeDialogs'
+
+// 3차 WS-25·26 정리 화면 — 열 때만 불러온다(지연 로드).
+const CleanupDialog = lazy(() => import('./CleanupDialog'))
 
 type Menu = { x: number; y: number; items: MenuItem[]; pick: (id: string) => void }
 
@@ -63,6 +67,42 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
   const [cpFor, setCpFor] = useState<Worktree | null>(null)
   const [extFor, setExtFor] = useState<Project | null>(null)
   const [sharedFor, setSharedFor] = useState<Project | null>(null)
+  const [cleanupOpen, setCleanupOpen] = useState(false)
+  // 3차 WS-24 계보 — 모든 작업 단위로 푼다(낡은 연결·고리 제외). 메뉴의 "자손까지" 수와 지우기 순서에 쓴다.
+  const lineage = useMemo(() => lineageChildren(Object.values(s.worktreesByRepo).flat()), [s.worktreesByRepo])
+  const descendantsOf = (w: Worktree): Worktree[] => {
+    const all = Object.values(useAiwsStore.getState().worktreesByRepo).flat()
+    return lineageDescendants(lineageChildren(all), w.id).flatMap((id) => all.filter((x) => x.id === id))
+  }
+  // WS-24 자손이 있으면 "자손까지 지우기" — 한 번 확인하고 깊은 자손부터 지운다(Orca Delete with Descendants). 없으면 예전 길(AiSpace 확인).
+  const removeWithLineage = (w: Worktree): void => {
+    const desc = descendantsOf(w)
+    if (desc.length === 0) return onRemove(w)
+    void dialog
+      .ask({
+        title: t('aiws.lineage.deleteTitle'),
+        message: t('aiws.lineage.deleteMsg').replace('{w}', w.displayName).replace('{n}', String(desc.length)),
+        detail: desc.map((d) => ({ label: d.displayName, value: d.path })),
+        tone: 'danger',
+        confirmLabel: t('aiws.remove.confirm')
+      })
+      .then(async (r) => {
+        if (r !== 'confirm') return
+        const failed: string[] = []
+        for (const x of [...desc, w]) {
+          const res = await useAiwsStore.getState().removeWorktree(x.id)
+          if (!res.ok) failed.push(`${x.displayName}: ${res.message}`)
+        }
+        if (failed.length > 0) note(t('aiws.lineage.deleteFailed').replace('{n}', String(failed.length)), failed.join('\n'))
+      })
+  }
+  // WS-24 자손까지 재우기(Orca Sleep with Descendants) — 살아 있는 탭이 있는 것만 재운다.
+  const sleepWithLineage = async (w: Worktree): Promise<void> => {
+    for (const x of [w, ...descendantsOf(w)]) {
+      if (x.sleep || !useAgentStore.getState().tabs.some((a) => a.worktreeId === x.id && !a.exited)) continue
+      refused(await sleepWorktree(x.id))
+    }
+  }
   // 프로젝트를 목록에서 빼기 — 디스크의 저장소·워크트리는 그대로(Orca confirm-remove-folder · repos:remove).
   const onRemoveProject = (repo: Project): void => {
     void dialog
@@ -99,7 +139,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
       e.preventDefault()
       e.stopPropagation()
       const repo = st.repos.find((r) => r.id === w.repoId)
-      if (!w.isMainWorktree) onRemove(w)
+      if (!w.isMainWorktree) removeWithLineage(w)
       else if (repo) onRemoveProject(repo)
     }
     window.addEventListener('keydown', onKey, true)
@@ -175,7 +215,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         }
       }
     )
-  const rowMenu = (e: ReactMouseEvent, w: Worktree, pinned: boolean): void =>
+  const rowMenu = (e: ReactMouseEvent, w: Worktree, pinned: boolean): void => {
+    const nDesc = lineageDescendants(lineage, w.id).length
+    const repo = s.repos.find((r) => r.id === w.repoId)
     openMenu(
       e,
       w.isArchived
@@ -183,24 +225,32 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         : [
             { id: 'pin', label: pinned ? t('aiws.side.unpin') : t('aiws.side.pin') },
             { id: 'checkpoint', label: t('aiws.cp.menu') },
+            // WS-24 하위 작업 — 로컬 git 프로젝트만(원격 생성은 부모를 기록하지 않는다).
+            ...(repo?.kind === 'git' && !repo.host ? [{ id: 'child', label: t('aiws.lineage.newChild') }] : []),
             w.sleep ? { id: 'wake', label: t('aiws.sleep.wake') } : { id: 'sleep', label: t('aiws.sleep.sleep') },
+            ...(nDesc > 0 ? [{ id: 'sleep-desc', label: t('aiws.lineage.sleepDesc').replace('{n}', String(nDesc)) }] : []),
             ...(w.isMainWorktree
               ? []
               : [
                   { id: 'archive', label: t('aiws.archive.archive') },
-                  { id: 'remove', label: t('aiws.side.remove'), danger: true, hint: DELETE_KEY_HINT }
+                  { id: 'remove', label: nDesc > 0 ? t('aiws.lineage.deleteDesc') : t('aiws.side.remove'), danger: true, hint: DELETE_KEY_HINT }
                 ])
           ],
       (id) => {
-        if (id === 'pin') s.togglePin(w.id)
+        if (id === 'child') {
+          s.setComposerParent(w.id)
+          onNew(w.repoId)
+        } else if (id === 'sleep-desc') void sleepWithLineage(w)
+        else if (id === 'pin') s.togglePin(w.id)
         else if (id === 'checkpoint') setCpFor(w)
         else if (id === 'wake') void wake(w)
         else if (id === 'sleep') void sleepWorktree(w.id).then(refused)
         else if (id === 'archive') void archiveWorktree(w.id).then(refused)
         else if (id === 'restore') void restoreWorktree(w.id)
-        else if (id === 'remove') onRemove(w)
+        else if (id === 'remove') removeWithLineage(w)
       }
     )
+  }
 
   // M15 R2 WS-22 호스트별 묶음 — 서버 이름·순서는 터미널 연결 사이드바(프로필·그룹)에서. 저장소 목록이 바뀔 때 한 번 다시 읽는다(폴링 없음).
   const [conn, setConn] = useState<{ profiles: ConnectionProfile[]; groups: string[]; layout: GroupLayout }>({ profiles: [], groups: [], layout: {} })
@@ -234,9 +284,10 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
         groups: s.groups,
         showArchived: s.showArchived,
         hosts,
-        collapsedHosts: s.collapsedHosts
+        collapsedHosts: s.collapsedHosts,
+        collapsedLineage: s.collapsedLineage
       }),
-    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy, s.groups, s.showArchived, hosts, s.collapsedHosts]
+    [s.repos, s.worktreesByRepo, s.pendingWorktreeCreations, s.pinnedIds, query, filterOpen, s.groupBy, s.groups, s.showArchived, hosts, s.collapsedHosts, s.collapsedLineage]
   )
 
   return (
@@ -273,6 +324,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
             onClick={() => s.setShowArchived(!s.showArchived)}
           >
             <Archive />
+          </button>
+          <button type="button" className="aiws-ic" data-aiws="cleanup" title={t('aiws.cleanup.title')} disabled={s.repos.length === 0} onClick={() => setCleanupOpen(true)}>
+            <Eraser />
           </button>
           <button type="button" className="aiws-ic" data-aiws="add-project" title={t('aiws.side.addProject')} onClick={() => void s.pickAndAddRepo()}>
             <FolderPlus />
@@ -431,8 +485,9 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
             <div
               key={r.key}
               role="listitem"
-              className={'aiws-row' + (active ? ' act' : '') + (sleeping ? ' sleeping' : '')}
+              className={'aiws-row' + (active ? ' act' : '') + (sleeping ? ' sleeping' : '') + (r.depth ? ` lin${r.depth}` : '')}
               data-wt={w.id}
+              data-depth={r.depth || undefined}
               data-pinned={r.pinned || undefined}
               data-sleeping={sleeping || undefined}
               data-archived={w.isArchived || undefined}
@@ -457,6 +512,21 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                 )}
                 {r.repo.kind === 'folder' ? <Folder className="aiws-row-ic" aria-hidden /> : <GitBranch className="aiws-row-ic" aria-hidden />}
                 <span className="aiws-row-name">{w.displayName}</span>
+                {r.childCount ? (
+                  <button
+                    type="button"
+                    className="aiws-chip aiws-kids"
+                    data-aiws="children"
+                    aria-expanded={!r.childrenCollapsed}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      s.toggleLineage(w.id)
+                    }}
+                  >
+                    {r.childrenCollapsed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}
+                    {t('aiws.lineage.children').replace('{n}', String(r.childCount))}
+                  </button>
+                ) : null}
                 <span className="aiws-row-acts">
                   {w.isArchived ? (
                     <button
@@ -506,7 +576,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                       title={`${t('aiws.side.remove')} (${DELETE_KEY_HINT})`}
                       onClick={(e) => {
                         e.stopPropagation()
-                        onRemove(w)
+                        removeWithLineage(w)
                       }}
                     >
                       <Trash2 />
@@ -519,6 +589,11 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                 {w.branch && shortBranch(w) !== w.displayName && <span className="aiws-mono">{shortBranch(w)}</span>}
                 {meta && <span>{meta}</span>}
                 {w.workspaceStatus && <span className="aiws-status">{t('aiws.status.' + w.workspaceStatus)}</span>}
+                {w.sparseDirectories?.length ? (
+                  <span className="aiws-status" data-aiws="sparse" title={w.sparseDirectories.join('\n')}>
+                    {t('aiws.sparse.badge')}
+                  </span>
+                ) : null}
                 {w.comment && <span className="aiws-row-cmt">{w.comment.split(/\r?\n/)[0]}</span>}
                 {st?.ok && st.added + st.removed > 0 && (
                   <span className="aiws-diffn">
@@ -548,6 +623,11 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
       {extFor && <ExternalWorktreesDialog repo={extFor} onClose={() => setExtFor(null)} />}
       {sharedFor && <SharedPathsDialog repo={sharedFor} onClose={() => setSharedFor(null)} />}
       {s.branchReviewOpen && s.preservedBranches.length > 0 && <PreservedBranchesDialog onClose={() => s.setBranchReviewOpen(false)} />}
+      {cleanupOpen && (
+        <Suspense fallback={null}>
+          <CleanupDialog onClose={() => setCleanupOpen(false)} />
+        </Suspense>
+      )}
     </aside>
   )
 }
@@ -557,7 +637,15 @@ function PendingRow({ p }: { p: PendingWorktreeCreation }): JSX.Element {
   const s = useAiwsStore()
   const failed = p.phase === 'failed'
   const pct = p.checkout?.percent
-  const phase = failed ? t('aiws.pending.failed') : p.phase === 'copying' ? t('aiws.pending.copying') : p.phase === 'creating' ? t('aiws.pending.creating') : t('aiws.pending.start')
+  const phase = failed
+    ? t('aiws.pending.failed')
+    : p.phase === 'setup'
+      ? t('aiws.pending.setup')
+      : p.phase === 'copying'
+        ? t('aiws.pending.copying')
+        : p.phase === 'creating'
+          ? t('aiws.pending.creating')
+          : t('aiws.pending.start')
   const lastLine = p.output.split(/[\r\n]+/).filter((l) => l.trim()).pop() ?? ''
   return (
     <div className={'aiws-row aiws-pending' + (failed ? ' failed' : '')} role="listitem" data-creation={p.creationId} data-phase={p.phase}>
@@ -574,7 +662,15 @@ function PendingRow({ p }: { p: PendingWorktreeCreation }): JSX.Element {
                 title={t('aiws.pending.retry')}
                 onClick={() => {
                   s.removePendingWorktreeCreation(p.creationId)
-                  void s.createWorktree({ repoId: p.repoId, name: p.name, baseBranch: p.baseBranch, nameWasGenerated: p.nameWasGenerated })
+                  void s.createWorktree({
+                    repoId: p.repoId,
+                    name: p.name,
+                    baseBranch: p.baseBranch,
+                    nameWasGenerated: p.nameWasGenerated,
+                    parentWorktreeId: p.parentWorktreeId,
+                    sparseDirectories: p.sparseDirectories,
+                    runSetup: p.runSetup
+                  })
                 }}
               >
                 <RotateCw />

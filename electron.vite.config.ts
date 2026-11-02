@@ -55,6 +55,8 @@ export default defineConfig({
           vaultSearchWorker: resolve('src/main/vault/searchWorker.ts'),
           // usageStatsWorker: M13 통계(30일 토큰) utility process — main/usage/stats.ts 가 out/main/usageStatsWorker.js 를 열 때만 띄운다.
           usageStatsWorker: resolve('src/main/usage/statsWorker.ts'),
+          // diskUsageWorker: 3차 WS-26 작업 단위 디스크 사용량 utility process — main/worktrees/feature.ts 가 [크기 재기] 때만 띄운다.
+          diskUsageWorker: resolve('src/main/worktrees/diskUsageWorker.ts'),
           // araCli: M14 R2 `ara` CLI — resources/win32/bin/ara.cmd 가 아라 실행 파일 + ELECTRON_RUN_AS_NODE 로 out/main/araCli.js 를 돌린다.
           araCli: resolve('src/cli/araCli.ts')
         }

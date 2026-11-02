@@ -66,7 +66,11 @@ import type {
   WorktreeMeta,
   WorktreeMetaUpdate,
   ProjectUpdate,
-  WorktreeStats
+  WorktreeStats,
+  CleanupGitInfo,
+  DiskUsage,
+  OrcaYamlPreview,
+  SparsePreset
 } from './worktrees'
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDeleteResult, VaultDetail, VaultSearchResult, VaultSession } from './vault'
@@ -633,6 +637,14 @@ export type InvokeContract = {
   'projectGroups:update': { req: { groupId: string; updates: { name?: string; isCollapsed?: boolean } }; res: ProjectGroup | null }
   'projectGroups:delete': { req: { groupId: string }; res: boolean }
   'projectGroups:moveProject': { req: { projectId: string; groupId: string | null }; res: Project | null }
+  // 3차 WS-23 orca.yaml 미리 보기·승인 · WS-27 sparse 프리셋(Orca sparsePresets:*) · WS-25·26 정리 화면 git 상태·디스크 사용량.
+  'repos:orcaYaml': { req: { repoId: string }; res: OrcaYamlPreview }
+  'repos:trustOrcaScripts': { req: { repoId: string; hashes: string[] }; res: boolean }
+  'sparsePresets:list': { req: { repoId: string }; res: SparsePreset[] }
+  'sparsePresets:save': { req: { repoId: string; preset: { id?: string; name: string; directories: string[] } }; res: SparsePreset | { error: string } }
+  'sparsePresets:remove': { req: { repoId: string; presetId: string }; res: boolean }
+  'worktrees:cleanupScan': { req: { repoId: string }; res: CleanupGitInfo[] }
+  'worktrees:diskUsage': { req: { repoId: string; paths: string[] }; res: DiskUsage[] }
   // M3 에이전트(main/agents/feature.ts). 감지는 force 면 로그인 셸 PATH 도 다시 읽는다.
   'agents:detect': { req: { force?: boolean }; res: DetectedAgent[] }
   'agents:getSettings': { req: void; res: AgentSettings }
@@ -1359,6 +1371,14 @@ export type EvApi = {
     remove(repoId: string): Promise<{ ok: boolean }>
     searchBaseRefs(repoId: string, query: string): Promise<BaseRef[]>
     update(repoId: string, updates: ProjectUpdate): Promise<Project | null>
+    orcaYaml(repoId: string): Promise<OrcaYamlPreview>
+    trustOrcaScripts(repoId: string, hashes: string[]): Promise<boolean>
+  }
+  // 3차 WS-27 sparse 프리셋(Orca sparsePresets 다리).
+  sparsePresets: {
+    list(repoId: string): Promise<SparsePreset[]>
+    save(repoId: string, preset: { id?: string; name: string; directories: string[] }): Promise<SparsePreset | { error: string }>
+    remove(repoId: string, presetId: string): Promise<boolean>
   }
   worktrees: {
     list(repoId: string): Promise<InvokeRes<'worktrees:list'>>
@@ -1368,6 +1388,8 @@ export type EvApi = {
     stats(repoId: string, path: string): Promise<WorktreeStats>
     updateMeta(worktreeId: string, updates: WorktreeMetaUpdate): Promise<WorktreeMeta | null>
     forceDeletePreservedBranch(repoId: string, branchName: string, head: string): Promise<InvokeRes<'worktrees:forceDeletePreservedBranch'>>
+    cleanupScan(repoId: string): Promise<CleanupGitInfo[]>
+    diskUsage(repoId: string, paths: string[]): Promise<DiskUsage[]>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
   }

@@ -34,6 +34,10 @@ export type PendingWorktreeCreation = {
   baseBranch?: string
   /** M10 WS-14 자동 이름이었나([다시]도 지운 이름을 건너뛰게). */
   nameWasGenerated?: boolean
+  /** 3차 WS-24·27·23 [다시] 가 같은 부모·sparse 폴더·setup 으로 다시 만들게. */
+  parentWorktreeId?: string
+  sparseDirectories?: string[]
+  runSetup?: boolean
   startedAt: number
   phase: CreateWorktreeProgressEvent['phase']
   path?: string
@@ -51,6 +55,8 @@ const OUTPUT_TAIL_CHARS = 4000
 const PINS_KEY = 'aiws.pinnedWorktrees'
 const GROUP_KEY = 'aiws.groupBy'
 const HOSTS_FOLDED_KEY = 'aiws.collapsedHosts'
+// 3차 WS-24 접은 부모(자식 줄 숨김) — Orca "N children" 칩의 접힘. 이 PC 의 보기 설정.
+const LINEAGE_FOLDED_KEY = 'aiws.collapsedLineage'
 export type SidebarGroupBy = 'repo' | 'none'
 
 function readLocal<T>(key: string, fallback: T, ok: (v: unknown) => v is T): T {
@@ -86,6 +92,12 @@ export type SidebarSlice = {
   toggleHost: (hostKey: string) => void
   /** +/− 줄 수 · 커밋 앞(행마다 git 3번 — 목록을 다시 읽을 때만). */
   fetchStats: (w: Worktree) => Promise<void>
+  /** 3차 WS-24 자식 줄을 접은 부모 id. */
+  collapsedLineage: string[]
+  toggleLineage: (worktreeId: string) => void
+  /** 3차 WS-24 "하위 작업 만들기" — 새 작업 카드가 열릴 때 부모 칸에 미리 넣는다(카드가 읽고 비운다). */
+  composerParentId: string | null
+  setComposerParent: (worktreeId: string | null) => void
 }
 
 export type RepoSlice = {
@@ -113,7 +125,16 @@ export type WorktreeSlice = {
   activeWorktreeId: string | null
   pendingWorktreeCreations: Record<string, PendingWorktreeCreation>
   fetchWorktrees: (repoId: string) => Promise<void>
-  createWorktree: (args: { repoId: string; name: string; baseBranch?: string; creationId?: string; nameWasGenerated?: boolean }) => Promise<CreateWorktreeResult>
+  createWorktree: (args: {
+    repoId: string
+    name: string
+    baseBranch?: string
+    creationId?: string
+    nameWasGenerated?: boolean
+    parentWorktreeId?: string
+    sparseDirectories?: string[]
+    runSetup?: boolean
+  }) => Promise<CreateWorktreeResult>
   cancelWorktreeCreation: (creationId: string) => Promise<void>
   removePendingWorktreeCreation: (creationId: string) => void
   removeWorktree: (worktreeId: string, force?: boolean) => Promise<RemoveWorktreeResult>
@@ -147,6 +168,15 @@ const createSidebarSlice: StateCreator<AiwsState, [], [], SidebarSlice> = (set) 
       return { collapsedHosts }
     }),
   statsById: {},
+  collapsedLineage: readLocal(LINEAGE_FOLDED_KEY, [], isStringArray),
+  toggleLineage: (id) =>
+    set((s) => {
+      const collapsedLineage = s.collapsedLineage.includes(id) ? s.collapsedLineage.filter((x) => x !== id) : [...s.collapsedLineage, id]
+      writeLocal(LINEAGE_FOLDED_KEY, collapsedLineage)
+      return { collapsedLineage }
+    }),
+  composerParentId: null,
+  setComposerParent: (composerParentId) => set({ composerParentId }),
   showArchived: false,
   setShowArchived: (showArchived) => set({ showArchived }),
   togglePin: (id) =>
@@ -245,15 +275,32 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     // 통계는 기다리지 않는다 — 목록이 먼저 보이고 +/− 는 뒤따라 찬다. 실패해도 목록은 그대로.
     for (const w of r.worktrees) void get().fetchStats(w).catch(() => {})
   },
-  createWorktree: async ({ repoId, name, baseBranch, creationId = crypto.randomUUID(), nameWasGenerated }) => {
+  createWorktree: async ({ repoId, name, baseBranch, creationId = crypto.randomUUID(), nameWasGenerated, parentWorktreeId, sparseDirectories, runSetup }) => {
+    // 3차: 부모(WS-24)·sparse(WS-27)·setup(WS-23)은 있을 때만 싣는다 — [다시] 도 같은 값으로.
+    const extra = {
+      ...(nameWasGenerated ? { nameWasGenerated } : {}),
+      ...(parentWorktreeId ? { parentWorktreeId } : {}),
+      ...(sparseDirectories?.length ? { sparseDirectories } : {}),
+      ...(runSetup ? { runSetup } : {})
+    }
     set((s) => ({
       pendingWorktreeCreations: {
         ...s.pendingWorktreeCreations,
-        [creationId]: { creationId, repoId, name, baseBranch, ...(nameWasGenerated ? { nameWasGenerated } : {}), startedAt: Date.now(), phase: 'start', output: '' }
+        [creationId]: { creationId, repoId, name, baseBranch, ...extra, startedAt: Date.now(), phase: 'start', output: '' }
       }
     }))
     // 결과는 진행 이벤트(done/failed)로도 온다 — 상태 반영은 applyCreateProgress 한 곳에서.
-    return window.ev.worktrees.create({ creationId, repoId, name, baseBranch, ...(nameWasGenerated ? { nameWasGenerated } : {}) })
+    const r = await window.ev.worktrees.create({ creationId, repoId, name, baseBranch, ...extra })
+    // WS-23 setup 을 못 돌렸거나(승인 안 됨) wait-for-setup 이 실패했다 — 작업 단위는 만들어졌다.
+    if (r.ok && r.setupWarning) {
+      pushNote({
+        kind: 'info',
+        space: 'ai',
+        title: t(r.setupWarning === 'untrusted' ? 'aiws.yaml.untrusted' : 'aiws.yaml.setupFailed').replace('{w}', r.worktree.displayName),
+        ...(r.setupWarning === 'untrusted' ? {} : { body: r.setupWarning })
+      })
+    }
+    return r
   },
   cancelWorktreeCreation: async (creationId) => {
     await window.ev.worktrees.cancelCreate(creationId)
@@ -338,6 +385,14 @@ const createWorktreeSlice: StateCreator<AiwsState, [], [], WorktreeSlice> = (set
     return id
   },
   applyCreateProgress: (e) => {
+    // WS-23 start-immediately 로 뒤에서 돈 setup 이 끝났다 — 만드는 중 줄은 이미 없다. 실패만 알린다.
+    if (e.phase === 'setupDone') {
+      if (!e.ok) {
+        const w = (get().worktreesByRepo[e.repoId] ?? []).find((x) => x.id === e.worktreeId)
+        pushNote({ kind: 'info', space: 'ai', title: t('aiws.yaml.setupFailed').replace('{w}', w?.displayName ?? e.worktreeId), ...(e.message ? { body: e.message } : {}) })
+      }
+      return
+    }
     if (e.phase === 'done') void get().fetchStats(e.worktree).catch(() => {})
     set((s) => {
       const prev = s.pendingWorktreeCreations[e.creationId]

@@ -12970,3 +12970,56 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-size: var(--fs-micro);
 }
+/* 3차 작업 단위 — 중첩 워크스페이스(WS-24) 들여쓰기·하위 칩, sparse 프리셋 칸(WS-27), 정리 화면(WS-25·26). */
+.aiws-row.lin1 {
+  padding-left: var(--sp-8);
+}
+.aiws-row.lin2 {
+  padding-left: calc(var(--sp-8) * 2);
+}
+.aiws-row.lin3 {
+  padding-left: calc(var(--sp-8) * 3);
+}
+.aiws-chip.aiws-kids {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+}
+.aiws-chip.aiws-kids svg {
+  width: var(--fs-micro);
+  height: var(--fs-micro);
+}
+.aiws-sparse-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.modal.aiws-cleanup {
+  width: 720px;
+}
+.aiws-cleanup-bar {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.aiws-cleanup-bar input {
+  flex: 1;
+}
+.aiws-cleanup-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  font-size: var(--fs-micro);
+}
+.aiws-status.aiws-warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.aiws-cleanup-total {
+  margin-right: auto;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type JSX } from 'react'
-import type { BaseRef } from '@shared/worktrees'
+import type { BaseRef, OrcaYamlPreview, SparsePreset } from '@shared/worktrees'
+import { pushNote } from '../../store/notify'
 import { t } from '../../i18n'
 import { useAiwsStore } from './store'
 import { AGENT_IDS, AGENTS, type AgentId } from '@shared/agents'
@@ -16,6 +17,10 @@ import { getSuggestedCreatureName, getWorkspaceSeedName } from '@shared/worktree
  * M8 DM-05: 맨 위 **실행 위치**(Orca host-picker — 로컬 / 관리형 서버). 서버를 고르면 그 서버의 원격 저장소만 보이고, 동의 안 된 서버는 동의 화면부터.
  * 원격 저장소는 경로를 쳐서 더한다(`~/…` 가능). 워크트리로/없이·분기 지점·에이전트는 로컬과 같은 칸 — 실행은 그 서버의 orcad 에서.
  * M10 WS-14 이름 칸은 비워도 된다(Orca "Automatic name") — 첫 지시의 영문 조각, 없으면 바다 생물 이름(shared/worktreeNames.ts).
+ * 3차(orcaRef ec112c6b01 — NewWorkspaceComposerAdvancedSection·ComposerParentWorktreePicker·sparse/SparsePresetChooser):
+ *  · WS-24 부모 작업 단위(선택) — 사이드바 "하위 작업 만들기"면 미리 들어 있다.
+ *  · WS-27 sparse checkout 프리셋(선택) — 프로젝트별 폴더 목록, 카드 안에서 만들고 지운다.
+ *  · WS-23 orca.yaml — 본 폴더에 setup/archive 스크립트가 있으면 "스크립트 쓰기" 칸. 처음 보는 내용이면 만들 때 글 그대로 보여 주고 승인을 받는다.
  */
 const REF_SEARCH_DEBOUNCE_MS = 150
 
@@ -71,6 +76,55 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
   const [base, setBase] = useState('')
   const [refQuery, setRefQuery] = useState('')
   const [refs, setRefs] = useState<BaseRef[]>([])
+  const local = !remote && isGit
+  // WS-24 부모 — 사이드바 "하위 작업 만들기"가 남긴 값을 읽고 비운다. 카드가 이미 열려 있을 때 눌러도 받는다(그 프로젝트·로컬로 옮김).
+  const [parentId, setParentId] = useState('')
+  const pendingParent = useAiwsStore((s) => s.composerParentId)
+  useEffect(() => {
+    if (!pendingParent) return
+    useAiwsStore.getState().setComposerParent(null)
+    setWhere(RUN_ON_LOCAL)
+    setRepoId(pendingParent.split('::')[0])
+    setParentId(pendingParent)
+  }, [pendingParent])
+  const repoWorktrees = useAiwsStore((s) => s.worktreesByRepo[repoId])
+  const parentChoices = useMemo(() => (repoWorktrees ?? []).filter((w) => !w.isArchived && !w.hidden), [repoWorktrees])
+  // WS-27 sparse 프리셋.
+  const [presets, setPresets] = useState<SparsePreset[]>([])
+  const [presetId, setPresetId] = useState('')
+  const [presetEdit, setPresetEdit] = useState<{ name: string; dirs: string } | null>(null)
+  const [presetErr, setPresetErr] = useState<string | null>(null)
+  // WS-23 orca.yaml.
+  const [yaml, setYaml] = useState<OrcaYamlPreview>({ found: false })
+  const [useScripts, setUseScripts] = useState(true)
+  useEffect(() => {
+    setPresetId('')
+    setPresetEdit(null)
+    setParentId((p) => (p.startsWith(repoId + '::') ? p : ''))
+    setYaml({ found: false })
+    if (!local) return setPresets([])
+    let live = true
+    void window.ev.sparsePresets.list(repoId).then((p) => live && setPresets(p))
+    void window.ev.repos.orcaYaml(repoId).then((y) => live && setYaml(y))
+    return () => {
+      live = false
+    }
+  }, [repoId, local])
+  const savePreset = async (): Promise<void> => {
+    if (!presetEdit) return
+    const r = await window.ev.sparsePresets.save(repoId, { name: presetEdit.name, directories: presetEdit.dirs.split(/\r?\n/) })
+    if ('error' in r) return setPresetErr(t('aiws.sparse.err.' + (r.error === 'name' || r.error === 'directories' ? r.error : 'path')))
+    setPresets((p) => [...p.filter((x) => x.id !== r.id), r])
+    setPresetId(r.id)
+    setPresetEdit(null)
+    setPresetErr(null)
+  }
+  const removePreset = async (): Promise<void> => {
+    if (!presetId) return
+    await window.ev.sparsePresets.remove(repoId, presetId)
+    setPresets((p) => p.filter((x) => x.id !== presetId))
+    setPresetId('')
+  }
 
   useEffect(() => {
     if (!isGit) {
@@ -110,7 +164,26 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
     if (agent) void useAgentStore.getState().launchAgent({ agent, worktreeId, cwd, prompt })
   }
 
-  const create = (): void => {
+  /** WS-23 처음 보는 setup/archive 스크립트면 글 그대로 보여 주고 승인을 받는다(Orca 공유 명령 승인). 거절하면 스크립트 없이 만든다. */
+  const approveScripts = async (): Promise<boolean> => {
+    const scripts = [yaml.setup, yaml.archive].filter((x): x is NonNullable<typeof x> => !!x)
+    if (!useScripts || scripts.length === 0) return false
+    const fresh = scripts.filter((x) => !x.trusted)
+    if (fresh.length === 0) return true
+    const yes = await dialog.ask({
+      title: t('aiws.yaml.approveTitle'),
+      message: t('aiws.yaml.approveMsg').replace('{p}', repo?.displayName ?? ''),
+      detail: [
+        ...(yaml.setup && !yaml.setup.trusted ? [{ label: 'scripts.setup', value: yaml.setup.script }] : []),
+        ...(yaml.archive && !yaml.archive.trusted ? [{ label: 'scripts.archive', value: yaml.archive.script }] : [])
+      ],
+      confirmLabel: t('aiws.yaml.approve')
+    })
+    if (yes !== 'confirm') return false
+    return window.ev.repos.trustOrcaScripts(repoId, fresh.map((x) => x.hash))
+  }
+
+  const create = async (): Promise<void> => {
     if (!repo || !canCreate) return
     const st = useAiwsStore.getState()
     if (effectiveMode === 'none') {
@@ -119,15 +192,38 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
       if (id) launch(id, repo.path)
       return
     }
+    const runSetup = local && !!yaml.setup && (await approveScripts())
+    const sparse = presets.find((p) => p.id === presetId)?.directories
     // 바로 닫는다 — 진행은 사이드바 줄이 보여 준다(WS-03). 다 만들어지면 그 워크트리를 고르고 에이전트를 띄운다.
     onClose()
     const seed = getWorkspaceSeedName({ explicitName: name, prompt: agent ? prompt : '', fallbackName: creature })
     const nameWasGenerated = !name.trim() && seed === creature
-    void st.createWorktree({ repoId: repo.id, name: seed, baseBranch: base || undefined, nameWasGenerated }).then((r) => {
-      if (!r.ok) return
-      useAiwsStore.getState().setActiveWorktree(r.worktree.id)
-      launch(r.worktree.id, r.worktree.path)
-    })
+    void st
+      .createWorktree({
+        repoId: repo.id,
+        name: seed,
+        baseBranch: base || undefined,
+        nameWasGenerated,
+        ...(local && parentId ? { parentWorktreeId: parentId } : {}),
+        ...(local && sparse ? { sparseDirectories: sparse } : {}),
+        ...(runSetup ? { runSetup } : {})
+      })
+      .then((r) => {
+        if (!r.ok) return
+        useAiwsStore.getState().setActiveWorktree(r.worktree.id)
+        launch(r.worktree.id, r.worktree.path)
+      })
+  }
+  // archive 만 있는 orca.yaml 도 승인 길이 있어야 한다 — 만들 때 "스크립트 쓰기"가 켜져 있으면 같이 묻는다.
+  const createClick = (): void => {
+    if (local && !yaml.setup && yaml.archive && !yaml.archive.trusted && useScripts) {
+      void approveScripts().then((ok) => {
+        if (!ok) pushNote({ kind: 'info', space: 'ai', title: t('aiws.yaml.archiveSkipped') })
+        void create()
+      })
+      return
+    }
+    void create()
   }
 
   return (
@@ -230,7 +326,7 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') create()
+                    if (e.key === 'Enter') createClick()
                   }}
                 />
               </label>
@@ -266,6 +362,101 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
                   ))}
                 </div>
               </div>
+              {local && (
+                <label className="aiws-field">
+                  <span>{t('aiws.lineage.parent')}</span>
+                  <select className="aiws-input" data-aiws="new-parent" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                    <option value="">{t('aiws.lineage.noParent')}</option>
+                    {parentChoices.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {local && (
+                <div className="aiws-field">
+                  <span>{t('aiws.sparse.label')}</span>
+                  <div className="aiws-modes">
+                    <select className="aiws-input" data-aiws="new-sparse" value={presetId} onChange={(e) => setPresetId(e.target.value)}>
+                      <option value="">{t('aiws.sparse.none')}</option>
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {`${p.name} · ${p.directories.length}`}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn sec"
+                      data-aiws="sparse-new"
+                      onClick={() => {
+                        const cur = presets.find((p) => p.id === presetId)
+                        setPresetEdit({ name: cur?.name ?? '', dirs: cur?.directories.join('\n') ?? '' })
+                      }}
+                    >
+                      {presetId ? t('aiws.sparse.edit') : t('aiws.sparse.new')}
+                    </button>
+                    {presetId && (
+                      <button type="button" className="btn sec" data-aiws="sparse-remove" onClick={() => void removePreset()}>
+                        {t('aiws.sparse.remove')}
+                      </button>
+                    )}
+                  </div>
+                  {presetEdit && (
+                    <div className="aiws-sparse-edit">
+                      <input
+                        className="aiws-input"
+                        data-aiws="sparse-name"
+                        placeholder={t('aiws.sparse.namePh')}
+                        value={presetEdit.name}
+                        onChange={(e) => setPresetEdit({ ...presetEdit, name: e.target.value })}
+                      />
+                      <textarea
+                        className="aiws-input aiws-mono"
+                        data-aiws="sparse-dirs"
+                        rows={3}
+                        placeholder={t('aiws.sparse.dirsPh')}
+                        value={presetEdit.dirs}
+                        onChange={(e) => setPresetEdit({ ...presetEdit, dirs: e.target.value })}
+                      />
+                      {presetErr && <p className="aiws-note aiws-err">{presetErr}</p>}
+                      <div className="aiws-modes">
+                        <button type="button" className="btn sec" onClick={() => setPresetEdit(null)}>
+                          {t('dlg.cancel')}
+                        </button>
+                        <button type="button" className="btn pri" data-aiws="sparse-save" onClick={() => void savePreset()}>
+                          {t('aiws.cp.save')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="aiws-note">{t('aiws.sparse.note')}</p>
+                </div>
+              )}
+              {local && yaml.found && (
+                <div className="aiws-field" data-aiws="new-yaml">
+                  <span>orca.yaml</span>
+                  {yaml.invalid ? (
+                    <p className="aiws-note aiws-err">{t('aiws.yaml.invalid')}</p>
+                  ) : (
+                    <>
+                      {(yaml.setup || yaml.archive) && (
+                        <label className="aiws-ext-src-row">
+                          <input type="checkbox" data-aiws="new-yaml-scripts" checked={useScripts} onChange={(e) => setUseScripts(e.target.checked)} />
+                          <span>
+                            {t('aiws.yaml.use')}
+                            {` (${[yaml.setup && 'setup', yaml.archive && 'archive'].filter(Boolean).join(' · ')})`}
+                            {[yaml.setup, yaml.archive].some((x) => x && !x.trusted) ? ` — ${t('aiws.yaml.needsApproval')}` : ''}
+                          </span>
+                        </label>
+                      )}
+                      {yaml.sharedDirectories?.length ? <p className="aiws-note">{t('aiws.yaml.shared').replace('{dirs}', yaml.sharedDirectories.join(', '))}</p> : null}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -298,7 +489,7 @@ export function NewWorkCard({ initialRepoId, onClose }: { initialRepoId?: string
         <button type="button" className="btn sec" data-aiws="new-cancel" onClick={onClose}>
           {t('aiws.new.cancel')}
         </button>
-        <button type="button" className="btn pri" data-aiws="new-create" disabled={!canCreate} onClick={create}>
+        <button type="button" className="btn pri" data-aiws="new-create" disabled={!canCreate} onClick={createClick}>
           {t('aiws.new.create')}
         </button>
       </div>

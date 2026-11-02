@@ -2,14 +2,21 @@
 // Electron 을 모른다(시험이 임시 git 저장소로 바로 돈다). IPC 는 feature.ts 가 건다.
 // Orca 원본(orcaRef 7a7f46f8a3): src/main/ipc/worktree-remote.ts(createLocalWorktree 의 이름 고르기·경로 확인),
 // src/main/ipc/created-worktree-reconciliation.ts(생성 확인), src/main/runtime/runtime-local-worktree-materialization.ts(.worktreeinclude 복사).
+// 3차(orcaRef ec112c6b01): orca.yaml(WS-23 — 공유 폴더·setup·archive), 중첩 워크스페이스(WS-24 — 부모 기록), 정리 화면(WS-25 — git 상태),
+// 디스크 사용량(WS-26 — utility process 로 재기), sparse checkout(WS-27 — 프리셋·생성).
+import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { ProjectStore } from './ProjectStore'
 import { computeWorkspaceRoot, computeWorktreePath, ensurePathWithinWorkspace, getDefaultWorkspaceDir } from './paths'
 import {
   addWorktree,
+  applySparseCheckout,
   branchExists,
+  checkIgnoredPaths,
+  cleanupGitInfo,
   copyIncludePaths,
   deleteBranchAfterRemoval,
   forceDeleteBranch,
@@ -33,7 +40,12 @@ import {
   sanitizeWorktreeName,
   worktreeCreateCandidate,
   type BaseRef,
+  type CleanupGitInfo,
   type CreateWorktreeArgs,
+  type DiskUsage,
+  type OrcaYamlPreview,
+  type SparsePreset,
+  normalizeSparseDirectories,
   type CreateWorktreeProgressEvent,
   type CreateWorktreeResult,
   type GitWorktreeInfo,
@@ -58,6 +70,8 @@ import { creatureNameTier, normalizeSuggestedName, suggestionPathBasename } from
 import { isAgentId } from '@shared/agents'
 import { remoteAddWorktree, remoteBaseRefs, remoteGitRun, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../managed/remoteWorktrees'
 import { sameRemotePath } from '@shared/runOn'
+import { ARCHIVE_TIMEOUT_MS, SETUP_TIMEOUT_MS, readOrcaYaml, runOrcaScript, scriptHash } from './orcaYaml'
+import { scanDiskUsage } from './diskUsage'
 
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: 'notFound'; message: string }
 export type ListWorktreesResult = { ok: true; worktrees: Worktree[] } | { ok: false; message: string }
@@ -72,7 +86,15 @@ export type WorktreeServiceDeps = {
   warn?: (msg: string) => void
   /** M8 DM-04: 원격 저장소(project.host)의 git 을 돌릴 길. 없으면 원격 프로젝트는 목록·생성이 실패로 답한다. */
   remote?: (hostKey: string) => RemoteRun
+  /** 3차 WS-26 디스크 사용량 재기 — 앱은 utility process(feature.ts), 시험은 기본값(같은 프로세스). */
+  scanDisk?: (paths: string[]) => Promise<DiskUsage[]>
 }
+
+/** 3차 WS-23 승인 기록 상한(프로젝트마다) — 오래된 것부터 버린다. */
+const TRUSTED_SCRIPTS_MAX = 50
+const SPARSE_PRESETS_MAX = 50
+/** 실패한 setup·archive 의 출력 꼬리(알림·대화상자에 보일 만큼). */
+const tail = (s: string, n = 600): string => (s.length > n ? '…' + s.slice(-n) : s).trim()
 
 const shortBranchOf = (ref: string): string => ref.replace(/^refs\/heads\//, '')
 
@@ -120,6 +142,35 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
     } catch (e) {
       return fail(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  /** WS-23 orca.yaml 공유 폴더 중 본 폴더에 있는 **폴더**이고 gitignore 된 것만(Orca: 파일·없는 것·추적되는 것은 건너뜀). */
+  async function existingIgnoredDirs(repoPath: string, dirs: readonly string[]): Promise<string[]> {
+    const exists: string[] = []
+    for (const d of dirs) if ((await stat(join(repoPath, d)).catch(() => null))?.isDirectory()) exists.push(d)
+    if (exists.length === 0) return []
+    const ignored = new Set(await checkIgnoredPaths(repoPath, exists).catch(() => []))
+    return exists.filter((d) => ignored.has(d))
+  }
+
+  /** WS-23 새 워크트리의 setup — 없음·승인 안 됨·돌림(wait = wait-for-setup 이면 끝나야 done). */
+  async function setupPlan(project: Project, worktreePath: string): Promise<{ kind: 'run'; script: string; wait: boolean } | { kind: 'untrusted' } | null> {
+    const y = (await readOrcaYaml(worktreePath)).yaml
+    const script = y?.scripts.setup
+    if (!script) return null
+    if (!(project.trustedScripts ?? []).includes(scriptHash(script))) return { kind: 'untrusted' }
+    return { kind: 'run', script, wait: y?.setupAgentStartupPolicy === 'wait-for-setup' }
+  }
+
+  /** setup 을 돌리고 실패면 사유(출력 꼬리), 성공이면 null. 시간 상한 30분. */
+  async function runSetup(script: string, rootPath: string, worktreePath: string, onOutput?: (s: string) => void): Promise<string | null> {
+    const r = await runOrcaScript(script, { cwd: worktreePath, rootPath, timeoutMs: SETUP_TIMEOUT_MS, platform, onOutput }).catch((e: unknown) => ({
+      code: 1,
+      stdout: '',
+      stderr: e instanceof Error ? e.message : String(e),
+      error: null
+    }))
+    return r.code === 0 ? null : `exit ${r.code}: ${tail(`${r.stdout}${r.stderr}`) || String(r.error)}`
   }
 
   async function listFor(project: Project): Promise<ListWorktreesResult> {
@@ -228,6 +279,13 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
         picked = { path, branch }
       }
       if (!picked) return fail({ ok: false, reason: 'collision', message: sanitized })
+      // WS-27 sparse 폴더(Orca normalizeSparseDirectories — 절대·.. 는 거절).
+      let sparse: string[] = []
+      try {
+        sparse = Array.isArray(args.sparseDirectories) ? normalizeSparseDirectories(args.sparseDirectories.filter((x): x is string => typeof x === 'string')).slice(0, 500) : []
+      } catch (e) {
+        return fail({ ok: false, reason: 'invalidName', message: e instanceof Error ? e.message : String(e) })
+      }
 
       const pending: PendingCreation = { creationId, repoId, repoPath: project.path, ...picked, startedAt: Date.now(), pathWasFree: true }
       deps.store.beginPending(pending)
@@ -236,11 +294,14 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       deps.emit({ creationId, repoId, phase: 'start', path: picked.path, branch: picked.branch })
       try {
         deps.emit({ creationId, repoId, phase: 'creating' })
-        const r = await addWorktree(project.path, picked.path, picked.branch, args.baseBranch || undefined, {
+        let r = await addWorktree(project.path, picked.path, picked.branch, args.baseBranch || undefined, {
           signal: controller.signal,
           onCheckoutProgress: (checkout) => deps.emit({ creationId, repoId, phase: 'creating', checkout }),
-          onOutput: (text) => deps.emit({ creationId, repoId, phase: 'output', text })
+          onOutput: (text) => deps.emit({ creationId, repoId, phase: 'output', text }),
+          noCheckout: sparse.length > 0
         })
+        // WS-27 파일 없이 만든 뒤 고른 폴더만 체크아웃(Orca addSparseWorktree). 실패하면 반쯤 만든 것을 치운다(아래).
+        if (r.code === 0 && sparse.length > 0) r = await applySparseCheckout(picked.path, picked.branch, sparse, controller.signal)
         if (r.code !== 0) {
           await cleanupFailedCreation(pending)
           if (controller.signal.aborted) return fail({ ok: false, reason: 'canceled', message: picked.path })
@@ -254,7 +315,24 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
         // 만든 링크는 메타에 남긴다 — 나중에 설정이 바뀌어도 지울 때 그 링크를 먼저 끊는다.
         const shared = (project.sharedPaths ?? []).filter(isSafeIncludePath)
         const links = shared.length > 0 ? await linkSharedPaths(project.path, created.path, shared, platform) : { linked: [], failed: [] }
-        deps.store.updateMeta(composeWorktreeId(repoId, created.path), { createdAt: Date.now(), ...(links.linked.length > 0 ? { linkedPaths: links.linked } : {}) })
+        // WS-23 orca.yaml worktree.sharedDirectories — 본 폴더의 orca.yaml, 있고 gitignore 된 **폴더**만, 설정 경로 다음(Orca 순서). 늘 링크.
+        const primaryYaml = (await readOrcaYaml(project.path)).yaml
+        const yamlDirs = await existingIgnoredDirs(project.path, primaryYaml?.worktree?.sharedDirectories ?? [])
+        if (yamlDirs.length > 0) {
+          const y = await linkSharedPaths(project.path, created.path, yamlDirs, platform)
+          links.linked.push(...y.linked)
+          links.failed.push(...y.failed)
+        }
+        // WS-24 부모 — 같은 프로젝트에 지금 있는 작업 단위만. 부모의 createdAt 을 같이 남겨 경로 재사용을 가른다(Orca instanceId).
+        const parent = typeof args.parentWorktreeId === 'string' ? listed.find((w) => composeWorktreeId(repoId, w.path) === args.parentWorktreeId) : undefined
+        const parentId = parent ? composeWorktreeId(repoId, parent.path) : undefined
+        const createdId = composeWorktreeId(repoId, created.path)
+        deps.store.updateMeta(createdId, {
+          createdAt: Date.now(),
+          ...(links.linked.length > 0 ? { linkedPaths: links.linked } : {}),
+          ...(parentId && parentId !== createdId ? { parentId, parentCreatedAt: deps.store.meta(parentId)?.createdAt } : {}),
+          ...(sparse.length > 0 ? { sparseDirectories: sparse } : {})
+        })
         // .worktreeinclude(Orca 기본값 — 파일이 있을 때만, gitignore 된 것만). 실패해도 생성은 성공이다.
         const skipped = links.failed.map((p) => `${p} (link)`)
         const include = await resolveWorktreeIncludePaths(project.path, warn)
@@ -264,7 +342,25 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
         }
         const includeCopyWarning = skipped.length > 0 ? skipped.join(', ') : undefined
         const worktree = withMeta(project, toWorktree(repoId, created))
+        // WS-23 setup — **새 워크트리의** orca.yaml(Orca: setup·정책은 새 체크아웃의 판). 승인한 내용과 글자까지 같을 때만 돈다.
+        const setup = args.runSetup === true ? await setupPlan(project, created.path) : null
+        if (setup?.kind === 'untrusted') {
+          deps.emit({ creationId, repoId, phase: 'done', worktree })
+          return { ok: true, worktree, ...(includeCopyWarning ? { includeCopyWarning } : {}), setupWarning: 'untrusted' }
+        }
+        if (setup?.kind === 'run' && setup.wait) {
+          deps.emit({ creationId, repoId, phase: 'setup' })
+          const sr = await runSetup(setup.script, project.path, created.path, (text) => deps.emit({ creationId, repoId, phase: 'output', text }))
+          deps.emit({ creationId, repoId, phase: 'done', worktree })
+          return { ok: true, worktree, ...(includeCopyWarning ? { includeCopyWarning } : {}), ...(sr ? { setupWarning: sr } : {}) }
+        }
         deps.emit({ creationId, repoId, phase: 'done', worktree })
+        // start-immediately(Orca 기본) — 에이전트는 바로 뜨고 setup 은 뒤에서. 끝을 setupDone 으로 알린다.
+        if (setup?.kind === 'run') {
+          void runSetup(setup.script, project.path, created.path).then((message) =>
+            deps.emit({ creationId, repoId, phase: 'setupDone', worktreeId: worktree.id, ok: !message, ...(message ? { message } : {}) })
+          )
+        }
         return { ok: true, worktree, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
       } finally {
         inflight.delete(creationId)
@@ -300,6 +396,13 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       const listed = (await listWorktrees(project.path)) ?? []
       const target = listed.find((w) => !w.isMainWorktree && same(w.path, worktreePath))
       if (!target) return { ok: false, message: worktreePath }
+      // WS-23 orca.yaml scripts.archive — **본 폴더의** orca.yaml, 워크트리에서, 지우기 전에(Orca runHook archive 120초). 승인한 것만.
+      // 실패하면 지우기를 막는다 — 사용자가 강제로 지우기를 고르면(force) 실패를 받아들이고 지운다(Orca: 호출자가 받아들이면 진행).
+      const archive = (await readOrcaYaml(project.path)).yaml?.scripts.archive
+      if (archive && (project.trustedScripts ?? []).includes(scriptHash(archive))) {
+        const ar = await runOrcaScript(archive, { cwd: target.path, rootPath: project.path, timeoutMs: ARCHIVE_TIMEOUT_MS, platform })
+        if (ar.code !== 0 && force !== true) return { ok: false, message: `orca.yaml scripts.archive (exit ${ar.code}): ${tail(`${ar.stdout}${ar.stderr}`) || String(ar.error)}` }
+      }
       // WS-20 링크부터 끊는다 — 만들 때 남긴 것 + 지금 설정(손으로 만든 링크도). 진짜 폴더·파일은 안 건드린다.
       const linked = deps.store.meta(composeWorktreeId(repoId, target.path))?.linkedPaths ?? []
       await unlinkSharedPaths(target.path, [...new Set([...linked, ...(project.sharedPaths ?? [])])])
@@ -408,6 +511,95 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
       }
       const { linkedPaths: _l, ...meta } = deps.store.updateMeta(worktreeId, next)
       return meta
+    },
+
+    // ── 3차 WS-23 orca.yaml — 새 작업 카드가 미리 보고 승인한다 ──
+    /** 본 폴더의 orca.yaml 요약(로컬 git 프로젝트만 — 원격·폴더는 found false). */
+    async orcaYamlPreview(repoId: unknown): Promise<OrcaYamlPreview> {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      if (!project || project.kind !== 'git' || project.host) return { found: false }
+      const { found, yaml } = await readOrcaYaml(project.path)
+      if (!found) return { found: false }
+      if (!yaml) return { found: true, invalid: true }
+      const trusted = new Set(project.trustedScripts ?? [])
+      const entry = (script: string | undefined) => (script ? { script, hash: scriptHash(script), trusted: trusted.has(scriptHash(script)) } : undefined)
+      const setup = entry(yaml.scripts.setup)
+      const archive = entry(yaml.scripts.archive)
+      return {
+        found: true,
+        ...(setup ? { setup } : {}),
+        ...(archive ? { archive } : {}),
+        ...(yaml.setupAgentStartupPolicy ? { setupAgentStartupPolicy: yaml.setupAgentStartupPolicy } : {}),
+        ...(yaml.worktree ? { sharedDirectories: yaml.worktree.sharedDirectories } : {})
+      }
+    },
+
+    /** 사용자가 본 스크립트를 승인 — 지금 본 폴더 orca.yaml 의 setup·archive 와 같은 hash 만 받는다(렌더러가 아무 hash 나 못 심게). */
+    async trustOrcaScripts(repoId: unknown, hashes: unknown): Promise<boolean> {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      if (!project || project.kind !== 'git' || project.host || !Array.isArray(hashes)) return false
+      const y = (await readOrcaYaml(project.path)).yaml
+      const current = [y?.scripts.setup, y?.scripts.archive].filter((x): x is string => !!x).map(scriptHash)
+      const add = hashes.filter((h): h is string => typeof h === 'string' && current.includes(h))
+      if (add.length === 0) return false
+      const next = [...(project.trustedScripts ?? []).filter((h) => !add.includes(h)), ...add].slice(-TRUSTED_SCRIPTS_MAX)
+      deps.store.updateProject(project.id, { trustedScripts: next })
+      return true
+    },
+
+    // ── 3차 WS-27 sparse 프리셋(Orca sparsePresets:list/save/remove) ──
+    listSparsePresets: (repoId: unknown): SparsePreset[] => (typeof repoId === 'string' ? (deps.store.get(repoId)?.sparsePresets ?? []) : []),
+    saveSparsePreset(repoId: unknown, input: unknown): SparsePreset | { error: string } {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      const u = (input && typeof input === 'object' ? input : {}) as { id?: unknown; name?: unknown; directories?: unknown }
+      if (!project || project.kind !== 'git') return { error: String(repoId) }
+      const name = typeof u.name === 'string' ? u.name.trim().slice(0, 100) : ''
+      if (!name) return { error: 'name' }
+      let directories: string[]
+      try {
+        directories = normalizeSparseDirectories(Array.isArray(u.directories) ? u.directories.filter((x): x is string => typeof x === 'string') : [])
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) }
+      }
+      if (directories.length === 0) return { error: 'directories' }
+      const list = project.sparsePresets ?? []
+      const existing = typeof u.id === 'string' ? list.find((p) => p.id === u.id) : undefined
+      const now = Date.now()
+      const preset: SparsePreset = { id: existing?.id ?? randomUUID(), name, directories: directories.slice(0, 500), createdAt: existing?.createdAt ?? now, updatedAt: now }
+      deps.store.updateProject(project.id, { sparsePresets: [...list.filter((p) => p.id !== preset.id), preset].slice(-SPARSE_PRESETS_MAX) })
+      return preset
+    },
+    removeSparsePreset(repoId: unknown, presetId: unknown): boolean {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      if (!project || typeof presetId !== 'string') return false
+      deps.store.updateProject(project.id, { sparsePresets: (project.sparsePresets ?? []).filter((p) => p.id !== presetId) })
+      return true
+    },
+
+    // ── 3차 WS-25 정리 화면 — 연결 워크트리마다 git 상태(로컬만 — 원격은 행마다 SSH 3번이라 뺐다) ──
+    async cleanupScan(repoId: unknown): Promise<CleanupGitInfo[]> {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      if (!project || project.kind !== 'git' || project.host) return []
+      const listed = (await listWorktrees(project.path)) ?? []
+      const mainHead = listed.find((w) => w.isMainWorktree)?.head ?? ''
+      const out: CleanupGitInfo[] = []
+      const targets = listed.filter((w) => !w.isMainWorktree && !w.isBare && !w.prunable)
+      // 넷씩 — 저장소 하나에 git 이 수십 개 겹쳐 돌지 않게.
+      for (let i = 0; i < targets.length; i += 4) out.push(...(await Promise.all(targets.slice(i, i + 4).map((w) => cleanupGitInfo(w.path, mainHead)))))
+      return out
+    },
+
+    // ── 3차 WS-26 디스크 사용량 — 목록에 있는 로컬 작업 폴더만 잰다(렌더러 경로 불신) ──
+    async diskUsage(repoId: unknown, paths: unknown): Promise<DiskUsage[]> {
+      const project = typeof repoId === 'string' ? deps.store.get(repoId) : undefined
+      if (!project || project.host || !Array.isArray(paths)) return []
+      const known = project.kind === 'folder' ? [project.path] : ((await listWorktrees(project.path)) ?? []).filter((w) => !w.isBare).map((w) => w.path)
+      const ok = paths.filter((p): p is string => typeof p === 'string' && known.some((k) => same(k, p)))
+      if (ok.length === 0) return []
+      if (deps.scanDisk) return deps.scanDisk(ok)
+      const out: DiskUsage[] = []
+      for (const p of ok) out.push(await scanDiskUsage(p))
+      return out
     },
 
     /** 기동 때 한 번 — 앱이 죽어 남은 생성 기록을 git 목록과 맞춰 정리한다(WS-03). */

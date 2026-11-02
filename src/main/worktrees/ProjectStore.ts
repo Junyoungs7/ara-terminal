@@ -81,10 +81,11 @@ export class ProjectStore {
   }
 
   /** M10 R2 WS-19·20 프로젝트 설정(아라 밖 워크트리 보이기·공유 경로). 값 검사는 service 가 한다. undefined 칸은 지운다. */
-  updateProject(id: string, updates: Pick<Project, 'externalVisibility' | 'shownExternalPaths' | 'sharedPaths'>): Project | null {
+  // 3차: trustedScripts(WS-23 orca.yaml 승인)·sparsePresets(WS-27).
+  updateProject(id: string, updates: Pick<Project, 'externalVisibility' | 'shownExternalPaths' | 'sharedPaths' | 'trustedScripts' | 'sparsePresets'>): Project | null {
     const p = this.get(id)
     if (!p) return null
-    for (const k of ['externalVisibility', 'shownExternalPaths', 'sharedPaths'] as const) {
+    for (const k of ['externalVisibility', 'shownExternalPaths', 'sharedPaths', 'trustedScripts', 'sparsePresets'] as const) {
       if (!(k in updates)) continue
       const v = updates[k]
       if (v === undefined || (Array.isArray(v) && v.length === 0)) delete p[k]
@@ -149,6 +150,11 @@ export class ProjectStore {
     if (!next.workspaceStatus) delete next.workspaceStatus
     if (!next.createdAt) delete next.createdAt
     if (!next.linkedPaths?.length) delete next.linkedPaths
+    if (!next.parentId) {
+      delete next.parentId
+      delete next.parentCreatedAt
+    } else if (next.parentCreatedAt === undefined) delete next.parentCreatedAt
+    if (!next.sparseDirectories?.length) delete next.sparseDirectories
     if (Object.keys(next).length === 0) delete this.data.meta[worktreeId]
     else this.data.meta[worktreeId] = next
     this.flush()

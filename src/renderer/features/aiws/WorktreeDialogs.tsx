@@ -8,7 +8,22 @@ import { EXTERNAL_SOURCES, WORKSPACE_STATUSES, WORKTREE_COMMENT_MAX, externalVis
 import { t } from '../../i18n'
 import { useAiwsStore, type PreservedBranchItem } from './store'
 
-function Modal({ title, onClose, children, foot, danger }: { title: string; onClose: () => void; children: ReactNode; foot: ReactNode; danger?: boolean }): JSX.Element {
+export function Modal({
+  title,
+  onClose,
+  children,
+  foot,
+  danger,
+  className
+}: {
+  title: string
+  onClose: () => void
+  children: ReactNode
+  foot: ReactNode
+  danger?: boolean
+  /** 3차 정리 화면처럼 넓은 대화상자. */
+  className?: string
+}): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
@@ -21,7 +36,7 @@ function Modal({ title, onClose, children, foot, danger }: { title: string; onCl
   }, [onClose])
   return (
     <div className="overlay open dlg-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={'modal sm aiws-dlg' + (danger ? ' danger' : '')} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={'modal sm aiws-dlg' + (danger ? ' danger' : '') + (className ? ' ' + className : '')} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-hd">
           <h2>{title}</h2>
         </div>

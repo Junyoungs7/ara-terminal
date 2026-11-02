@@ -30,10 +30,55 @@ export type Project = {
   shownExternalPaths?: string[]
   /** M10 R2 WS-20 공유 경로(Orca `Repo.symlinkPaths` — Settings › Repository › Worktree Shared Paths). 새 워크트리에 본 폴더 것을 링크로. */
   sharedPaths?: string[]
+  /** 3차 WS-27 sparse checkout 프리셋(Orca `sparsePresetsByRepo` — 프로젝트별 폴더 목록). */
+  sparsePresets?: SparsePreset[]
+  /** 3차 WS-23 사용자가 승인한 orca.yaml 스크립트(setup·archive)의 sha256 — 같은 내용이면 다시 묻지 않는다(Orca saved trust). */
+  trustedScripts?: string[]
 }
 
 /** M10 R2 repos:update 가 받는 칸(WS-19·20). 빈 배열·undefined = 지움. */
 export type ProjectUpdate = Partial<Pick<Project, 'externalVisibility' | 'shownExternalPaths' | 'sharedPaths'>>
+
+/** 3차 WS-27 Orca `SparsePreset`(src/shared/worktree/create-types.ts) — repoId 는 담는 프로젝트가 안다. */
+export type SparsePreset = { id: string; name: string; directories: string[]; createdAt: number; updatedAt: number }
+
+/** Orca normalizeSparseDirectories(src/main/ipc/sparse-checkout-directories.ts) — 저장소 기준 상대 경로만, 겹침 제거. 절대·`..` 는 던진다. */
+export function normalizeSparseDirectories(directories: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const bad = (): never => {
+    throw new Error('Sparse checkout directories must be repo-relative paths.')
+  }
+  return directories
+    .map((entry) => entry.trim())
+    .map((entry) => {
+      if (entry.startsWith('/') || entry.startsWith('\\') || /^[A-Za-z]:/.test(entry)) bad()
+      return entry.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+    })
+    .filter((entry) => entry.length > 0 && entry !== '.')
+    .filter((entry) => {
+      if (entry.split('/').includes('..')) bad()
+      if (seen.has(entry)) return false
+      seen.add(entry)
+      return true
+    })
+}
+
+/** 3차 WS-23 orca.yaml(Orca src/shared/orca-yaml.ts 의 아라가 쓰는 칸). defaultTabs·issueCommand·environmentRecipes 는 읽지 않는다(보고서). */
+export type OrcaYaml = {
+  scripts: { setup?: string; archive?: string }
+  setupAgentStartupPolicy?: 'start-immediately' | 'wait-for-setup'
+  worktree?: { sharedDirectories: string[] }
+}
+/** 새 작업 카드가 보는 orca.yaml 요약 — 본 폴더의 것. trusted = 그 스크립트를 전에 승인했다. hash 는 승인할 때 그대로 돌려준다. */
+export type OrcaYamlPreview = {
+  found: boolean
+  /** 파일은 있는데 못 읽었다(YAML 오류·중복 키·크기) — Orca 처럼 통째로 무시한다. */
+  invalid?: boolean
+  setup?: { script: string; hash: string; trusted: boolean }
+  archive?: { script: string; hash: string; trusted: boolean }
+  setupAgentStartupPolicy?: OrcaYaml['setupAgentStartupPolicy']
+  sharedDirectories?: string[]
+}
 
 /** M10 WS-15 Orca `ProjectGroup`(src/shared/project-group-types.ts)의 부분집합 — 이름·접힘만(중첩·색·폴더 스캔은 뺐다). */
 export type ProjectGroup = { id: string; name: string; isCollapsed: boolean; createdAt: number }
@@ -53,6 +98,11 @@ export type WorktreeMeta = {
   createdAt?: number
   /** WS-20 만들 때 링크로 만든 공유 경로 — 지울 때 링크를 먼저 끊는다. main 만 쓴다(목록엔 안 싣는다). */
   linkedPaths?: string[]
+  /** 3차 WS-24 중첩 워크스페이스 — 부모 작업 단위 id 와 그 부모의 createdAt(Orca lineage parentWorktreeInstanceId — 같은 경로를 다시 쓰면 낡은 연결). */
+  parentId?: string
+  parentCreatedAt?: number
+  /** 3차 WS-27 sparse checkout 으로 만든 폴더 목록(Orca `WorktreeMeta.sparseDirectories`). */
+  sparseDirectories?: string[]
 }
 /** 바꿀 칸만. sleep: null = 깨움(IPC 는 undefined 를 못 실어 null 로 지운다). comment ''·workspaceStatus null = 지움. */
 export type WorktreeMetaUpdate = { isArchived?: boolean; sleep?: SleepTab[] | null; comment?: string; workspaceStatus?: WorkspaceStatus | null }
@@ -101,10 +151,16 @@ export type CreateWorktreeArgs = {
   creationId: string
   /** M10 WS-14 이름 칸을 비워 자동 이름(바다 생물)을 쓴다 — main 이 지운 이름(retiredNames)을 건너뛴다(Orca nameWasGenerated). */
   nameWasGenerated?: boolean
+  /** 3차 WS-24 부모 작업 단위(같은 프로젝트). Orca CreateWorktreeArgs.parentWorktreeId. */
+  parentWorktreeId?: string
+  /** 3차 WS-27 sparse checkout 폴더(Orca sparseCheckout.directories). 비면 전체. */
+  sparseDirectories?: string[]
+  /** 3차 WS-23 orca.yaml 설정 스크립트를 돌린다(Orca --setup run|skip). 승인(trustedScripts)된 내용일 때만 main 이 실제로 돈다. */
+  runSetup?: boolean
 }
 
 export type CreateWorktreeResult =
-  | { ok: true; worktree: Worktree; includeCopyWarning?: string }
+  | { ok: true; worktree: Worktree; includeCopyWarning?: string; setupWarning?: string }
   | { ok: false; reason: 'notFound' | 'notRepo' | 'invalidName' | 'collision' | 'canceled' | 'git'; message: string }
 
 /**
@@ -117,7 +173,11 @@ export type CreateWorktreeProgressEvent = { creationId: string; repoId: string }
   | { phase: 'creating'; checkout?: WorktreeCheckoutProgress | null }
   | { phase: 'output'; text: string }
   | { phase: 'copying' }
+  /** 3차 WS-23 orca.yaml 설정 스크립트 실행 중(wait-for-setup — 끝나야 done). */
+  | { phase: 'setup' }
   | { phase: 'done'; worktree: Worktree }
+  /** 3차 WS-23 start-immediately 로 done 뒤에 돈 설정 스크립트가 끝났다(실패면 렌더러가 알림). */
+  | { phase: 'setupDone'; worktreeId: string; ok: boolean; message?: string }
   | { phase: 'failed'; reason: Exclude<CreateWorktreeResult, { ok: true }>['reason']; message: string }
 )
 
@@ -531,3 +591,54 @@ export async function resolveWorktreeAddBaseRef(baseRef: string, refExists: (qua
   for (const candidate of candidates) if (await refExists(candidate)) return candidate
   return baseRef
 }
+
+// ── 3차 WS-24 중첩 워크스페이스(Orca src/shared/resolved-worktree-lineage.ts 의 핵심) ──
+
+/**
+ * 유효한 부모 → 자식 id 목록. 같은 프로젝트(= 같은 호스트)만, 부모의 createdAt 이 기록과 같아야(경로 재사용이면 낡은 연결),
+ * 고리(cycle)에 든 연결은 버린다(Orca isValidResolvedWorktreeLineageEdge · getCyclicLineageChildKeys).
+ */
+export function lineageChildren(worktrees: readonly Pick<Worktree, 'id' | 'repoId' | 'parentId' | 'parentCreatedAt' | 'createdAt'>[]): Map<string, string[]> {
+  const byId = new Map(worktrees.map((w) => [w.id, w]))
+  const parentOf = new Map<string, string>()
+  for (const w of worktrees) {
+    const p = w.parentId ? byId.get(w.parentId) : undefined
+    if (!p || p.id === w.id || p.repoId !== w.repoId || (p.createdAt ?? 0) !== (w.parentCreatedAt ?? 0)) continue
+    parentOf.set(w.id, p.id)
+  }
+  // 고리 — 부모를 따라 올라가다 같은 줄을 다시 만나면 그 고리에 든 연결만 버린다(고리로 들어가는 꼬리는 산다 — Orca getCyclicLineageChildKeys).
+  for (const start of [...parentOf.keys()]) {
+    const path: string[] = []
+    for (let cur: string | undefined = start; cur !== undefined && parentOf.has(cur); cur = parentOf.get(cur)) {
+      const at = path.indexOf(cur)
+      if (at !== -1) {
+        for (const id of path.slice(at)) parentOf.delete(id)
+        break
+      }
+      path.push(cur)
+    }
+  }
+  const out = new Map<string, string[]>()
+  for (const [child, parent] of parentOf) out.set(parent, [...(out.get(parent) ?? []), child])
+  return out
+}
+
+/** 자손 id — 깊은 것부터(지울 때 자식부터 지운다). */
+export function lineageDescendants(children: ReadonlyMap<string, readonly string[]>, id: string): string[] {
+  const out: string[] = []
+  const walk = (x: string): void => {
+    for (const c of children.get(x) ?? []) {
+      walk(c)
+      out.push(c)
+    }
+  }
+  walk(id)
+  return out
+}
+
+// ── 3차 WS-25·26 정리 화면·디스크 사용량 ──
+
+/** 정리 화면 한 줄의 git 상태(Orca workspace-cleanup-scan 의 아라판). merged = 본 폴더 브랜치에 다 들어감. */
+export type CleanupGitInfo = { path: string; dirty: number; merged: boolean; lastCommitAt: number | null }
+/** 디스크 사용량(Orca WorkspaceSpaceWorktree 의 아라판) — 링크는 따라가지 않는다(공유 경로 node_modules 를 두 번 세지 않게). */
+export type DiskUsage = { path: string; ok: boolean; bytes: number; entries: number; truncated: boolean; top: { name: string; bytes: number }[] }

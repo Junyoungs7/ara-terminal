@@ -4,7 +4,7 @@ import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { EvApi } from '@shared/ipc'
 import type { CreateWorktreeArgs, CreateWorktreeProgressEvent, ProjectUpdate, WorktreeMetaUpdate } from '@shared/worktrees'
 
-export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups'> = {
+export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups' | 'sparsePresets'> = {
   repos: {
     list: () => ipcRenderer.invoke('repos:list'),
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
@@ -12,7 +12,15 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups
     addRemote: (hostKey: string, path: string) => ipcRenderer.invoke('repos:addRemote', { hostKey, path }),
     remove: (repoId: string) => ipcRenderer.invoke('repos:remove', { repoId }),
     searchBaseRefs: (repoId: string, query: string) => ipcRenderer.invoke('repos:searchBaseRefs', { repoId, query }),
-    update: (repoId: string, updates: ProjectUpdate) => ipcRenderer.invoke('repos:update', { repoId, updates })
+    update: (repoId: string, updates: ProjectUpdate) => ipcRenderer.invoke('repos:update', { repoId, updates }),
+    orcaYaml: (repoId: string) => ipcRenderer.invoke('repos:orcaYaml', { repoId }),
+    trustOrcaScripts: (repoId: string, hashes: string[]) => ipcRenderer.invoke('repos:trustOrcaScripts', { repoId, hashes })
+  },
+  // 3차 WS-27 Orca sparsePresets:*
+  sparsePresets: {
+    list: (repoId: string) => ipcRenderer.invoke('sparsePresets:list', { repoId }),
+    save: (repoId: string, preset: { id?: string; name: string; directories: string[] }) => ipcRenderer.invoke('sparsePresets:save', { repoId, preset }),
+    remove: (repoId: string, presetId: string) => ipcRenderer.invoke('sparsePresets:remove', { repoId, presetId })
   },
   worktrees: {
     list: (repoId: string) => ipcRenderer.invoke('worktrees:list', { repoId }),
@@ -23,6 +31,8 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups
     updateMeta: (worktreeId: string, updates: WorktreeMetaUpdate) => ipcRenderer.invoke('worktrees:updateMeta', { worktreeId, updates }),
     forceDeletePreservedBranch: (repoId: string, branchName: string, head: string) =>
       ipcRenderer.invoke('worktrees:forceDeletePreservedBranch', { repoId, branchName, head }),
+    cleanupScan: (repoId: string) => ipcRenderer.invoke('worktrees:cleanupScan', { repoId }),
+    diskUsage: (repoId: string, paths: string[]) => ipcRenderer.invoke('worktrees:diskUsage', { repoId, paths }),
     onCreateProgress: (cb: (e: CreateWorktreeProgressEvent) => void) => {
       const listener = (_e: IpcRendererEvent, d: CreateWorktreeProgressEvent) => cb(d)
       ipcRenderer.on('createWorktree:progress', listener)

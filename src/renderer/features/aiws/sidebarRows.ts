@@ -9,15 +9,17 @@
 // M10 R2: 숨은 아라 밖 워크트리(WS-19 — 줄에서 빼고 프로젝트 머리줄 아래 "숨은 워크트리 n개" 카드 한 줄, Orca hidden worktrees card).
 // M15 R2 WS-22: 호스트별 묶음(Orca host sections — 호스트 머리줄 아래 그 호스트의 고정·프로젝트 줄). 호스트가 둘 이상일 때만(로컬만이면 예전 그대로).
 //   호스트 순서·이름은 store/hostSections.ts(터미널 사이드바 그룹과 같은 구현).
-// 뺀 것: 그룹 중첩·계보(lineage) 들여쓰기·상태별 묶기·잠든 워크트리 숨기기(Orca 기본값 꺼짐)·수동 정렬.
-import type { Project, ProjectGroup, Worktree } from '@shared/worktrees'
+// 3차 WS-24 중첩 워크스페이스(Orca worktree-list lineage — 부모 아래 자식이 한 칸씩 들어가고, 부모 줄에 "N children" 칩, 접으면 자손을 숨김).
+//   프로젝트 묶음 안에서만 들인다(고정·한 목록·보관함은 평평하게). 부모가 이 묶음에 안 보이면(고정·숨김·검색) 자식은 맨 위 줄로.
+// 뺀 것: 그룹 중첩·상태별 묶기·잠든 워크트리 숨기기(Orca 기본값 꺼짐)·수동 정렬·끌어서 부모 바꾸기.
+import { lineageChildren, type Project, type ProjectGroup, type Worktree } from '@shared/worktrees'
 import { isMac } from '@shared/keymap'
 import type { PendingWorktreeCreation, SidebarGroupBy } from './store'
 import { LOCAL_HOST, type HostSection } from '../../store/hostSections'
 
 export type SidebarRow =
   | { kind: 'header'; key: string; group: 'pinned' | 'all' | 'repo' | 'group' | 'archived' | 'host'; repo?: Project; projectGroup?: ProjectGroup; host?: HostSection; collapsed?: boolean; depth?: number; count: number }
-  | { kind: 'item'; key: string; worktree: Worktree; repo: Project; pinned: boolean; showProject: boolean }
+  | { kind: 'item'; key: string; worktree: Worktree; repo: Project; pinned: boolean; showProject: boolean; depth?: number; childCount?: number; childrenCollapsed?: boolean }
   | { kind: 'pending'; key: string; creation: PendingWorktreeCreation }
   | { kind: 'hidden'; key: string; repo: Project; count: number }
 
@@ -35,7 +37,12 @@ export type SidebarInput = {
   hosts?: readonly HostSection[]
   /** 접은 호스트 key — 머리줄만 남는다. */
   collapsedHosts?: readonly string[]
+  /** 3차 WS-24 자식 줄을 접은 부모 id. */
+  collapsedLineage?: readonly string[]
 }
+
+/** WS-24 표시 깊이 상한 — 더 깊은 자손은 같은 칸에 선다(사이드바 폭). */
+export const LINEAGE_MAX_DEPTH = 3
 
 export const shortBranch = (w: Pick<Worktree, 'branch'>): string => w.branch.replace(/^refs\/heads\//, '')
 
@@ -105,7 +112,11 @@ export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
     return [
       { kind: 'header', key: `repo:${repo.id}`, group: 'repo', repo, depth, count: list.length },
       ...pend.map((p): SidebarRow => ({ kind: 'pending', key: `pending:${p.creationId}`, creation: p })),
-      ...list.map((w) => item(w, repo, false, false, `repo:${repo.id}`)),
+      ...nestLineage(list, input.worktreesByRepo[repo.id] ?? [], new Set(input.collapsedLineage ?? [])).map(({ w, depth, childCount, collapsed }) => ({
+        ...(item(w, repo, false, false, `repo:${repo.id}`) as Extract<SidebarRow, { kind: 'item' }>),
+        ...(depth > 0 ? { depth } : {}),
+        ...(childCount > 0 ? { childCount, childrenCollapsed: collapsed } : {})
+      })),
       ...(hidden > 0 && !q ? [{ kind: 'hidden', key: `hidden:${repo.id}`, repo, count: hidden } as const] : [])
     ]
   }
@@ -121,6 +132,34 @@ export function buildSidebarRows(input: SidebarInput): SidebarRow[] {
   }
   for (const repo of input.repos) if (!repo.groupId || !known.has(repo.groupId)) rows.push(...(projectBlock(repo, 0) ?? []))
   return rows
+}
+
+/**
+ * WS-24 보이는 줄(정렬된 것)을 부모 → 자식 순서로 다시 늘어놓는다. 계보는 프로젝트의 모든 작업 단위로 풀고(lineageChildren —
+ * 낡은 연결·고리 제외), 부모가 이 목록에 없으면 그 자식이 맨 위로 선다. 접은 부모의 자손은 빠진다. childCount = 보이는 자식 수.
+ */
+export function nestLineage(
+  list: readonly Worktree[],
+  all: readonly Worktree[],
+  collapsed: ReadonlySet<string>
+): { w: Worktree; depth: number; childCount: number; collapsed: boolean }[] {
+  const children = lineageChildren(all)
+  const shown = new Set(list.map((w) => w.id))
+  const parentOf = new Map<string, string>()
+  for (const [p, cs] of children) for (const c of cs) parentOf.set(c, p)
+  const byId = new Map(list.map((w) => [w.id, w]))
+  const out: { w: Worktree; depth: number; childCount: number; collapsed: boolean }[] = []
+  const visit = (w: Worktree, depth: number): void => {
+    const kids = (children.get(w.id) ?? []).filter((id) => shown.has(id)).map((id) => byId.get(id) as Worktree).sort(compareWorktrees)
+    const folded = collapsed.has(w.id)
+    out.push({ w, depth: Math.min(depth, LINEAGE_MAX_DEPTH), childCount: kids.length, collapsed: folded })
+    if (!folded) for (const k of kids) visit(k, depth + 1)
+  }
+  for (const w of list) {
+    const p = parentOf.get(w.id)
+    if (!p || !shown.has(p)) visit(w, 0)
+  }
+  return out
 }
 
 /** 호스트마다 그 호스트 저장소만으로 줄을 만들고 머리줄을 얹는다. 키에 호스트를 붙인다(고정·전체 머리줄이 호스트마다 하나씩 생긴다). */

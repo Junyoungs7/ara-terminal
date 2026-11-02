@@ -17,6 +17,7 @@ import {
   parseWorktreeList,
   resolveWorktreeAddBaseRef,
   type BaseRef,
+  type CleanupGitInfo,
   type GitWorktreeInfo,
   type PreservedBranch,
   type WorktreeCheckoutProgress
@@ -71,9 +72,10 @@ export async function addWorktree(
   worktreePath: string,
   branch: string,
   baseBranch: string | undefined,
-  opts: { signal?: AbortSignal; onCheckoutProgress?: (p: WorktreeCheckoutProgress | null) => void; onOutput?: (s: string) => void }
+  opts: { signal?: AbortSignal; onCheckoutProgress?: (p: WorktreeCheckoutProgress | null) => void; onOutput?: (s: string) => void; noCheckout?: boolean }
 ): Promise<RunResult> {
-  const args = ['worktree', 'add', '--no-track', '-b', branch, worktreePath]
+  // 3차 WS-27 sparse 는 파일을 안 쓰고 만든 뒤 고른 폴더만 체크아웃한다(Orca addWorktree 의 noCheckout).
+  const args = ['worktree', 'add', ...(opts.noCheckout ? ['--no-checkout'] : []), '--no-track', '-b', branch, worktreePath]
   if (baseBranch) {
     args.push(await resolveWorktreeAddBaseRef(baseBranch, async (ref) => (await git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], repoPath)).code === 0))
   }
@@ -281,4 +283,42 @@ export async function forceDeleteBranch(run: GitRun, branchName: string, head: s
   if (r.code !== 0) return { ok: false, message: `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.` }
   await run(['config', '--remove-section', `branch.${branchName}`])
   return { ok: true }
+}
+
+// ── 3차 WS-27 sparse checkout(Orca src/main/git/worktree-sparse-add.ts addSparseWorktree) ──
+
+/** --no-checkout 으로 만든 워크트리에 cone 모드로 고른 폴더만 체크아웃한다. 실패하면 git 의 말(지우기는 부르는 쪽이). */
+export async function applySparseCheckout(worktreePath: string, branch: string, directories: readonly string[], signal?: AbortSignal): Promise<RunResult> {
+  const steps = [
+    ['sparse-checkout', 'init', '--cone'],
+    ['sparse-checkout', 'set', '--', ...directories],
+    ['checkout', branch]
+  ]
+  let r: RunResult = { code: 0, stdout: '', stderr: '', error: null }
+  for (const args of steps) {
+    r = await git(args, worktreePath, { timeoutMs: WORKTREE_ADD_TIMEOUT_MS, signal })
+    if (r.code !== 0) return r
+  }
+  return r
+}
+
+// ── 3차 WS-25 정리 화면 git 상태(Orca workspace-cleanup-scan 의 아라판) ──
+
+/**
+ * 작업 단위 하나의 상태 — 커밋 안 한 변경 수(status --porcelain 줄 수)·본 폴더 HEAD 에 다 들어갔나(merge-base --is-ancestor)·마지막 커밋 시각.
+ * 못 읽은 칸은 보수적으로(변경 있음 1, 병합 안 됨) — 정리 화면이 지워도 되는 것처럼 보이지 않게.
+ */
+export async function cleanupGitInfo(worktreePath: string, mainHead: string): Promise<CleanupGitInfo> {
+  const [status, ancestor, last] = await Promise.all([
+    git(['status', '--porcelain', '--untracked-files=normal'], worktreePath),
+    mainHead ? git(['merge-base', '--is-ancestor', 'HEAD', mainHead], worktreePath) : Promise.resolve(null),
+    git(['log', '-1', '--format=%ct'], worktreePath)
+  ])
+  const ts = Number(last.stdout.trim())
+  return {
+    path: worktreePath,
+    dirty: status.code === 0 ? status.stdout.split(/\r?\n/).filter(Boolean).length : 1,
+    merged: ancestor?.code === 0,
+    lastCommitAt: last.code === 0 && ts > 0 ? ts * 1000 : null
+  }
 }
