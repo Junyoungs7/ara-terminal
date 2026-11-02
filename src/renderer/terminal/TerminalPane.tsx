@@ -111,11 +111,14 @@ type Comp = { items: string[]; index: number; left: number; y: number; up: boole
 // (실측: 163칸에서 찍힌 dir 출력을 66칸으로 줄이면 줄마다 빈 줄 2개가 끼어 줄 간격이 벌어진다).
 // conpty 는 리사이즈 때 화면을 스스로 다시 그리므로 xterm 쪽 리플로우는 꺼야 맞다.
 //
-// 끄는 스위치는 windowsMode 뿐이다. xterm 의 게이트는
-//   _isReflowEnabled = windowsPty?.buildNumber ? (conpty && buildNumber >= 21376) : !windowsMode
-// 라서, 실제 빌드번호(26200)를 정직하게 넘기면 리플로우가 켜진 채로 남아 증상이 그대로 재현된다.
-// deprecated 표기가 있지만 windowsPty 를 함께 주지 않는 한 유효하며, 현재 이 동작을 얻는 유일한 경로다.
+// 🔴 M15 R3(xterm 6): 끄던 스위치 `windowsMode` 가 없어지고 `windowsPty` 만 남았다. 게이트는
+//   _isReflowEnabled = windowsPty?.buildNumber ? (conpty && buildNumber >= 21376) : true
+// 라 **리플로우를 끄는 길은 21376 아래 빌드번호뿐**이다. 1 을 주면 xterm 5 windowsMode 와 같은 동작이다
+// (리플로우 끔 + 줄바꿈 추정 켬). 실제 빌드번호(26200)를 넘기면 리플로우가 켜져 위 증상이 재현된다(xterm 5 실측).
+// Orca(shared/xterm-conpty-options.ts)는 실제 빌드번호를 넘겨 리플로우를 켠 채 쓴다 — 아라는 실측 증상과
+// 스모크 'R3 진단②' 때문에 끈 쪽을 지킨다.
 // 원격(SSH)은 실제 pty 라 리플로우가 정상 동작하므로 적용하지 않는다.
+const CONPTY_NO_REFLOW = { backend: 'conpty', buildNumber: 1 } as const
 const isWindows = navigator.userAgent.includes('Windows')
 // mac 은 복사/붙여넣기 수식자가 ⌘ 다(Ctrl 은 셸 제어문자 그대로 유지).
 const isMacUA = navigator.userAgent.includes('Mac')
@@ -205,7 +208,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       cursorStyle: termPrefs.cursorStyle,
       cursorBlink: termPrefs.cursorBlink,
       allowProposedApi: true,
-      windowsMode: isWindows && local,
+      ...(isWindows && local ? { windowsPty: CONPTY_NO_REFLOW } : {}),
       scrollback: termPrefs.scrollback,
       theme: ansiTheme()
     })
@@ -784,8 +787,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
      *
      * main 이 먼저 만든 세션(탐색기 `아라` · MCP)은 칸이 정해지기 **전에** 마운트되어, 그 순간 호스트가
      * 아주 작다 — fit 이 9칸으로 맞췄다. main 은 1.0.14 부터 그런 치수를 pty·저장값에서 거르지만
-     * (`shared/termSize.ts`) **xterm 자신은 9칸이 된다.** 윈도우 로컬은 windowsMode 라 폭이 돌아와도
-     * **줄을 다시 접지 않으므로**, 그 순간 찍힌 프롬프트가 9칸에서 접힌 채 굳었다.
+     * (`shared/termSize.ts`) **xterm 자신은 9칸이 된다.** 윈도우 로컬은 리플로우가 꺼져 있으면(xterm 5
+     * windowsMode · xterm 6 CONPTY_NO_REFLOW) 폭이 돌아와도 **줄을 다시 접지 않으므로**, 그 순간 찍힌 프롬프트가 9칸에서 접힌 채 굳었다.
      * 쓸 만한 크기가 나올 때까지 기본값(80×24)으로 두고 기다린다 — ResizeObserver 가 곧 다시 부른다.
      */
     // 초기 fit + pty에 초기 크기 전달.

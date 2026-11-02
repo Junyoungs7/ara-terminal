@@ -2071,15 +2071,15 @@ const checks = []
   checks.push(['R3 진단①: 재생 버퍼의 DA 질의에는 응답하지 않는다', daReplayed === 0])
   checks.push(['R3 진단①: 새 로컬 셸 프롬프트에 `[?…c` 이스케이프 잔재 없음', freshResidue.hasEscape === false])
 
-  // ── R3 회귀 진단② windowsMode 유지 ──
+  // ── R3 회귀 진단② conpty 리플로우 끔 유지(xterm 5 windowsMode → M15 R3 xterm 6 windowsPty.buildNumber < 21376) ──
   // conpty 는 줄을 터미널 폭까지 공백으로 채워 보낸다. xterm 리플로우가 켜져 있으면 창을 좁힐 때
-  // 그 padding 까지 접혀 줄 사이에 빈 줄이 끼고 줄 간격이 벌어진다. 로컬 세션은 windowsMode 로 꺼 둔다.
+  // 그 padding 까지 접혀 줄 사이에 빈 줄이 끼고 줄 간격이 벌어진다. 로컬 세션은 windowsPty 빌드번호 1 로 꺼 둔다.
   const wmode = await win.webContents.executeJavaScript(
-    `({ windowsMode: window.__evTerm('${r3a.sid}')?.windowsMode, isWin: navigator.userAgent.includes('Windows') })`
+    `({ pty: window.__evTerm('${r3a.sid}')?.windowsPty, isWin: navigator.userAgent.includes('Windows') })`
   )
   checks.push([
-    'R3 진단②: 로컬 세션 windowsMode 유지(리플로우 끔 — 좁힐 때 줄간격 깨짐 방지)',
-    wmode.isWin ? wmode.windowsMode === true : wmode.windowsMode !== true
+    'R3 진단②: 로컬 세션 conpty 리플로우 끔 유지(windowsPty 빌드번호 < 21376 — 좁힐 때 줄간격 깨짐 방지)',
+    wmode.isWin ? wmode.pty?.backend === 'conpty' && wmode.pty.buildNumber > 0 && wmode.pty.buildNumber < 21376 : !wmode.pty
   ])
 
   // ── R4 어서션 (창/셸 크롬) ──

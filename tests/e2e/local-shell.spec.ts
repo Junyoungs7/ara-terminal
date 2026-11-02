@@ -79,9 +79,11 @@ test('LOCAL-5 창을 좁혀도 로컬 셸 출력이 깨지지 않는다', async 
   await runCommand(page, id, 'echo 리사이즈_기준선')
   await expectTermText(page, id, /리사이즈_기준선/)
 
-  // 로컬 셸은 conpty 리플로우를 끈다(windowsMode) — 원격 pty 에는 적용하지 않는다.
+  // 로컬 셸은 conpty 리플로우를 끈다(옛 windowsMode → M15 R3 xterm 6 windowsPty 빌드번호 < 21376) — 원격 pty 에는 주지 않는다.
   if (process.platform === 'win32') {
-    expect(await page.evaluate((sid) => window.__evTerm(sid)?.windowsMode, id)).toBe(true)
+    const pty = await page.evaluate((sid) => window.__evTerm(sid)?.windowsPty, id)
+    expect(pty?.backend).toBe('conpty')
+    expect(pty?.buildNumber).toBeLessThan(21376)
   }
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0].setSize(820, 900)

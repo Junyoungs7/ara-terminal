@@ -909,8 +909,8 @@ export function Shell() {
         __evAdopt?: (id: string, title: string, serverKey: string, type?: SessionType) => void
       }
     ).__evAdopt = (id, title, serverKey, type = 'ssh') => {
-      // type 을 무시하고 늘 'ssh' 로 편입하던 버그가 있었다 — 로컬 세션이 SSH 로 잡히면 windowsMode 가
-      // 꺼져 conpty 리플로우 증상이 하네스에서 재현되지 않는다.
+      // type 을 무시하고 늘 'ssh' 로 편입하던 버그가 있었다 — 로컬 세션이 SSH 로 잡히면 windowsPty(옛 windowsMode)가
+      // 빠져 conpty 리플로우 증상이 하네스에서 재현되지 않는다.
       sessions.adopt(id, title, serverKey, type)
       selectSession(id)
     }

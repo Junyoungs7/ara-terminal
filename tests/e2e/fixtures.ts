@@ -21,7 +21,8 @@ type TermProbe = {
   scrollback?: number
   cursorStyle?: string
   cursorBlink?: boolean
-  windowsMode?: boolean
+  /** M15 R3 xterm 6 — 옛 windowsMode 대신. 로컬 Windows 셸만 있다. */
+  windowsPty?: { backend?: string; buildNumber?: number }
   unicode: string
   theme?: Record<string, string>
   selectAll: () => void

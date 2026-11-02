@@ -18,7 +18,7 @@ const terms = new Map<string, Entry>()
  * 잡히기 전의 호스트에서는 9칸이 나온다. 1.0.15 는 TerminalPane 의 fit 셋만 막았고, 폰트가 늦게
  * 도착할 때 부르는 `remeasureAll`(JetBrains Mono 처럼 번들 웹폰트일 때만 뜬다)은 **그대로 fit 했다.**
  * main 은 9칸 resize 를 버리므로 pty·저장값은 139 로 멀쩡한데 **xterm 만 9칸**이 되어, 셸의 프롬프트가
- * 9칸에서 접히고 커서는 8열(= cols-1)로 눌린다. windowsMode 라 넓어져도 다시 펴지지 않는다.
+ * 9칸에서 접히고 커서는 8열(= cols-1)로 눌린다. 리플로우가 꺼진 칸(옛 windowsMode)은 넓어져도 다시 펴지지 않는다.
  * 새 fit 호출은 반드시 이 함수로 — 한쪽만 막으면 또 샌다.
  */
 export function fitIfUsable(fit: FitAddon): void {
@@ -44,7 +44,8 @@ if (typeof window !== 'undefined') {
       scrollback: e.term.options.scrollback,
       cursorStyle: e.term.options.cursorStyle,
       cursorBlink: e.term.options.cursorBlink,
-      windowsMode: e.term.options.windowsMode,
+      // M15 R3 xterm 6 — windowsMode 대신 windowsPty(로컬 Windows 셸만 — CONPTY_NO_REFLOW).
+      windowsPty: e.term.options.windowsPty,
       unicode: e.term.unicode.activeVersion,
       theme: e.term.options.theme,
       selectAll: () => e.term.selectAll(),
