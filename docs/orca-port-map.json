@@ -1169,5 +1169,17 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "M14 R2(v2.2 a2ab524): resources/skills/ara-cli/SKILL.md(설치본 extraResources skills/ara-cli) — 아라에 있는 명령만, 넘기기(handoff) 규칙·선택자·메모/상태. 설정 › 스킬에서 대상별(Claude ~/.claude/skills, Codex·Gemini ~/.agents/skills) 상태(설치 안 됨·최신·다름) + [설치]/[업데이트](폴더째 복사, 업데이트는 번들 파일만 덮고 사용자 파일은 남김). 뺀 것: orca skills install/update CLI 명령, 번들 매니페스트·digest, 다른 번들 스킬들(jira·linear·emulator·per-workspace-env 등), npx skills add."
+  },
+  {
+    "id": "AU-07",
+    "feature": "아라가 띄우는 PTY(에이전트 탭·터미널 공간 로컬 셸) PATH 맨 앞에 ara CLI 폴더 — 설치 없이 ara",
+    "orcaPaths": [
+      "src/main/cli/orca-cli-child-path.ts",
+      "src/main/ipc/pty/host-env/assembly.ts",
+      "src/main/cli/cli-dev-launcher.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "정리 1(v2.2 9e426f1): src/main/cli/childPath.ts — 켤 때 폴더 결정(설치본 resources\bin\u0007ra.cmd 있을 때, 개발판 userData\\cli\bin\u0007ra.cmd 를 그 dev 실행 파일 + out/main/araCli.js 로 씀), 앱 안 PtyBackend·데몬 에이전트 create·데몬 터미널 appEnv 세 자리에서 PATH 키(대소문자 무관) 하나로 모아 맨 앞에 넣고 중복 제거 + ARA_USER_DATA_PATH. Orca 처럼 모든 로컬 PTY(터미널·에이전트 구분 없음), 원격 셸 무변경, 전역 PATH 무변경. 바꾼 것: Windows dev 명령 이름 orca-dev 대신 ara 그대로(에이전트가 같은 명령을 치게), ARA_USER_DATA_PATH 는 늘 실음(Orca 는 host launcher·dev 때만). 뺀 것: 맥·리눅스(ara 실행 파일이 ara.cmd 뿐), 리눅스 shim, WSL CLI, ORCA_CLI_COMMAND·ORCA_CLI_BIN_DIR, 로그인 셸 PATH 복원 rcfile, 네이티브 launcher."
   }
 ]
