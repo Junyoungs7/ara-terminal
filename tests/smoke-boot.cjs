@@ -876,10 +876,10 @@ const checks = []
   // M3 S1: [AI 실행 ▸]을 지워 첫 단계는 일곱 줄, 그중 [분할] 하나가 서브메뉴 부모다(자식은 호버해야 그려진다).
   // (tmux 항목은 SSH 세션일 때만 붙는다 — 여기는 로컬 셸이라 없다.)
   const ctxWanted = AI_ENTRY
-    ? 'copy,paste,split,session.duplicate,log.save,ai.ask,pane.close'
-    : 'copy,paste,split,session.duplicate,log.save,pane.close'
-  checks.push([`리스트 첫 단계 = 실동작 ${AI_ENTRY ? 6 : 5} + 묶음 1`, f4c.listItems.join(',') === ctxWanted])
-  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_ENTRY ? 7 : 6)])
+    ? 'copy,paste,split,session.duplicate,log.save,ai.ask,terminal.reset,pane.close'
+    : 'copy,paste,split,session.duplicate,log.save,terminal.reset,pane.close'
+  checks.push([`리스트 첫 단계 = 실동작 ${AI_ENTRY ? 7 : 6} + 묶음 1(M15 R2 터미널 초기화)`, f4c.listItems.join(',') === ctxWanted])
+  checks.push(['리스트 항목마다 아이콘', f4c.listIcons === (AI_ENTRY ? 8 : 7)])
   // R3.8 재배치 반영 — 힌트도 keymap 단일 소스에서 나오므로 자동으로 Ctrl+Shift 계열이 된다.
   // 분할 단축키(Ctrl+Shift+-/\)는 이제 서브메뉴 안이라 첫 단계엔 없다 — 첫 단계의 것으로 본다.
   checks.push([
