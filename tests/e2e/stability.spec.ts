@@ -3,28 +3,67 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test, expect, quitAra } from './fixtures'
 
+// 감시 워커는 표식을 writeFileSync(비우고 쓰기)로 고쳐 쓴다 — 그 사이에 읽으면 빈 파일이다. expect.poll 은 콜백이
+// 던지면 다시 묻지 않고 바로 실패하므로(STAB-2 "Unexpected end of JSON input", 2026-11-02) 못 읽음 = null 로 돌려 다시 묻는다.
+const readJson = <T>(p: string): T | null => {
+  try {
+    return JSON.parse(readFileSync(p, 'utf8')) as T
+  } catch {
+    return null
+  }
+}
+
 // STAB-1 렌더러가 죽으면 main 이 다시 불러온다(창을 다시 띄우지 않고 같은 창에서 다시 그린다).
 test('STAB-1 렌더러 강제 크래시 → 자동 재로드로 화면이 다시 그려진다', async ({ ara }) => {
   // 크래시·재로드 확인을 main 안에서 한 번에 한다. 페이지 핸들(bw/page)을 거쳐 poll 하면 렌더러가 죽는 순간
   // Playwright 의 CDP 세션이 "Cannot find context" 로 꼬여 앱은 살아났는데도 술어가 끝까지 false 다(2026-11-01 실측).
-  const redrawn = await ara.app.evaluate(async ({ BrowserWindow }) => {
+  const r = await ara.app.evaluate(async ({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0]
     const wc = w.webContents
-    // 양성 대조: 죽었고(gone) 다시 불러왔다(reloaded)는 것까지 본다 — 안 죽어도 .app 은 있으니 그것만으론 통과가 공짜다.
-    let gone = ''
-    wc.once('render-process-gone', (_e, d) => (gone = d.reason))
-    const reloaded = new Promise<boolean>((resolve) => wc.once('did-finish-load', () => resolve(true)))
+    const sleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms))
+    // 양성 대조: 죽었고(gone) 다시 불러왔다(loads)는 것까지 본다 — 안 죽어도 .app 은 있으니 그것만으론 통과가 공짜다.
+    // 횟수까지 센다 — 다시 불러온 뒤 또 죽거나 또 불러오면(제품 버그) 여기서 드러난다.
+    const gone: string[] = []
+    let loads = 0
+    const onGone = (_e: unknown, d: { reason: string }): void => void gone.push(d.reason)
+    const onLoad = (): void => void loads++
+    wc.on('render-process-gone', onGone)
+    wc.on('did-finish-load', onLoad)
     wc.forcefullyCrashRenderer()
-    const didReload = await Promise.race([reloaded, new Promise<boolean>((r) => setTimeout(() => r(false), 20_000))])
+    const reloadBy = Date.now() + 20_000
+    while (loads === 0 && Date.now() < reloadBy) await sleep(250)
+    // 🔴 executeJavaScript 에 상한을 건다. Electron 43 의 구현(electron.exe 안 lib/browser)은 ① 불러오는 중이면
+    // did-stop-loading 까지 기다리고 ② 렌더러에 내부 IPC 를 보낸 뒤 **응답만** 기다린다(invokeInWebContents —
+    // 죽음·다시 불러오기에 거절하지 않는다). 답하기 전에 렌더러가 죽거나 다시 불러오면 그 약속은 영영 안 끝나고,
+    // 시험은 120초를 다 쓴 뒤 해체가 앱을 끄면서 "Execution context was destroyed" 로만 보인다(2026-11-02 전체 회귀).
     let app = false
-    for (let i = 0; i < 40 && !app; i++) {
-      if (!wc.isDestroyed() && !wc.isCrashed())
-        app = (await wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false)) as boolean
-      if (!app) await new Promise((r) => setTimeout(r, 250))
+    let probeTimeouts = 0
+    const probeBy = Date.now() + 20_000
+    while (!app && Date.now() < probeBy) {
+      if (!wc.isDestroyed() && !wc.isCrashed() && !wc.isLoadingMainFrame()) {
+        const v = await Promise.race([
+          wc.executeJavaScript('!!document.querySelector(".app")').catch(() => false),
+          sleep(2_000).then(() => 'timeout' as const)
+        ])
+        if (v === 'timeout') probeTimeouts++
+        else app = v === true
+      }
+      if (!app) await sleep(250)
     }
-    return { gone, didReload, app }
+    wc.removeListener('render-process-gone', onGone)
+    wc.removeListener('did-finish-load', onLoad)
+    return {
+      gone: gone.join(','),
+      loads,
+      app,
+      probeTimeouts,
+      crashed: wc.isCrashed(),
+      loading: wc.isLoadingMainFrame(),
+      url: wc.getURL()
+    }
   })
-  expect(redrawn).toEqual({ gone: 'crashed', didReload: true, app: true })
+  // 실패하면 진단 전체(몇 번 죽고 몇 번 불렀는지, 렌더러가 답을 안 한 횟수, 지금 상태)가 메시지에 실린다.
+  expect({ gone: r.gone, loads: r.loads, app: r.app }, JSON.stringify(r)).toEqual({ gone: 'crashed', loads: 1, app: true })
 })
 
 // STAB-2 main 을 5초 막으면 감시 워커가 표식을 남기고, 다음 실행이 로그 폴더에 보고 파일을 쓴다.
@@ -53,7 +92,7 @@ test('STAB-2 main 5초 막기 → 다음 실행에 logs/hang-report.ndjson', asy
   // 막기(3초 뒤 5초) + 회복 맥박까지 기다린다 — 표식이 selfRecovered:true 로 고쳐 써질 때까지.
   const marker = join(userDataDir, 'main-thread-hang.json')
   await expect
-    .poll(() => (existsSync(marker) ? JSON.parse(readFileSync(marker, 'utf8')).selfRecovered : null), { timeout: 30_000 })
+    .poll(() => readJson<{ selfRecovered?: boolean }>(marker)?.selfRecovered ?? null, { timeout: 30_000 })
     .toBe(true)
   await quitAra(a1)
 
