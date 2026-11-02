@@ -1,6 +1,9 @@
 // IPC 타입 계약 (단일 진실). main 핸들러·preload 브리지·renderer 호출부가 이 파일을 import한다.
 // 계획서 §B.2. F1은 workspace 도메인만; F2에서 session 도메인이 붙는다.
 
+import type { Automation, AutomationDispatchRequest, AutomationDispatchResult, AutomationInput, AutomationsState } from './automations/automations-types'
+import type { SkillAddTarget, SkillScan } from './skills'
+import type { McpServerDraft, McpView } from './mcp/agentMcp'
 import type { LaunchShell } from './aiCli'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
@@ -802,6 +805,24 @@ export type InvokeContract = {
   // 항목 저장(캡처 데이터 포함 — attachCapture=true면 main이 이 호출 시점에 창을 캡처한다).
   // 읽기 채널은 없다: 앱이 목록을 보여주지 않으므로(파일을 열면 되는 것이 목적) 불필요하다.
   // F12 로그 폴더 열기와 같은 shell.openPath 패턴.
+  // M14 R1 자동화·스킬·MCP(main/automations·skills·mcpServers/feature.ts). 자동화가 바뀌면 'automations:changed', 띄우기는 'automations:dispatch'(본창).
+  'automations:list': { req: void; res: AutomationsState }
+  'automations:create': { req: AutomationInput; res: { ok: true; automation: Automation } | { ok: false; error: string } }
+  'automations:update': { req: { id: string; input: AutomationInput }; res: { ok: true; automation: Automation } | { ok: false; error: string } }
+  'automations:setEnabled': { req: { id: string; enabled: boolean }; res: boolean }
+  'automations:remove': { req: { id: string }; res: boolean }
+  'automations:runNow': { req: { id: string }; res: boolean }
+  'automations:markDispatchResult': { req: AutomationDispatchResult; res: void }
+  'automations:rendererReady': { req: void; res: void }
+  'skills:scan': { req: void; res: SkillScan }
+  'skills:delete': { req: { id: string }; res: { ok: true } | { ok: false; error: string } }
+  'skills:pickFolder': { req: void; res: string | null }
+  'skills:add': { req: { source: string; target: SkillAddTarget }; res: { ok: true; path: string } | { ok: false; error: string } }
+  'mcpServers:list': { req: { project: string | null }; res: McpView }
+  'mcpServers:createStarter': { req: { project: string }; res: { ok: true } | { ok: false; error: string } }
+  'mcpServers:add': { req: { project: string; server: McpServerDraft }; res: { ok: true } | { ok: false; error: string } }
+  'mcpServers:remove': { req: { project: string; name: string }; res: { ok: true } | { ok: false; error: string } }
+  'mcpServers:open': { req: { path: string }; res: boolean }
 }
 
 /**
@@ -1474,6 +1495,32 @@ export type EvApi = {
   }
   // F24 앱 내 피드백 수집. **읽기 채널이 없다는 것이 계약이다** — 목록 화면을 만들지 않으므로
   // 저장된 항목을 렌더러로 되돌리는 창구가 표면에 존재하지 않는다(폴더 열기로 충분).
+  // M14 R1 자동화·스킬·MCP(preload/features/automations.ts).
+  automations: {
+    list(): Promise<AutomationsState>
+    create(input: AutomationInput): Promise<InvokeRes<'automations:create'>>
+    update(id: string, input: AutomationInput): Promise<InvokeRes<'automations:update'>>
+    setEnabled(id: string, enabled: boolean): Promise<boolean>
+    remove(id: string): Promise<boolean>
+    runNow(id: string): Promise<boolean>
+    markDispatchResult(r: AutomationDispatchResult): Promise<void>
+    rendererReady(): Promise<void>
+    onChanged(cb: (s: AutomationsState) => void): () => void
+    onDispatch(cb: (req: AutomationDispatchRequest) => void): () => void
+  }
+  skills: {
+    scan(): Promise<SkillScan>
+    delete(id: string): Promise<InvokeRes<'skills:delete'>>
+    pickFolder(): Promise<string | null>
+    add(source: string, target: SkillAddTarget): Promise<InvokeRes<'skills:add'>>
+  }
+  mcpServers: {
+    list(project: string | null): Promise<McpView>
+    createStarter(project: string): Promise<InvokeRes<'mcpServers:createStarter'>>
+    add(project: string, server: McpServerDraft): Promise<InvokeRes<'mcpServers:add'>>
+    remove(project: string, name: string): Promise<InvokeRes<'mcpServers:remove'>>
+    open(path: string): Promise<boolean>
+  }
 }
 
 declare global {

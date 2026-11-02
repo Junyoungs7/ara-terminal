@@ -68,7 +68,9 @@ lockHost.id = LOCK_HOST_ID
 document.body.appendChild(lockHost)
 createRoot(lockHost).render(<LockScreen variant={isMainWin ? 'clock' : 'card'} />)
 
-const renderApp = (): void =>
+const renderApp = (): void => {
+  // M14 R1 예약 실행 — 본창만 띄우기를 받는다(받으면 그때 AI 작업 공간 코드를 불러온다). 잠긴 채 켜면 풀린 뒤부터.
+  if (isMainWin) void import('./features/automations/dispatch').then((m) => m.installAutomationDispatch())
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* M0 FD-04 앱 전체 경계 — 큰 영역 경계(Shell·MainArea)를 빠져나온 오류의 마지막 자리. */}
@@ -91,6 +93,7 @@ const renderApp = (): void =>
     </ErrorBoundary>
   </StrictMode>
   )
+}
 
 /**
  * **앱을 켤 때 잠겨 있으면 본창(Shell)을 아직 그리지 않는다** — Shell 이 마운트되면 세션 복원·자동 접속이

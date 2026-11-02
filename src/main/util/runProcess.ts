@@ -31,6 +31,8 @@ export type RunOptions = {
   onStdout?: (chunk: string) => void
   /** stdin 으로 넣고 닫을 글(M5 — 모델 목록·이름 짓기: 사용자 글은 인자가 아니라 stdin 으로). 없으면 예전 그대로. */
   input?: string
+  /** M14 R1 사전 점검 — `cmd /d /s /c "<한 줄>"` 을 Node shell:true 와 같게 인용 없이 넘긴다(Windows 만 뜻이 있다). */
+  windowsVerbatimArguments?: boolean
 }
 
 export type RunResult = {
@@ -79,6 +81,7 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
         timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         maxBuffer: opts.maxBuffer ?? DEFAULT_MAX_BUFFER,
         windowsHide: true,
+        windowsVerbatimArguments: opts.windowsVerbatimArguments,
         signal: opts.signal,
         encoding: 'buffer'
       },

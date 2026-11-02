@@ -12422,6 +12422,52 @@ button.sb-seg.upd:hover .val {
 .stats-head {
   justify-content: space-between;
 }
+/* M14 R1 설정 › 예약 실행(features/automations/AutomationsPanel.tsx). 스킬·MCP 는 위 acct-* 를 그대로 쓴다. */
+.auto-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.auto-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18ch, 1fr));
+  gap: var(--sp-3);
+}
+.auto-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.auto-runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-left: var(--sp-6);
+}
+.auto-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.auto-run-when {
+  font-family: var(--mono);
+}
+.auto-run-status {
+  color: var(--text-hi);
+}
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

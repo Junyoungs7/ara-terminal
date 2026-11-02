@@ -19,6 +19,7 @@ import type { LaunchShell } from '@shared/aiCli'
 import { orielBridge } from './features/oriel'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
+import { automationsBridge } from './features/automations'
 import { worktreesBridge } from './features/worktrees'
 import { agentsBridge } from './features/agents'
 import { managedBridge } from './features/managed'
@@ -259,6 +260,8 @@ const api: EvApi = {
   ...orielBridge,
   // FD-01 자원 관리자 — 기능 틀(preload/features/resources.ts).
   ...resourcesBridge,
+  // M14 R1 자동화·스킬·MCP(preload/features/automations.ts).
+  ...automationsBridge,
   // M9 AI-10 사용량(preload/features/usage.ts).
   ...usageBridge,
   ...worktreesBridge,

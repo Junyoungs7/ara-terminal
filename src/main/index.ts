@@ -44,6 +44,9 @@ import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerUsageFeature } from './usage/feature'
+import { registerAutomationsFeature } from './automations/feature'
+import { registerSkillsFeature } from './skills/feature'
+import { registerMcpServersFeature } from './mcpServers/feature'
 import { registerManagedFeature, type ManagedFeature } from './managed/feature'
 import { registerVaultFeature } from './vault/feature'
 import { registerCodeFeature } from './code/feature'
@@ -589,6 +592,13 @@ app.whenReady().then(async () => {
   // M9 AI-10 사용량(main/usage/feature.ts) — CLI 로그인 자격(읽기만)으로 Claude·Codex 구독 사용량. 같은 홈(e2e 는 임시 홈·환경 무시).
   // M13: 계정 여러 개(고른 계정 env 를 에이전트 실행에) · 컨텍스트 사용량(statusLine, 탭별) · 통계(상태 원장의 '일하는 중' 전환).
   const usage = registerUsageFeature({ home: hookHome, env: process.env['ARA_E2E'] === '1' ? {} : process.env, userData, mainWindow: () => mainWindow, mainWc })
+  // M14 R1 예약 실행(main/automations/feature.ts) — 앱 안 타이머만(OS 작업 스케줄러 등록 없음). 띄우기는 본창 렌더러가 에이전트 탭으로.
+  const automations = registerAutomationsFeature({ userData, mainWc })
+  // M14 R1 스킬 관리·MCP 등록 — 같은 홈(e2e 는 임시 홈·환경 무시). 사용자 폴더 쓰기는 사람이 누를 때만, 전역 MCP 설정 파일은 읽기만.
+  const localProjects = (): string[] => worktrees.listProjects().filter((p) => !p.host).map((p) => p.path)
+  const toolEnv = process.env['ARA_E2E'] === '1' ? {} : process.env
+  registerSkillsFeature({ home: hookHome, env: toolEnv, projects: localProjects, mainWindow: () => mainWindow })
+  registerMcpServersFeature({ home: hookHome, env: toolEnv, projects: localProjects, orielOn: async () => (await oriel.status()).installed })
   agents = registerAgentsFeature({
     userData,
     sessions: () => sessions,
@@ -597,7 +607,7 @@ app.whenReady().then(async () => {
     mainWc: () => mainWc(),
     remote: () => managed,
     onClaudeStatusLine: (p, pane) => usage.ingestStatusLine(p, pane),
-    onAgentWorking: (id, working) => usage.stats.observe(id, working),
+    onAgentWorking: (id, working) => (usage.stats.observe(id, working), automations.observe(id, working)),
     accountEnv: (agent) => usage.accounts.launchEnv(agent),
     oriel
   })

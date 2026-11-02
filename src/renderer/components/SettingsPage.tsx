@@ -50,6 +50,7 @@ import type { SettingsTarget } from '../store/settingsNav'
 import { AgentSettings } from '../features/aiws'
 import { ManagedServers } from '../features/managed'
 import { UsageSettings } from '../features/usage'
+import { AutomationsSettings, McpServersSettings, SkillsSettings } from '../features/automations'
 import { GitLabSettings, SlackSettings } from '../features/integrations'
 
 // 설정 페이지 (F5 드로어 → 2.0 가운데 창 → M1 1-A **전체 화면 + 검색**, 시안 SW-final 설정 장면).
@@ -1600,6 +1601,23 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
           {section === 'slack' && open && (
             <Suspense fallback={null}>
               <SlackSettings />
+            </Suspense>
+          )}
+
+          {/* M14 R1 예약 실행·스킬·MCP 서버 — 열렸을 때만(스킬 폴더·MCP 설정 파일을 그때 읽는다). */}
+          {section === 'automations' && open && (
+            <Suspense fallback={null}>
+              <AutomationsSettings />
+            </Suspense>
+          )}
+          {section === 'skills' && open && (
+            <Suspense fallback={null}>
+              <SkillsSettings />
+            </Suspense>
+          )}
+          {section === 'mcpServers' && open && (
+            <Suspense fallback={null}>
+              <McpServersSettings />
             </Suspense>
           )}
 

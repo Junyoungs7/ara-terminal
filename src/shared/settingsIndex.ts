@@ -15,6 +15,8 @@ export type SettingsGroup = (typeof SETTINGS_GROUPS)[number]
 
 export const SETTINGS_SECTIONS = [
   'agents', 'managed', 'usage', 'git', 'integrations', 'editor', 'sessionSearch', 'notify', 'automations',
+  // M14 R1 스킬·MCP 서버(features/automations).
+  'skills', 'mcpServers',
   'general', 'look', 'pet', 'font', 'keys', 'update',
   'ai', 'voice',
   'terminal', 'conn', 'features', 'log', 'history',
@@ -107,7 +109,10 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('notify.sound', 'settings.notify.sound', 'settings.notify.sound.desc')
     ]
   },
-  soon('automations', 'aiws'),
+  // M14 R1 AU-01~03 예약 실행·스킬·MCP 서버(features/automations — 섹션을 열 때만 불러온다).
+  { id: 'automations', group: 'aiws', items: [i('auto.list', 'auto.set.list', 'auto.set.list.desc')] },
+  { id: 'skills', group: 'aiws', items: [i('skills.list', 'skills.set.list', 'skills.set.list.desc')] },
+  { id: 'mcpServers', group: 'aiws', items: [i('mcpsrv.list', 'mcpsrv.set.list', 'mcpsrv.set.list.desc')] },
 
   { id: 'general', group: 'app', items: [s('uiScale'), s('bootSplash'), i('dir.download', 'settings.dir.download', 'settings.dir.download.desc')] },
   { id: 'look', group: 'app', items: [s('mouseCursor')] },
