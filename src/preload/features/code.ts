@@ -37,6 +37,12 @@ export const codeBridge: Pick<EvApi, 'code'> = {
       const listener = (_e: IpcRendererEvent, d: { path: string }) => cb(d)
       ipcRenderer.on('code:aiLinesChanged', listener)
       return () => ipcRenderer.removeListener('code:aiLinesChanged', listener)
+    },
+    docPreview: (root: string, path: string, host?: string, remote?: boolean) => ipcRenderer.invoke('code:docPreview', { root, path, host, remote }),
+    onDocLink: (cb: (e: { url: string; grant: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, d: { url: string; grant: string }) => cb(d)
+      ipcRenderer.on('code:docLink', listener)
+      return () => ipcRenderer.removeListener('code:docLink', listener)
     }
   }
 }

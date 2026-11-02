@@ -16,13 +16,26 @@ export type DiffComment = {
   /** 에이전트에게 보낸 때. 고치면 지운다(Orca). */
   sentAt?: number
   scope?: DiffMode
+  /** 3차 R1-B 마크다운 리뷰 주석(Orca MarkdownReviewNote = DiffComment & { source: 'markdown' }) — 그린 글에서 고른 부분. */
+  source?: 'markdown'
+  selectedText?: string
 }
 
 /** Orca formatDiffComment — 붙여 넣는 계약을 결정적·따옴표 안전하게. */
 export function formatDiffComment(c: DiffComment): string {
-  const escaped = c.body.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+  if (c.source === 'markdown') return formatMarkdownNote(c)
   const loc = c.lineNumber === 0 ? 'Scope: file' : c.startLine !== undefined && c.startLine !== c.lineNumber ? `Lines: ${c.startLine}-${c.lineNumber}` : `Line: ${c.lineNumber}`
-  return [`File: ${c.filePath}`, loc, `User comment: "${escaped}"`].join('\n')
+  return [`File: ${c.filePath}`, loc, `User comment: "${escapeBody(c.body)}"`].join('\n')
+}
+
+const escapeBody = (b: string): string => b.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+
+/** Orca formatMarkdownReviewNotes(lib/markdown-review-notes) — File · Source: markdown · 줄 · 고른 글(인용) · 사용자 주석. */
+function formatMarkdownNote(c: DiffComment): string {
+  const lines = c.startLine !== undefined && c.startLine !== c.lineNumber ? `Lines ${c.startLine}-${c.lineNumber}` : `Line ${c.lineNumber}`
+  const sel = c.selectedText?.trim()
+  const quote = sel ? `Excerpt:\n> ${sel.replace(/\r\n|\r|\n/g, '\n> ')}` : null
+  return [`File: ${c.filePath}`, 'Source: markdown', '', lines, quote, `User comment: "${escapeBody(c.body)}"`].filter((x) => x !== null).join('\n')
 }
 
 export const formatDiffComments = (comments: readonly DiffComment[]): string => comments.map(formatDiffComment).join('\n\n')
@@ -38,7 +51,9 @@ export function normalizeDiffComment(v: unknown): DiffComment | null {
   const sentAt = typeof o.sentAt === 'number' && Number.isFinite(o.sentAt) && o.sentAt > 0 ? o.sentAt : undefined
   const updatedAt = typeof o.updatedAt === 'number' ? o.updatedAt : undefined
   const scope = o.scope === 'unstaged' || o.scope === 'staged' || o.scope === 'branch' ? o.scope : undefined
-  return { id, filePath, lineNumber, body, createdAt, ...(startLine !== undefined ? { startLine } : {}), ...(sentAt ? { sentAt } : {}), ...(updatedAt ? { updatedAt } : {}), ...(scope ? { scope } : {}) }
+  const md = o.source === 'markdown'
+  const selectedText = md && typeof o.selectedText === 'string' ? o.selectedText : undefined
+  return { id, filePath, lineNumber, body, createdAt, ...(startLine !== undefined ? { startLine } : {}), ...(sentAt ? { sentAt } : {}), ...(updatedAt ? { updatedAt } : {}), ...(scope ? { scope } : {}), ...(md ? { source: 'markdown' as const } : {}), ...(selectedText ? { selectedText } : {}) }
 }
 
 /** 저장 형식 = { [워크트리 경로]: DiffComment[] }. 깨진 항목은 버리고 나머지는 살린다. */

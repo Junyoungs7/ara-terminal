@@ -8,6 +8,7 @@ import { isInsidePath, onDiskChange } from '@shared/codeFiles'
 import { areWorktreePathsEqual, type Worktree } from '@shared/worktrees'
 import { QUICK_OPEN_RECENT_LIMIT } from '@shared/codeSearch'
 import { mediaOf, type MediaKind } from '@shared/media'
+import { defaultDocView, docKindOf, type DocView } from '@shared/docView'
 import type { GitConflictKind } from '@shared/gitDiff'
 import { hostOfWorktree, useAiwsStore } from './store'
 import { t } from '../../i18n'
@@ -39,6 +40,8 @@ export type CodeFile = {
   preview?: boolean
   /** M12 R2 머지 충돌 — 소스 제어 [충돌]에서 연 파일의 충돌 종류(Orca OpenFile.conflict). 충돌 띠가 말한다. */
   gitConflict?: GitConflictKind
+  /** 3차 R1-B 글 파일의 보기(마크다운 리치·원문·미리 보기, CSV 표, .mmd 그림, HTML 미리 보기). 다른 보기가 없는 파일은 없음. */
+  docView?: DocView
 }
 
 /** 에디터 청크가 걸어 두는 손잡이 — 모델의 지금 글로 저장, 탭을 닫을 때 모델 정리. 에디터가 아직 안 떴으면 null. */
@@ -61,6 +64,8 @@ type CodeState = {
   closeFile: (path: string) => void
   /** 미리 보기 탭을 고정(탭 두 번 누름). */
   pin: (path: string) => void
+  /** 3차 R1-B 보기 바꾸기(탭마다 — Orca 의 파일별 markdownViewMode). */
+  setDocView: (path: string, view: DocView) => void
 }
 
 export const PLATFORM = isMac() ? 'darwin' : typeof navigator !== 'undefined' && /Win/i.test(navigator.platform) ? 'win32' : 'linux'
@@ -82,6 +87,7 @@ export const useCodeStore = create<CodeState>()((set, get) => ({
   pin: (path) => {
     if (get().files.find((f) => same(f.path, path))?.preview) set(patch(path, { preview: false }))
   },
+  setDocView: (path, docView) => set(patch(path, { docView })),
   markSaved: (path, sig, text, dirty) => set(patch(path, { sig, text, dirty, conflict: null })),
   setConflict: (path, conflict) => set(patch(path, { conflict })),
   reloadFromDisk: async (path) => {
@@ -138,7 +144,7 @@ export async function openFile(path: string, line?: number, opts?: { preview?: b
   const open = s.files.find((f) => same(f.path, abs))
   if (open) {
     // 고정으로 열면(빠른 열기·검색·두 번 누름) 미리 보기였던 탭도 고정된다. 미리 보기로 다시 눌러도 고정 탭은 그대로.
-    useCodeStore.setState(patch(abs, { ...(reveal ? { reveal } : {}), ...(open.preview && !preview ? { preview: false } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}) }))
+    useCodeStore.setState(patch(abs, { ...(reveal ? { reveal, ...(open.docView ? { docView: 'source' as const } : {}) } : {}), ...(open.preview && !preview ? { preview: false } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}) }))
     s.setActive(open.worktreeId, open.path)
     remember()
     return { ok: true }
@@ -160,7 +166,10 @@ export async function openFile(path: string, line?: number, opts?: { preview?: b
   // 읽는 사이 같은 파일을 또 열었으면(연타) 하나만.
   if (!useCodeStore.getState().files.some((f) => same(f.path, abs))) {
     const at = preview ? replacePreview(wt.id) : -1
-    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal, ...(preview ? { preview } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}) }
+    // 충돌 파일·줄로 연 파일은 원문(Monaco)으로 — 표시·줄 이동이 거기 있다.
+    const kind = docKindOf(abs)
+    const docView = kind ? (opts?.gitConflict || reveal ? 'source' : defaultDocView(kind)) : undefined
+    const file: CodeFile = { path: abs, worktreeId: wt.id, root: wt.path, ...(host ? { host } : {}), text: r.text, eol: r.eol, sig: r.sig, bytes: r.bytes, readOnly: r.readOnly, dirty: false, conflict: null, loadSeq: 0, reveal, ...(preview ? { preview } : {}), ...(opts?.gitConflict ? { gitConflict: opts.gitConflict } : {}), ...(docView ? { docView } : {}) }
     addFile(file, at)
     void window.ev.code.watch(wt.path, abs, host)
     startWatch()

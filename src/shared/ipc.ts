@@ -719,6 +719,8 @@ export type InvokeContract = {
   'code:unwatchTree': { req: { root: string; host?: string }; res: void }
   // M12 R3 RV-03 AI 작성 줄 — path 의 지금 보이는 글(text) 기준 AI 줄 범위([처음, 끝], 1부터). 바뀌면 push code:aiLinesChanged { path }.
   'code:aiLines': { req: { path: string; text: string }; res: [number, number][] }
+  // 3차 R1-B HTML 미리 보기 허가(ara-doc: 프로토콜) — 그 문서 폴더 아래만, remote = 원격(http/https) 리소스 허용.
+  'code:docPreview': { req: { root: string; path: string; host?: string; remote?: boolean }; res: { ok: true; url: string } | { ok: false; message: string } }
   // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
   // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
   'scm:stage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
@@ -1480,6 +1482,10 @@ export type EvApi = {
     onTreeChanged(cb: (e: { root: string }) => void): () => void
     aiLines(path: string, text: string): Promise<[number, number][]>
     onAiLinesChanged(cb: (e: { path: string }) => void): () => void
+    /** 3차 R1-B HTML 미리 보기 주소(ara-doc:) — iframe sandbox 로 띄운다. */
+    docPreview(root: string, path: string, host?: string, remote?: boolean): Promise<InvokeRes<'code:docPreview'>>
+    /** 미리 보기 안의 http(s) 링크(막힌 이동) — grant = 그 미리 보기의 허가 id. */
+    onDocLink(cb: (e: { url: string; grant: string }) => void): () => void
   }
   // M7 R2 소스 제어 — git 쓰기(preload/features/scm.ts). 조회는 gitInspect(M7 R1).
   scm: {

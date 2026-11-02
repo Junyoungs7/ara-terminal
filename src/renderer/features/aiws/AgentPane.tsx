@@ -22,6 +22,8 @@ const CodeEditor = lazy(() => import('./CodeEditor'))
 const DiffView = lazy(() => import('./DiffView'))
 // M12 CV-02 뷰어(PDF·이미지·AV) — 뷰어 탭이 보일 때만 불린다.
 const MediaView = lazy(() => import('./MediaView'))
+// 3차 R1-B 새 탭 옴니박스 — [+]를 처음 누를 때만 불린다.
+const NewTabOmnibox = lazy(() => import('./NewTabOmnibox'))
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
 /**
@@ -203,6 +205,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const chatOn = useAgentStore((s) => s.chatOn)
   const autoTitle = useAgentStore((s) => s.settings?.tabAutoTitle === true)
   const [picking, setPicking] = useState(false)
+  const [omni, setOmni] = useState(false)
   // M6 파일 탭 — 이 작업 단위에서 연 파일과 지금 보이는 파일(있으면 에이전트 탭 대신 에디터가 보인다).
   const allFiles = useCodeStore((s) => s.files)
   const files = allFiles.filter((f) => f.worktreeId === worktree.id)
@@ -418,10 +421,16 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
           </button>
         )}
-        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setPicking(true)}>
+        {/* 3차 R1-B [+] = 새 탭 옴니박스(Orca) — 열린 탭·파일·URL·에이전트. 예전 피커는 그 안의 [에이전트 고르기…]. */}
+        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setOmni(true)}>
           <Plus />
         </button>
       </div>
+      {omni && (
+        <Suspense fallback={null}>
+          <NewTabOmnibox worktree={worktree} onClose={() => setOmni(false)} onPick={() => setPicking(true)} />
+        </Suspense>
+      )}
       {active && !shownFile && !shownDiff && active.prompt && statusById[active.sessionId]?.promptFailed && (
         <div className="aiws-note aiws-err aiws-prompt-failed" role="alert" data-aiws="prompt-failed">
           <span>{t('aiws.agent.promptFailed')}</span>

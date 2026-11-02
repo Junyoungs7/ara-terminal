@@ -1,0 +1,367 @@
+/* 3차 R1-B 코드 보기 3차 — 글 파일의 다른 보기(마크다운 리치·미리 보기, CSV 표, Mermaid, HTML 미리 보기)와 리뷰 메모.
+   DocSurface 청크와 함께 불러온다(보기를 처음 열 때만). 보기 단추 줄(.doc-views)은 CodeEditor 청크라 여기 같이 둔다 — 그 줄은 보기가 있는 파일에만 보인다. */
+.code-monaco[hidden] {
+  display: none;
+}
+.doc-views {
+  gap: var(--sp-1);
+}
+.doc-view-btn {
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.doc-view-btn:hover {
+  color: var(--text-hi);
+}
+.doc-view-btn.on {
+  border-color: var(--line-strong);
+  background: var(--glass);
+  color: var(--text-hi);
+}
+.doc-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.doc-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.doc-md {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-9);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+  user-select: text;
+}
+.doc-md h1 {
+  font-size: var(--fs-xl);
+}
+.doc-link {
+  cursor: var(--cur-hand, pointer);
+  text-decoration: underline;
+}
+.doc-img {
+  max-width: 100%;
+}
+.doc-front {
+  max-width: 920px;
+  margin: var(--sp-6) auto 0;
+  padding: var(--sp-4) var(--sp-6);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--text-lo);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  white-space: pre-wrap;
+}
+.doc-fallback {
+  padding: var(--sp-8);
+  color: var(--text-lo);
+  font-size: var(--fs-md);
+  text-align: center;
+}
+/* 리치 편집 */
+.rmd {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rmd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.rmd-btn.on {
+  background: var(--glass);
+  color: var(--text-hi);
+}
+.rmd-body .tiptap {
+  outline: none;
+  min-height: 100%;
+}
+.rmd-body .tiptap > * + * {
+  margin-top: var(--sp-4);
+}
+.rmd-body pre {
+  padding: var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--bg-terminal);
+  font-family: var(--mono);
+  overflow-x: auto;
+}
+.rmd-body code {
+  font-family: var(--mono);
+}
+.rmd-body blockquote {
+  padding-left: var(--sp-6);
+  border-left: 2px solid var(--line-strong);
+}
+.rmd-body table {
+  border-collapse: collapse;
+}
+.rmd-body td,
+.rmd-body th {
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--line-strong);
+}
+.rmd-body ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: var(--sp-4);
+}
+.rmd-body ul[data-type='taskList'] li {
+  display: flex;
+  gap: var(--sp-3);
+}
+/* 리뷰 메모 */
+.md-note-add,
+.md-note-composer {
+  position: absolute;
+  z-index: 5;
+  margin-top: var(--sp-2);
+}
+.md-note-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-overlay);
+  color: var(--text-hi);
+  font-size: var(--fs-micro);
+  cursor: var(--cur-hand, pointer);
+}
+.md-note-add svg,
+.md-notes-head svg {
+  width: 14px;
+  height: 14px;
+}
+.md-note-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: min(360px, 90%);
+  padding: var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-lg);
+}
+.md-note-composer textarea {
+  resize: vertical;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-hi);
+  font: inherit;
+  font-size: var(--fs-md);
+}
+.md-note-label {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.md-note-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.md-notes {
+  position: sticky;
+  bottom: 0;
+  max-height: 40%;
+  overflow: auto;
+  padding: var(--sp-3) var(--sp-6);
+  border-top: 1px solid var(--line);
+  background: var(--bg-surface);
+}
+.md-notes-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.md-notes-head > span:first-child {
+  flex: 1;
+}
+.md-notes-msg {
+  color: var(--text-lo);
+}
+.md-note {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  font-size: var(--fs-md);
+}
+.md-note[data-sent] .md-note-body {
+  color: var(--text-lo);
+}
+.md-note-loc,
+.md-note-sent {
+  flex: none;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.md-note-quote {
+  flex: none;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+}
+.md-note-body {
+  flex: 1;
+  color: var(--text-hi);
+  white-space: pre-wrap;
+}
+/* Mermaid */
+.mmd {
+  color: var(--text-lo);
+}
+.mmd svg {
+  max-width: 100%;
+  height: auto;
+}
+.mmd-err pre {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.mmd-view,
+.csv-view,
+.html-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mmd-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.mmd-pan {
+  display: inline-block;
+  padding: var(--sp-8);
+  transform-origin: 0 0;
+}
+.mmd-pan .mmd svg {
+  max-width: none;
+}
+/* CSV/TSV 표 · 보기 위쪽 도구 줄(.mmd·HTML 도 같이 쓴다) */
+.csv-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.csv-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.csv-search svg,
+.html-remote svg {
+  width: 14px;
+  height: 14px;
+}
+.csv-search input {
+  width: 220px;
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-hi);
+  font-size: var(--fs-micro);
+}
+.csv-count {
+  flex: 1;
+}
+.csv-table {
+  border-collapse: collapse;
+  font-size: var(--fs-micro);
+  font-family: var(--mono);
+}
+.csv-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  padding: 0;
+}
+.csv-table th button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-4);
+  border: 0;
+  background: transparent;
+  color: var(--text-hi);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: var(--cur-hand, pointer);
+}
+.csv-table th svg {
+  width: 12px;
+  height: 12px;
+}
+.csv-table td {
+  max-width: 480px;
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--line-soft);
+  color: var(--text-mid);
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csv-num {
+  color: var(--text-dim);
+  text-align: right;
+}
+.csv-more {
+  padding: var(--sp-4);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+/* HTML 미리 보기 */
+.html-remote {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: var(--cur-hand, pointer);
+}
+.html-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  /* 문서는 제 바탕을 그린다 — 바탕을 안 칠한 문서가 어두운 앱 위에 검은 글로 묻히지 않게 흰 종이. */
+  background: var(--paper, white);
+}

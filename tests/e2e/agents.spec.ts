@@ -224,6 +224,7 @@ test('AG-2★ 상태 점 — claude 는 훅(추정 아님)으로 일함→승인
 
     // codex — 훅 없음(신뢰 해시가 필요해 이 판엔 안 심는다) → 화면 판정이 추정으로.
     await page.click('[data-aiws="agent-add"]')
+    await page.click('[data-aiws="omnibox"] [data-omni="pick"]') // 3차 R1-B [+] = 옴니박스 → [에이전트 고르기…] = 예전 피커
     await page.click('[data-aiws="agent-picker"] .aiws-mode[data-agent="codex"]')
     await page.fill('[data-aiws="agent-prompt"]', 'screen-only')
     await page.click('[data-aiws="agent-launch"]')

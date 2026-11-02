@@ -10,11 +10,14 @@ import { workBackend } from '../work/backend'
 import { listFilesOn, searchTextOn } from './search'
 import { registerAiLines } from './aiLines'
 import { MEDIA_MAX_BYTES, mediaOf } from '@shared/media'
+import { docKindOf } from '@shared/docView'
+import { mintDocGrant, registerDocPreview } from './docPreview'
 
 const outside = { ok: false as const, message: '작업 단위 폴더 밖의 파일입니다.' }
 
 export function registerCodeFeature(): void {
   registerAiLines() // M12 R3 RV-03 AI 작성 줄
+  registerDocPreview() // 3차 R1-B HTML 미리 보기(ara-doc:)
   const inside = (root: unknown, path: unknown, host: unknown): path is string =>
     typeof root === 'string' && typeof path === 'string' && isInsidePath(root, path, workBackend(host).platform)
   // 열린 탭 수만큼 센다 — 같은 파일을 두 창이 열어도 마지막이 닫을 때 감시를 푼다. 키 = 호스트 + 경로(두 서버의 같은 경로는 다른 파일).
@@ -81,6 +84,11 @@ export function registerCodeFeature(): void {
       default:
         return outside
     }
+  })
+  // 3차 R1-B HTML 미리 보기 허가 — 작업 단위 안의 .html/.htm 만.
+  handle('code:docPreview', ({ root, path, host, remote }) => {
+    if (typeof path !== 'string' || docKindOf(path) !== 'html' || !inside(root, path, host)) return outside
+    return { ok: true as const, url: mintDocGrant(path, typeof host === 'string' ? host : undefined, remote === true) }
   })
   // M12 CV-02 뷰어 — 뷰어로 여는 종류만, 종류별 상한까지.
   handle('code:readBytes', ({ root, path, host }) => {

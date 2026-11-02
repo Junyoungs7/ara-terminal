@@ -125,7 +125,10 @@ test('DM-M11-2★ 데몬째 죽음(재부팅 흉내) → 다시 켜면 에이전
     const a = await launch(userDataDir)
     await openAi(a.app, a.page, repo, true)
     for (const agent of ['codex', 'claude']) {
-      if (agent !== 'codex') await a.page.click('[data-aiws="agent-add"]') // 탭이 생기면 피커는 닫힌다(AgentPane) — 둘째부터는 [+]
+      if (agent !== 'codex') {
+        await a.page.click('[data-aiws="agent-add"]') // 탭이 생기면 피커는 닫힌다(AgentPane) — 둘째부터는 [+]
+        await a.page.click('[data-aiws="omnibox"] [data-omni="pick"]') // 3차 R1-B [+] = 옴니박스 → [에이전트 고르기…]
+      }
       await a.page.click(`[data-aiws="agent-picker"] .aiws-mode[data-agent="${agent}"]`)
       await a.page.click('[data-aiws="agent-launch"]')
       await expect(a.page.locator(`.aiws-tab[data-agent-tab="${agent}"]`)).toBeVisible()

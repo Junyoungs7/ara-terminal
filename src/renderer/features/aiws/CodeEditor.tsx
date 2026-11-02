@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { ChevronDown, ChevronUp, GitMerge } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import { CODE_READONLY_BYTES, languageOf } from '@shared/codeFiles'
@@ -11,6 +11,14 @@ import { codeEditorOptions } from './editorOptions'
 import { buildGitConflictDecorations, findGitConflictBlocks, getNextConflictNavigationIndex, hasGitConflictMarkers } from './conflictMarkers'
 import { useEditorPrefs } from '../../store/editorPrefs'
 import { watchAiLines } from './aiLines'
+import { DOC_VIEWS, MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES, RICH_MARKDOWN_MAX_SIZE_BYTES, defaultDocView, docKindOf } from '@shared/docView'
+import type { DocModel } from './DocSurface'
+import './docViews.css'
+
+// 3차 R1-B 글 파일의 다른 보기(마크다운·CSV·Mermaid·HTML) — 그 보기를 처음 고를 때만 불린다(Tiptap·mermaid 는 그 안에서 또 따로).
+const DocSurface = lazy(() => import('./DocSurface'))
+/** 크기 넘침 [그래도 열기]를 누른 마크다운(이번 실행 — 탭을 닫으면 editorOps.dispose 가 지운다). */
+const richOverride = new Set<string>()
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 type Model = ReturnType<typeof monaco.editor.createModel>
@@ -54,6 +62,12 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
   const editorRef = useRef<ReturnType<typeof monaco.editor.create> | null>(null)
   const prefs = useEditorPrefs()
   const readOnly = !!file?.readOnly
+  const kind = file ? docKindOf(file.path) : null
+  const view = file && kind ? (file.docView ?? defaultDocView(kind)) : 'source'
+  // Orca: 600KB 를 넘는 마크다운은 리치 대신 원문(Monaco)을 먼저 — [그래도 열기](1MB 까지)는 그 탭을 닫을 때까지.
+  const [, bump] = useState(0)
+  const richTooBig = kind === 'markdown' && view === 'rich' && !!file && file.bytes > RICH_MARKDOWN_MAX_SIZE_BYTES && !richOverride.has(file.path)
+  const surface = view !== 'source' && !richTooBig
   // M12 R2 머지 충돌(Orca useEditorConflictNavigation) — 보이는 모델의 충돌 블록 시작 줄 · 마지막으로 간 블록.
   const [conflictLines, setConflictLines] = useState<number[]>([])
   const [conflictAt, setConflictAt] = useState<number | null>(null)
@@ -75,7 +89,12 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
 
   // 저장·정리 손잡이를 상태 저장소에 건다(탭 줄의 닫기 확인이 부른다 — 그쪽은 monaco 를 모른다).
   useEffect(() => {
-    useCodeStore.setState({ editorOps: { save: (p) => save(p, askRef.current), dispose: (p) => monaco.editor.getModel(uriOf(p))?.dispose() } })
+    useCodeStore.setState({ editorOps: { save: (p) => save(p, askRef.current), dispose: (p) => {
+          richOverride.delete(p)
+          monaco.editor.getModel(uriOf(p))?.dispose()
+        }
+      }
+    })
     return () => useCodeStore.setState({ editorOps: null })
   }, [])
 
@@ -132,8 +151,62 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
           {t('code.readonly').replace('{size}', mb(file.bytes)).replace('{limit}', mb(CODE_READONLY_BYTES))}
         </div>
       )}
+      {file && kind && (
+        <div className="code-bar doc-views" role="tablist" aria-label={t('doc.views')} data-code="doc-views">
+          {DOC_VIEWS[kind].map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={v === view}
+              className={'doc-view-btn' + (v === view ? ' on' : '')}
+              data-doc-view={v}
+              onClick={() => useCodeStore.getState().setDocView(file.path, v)}
+            >
+              {t('doc.view.' + v)}
+            </button>
+          ))}
+        </div>
+      )}
+      {file && richTooBig && (
+        <div className="code-bar" role="status" data-doc="too-big">
+          <span>{t('doc.md.tooBig')}</span>
+          {file.bytes <= MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES && (
+            <button
+              type="button"
+              className="btn sec"
+              data-doc="open-anyway"
+              onClick={() => {
+                richOverride.add(file.path)
+                bump((n) => n + 1)
+              }}
+            >
+              {t('doc.md.openAnyway')}
+            </button>
+          )}
+        </div>
+      )}
+      {file && surface && kind && (
+        <div
+          className="doc-surface"
+          data-code="doc-surface"
+          data-kind={kind}
+          data-view={view}
+          onKeyDown={(e) => {
+            // 리치 편집·표 안에서도 Ctrl+S 저장(Monaco 명령은 Monaco 에 포커스가 있을 때만 돈다).
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyS') {
+              e.preventDefault()
+              void save(file.path, askRef.current)
+            }
+          }}
+        >
+          <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
+            <DocSurface key={file.path + view} file={file} kind={kind} view={view} model={docModelOf(file)} />
+          </Suspense>
+        </div>
+      )}
       {file && (
-        <div className="code-monaco">
+        <div className="code-monaco" hidden={surface}>
           <Editor
             path={uriOf(file.path).toString()}
             defaultValue={file.text}
@@ -199,6 +272,30 @@ function revealOf(ed: ReturnType<typeof monaco.editor.create> | null, file: Code
 }
 
 const mb = (n: number): string => (n / 1024 / 1024).toFixed(1)
+
+/**
+ * 3차 R1-B 다른 보기가 읽고 쓰는 손잡이 — Monaco 모델이 글의 주인 그대로(더러움·저장·밖에서 바뀜이 한 길). 리치 편집은 모델에 써 넣는다.
+ * 모델이 아직 없으면(처음부터 리치로 연 파일 — Editor 가 숨은 채 아직 안 떴다) 같은 uri 로 만든다(Editor 는 있는 모델을 쓴다).
+ * 읽을 때 줄 끝은 LF 로(CRLF 파일도 보기 쪽은 LF 만 안다 — 써 넣으면 모델의 EOL 로 바뀐다).
+ */
+const lf = (m: Model): string => m.getLinesContent().join('\n')
+
+function docModelOf(f: CodeFile): DocModel {
+  const uri = uriOf(f.path)
+  const model = (): Model => monaco.editor.getModel(uri) ?? monaco.editor.createModel(useCodeStore.getState().files.find((x) => x.path === f.path)?.text ?? f.text, languageOf(f.path, LANGS), uri)
+  return {
+    readOnly: f.readOnly,
+    get: () => lf(model()),
+    set: (text) => {
+      const m = model()
+      if (lf(m) !== text) m.pushEditOperations([], [{ range: m.getFullModelRange(), text }], () => null)
+    },
+    onChange: (cb) => {
+      const d = model().onDidChangeContent(() => cb())
+      return () => d.dispose()
+    }
+  }
+}
 
 /**
  * 저장(WS-08, Orca 규칙) — 모델의 지금 글을 쓰되, 읽은 뒤 디스크가 바뀌었으면(main 이 서명으로 판정) 덮어쓰기 전에 묻는다.
