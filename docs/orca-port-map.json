@@ -1118,5 +1118,56 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M14 R1(v2.2 5ec1988): Orca McpConfigSection 그대로 — 프로젝트 후보 .mcp.json·.cursor/mcp.json·.claude.json·.claude/mcp.json 살피기(서버 이름·transport·명령/URL·켜짐, env 비밀 가림), 하나도 없으면 [MCP 설정 추가] 두 번 눌러 빈 .mcp.json(덮어쓰지 않음 wx), [열기](Orca 는 자기 에디터 — 아라는 OS 기본 편집기). 아라가 더한 것: 프로젝트 .mcp.json 에 서버 추가(명령+인자 또는 URL, 같은 이름 거절)·지우기(확인, 깨진 JSON 은 안 건드림). 에이전트별 사용자 설정 ~/.claude.json·~/.codex/config.toml([mcp_servers.*] 줄 읽기)·~/.gemini/settings.json 은 읽기만(전역 설정 파일 쓰기 금지 원칙). Oriel 은 M9 R2 처럼 실행 인자로 붙임 → 에이전트마다 '아라가 붙임' 줄. 뺀 것: SSH·런타임 원격 프로젝트, Codex 도구 승인(codex-mcp-tool-approval)."
+  },
+  {
+    "id": "AU-04",
+    "feature": "ara CLI — 아라와 통신(로컬 파이프·토큰) · worktree · terminal · agent launch · 명령 제안",
+    "orcaPaths": [
+      "src/cli/index.ts",
+      "src/cli/args.ts",
+      "src/cli/command-spec.ts",
+      "src/cli/command-suggestion.ts",
+      "src/cli/runtime/metadata.ts",
+      "src/cli/runtime/transport.ts",
+      "src/cli/runtime/status.ts",
+      "src/cli/runtime/open-local-orca.ts",
+      "src/cli/handlers/worktree.ts",
+      "src/cli/handlers/terminal.ts",
+      "src/cli/handlers/agent-launch.ts",
+      "src/shared/runtime-bootstrap.ts",
+      "src/shared/edit-distance.ts",
+      "resources/win32/bin/orca.cmd"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M14 R2(v2.2 a2ab524): 아라가 켜지면 userData/ara-runtime.json(파이프 \\\\.\\pipe\\ara-cli-<runtimeId>·256비트 토큰·pid·판)을 쓰고 끌 때 지운다(우리 runtimeId 일 때만). NDJSON {id, authToken, method, params} → {id, ok, result|error{code,message,nextSteps}}. 꺼져 있으면 Orca 처럼 runtime_unavailable + 'ara open', status 는 실패 아님(not_running·stale_bootstrap), open 만 아라를 띄우고 창이 뜰 때까지. 명령: status·open·repo list·worktree list/current/show/create(--agent --prompt)/set(--comment --workspace-status = M10 R2 WS-18 메모·카드 상태, 사이드바에 cli:worktreesChanged)/rm(--worktree 필수)·terminal list/create/send/read(--terminal 기본 = ARA_PANE_KEY)·agent launch(본창 렌더러 launchAgent — [+] 와 같은 길). 선택자 id:/path:/name:/branch:/active. 명령 제안·Orca 시험 2개 그대로(orca → ara). 실행 = ara.cmd → ARA.exe + ELECTRON_RUN_AS_NODE + app.asar.unpacked/out/main/araCli.js(node 없는 PC, OR-2 선례). terminal create 는 AI 탭이 에이전트 전용이라 터미널 공간 로컬 셸. 뺀 것: orchestration·automations·file·browser·emulator·artifacts·account·serve·원격(--environment·pairing)·worktree ps/parent/lineage/PR·issue 링크·terminal wait/split·위치 인자·--retry-launch·keepalive 프레임. 3차: file, ai-browser 때 브라우저."
+  },
+  {
+    "id": "AU-05",
+    "feature": "ara CLI 등록(설정 [CLI 설치]·[제거]) — Windows 사용자 PATH",
+    "orcaPaths": [
+      "src/main/cli/cli-path-registration.ts",
+      "src/main/cli/cli-install-location.ts",
+      "src/main/cli/windows-user-path-registry.ts",
+      "src/main/cli/cli-privileged-processes.ts",
+      "src/main/cli/cli-install-path-format.ts",
+      "config/nsis/orca-user-path-cleanup.nsh"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M14 R2(v2.2 a2ab524): 설정 › 스킬 맨 위 'ara 명령줄' — 누를 때만, 확인 창에 넣을 폴더를 먼저 보임. 사용자 PATH(HKCU Environment Path)에 설치 폴더 resources\\bin(ara.cmd 하나) 한 줄을 끝에 붙이고 [제거]는 그 줄만 뺌. 펼치지 않은 값·값 종류(REG_EXPAND_SZ/REG_SZ)·다른 항목 그대로(Orca 앱은 SetEnvironmentVariable 로 REG_SZ 가 됨 — 따르지 않음), 못 읽으면 쓰지 않음, 알림은 SetEnvironmentVariable(없는 이름 지우기)로 WM_SETTINGCHANGE 를 빌림. PATH 앞쪽 같은 이름이면 가림 경고. App Paths(ara.exe, 탐색기용)와 통합: ara.cmd 는 인자 없으면 그 폴더에서 아라(= App Paths 동작), 있으면 CLI. 진짜 제거 때 installer.nsh 가 같은 줄을 뺌(Orca NSIS 매크로 그대로, 업데이트는 둠). 개발 실행·맥은 unsupported(맥 /usr/local/bin 심볼릭 링크·리눅스 뺌). 뺀 것: Orca 네이티브 launcher(orca.exe), dev 명령 이름, 관리자 재시작."
+  },
+  {
+    "id": "AU-06",
+    "feature": "번들 스킬 ara-cli(에이전트가 ara CLI 를 쓰는 법) — 스킬 화면 [설치]·[업데이트]",
+    "orcaPaths": [
+      "skill-guides/orca-cli.md",
+      "src/cli/handlers/skills.ts",
+      "src/cli/bundled-skill-guides.ts",
+      "docs/site/content/docs/cli/skills.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M14 R2(v2.2 a2ab524): resources/skills/ara-cli/SKILL.md(설치본 extraResources skills/ara-cli) — 아라에 있는 명령만, 넘기기(handoff) 규칙·선택자·메모/상태. 설정 › 스킬에서 대상별(Claude ~/.claude/skills, Codex·Gemini ~/.agents/skills) 상태(설치 안 됨·최신·다름) + [설치]/[업데이트](폴더째 복사, 업데이트는 번들 파일만 덮고 사용자 파일은 남김). 뺀 것: orca skills install/update CLI 명령, 번들 매니페스트·digest, 다른 번들 스킬들(jira·linear·emulator·per-workspace-env 등), npx skills add."
   }
 ]
