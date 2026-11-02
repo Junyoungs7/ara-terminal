@@ -392,7 +392,8 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         aiProvider: provider,
         aiModels: aiModelsOf({ [provider]: 'x-model' }),
         aiCompatibleBaseUrl: provider === 'compatible' ? 'https://gateway.internal/v1' : '',
-        codeEditor: DEFAULT_EDITOR_PREFS
+        codeEditor: DEFAULT_EDITOR_PREFS,
+        glass: false
       })
       store.flush()
       expect(readFileSync(join(dir, `workspace-${provider}.json`), 'utf8')).not.toContain(SENTINEL)

@@ -115,7 +115,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
   { id: 'mcpServers', group: 'aiws', items: [i('mcpsrv.list', 'mcpsrv.set.list', 'mcpsrv.set.list.desc')] },
 
   { id: 'general', group: 'app', items: [s('uiScale'), s('bootSplash'), i('dir.download', 'settings.dir.download', 'settings.dir.download.desc')] },
-  { id: 'look', group: 'app', items: [s('mouseCursor')] },
+  { id: 'look', group: 'app', items: [s('glass'), s('mouseCursor')] },
   soon('pet', 'app'),
   {
     id: 'font',

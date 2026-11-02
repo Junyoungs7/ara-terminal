@@ -118,6 +118,44 @@
   --graph-fill-mem: rgba(140, 196, 255, 0.18); /* --accent-bright 의 RGB — 2.0 에서 보라(AI 색)를 걷어냈다 */
   --graph-fill-gpu: rgba(107, 191, 138, 0.18);
 
+  /* G1 글라스(시안 C, mockups/v2/glass/c.css) — **<html data-glass="on"> 일 때만** styles/glass.css 가 쓴다.
+     여기는 값만 둔다(scan:magic 이 HEX·rgba 를 이 파일에만 허락한다). 이름이 --bg-*·--text-*·--accent* 가
+     아닌 이유: 대비 게이트가 그 접두사를 기본 테마의 값으로 읽는다 — 글라스 값이 섞이면 기본 테마 검사가 흐려진다.
+     층: 바탕 --gl-wall(움직이지 않는 radial 넷) · 구조 면 --gl-1(틴트만, 블러 없음) ·
+         뜨는 면 --gl-2 + --gl-blur · 글이 많은 면 --gl-3(설정 본문) · 터미널·에디터·diff 는 불투명 그대로. */
+  --gl-wall: radial-gradient(55% 65% at 8% 12%, #1f44a8 0, transparent 70%),
+    radial-gradient(45% 55% at 92% 6%, #6a3424 0, transparent 70%),
+    radial-gradient(55% 60% at 86% 96%, #0e5e66 0, transparent 72%),
+    radial-gradient(45% 55% at 30% 104%, #2b2f7a 0, transparent 70%), #080b16;
+  --gl-1: rgba(10, 13, 24, 0.6);
+  --gl-2: rgba(30, 35, 52, 0.74);
+  --gl-3: rgba(13, 15, 20, 0.78);
+  --gl-edge: rgba(255, 255, 255, 0.08);
+  --gl-hl: rgba(255, 255, 255, 0.09);
+  --gl-in: rgba(0, 0, 0, 0.28);
+  --gl-blur: blur(28px) saturate(1.6);
+  /* 신호색(시안 C 색 의미 — 결정 orca-bundle-decisions.md 2026-11-01). 브랜드색이 아니다 — 브랜드는 마크 자리에만.
+     AI = 인디고→애저→스카이 · 사람·포커스·선택 = 앰버 · 답할 일 = 반전(--text-hi 면) · 대기 = 슬레이트. */
+  --sig-ai-a: #5b4bff;
+  --sig-ai-m: #1f8fff;
+  --sig-ai-b: #4ad6ff;
+  --sig-ai-ink: #afc0ff;
+  --sig-ai-soft: rgba(91, 110, 255, 0.2);
+  --sig-ai: linear-gradient(90deg, var(--sig-ai-a), var(--sig-ai-m), var(--sig-ai-b));
+  --sig-user: #ffb547;
+  --sig-user-ink: #ffcb80;
+  --sig-user-on: #2a1700;
+  --sig-user-line: rgba(255, 181, 71, 0.45);
+  --sig-user-glow: rgba(255, 181, 71, 0.16);
+  --sig-user-halo: rgba(255, 181, 71, 0.1);
+  --sig-soft: #9aa1b0;
+  --sig-slate: #858b98;
+  /* 주 버튼 하나만 그라디언트(흰 글자 — 양 끝 대비는 scan:magic 이 잰다). */
+  --sig-go-a: #4a3af0;
+  --sig-go-b: #1d6fe0;
+  --sig-go-ink: #ffffff;
+  --sig-go: linear-gradient(135deg, var(--sig-go-a), var(--sig-go-b));
+
   /* 시맨틱 (§1.5) */
   --ok: #6bbf8a;
   --warn: #e2c35f;

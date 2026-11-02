@@ -5,6 +5,7 @@ import type { Automation, AutomationDispatchRequest, AutomationDispatchResult, A
 import type { SkillAddTarget, SkillScan } from './skills'
 import type { McpServerDraft, McpView } from './mcp/agentMcp'
 import type { LaunchShell } from './aiCli'
+import type { GlassMaterial } from './glass'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { BytesResult } from './media'
@@ -948,6 +949,10 @@ export type EvApi = {
     webglOptOut?: string | undefined
     /** 시험 훅 설치 여부 — main 이 `!isPackaged && ARA_E2E=1` 일 때만 인자를 넘긴다(renderer/testCrash.ts). */
     testHooks?: boolean
+    /** G1 `ARA_GLASS` 날값('1' 켬 · '0' 끔 — 설정을 덮는다, 성능 A/B 용). 판정은 shared/glass.ts glassOn. */
+    glassForce?: string | undefined
+    /** G1 창을 만들 때 main 이 깐 OS 재질(ARA_GLASS_MATERIAL → glassMaterialOf). 없으면 CSS 바탕. */
+    glassMaterial?: GlassMaterial | null
   }
   /** #206 오류 신고 — 찍고 모으기(신고 창보다 먼저) · 보내기(자동 재시도 없음). */
   report: {

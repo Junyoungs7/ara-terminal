@@ -1721,6 +1721,10 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
           {/* 2.0 4단계 — 모양 › 마우스 커서(시안 Z-cursor). 견본 칸에 마우스를 올리면 그 커서가 된다. */}
           {section === 'look' && (
             <>
+              {/* G1 글라스(시안 C). 기본 끔 — 성능 A/B 뒤 기본값을 정한다. ARA_GLASS 로 강제한 판이면 이 스위치보다 env 가 이긴다. */}
+              <Row label={t('settings.glass')} desc={t('settings.glass.desc')} item="glass">
+                <Toggle on={prefs.glass} label={t('settings.glass')} onChange={(glass) => onPrefsChange({ glass })} />
+              </Row>
               <div className="set-sec-t" data-item="mouseCursor">{t('settings.mouseCursor')}</div>
               <div className="set-note">{t('settings.mouseCursor.desc')}</div>
               <div className="cur-legend" aria-hidden>

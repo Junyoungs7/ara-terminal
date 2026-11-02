@@ -22,6 +22,7 @@ import { spaceOf } from '@shared/space'
 import { editorPrefsOf } from '@shared/editorPrefs'
 import { setEditorPrefs } from '../store/editorPrefs'
 import { applyMouseCursor } from '../cursorThemes'
+import { applyGlass } from '../glass'
 import { setAgentNotesEnabled } from '../store/notify'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
@@ -52,6 +53,7 @@ export const termPrefs: Omit<
   | 'notifyToast'
   | 'notifyAgents'
   | 'codeEditor'
+  | 'glass'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -93,7 +95,7 @@ export function prefsFrom(
     | 'notifyToast'
     | 'notifyAgents'
     | 'codeEditor'
-  | 'codeEditor'
+    | 'glass'
   >
 ): UiPrefs {
   return {
@@ -131,7 +133,9 @@ export function prefsFrom(
     // M3 R3 — 미지정이면 켬.
     notifyAgents: ui.notifyAgents !== false,
     // M12 R2 — 미지정 칸은 Orca 기본값.
-    codeEditor: editorPrefsOf(ui.codeEditor)
+    codeEditor: editorPrefsOf(ui.codeEditor),
+    // G1 — 미지정이면 끔(true 만 켬).
+    glass: ui.glass === true
   }
 }
 
@@ -143,6 +147,7 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   if (typeof document !== 'undefined') {
     document.documentElement.style.setProperty('--ui-scale', String(UI_SCALE_FACTOR[prefs.uiScale]))
     applyMouseCursor(prefs.mouseCursor)
+    applyGlass(prefs.glass)
   }
   if (prefs.codeEditor) setEditorPrefs(prefs.codeEditor)
   termPrefs.scrollback = prefs.scrollback

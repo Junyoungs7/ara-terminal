@@ -16,6 +16,7 @@ import type {
   UpdateState
 } from '@shared/ipc'
 import type { LaunchShell } from '@shared/aiCli'
+import { glassMaterialOf } from '@shared/glass'
 import { orielBridge } from './features/oriel'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
@@ -80,6 +81,9 @@ const api: EvApi = {
     probe: (on?: boolean) => ipcRenderer.invoke('diag:probe', { on }),
     testHooks: typeof process !== 'undefined' && process.argv.includes('--ara-test-hooks'),
     webglOptOut: typeof process === 'undefined' ? undefined : process.env['ARA_NO_WEBGL'],
+    // G1 글라스 — 같은 이유로 값이다(첫 그림 전에 html 속성을 정한다). 재질 판정은 main 과 같은 함수.
+    glassForce: typeof process === 'undefined' ? undefined : process.env['ARA_GLASS'],
+    glassMaterial: typeof process === 'undefined' ? null : glassMaterialOf(process.env['ARA_GLASS_MATERIAL'], process.platform),
     // #98 자동 업데이트. 상태는 열릴 때 한 번 묻고(updateState) 그 뒤로는 push 로 받는다.
     updateState: () => ipcRenderer.invoke('update:get'),
     updateCheck: () => ipcRenderer.invoke('update:check'),

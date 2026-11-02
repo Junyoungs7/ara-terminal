@@ -377,6 +377,29 @@ if (softWorst < MIN_RATIO) {
   violations.push(`src/renderer/styles/tokens.css  --accent-soft 글자 대비 ${softWorst.toFixed(2)} < ${MIN_RATIO} (가장 나쁜 표면 기준, 못 풀었으면 0)`)
 }
 
+// G1 글라스 신호색(2026-11-02) — 글라스를 켜면 --accent* 가 이 값들로 바뀐다(styles/glass.css). 위 검사들은
+// 기본 테마만 보므로 여기서 따로 잰다. ⚠️ 한계: 배경은 불투명 --bg-* 다 — 글라스의 반투명 면(--gl-1 + 바탕
+// 그라디언트) 합성색은 위치마다 달라 정적으로 못 잰다(바탕이 어두운 쪽이라 불투명 면보다 나빠지지는 않는다).
+const glassPairs = [
+  ['--sig-ai-ink', MIN_RATIO],
+  ['--sig-user-ink', MIN_RATIO],
+  ['--sig-soft', MIN_RATIO],
+  ['--sig-user', NONTEXT_MIN_RATIO],
+  ['--sig-ai-m', NONTEXT_MIN_RATIO],
+  ['--sig-slate', NONTEXT_MIN_RATIO]
+]
+for (const [tn, floor] of glassPairs) {
+  const hex = resolveHex(tn)
+  const r = hex ? Math.min(...surfaces.map(([, bv]) => contrast(hex, bv))) : 0
+  if (r < floor) violations.push(`src/renderer/styles/tokens.css  글라스 ${tn} 대비 ${r.toFixed(2)} < ${floor} (가장 나쁜 표면, 못 풀었으면 0)`)
+}
+for (const [fg, bg] of [['--sig-user-on', '--sig-user'], ['--sig-go-ink', '--sig-go-a'], ['--sig-go-ink', '--sig-go-b']]) {
+  const a = resolveHex(fg)
+  const b = resolveHex(bg)
+  const r = a && b ? contrast(a, b) : 0
+  if (r < MIN_RATIO) violations.push(`src/renderer/styles/tokens.css  글라스 ${fg} × ${bg} 대비 ${r.toFixed(2)} < ${MIN_RATIO}`)
+}
+
 // CSS 중괄호 균형 검사: 주석·문자열 제거 후 {/} 개수 비교. (tokens.css 포함 전부 대상)
 const STYLES_DIR = 'src/renderer/styles'
 const braceErrors = []

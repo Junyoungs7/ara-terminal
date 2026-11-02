@@ -1026,6 +1026,8 @@
   "settings.title": "설정",
   "settings.nav.general": "일반",
   "settings.nav.look": "모양",
+  "settings.glass": "글라스",
+  "settings.glass.desc": "창 바탕과 테두리 면을 반투명하게, 메뉴·알림·대화상자를 흐린 유리로 그립니다. 터미널·편집기·비교 화면은 그대로 불투명합니다. Windows 투명 효과를 끄거나 고대비면 불투명으로 돌아갑니다.",
   "settings.mouseCursor": "마우스 커서",
   "settings.mouseCursor.desc": "아라 창 안에서만 바뀝니다. 기본은 Windows 설정의 커서를 그대로 씁니다.",
   "settings.mouseCursor.default": "기본값",

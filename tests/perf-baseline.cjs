@@ -8,6 +8,8 @@
 //   npm run perf -- --quick      1회만(배선 확인용 — 기준선으로 쓰지 말 것)
 //   npm run perf:gate            빌드 → 5회 측정 → 기준선과 비교, 넘으면 exit 1
 //   옵션: --runs=N  --out=<경로>  --quick  --gate  --baseline=<경로>  --retries=N(게이트 재측정, 기본 1)
+//         --glass=on|off(G1 글라스 A/B — 앱에 ARA_GLASS=1|0 을 넘긴다, 기본 off. 같은 기준선에 대고 두 번 돌려 비교)
+//         OS 재질까지 재려면 ARA_GLASS_MATERIAL=mica|acrylic 을 같이 준다(env 는 그대로 앱에 넘어간다).
 //
 // 4지표 (한 판 = 앱 두 번 띄움)
 //   ① startupMs   켜는 시간. main 프로세스 생성 시각(process.getCreationTime) → 본창 렌더러의
@@ -152,6 +154,9 @@ function machineInfo() {
   }
 }
 
+/** G1 --glass 값 → 앱 env ARA_GLASS. 명시적으로 끄기('0')까지 넘겨 저장된 설정이 끼어들지 않게 한다. */
+let glassEnv = '0'
+
 async function launch(userData) {
   const { _electron } = require('@playwright/test')
   const tLaunch = Date.now()
@@ -162,7 +167,7 @@ async function launch(userData) {
     // ARA_E2E_ONSCREEN: e2e 의 '창을 처음부터 화면 밖에'(7318736)를 끈다 — 처음부터 가려진 창은 Chromium 이 첫 그리기를 늦춰
     // 켜기·작업공간 지표가 부푼다(기준선과 같은 조건 = 첫 그림 뒤에 아래 launch() 가 화면 밖으로 옮김).
     // 멈춤 감시는 배포본에서 늘 켜지고 개발 실행에선 꺼진다 — 배포본 비용을 재려고 강제로 켠다(M0 FD-02).
-    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_HANG_WATCHDOG_FORCE: '1', ARA_E2E_ONSCREEN: '1' }
+    env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_HANG_WATCHDOG_FORCE: '1', ARA_E2E_ONSCREEN: '1', ARA_GLASS: glassEnv }
   })
   const page = await app.firstWindow()
   // 25분 측정 동안 사용자 화면을 가리지 않게 화면 밖으로(showInactive 라 포커스는 원래 안 뺏는다).
@@ -272,13 +277,17 @@ async function measureIdle() {
     const mem = await metrics()
     const idleMemMB = mem.reduce((s, m) => s + m.memory.workingSetSize, 0) / 1024
     // percentCPUUsage 는 "지난 호출 이후"다 — 위 호출이 기준점이 된다.
+    // G1: GPU 프로세스 몫을 따로 적는다(게이트 지표 아님 — 글라스 켬/끔 A/B 에서 '유휴 다시 그리기'가 여기 실린다).
     const cpu = []
+    const gpu = []
     for (let t = 0; t < CPU_MS; t += CPU_STEP_MS) {
       await sleep(CPU_STEP_MS)
-      cpu.push((await metrics()).reduce((s, m) => s + m.cpu.percentCPUUsage, 0))
+      const ms = await metrics()
+      cpu.push(ms.reduce((s, m) => s + m.cpu.percentCPUUsage, 0))
+      gpu.push(ms.filter((m) => m.type === 'GPU').reduce((s, m) => s + m.cpu.percentCPUUsage, 0))
     }
-    const idleCpuPct = cpu.reduce((a, b) => a + b, 0) / cpu.length
-    return { startupMs, startupSource, idleMemMB, idleCpuPct, processes: mem.length }
+    const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length
+    return { startupMs, startupSource, idleMemMB, idleCpuPct: avg(cpu), idleGpuCpuPct: avg(gpu), processes: mem.length }
   } finally {
     await quit(app, ud)
   }
@@ -319,15 +328,17 @@ async function measure(runs) {
     rows.push(row)
     console.log(
       `  판 ${i + 1}/${runs}: 켜기 ${round(row.startupMs)}ms(${row.startupSource}) · 메모리 ${round(row.idleMemMB)}MB` +
-        ` · CPU ${round(row.idleCpuPct, 2)}% · 작업공간 ${round(row.workspaceMs)}ms`
+        ` · CPU ${round(row.idleCpuPct, 2)}%(GPU ${round(row.idleGpuCpuPct, 2)}%) · 작업공간 ${round(row.workspaceMs)}ms`
     )
   }
   const metrics = Object.fromEntries(METRICS.map((m) => [m, summarize(m, rows.map((r) => r[m]))]))
-  return { electron, metrics, startupSources: [...new Set(rows.map((r) => r.startupSource))] }
+  const gpuMedian = median(rows.map((r) => r.idleGpuCpuPct))
+  console.log(`  유휴 GPU 프로세스 CPU 중앙값 ${round(gpuMedian, 2)}% (게이트 아님 — 글라스 A/B 비교용)`)
+  return { electron, metrics, idleGpuCpuPct: gpuMedian, startupSources: [...new Set(rows.map((r) => r.startupSource))] }
 }
 
 function parseArgs(argv) {
-  const opt = { runs: 5, out: null, gate: false, baseline: DEFAULT_BASELINE, retries: 1 }
+  const opt = { runs: 5, out: null, gate: false, baseline: DEFAULT_BASELINE, retries: 1, glass: 'off' }
   for (const a of argv) {
     const [k, v] = a.replace(/^--/, '').split('=')
     if (k === 'quick') opt.runs = 1
@@ -336,6 +347,7 @@ function parseArgs(argv) {
     else if (k === 'out') opt.out = resolve(v)
     else if (k === 'baseline') opt.baseline = resolve(v)
     else if (k === 'retries') opt.retries = Number(v)
+    else if (k === 'glass' && (v === 'on' || v === 'off')) opt.glass = v
     else throw new Error(`모르는 인자: ${a}`)
   }
   if (!(opt.runs >= 1)) throw new Error('--runs 는 1 이상')
@@ -344,10 +356,12 @@ function parseArgs(argv) {
 
 async function main() {
   const opt = parseArgs(process.argv.slice(2))
+  glassEnv = opt.glass === 'on' ? '1' : '0'
   if (!existsSync(MAIN_JS)) throw new Error(`빌드가 없다: ${MAIN_JS} — npm run build 먼저`)
   const machine = machineInfo()
   const injected = Number(process.env['ARA_PERF_INJECT_DELAY_MS']) || 0
-  const header = { createdAt: new Date().toISOString(), runs: opt.runs, tabs: TABS, idleMs: IDLE_MS, cpuMs: CPU_MS }
+  const header = { createdAt: new Date().toISOString(), runs: opt.runs, tabs: TABS, idleMs: IDLE_MS, cpuMs: CPU_MS, glass: opt.glass }
+  console.log(`글라스 ${opt.glass}${process.env['ARA_GLASS_MATERIAL'] ? ` · 재질 ${process.env['ARA_GLASS_MATERIAL']}` : ''}`)
 
   if (!opt.gate) {
     if (injected) throw new Error('ARA_PERF_INJECT_DELAY_MS 가 켜진 채로 기준선을 기록하지 않는다(양성 대조는 --gate 로)')
@@ -375,7 +389,7 @@ async function main() {
     const verdict = judge(baseline.metrics, Object.fromEntries(METRICS.map((m) => [m, r.metrics[m].median])))
     console.table(verdict)
     if (opt.out) {
-      const doc = { ...header, machine: { ...machine, electron: r.electron }, baseline: opt.baseline, injected, verdict, metrics: r.metrics }
+      const doc = { ...header, machine: { ...machine, electron: r.electron }, baseline: opt.baseline, injected, verdict, metrics: r.metrics, idleGpuCpuPct: r.idleGpuCpuPct }
       writeFileSync(opt.out, JSON.stringify(doc, null, 2) + '\n')
     }
     if (verdict.every((v) => v.ok)) {
@@ -387,7 +401,7 @@ async function main() {
   return 1
 }
 
-module.exports = { median, mad, summarize, limitOf, judge, sameMachine, METRICS, FLOOR }
+module.exports = { median, mad, summarize, limitOf, judge, sameMachine, parseArgs, METRICS, FLOOR }
 
 if (require.main === module) {
   main().then(

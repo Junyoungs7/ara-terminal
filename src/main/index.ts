@@ -62,6 +62,7 @@ import type { AraToolGate } from './mcp/tools'
 import { registerAraIpc, type AraRuntime } from './ipc/registerAraIpc'
 import { registerVoiceIpc, type VoiceRuntime } from './ipc/registerVoiceIpc'
 import { voiceOf } from '@shared/voice'
+import { glassMaterialOf, glassOn } from '@shared/glass'
 import { clearStaleSelfToken } from './ai/engine/araMcp'
 import { createSessionLog, type SessionLogService } from './log/SessionLog'
 import { setApiPersona } from './ai/prompt'
@@ -206,13 +207,19 @@ let quitting = false
 function createWindow(): void {
   // F6: 저장된 창 크기·위치로 복원. 없으면 기본 크기(최초 실행).
   const bounds = store?.get().ui.window
+  // G1 OS 재질(측정용 ARA_GLASS_MATERIAL, 기본 없음 = CSS 바탕). 글라스가 켜진 채 켤 때만 깐다 — 켠 뒤
+  // 끄면 body 가 불투명 abyss 로 덮는다(renderer/glass.ts). 재질이 비치려면 창 바탕이 투명이어야 한다.
+  const material = glassOn(store?.get().ui.glass === true, process.env['ARA_GLASS'])
+    ? glassMaterialOf(process.env['ARA_GLASS_MATERIAL'], process.platform)
+    : null
   const win = new BrowserWindow({
     width: bounds?.width ?? 1440,
     height: bounds?.height ?? 900,
     ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
     show: false,
     frame: false,
-    backgroundColor: '#0d1119',
+    backgroundColor: material ? '#00000000' : '#0d1119',
+    ...(material === 'vibrancy' ? { vibrancy: 'under-window' as const } : material ? { backgroundMaterial: material } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // 보안 기본값 불변식 (계획서 §A.1 / §B.1)

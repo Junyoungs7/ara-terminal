@@ -1,0 +1,190 @@
+/* ============================================================
+   G1 글라스(시안 C) — <html data-glass="on"> 일 때만 켜진다(renderer/glass.ts). 속성이 없으면 이 파일은
+   아무것도 안 한다 = 지금 화면 그대로. 값은 전부 tokens.css 의 --gl-*·--sig-* 다(여기엔 색 리터럴 없음).
+   출발점: mockups/v2/glass/glass-inject.css(실제 앱 클래스에 맞춘 초안) + c.css(색 의미).
+
+   층
+     바탕     body = --gl-wall. 정적 radial 넷 — 움직이지 않는다(유휴 때 다시 그릴 것이 없다).
+     구조 면  타이틀바·상태바·레일·사이드바·AI 워크트리 사이드·오른쪽 바·아라 채팅·설정 내비
+              → 반투명 틴트만, **블러 없음**: 바탕이 매끈한 그라디언트라 블러한 그림 = 안 한 그림이다.
+              (상태바 게이지·시계가 주기적으로 다시 그려도 블러를 다시 돌리지 않는다.)
+     뜨는 면  명령 팔레트·빠른 열기·벨 목록·토스트·≡ 메뉴·우클릭 메뉴·대화상자·승인 띠/질문 카드
+              → 진짜 backdrop-filter. 움직이는 글자 위에 뜨는 자리들이다. **면 자체는 움직이지 않는다** —
+              등장은 opacity 만(gl-fade). 블러 면 위에서 도는 것은 transform·opacity 뿐(토스트 수명 막대 scaleX).
+     불투명   터미널·에디터·diff·뷰어·탭바·.main — 손대지 않는다(오래 읽는 글자 + 블러 비용).
+   유리 위에 유리 없음: 구조 면에 backdrop-filter 를 걸지 않으므로 그 안에 뜨는 메뉴(.ntf-menu ⊂ .titlebar)의
+   블러가 부모에 갇히지 않는다(backdrop root 는 filter/opacity/backdrop-filter 를 가진 조상이 만든다).
+
+   폴백: 투명도 줄이기(Windows 설정 › 투명 효과 끔)·고대비·강제 색 → 아래 @media 가 통째로 빠져 **불투명 면 +
+   신호색**만 남는다. 신호색 규칙은 @media 밖에 있다(투명이 아니라 색이라서).
+   ============================================================ */
+
+/* ── 신호색: 사람·포커스·선택 = 앰버. --accent* 를 쓰는 자리(포커스 링·레일 막대·스위치·선택 행)가 따라온다.
+   --sel-bg 는 그대로 — 터미널 xterm 테마와 짝이라 CSS 만 바꾸면 선택 색이 둘로 갈린다. ── */
+:root[data-glass='on'] {
+  --accent: var(--sig-user);
+  --accent-bright: var(--sig-user-ink);
+  --accent-deep: var(--sig-user);
+  --on-accent: var(--sig-user-on);
+  --on-accent-deep: var(--sig-user-on);
+  --accent-line: var(--sig-user-line);
+  --accent-glow: var(--sig-user-glow);
+  --accent-halo: var(--sig-user-halo);
+  --accent-soft: var(--sig-soft);
+}
+/* 주 버튼 하나만 그라디언트 + 흰 글자(나머지 --accent-deep 면은 앰버 + 어두운 잉크). */
+:root[data-glass='on'] .btn.pri {
+  background: var(--sig-go);
+  color: var(--sig-go-ink);
+}
+:root[data-glass='on'] .ara-send {
+  background: var(--text-hi);
+  color: var(--bg-abyss);
+}
+
+/* ── AI = 인디고→애저→스카이 ── */
+/* 일하는 중 = 그라디언트 고리. 도는 것은 고리 하나(transform: rotate — ai-key-spin). */
+:root[data-glass='on'] .ag-spin {
+  border: 0;
+  background: conic-gradient(from 0deg, transparent 0 18%, var(--sig-ai-a) 50%, var(--sig-ai-m) 75%, var(--sig-ai-b));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), var(--void) calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), var(--void) calc(100% - 1.5px));
+}
+:root[data-glass='on'] .aiws-spin,
+:root[data-glass='on'] .ara-think i {
+  color: var(--sig-ai-ink);
+}
+:root[data-glass='on'] .ara-think i {
+  background: var(--sig-ai-ink);
+}
+:root[data-glass='on'] .tb-spaces button[data-space='ai'] svg {
+  color: var(--sig-ai-ink);
+}
+:root[data-glass='on'] .tb-spaces button[data-space='ai'].on {
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -2px 0 -0.5px var(--sig-ai-m);
+}
+/* 에이전트 탭 밑줄 · 작업 중인 워크트리 행/카드 옅은 틴트 · 아라 채팅 머리 선 */
+:root[data-glass='on'] .aiws-tab.on {
+  background: var(--sig-ai) bottom / 100% 2px no-repeat, var(--bg-surface);
+}
+:root[data-glass='on'] .aiws-row:has(.ag-spin),
+:root[data-glass='on'] .aiws-card:has(.ag-spin) {
+  background-image: linear-gradient(90deg, var(--sig-ai-soft), transparent 75%);
+}
+:root[data-glass='on'] .ara-hd {
+  background: var(--sig-ai) bottom / 100% 1px no-repeat;
+}
+
+/* ── 답할 일 = 반전(.ag-ask-chip 은 이미 반전 칩이다 — shell.css). 안 읽음·다른 공간에서 기다림도 반전 점. ── */
+:root[data-glass='on'] .tb-bell-dot,
+:root[data-glass='on'] .ntf-item.unread .ntf-time::after {
+  background: var(--text-hi);
+  box-shadow: none;
+}
+/* 맥박 — 옛 것은 box-shadow 를 키프레임으로 돌려 매 프레임 다시 그린다. 여기서는 뒤의 고리를 transform·opacity 로. */
+:root[data-glass='on'] .tb-spaces-dot {
+  position: relative;
+  background: var(--text-hi);
+  animation: none;
+}
+:root[data-glass='on'] .tb-spaces-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--text-hi);
+  animation: gl-ping 1.8s ease-out infinite;
+}
+@keyframes gl-ping {
+  from {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-glass='on'] .tb-spaces-dot::after {
+    display: none;
+  }
+}
+
+/* ── 대기 = 슬레이트 ── */
+:root[data-glass='on'] .ag-dot.idle {
+  background: var(--sig-slate);
+}
+:root[data-glass='on'] .ag-dot.unknown {
+  box-shadow: inset 0 0 0 1px var(--sig-slate);
+}
+
+/* ── 뜨는 면은 움직이지 않는다 — 등장 이동(translate·scale)을 opacity 페이드로. 투명도 폴백에서도 같다. ── */
+:root[data-glass='on'] :is(.cp-drop, .qo-drop, .ntf-menu, .ntf-toast, .ntf-more, .tb-menu, .ctx-menu, .modal) {
+  animation-name: gl-fade;
+}
+@keyframes gl-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ============================================================ 투명·블러 (폴백 조건이면 통째로 빠진다) */
+@media (prefers-reduced-transparency: no-preference) and (prefers-contrast: no-preference) and (forced-colors: none) {
+  /* 바탕 */
+  :root[data-glass='on'] body,
+  :root[data-glass='on'] .settings-page {
+    background: var(--gl-wall);
+  }
+  /* OS 재질(측정용 ARA_GLASS_MATERIAL)이 깔렸으면 body 를 비워 재질이 비치게 한다. */
+  :root[data-glass='on'][data-glass-material] body,
+  :root[data-glass='on'][data-glass-material] .settings-page {
+    background: transparent;
+  }
+
+  /* 구조 면: 틴트만 */
+  :root[data-glass='on'] :is(.titlebar, .statusbar, .lrail, .sidebar, .aiws-side, .ai-rail, .rbar, .ara-panel, .sp-nav) {
+    background: var(--gl-1);
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .titlebar {
+    box-shadow: inset 0 1px 0 var(--gl-hl);
+  }
+  /* 구조 면 안에서 면을 다시 칠하던 머리·탭 줄 — 비워서 유리가 이어지게 */
+  :root[data-glass='on'] .sb-tabs {
+    background: transparent;
+  }
+  :root[data-glass='on'] :is(.tb-omni, .tb-spaces, .ara-box) {
+    background: var(--gl-in);
+    border-color: var(--gl-edge);
+  }
+  /* 설정 본문 — 글이 많아 짙은 틴트(블러 없음) */
+  :root[data-glass='on'] .sp-main {
+    background: var(--gl-3);
+  }
+
+  /* 뜨는 면: 진짜 유리 */
+  :root[data-glass='on'] :is(.cp-drop, .qo-drop, .ntf-menu, .ntf-toast, .ntf-more, .tb-menu, .ctx-menu, .modal) {
+    background: var(--gl-2);
+    -webkit-backdrop-filter: var(--gl-blur);
+    backdrop-filter: var(--gl-blur);
+    border-color: var(--gl-edge);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] :is(.cp-head, .cp-foot, .qo-head, .qo-foot) {
+    background: transparent;
+  }
+  /* 승인 카드: 에이전트 채팅의 승인 띠·질문 카드는 불투명 본문 위에 뜬다 → 유리.
+     아라 채팅의 계획 승인(.ara-plan)은 유리 패널 안 → 불투명(유리 위에 유리 없음). */
+  :root[data-glass='on'] :is(.aiws-chat-question, .aiws-chat-blocked) {
+    background: var(--gl-2);
+    -webkit-backdrop-filter: var(--gl-blur);
+    backdrop-filter: var(--gl-blur);
+    border-color: var(--gl-edge);
+    box-shadow: inset 0 1px 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] .ara-plan {
+    background: var(--bg-raised);
+    border-top-color: var(--line-strong);
+  }
+}

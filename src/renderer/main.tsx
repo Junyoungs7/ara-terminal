@@ -20,6 +20,7 @@ import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/shell.css'
 import './styles/interactions.css'
+import './styles/glass.css'
 
 // #206 렌더러 오류 링버퍼 — **가장 먼저** 건다(아래 무엇이 던지든 기록되게). 모든 창이 이 파일을 지난다.
 installErrorRing()

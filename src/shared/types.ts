@@ -390,6 +390,8 @@ export type UiPrefs = {
   notifyAgents: boolean
   /** M12 R2 설정 › 편집기(AI 작업 공간 코드 에디터·변경 비교). editorPrefsOf 가 채운 확정값. */
   codeEditor: EditorPrefs
+  /** G1 설정 › 모양 [글라스](시안 C). 기본 끔 — 성능 A/B 뒤 메인이 기본값을 정한다. ARA_GLASS 가 덮는다(shared/glass.ts). */
+  glass: boolean
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -541,6 +543,8 @@ export type UiState = {
   notifyAgents?: boolean
   /** M12 R2 설정 › 편집기. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 editorPrefsOf 로 클램프한다. */
   codeEditor?: Partial<EditorPrefs>
+  /** G1 설정 › 모양 [글라스]. 🔴 선택 필드 — 없으면 끔(prefsFrom). */
+  glass?: boolean
   // M3 S1 옛 키(터미널 AI CLI 기본 플래그, id 만). 에이전트 설정(agents.json)이 처음 한 번 옮기고
   // (shared/agents.ts migrateAiCliFlags) 데이터 이전(main/agents/legacyImport.ts)이 그 뒤 지운다.
   aiCliFlags?: Partial<Record<string, string[]>>

@@ -37,7 +37,8 @@ const DEFAULT_PREFS: UiPrefs = {
   space: 'term',
   notifyToast: true,
   notifyAgents: true,
-  codeEditor: DEFAULT_EDITOR_PREFS
+  codeEditor: DEFAULT_EDITOR_PREFS,
+  glass: false
 }
 
 export function useUiPrefs() {
