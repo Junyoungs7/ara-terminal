@@ -168,6 +168,7 @@ export function registerIntegrationsFeature(deps: {
   handle('integrations:setGitlab', (req) => {
     putSecret(V_GITLAB, req.token)
     save({ ...prefs, gitlab: { enabled: req.enabled === true, baseUrl: normalizeBaseUrl(req.baseUrl) } })
+    push() // 소스 제어의 MR 목록·MR 만들기는 따로 구독한다 — 알리지 않으면 켜도 안 나타난다.
     return state()
   })
   handle('integrations:setSlack', (req) => {

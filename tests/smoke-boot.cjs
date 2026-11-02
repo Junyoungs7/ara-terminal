@@ -1003,8 +1003,8 @@ const checks = []
   checks.push(['설정 창 열림(좌측 레일)', f5.drawerOpen === true])
   checks.push([
     // 정의부는 shared/settingsIndex.ts SETTINGS_SECTIONS(M1 1-A — 묶음: AI 작업 공간 → 앱 → 전역 → 터미널 → 보안·연동 → 고급 → 정보).
-    '설정 목록 29섹션이 묶음 순서대로(AI 작업 공간이 맨 위 · M3 에서 실험 기능 섹션은 지웠다 · M8 관리형 서버)',
-    f5.navSections.join(',') === 'agents,managed,usage,git,editor,sessionSearch,notify,automations,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,about'
+    '설정 목록 32섹션이 묶음 순서대로(AI 작업 공간이 맨 위 · M3 에서 실험 기능 섹션은 지웠다 · M8 관리형 서버 · M15 연동 · M14 스킬·MCP 서버)',
+    f5.navSections.join(',') === 'agents,managed,usage,git,integrations,editor,sessionSearch,notify,automations,skills,mcpServers,general,look,pet,font,keys,update,ai,voice,terminal,conn,features,log,history,security,mcp,remote,mobile,slack,privacy,advanced,about'
   ])
   // ── W3 F16 아라 어서션 (W5 멀티 프로바이더로 갱신) ──
   // 반출 고지가 선택된 프로바이더 이름·호스트를 담는다(고정 "Anthropic API로 전송" 문구는 이제 거짓일 수 있다).
