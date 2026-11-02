@@ -24,6 +24,7 @@ test('CTX-1 터미널 우클릭 기본은 리스트 메뉴다', async ({ ara }) 
     'session.duplicate',
     'log.save',
     'ai.ask',
+    'terminal.reset', // M15 R2 TM-03 [터미널 초기화]
     'pane.close'
   ])
   // 단축키 힌트는 keymap 단일 소스에서 온다 — 묶여 들어간 뒤에도 서브메뉴 안에 그대로 있다.

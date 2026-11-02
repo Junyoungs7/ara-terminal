@@ -1,5 +1,5 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
-import { app, BrowserWindow, Menu, session, safeStorage } from 'electron'
+import { app, BrowserWindow, Menu, screen, session, safeStorage } from 'electron'
 import { appMenuTemplate } from './appMenu'
 import { join, isAbsolute, basename, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -437,19 +437,33 @@ if (!app.isPackaged && process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_ON
     // 옮기기 전 자리를 남긴다 — 창 위치를 재는 시험(RDPV-21 다중 모니터 배치)은 이 값을 본다.
     const g = globalThis as { __araIntendedBounds?: Map<number, { bounds: Electron.Rectangle; content: Electron.Rectangle }> }
     const intended = (g.__araIntendedBounds ??= new Map())
+    // 2026-11-02: 예전엔 (-32000,-32000) 에 두고 "x > -30000 이면 아직 안 옮김"으로 갈랐다. 1.5 배 단일 모니터에선
+    // -48000px 이 Windows 좌표 한계 -32768px 로 잘려 x = -21845 가 되고, 그 move 가 "앱이 옮겼다"로 읽혀
+    // 옮긴 자리를 원래 자리로 덮어썼다(RDPV-21 x=-21845) · 잘린 자리에서 창 크기도 어긋났다(RESTORE-6 +16).
+    // → 모든 모니터의 왼쪽 바로 바깥(잘리지 않는 좌표)에 두고, 옮겼는지는 실제로 놓인 자리와 비교한다.
+    let parkedAt: number[] | null = null
+    let parking = false // setPosition 안에서 move 가 바로 올 수 있다 — 그건 우리가 옮긴 것
     const park = (): void => {
-      if (w.isDestroyed()) return
+      if (w.isDestroyed() || parking) return
+      const pos = w.getPosition()
+      if (parkedAt && pos[0] === parkedAt[0] && pos[1] === parkedAt[1]) return // 이미 옮긴 자리
       const b = w.getBounds()
-      if (b.x > -30000) intended.set(w.id, { bounds: b, content: w.getContentBounds() })
-      w.setPosition(-32000, -32000)
+      intended.set(w.id, { bounds: b, content: w.getContentBounds() })
+      const left = Math.min(...screen.getAllDisplays().map((d) => d.bounds.x))
+      parkedAt = [left - b.width - 200, screen.getPrimaryDisplay().bounds.y]
+      parking = true
+      try {
+        w.setPosition(parkedAt[0], parkedAt[1])
+      } finally {
+        parking = false
+      }
+      parkedAt = w.getPosition() // OS 가 조정했으면 그 자리가 기준
     }
     park()
     w.once('ready-to-show', park)
     w.once('show', park)
     // 앱이 나중에 자리를 다시 잡는 창(RDP 펼침 등)도 다시 옮긴다.
-    w.on('move', () => {
-      if (!w.isDestroyed() && w.getBounds().x > -30000) park()
-    })
+    w.on('move', park)
   })
 }
 

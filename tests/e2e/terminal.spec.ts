@@ -126,7 +126,10 @@ test('TERM-9 URL 은 수식자 클릭으로만 열린다 — Ctrl 은 Oriel, Ctr
 
   const link = page.locator('.pane-grid .pane:visible .xterm-rows').getByText('https://example.invalid/docs').last()
   await link.waitFor({ timeout: 10_000 })
-  await link.click() // 수식자 없는 클릭 — 열리면 안 된다
+  // 수식자 없는 클릭 — 열리면 안 된다. force: xterm 6 DOM 렌더러가 `.xterm-rows { pointer-events: none }` 을
+  // 넣어 글자 span 은 클릭 대상이 아니다(사용자 클릭도 .xterm-screen 이 받고 xterm 이 좌표로 링크를 찾는다) —
+  // 같은 좌표를 그대로 누르되 Playwright 의 "가려짐" 검사만 건너뛴다.
+  await link.click({ force: true })
   await page.waitForTimeout(600)
   expect(await app.evaluate(() => (globalThis as unknown as { __opened: string[] }).__opened)).toEqual([])
   expect(await orielOpened(app)).toHaveLength(0)

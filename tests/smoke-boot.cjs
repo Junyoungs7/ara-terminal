@@ -2132,10 +2132,14 @@ const checks = []
     // 세션 하나 확보(＋ → 로컬 셸).
     document.querySelector('.tterm-add')?.click(); await wait(200)
     document.querySelector('.ctx-menu .ctx-item[data-action="local.new"]')?.click(); await wait(900)
+    for (let i = 0; i < 50 && document.querySelectorAll('.pane-grid .pane').length === 0; i++) await wait(100) // 아래와 같은 이유(셸이 늦게 뜬다)
 
     // R4.1 ③ 메뉴 항목이 실제로 동작한다 — Split → 가로 분할로 패널이 늘어난다.
     const panesBefore = document.querySelectorAll('.pane-grid .pane').length
     await openTop('터미널'); await openSub('sub.split'); await pick('split.horizontal')
+    // 분할은 새 셸을 연 **뒤에** 칸을 놓는다(MainArea doSplit → await open()) — PTY 가 늦게 뜨는 판에선
+    // pick 의 350ms 안에 칸이 안 생겨 간헐 실패했다. 칸이 생길 때까지(최대 5초) 기다린다.
+    for (let i = 0; i < 50 && document.querySelectorAll('.pane-grid .pane').length <= panesBefore; i++) await wait(100)
     const panesAfterMenu = document.querySelectorAll('.pane-grid .pane').length
     // 되돌리기: 칸 닫기(R9a — 그 칸의 세션도 함께 끝난다. 여기선 로컬이라 확인 없음).
     await openTop('터미널'); await pick('pane.close')
