@@ -5,7 +5,7 @@
 // 한 번 만들어 둔다.
 //
 // ⚠️ **창을 띄우지 않는다**(`show:false` + `offscreen`). 준영님이 쓰고 계신 화면 위로 창이 뜨면
-// 그 자체가 방해다 — make-icon-png.cjs 와 같은 규율이다.
+// 그 자체가 방해다(옛 아이콘 굽기 스크립트 때부터의 규율).
 //
 // 왜 Electron 인가: 이 저장소에 헤드리스 브라우저가 따로 없고, 목업은 앱과 같은 크로미움에서
 // 봐야 폰트·서브픽셀이 실제와 같다. 새 의존성을 얹지 않는다.
@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
     // 폰트·그라디언트가 자리를 잡을 시간. 첫 페인트만으로는 웹폰트가 덜 그려진다.
     await new Promise((r) => setTimeout(r, 500))
 
-    // **뷰포트를 강제**한다 — 창이 화면보다 크면 capturePage 가 잘린다(make-icon-png.cjs 의 그 함정).
+    // **뷰포트를 강제**한다 — 창이 화면보다 크면 capturePage 가 잘린다(옛 아이콘 굽기 스크립트가 밟은 함정).
     const dbg = win.webContents.debugger
     dbg.attach('1.3')
     await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {

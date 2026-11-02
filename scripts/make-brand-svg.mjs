@@ -12,8 +12,9 @@
 //     → site/assets/ara-icon.svg · video/public/logo.svg (그 폴더가 있을 때만 — 평면 판)
 //
 // 설치본 아이콘(resources/icons/ara-icon.ico · ara-icon.png)은 **키트에서 복사**한다 — 16~48px 은
-// 픽셀 정렬한 평면 판이 크기마다 따로 들어 있다. `npm run icons:png`/`icons:ico`(Electron 래스터) 로
-// 다시 구우면 맥 PNG 의 검은 판과 작은 크기 정렬이 빠진다 — 마크가 바뀌면 키트를 다시 굽고 복사한다.
+// 픽셀 정렬한 평면 판이 크기마다 따로 들어 있다(kit\ara\ara.ico → ara-icon.ico, kit\ara\png\ara-macos-1024.png →
+// ara-icon.png). 옛 Electron 래스터 스크립트(icons:png·icons:ico)는 정리 1 에서 지웠다 — 돌리면 맥 PNG 의 검은 판과
+// 작은 크기 정렬이 빠졌다. 마크가 바뀌면 키트를 다시 굽고(build_kit.py) 그 두 파일을 복사한 뒤 이것을 돌린다.
 //
 // **왜 index.html 까지 여기서 쓰나.** 2026-08-27 리브랜드 때 index.html 만 생성기 밖에 있어서
 // 걷어낸 마크가 파비콘으로 혼자 살아남았다(AUDIT-R4 ①). 마크는 한 곳에서 나와야 한다.

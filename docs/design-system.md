@@ -1,6 +1,6 @@
 # A.R.A — 디자인 시스템
 
-> **2.0 은 [design-system-v2.md](design-system-v2.md) 를 본다.** 이 문서는 1.x 기준이다.
+> **2.0 은 [design-system-v2.md](design-system-v2.md) 를 본다.** 이 문서는 1.x 기준이다 — 단 **§8 브랜드(접힌 별)·§8.5 글라스는 2.x 현행**(2026-11-02 정리 1).
 
 > **앱 이름**: **A.R.A** (아라, AI Remote Agent — 구 OFA Terminal → E.V. → A.R.A. 2026-08-02 최종 확정)
 > **근거**: variant-4 layout × variant-1 style — 사용자 확정 **2026-08-02**
@@ -1238,47 +1238,61 @@ function switchSbTab(tab) {
 - 부제(서브타이틀): "AI Terminal" (소문자 허용) — 타이틀바·스플래시에서만
 - 색: A·R·A 글자에 `--accent-bright` (#d8bc96), 부제에 `--text-lo` (muted)
 
-### 8.2 로고 마크 — 터미널을 도는 고리 (2026-08-27 개정)
+### 8.2 로고 마크 — 접힌 별 (2026-11-02 확정)
 
-> **배를 걷어냈다.** 배(`>_` 를 뱃머리·선체로 읽은 S5)는 이름의 뜻(아라 = 바다)에 걸린 마크였다.
-> 준영님이 아이덴티티 시트를 직접 만들어 오셨고(터미널 창 + 서버 랙 + 금색 고리), 그 안이
-> **하는 일**에 걸려 있어 더 직설적이다 — 원격 서버를 마우스로 다루는 터미널, 그 위를 도는 AI.
-> 이전 판의 근거는 git 이력에 남는다(2026-08-23 §8.2).
+> **고리를 걷어냈다.** 2026-08-27 의 "터미널 창 + 서버 랙 + 금색 고리"(그 전엔 배)는 git 이력에 남는다.
+> 지금 마크는 준영님 확정 보드에서 벡터로 다시 그린 **접힌 별**(면 두 장)이다. 아라·Oriel 이 같은 꼴, 색만 다르다.
+> **원본은 이 저장소 밖**: `D:\AI\OFA\docs\brand\final\` — 규칙 `ARA-brand.md`(아라 몫)·`HANDOFF-oriel.md`(공통 3절 쓰임 규칙·4절 모션),
+> 키트 `kit\ara\`(SVG·PNG 16~1024·ico·icns·맥 판·워드마크), 토큰 `kit\tokens.css`·`tokens.json`. 키트는 `scripts\build_kit.py` 가 굽는다.
 
-- 마스터: `resources/icons/ara-icon.svg` (512). **전부 생성물이다** — `npm run icons:svg`.
-  손으로 고치면 다음 생성 때 지워진다. 모양을 바꾸려면 `scripts/make-brand-svg.mjs` 의
-  숫자(RX/RY/DEG/두께)를 고치고 다시 돌린다.
-- 구성: 서버 랙 3단(원격) · 터미널 창 `>_`(하는 일) · **고리**와 반짝임(AI 가 돈다).
-- 팔레트: `#0E1117` `#1B1F26` `#D4AF37` `#F5E9D2` — 앱 액센트(`#c9a26d`)와 같은 계열이라
-  UI 토큰은 손대지 않았다.
+- 면: **a = 위 면**(위 갈래 + 왼쪽 아래 꼬리), **b = 아래 갈래**. 접힘(두 면 명암)이 흔한 AI ✦ 반짝이와 이 마크를 가른다.
+- **앱 아이콘·앱 안 마크는 dark(밝은 보라) 변형** — 바탕을 모르는 자리라서. 남색(light) 판은 밝은 바탕이 확실한 자리(문서·사이트 밝은 화면)만.
 
-**판이 셋이다 — 크기가 판을 정한다**
+| 변형 | 면 a | 면 b | 쓰는 곳 |
+|---|---|---|---|
+| dark(그라데이션) | `#5E61DA`·`#6868E1`·`#6662D7` | `#8A72D8`·`#A68DF8`·`#9688FC` | 앱 아이콘 64px 이상·시작 화면 마크 |
+| 작은 판(≤48px, 평면 2톤) | `#5E61DA` | `#A68DF8` | 작업 표시줄·Alt+Tab·파비콘 |
+| light(남색, 그라데이션) | `#08103B`·`#142161`·`#6665D4` | `#806DC9`·`#313176`·`#35398D` | 밝은 바탕 문서·사이트 |
 
-| 판 | 파일 | 쓰는 곳 |
+(값은 키트 `tokens.css` 의 `--ara-dark-*`·`--ara-small-*`·`--ara-light-*`. 앱 tokens.css 에는 들이지 않았다 — HEX 는 생성물 `brandMark.ts` 한 곳.)
+
+**앱 안 자리(v2.2)**
+
+| 파일 | 원본(키트) | 쓰는 곳 |
 |---|---|---|
-| 전체 | `resources/icons/ara-icon.svg` · `assets/brand/ara-icon.svg` | 128px 이상 — 설치본·스토어·사이트 히어로 |
-| 덜어낸 판 | `assets/brand/ara-favicon.svg` · `site/assets/ara-icon.svg` · `video/public/logo.svg` | **64px 이하** — 작업표시줄·바탕화면·파비콘 |
-| 선 마크 | `src/renderer/components/brandMark.ts` → `BrandOrb.tsx` | 타이틀바 17px |
+| `resources/icons/ara-icon.ico` | `ara.ico`(16·20·24·32·40·48·64·256, 48 이하 픽셀 정렬 평면 판) | electron-builder `win.icon` — 설치 프로그램·exe → 작업 표시줄·창 |
+| `resources/icons/ara-icon.png` | `png/ara-macos-1024.png`(검은 판) | electron-builder `mac.icon` |
+| `assets/brand/ara-icon.svg` = `resources/icons/ara-icon.svg` | `svg/ara-color-dark.svg` | 마스터 |
+| `assets/brand/ara-favicon.svg` | `svg/ara-flat.svg` | 파비콘·`UpdateProgress` 로고 |
+| `src/renderer/components/brandMark.ts` → `BrandOrb.tsx` | 생성물(면 경로·그라데이션) | 시작 화면(`BootSplash`)·첫 인사(`WelcomeModal`) |
 
-**그리면서 정한 세 가지 (바꿀 때 지킬 것)**
+- **`npm run icons:svg`(`scripts/make-brand-svg.mjs`) 는 배포기다** — 위 두 SVG 를 `resources/icons/ara-icon.svg`·`brandMark.ts`·`index.html` 파비콘 한 줄·`site/`·`video/` 로 퍼뜨린다.
+  `.ico`·`.png` 는 **키트에서 복사**한다. 옛 Electron 래스터(`icons:png`·`icons:ico`, `make-icon-*.cjs`)는 **2026-11-02 정리 1 에서 지웠다** —
+  돌리면 맥 PNG 의 검은 판과 16~48px 픽셀 정렬이 빠졌다. 마크가 바뀌면: 키트 다시 굽기 → 두 SVG·ico·png 복사 → `icons:svg`.
+- 창 아이콘·트레이: v2.2 메인에는 `BrowserWindow({icon})`·트레이가 없다 — exe 아이콘이 쓰인다.
 
-1. **고리는 획이 아니라 면이다.** 획(stroke)으로는 굵기를 도중에 바꿀 수 없어 아무리 굽혀도
-   "평면에 그은 선"으로 보인다(준영님 1차 피드백이 정확히 그것이었다). 타원을 촘촘히 훑어
-   법선 방향 두께를 **앞(아래)에서 굵고 뒤(위)에서 가늘게** 준다 — 그 변화가 고리를 눕힌다.
-2. **고리는 끊기면 안 된다.** 같은 면을 창 뒤에 통째로 한 벌, 창 앞에 앞쪽 절반만 한 벌 그린다.
-   두 벌의 모양·색이 같아 이음매가 없고, 자르는 선이 타원의 장축과 같아 경계가 양 끝점에 떨어진다.
-3. **고리가 창보다 커야 고리로 읽힌다.** 처음엔 궤도가 창보다 작아 위쪽 반이 통째로 창 뒤에
-   숨었고, 그러니 아래를 스치는 획 하나만 보였다. 창 위아래로 각각 37px 솟게 잡았다.
+**쓰임 규칙**(HANDOFF-oriel.md 3절 요약 — 바꿀 때 지킬 것)
 
-**64px 이하에서 랙을 버리는 이유**: 막대 셋과 점 여섯이 얼룩으로 뭉친다(실측 — 작업표시줄
-40px 에서 확인). 고리는 남긴다: 멀리서 이 마크를 알아보게 하는 것이 고리의 실루엣이다.
+1. **브랜드 색은 마크·로고 자리 안에서만.** UI 신호색(§8.5 — 사람 = 앰버, AI = 인디고→애저→스카이)은 그대로. 버튼·강조·선택·포커스에 브랜드 보라를 쓰지 않는다
+   (브랜드 보라와 AI 신호의 ΔE 23~27 — `kit\signal-distance.md`. 그래서 자리로 가른다).
+2. **48px 이하는 평면 2톤 판.** 그라데이션을 줄여 쓰지 않는다 — 16px 에서 얼룩이 되고 접힘이 사라진다.
+3. **접힘은 모든 크기에서 남긴다.** 한 색 판도 면 b 를 60% 로 남긴다.
+4. 작은 판은 픽셀 정렬돼 있다 — 늘이지 말고 가장 가까운 크기 파일을 쓴다.
+5. 돌리기·기울이기·비율 바꾸기·그림자·외곽선 금지(모션의 빛 번짐 층만 예외).
+6. 맥은 검은 판(`*-macos-*`)만.
+7. **에이전트별 "일하는 중" 표시에 별 마크를 쓰지 않는다**(코디네이터 결정) — 그 자리는 §8.5 의 신호색 고리·점.
+   마크의 동작 중 모션(A 빛남 2.4s · B 앞에서 본 궤도, transform·opacity 만, 3초 게이트, reduced-motion 정지)은
+   `HANDOFF-oriel.md` 4절에 있고 **아직 앱에 붙이지 않았다**(자리·게이트 연결은 메인 결정).
 
-- PNG: `npm run icons:png` → `resources/icons/ara-icon.png` (1024²). electron-builder 가 이 한 장에서
-  `.ico`·`.icns` 를 만든다.
+### 8.3 파비콘 규격
 
-**⚠️ 아이콘을 다시 만들 때**: `scripts/make-icon-png.cjs` 는 DevTools 프로토콜로 **뷰포트를 강제**해
-찍는다. 예전처럼 `capturePage()` 로 찍으면 **화면 높이가 1024 보다 작은 PC 에서 세로가 잘려**
-비정사각 PNG 가 나오고 electron-builder 가 거부한다(2026-08-23 실제 발생).
+- **작은 판(평면 2톤)을 쓴다** — `assets/brand/ara-favicon.svg`(= 키트 `ara-flat.svg` = `site/assets/ara-icon.svg` = `video/public/logo.svg`).
+- HTML 적용: `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` (inline data URI — `index.html`).
+  **그 href 는 손으로 쓰지 않는다** — `npm run icons:svg`(`scripts/make-brand-svg.mjs` 의 `patchFavicon`)가
+  작은 판을 인라인해 그 한 줄만 갈아 끼운다. 파일 전체를 생성하지 않는 유일한 산출물이다
+  (CSP·title·마운트 지점이 같은 파일에 있다). **자리를 못 찾으면 생성기가 죽는다** — 조용히
+  넘어가면 2026-08-27 리브랜드 때처럼 옛 마크가 혼자 남고도 생성기는 성공했다고 말한다.
+- PNG 가 필요하면 키트 `png/ara-{16…1024}.png` 를 쓴다(48 이하는 평면 판).
 
 ### 8.4 아이콘 규격 (R8 — 일관성 패스)
 
@@ -1306,20 +1320,49 @@ function switchSbTab(tab) {
   펼침이 전환으로 보이고 자리도 안 흔들린다. 표 정렬(`.con-caret`)만 회전이 아니라
   `ChevronUp`/`ChevronDown` 두 개를 쓴다(상태가 "펼침/접힘"이 아니라 "오름/내림"이라서).
 
-### 8.3 파비콘 규격
+### 8.5 글라스 (2026-11 G1·G2 — 시안 C, 기본 켬)
 
-- **덜어낸 판을 쓴다** — `assets/brand/ara-favicon.svg`(= `site/assets/ara-icon.svg` = `video/public/logo.svg`).
-  512 마스터(`resources/icons/ara-icon.svg`)와 **설계상 다른 파일이다**: 위 §8.2 의 판 표대로
-  64px 이하에서는 서버 랙을 버린다(그 크기에서 막대 셋과 점 여섯은 얼룩으로 뭉친다).
-  16px 에서도 "금색 고리 + 그 안의 어두운 창"으로 갈려 식별된다.
-  > 이 줄은 2026-08-28 까지 *"배 마스터를 그대로 쓴다(`site/assets/ara-icon.svg` =
-  > `resources/icons/ara-icon.svg`)"* 였다 — 배는 §8.2 가 걷어냈고 두 파일은 같지도 않다.
-- HTML 적용: `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,...">` (inline data URI — `index.html`).
-  **그 href 는 손으로 쓰지 않는다** — `npm run icons:svg`(`scripts/make-brand-svg.mjs` 의 `patchFavicon`)가
-  덜어낸 판을 인라인해 그 한 줄만 갈아 끼운다. 파일 전체를 생성하지 않는 유일한 산출물이다
-  (CSP·title·마운트 지점이 같은 파일에 있다). **자리를 못 찾으면 생성기가 죽는다** — 조용히
-  넘어가면 2026-08-27 리브랜드 때처럼 옛 마크가 혼자 남고도 생성기는 성공했다고 말한다.
-- PNG 변환 시: 512/256/128/64/32/16px 6종 추출 (Electron `nativeImage`·`electron-builder` .ico/.icns 용)
+시안 `mockups/v2/glass/C.html`. 코드 `src/renderer/styles/glass.css`(규칙)·`tokens.css`(`--gl-*`·`--sig-*`)·`src/shared/glass.ts`·`src/renderer/glass.ts`, 시험 `tests/glass.test.ts`·`tests/e2e/glass.spec.ts`.
+
+- **켜기**: 설정 › 모양 [글라스]. 미지정 = 켬, `false` 만 끔(G2). 모든 규칙이 `html[data-glass="on"]` 아래 — 끄면 그 전 화면 그대로.
+  `ARA_GLASS=0|1` 이 설정을 덮는다(시험·성능 기준선용 — `perf-baseline.cjs` 기본 `--glass=off`).
+- **창 바탕은 CSS**(정적 radial `--gl-wall`, 창은 불투명). OS 재질(mica·acrylic·vibrancy)은 측정용 env `ARA_GLASS_MATERIAL` 로만 — 투명 창 합성 비용 때문(Oriel ~25% iGPU).
+
+**층(토큰)**
+
+| 층 | 토큰 | 값 | 자리 |
+|---|---|---|---|
+| 바탕 | `--gl-wall` | radial 넷(움직이지 않음) | body |
+| 구조 면 — 틴트만, **블러 없음** | `--gl-1` | `rgba(10,13,24,.6)` | 타이틀바·상태바·레일·사이드바·`.aiws-side`·`.ai-rail`·`.rbar`·`.ara-panel`·검색·SCM·탐색기 패널 |
+| 뜨는 면 — **블러는 여기만** | `--gl-2` + `--gl-blur` | `rgba(30,35,52,.74)` + `blur(28px) saturate(1.6)` | 명령 팔레트·빠른 열기·메뉴·토스트·`.ctx-menu`·`.modal`·승인 카드 |
+| 글이 많은 면 | `--gl-3` | `rgba(13,15,20,.78)` | 설정 본문 |
+| AI 가운데 바닥 | `--gl-center` | 옅은 AI 빛 radial + `--bg-terminal` | `.aiws-center` |
+| 경계·하이라이트 | `--gl-edge`·`--gl-hl`·`--gl-in` | 흰 8%·9%·검정 28% | 면 경계, 위쪽 1px |
+| 막대 홈 | `--gl-track` | 흰 12% | 사용량 막대 빈 몫 |
+
+- **불투명 유지**: 터미널·에디터·diff·뷰어·탭바·터미널 공간 `.main` — 유리 위에 글을 올리지 않는다(단위 시험이 지킨다). AI 공간만 `.main.space-ai` 를 비워 사이드가 바탕 위 유리로 보인다.
+- **유리 위에 유리 없음** — 유리 패널 안의 뜨는 것(`.ara-plan`)은 불투명.
+
+**신호색(`--sig-*`) — 색은 뜻이다**
+
+| 뜻 | 토큰 | 자리 |
+|---|---|---|
+| AI(일하는 중) | `--sig-ai`(인디고 `#5b4bff` → 애저 `#1f8fff` → 스카이 `#4ad6ff`), 글 `--sig-ai-ink`, 틴트 `--sig-ai-soft` | `.ag-spin` 고리(11px)·`.aiws-spin`·`.ara-think`·에이전트 탭 밑줄·작업 중 행 틴트 |
+| 사람·포커스·선택 | `--sig-user`(앰버 `#ffb547`), 위 글 `--sig-user-on` | 글라스 때 `--accent*` 가 앰버로 → 포커스 링·고른 행 왼쪽 2px 막대·스위치·사용자 말풍선·터미널 탭 밑줄 |
+| 답할 일 | 반전(흰 바탕 + 어두운 글) | `.ag-ask-chip`·막힘 글리프·벨/안 읽음/맥박 점 |
+| 대기 | `--sig-slate` | `.ag-dot.idle`·`unknown` |
+| 주 버튼 | `--sig-go`(그라데이션, 흰 글) | 주 버튼만 |
+
+- 대비는 `scan:magic` 이 잰다(ai-ink·user-ink·soft ≥4.5, user·ai-m·slate ≥3, 앰버 위 잉크·주 버튼 흰 글 ≥4.5). 반투명 면 합성색은 정적으로 못 잰다(scan 주석에 한계).
+- `--sel-bg` 는 그대로(xterm 테마와 짝).
+
+**움직임·폴백**
+
+- 블러 면은 움직이지 않는다 — 등장은 `gl-fade`(opacity 만). 새 키프레임은 transform·opacity 만(시험이 확인). 공간 맥박 점은 `::after` 고리 transform·opacity.
+- 주기 갱신(상태바 게이지·시계)은 구조 면 안 — 블러를 다시 돌리지 않는다.
+- `prefers-reduced-transparency`·`prefers-contrast`·`forced-colors` → 투명·블러·바탕이 통째로 빠지고 불투명 면 + 신호색만. 신호색 규칙(행 막대·반전 글리프)은 그 폴백 밖.
+- ✦(`Sparkles`·`WandSparkles`)는 renderer 에 0개 — 시험이 막는다(G2). AI 공간 = `Bot`, 빈 화면 = `FolderGit2`, AI 커밋 메시지 = `PenLine`.
+- 라이트 테마 값은 옮기지 않았다(앱에 라이트 테마 없음). 시안의 브랜드 파랑→핑크 글자도 뺐다(브랜드는 §8.2).
 
 ---
 

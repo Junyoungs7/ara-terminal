@@ -61,8 +61,6 @@
     "screenshot:w5": "electron-vite build && electron tests/w5-screenshot.cjs",
     "screenshot:fbmon": "electron-vite build && electron tests/fbmon-screenshot.cjs",
     "icons:svg": "node scripts/make-brand-svg.mjs",
-    "icons:png": "electron scripts/make-icon-png.cjs",
-    "icons:ico": "electron scripts/make-icon-ico.cjs",
     "feed": "node scripts/local-update-feed.mjs"
   },
   "dependencies": {
