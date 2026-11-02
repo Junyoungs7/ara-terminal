@@ -1,37 +1,29 @@
-import { MARK_FRONT_CLIP, MARK_RING, MARK_SPARK } from './brandMark'
+import { useId } from 'react'
+import { MARK_FACES, MARK_GRADS, MARK_VIEWBOX } from './brandMark'
 
-// A.R.A 브랜드 마크 — **터미널을 도는 고리**(2026-08-27 준영님 확정, design-system §8).
-// 원격 서버(랙)를 마우스로 다루는 터미널 + 그 위를 도는 AI. 앱 아이콘과 같은 도안을
-// **타이틀바 17px 용으로 덜어낸 판**이다: 랙을 뺐다 — 그 크기에서 막대 셋은 얼룩으로 뭉친다.
+// ARA 브랜드 마크 — **접힌 4갈래 별**(2026-11-02 준영님 확정 보드, D:\AI\OFA\docs\brand\final).
+// 왼쪽 아래로 길게 뻗은 꼬리 + 접힌 두 면(a 위·꼬리 / b 아래 갈래). 시작 화면·첫 인사가 쓴다.
 //
-// 고리 좌표는 **생성물이다**(brandMark.ts ← scripts/make-brand-svg.mjs). 손으로 찍으면 어긋나
-// "그은 선"이 된다. 앞쪽 절반을 한 번 더 그려 창 앞으로 지나가게 하는 것도 아이콘과 같은 방식이다.
-// 색은 var(--accent)/var(--accent-bright) 를 상속한다(테마를 갈면 마크도 따라간다).
+// 경로·색은 **생성물이다**(brandMark.ts ← scripts/make-brand-svg.mjs ← 키트). 색은 브랜드 그라데이션
+// 그대로 — 테마 강조색(--accent, 사람 앰버)을 따르지 않는다: 브랜드 색은 마크 자리에서만 쓰고
+// UI 신호색(사람 앰버·AI 인디고~스카이)은 바꾸지 않는다. 밝은 변형이라 라이트·다크 바탕 둘 다 읽힌다.
 export function BrandOrb() {
+  // 한 화면에 둘 이상 그려질 수 있다(시작 화면 위 첫 인사) — 그라데이션 id 가 겹치면 안 된다.
+  const id = useId()
   return (
-    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="A.R.A">
+    <svg viewBox={MARK_VIEWBOX} xmlns="http://www.w3.org/2000/svg" aria-label="ARA">
       <defs>
-        <clipPath id="orbFront">
-          <polygon points={MARK_FRONT_CLIP} />
-        </clipPath>
+        {MARK_GRADS.map((g, i) => (
+          <linearGradient key={i} id={`${id}g${i}`} gradientUnits="userSpaceOnUse" x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2}>
+            {g.stops.map(([o, c]) => (
+              <stop key={o} offset={o} stopColor={c} />
+            ))}
+          </linearGradient>
+        ))}
       </defs>
-      {/* 고리 뒤쪽 — 창 뒤로 지나간다. 어둡게 둬야 뒤에 있어 보인다 */}
-      <path d={MARK_RING} fill="var(--accent)" fillRule="evenodd" opacity=".55" />
-      {/* 터미널 창 + 프롬프트 */}
-      <rect x="8.6" y="10.4" width="14.8" height="11.4" rx="2.8" stroke="var(--accent-bright)" strokeWidth="2" />
-      <path
-        d="M12 13.7 L14.7 15.9 L12 18.1"
-        stroke="var(--accent-bright)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M16.8 18.3 L20.4 18.3" stroke="var(--accent-bright)" strokeWidth="2" strokeLinecap="round" />
-      {/* 고리 앞쪽 — 같은 모양을 절반만 다시. 이음매가 없다 */}
-      <g clipPath="url(#orbFront)">
-        <path d={MARK_RING} fill="var(--accent-bright)" fillRule="evenodd" />
-      </g>
-      <path d={MARK_SPARK} fill="var(--accent-bright)" />
+      {MARK_FACES.map((d, i) => (
+        <path key={i} d={d} fill={`url(#${id}g${i})`} />
+      ))}
     </svg>
   )
 }
