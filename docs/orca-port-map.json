@@ -1196,5 +1196,70 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "정리 1(v2.2 9e426f1): src/main/cli/childPath.ts — 켤 때 폴더 결정(설치본 resources\bin\u0007ra.cmd 있을 때, 개발판 userData\\cli\bin\u0007ra.cmd 를 그 dev 실행 파일 + out/main/araCli.js 로 씀), 앱 안 PtyBackend·데몬 에이전트 create·데몬 터미널 appEnv 세 자리에서 PATH 키(대소문자 무관) 하나로 모아 맨 앞에 넣고 중복 제거 + ARA_USER_DATA_PATH. Orca 처럼 모든 로컬 PTY(터미널·에이전트 구분 없음), 원격 셸 무변경, 전역 PATH 무변경. 바꾼 것: Windows dev 명령 이름 orca-dev 대신 ara 그대로(에이전트가 같은 명령을 치게), ARA_USER_DATA_PATH 는 늘 실음(Orca 는 host launcher·dev 때만). 뺀 것: 맥·리눅스(ara 실행 파일이 ara.cmd 뿐), 리눅스 shim, WSL CLI, ORCA_CLI_COMMAND·ORCA_CLI_BIN_DIR, 로그인 셸 PATH 복원 rcfile, 네이티브 launcher."
+  },
+  {
+    "id": "TM-03",
+    "feature": "Reset Terminal(터미널 입력 모드 초기화 — 우클릭·메뉴·단축키)",
+    "orcaPaths": [
+      "src/shared/terminal-mode-reset-profiles.ts",
+      "src/renderer/src/components/terminal-pane/terminal-input-mode-reset.ts",
+      "src/renderer/src/components/terminal-pane/use-terminal-pane-context-menu.ts",
+      "src/renderer/src/components/terminal-pane/TerminalContextMenu.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2: buildProcessBoundaryGround 그대로(shared/terminalModeReset.ts)를 그 칸의 xterm 에 쓴다(셸엔 안 보냄, 로컬 Windows ConPTY 는 ?1004 유지). 터미널 우클릭 [터미널 초기화]·편집 메뉴·Ctrl+Shift+R(아라 추가 — Orca 는 우클릭만). 뺀 것: 호스트(데몬) 모델 바닥 맞추기 — 아라 데몬·SSH replay 는 원래 바이트라 다시 붙으면 옛 모드가 살아날 수 있다(ponytail 주석)."
+  },
+  {
+    "id": "TM-04",
+    "feature": "macOS 로컬 네트워크 권한 안내·복구",
+    "orcaPaths": [
+      "src/main/ipc/developer-permissions.ts",
+      "src/main/ipc/local-network-connection-test.ts",
+      "src/renderer/src/components/settings/DeveloperPermissionsPane.tsx",
+      "src/renderer/src/components/settings/LocalNetworkConnectionTest.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2: 설정 › 터미널 맨 아래 '로컬 네트워크(macOS)' 줄(맥에서만) — [권한 요청](mDNS 멀티캐스트 1바이트로 macOS 권한 창), [시스템 설정 열기](Privacy_LocalNetwork), 같은 망 주소:포트 [연결 시험](Electron 을 node 로 띄운 자식이 TCP 연결 — 사설 IP 만, 실패 사유 7종). Windows·리눅스는 줄이 없고 IPC 도 unsupported. 뺀 것: 다른 개발자 권한, 데몬 launchd 귀속, 마지막 성공 기억, 설정 검색 색인(맥 전용 줄이라)."
+  },
+  {
+    "id": "TM-05",
+    "feature": "SSH agent 포워딩 + 주소 유지(herdr H9)",
+    "orcaPaths": [
+      "src/main/ssh/connection/ssh-connect-config.ts",
+      "src/main/ssh/ssh-auth-resolution.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2: 아라엔 agent 포워딩이 아예 없었다 → 프로필별 [SSH agent 포워딩](기본 끔, 대상에만 — 점프 홉엔 안 빌려줌). 에이전트 = SSH_AUTH_SOCK, 없으면 Windows OpenSSH 파이프(Orca resolveDefaultAgentSocket 순서). 주소 유지(herdr src/platform/ssh_agent.rs·src/remote/ssh_agent.rs, Apache-2.0 — 생각만): 관리형 서버 orcad 의 connect 다리가 연결마다 ~/.ara-server/agent.sock 링크를 자기 포워딩 소켓으로 다시 걸고, orcad 세션은 SSH_AUTH_SOCK=그 링크 → 재접속·데몬 생존 뒤에도 같은 경로. 터미널 공간은 서버에 아무것도 안 쓰므로 주소 유지 없음(새 셸마다 sshd 가 새 경로를 준다). 뺀 것: herdr 의 여러 에이전트 중 살아 있는 것 고르기·주기 점검."
+  },
+  {
+    "id": "TM-06",
+    "feature": "복원 파일 백업·스냅샷 회전(herdr H5)",
+    "orcaPaths": [],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2: herdr src/persist/{restore,snapshot,writer}.rs(Apache-2.0)의 생각. 작업대 복원 파일 workspace.json — 읽다가 깨져 있으면 workspace-backups/ 에 원본 보존(최근 3), 저장 때 15분에 한 장 workspace-snapshots/(최근 48 ≈ 12시간), 본 파일·.bak 둘 다 깨지면 가장 최근의 읽히는 스냅샷으로 뜬다(전엔 빈 기본값). main/workspace/restoreSnapshots.ts. 뺀 것: 다른 저장 파일(agent-tabs.json 등), 저장 폴더가 없어도 패널 남기기."
+  },
+  {
+    "id": "WS-22",
+    "feature": "여러 서버 묶어 보기(호스트별 묶음 — 터미널 사이드바와 한 구현, herdr H8)",
+    "orcaPaths": [
+      "src/shared/sidebar-list/host-section-rows.ts",
+      "src/shared/sidebar-list/host-section-order.ts",
+      "src/renderer/src/components/sidebar/worktree-list/rows/HostSectionHeader.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2: AI 작업 공간 사이드바 — 저장소가 둘 이상의 호스트(이 PC·관리형 서버)에 있으면 호스트 머리줄(접기, localStorage) 아래 그 호스트의 고정·프로젝트 줄. 서버 이름·순서·그룹은 터미널 연결 사이드바와 같은 구현(store/groups.ts groupServers — ConnTree 도 이것으로 바꿈)에서: 터미널에서 끌어 놓은 그룹 순서 그대로, 머리줄 '그룹 › 서버'. 뺀 것: Orca 런타임 호스트·호스트 끌어 순서·호스트 필터·연결 상태 점·herdr 끊긴 머신 흐리게."
+  },
+  {
+    "id": "TM-07",
+    "feature": "한글 IME 자동 전환(herdr H11) — 뺌",
+    "orcaPaths": [],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "M15 R2 뺌(보고만): herdr src/client/shell/input_source.rs 는 OS 입력기 API(Windows IMM/TSF·macOS TIS)를 직접 부른다. Electron·Chromium 에는 IME 변환 모드를 바꾸는 API 가 없고(ime-mode CSS 미지원), Windows 는 ImmSetConversionStatus(같은 프로세스 HIMC) 또는 IME 기본 창에 WM_IME_CONTROL — 둘 다 네이티브 모듈(새 의존성)이나 키마다 PowerShell Add-Type(수백 ms) 이 필요. 아라엔 herdr 같은 prefix 모드도 없다. 대안 후보(새 의존성 없음): 단축키 판정을 e.code(물리 키)로 보조 — 한글 상태에서 Ctrl+Shift+글자 단축키가 안 먹는 제보가 있을 때."
   }
 ]
