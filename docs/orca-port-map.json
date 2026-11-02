@@ -1065,5 +1065,58 @@
     "orcaRef": "fdfcfb3551",
     "status": "porting",
     "notes": "M15 R1(v2.2 a2510a4): 처음 AI 공간에 들어올 때 지연 로드 덮개 — 에이전트 CLI 설치(감지·설치 명령)·로그인(사용량 조회의 missing-credentials), Oriel 감지, 관리형 서버 소개(설정 바로 가기). [닫기] 이번 실행만, [다시 보지 않기] localStorage. 뺀 것: 테마·알림·언어·Windows Terminal 단계, 체크리스트, 원격 측정. 시험 빌드에선 기본으로 안 뜸(aiws.onboarding.test 로 켬)."
+  },
+  {
+    "id": "AU-01",
+    "feature": "예약 실행(자동화) — 만들기·관리·사전 점검·실행 이력·지금 실행·다시 실행",
+    "orcaPaths": [
+      "src/main/automations/service.ts",
+      "src/main/automations/dispatch-refusal.ts",
+      "src/main/automations/precheck-runner.ts",
+      "src/shared/automations-types.ts",
+      "src/shared/automation-schedule-parsing.ts",
+      "src/shared/automation-schedule-occurrences.ts",
+      "src/shared/automation-schedules.ts",
+      "src/shared/automation-cron-field-parsing.ts",
+      "src/shared/automation-cron-occurrence.ts",
+      "src/shared/automation-precheck.ts",
+      "src/shared/automation-run-retention.ts",
+      "src/renderer/src/hooks/automation-dispatch-handler.ts",
+      "src/renderer/src/components/automations/AutomationsPage.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M14 R1(v2.2 5ec1988): 앱(main) 안 60초 타이머만 — OS 작업 스케줄러·로그인 항목 등록 없음(Orca 데스크톱과 같음). 앱이 꺼져 있던/PC 가 잠든 동안 놓친 예약은 다음 틱에 놓친 실행 유예(기본 720분, 0·30·60·180·720·1440·2880) 안이면 한 번, 넘으면 skipped_missed(missedBeyondGrace = 유예 + 틱 2번). 사전 점검은 예약 실행만, 0 아니면 skipped_precheck, [지금 실행]·[다시 실행]은 건너뜀. 띄우기는 본창 렌더러(automations:dispatch → agentStore.launchAgent, 화면 안 옮김), 받을 창 없으면 skipped_unavailable. 끝남 = 탭이 일하는 중을 지나 멈춤. 이력은 끝난 것만 자동화당 100개. 예약 문법(RRULE·cron 5칸) 파일·시험 5개 그대로. 설정 › 예약 실행. 뺀 것: 실행마다 새 작업 단위(new_per_run), 세션 재사용, 추가 인자, 원격 호스트·orcad 예약(3차 '여러 호스트 자동화 표'), 반복 거절 접기(repeatSkip), 사용량 귀속, 출력 스냅숏, 템플릿, 목록 거르기·정렬."
+  },
+  {
+    "id": "AU-02",
+    "feature": "스킬 관리 화면(목록·추가·지우기)",
+    "orcaPaths": [
+      "src/main/skills/discovery.ts",
+      "src/main/skills/skill-discovery-sources.ts",
+      "src/main/skills/skill-root-file-walk.ts",
+      "src/shared/skills.ts",
+      "src/shared/skill-deletion-eligibility.ts",
+      "src/shared/skill-discovery-depth.ts",
+      "src/renderer/src/components/skills/SkillsPage.tsx"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M14 R1(v2.2 5ec1988): 뿌리 = Claude(CLAUDE_CONFIG_DIR|~/.claude)/skills · ~/.agents/skills(Codex·Gemini) · Codex(CODEX_HOME)/skills · ~/.gemini/skills · 플러그인(Claude plugins, Codex plugins/cache — 못 지움) · 프로젝트 .claude/skills·.agents/skills. SKILL.md 깊이 5(플러그인 10), 이름·설명은 머리말. 열 때만 읽음. 쓰기는 버튼을 눌렀을 때만: 추가 = OS 대화상자로 고른 폴더(SKILL.md 필수)를 고른 홈 뿌리로 복사(같은 이름 거절 — Orca 는 번들·공유 링크·저장소 설치), 지우기 = 확인 → 휴지통(Orca 는 staging 후 삭제), 링크인 스킬 폴더는 링크만 끊음(removeAccountTree), 링크된 뿌리 안이면 실제 위치와 '원본이 지워진다'를 확인 창·뿌리 경고로 밝힘(M13 R2 계정 공유 링크와 충돌 없게 — 계정 폴더는 따로 훑지 않음). 켜기/끄기는 Orca 에 없음(→ 안 함, Codex 의 config.toml skills 설정은 전역 파일이라 안 씀). 뺀 것: 번들 스킬 설치·업데이트 검토(M14 R2 ara CLI 와), 공유 링크(결정 :96 빼기), WSL, 원격."
+  },
+  {
+    "id": "AU-03",
+    "feature": "MCP 서버 등록(에이전트별·프로젝트별)",
+    "orcaPaths": [
+      "src/renderer/src/components/settings/McpConfigSection.tsx",
+      "src/renderer/src/components/settings/McpMissingConfigList.tsx",
+      "src/shared/mcp-config.ts",
+      "src/shared/mcp-server-inspection.ts",
+      "src/shared/mcp-config-inspection-limits.ts",
+      "src/main/codex/config-toml-mcp-servers.ts"
+    ],
+    "orcaRef": "fdfcfb3551",
+    "status": "porting",
+    "notes": "M14 R1(v2.2 5ec1988): Orca McpConfigSection 그대로 — 프로젝트 후보 .mcp.json·.cursor/mcp.json·.claude.json·.claude/mcp.json 살피기(서버 이름·transport·명령/URL·켜짐, env 비밀 가림), 하나도 없으면 [MCP 설정 추가] 두 번 눌러 빈 .mcp.json(덮어쓰지 않음 wx), [열기](Orca 는 자기 에디터 — 아라는 OS 기본 편집기). 아라가 더한 것: 프로젝트 .mcp.json 에 서버 추가(명령+인자 또는 URL, 같은 이름 거절)·지우기(확인, 깨진 JSON 은 안 건드림). 에이전트별 사용자 설정 ~/.claude.json·~/.codex/config.toml([mcp_servers.*] 줄 읽기)·~/.gemini/settings.json 은 읽기만(전역 설정 파일 쓰기 금지 원칙). Oriel 은 M9 R2 처럼 실행 인자로 붙임 → 에이전트마다 '아라가 붙임' 줄. 뺀 것: SSH·런타임 원격 프로젝트, Codex 도구 승인(codex-mcp-tool-approval)."
   }
 ]
