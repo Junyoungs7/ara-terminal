@@ -1105,7 +1105,11 @@ const checks = []
     const addBtn = document.querySelector('.tterm-add')
     const tabsBeforeAdd = document.querySelectorAll('.term-tabbar .ttab').length
     if (addBtn) addBtn.click()
-    await wait(600)
+    // OR-3: 고정 600ms 는 session.list → create(스텁의 cmd.exe conpty 스폰) → 렌더 왕복에 빠듯했다(e018a63 조용한 측정 1회 실패, 앞뒤는 통과).
+    // 이 스모크는 세션 IPC 를 스텁으로 둬 M11 R2 데몬 대기(최대 3초)를 거치지 않는다 — 제품 경로가 아니라 시험 시점 문제.
+    // 생길 때까지(최대 3초) 기다린 뒤, 하나가 더 생기는지 보려고 조금 더 둔다 — "정확히 1개" 단언은 그대로.
+    for (let i = 0; i < 30 && document.querySelectorAll('.term-tabbar .ttab').length <= tabsBeforeAdd; i++) await wait(100)
+    await wait(300)
     const tabsAfterAddClick = document.querySelectorAll('.term-tabbar .ttab').length
     const addClickNoMenu = document.querySelectorAll('.ctx-menu').length === 0
     if (addBtn) ctx(addBtn, 0, 0)
@@ -1237,6 +1241,7 @@ const checks = []
   checks.push(['R1.3: 트리 "＋ 새 로컬 셸" 행 제거(빈 영역 우클릭으로 이동)', ux.newLocalRow === false])
   checks.push(['로컬 그룹 상시 표시(세션 없어도)', ux.localGroupAlways === true])
   checks.push(['탭바 ＋ 좌클릭 → 메뉴 없이 로컬 셸 1개 생성', ux.addClickNoMenu && ux.tabsAfterAddClick === ux.tabsBeforeAdd + 1])
+  if (!(ux.addClickNoMenu && ux.tabsAfterAddClick === ux.tabsBeforeAdd + 1)) console.log(`  └ 탭 ${ux.tabsBeforeAdd} → ${ux.tabsAfterAddClick}, 메뉴 없음=${ux.addClickNoMenu}`)
   // ＋ 는 세션을 **만드는** 자리다. AI CLI 는 이미 붙어 있는 세션의 폴더에서 띄우는 것이라
   // 여기 있을 이유가 없었다(2026-08-18 창 제거와 함께 뺐다).
   checks.push(['탭바 ＋ 우클릭 → 로컬 셸/SSH 연결 보조 메뉴', ux.addMenu.join(',') === 'local.new,ssh.open'])
