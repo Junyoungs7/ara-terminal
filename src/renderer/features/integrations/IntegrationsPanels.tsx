@@ -87,8 +87,8 @@ export function SlackSettingsPanel(): JSX.Element | null {
   const [draft, setDraft] = useState<{ channel?: string; users?: string }>({})
   if (!st) return null
   const s = st.slack
-  const save = async (p: Partial<{ enabled: boolean; channel: string; users: string[]; notify: boolean; appToken: string; botToken: string }>): Promise<void> => {
-    setSt(await window.ev.integrations.setSlack({ enabled: s.enabled, channel: s.channel, users: s.users, notify: s.notify, ...p }))
+  const save = async (p: Partial<{ enabled: boolean; channel: string; users: string[]; notify: boolean; allowRun: boolean; appToken: string; botToken: string }>): Promise<void> => {
+    setSt(await window.ev.integrations.setSlack({ enabled: s.enabled, channel: s.channel, users: s.users, notify: s.notify, allowRun: s.allowRun, ...p }))
   }
   const ready = s.hasAppToken && s.hasBotToken
   return (
@@ -133,6 +133,12 @@ export function SlackSettingsPanel(): JSX.Element | null {
       <Row label={t('slack.set.notify')} desc={t('slack.set.notify.desc')} item="slack.notify">
         <Toggle on={s.notify} label={t('slack.set.notify')} onChange={(on) => void save({ notify: on })} />
       </Row>
+      <Row label={t('slack.set.allowRun')} desc={t('slack.set.allowRun.desc')} item="slack.allowRun">
+        <Toggle on={s.allowRun} label={t('slack.set.allowRun')} onChange={(on) => void save({ allowRun: on })} />
+      </Row>
+      <div className="set-note" data-item="slack.warning">
+        {t('slack.set.warning')}
+      </div>
       <div className="set-note" data-item="slack.commands">
         {t('slack.set.commands')}
       </div>

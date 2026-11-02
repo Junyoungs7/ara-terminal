@@ -2,8 +2,9 @@
 // 설정은 userData/integrations.json, 토큰은 vault(safeStorage) — 화면·로그로 나가지 않는다(렌더러는 '있다/없다'만 안다).
 
 export type GitLabPrefs = { enabled: boolean; baseUrl: string }
-/** channel = 알림을 올릴 채널 id(C…). users = 명령을 받을 Slack user id(U…) — 비면 아무 명령도 안 받는다. */
-export type SlackPrefs = { enabled: boolean; channel: string; users: string[]; notify: boolean }
+/** channel = 알림을 올릴 채널 id(C…). users = 명령을 받을 Slack user id(U…) — 비면 아무 명령도 안 받는다.
+ *  allowRun = IN-02b 시작·이어 지시를 받는다(기본 꺼짐 — 상태·질문·답·취소만). */
+export type SlackPrefs = { enabled: boolean; channel: string; users: string[]; notify: boolean; allowRun: boolean }
 export type IntegrationsPrefs = { gitlab: GitLabPrefs; slack: SlackPrefs }
 
 export type SlackLink = 'off' | 'connecting' | 'connected' | 'error'
@@ -37,7 +38,7 @@ export type GitLabResult<T> = ({ ok: true } & T) | { ok: false; error: string; d
 
 export const DEFAULT_INTEGRATIONS: IntegrationsPrefs = {
   gitlab: { enabled: false, baseUrl: '' },
-  slack: { enabled: false, channel: '', users: [], notify: true }
+  slack: { enabled: false, channel: '', users: [], notify: true, allowRun: false }
 }
 
 const SLACK_ID = /^[A-Z0-9]{2,20}$/
@@ -64,7 +65,8 @@ export function integrationsPrefsOf(v: unknown): IntegrationsPrefs {
       enabled: s.enabled === true,
       channel: typeof s.channel === 'string' && SLACK_ID.test(s.channel.trim()) ? s.channel.trim() : '',
       users: slackUsersOf(s.users),
-      notify: s.notify !== false
+      notify: s.notify !== false,
+      allowRun: s.allowRun === true
     }
   }
 }

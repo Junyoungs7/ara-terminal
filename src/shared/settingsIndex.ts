@@ -217,7 +217,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('slack.botToken', 'slack.set.botToken', 'slack.set.botToken.desc'),
       i('slack.channel', 'slack.set.channel', 'slack.set.channel.desc'),
       i('slack.users', 'slack.set.users', 'slack.set.users.desc'),
-      i('slack.notify', 'slack.set.notify', 'slack.set.notify.desc')
+      i('slack.notify', 'slack.set.notify', 'slack.set.notify.desc'),
+      i('slack.allowRun', 'slack.set.allowRun', 'slack.set.allowRun.desc')
     ]
   },
   soon('privacy', 'security'),

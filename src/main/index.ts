@@ -653,6 +653,7 @@ app.whenReady().then(async () => {
     vault: secrets,
     mainWc,
     agents: () => agents,
+    launch: (req) => (cli ? cli.agentLaunch(req) : Promise.resolve({ ok: false as const, error: '아라가 아직 준비되지 않았습니다.' })),
     ...(process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_SLACK_API'] ? { slackApi: process.env['ARA_E2E_SLACK_API'] } : {})
   })
   // M3 S1 데이터 이전(한 번) — 옛 작업대 로컬 폴더 → 프로젝트, 옛 키 정리. aiCliFlags 는 바로 위가 먼저 옮겼다(순서가 계약).

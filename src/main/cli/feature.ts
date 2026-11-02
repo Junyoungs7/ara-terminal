@@ -33,7 +33,7 @@ export function registerCliFeature(deps: {
   worktrees: CliDeps['worktrees']
   sessions: () => CliDeps['sessions'] | null
   mainWc: () => WebContents | null
-}): { stop(): Promise<void> } {
+}): { stop(): Promise<void>; agentLaunch(req: { agent: AgentId; worktree: string; prompt: string }): Promise<{ ok: true; sessionId: string } | { ok: false; error: string }> } {
   const pending = new Map<string, (r: AgentLaunchResult) => void>()
   const launchAgent = (req: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string }): Promise<AgentLaunchResult> =>
     new Promise((resolve) => {
@@ -93,5 +93,16 @@ export function registerCliFeature(deps: {
   handle('cli:skillStatus', () => bundledSkillStatus(bundledSkillSource(deps.skillSourceDirs), roots()))
   handle('cli:skillInstall', ({ rootId }) => installBundledSkill(bundledSkillSource(deps.skillSourceDirs), roots(), rootId))
 
-  return { stop: async () => void (await server?.stop()) }
+  return {
+    stop: async () => void (await server?.stop()),
+    // IN-02b Slack 시작 — CLI `agent launch` 와 같은 길(작업 단위 선택자 → 렌더러 [+]).
+    agentLaunch: async (req) => {
+      try {
+        const r = (await handlers['agent.launch']!({ agent: req.agent, worktree: req.worktree, prompt: req.prompt })) as { launch: { terminal: string } }
+        return { ok: true, sessionId: r.launch.terminal }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  }
 }

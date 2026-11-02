@@ -87,7 +87,9 @@ test('IN-M15-2★ Slack — 모의 Socket Mode 연결 · 지정 사용자 명령
   const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' })
   await new Promise<void>((r) => wss.on('listening', () => r()))
   let client: WebSocket | null = null
+  let conns = 0
   wss.on('connection', (c) => {
+    conns++
     client = c
     c.send(JSON.stringify({ type: 'hello' }))
   })
@@ -120,6 +122,21 @@ test('IN-M15-2★ Slack — 모의 Socket Mode 연결 · 지정 사용자 명령
     expect(JSON.parse(post.body)).toMatchObject({ channel: 'C111', text: '열린 에이전트 탭이 없습니다.', thread_ts: '2' })
     expect(post.headers['authorization']).toBe('Bearer xoxb-e2e')
     expect(await page.content()).not.toContain('xoxb-e2e')
+
+    // IN-02b 시작·이어 지시 스위치 — 기본 꺼짐(거절 글), 켜면 커넥터가 시작을 시도(없는 작업 단위라 실제 에이전트는 안 뜬다). 경고 문구가 보인다.
+    const posts = () => api.hits.filter((h) => h.url.endsWith('chat.postMessage')).map((h) => JSON.parse(h.body) as { text: string; thread_ts: string })
+    await expect(pane.locator('[data-item="slack.warning"]')).toContainText('Slack 에 남습니다')
+    send('3', 'U111', '시작 없는작업단위 claude 안녕')
+    await expect.poll(() => posts().length, { timeout: 10_000 }).toBe(2)
+    expect(posts()[1]).toMatchObject({ thread_ts: '3' })
+    expect(posts()[1]!.text).toContain('꺼져 있습니다')
+    const before = conns
+    await pane.locator('[data-item="slack.allowRun"] .set-toggle').click()
+    // 설정 저장은 소켓을 다시 연다 — 새 연결에 보낸다.
+    await expect.poll(() => conns, { timeout: 15_000 }).toBe(before + 1)
+    send('4', 'U111', '시작 없는작업단위 claude 안녕')
+    await expect.poll(() => posts().length, { timeout: 10_000 }).toBe(3)
+    expect(posts()[2]!.text).toContain('시작하지 못했습니다')
   } finally {
     if (saved === undefined) delete process.env.ARA_E2E_SLACK_API
     else process.env.ARA_E2E_SLACK_API = saved

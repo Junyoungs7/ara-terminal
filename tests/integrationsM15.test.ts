@@ -6,7 +6,8 @@ import { WebSocketServer } from 'ws'
 import { integrationsPrefsOf, normalizeBaseUrl, parseGitRemote, projectPathFor, slackUsersOf } from '../src/shared/integrations'
 import { createGitLabClient, type FetchLike } from '../src/main/integrations/gitlab'
 import { startSlackSocket, type SlackFetch, type SlackMessage } from '../src/main/integrations/slack'
-import { isSlackCommand, runSlackCommand, type SlackTab } from '../src/main/integrations/slackCommands'
+import { cleanSlackText, describeTurnEnd, isSlackCommand, runSlackCommand, type SlackTab } from '../src/main/integrations/slackCommands'
+import { createConnectorSeam, redactSecrets, turnResult, TURN_RESULT_MAX_CHARS, type ConnectorHost } from '../src/main/integrations/connector'
 
 const servers: { close(cb?: () => void): void }[] = []
 afterEach(async () => {
@@ -88,30 +89,108 @@ describe('GitLab 클라이언트(모의 서버)', () => {
   })
 })
 
-describe('Slack 명령', () => {
+describe('Slack 명령 → 커넥터 이음새(IN-02b)', () => {
   const approval = JSON.stringify({ approval: { tool: 'Write', summary: 'a.txt' } })
   const question = JSON.stringify({ questions: [{ question: '어느 쪽?', multiSelect: false, options: [{ label: '왼쪽' }, { label: '오른쪽' }] }] })
-  const tabs: SlackTab[] = [
-    { n: 1, sessionId: 's1', label: 'Claude Code · app', agent: 'claude', state: 'blocked', ask: approval },
-    { n: 2, sessionId: 's2', label: 'Codex · web', agent: 'codex', state: 'blocked', ask: question },
-    { n: 3, sessionId: 's3', label: 'Claude Code · x', agent: 'claude', state: 'working' }
-  ]
-  it('상태·질문·도움', () => {
-    expect(runSlackCommand('<@UBOT> 상태', tabs).text).toContain('[3] Claude Code · x — 일하는 중')
-    const q = runSlackCommand('질문', tabs).text
+  function fakeHost(allowRun = false) {
+    const tabs: SlackTab[] = [
+      { n: 1, sessionId: 's1', label: 'Claude Code · app', agent: 'claude', state: 'blocked', ask: approval },
+      { n: 2, sessionId: 's2', label: 'Codex · web', agent: 'codex', state: 'blocked', ask: question },
+      { n: 3, sessionId: 's3', label: 'Claude Code · x', agent: 'claude', state: 'working' }
+    ]
+    const calls: unknown[][] = []
+    let screen = ''
+    const host: ConnectorHost = {
+      tabs: () => tabs,
+      answer: (id, groups) => (calls.push(['answer', id, groups]), { ok: true }),
+      followUp: (id, text) => (calls.push(['send', id, text]), { ok: true }),
+      screen: async () => screen,
+      launch: async (req) => {
+        calls.push(['launch', req])
+        if (req.worktree === 'nope') return { ok: false, error: '작업 단위를 못 찾았습니다: nope' }
+        tabs.push({ n: 4, sessionId: 's4', label: 'Claude Code · feat', agent: req.agent, state: 'working' })
+        return { ok: true, sessionId: 's4' }
+      }
+    }
+    const seam = createConnectorSeam(host, { allowRun: () => allowRun })
+    return { tabs, calls, seam, setScreen: (t: string) => (screen = t) }
+  }
+  const ctx = (thread: string, ts = thread) => ({ key: { source: 'slack', externalId: `C1 ${thread}` }, deliveryId: ts })
+
+  it('상태·질문·도움 · 채널 명령 판별 · Slack 꾸밈 벗기기', async () => {
+    const { seam } = fakeHost()
+    expect(await runSlackCommand('<@UBOT> 상태', seam, ctx('1'))).toContain('[3] Claude Code · x — 일하는 중')
+    const q = await runSlackCommand('질문', seam, ctx('1'))
     expect(q).toContain('Write 실행을 허용할까요?')
     expect(q).toContain('2. 오른쪽')
-    expect(runSlackCommand('rm -rf', tabs).text).toContain('아라 명령')
+    expect(await runSlackCommand('rm -rf', seam, ctx('1'))).toContain('아라 명령')
     expect(isSlackCommand('안녕하세요')).toBe(false)
     expect(isSlackCommand('<@UBOT> status')).toBe(true)
+    expect(isSlackCommand('시작 a claude 해')).toBe(true)
+    expect(cleanSlackText('지시 1 &lt;b&gt; &amp; <https://x.y/a|x.y/a>')).toBe('지시 1 <b> & https://x.y/a')
   })
-  it('승인 답 = 허용 1 / 거부 Esc, 질문 답 = 그 에이전트의 키', () => {
-    expect(runSlackCommand('답 1 허용', tabs).answer).toEqual({ sessionId: 's1', groups: [{ raw: '1' }] })
-    expect(runSlackCommand('answer 1 deny', tabs).answer?.groups).toEqual([{ raw: '\x1b' }])
-    expect(runSlackCommand('답 2 2', tabs).answer).toEqual({ sessionId: 's2', groups: [{ raw: '2' }] })
-    expect(runSlackCommand('답 2 5', tabs).answer).toBeUndefined()
-    expect(runSlackCommand('답 3 허용', tabs).answer).toBeUndefined()
-    expect(runSlackCommand('답 9 허용', tabs).answer).toBeUndefined()
+
+  it('답 — 승인 허용 1 / 거부 Esc, 질문은 그 에이전트의 키, 범위 밖·답 대기 아님은 거절', async () => {
+    const { seam, calls } = fakeHost()
+    expect(await runSlackCommand('답 1 허용', seam, ctx('1'))).toContain('[1] 허용했습니다')
+    expect(await runSlackCommand('answer 1 deny', seam, ctx('2'))).toContain('거부했습니다')
+    expect(await runSlackCommand('답 2 2', seam, ctx('3'))).toContain('"오른쪽" 로 답했습니다')
+    expect(await runSlackCommand('답 2 5', seam, ctx('4'))).toContain('1~2 중')
+    expect(await runSlackCommand('답 3 허용', seam, ctx('5'))).toContain('지금 답을 기다리지 않습니다')
+    expect(await runSlackCommand('답 9 허용', seam, ctx('6'))).toContain('그 번호의 탭이 없습니다')
+    expect(await runSlackCommand('답 허용', seam, ctx('7'))).toContain('이어진 탭이 없습니다')
+    expect(calls).toEqual([
+      ['answer', 's1', [{ raw: '1' }]],
+      ['answer', 's1', [{ raw: '\x1b' }]],
+      ['answer', 's2', [{ raw: '2' }]]
+    ])
+  })
+
+  it('시작·지시는 스위치가 꺼져 있으면 거절(아무것도 띄우거나 쓰지 않는다)', async () => {
+    const { seam, calls } = fakeHost(false)
+    expect(await runSlackCommand('시작 feat claude 고쳐 줘', seam, ctx('10'))).toContain('꺼져 있습니다')
+    expect(await runSlackCommand('지시 3 더 해 줘', seam, ctx('11'))).toContain('꺼져 있습니다')
+    expect(calls).toEqual([])
+  })
+
+  it('시작 → 스레드에 이음 → 지시(번호 없이)·취소(Esc)·같은 글 두 번은 한 번만 · 턴 결과는 그 스레드 키로', async () => {
+    const { seam, calls, tabs, setScreen } = fakeHost(true)
+    await seam.tick() // 기준
+    expect(await runSlackCommand('시작 feat claude 테스트 고쳐 줘\n둘째 줄', seam, ctx('20'))).toContain('시작했습니다')
+    expect(calls[0]).toEqual(['launch', { agent: 'claude', worktree: 'feat', prompt: '테스트 고쳐 줘\n둘째 줄' }])
+    expect(await runSlackCommand('시작 nope claude x', seam, ctx('21'))).toContain('시작하지 못했습니다 — 작업 단위를 못 찾았습니다')
+    expect(await runSlackCommand('시작 feat bash x', seam, ctx('22'))).toContain('claude·codex·gemini')
+    expect(await runSlackCommand('지시 이어서 해', seam, ctx('20', '20.1'))).toContain('[4] 보냈습니다')
+    expect(await runSlackCommand('지시 이어서 해', seam, ctx('20', '20.1'))).toContain('[4] 보냈습니다')
+    expect(calls.filter((c) => c[0] === 'send')).toEqual([['send', 's4', '이어서 해']])
+    expect(await runSlackCommand('지시 해', seam, ctx('99'))).toContain('이어진 탭이 없습니다')
+    expect(await runSlackCommand('지시 1 해', seam, ctx('98'))).toContain('먼저 `답`')
+    expect(await runSlackCommand('취소', seam, ctx('20', '20.2'))).toContain('[4] 취소했습니다')
+    expect(calls.at(-1)).toEqual(['answer', 's4', [{ raw: '\x1b' }]])
+    expect(await runSlackCommand('취소 1', seam, ctx('30'))).toContain('[1] 취소했습니다')
+    expect(calls.at(-1)).toEqual(['answer', 's1', [{ raw: '\x1b' }]])
+    expect(await runSlackCommand('취소 2', seam, ctx('31'))).toContain('아라에서 답하세요')
+    // 턴 끝 → 이어진 스레드 키 + 화면 뒤쪽(비밀 가림·테두리 뺌)
+    await seam.tick()
+    tabs[3]!.state = 'idle'
+    setScreen('앞 출력\n╭────╮\n결과: 통과 12건\nTOKEN=abc123\nxoxb-123456789012-abcdefabcdef\n│ > │\n╰────╯\n')
+    const ev = await seam.tick()
+    expect(ev).toHaveLength(1)
+    expect(ev[0]).toMatchObject({ kind: 'turn-ended', key: { source: 'slack', externalId: 'C1 20' } })
+    const out = (ev[0] as { lastOutput: string }).lastOutput
+    expect(out).toContain('결과: 통과 12건')
+    expect(out).not.toContain('abc123')
+    expect(out).not.toContain('xoxb-123')
+    expect(out).not.toContain('╭')
+    expect(describeTurnEnd(tabs[3]!, out)).toContain('끝났습니다.\n```')
+  })
+
+  it('턴 결과 길이 상한 · 토큰 가림', () => {
+    const long = Array.from({ length: 40 }, (_, i) => `${i} ${'가'.repeat(200)}`).join('\n')
+    const r = turnResult(long)
+    expect(r.length).toBeLessThanOrEqual(TURN_RESULT_MAX_CHARS + 1)
+    expect(r).toContain('39 ')
+    expect(redactSecrets('glpat-abcdefghijklmnop ghp_abcdefghijklmnop')).toBe('**** ****')
   })
 })
 
@@ -149,6 +228,60 @@ describe('Slack Socket Mode(모의 서버)', () => {
     expect(api.seen.find((s) => s.url.endsWith('apps.connections.open'))!.headers.authorization).toBe('Bearer xapp-1')
     sock.stop()
     expect(links.at(-1)).toBe('off')
+  })
+  it('IN-02b 왕복 — 모의 Socket Mode 로 시작 → 스레드 지시 → 같은 봉투 재전송은 한 번만 → 답 글은 그 스레드로', async () => {
+    const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' })
+    servers.push(wss)
+    await new Promise<void>((r) => wss.on('listening', () => r()))
+    const wsUrl = `ws://127.0.0.1:${(wss.address() as AddressInfo).port}`
+    const ev = (id: string, text: string, ts: string, thread?: string) =>
+      JSON.stringify({ envelope_id: id, type: 'events_api', payload: { event: { type: 'message', user: 'U1', channel: 'C1', channel_type: 'channel', text, ts, ...(thread ? { thread_ts: thread } : {}) } } })
+    wss.on('connection', (c) => {
+      c.send(JSON.stringify({ type: 'hello' }))
+      c.send(ev('e1', '시작 feat codex 테스트 돌려', '100.1'))
+      setTimeout(() => {
+        c.send(ev('e2', '지시 &lt;이어서&gt;', '100.2', '100.1'))
+        c.send(ev('e2', '지시 &lt;이어서&gt;', '100.2', '100.1')) // Slack 재전송
+      }, 150)
+    })
+    const api = await mockHttp((s) => (s.url.endsWith('apps.connections.open') ? { status: 200, body: { ok: true, url: wsUrl } } : { status: 200, body: { ok: true } }))
+    const calls: unknown[][] = []
+    const tabs: SlackTab[] = []
+    const seam = createConnectorSeam(
+      {
+        tabs: () => tabs,
+        answer: () => ({ ok: true }),
+        followUp: (id, text) => (calls.push(['send', id, text]), { ok: true }),
+        screen: async () => '',
+        launch: async (req) => {
+          calls.push(['launch', req])
+          tabs.push({ n: 1, sessionId: 's9', label: 'Codex · feat', agent: req.agent, state: 'working' })
+          return { ok: true, sessionId: 's9' }
+        }
+      },
+      { allowRun: () => true }
+    )
+    const sock = startSlackSocket({
+      fetch: fetchLike,
+      appToken: 'xapp-1',
+      botToken: 'xoxb-1',
+      apiBase: api.base,
+      onLink: () => {},
+      onMessage: (m) => {
+        const thread = m.threadTs ?? m.ts
+        void runSlackCommand(m.text, seam, { key: { source: 'slack', externalId: `${m.channel} ${thread}` }, deliveryId: m.ts }).then((t) => sock.post(m.channel, t, thread))
+      }
+    })
+    const posts = () => api.seen.filter((s) => s.url.endsWith('chat.postMessage')).map((s) => JSON.parse(s.body) as { channel: string; text: string; thread_ts: string })
+    await expect.poll(() => posts().length, { timeout: 5000 }).toBe(3)
+    expect(calls).toEqual([
+      ['launch', { agent: 'codex', worktree: 'feat', prompt: '테스트 돌려' }],
+      ['send', 's9', '<이어서>']
+    ])
+    expect(posts().every((p) => p.channel === 'C1' && p.thread_ts === '100.1')).toBe(true)
+    expect(posts()[0]!.text).toContain('시작했습니다')
+    expect(posts()[1]!.text).toContain('[1] 보냈습니다')
+    sock.stop()
   })
   it('토큰 오류(invalid_auth)는 다시 붙지 않고 error', async () => {
     const api = await mockHttp(() => ({ status: 200, body: { ok: false, error: 'invalid_auth' } }))

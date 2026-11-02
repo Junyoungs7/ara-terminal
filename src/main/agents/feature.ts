@@ -41,6 +41,7 @@ import type { Oriel } from '../oriel/oriel'
 import { createAgentAwake } from './awake'
 import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
 import { promptBytes } from './status'
+import { renderScreen } from '../sessions/screenText'
 import { ASK_MAX_GROUPS, ASK_MAX_TEXT, ASK_STEP_MS, type AskAnswerKeyGroup } from '@shared/agentAsk'
 
 export function registerAgentsFeature(deps: {
@@ -61,7 +62,7 @@ export function registerAgentsFeature(deps: {
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean } } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string> } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -506,7 +507,13 @@ export function registerAgentsFeature(deps: {
     terminalDaemon,
     // M15 Slack(main/integrations) — 탭 목록(띄운 순서)과 카드 답(같은 길).
     tabs: () => [...tabMeta].map(([sessionId, m]) => ({ sessionId, agent: m.agent, cwd: m.cwd })),
-    answer
+    answer,
+    // IN-02b Slack 이어 지시(채팅 입력과 같은 M3 안전 입력 — 입력 상자를 본 뒤 붙여넣기 → Enter)·턴 결과(화면 글).
+    followUp: (sessionId, text) => ({ ok: typeof text === 'string' && !!text.trim() && deps.sessions().has(sessionId) && ensureTracker().submit(sessionId, text) }),
+    screen: async (sessionId) => {
+      const s = deps.sessions().snapshot().find((x) => x.id === sessionId)
+      return s ? renderScreen(deps.sessions().peek(sessionId), s.cols ?? 80, s.rows ?? 24) : ''
+    }
   }
 }
 

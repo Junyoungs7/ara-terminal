@@ -13,12 +13,13 @@ import { runProcess } from '../util/runProcess'
 import { pushSend } from '../util/windowPush'
 import { createGitLabClient, type FetchLike } from './gitlab'
 import { startSlackSocket, type SlackFetch, type SlackSocket } from './slack'
-import { describeCard, isSlackCommand, runSlackCommand, type SlackTab } from './slackCommands'
+import { createConnectorSeam, type ConnectorHost, type ConnectorSeam } from './connector'
+import { describeCard, describeTurnEnd, isSlackCommand, runSlackCommand, type SlackTab } from './slackCommands'
 
 const V_GITLAB = 'gitlab.token'
 const V_SLACK_APP = 'slack.appToken'
 const V_SLACK_BOT = 'slack.botToken'
-/** 알림용 상태 훑기 간격 — Slack 이 붙어 있고 알림이 켜졌을 때만 돈다. */
+/** 알림·턴 결과용 상태 훑기 간격 — Slack 이 붙어 있을 때만 돈다. */
 const NOTIFY_POLL_MS = 3000
 const GIT_TIMEOUT_MS = 5000
 
@@ -27,6 +28,10 @@ export type AgentsLink = {
   views(): AgentStatusView[]
   tabs(): { sessionId: string; agent: string; cwd: string }[]
   answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }
+  /** IN-02b 이어 지시 — M3 안전 입력(채팅·첫 지시와 같은 길). */
+  followUp(sessionId: string, text: string): { ok: boolean }
+  /** IN-02b 턴 결과 — 탭 화면 글. */
+  screen(sessionId: string): Promise<string>
 }
 
 export function registerIntegrationsFeature(deps: {
@@ -35,6 +40,8 @@ export function registerIntegrationsFeature(deps: {
   fetch?: FetchLike & SlackFetch
   mainWc: () => WebContents | null
   agents: () => AgentsLink | null
+  /** IN-02b 시작 — ara CLI agent.launch(앱의 [+] 와 같은 길). 없으면 시작은 실패 답. */
+  launch?: ConnectorHost['launch']
   /** 시험용 Slack API 주소(모의 서버). */
   slackApi?: string
 }): { stop(): void } {
@@ -88,24 +95,44 @@ export function registerIntegrationsFeature(deps: {
       return { n: i + 1, sessionId: t.sessionId, label, agent: t.agent, state: v?.state ?? null, ...(v?.ask ? { ask: v.ask } : {}) }
     })
   }
-  const last = new Map<string, { state: string | null; ask?: string }>()
-  const watch = (): void => {
-    for (const tab of slackTabs()) {
-      const prev = last.get(tab.sessionId)
-      last.set(tab.sessionId, { state: tab.state, ask: tab.ask })
-      if (!prev || !prefs.slack.channel || !socket) continue
-      if (tab.ask && tab.ask !== prev.ask) {
-        const card = describeCard(tab)
-        if (card) void socket.post(prefs.slack.channel, card)
-      } else if (prev.state === 'working' && tab.state === 'idle') {
-        void socket.post(prefs.slack.channel, `[${tab.n}] ${tab.label} — 끝났습니다.`)
+  // IN-02b 커넥터 이음새(connector.ts) — Slack 은 그 위의 운반 하나. 시작·지시는 allowRun 스위치(기본 꺼짐).
+  const seam: ConnectorSeam = createConnectorSeam(
+    {
+      tabs: slackTabs,
+      answer: (id, groups) => deps.agents()?.answer(id, groups) ?? { ok: false },
+      followUp: (id, text) => deps.agents()?.followUp(id, text) ?? { ok: false },
+      screen: async (id) => (await deps.agents()?.screen(id)) ?? '',
+      launch: (req) => (deps.launch ? deps.launch(req) : Promise.resolve({ ok: false as const, error: '아라가 아직 준비되지 않았습니다.' }))
+    },
+    { allowRun: () => prefs.slack.allowRun }
+  )
+  /** 대화 키 ↔ Slack 스레드: externalId = "<채널> <스레드 ts>". */
+  const threadOf = (externalId: string): { channel: string; ts: string } => {
+    const [channel = '', ts = ''] = externalId.split(' ')
+    return { channel, ts }
+  }
+  // Orca watch — 이어진 대화는 그 스레드로(늘), 나머지는 알림 채널로(상태 알림이 켜졌을 때만).
+  let ticking = false
+  const watch = async (): Promise<void> => {
+    if (ticking || !socket) return
+    ticking = true
+    try {
+      for (const ev of await seam.tick()) {
+        const text = ev.kind === 'prompt' ? describeCard(ev.tab) : describeTurnEnd(ev.tab, ev.lastOutput)
+        if (!text || !socket) continue
+        if (ev.key) {
+          const t = threadOf(ev.key.externalId)
+          void socket.post(t.channel, text, t.ts)
+        } else if (prefs.slack.notify && prefs.slack.channel) void socket.post(prefs.slack.channel, text)
       }
+    } finally {
+      ticking = false
     }
   }
   const stopSlack = (): void => {
     if (poll) clearInterval(poll)
     poll = null
-    last.clear()
+    seam.reset()
     socket?.stop()
     socket = null
     link = 'off'
@@ -133,16 +160,14 @@ export function registerIntegrationsFeature(deps: {
         const dm = m.channelType === 'im'
         if (!dm && m.channel !== prefs.slack.channel) return
         if (!dm && !isSlackCommand(m.text)) return
-        const r = runSlackCommand(m.text, slackTabs())
-        if (r.answer) {
-          const ok = deps.agents()?.answer(r.answer.sessionId, r.answer.groups).ok === true
-          if (!ok) return void sock.post(m.channel, '보내지 못했습니다 — 그 탭이 닫혔을 수 있습니다.', m.threadTs ?? m.ts)
-        }
-        void sock.post(m.channel, r.text, m.threadTs ?? m.ts)
+        const thread = m.threadTs ?? m.ts
+        // 배달 id = 글 ts(Slack 이 같은 봉투를 다시 보내도 한 번만 실행).
+        void runSlackCommand(m.text, seam, { key: { source: 'slack', externalId: `${m.channel} ${thread}` }, deliveryId: m.ts }).then((text) => sock.post(m.channel, text, thread))
       }
     })
     socket = sock
-    if (prefs.slack.notify) poll = setInterval(watch, NOTIFY_POLL_MS)
+    // 이어진 스레드의 턴 결과는 알림을 꺼도 간다 — 붙어 있는 동안 늘 훑는다.
+    poll = setInterval(() => void watch(), NOTIFY_POLL_MS)
   }
 
   // ── GitLab ──
@@ -174,7 +199,7 @@ export function registerIntegrationsFeature(deps: {
   handle('integrations:setSlack', (req) => {
     putSecret(V_SLACK_APP, req.appToken)
     putSecret(V_SLACK_BOT, req.botToken)
-    save({ ...prefs, slack: { enabled: req.enabled === true, channel: req.channel, users: req.users, notify: req.notify } })
+    save({ ...prefs, slack: { enabled: req.enabled === true, channel: req.channel, users: req.users, notify: req.notify, allowRun: req.allowRun === true } })
     startSlack()
     return state()
   })
