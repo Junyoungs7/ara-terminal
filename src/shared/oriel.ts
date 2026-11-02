@@ -5,7 +5,12 @@
 // 사용자 설정 파일(~/.claude.json·~/.codex/config.toml·~/.gemini/settings.json)은 쓰지 않는다 — 실행 인자·env 로만.
 import type { AgentId } from './agents'
 
-export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean }
+export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean; pid?: number }
+/**
+ * OR-3 — 어느 Oriel 인가. standalone = Oriel 설치 파일로 깐 것(`%LOCALAPPDATA%\Programs\oriel`, 자기 Oriel.exe 로 뜬다),
+ * bundled = 아라 설치본 동봉(`<resources>/oriel`, 아라 Electron 공유), dev = 그 밖(개발 체크아웃·설정에 적은 폴더).
+ */
+export type OrielKind = 'standalone' | 'bundled' | 'dev'
 /**
  * OR-2 — Oriel CLI(version·open·mcp)를 띄우는 법. 시스템 node 가 없는 PC 도 되게 아라 Electron + `ELECTRON_RUN_AS_NODE=1`
  * (M4 데몬과 같은 길), 그 위에 Oriel 앱을 띄울 Electron(`ORIEL_ELECTRON`)·설치본 호스트 표시(`ARA_HOST_APP`)를 env 로 — main/oriel/oriel.ts araOrielRunner.
@@ -15,7 +20,7 @@ export type OrielRunner = { command: string; env: Record<string, string> }
 export const NODE_RUNNER: OrielRunner = { command: 'node', env: {} }
 
 /** 설정·알림이 보는 상태. installed=false 면 where 에 찾아본 자리들. runner = 감지에 쓴 실행법(open·에이전트 MCP 설정도 같은 것). */
-export type OrielStatus = { installed: true; info: OrielInfo; runner: OrielRunner } | { installed: false; tried: string[] }
+export type OrielStatus = { installed: true; info: OrielInfo; runner: OrielRunner; kind: OrielKind } | { installed: false; tried: string[] }
 
 /** `oriel version` stdout → 정보. 필요한 칸이 없거나 JSON 이 아니면 null. */
 export function parseOrielVersion(stdout: string): OrielInfo | null {
@@ -32,16 +37,32 @@ export function parseOrielVersion(stdout: string): OrielInfo | null {
   const electronPath = str('electronPath')
   const cliPath = str('cliPath')
   if (!version || !appPath || !electronPath || !cliPath) return null
-  return { version, appPath, electronPath, cliPath, running: o['running'] === true }
+  const pid = typeof o['pid'] === 'number' ? { pid: o['pid'] } : {}
+  return { version, appPath, electronPath, cliPath, running: o['running'] === true, ...pid }
 }
 
 /**
- * 찾아볼 자리(앞이 먼저). 설정값이 있으면 그것만. 없으면 설치본 동봉 자리(다음 라운드 — electron-builder extraResources `oriel`) → 개발 PC 체크아웃.
- * 하드코딩 경로는 후보일 뿐 — 없으면 '미설치'.
+ * 찾아볼 자리(앞이 먼저 = OR-3 우선순위의 뒷부분: 단독 설치본 > 동봉판 > dev). 설정값이 있으면 그것만(경로 고정).
+ * 하드코딩 경로는 후보일 뿐 — 없으면 '미설치'. 실행 중인 것이 맨 앞이라는 규칙은 감지 뒤에 pickOriel 이.
  */
-export function orielCandidates(setting: string, resourcesPath: string | null): string[] {
+export function orielCandidates(setting: string, resourcesPath: string | null, localAppData: string | null = null): string[] {
   if (setting.trim()) return [setting.trim()]
-  return [...(resourcesPath ? [`${resourcesPath.replace(/\\/g, '/')}/oriel`] : []), 'D:/AI/ai-browser']
+  const slash = (p: string): string => p.replace(/\\/g, '/')
+  return [
+    ...(localAppData ? [`${slash(localAppData)}/Programs/oriel/resources/app`] : []),
+    ...(resourcesPath ? [`${slash(resourcesPath)}/oriel`] : []),
+    'D:/AI/ai-browser'
+  ]
+}
+
+/**
+ * OR-3 여러 Oriel 이 찾아졌을 때 고르기: 실행 중인 그것 > 후보 순서. 데이터·단일 인스턴스 잠금·파이프를 모두 같이 써서
+ * `version` 의 running 은 어느 판에서 물어도 같다 → 실행 중 프로세스의 실행 파일(runningExe)이 그 판의 electronPath 인 것을 고른다.
+ */
+export function pickOriel<T extends { info: OrielInfo }>(found: readonly T[], runningExe: string | null): T | null {
+  const norm = (p: string): string => p.replace(/\\/g, '/').toLowerCase()
+  const running = runningExe ? found.find((f) => norm(f.info.electronPath) === norm(runningExe)) : undefined
+  return running ?? found[0] ?? null
 }
 
 /** 에이전트에게 주는 한 줄 지시(Claude 는 --append-system-prompt-file, Codex 는 developer_instructions). 따옴표·줄바꿈 없음 — 셸 한 줄에 그대로 담긴다. */

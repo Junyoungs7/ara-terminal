@@ -4,8 +4,8 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion, type OrielRunner } from '../src/shared/oriel'
-import { araElectronForOriel, araOrielRunner, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV } from '../src/main/oriel/oriel'
+import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion, pickOriel, type OrielRunner } from '../src/shared/oriel'
+import { araElectronForOriel, araOrielRunner, createOriel, FOREGROUND_SCRIPT, ORIEL_ELECTRON_ENV, orielAppDir, orielKindOf, standaloneOrielExe } from '../src/main/oriel/oriel'
 import { ARA_HOST_APP_ENV, ARA_HOST_ARG, isBundledOrielDir, orielHostDir } from '../src/main/oriel/host'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
@@ -39,7 +39,8 @@ describe('감지 규칙', () => {
       appPath: 'D:/a',
       electronPath: 'D:/a/e.exe',
       cliPath: 'D:/a/bin/oriel.mjs',
-      running: true
+      running: true,
+      pid: 3 // OR-3 — 여러 Oriel 중 떠 있는 것을 가릴 때
     })
     expect(parseOrielVersion('{"version":"0.1.0","appPath":"D:/a"}')).toBeNull()
     expect(parseOrielVersion('Usage: oriel ...')).toBeNull()
@@ -48,6 +49,8 @@ describe('감지 규칙', () => {
     expect(orielCandidates(' E:/tools/oriel ', 'C:\\ARA\\resources')).toEqual(['E:/tools/oriel'])
     expect(orielCandidates('', 'C:\\ARA\\resources')).toEqual(['C:/ARA/resources/oriel', 'D:/AI/ai-browser'])
     expect(orielCandidates('', null)).toEqual(['D:/AI/ai-browser'])
+    // OR-3 단독 설치본이 동봉판보다 앞
+    expect(orielCandidates('', 'C:\\ARA\\resources', 'C:\\Users\\u\\AppData\\Local')).toEqual(['C:/Users/u/AppData/Local/Programs/oriel/resources/app', 'C:/ARA/resources/oriel', 'D:/AI/ai-browser'])
   })
 })
 
@@ -325,4 +328,97 @@ describe.runIf(process.platform === 'win32')('실행 한 줄을 진짜 PowerShel
       expect(JSON.parse(r.stdout.trim())).toEqual(['--settings', settingsFile, ...(resume ? ['--resume', resume] : ['--dangerously-skip-permissions'])])
     }
   }, 60_000)
+})
+
+/** OR-3 가짜 단독 설치본 `<root>/Oriel.exe` + `<root>/resources/app/bin/oriel.mjs`(실행하지 않는다). */
+function fakeStandalone(): { root: string; app: string; exe: string; versionJson: (running?: boolean, pid?: number) => string } {
+  const root = tmp()
+  const app = join(root, 'resources', 'app')
+  mkdirSync(join(app, 'bin'), { recursive: true })
+  writeFileSync(join(app, 'bin', 'oriel.mjs'), '')
+  const exe = join(root, 'Oriel.exe')
+  writeFileSync(exe, '')
+  const versionJson = (running = false, pid?: number): string =>
+    JSON.stringify({ version: '0.1.0', appPath: app, electronPath: exe, cliPath: join(app, 'bin', 'oriel.mjs'), running, ...(pid ? { pid } : {}) })
+  return { root, app, exe, versionJson }
+}
+
+describe('OR-3 — Oriel 단독 설치본 감지·우선순위(실행 중 > 단독 > 동봉 > dev)', () => {
+  it('단독 설치본 판별·설치 폴더 → resources/app·종류', () => {
+    const sa = fakeStandalone()
+    expect(standaloneOrielExe(sa.app)).toBe(sa.exe)
+    expect(standaloneOrielExe(sa.root)).toBeNull()
+    expect(orielAppDir(sa.root)).toBe(sa.app) // 설정 칸에 설치 폴더를 적어도
+    expect(orielAppDir(sa.app)).toBe(sa.app)
+    const { dir } = fakeOriel()
+    expect(orielAppDir(dir)).toBe(dir)
+    expect(orielKindOf(sa.app, null)).toBe('standalone')
+    expect(orielKindOf('C:/ARA/resources/oriel', 'C:/ARA/resources', () => false)).toBe('bundled')
+    expect(orielKindOf(dir, 'C:/ARA/resources')).toBe('dev')
+  })
+  it('★ 단독판 runner = 자기 Oriel.exe + ELECTRON_RUN_AS_NODE 만(아라 Electron·ORIEL_ELECTRON·ARA_HOST_APP 없음) → MCP 설정 세 에이전트도', () => {
+    const sa = fakeStandalone()
+    const runner = araOrielRunner(sa.app, { execPath: 'C:/ARA/A.R.A.exe', devElectron: 'C:/x/electron.exe', resourcesPath: 'C:/ARA/resources' })
+    expect(runner).toEqual({ command: sa.exe, env: { ELECTRON_RUN_AS_NODE: '1' } })
+    const cli = join(sa.app, 'bin', 'oriel.mjs').replace(/\\/g, '/')
+    const files: Record<string, string> = {}
+    const write = (name: string, ext: string, body: string): string => ((files[name] = body), `C:/h/${name}.${ext}`)
+    orielLaunch('claude', cli, write, runner)
+    expect(JSON.parse(files['oriel-mcp']).mcpServers.oriel).toEqual({ type: 'stdio', command: sa.exe, args: [cli, 'mcp', '--launch'], env: { ELECTRON_RUN_AS_NODE: '1' } })
+    expect(orielLaunch('codex', cli, write, runner).args).toEqual(
+      expect.arrayContaining([`mcp_servers.oriel.command='${sa.exe}'`, `mcp_servers.oriel.args=['${cli}','mcp','--launch']`, "mcp_servers.oriel.env={ELECTRON_RUN_AS_NODE='1'}"])
+    )
+    orielLaunch('gemini', cli, write, runner)
+    expect(JSON.parse(files['oriel-gemini']).mcpServers.oriel).toEqual({ command: sa.exe, args: [cli, 'mcp', '--launch'], env: { ELECTRON_RUN_AS_NODE: '1' } })
+  })
+  it('pickOriel — 실행 중 실행 파일과 electronPath 가 같은 것(대소문자·구분자 무시) > 후보 순서', () => {
+    const a = { info: parseOrielVersion(JSON.stringify({ version: '1', appPath: 'a', electronPath: 'C:\\S\\Oriel.exe', cliPath: 'c' }))! }
+    const b = { info: parseOrielVersion(JSON.stringify({ version: '1', appPath: 'b', electronPath: 'D:/dev/electron.exe', cliPath: 'c' }))! }
+    expect(pickOriel([a, b], null)).toBe(a)
+    expect(pickOriel([a, b], 'd:\\DEV\\electron.exe')).toBe(b)
+    expect(pickOriel([a, b], 'C:/other.exe')).toBe(a)
+    expect(pickOriel([], null)).toBeNull()
+  })
+  it('★ createOriel — 세 종류가 다 있으면 단독판, 떠 있는 게 dev 면 dev(그 pid 의 실행 파일로 가림), 하나뿐이면 프로세스를 묻지 않는다', async () => {
+    const sa = fakeStandalone()
+    const bundled = fakeOriel()
+    const dev = fakeOriel()
+    const devExe = join(dev.dir, 'electron.exe')
+    const kinds: Record<string, 'standalone' | 'bundled' | 'dev'> = { [sa.app]: 'standalone', [bundled.dir]: 'bundled', [dev.dir]: 'dev' }
+    let running: number | null = null
+    const asked: number[] = []
+    const make = (cands: string[]) =>
+      createOriel({
+        candidates: () => cands,
+        openExternal: async () => {},
+        kindOf: (d) => kinds[d] ?? 'dev',
+        runner: (d) => araOrielRunner(d, { execPath: 'C:/ARA/electron.exe', devElectron: null, resourcesPath: null }),
+        processPath: async (pid) => (asked.push(pid), pid === 77 ? devExe : null),
+        run: async (_f, args) => {
+          const cli = args[0]
+          const r = running !== null
+          if (cli.startsWith(sa.app)) return ok(sa.versionJson(r, running ?? undefined))
+          const d = cli.startsWith(bundled.dir) ? bundled : dev
+          return ok(JSON.stringify({ ...JSON.parse(d.versionJson), running: r, ...(running ? { pid: running } : {}) }))
+        }
+      })
+    // 꺼져 있음: 후보 순서(단독 > 동봉 > dev)
+    let s = await make([sa.root, bundled.dir, dev.dir]).status()
+    expect(s.installed && [s.kind, s.info.appPath, s.runner.command]).toEqual(['standalone', sa.app, sa.exe])
+    expect(asked).toEqual([])
+    // dev 가 떠 있음(pid 77 → dev 의 electron.exe): 실행 중인 것이 먼저
+    running = 77
+    s = await make([sa.app, bundled.dir, dev.dir]).status()
+    expect(s.installed && [s.kind, s.info.appPath]).toEqual(['dev', dev.dir])
+    expect(asked).toEqual([77])
+    // 떠 있는데 어느 판인지 모름 → 후보 순서
+    running = 5
+    s = await make([sa.app, bundled.dir, dev.dir]).status()
+    expect(s.installed && s.kind).toBe('standalone')
+    // 경로 고정(후보 하나) — 묻지 않는다
+    asked.length = 0
+    s = await make([bundled.dir]).status()
+    expect(s.installed && s.kind).toBe('bundled')
+    expect(asked).toEqual([])
+  })
 })

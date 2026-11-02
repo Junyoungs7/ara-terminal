@@ -1,10 +1,10 @@
 // M9 R2 — Oriel 감지·링크 열기(main). 순수 규칙은 shared/oriel.ts. 아라 안 브라우저는 없앴다(결정 :162 — 브라우저는 무조건 Oriel).
 // 프로세스는 runProcess(셸 안 거침·시간 상한). 시험은 run 을 바꿔 끼운다 — 진짜 Oriel 을 띄우지 않는다.
 import { existsSync } from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import { runProcess, type RunOptions, type RunResult } from '../util/runProcess'
 import { isSafeExternal } from '../util/safeExternal'
-import { NODE_RUNNER, parseOrielVersion, type OrielRunner, type OrielStatus } from '@shared/oriel'
+import { NODE_RUNNER, parseOrielVersion, pickOriel, type OrielInfo, type OrielKind, type OrielRunner, type OrielStatus } from '@shared/oriel'
 import { ARA_HOST_APP_ENV, isBundledOrielDir } from './host'
 
 type Run = (file: string, args: readonly string[], opts?: RunOptions) => Promise<RunResult>
@@ -37,11 +37,52 @@ export function araElectronForOriel(candidates: readonly string[], exists: (p: s
  *  · 설치본 + dir 이 `<resources>/oriel`: ORIEL_ELECTRON = A.R.A.exe + ARA_HOST_APP=oriel → main/boot.ts 가 Oriel 로 뜬다(안 A).
  *  · 그 밖(설치본에 설정한 체크아웃 등): ORIEL_ELECTRON 없음 → Oriel 이 자기 node_modules electron 으로.
  */
-export function araOrielRunner(dir: string, o: { execPath: string; devElectron: string | null; resourcesPath: string | null }): OrielRunner {
+export function araOrielRunner(
+  dir: string,
+  o: { execPath: string; devElectron: string | null; resourcesPath: string | null },
+  exists: (p: string) => boolean = existsSync
+): OrielRunner {
+  // OR-3 단독 설치본은 자기 Oriel.exe 를 node 로(ELECTRON_RUN_AS_NODE) — 앱도 그 Oriel.exe 로 뜬다(CLI 기본값). 아라 Electron·ARA_HOST_APP 은 안 준다.
+  const own = standaloneOrielExe(dir, exists)
+  if (own) return { command: own, env: { ELECTRON_RUN_AS_NODE: '1' } }
   const env: Record<string, string> = { ELECTRON_RUN_AS_NODE: '1' }
   if (o.devElectron) env[ORIEL_ELECTRON_ENV] = o.devElectron
   else if (o.resourcesPath && isBundledOrielDir(dir, o.resourcesPath)) Object.assign(env, { [ORIEL_ELECTRON_ENV]: o.execPath, [ARA_HOST_APP_ENV]: 'oriel' })
   return { command: o.execPath, env }
+}
+
+/** OR-3 단독 설치본의 실행 파일 이름(Oriel 설치 파일 f52f95d — Windows 전용 배포). */
+const ORIEL_EXE = 'Oriel.exe'
+
+/**
+ * OR-3 Oriel 앱 폴더 dir 이 단독 설치본(`<설치>/resources/app`, 옆 `<설치>/Oriel.exe`)이면 그 Oriel.exe, 아니면 null.
+ * 판별은 폴더 구조만(oriel-integration.md "설치본 판별은 폴더 구조").
+ */
+export function standaloneOrielExe(dir: string, exists: (p: string) => boolean = existsSync): string | null {
+  if (basename(dir).toLowerCase() !== 'app' || basename(dirname(dir)).toLowerCase() !== 'resources') return null
+  const exe = join(dirname(dirname(dir)), ORIEL_EXE)
+  return exists(exe) ? exe : null
+}
+
+/** OR-3 설정 칸에 설치 폴더(`…/Programs/oriel`)를 적어도 받는다 — 그 안의 resources/app 이 앱 폴더. */
+export function orielAppDir(dir: string, exists: (p: string) => boolean = existsSync): string {
+  const app = join(dir, 'resources', 'app')
+  return exists(join(app, 'bin', 'oriel.mjs')) && exists(join(dir, ORIEL_EXE)) ? app : dir
+}
+
+/** OR-3 Oriel 앱 폴더의 종류(설정 화면 표시·우선순위 근거). */
+export function orielKindOf(dir: string, resourcesPath: string | null, exists: (p: string) => boolean = existsSync): OrielKind {
+  if (standaloneOrielExe(dir, exists)) return 'standalone'
+  return resourcesPath && isBundledOrielDir(dir, resourcesPath) ? 'bundled' : 'dev'
+}
+
+const powershellExe = (): string => join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+
+/** 실행 중 프로세스의 실행 파일 경로(Windows) — 여러 Oriel 중 떠 있는 것을 가린다. 못 알면 null. */
+const PROCESS_PATH_TIMEOUT_MS = 5_000
+async function processPathWin(run: Run, pid: number): Promise<string | null> {
+  const r = await run(powershellExe(), ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${Math.trunc(pid)}).Path`], { timeoutMs: PROCESS_PATH_TIMEOUT_MS })
+  return r.error ? null : r.stdout.trim() || null
 }
 
 /**
@@ -69,6 +110,10 @@ export function createOriel(deps: {
   run?: Run
   /** OR-2 Oriel 폴더별 CLI 실행법(araOrielRunner). 없으면 시스템 node(시험). */
   runner?: (dir: string) => OrielRunner
+  /** OR-3 앱 폴더의 종류(orielKindOf). 없으면 dev(시험). */
+  kindOf?: (dir: string) => OrielKind
+  /** OR-3 실행 중 Oriel(pid)의 실행 파일. 없으면 Windows 는 PowerShell Get-Process, 그 밖은 모름. */
+  processPath?: (pid: number) => Promise<string | null>
   platform?: NodeJS.Platform
 }): Oriel {
   const run = deps.run ?? runProcess
@@ -76,19 +121,30 @@ export function createOriel(deps: {
   const platform = deps.platform ?? process.platform
   let cached: Promise<OrielStatus> | null = null
 
+  const kindOf = deps.kindOf ?? ((): OrielKind => 'dev')
+  const processPath = deps.processPath ?? ((pid: number) => (platform === 'win32' ? processPathWin(run, pid) : Promise.resolve(null)))
+
+  // OR-3: 후보를 모두(동시에) 물어보고 고른다 — 실행 중인 것 > 후보 순서(단독 > 동봉 > dev). `version` 은 읽기 전용(앱을 띄우지 않는다).
   const probe = async (): Promise<OrielStatus> => {
     const tried = deps.candidates()
-    for (const dir of tried) {
-      const cli = join(dir, 'bin', 'oriel.mjs')
-      if (!existsSync(cli)) continue
-      // `version` 은 읽기 전용(앱을 띄우지 않는다) — 실행 중이면 토큰 인증까지 해서 pid 를 준다.
-      // ORIEL_ELECTRON 을 같이 줘야 version 의 electronPath 가 실제로 띄울 바이너리다(동봉판은 자기 electron 이 없다).
-      const runner = runnerOf(dir)
-      const r = await run(runner.command, [cli, 'version'], { timeoutMs: VERSION_TIMEOUT_MS, env: runner.env })
-      const info = r.error ? null : parseOrielVersion(r.stdout)
-      if (info && existsSync(info.electronPath) && existsSync(info.cliPath)) return { installed: true, info, runner }
-    }
-    return { installed: false, tried }
+    const found = (
+      await Promise.all(
+        tried.map(async (raw): Promise<{ info: OrielInfo; runner: OrielRunner; kind: OrielKind } | null> => {
+          const dir = orielAppDir(raw)
+          const cli = join(dir, 'bin', 'oriel.mjs')
+          if (!existsSync(cli)) return null
+          // 실행 중이면 토큰 인증까지 해서 pid 를 준다. ORIEL_ELECTRON 을 같이 줘야 version 의 electronPath 가 실제로 띄울 바이너리다.
+          const runner = runnerOf(dir)
+          const r = await run(runner.command, [cli, 'version'], { timeoutMs: VERSION_TIMEOUT_MS, env: runner.env })
+          const info = r.error ? null : parseOrielVersion(r.stdout)
+          return info && existsSync(info.electronPath) && existsSync(info.cliPath) ? { info, runner, kind: kindOf(dir) } : null
+        })
+      )
+    ).filter((f) => f !== null)
+    // 하나뿐이면 묻지 않는다. 여럿이고 떠 있으면 그 프로세스의 실행 파일로 어느 판인지 가린다.
+    const pid = found.length > 1 ? found.find((f) => f.info.running && f.info.pid)?.info.pid : undefined
+    const pick = pickOriel(found, pid ? await processPath(pid).catch(() => null) : null)
+    return pick ? { installed: true, ...pick } : { installed: false, tried }
   }
 
   const status = (force = false): Promise<OrielStatus> => {
@@ -106,8 +162,7 @@ export function createOriel(deps: {
       const s = await status()
       if (s.installed) {
         if (user?.gesture && platform === 'win32') {
-          const ps = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-          await run(ps, ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], { timeoutMs: FOREGROUND_TIMEOUT_MS })
+          await run(powershellExe(), ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], { timeoutMs: FOREGROUND_TIMEOUT_MS })
         }
         // 종료 코드 0 열림 / 1 못 엶 / 2 URL 거부 / 3 실행·연결 실패 → 0 아니면 OS 기본 브라우저(oriel-integration.md 확정).
         const r = await run(s.runner.command, [s.info.cliPath, 'open', url], { timeoutMs: OPEN_TIMEOUT_MS, env: s.runner.env })

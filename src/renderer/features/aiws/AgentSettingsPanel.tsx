@@ -206,7 +206,7 @@ function OrielRow({ path, onPath }: { path: string; onPath: (p: string) => Promi
   const [st, setSt] = useState<OrielStatus | null>(null)
   const probe = (force: boolean): void => void window.ev?.oriel?.status(force).then(setSt).catch(() => setSt(null))
   useEffect(() => probe(false), [])
-  const desc = !st ? t('aiws.agent.detecting') : st.installed ? t('settings.agents.oriel.found').replace('{v}', st.info.version).replace('{path}', st.info.appPath) : t('settings.agents.oriel.missing')
+  const desc = !st ? t('aiws.agent.detecting') : st.installed ? t('settings.agents.oriel.found').replace('{v}', st.info.version).replace('{kind}', t(`settings.agents.oriel.kind.${st.kind}`)).replace('{path}', st.info.appPath) : t('settings.agents.oriel.missing')
   return (
     <Row label={t('settings.agents.oriel')} desc={desc} item="agents.oriel">
       <input
