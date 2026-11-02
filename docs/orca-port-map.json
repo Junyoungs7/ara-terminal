@@ -1273,5 +1273,72 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "M15 R3(v2.2 842d08f): @xterm/xterm 6.1.0-beta.304 · headless 6.1.0-beta.303 · fit 0.12.0-beta.301 · search 0.17.0-beta.301 · unicode11 0.10.0-beta.301 · web-links 0.13.0-beta.301 · webgl 0.20.0-beta.300 — Orca 와 같은 베타 판 고정. 바꾼 것: 로컬 Windows 셸 windowsPty 는 Orca 처럼 실제 빌드번호가 아니라 { backend: 'conpty', buildNumber: 1 }(xterm 5 windowsMode 와 같은 동작 — 리플로우 끔). Orca 방식이면 Win11(≥21376)에서 리플로우가 켜져 실측 dir 빈 줄 증상이 돌아온다(스모크 R3 진단②). 뺀 것: addon-serialize·image·ligatures(아라가 안 씀), osRelease 전달(빌드번호를 안 쓰므로). 같은 라운드 TypeScript 7.0.2(v2.2 20cb8ff, typescript-api 별칭 안 넣음 — JS API 쓰는 곳 없음)."
+  },
+  {
+    "id": "WS-23",
+    "feature": "저장소 설정 파일 orca.yaml(같은 파일을 읽음 — ara.yaml 안 둠)",
+    "orcaPaths": [
+      "src/shared/orca-yaml.ts",
+      "src/shared/orca-yaml-file-limit.ts",
+      "src/main/hooks.ts",
+      "src/main/setup-runner-script-text.ts",
+      "src/main/setup-hook-env-vars.ts",
+      "docs/site/content/docs/model/orca-yaml.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R1-A(v2.2 a03e030): 저장소 뿌리 orca.yaml 을 Orca 와 같은 규칙으로 읽는다(중복 키·YAML 오류·256KB 초과 = 파일째 무시, 필드 64KB, 공유 폴더 100개·절대/../.git 거절). 쓰는 칸: worktree.sharedDirectories(본 폴더의 것, 있고 gitignore 된 폴더만, 설정 공유 경로 다음 순서, 늘 링크 → meta.linkedPaths 에 넣어 지울 때 먼저 끊음) · scripts.setup(새 워크트리의 것, wait-for-setup 이면 끝나야 done, start-immediately 면 뒤에서 돌고 setupDone 으로 실패 알림) · scripts.archive(본 폴더의 것, 지우기 전 120초, 실패면 지우기 막음 — 강제로 지우기면 받아들임) · setupAgentStartupPolicy. 신뢰 경계: 새 작업 카드가 처음 보는 스크립트를 글 그대로 보여 주고 승인 → 프로젝트 trustedScripts 에 sha256(main 은 지금 orca.yaml 의 hash 만 받음, 글자가 바뀌면 다시 물음). 러너 Windows .cmd(줄마다 call·errorlevel, 셔뱅이면 거절)·POSIX bash set -e, env ORCA_ROOT_PATH·ORCA_WORKTREE_PATH·ORCA_WORKSPACE_NAME(+CONDUCTOR·GHOSTX 별칭). 파서 js-yaml(electron-updater 가 이미 끌어온 것). 뺀 것: defaultTabs(AI 공간에 셸 탭 없음)·issueCommand·environmentRecipes·로컬 훅·명령 출처 정책 설정·Git Bash 갈래·setup 터미널(main 에서 돌고 출력은 만드는 중 줄에)·원격 프로젝트."
+  },
+  {
+    "id": "WS-24",
+    "feature": "중첩 워크스페이스(부모·자식, 자손까지 재우기·지우기)",
+    "orcaPaths": [
+      "src/shared/worktree/lineage-types.ts",
+      "src/shared/resolved-worktree-lineage.ts",
+      "src/renderer/src/components/new-workspace/ComposerParentWorktreePicker.tsx",
+      "src/renderer/src/components/sidebar/WorktreeContextMenuView.tsx",
+      "src/renderer/src/components/sidebar/WorkspaceSleepMenuItems.tsx",
+      "docs/site/content/docs/model/worktrees.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R1-A(v2.2 a03e030): 새 작업 카드 '부모 작업 단위' 칸 + 줄 우클릭 '하위 작업 만들기…'(부모가 미리 골라짐). meta.parentId + parentCreatedAt(= Orca parentWorktreeInstanceId — 같은 경로를 다시 쓰면 낡은 연결). 같은 프로젝트만, 고리는 고리 안 연결만 버림. 사이드바: 프로젝트 묶음 안에서 자식이 한 칸씩 들어감(최대 3칸), 부모 줄 '하위 n' 칩으로 접기(localStorage), 부모가 고정·숨김이면 자식은 맨 위로. 메뉴: '자손까지 재우기 (n)'(살아 있는 탭만), 자손이 있으면 지우기가 '자손까지 지우기…'(한 번 확인, 깊은 것부터, Ctrl+Shift+Backspace 도 같음). 뺀 것: 오케스트레이션·CLI 계보(capture/origin), 끌어서 부모 바꾸기, 칩 단축키, 원격 프로젝트의 부모 기록."
+  },
+  {
+    "id": "WS-25",
+    "feature": "작업 단위 정리 화면(Resource Manager › Clean up workspaces)",
+    "orcaPaths": [
+      "src/main/workspace-cleanup-scan-snapshot.ts",
+      "src/main/workspace-cleanup-removal-snapshot-prune.ts",
+      "docs/site/content/docs/model/worktrees.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R1-A(v2.2 a03e030): 사이드바 머리 [정리] → 지연 로드 대화상자(CleanupDialog). 모든 로컬 git 프로젝트의 연결 작업 단위 한 목록 — git 상태(worktrees:cleanupScan: 변경 수·본 폴더 HEAD 에 병합됨·마지막 커밋, 프로젝트마다 넷씩), 검색·거르기(병합됨·30일 넘게 손 안 댐·잠듦/보관)·정렬(오래된 순·큰 순·이름 순). 고른 것을 한 번 확인하고 지움 — M10 R2 규칙 그대로(링크 먼저 끊기·branch -d·병합 안 된 브랜치는 검토 띠), 강제로 지우지 않음(변경 있으면 사유를 화면에). 기본 고름 없음. 뺀 것: 본 작업 폴더·폴더 프로젝트·끊긴 SSH 서버 줄(아라에서 그건 '목록에서 빼기'), 연결된 리뷰(PR) 칸, 원격 git 상태."
+  },
+  {
+    "id": "WS-26",
+    "feature": "작업 단위 디스크 사용량",
+    "orcaPaths": [
+      "src/main/workspace-space-local-scan.ts",
+      "src/main/workspace-space-scan-worker-entry.ts",
+      "src/renderer/src/components/workspace-space/WorkspaceSpacePage.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R1-A(v2.2 a03e030): 정리 화면 [크기 재기] 를 누를 때만 utility process(out/main/diskUsageWorker.js, 한 번 띄우고 끝, 5분 상한)로 잼. lstat 로 걷고 링크(공유 경로 접합점)는 따라가지 않음 — 두 번 세거나 본 폴더로 넘어가지 않게. 작업 단위마다 합계·맨 위 큰 항목 5개(툴팁)·항목 50만 상한(넘으면 +). main 은 목록에 있는 로컬 작업 폴더만 잼(렌더러 경로 불신). 뺀 것: du 빠른 길, 취소 버튼, 스냅샷 캐시, 별도 창, 원격."
+  },
+  {
+    "id": "WS-27",
+    "feature": "sparse checkout 프리셋(새 작업 단위 만들 때 고름)",
+    "orcaPaths": [
+      "src/main/git/worktree-sparse-add.ts",
+      "src/main/ipc/sparse-checkout-directories.ts",
+      "src/main/ipc/repos/sparse-preset-handlers.ts",
+      "src/renderer/src/components/sparse/SparsePresetChooser.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R1-A(v2.2 a03e030): 프로젝트별 프리셋(Project.sparsePresets, IPC 이름 Orca sparsePresets:list/save/remove). 새 작업 카드 'sparse checkout' 칸에서 고르고 그 자리에서 만들기·고치기·지우기. 만들 때 git worktree add --no-checkout → sparse-checkout init --cone → set -- 폴더 → checkout(Orca addSparseWorktree), 실패면 반쯤 만든 것 치움. 경로는 Orca normalizeSparseDirectories(절대·.. 거절). meta.sparseDirectories → 줄에 'sparse' 표(툴팁 폴더). 뺀 것: 폴더 고르기 탐색기(SparseDirectoryPicker — 한 줄에 하나 입력), 기존 작업 단위의 sparse 바꾸기, 원격."
   }
 ]
