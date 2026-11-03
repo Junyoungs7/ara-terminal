@@ -45,6 +45,7 @@ import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerUsageFeature } from './usage/feature'
 import { registerTermExtraIpc } from './termExtraIpc'
+import { registerPetFeature } from './pet/feature'
 import { registerAutomationsFeature } from './automations/feature'
 import { registerSkillsFeature } from './skills/feature'
 import { registerCliFeature } from './cli/feature'
@@ -612,6 +613,8 @@ app.whenReady().then(async () => {
   registerUpdateIpc(mainWc, () => store.get().ui.updateChannel)
   // P3 R2-A 터미널 3차 — 셸 목록·Ghostty/Warp 미리 보기(설정 화면이 부를 때만).
   registerTermExtraIpc()
+  // p3-M21 펫 — 그림 올리기·읽기(사람이 켜고 누를 때만).
+  registerPetFeature()
   // #206 오류 신고 — 찍기·모으기·보내기(렌더러는 서버에 직접 닿지 않는다).
   registerReportIpc(sessions, store)
   registerEditorIpc(sftpService, sessions, () => mainWindow)

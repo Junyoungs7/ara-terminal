@@ -1,3 +1,4 @@
+import { petOf } from '@shared/pet'
 import {
   aiModelsOf,
   aiProviderOf,
@@ -58,6 +59,8 @@ export const termPrefs: Omit<
   | 'glass'
   // P3 R2-A 릴리스 채널은 main 이 읽는 값이다(termExtra 는 xterm 이 읽으므로 남긴다).
   | 'updateChannel'
+  // p3-M21 펫은 화면 덮개(features/pet)가 읽는다.
+  | 'pet'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -104,6 +107,7 @@ export function prefsFrom(
     | 'glass'
     | 'termExtra'
     | 'updateChannel'
+    | 'pet'
   >
 ): UiPrefs {
   return {
@@ -146,7 +150,9 @@ export function prefsFrom(
     glass: ui.glass !== false,
     // P3 R2-A — 미지정 칸은 기본(OSC 52 꺼짐·인라인 이미지 켬·테마 아라 기본·대비 자동).
     termExtra: termExtraOf(ui.termExtra),
-    updateChannel: updateChannelOf(ui.updateChannel)
+    updateChannel: updateChannelOf(ui.updateChannel),
+    // p3-M21 — 미지정이면 꺼짐.
+    pet: petOf(ui.pet)
   }
 }
 

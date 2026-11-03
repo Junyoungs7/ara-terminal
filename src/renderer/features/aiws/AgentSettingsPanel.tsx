@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { AGENT_IDS, AGENT_VIEWS, AGENTS, AWAKE_MODES, isAwakeMode, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
+import { AGENT_IDS, AGENT_VIEWS, AGENTS, AWAKE_MODES, HIBERNATE_MAX_MIN, HIBERNATE_MIN_MIN, hibernateMinutesOf, isAwakeMode, envToLines, memoryCapOf, parseEnvLines, permissionChoicesFor, planAgentLaunch, type AgentId, type AgentPrefs, type AgentSettings } from '@shared/agents'
 import type { LaunchShell } from '@shared/aiCli'
 import { t } from '../../i18n'
 import { useAgentStore } from './agentStore'
@@ -82,6 +82,23 @@ export function AgentSettingsPanel(): JSX.Element {
             </option>
           ))}
         </select>
+      </Row>
+      {/* p3-M21 잠재우기(Orca 설정 › 실험 Agent hibernation — 기본 끔, 30분). */}
+      <Row label={t('settings.agents.hibernate')} desc={t('settings.agents.hibernate.desc')} item="agents.hibernate">
+        <Toggle on={settings.hibernate} label={t('settings.agents.hibernate')} onChange={(hibernate) => save({ ...settings, hibernate })} />
+      </Row>
+      <Row label={t('settings.agents.hibernateAfter')} desc={t('settings.agents.hibernateAfter.desc')} item="agents.hibernateAfter">
+        <input
+          key={`h-${settings.hibernateMinutes}`}
+          className="aiws-input aiws-mono"
+          data-field="agents.hibernateAfter"
+          disabled={!settings.hibernate}
+          type="number"
+          min={HIBERNATE_MIN_MIN}
+          max={HIBERNATE_MAX_MIN}
+          defaultValue={settings.hibernateMinutes}
+          onBlur={(e) => hibernateMinutesOf(e.target.value) !== settings.hibernateMinutes && save({ ...settings, hibernateMinutes: hibernateMinutesOf(e.target.value) })}
+        />
       </Row>
       {/* M5 AI-18 Orca ChatPermissionSetting — 채팅은 그 터미널 세션이라 에이전트 권한을 따른다. 에이전트별 지금 값을 보여 준다. */}
       <Row label={t('settings.agents.chatPermission')} desc={t('settings.agents.chatPermission.desc')} item="agents.chatPermission">

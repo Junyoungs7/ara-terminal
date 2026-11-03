@@ -1,0 +1,15 @@
+/* p3-M21 잠든 탭 — 흐린 제목 + z(목업 sleep.html 안 1). 상태색은 쓰지 않는다(잠듦은 신호가 아니라 쉼). */
+.aiws-tab.slept {
+  color: var(--text-lo);
+}
+.aiws-z {
+  color: var(--sig-slate);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+}
+.aiws-hib {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}

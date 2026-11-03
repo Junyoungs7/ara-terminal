@@ -1,5 +1,6 @@
 // Shared domain types — main·preload·renderer 공유. (계획서 §B.3 스키마)
 import type { FeatureShown } from './features'
+import type { PetPrefs } from './pet'
 import type { VoicePrefs } from './voice'
 import type { Space } from './space'
 import type { EditorPrefs } from './editorPrefs'
@@ -405,6 +406,8 @@ export type UiPrefs = {
   termExtra: TermExtraPrefs
   /** P3 R2-A TM-15 설정 › 업데이트 [릴리스 채널]. */
   updateChannel: UpdateChannel
+  /** p3-M21 설정 › 펫(shared/pet.ts). petOf 가 채운 확정값 — 기본 꺼짐. */
+  pet: PetPrefs
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -562,6 +565,8 @@ export type UiState = {
   termExtra?: Partial<TermExtraPrefs>
   /** P3 R2-A 릴리스 채널. 🔴 선택 필드 — 없으면 stable. */
   updateChannel?: UpdateChannel
+  /** p3-M21 펫. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 petOf 로 클램프한다. */
+  pet?: Partial<PetPrefs>
   // M3 S1 옛 키(터미널 AI CLI 기본 플래그, id 만). 에이전트 설정(agents.json)이 처음 한 번 옮기고
   // (shared/agents.ts migrateAiCliFlags) 데이터 이전(main/agents/legacyImport.ts)이 그 뒤 지운다.
   aiCliFlags?: Partial<Record<string, string[]>>

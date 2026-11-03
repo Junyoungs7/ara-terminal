@@ -128,12 +128,29 @@ export type AgentSettings = {
    * 그 지시를 CLI 에이전트에 한 번 보내 브랜치 이름을 짓고 바꾼다(올린 적 없는 브랜치만).
    */
   autoRenameBranch: boolean
+  /**
+   * p3-M21 에이전트 잠재우기(Orca experimentalAgentHibernation — 기본 끔). 켜면 끝나고 안 보이는 에이전트 탭을 hibernateMinutes 뒤
+   * 멈추고(세션 종료, 탭은 남김) 그 탭으로 돌아오면 같은 세션으로 이어 띄운다(features/aiws/hibernation.ts).
+   */
+  hibernate: boolean
+  /** p3-M21 잠재우기까지 기다리는 분(Orca agentHibernationIdleMs — 기본 30분, 1분~24시간). */
+  hibernateMinutes: number
 }
 
 /** M11 깨어있기 모드(Orca shared/computer-awake-mode.ts). */
 export const AWAKE_MODES = ['off', 'auto', 'on'] as const
 export type AwakeMode = (typeof AWAKE_MODES)[number]
 export const isAwakeMode = (v: unknown): v is AwakeMode => (AWAKE_MODES as readonly unknown[]).includes(v)
+
+/** p3-M21 잠재우기 기다림(분) — Orca DEFAULT/MIN/MAX_AGENT_HIBERNATION_IDLE_MS. */
+export const HIBERNATE_DEFAULT_MIN = 30
+export const HIBERNATE_MIN_MIN = 1
+export const HIBERNATE_MAX_MIN = 24 * 60
+/** 범위 밖·숫자 아님 = 기본값(Orca getEffectiveAgentHibernationIdleMs). */
+export function hibernateMinutesOf(v: unknown): number {
+  const n = typeof v === 'string' ? Number(v.trim()) : v
+  return typeof n === 'number' && Number.isFinite(n) && n >= HIBERNATE_MIN_MIN && n <= HIBERNATE_MAX_MIN ? Math.floor(n) : HIBERNATE_DEFAULT_MIN
+}
 
 /** 메모리 상한 칸의 범위(MB). 넘거나 모자라면 끔(0)으로 읽는다. */
 export const MEMORY_CAP_MAX_MB = 1024 * 1024
@@ -152,7 +169,9 @@ export function defaultAgentSettings(): AgentSettings {
     orielPath: '',
     awakeMode: 'off',
     tabAutoTitle: false,
-    autoRenameBranch: true
+    autoRenameBranch: true,
+    hibernate: false,
+    hibernateMinutes: HIBERNATE_DEFAULT_MIN
   }
 }
 
@@ -196,6 +215,8 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.awakeMode = isAwakeMode(src.awakeMode) ? src.awakeMode : 'off'
   base.tabAutoTitle = src.tabAutoTitle === true
   base.autoRenameBranch = src.autoRenameBranch !== false
+  base.hibernate = src.hibernate === true
+  base.hibernateMinutes = hibernateMinutesOf(src.hibernateMinutes)
   return base
 }
 

@@ -12,6 +12,7 @@ import { applyTermPrefsToAll } from '../terminal/termRegistry'
 import { featuresOf } from '@shared/features'
 import { DEFAULT_VOICE } from '@shared/voice'
 import { DEFAULT_EDITOR_PREFS } from '@shared/editorPrefs'
+import { DEFAULT_PET } from '@shared/pet'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 import { setEditorPrefsWriter } from './editorPrefs'
 
@@ -41,6 +42,7 @@ const DEFAULT_PREFS: UiPrefs = {
   codeEditor: DEFAULT_EDITOR_PREFS,
   // P3 R2-A TM-15. termExtra 는 ...termPrefs 가 가져온다.
   updateChannel: 'stable',
+  pet: DEFAULT_PET,
   glass: true
 }
 

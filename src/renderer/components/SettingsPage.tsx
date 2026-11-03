@@ -48,11 +48,13 @@ import { editorPrefsOf, normalizeAutoSaveDelayMs, AUTO_SAVE_DELAY_MIN, AUTO_SAVE
 import type { SettingsTarget } from '../store/settingsNav'
 import { TermExtraRows, UpdateChannelRow } from './TermExtraSettings'
 // M3 에이전트 설정 — AI 작업 공간 청크(지연 로드). 이 진입점 밖의 aiws 파일은 직접 import 하지 않는다(feature-module.md).
-import { AgentSettings } from '../features/aiws'
+import { AgentSettings, SetupGuideSettings } from '../features/aiws'
 import { ManagedServers } from '../features/managed'
 import { UsageSettings } from '../features/usage'
 import { AutomationsSettings, McpServersSettings, SkillsSettings } from '../features/automations'
 import { GitLabSettings, SlackSettings } from '../features/integrations'
+import { importPet } from '../features/pet/importPet'
+import { PET_SIZES } from '@shared/pet'
 
 // 설정 페이지 (F5 드로어 → 2.0 가운데 창 → M1 1-A **전체 화면 + 검색**, 시안 SW-final 설정 장면).
 // 묶음·섹션·항목 목록은 shared/settingsIndex.ts 한 곳에 있다(검색·딥링크가 그 표를 읽는다).
@@ -1393,7 +1395,7 @@ function Hl({ text, q }: { text: string; q: string }) {
 const FLASH_MS = 1600
 
 export function SettingsPage({ open, font, prefs, version, onClose, onChange, onPrefsChange, ask, onOpenCommandBook, entry }: Props) {
-  const [section, setSection] = useState<SettingsSection>(SETTINGS_INDEX[0].id)
+  const [section, setSection] = useState<SettingsSection>('agents') // p3-M21: 맨 위는 시작하기지만 처음 여는 자리는 그대로 에이전트
   const [query, setQuery] = useState('')
   // 딥링크로 온 항목 — 섹션이 그려진 뒤 그 줄로 스크롤하고 잠깐 밝힌다.
   const [focusItem, setFocusItem] = useState<{ item: string; n: number } | null>(null)
@@ -1603,6 +1605,13 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
               <div className="sp-pane" role="tabpanel" data-section={section}>
           {def.soon && <div className="set-note sp-soon">{t('settings.soon')}</div>}
 
+          {/* p3-M21 셋업 가이드 — 열렸을 때만(스킬·연동·Oriel·orca.yaml 을 그때 묻는다). */}
+          {section === 'setupGuide' && open && (
+            <Suspense fallback={null}>
+              <SetupGuideSettings />
+            </Suspense>
+          )}
+
           {section === 'agents' && (
             <>
               {/* 열렸을 때만 — 이 페이지는 닫혀도 마운트돼 있어 감지(powershell·where·--version 4~7개)가 켤 때마다 돌아
@@ -1776,6 +1785,26 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                     .then((r) => (r.missing ? `${r.missing} — ${t('settings.dir.missing')}` : r.dir))
                 }
               />
+            </>
+          )}
+
+          {/* p3-M21 펫(준영님 안 1) — 기본 꺼짐, 기본 캐릭터 없음(업로드만). 덮개는 MainArea 가 켰을 때만 불러온다. */}
+          {section === 'pet' && (
+            <>
+              <Row label={t('settings.pet.enabled')} desc={t('settings.pet.enabled.desc')} item="pet.enabled">
+                <Toggle on={prefs.pet.enabled} label={t('settings.pet.enabled')} onChange={(enabled) => onPrefsChange({ pet: { ...prefs.pet, enabled } })} />
+              </Row>
+              <Row label={t('settings.pet.image')} desc={t(prefs.pet.image ? 'settings.pet.image.has' : 'settings.pet.image.none')} item="pet.image">
+                <button type="button" className="btn" data-action="pet.upload" onClick={() => void importPet(prefs.pet, (pet) => onPrefsChange({ pet }))}>
+                  {t('pet.upload')}
+                </button>
+                <button type="button" className="btn sec" data-action="pet.clear" disabled={!prefs.pet.image} onClick={() => onPrefsChange({ pet: { ...prefs.pet, image: '' } })}>
+                  {t('settings.pet.image.clear')}
+                </button>
+              </Row>
+              <Row label={t('settings.pet.size')} item="pet.size">
+                <Seg field="pet.size" value={String(prefs.pet.size)} options={PET_SIZES.map(String)} labelKey={(v) => 'settings.pet.size.' + v} onChange={(v) => onPrefsChange({ pet: { ...prefs.pet, size: Number(v) } })} />
+              </Row>
             </>
           )}
 

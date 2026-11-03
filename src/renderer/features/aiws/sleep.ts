@@ -15,15 +15,17 @@ const findWorktree = (id: string): Worktree | undefined =>
     .flat()
     .find((w) => w.id === id)
 
-const liveTabs = (id: string) => useAgentStore.getState().tabs.filter((x) => x.worktreeId === id && !x.exited)
+// p3-M21 자동으로 잠든 탭(hibernation.ts)도 같은 재개 기록에 든다 — 세션은 끝났지만 재개 id 를 탭이 들고 있다.
+const liveTabs = (id: string) => useAgentStore.getState().tabs.filter((x) => x.worktreeId === id && (!x.exited || x.slept))
 
 /** 재운다. 막히면 사유. */
 export async function sleepWorktree(id: string): Promise<SleepRefusal | null> {
   if (hostOfWorktree(id)) return 'remote'
   const live = liveTabs(id)
   // 닫기 전에 받는다 — 닫으면 main 이 그 탭의 transcript 경로를 잊는다.
-  const ids = live.length ? await window.ev.agents.resumeIds(live.map((x) => x.sessionId)) : {}
-  const sleep: SleepTab[] = live.map((x) => ({ agent: x.agent, resume: ids[x.sessionId] ?? null }))
+  const awake = live.filter((x) => !x.slept)
+  const ids = awake.length ? await window.ev.agents.resumeIds(awake.map((x) => x.sessionId)) : {}
+  const sleep: SleepTab[] = live.map((x) => ({ agent: x.agent, resume: x.slept?.resume ?? ids[x.sessionId] ?? null }))
   if (!(await useAiwsStore.getState().updateWorktreeMeta(id, { sleep }))) return 'failed'
   const a = useAgentStore.getState()
   for (const x of a.tabs.filter((x) => x.worktreeId === id)) a.closeTab(x.sessionId)

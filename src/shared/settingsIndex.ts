@@ -14,6 +14,8 @@ export const SETTINGS_GROUPS = ['aiws', 'app', 'global', 'terminal', 'security',
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number]
 
 export const SETTINGS_SECTIONS = [
+  // p3-M21 셋업 가이드(Orca 설정 맨 위 '온보딩 체크리스트').
+  'setupGuide',
   'agents', 'managed', 'usage', 'git', 'integrations', 'editor', 'sessionSearch', 'notify', 'automations',
   // M14 R1 스킬·MCP 서버(features/automations).
   'skills', 'mcpServers',
@@ -37,6 +39,8 @@ const s = (id: string): SettingsItem => i(id, `settings.${id}`, `settings.${id}.
 const soon = (id: SettingsSection, group: SettingsGroup): SettingsSectionDef => ({ id, group, soon: true, items: [] })
 
 export const SETTINGS_INDEX: SettingsSectionDef[] = [
+  // p3-M21 셋업 가이드(features/aiws/setupGuide — 섹션을 열 때만 불러온다).
+  { id: 'setupGuide', group: 'aiws', items: [i('setupGuide.list', 'setup.title', 'setup.settings.desc')] },
   {
     id: 'agents',
     group: 'aiws',
@@ -49,6 +53,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.tabTitle', 'settings.agents.tabTitle', 'settings.agents.tabTitle.desc'),
       i('agents.autoRenameBranch', 'settings.agents.autoRenameBranch', 'settings.agents.autoRenameBranch.desc'),
       i('agents.awake', 'settings.agents.awake', 'settings.agents.awake.desc'),
+      i('agents.hibernate', 'settings.agents.hibernate', 'settings.agents.hibernate.desc'),
+      i('agents.hibernateAfter', 'settings.agents.hibernateAfter', 'settings.agents.hibernateAfter.desc'),
       i('agents.chatPermission', 'settings.agents.chatPermission', 'settings.agents.chatPermission.desc'),
       i('agents.oriel', 'settings.agents.oriel', 'settings.agents.oriel.missing'),
       i('agents.lowPriority', 'settings.agents.lowPriority', 'settings.agents.lowPriority.desc'),
@@ -120,7 +126,8 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
 
   { id: 'general', group: 'app', items: [s('uiScale'), s('bootSplash'), i('dir.download', 'settings.dir.download', 'settings.dir.download.desc')] },
   { id: 'look', group: 'app', items: [s('glass'), s('mouseCursor')] },
-  soon('pet', 'app'),
+  // p3-M21 펫(features/pet — 켰을 때만 덮개를 불러온다).
+  { id: 'pet', group: 'app', items: [i('pet.enabled', 'settings.pet.enabled', 'settings.pet.enabled.desc'), i('pet.image', 'settings.pet.image', 'settings.pet.image.none'), i('pet.size', 'settings.pet.size')] },
   {
     id: 'font',
     group: 'app',

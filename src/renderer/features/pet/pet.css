@@ -1,0 +1,73 @@
+/* p3-M21 펫 덮개 — 덮개 청크와 함께 불러온다(목업 mockups/v3/m21/pet.html 안 1). 브랜드 별·새 색 없음 — 상태는 기존 글리프 배지. */
+.pet {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.pet:active {
+  cursor: grabbing;
+}
+.pet-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px var(--scrim));
+  pointer-events: none;
+}
+.pet-empty {
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  color: var(--text-lo);
+  font: inherit;
+  font-size: var(--fs-micro);
+  cursor: pointer;
+}
+.pet-empty:hover {
+  color: var(--text-hi);
+}
+.pet-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.pet[data-pet='running'] .pet-img {
+  animation: pet-bob 1.2s var(--ease-pop) infinite;
+}
+.pet[data-pet='waiting'] .pet-img {
+  animation: pet-wig 0.9s ease-in-out infinite;
+}
+.pet.jump .pet-img {
+  animation: pet-jump 0.5s var(--ease-pop);
+}
+@keyframes pet-bob {
+  50% {
+    transform: translateY(-6%);
+  }
+}
+@keyframes pet-wig {
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes pet-jump {
+  40% {
+    transform: translateY(-14%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet .pet-img {
+    animation: none !important;
+  }
+}

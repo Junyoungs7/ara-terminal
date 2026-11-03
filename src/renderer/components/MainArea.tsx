@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
+import { Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from 'react'
+import { PetOverlay } from '../features/pet'
 import { setUploadNotifier } from '../store/uploadBus'
 import { t } from '../i18n'
 import { TermTabbar } from './TermTabbar'
@@ -1491,6 +1492,12 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
               </button>
             )}
           </div>
+        )}
+        {/* p3-M21 펫(준영님 안 1) — 켰을 때만 불러온다. 음성(아라 얼굴)이 열리면 비킨다(한 화면에 얼굴은 하나). */}
+        {!detachedWinId && prefs.pet.enabled && !voice.open && (
+          <Suspense fallback={null}>
+            <PetOverlay pet={prefs.pet} onChange={(pet) => updatePrefs({ pet })} />
+          </Suspense>
         )}
         {/* 받는 동안 · 끄기 직전 — 우하단에 뜨고 아무것도 가리지 않는다(모달이 아니다). */}
         {!detachedWinId && (installing || updSt?.status === 'downloading') && (

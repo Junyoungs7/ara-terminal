@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { lastInputAt } from './inputClock'
 import { Terminal, type IDecoration, type IMarker } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -772,6 +773,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       }
       if (fed.commands.length > 0) clearGhost()
       else scheduleGhost()
+      if (agent) lastInputAt.set(sessionId, Date.now())
       window.ev.session.input(sessionId, data)
     })
     // xterm 리사이즈 → pty resize (창 크기 변경 시 cols/rows 재계산).

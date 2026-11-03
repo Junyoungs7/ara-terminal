@@ -1,0 +1,161 @@
+/* p3-M21 셋업 가이드 — 셋업 가이드 청크와 함께 불러온다(목업 mockups/v3/m21/setup-guide.html 안 2). */
+.sg-ring {
+  flex: none;
+  width: var(--sp-4);
+  height: var(--sp-4);
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, var(--bg-raised) 68%, transparent 70%),
+    conic-gradient(var(--sig-go) calc(var(--p, 0) * 1turn), var(--line-strong) 0);
+}
+.sg-grow {
+  flex: 1;
+  min-width: 0;
+}
+.sg-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-mid);
+  font: inherit;
+  font-size: var(--fs-micro);
+  text-align: left;
+  cursor: pointer;
+}
+.sg-entry:hover {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+.sg-count {
+  color: var(--text-lo);
+  font-family: var(--mono);
+}
+.sg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  background: var(--scrim);
+}
+.sg-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: min(880px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--sp-5) var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+}
+.sg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.sg-title {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.sg-sub,
+.sg-desc {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.sg-body {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: var(--sp-5);
+}
+.sg-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sg-sec {
+  padding: var(--sp-2) var(--sp-2) 0;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.sg-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-mid);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sg-step:hover,
+.sg-step.on {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+.sg-step.done {
+  color: var(--text-lo);
+}
+.sg-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--sp-4);
+  height: var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+.sg-step.done .sg-check {
+  border-color: var(--sig-go);
+  color: var(--sig-go);
+}
+.sg-check svg {
+  width: 70%;
+  height: 70%;
+}
+.sg-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.sg-h {
+  margin: 0;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.sg-desc {
+  margin: 0;
+  line-height: 1.6;
+}
+.sg-ok {
+  color: var(--sig-go);
+  font-size: var(--fs-micro);
+}
+.sg-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}

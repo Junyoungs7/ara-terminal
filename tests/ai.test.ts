@@ -15,6 +15,7 @@ import { insertText } from '../src/shared/shellInput'
 import { AI_PROVIDERS, DEFAULT_AI_MODEL, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
 import { voiceOf } from '@shared/voice'
 import { featuresOf } from '../src/shared/features'
+import { DEFAULT_PET } from '../src/shared/pet'
 
 // ⚠️ 이 파일에는 실 API 호출이 없다. 영원히 없다(설계 §7). 전부 주입된 가짜 어댑터로 돈다.
 
@@ -396,7 +397,8 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         codeEditor: DEFAULT_EDITOR_PREFS,
         glass: false,
         termExtra: DEFAULT_TERM_EXTRA,
-        updateChannel: 'stable'
+        updateChannel: 'stable',
+        pet: DEFAULT_PET
       })
       store.flush()
       expect(readFileSync(join(dir, `workspace-${provider}.json`), 'utf8')).not.toContain(SENTINEL)

@@ -22,6 +22,7 @@ import { localNetworkBridge } from './features/localNetwork'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
 import { termExtraBridge } from './features/termExtra'
+import { petBridge } from './features/pet'
 import { automationsBridge } from './features/automations'
 import { cliBridge } from './features/cli'
 import { worktreesBridge } from './features/worktrees'
@@ -277,6 +278,8 @@ const api: EvApi = {
   ...usageBridge,
   // P3 R2-A 터미널 3차(preload/features/termExtra.ts).
   ...termExtraBridge,
+  // p3-M21 펫(preload/features/pet.ts).
+  ...petBridge,
   ...worktreesBridge,
   ...agentsBridge,
   ...managedBridge,

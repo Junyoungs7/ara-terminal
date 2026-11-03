@@ -38,6 +38,8 @@ import { useDialog } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
 import { archiveWorktree, restoreWorktree, sleepWorktree, wakeWorktree, type SleepRefusal } from './sleep'
 import { CheckpointDialog, ExternalWorktreesDialog, PreservedBranchesDialog, SharedPathsDialog } from './WorktreeDialogs'
+import { SetupGuideModal, SetupGuideSidebarEntry } from './setupGuide/SetupGuide'
+import { setSetupGuideHidden } from './setupGuide/useSetupGuide'
 
 // 3차 WS-25·26 정리 화면 — 열 때만 불러온다(지연 로드).
 const CleanupDialog = lazy(() => import('./CleanupDialog'))
@@ -68,6 +70,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
   const [extFor, setExtFor] = useState<Project | null>(null)
   const [sharedFor, setSharedFor] = useState<Project | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
+  const [setupOpen, setSetupOpen] = useState(false)
   // 3차 WS-24 계보 — 모든 작업 단위로 푼다(낡은 연결·고리 제외). 메뉴의 "자손까지" 수와 지우기 순서에 쓴다.
   const lineage = useMemo(() => lineageChildren(Object.values(s.worktreesByRepo).flat()), [s.worktreesByRepo])
   const descendantsOf = (w: Worktree): Worktree[] => {
@@ -606,6 +609,12 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           )
         })}
       </div>
+      {/* p3-M21 셋업 가이드 진행 줄(Orca SetupGuideSidebarEntry) — 다 하거나 숨기면 사라진다. */}
+      <SetupGuideSidebarEntry
+        onOpen={() => setSetupOpen(true)}
+        onMenu={(x, y) => setMenu({ x, y, items: [{ id: 'hide', label: t('setup.hide') }], pick: () => setSetupGuideHidden(true) })}
+      />
+      {setupOpen && <SetupGuideModal onClose={() => setSetupOpen(false)} />}
       <ContextMenu
         open={menu !== null}
         x={menu?.x ?? 0}

@@ -8,6 +8,7 @@ import type { BundledSkillStatus, CliInstallStatus } from './araCli'
 import type { LaunchShell } from './aiCli'
 import type { GlassMaterial } from './glass'
 import type { ImportResult, ImportSource, ShellChoice } from './termExtra'
+import type { PetImportResult } from './pet'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffImageResult, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { BytesResult } from './media'
@@ -602,6 +603,9 @@ export type InvokeContract = {
   // P3 R2-A 터미널 3차(main/termExtraIpc.ts) — 셸 목록(있나만 본다) · Ghostty/Warp 미리 보기(읽기만).
   'term:shells': { req: void; res: ShellChoice[] }
   'term:importPreview': { req: { source: ImportSource }; res: ImportResult }
+  // p3-M21 펫(main/pet/feature.ts) — 그림 올리기(사람이 눌렀을 때만 파일 고르기) · 올린 그림 읽기(data URL).
+  'pet:import': { req: void; res: PetImportResult }
+  'pet:image': { req: { image: string }; res: string | null }
   'usage:get': { req: void; res: UsageState }
   'usage:refresh': { req: void; res: UsageState }
   // M13 %사용/%남음·Gemini 켜기 · 계정(추가·지우기·이름·고르기·로그인) · 계정 하나의 사용량(사람이 열 때만) · 통계(요약 + 30일 토큰, utility process).
@@ -1352,6 +1356,11 @@ export type EvApi = {
   termExtra: {
     shells(): Promise<ShellChoice[]>
     importPreview(source: ImportSource): Promise<ImportResult>
+  }
+  // p3-M21 펫(preload/features/pet.ts).
+  pet: {
+    import(): Promise<PetImportResult>
+    image(image: string): Promise<string | null>
   }
   // M9 AI-10 사용량(preload/features/usage.ts).
   usage: {

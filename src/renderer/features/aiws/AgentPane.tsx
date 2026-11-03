@@ -15,6 +15,8 @@ import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { areWorktreePathsEqual } from '@shared/worktrees'
 import { changeCount, openDiff, useDiffStore } from './diffStore'
 import { resolveAgentTabTitle } from '@shared/agentTabTitle'
+import { wakeTab } from './hibernation'
+import './hibernation.css'
 
 // M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
 const CodeEditor = lazy(() => import('./CodeEditor'))
@@ -222,6 +224,11 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
     useAgentStore.getState().setViewing(shownId)
     return () => useAgentStore.getState().setViewing(null)
   }, [shownId])
+  // p3-M21 잠든 탭으로 돌아오면 같은 세션으로 이어 띄운다(Orca: 누를 것 없이 앞으로 가져오면 재개).
+  const shownSlept = !!shownTab?.slept
+  useEffect(() => {
+    if (shownSlept && shownId) void wakeTab(shownId)
+  }, [shownSlept, shownId])
   // M3 S1(제거 A8): 옛 터미널 AI 키 — Ctrl+Shift+L = 피커, Alt+1·2·3 = 그 에이전트를 이 워크트리에서 바로(첫 지시 없이).
   // 못 띄우면(설치 안 됨·꺼 둠) 피커를 열어 이유를 보게 한다. 이 화면이 떠 있을 때만 받는다(터미널 공간에선 무동작).
   useEffect(() => {
@@ -290,9 +297,9 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             role="tab"
             tabIndex={0}
             aria-selected={x === active && !shownFile && !shownDiff}
-            className={'aiws-tab' + (x === active && !shownFile && !shownDiff ? ' on' : '')}
+            className={'aiws-tab' + (x === active && !shownFile && !shownDiff ? ' on' : '') + (x.slept ? ' slept' : '')}
             data-agent-tab={x.agent}
-            data-state={x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
+            data-state={x.slept ? 'slept' : x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
             title={x.line}
             onClick={() => {
               useCodeStore.getState().setActive(worktree.id, null)
@@ -300,7 +307,11 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)
             }}
           >
-            {x.exited ? (
+            {x.slept ? (
+              <span className="aiws-z" data-aiws="tab-slept" title={t('aiws.hib.tab')}>
+                z
+              </span>
+            ) : x.exited ? (
               <span className="aiws-tab-dot off" aria-hidden />
             ) : (
               <AgentGlyph
@@ -316,6 +327,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               const d = displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)
               // 답할 일(승인·질문) = 반전 칩(시안 C).
               const ask = !x.exited && (d === 'blocked' || d === 'question')
+              if (x.slept) return null
               return (
                 <span className={'aiws-tab-state' + (ask ? ' ag-ask-chip' : '')} data-aiws={ask ? 'tab-ask' : undefined} title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : undefined}>
                   {x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${d}`)}
@@ -323,7 +335,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               )
             })()}
             {/* M11 재시작 칩(Orca Restart chip) — 끝난 탭. 끊긴 원격 탭은 [다시 연결]이 맞다(세션이 서버에 산다). */}
-            {(x.exited ? !(x.lost && x.host) : statusById[x.sessionId]?.agentExited) && <RestartChip sessionId={x.sessionId} />}
+            {!x.slept && (x.exited ? !(x.lost && x.host) : statusById[x.sessionId]?.agentExited) && <RestartChip sessionId={x.sessionId} />}
             <button
               type="button"
               className="aiws-ic"
@@ -438,9 +450,16 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         </div>
       )}
       {active && active.lost && active.host && !shownFile && !shownDiff && <RemoteCut host={active.host} />}
-      {active && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !shownFile && !shownDiff && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
-      {active && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
-      {tabs.map((x) => (
+      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !shownFile && !shownDiff && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
+      {/* p3-M21 잠든 탭 → 깨우는 중 / 깨어난 탭 → 한 줄(목업 sleep.html 안 1). */}
+      {active && !shownFile && !shownDiff && (active.slept || active.woke !== undefined) && (
+        <div className="aiws-note aiws-hib" role="status" data-aiws={active.slept ? 'hib-waking' : 'hib-woke'}>
+          <span className="aiws-z">z</span>
+          <span>{active.slept ? t('aiws.hib.waking') : t('aiws.hib.woke').replace('{n}', String(active.woke))}</span>
+        </div>
+      )}
+      {active && !active.slept && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
+      {tabs.filter((x) => !x.slept).map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
           {/* M8 R4 원격 탭은 원격 터미널로 — 붙여넣은 이미지·파일을 그 서버에 올리고 원격 경로를 넣는다(로컬 경로를 넣지 않는다). */}
           <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile && !shownDiff} local={!x.host} serverKey={x.host ?? 'localhost'} agent />

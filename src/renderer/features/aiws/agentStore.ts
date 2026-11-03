@@ -38,6 +38,10 @@ export type AgentTab = {
   vaultTitle?: string
   /** M11 첫 지시로 지은 제목(Orca generatedTitle — 설정 tabAutoTitle 이 켜졌을 때만 보인다). */
   genTitle?: string
+  /** p3-M21 잠재우기(hibernation.ts) — 세션은 끝났고 돌아오면 이 세션 id 로 이어 띄운다. minutes = 쉬던 시간(알림 글). */
+  slept?: { resume: string; minutes: number }
+  /** p3-M21 잠들었다 깨어난 탭 — 그 탭을 보는 동안 한 줄 알림(분). */
+  woke?: number
 }
 
 type AgentState = {

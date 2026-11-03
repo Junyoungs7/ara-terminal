@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
+import { startHibernation } from './hibernation'
 import type { Worktree } from '@shared/worktrees'
 import { Bot, FolderGit2, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Zap } from 'lucide-react'
 import { t } from '../../i18n'
@@ -105,6 +106,8 @@ export function AiRail({ settingsOpen, onSettings }: { settingsOpen: boolean; on
 export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: AiwsLocation | null) => void }): JSX.Element {
   // M2: 프로젝트·워크트리 상태를 처음 열 때 불러온다.
   useEffect(() => void ensureAiwsLoaded(), [])
+  // p3-M21 잠재우기 타이머(설정이 꺼져 있으면 매 틱 아무 일도 안 한다).
+  useEffect(startHibernation, [])
   const [composer, setComposer] = useState<{ repoId?: string } | null>(null)
   const view = useAgentStore((s) => s.view)
   const repos = useAiwsStore((s) => s.repos)
