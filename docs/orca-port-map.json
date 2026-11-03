@@ -1592,5 +1592,45 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "3차 R2-B: shiki 4.5.0·vscode-oniguruma 2.0.1(Orca 판), 그 언어 파일을 열 때만 지연 로드. 바꾼 점: WASM 을 ?url fetch 대신 ?inline(설치본 file:// 에서 fetch 불가). Orca 시험 textmate-token-provider 21건 옮김"
+  },
+  {
+    "id": "IN-05",
+    "feature": "셋업 가이드(시작하기 체크리스트 8단계 — 사이드바 진행 줄·모달·설정 맨 위 섹션, 저절로 판정)",
+    "orcaPaths": [
+      "src/shared/feature-wall-setup-steps.ts",
+      "src/renderer/src/components/feature-wall/feature-wall-setup-progress.ts",
+      "src/renderer/src/components/setup-guide",
+      "src/renderer/src/components/sidebar/SetupGuideSidebarEntry.tsx",
+      "src/renderer/src/components/settings/SettingsSetupGuidePane.tsx",
+      "src/renderer/src/components/settings/settings-setup-guide-progress.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting"
+  },
+  {
+    "id": "AI-28",
+    "feature": "에이전트 잠재우기(하이버네이션 — 끝나고 안 보이는 탭 N분 뒤 세션 종료, 돌아오면 --resume)",
+    "orcaPaths": [
+      "src/renderer/src/lib/agent-hibernation-planner.ts",
+      "src/renderer/src/lib/agent-hibernation-pane-eligibility.ts",
+      "src/renderer/src/lib/agent-hibernation-confirmation.ts",
+      "src/renderer/src/components/AgentHibernationGate.tsx",
+      "docs/site/content/docs/agents/hibernation.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting"
+  },
+  {
+    "id": "AI-29",
+    "feature": "펫(떠 있는 캐릭터 — 에이전트 상태 반영, 끌어 옮김, 내 그림 올리기)",
+    "orcaPaths": [
+      "src/renderer/src/components/pet",
+      "src/main/ipc/pet.ts",
+      "src/main/ipc/pet-image-formats.ts",
+      "src/main/ipc/pet-import-size-limits.ts",
+      "src/preload/api/pet-api.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting"
   }
 ]
