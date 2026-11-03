@@ -33,6 +33,8 @@ export type RunOptions = {
   input?: string
   /** M14 R1 사전 점검 — `cmd /d /s /c "<한 줄>"` 을 Node shell:true 와 같게 인용 없이 넘긴다(Windows 만 뜻이 있다). */
   windowsVerbatimArguments?: boolean
+  /** 3차 R2-B 결과에 날 바이트(stdoutBytes)도 싣는다. */
+  raw?: boolean
 }
 
 export type RunResult = {
@@ -41,6 +43,8 @@ export type RunResult = {
   stdout: string
   stderr: string
   error: Error | null
+  /** 3차 R2-B 날 바이트(그림 비교의 git cat-file blob — 글로 풀면 깨진다). 로컬 runProcess 가 raw 일 때만 채운다. */
+  stdoutBytes?: Buffer
 }
 
 let cp949: TextDecoder | null | undefined
@@ -91,7 +95,8 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
           code: typeof code === 'number' ? code : err ? 1 : 0,
           stdout: decodeOutput(stdout),
           stderr: decodeOutput(stderr),
-          error: err
+          error: err,
+          ...(opts.raw ? { stdoutBytes: stdout } : {})
         })
       }
     )

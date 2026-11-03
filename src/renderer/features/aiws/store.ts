@@ -426,6 +426,8 @@ export const useAiwsStore = create<AiwsState>()((...a) => ({ ...createRepoSlice(
 // 시험(node)에는 window.ev 가 없다 — 그때는 건너뛴다.
 if (typeof window !== 'undefined' && window.ev?.worktrees) {
   window.ev.worktrees.onCreateProgress((e) => useAiwsStore.getState().applyCreateProgress(e))
+  // 3차 R2-B 브랜치 자동 개명 — 사이드바 이름(= 브랜치)을 새로.
+  window.ev.worktrees.onBranchRenamed?.((e) => void useAiwsStore.getState().fetchWorktrees(e.repoId))
 }
 
 let loaded: Promise<void> | null = null

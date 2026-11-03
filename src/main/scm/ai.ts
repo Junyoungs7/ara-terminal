@@ -22,6 +22,7 @@ import {
   type ScmAiKind,
   type ScmAiResult
 } from '@shared/scmAi'
+import { buildFirstWorkBranchNamePrompt } from '@shared/branchRename'
 import { runAgentOnce } from '../agents/options'
 import type { Exec } from '../work/backend'
 import type { RunResult } from '../util/runProcess'
@@ -32,7 +33,7 @@ const PATCH_MAX = 16 * 1024 * 1024
 /** cmd.exe 가 "명령을 찾을 수 없음"에 내는 코드 · POSIX 셸의 127. */
 const NOT_FOUND_CODES = new Set([9009, 127])
 
-type Ctx = { root: string; x: Exec; remote: boolean; settings: AgentSettings; signal?: AbortSignal; win?: boolean }
+export type Ctx = { root: string; x: Exec; remote: boolean; settings: AgentSettings; signal?: AbortSignal; win?: boolean }
 
 async function git(c: Ctx, args: string[]): Promise<RunResult> {
   return c.x('git', ['-c', 'core.quotePath=false', ...args], { cwd: c.root, timeoutMs: GIT_MS, maxBuffer: PATCH_MAX, env: { GIT_TERMINAL_PROMPT: '0' }, signal: c.signal })
@@ -130,6 +131,16 @@ async function generate(kind: ScmAiKind, c: Ctx): Promise<ScmAiResult> {
       return { ok: false, code: 'empty', agent, message: failureExcerpt(r.stdout, r.stderr) }
     }
   }
+  const slug = sanitizeBranchSlug(r.stdout)
+  return slug ? { ok: true, agent, slug } : { ok: false, code: 'empty', agent, message: failureExcerpt(r.stdout, r.stderr) }
+}
+
+/** 3차 R2-B 브랜치 자동 개명 — 첫 지시로 이름 짓기(Orca generateBranchNameFromContext). 실행 길·실패 판정은 [AI 로 쓰기]와 같다. */
+export async function generateFirstWorkBranchSlug(c: Ctx, firstPrompt: string, assistantMessage?: string): Promise<ScmAiResult> {
+  const agent = scmAiAgentOf(c.settings.defaultAgent)
+  const r = await runAgent(c, agent, buildFirstWorkBranchNamePrompt(firstPrompt.slice(0, 8_000), assistantMessage?.slice(0, 4_000)))
+  const bad = failureOf(r, c, agent)
+  if (bad) return bad
   const slug = sanitizeBranchSlug(r.stdout)
   return slug ? { ok: true, agent, slug } : { ok: false, code: 'empty', agent, message: failureExcerpt(r.stdout, r.stderr) }
 }

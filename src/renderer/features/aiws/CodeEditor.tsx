@@ -5,11 +5,11 @@ import { CODE_READONLY_BYTES, languageOf } from '@shared/codeFiles'
 import { areWorktreePathsEqual } from '@shared/worktrees'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { t } from '../../i18n'
-import { monaco } from './monacoSetup'
+import { addZoomKeys, monaco } from './monacoSetup'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { codeEditorOptions } from './editorOptions'
 import { buildGitConflictDecorations, findGitConflictBlocks, getNextConflictNavigationIndex, hasGitConflictMarkers } from './conflictMarkers'
-import { useEditorPrefs } from '../../store/editorPrefs'
+import { getEditorPrefs, useEditorPrefs } from '../../store/editorPrefs'
 import { watchAiLines } from './aiLines'
 import { DOC_VIEWS, MARKDOWN_RENDER_OVERRIDE_MAX_SIZE_BYTES, RICH_MARKDOWN_MAX_SIZE_BYTES, defaultDocView, docKindOf } from '@shared/docView'
 import type { DocModel } from './DocSurface'
@@ -44,15 +44,42 @@ monaco.editor.onDidCreateModel((m) => {
   savedVersion.set(keyOf(m), m.getAlternativeVersionId())
   m.onDidChangeContent(() => {
     const f = fileOf(m)
-    if (f) useCodeStore.getState().setDirty(f.path, m.getAlternativeVersionId() !== savedVersion.get(keyOf(m)))
+    if (!f) return
+    const dirty = m.getAlternativeVersionId() !== savedVersion.get(keyOf(m))
+    useCodeStore.getState().setDirty(f.path, dirty)
+    if (dirty) scheduleAutoSave(m)
   })
   m.onWillDispose(() => {
     savedVersion.delete(keyOf(m))
     appliedSeq.delete(keyOf(m))
+    clearTimeout(autoTimers.get(keyOf(m)))
+    autoTimers.delete(keyOf(m))
   })
 })
 
 const LANGS = monaco.languages.getLanguages()
+
+/**
+ * 3차 R2-B 자동 저장(Orca editor-autosave — 기본 끔, 마지막으로 친 뒤 autoSaveDelayMs). 같은 안전 저장 길을 타되 묻지 않는다:
+ * 디스크가 읽은 뒤 바뀌었거나 지워졌으면 쓰지 않고 밖에서 바뀜 띠를 띄운다(Orca: externalMutation 이면 멈춤 — 사용자가 고를 때까지).
+ * 읽기 전용(큰 파일 앞부분)·밖에서 바뀜 띠가 떠 있는 파일은 건너뛴다. ponytail: 켜는 순간 이미 더러운 탭은 다음에 칠 때 저장(Orca 는 훑어서 바로).
+ */
+const autoTimers = new Map<string, ReturnType<typeof setTimeout>>()
+function scheduleAutoSave(m: Model): void {
+  const key = keyOf(m)
+  clearTimeout(autoTimers.get(key))
+  autoTimers.delete(key)
+  const p = getEditorPrefs()
+  if (!p.autoSave) return
+  autoTimers.set(
+    key,
+    setTimeout(() => {
+      autoTimers.delete(key)
+      const f = fileOf(m)
+      if (f && f.dirty && !f.readOnly && !f.conflict) void save(f.path, null)
+    }, p.autoSaveDelayMs)
+  )
+}
 
 export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: string; ask: AskFn; hidden: boolean }): JSX.Element {
   const files = useCodeStore((s) => s.files)
@@ -231,6 +258,7 @@ export default function CodeEditor({ worktreeId, ask, hidden }: { worktreeId: st
                 const p = ed.getModel()?.uri.fsPath
                 if (p) void save(p, askRef.current)
               })
+              addZoomKeys(ed)
             }}
           />
         </div>
@@ -301,7 +329,7 @@ function docModelOf(f: CodeFile): DocModel {
  * 저장(WS-08, Orca 규칙) — 모델의 지금 글을 쓰되, 읽은 뒤 디스크가 바뀌었으면(main 이 서명으로 판정) 덮어쓰기 전에 묻는다.
  * 지워졌으면 다시 만들지 묻는다. 쓰는 사이 더 친 글은 더러움으로 남는다(저장한 버전만 깨끗).
  */
-async function save(path: string, ask: AskFn): Promise<boolean> {
+async function save(path: string, ask: AskFn | null): Promise<boolean> {
   const f = useCodeStore.getState().files.find((x) => areWorktreePathsEqual(x.path, path, PLATFORM))
   const m = f ? monaco.editor.getModel(uriOf(f.path)) : null
   if (!f || !m || f.readOnly) return false
@@ -309,7 +337,11 @@ async function save(path: string, ask: AskFn): Promise<boolean> {
   const text = m.getValue()
   const req = { root: f.root, path: f.path, text, eol: f.eol, baseSig: f.sig, host: f.host }
   let r = await window.ev.code.write(req)
-  if (!r.ok && 'conflict' in r) {
+  // 자동 저장(ask 없음)은 덮어쓸지 묻지 않는다 — 띠를 띄우고 멈춘다. 실패는 더러움으로 남는다(Ctrl+S 가 이유를 보인다).
+  if (!ask) {
+    if (!r.ok && 'conflict' in r) useCodeStore.getState().setConflict(f.path, r.conflict === 'missing' ? 'missing' : 'changed')
+    if (!r.ok) return false
+  } else if (!r.ok && 'conflict' in r) {
     const missing = r.conflict === 'missing'
     const yes = await ask({
       title: t(missing ? 'code.save.missingTitle' : 'code.save.changedTitle'),
@@ -321,7 +353,7 @@ async function save(path: string, ask: AskFn): Promise<boolean> {
     r = await window.ev.code.write({ ...req, force: true })
   }
   if (!r.ok) {
-    await ask({ title: t('code.save.failTitle'), message: 'message' in r ? r.message : '', cancelLabel: null })
+    await ask?.({ title: t('code.save.failTitle'), message: 'message' in r ? r.message : '', cancelLabel: null })
     return false
   }
   savedVersion.set(keyOf(m), version)

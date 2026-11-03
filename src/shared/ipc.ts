@@ -8,7 +8,7 @@ import type { BundledSkillStatus, CliInstallStatus } from './araCli'
 import type { LaunchShell } from './aiCli'
 import type { GlassMaterial } from './glass'
 import type { ImportResult, ImportSource, ShellChoice } from './termExtra'
-import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
+import type { GitBranchCompareResult, GitDiffArgs, GitDiffImageResult, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { BytesResult } from './media'
 import type { SearchFile, SearchOptions } from './codeSearch'
@@ -701,6 +701,8 @@ export type InvokeContract = {
   'git:status': { req: { worktreePath: string; host?: string }; res: GitStatusResult }
   'git:branchCompare': { req: { worktreePath: string; baseRef?: string; host?: string }; res: GitBranchCompareResult }
   'git:diff': { req: GitDiffArgs; res: GitDiffResult }
+  /** 3차 R2-B 그림 비교 — 그림 파일의 양쪽 바이트(없는 쪽 null). */
+  'git:diffImage': { req: GitDiffArgs; res: GitDiffImageResult }
   // M6 WS-07·08 코드 에디터(main/code/feature.ts). root = 워크트리 폴더 — main 은 그 안의 경로만 받는다.
   // write 는 baseSig(읽을 때 받은 서명)로 디스크가 바뀌었는지 보고, 바뀌었으면 쓰지 않고 conflict.
   'code:read': { req: { root: string; path: string; host?: string }; res: CodeReadResult }
@@ -724,7 +726,7 @@ export type InvokeContract = {
   // M12 R3 RV-03 AI 작성 줄 — path 의 지금 보이는 글(text) 기준 AI 줄 범위([처음, 끝], 1부터). 바뀌면 push code:aiLinesChanged { path }.
   'code:aiLines': { req: { path: string; text: string }; res: [number, number][] }
   // 3차 R1-B HTML 미리 보기 허가(ara-doc: 프로토콜) — 그 문서 폴더 아래만, remote = 원격(http/https) 리소스 허용.
-  'code:docPreview': { req: { root: string; path: string; host?: string; remote?: boolean }; res: { ok: true; url: string } | { ok: false; message: string } }
+  'code:docPreview': { req: { root: string; path: string; host?: string; remote?: boolean; text?: string }; res: { ok: true; url: string } | { ok: false; message: string } }
   // M7 R2 WS-12·13 소스 제어 — git 쓰기(main/scm/feature.ts). root = 워크트리 폴더, paths = 그 기준 '/' 경로.
   // need 가 오면 아무것도 안 한 것 — 사용자가 확인하면 confirmed 를 실어 다시 부른다(보호 브랜치·강제 푸시·푸시된 커밋 amend).
   'scm:stage': { req: { root: string; paths: string[]; host?: string }; res: ScmResult }
@@ -1403,6 +1405,8 @@ export type EvApi = {
     diskUsage(repoId: string, paths: string[]): Promise<DiskUsage[]>
     /** 생성 단계(시작·git 출력·진행·끝/실패). 모든 창에 간다. */
     onCreateProgress(cb: (e: CreateWorktreeProgressEvent) => void): () => void
+    /** 3차 R2-B 브랜치 자동 개명이 브랜치를 바꿨다(push 'worktrees:branchRenamed') — 목록을 다시 읽는다. */
+    onBranchRenamed(cb: (e: { repoId: string; from: string; to: string }) => void): () => void
   }
   // M10 WS-15 프로젝트 그룹(preload/features/worktrees.ts).
   projectGroups: {
@@ -1469,6 +1473,7 @@ export type EvApi = {
     status(worktreePath: string, host?: string): Promise<GitStatusResult>
     branchCompare(worktreePath: string, baseRef?: string, host?: string): Promise<GitBranchCompareResult>
     diff(args: GitDiffArgs): Promise<GitDiffResult>
+    diffImage(args: GitDiffArgs): Promise<GitDiffImageResult>
   }
   // M6 코드 에디터(preload/features/code.ts).
   code: {
@@ -1492,7 +1497,8 @@ export type EvApi = {
     aiLines(path: string, text: string): Promise<[number, number][]>
     onAiLinesChanged(cb: (e: { path: string }) => void): () => void
     /** 3차 R1-B HTML 미리 보기 주소(ara-doc:) — iframe sandbox 로 띄운다. */
-    docPreview(root: string, path: string, host?: string, remote?: boolean): Promise<InvokeRes<'code:docPreview'>>
+    /** text(3차 R2-B HTML 렌더 비교) — 문서 자신은 이 글로(비교의 원래 쪽), 옆 파일(css·그림)은 디스크에서. */
+    docPreview(root: string, path: string, host?: string, remote?: boolean, text?: string): Promise<InvokeRes<'code:docPreview'>>
     /** 미리 보기 안의 http(s) 링크(막힌 이동) — grant = 그 미리 보기의 허가 id. */
     onDocLink(cb: (e: { url: string; grant: string }) => void): () => void
   }

@@ -81,6 +81,10 @@ import {
 import { eventLoopDelayProbeStatus, setEventLoopDelayProbe, startEventLoopDelayProbe } from './stability/eventLoopProbe'
 import { pushSend } from './util/windowPush'
 import { logMainError } from './log/MainErrorLog'
+import { createFirstWorkBranchRename } from './scm/branchRename'
+import { runProcess } from './util/runProcess'
+import { agentSettingsOf } from '@shared/agents'
+import { readJsonWithBackup } from './util/atomicJson'
 import { aiModelsOf, aiProviderOf, isBottomId, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_SESSION_LOG } from '@shared/types'
 import type { MainSessionManager } from './sessions/MainSessionManager'
 import { drainKilledPtys } from './sessions/PtyBackend'
@@ -644,6 +648,14 @@ app.whenReady().then(async () => {
   // M14 R1 예약 실행(main/automations/feature.ts) — 앱 안 타이머만(OS 작업 스케줄러 등록 없음). 띄우기는 본창 렌더러가 에이전트 탭으로.
   const automations = registerAutomationsFeature({ userData, mainWc })
   // M14 R1 스킬 관리·MCP 등록 — 같은 홈(e2e 는 임시 홈·환경 무시). 사용자 폴더 쓰기는 사람이 누를 때만, 전역 MCP 설정 파일은 읽기만.
+  // 3차 R2-B 브랜치 자동 개명(main/scm/branchRename.ts) — 설정은 부를 때마다 agents.json 에서.
+  const branchRename = createFirstWorkBranchRename({
+    settings: () => agentSettingsOf(readJsonWithBackup<unknown>(join(userData, 'agents.json'), null)),
+    findWorktree: (cwd) => worktrees.findLocalWorktree(cwd),
+    exec: runProcess,
+    onRenamed: (t, from, to) => pushSend(mainWc(), 'worktrees:branchRenamed', { repoId: t.repoId, from, to }),
+    log: (m) => logMainError('branch-rename', new Error(m))
+  })
   const localProjects = (): string[] => worktrees.listProjects().filter((p) => !p.host).map((p) => p.path)
   const toolEnv = process.env['ARA_E2E'] === '1' ? {} : process.env
   registerSkillsFeature({ home: hookHome, env: toolEnv, projects: localProjects, mainWindow: () => mainWindow })
@@ -658,7 +670,8 @@ app.whenReady().then(async () => {
     onClaudeStatusLine: (p, pane) => usage.ingestStatusLine(p, pane),
     onAgentWorking: (id, working) => (usage.stats.observe(id, working), automations.observe(id, working)),
     accountEnv: (agent) => usage.accounts.launchEnv(agent),
-    oriel
+    oriel,
+    onPrompt: (cwd, prompt) => void branchRename.onFirstPrompt(cwd, prompt)
   })
   // M11 R2 터미널 공간 로컬 셸도 데몬에(재시작·업데이트를 넘는다). 데몬은 에이전트와 같은 하나.
   sessions.setLocalDaemon(agents.terminalDaemon)

@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
-import type { GitDiffResult } from '@shared/gitDiff'
+import { Check, Eye, GitMerge, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import type { GitConflictKind, GitDiffResult } from '@shared/gitDiff'
 import type { DiffComment } from '@shared/diffComments'
 import { languageOf } from '@shared/codeFiles'
+import { mediaOf } from '@shared/media'
+import { docKindOf } from '@shared/docView'
 import type { Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
-import { monaco } from './monacoSetup'
+import { addZoomKeys, monaco } from './monacoSetup'
 import { changeCount, sendCommentsToAgent, useDiffStore, type DiffSel } from './diffStore'
 import { hostOfWorktree } from './store'
 import { editorFont } from './editorOptions'
+import { subscribeEditorPrefs } from '../../store/editorPrefs'
+import { openFile } from './codeStore'
+import { HtmlDiff, ImageDiff } from './DiffMedia'
 import { watchAiLines } from './aiLines'
 
 /**
@@ -20,7 +25,7 @@ import { watchAiLines } from './aiLines'
 
 const LANGS = monaco.languages.getLanguages()
 const STATUS_LETTER: Record<string, string> = { modified: 'M', added: 'A', deleted: 'D', renamed: 'R', copied: 'C', untracked: 'U', conflicted: '!' }
-type Row = DiffSel & { key: string; letter: string; area?: string }
+type Row = DiffSel & { key: string; letter: string; area?: string; conflictKind?: GitConflictKind | '' }
 
 export default function DiffView({ worktree, hidden }: { worktree: Worktree; hidden: boolean }): JSX.Element {
   const d = useDiffStore((s) => s.byWorktree[worktree.id])
@@ -31,6 +36,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const [draft, setDraft] = useState<{ startLine: number; lineNumber: number; body: string; editId?: string } | null>(null)
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+  // 3차 R2-B HTML 렌더 비교(이번 탭에서만 — 고른 파일이 바뀌어도 켠 채).
+  const [htmlRender, setHtmlRender] = useState(false)
   const host = useRef<HTMLDivElement>(null)
   const edRef = useRef<ReturnType<typeof monaco.editor.createDiffEditor> | null>(null)
   const aiPathRef = useRef<string | null>(null)
@@ -38,9 +45,13 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
   const decoRef = useRef<ReturnType<ReturnType<ReturnType<typeof monaco.editor.createDiffEditor>['getModifiedEditor']>['createDecorationsCollection']> | null>(null)
 
   // 목록 줄 — 작업 중이면 영역(스테이지됨/안 됨/추적 안 됨)마다 한 줄(같은 파일이 둘이면 두 줄, 보는 쪽이 다르다).
+  const conflictCount = d?.working?.ok ? d.working.entries.filter((e) => e.status === 'conflicted').length : 0
+  const onlyConflicts = !!d?.conflicts && d.list === 'working'
   const rows: Row[] = useMemo(() => {
     if (d?.list === 'working' && d.working?.ok)
-      return d.working.entries.map((e) => ({ key: `${e.area}:${e.path}`, path: e.path, oldPath: e.oldPath, mode: e.area === 'staged' ? 'staged' : 'unstaged', letter: STATUS_LETTER[e.status] ?? 'M', area: e.area }))
+      return d.working.entries
+        .filter((e) => !d.conflicts || e.status === 'conflicted')
+        .map((e) => ({ key: `${e.area}:${e.path}`, path: e.path, oldPath: e.oldPath, mode: e.area === 'staged' ? 'staged' : 'unstaged', letter: STATUS_LETTER[e.status] ?? 'M', area: e.area, conflictKind: e.status === 'conflicted' ? (e.conflictKind ?? '') : undefined }))
     if (d?.list === 'branch' && d.branch?.ok) return d.branch.entries.map((e) => ({ key: e.path, path: e.path, oldPath: e.oldPath, mode: 'branch', letter: STATUS_LETTER[e.status] ?? 'M' }))
     return []
   }, [d])
@@ -49,8 +60,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
 
   // 아무것도 안 골랐으면 첫 파일(Orca 도 diff 를 열면 첫 파일을 보인다).
   useEffect(() => {
-    if (!sel && rows[0]) useDiffStore.getState().select(worktree.id, { path: rows[0].path, oldPath: rows[0].oldPath, mode: rows[0].mode })
-  }, [sel, rows, worktree.id])
+    if (!sel && rows[0] && !onlyConflicts) useDiffStore.getState().select(worktree.id, { path: rows[0].path, oldPath: rows[0].oldPath, mode: rows[0].mode })
+  }, [sel, rows, worktree.id, onlyConflicts])
 
   // Monaco diff 에디터는 탭이 살아 있는 동안 하나. 모델은 고른 파일이 바뀔 때마다 새로(옛것은 버린다).
   useEffect(() => {
@@ -70,9 +81,14 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     })
     edRef.current = ed
     decoRef.current = ed.getModifiedEditor().createDecorationsCollection()
+    // 3차 R2-B 에디터 확대(Ctrl+=/−/0 — 에디터와 같은 값) · 설정 › 편집기 글꼴·확대를 바로 따른다.
+    addZoomKeys(ed.getModifiedEditor())
+    addZoomKeys(ed.getOriginalEditor())
+    const offPrefs = subscribeEditorPrefs(() => ed.updateOptions(editorFont()))
     // M12 R3 AI 작성 줄 — 바뀐 쪽(오른쪽)에. 원격 작업 단위는 표시 없음.
     watchAiLines(ed.getModifiedEditor(), () => (aiPathRef.current && !hostOfWorktree(worktree.id) ? aiPathRef.current : null))
     return () => {
+      offPrefs()
       const m = ed.getModel()
       ed.dispose()
       m?.original.dispose()
@@ -142,6 +158,22 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     setNote(r.ok ? { ok: true, text: t('diff.send.done').replace('{n}', String(r.sent)) } : { ok: false, text: r.message })
   }
   const n = changeCount(d)
+  // 3차 R2-B 그림(바이너리·너무 큼이어도 그림 파일이면 양쪽 그림) · HTML 렌더 비교.
+  const imageDiff = !!sel && mediaOf(sel.path)?.kind === 'image' && !!diff?.ok && diff.kind !== 'text'
+  const isHtml = !!sel && docKindOf(sel.path) === 'html'
+  const htmlDiff = isHtml && htmlRender && !!diff?.ok && diff.kind === 'text'
+  const diffArgs = useMemo(() => (sel ? { worktreePath: worktree.path, filePath: sel.path, oldPath: sel.oldPath, mode: sel.mode, mergeBase, host: hostOfWorktree(worktree.id) } : null), [sel, worktree.path, worktree.id, mergeBase])
+  // 충돌 검토 — 누르면 에디터 탭으로(충돌 띠·세 구역 색이 거기 있다. Orca 는 같은 탭 오른쪽 편집기), ✓ = 해결 표시(git add).
+  const openConflict = async (r: Row): Promise<void> => {
+    const res = await openFile(r.path, undefined, r.conflictKind ? { gitConflict: r.conflictKind } : undefined)
+    if (res.ok) useDiffStore.getState().setShown(worktree.id, false)
+    else setNote({ ok: false, text: res.message })
+  }
+  const resolve = async (r: Row): Promise<void> => {
+    const res = await window.ev.scm.stage(worktree.path, [r.path], hostOfWorktree(worktree.id))
+    if (!res.ok) setNote({ ok: false, text: res.message ?? '' })
+    void useDiffStore.getState().refresh(worktree)
+  }
 
   return (
     <div className="diff-view" data-diff="view" hidden={hidden}>
@@ -154,6 +186,19 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
               </button>
             ))}
           </div>
+          {d?.list === 'working' && (conflictCount > 0 || onlyConflicts) && (
+            <button
+              type="button"
+              className={'diff-seg-btn' + (onlyConflicts ? ' on' : '')}
+              aria-pressed={onlyConflicts}
+              data-diff="conflicts"
+              title={t('diff.conflicts.hint')}
+              onClick={() => useDiffStore.getState().setConflicts(worktree.id, !onlyConflicts)}
+            >
+              <GitMerge aria-hidden className="diffm-ic" />
+              {t('diff.conflicts').replace('{n}', String(conflictCount))}
+            </button>
+          )}
           <button type="button" className="aiws-ic" data-diff="refresh" aria-label={t('diff.refresh')} title={t('diff.refresh')} onClick={() => void useDiffStore.getState().refresh(worktree)}>
             <RefreshCw />
           </button>
@@ -170,9 +215,30 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
           </p>
         )}
         {result?.ok && n === 0 && <p className="aiws-note" data-diff="empty">{t('diff.empty')}</p>}
+        {onlyConflicts && rows.length === 0 && result?.ok && (
+          <p className="aiws-note" data-diff="no-conflicts">
+            {t('diff.conflicts.none')}
+          </p>
+        )}
         {result?.ok && result.truncated && <p className="aiws-note">{t('diff.truncated')}</p>}
         <div className="diff-rows" role="listbox" aria-label={t('diff.list')}>
           {rows.map((r) => {
+            if (onlyConflicts) {
+              const at = r.path.lastIndexOf('/')
+              return (
+                <div key={r.key} className="diff-row diffm-conflict" data-diff-conflict={r.path} title={r.conflictKind ? `${r.path}\n${t('scm.conflict.hint.' + r.conflictKind)}` : r.path}>
+                  <button type="button" className="diffm-open" onClick={() => void openConflict(r)}>
+                    <span className="diff-letter s-!">!</span>
+                    <span className="diff-name">{r.path.slice(at + 1)}</span>
+                    <span className="diff-dir">{at > 0 ? r.path.slice(0, at) : ''}</span>
+                    {r.conflictKind && <span className="diff-area">{t('scm.conflict.kind.' + r.conflictKind)}</span>}
+                  </button>
+                  <button type="button" className="aiws-ic" data-diff="resolve" title={t('diff.conflicts.resolve')} aria-label={t('diff.conflicts.resolve')} onClick={() => void resolve(r)}>
+                    <Check />
+                  </button>
+                </div>
+              )
+            }
             const on = !!sel && sel.path === r.path && sel.mode === r.mode
             const cnt = comments.filter((c) => c.filePath === r.path && !c.sentAt).length
             const cut = r.path.lastIndexOf('/')
@@ -210,6 +276,12 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
               </button>
             ))}
           </div>
+          {isHtml && diff?.ok && diff.kind === 'text' && (
+            <button type="button" className={'btn sec' + (htmlRender ? ' on' : '')} aria-pressed={htmlRender} data-diff="html-render" onClick={() => setHtmlRender(!htmlRender)}>
+              <Eye aria-hidden />
+              {t('diffm.render')}
+            </button>
+          )}
           <button type="button" className="btn sec" data-diff="add-comment" disabled={!sel || !diff?.ok} onClick={startComment}>
             <MessageSquarePlus aria-hidden />
             {t('diff.comment.add')}
@@ -259,12 +331,14 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
             {diff.message}
           </p>
         )}
-        {diff?.ok && diff.kind !== 'text' && (
+        {diff?.ok && diff.kind !== 'text' && !imageDiff && (
           <p className="aiws-note" data-diff={diff.kind}>
             {t('diff.' + diff.kind)}
           </p>
         )}
-        <div className="diff-monaco" ref={host} hidden={!diff?.ok || diff.kind !== 'text'} />
+        {imageDiff && diffArgs && <ImageDiff args={diffArgs} inline={inline} />}
+        {htmlDiff && diffArgs && diff?.ok && diff.kind === 'text' && <HtmlDiff args={diffArgs} original={diff.original} modified={diff.modified} inline={inline} />}
+        <div className="diff-monaco" ref={host} hidden={!diff?.ok || diff.kind !== 'text' || htmlDiff} />
         {fileComments.length > 0 && (
           <ul className="diff-cmts" aria-label={t('diff.comments')}>
             {fileComments.map((c) => (

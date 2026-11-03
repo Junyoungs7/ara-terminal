@@ -19,7 +19,7 @@ import { t } from '../../i18n'
 import { hostOfWorktree, useAiwsStore } from './store'
 import { openFile } from './codeStore'
 import { GitLabMrCreate, GitLabMrList } from '../integrations'
-import { useDiffStore } from './diffStore'
+import { openConflictReview, useDiffStore } from './diffStore'
 
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
 
@@ -331,6 +331,10 @@ ${t('scm.conflict.hint.' + e.conflictKind)}` : e.path}
               <>
                 <div className="scm-sec" data-scm-sec="conflicts">
                   <span>{t('scm.conflicts').replace('{n}', String(conflicts.length))}</span>
+                  {/* 3차 R2-B 충돌 검토 목록(Orca openConflictReview) — 변경 비교 탭을 충돌만 보기로. */}
+                  <button type="button" className="btn sec" data-scm="conflict-review" onClick={() => wt && openConflictReview(wt.id) && onOpened?.()}>
+                    {t('scm.conflict.review')}
+                  </button>
                 </div>
                 {conflicts.map(row)}
               </>

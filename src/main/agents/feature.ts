@@ -50,6 +50,8 @@ export function registerAgentsFeature(deps: {
   onClaudeStatusLine?: (payload: Record<string, unknown>, pane: string) => void
   /** M13 통계 — 탭이 '일하는 중'으로 들어가고 나올 때. */
   onAgentWorking?: (sessionId: string, working: boolean) => void
+  /** 3차 R2-B 브랜치 자동 개명 — 로컬 에이전트 탭에 지시가 들어올 때(실행 지시·훅 UserPromptSubmit). cwd = 그 탭의 폴더. */
+  onPrompt?: (cwd: string, prompt: unknown) => void
   /** M13 계정 — 고른 Claude·Codex 계정의 실행 env(CLAUDE_CONFIG_DIR·CODEX_HOME). 시스템 기본이면 빈 객체. 로컬 실행에만. */
   accountEnv?: (agent: 'claude' | 'codex') => Record<string, string>
   sessions: () => MainSessionManager
@@ -158,6 +160,8 @@ export function registerAgentsFeature(deps: {
       // Claude UserPromptSubmit·Gemini BeforeAgent 의 prompt = 사람이 친 첫 요청(터미널에서 친 것도).
       maybeName(e.paneKey, e.payload['prompt'])
       noteFirstPrompt(e.paneKey, e.payload['prompt'])
+      const meta = tabMeta.get(e.paneKey)
+      if (meta) deps.onPrompt?.(meta.cwd, e.payload['prompt'])
     },
     typeof savedHook?.port === 'number' && typeof savedHook.token === 'string' ? { port: savedHook.port, token: savedHook.token } : null,
     (payload, pane) => deps.onClaudeStatusLine?.(payload, pane)
@@ -490,6 +494,7 @@ export function registerAgentsFeature(deps: {
     saveTabRecords()
     if (typeof prompt === 'string') maybeName(sessionId, prompt)
     noteFirstPrompt(sessionId, prompt)
+    deps.onPrompt?.(cwd, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line, ...(noOriel ? { noOriel: true as const } : {}) }

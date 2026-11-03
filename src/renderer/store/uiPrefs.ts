@@ -13,6 +13,7 @@ import { featuresOf } from '@shared/features'
 import { DEFAULT_VOICE } from '@shared/voice'
 import { DEFAULT_EDITOR_PREFS } from '@shared/editorPrefs'
 import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
+import { setEditorPrefsWriter } from './editorPrefs'
 
 // R5 터미널 동작 설정 단일 소스(useFont·useSidebar 와 같은 형태):
 // workspace.json ui → 하이드레이트 → 열린 xterm 즉시 반영 → ui.setPrefs 로 영속.
@@ -67,6 +68,12 @@ export function useUiPrefs() {
       return next
     })
   }, [])
+
+  // 3차 R2-B 에디터 확대 키(AI 작업 공간 청크)가 같은 저장 길을 타게.
+  useEffect(() => {
+    setEditorPrefsWriter((codeEditor) => update({ codeEditor }))
+    return () => setEditorPrefsWriter(null)
+  }, [update])
 
   return { prefs, update }
 }

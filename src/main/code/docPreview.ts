@@ -23,7 +23,8 @@ const GRANT_CAP = 64
 // ⚠️ app ready 앞이어야 한다 — 이 모듈은 main/index.ts 의 최상단 import(code/feature)로 먼저 평가된다.
 protocol.registerSchemesAsPrivileged([{ scheme: DOC_SCHEME, privileges: { standard: true, secure: true } }])
 
-type Grant = { dir: string; host?: string; remote: boolean }
+/** body = 3차 R2-B 렌더 비교의 원래 쪽 — 그 문서(docPath)만 디스크 대신 이 글로 낸다(상한 = 문서 상한). */
+type Grant = { dir: string; host?: string; remote: boolean; docPath?: string; body?: string }
 const grants = new Map<string, Grant>()
 
 const MIME: Record<string, string> = {
@@ -72,10 +73,10 @@ export function docPreviewCsp(remote: boolean): string {
 }
 
 /** 허가 하나 — 문서 폴더(dir) 아래만 읽는다. url = 문서 자신. */
-export function mintDocGrant(path: string, host: string | undefined, remote: boolean): string {
+export function mintDocGrant(path: string, host: string | undefined, remote: boolean, body?: string): string {
   const flavor = workBackend(host).platform === 'win32' ? win32 : posix
   const id = randomBytes(16).toString('hex')
-  grants.set(id, { dir: flavor.dirname(path), host, remote })
+  grants.set(id, { dir: flavor.dirname(path), host, remote, ...(body !== undefined && body.length <= DOC_FILE_MAX_BYTES ? { docPath: flavor.join(flavor.dirname(path), flavor.basename(path)), body } : {}) })
   while (grants.size > GRANT_CAP) grants.delete(grants.keys().next().value as string)
   return `${DOC_SCHEME}://${id}/${encodeURIComponent(flavor.basename(path))}`
 }
@@ -102,15 +103,21 @@ export function docPathOf(url: string): { path: string; grant: Grant } | null {
   return rel && isInsidePath(g.dir, path, platform) ? { path, grant: g } : null
 }
 
+const docHeaders = (path: string, remote: boolean): Record<string, string> => ({
+  'content-type': docMimeOf(path),
+  'content-security-policy': docPreviewCsp(remote),
+  'x-content-type-options': 'nosniff',
+  'cache-control': 'no-store'
+})
+
 export function registerDocPreview(): void {
   protocol.handle(DOC_SCHEME, async (req) => {
     const hit = docPathOf(req.url)
     if (!hit) return new Response('Not found', { status: 404 })
+    if (hit.grant.body !== undefined && hit.path === hit.grant.docPath) return new Response(hit.grant.body, { headers: docHeaders(hit.path, hit.grant.remote) })
     const r = await workBackend(hit.grant.host).fs.readBytes(hit.path, DOC_FILE_MAX_BYTES)
     if (!r.ok) return new Response(r.tooBig ? 'Too large' : 'Not found', { status: r.tooBig ? 413 : 404 })
-    return new Response(r.data as BodyInit, {
-      headers: { 'content-type': docMimeOf(hit.path), 'content-security-policy': docPreviewCsp(hit.grant.remote), 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' }
-    })
+    return new Response(r.data as BodyInit, { headers: docHeaders(hit.path, hit.grant.remote) })
   })
   // 미리 보기 프레임이 ara-doc: 밖으로 가려 하면(링크·meta refresh·location) 막는다. http(s) 면 렌더러가 묻고 바깥 브라우저로 연다.
   const guard = (wc: WebContents): void => {

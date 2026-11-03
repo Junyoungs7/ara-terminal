@@ -5,10 +5,12 @@
 //    이 번들의 monaco 를 쓰게 한다(사내망·CSP script-src 'self'). 이 줄이 Editor 를 그리기 전에 돌아야 한다(모듈 맨 위).
 //  · 테마: 아라 토큰(tokens.css 의 CSS 변수)을 읽어 만든다 — 색 리터럴을 여기 두지 않는다. 배경 밝기로 다크/라이트 바탕을 고른다.
 // M12 R2 언어 하이라이트 확장(Orca runMonacoSetupSteps 의 언어 등록 — monarch 판만): Vue·Svelte·Astro·Glimmer(.gjs/.gts)·CUDA·JSONL·dotenv·Quarto·
-// Markdown 의 bash 별칭. 뺀 것: Nim·Lean·Typst·Zig·Groovy·CMake(shiki·oniguruma TextMate 엔진 = 새 의존성), Markdown 머리말 접기.
+// Markdown 의 bash 별칭. 3차 R2-B: Nim·Lean·Typst·Zig·Groovy·CMake(shiki·Oniguruma TextMate, 지연 로드). 뺀 것: Markdown 머리말 접기.
 // 뺀 것(Orca): TS 워커 유휴 정지, 붙여넣기·diff 폐기 가드 — 필요해지면 그때.
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
+import { nextEditorFontZoomLevel } from '@shared/editorPrefs'
+import { getEditorPrefs, updateEditorPrefs } from '../../store/editorPrefs'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
@@ -23,6 +25,13 @@ import { registerJsonlLanguage } from './monacoLanguages/register-jsonl'
 import { registerDotenvLanguage } from './monacoLanguages/register-dotenv'
 import { registerQuartoLanguage } from './monacoLanguages/register-quarto'
 import { registerShellMarkdownAliases } from './monacoLanguages/register-shell-markdown-aliases'
+// 3차 R2-B shiki/TextMate 언어 6종(Orca) — 등록은 이름표만, 문법·shiki·Oniguruma WASM 은 그 언어 모델을 처음 토큰화할 때 불린다.
+import { registerNimLanguage } from './monacoLanguages/register-nim'
+import { registerTypstLanguage } from './monacoLanguages/register-typst'
+import { registerLeanLanguage } from './monacoLanguages/register-lean'
+import { registerZigLanguage } from './monacoLanguages/register-zig'
+import { registerGroovyLanguage } from './monacoLanguages/register-groovy'
+import { registerCMakeLanguage } from './monacoLanguages/register-cmake'
 
 globalThis.MonacoEnvironment = {
   getWorker(_id: string, label: string) {
@@ -52,7 +61,7 @@ monaco.typescript.typescriptDefaults.setDiagnosticsOptions(quiet)
 monaco.typescript.javascriptDefaults.setDiagnosticsOptions(quiet)
 
 // 하나가 실패해도 에디터는 뜨게(Orca monaco-setup-steps 와 같은 뜻).
-for (const reg of [registerVueLanguage, registerSvelteLanguage, registerAstroLanguage, registerGlimmerLanguages, registerCudaLanguage, registerJsonlLanguage, registerDotenvLanguage, registerQuartoLanguage, registerShellMarkdownAliases]) {
+for (const reg of [registerVueLanguage, registerSvelteLanguage, registerAstroLanguage, registerGlimmerLanguages, registerCudaLanguage, registerJsonlLanguage, registerDotenvLanguage, registerQuartoLanguage, registerShellMarkdownAliases, registerNimLanguage, registerTypstLanguage, registerLeanLanguage, registerZigLanguage, registerGroovyLanguage, registerCMakeLanguage]) {
   try {
     reg(monaco)
   } catch (e) {
@@ -61,6 +70,23 @@ for (const reg of [registerVueLanguage, registerSvelteLanguage, registerAstroLan
 }
 
 loader.config({ monaco })
+
+/**
+ * 3차 R2-B 에디터 글자 확대(Orca resolveZoomTarget — 포커스가 에디터면 Ctrl+=/−/0 이 앱이 아니라 에디터 글자를). 값은 설정에 남는다(다시 켜도 그대로).
+ * 비교(DiffView)도 같은 값을 쓴다. 뺀 것: 마크다운 미리 보기·리치 편집 확대(Orca 는 같은 값으로 키운다).
+ */
+export function addZoomKeys(ed: { addCommand: (key: number, run: () => void) => unknown }): void {
+  const zoom = (d: 'in' | 'out' | 'reset') => () => updateEditorPrefs({ fontZoom: nextEditorFontZoomLevel(getEditorPrefs().fontZoom, d) })
+  const { CtrlCmd } = monaco.KeyMod
+  const K = monaco.KeyCode
+  ed.addCommand(CtrlCmd | K.Equal, zoom('in'))
+  ed.addCommand(CtrlCmd | K.NumpadAdd, zoom('in'))
+  ed.addCommand(CtrlCmd | K.Minus, zoom('out'))
+  ed.addCommand(CtrlCmd | K.NumpadSubtract, zoom('out'))
+  ed.addCommand(CtrlCmd | K.Digit0, zoom('reset'))
+  ed.addCommand(CtrlCmd | K.Numpad0, zoom('reset'))
+}
+
 
 /** 아라 토큰 → Monaco 테마. Monaco 는 #rrggbb(aa) 만 받으므로 그 꼴이 아닌 값(rgba 등)은 건너뛴다. */
 function defineAraTheme(): void {

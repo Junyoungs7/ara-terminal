@@ -44,7 +44,7 @@ import { VOICES, VOICE_FACES, VOICE_KEEP, VOICE_LISTEN, VOICE_SPEEDS } from '@sh
 import { openMic, listMics, type MicHandle } from '../voice/audio'
 import { previewVoice, setBypass, useVoice } from '../store/voice'
 import { SETTINGS_INDEX, searchSettings, sectionDef, type SettingsSection } from '@shared/settingsIndex'
-import { editorPrefsOf, type DiffView } from '@shared/editorPrefs'
+import { editorPrefsOf, normalizeAutoSaveDelayMs, AUTO_SAVE_DELAY_MIN, AUTO_SAVE_DELAY_MAX, type DiffView } from '@shared/editorPrefs'
 import type { SettingsTarget } from '../store/settingsNav'
 import { TermExtraRows, UpdateChannelRow } from './TermExtraSettings'
 // M3 에이전트 설정 — AI 작업 공간 청크(지연 로드). 이 진입점 밖의 aiws 파일은 직접 import 하지 않는다(feature-module.md).
@@ -1706,6 +1706,25 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
               <Row label={t('settings.editor.diffView')} desc={t('settings.editor.diffView.desc')} item="editor.diffView">
                 <Seg value={prefs.codeEditor.diffView} options={DIFF_VIEWS} onChange={(diffView) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, diffView } })} labelKey={(v) => 'settings.editor.diffView.' + v} field="editor.diffView" />
               </Row>
+              {/* 3차 R2-B 자동 저장(Orca editorAutoSave 기본 끔 · 지연 1000ms, 250~10000 — 칸을 떠날 때 맞춘다). */}
+              <Row label={t('settings.editor.autoSave')} desc={t('settings.editor.autoSave.desc')} item="editor.autoSave">
+                <Toggle on={prefs.codeEditor.autoSave} label={t('settings.editor.autoSave')} onChange={(autoSave) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, autoSave } })} />
+              </Row>
+              {prefs.codeEditor.autoSave && (
+                <Row label={t('settings.editor.autoSaveDelay')} desc={t('settings.editor.autoSaveDelay.desc')} item="editor.autoSaveDelay">
+                  <input
+                    key={prefs.codeEditor.autoSaveDelayMs}
+                    type="number"
+                    className="ai-key-input"
+                    data-field="editor.autoSaveDelay"
+                    min={AUTO_SAVE_DELAY_MIN}
+                    max={AUTO_SAVE_DELAY_MAX}
+                    step={50}
+                    defaultValue={prefs.codeEditor.autoSaveDelayMs}
+                    onBlur={(e) => onPrefsChange({ codeEditor: { ...prefs.codeEditor, autoSaveDelayMs: normalizeAutoSaveDelayMs(e.target.value) } })}
+                  />
+                </Row>
+              )}
             </>
           )}
 

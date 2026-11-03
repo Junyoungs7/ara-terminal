@@ -123,6 +123,11 @@ export type AgentSettings = {
   awakeMode: AwakeMode
   /** M11 첫 지시로 탭 제목 짓기(Orca tabAutoGenerateTitle — 기본 꺼짐). 끄면 에이전트가 정한 제목(OSC)을 쓴다. */
   tabAutoTitle: boolean
+  /**
+   * 3차 R2-B 브랜치 자동 개명(Orca autoRenameBranchFromWork — 기본 켬). 아라가 자동 이름(바다 생물)으로 만든 작업 단위에 첫 지시가 들어오면
+   * 그 지시를 CLI 에이전트에 한 번 보내 브랜치 이름을 짓고 바꾼다(올린 적 없는 브랜치만).
+   */
+  autoRenameBranch: boolean
 }
 
 /** M11 깨어있기 모드(Orca shared/computer-awake-mode.ts). */
@@ -146,7 +151,8 @@ export function defaultAgentSettings(): AgentSettings {
     chatNaming: true,
     orielPath: '',
     awakeMode: 'off',
-    tabAutoTitle: false
+    tabAutoTitle: false,
+    autoRenameBranch: true
   }
 }
 
@@ -189,6 +195,7 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.orielPath = textOf(src.orielPath).trim()
   base.awakeMode = isAwakeMode(src.awakeMode) ? src.awakeMode : 'off'
   base.tabAutoTitle = src.tabAutoTitle === true
+  base.autoRenameBranch = src.autoRenameBranch !== false
   return base
 }
 

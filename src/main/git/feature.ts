@@ -2,7 +2,7 @@
 // M8 R5: host 가 있으면 원격 작업 단위 — 같은 조회를 SSH exec·SFTP 로(work/backend).
 import { handle } from '../ipc/handle'
 import { workBackend } from '../work/backend'
-import { readBranchCompare, readFileDiff, readGitStatus } from './inspect'
+import { readBranchCompare, readFileDiff, readFileDiffImage, readGitStatus } from './inspect'
 
 const bad = { ok: false as const, message: '작업 단위 폴더가 없습니다.' }
 
@@ -12,4 +12,5 @@ export function registerGitInspectFeature(): void {
     typeof worktreePath === 'string' && worktreePath ? readBranchCompare(worktreePath, baseRef, workBackend(host).inspect) : bad
   )
   handle('git:diff', (args) => (typeof args?.worktreePath === 'string' && args.worktreePath ? readFileDiff(args, workBackend(args.host).inspect) : bad))
+  handle('git:diffImage', (args) => (typeof args?.worktreePath === 'string' && args.worktreePath ? readFileDiffImage(args, workBackend(args.host).inspect) : bad))
 }

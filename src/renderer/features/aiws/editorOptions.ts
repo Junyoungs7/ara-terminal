@@ -7,7 +7,8 @@ import { getEditorPrefs } from '../../store/editorPrefs'
 export function editorFont(css: CSSStyleDeclaration = getComputedStyle(document.documentElement), p: EditorPrefs = getEditorPrefs()): { fontFamily: string; fontSize?: number } {
   const size = parseFloat(css.getPropertyValue('--tt'))
   const fontFamily = p.fontFamily || css.getPropertyValue('--term').trim() || css.getPropertyValue('--mono').trim()
-  return size > 0 ? { fontFamily, fontSize: Math.max(8, Math.min(32, size)) } : { fontFamily }
+  // 3차 R2-B 확대(Orca computeEditorFontSize — 확대 뒤 8~32 로 자른다).
+  return size > 0 ? { fontFamily, fontSize: Math.max(8, Math.min(32, size + p.fontZoom)) } : { fontFamily }
 }
 
 export function codeEditorOptions(p: EditorPrefs): { fontFamily: string; fontSize?: number; wordWrap: 'on' | 'off'; minimap: { enabled: boolean } } {

@@ -86,9 +86,10 @@ export function registerCodeFeature(): void {
     }
   })
   // 3차 R1-B HTML 미리 보기 허가 — 작업 단위 안의 .html/.htm 만.
-  handle('code:docPreview', ({ root, path, host, remote }) => {
+  // 3차 R2-B text = HTML 렌더 비교의 원래 쪽(문서 자신만 그 글로 — 옆 파일은 그대로 허가 폴더 디스크에서).
+  handle('code:docPreview', ({ root, path, host, remote, text }) => {
     if (typeof path !== 'string' || docKindOf(path) !== 'html' || !inside(root, path, host)) return outside
-    return { ok: true as const, url: mintDocGrant(path, typeof host === 'string' ? host : undefined, remote === true) }
+    return { ok: true as const, url: mintDocGrant(path, typeof host === 'string' ? host : undefined, remote === true, typeof text === 'string' ? text : undefined) }
   })
   // M12 CV-02 뷰어 — 뷰어로 여는 종류만, 종류별 상한까지.
   handle('code:readBytes', ({ root, path, host }) => {

@@ -37,6 +37,11 @@ export const worktreesBridge: Pick<EvApi, 'repos' | 'worktrees' | 'projectGroups
       const listener = (_e: IpcRendererEvent, d: CreateWorktreeProgressEvent) => cb(d)
       ipcRenderer.on('createWorktree:progress', listener)
       return () => ipcRenderer.removeListener('createWorktree:progress', listener)
+    },
+    onBranchRenamed: (cb: (e: { repoId: string; from: string; to: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, d: { repoId: string; from: string; to: string }) => cb(d)
+      ipcRenderer.on('worktrees:branchRenamed', listener)
+      return () => ipcRenderer.removeListener('worktrees:branchRenamed', listener)
     }
   },
   // M10 WS-15 Orca projectGroups:*

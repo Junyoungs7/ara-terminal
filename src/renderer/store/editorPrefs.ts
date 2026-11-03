@@ -17,3 +17,14 @@ export function subscribeEditorPrefs(f: () => void): () => void {
   return () => void subs.delete(f)
 }
 export const useEditorPrefs = (): EditorPrefs => useSyncExternalStore(subscribeEditorPrefs, getEditorPrefs)
+
+// 3차 R2-B — AI 작업 공간 청크(에디터 확대 키)가 설정을 바꿀 길. useUiPrefs 가 저장까지 하는 update 를 걸어 둔다.
+let writer: ((p: EditorPrefs) => void) | null = null
+export function setEditorPrefsWriter(w: ((p: EditorPrefs) => void) | null): void {
+  writer = w
+}
+export function updateEditorPrefs(patch: Partial<EditorPrefs>): void {
+  const next = { ...cur, ...patch }
+  if (writer) writer(next)
+  else setEditorPrefs(next)
+}

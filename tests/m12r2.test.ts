@@ -15,13 +15,13 @@ import type { UiState } from '../src/shared/types'
 
 describe('에디터 옵션 — Orca 기본값', () => {
   it('미지정이면 줄바꿈 켬·미니맵 끔·글꼴 빈 값(터미널 글꼴)·미리 보기 탭 켬·변경 보기 한 줄', () => {
-    expect(DEFAULT_EDITOR_PREFS).toEqual({ wordWrap: true, minimap: false, fontFamily: '', previewTabs: true, diffView: 'inline' })
+    expect(DEFAULT_EDITOR_PREFS).toEqual({ wordWrap: true, minimap: false, fontFamily: '', previewTabs: true, diffView: 'inline', autoSave: false, autoSaveDelayMs: 1000, fontZoom: 0 }) // 3차 R2-B 자동 저장·확대(Orca 기본값)
     expect(editorPrefsOf(undefined)).toEqual(DEFAULT_EDITOR_PREFS)
     expect(prefsFrom({} as UiState).codeEditor).toEqual(DEFAULT_EDITOR_PREFS)
   })
   it('손상 값은 기본으로, 글꼴은 CSS 로 새는 글자를 빼고 자른다', () => {
     const p = editorPrefsOf({ wordWrap: 'yes', minimap: true, fontFamily: ' Consolas; } body { x\n', previewTabs: false, diffView: 'split' })
-    expect(p).toEqual({ wordWrap: true, minimap: true, fontFamily: 'Consolas  body  x', previewTabs: false, diffView: 'inline' })
+    expect(p).toEqual({ wordWrap: true, minimap: true, fontFamily: 'Consolas  body  x', previewTabs: false, diffView: 'inline', autoSave: false, autoSaveDelayMs: 1000, fontZoom: 0 })
     expect(editorPrefsOf({ diffView: 'side-by-side' }).diffView).toBe('side-by-side')
     expect(editorPrefsOf({ fontFamily: 'x'.repeat(500) }).fontFamily).toHaveLength(200)
   })

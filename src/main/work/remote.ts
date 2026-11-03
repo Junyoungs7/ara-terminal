@@ -184,6 +184,18 @@ export function remoteBackend(client: () => Promise<Client>): WorkBackend {
         const st = await statOf(s, p).catch(() => null)
         if (!st?.isFile()) return ''
         return st.size > DIFF_READ_MAX_BYTES ? null : (await readAll(s, p)).toString('utf8')
+      },
+      // 3차 R2-B 그림 비교 — exec 는 글로 풀어 돌려주므로 서버에서 base64 로 바꿔 받는다(coreutils base64 — 서버에 깔 것 없음).
+      gitBytes: async (args, cwd) => {
+        const r = await exec('sh', ['-c', 'git "$@" | base64', 'sh', ...args], { cwd, timeoutMs: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER })
+        return r.code === 0 && r.stdout.trim() ? Buffer.from(r.stdout, 'base64') : null
+      },
+      readBytes: async (root, rel, max) => {
+        const s = await sftp()
+        const p = posixJoin(root, rel)
+        const st = await statOf(s, p).catch(() => null)
+        if (!st?.isFile()) return null
+        return st.size > max ? 'tooLarge' : new Uint8Array(await readAll(s, p))
       }
     },
     fs: {

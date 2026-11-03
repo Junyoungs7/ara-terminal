@@ -14,7 +14,8 @@ import { getEditorPrefs, subscribeEditorPrefs } from '../../store/editorPrefs'
 /** 목록 갈래 — 작업 중 변경(status) / 분기 기준 대비(branchCompare). */
 export type DiffList = 'working' | 'branch'
 export type DiffSel = { path: string; oldPath?: string; mode: DiffMode }
-export type WorktreeDiff = { list: DiffList; selected: DiffSel | null; working: GitStatusResult | null; branch: GitBranchCompareResult | null; loading: boolean }
+/** conflicts(3차 R2-B 충돌 검토 — Orca EditorConflictReviewSurface 의 목록) = 작업 중 목록에서 충돌 파일만. */
+export type WorktreeDiff = { list: DiffList; selected: DiffSel | null; working: GitStatusResult | null; branch: GitBranchCompareResult | null; loading: boolean; conflicts?: boolean }
 
 // 주석은 이 PC 의 localStorage 에 작업 단위 **폴더 경로**로 둔다 — 앱을 다시 켜도 남는다(Orca 는 orca-data.json 의 worktree meta).
 // ponytail: 창 하나·쓰기 한 곳이라 Orca 의 쓰기 줄 세우기·되돌리기는 뺐다. 여러 창이 같은 주석을 고치게 되면 main 저장으로 옮긴다.
@@ -48,6 +49,8 @@ type DiffState = {
   setList: (wt: Worktree, list: DiffList) => void
   select: (worktreeId: string, sel: DiffSel) => void
   setInline: (inline: boolean) => void
+  /** 3차 R2-B 충돌만 보기 켜고 끄기. */
+  setConflicts: (worktreeId: string, on: boolean) => void
   /** 목록 다시 읽기(지금 갈래만). */
   refresh: (wt: Worktree) => Promise<void>
   addComment: (wtPath: string, c: Omit<DiffComment, 'id' | 'createdAt'>) => void
@@ -72,6 +75,7 @@ export const useDiffStore = create<DiffState>()((set, get) => {
     // M12 R2: 처음 보기 = 설정 › 편집기 [변경 보기](Orca diffDefaultView, 기본 한 줄). 탭 안의 [한 줄 | 나란히]는 이번 실행에서만.
     inline: getEditorPrefs().diffView === 'inline',
     comments: loadComments(),
+    setConflicts: (id, on) => patchWt(id, { conflicts: on }),
     setShown: (id, shown) => set((s) => ({ shownByWorktree: { ...s.shownByWorktree, [id]: shown } })),
     close: (id) =>
       set((s) => {
@@ -80,7 +84,7 @@ export const useDiffStore = create<DiffState>()((set, get) => {
         return { byWorktree, shownByWorktree: { ...s.shownByWorktree, [id]: false } }
       }),
     setList: (wt, list) => {
-      patchWt(wt.id, { list, selected: null })
+      patchWt(wt.id, { list, selected: null, conflicts: false })
       void get().refresh(wt)
     },
     select: (id, sel) => patchWt(id, { selected: sel }),
@@ -137,6 +141,14 @@ export function openDiff(filePath?: string, mode: DiffMode = 'unstaged', worktre
   // 파일 탭이 보이고 있었으면 내린다(diff 탭이 위).
   useCodeStore.getState().setActive(wt.id, null)
   void useDiffStore.getState().refresh(wt)
+  return true
+}
+
+/** 3차 R2-B 충돌 검토 목록(Orca openConflictReview) — 변경 비교 탭을 작업 중 목록·충돌만 보기로 연다. */
+export function openConflictReview(worktreeId?: string): boolean {
+  const wt = findWorktree(worktreeId)
+  if (!wt || !openDiff(undefined, 'unstaged', wt.id)) return false
+  useDiffStore.getState().setConflicts(wt.id, true)
   return true
 }
 

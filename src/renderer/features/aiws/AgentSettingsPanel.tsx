@@ -69,6 +69,10 @@ export function AgentSettingsPanel(): JSX.Element {
       <Row label={t('settings.agents.tabTitle')} desc={t('settings.agents.tabTitle.desc')} item="agents.tabTitle">
         <Toggle on={settings.tabAutoTitle} label={t('settings.agents.tabTitle')} onChange={(tabAutoTitle) => save({ ...settings, tabAutoTitle })} />
       </Row>
+      {/* 3차 R2-B Orca AutoRenameBranchFromWorkSetting(기본 켬) — 첫 지시가 그 에이전트(모델)로 한 번 더 간다는 것을 그대로 적는다. */}
+      <Row label={t('settings.agents.autoRenameBranch')} desc={t('settings.agents.autoRenameBranch.desc')} item="agents.autoRenameBranch">
+        <Toggle on={settings.autoRenameBranch} label={t('settings.agents.autoRenameBranch')} onChange={(autoRenameBranch) => save({ ...settings, autoRenameBranch })} />
+      </Row>
       {/* M11 Orca AgentAwakeSetting — 항상 / 에이전트가 일할 때만 / 끔(기본). */}
       <Row label={t('settings.agents.awake')} desc={t('settings.agents.awake.desc')} item="agents.awake">
         <select className="aiws-input" data-field="agents.awake" value={settings.awakeMode} onChange={(e) => isAwakeMode(e.target.value) && save({ ...settings, awakeMode: e.target.value })}>

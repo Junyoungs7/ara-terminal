@@ -47,6 +47,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.rc', 'settings.agents.rc', 'settings.agents.rc.desc'),
       i('agents.naming', 'settings.agents.naming', 'settings.agents.naming.desc'),
       i('agents.tabTitle', 'settings.agents.tabTitle', 'settings.agents.tabTitle.desc'),
+      i('agents.autoRenameBranch', 'settings.agents.autoRenameBranch', 'settings.agents.autoRenameBranch.desc'),
       i('agents.awake', 'settings.agents.awake', 'settings.agents.awake.desc'),
       i('agents.chatPermission', 'settings.agents.chatPermission', 'settings.agents.chatPermission.desc'),
       i('agents.oriel', 'settings.agents.oriel', 'settings.agents.oriel.missing'),
@@ -95,7 +96,9 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('editor.minimap', 'settings.editor.minimap', 'settings.editor.minimap.desc'),
       i('editor.font', 'settings.editor.font', 'settings.editor.font.desc'),
       i('editor.previewTabs', 'settings.editor.previewTabs', 'settings.editor.previewTabs.desc'),
-      i('editor.diffView', 'settings.editor.diffView', 'settings.editor.diffView.desc')
+      i('editor.diffView', 'settings.editor.diffView', 'settings.editor.diffView.desc'),
+      i('editor.autoSave', 'settings.editor.autoSave', 'settings.editor.autoSave.desc'),
+      i('editor.autoSaveDelay', 'settings.editor.autoSaveDelay', 'settings.editor.autoSaveDelay.desc')
     ]
   },
   soon('sessionSearch', 'aiws'),

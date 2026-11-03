@@ -26,6 +26,8 @@ export type GitDiffResult =
   | { ok: true; kind: 'text'; original: string; modified: string }
   | { ok: true; kind: 'binary' | 'tooLarge' }
   | { ok: false; message: string }
+/** 3차 R2-B 그림 비교의 양쪽 바이트(없는 쪽 null). */
+export type GitDiffImageResult = { ok: true; original: Uint8Array | null; modified: Uint8Array | null } | { ok: false; message: string; tooLarge?: boolean }
 
 /** Orca DEFAULT_GIT_STATUS_LIMIT — 큰 저장소에서 목록이 화면·IPC 를 막지 않게 여기서 자른다(truncated). */
 export const GIT_STATUS_LIMIT = 1_000

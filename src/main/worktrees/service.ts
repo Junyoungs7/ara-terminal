@@ -603,6 +603,17 @@ export function createWorktreeService(deps: WorktreeServiceDeps) {
     },
 
     /** 기동 때 한 번 — 앱이 죽어 남은 생성 기록을 git 목록과 맞춰 정리한다(WS-03). */
+    /** 3차 R2-B 브랜치 자동 개명 — 탭 cwd 의 로컬 git 작업 단위(araCreated = 아라가 만든 것, meta.createdAt). */
+    async findLocalWorktree(cwd: string): Promise<{ repoId: string; worktreeId: string; path: string; araCreated: boolean } | null> {
+      for (const p of deps.store.list()) {
+        if (p.host || p.kind !== 'git') continue
+        const w = (await listWorktrees(p.path))?.find((x) => !x.isBare && same(x.path, cwd))
+        if (!w) continue
+        const id = composeWorktreeId(p.id, w.path)
+        return { repoId: p.id, worktreeId: id, path: w.path, araCreated: !!deps.store.meta(id)?.createdAt }
+      }
+      return null
+    },
     async reconcilePending(): Promise<{ creationId: string; verdict: string }[]> {
       const out: { creationId: string; verdict: string }[] = []
       for (const p of [...deps.store.pending()]) {
