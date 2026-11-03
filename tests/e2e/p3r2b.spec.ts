@@ -136,6 +136,7 @@ test('P3R2B-3 에디터 확대(Ctrl+=/0)·자동 저장(설정 켬 → 1초 뒤 
     if (!(await page.locator('[data-aiws="explorer"]').isVisible())) await page.click('.rbar [data-rbar="explorer"]')
     await page.locator('[data-aiws="explorer"] .frow:has(.fn:text-is("a.txt"))').dblclick()
     await page.locator('.code-ed .monaco-editor').click()
+    await page.keyboard.press('Control+Home') // 클릭 위치가 둘째 줄일 수 있다 — 첫 줄 끝에 쓴다
     await page.keyboard.press('End')
     await page.keyboard.type('Z')
     await expect.poll(() => readFileSync(join(repo, 'a.txt'), 'utf8'), { timeout: 10_000 }).toContain('aZ')
