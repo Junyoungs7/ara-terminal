@@ -26,7 +26,7 @@ export function registerMcpIpc(
   // ask 도 여기서 만든다(#125) — 화면으로 올리는 길이 이 파일에 있으니 주인도 여기가 맞다.
   deps: Omit<ToolCtx, 'approval' | 'ask'>,
   vault: TokenVault,
-  logDir: string,
+  logDir: string | (() => string),
   retentionDays: () => number,
   getWebContents: () => WebContents | null,
   /**

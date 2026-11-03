@@ -802,7 +802,7 @@ app.whenReady().then(async () => {
       uploadsDir: join(userData, 'mcp-uploads')
     },
     secrets,
-    logDir,
+    () => sessionLog?.dir ?? sessionDir, // 세션 기록과 같은 폴더(설정에서 바꾸면 따라감)
     () => store.get().ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
     getWebContents,
     // e2e 는 앱을 여러 개 동시에 띄운다 — 기본 켜짐이 된 뒤로 고정 포트를 두고 싸운다.

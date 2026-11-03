@@ -176,6 +176,20 @@ describe('MCP-24 감사 로그 파일 이름·자리', () => {
     expect(files).toHaveLength(1)
     expect(files[0]).toMatch(AUDIT_NAME_RE)
   })
+
+  it('폴더를 함수로 받으면 설정에서 바꾼 새 폴더에 쓴다(세션 기록 폴더를 따라감)', () => {
+    const a = tmp('ara-p0-audit-a-')
+    const b = tmp('ara-p0-audit-b-')
+    let cur = a
+    const log = createAuditLog(() => cur)
+    const rec = { at: Date.UTC(2026, 10, 3, 3), sessionId: 's', tool: 'session_list', args: '{}', mode: 'readOnly', outcome: 'auto', resultSummary: 'ok' } as const
+    log.write(rec)
+    cur = b
+    log.write(rec)
+    expect(readdirSync(a)).toHaveLength(1)
+    expect(readdirSync(b)).toHaveLength(1)
+    expect(log.dir).toBe(b)
+  })
 })
 
 // v22-126 설치 폴더에 resources\oriel 이 없다 — UB-1 에서 동봉을 뺐다. 빌드 산출물 대신 빌드 설정(정적)을 본다.

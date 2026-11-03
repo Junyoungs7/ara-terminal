@@ -54,15 +54,19 @@ export type AuditLog = {
   dir: string
 }
 
-export function createAuditLog(dir: string): AuditLog {
+// dir 은 함수로도 받는다 — 설정 › 로그에서 세션 기록 폴더를 바꾸면 감사 로그도 따라가야 한다(체크리스트 MCP-24).
+export function createAuditLog(dirOf: string | (() => string)): AuditLog {
   let seq = 0
+  const cur = (): string => (typeof dirOf === 'function' ? dirOf() : dirOf)
 
   function ensureDir(): void {
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    if (!existsSync(cur())) mkdirSync(cur(), { recursive: true })
   }
 
   return {
-    dir,
+    get dir() {
+      return cur()
+    },
 
     write(rec) {
       ensureDir()
@@ -80,7 +84,7 @@ export function createAuditLog(dir: string): AuditLog {
         args: maskSecrets(rec.args),
         resultSummary: maskSecrets(rec.resultSummary)
       }
-      const path = join(dir, `mcp-actions_${dateStamp(new Date(full.at))}.jsonl`)
+      const path = join(cur(), `mcp-actions_${dateStamp(new Date(full.at))}.jsonl`)
       appendFileSync(path, JSON.stringify(full) + '\n', 'utf8')
     },
 
@@ -91,13 +95,13 @@ export function createAuditLog(dir: string): AuditLog {
       let removed = 0
       let names: string[]
       try {
-        names = readdirSync(dir)
+        names = readdirSync(cur())
       } catch {
         return 0
       }
       for (const name of names) {
         if (!AUDIT_NAME_RE.test(name)) continue
-        const path = join(dir, name)
+        const path = join(cur(), name)
         try {
           const st = statSync(path)
           if (!st.isFile() || st.mtimeMs >= cutoff) continue
