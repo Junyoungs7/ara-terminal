@@ -96,7 +96,8 @@ test('P3R2B-2 충돌 검토 — [소스 제어] 충돌 검토 → 변경 비교 
     await expect(page.locator('[data-diff-file="a.txt"]')).toHaveCount(0)
     await row.locator('.diffm-open').click()
     await expect(page.locator('[data-code="merge-conflict"]')).toBeVisible()
-    await page.click('[data-aiws="diff-open"]')
+    // 변경 비교가 이미 열려 있어 [변경 비교] 버튼 대신 탭(diff-tab)이 있다.
+    await page.click('[data-aiws="diff-tab"]')
     await page.locator('[data-diff-conflict="a.txt"] [data-diff="resolve"]').click()
     await expect(page.locator('[data-diff="no-conflicts"]')).toBeVisible({ timeout: 15_000 })
   } finally {
@@ -127,7 +128,12 @@ test('P3R2B-3 에디터 확대(Ctrl+=/0)·자동 저장(설정 켬 → 1초 뒤 
       await window.ev.ui.setPrefs({ ...snap.ui, codeEditor: { ...(snap.ui.codeEditor ?? {}), autoSave: true, autoSaveDelayMs: 500 } } as never)
     })
     await page.reload()
-    await openProject(app, page, repo).catch(() => {})
+    // 다시 불러온 뒤엔 공간·작업 단위·탐색기가 안 열려 있을 수 있다 — 보이는 만큼만 다시 연다.
+    if (!(await page.locator(side).isVisible())) await page.click('.titlebar .tb-spaces [data-space="ai"]')
+    await expect(page.locator(side)).toBeVisible()
+    const mainRow = page.locator(`${side} .aiws-row`).filter({ hasText: 'main' })
+    if ((await mainRow.getAttribute('aria-current')) !== 'true') await mainRow.click()
+    if (!(await page.locator('[data-aiws="explorer"]').isVisible())) await page.click('.rbar [data-rbar="explorer"]')
     await page.locator('[data-aiws="explorer"] .frow:has(.fn:text-is("a.txt"))').dblclick()
     await page.locator('.code-ed .monaco-editor').click()
     await page.keyboard.press('End')

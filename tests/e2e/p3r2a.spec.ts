@@ -39,7 +39,10 @@ test('TM3-3 테마 라이브러리에서 고르면 열린 터미널 배경이 �
   const before = (await term(page, id))?.bg
   await openTerminalSettings(page)
   await page.click('.settings-page [data-field="term.theme"] .dd')
-  await page.locator('.dd-list >> text=Ghostty Default Style Dark').click()
+  // 목록이 지연 로드 뒤 다시 그려져 요소가 갈린다 — 이름 항목을 다시 찾아 누르길 재시도한다.
+  await expect(async () => {
+    await page.locator('.dd-list .dd-opt', { hasText: 'Ghostty Default Style Dark' }).click({ timeout: 2000 })
+  }).toPass({ timeout: 20_000 })
   await expect.poll(() => term(page, id).then((t) => t?.bg)).toBe('#282c34')
   await page.click('.settings-page [data-field="term.theme"] .dd')
   await page.locator('.dd-list >> text=아라 기본').click()
