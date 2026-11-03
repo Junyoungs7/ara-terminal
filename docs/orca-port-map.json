@@ -1426,5 +1426,89 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "3차 R1-A(v2.2 a03e030): 프로젝트별 프리셋(Project.sparsePresets, IPC 이름 Orca sparsePresets:list/save/remove). 새 작업 카드 'sparse checkout' 칸에서 고르고 그 자리에서 만들기·고치기·지우기. 만들 때 git worktree add --no-checkout → sparse-checkout init --cone → set -- 폴더 → checkout(Orca addSparseWorktree), 실패면 반쯤 만든 것 치움. 경로는 Orca normalizeSparseDirectories(절대·.. 거절). meta.sparseDirectories → 줄에 'sparse' 표(툴팁 폴더). 뺀 것: 폴더 고르기 탐색기(SparseDirectoryPicker — 한 줄에 하나 입력), 기존 작업 단위의 sparse 바꾸기, 원격."
+  },
+  {
+    "id": "TM-09",
+    "feature": "셸 선택·인자(로컬 셸 프로필 + 프로필별 인자)",
+    "orcaPaths": [
+      "src/shared/windows-terminal-shell.ts",
+      "src/main/git-bash.ts",
+      "src/main/ipc/pty/configured-terminal-shell-args.ts",
+      "src/shared/local-windows-terminal-runtime.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): 설정 › 터미널 [셸] 자동/Windows PowerShell/pwsh/cmd/Git Bash/WSL/직접 경로(절대 경로만), [셸 인자] 프로필별(주면 기본 인자를 바꿈 — Orca terminalDefaultShellArgs). 감지는 파일 있나만(Git Bash 후보는 Orca getGitBashCandidatePaths 그대로, pwsh 는 PATH → Program Files\\PowerShell\u0007). 새 로컬 셸부터, 복원은 세션에 저장한 shell·shellArgs 그대로, 데몬 셸도. 뺀 것: WSL 배포판 고르기(wsl -l 실행 필요), PowerShell 구현 자동 고르기(terminalWindowsPowerShellImplementation), 프로젝트별 런타임, 에이전트 시작 명령 quoting 을 셸 설정에 맞추기(아라 AI 공간은 기존 defaultLaunchShell 그대로)."
+  },
+  {
+    "id": "TM-10",
+    "feature": "터미널 테마 라이브러리·대비 하한",
+    "orcaPaths": [
+      "src/shared/terminal-themes",
+      "src/shared/terminal-contrast-correction.ts",
+      "src/shared/terminal-minimum-contrast-settings.ts",
+      "src/shared/terminal-title-contrast.ts",
+      "src/renderer/src/components/settings/TerminalContrastSetting.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): 카탈로그 파일 그대로(shared/terminalThemes, 고를 때만 지연 로드). 기본은 아라 토큰 팔레트(라이브러리 안 씀). 대비 자동 = 배경 밝기로 4.5/3(Orca 그대로), 끔 = 1, 직접 1~21. 열린 xterm 에 바로. 글라스는 터미널을 불투명으로 두므로 테마는 xterm·.term-pane 배경에만(글라스 토큰 안 건드림). 뺀 것: 밝은/어두운 테마 따로(앱이 어두운 판뿐), 색 덮어쓰기 칸, 분할선 색·불투명도."
+  },
+  {
+    "id": "TM-11",
+    "feature": "Ghostty·Warp 설정 가져오기",
+    "orcaPaths": [
+      "src/main/ghostty",
+      "src/main/warp-themes"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): 읽기만. Ghostty discovery·parser·theme-resolution 그대로, 매퍼는 색·palette·font-family/size·cursor-style(-blink)만(나머지 키는 '옮기지 않은 항목'). Warp 폴더 규칙·색 규칙 그대로, YAML 은 js-yaml(파일 1MB·100개 상한, main 에서 — Orca 는 worker 1초 상한). [가져오기] → 가져온 테마(termExtra.customThemes)로 저장·선택, 글꼴·커서는 기존 설정에. 뺀 것: Warp 파일·폴더 고르기 창, Ghostty 창 재질·패딩·분할 색 등 아라에 없는 설정."
+  },
+  {
+    "id": "TM-12",
+    "feature": "인라인 이미지(sixel·iTerm2·kitty)",
+    "orcaPaths": [
+      "src/renderer/src/lib/pane-manager/pane-inline-images.ts",
+      "src/renderer/src/lib/pane-manager/terminal-inline-image-options.ts",
+      "src/renderer/src/lib/pane-manager/terminal-image-addon-loader.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): @xterm/addon-image 0.10.0-beta.301(Orca 판, 새 의존성 ~0.9MB), 켰을 때만 동적 import, 상한 Orca 그대로(시퀀스 8MB·저장 32MB), 크기 보고 끔. 기본 켬(Orca 와 같음), 새 터미널부터. 뺀 것: kitty 로컬 파일 읽기(readKittyFile — 원격이 이 PC 파일을 읽는 길), 이미지 뒤 다시 그리기 보정, DA1 소유자 재계산."
+  },
+  {
+    "id": "TM-13",
+    "feature": "Kerberos(GSSAPI)·FIDO2 보안 키 SSH 인증",
+    "orcaPaths": [
+      "src/main/ssh/ssh-security-key-identity.ts",
+      "src/main/ssh/ssh-transport-selection.ts",
+      "src/main/ssh/connection/ssh-connection.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): ssh2 1.17 은 GSSAPI 도 sk-* 서명도 없다(node_modules/ssh2/lib 에 형식 없음). Orca 는 둘 다 시스템 OpenSSH 전송으로 돌린다 — 아라는 그 전송이 없어 보류(deferred). 이번엔 보안 키 판별(Orca 파일 그대로 + 시험)만 옮겨 sk 키를 고른 프로필에 '지원하지 않음' 이유를 말한다. 남은 일: 시스템 ssh 전송(터미널·SFTP·포워딩 전부 ssh2 위라 큰 작업)."
+  },
+  {
+    "id": "TM-14",
+    "feature": "OSC 52 클립보드 쓰기",
+    "orcaPaths": [
+      "src/shared/osc52-clipboard.ts",
+      "src/renderer/src/components/terminal-pane/terminal-pane-pane-created.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): osc52-clipboard.ts·시험 그대로. 아라는 **기본 꺼짐**(결정 묶음 12, Orca 는 켬). 쓰기만, 읽기 질의(?) 무시, 128KB 상한, 재생(attach 백로그) 중 막음, 쓰기는 main 경유(writeClipboard). 뺀 것: 막혔을 때 토스트(꺼짐이 기본이라 매번 뜬다), 기본 켬 이전 알림."
+  },
+  {
+    "id": "TM-15",
+    "feature": "릴리스 채널(사내 베타)",
+    "orcaPaths": [
+      "src/main/updater/updater-build-selection.ts",
+      "src/shared/release-channel.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "P3 R2-A(v2.2 ec985c5): 설정 › 업데이트 [릴리스 채널] 정식/사내 베타. 베타 = 같은 사내 피드 폴더의 beta.yml(electron-updater channel), 채널을 바꿀 때 allowDowngrade 다시 끔. 확인할 때마다 읽는다. 배포는 안 함(베타 판은 electron-builder channel: beta 로 올려야 함). 뺀 것: GitHub 릴리스 목록·특정 판 고정·RC/perf 채널."
   }
 ]
