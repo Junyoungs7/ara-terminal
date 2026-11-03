@@ -110,7 +110,17 @@ export function Dropdown({ value, options, onChange, ariaLabel, editable, placeh
   // (부모 스크롤 컨테이너 포함 — capture 로 어느 스크롤이든 잡는다).
   useEffect(() => {
     if (!open) return
-    const close = () => setOpen(false)
+    const at = rootRef.current?.getBoundingClientRect()
+    const close = (e?: Event) => {
+      if (e?.type === 'scroll') {
+        // 목록 자체를 굴리는 스크롤(휠·항목으로 스크롤 이동)은 닫을 이유가 아니다 — 긴 목록(테마 31종)을 못 내리게 된다.
+        if (e.target instanceof Node && rootRef.current?.contains(e.target)) return
+        // 앵커가 실제로 움직였을 때만 닫는다 — 열 때 포커스가 일으킨 0px 스크롤 이벤트로 바로 닫히던 것(TM3-3).
+        const now = rootRef.current?.getBoundingClientRect()
+        if (at && now && Math.abs(now.top - at.top) < 1 && Math.abs(now.left - at.left) < 1) return
+      }
+      setOpen(false)
+    }
     window.addEventListener('resize', close)
     window.addEventListener('scroll', close, true)
     return () => {
