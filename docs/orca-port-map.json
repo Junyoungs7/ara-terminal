@@ -1510,5 +1510,87 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "P3 R2-A(v2.2 ec985c5): 설정 › 업데이트 [릴리스 채널] 정식/사내 베타. 베타 = 같은 사내 피드 폴더의 beta.yml(electron-updater channel), 채널을 바꿀 때 allowDowngrade 다시 끔. 확인할 때마다 읽는다. 배포는 안 함(베타 판은 electron-builder channel: beta 로 올려야 함). 뺀 것: GitHub 릴리스 목록·특정 판 고정·RC/perf 채널."
+  },
+  {
+    "id": "RV-05",
+    "feature": "이미지 diff(나란히·겹쳐 보기)",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/ImageDiffViewer.tsx",
+      "src/renderer/src/components/editor/EditorDiffFileSurface.tsx",
+      "docs/site/content/docs/review/diff-viewer.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B(v2.2 c79f927): 그림 파일이면 원래/바뀐 두 칸(나란히=2열, 한 줄 보기=위아래 — Orca 코드), 겹쳐 보기=불투명도 막대(Orca 문서 onion-skin, 코드엔 없음). 바이트는 git:diffImage(로컬 runProcess raw, 원격 서버 base64). 뺀 것: 스와이프, 그림 확대·끌기"
+  },
+  {
+    "id": "RV-06",
+    "feature": "HTML diff(렌더 비교)",
+    "orcaPaths": [
+      "docs/site/content/docs/review/diff-viewer.mdx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: Orca 는 작업 트리 HTML 을 옆 브라우저로 미리 보기만. 아라는 R1-B ara-doc 샌드박스 iframe 두 칸으로 원래/바뀐 쪽 렌더 비교(원래 쪽은 문서 글만 메모리, 옆 파일은 지금 디스크). 링크는 확인 후 Oriel"
+  },
+  {
+    "id": "RV-07",
+    "feature": "브랜치 자동 개명(첫 지시)",
+    "orcaPaths": [
+      "src/main/agent-hooks/first-work-branch-rename.ts",
+      "src/main/git/branch-rename.ts",
+      "src/shared/branch-name-from-work.ts",
+      "src/main/agent-hooks/first-work-generation-backoff.ts",
+      "src/shared/auto-rename-branch-from-work-settings.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: 기본 켬. 아라가 만든 작업 단위(meta.createdAt)·자동 이름 브랜치·안 올린 브랜치에 첫 지시(실행 지시·훅 UserPromptSubmit) → CLI 에이전트로 이름 → git branch -m(겹치면 -2…), 짓는 동안 바뀌면 그만, 실패 30초·2분·30분. 뺀 것: 폴더 이름 바꾸기(Orca 도 꺼 둠), 실패 배지·진단 창, 접두어 설정, 원격(SSH) 작업 단위(Orca 도 미룸), 사용자 지정 프롬프트"
+  },
+  {
+    "id": "RV-08",
+    "feature": "충돌 검토 목록 탭",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/EditorConflictReviewSurface.tsx",
+      "src/renderer/src/components/editor/ConflictReviewFileTree.tsx"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: 변경 비교 탭 [충돌 n] = 충돌 파일만(종류 꼬리표), 누르면 에디터 탭(충돌 띠), ✓ = 해결 표시(git add), [소스 제어] [충돌 검토]. 뺀 것: 같은 탭 오른쪽 편집기·폴더 트리·삭제 충돌 자리 표시 화면"
+  },
+  {
+    "id": "CV-10",
+    "feature": "에디터 글자 확대",
+    "orcaPaths": [
+      "src/renderer/src/lib/editor-font-zoom.ts",
+      "src/renderer/src/hooks/resolve-zoom-target.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: 에디터·비교에 포커스면 Ctrl+=/−/0(-6~18, 크기 8~32), 설정에 남음. 뺀 것: 마크다운 미리 보기·리치 편집 확대"
+  },
+  {
+    "id": "CV-11",
+    "feature": "에디터 자동 저장",
+    "orcaPaths": [
+      "src/renderer/src/components/editor/editor-autosave.ts",
+      "src/shared/constants.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: Orca 기본 끔·1000ms(250~10000), 설정 › 편집기. 안전 저장 그대로, 디스크가 바뀌었으면 쓰지 않고 띠. 뺀 것: 켤 때 이미 더러운 탭 훑기, 비교(unstaged) 쪽 자동 저장, 비UTF-8 멈춤"
+  },
+  {
+    "id": "CV-12",
+    "feature": "shiki/TextMate 언어 6종",
+    "orcaPaths": [
+      "src/renderer/src/lib/monaco-languages/register-{nim,lean,typst,zig,groovy,cmake}.ts",
+      "src/renderer/src/lib/monaco-languages/textmate-token-provider.ts",
+      "src/renderer/src/lib/syntax-highlighting/textmate-core.ts",
+      "src/renderer/src/lib/syntax-highlighting/oniguruma.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "3차 R2-B: shiki 4.5.0·vscode-oniguruma 2.0.1(Orca 판), 그 언어 파일을 열 때만 지연 로드. 바꾼 점: WASM 을 ?url fetch 대신 ?inline(설치본 file:// 에서 fetch 불가). Orca 시험 textmate-token-provider 21건 옮김"
   }
 ]
