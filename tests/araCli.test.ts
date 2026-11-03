@@ -410,7 +410,7 @@ describe('번들 스킬 ara-cli', () => {
   it('저장소 resources/skills/ara-cli 가 원본 — 머리말 name: ara-cli', () => {
     const src = bundledSkillSource([join(tmpdir(), 'nope'), join(__dirname, '..', 'resources')])
     expect(src).not.toBeNull()
-    expect(readFileSync(join(src!, 'SKILL.md'), 'utf8')).toMatch(/^---\nname: ara-cli\n/)
+    expect(readFileSync(join(src!, 'SKILL.md'), 'utf8')).toMatch(/^---\r?\nname: ara-cli\r?\n/) // autocrlf 체크아웃(OFA-perf)은 CRLF
   })
 
   it('없음 → [설치] → 최신, 손대면 다름 → [업데이트]가 번들 파일만 덮고 사용자 파일은 남긴다', async () => {
