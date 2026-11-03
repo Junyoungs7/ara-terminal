@@ -6,10 +6,10 @@
  * 이유: 파일을 직접 열어 봐도(file://) 그대로 보여야 하기 때문이다.
  */
 window.ARA_RELEASE = {
-  version: '2.0.0',
-  date: '2026-10-29',
-  file: 'ARA Setup 2.0.0.exe',
-  size: '94.3 MB',
+  version: '2.2.0',
+  date: '2026-11-04',
+  file: 'ARA Setup 2.2.0.exe',
+  size: '145.9 MB',
   os: 'Windows 10 / 11 (64비트)',
   dir: 'downloads/v2/'
 }
