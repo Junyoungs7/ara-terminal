@@ -66,7 +66,7 @@ test('v22-4 Ctrl+R 은 앱을 새로고침하지 않는다(기본 메뉴 가속�
   await focusTerminal(page)
   await page.keyboard.press('Control+r')
   await page.waitForTimeout(1_500)
-  await page.locator('.sidebar .sb-search input').click() // 터미널 밖에서도
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()) // 터미널 밖에서도(사이드바는 레이아웃에 따라 숨어 있다)
   await page.keyboard.press('Control+r')
   await page.waitForTimeout(1_500)
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin)
@@ -110,7 +110,7 @@ test('R11-8 떼어낸 창에서 Ctrl+W 는 창을 닫지 않고, 탭 닫기(Ctrl
   await expect(win.locator(`.ttab[data-session-id="${a}"]`)).toHaveCount(1, { timeout: 15_000 })
   await win.click('.tterm-add') // 이 창에 탭을 하나 더 — 둘이어야 하나를 닫아도 창이 남는다
   await expect(win.locator('.ttab')).toHaveCount(2)
-  await expect(win.locator('.pane-grid .xterm').first()).toBeVisible()
+  await expect(win.locator('.pane-grid .xterm:visible').first()).toBeVisible()
   await win.locator('.pane-grid .pane:visible .term-pane').first().click()
 
   await win.keyboard.press('Control+w') // 기본 메뉴의 "창 닫기" 가속키 — 없어야 한다
