@@ -5,19 +5,22 @@ import { handle } from './handle'
 import { pushSend } from '../util/windowPush'
 import { logMainError } from '../log/MainErrorLog'
 import { createAutoUpdate, type AutoUpdateService, type UpdaterLike } from '../update/AutoUpdate'
+import type { UpdateChannel } from '@shared/termExtra'
 
 /** 처음 확인은 창이 뜨고 조금 뒤에 — 기동 순간의 네트워크·디스크를 업데이트 확인이 뺏지 않게. */
 const FIRST_CHECK_MS = 20_000
 /** 그 뒤로는 여섯 시간마다. 하루 종일 켜 두는 앱이라 이 정도면 당일 안에 새 버전이 닿는다. */
 const EVERY_MS = 6 * 60 * 60 * 1000
 
-export function registerUpdateIpc(getWebContents: () => WebContents | null): AutoUpdateService {
+export function registerUpdateIpc(getWebContents: () => WebContents | null, channel?: () => UpdateChannel | undefined): AutoUpdateService {
   const svc = createAutoUpdate({
     updater: autoUpdater as unknown as UpdaterLike,
     packaged: app.isPackaged,
     // 사내 서버가 옮겨 가도 다시 빌드하지 않게 — 있으면 패키지에 박힌 주소를 덮는다.
     // 2.0 의 박힌 주소는 `…/downloads/v2/`(electron-builder.yml publish.url) — 덮을 때도 v2 폴더를 준다.
     feedUrl: process.env.ARA_UPDATE_URL?.trim() || undefined,
+    // P3 R2-A TM-15 릴리스 채널(설정 › 업데이트) — 확인할 때마다 읽는다.
+    channel,
     emit: (state) => pushSend(getWebContents(), 'update:state', state),
     onError: (where, err) => logMainError(where, err)
   })

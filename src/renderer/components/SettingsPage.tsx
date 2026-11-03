@@ -46,6 +46,7 @@ import { previewVoice, setBypass, useVoice } from '../store/voice'
 import { SETTINGS_INDEX, searchSettings, sectionDef, type SettingsSection } from '@shared/settingsIndex'
 import { editorPrefsOf, type DiffView } from '@shared/editorPrefs'
 import type { SettingsTarget } from '../store/settingsNav'
+import { TermExtraRows, UpdateChannelRow } from './TermExtraSettings'
 // M3 에이전트 설정 — AI 작업 공간 청크(지연 로드). 이 진입점 밖의 aiws 파일은 직접 import 하지 않는다(feature-module.md).
 import { AgentSettings } from '../features/aiws'
 import { ManagedServers } from '../features/managed'
@@ -1656,7 +1657,13 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
             </Suspense>
           )}
 
-          {section === 'update' && <UpdateRow />}
+          {section === 'update' && (
+            <>
+              <UpdateRow />
+              {/* P3 R2-A TM-15 릴리스 채널(사내 베타). */}
+              <UpdateChannelRow prefs={prefs} onPrefsChange={onPrefsChange} />
+            </>
+          )}
 
           {section === 'notify' && (
             // M1 라운드 3: 알림 센터(벨·토스트·공간 맥박). M3 부터 AI 작업 공간이 기본 공개라 늘 보인다.
@@ -1853,6 +1860,8 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                 </div>
               </Row>
               {isMac && <LocalNetworkRow />}
+              {/* P3 R2-A 터미널 3차 — 셸·테마·대비·가져오기·인라인 이미지·OSC 52(TermExtraSettings.tsx). */}
+              <TermExtraRows prefs={prefs} onPrefsChange={onPrefsChange} onFont={onChange} />
             </>
           )}
 

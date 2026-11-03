@@ -8,6 +8,8 @@ import { SHELL_INTEGRATION } from './osc7'
 import { shellFor, type LaunchShell } from '@shared/aiCli'
 import { HOOK_ENV } from '@shared/agentHooks'
 import { withAraCliPath } from '../cli/childPath'
+import { resolveShellProfile } from './shellProfiles'
+import { shellIdOf } from '@shared/termExtra'
 
 // OSC7 주입 방식이 셸마다 달라 종류를 판별한다(powershell=시작 인자, bash=환경변수, 그 외=stdin 폴백).
 type ShellKind = 'powershell' | 'bash' | 'other'
@@ -21,15 +23,19 @@ function shellKind(file: string): ShellKind {
 // Windows: PWSH 환경변수가 가리키는 셸 → 없으면 powershell.exe(5.1). pwsh 를 찾아 나서지는 않는다
 // (처음부터 이 동작이다 — 1c019e7). 스폰이 실패하면 생성자가 cmd 로 폴백한다.
 // mac/linux: 로그인 셸(SHELL env) → 없으면 zsh.
+// P3 R2-A TM-09: spec.shell 은 셸 프로필(내장 id 또는 절대 경로 — shellProfiles.ts), spec.shellArgs 는 그 프로필 인자(주면 기본 인자를 바꾼다).
+// 렌더러가 보낸 값이라 shellIdOf 로 한 번 더 거른다(모르는 이름 = 자동).
 function resolveShell(spec: SessionSpec): { file: string; args: string[]; kind: ShellKind } {
   const of = (file: string, args: string[] = []) => ({ file, args, kind: shellKind(file) })
-  if (spec.shell) return of(spec.shell)
+  const userArgs = Array.isArray(spec.shellArgs) ? spec.shellArgs.filter((a): a is string => typeof a === 'string') : undefined
+  const profile = resolveShellProfile(shellIdOf(spec.shell), userArgs)
+  if (profile) return of(profile.file, profile.args)
   if (process.platform === 'win32') {
     const psh = process.env['PWSH']
-    if (psh) return of(psh)
-    return of('powershell.exe', ['-NoLogo'])
+    if (psh) return of(psh, userArgs)
+    return of('powershell.exe', userArgs ?? ['-NoLogo'])
   }
-  return of(process.env['SHELL'] || '/bin/zsh')
+  return of(process.env['SHELL'] || '/bin/zsh', userArgs)
 }
 
 /**

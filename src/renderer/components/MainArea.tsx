@@ -397,6 +397,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
               cwd: item.session.cwd,
               profileId: null,
               shell: item.session.shell,
+              ...(item.session.shellArgs ? { shellArgs: item.session.shellArgs } : {}),
               // 사용자가 바꿔 둔 이름은 재스폰 후에도 셸 OSC 제목에서 지켜 준다(R3.6).
               manualTitle: item.session.manualTitle,
               // 마지막으로 쓰던 치수로 연다 — 안 주면 80×24 라 첫 프롬프트가 접힌다

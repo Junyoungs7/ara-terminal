@@ -13023,3 +13023,31 @@ button.sb-seg.upd:hover .val {
   color: var(--text-lo);
   font-size: var(--fs-micro);
 }
+
+/* P3 R2-A 설정 › 터미널 [다른 터미널에서 가져오기] 미리 보기 줄 — 색 견본 + 이름 + 가져오기. */
+.set-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.set-import-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.set-import-nm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-swatches {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+}
+.set-swatches i {
+  width: var(--sp-3);
+  height: var(--sp-3);
+}

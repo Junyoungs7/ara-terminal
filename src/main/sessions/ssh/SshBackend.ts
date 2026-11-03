@@ -1,6 +1,7 @@
 // SshBackend — ssh2 Client + shell() 채널을 SessionBackend로 감싼다 (원격 셸).
 // 연결(auth·호스트키 검증)은 connectSsh()에서 끝나고, 준비된 Client+Channel을 여기서 스트림으로 흘린다.
 import { readFile } from 'node:fs/promises'
+import { isOpenSshSecurityKeyPrivateKey } from './securityKey'
 import { StringDecoder } from 'node:string_decoder'
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
 import type { SessionBackend } from '../SessionBackend'
@@ -101,6 +102,8 @@ async function applyAuth(cfg: ConnectConfig, auth: SshAuth, secret: string | nul
   } catch (err) {
     return `개인키를 읽을 수 없습니다: ${(err as Error).message}`
   }
+  // P3 R2-A TM-13: FIDO2 보안 키는 ssh2 가 서명하지 못한다 — 알 수 없는 오류 대신 이유를 말한다(securityKey.ts).
+  if (isOpenSshSecurityKeyPrivateKey(cfg.privateKey as Buffer)) return 'FIDO2 보안 키(sk-*)는 아직 지원하지 않습니다 — 일반 키나 비밀번호를 쓰세요.'
   if (secret) cfg.passphrase = secret
   return null
 }

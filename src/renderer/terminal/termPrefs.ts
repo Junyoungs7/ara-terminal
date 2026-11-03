@@ -24,6 +24,8 @@ import { setEditorPrefs } from '../store/editorPrefs'
 import { applyMouseCursor } from '../cursorThemes'
 import { applyGlass } from '../glass'
 import { setAgentNotesEnabled } from '../store/notify'
+import { DEFAULT_TERM_EXTRA, termExtraOf, updateChannelOf } from '@shared/termExtra'
+import { applyTermExtraToAll } from './termRegistry'
 
 // 터미널 동작 설정(R3.1 선택 자동 복사 / R3.4 스크롤백 / R5 커서·벨)의 렌더러 캐시.
 // xterm 은 TerminalPane 이 mount 하는 순간 만들어지므로, 값을 React 상태로 두면 세션마다 prop 을
@@ -54,6 +56,8 @@ export const termPrefs: Omit<
   | 'notifyAgents'
   | 'codeEditor'
   | 'glass'
+  // P3 R2-A 릴리스 채널은 main 이 읽는 값이다(termExtra 는 xterm 이 읽으므로 남긴다).
+  | 'updateChannel'
 > = {
   scrollback: DEFAULT_SCROLLBACK,
   copyOnSelect: DEFAULT_COPY_ON_SELECT,
@@ -63,7 +67,9 @@ export const termPrefs: Omit<
   // #194 ④ — 이 값은 xterm 옵션이 아니라 TerminalPane 이 **키를 칠 때마다** 읽는 값이다. 그래서
   // 이미 열려 있는 터미널도 applyTermPrefsToAll 없이 따라온다(끈 순간 이미 그려져 있던 고스트
   // 하나는 다음 키에서 걷힌다 — 그 키가 사람이 터미널을 다시 만지는 순간이라 그대로 뒀다).
-  termCompletion: DEFAULT_TERM_COMPLETION
+  termCompletion: DEFAULT_TERM_COMPLETION,
+  // P3 R2-A 터미널 3차 — 새 xterm 이 읽는다(셸은 새 로컬 세션을 만들 때 store/sessions 가, OSC 52 는 받는 순간 TerminalPane 이).
+  termExtra: DEFAULT_TERM_EXTRA
 }
 
 // 스냅샷 ui(옵셔널 필드 다수) → 기본값이 채워진 확정 prefs. 설정 창·부트 복원이 공유한다.
@@ -96,6 +102,8 @@ export function prefsFrom(
     | 'notifyAgents'
     | 'codeEditor'
     | 'glass'
+    | 'termExtra'
+    | 'updateChannel'
   >
 ): UiPrefs {
   return {
@@ -135,7 +143,10 @@ export function prefsFrom(
     // M12 R2 — 미지정 칸은 Orca 기본값.
     codeEditor: editorPrefsOf(ui.codeEditor),
     // G2 — 미지정이면 켬(false 만 끔). G1 A/B 에서 켬/끔 유휴 GPU 차이 없음.
-    glass: ui.glass !== false
+    glass: ui.glass !== false,
+    // P3 R2-A — 미지정 칸은 기본(OSC 52 꺼짐·인라인 이미지 켬·테마 아라 기본·대비 자동).
+    termExtra: termExtraOf(ui.termExtra),
+    updateChannel: updateChannelOf(ui.updateChannel)
   }
 }
 
@@ -156,6 +167,11 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   termPrefs.cursorBlink = prefs.cursorBlink
   termPrefs.bell = prefs.bell
   termPrefs.termCompletion = prefs.termCompletion
+  if (prefs.termExtra) {
+    termPrefs.termExtra = prefs.termExtra
+    // 열린 터미널에도 테마·대비 하한을 바로(termRegistry). DOM 없는 단위 시험에서는 등록된 xterm 이 없어 그냥 지나간다.
+    applyTermExtraToAll(prefs.termExtra)
+  }
   // 에이전트 알림은 AI 작업 공간 청크가 상태를 받을 때 읽는다(store/notify).
   setAgentNotesEnabled(prefs.notifyAgents)
 }

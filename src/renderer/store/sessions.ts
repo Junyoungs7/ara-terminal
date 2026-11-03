@@ -4,6 +4,7 @@ import type { SessionType } from '@shared/types'
 import { forgetSessionState } from './sessionState'
 import { sizeOf } from '../terminal/termRegistry'
 import { usableSize } from '@shared/termSize'
+import { termPrefs } from '../terminal/termPrefs'
 
 // 렌더러 세션 레지스트리 — 트리·탭·패널이 공유하는 단일 소스(이중 상태 금지, F4b).
 // 세션의 홈은 탭이다: 탭 닫기 = 세션 종료, 패널 닫기 = detach(세션 유지, 탭에 남음).
@@ -235,7 +236,9 @@ export function useSessions(winId?: string) {
       serverKey: 'localhost',
       cwd: undefined,
       profileId: null,
-      shell: undefined,
+      // P3 R2-A TM-09 설정 › 터미널 [셸]·[셸 인자] — 새 로컬 셸만. 복원은 그 세션이 쓰던 셸·인자 그대로(MainArea).
+      shell: termPrefs.termExtra.shell || undefined,
+      ...(termPrefs.termExtra.shellArgs[termPrefs.termExtra.shell] ? { shellArgs: termPrefs.termExtra.shellArgs[termPrefs.termExtra.shell] } : {}),
       // 이 창이 주인이다 — 안 주면 main 이 본창 것으로 잡아 출력이 저쪽으로 간다.
       ...(winId ? { winId } : {})
     }

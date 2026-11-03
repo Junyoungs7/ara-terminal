@@ -19,11 +19,15 @@
  * 업데이터로 그대로 돌려 보기 위해서다(tests/autoUpdate.test.ts).
  */
 import type { UpdateState } from '../../shared/ipc'
+import { updateChannelOf, type UpdateChannel } from '../../shared/termExtra'
 
 /** electron-updater 의 `autoUpdater` 중 **우리가 쓰는 것만** 추린 모양. */
 export type UpdaterLike = {
   autoDownload: boolean
   autoInstallOnAppQuit: boolean
+  /** P3 R2-A TM-15 피드 파일 이름(latest → latest.yml, beta → beta.yml). 세터가 allowDowngrade 를 켠다(electron-updater AppUpdater). */
+  channel?: string | null
+  allowDowngrade?: boolean
   setFeedURL(options: { provider: 'generic'; url: string }): void
   checkForUpdates(): Promise<unknown>
   /** `autoDownload = false` 라 받기는 이걸로만 시작된다(설계 결정 0). */
@@ -43,6 +47,11 @@ export type AutoUpdateDeps = {
   platform?: string
   /** 환경변수 override. 비어 있으면 패키지에 박힌 주소를 쓴다. */
   feedUrl?: string
+  /**
+   * P3 R2-A TM-15 릴리스 채널(설정 › 업데이트). 확인할 때마다 읽는다 — 'beta' = 같은 사내 피드 폴더의 beta.yml(사내 베타).
+   * 생략 = 정식(latest.yml). 배포 쪽: 베타 판은 beta.yml 로 올린다(electron-builder publish channel: beta) — 이 라운드는 배포하지 않는다.
+   */
+  channel?: () => UpdateChannel | undefined
   emit(state: UpdateState): void
   onError(where: string, err: unknown): void
 }
@@ -118,6 +127,19 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
     set(downloaded ?? { status: 'error', message })
   }
 
+  /**
+   * 채널이 바뀌었을 때만 갈아 끼운다. 세터가 allowDowngrade 를 켜는데 **다시 끈다** — 베타에서 정식으로 돌아올 때
+   * 더 낮은 정식 판을 "새 버전"으로 받아 내려가지 않게(정식이 베타를 따라잡으면 그때 올라간다). 손대지 않은 정식은 세터를 안 부른다(지금과 같음).
+   */
+  let channelNow: UpdateChannel = 'stable'
+  const applyChannel = (): void => {
+    const want = updateChannelOf(deps.channel?.())
+    if (want === channelNow) return
+    channelNow = want
+    updater.channel = want === 'beta' ? 'beta' : 'latest'
+    updater.allowDowngrade = false
+  }
+
   updater.on('checking-for-update', () => set({ status: 'checking' }))
   // **받지 않는다 — 찾았다고만 한다**(설계 결정 0). 여기서 곧장 'downloading' 으로 넘기면
   // `autoDownload = false` 인 지금은 진행률이 영영 안 와서 그 상태에 박힌다(= check() 가드와 화면
@@ -144,6 +166,7 @@ export function createAutoUpdate(deps: AutoUpdateDeps): AutoUpdateService {
       // 1.0.27 에 갇혔다(2026-10-20 준영님).
       if (state.status === 'checking' || state.status === 'downloading') return
       lastLogged = null // 새 회차 — 같은 사유라도 이번 실패는 다시 적는다
+      applyChannel()
       set({ status: 'checking' })
       // 실패는 'error' 이벤트로도 오지만, 던지는 경로(주소 자체가 잘못된 경우)도 여기서 받는다.
       updater.checkForUpdates().catch((err) => fail('update check', err))

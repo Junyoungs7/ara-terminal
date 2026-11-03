@@ -118,6 +118,7 @@ export class MainSessionManager implements ISessionManager {
       id,
       type: spec.type,
       shell: spec.shell,
+      ...(spec.shellArgs ? { shellArgs: spec.shellArgs } : {}),
       profileId: spec.profileId ?? null,
       cwd: spec.cwd,
       title: spec.title,

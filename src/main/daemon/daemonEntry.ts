@@ -144,7 +144,7 @@ export function startDaemon(a: DaemonArgs): void {
   const create = (spec: DaemonCreateSpec): DaemonSessionInfo => {
     if (sessions.has(spec.id)) throw new Error('같은 id 의 세션이 있다')
     // M11 R2 터미널 공간 셸은 에이전트 표식 없이, 그 탭의 셸로.
-    const ptySpec = { type: 'local', cwd: spec.cwd, cols: spec.cols, rows: spec.rows, env: spec.env, ...(spec.space === 'terminal' ? { shell: spec.shell } : { space: 'ai' }) } as SessionSpec
+    const ptySpec = { type: 'local', cwd: spec.cwd, cols: spec.cols, rows: spec.rows, env: spec.env, ...(spec.space === 'terminal' ? { shell: spec.shell, shellArgs: spec.shellArgs } : { space: 'ai' }) } as SessionSpec
     const backend = new PtyBackend(ptySpec, spec.id)
     const info: DaemonSessionInfo = { id: spec.id, pid: backend.pid, cwd: spec.cwd, cols: spec.cols ?? 80, rows: spec.rows ?? 24, meta: spec.meta ?? {} }
     const s: Session = { backend, info, replay: new ReplayBuffer() }

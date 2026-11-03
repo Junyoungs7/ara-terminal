@@ -44,6 +44,7 @@ import { NO_AGENT_LIMITS } from '@shared/resources'
 import { registerWorktreesFeature } from './worktrees/feature'
 import { registerAgentsFeature } from './agents/feature'
 import { registerUsageFeature } from './usage/feature'
+import { registerTermExtraIpc } from './termExtraIpc'
 import { registerAutomationsFeature } from './automations/feature'
 import { registerSkillsFeature } from './skills/feature'
 import { registerCliFeature } from './cli/feature'
@@ -603,7 +604,10 @@ app.whenReady().then(async () => {
   registerFsIpc(() => store.get().ui.downloadDir, lastDialogDir)
   registerLocalCliIpc()
   // #98 자동 업데이트 — 본창으로만 알린다(떼어낸 창에 같은 배너를 두 번 띄울 이유가 없다).
-  registerUpdateIpc(mainWc)
+  // P3 R2-A TM-15: 확인할 때마다 지금 고른 릴리스 채널을 읽는다(설정 › 업데이트).
+  registerUpdateIpc(mainWc, () => store.get().ui.updateChannel)
+  // P3 R2-A 터미널 3차 — 셸 목록·Ghostty/Warp 미리 보기(설정 화면이 부를 때만).
+  registerTermExtraIpc()
   // #206 오류 신고 — 찍기·모으기·보내기(렌더러는 서버에 직접 닿지 않는다).
   registerReportIpc(sessions, store)
   registerEditorIpc(sftpService, sessions, () => mainWindow)

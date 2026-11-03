@@ -3,6 +3,7 @@ import type { FeatureShown } from './features'
 import type { VoicePrefs } from './voice'
 import type { Space } from './space'
 import type { EditorPrefs } from './editorPrefs'
+import type { TermExtraPrefs, UpdateChannel } from './termExtra'
 
 // v2: 터미널 우클릭 기본값을 리스트 메뉴로 바꾸면서 기존 저장값(radial/palette)을 1회 list 로 옮긴다.
 // v3: 탭바 순환 토글을 제거(R1.4) — 스타일을 바꿀 UI 가 없어졌으므로 남아 있는 radial/palette 를 다시 list 로 내린다.
@@ -120,6 +121,8 @@ export type Session = {
   id: string
   type: SessionType
   shell?: string
+  /** P3 R2-A TM-09 그 셸 프로필의 인자(설정 › 터미널 › 셸). 없으면 셸 기본 인자. 🔴 선택 필드. */
+  shellArgs?: string[]
   profileId?: string | null
   cwd?: string
   title: string
@@ -398,6 +401,10 @@ export type UiPrefs = {
   codeEditor: EditorPrefs
   /** G1 설정 › 모양 [글라스](시안 C). G2 부터 기본 켬(미지정 = 켬, false 만 끔). ARA_GLASS 가 덮는다(shared/glass.ts). */
   glass: boolean
+  /** P3 R2-A 설정 › 터미널 3차(셸·테마·대비·가져온 테마·인라인 이미지·OSC 52). termExtraOf 가 채운 확정값. */
+  termExtra: TermExtraPrefs
+  /** P3 R2-A TM-15 설정 › 업데이트 [릴리스 채널]. */
+  updateChannel: UpdateChannel
 }
 
 // 사이드바 상태(R4.3). 스키마는 F1부터 있었지만 아무도 읽지 않는 죽은 필드였다 — 폭 드래그·접힘·
@@ -551,6 +558,10 @@ export type UiState = {
   codeEditor?: Partial<EditorPrefs>
   /** G1 설정 › 모양 [글라스]. 🔴 선택 필드 — 없으면 끔(prefsFrom). */
   glass?: boolean
+  /** P3 R2-A 터미널 3차. 🔴 선택 필드 — SCHEMA_VERSION 그대로. 읽는 쪽이 termExtraOf 로 클램프한다. */
+  termExtra?: Partial<TermExtraPrefs>
+  /** P3 R2-A 릴리스 채널. 🔴 선택 필드 — 없으면 stable. */
+  updateChannel?: UpdateChannel
   // M3 S1 옛 키(터미널 AI CLI 기본 플래그, id 만). 에이전트 설정(agents.json)이 처음 한 번 옮기고
   // (shared/agents.ts migrateAiCliFlags) 데이터 이전(main/agents/legacyImport.ts)이 그 뒤 지운다.
   aiCliFlags?: Partial<Record<string, string[]>>

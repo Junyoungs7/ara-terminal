@@ -38,6 +38,8 @@ const DEFAULT_PREFS: UiPrefs = {
   notifyToast: true,
   notifyAgents: true,
   codeEditor: DEFAULT_EDITOR_PREFS,
+  // P3 R2-A TM-15. termExtra 는 ...termPrefs 가 가져온다.
+  updateChannel: 'stable',
   glass: true
 }
 

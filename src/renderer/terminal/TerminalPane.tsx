@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Terminal, type IDecoration, type IMarker, type ITheme } from '@xterm/xterm'
+import { Terminal, type IDecoration, type IMarker } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -10,6 +10,8 @@ import { fitIfUsable, lineBeforeCursor, registerTerm, unregisterTerm } from './t
 import { completionKey } from './completionKeys'
 import { cancelPendingResize, whenResizeAllowed } from './resizeGate'
 import { termPrefs } from './termPrefs'
+import { applyTermTheme } from './termTheme'
+import { createOsc52OscHandler } from '@shared/osc52Clipboard'
 import { notifyPasted, readClipboard, writeClipboard } from '../store/clipboardWrite'
 import {
   appendHistory,
@@ -34,37 +36,7 @@ function readVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-// R3.5 ANSI 16색 — design-system §1.6 팔레트를 xterm 테마로 옮긴다. 8 normal 은 문서의 토큰 그대로,
-// 8 bright 는 같은 색상의 밝은 파생(--t-*-b)이다. black/white 는 표면·텍스트 토큰을 재사용해
-// 터미널 배경과 한 계열로 유지한다. 2.0: 전경은 --text-hi, white(7)는 --t-fg — 시안 Z-final 의 ANSI 16색. 폴백 HEX 는 CSS 가 아직 없는 순간(테스트 하네스)용 최후 수단.
-function ansiTheme(): ITheme {
-  const v = (name: string, fallback: string) => readVar(name) || fallback
-  return {
-    background: v('--bg-terminal', '#15171a'),
-    foreground: v('--text-hi', '#e4e7eb'),
-    cursor: v('--accent', '#3d9bff'),
-    // 커서 위 글자색 — 배경과 같게 둬야 블록 커서 안 글자가 읽힌다.
-    cursorAccent: v('--bg-terminal', '#15171a'),
-    selectionBackground: v('--sel-bg', 'rgba(61,155,255,0.25)'),
-    selectionForeground: v('--text-hi', '#e4e7eb'),
-    black: v('--t-black', '#1d2024'),
-    red: v('--t-red', '#e0766e'),
-    green: v('--t-green', '#6bbf8a'),
-    yellow: v('--t-yellow', '#e2c35f'),
-    blue: v('--t-blue', '#3d9bff'),
-    magenta: v('--t-purple', '#c08cf0'),
-    cyan: v('--t-cyan', '#4fc4d0'),
-    white: v('--t-fg', '#b2b9c1'),
-    brightBlack: v('--t-gray', '#5c6570'),
-    brightRed: v('--t-red-b', '#ff8f86'),
-    brightGreen: v('--t-green-b', '#86d9a3'),
-    brightYellow: v('--t-yellow-b', '#f2d27a'),
-    brightBlue: v('--t-blue-b', '#74b6ff'),
-    brightMagenta: v('--t-purple-b', '#d8acff'),
-    brightCyan: v('--t-cyan-b', '#7fe0e9'),
-    brightWhite: v('--text-hi', '#e4e7eb')
-  }
-}
+// R3.5 ANSI 16색 팔레트(ansiTheme)는 P3 R2-A 에 termTheme.ts 로 옮겼다 — 테마 라이브러리·대비 하한과 한 자리.
 
 // 백프레셔 메커니즘 2: xterm write 콜백 백로그가 임계치를 넘으면 pty read를 일시정지 요청.
 // write 콜백이 밀리는 개수로 백로그를 근사한다.
@@ -209,9 +181,10 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       cursorBlink: termPrefs.cursorBlink,
       allowProposedApi: true,
       ...(isWindows && local ? { windowsPty: CONPTY_NO_REFLOW } : {}),
-      scrollback: termPrefs.scrollback,
-      theme: ansiTheme()
+      scrollback: termPrefs.scrollback
     })
+    // P3 R2-A TM-10 테마·대비 하한(termTheme.ts — 기본은 지금까지의 토큰 팔레트).
+    applyTermTheme(term, host, termPrefs.termExtra)
     // ── F11 인라인 고스트 자동완성 ──
     // 히스토리 scope 를 미리 읽어 둔다(키 입력마다 IPC 왕복을 둘 수 없다). 고스트는 xterm 데코레이션
     // (공개 API)으로 그린다 — 터미널에 실제로 써 넣으면 셸의 화면 갱신과 싸우게 된다.
@@ -499,6 +472,33 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       )
     )
     term.open(host)
+    // P3 R2-A TM-12 인라인 이미지(sixel·iTerm2 IIP·kitty) — Orca 와 같은 @xterm/addon-image 판, 켰을 때만 그 청크(wasm 디코더 포함)를 부른다.
+    // 상한은 Orca terminal-inline-image-options 그대로(시퀀스 8MB, 저장 32MB). Orca 의 kitty 로컬 파일 읽기(readKittyFile)는 뺐다 —
+    // 원격 프로그램이 이 PC 파일을 읽게 하는 길이다. 크기 보고(CSI 14t/16t)도 끈다(Orca 와 같음).
+    if (termPrefs.termExtra.inlineImages) {
+      void import('@xterm/addon-image')
+        .then(({ ImageAddon }) => {
+          if (disposed) return
+          const seq = 8 * 1024 * 1024
+          const storageMb = 32
+          term.loadAddon(
+            new ImageAddon({ enableSizeReports: false, storageLimit: storageMb, pixelLimit: (storageMb * 1000000) / 4, sixelSizeLimit: seq, iipSizeLimit: seq, kittySizeLimit: seq })
+          )
+        })
+        .catch((err: unknown) => console.warn('[term] 인라인 이미지 애드온을 못 불렀다 — 이미지 없이 계속', err))
+    }
+    // P3 R2-A TM-14 OSC 52 클립보드(Orca osc52-clipboard 그대로). **기본 꺼짐** — 설정에서 켜면 원격 프로그램이 클립보드에 쓰기만 한다.
+    // 읽기 질의(`?`)는 켜도 답하지 않는다. 재생(attach 백로그) 중의 옛 복사는 버린다. 쓰기는 main 경유(writeClipboard).
+    const osc52Disp = term.parser.registerOscHandler(
+      52,
+      createOsc52OscHandler({
+        getSettingEnabled: () => termPrefs.termExtra.osc52,
+        getReplaying: () => replaying,
+        writeClipboardText: async (text) => {
+          if (!(await writeClipboard(text))) throw new Error('clipboard write rejected')
+        }
+      })
+    )
     // 오류 신고 #29·#30 — 마우스 추적이 꺼진 화면에서 Shift+드래그는 xterm 5.5 가 "기존 선택 늘리기"로
     // 읽어(SelectionService _handleIncrementalClick), **화면에 안 보이는 마지막 클릭 자리**에서 선택을 시작한다.
     // Ctrl+C 뒤엔 그 자리마저 지워져 아무것도 안 잡힌다. 추적이 꺼져 있을 때만 Shift 를 뗀 클릭으로 다시
@@ -681,7 +681,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
     host.addEventListener('dragleave', onDragLeave)
     host.addEventListener('drop', onDrop)
     fitRef.current = fit
-    registerTerm(sessionId, { term, fit, search, conpty: isWindows && local }) // 선택 복사(F4c)·폰트 적용(F5)·검색(R3.2)
+    registerTerm(sessionId, { term, fit, search, conpty: isWindows && local, host }) // 선택 복사(F4c)·폰트 적용(F5)·검색(R3.2)
 
     // R3.1 선택 즉시 복사(X11·PuTTY 관례). 드래그가 끝난 시점 한 번만 — onSelectionChange 는
     // 드래그 중 수십 번 발화해 클립보드를 그만큼 두드린다.
@@ -824,6 +824,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       onDataDisp.dispose()
       onResizeDisp.dispose()
       onTitleDisp.dispose()
+      osc52Disp.dispose()
       onBellDisp.dispose()
       if (bellTimer) clearTimeout(bellTimer)
       clearGhost()

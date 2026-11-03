@@ -77,6 +77,7 @@
     "@tiptap/starter-kit": "3.31.3",
     "@vscode/ripgrep-universal": "1.18.0",
     "@xterm/addon-fit": "0.12.0-beta.301",
+    "@xterm/addon-image": "0.10.0-beta.301",
     "@xterm/addon-search": "0.17.0-beta.301",
     "@xterm/addon-unicode11": "0.10.0-beta.301",
     "@xterm/addon-web-links": "0.13.0-beta.301",

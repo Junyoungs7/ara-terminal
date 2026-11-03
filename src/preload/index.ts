@@ -21,6 +21,7 @@ import { orielBridge } from './features/oriel'
 import { localNetworkBridge } from './features/localNetwork'
 import { resourcesBridge } from './features/resources'
 import { usageBridge } from './features/usage'
+import { termExtraBridge } from './features/termExtra'
 import { automationsBridge } from './features/automations'
 import { cliBridge } from './features/cli'
 import { worktreesBridge } from './features/worktrees'
@@ -274,6 +275,8 @@ const api: EvApi = {
   ...cliBridge,
   // M9 AI-10 사용량(preload/features/usage.ts).
   ...usageBridge,
+  // P3 R2-A 터미널 3차(preload/features/termExtra.ts).
+  ...termExtraBridge,
   ...worktreesBridge,
   ...agentsBridge,
   ...managedBridge,

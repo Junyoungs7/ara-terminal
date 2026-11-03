@@ -7,6 +7,7 @@ import type { McpServerDraft, McpView } from './mcp/agentMcp'
 import type { BundledSkillStatus, CliInstallStatus } from './araCli'
 import type { LaunchShell } from './aiCli'
 import type { GlassMaterial } from './glass'
+import type { ImportResult, ImportSource, ShellChoice } from './termExtra'
 import type { GitBranchCompareResult, GitDiffArgs, GitDiffResult, GitStatusResult } from './gitDiff'
 import type { CodeReadResult, CodeWriteResult } from './codeFiles'
 import type { BytesResult } from './media'
@@ -598,6 +599,9 @@ export type InvokeContract = {
   // 안전 종료 = 탭 닫기와 같은 길(sessions.destroy). 목록에 없는 id 면 ok:false.
   'resources:killPty': { req: { id: string }; res: { ok: boolean } }
   // M9 AI-10 사용량(main/usage/feature.ts). 바뀔 때마다 'usage:update' 로 민다. refresh = 사람이 누른 새로 고침(조회 간격 무시).
+  // P3 R2-A 터미널 3차(main/termExtraIpc.ts) — 셸 목록(있나만 본다) · Ghostty/Warp 미리 보기(읽기만).
+  'term:shells': { req: void; res: ShellChoice[] }
+  'term:importPreview': { req: { source: ImportSource }; res: ImportResult }
   'usage:get': { req: void; res: UsageState }
   'usage:refresh': { req: void; res: UsageState }
   // M13 %사용/%남음·Gemini 켜기 · 계정(추가·지우기·이름·고르기·로그인) · 계정 하나의 사용량(사람이 열 때만) · 통계(요약 + 30일 토큰, utility process).
@@ -1341,6 +1345,11 @@ export type EvApi = {
   resources: {
     snapshot(): Promise<ResourceSnapshot>
     killPty(id: string): Promise<{ ok: boolean }>
+  }
+  // P3 R2-A 터미널 3차(preload/features/termExtra.ts).
+  termExtra: {
+    shells(): Promise<ShellChoice[]>
+    importPreview(source: ImportSource): Promise<ImportResult>
   }
   // M9 AI-10 사용량(preload/features/usage.ts).
   usage: {

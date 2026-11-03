@@ -10,6 +10,7 @@ export type SessionSpec = Pick<
   Session,
   | 'type'
   | 'shell'
+  | 'shellArgs'
   | 'profileId'
   | 'cwd'
   | 'serverKey'

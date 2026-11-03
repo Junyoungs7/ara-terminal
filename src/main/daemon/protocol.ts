@@ -123,7 +123,7 @@ export function judgeDaemon(protocol: number, current = DAEMON_PROTOCOL_VERSION,
  * M11 R2: space 'terminal' = 터미널 공간 로컬 셸(에이전트 탭 표식 ARA_PANE_KEY 를 안 넣는다), shell = 그 탭이 고른 셸. 없으면 에이전트 셸(1차 그대로).
  * 덧붙인 선택 필드라 판(protocol)은 그대로다 — v1 데몬은 아직 배포 전(v2.2)이라 이것을 모르는 데몬이 사용자 PC 에 없다.
  */
-export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string }
+export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string; shellArgs?: string[] }
 export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown> }
 
 export type DaemonHello = { type: 'hello'; protocol: number; token: string }

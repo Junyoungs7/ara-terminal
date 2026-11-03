@@ -10,6 +10,7 @@ import { aiKeyVaultId, type KeyVault } from '../src/main/secrets/aiKeys'
 import { ProviderError, type AiRequest, type ProviderAdapter } from '../src/main/ai/providers/types'
 import { migrate } from '../src/main/workspace/migrations'
 import { WorkspaceStore } from '../src/main/workspace/WorkspaceStore'
+import { DEFAULT_TERM_EXTRA } from '../src/shared/termExtra'
 import { insertText } from '../src/shared/shellInput'
 import { AI_PROVIDERS, DEFAULT_AI_MODEL, SCHEMA_VERSION, aiModelsOf, aiProviderOf, type AiEnd, type AiProvider, type AiTurn } from '../src/shared/types'
 import { voiceOf } from '@shared/voice'
@@ -393,7 +394,9 @@ describe('API 키 센티널 — 키는 main 을 벗어나지 않는다 (프로�
         aiModels: aiModelsOf({ [provider]: 'x-model' }),
         aiCompatibleBaseUrl: provider === 'compatible' ? 'https://gateway.internal/v1' : '',
         codeEditor: DEFAULT_EDITOR_PREFS,
-        glass: false
+        glass: false,
+        termExtra: DEFAULT_TERM_EXTRA,
+        updateChannel: 'stable'
       })
       store.flush()
       expect(readFileSync(join(dir, `workspace-${provider}.json`), 'utf8')).not.toContain(SENTINEL)

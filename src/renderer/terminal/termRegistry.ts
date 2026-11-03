@@ -2,13 +2,15 @@ import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { CursorStyle } from '@shared/types'
+import type { TermExtraPrefs } from '@shared/termExtra'
+import { applyTermTheme } from './termTheme'
 import { usableSize } from '../../shared/termSize'
 import { buildProcessBoundaryGround } from '../../shared/terminalModeReset'
 
 // 세션별 xterm 인스턴스 레지스트리 — 우클릭 메뉴 '복사'(F4c) + F5 폰트 실시간 적용 + R3.2 검색.
 // TerminalPane 이 mount 시 등록, unmount 시 해제. UI 상태가 아니므로 스토어가 아닌 모듈 맵으로 관리.
 /** conpty: 로컬 Windows 셸(ConPTY) — Reset Terminal 이 포커스 보고(?1004)를 남긴다. */
-type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon; conpty?: boolean }
+type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon; conpty?: boolean; host?: HTMLElement }
 const terms = new Map<string, Entry>()
 
 /**
@@ -48,6 +50,8 @@ if (typeof window !== 'undefined') {
       windowsPty: e.term.options.windowsPty,
       unicode: e.term.unicode.activeVersion,
       theme: e.term.options.theme,
+      // P3 R2-A TM-10 대비 하한(e2e TM3-2).
+      minimumContrastRatio: e.term.options.minimumContrastRatio,
       selectAll: () => e.term.selectAll(),
       getSelection: () => e.term.getSelection(),
       // M15 R2 TM-03 Reset Terminal 확인용(마우스 추적·bracketed paste 가 꺼졌나).
@@ -161,6 +165,12 @@ export function applyTermPrefsToAll(scrollback: number, cursorStyle: CursorStyle
     term.options.cursorStyle = cursorStyle
     term.options.cursorBlink = cursorBlink
   }
+}
+
+// P3 R2-A TM-10: 테마·대비 하한을 열린 xterm 에도 바로(재마운트 금지 — 위와 같은 이유). 인라인 이미지·OSC 52 는 새 터미널부터
+// (이미지 애드온은 붙일 때만 정해지고, OSC 52 는 받는 순간 termPrefs 를 읽으므로 따로 할 일이 없다).
+export function applyTermExtraToAll(extra: TermExtraPrefs): void {
+  for (const { term, host } of terms.values()) applyTermTheme(term, host, extra)
 }
 
 // F5: 열려 있는 모든 xterm 에 폰트/크기/행간 즉시 반영(재마운트 금지).

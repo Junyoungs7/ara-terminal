@@ -28,6 +28,7 @@ export function terminalSessionOf(info: DaemonSessionInfo): Omit<Session, 'id'> 
     cwd: str(m['cwd']) ?? (info.cwd || undefined),
     profileId: null,
     ...(str(m['shell']) ? { shell: str(m['shell']) } : {}),
+    ...(Array.isArray(m['shellArgs']) ? { shellArgs: (m['shellArgs'] as unknown[]).filter((a): a is string => typeof a === 'string') } : {}),
     ...(m['manualTitle'] === true ? { manualTitle: true } : {}),
     // 만들 때 부른 창(떼어낸 창에서 연 탭). 켤 때 claim 하면 화면이 준 창으로 바꾼다(MainSessionManager.create).
     ...(str(m['winId']) ? { winId: str(m['winId']) } : {}),
@@ -50,9 +51,9 @@ export function createTerminalDaemonHook(daemon: AgentDaemon, log: (m: string) =
         log(`terminal shell ${id}: daemon not ready in ${waitMs}ms — in-app PTY`)
         return false
       }
-      const session = { title: spec.title, cwd: spec.cwd, shell: spec.shell, manualTitle: spec.manualTitle, winId: spec.winId }
+      const session = { title: spec.title, cwd: spec.cwd, shell: spec.shell, shellArgs: spec.shellArgs, manualTitle: spec.manualTitle, winId: spec.winId }
       try {
-        await daemon.create({ id, cwd: spec.cwd ?? '', cols: spec.cols, rows: spec.rows, env: appEnv(), space: 'terminal', ...(spec.shell ? { shell: spec.shell } : {}), meta: { kind: 'terminal', session } })
+        await daemon.create({ id, cwd: spec.cwd ?? '', cols: spec.cols, rows: spec.rows, env: appEnv(), space: 'terminal', ...(spec.shell ? { shell: spec.shell } : {}), ...(spec.shellArgs ? { shellArgs: spec.shellArgs } : {}), meta: { kind: 'terminal', session } })
         return true
       } catch (e) {
         log(`terminal shell ${id}: daemon create failed — in-app PTY: ${String(e)}`)
