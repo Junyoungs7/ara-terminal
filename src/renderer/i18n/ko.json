@@ -2111,6 +2111,8 @@
   "aiws.chat.hint": "보낸 글은 이 세션의 터미널에 입력됩니다. 첨부는 파일 경로만 넘어갑니다.",
   "aiws.chat.detach": "첨부 빼기",
   "aiws.chat.image": "이미지",
+  "aiws.chat.imageOpen": "이미지 크게 보기",
+  "aiws.chat.thought": "생각함",
   "aiws.chat.answered": "답했습니다",
   "aiws.chat.answerInTerminal": "터미널에서 답하기",
   "aiws.chat.running": "실행 중…",

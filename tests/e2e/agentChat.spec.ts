@@ -56,6 +56,13 @@ process.stdin.on('data', (d) => {
     }
     return box()
   }
+  // 그림·생각 시험 — 1x1 png 와 thinking 줄(Orca 처럼 미리보기·접힌 생각함).
+  if (text === 'pic') {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    rec({ type: 'user', uuid: 'pu' + n, message: { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } }, { type: 'text', text: 'PIC-ASK' }] } })
+    rec({ type: 'assistant', uuid: 'pa' + n, message: { id: 'pm' + n, role: 'assistant', content: [{ type: 'thinking', thinking: 'THINK-BODY-XYZ' }, { type: 'text', text: 'PIC-ANSWER' }] } })
+    return box()
+  }
   if (text === 'hold') { hook('UserPromptSubmit'); return box() }
   if (text === 'release') { hook('Stop'); return box() }
   rec({ type: 'user', uuid: 'u' + n, message: { role: 'user', content: text } })
@@ -205,6 +212,22 @@ test('CHAT-1★ 가짜 claude 의 transcript → 채팅 화면 · 채팅 입력 
     await page.locator('[data-aiws="chat-input"]').fill('release')
     await page.locator('[data-aiws="chat-input"]').press('Enter')
     await expect(working).toHaveCount(0, { timeout: 15_000 })
+
+    // 그림·생각 — 작은 미리보기(data: png) → 누르면 오버레이 → Esc 로 닫힘 · 생각함은 접힌 채, 펼치면 본문.
+    await page.locator('[data-aiws="chat-input"]').fill('pic')
+    await page.locator('[data-aiws="chat-input"]').press('Enter')
+    const thumb = page.locator('[data-aiws="chat-image"]').last()
+    await expect(thumb).toBeVisible({ timeout: 15_000 })
+    expect(await thumb.locator('img').getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+    await thumb.click()
+    await expect(page.locator('[data-aiws="chat-image-big"]')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-aiws="chat-image-big"]')).toHaveCount(0)
+    const think = page.locator('[data-aiws="chat-thinking"]').last()
+    await expect(think).toBeVisible()
+    await expect(think).not.toHaveAttribute('open', '')
+    await think.locator('summary').click()
+    await expect(think).toContainText('THINK-BODY-XYZ')
   } finally {
     process.env.PATH = savedPath
     rmDir(root)

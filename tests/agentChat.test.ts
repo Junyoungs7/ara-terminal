@@ -4,7 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, nearBottom, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
+import { IMAGE_MAX_CHARS, composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, nearBottom, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
 import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
@@ -33,7 +33,8 @@ describe('줄 해석(decodeClaudeLine)', () => {
     const meta = decodeClaudeLine(user('m', [{ type: 'tool_result', tool_use_id: 't9', content: 'ok', is_error: true }], { isMeta: true }), 'f')
     expect(meta?.blocks).toEqual([])
     expect(meta?.results).toEqual([{ id: 't9', text: 'ok', error: true }])
-    expect(decodeClaudeLine(convo[3], 'f')).toBeNull() // thinking 만 — 1차는 뺀다
+    expect(decodeClaudeLine(convo[3], 'f')?.blocks).toEqual([{ type: 'thinking', text: '생각' }])
+    expect(decodeClaudeLine(asst('a', 'm', [{ type: 'thinking', thinking: '  ' }]), 'f')).toBeNull()
     expect(decodeClaudeLine('{"broken', 'f')).toBeNull()
   })
   it('끊김 문구는 시스템 줄, 이미지는 칩, 긴 결과는 자른다', () => {
@@ -44,6 +45,27 @@ describe('줄 해석(decodeClaudeLine)', () => {
   })
 })
 
+describe('그림 블록', () => {
+  const img = (source: unknown): unknown => decodeClaudeLine(user('i', [{ type: 'image', source }]), 'f')?.blocks[0]
+  it('base64 png·jpeg·gif·webp 는 data: URL, 그 밖·SVG·외부 URL·깨진 base64 는 표시만', () => {
+    expect(img({ type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' })).toEqual({ type: 'image', src: 'data:image/png;base64,iVBORw0KGgo=' })
+    for (const m of ['image/jpeg', 'image/gif', 'image/webp']) expect(img({ type: 'base64', media_type: m, data: 'AAAA' })).toEqual({ type: 'image', src: `data:${m};base64,AAAA` })
+    expect(img({ type: 'base64', media_type: 'image/svg+xml', data: 'AAAA' })).toEqual({ type: 'image' })
+    expect(img({ type: 'url', url: 'https://x.test/a.png' })).toEqual({ type: 'image' })
+    expect(img({ type: 'base64', media_type: 'image/png', data: '"><script>' })).toEqual({ type: 'image' })
+  })
+  it('상한을 넘으면 표시만', () => {
+    expect(img({ type: 'base64', media_type: 'image/png', data: 'A'.repeat(IMAGE_MAX_CHARS) })).toHaveProperty('src')
+    expect(img({ type: 'base64', media_type: 'image/png', data: 'A'.repeat(IMAGE_MAX_CHARS + 1) })).toEqual({ type: 'image' })
+  })
+  it('Codex input_image — data: URL 만, 외부 URL·SVG 는 표시만', () => {
+    const cx = (image_url: string): unknown => decodeCodexLine(J({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_image', image_url }] } }), 'f')?.blocks[0]
+    expect(cx('data:image/webp;base64,AAAA')).toEqual({ type: 'image', src: 'data:image/webp;base64,AAAA' })
+    expect(cx('https://x.test/a.png')).toEqual({ type: 'image' })
+    expect(cx('data:image/svg+xml;base64,AAAA')).toEqual({ type: 'image' })
+  })
+})
+
 describe('메시지 모델', () => {
   it('한 응답(message.id)은 한 말풍선 · 도구 결과는 그 블록에 · 질문 카드', () => {
     const m = createChatModel()
@@ -51,6 +73,7 @@ describe('메시지 모델', () => {
     const list = m.messages()
     expect(list.map((x) => x.role)).toEqual(['user', 'assistant', 'assistant', 'system', 'assistant'])
     expect(list[1].blocks).toEqual([
+      { type: 'thinking', text: '생각' },
       { type: 'text', text: '**보겠습니다**' },
       { type: 'tool', id: 't1', name: 'Bash', summary: 'npm test -- --run', result: '3 passed', error: false }
     ])
@@ -60,8 +83,8 @@ describe('메시지 모델', () => {
     const m = createChatModel()
     m.add(convo.slice(0, 6))
     const changed = m.add(convo.slice(6, 7))
-    expect(changed.map((x) => x.id)).toEqual(['a2'])
-    expect(changed[0].blocks[1]).toMatchObject({ result: '3 passed' })
+    expect(changed.map((x) => x.id)).toEqual(['a1'])
+    expect(changed[0].blocks[2]).toMatchObject({ result: '3 passed' })
     m.add(convo.slice(7))
     expect(m.add([convo[4], convo[5]])).toEqual([]) // 묶인 줄을 다시 읽어도 블록이 두 번 붙지 않는다
     const whole = createChatModel()
@@ -158,7 +181,7 @@ describe('main 꼬리 읽기(createChatWatcher)', () => {
     w.hook('p1', { hook_event_name: 'UserPromptSubmit', transcript_path: file, session_id: 's' })
     expect(JSON.parse(readFileSync(store, 'utf8'))).toEqual({ p1: file })
     writeFileSync(file, convo.slice(0, 5).join('\n') + '\n')
-    await vi.waitFor(() => expect(events.flatMap((e) => e.messages).map((m) => m.id)).toContain('a2'), { timeout: 3000 })
+    await vi.waitFor(() => expect(events.flatMap((e) => e.messages).map((m) => m.id)).toContain('a1'), { timeout: 3000 })
     events.length = 0
     // 덜 쓴 줄은 기다린다.
     const rest = convo.slice(5).join('\n') + '\n'
@@ -171,7 +194,7 @@ describe('main 꼬리 읽기(createChatWatcher)', () => {
     const w2 = createChatWatcher({ push: () => {}, store, home: dir, throttleMs: 20 })
     const snap = w2.open('p1')
     expect(snap.file).toBe(file)
-    expect(snap.messages.map((m) => m.id)).toEqual(['u1', 'a2', 'a4', 'u3', 'a5'])
+    expect(snap.messages.map((m) => m.id)).toEqual(['u1', 'a1', 'a4', 'u3', 'a5'])
     w2.stop()
     // 잘림 → reset 과 함께 처음부터.
     events.length = 0

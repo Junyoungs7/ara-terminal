@@ -120,6 +120,57 @@
   height: 14px;
 }
 
+/* ── 그림(미리보기 → 오버레이)·생각(접힌 한 줄) ── */
+.aiws-chat-img {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.aiws-chat-img img {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+}
+.aiws-chat-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-9);
+  background: var(--scrim-deep);
+  cursor: zoom-out;
+}
+.aiws-chat-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.aiws-chat-think summary,
+.aiws-chat-think summary .aiws-chat-think-ic {
+  color: var(--text-lo);
+}
+.aiws-chat-think-ic {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.aiws-chat-think-body {
+  margin: 0 0 var(--sp-4) var(--sp-9);
+  max-height: 240px;
+  overflow-y: auto;
+  color: var(--text-lo);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ── 도구 호출 — 띠가 아니라 한 줄. 이어진 도구는 붙여 쌓는다 ── */
 .aiws-chat-tool + .aiws-chat-tool {
   margin-top: calc(var(--sp-5) * -1);

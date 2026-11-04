@@ -6,7 +6,7 @@
 //  · 경로 = session-file-resolver.ts(훅이 준 transcript_path 가 우선, 없으면 세션 id 로 projects/*/<id>.jsonl)
 //  · R2: Codex = transcript-line-decoders-codex.ts(response_item 만 — event_msg 의 같은 말은 겹치므로 버림), Gemini = Orca 에 채팅 디코더가
 //    없어 ai-vault session-scanner-gemini-parsers.ts(type user/gemini) 모양에 toolCalls 를 도구 블록으로 더했다.
-// 뺀 것: 편집 diff 블록·이미지 미리보기·붙여넣은 글 펼치기·하위 에이전트 구역·되감기·Grok 해석·Codex 추론(reasoning) 줄.
+// 뺀 것: 편집 diff 블록·붙여넣은 글 펼치기·하위 에이전트 구역·되감기·Grok 해석·Codex 추론(reasoning) 줄. 그림·Claude thinking 은 넣었다.
 import type { AgentId } from './agents'
 import { INJECTED } from './vault'
 
@@ -15,7 +15,10 @@ export type TestCount = { pass: number; total: number }
 
 export type ChatBlock =
   | { type: 'text'; text: string }
-  | { type: 'image' }
+  /** src = 안전한 data: URL(png·jpeg·gif·webp, 상한 이내)일 때만 — 없으면(외부 URL·SVG·너무 큼) 표시만. */
+  | { type: 'image'; src?: string }
+  /** 모델의 생각 — 접힌 "생각함" 한 줄(Orca NativeChatReasoningRow). */
+  | { type: 'thinking'; text: string }
   /** 도구 호출 — 결과(tool_result)가 오면 같은 블록에 붙는다. 화면은 접어서 그린다. */
   | { type: 'tool'; id: string; name: string; summary: string; result?: string; error?: boolean; at?: number; ms?: number; add?: number; del?: number; tests?: TestCount }
   /** AskUserQuestion — 질문 카드 자리(답은 터미널에서). answered = 결과가 왔다. */
@@ -33,6 +36,10 @@ export const CHAT_CAP = 2000
 /** 도구 결과 글 상한(통째로 실으면 수 MB 출력이 화면·IPC 로 간다). */
 const RESULT_CHARS = 4000
 const SUMMARY_CHARS = 200
+/** 그림 data: URL 상한(글자 수 ≈ 바이트) — 넘으면 표시만. */
+export const IMAGE_MAX_CHARS = 8 * 1024 * 1024
+const IMAGE_MIME = /^image\/(png|jpeg|gif|webp)$/
+const BASE64 = /^[A-Za-z0-9+/\s]+={0,2}\s*$/
 /** Claude 가 끊긴 턴에 끼우는 글(Orca transcript-turn-markers). */
 const INTERRUPTED = /^\[Request interrupted by user/
 
@@ -40,6 +47,17 @@ type Rec = Record<string, unknown>
 const rec = (v: unknown): Rec | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : null)
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n) + '…' : s)
+
+/** 그림 블록 — 허용 형식·크기 안의 base64 만 data: URL 로(외부 URL 은 불러오지 않는다 — CSP·추적 방지). */
+export function imageBlock(mime: unknown, data: unknown): ChatBlock {
+  if (typeof mime === 'string' && IMAGE_MIME.test(mime) && typeof data === 'string' && data.length <= IMAGE_MAX_CHARS && BASE64.test(data)) return { type: 'image', src: `data:${mime};base64,${data.replace(/\s+/g, '')}` }
+  return { type: 'image' }
+}
+/** Codex input_image.image_url 의 data: URL 만. */
+function dataUrlImage(u: unknown): ChatBlock {
+  const m = typeof u === 'string' ? /^data:([^;,]+);base64,/.exec(u) : null
+  return m ? imageBlock(m[1], (u as string).slice(m[0].length)) : { type: 'image' }
+}
 
 /** 덜 쓴 마지막 줄은 carry 로 남긴다 — 다음 읽기에서 이어 붙인다. */
 export function takeLines(carry: string, chunk: string): { lines: string[]; carry: string } {
@@ -167,7 +185,13 @@ export function decodeClaudeLine(line: string, fallbackId: string): Decoded | nu
       if (r.type === 'user' && INTERRUPTED.test(text)) return { id, groupId: null, role: 'system', blocks: [{ type: 'text', text: text.trim() }], results }
       if (r.type === 'user' && INJECTED.test(text)) continue
       blocks.push({ type: 'text', text })
-    } else if (b.type === 'image') blocks.push({ type: 'image' })
+    } else if (b.type === 'image') {
+      const src = rec(b.source)
+      blocks.push(src?.type === 'base64' ? imageBlock(src.media_type, src.data) : { type: 'image' })
+    } else if (b.type === 'thinking') {
+      const text = str(b.thinking)
+      if (text) blocks.push({ type: 'thinking', text: clip(text, RESULT_CHARS) })
+    }
     else if (b.type === 'tool_use') {
       const tid = str(b.id) ?? `${id}:${blocks.length}`
       const name = str(b.name) ?? 'tool'
@@ -178,7 +202,6 @@ export function decodeClaudeLine(line: string, fallbackId: string): Decoded | nu
         blocks.push({ type: 'tool', id: tid, name, summary: toolSummary(name, b.input), ...(at !== undefined ? { at } : {}), ...(ed ? ed : {}) })
       }
     }
-    // thinking 은 뺀다(1차 — Orca 는 접힌 추론 줄).
   }
   if (!blocks.length && !results.length) return null
   // 한 응답(message.id)은 블록마다 따로 기록된다 — 한 말풍선으로 묶는다.
@@ -237,7 +260,7 @@ export function decodeCodexLine(line: string, fallbackId: string): Decoded | nul
     for (const it of items) {
       const b = rec(it)
       const text = str(b?.text)
-      if (b?.type === 'input_image') blocks.push({ type: 'image' })
+      if (b?.type === 'input_image') blocks.push(dataUrlImage(b.image_url))
       else if (text && !(p.role === 'user' && CODEX_INJECTED.test(text))) blocks.push({ type: 'text', text })
     }
     return blocks.length ? { id, groupId: null, role: p.role, blocks, results: [] } : null

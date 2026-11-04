@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type JSX } from 'react'
-import { ArrowDown, ArrowUp, Check, ChevronRight, ImageIcon, SquareTerminal } from 'lucide-react'
+import { ArrowDown, ArrowUp, Brain, Check, ChevronRight, ImageIcon, SquareTerminal } from 'lucide-react'
 import { fmtDuration, mergeMessages, nearBottom, type ChatBlock, type ChatMessage } from '@shared/agentChat'
 import { effortLabel, optionCommand, type ModelOption } from '@shared/agentOptions'
 import type { AgentStatusView } from '@shared/agentHooks'
@@ -26,7 +26,7 @@ const PASTE_SUB = 'agent'
  * 기록은 main 이 transcript 를 꼬리 읽기로 따라가 민다(이 화면이 떠 있을 때만 감시). 입력은 PTY 로(첫 지시와 같은 괄호 붙여넣기).
  * 승인·질문 응답은 터미널 몫이다 — 막히면 띠로 알리고 [터미널로] 를 준다(구조화 채팅이 아니라서 버튼으로 답할 길이 없다).
  * R2: 맨 앞 `/` 를 치면 명령·스킬 목록(AI-16), Claude 는 모델·추론 강도 pill(AI-15 — 고르면 그 탭 CLI 에 `/model …`·`/effort …`).
- * 뺀 것(Orca): 편집 diff 카드·이미지 미리보기·찾기·메시지 레일·되감기·하위 에이전트 구역·`@` 파일 멘션·지금 모델 읽기(화면 판독).
+ * 뺀 것(Orca): 편집 diff 카드·찾기·메시지 레일·되감기·하위 에이전트 구역·`@` 파일 멘션·지금 모델 읽기(화면 판독).
  * 모양 = 시안 A 문서형(mockups/v3/chat/A.html · styles/agentChat.css): 가운데 열, 이름줄, 도구는 한 줄 각주.
  * 시안의 이름줄 모델·시각, 도구 줄 결과 요약(`+18 −11` · `3/4 통과 · 12.4s`)은 transcript 블록에 그 값이 없어 뺐다 — 오른쪽엔 실행 중/오류만.
  */
@@ -313,12 +313,17 @@ const Row = memo(function Row({ m, who, onTerminal }: { m: ChatMessage; who?: st
 
 function Block({ b, role, onTerminal }: { b: ChatBlock; role: ChatMessage['role']; onTerminal: () => void }): JSX.Element {
   if (b.type === 'text') return role === 'assistant' ? <Markdown text={b.text} /> : <div className="aiws-chat-text">{b.text}</div>
-  if (b.type === 'image')
+  if (b.type === 'image') return b.src ? <ChatImage src={b.src} /> : <span className="aiws-chat-chip"><ImageIcon aria-hidden />{t('aiws.chat.image')}</span>
+  if (b.type === 'thinking')
     return (
-      <span className="aiws-chat-chip">
-        <ImageIcon aria-hidden />
-        {t('aiws.chat.image')}
-      </span>
+      <details className="aiws-chat-tool aiws-chat-think" data-aiws="chat-thinking">
+        <summary>
+          <ChevronRight className="aiws-chat-caret" aria-hidden />
+          <Brain className="aiws-chat-think-ic" aria-hidden />
+          <span>{t('aiws.chat.thought')}</span>
+        </summary>
+        <div className="aiws-chat-think-body">{b.text}</div>
+      </details>
     )
   if (b.type === 'question')
     return (
@@ -349,6 +354,33 @@ function Block({ b, role, onTerminal }: { b: ChatBlock; role: ChatMessage['role'
       </summary>
       {b.result !== undefined && <pre className="aiws-mono">{b.result || t('aiws.chat.noOutput')}</pre>}
     </details>
+  )
+}
+
+/** 작은 미리보기(비율 유지·높이 제한) — 누르면 앱 안 오버레이로 크게, Esc·바깥 클릭으로 닫는다. src 는 파서가 거른 data: URL 뿐. */
+function ChatImage({ src }: { src: string }): JSX.Element {
+  const [big, setBig] = useState(false)
+  useEffect(() => {
+    if (!big) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setBig(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [big])
+  return (
+    <>
+      <button type="button" className="aiws-chat-img" data-aiws="chat-image" aria-label={t('aiws.chat.imageOpen')} onClick={() => setBig(true)}>
+        <img src={src} alt={t('aiws.chat.image')} />
+      </button>
+      {big && (
+        <div className="aiws-chat-lightbox" role="dialog" aria-modal="true" aria-label={t('aiws.chat.image')} data-aiws="chat-image-big" onClick={() => setBig(false)}>
+          <img src={src} alt={t('aiws.chat.image')} />
+        </div>
+      )}
+    </>
   )
 }
 
