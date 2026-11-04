@@ -58,6 +58,25 @@ function belowClipBoundary(el: HTMLElement | null): number {
   return window.innerHeight
 }
 
+// position:fixed 의 기준 상자가 되는 가장 가까운 조상(CSS: transform·filter·backdrop-filter·perspective·contain·will-change). 없으면 null(= 뷰포트).
+function fixedContainingBlock(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null
+  while (node && node !== document.documentElement) {
+    const cs = getComputedStyle(node)
+    if (
+      cs.transform !== 'none' ||
+      cs.filter !== 'none' ||
+      (cs.backdropFilter && cs.backdropFilter !== 'none') ||
+      cs.perspective !== 'none' ||
+      /paint|layout|strict|content/.test(cs.contain) ||
+      /transform|filter|perspective/.test(cs.willChange)
+    )
+      return node
+    node = node.parentElement
+  }
+  return null
+}
+
 type Props = {
   value: string
   options: string[]
@@ -78,7 +97,19 @@ export function Dropdown({ value, options, onChange, ariaLabel, editable, placeh
   // 열기: 목록을 그리기 전에 앵커(.dd) 위치를 재서 뷰포트 기준 좌표를 정한다.
   const openList = () => {
     const r = rootRef.current?.getBoundingClientRect()
-    if (r) setPos(placeDropdown(r, window.innerHeight, belowClipBoundary(rootRef.current)))
+    if (r) {
+      const p = placeDropdown(r, window.innerHeight, belowClipBoundary(rootRef.current))
+      // fixed 의 기준이 뷰포트가 아닐 수 있다 — 글라스 모달(backdrop-filter)·transform 조상은 fixed 자손의 기준 상자가 된다.
+      // 그 안에서 열면 목록이 모달 좌표만큼 밀려 엉뚱한 데 뜬다(2026-11-04 에이전트 실행 카드, 화면 오른쪽 끝에 뜸).
+      const cb = fixedContainingBlock(rootRef.current)
+      if (cb) {
+        const c = cb.getBoundingClientRect()
+        p.left -= c.left
+        if (p.top !== undefined) p.top -= c.top
+        if (p.bottom !== undefined) p.bottom -= window.innerHeight - c.bottom
+      }
+      setPos(p)
+    }
     setOpen(true)
   }
 

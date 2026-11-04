@@ -210,8 +210,14 @@ for (const theme of THEMES) {
           const opts = page.locator('[data-aiws="launch-options"]')
           if ((await opts.count()) === 0) await page.locator('[data-aiws="agent-picker"] [data-agent]:not([disabled])').first().click()
           await expect(opts).toBeVisible()
-          await page.locator('[data-aiws="opt-model"] .dd, [data-aiws="opt-effort"] .dd, [data-aiws="opt-permission"] .dd').first().click()
+          const dd = page.locator('[data-aiws="opt-model"] .dd, [data-aiws="opt-effort"] .dd, [data-aiws="opt-permission"] .dd').first()
+          await dd.click()
           await expect(page.locator('.dd-list').first()).toBeVisible()
+          // 글라스 카드(backdrop-filter) 안에서도 목록이 버튼 바로 밑에 붙는다(2026-11-04 오른쪽 끝에 뜨던 것).
+          const a = (await dd.boundingBox())!
+          const l = (await page.locator('.dd-list').first().boundingBox())!
+          expect(Math.abs(l.x - a.x)).toBeLessThan(2)
+          expect(Math.abs(l.y - (a.y + a.height + 4)) < 3 || Math.abs(l.y + l.height - (a.y - 4)) < 3).toBe(true)
         })
         await step(c, 'ai-setup-guide-modal', async () => {
           await page.click(`${side} [data-aiws="setup-entry"]`)
