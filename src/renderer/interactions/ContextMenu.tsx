@@ -70,11 +70,18 @@ export function submenuPos(
   vw: number,
   vh: number
 ): { left: number; top: number } {
-  const right = parent.left + MENU_W
-  // 뷰포트가 메뉴 두 장 + 여백(462px)보다 좁으면 어디에 놔도 겹친다 — 그때는 왼쪽 가장자리에
-  // 붙인다(화면 밖으로 내보내는 쪽이 더 나쁘다).
-  const left = right + MENU_W + EDGE <= vw ? right : Math.max(EDGE, parent.left - MENU_W)
+  const left = sideMenuX({ left: parent.left, right: parent.left + MENU_W }, vw)
   return { left, top: clampMenu(parent.left, parent.top + index * ROW_H, count, vw, vh).top }
+}
+
+/**
+ * 패널(parent) **바깥 옆**에 메뉴 한 장을 붙일 x(순수 — 단위 테스트 대상). 오른쪽에 안 들어가면 왼쪽으로 뒤집는다.
+ * 서브메뉴(위 submenuPos)와 타이틀바 ≡ 펼침 옆 메뉴(TitleBar.tsx)가 같이 쓴다.
+ * 뷰포트가 메뉴 두 장 + 여백보다 좁으면 어디에 놔도 겹친다 — 그때는 왼쪽 가장자리에
+ * 붙인다(화면 밖으로 내보내는 쪽이 더 나쁘다).
+ */
+export function sideMenuX(parent: { left: number; right: number }, vw: number): number {
+  return parent.right + MENU_W + EDGE <= vw ? parent.right : Math.max(EDGE, parent.left - MENU_W)
 }
 
 type Props = {

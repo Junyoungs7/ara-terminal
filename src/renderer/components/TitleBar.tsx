@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ContextMenu } from '../interactions/ContextMenu'
+import { ContextMenu, sideMenuX } from '../interactions/ContextMenu'
 import { MENUBAR, menuBarItems, type MenuCommandId } from '../interactions/actions'
 import { menuEntryById, SPACE_ACTIONS, type MenuEntry } from '../../shared/menubar'
 import { SPACES, type Space } from '@shared/space'
@@ -7,6 +7,7 @@ import { Bot, SquareTerminal } from 'lucide-react'
 import type { FeatureShown } from '@shared/features'
 import { dispatchAction, isMac, keyText, KEYMAP } from '../../shared/keymap'
 import { t } from '../i18n'
+import { BrandOrb } from './BrandOrb'
 
 // 커스텀 프레임리스 타이틀바 (design-system §4.1/§8). 창 컨트롤은 no-drag.
 //
@@ -67,9 +68,16 @@ export function TitleBar({
 
   // 좌표는 **펼친 뒤에** 잰다 — ≡ 를 누르는 순간엔 제목 목록이 아직 숨어 있어 사각형이 0 이다.
   // 그림 그리기 전(layout effect)이라 0,0 에 한 번 뜨는 깜빡임은 없다.
+  // FB-2.2.3 6번(2026-11-04): 옆 메뉴의 x 는 제목 행이 아니라 **펼침 패널(.tb-menu) 바깥 오른쪽**이다.
+  // 그전엔 제목 행의 오른쪽(= 패널 안쪽 여백만큼 안)에 붙어, z 가 더 높은 패널(201) 뒤로 반쯤 들어가 보였다.
+  // 오른쪽에 자리가 없으면 왼쪽으로 뒤집는다(sideMenuX — 서브메뉴와 같은 규칙).
   useLayoutEffect(() => {
-    const r = open ? tops.current[open.index]?.getBoundingClientRect() : undefined
-    if (open && r && r.width > 0 && (r.right !== open.x || r.top !== open.y)) setOpen({ index: open.index, x: r.right, y: r.top })
+    const el = open ? tops.current[open.index] : undefined
+    const r = el?.getBoundingClientRect()
+    const panel = el?.parentElement?.getBoundingClientRect()
+    if (!open || !r || !panel || r.width <= 0) return
+    const x = sideMenuX(panel, window.innerWidth)
+    if (x !== open.x || r.top !== open.y) setOpen({ index: open.index, x, y: r.top })
   }, [open])
   // 옆 메뉴로 넘어갈 때는 옛 좌표를 들고 간다 — 0 으로 지우면 그 틈에 메뉴가 한 번 닫혔다 열려
   // (backdrop 이 사라졌다 생긴다) 돌려줄 포커스 자리를 잃는다.
@@ -154,6 +162,7 @@ export function TitleBar({
         </div>
       )}
       <div className="tb-logo">
+        <span className="tb-mark" aria-hidden><BrandOrb /></span>
         <span className="tb-name">{t('app.name')}</span>
         {crumb && (
           <>

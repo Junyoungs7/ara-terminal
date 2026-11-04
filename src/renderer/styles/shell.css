@@ -116,6 +116,17 @@
   min-width: 0;
   flex: 0 1 auto;
 }
+/* FB-2.2.3 5번: 맨 왼쪽 ARA 마크 — 브랜드 그라데이션 고정(BrandOrb, 테마 강조색·신호색 아님). */
+.tb-mark {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.tb-mark svg {
+  width: 100%;
+  height: 100%;
+}
 .tb-name {
   flex: none;
   font-weight: 600;
@@ -204,6 +215,14 @@
 /* 드롭다운이 열려 있는 동안만 backdrop 위로. */
 .tb-menu.on {
   z-index: 201;
+}
+/* ≡ 펼침 옆에 뜨는 메뉴(ContextMenu)는 펼침보다 위다(FB-2.2.3 6번) — 기본 .ctx-menu 200 이면 좁은 창에서
+   왼쪽으로 뒤집혀 겹칠 때 펼침(201) 뒤로 들어간다. 서브메뉴는 그보다 한 칸 더 위. */
+.titlebar .ctx-menu {
+  z-index: 202;
+}
+.titlebar .ctx-submenu {
+  z-index: 203;
 }
 .tb-menu span {
   font-size: var(--fs-md);

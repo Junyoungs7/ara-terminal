@@ -2,7 +2,8 @@ import { type JSX, useRef, useState } from 'react'
 import { ChevronDown, MoreHorizontal, Star } from 'lucide-react'
 import { useRowKeys } from '../store/rowKeys'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
-import { connDotClass, type ConnState } from '../store/profiles'
+import { serverDotClass, type ConnState } from '../store/profiles'
+import { sessionState, useSessionStates } from '../store/sessionState'
 import type { Session } from '../store/sessions'
 import { ContextMenu, type MenuItem } from '../interactions/ContextMenu'
 import { treeMenu, tmuxMenuItem, type TreeActionId, type TreeMenuKind } from '../interactions/actions'
@@ -99,8 +100,7 @@ type Dragging = { kind: 'server'; id: string } | { kind: 'group'; name: string }
  */
 const DND_MIME = 'application/x-ara-tree'
 
-// 상태 dot — 판정은 store/profiles.ts 의 connDotClass 하나가 한다(연결 관리자와 공유).
-const stDot = (state: ConnState[string] | undefined): string => 'st ' + connDotClass(state)
+// 상태 dot — 판정은 store/profiles.ts 의 serverDotClass(세션 상태 우선, connDotClass 와 같은 클래스)가 한다.
 
 // FB-monitor(F19 tmux 후속): 메뉴 종류 + tmux 조회 상태 → 실제로 그릴 항목. tmuxSessionId 가
 // 없으면(로컬·RDP·연결 안 된 서버) tmux 항목 자체가 안 붙는다 — sudo 상승 없이 조회 가능한 대상만.
@@ -231,6 +231,8 @@ export function ConnTree({
     for (const [k, v] of Object.entries(fn(collapsed))) if (v) next[k] = true
     onConnCollapsed?.(next)
   }
+  // 세션이 끊기면(exit·끊김) 서버 점도 내려가야 한다 — 세션 상태가 바뀔 때 다시 그린다(FB-2.2.3 7번).
+  useSessionStates()
   const [menu, setMenu] = useState<
     { x: number; y: number; kind: TreeMenuKind; target: TreeTarget; tmuxSessionId?: string } | null
   >(null)
@@ -445,7 +447,7 @@ export function ConnTree({
         ) : (
           <span className="tw" />
         )}
-        <span className={live ? 'st on' : stDot(conn[p.id])} />
+        <span className={'st ' + serverDotClass((rdpSession ? [rdpSession] : sess).map((x) => sessionState(x.id)), conn[p.id])} />
         <span className={'tbadge ' + badge.cls}>{badge.label}</span>
         <span className="sname">{p.name}</span>
         {/* 호버 인라인 버튼 — 우클릭 메뉴를 몰라도 손이 닿아야 한다(VS Code 트리 규칙).

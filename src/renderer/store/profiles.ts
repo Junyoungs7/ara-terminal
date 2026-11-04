@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionProfile, ProfileInput } from '@shared/types'
 import type { SshConnectResult } from '@shared/ipc'
 import { t } from '../i18n'
+import type { SessionState } from './sessionState'
 
 export type ConnectFailure = Extract<SshConnectResult, { ok: false }>
 
@@ -31,6 +32,21 @@ export function connDotClass(state: ConnState[string] | undefined): string {
   if (state === 'connecting') return 'connecting'
   if (state === 'error') return 'error'
   return 'off'
+}
+
+/**
+ * 서버 행의 점 — 그 서버에서 열린 세션들의 상태(store/sessionState)가 먼저, 없으면 접속 기록.
+ *
+ * FB-2.2.3 7번(2026-11-04 준영님): *"서버 접속 후 종료했는데 사이드바 그 서버 앞 점이 계속 초록."*
+ * 원인 둘: ① `ConnState` 의 `connected` 는 접속에 성공한 **순간의 기록**이라 아무도 내리지 않았다 —
+ * 탭을 닫아 세션이 사라지면 그 기록이 초록으로 남았다. ② 세션이 남아 있으면 상태를 안 보고 무조건
+ * 초록이었다 — `exit`·끊김으로 세션이 `lost` 가 돼도(탭은 [재접속] 카드로 남는다) 초록.
+ * 그래서 **초록은 지금 `on` 인 세션이 있을 때만**이다. `connected` 기록만 남은 것은 미연결로 내린다.
+ */
+export function serverDotClass(sessions: readonly SessionState[], state: ConnState[string] | undefined): string {
+  if (sessions.includes('on')) return 'on'
+  if (sessions.includes('connecting')) return 'connecting'
+  return connDotClass(state === 'connected' ? undefined : state)
 }
 
 // 여기 있던 `serverRowActive` 는 2026-09-08 에 없앴다. 트리 서버 행에 **색으로 말할 상태가 하나도
