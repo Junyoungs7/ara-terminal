@@ -443,9 +443,13 @@ export function registerAgentsFeature(deps: {
     const os = await deps.oriel?.status()
     if (os?.installed) {
       try {
-        if (agent === 'gemini') Object.assign(geminiDefaults, orielGeminiDefaults(os.info.cliPath, os.runner))
+        // 브라우저에 "어느 세션의 어느 AI 인가"를 보인다(Oriel 0.1.3 ORIEL_AGENT_LABEL — 옛 Oriel 은 모르는 env 라 무시).
+        // 작은따옴표는 Codex -c 값에서 막히므로(orielLaunch 가 Oriel 을 통째로 뺀다) 바꿔 둔다.
+        const label = `아라 · ${AGENTS[agent].label} · ${basename(cwd) || cwd}`.replace(/'/g, '’')
+        const runner = { ...os.runner, env: { ...os.runner.env, ORIEL_AGENT_LABEL: label } }
+        if (agent === 'gemini') Object.assign(geminiDefaults, orielGeminiDefaults(os.info.cliPath, runner))
         else {
-          const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body), os.runner)
+          const o = orielLaunch(agent, os.info.cliPath, (name, ext, body) => writeLaunchFile(deps.home, name, ext, body), runner)
           extraArgs.push(...o.args)
           Object.assign(extraEnv, o.env)
         }

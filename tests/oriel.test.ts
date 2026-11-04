@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ORIEL_INSTRUCTIONS, orielCandidates, orielLaunch, orielMcpServers, parseOrielVersion, pickOriel, type OrielRunner } from '../src/shared/oriel'
+import { ORIEL_INSTRUCTIONS, orielCandidates, orielGeminiDefaults, orielLaunch, orielMcpServers, parseOrielVersion, pickOriel, type OrielRunner } from '../src/shared/oriel'
 import { araOrielRunner, createOriel, FOREGROUND_SCRIPT, orielAppDir, orielKindOf, standaloneOrielExe } from '../src/main/oriel/oriel'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
@@ -64,6 +64,13 @@ describe('에이전트별 Oriel 전용 MCP(실행 인자·env 만 — 사용자 
     expect(o.args).not.toContain('--strict-mcp-config')
     expect(JSON.parse(files['C:/h/.ara/agent-launch/oriel-mcp.json'])).toEqual({ mcpServers: { oriel: { type: 'stdio', command: 'node', args: ['D:/AI/ai-browser/bin/oriel.mjs', 'mcp', '--launch'] } } })
     expect(files['C:/h/.ara/agent-launch/oriel-instructions.md']).toContain('finish()')
+  })
+  it('실행 env(ORIEL_AGENT_LABEL — 브라우저에 보일 세션 이름)가 세 CLI 의 MCP 서버 env 로 그대로 간다', () => {
+    const runner = { command: 'C:/A/ARA.exe', env: { ELECTRON_RUN_AS_NODE: '1', ORIEL_AGENT_LABEL: '아라 · Claude Code · OFA' } }
+    orielLaunch('claude', 'D:/o/bin/oriel.mjs', write, runner)
+    expect(JSON.parse(files['C:/h/.ara/agent-launch/oriel-mcp.json']).mcpServers.oriel.env).toEqual(runner.env)
+    expect(orielLaunch('codex', 'D:/o/bin/oriel.mjs', write, runner).args).toContain("mcp_servers.oriel.env={ELECTRON_RUN_AS_NODE='1',ORIEL_AGENT_LABEL='아라 · Claude Code · OFA'}")
+    expect(orielGeminiDefaults('D:/o/bin/oriel.mjs', runner).mcpServers.oriel.env).toEqual(runner.env)
   })
   it('Codex — -c 덮어쓰기(TOML 리터럴 문자열), 경로에 작은따옴표가 있으면 붙이지 않음', () => {
     const o = orielLaunch('codex', 'D:/AI/ai-browser/bin/oriel.mjs', write)
