@@ -123,6 +123,22 @@ describe('createOriel — 감지·링크 열기', () => {
     openResult = failed()
     expect(await o.open('https://example.com/a')).toBe('external')
     expect(external).toEqual(['https://example.com/a'])
+  })
+
+  it('Oriel 이 open-theme 을 지원하면 아라 테마(다크)를 --theme 으로 넘긴다 — 옛 Oriel 엔 안 붙인다(위 시험)', async () => {
+    const { dir, versionJson } = fakeOriel()
+    const withCaps = JSON.stringify({ ...JSON.parse(versionJson), capabilities: ['open-theme', 'theme'] })
+    const calls: string[][] = []
+    const o = createOriel({
+      candidates: () => [dir],
+      openExternal: async () => {},
+      run: async (file, args) => {
+        calls.push([file, ...args])
+        return args[1] === 'version' ? ok(withCaps) : ok('')
+      }
+    })
+    expect(await o.open('http://localhost:8000')).toBe('oriel')
+    expect(calls.at(-1)).toEqual(['node', join(dir, 'bin', 'oriel.mjs'), 'open', 'http://localhost:8000', '--theme', 'dark'])
     expect(await o.open('file:///C:/Windows/win.ini')).toBe(false)
     expect(external).toHaveLength(1)
     await o.status(true)

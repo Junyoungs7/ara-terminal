@@ -5,7 +5,7 @@
 // 사용자 설정 파일(~/.claude.json·~/.codex/config.toml·~/.gemini/settings.json)은 쓰지 않는다 — 실행 인자·env 로만.
 import type { AgentId } from './agents'
 
-export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean; pid?: number }
+export type OrielInfo = { version: string; appPath: string; electronPath: string; cliPath: string; running: boolean; pid?: number; capabilities?: string[] }
 /**
  * OR-3 — 어느 Oriel 인가. standalone = Oriel 설치 파일로 깐 것(`%LOCALAPPDATA%\Programs\Oriel`, 자기 Oriel.exe 로 뜬다),
  * dev = 그 밖(개발 체크아웃·설정에 적은 폴더). UB-1: 아라 설치본에는 Oriel 을 넣지 않는다(따로 설치하는 호환 제품).
@@ -38,7 +38,9 @@ export function parseOrielVersion(stdout: string): OrielInfo | null {
   const cliPath = str('cliPath')
   if (!version || !appPath || !electronPath || !cliPath) return null
   const pid = typeof o['pid'] === 'number' ? { pid: o['pid'] } : {}
-  return { version, appPath, electronPath, cliPath, running: o['running'] === true, ...pid }
+  // Oriel 8ff97d0(0.1.1)부터 — 'open-theme'(open --theme)·'theme'. 옛 Oriel 은 없다 → 인자를 안 붙인다.
+  const caps = Array.isArray(o['capabilities']) ? { capabilities: (o['capabilities'] as unknown[]).filter((c): c is string => typeof c === 'string') } : {}
+  return { version, appPath, electronPath, cliPath, running: o['running'] === true, ...pid, ...caps }
 }
 
 /**

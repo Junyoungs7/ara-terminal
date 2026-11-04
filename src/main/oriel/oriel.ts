@@ -136,7 +136,10 @@ export function createOriel(deps: {
           await run(powershellExe(), ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], { timeoutMs: FOREGROUND_TIMEOUT_MS })
         }
         // 종료 코드 0 열림 / 1 못 엶 / 2 URL 거부 / 3 실행·연결 실패 → 0 아니면 OS 기본 브라우저(oriel-integration.md 확정).
-        const r = await run(s.runner.command, [s.info.cliPath, 'open', url], { timeoutMs: OPEN_TIMEOUT_MS, env: s.runner.env })
+        // 아라 테마를 따라간다(준영님 2026-11-04, oriel-integration.md). 지원하는 Oriel 에만 붙인다.
+        // ponytail: 아라는 지금 다크(글라스) 하나뿐이라 고정 — 라이트 테마가 생기면 설정값을 넘기고 바꿀 때 `oriel theme` 을 부른다.
+        const theme = s.info.capabilities?.includes('open-theme') ? ['--theme', 'dark'] : []
+        const r = await run(s.runner.command, [s.info.cliPath, 'open', url, ...theme], { timeoutMs: OPEN_TIMEOUT_MS, env: s.runner.env })
         if (!r.error) return 'oriel'
       }
       await deps.openExternal(url).catch(() => {})
