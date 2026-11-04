@@ -131,7 +131,13 @@ async function start(launch: (ud: string) => Promise<{ app: import('@playwright/
   await page.fill('[data-aiws="agent-prompt"]', 'hello')
   await page.click('[data-aiws="agent-launch"]')
   await expect.poll(() => existsSync(hookScript), { timeout: 20_000 }).toBe(true)
-  const sid = await page.evaluate(async () => (await window.ev.session.list()).find((s) => s.space === 'ai')!.id)
+  // 훅 스크립트는 세션을 만들기 **전에** 써진다(feature.ts installHooks → daemon.create) — 탭이 선 뒤 세션 목록에 뜰 때까지 기다린다.
+  // (agentChat.spec 은 채팅 전환 등 화면 단계를 먼저 거쳐 이 틈에 안 걸렸다.)
+  await expect(page.locator('.aiws-tab[data-agent-tab="claude"]')).toHaveCount(1, { timeout: 20_000 })
+  let sid = ''
+  await expect
+    .poll(async () => (sid = await page.evaluate(async () => (await window.ev.session.list()).find((s) => s.space === 'ai')?.id ?? '')), { timeout: 20_000 })
+    .not.toBe('')
   const term = (s: string) => page.evaluate((x) => window.__evTerm(x)?.text() ?? '', s)
   await expect.poll(() => term(sid), { timeout: 20_000 }).toContain(`CFG: ${join(userDataDir, 'accounts', 'claude', A)}`)
   await expect.poll(() => term(sid), { timeout: 20_000 }).toContain('GOT: hello')
