@@ -177,7 +177,8 @@ describe('데몬 프로세스(node)', () => {
     // 끄면 그 뒤에 만드는 세션은 보통 우선순위 · 상한 0 이면 표본이 멈춘다(알림도 없다).
     await a.request({ type: 'limits', limits: { lowPriority: false, memoryBytes: 0 } })
     const plain = await a.request<DaemonSessionInfo>({ type: 'create', spec: { id: 'c2', cwd: dir, env: {}, meta: {} } })
-    expect(getPriority(plain.pid)).toBe(constants.priority.PRIORITY_NORMAL)
+    // 끄면 우선순위를 건드리지 않는다 = 부모(이 시험 프로세스)의 것을 물려받는다. 아라 에이전트 탭 안에서 돌리면 부모가 이미 낮음(10)이라 0 이 아니다.
+    expect(getPriority(plain.pid)).toBe(getPriority())
     await new Promise((r) => setTimeout(r, 600))
     expect(overs).toHaveLength(1)
     void a.request({ type: 'shutdown' }).catch(() => {})
