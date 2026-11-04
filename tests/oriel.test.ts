@@ -123,6 +123,10 @@ describe('createOriel — 감지·링크 열기', () => {
     openResult = failed()
     expect(await o.open('https://example.com/a')).toBe('external')
     expect(external).toEqual(['https://example.com/a'])
+    expect(await o.open('file:///C:/Windows/win.ini')).toBe(false)
+    expect(external).toHaveLength(1)
+    await o.status(true)
+    expect(calls.filter((c) => c[2] === 'version')).toHaveLength(2) // [다시 찾기]
   })
 
   it('Oriel 이 open-theme 을 지원하면 아라 테마(다크)를 --theme 으로 넘긴다 — 옛 Oriel 엔 안 붙인다(위 시험)', async () => {
@@ -139,10 +143,6 @@ describe('createOriel — 감지·링크 열기', () => {
     })
     expect(await o.open('http://localhost:8000')).toBe('oriel')
     expect(calls.at(-1)).toEqual(['node', join(dir, 'bin', 'oriel.mjs'), 'open', 'http://localhost:8000', '--theme', 'dark'])
-    expect(await o.open('file:///C:/Windows/win.ini')).toBe(false)
-    expect(external).toHaveLength(1)
-    await o.status(true)
-    expect(calls.filter((c) => c[2] === 'version')).toHaveLength(2) // [다시 찾기]
   })
   it('미설치(자리 없음·version 실패·electron 없음) → installed:false, 링크는 OS 브라우저, Oriel 을 부르지 않는다', async () => {
     const { dir } = fakeOriel()
