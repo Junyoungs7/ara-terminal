@@ -1657,5 +1657,17 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "원격 3차 R1(v2.2, A안 orcad.py 확장): probe 에 running·채택 동의 화면(같은/옛/새 판 — decideUpdate 규칙 그대로, 업데이트 직전 세션 0 이면 옛 서버 stop). orcad 에 attach pc·detach·meta 요청과 viewers·meta 사건(옛 orcad 는 모르는 요청으로 넘어감). 탭 ✕ = detach(서버 세션 유지), 탭 메뉴 [서버에서도 끝내기] = kill. [다시 연결]은 이 PC 의 탭만. 뺀 것: 페어링·WS·E2EE·기기 grant(SSH 위 stdio 다리 그대로), 서버 쪽 상태 판정(R2), '세션 목록 먼저 보기' 버튼, 설치한 PC 기록."
+  },
+  {
+    "id": "DM-07",
+    "feature": "서버에서 상태 판정 — 원격 에이전트 훅을 서버 orcad 가 받아 붙은 PC 모두에 status(늦게 붙은 PC 도 마지막 상태), 원격 탭 상태·카드·알림이 로컬 훅과 같은 파이프라인, 서버 세션 목록 상태 칸",
+    "orcaPaths": [
+      "src/main/agent-hooks/remote-managed-hook-installers.ts",
+      "src/main/agent-hooks/installer-utils-remote.ts",
+      "src/main/agent-hooks/server.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "원격 3차 R2(v2.2): 훅 줄은 서버 사용자 설정(~/.claude·~/.gemini)이 아니라 설치 폴더의 claude-hooks.json(--settings)·gemini-hooks.json(GEMINI_CLI_SYSTEM_DEFAULTS_PATH) — Orca 는 원격 사용자 설정에 심는다(흔적 원칙으로 바꿈). 훅 명령 python3 \"$HOME/.ara-server/orcad.py\" hook <cli> → orcad hook 요청 → status 사건(붙은 PC) + 세션 대장 마지막 상태(list·attach). 페이로드는 서버에서 잘라 보냄(이벤트·도구·자식 id·16KB 이하 tool_input). 옛 orcad(hello hookDir 없음)·Codex 는 화면 판정. 뺀 것: Orca 릴레이 스풀·재생, 원격 Codex 훅(신뢰 해시), 원격 채팅 보기(R4)."
   }
 ]
