@@ -8,7 +8,7 @@ import { t } from '../../i18n'
  * M11 질문/승인 카드 — Orca NativeChatInteractiveCard·NativeChatQuestionCard·NativeChatApprovalCard(orcaRef fdfcfb3551)의 흐름:
  * 질문은 한 번에 하나(단일 선택은 고르면 다음으로, 다중 선택·직접 입력은 [다음]/[보내기]), 승인은 [허용]/[거부].
  * 답은 TUI 키로(main agents:answer 가 걸음 간격을 둔다). 보낸 뒤엔 카드를 접고 훅이 막힘을 풀면 사라진다.
- * '답할 차례' 신호는 시안 C 의 반전 칩(.ag-ask-chip).
+ * '답할 차례' 신호는 시안 C 의 반전 칩(.ag-ask-chip). 모양은 채팅 시안 A(styles/agentChat.css) — 라디오 점 · 글 · 오른쪽 번호, 고른 것 = 앰버.
  * 뺀 것: 미리 보기 선택기의 메모 칸(직접 입력으로 대신), 숫자 키 단축, 카드 접기(입력 줄 돌려주기).
  */
 export function AgentAskCard({ sessionId, agent, ask, onTerminal }: { sessionId: string; agent: AgentId; ask: string; onTerminal?: () => void }): JSX.Element | null {
@@ -92,11 +92,12 @@ function Questions({ prompt, agent, onSend }: { prompt: AskPrompt; agent: AgentI
           const on = (picks[index] ?? []).includes(i)
           return (
             <button key={i} type="button" role={q.multiSelect ? 'checkbox' : 'radio'} aria-checked={on} className={'ag-ask-opt' + (on ? ' on' : '')} data-aiws="ask-option" onClick={() => pick(i)}>
-              <span className="ag-ask-num">{i + 1}</span>
-              <span>
+              <span className="ag-ask-rd" aria-hidden />
+              <span className="ag-ask-ot">
                 <b>{o.label}</b>
                 {o.description && <span className="aiws-note">{o.description}</span>}
               </span>
+              <span className="ag-ask-num">{i + 1}</span>
             </button>
           )
         })}

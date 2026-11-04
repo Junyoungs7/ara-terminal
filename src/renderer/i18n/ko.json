@@ -2101,6 +2101,8 @@
   "aiws.chat.answerInTerminal": "터미널에서 답하기",
   "aiws.chat.running": "실행 중…",
   "aiws.chat.noOutput": "(출력 없음)",
+  "aiws.chat.me": "나",
+  "aiws.chat.toolError": "오류",
   "aiws.agent.add": "에이전트 하나 더",
   "aiws.agent.promptFailed": "첫 지시를 넣지 못했습니다 — 에이전트 입력 상자가 화면에 보이지 않았습니다(셸에는 치지 않았습니다). 아래 글을 직접 붙여 넣으세요.",
   "aiws.st.working": "작업 중",

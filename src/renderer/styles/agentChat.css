@@ -1,0 +1,480 @@
+/* ============================================================
+   에이전트 채팅 보기 — 시안 A 문서형(mockups/v3/chat/A.html, 2026-11-04 준영님 선택).
+   가운데 좁은 열(--chat-col), 말풍선 없음. 사람 = 앰버 2px 막대, 에이전트 = 이름줄(AI 잉크) + 본문.
+   도구 호출 = 문단 사이 한 줄(각주처럼): 동사(AI 잉크) · 대상(모노) · 오른쪽 상태. 펼치면 짙은 pre.
+   답할 차례 = 반전 칩(.ag-ask-chip — shell.css). 전달 실패 = 사람 막대 자리의 빨강 막대.
+   AgentChatView.tsx 가 불러온다. 첨부 칩·슬래시 목록 바탕·pill 은 아라 채팅과 같이 써서 shell.css 에 남는다.
+   ============================================================ */
+
+.aiws-chat {
+  --chat-col: 720px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 위쪽에만 옅은 AI 빛 — 글이 많은 면이라 바탕은 불투명 */
+  background:
+    radial-gradient(70% 220px at 50% 0, var(--sig-ai-soft), transparent 75%),
+    var(--bg-canvas);
+}
+.aiws-chat.drag-over {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-inset);
+}
+
+/* ── 목록: 스크롤은 넓게, 내용은 가운데 열 ── */
+.aiws-chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-9) var(--sp-6) var(--sp-6);
+}
+.aiws-chat-list > * {
+  align-self: center;
+  width: 100%;
+  max-width: var(--chat-col);
+}
+.aiws-chat-older.btn {
+  width: auto;
+  margin-bottom: var(--sp-9);
+  border-radius: 999px;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-empty {
+  margin: auto;
+  max-width: 480px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* 긴 대화 — 화면 밖 줄은 그리지 않는다(브라우저 기본 가상화). */
+.aiws-chat-msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+  padding-bottom: var(--sp-9);
+  color: var(--text-mid);
+  font-size: var(--fs-md);
+  line-height: 1.75;
+}
+/* 이름줄 — 같은 쪽 말이 이어지면 첫 조각에만 */
+.aiws-chat-who {
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.aiws-chat-msg.user .aiws-chat-who {
+  color: var(--sig-user-ink);
+}
+.aiws-chat-msg.assistant .aiws-chat-who {
+  color: var(--sig-ai-ink);
+}
+.aiws-chat-msg.assistant.head {
+  padding-top: var(--sp-9);
+  border-top: 1px solid var(--line-soft);
+}
+.aiws-chat-msg.assistant .md {
+  font-weight: 400;
+}
+.aiws-chat-msg.assistant .md :is(b, strong) {
+  color: var(--text-hi);
+  font-weight: 500;
+}
+/* 사람 = 문서 안 인용처럼 왼쪽 앰버 막대 하나 */
+.aiws-chat-msg.user :is(.aiws-chat-text, .aiws-chat-chip) {
+  padding: var(--sp-hair) 0 var(--sp-hair) var(--sp-7);
+  box-shadow: inset 2px 0 0 var(--sig-user);
+}
+.aiws-chat-msg.user .aiws-chat-text {
+  color: var(--text-hi);
+  line-height: 1.7;
+}
+.aiws-chat-msg.system {
+  align-items: center;
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aiws-chat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-chip svg,
+.aiws-chat-question svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── 도구 호출 — 띠가 아니라 한 줄. 이어진 도구는 붙여 쌓는다 ── */
+.aiws-chat-tool + .aiws-chat-tool {
+  margin-top: calc(var(--sp-5) * -1);
+}
+.aiws-chat-tool summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+  height: 28px;
+  margin: 0 calc(var(--sp-4) * -1);
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+  line-height: 1;
+  cursor: var(--cur-hand, pointer);
+  list-style: none;
+}
+.aiws-chat-tool summary::-webkit-details-marker {
+  display: none;
+}
+.aiws-chat-tool summary:hover {
+  background: var(--bg-raised);
+}
+.aiws-chat-caret {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--text-lo);
+  transition: transform var(--dur-quick);
+}
+.aiws-chat-tool[open] .aiws-chat-caret {
+  transform: rotate(90deg);
+}
+.aiws-chat-tool-vb {
+  flex: none;
+  min-width: 44px;
+  color: var(--sig-ai-ink);
+  font-weight: 500;
+}
+.aiws-chat-tool summary .aiws-mono {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-mid);
+}
+.aiws-chat-tool-rs {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--mono);
+  color: var(--text-lo);
+  white-space: nowrap;
+}
+.aiws-chat-tool.err .aiws-chat-tool-rs {
+  color: var(--t-red);
+}
+.aiws-chat-tool pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: var(--sp-2) 0 var(--sp-4) var(--sp-9);
+  padding: var(--sp-5) var(--sp-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-abyss);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  font-size: var(--fs-micro);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-mid);
+}
+.aiws-chat-tool.err pre {
+  box-shadow: inset 0 0 0 1px var(--err-line);
+}
+
+/* 대화 속 질문(AskUserQuestion) — 답 안 했으면 작은 칸(유리는 glass.css), 답했으면 글 + 한 줄(.aiws-chat-asked) */
+.aiws-chat-question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--sp-8);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  color: var(--text-hi);
+}
+.aiws-chat-question p {
+  margin: 0;
+}
+.aiws-chat-asked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  color: var(--text-mid);
+}
+.aiws-chat-asked p {
+  margin: 0;
+}
+.aiws-chat-answered {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-answered svg {
+  color: var(--t-green);
+}
+
+/* ── 열 아래 줄들(막힘·전달 실패·오류·질문 카드·입력)도 같은 열 ── */
+.aiws-chat > :is(.aiws-chat-blocked, .aiws-note, .ag-ask, .aiws-chat-composer) {
+  align-self: center;
+  width: calc(100% - var(--sp-6) * 2);
+  max-width: var(--chat-col);
+}
+/* 질문 없는 막힘 — 답할 차례 칩 + 한 줄 + [터미널로] */
+.aiws-chat-blocked {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-5) var(--sp-5) var(--sp-5) var(--sp-8);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+}
+.aiws-chat-blocked > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+/* 전달 실패·보내기 오류 — 사람 막대 자리의 빨강 막대(내 말이 안 들어갔다) */
+.aiws-chat > .aiws-note.aiws-err {
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-7);
+  box-shadow: inset 2px 0 0 var(--err);
+  color: var(--text-hi);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+}
+
+/* ── 질문/승인 카드(M11) — 열의 마지막 칸. 고른 것 = 앰버 ── */
+.ag-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-6);
+  padding: var(--sp-7) var(--sp-8) var(--sp-6);
+  border-radius: var(--radius-xl);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--line-strong), var(--shadow-md);
+}
+.ag-ask-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.ag-ask-term {
+  margin-left: auto;
+}
+.ag-ask-q {
+  margin: 0;
+  color: var(--text-hi);
+  font-weight: 500;
+  line-height: 1.6;
+}
+.ag-ask-header {
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.ag-ask-detail {
+  margin: 0;
+  max-height: calc(var(--sp-8) * 6);
+  overflow: auto;
+  padding: var(--sp-5) var(--sp-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-abyss);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: var(--fs-micro);
+}
+.ag-ask-opts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.ag-ask-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: none;
+  color: var(--text-hi);
+  text-align: left;
+}
+.ag-ask-opt:hover {
+  background: var(--bg-overlay);
+}
+.ag-ask-rd {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: var(--sp-2);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--text-lo);
+}
+.ag-ask-opt[role='checkbox'] .ag-ask-rd {
+  border-radius: var(--radius-sm);
+}
+.ag-ask-ot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ag-ask-ot b {
+  font-weight: 400;
+}
+.ag-ask-opt.on {
+  background: var(--sig-user-glow);
+  box-shadow: inset 0 0 0 1px var(--sig-user-line);
+}
+.ag-ask-opt.on .ag-ask-rd {
+  box-shadow: inset 0 0 0 4px var(--sig-user);
+}
+.ag-ask-num {
+  flex: none;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-lo);
+}
+.ag-ask .aiws-input {
+  margin-left: var(--sp-9);
+  width: calc(100% - var(--sp-9));
+}
+
+/* ── 입력 — 같은 열, 바닥. 칸 하나 안에 글(2줄) · 첨부 · 모델 pill · 보내기 ── */
+.aiws-chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-6);
+}
+.aiws-chat-box {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-3);
+  padding: var(--sp-6) var(--sp-7) var(--sp-4);
+  border-radius: var(--radius-xl);
+  background: var(--bg-canvas);
+  box-shadow: inset 0 0 0 1px var(--line-strong), var(--shadow-md);
+}
+.aiws-chat-box:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 0 3px var(--accent-glow);
+}
+.aiws-chat-row {
+  display: contents;
+}
+.aiws-chat-box .aiws-chat-input {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  resize: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+.aiws-chat-box .aiws-chat-input:focus {
+  outline: none;
+}
+.aiws-chat-box .aiws-chat-files {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.aiws-chat-box .aiws-chat-opts {
+  grid-column: 1;
+  grid-row: 3;
+}
+.aiws-chat-send {
+  grid-column: 2;
+  grid-row: 3;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+}
+.aiws-chat-send svg {
+  width: 16px;
+  height: 16px;
+}
+/* 슬래시 목록 — 입력칸 바로 위에 뜬다 */
+.aiws-chat-box .aiws-chat-slash {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--sp-4));
+  z-index: 2;
+  padding: var(--sp-3);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+.aiws-chat-box .aiws-chat-slash li {
+  align-items: center;
+  gap: var(--sp-7);
+  height: 32px;
+  padding: 0 var(--sp-5);
+  border-radius: var(--radius-lg);
+  color: var(--text-lo);
+}
+.aiws-chat-box .aiws-chat-slash li b {
+  min-width: 92px;
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--text-hi);
+}
+.aiws-chat-box .aiws-chat-slash li.on {
+  background: var(--bg-overlay);
+  box-shadow: inset 2px 0 0 var(--sig-user);
+}
+.aiws-chat-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.aiws-chat-box .aiws-pill {
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--text-lo);
+}
+.aiws-chat-box .aiws-pill:hover {
+  background: var(--bg-raised);
+}
+.aiws-chat-box .aiws-pill select {
+  border: 0;
+  background: none;
+  color: var(--text-mid);
+  font-size: var(--fs-micro);
+}
+.aiws-chat-hint {
+  text-align: center;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}

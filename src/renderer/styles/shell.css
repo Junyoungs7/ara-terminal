@@ -10380,154 +10380,13 @@ progress {
   color: var(--accent-bright);
   border-radius: var(--radius-sm);
 }
-/* M5 AI-13·12·17 에이전트 채팅으로 보기 — 목록(아래로 쌓임) · 승인 띠 · 입력칸(첨부 칩). */
+/* M5 AI-13·12·17 에이전트 채팅으로 보기 — 화면 규칙은 styles/agentChat.css(시안 A 문서형). 여기는 탭 머리 토글과 아라 채팅과 같이 쓰는 첨부 칩·슬래시 목록·pill. */
 .aiws-chat-toggle {
   margin-left: auto;
 }
-.aiws-chat {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-canvas);
-}
-.aiws-chat.drag-over {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-inset);
-}
-.aiws-chat-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-6);
-}
-.aiws-chat-older {
-  align-self: center;
-}
-.aiws-chat-empty {
-  margin: auto;
-  max-width: 480px;
-  text-align: center;
-}
-/* 긴 대화 — 화면 밖 줄은 그리지 않는다(브라우저 기본 가상화). 높이 짐작은 첫 그림 뒤 실제 값으로 바뀐다. */
-.aiws-chat-msg {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 80px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  max-width: 100%;
-  min-width: 0;
-  color: var(--text-hi);
-}
-.aiws-chat-msg.user {
-  align-self: flex-end;
-  max-width: 80%;
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius-bubble);
-  background: var(--bg-raised);
-}
-.aiws-chat-msg.system {
-  align-self: center;
-  color: var(--text-lo);
-  font-size: var(--fs-micro);
-}
-.aiws-chat-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.aiws-chat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  color: var(--text-lo);
-  font-size: var(--fs-micro);
-}
-.aiws-chat-chip svg,
-.aiws-chat-file svg,
-.aiws-chat-question svg {
+.aiws-chat-file svg {
   width: 14px;
   height: 14px;
-}
-.aiws-chat-tool {
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--bg-surface);
-  font-size: var(--fs-micro);
-}
-.aiws-chat-tool.err {
-  border-color: var(--err-line);
-}
-.aiws-chat-tool summary {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-  padding: var(--sp-1) var(--sp-3);
-  color: var(--text-mid);
-  cursor: var(--cur-hand, pointer);
-  list-style: none;
-}
-.aiws-chat-tool summary::-webkit-details-marker {
-  display: none;
-}
-.aiws-chat-tool summary .aiws-mono {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aiws-chat-caret {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  transition: transform var(--dur-quick);
-}
-.aiws-chat-tool[open] .aiws-chat-caret {
-  transform: rotate(90deg);
-}
-.aiws-chat-tool pre {
-  max-height: 320px;
-  overflow: auto;
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border-top: 1px solid var(--line-soft);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--text-mid);
-}
-.aiws-chat-question {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--glass);
-}
-.aiws-chat-question p {
-  margin: 0;
-}
-.aiws-chat-blocked {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-6);
-  border-top: 1px solid var(--line);
-  background: var(--bg-raised);
-  color: var(--warn);
-}
-.aiws-chat-composer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-6) var(--sp-4);
-  border-top: 1px solid var(--line);
 }
 .aiws-chat-files {
   display: flex;
@@ -10550,29 +10409,8 @@ progress {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.aiws-chat-row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-2);
-}
-.aiws-chat-input {
-  flex: 1;
-  resize: none;
-}
-.aiws-chat-send svg {
-  width: 16px;
-  height: 16px;
-}
-.aiws-chat-hint {
-  font-size: var(--fs-micro);
-}
 
 /* M5 R2 — 모델·강도·권한 pill(AI-15·18), 슬래시 목록(AI-16), 탭 이름(AI-19) */
-.aiws-chat-opts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
 .aiws-pill {
   display: inline-flex;
   align-items: center;
@@ -12876,7 +12714,7 @@ progress {
   font-size: var(--fs-micro);
 }
 
-/* ── M11 에이전트 2차: 답할 일 = 반전 칩(시안 C) · 질문/승인 카드 · 재시작 · 지난 세션 범위·필터·검색 ── */
+/* ── M11 에이전트 2차: 답할 일 = 반전 칩(시안 C) · 재시작 · 지난 세션 범위·필터·검색 (질문/승인 카드는 styles/agentChat.css) ── */
 .ag-ask-chip,
 .aiws-tab-state.ag-ask-chip {
   background: var(--text-hi);
@@ -12884,68 +12722,6 @@ progress {
   border-radius: var(--radius-sm);
   padding: 0 var(--sp-2);
   font-weight: 500;
-}
-.ag-ask {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  margin: var(--sp-3) var(--sp-6);
-  padding: var(--sp-4) var(--sp-6);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-}
-.ag-ask-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  font-size: var(--fs-micro);
-}
-.ag-ask-q {
-  margin: 0;
-  color: var(--text-hi);
-}
-.ag-ask-header {
-  font-size: var(--fs-micro);
-  color: var(--text-mid);
-}
-.ag-ask-detail {
-  margin: 0;
-  max-height: calc(var(--sp-8) * 6);
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: var(--fs-micro);
-}
-.ag-ask-opts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.ag-ask-opt {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-mid);
-  text-align: left;
-}
-.ag-ask-opt > span:last-child {
-  display: flex;
-  flex-direction: column;
-}
-.ag-ask-opt.on {
-  border-color: var(--line-strong);
-  color: var(--text-hi);
-}
-.ag-ask-num {
-  flex: none;
-  font-family: var(--mono);
-  color: var(--text-lo);
 }
 .ag-restart {
   margin-left: calc(var(--sp-1) * -1);
