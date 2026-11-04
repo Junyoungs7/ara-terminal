@@ -64,7 +64,7 @@ export function registerAgentsFeature(deps: {
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string> } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string> } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -513,6 +513,7 @@ export function registerAgentsFeature(deps: {
     views: () => tracker?.views() ?? [],
     limits: () => agentLimitsOf(settings),
     orielPath: () => settings.orielPath,
+    orielFeedUrl: () => settings.orielFeedUrl,
     terminalDaemon,
     // M15 Slack(main/integrations) — 탭 목록(띄운 순서)과 카드 답(같은 길).
     tabs: () => [...tabMeta].map(([sessionId, m]) => ({ sessionId, agent: m.agent, cwd: m.cwd })),

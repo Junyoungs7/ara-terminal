@@ -6,6 +6,8 @@ import { useAgentStore } from './agentStore'
 import { Row, Toggle } from '../../components/SettingsPage'
 import { useDialog } from '../../components/Dialog'
 import type { OrielStatus } from '@shared/oriel'
+import { OrielInstallButton, useOrielInstall } from './OrielInstall'
+import { ORIEL_FEED_URL } from '@shared/links'
 
 /**
  * M3 설정 › AI 작업 공간 › 에이전트 — Orca AgentDetectionCatalog(감지 목록·켜고 끄기) + AgentLaunchSettingsSection·AgentPermissionModeMenu
@@ -107,6 +109,16 @@ export function AgentSettingsPanel(): JSX.Element {
         </span>
       </Row>
       <OrielRow path={settings.orielPath} onPath={(orielPath) => useAgentStore.getState().saveSettings({ ...settings, orielPath })} />
+      <Row label={t('settings.agents.orielFeed')} desc={t('settings.agents.orielFeed.desc')} item="agents.orielFeed">
+        <input
+          key={`of-${settings.orielFeedUrl}`}
+          className="aiws-input aiws-mono"
+          data-field="agents.orielFeed"
+          placeholder={ORIEL_FEED_URL}
+          defaultValue={settings.orielFeedUrl}
+          onBlur={(e) => e.target.value.trim() !== settings.orielFeedUrl && void useAgentStore.getState().saveSettings({ ...settings, orielFeedUrl: e.target.value.trim() })}
+        />
+      </Row>
 
       {/* M4 DM-01 — 에이전트는 로컬 데몬에서 돌아 앱을 닫아도 산다. 끄는 길 둘(Orca Quit Completely). */}
       <div className="set-sec-t" data-item="agents.daemon">
@@ -227,6 +239,11 @@ function OrielRow({ path, onPath }: { path: string; onPath: (p: string) => Promi
   const [st, setSt] = useState<OrielStatus | null>(null)
   const probe = (force: boolean): void => void window.ev?.oriel?.status(force).then(setSt).catch(() => setSt(null))
   useEffect(() => probe(false), [])
+  // 설치가 끝나면 main 이 이미 다시 감지했다 — 그 결과를 읽는다.
+  const phase = useOrielInstall().phase
+  useEffect(() => {
+    if (phase === 'done') probe(false)
+  }, [phase])
   const desc = !st ? t('aiws.agent.detecting') : st.installed ? t('settings.agents.oriel.found').replace('{v}', st.info.version).replace('{kind}', t(`settings.agents.oriel.kind.${st.kind}`)).replace('{path}', st.info.appPath) : t('settings.agents.oriel.missing')
   return (
     <Row label={t('settings.agents.oriel')} desc={desc} item="agents.oriel">
@@ -244,6 +261,7 @@ function OrielRow({ path, onPath }: { path: string; onPath: (p: string) => Promi
       <button type="button" className="btn sec" data-aiws="oriel-redetect" onClick={() => probe(true)}>
         {t('aiws.agent.redetect')}
       </button>
+      {st && !st.installed && <OrielInstallButton />}
     </Row>
   )
 }

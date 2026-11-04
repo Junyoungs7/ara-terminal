@@ -134,3 +134,15 @@ export function orielGeminiDefaults(cliPath: string, runner: OrielRunner = NODE_
   const { command, args, env } = orielMcpServers(cliPath, runner).mcpServers.oriel
   return { mcpServers: { oriel: { command, args, ...(env ? { env } : {}) } } }
 }
+
+/**
+ * Oriel 내려받아 설치하기(사용자가 [Oriel 설치]를 누를 때만) — main/oriel/install.ts 가 진행을 push('oriel:install')로 알린다.
+ * error.reason: feed(latest.yml 못 받음) · parse(latest.yml 모양이 틀림) · download(설치 파일 못 받음) · sha512(받은 파일이 다름 — 실행 안 함)
+ * · exit(설치 프로그램 종료 코드 ≠ 0) · missing(설치는 끝났는데 감지 안 됨). detail = HTTP 상태·종료 코드 등(그대로 보인다).
+ */
+export type OrielInstallState =
+  | { phase: 'idle' }
+  | { phase: 'download'; got: number; total: number }
+  | { phase: 'install' }
+  | { phase: 'done' }
+  | { phase: 'error'; reason: 'feed' | 'parse' | 'download' | 'sha512' | 'exit' | 'missing'; detail?: string }

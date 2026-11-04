@@ -57,6 +57,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
       i('agents.hibernateAfter', 'settings.agents.hibernateAfter', 'settings.agents.hibernateAfter.desc'),
       i('agents.chatPermission', 'settings.agents.chatPermission', 'settings.agents.chatPermission.desc'),
       i('agents.oriel', 'settings.agents.oriel', 'settings.agents.oriel.missing'),
+      i('agents.orielFeed', 'settings.agents.orielFeed', 'settings.agents.orielFeed.desc'),
       i('agents.lowPriority', 'settings.agents.lowPriority', 'settings.agents.lowPriority.desc'),
       i('agents.memoryCap', 'settings.agents.memoryCap', 'settings.agents.memoryCap.desc'),
       i('agents.launch', 'settings.agents.launch'),

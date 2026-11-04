@@ -9,6 +9,7 @@ import type { SettingsSection } from '@shared/settingsIndex'
 import { useAiwsStore } from '../store'
 import { firstIncompleteStep, sectionOfStep, SETUP_STEP_IDS, showSidebarEntry, type SetupGuideProgress, type SetupStepId } from './steps'
 import { setSetupGuideHidden, useSetupGuideHidden, useSetupGuideProgress } from './useSetupGuide'
+import { OrielInstallButton } from '../OrielInstall'
 import './setupGuide.css'
 
 /** 단계의 [바로 가기] — 설정 딥링크 또는 동작. 없는 단계는 설명만. */
@@ -71,6 +72,7 @@ export function SetupChecklist({ progress, onGo }: { progress: SetupGuideProgres
             </button>
           )
         )}
+        {active === 'browser' && !progress.stepDone.browser && <OrielInstallButton />}
       </div>
     </div>
   )

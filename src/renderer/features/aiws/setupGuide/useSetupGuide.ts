@@ -57,7 +57,10 @@ export function useSetupGuideProgress(): SetupGuideProgress {
     window.addEventListener('focus', again)
     document.addEventListener('visibilitychange', onVis)
     const offInt = window.ev.integrations.onUpdate(again)
+    // [Oriel 설치]가 끝나면(main 이 이미 다시 감지했다) 판정을 다시.
+    const offOriel = window.ev.oriel.onInstall((s) => s.phase === 'done' && again())
     return () => {
+      offOriel()
       window.removeEventListener('focus', again)
       document.removeEventListener('visibilitychange', onVis)
       offInt()

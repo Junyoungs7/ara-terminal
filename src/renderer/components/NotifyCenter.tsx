@@ -175,6 +175,11 @@ export function NotifyToasts({ onPick, onMore }: { onPick: (n: Note) => void; on
           onKeyDown={(e) => e.key === 'Enter' && pick(n)}
         >
           <NoteBody n={n} />
+          {n.extra && (
+            <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <n.extra />
+            </span>
+          )}
           <button
             type="button"
             className="ntf-x"

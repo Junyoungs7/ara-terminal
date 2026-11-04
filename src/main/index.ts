@@ -630,7 +630,7 @@ app.whenReady().then(async () => {
   remoteConsole = remoteSvc
   const fwdIpc = registerForwardIpc(sessions, () => sessionLog?.dir ?? sessionDir)
   // M9 R2 Oriel(main/oriel/feature.ts) — 링크·포트 [열기]·MCP oriel_open 이 Oriel 로(아라 안 브라우저 없음). 위치 설정은 에이전트 설정(아래에서 선다).
-  const oriel = registerOrielFeature(() => agents?.orielPath() ?? '')
+  const oriel = registerOrielFeature(() => agents?.orielPath() ?? '', () => agents?.orielFeedUrl() ?? '')
   // M15 R2 TM-04 macOS 로컬 네트워크(main/localNetwork/feature.ts) — 맥이 아니면 핸들러가 ok:false 만.
   registerLocalNetworkFeature()
   forwards = fwdIpc.forwards

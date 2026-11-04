@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, type ComponentType } from 'react'
 import type { Space } from '@shared/space'
 
 /**
@@ -33,8 +33,10 @@ export type Note = {
   toast: boolean
   /** 공간을 옮긴 뒤 그 안에서 갈 자리(M3 에이전트 탭 — AI 작업 공간 청크가 건다. Shell 은 그 상태를 모른다). */
   go?: () => void
+  /** 토스트 안의 단추(noOriel → [Oriel 설치]). 벨 목록 줄은 통째로 단추라 거기엔 안 그린다. */
+  extra?: ComponentType
 }
-export type NoteInput = Pick<Note, 'kind' | 'space' | 'title'> & Partial<Pick<Note, 'target' | 'body' | 'ctx' | 'go'>>
+export type NoteInput = Pick<Note, 'kind' | 'space' | 'title'> & Partial<Pick<Note, 'target' | 'body' | 'ctx' | 'go' | 'extra'>>
 
 /** 토스트는 한 번에 셋까지 — 넘치면 "+n" 알약(결정). */
 export const TOAST_MAX = 3

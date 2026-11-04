@@ -23,3 +23,9 @@ export const CHANGELOG_URL = 'http://192.168.100.56:8899/changelog.html'
  * 부르는 쪽은 main 뿐이다 — 렌더러 CSP 는 이 주소를 막는다.
  */
 export const REPORTS_API = 'http://192.168.100.56:8897'
+
+/**
+ * Oriel 설치 파일 배포 자리(Oriel 세션과 합의, 2026-11-04) — 아라 업데이트 채널(electron-builder.yml publish.url)과 같은 서버.
+ * `latest.yml`(electron-builder generic) + `Oriel Setup <ver>.exe`. 설정 › 에이전트 › Oriel 내려받는 곳(고급)으로 바꿀 수 있다.
+ */
+export const ORIEL_FEED_URL = 'http://192.168.100.56:8899/downloads/oriel/'

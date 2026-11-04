@@ -119,6 +119,8 @@ export type AgentSettings = {
   chatNaming: boolean
   /** M9 R2 Oriel 위치(체크아웃·설치 폴더 — bin/oriel.mjs 가 있는 곳). 빈 값 = 자동(Oriel 단독 설치본·개발 PC D:/AI/ai-browser). */
   orielPath: string
+  /** Oriel 설치 파일 배포 자리(고급 — latest.yml 이 있는 폴더 URL). 빈 값 = 기본(shared/links ORIEL_FEED_URL). */
+  orielFeedUrl: string
   /** M11 깨어있기(Orca computerAwakeMode — 기본 끔): off · auto(에이전트가 일하는 동안만) · on(늘). */
   awakeMode: AwakeMode
   /** M11 첫 지시로 탭 제목 짓기(Orca tabAutoGenerateTitle — 기본 꺼짐). 끄면 에이전트가 정한 제목(OSC)을 쓴다. */
@@ -167,6 +169,7 @@ export function defaultAgentSettings(): AgentSettings {
     memoryCapMb: 0,
     chatNaming: true,
     orielPath: '',
+    orielFeedUrl: '',
     awakeMode: 'off',
     tabAutoTitle: false,
     autoRenameBranch: true,
@@ -212,6 +215,7 @@ export function agentSettingsOf(raw: unknown): AgentSettings {
   base.memoryCapMb = memoryCapOf(src.memoryCapMb)
   base.chatNaming = src.chatNaming !== false
   base.orielPath = textOf(src.orielPath).trim()
+  base.orielFeedUrl = textOf(src.orielFeedUrl).trim()
   base.awakeMode = isAwakeMode(src.awakeMode) ? src.awakeMode : 'off'
   base.tabAutoTitle = src.tabAutoTitle === true
   base.autoRenameBranch = src.autoRenameBranch !== false

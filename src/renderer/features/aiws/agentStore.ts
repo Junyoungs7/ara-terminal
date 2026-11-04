@@ -15,6 +15,8 @@ import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
 import { clearDraft, readChatOn, writeChatOn } from './chatDraft'
 import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
+import { openSettings } from '../../store/settingsNav'
+import { OrielInstallButton } from './OrielInstall'
 import { layoutOf, orderTabs, readTabLayout, restoreActive, writeTabLayout } from './tabLayout'
 
 export type AgentTab = {
@@ -117,7 +119,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     const r = await window.ev.agents.launch(agent, cwd, prompt, resume, options, host)
     if (!r.ok) return r
     // M9 R2 Oriel 이 없어 웹 도구 없이 띄웠다(main 이 앱 실행 중 처음 한 번만 알려 준다). 설치 안내는 설정 › 에이전트.
-    if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body') })
+    if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body'), go: () => openSettings('agents', 'agents.oriel'), extra: OrielInstallButton })
     // M11 실행 지시로 지은 제목 — main 도 같은 규칙으로 짓지만 그 push 는 launch 응답보다 먼저 와 버려진다(되살리기용으로 main 이 남긴다).
     const genTitle = prompt ? deriveGeneratedTabTitle(prompt) : null
     const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}) }
