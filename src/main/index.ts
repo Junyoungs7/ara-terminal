@@ -1,4 +1,5 @@
 // main 프로세스 진입점 — 앱 생명주기·BrowserWindow·IPC·영속화 (계획서 §B.1).
+import { allowPermission } from './permissions'
 import { app, BrowserWindow, Menu, screen, session, safeStorage } from 'electron'
 import { appMenuTemplate } from './appMenu'
 import { join, isAbsolute, basename, dirname } from 'node:path'
@@ -678,7 +679,7 @@ app.whenReady().then(async () => {
     remote: () => managed,
     onClaudeStatusLine: (p, pane) => usage.ingestStatusLine(p, pane),
     onAgentWorking: (id, working) => (usage.stats.observe(id, working), automations.observe(id, working)),
-    accountEnv: (agent) => usage.accounts.launchEnv(agent),
+    accounts: () => usage.accounts,
     oriel,
     onPrompt: (cwd, prompt) => void branchRename.onFirstPrompt(cwd, prompt)
   })
@@ -763,14 +764,17 @@ app.whenReady().then(async () => {
     )
   )
   ara = registerAiIpc(secrets, aiPrefs, getWebContents)
-  // 권한 요청은 **마이크 하나만** 연다(2.1 음성). 카메라·화면·위치·알림·클립보드는 전부 거절이다.
+  // 권한 요청은 **마이크**(2.1 음성)와 **아라 화면의 알림**만 연다. 카메라·화면·위치·클립보드는 전부 거절이다.
   // mediaTypes 가 오디오만일 때만 — 비디오가 하나라도 섞이면 거절한다. 아라 브라우저 뷰는 다른
   // 파티션이라 여기 걸리지 않고 자기 선(전부 거절)을 따로 지킨다(BrowserService.hardenSession).
   // ⚠️ 이 줄을 지우면 안 된다 — 핸들러가 없으면 Electron 은 요청을 **승인**한다(브라우저처럼
   // 물어보지 않는다).
+  // 알림은 아라 자기 화면만(permissions.ts). 아라 화면 주소 = 패키지의 file:(out/renderer) 또는 dev 서버.
+  const devUrl = process.env['ELECTRON_RENDERER_URL']
+  const isAppUrl = (u: string): boolean => u.startsWith('file:') || (!!devUrl && u.startsWith(devUrl))
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
-    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
-    cb(permission === 'media' && types.length > 0 && types.every((t) => t === 'audio'))
+    const d = details as { mediaTypes?: string[]; isMainFrame?: boolean; requestingUrl?: string }
+    cb(allowPermission({ permission, mediaTypes: d.mediaTypes, isMainFrame: d.isMainFrame, requestingUrl: d.requestingUrl }, isAppUrl))
   })
   // 2.1 음성 — Gemini Live. 키는 AI 설정의 Google 키(vault)를 같이 쓴다. 설정은 ui.voice(읽을 때마다 클램프).
   voice = registerVoiceIpc({
