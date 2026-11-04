@@ -118,12 +118,21 @@ test('SERVE-R6-1 다리가 끊겨도 같은 세션으로 다시 붙고 replay �
     const r = await page.evaluate(([cwd, host]) => window.ev.agents.launch('claude', cwd, undefined, undefined, undefined, host), [home, hostKey] as const)
     expect(r).toMatchObject({ ok: true })
     const sid = (r as { sessionId: string }).sessionId
+    // 출력은 렌더러가 session.attach 를 불러야 push 된다(그 전엔 main 백로그에만 — MainSessionManager attached). 터미널 칸이 없으니 시험이 직접 붙는다.
+    // 다시 붙을 때(adopt)도 새 핸들이라 다시 attach 한다 — 돌려받는 백로그에 replay 가 들어 있다.
+    const attachOut = (s: string): Promise<void> =>
+      page.evaluate(async (x) => {
+        const w = window as unknown as R6Win
+        const r = await window.ev.session.attach(x)
+        w.__r6 = (w.__r6 ?? '') + new TextDecoder().decode(r.backlog)
+      }, s)
     await page.evaluate((s) => {
       const w = window as unknown as R6Win
       w.__r6 = ''
       window.ev.session.onData(s, (c) => (w.__r6 += new TextDecoder().decode(c)))
       window.ev.session.onExit(s, (info) => (w.__r6exit = info.exitCode))
     }, sid)
+    await attachOut(sid)
     const out = (): Promise<string> => page.evaluate(() => (window as unknown as R6Win).__r6 ?? '')
     await expect.poll(out, { timeout: 30_000, message: '가짜 claude 준비' }).toContain('FAKE-R6 READY')
     await page.evaluate((s) => window.ev.session.input(s, 'r6-before\r'), sid)
@@ -141,6 +150,7 @@ test('SERVE-R6-1 다리가 끊겨도 같은 세션으로 다시 붙고 replay �
         return x.ok ? x.tabs.map((t: { sessionId: string }) => t.sessionId) : x.error
       }, { timeout: 30_000, message: '다시 붙기' })
       .toEqual([sid])
+    await attachOut(sid)
     await expect.poll(out, { timeout: 15_000, message: 'replay' }).toContain('GOT:r6-before')
     await page.evaluate((s) => window.ev.session.input(s, 'r6-after\r'), sid)
     await expect.poll(out, { timeout: 15_000, message: '다시 붙은 뒤 입력' }).toContain('GOT:r6-after')
