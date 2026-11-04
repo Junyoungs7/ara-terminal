@@ -4,6 +4,7 @@
 // 데몬은 PTY 바이트만 나른다.
 // R1 다른 PC 에서 이어 보기: 같은 세션에 PC 여럿이 붙는다(입력은 모두 같은 PTY 로, 출력은 모두에게 — Orca 처럼). 탭 닫기 = 이 PC 에서만 놓기(detach),
 // 서버에서 끝내기는 kill 따로. 붙을 때 PC 이름을 알려 다른 PC 에 "누가 보는 중"(viewers 사건)이 보인다.
+// R2 서버에서 상태 판정: 에이전트 훅이 orcad 에 닿으면 status 사건(붙은 PC 모두에게, 늦게 붙으면 attach 때 마지막 것) → deps.status.
 import type { Client } from 'ssh2'
 import { AGENT_SESSION_LOST_EXIT } from '@shared/agentHooks'
 import type { DaemonConnection } from '../daemon/client'
@@ -20,8 +21,11 @@ export type RemoteAgents = {
   release(id: string): void
   /** R1 서버 세션의 meta 덧쓰기(제목 등 — 다른 PC 가 목록에서 본다). 붙은 세션만, 실패는 넘어간다. */
   meta(id: string, patch: Record<string, unknown>): void
-  /** 원격에 세션을 만든다. env 는 원격 환경 위에 덧붙는다(아라의 로컬 환경을 보내지 않는다 — Windows PATH 가 원격을 망친다). */
-  create(hostKey: string, client: Client, spec: DaemonCreateSpec): Promise<DaemonSessionInfo>
+  /**
+   * 원격에 세션을 만든다. env 는 원격 환경 위에 덧붙는다(아라의 로컬 환경을 보내지 않는다 — Windows PATH 가 원격을 망친다).
+   * R2: spec 을 함수로 주면 그 서버 orcad 의 훅 폴더(hello hookDir — 옛 orcad 는 null)를 받아 만든다.
+   */
+  create(hostKey: string, client: Client, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<DaemonSessionInfo>
   /** 원격에 돌고 있는 세션 수(업데이트 미룸 판정). 붙어 있지 않으면 붙어서 잰다. */
   liveSessions(hostKey: string, client: Client): Promise<number>
   /** R1 "서버에서도 끝내기"(탭 닫기 기본은 release). 끊긴 탭이면 잠깐 붙어서 끝내고, 이 호스트에 붙은 탭이 없으면 다리를 닫는다. */
@@ -47,6 +51,8 @@ export function createRemoteAgents(deps: {
   released?: (id: string, hostKey: string) => void
   /** R1 그 세션에 붙은 PC 가 바뀌었다(이 PC 포함). */
   viewers?: (id: string, viewers: string[]) => void
+  /** R2 서버가 들은 에이전트 훅(이 PC 에 붙은 세션만). */
+  status?: (id: string, source: string, payload: Record<string, unknown>) => void
   /** R1 서버에 알릴 이 PC 의 이름. */
   pc?: string
   log: (msg: string) => void
@@ -65,6 +71,7 @@ export function createRemoteAgents(deps: {
       if (!x) return
       if (e.type === 'data') return x.b.emitData(e.data)
       if (e.type === 'viewers') return deps.viewers?.(e.id, e.viewers)
+      if (e.type === 'status') return deps.status?.(e.id, e.source, e.payload)
       backends.delete(e.id)
       deps.gone?.(e.id, x.host)
       x.b.emitExit(e.code, e.signal)
@@ -140,7 +147,14 @@ export function createRemoteAgents(deps: {
     },
     async create(hostKey, client, spec) {
       const conn = await ensure(hostKey, client)
-      const info = await conn.request<DaemonSessionInfo>({ type: 'create', spec })
+      let made: DaemonCreateSpec
+      try {
+        made = typeof spec === 'function' ? spec(conn.hello.hookDir ?? null) : spec
+      } catch (e) {
+        if (idle(hostKey)) detach(hostKey)
+        throw e
+      }
+      const info = await conn.request<DaemonSessionInfo>({ type: 'create', spec: made })
       await adoptOne(hostKey, conn, info, false)
       return info
     },

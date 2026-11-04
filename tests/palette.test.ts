@@ -178,8 +178,8 @@ describe('서버 세션 항목', () => {
       version: '2.2.11',
       ok: true,
       sessions: [
-        { id: 's1', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '결제 재시도', agent: 'claude', pc: 'OFFICE', startedAt: 1, viewers: ['OFFICE'], here: false },
-        { id: 's2', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '쿠폰 반올림', agent: 'codex', pc: null, startedAt: 2, viewers: [], here: true }
+        { id: 's1', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '결제 재시도', agent: 'claude', pc: 'OFFICE', startedAt: 1, viewers: ['OFFICE'], here: false, state: 'working' as const },
+        { id: 's2', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '쿠폰 반올림', agent: 'codex', pc: null, startedAt: 2, viewers: [], here: true, state: null }
       ]
     },
     { hostKey: 'ci@10.0.0.2:22', label: 'build', version: null, ok: false, error: 'x', sessions: [] }

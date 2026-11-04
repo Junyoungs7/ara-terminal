@@ -37,6 +37,8 @@ export function registerManagedFeature(deps: {
   updated?: (e: { hostKey: string; from: string; to: string }) => void
   /** R1 원격 탭에 붙은 PC 가 바뀌었다(탭의 "PC 2대" 표시). */
   viewers?: (e: { sessionId: string; viewers: string[] }) => void
+  /** R2 서버가 들은 에이전트 훅 — 로컬 훅과 같은 상태 파이프라인으로. */
+  status?: (sessionId: string, source: string, payload: Record<string, unknown>) => void
 }): ManagedFeature {
   const file = join(deps.userData, 'managed-servers.json')
   const log = (m: string): void => {
@@ -153,6 +155,7 @@ export function registerManagedFeature(deps: {
     // R1 이 PC 에서만 닫았다 — 서버 세션은 산다. 다음에 켜도 '끊김'으로 되살리지 않는다.
     released: (id) => dropTab(id),
     viewers: (id, viewers) => deps.viewers?.({ sessionId: id, viewers }),
+    status: (id, source, payload) => deps.status?.(id, source, payload),
     pc: hostname(),
     // 서버에 없는 저장 탭은 이미 끝난 것 — 지운다.
     listed: (hostKey, ids) => {
@@ -317,8 +320,8 @@ export type ManagedFeature = {
   ensureReady(hostKey: string): Promise<ManagedRecord>
   /** DM-04 원격 git — 그 서버에서 sh -c 한 번(연결은 clientFor). */
   run(hostKey: string): RemoteRun
-  /** DM-05 원격 에이전트 세션 만들기(준비 포함). */
-  launch(hostKey: string, spec: DaemonCreateSpec): Promise<void>
+  /** DM-05 원격 에이전트 세션 만들기(준비 포함). R2: 함수면 그 서버의 훅 폴더(옛 서버는 null)를 받아 spec 을 만든다. */
+  launch(hostKey: string, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<void>
   reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
   /** R1 서버 세션 하나에 붙는다(다른 PC 가 만든 것도). 이미 붙었으면 빈 배열. */
   attachOne(hostKey: string, id: string): Promise<DaemonSessionInfo[]>

@@ -707,7 +707,7 @@ app.whenReady().then(async () => {
   registerGitInspectFeature()
   registerScmFeature()
   // M8 DM-02·03 관리형 서버(main/managed/feature.ts) — 호스트별 동의·설치·업데이트·제거. 동의 없는 서버에는 아무것도 깔지 않는다.
-  managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion(), updated: (e) => pushSend(mainWc(), 'managed:updated', e), viewers: (e) => pushSend(mainWc(), 'agents:viewers', e) })
+  managed = registerManagedFeature({ userData, sessions: () => sessions, profiles, knownHosts: store, appVersion: app.getVersion(), updated: (e) => pushSend(mainWc(), 'managed:updated', e), viewers: (e) => pushSend(mainWc(), 'agents:viewers', e), status: (id, source, payload) => agents?.remoteHook(id, source, payload) })
   // M15 연동(main/integrations/feature.ts) — 사내 GitLab·Slack(Socket Mode). 둘 다 기본 꺼짐, 꺼져 있으면 네트워크 0. 토큰은 vault.
   // e2e 는 ARA_E2E_SLACK_API 로 모의 Slack 을 가리킨다(진짜 slack.com 에 닿지 않는다).
   registerIntegrationsFeature({

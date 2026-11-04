@@ -125,10 +125,13 @@ export function judgeDaemon(protocol: number, current = DAEMON_PROTOCOL_VERSION,
  */
 export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string; shellArgs?: string[] }
 /** viewers: 원격(orcad) 만 — 지금 이 세션에 붙은 PC 이름들(R1 다른 PC 에서 이어 보기). 로컬 데몬은 안 채운다. */
-export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown>; viewers?: string[] }
+/** status: 원격(orcad) 만 — R2 서버가 훅으로 들은 그 세션의 마지막 상태(늦게 붙은 PC 도 받는다). */
+export type DaemonHookStatus = { source: string; payload: Record<string, unknown>; at: number }
+export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown>; viewers?: string[]; status?: DaemonHookStatus }
 
 export type DaemonHello = { type: 'hello'; protocol: number; token: string }
-export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; pid: number; appVersion?: string; error?: string }
+/** hookDir: R2 orcad 만 — 설치 폴더(절대 경로, 훅 설정 파일이 있는 곳). 옛 orcad 는 안 준다 = 서버 상태 판정 없음. */
+export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; pid: number; appVersion?: string; error?: string; hookDir?: string }
 
 /** 요청(앱 → 데몬). rid 로 답을 짝짓는다 — rid 0 은 답이 필요 없는 것(write·resize, 키 하나마다 답을 받지 않는다). */
 export type DaemonRequest =
@@ -160,3 +163,4 @@ export type DaemonEvent =
   /** 원격(orcad) R1 — 그 세션에 붙은 PC 가 바뀌었다 · meta 가 바뀌었다(붙은 쪽 모두에게). */
   | { type: 'viewers'; id: string; viewers: string[] }
   | { type: 'meta'; id: string; meta: Record<string, unknown> }
+  | ({ type: 'status'; id: string } & DaemonHookStatus)

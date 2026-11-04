@@ -38,6 +38,7 @@ import { lowerPriority } from '../resources/hostProcs'
 import type { AccountsFeature } from '../usage/accounts'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
+import { remoteHookLaunch } from '@shared/managedServers'
 import { GEMINI_DEFAULTS_ENV, orielGeminiDefaults, orielLaunch } from '@shared/oriel'
 import type { Oriel } from '../oriel/oriel'
 import { createAgentAwake } from './awake'
@@ -66,7 +67,7 @@ export function registerAgentsFeature(deps: {
   remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
-}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string> } {
+}): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string>; remoteHook(sessionId: string, source: string, payload: Record<string, unknown>): void } {
   const file = join(deps.userData, 'agents.json')
   cleanupTemp(file)
   let settings = agentSettingsOf(readJsonWithBackup<unknown>(file, null))
@@ -360,19 +361,31 @@ export function registerAgentsFeature(deps: {
     await daemon.shutdownAll()
     app.quit()
   })
-  // ── M8 DM-05 원격(관리형 서버) ── 원격 탭은 훅 서버(127.0.0.1)에 닿지 않는다 → 상태는 화면 판정('추정')만. 채팅 보기·이름 짓기도
+  // ── M8 DM-05 원격(관리형 서버) ── 원격 탭은 훅 서버(127.0.0.1)에 닿지 않는다. 3차 R2: 훅은 서버의 orcad 가 받아(orcad.py hook) status 사건으로
+  // 보낸다 → remoteHook 이 로컬 훅과 같은 tracker 로. 옛 orcad(hookDir 없음)·Codex 는 화면 판정('추정')만. 채팅 보기·이름 짓기는
   // 로컬 transcript·로컬 CLI 를 읽으므로 걸지 않는다. 명령줄은 POSIX 셸 기준(원격 로그인 셸)으로 만든다.
+  /** R2 서버 orcad 가 들은 훅(status 사건) — 로컬 훅과 같은 상태 파이프라인(질문·승인 카드·알림 규칙 그대로). */
+  const remoteHook = (sessionId: string, source: string, payload: Record<string, unknown>): void => {
+    if (isHookSource(source)) tracker?.hook({ source, paneKey: sessionId, payload })
+  }
   const launchRemote = async (host: string, agent: AgentId, cwd: string, prompt: string | undefined, resume: string | undefined, options: unknown): Promise<AgentLaunchResult> => {
     const remote = deps.remote?.()
     if (!remote) return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
-    const plan = planAgentLaunch({ agent, settings: remoteAgentSettings(settings, agent), prompt, shell: 'posix', resume, options: launchOptionsOf(options) })
-    if (!plan.ok) return plan
+    const planOf = (hookDir: string | null): ReturnType<typeof planAgentLaunch> =>
+      planAgentLaunch({ agent, settings: remoteAgentSettings(settings, agent), prompt, shell: 'posix', resume, options: launchOptionsOf(options), ...remoteHookLaunch(agent, hookDir) })
+    const checked = planOf(null)
+    if (!checked.ok) return checked
+    let plan = checked
     const title = `${AGENTS[agent].label} · ${remoteBaseName(cwd)}`
     const sessionId = randomUUID()
     const t = ensureTracker() // tap 을 세션보다 먼저 건다 - 로컬 실행과 같은 순서
     try {
-      // env 는 에이전트 env 만(원격 환경 위에 덧붙는다 — 아라의 Windows 환경을 보내지 않는다).
-      await remote.launch(host, { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host, pc: hostname() } })
+      // env 는 에이전트 env 만(원격 환경 위에 덧붙는다 — 아라의 Windows 환경을 보내지 않는다). R2 훅 설정은 그 서버 orcad 가 훅 폴더를 알려 줄 때만.
+      await remote.launch(host, (hookDir) => {
+        const p = planOf(hookDir)
+        if (p.ok) plan = p
+        return { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host, pc: hostname() } }
+      })
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -389,6 +402,8 @@ export function registerAgentsFeature(deps: {
         const tab = tabOf(info)
         if (!tab) continue
         ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
+        // R2 서버 대장의 마지막 상태(늦게 붙은 PC) — attach 사건이 track 보다 먼저 올 수 있어 목록 값으로 한 번 더.
+        if (info.status) remoteHook(info.id, info.status.source, info.status.payload)
         tabs.push(tab)
       }
       return { ok: true, tabs }
@@ -534,6 +549,7 @@ export function registerAgentsFeature(deps: {
       return hooks.stop()
     },
     views: () => tracker?.views() ?? [],
+    remoteHook,
     limits: () => agentLimitsOf(settings),
     orielPath: () => settings.orielPath,
     orielFeedUrl: () => settings.orielFeedUrl,

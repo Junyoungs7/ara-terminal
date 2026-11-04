@@ -8,6 +8,8 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 # A.R.A orcad - remote agent terminal daemon (M8 DM-02). Installed only with the user's per-host consent.
 # Same wire protocol as the local daemon (src/main/daemon/protocol.ts): NDJSON, hello+token, create/list/attach/write/resize/kill/killAll/shutdown.
 # R1 (several PCs): attach carries the PC name, detach (close on this PC only), meta (patch title etc.), viewers event (who is attached).
+# R2 (agent state on the server): agents get hook settings (claude --settings / gemini system defaults) that run 'orcad.py hook <cli>';
+#   the daemon broadcasts a status event to attached clients and keeps the last one (late clients get it on attach and in list).
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
 import codecs, errno, fcntl, hmac, json, os, pty, selectors, signal, socket, stat, struct, subprocess, sys, termios, time
@@ -31,6 +33,12 @@ HELLO_S = 5
 KILL_WAIT_S = 3
 PC_MAX = 64
 META_MAX = 4096
+SESSION_ENV = 'ARA_ORCAD_SESSION'
+HOOK_IN_MAX = 2 << 20
+HOOK_WAIT_S = 1.5
+HOOK_STR_MAX = 256
+TOOL_INPUT_MAX = 16384
+HOOK_KEYS = ('hook_event_name', 'tool_name', 'agent_id', 'agent_type')
 
 
 def log(msg):
@@ -62,6 +70,7 @@ class Session(object):
             env[str(k)] = str(v)
         env['TERM'] = 'xterm-256color'
         env[MARK] = DIR
+        env[SESSION_ENV] = self.id
         if os.path.islink(AGENT):
             env['SSH_AUTH_SOCK'] = AGENT
         shell = env.get('SHELL') or '/bin/sh'
@@ -77,6 +86,7 @@ class Session(object):
         self.dec = codecs.getincrementaldecoder('utf-8')('replace')
         self.replay = []
         self.size = 0
+        self.status = None
         self.info = {'id': self.id, 'pid': pid, 'cwd': cwd, 'cols': cols, 'rows': rows, 'meta': spec.get('meta') or {}}
         self.resize(cols, rows)
 
@@ -224,6 +234,8 @@ def serve():
     def info_of(s):
         d = dict(s.info)
         d['viewers'] = viewers_of(s.id)
+        if s.status:
+            d['status'] = {'source': s.status['source'], 'payload': s.status['payload'], 'at': s.status['at']}
         return d
 
     def broadcast(sid, ev, only_attached):
@@ -295,6 +307,17 @@ def serve():
             s.info['meta'] = m
             broadcast(s.id, {'type': 'meta', 'id': s.id, 'meta': m}, True)
             return m
+        if t == 'hook':
+            s = sessions.get(r.get('id'))
+            payload = r.get('payload')
+            if not s or not isinstance(payload, dict):
+                raise ValueError('no such session')
+            ev = {'type': 'status', 'id': s.id, 'source': str(r.get('source') or ''), 'payload': payload, 'at': int(time.time() * 1000)}
+            # A subagent's tool event alone says little about the tab; late clients get the last top-level one.
+            if not payload.get('agent_id'):
+                s.status = ev
+            broadcast(s.id, ev, True)
+            return None
         if t == 'write':
             s = sessions.get(r.get('id'))
             if s:
@@ -329,7 +352,9 @@ def serve():
         if not c.authed:
             ok = isinstance(msg, dict) and msg.get('type') == 'hello' and hmac.compare_digest(str(msg.get('token') or '').encode(), token.encode())
             reply = {'type': 'hello', 'ok': ok, 'protocol': PROTOCOL, 'pid': os.getpid(), 'appVersion': read_version()}
-            if not ok:
+            if ok:
+                reply['hookDir'] = DIR
+            else:
                 reply['error'] = 'token'
             put(c, reply)
             if not ok:
@@ -349,6 +374,8 @@ def serve():
                 s = sessions[msg.get('id')]
                 for chunk in s.replay:
                     put(c, {'type': 'data', 'id': s.id, 'data': chunk})
+                if s.status:
+                    put(c, s.status)
                 c.attached.add(s.id)
                 tell_viewers(s.id)
         except Stop:
@@ -548,6 +575,60 @@ def bridge():
                     view = view[n:]
 
 
+def slim(payload):
+    """Only what the state needs (PostToolUse can carry whole files): event, tool, subagent, and a small tool_input (question/approval card)."""
+    out = {}
+    for k in HOOK_KEYS:
+        v = payload.get(k)
+        if isinstance(v, str) and len(v) <= HOOK_STR_MAX:
+            out[k] = v
+    ti = payload.get('tool_input')
+    if ti is not None and len(json.dumps(ti, ensure_ascii=False)) <= TOOL_INPUT_MAX:
+        out['tool_input'] = ti
+    return out
+
+
+def hook(source):
+    """Agent hook: print {} first (a permission hook with empty output fails closed), tell the daemon, never fail the agent."""
+    sys.stdout.write('{}\n')
+    sys.stdout.flush()
+    sid = os.environ.get(SESSION_ENV)
+    if not sid or source not in ('claude', 'gemini'):
+        return
+    raw = sys.stdin.buffer.read(HOOK_IN_MAX + 1)
+    if len(raw) > HOOK_IN_MAX:
+        return
+    payload = json.loads(raw.decode('utf-8', 'replace') or '{}')
+    if not isinstance(payload, dict):
+        return
+    with open(TOKEN) as f:
+        token = f.read().strip()
+    s = try_connect()
+    if s is None:
+        return
+    try:
+        s.settimeout(HOOK_WAIT_S)
+        s.sendall(frame({'type': 'hello', 'protocol': PROTOCOL, 'token': token}) +
+                  frame({'type': 'hook', 'rid': 1, 'id': sid, 'source': source, 'payload': slim(payload)}))
+        # Wait for the reply: closing early can drop the request unread.
+        buf = b''
+        while True:
+            d = s.recv(65536)
+            if not d:
+                return
+            buf += d
+            lines = buf.split(b'\n')
+            buf = lines.pop()
+            for line in lines:
+                try:
+                    if json.loads(line.decode('utf-8')).get('type') == 'reply':
+                        return
+                except ValueError:
+                    pass
+    finally:
+        s.close()
+
+
 def stop():
     """SIGTERM the daemon (it ends its sessions), wait for it."""
     try:
@@ -583,9 +664,15 @@ if __name__ == '__main__':
             pass
     elif cmd == 'stop':
         stop()
+    elif cmd == 'hook':
+        try:
+            hook(sys.argv[2] if len(sys.argv) > 2 else '')
+        except Exception:  # noqa - a hook must never break the agent
+            pass
+        sys.exit(0)
     elif cmd == 'version':
         print('protocol=%d' % PROTOCOL)
     else:
-        sys.stderr.write('usage: orcad.py serve|connect|stop|version\n')
+        sys.stderr.write('usage: orcad.py serve|connect|stop|version|hook <cli>\n')
         sys.exit(64)
 `

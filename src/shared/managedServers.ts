@@ -4,6 +4,8 @@
 //
 // 원칙(m8-r1 지시서): 터미널 공간은 서버에 아무것도 깔지 않는다. orcad 는 AI 공간에서 **호스트별 동의를 받은 서버에만**,
 // 사용자 홈 아래 한 폴더에, 사용자 권한으로만(root·sudo·systemd·crontab 없음). 제거하면 흔적 0 — 그것을 원격에서 재서 확인한다.
+import { applyHookEvent, isHookSource, launchHooks, type HookSource } from './agentHooks'
+import { GEMINI_DEFAULTS_ENV } from './oriel'
 
 /** 설치 폴더 — 원격 사용자 홈 아래 이 이름 하나. SFTP 는 홈 기준 상대 경로, exec 은 "$HOME/…". */
 export const MANAGED_DIR = '.ara-server'
@@ -13,11 +15,36 @@ export const MANAGED_MIN_PYTHON: readonly [number, number] = [3, 6]
 export const managedDirShown = `~/${MANAGED_DIR}`
 
 /** 설치하는 파일(동의 화면에 그대로 보인다). orcad.py 크기는 부르는 쪽이 채운다. */
-export const MANAGED_FILES = ['orcad.py', 'token', 'version'] as const
+export const MANAGED_FILES = ['orcad.py', 'token', 'version', 'claude-hooks.json', 'gemini-hooks.json'] as const
 /** 돌 때만 생기는 파일(모두 설치 폴더 안 — 제거하면 함께 사라진다). agent.sock 은 SSH agent 포워딩을 켠 연결의 에이전트를 가리키는 링크(M15 R2 TM-05). */
 export const MANAGED_RUNTIME_FILES = ['orcad.sock', 'orcad.pid', 'orcad.log', 'agent.sock'] as const
 /** 원격 프로세스에 붙는 표식(환경 변수) — 제거 검증이 이것으로 "아라가 띄운 것"을 센다. orcad.py 의 MARK 와 같아야 한다. */
 export const MANAGED_MARK = 'ARA_ORCAD_HOME'
+
+// ── R2 서버에서 상태 판정 ── 원격 에이전트 실행에만 주는 훅 설정(설치 폴더 안 파일 — 서버 ~/.claude·~/.gemini 는 안 건드린다).
+// 훅 명령은 orcad.py hook <cli> — orcad 가 받아 status 사건으로 붙은 PC 모두에 보낸다. 로컬 M9 R3 과 같은 이벤트 목록(launchHooks).
+export const remoteHookCommand = (source: HookSource): string => `python3 "$HOME/${MANAGED_DIR}/orcad.py" hook ${source}`
+export const remoteHookFileName = (source: HookSource): 'claude-hooks.json' | 'gemini-hooks.json' => `${source}-hooks.json`
+export const remoteHookFile = (source: HookSource): string => JSON.stringify(launchHooks(source, remoteHookCommand(source)), null, 2)
+/**
+ * 원격 실행에 붙일 것. hookDir = orcad hello 의 설치 폴더(절대 경로 — 옛 orcad 는 안 준다 → 훅 없이 화면 판정 '추정'만).
+ * Claude 는 `--settings <파일>`, Gemini 는 시스템 기본값 파일 env(로컬과 같은 방식 — 서버에 시스템 기본값 파일이 따로 있으면 이 실행에서는 우리 것이 대신한다).
+ */
+export function remoteHookLaunch(agent: string, hookDir: string | null): { extraArgs?: string[]; extraEnv?: Record<string, string> } {
+  if (!hookDir || !isHookSource(agent)) return {}
+  const file = `${hookDir}/${remoteHookFileName(agent)}`
+  return agent === 'claude' ? { extraArgs: ['--settings', file] } : { extraEnv: { [GEMINI_DEFAULTS_ENV]: file } }
+}
+/** 서버 대장의 마지막 상태(orcad list·attach) → 목록 칸(기존 글리프). 모르면 null. */
+export type ServerSessionState = 'working' | 'blocked' | 'question' | 'idle'
+export function serverStateOf(status: unknown): ServerSessionState | null {
+  if (!status || typeof status !== 'object') return null
+  const { source, payload } = status as { source?: unknown; payload?: unknown }
+  if (typeof source !== 'string' || !isHookSource(source) || !payload || typeof payload !== 'object') return null
+  const p = applyHookEvent(null, source, payload as Record<string, unknown>, 0)
+  if (!p) return null
+  return p.state === 'blocked' ? (p.kind === 'question' ? 'question' : 'blocked') : p.state === 'working' ? 'working' : 'idle'
+}
 
 // ── 원격 명령 ── 모두 `sh -c '<글>'` 로 보낸다(로그인 셸이 fish·csh 여도 같은 문법). 사용자 값은 끼우지 않는다 — 고정 글뿐.
 const D = `D="$HOME/${MANAGED_DIR}"`
@@ -213,13 +240,15 @@ export type ServerSessionRow = {
   viewers: string[]
   /** 이 PC 에 탭으로 열려 있다. */
   here: boolean
+  /** R2 서버가 훅으로 들은 마지막 상태(null = 모름 — 옛 서버·훅 없는 에이전트). */
+  state: ServerSessionState | null
 }
 export type ServerSessionsHost = { hostKey: string; label: string; version: string | null; ok: boolean; error?: string; sessions: ServerSessionRow[] }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 
 /** 서버 list 결과 → 목록 줄(최근 시작이 위). 제목은 이름 > 첫 지시 제목 > 실행 제목 순(탭 제목과 같은 순서). */
-export function serverRowsOf(hostKey: string, infos: readonly { id: string; cwd: string; meta: Record<string, unknown>; viewers?: string[] }[], here: (id: string) => boolean): ServerSessionRow[] {
+export function serverRowsOf(hostKey: string, infos: readonly { id: string; cwd: string; meta: Record<string, unknown>; viewers?: string[]; status?: unknown }[], here: (id: string) => boolean): ServerSessionRow[] {
   return infos
     .map((x) => ({
       id: x.id,
@@ -230,14 +259,16 @@ export function serverRowsOf(hostKey: string, infos: readonly { id: string; cwd:
       pc: str(x.meta['pc']),
       startedAt: typeof x.meta['startedAt'] === 'number' ? x.meta['startedAt'] : null,
       viewers: Array.isArray(x.viewers) ? x.viewers.filter((v): v is string => typeof v === 'string') : [],
-      here: here(x.id)
+      here: here(x.id),
+      state: serverStateOf(x.status)
     }))
     .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
 }
 
 export function consentPlan(hostKey: string, probe: ManagedProbe, scriptBytes: number, tokenBytes: number, versionBytes: number, extra: { app?: string; sessions?: number } = {}): ManagedConsentPlan {
   const dir = probe.home ? `${probe.home}/${MANAGED_DIR}` : managedDirShown
-  const bytes = { 'orcad.py': scriptBytes, token: tokenBytes, version: versionBytes }
+  const size = (s: string): number => new TextEncoder().encode(s).length
+  const bytes = { 'orcad.py': scriptBytes, token: tokenBytes, version: versionBytes, 'claude-hooks.json': size(remoteHookFile('claude')), 'gemini-hooks.json': size(remoteHookFile('gemini')) }
   return {
     hostKey,
     support: supportOf(probe),

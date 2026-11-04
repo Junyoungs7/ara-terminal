@@ -12,12 +12,17 @@ import {
   hostKeyOf,
   parseProbe,
   remnantsOf,
+  remoteHookCommand,
+  remoteHookFile,
+  remoteHookLaunch,
   serverRowsOf,
+  serverStateOf,
   supportOf,
   versionCmp,
   type ManagedRecord
 } from '../src/shared/managedServers'
 import { ORCAD_PY } from '../src/main/managed/orcadScript'
+import { HOOK_TARGETS } from '../src/shared/agentHooks'
 
 const linux = 'os=Linux\narch=x86_64\nhome=/home/dev\npython=/usr/bin/python3\npyver=3.10\npymods=1\n'
 
@@ -92,7 +97,9 @@ describe('동의', () => {
     expect(p.files).toEqual([
       { path: '/home/dev/.ara-server/orcad.py', bytes: 12345 },
       { path: '/home/dev/.ara-server/token', bytes: 64 },
-      { path: '/home/dev/.ara-server/version', bytes: 6 }
+      { path: '/home/dev/.ara-server/version', bytes: 6 },
+      { path: '/home/dev/.ara-server/claude-hooks.json', bytes: new TextEncoder().encode(remoteHookFile('claude')).length },
+      { path: '/home/dev/.ara-server/gemini-hooks.json', bytes: new TextEncoder().encode(remoteHookFile('gemini')).length }
     ])
     expect(p.runtimeFiles.every((f) => f.startsWith(p.dir + '/'))).toBe(true)
     expect(p.socket).toBe('/home/dev/.ara-server/orcad.sock')
@@ -153,5 +160,43 @@ describe('R1 채택·서버 세션 목록', () => {
     expect(ORCAD_PY).toContain("if t == 'detach':")
     expect(ORCAD_PY).toContain("if t == 'meta':")
     expect(ORCAD_PY).toContain("'type': 'viewers'")
+  })
+})
+
+// 3차 R2 서버에서 상태 판정 — 원격 실행에만 주는 훅 설정(설치 폴더 안), orcad hook 요청·status 사건, 목록 상태 칸.
+describe('R2 서버 훅', () => {
+  it('훅 설정 = 로컬과 같은 이벤트 목록, 명령은 서버의 orcad.py hook <cli>($HOME — 따옴표 안에서도 펴진다)', () => {
+    expect(remoteHookCommand('claude')).toBe('python3 "$HOME/.ara-server/orcad.py" hook claude')
+    for (const src of ['claude', 'gemini'] as const) {
+      const f = JSON.parse(remoteHookFile(src)) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+      expect(Object.keys(f.hooks).sort()).toEqual([...HOOK_TARGETS[src].events].sort())
+      for (const defs of Object.values(f.hooks)) expect(defs.map((d) => d.hooks[0].command)).toEqual([remoteHookCommand(src)])
+      expect(Object.keys(f)).toEqual(['hooks']) // statusLine 등 다른 것은 싣지 않는다
+    }
+  })
+  it('원격 실행 인자: Claude --settings 파일 · Gemini 시스템 기본값 env · 옛 서버(hookDir 없음)·Codex 는 없음', () => {
+    expect(remoteHookLaunch('claude', '/home/dev/.ara-server')).toEqual({ extraArgs: ['--settings', '/home/dev/.ara-server/claude-hooks.json'] })
+    expect(remoteHookLaunch('gemini', '/home/dev/.ara-server')).toEqual({ extraEnv: { GEMINI_CLI_SYSTEM_DEFAULTS_PATH: '/home/dev/.ara-server/gemini-hooks.json' } })
+    expect(remoteHookLaunch('claude', null)).toEqual({})
+    expect(remoteHookLaunch('codex', '/home/dev/.ara-server')).toEqual({})
+  })
+  it('서버 대장의 마지막 상태 → 목록 칸(기존 글리프 이름)', () => {
+    expect(serverStateOf({ source: 'claude', payload: { hook_event_name: 'UserPromptSubmit' }, at: 1 })).toBe('working')
+    expect(serverStateOf({ source: 'claude', payload: { hook_event_name: 'PermissionRequest', tool_name: 'Bash' }, at: 1 })).toBe('blocked')
+    expect(serverStateOf({ source: 'claude', payload: { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion' }, at: 1 })).toBe('question')
+    expect(serverStateOf({ source: 'claude', payload: { hook_event_name: 'Stop' }, at: 1 })).toBe('idle')
+    expect(serverStateOf({ source: 'gemini', payload: { hook_event_name: 'BeforeAgent' }, at: 1 })).toBe('working')
+    expect(serverStateOf(undefined)).toBeNull()
+    expect(serverStateOf({ source: 'codex', payload: { hook_event_name: 'Stop' } })).toBeNull()
+    expect(serverStateOf({ source: 'claude', payload: { hook_event_name: 'Notification' } })).toBeNull()
+    const rows = serverRowsOf('dev@h:22', [{ id: 'a', cwd: '/x', meta: {}, status: { source: 'claude', payload: { hook_event_name: 'Stop' }, at: 1 } }, { id: 'b', cwd: '/x', meta: {} }], () => false)
+    expect(rows.map((r) => r.state)).toEqual(['idle', null])
+  })
+  it('orcad 가 hook 요청·status 사건·hello hookDir·세션 env 를 안다', () => {
+    expect(ORCAD_PY).toContain("if t == 'hook':")
+    expect(ORCAD_PY).toContain("'type': 'status'")
+    expect(ORCAD_PY).toContain("reply['hookDir'] = DIR")
+    expect(ORCAD_PY).toContain('env[SESSION_ENV] = self.id')
+    expect(ORCAD_PY).toContain("elif cmd == 'hook':")
   })
 })

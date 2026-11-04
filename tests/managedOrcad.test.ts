@@ -1,17 +1,18 @@
-// M8 DM-02·03 통합 — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
+// M8 DM-02·03 통합(+ 3차 R1 PC 둘 · R2 서버 훅) — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
 // 다시 붙어 이어 보기(replay) → 업데이트 미룸 판정 → 제거 → 흔적 0(폴더·프로세스·crontab·systemd)을 원격에서 잰다.
 // 원격 쪽 명령은 진짜 Linux 가 돌려야 한다(pty·유닉스 소켓·/proc): Windows 에서는 WSL(Ubuntu)의 임시 폴더를 홈으로, SFTP 는 \\wsl.localhost 로 같은 폴더를 노출한다.
 // WSL·python3 가 없으면 건너뛴다. 실서버·사내 서버에는 붙지 않는다(127.0.0.1 하네스만).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Client } from 'ssh2'
 import { startPasswordServer, type Harness } from './ssh-harness'
 import { execSh, installHost, probeHost, uninstallHost } from '../src/main/managed/host'
 import { createRemoteAgents } from '../src/main/managed/remoteAgents'
 import type { DaemonBackend } from '../src/main/daemon/service'
 import { AGENT_SESSION_LOST_EXIT } from '../src/shared/agentHooks'
-import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, decideUpdate, remnantsOf, supportOf } from '../src/shared/managedServers'
+import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, decideUpdate, remnantsOf, remoteHookLaunch, serverStateOf, supportOf } from '../src/shared/managedServers'
+import { applyHookEvent } from '../src/shared/agentHooks'
 import { remoteAddWorktree, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../src/main/managed/remoteWorktrees'
 
 const DISTRO = process.env['ARA_TEST_WSL_DISTRO'] || 'Ubuntu'
@@ -380,6 +381,112 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
       if (Date.now() > end2) throw new Error('시간 초과: 서버에서 끝내기')
       await new Promise((r) => setTimeout(r, 200))
     }
+    expect(await uninstallHost(cB)).toEqual([])
+    cB.end()
+  }, 180_000)
+
+  // 3차 R2 서버에서 상태 판정 — 가짜 claude 가 --settings 파일의 훅 명령(orcad.py hook claude)을 부르면 붙은 PC 둘이 같은 status 사건을 받고,
+  // 늦게 붙은 PC 는 attach 때·list 에서 마지막 상태를 받는다. 서버 ~/.claude/settings.json 은 그대로(훅을 거기에 심지 않는다).
+  it('서버 훅 — PC 둘이 같은 status · 늦게 붙은 PC 도 마지막 상태 · 서버 ~/.claude 그대로', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    type Ev = { id: string; source: string; payload: Record<string, unknown> }
+    type Pc = { agents: ReturnType<typeof createRemoteAgents>; out: Map<string, string>; backends: Map<string, DaemonBackend>; status: Ev[] }
+    const pc = (name: string): Pc => {
+      const p: Pc = { out: new Map(), backends: new Map(), status: [], agents: null as unknown as Pc['agents'] }
+      p.agents = createRemoteAgents({
+        adopt: (b) => {
+          p.backends.set(b.id, b)
+          p.out.set(b.id, '')
+          b.onData((d) => p.out.set(b.id, p.out.get(b.id) + d))
+        },
+        status: (id, source, payload) => p.status.push({ id, source, payload }),
+        pc: name,
+        log: () => {}
+      })
+      return p
+    }
+    const cA = await connect(h.port, h.password)
+    const cB = await connect(h.port, h.password)
+    await installHost(cA, '2.11.0')
+    // 사용자의 서버 claude 설정(있는 그대로 남아야 한다).
+    const userSettings = '{\n  "model": "opus",\n  "hooks": {}\n}\n'
+    await execSh(cA, `mkdir -p "$HOME/.claude" && printf '%s' '${userSettings}' > "$HOME/.claude/settings.json"`)
+    // 가짜 claude: --settings 파일을 읽어 인자로 준 이벤트마다 그 훅 명령을 sh 로(claude 처럼 stdin JSON) 부르고 출력을 찍는다.
+    writeFileSync(
+      `${sftpRoot}/fake-claude`,
+      [
+        '#!/usr/bin/env python3',
+        'import json, subprocess, sys',
+        'a = sys.argv[1:]',
+        'i = a.index("--settings")',
+        'cfg = json.load(open(a[i + 1]))',
+        'for spec in a[i + 2:]:',
+        '    ev, _, tool = spec.partition(":")',
+        '    p = {"hook_event_name": ev, "session_id": "s", "transcript_path": "/tmp/x.jsonl", "tool_response": "z" * 300000}',
+        '    if tool:',
+        '        p["tool_name"] = tool',
+        '        p["tool_input"] = {"command": "rm -rf build"}',
+        '    for g in cfg["hooks"][ev]:',
+        '        for hk in g["hooks"]:',
+        '            r = subprocess.run(hk["command"], shell=True, input=json.dumps(p).encode(), stdout=subprocess.PIPE)',
+        '            print("HOOK %s rc=%d out=%s" % (ev, r.returncode, r.stdout.decode().strip()))',
+        ''
+      ].join('\n')
+    )
+    await execSh(cA, 'chmod 700 "$HOME/fake-claude"')
+    const A = pc('PC-A')
+    const B = pc('PC-B')
+
+    // A 가 만든다 — spec 을 함수로: 서버 orcad 가 알려 준 훅 폴더로 실행 인자를 만든다(옛 orcad 면 null).
+    let hookDir: string | null = null
+    await A.agents.create(hostKey, cA, (dir) => {
+      hookDir = dir
+      return { id: 'hk', cwd: home, env: {}, meta: { agent: 'claude', title: '훅', startedAt: Date.now() } }
+    })
+    expect(hookDir).toBe(`${home}/.ara-server`)
+    const args = remoteHookLaunch('claude', hookDir).extraArgs!
+    const run = (events: string): void => A.backends.get('hk')!.write(`"$HOME/fake-claude" ${args.join(' ')} ${events}\n`)
+
+    run('UserPromptSubmit PermissionRequest:Bash')
+    await waitFor(() => /HOOK PermissionRequest rc=0 out=\{\}/.test(A.out.get('hk')!), 20_000, '훅 출력 {} · rc 0')
+    await waitFor(() => A.status.some((e) => e.payload['hook_event_name'] === 'PermissionRequest'), 10_000, 'A status')
+    expect(A.status.map((e) => [e.id, e.source, e.payload['hook_event_name']])).toEqual([
+      ['hk', 'claude', 'UserPromptSubmit'],
+      ['hk', 'claude', 'PermissionRequest']
+    ])
+    // 큰 필드는 서버에서 잘라 보낸다(상태·카드에 쓰는 것만).
+    const perm = A.status[1].payload
+    expect(perm).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })
+    expect(applyHookEvent(null, 'claude', perm, 0)).toMatchObject({ state: 'blocked', kind: 'permission' })
+
+    // B: 붙지 않고 목록 — 마지막 상태가 대장에 있다(목록 상태 칸).
+    const listed = await B.agents.list(hostKey, cB)
+    expect(serverStateOf(listed[0]?.status)).toBe('blocked')
+    // B 가 늦게 붙는다 → attach 때 마지막 상태를 받는다.
+    await B.agents.attach(hostKey, cB, ['hk'])
+    await waitFor(() => B.status.some((e) => e.payload['hook_event_name'] === 'PermissionRequest'), 10_000, 'B 늦게 붙어 마지막 상태')
+    expect(B.status).toEqual([{ id: 'hk', source: 'claude', payload: perm }])
+
+    // 이제 둘 다 붙었다 — 다음 훅은 둘이 같은 것을 받는다.
+    run('Stop')
+    await waitFor(() => A.status.length === 3 && B.status.length === 2, 10_000, '둘 다 Stop')
+    expect(A.status[2]).toEqual(B.status[1])
+    expect(A.status[2].payload).toEqual({ hook_event_name: 'Stop' })
+    expect(serverStateOf((await B.agents.list(hostKey, cB))[0]?.status)).toBe('idle')
+
+    // 서버 사용자 설정은 그대로 · ~/.gemini 도 안 생긴다.
+    const after = await execSh(cA, 'cat "$HOME/.claude/settings.json"; ls -a "$HOME/.claude"; [ -e "$HOME/.gemini" ] && echo GEMINI')
+    expect(after.out).toBe(`${userSettings}.\n..\nsettings.json\n`)
+
+    await B.agents.kill(hostKey, cB, 'hk')
+    const end2 = Date.now() + 15_000
+    while ((await B.agents.list(hostKey, cB)).length) {
+      if (Date.now() > end2) throw new Error('시간 초과: 서버에서 끝내기')
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    cA.end()
+    await execSh(cB, 'rm -rf "$HOME/.claude" "$HOME/fake-claude"')
     expect(await uninstallHost(cB)).toEqual([])
     cB.end()
   }, 180_000)

@@ -9,7 +9,8 @@ import type { Client, ClientChannel, SFTPWrapper } from 'ssh2'
 import { connectDaemonStream, type DaemonConnection } from '../daemon/client'
 import { readRemoteText, writeRemoteText } from '../editor/textIO'
 import { shQuote } from '../telemetry/LogTail'
-import { BRIDGE_SCRIPT, FINISH_SCRIPT, MANAGED_DIR, MKDIR_SCRIPT, PROBE_SCRIPT, UNINSTALL_SCRIPT, parseProbe, remnantsOf, supportOf, type ManagedProbe } from '@shared/managedServers'
+import { BRIDGE_SCRIPT, FINISH_SCRIPT, MANAGED_DIR, MKDIR_SCRIPT, PROBE_SCRIPT, UNINSTALL_SCRIPT, parseProbe, remnantsOf, remoteHookFile, remoteHookFileName, supportOf, type ManagedProbe } from '@shared/managedServers'
+import { HOOK_SOURCES } from '@shared/agentHooks'
 import { ORCAD_PY } from './orcadScript'
 
 const EXEC_TIMEOUT_MS = 20_000
@@ -67,6 +68,8 @@ export async function installHost(client: Client, appVersion: string): Promise<v
     }
     await put('orcad.py', ORCAD_PY)
     await put('token', randomBytes(TOKEN_BYTES).toString('hex'))
+    // R2 원격 에이전트 실행에만 주는 상태 훅 설정(서버 ~/.claude·~/.gemini 는 안 건드린다).
+    for (const src of HOOK_SOURCES) await put(remoteHookFileName(src), remoteHookFile(src))
     await put('version', appVersion)
   } finally {
     sftp.end()

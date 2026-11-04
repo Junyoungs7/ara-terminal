@@ -5,13 +5,14 @@ import { AGENTS, isAgentId } from '@shared/agents'
 import { t } from '../../i18n'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { useAgentStore } from '../aiws/agentStore'
+import { AgentGlyph } from '../aiws/AgentGlyph'
 import { useServerSessions } from './serverSessions'
 import './servers.css'
 
 /**
  * R1 AI 공간 › 서버 — 서버에서 도는 에이전트 세션(목업 1-sessions A 페이지). 동의한 서버마다 카드 하나.
  * [붙기] = 그 세션을 이 PC 탭으로(다른 PC 가 만든 것도 — 두 PC 모두 입력), [탭으로] = 이미 이 PC 에 열림, [끝내기] = 서버에서 끝냄(다른 PC 탭도).
- * 상태(작업 중·답할 차례)는 서버 판정이 생기는 R2 에서 — 지금은 누가 보는지만.
+ * R2 상태 칸 = 서버가 훅으로 들은 마지막 상태(기존 글리프). 모르면(옛 서버·Codex) '모름' 글리프.
  */
 export function ServerSessionsPage({ ask }: { ask: (spec: DialogSpec) => Promise<DialogResult> }): JSX.Element {
   const hosts = useServerSessions((s) => s.hosts)
@@ -79,6 +80,7 @@ function HostCard({ host, busy, onAttach, onEnd }: { host: ServerSessionsHost; b
         <table className="srv-tbl">
           <thead>
             <tr>
+              <th>{t('servers.col.state')}</th>
               <th>{t('servers.col.session')}</th>
               <th>{t('servers.col.started')}</th>
               <th>{t('servers.col.from')}</th>
@@ -89,6 +91,9 @@ function HostCard({ host, busy, onAttach, onEnd }: { host: ServerSessionsHost; b
           <tbody>
             {host.sessions.map((r) => (
               <tr key={r.id} className={r.here ? 'here' : ''} data-servers-row={r.id}>
+                <td data-servers-state={r.state ?? 'unknown'}>
+                  <AgentGlyph display={r.state ?? 'unknown'} estimated={false} />
+                </td>
                 <td className="srv-tt">
                   <b>{r.title}</b>
                   <span>{[isAgentId(r.agent) ? AGENTS[r.agent].label : r.agent, r.cwd].filter(Boolean).join(' · ')}</span>

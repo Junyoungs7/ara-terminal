@@ -1813,6 +1813,7 @@
   "servers.count": "세션 {n}",
   "servers.none": "이 서버에 도는 세션이 없습니다.",
   "servers.err.host": "연결하지 못했습니다({why}) — 터미널에서 이 서버에 한 번 접속한 뒤 [새로 고침]을 눌러 주세요.",
+  "servers.col.state": "상태",
   "servers.col.session": "세션",
   "servers.col.started": "시작",
   "servers.col.from": "만든 PC",
