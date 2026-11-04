@@ -117,7 +117,7 @@
 
 /* ── G2 고른 행 = 앰버 왼쪽 막대(시안 C .row.act) — 워크트리·서버·세션·파일·탐색기 행.
    C#24 포커스 링이 안쪽 1px 라 막대와 같이 그린다(옛 :not(:focus-visible) 로 막대를 끄던 분기는 뺐다). ── */
-:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on) {
+:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on, .diff-row.on) {
   box-shadow: inset 2px 0 0 var(--sig-user), inset 0 1px 0 var(--glass-hi);
 }
 
@@ -178,7 +178,9 @@
   :root[data-glass='on'] :is(.ara-panel, .aiws-scm, .aiws-explorer) {
     box-shadow: inset 1px 0 0 var(--gl-hl);
   }
-  :root[data-glass='on'] :is(.aiws-side, .aiws-search, .aiws-scm, .aiws-explorer) .aiws-side-head {
+  :root[data-glass='on'] :is(.aiws-side, .aiws-search, .aiws-scm, .aiws-explorer) .aiws-side-head,
+  :root[data-glass='on'] .aiws-explorer .sftp-path-bar,
+  :root[data-glass='on'] .aiws-tabs {
     border-color: var(--gl-edge);
   }
   /* G2 AI 공간 — .main 의 불투명 바닥이 왼쪽 워크트리 목록(.aiws-side)을 덮어 유리가 안 보였다.

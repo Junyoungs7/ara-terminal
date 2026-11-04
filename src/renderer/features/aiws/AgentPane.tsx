@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
-import { FileDiff, FileText, MessageSquare, Plus, RotateCw, SquareTerminal, X } from 'lucide-react'
+import { FileDiff, FileText, GitBranch, MessageSquare, Plus, RotateCw, SquareTerminal, X } from 'lucide-react'
 import { AGENT_IDS, AGENTS, permissionChoicesFor, type AgentId, type AgentPermissionChoice } from '@shared/agents'
 import { effortLabel, type ModelCatalog } from '@shared/agentOptions'
 import type { Worktree } from '@shared/worktrees'
@@ -14,7 +14,8 @@ import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { Dropdown } from '../../components/Dropdown'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { areWorktreePathsEqual } from '@shared/worktrees'
-import { changeCount, openDiff, useDiffStore } from './diffStore'
+import { changeCount, useDiffStore } from './diffStore'
+import { shortBranch } from './sidebarRows'
 import { resolveAgentTabTitle } from '@shared/agentTabTitle'
 import { wakeTab } from './hibernation'
 import './hibernation.css'
@@ -50,7 +51,7 @@ function OptField({ label, title, field, value, choices, onChange }: { label: st
  * M5 R2: 시작 전 초안 옵션(Orca draft session options) — 모델·추론 강도(AI-15, 설치된 CLI 가 알려 준 목록 — 지금은 Claude)·이번 탭 권한(AI-18)은
  * 첫 실행 인자로(--model·--effort·권한 플래그). 비워 두면 CLI 기본값·설정 › 에이전트의 권한.
  */
-export function AgentPicker({ worktree, onLaunched, onCancel, onDiff }: { worktree: Worktree; onLaunched?: () => void; onCancel?: () => void; onDiff?: () => void }): JSX.Element {
+export function AgentPicker({ worktree, onLaunched, onCancel }: { worktree: Worktree; onLaunched?: () => void; onCancel?: () => void }): JSX.Element {
   const detected = useAgentStore((s) => s.detected)
   const settings = useAgentStore((s) => s.settings)
   const detecting = useAgentStore((s) => s.detecting)
@@ -176,11 +177,6 @@ export function AgentPicker({ worktree, onLaunched, onCancel, onDiff }: { worktr
         </p>
       )}
       <div className="aiws-new-foot">
-        {onDiff && (
-          <button type="button" className="btn sec" data-aiws="diff-open" onClick={onDiff}>
-            {t('diff.open')}
-          </button>
-        )}
         <button type="button" className="btn sec" disabled={detecting} onClick={() => void useAgentStore.getState().loadAgents(true)}>
           {t('aiws.agent.redetect')}
         </button>
@@ -199,6 +195,8 @@ export function AgentPicker({ worktree, onLaunched, onCancel, onDiff }: { worktr
 
 const chatKey = KEYMAP.find((k) => k.action === 'agent.chatToggle')
 const CHAT_KEY = chatKey ? (isMac() ? chatKey.mac : chatKey.win) : ''
+const pickKey = KEYMAP.find((k) => k.action === 'agent.start')
+const PICK_KEY = pickKey ? (isMac() ? pickKey.mac : pickKey.win) : ''
 
 /**
  * M3 AI-03 가운데 — 고른 작업 단위의 **에이전트 터미널 탭 줄**(시안 SW-final: 에이전트 탭 + 파일 탭 자리) + 그 탭의 터미널.
@@ -226,6 +224,10 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const shownTab = tabs.length === 0 || picking || shownFile || shownDiff ? null : (tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1])
   const shownId = shownTab?.sessionId ?? null
   const chatAgent = shownTab ? shownTab.sessionId : null
+  // 피커가 떠 있을 때 레일·탐색기로 diff·파일을 열면 그쪽이 보이게 피커를 내린다.
+  useEffect(() => {
+    if (shownDiff || activeFilePath) setPicking(false)
+  }, [shownDiff, activeFilePath])
   // 지금 보이는 탭 = 본 것(herdr seen). 공간을 떠나면(언마운트) 아무것도 안 보고 있다.
   useEffect(() => {
     useAgentStore.getState().setViewing(shownId)
@@ -263,22 +265,9 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [worktree.id, worktree.path, chatAgent])
-  if ((tabs.length === 0 && files.length === 0 && !diff) || picking) {
-    return (
-      <AgentPicker
-        worktree={worktree}
-        onLaunched={() => {
-          setPicking(false)
-          useCodeStore.getState().setActive(worktree.id, null)
-        }}
-        onCancel={tabs.length || files.length || diff ? () => setPicking(false) : undefined}
-        onDiff={() => {
-          setPicking(false)
-          openDiff(undefined, 'unstaged', worktree.id)
-        }}
-      />
-    )
-  }
+  // FB-2.2.4 D7: 피커도 탭 줄 아래에 — 탭 줄([+] 새 탭·워크트리 칩)은 어느 상태에서든 선다. 피커가 떠 있으면 아래 본문(터미널·에디터·diff)은 붙인 채 숨긴다.
+  const pickerOn = (tabs.length === 0 && files.length === 0 && !diff) || picking
+  const covered = pickerOn || !!shownFile || shownDiff
   const active = tabs.find((x) => x.sessionId === activeId) ?? tabs[tabs.length - 1]
   const chatting = !!active && !!chatOn[active.sessionId]
   // 더러운 파일을 닫으면 아라 공용 대화상자로 묻는다 — 저장 / 저장 안 함 / 취소.
@@ -298,17 +287,23 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   return (
     <div className="aiws-agentws" data-aiws="agent-ws">
       <div className="aiws-tabs" role="tablist" aria-label={t('aiws.agent.tabs')}>
+        {/* FB-2.2.4 D6: 이 탭 묶음이 어느 워크트리 것인지(Orca — 탭은 워크트리마다 따로). */}
+        <span className="aiws-tabs-wt" data-aiws="tabs-worktree" title={t('aiws.tabs.worktree').replace('{path}', worktree.path)}>
+          <GitBranch aria-hidden />
+          <span>{shortBranch(worktree) || worktree.displayName}</span>
+        </span>
         {tabs.map((x) => (
           <div
             key={x.sessionId}
             role="tab"
             tabIndex={0}
-            aria-selected={x === active && !shownFile && !shownDiff}
-            className={'aiws-tab' + (x === active && !shownFile && !shownDiff ? ' on' : '') + (x.slept ? ' slept' : '')}
+            aria-selected={x === active && !covered}
+            className={'aiws-tab' + (x === active && !covered ? ' on' : '') + (x.slept ? ' slept' : '')}
             data-agent-tab={x.agent}
             data-state={x.slept ? 'slept' : x.exited ? 'exited' : (statusById[x.sessionId]?.state ?? 'running')}
             title={x.line}
             onClick={() => {
+              setPicking(false)
               useCodeStore.getState().setActive(worktree.id, null)
               useDiffStore.getState().setShown(worktree.id, false)
               useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)
@@ -362,13 +357,14 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             key={f.path}
             role="tab"
             tabIndex={0}
-            aria-selected={f === shownFile}
-            className={'aiws-tab' + (f === shownFile ? ' on' : '') + (f.preview ? ' preview' : '')}
+            aria-selected={f === shownFile && !pickerOn}
+            className={'aiws-tab' + (f === shownFile && !pickerOn ? ' on' : '') + (f.preview ? ' preview' : '')}
             data-file-tab={baseName(f.path)}
             data-dirty={f.dirty || undefined}
             data-preview={f.preview || undefined}
             title={f.path}
             onClick={() => {
+              setPicking(false)
               useDiffStore.getState().setShown(worktree.id, false)
               useCodeStore.getState().setActive(worktree.id, f.path)
             }}
@@ -395,15 +391,16 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             </button>
           </div>
         ))}
-        {/* M7 WS-10 "변경 비교 · n"(시안 SW-final 가운데 탭). 안 열었으면 탭 줄 끝의 [변경 비교] 버튼으로 연다. */}
-        {diff ? (
+        {/* M7 WS-10 "변경 비교 · n"(시안 SW-final 가운데 탭). 여는 버튼은 FB-2.2.4 D7 부터 오른쪽 레일(RightBar [변경 비교]). */}
+        {diff && (
           <div
             role="tab"
             tabIndex={0}
-            aria-selected={shownDiff}
-            className={'aiws-tab' + (shownDiff ? ' on' : '')}
+            aria-selected={shownDiff && !pickerOn}
+            className={'aiws-tab' + (shownDiff && !pickerOn ? ' on' : '')}
             data-aiws="diff-tab"
             onClick={() => {
+              setPicking(false)
               useCodeStore.getState().setActive(worktree.id, null)
               useDiffStore.getState().setShown(worktree.id, true)
             }}
@@ -422,12 +419,8 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               <X />
             </button>
           </div>
-        ) : (
-          <button type="button" className="aiws-ic" data-aiws="diff-open" aria-label={t('diff.open')} title={t('diff.open')} onClick={() => openDiff(undefined, 'unstaged', worktree.id)}>
-            <FileDiff />
-          </button>
         )}
-        {active && !shownFile && !shownDiff && (
+        {active && !covered && (
           <button
             type="button"
             className={'aiws-tab aiws-chat-toggle' + (chatting ? ' on' : '')}
@@ -441,7 +434,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           </button>
         )}
         {/* 3차 R1-B [+] = 새 탭 옴니박스(Orca) — 열린 탭·파일·URL·에이전트. 예전 피커는 그 안의 [에이전트 고르기…]. */}
-        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('aiws.agent.add')} title={t('aiws.agent.add')} onClick={() => setOmni(true)}>
+        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('omni.title')} title={t('aiws.tabs.newTip').replace('{key}', PICK_KEY)} onClick={() => setOmni(true)}>
           <Plus />
         </button>
       </div>
@@ -450,42 +443,54 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <NewTabOmnibox worktree={worktree} onClose={() => setOmni(false)} onPick={() => setPicking(true)} />
         </Suspense>
       )}
-      {active && !shownFile && !shownDiff && active.prompt && statusById[active.sessionId]?.promptFailed && (
+      {pickerOn && (
+        <div className="aiws-pick-wrap">
+          <AgentPicker
+            worktree={worktree}
+            onLaunched={() => {
+              setPicking(false)
+              useCodeStore.getState().setActive(worktree.id, null)
+            }}
+            onCancel={tabs.length || files.length || diff ? () => setPicking(false) : undefined}
+          />
+        </div>
+      )}
+      {active && !covered && active.prompt && statusById[active.sessionId]?.promptFailed && (
         <div className="aiws-note aiws-err aiws-prompt-failed" role="alert" data-aiws="prompt-failed">
           <span>{t('aiws.agent.promptFailed')}</span>
           <textarea className="aiws-input aiws-mono" readOnly rows={2} value={active.prompt} onFocus={(e) => e.currentTarget.select()} />
         </div>
       )}
-      {active && active.lost && active.host && !shownFile && !shownDiff && <RemoteCut host={active.host} />}
-      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !shownFile && !shownDiff && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
+      {active && active.lost && active.host && !covered && <RemoteCut host={active.host} />}
+      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !covered && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
       {/* p3-M21 잠든 탭 → 깨우는 중 / 깨어난 탭 → 한 줄(목업 sleep.html 안 1). */}
-      {active && !shownFile && !shownDiff && (active.slept || active.woke !== undefined) && (
+      {active && !covered && (active.slept || active.woke !== undefined) && (
         <div className="aiws-note aiws-hib" role="status" data-aiws={active.slept ? 'hib-waking' : 'hib-woke'}>
           <span className="aiws-z">z</span>
           <span>{active.slept ? t('aiws.hib.waking') : t('aiws.hib.woke').replace('{n}', String(active.woke))}</span>
         </div>
       )}
-      {active && !active.slept && chatting && !shownFile && !shownDiff && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
+      {active && !active.slept && chatting && !covered && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.filter((x) => !x.slept).map((x) => (
-        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || !!shownFile || shownDiff}>
+        <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || covered}>
           {/* M8 R4 원격 탭은 원격 터미널로 — 붙여넣은 이미지·파일을 그 서버에 올리고 원격 경로를 넣는다(로컬 경로를 넣지 않는다). */}
-          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !shownFile && !shownDiff} local={!x.host} serverKey={x.host ?? 'localhost'} agent />
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !covered} local={!x.host} serverKey={x.host ?? 'localhost'} agent />
         </div>
       ))}
       {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}
       {files.some((f) => !f.media) && (
         <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
-          <CodeEditor worktreeId={worktree.id} ask={ask} hidden={!shownFile || Boolean(shownFile.media)} />
+          <CodeEditor worktreeId={worktree.id} ask={ask} hidden={pickerOn || !shownFile || Boolean(shownFile.media)} />
         </Suspense>
       )}
-      {shownFile?.media && (
+      {shownFile?.media && !pickerOn && (
         <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
           <MediaView key={shownFile.path} file={shownFile} />
         </Suspense>
       )}
       {diff && (
         <Suspense fallback={<div className="aiws-note">{t('code.loading')}</div>}>
-          <DiffView worktree={worktree} hidden={!shownDiff} />
+          <DiffView worktree={worktree} hidden={!shownDiff || pickerOn} />
         </Suspense>
       )}
     </div>

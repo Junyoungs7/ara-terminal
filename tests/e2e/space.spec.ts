@@ -96,7 +96,7 @@ test('SPACE-3 오른쪽 아이콘 바 — 아라를 열고 접는다, 타이틀�
 
   // AI 작업 공간 — 아래에 탐색기(M6: 파일 열기 — 살아 있음)·소스 제어·검사 자리(비활성).
   await page.keyboard.press('Control+Alt+2')
-  await expect(page.locator('.rbar .rbar-item')).toHaveCount(4)
+  await expect(page.locator('.rbar .rbar-item')).toHaveCount(5)
   await expect(page.locator('.rbar .rbar-item[data-rbar="explorer"]')).toBeEnabled()
   // [소스 제어]는 M7 에서 살아났다 — [검사]만 아직 자리.
   await expect(page.locator('.rbar .rbar-item[data-rbar="scm"]')).toBeEnabled()

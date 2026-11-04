@@ -326,7 +326,7 @@ for (const theme of THEMES) {
           await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 20_000 })
         })
         await step(c, 'ai-diff', async () => {
-          await page.click('[data-aiws="diff-open"]')
+          await page.click('.rbar [data-rbar="diff"]')
           await expect(page.locator('[data-diff="view"]')).toBeVisible({ timeout: 20_000 })
         })
 

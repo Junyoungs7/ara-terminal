@@ -973,6 +973,21 @@
   color: var(--text-mid);
   text-transform: uppercase;
 }
+/* FB-2.2.4 D1·D2 AI 공간 오른쪽 탐색기 머리 — 높이는 탭 줄·워크트리 머리와 같게, 프로젝트 이름은 타이틀바 경로(.tb-server)와 같은 글꼴·굵기·크기.
+   터미널 [파일] 탭의 같은 트리(components/FileTree)는 그대로 — .aiws-explorer 아래만. */
+.aiws-explorer .sftp-path-bar {
+  height: var(--row-tabbar);
+  min-height: 0;
+  padding: 0 var(--sp-4);
+  background: none;
+}
+.aiws-explorer .sftp-path-bar .fpin-name {
+  font-family: var(--ui);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-hi);
+  text-transform: none;
+}
 /* mtime(상대시간) · 크기 — 이름 뒤 메타 열. 좁아지면 이름이 먼저 살아남는다. */
 .frow .fmt {
   flex: none;
@@ -9381,10 +9396,16 @@ progress {
   height: 6px;
   flex: none;
   border-radius: 999px;
-  background: var(--idle);
+  /* FB-2.2.4 D8 세션 없음 = 빈 점, 세션 살아 있음(쉬는 중·상태 모름) = 초록 점(.live — 터미널 사이드바 .sb-dot.connected 와 같은 뜻). */
+  box-shadow: inset 0 0 0 1px var(--text-lo);
 }
 .aiws-row.act .aiws-dot {
-  background: var(--text-mid);
+  box-shadow: inset 0 0 0 1px var(--text-mid);
+}
+.aiws-dot.live,
+.aiws-row.act .aiws-dot.live {
+  background: var(--ok);
+  box-shadow: none;
 }
 .aiws-row-acts {
   display: none;
@@ -9603,12 +9624,49 @@ progress {
   min-height: 0;
 }
 .aiws-tabs {
+  /* FB-2.2.4 D1 왼쪽 '워크트리' 머리(.aiws-side-head)·오른쪽 탐색기 머리와 같은 높이 — 아래 경계선이 한 줄로 잇는다. */
+  height: var(--row-tabbar);
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-3);
+  padding: 0 var(--sp-3);
   border-bottom: 1px solid var(--line);
   background: var(--bg-canvas);
+}
+/* FB-2.2.4 D6 탭 줄 앞 워크트리 칩 — 이 탭 묶음이 어느 워크트리 것인지(Orca: 탭은 워크트리마다). */
+.aiws-tabs-wt {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: 160px;
+  height: 22px;
+  margin-right: var(--sp-2);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-mid);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.aiws-tabs-wt > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-tabs-wt > svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--text-lo);
+}
+/* D7 피커도 탭 줄 아래 본문 자리에 — 넘치면 이 안에서 스크롤. */
+.aiws-pick-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
 }
 .aiws-tab {
   display: flex;
@@ -9931,6 +9989,7 @@ progress {
 }
 .diff-bar {
   flex-wrap: wrap;
+  min-height: var(--row-tabbar);
 }
 .diff-bar > span {
   flex: 1 1 8em;
@@ -9975,7 +10034,9 @@ progress {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+  /* FB-2.2.4 D3 목록 머리와 본문 툴바(.diff-bar)가 한 높이 — 아래 선이 한 줄. */
+  min-height: var(--row-tabbar);
+  padding: var(--sp-1) var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
 .diff-list-head .seg-ctl {
@@ -10011,8 +10072,9 @@ progress {
 .diff-row {
   width: 100%;
   display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 26px;
   padding: var(--sp-1) var(--sp-3);
   background: none;
   border: 0;
@@ -10021,17 +10083,26 @@ progress {
   cursor: var(--cur-hand, pointer);
 }
 .diff-row:hover {
-  background: var(--bg-surface);
+  background: var(--glass-hover);
 }
+/* 고른 줄 = 왼쪽 2px 막대(글라스면 glass.css 가 앰버 — .aiws-row.act 와 같은 규칙). */
 .diff-row.on {
-  background: var(--bg-raised);
+  background: var(--glass);
   color: var(--text-hi);
+  box-shadow: inset 2px 0 0 var(--text-mid);
 }
+/* 상태 글자 = 작은 칸(M·A·D·R·U·!) — 색은 뜻(추가 초록·삭제 빨강·수정 경고). */
 .diff-letter {
   flex: none;
-  width: var(--sp-4);
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--gl-in);
   font-family: var(--mono);
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-lo);
 }
 .diff-letter.s-A,
@@ -10075,6 +10146,50 @@ progress {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+/* +/− 줄 수(고른 파일 — Monaco 가 센 줄 변경). */
+.diff-stat {
+  flex: none;
+  display: flex;
+  gap: var(--sp-2);
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+}
+.diff-add {
+  color: var(--ok);
+}
+.diff-del {
+  color: var(--err);
+}
+/* 바뀐 것 없음 — 본문 가운데 한 줄 안내(.aiws-empty 와 같은 문법). */
+.diff-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8);
+  color: var(--text-lo);
+  text-align: center;
+}
+.diff-empty > svg {
+  width: 28px;
+  height: 28px;
+}
+.diff-empty > b {
+  color: var(--text-hi);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+/* 아주 좁으면 목록은 이름만(폴더 경로를 접는다). */
+@container (max-width: 560px) {
+  .diff-list {
+    width: 150px;
+  }
+  .diff-row .diff-dir {
+    display: none;
+  }
 }
 .diff-bar .btn svg {
   width: 14px;
@@ -10244,6 +10359,49 @@ progress {
   padding: var(--sp-7) var(--sp-4);
   color: var(--text-mid);
   font-size: var(--fs-md);
+}
+/* FB-2.2.4 D4 새 탭 — 빈 입력일 때 할 일 안내 · 묶음 머리(열린 탭·최근 파일·새 에이전트). */
+.omni-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: var(--sp-2) 0 var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--gl-in);
+}
+.omni-guide-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 24px;
+  font-size: var(--fs-micro);
+}
+.omni-guide-row > svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--text-lo);
+}
+.omni-guide-what {
+  flex: none;
+  color: var(--text-hi);
+}
+.omni-guide-how {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-lo);
+}
+.omni-group {
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.omni-kbd {
+  margin-left: auto;
 }
 .qo-foot {
   flex: none;

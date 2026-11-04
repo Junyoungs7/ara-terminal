@@ -505,11 +505,14 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
               onContextMenu={(e) => rowMenu(e, w, r.pinned)}
             >
               <div className="aiws-row-l1">
-                {/* 잠듦이면 달, 에이전트가 없으면 빈 점(고른 줄만 밝힌다), 있으면 상태 글리프(AI-11). */}
+                {/* 잠듦이면 달. 일함·답 기다림 = 상태 글리프(AI-11). FB-2.2.4 D8: 쉬는 중·상태 모름(복원 직후·훅 없는 CLI 는 state=null → 'unknown')이라도
+                    세션이 살아 있으면 초록 점(터미널 사이드바 .sb-dot.connected 와 같은 뜻) — 예전엔 unknown 이 빈 고리라 '세션 없음'처럼 보였다. 세션이 없을 때만 빈 점. */}
                 {sleeping ? (
                   <Moon className="aiws-row-ic" aria-hidden />
-                ) : glyph ? (
+                ) : glyph && (glyph.display === 'working' || glyph.display === 'blocked' || glyph.display === 'question') ? (
                   <AgentGlyph display={glyph.display} estimated={glyph.estimated} />
+                ) : glyph ? (
+                  <span className="aiws-dot live" data-agent-state="alive" role="img" aria-label={t('aiws.st.alive')} title={t('aiws.st.alive')} />
                 ) : (
                   <span className="aiws-dot" aria-hidden />
                 )}

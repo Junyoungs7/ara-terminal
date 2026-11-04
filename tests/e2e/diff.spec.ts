@@ -97,7 +97,7 @@ test('DIFF-1★ 변경 → "변경 비교 · 2" 탭 → Monaco diff(나란히/�
 
     // diff 를 열기 전엔 diff 에디터가 없다(지연 로드).
     await expect(page.locator('[data-diff="view"]')).toHaveCount(0)
-    await page.click('[data-aiws="diff-open"]')
+    await page.click('.rbar [data-rbar="diff"]')
     const tab = page.locator('[data-aiws="diff-tab"]')
     await expect(tab).toHaveAttribute('aria-selected', 'true')
     await expect(tab).toContainText('변경 비교 · 2')
@@ -151,7 +151,7 @@ test('DIFF-1★ 변경 → "변경 비교 · 2" 탭 → Monaco diff(나란히/�
     const again = await launch(userDataDir)
     await again.page.click('.titlebar .tb-spaces [data-space="ai"]')
     await again.page.locator(`${side} .aiws-row`).filter({ hasText: 'main' }).click()
-    await again.page.click('[data-aiws="diff-open"]')
+    await again.page.click('.rbar [data-rbar="diff"]')
     await again.page.click('[data-diff-file="src/app.ts"]')
     await expect(again.page.locator('[data-diff="comment"]')).toContainText('여기 "20" 맞나요?')
     await expect(again.page.locator('[data-diff="comment"]')).toHaveAttribute('data-sent', 'true')
@@ -177,7 +177,7 @@ test('DIFF-2 분기 기준 갈래 · 바이너리는 비교를 안 그린다', a
     }, repo)
     await page.click(`${side} [data-aiws="add-project"]`)
     await page.locator(`${side} .aiws-row`).first().click()
-    await page.click('[data-aiws="diff-open"]')
+    await page.click('.rbar [data-rbar="diff"]')
     await page.click('[data-diff-file="bin.dat"]')
     await expect(page.locator('[data-diff="binary"]')).toBeVisible()
     await page.click('[data-diff-list="branch"]')

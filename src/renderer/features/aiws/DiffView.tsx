@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Check, Eye, GitMerge, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Check, Eye, FileDiff, GitMerge, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { GitConflictKind, GitDiffResult } from '@shared/gitDiff'
 import type { DiffComment } from '@shared/diffComments'
 import { languageOf } from '@shared/codeFiles'
@@ -38,6 +38,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
   // 3차 R2-B HTML 렌더 비교(이번 탭에서만 — 고른 파일이 바뀌어도 켠 채).
   const [htmlRender, setHtmlRender] = useState(false)
+  // FB-2.2.4 D3 고른 파일의 +/− 줄 수 — Monaco 가 계산한 줄 변경에서(목록 전체 수는 main 의 numstat 이 필요해 아직 없다).
+  const [stat, setStat] = useState<{ add: number; del: number } | null>(null)
   const host = useRef<HTMLDivElement>(null)
   const edRef = useRef<ReturnType<typeof monaco.editor.createDiffEditor> | null>(null)
   const aiPathRef = useRef<string | null>(null)
@@ -87,10 +89,22 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     addZoomKeys(ed.getModifiedEditor())
     addZoomKeys(ed.getOriginalEditor())
     const offPrefs = subscribeEditorPrefs(() => ed.updateOptions(editorFont()))
+    const offDiff = ed.onDidUpdateDiff(() => {
+      const ch = ed.getLineChanges()
+      if (!ch) return setStat(null)
+      let add = 0
+      let del = 0
+      for (const c of ch) {
+        if (c.modifiedEndLineNumber > 0) add += c.modifiedEndLineNumber - c.modifiedStartLineNumber + 1
+        if (c.originalEndLineNumber > 0) del += c.originalEndLineNumber - c.originalStartLineNumber + 1
+      }
+      setStat({ add, del })
+    })
     // M12 R3 AI 작성 줄 — 바뀐 쪽(오른쪽)에. 원격 작업 단위는 표시 없음.
     watchAiLines(ed.getModifiedEditor(), () => (aiPathRef.current && !hostOfWorktree(worktree.id) ? aiPathRef.current : null))
     return () => {
       offPrefs()
+      offDiff.dispose()
       const m = ed.getModel()
       ed.dispose()
       m?.original.dispose()
@@ -104,6 +118,7 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
   useEffect(() => {
     setDiff(null)
     setDraft(null)
+    setStat(null)
     if (!sel) return
     let alive = true
     void window.ev.gitInspect.diff({ worktreePath: worktree.path, filePath: sel.path, oldPath: sel.oldPath, mode: sel.mode, mergeBase, host: hostOfWorktree(worktree.id) }).then((r) => alive && setDiff(r))
@@ -256,10 +271,11 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
                 title={r.oldPath ? `${r.oldPath} → ${r.path}` : r.path}
                 onClick={() => useDiffStore.getState().select(worktree.id, { path: r.path, oldPath: r.oldPath, mode: r.mode })}
               >
-                <span className={'diff-letter s-' + r.letter}>{r.letter}</span>
+                <span className={'diff-letter s-' + r.letter} title={t('diff.st.' + r.letter)}>{r.letter}</span>
                 <span className="diff-name">{r.path.slice(cut + 1)}</span>
                 <span className="diff-dir">{cut > 0 ? r.path.slice(0, cut) : ''}</span>
                 {r.area === 'staged' && <span className="diff-area">{t('diff.staged')}</span>}
+                {on && stat && <DiffStat stat={stat} />}
                 {cnt > 0 && <span className="diff-cnt">{cnt}</span>}
               </button>
             )
@@ -271,6 +287,7 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
           <span className="aiws-mono" data-diff="path">
             {sel ? `${sel.oldPath ? sel.oldPath + ' → ' : ''}${sel.path}` : ''}
           </span>
+          {sel && stat && <DiffStat stat={stat} />}
           <div className="seg-ctl" role="radiogroup" aria-label={t('diff.layout')}>
             {[false, true].map((v) => (
               <button key={String(v)} type="button" role="radio" aria-checked={inline === v} className={inline === v ? 'on' : undefined} data-diff-layout={v ? 'inline' : 'split'} onClick={() => useDiffStore.getState().setInline(v)}>
@@ -327,6 +344,14 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
             </div>
           </div>
         )}
+        {/* FB-2.2.4 D3 빈 상태 — 목록이 비면 본문도 빈 판 대신 한 줄 안내. */}
+        {result?.ok && n === 0 && !onlyConflicts && (
+          <div className="diff-empty" data-diff="empty-main">
+            <FileDiff aria-hidden />
+            <b>{t('diff.empty.title')}</b>
+            <span>{t(d?.list === 'branch' ? 'diff.empty.branch' : 'diff.empty.working')}</span>
+          </div>
+        )}
         {sel && !diff && <p className="aiws-note">{t('diff.loading')}</p>}
         {diff && !diff.ok && (
           <p className="aiws-note aiws-err" role="alert">
@@ -362,6 +387,15 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
         )}
       </section>
     </div>
+  )
+}
+
+function DiffStat({ stat }: { stat: { add: number; del: number } }): JSX.Element {
+  return (
+    <span className="diff-stat" data-diff="stat">
+      <span className="diff-add">+{stat.add}</span>
+      <span className="diff-del">−{stat.del}</span>
+    </span>
   )
 }
 

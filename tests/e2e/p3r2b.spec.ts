@@ -57,7 +57,7 @@ test('P3R2B-1★ 그림 비교 — 원래/바뀐 두 그림(바이트 그대로)
   const { root, repo } = makeRepo()
   try {
     await openProject(app, page, repo)
-    await page.click('[data-aiws="diff-open"]')
+    await page.click('.rbar [data-rbar="diff"]')
     await page.click('[data-diff-file="logo.png"]')
     const view = page.locator('[data-diffm="image-view"]')
     await expect(view.locator('[data-side="original"] img')).toBeVisible()

@@ -6,19 +6,34 @@
 //  · 한 낱말이면 파일이 먼저, 여러 낱말이면 웹 검색 줄이 위로, `?` 로 시작하면 곧장 검색.
 // 아라 차이: URL·검색은 바깥 브라우저로 연다(AI 작업 공간 안 브라우저가 아직 없다 — ai-browser 이식 때 그쪽으로). 검색 엔진 = Orca 기본값 Google(docView.OMNIBOX_SEARCH_URL).
 // [에이전트 고르기…] 줄 = 예전 [+] 피커(첫 지시·모델·권한) 그대로.
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Bot, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { Bot, Clock, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react'
 import { AGENT_IDS, AGENTS, type AgentId } from '@shared/agents'
 import { rankQuickOpen } from '@shared/codeSearch'
 import { OMNIBOX_SEARCH_URL, omniboxPrefersSearch, omniboxUrlOf, parseOmniboxQuery } from '@shared/docView'
 import type { Worktree } from '@shared/worktrees'
+import { isMac, KEYMAP } from '@shared/keymap'
 import { t } from '../../i18n'
 import { openFile, useCodeStore } from './codeStore'
 import { useAgentStore } from './agentStore'
 import { useDiffStore } from './diffStore'
 import { hostOfWorktree } from './store'
 
-type Row = { key: string; icon: typeof Bot; label: string; sub?: string; run: () => void | Promise<unknown> }
+type Row = { key: string; icon: typeof Bot; label: string; sub?: string; kbd?: string; group?: string; run: () => void | Promise<unknown> }
+
+const keyOf = (action: string): string => {
+  const k = KEYMAP.find((x) => x.action === action)
+  return k ? (isMac() ? k.mac : k.win) : ''
+}
+/** FB-2.2.4 D4 빈 입력일 때 보이는 할 일 — 새 기능이 아니라 이 칸이 이미 하는 것을 적는다(단축키는 KEYMAP 그대로, 빠른 열기는 AiHome 의 Ctrl+P). */
+const GUIDE: readonly { id: string; icon: typeof Bot; keys: () => string }[] = [
+  { id: 'tabs', icon: MessageSquare, keys: () => '' },
+  { id: 'file', icon: FileText, keys: () => (isMac() ? 'Cmd+P' : 'Ctrl+P') },
+  { id: 'url', icon: Globe, keys: () => '' },
+  { id: 'search', icon: Search, keys: () => '?' },
+  { id: 'agent', icon: Bot, keys: () => [keyOf('agent.start.claude'), keyOf('agent.start.codex'), keyOf('agent.start.gemini'), keyOf('agent.start')].filter(Boolean).join(' · ') }
+]
+const RECENT_ROWS = 5
 
 const FILE_ROWS = 8
 /** 줄 실행이 실패해 창을 열어 둔다(이유를 보이게). */
@@ -60,9 +75,10 @@ export default function NewTabOmnibox({ worktree, onClose, onPick }: { worktree:
       useAgentStore.getState().setActiveTab(worktree.id, sid)
     }
     const tabRows: Row[] = [
-      ...tabs.map((x) => ({ key: 'tab:' + x.sessionId, icon: MessageSquare, label: AGENTS[x.agent].label, sub: x.prompt ?? x.line, run: () => show(x.sessionId) })),
+      ...tabs.map((x) => ({ key: 'tab:' + x.sessionId, icon: MessageSquare, label: AGENTS[x.agent].label, sub: x.prompt ?? x.line, group: 'tabs', run: () => show(x.sessionId) })),
       ...openFiles.map((f) => ({
         key: 'file-tab:' + f.path,
+        group: 'tabs',
         icon: FileText,
         label: f.path.split(/[\\/]/).pop() ?? f.path,
         sub: relOf(f.root, f.path),
@@ -81,13 +97,21 @@ export default function NewTabOmnibox({ worktree, onClose, onPick }: { worktree:
             const cut = p.lastIndexOf('/')
             return { key: 'file:' + p, icon: FileText, label: p.slice(cut + 1), sub: cut > 0 ? p.slice(0, cut) : undefined, run: () => openFile(p).then((r) => (r.ok ? undefined : (setErr(r.message), KEEP))) }
           })
-      : []
+      : (recent ?? [])
+          .filter((p) => !openRel.has(p))
+          .slice(0, RECENT_ROWS)
+          .map((p) => {
+            const cut = p.lastIndexOf('/')
+            return { key: 'recent:' + p, icon: Clock, label: p.slice(cut + 1), sub: cut > 0 ? p.slice(0, cut) : undefined, group: 'recent', run: () => openFile(p).then((r) => (r.ok ? undefined : (setErr(r.message), KEEP))) }
+          })
     const agentRows: Row[] = AGENT_IDS.filter((id) => settings?.agents[id].enabled !== false && detected?.find((d) => d.id === id)?.installed)
       .filter((id) => !lq || AGENTS[id].label.toLowerCase().includes(lq) || id.includes(lq))
       .map((id: AgentId) => ({
         key: 'agent:' + id,
         icon: Bot,
         label: t('omni.agent').replace('{agent}', AGENTS[id].label),
+        kbd: keyOf(`agent.start.${id}`) || undefined,
+        group: 'agent',
         run: () =>
           useAgentStore
             .getState()
@@ -97,7 +121,7 @@ export default function NewTabOmnibox({ worktree, onClose, onPick }: { worktree:
               if (!r.ok) onPick()
             })
       }))
-    const pick: Row = { key: 'pick', icon: Sparkles, label: t('omni.pick'), run: onPick }
+    const pick: Row = { key: 'pick', icon: Sparkles, label: t('omni.pick'), kbd: keyOf('agent.start') || undefined, group: 'agent', run: onPick }
     const lead = [urlRow, search && omniboxPrefersSearch(query) ? search : null].filter((r): r is Row => r !== null)
     const trail = search && !omniboxPrefersSearch(query) ? [search] : []
     return [...lead, ...tabRows, ...fileRows, ...agentRows, ...trail, pick]
@@ -156,21 +180,36 @@ export default function NewTabOmnibox({ worktree, onClose, onPick }: { worktree:
         </div>
         <div className="qo-list" ref={listRef} role="listbox">
           {err && <div className="qo-empty">{err}</div>}
-          {rows.map((r, i) => (
-            <div
-              key={r.key}
-              className={'qo-item' + (i === cursor ? ' on' : '')}
-              data-omni={r.key}
-              role="option"
-              aria-selected={i === cursor}
-              onMouseEnter={() => setCursor(i)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => void run(r)}
-            >
-              <r.icon aria-hidden />
-              <span className="qo-name">{r.label}</span>
-              {r.sub && <span className="qo-dir">{r.sub}</span>}
+          {!q && (
+            <div className="omni-guide" data-omni="guide">
+              {GUIDE.map((g) => (
+                <div key={g.id} className="omni-guide-row" data-omni-guide={g.id}>
+                  <g.icon aria-hidden />
+                  <span className="omni-guide-what">{t('omni.guide.' + g.id)}</span>
+                  <span className="omni-guide-how">{t('omni.guide.' + g.id + '.how')}</span>
+                  {g.keys() && <kbd className="kbd">{g.keys()}</kbd>}
+                </div>
+              ))}
             </div>
+          )}
+          {rows.map((r, i) => (
+            <Fragment key={r.key}>
+              {!q && r.group && r.group !== rows[i - 1]?.group && <div className="omni-group">{t('omni.g.' + r.group)}</div>}
+              <div
+                className={'qo-item' + (i === cursor ? ' on' : '')}
+                data-omni={r.key}
+                role="option"
+                aria-selected={i === cursor}
+                onMouseEnter={() => setCursor(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void run(r)}
+              >
+                <r.icon aria-hidden />
+                <span className="qo-name">{r.label}</span>
+                {r.sub && <span className="qo-dir">{r.sub}</span>}
+                {r.kbd && <kbd className="kbd omni-kbd">{r.kbd}</kbd>}
+              </div>
+            </Fragment>
           ))}
         </div>
         {files === null && <div className="qo-foot">{t('qo.loading')}</div>}

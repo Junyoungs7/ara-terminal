@@ -113,6 +113,20 @@ function defineAraTheme(): void {
     const v = hex(token)
     if (v) colors[key] = v
   }
+  // FB-2.2.4 D3 diff 본문 — vs-dark 기본 초록·빨강 대신 아라 신호색(--ok·--err)을 옅게. 양쪽 사이 경계는 --line. 개요 띠는 DiffView 가 끈다(C#26).
+  const tint: [string, string, string][] = [
+    ['diffEditor.insertedLineBackground', '--ok', '1a'],
+    ['diffEditor.insertedTextBackground', '--ok', '33'],
+    ['diffEditor.removedLineBackground', '--err', '1a'],
+    ['diffEditor.removedTextBackground', '--err', '33'],
+    ['diffEditor.diagonalFill', '--line', '80']
+  ]
+  for (const [key, token, alpha] of tint) {
+    const v = hex(token)
+    if (v && v.length === 7) colors[key] = v + alpha
+  }
+  const line = hex('--line')
+  if (line) colors['diffEditor.border'] = line
   monaco.editor.defineTheme('ara', { base: luma > 128 ? 'vs' : 'vs-dark', inherit: true, rules: [], colors })
 }
 defineAraTheme()

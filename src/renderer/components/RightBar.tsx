@@ -1,9 +1,10 @@
 import { useEffect, useState, type JSX } from 'react'
-import { CircleCheck, Files, GitBranch, MessageCircle } from 'lucide-react'
+import { CircleCheck, FileDiff, Files, GitBranch, MessageCircle } from 'lucide-react'
 import type { Space } from '@shared/space'
 import { t } from '../i18n'
 import { EXPLORER_STATE_EVENT, EXPLORER_TOGGLE_EVENT } from '@shared/codeFiles'
 import { SCM_STATE_EVENT, SCM_TOGGLE_EVENT } from '@shared/scm'
+import { OPEN_DIFF_EVENT } from '@shared/gitDiff'
 
 /**
  * M1 라운드 2 — 오른쪽 끝 아이콘 바(시안 SW-final, Orca 오른쪽 사이드바 탭 줄). M3 부터 늘 선다(옛 실험 기능 게이트는 지웠다).
@@ -67,6 +68,17 @@ export function RightBar({ space, chatOpen, onChat }: { space: Space; chatOpen: 
             onClick={() => window.dispatchEvent(new Event(SCM_TOGGLE_EVENT))}
           >
             <GitBranch />
+          </button>
+          {/* FB-2.2.4 D7 [변경 비교] — 탭 줄 끝에서 옮겼다(탭 줄은 탭과 [+]만). 여는 길은 소스 제어 패널과 같은 창 이벤트(AiHome 이 받는다). */}
+          <button
+            type="button"
+            className="rbar-item"
+            data-rbar="diff"
+            aria-label={t('diff.open')}
+            title={t('diff.open.tip')}
+            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_DIFF_EVENT))}
+          >
+            <FileDiff />
           </button>
           {SOON.map(({ id, Icon }) => (
             <button
