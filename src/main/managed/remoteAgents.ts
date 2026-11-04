@@ -6,8 +6,10 @@
 // 서버에서 끝내기는 kill 따로. 붙을 때 PC 이름을 알려 다른 PC 에 "누가 보는 중"(viewers 사건)이 보인다.
 // R2 서버에서 상태 판정: 에이전트 훅이 orcad 에 닿으면 status 사건(붙은 PC 모두에게, 늦게 붙으면 attach 때 마지막 것) → deps.status.
 // R3 서버 계정: account 요청(목록·추가·지우기·기본) — 붙은 탭이 없으면 다리를 닫는다(list 와 같다).
+// R4 채팅 보기: read 요청(그 세션의 연결 그대로 — SFTP 를 따로 열지 않는다).
 import type { Client } from 'ssh2'
 import { AGENT_SESSION_LOST_EXIT } from '@shared/agentHooks'
+import type { TranscriptSlice } from '@shared/agentChat'
 import type { DaemonConnection } from '../daemon/client'
 import type { DaemonCreateSpec, DaemonSessionInfo } from '../daemon/protocol'
 import { DaemonBackend } from '../daemon/service'
@@ -29,6 +31,8 @@ export type RemoteAgents = {
   create(hostKey: string, client: Client, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<DaemonSessionInfo>
   /** R3 서버 계정 요청(답 그대로). */
   account(hostKey: string, client: Client, req: { op: 'list' | 'add' | 'remove' | 'default'; agent?: string; label?: string; id?: string | null }): Promise<unknown>
+  /** R4 붙은 세션의 서버 연결로 transcript 조각(경로 검사는 orcad). 붙지 않았으면 실패. */
+  read(id: string, path: string, offset: number | null): Promise<TranscriptSlice>
   /** 원격에 돌고 있는 세션 수(업데이트 미룸 판정). 붙어 있지 않으면 붙어서 잰다. */
   liveSessions(hostKey: string, client: Client): Promise<number>
   /** R1 "서버에서도 끝내기"(탭 닫기 기본은 release). 끊긴 탭이면 잠깐 붙어서 끝내고, 이 호스트에 붙은 탭이 없으면 다리를 닫는다. */
@@ -176,6 +180,10 @@ export function createRemoteAgents(deps: {
       }
     },
     release,
+    read(id, path, offset) {
+      const x = backends.get(id)
+      return x ? x.b.conn.request<TranscriptSlice>({ type: 'read', path, offset }) : Promise.reject(new Error('not attached'))
+    },
     meta(id, patch) {
       const x = backends.get(id)
       if (x) void x.b.conn.request({ type: 'meta', id, meta: patch }).catch(() => {})

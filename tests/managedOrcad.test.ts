@@ -1,4 +1,4 @@
-// M8 DM-02·03 통합(+ 3차 R1 PC 둘 · R2 서버 훅 · R3 서버 계정) — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
+// M8 DM-02·03 통합(+ 3차 R1 PC 둘 · R2 서버 훅 · R3 서버 계정 · R4 원격 채팅 보기) — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
 // 다시 붙어 이어 보기(replay) → 업데이트 미룸 판정 → 제거 → 흔적 0(폴더·프로세스·crontab·systemd)을 원격에서 잰다.
 // 원격 쪽 명령은 진짜 Linux 가 돌려야 한다(pty·유닉스 소켓·/proc): Windows 에서는 WSL(Ubuntu)의 임시 폴더를 홈으로, SFTP 는 \\wsl.localhost 로 같은 폴더를 노출한다.
 // WSL·python3 가 없으면 건너뛴다. 실서버·사내 서버에는 붙지 않는다(127.0.0.1 하네스만).
@@ -9,6 +9,9 @@ import { Client } from 'ssh2'
 import { startPasswordServer, type Harness } from './ssh-harness'
 import { execSh, installHost, probeHost, uninstallHost } from '../src/main/managed/host'
 import { createRemoteAgents } from '../src/main/managed/remoteAgents'
+import { createRemoteChat } from '../src/main/agents/remoteChat'
+import type { AgentChatEvent } from '../src/shared/agentChat'
+import { deriveGeneratedTabTitle } from '../src/shared/agentTabTitle'
 import type { DaemonBackend } from '../src/main/daemon/service'
 import { AGENT_SESSION_LOST_EXIT } from '../src/shared/agentHooks'
 import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, accountLoginLine, decideUpdate, remnantsOf, remoteHookLaunch, serverAccountsOf, serverStateOf, supportOf, type ServerAccount, type ServerAccounts } from '../src/shared/managedServers'
@@ -457,7 +460,7 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     ])
     // 큰 필드는 서버에서 잘라 보낸다(상태·카드에 쓰는 것만).
     const perm = A.status[1].payload
-    expect(perm).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', session_id: 's', tool_input: { command: 'rm -rf build' } })
+    expect(perm).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', session_id: 's', transcript_path: '/tmp/x.jsonl', tool_input: { command: 'rm -rf build' } })
     expect(applyHookEvent(null, 'claude', perm, 0)).toMatchObject({ state: 'blocked', kind: 'permission' })
 
     // B: 붙지 않고 목록 — 마지막 상태가 대장에 있다(목록 상태 칸).
@@ -472,7 +475,7 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     run('Stop')
     await waitFor(() => A.status.length === 3 && B.status.length === 2, 10_000, '둘 다 Stop')
     expect(A.status[2]).toEqual(B.status[1])
-    expect(A.status[2].payload).toEqual({ hook_event_name: 'Stop', session_id: 's' })
+    expect(A.status[2].payload).toEqual({ hook_event_name: 'Stop', session_id: 's', transcript_path: '/tmp/x.jsonl' })
     expect(serverStateOf((await B.agents.list(hostKey, cB))[0]?.status)).toBe('idle')
 
     // 서버 사용자 설정은 그대로 · ~/.gemini 도 안 생긴다.
@@ -611,4 +614,74 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     await execSh(c, 'rm -rf "$HOME/.claude" "$HOME/bin"')
     c.end()
   }, 180_000)
+
+  // 3차 R4 원격 채팅 보기 — 서버 claude-shared 에 jsonl 을 두고, 세션 안에서 orcad 훅(transcript_path·prompt)을 부르면 PC 가 같은 연결의 read 로
+  // 읽어 채팅 블록(글·생각함·도구 요약+결과·그림 미리보기)이 나온다 · 덧붙인 줄만 증분으로 · 탭 제목은 로컬과 같은 규칙 · 경로 탈출은 orcad 가 거절.
+  it('원격 채팅 보기 — 서버 transcript 를 read 로 · 증분 · 경로 탈출 거절', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    const c = await connect(h.port, h.password)
+    await installHost(c, '2.11.0')
+    const tp = `${home}/.ara-server/claude-shared/projects/-repo/s4.jsonl`
+    const J = (o: unknown): string => JSON.stringify(o)
+    const lines = [
+      J({ type: 'user', uuid: 'u1', message: { role: 'user', content: [{ type: 'text', text: '로그인 버그 고쳐 줘' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } }] } }),
+      J({ type: 'assistant', uuid: 'a1', message: { id: 'm1', role: 'assistant', content: [{ type: 'thinking', thinking: '원인을 본다' }, { type: 'text', text: '찾아보겠습니다' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } }] } }),
+      J({ type: 'user', uuid: 'u2', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'Tests  3 passed (3)' }] } })
+    ]
+    await execSh(c, `mkdir -p "$HOME/.ara-server/claude-shared/projects/-repo"`)
+    writeFileSync(`${sftpRoot}/.ara-server/claude-shared/projects/-repo/s4.jsonl`, lines.join('\n') + '\n')
+    writeFileSync(`${sftpRoot}/p.json`, J({ hook_event_name: 'UserPromptSubmit', session_id: 's4', transcript_path: tp, prompt: '로그인 버그 고쳐 줘' }))
+    writeFileSync(`${sftpRoot}/secret.jsonl`, '{"secret": 1}\n')
+
+    const status: Record<string, unknown>[] = []
+    const pushed: AgentChatEvent[] = []
+    let out = ''
+    const backends = new Map<string, DaemonBackend>()
+    const rc = createRemoteChat({ read: (id, path, offset) => agents.read(id, path, offset), push: (e) => pushed.push(e), pollMs: 100 })
+    const agents = createRemoteAgents({
+      adopt: (b) => {
+        backends.set(b.id, b)
+        b.onData((d) => (out += d))
+      },
+      status: (id, _source, payload) => {
+        status.push(payload)
+        rc.hook(id, payload)
+      },
+      log: () => {}
+    })
+    await agents.create(hostKey, c, { id: 'r4', cwd: home, env: {}, meta: { agent: 'claude', title: '채팅', startedAt: Date.now() } })
+    rc.bind('r4', 'claude')
+    // 훅 전 = 경로를 모른다 → 빈 화면.
+    expect(await rc.open('r4')).toEqual({ messages: [], file: null })
+
+    backends.get('r4')!.write(`python3 "$HOME/.ara-server/orcad.py" hook claude < "$HOME/p.json"; echo HOOKED\n`)
+    await waitFor(() => status.length > 0, 20_000, '서버 훅')
+    expect(status[0]).toEqual({ hook_event_name: 'UserPromptSubmit', session_id: 's4', transcript_path: tp, prompt: '로그인 버그 고쳐 줘' })
+    expect(deriveGeneratedTabTitle(String(status[0]['prompt']))).toBeTruthy()
+    await waitFor(() => pushed.length > 0, 10_000, '채팅 첫 화면')
+    expect(pushed[0].reset).toBe(true)
+    const [u, a] = pushed[0].messages
+    expect(u.blocks).toEqual([{ type: 'text', text: '로그인 버그 고쳐 줘' }, { type: 'image', src: 'data:image/png;base64,iVBORw0KGgo=' }])
+    expect(a.blocks.map((b) => b.type)).toEqual(['thinking', 'text', 'tool'])
+    expect(a.blocks[2]).toMatchObject({ type: 'tool', name: 'Bash', result: 'Tests  3 passed (3)' })
+
+    // 덧붙인 줄만 증분으로(바이트 오프셋) — 화면 통째로가 아니다.
+    await execSh(c, `printf '%s\\n' '${J({ type: 'assistant', uuid: 'a2', message: { id: 'm2', role: 'assistant', content: [{ type: 'text', text: '고쳤습니다' }] } })}' >> "${tp}"`)
+    await waitFor(() => pushed.length > 1, 10_000, '증분')
+    expect(pushed[1].reset).toBeUndefined()
+    expect(pushed[1].messages.map((m) => m.blocks)).toEqual([[{ type: 'text', text: '고쳤습니다' }]])
+
+    // 경로 탈출 — 서버 사용자 ~/.claude·설치 폴더 밖·.. 로 빠지기·jsonl 아닌 것은 orcad 가 거절.
+    for (const bad of [`${home}/.claude/projects/-repo/s4.jsonl`, `${home}/secret.jsonl`, `${home}/.ara-server/claude-shared/../../secret.jsonl`, `${home}/.ara-server/token`]) {
+      await expect(agents.read('r4', bad, null), bad).rejects.toThrow('path not allowed')
+    }
+    rc.stop()
+    await agents.kill(hostKey, c, 'r4')
+    expect(out).toContain('HOOKED')
+    await execSh(c, 'rm -f "$HOME/p.json" "$HOME/secret.jsonl"')
+    agents.detach(hostKey)
+    expect(await uninstallHost(c)).toEqual([])
+    c.end()
+  }, 120_000)
 })

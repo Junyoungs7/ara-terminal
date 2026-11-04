@@ -12,6 +12,8 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 #   the daemon broadcasts a status event to attached clients and keeps the last one (late clients get it on attach and in list).
 # R3 (server accounts): accounts/<id>/ is one CLI login (CLAUDE_CONFIG_DIR / CODEX_HOME, 700). Claude history folders are links into
 #   claude-shared/ so any account can --resume any conversation. The user's own ~/.claude is never touched. All of it lives in this folder.
+# R4 (chat view on the server's transcript): 'read' returns whole lines of a .jsonl under claude-shared/ or accounts/ only
+#   (tail first, then by byte offset, capped). Hooks also pass transcript_path and the prompt (tab title / chat name).
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
 import codecs, errno, fcntl, hmac, json, os, pty, re, selectors, shutil, signal, socket, stat, struct, subprocess, sys, termios, time
@@ -42,6 +44,11 @@ HOOK_STR_MAX = 256
 TOOL_INPUT_MAX = 16384
 # R3: session_id (resume under another account), error (StopFailure rate_limit -> 'switch account' band).
 HOOK_KEYS = ('hook_event_name', 'tool_name', 'agent_id', 'agent_type', 'session_id', 'error')
+# R4: transcript_path (chat view), prompt (tab title, chat name - cut to PROMPT_MAX).
+PATH_MAX = 4096
+PROMPT_MAX = 4096
+READ_MAX = 2 << 20
+LF = b'\n'
 ACCOUNTS = os.path.join(DIR, 'accounts')
 SHARED = os.path.join(DIR, 'claude-shared')
 ACCOUNT_META = '.ara-account.json'
@@ -370,6 +377,8 @@ def serve():
             raise Stop()
         if t == 'limits':
             return None
+        if t == 'read':
+            return read_transcript(r.get('path'), r.get('offset'), r.get('max'))
         if t == 'account':
             op = r.get('op')
             if op == 'add':
@@ -624,7 +633,55 @@ def slim(payload):
     ti = payload.get('tool_input')
     if ti is not None and len(json.dumps(ti, ensure_ascii=False)) <= TOOL_INPUT_MAX:
         out['tool_input'] = ti
+    tp = payload.get('transcript_path')
+    if isinstance(tp, str) and len(tp) <= PATH_MAX:
+        out['transcript_path'] = tp
+    pr = payload.get('prompt')
+    if isinstance(pr, str):
+        out['prompt'] = pr[:PROMPT_MAX]
     return out
+
+
+def read_transcript(path, offset, want):
+    """R4 chat view: whole lines of a .jsonl under claude-shared/ or accounts/ (checked after resolving links - no escape).
+    offset None (first open) or past the end (file rewritten -> reset) = the tail. A line longer than the cap is skipped."""
+    if not isinstance(path, str) or not path.endswith('.jsonl') or not os.path.isabs(path) or '\0' in path:
+        raise ValueError('path not allowed')
+    real = os.path.realpath(path)
+    if not any(real.startswith(os.path.realpath(root) + os.sep) for root in (SHARED, ACCOUNTS)):
+        raise ValueError('path not allowed')
+    if offset is not None and (not isinstance(offset, int) or isinstance(offset, bool) or offset < 0):
+        raise ValueError('bad offset')
+    want = want if isinstance(want, int) and not isinstance(want, bool) and 0 < want < READ_MAX else READ_MAX
+    fd = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError('path not allowed')
+        size = st.st_size
+        reset = offset is not None and offset > size
+        tail = offset is None or reset
+        start = max(0, size - want) if tail else offset
+        os.lseek(fd, start, os.SEEK_SET)
+        buf = b''
+        while len(buf) < min(want, size - start):
+            d = os.read(fd, min(want, size - start) - len(buf))
+            if not d:
+                break
+            buf += d
+    finally:
+        os.close(fd)
+    if tail and start > 0:
+        # Cut into the middle of a line - drop it.
+        i = buf.find(LF)
+        cut = i + 1 if i >= 0 else len(buf)
+        buf, start = buf[cut:], start + cut
+    end = buf.rfind(LF)
+    if end < 0:
+        # ponytail: a line longer than the cap is skipped whole (its rest parses as junk and is dropped); raise READ_MAX if that bites.
+        nxt = start + len(buf) if len(buf) >= want else start
+        return {'size': size, 'next': nxt, 'text': '', 'reset': reset}
+    return {'size': size, 'next': start + end + 1, 'text': buf[:end + 1].decode('utf-8', 'replace'), 'reset': reset}
 
 
 def hook(source):

@@ -24,6 +24,7 @@ import { createAgentDetector } from './detect'
 import { claudeLaunchArgs, createHookServer, geminiLaunchDefaults, installHooks, writeLaunchFile } from './hooks'
 import { createAgentStatusTracker, type AgentStatusTracker } from './status'
 import { createChatWatcher, type ChatWatcher } from './chat'
+import { createRemoteChat, type RemoteChat } from './remoteChat'
 import { generateChatName, listModels, scanSlash } from './options'
 import { ingestAiWrite } from '../code/aiLines'
 import { isOptionValue, type ModelCatalog } from '@shared/agentOptions'
@@ -64,7 +65,7 @@ export function registerAgentsFeature(deps: {
   home: string
   mainWc: () => WebContents | null
   /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
-  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta'> | null
+  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta' | 'read'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
 }): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string>; remoteHook(sessionId: string, source: string, payload: Record<string, unknown>): void } {
@@ -89,6 +90,13 @@ export function registerAgentsFeature(deps: {
   const userEnv: NodeJS.ProcessEnv = process.env['ARA_E2E'] === '1' ? {} : process.env
   const ensureChat = (): ChatWatcher =>
     (chat ??= createChatWatcher({ push: (e) => pushSend(deps.mainWc(), 'agents:chat', e), store: join(deps.userData, 'agent-chat.json'), home: deps.home, env: userEnv }))
+  // 3차 R4 원격 탭 채팅 보기 — 서버 transcript 를 그 세션의 orcad 연결로 읽는다(remoteChat.ts). 첫 원격 탭 때 만든다.
+  let rchat: RemoteChat | null = null
+  const ensureRemoteChat = (): RemoteChat =>
+    (rchat ??= createRemoteChat({
+      read: (id, path, offset) => deps.remote?.()?.read(id, path, offset) ?? Promise.reject(new Error('remote off')),
+      push: (e) => pushSend(deps.mainWc(), 'agents:chat', e)
+    }))
 
   // M5 AI-19 채팅 이름 — 탭마다 첫 요청 한 번. 이름은 userData/agent-names.json(데몬에 산 탭은 다시 켜도 그대로), 탭이 끝나면 지운다.
   const namesFile = join(deps.userData, 'agent-names.json')
@@ -96,6 +104,9 @@ export function registerAgentsFeature(deps: {
   const names = new Map<string, string>(savedNames && typeof savedNames === 'object' ? Object.entries(savedNames).filter((x): x is [string, string] => typeof x[1] === 'string') : [])
   const naming = new Set<string>()
   const tabMeta = new Map<string, { agent: AgentId; cwd: string }>()
+  // R4 원격 탭(이름·제목 짓기만 — Slack 탭 목록 등 tabMeta 를 쓰는 곳엔 안 들어간다). cwd 는 이 PC 의 홈: 이름 짓기는 로컬 CLI 로 하고, 원격 폴더는 이 PC 에 없다.
+  const remoteMeta = new Map<string, { agent: AgentId; cwd: string }>()
+  const metaOf = (id: string): { agent: AgentId; cwd: string } | undefined => tabMeta.get(id) ?? remoteMeta.get(id)
   const saveNames = (): void => {
     try {
       writeJsonAtomic(namesFile, Object.fromEntries(names))
@@ -104,11 +115,11 @@ export function registerAgentsFeature(deps: {
     }
   }
   const maybeName = (sessionId: string, firstPrompt: unknown): void => {
-    const meta = tabMeta.get(sessionId)
+    const meta = metaOf(sessionId)
     if (!settings.chatNaming || !meta || typeof firstPrompt !== 'string' || !firstPrompt.trim() || names.has(sessionId) || naming.has(sessionId)) return
     naming.add(sessionId) // 한 탭에 한 번(실패해도 다시 묻지 않는다 — Orca 도 첫 요청만)
     void generateChatName({ agent: meta.agent, settings, cwd: meta.cwd, firstPrompt }).then((name) => {
-      if (!name || !tabMeta.has(sessionId)) return
+      if (!name || !metaOf(sessionId)) return
       names.set(sessionId, name)
       saveNames()
       deps.remote?.()?.meta(sessionId, { name })
@@ -127,7 +138,7 @@ export function registerAgentsFeature(deps: {
     }
   }
   const noteFirstPrompt = (sessionId: string, prompt: unknown): void => {
-    if (genTitles.has(sessionId) || !tabMeta.has(sessionId) || typeof prompt !== 'string' || prompt.startsWith('/')) return
+    if (genTitles.has(sessionId) || !metaOf(sessionId) || typeof prompt !== 'string' || prompt.startsWith('/')) return
     const title = deriveGeneratedTabTitle(prompt)
     if (!title) return
     genTitles.set(sessionId, title)
@@ -153,6 +164,8 @@ export function registerAgentsFeature(deps: {
     if (tabRecords.delete(id)) saveTabRecords()
     chat?.forget(id)
     tabMeta.delete(id)
+    remoteMeta.delete(id)
+    rchat?.forget(id)
     awake.forget(id)
     if (names.delete(id)) saveNames()
     if (genTitles.delete(id)) saveTitles()
@@ -321,8 +334,11 @@ export function registerAgentsFeature(deps: {
     })
     return [...restoredTabs.filter((t) => deps.sessions().has(t.sessionId)), ...cut, ...coldTabs()]
   })
-  handle('agents:chatOpen', ({ sessionId }) => ensureChat().open(sessionId))
-  handle('agents:chatClose', ({ sessionId }) => chat?.close(sessionId))
+  handle('agents:chatOpen', ({ sessionId }) => (rchat?.has(sessionId) ? rchat.open(sessionId) : ensureChat().open(sessionId)))
+  handle('agents:chatClose', ({ sessionId }) => {
+    chat?.close(sessionId)
+    rchat?.close(sessionId)
+  })
   // 채팅 입력 → PTY. 첫 지시와 같은 길(status.ts submit — 입력 상자가 뜬 뒤 괄호 붙여넣기 → 길이만큼 기다려 Enter).
   // 바로 쓰면 에이전트가 뜨기 전 셸(PowerShell PSReadLine 의 미리 읽기)이 글을 먹는다 — e2e CHAT-1 실패의 원인.
   handle('agents:chatSend', ({ sessionId, agent, text }) => {
@@ -363,8 +379,8 @@ export function registerAgentsFeature(deps: {
     app.quit()
   })
   // ── M8 DM-05 원격(관리형 서버) ── 원격 탭은 훅 서버(127.0.0.1)에 닿지 않는다. 3차 R2: 훅은 서버의 orcad 가 받아(orcad.py hook) status 사건으로
-  // 보낸다 → remoteHook 이 로컬 훅과 같은 tracker 로. 옛 orcad(hookDir 없음)·Codex 는 화면 판정('추정')만. 채팅 보기·이름 짓기는
-  // 로컬 transcript·로컬 CLI 를 읽으므로 걸지 않는다. 명령줄은 POSIX 셸 기준(원격 로그인 셸)으로 만든다.
+  // 보낸다 → remoteHook 이 로컬 훅과 같은 tracker 로. 옛 orcad(hookDir 없음)·Codex 는 화면 판정('추정')만. R4: 채팅 보기는 서버
+  // transcript 를 orcad read 로(remoteChat.ts), 탭 제목·채팅 이름은 서버 훅의 prompt 로(이름 짓기 CLI 는 이 PC 에서). 명령줄은 POSIX 셸 기준(원격 로그인 셸)으로 만든다.
   /** R2 서버 orcad 가 들은 훅(status 사건) — 로컬 훅과 같은 상태 파이프라인(질문·승인 카드·알림 규칙 그대로). */
   // R3: 서버 훅의 session_id = 다른 계정으로 이어서(--resume) 할 id · StopFailure rate_limit = 한도 걸림(다음 지시면 풀림). 자식 이벤트는 안 본다.
   const remoteResume = new Map<string, string>()
@@ -373,6 +389,10 @@ export function registerAgentsFeature(deps: {
     if (!isHookSource(source)) return
     tracker?.hook({ source, paneKey: sessionId, payload })
     if (payload['agent_id']) return
+    // R4 채팅 보기(transcript_path)·탭 제목·채팅 이름(prompt) — 로컬 훅과 같은 규칙.
+    rchat?.hook(sessionId, payload)
+    maybeName(sessionId, payload['prompt'])
+    noteFirstPrompt(sessionId, payload['prompt'])
     const sid = payload['session_id']
     if (typeof sid === 'string' && sid) remoteResume.set(sessionId, sid)
     const ev = payload['hook_event_name']
@@ -381,6 +401,11 @@ export function registerAgentsFeature(deps: {
     if (hit) remoteLimit.add(sessionId)
     else remoteLimit.delete(sessionId)
     pushSend(deps.mainWc(), 'agents:remoteLimit', { sessionId, hit })
+  }
+  /** R4 원격 탭 표시 — 채팅 보기(서버 transcript)·이름 짓기 대상. 첫 지시 전에 건다(훅이 곧 온다). */
+  const remoteTab = (id: string, agent: AgentId): void => {
+    ensureRemoteChat().bind(id, agent)
+    remoteMeta.set(id, { agent, cwd: deps.home })
   }
   const launchRemote = async (host: string, agent: AgentId, cwd: string, prompt: string | undefined, resume: string | undefined, options: unknown): Promise<AgentLaunchResult> => {
     const remote = deps.remote?.()
@@ -409,6 +434,7 @@ export function registerAgentsFeature(deps: {
       return { ok: false, error: accountErrorText(err instanceof Error ? err.message : String(err)) }
     }
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
+    remoteTab(sessionId, agent)
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line, ...(used !== undefined ? { account: used } : {}) }
   }
@@ -421,6 +447,7 @@ export function registerAgentsFeature(deps: {
         const tab = tabOf(info)
         if (!tab) continue
         ensureTracker().track({ sessionId: info.id, agent: tab.agent, cols: info.cols, rows: info.rows })
+        remoteTab(info.id, tab.agent)
         // R2 서버 대장의 마지막 상태(늦게 붙은 PC) — attach 사건이 track 보다 먼저 올 수 있어 목록 값으로 한 번 더.
         if (info.status) remoteHook(info.id, info.status.source, info.status.payload)
         tabs.push(tab)
@@ -564,6 +591,7 @@ export function registerAgentsFeature(deps: {
     stop: () => {
       daemon.disconnect() // 세션·데몬은 산다 — 다음에 켜면 다시 붙는다
       chat?.stop()
+      rchat?.stop()
       awake.dispose()
       return hooks.stop()
     },

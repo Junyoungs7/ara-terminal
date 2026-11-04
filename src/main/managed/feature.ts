@@ -16,6 +16,7 @@ import type { ProfileStore } from '../secrets/ProfileStore'
 import { LOGIN_SESSION_KIND, STOP_SCRIPT, accountErrorText, accountLoginLine, consentPlan, decideUpdate, hostKeyOf, isServerAccountAgent, serverAccountsOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerAccount, type ServerSessionsHost } from '@shared/managedServers'
 import type { ManagedAccountsRequest, ManagedAccountsResult, ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
 import type { SshProfile } from '@shared/types'
+import type { TranscriptSlice } from '@shared/agentChat'
 import { runOnHosts } from '@shared/runOn'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
 import { connectSshClient, holdClient, type ConnectFailure } from '../sessions/ssh/SshBackend'
@@ -319,6 +320,7 @@ export function registerManagedFeature(deps: {
     attachOne: async (hostKey, id) => remote.attach(hostKey, await clientFor(hostKey), [id]),
     forget: (id) => dropTab(id),
     meta: (id, patch) => remote.meta(id, patch),
+    read: (id, path, offset) => remote.read(id, path, offset),
     savedTabs: () => tabs.map((x) => x.info),
     // 끊긴 원격 탭 닫기 — 잠깐 붙어서 끝낸다. 못 붙으면 기억해 두고 다음에 붙을 때 끝낸다(탭은 바로 닫힌다).
     async kill(hostKey, id) {
@@ -369,6 +371,8 @@ export type ManagedFeature = {
   forget(id: string): void
   /** R1 붙은 원격 세션의 meta 덧쓰기(제목 — 다른 PC 의 목록에 보인다). */
   meta(id: string, patch: Record<string, unknown>): void
+  /** R4 원격 탭 채팅 보기 — 서버 transcript 조각(RemoteAgents.read). */
+  read(id: string, path: string, offset: number | null): Promise<TranscriptSlice>
   /** 앱을 다시 켰을 때 '끊김'으로 되살릴 원격 탭(서버에 묻지 않는다 — 자동 재접속 없음). */
   savedTabs(): DaemonSessionInfo[]
   /** 끊긴 원격 탭을 닫을 때 서버의 세션을 끝낸다. false = 못 붙어서 다음 연결 때로 미룸. */

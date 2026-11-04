@@ -29,6 +29,8 @@ export type ChatMessage = { id: string; role: 'user' | 'assistant' | 'system'; b
 /** main → 렌더러: 바뀐(또는 새) 메시지들. reset 이면 앞의 것을 버리고 이것으로 시작(다른 파일·잘린 파일). */
 export type AgentChatEvent = { sessionId: string; messages: ChatMessage[]; reset?: boolean }
 export type AgentChatSnapshot = { messages: ChatMessage[]; file: string | null }
+/** R4 orcad read 의 답 — next = 다음에 읽을 바이트 위치, reset = 파일이 줄어 꼬리부터 다시 읽었다. */
+export type TranscriptSlice = { size: number; next: number; text: string; reset: boolean }
 
 
 /** 메모리·IPC 상한 — 이보다 오래된 메시지는 버린다(긴 대화의 화면은 꼬리가 중요하다). */
