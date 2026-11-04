@@ -4,8 +4,8 @@
 //
 // 각 장면은 step() 으로 감싼다 — 못 여는 화면은 건너뛰고 skipped.txt 에 한 줄 남긴다(투어 전체가 안 죽게).
 // 라이트 테마는 아직 없어 뺐다(생기면 THEMES 에 'light' 추가 — setTheme 이 data-theme·colorScheme 을 건다).
-import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, writeFileSync, appendFileSync, chmodSync, existsSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { test, expect, REPO_ROOT, tempDir, rmDir, newLocalShell, pickSidebarTab, openBottomTool, connectNewSshProfile, explorerWindow } from './fixtures'
@@ -62,6 +62,71 @@ function makeRepo(): { root: string; repo: string } {
   return { root, repo }
 }
 
+// ── AI 채팅 보기 장면용 가짜 claude — agentChat.spec 의 FAKE·fakeClaude 를 그대로 옮기고 질문 장면용 둘만 얹었다:
+//    ① 받은 글이 'ASK' 면 AskUserQuestion PreToolUse 훅(tool_input.questions)을 보내 막힘+질문 카드를 띄운다(기록은 안 씀)
+//    ② ESC(카드 [취소] = main agents:answer 의 raw ESC)를 받으면 Stop 훅으로 막힘을 푼다.
+const FAKE = String.raw`
+const { appendFileSync, mkdirSync } = require('node:fs')
+const { dirname } = require('node:path')
+const { spawnSync } = require('node:child_process')
+const args = process.argv.slice(3)
+if (args[0] === '--version') { console.log('9.9.9 (fake claude)'); process.exit(0) }
+const file = process.env.ARA_E2E_TRANSCRIPT
+const out = (s) => process.stdout.write(s.replace(/\n/g, '\r\n'))
+const RULE = '─'.repeat(40)
+const box = () => out(RULE + '\n❯ \n' + RULE + '\n  ? for shortcuts\n')
+const J = JSON.stringify
+let n = 0
+const rec = (o) => { mkdirSync(dirname(file), { recursive: true }); appendFileSync(file, J(Object.assign({ sessionId: 'fake-sid', cwd: process.cwd(), timestamp: new Date().toISOString() }, o)) + '\n') }
+const hook = (event, extra) => {
+  const script = process.env.ARA_E2E_HOOK_SCRIPT
+  if (!script) return
+  const input = J(Object.assign({ hook_event_name: event, session_id: 'fake-sid', transcript_path: file }, extra))
+  if (process.platform === 'win32') spawnSync('cmd.exe', ['/d', '/c', script], { input, stdio: ['pipe', 'ignore', 'ignore'] })
+  else spawnSync('/bin/sh', [script], { input, stdio: ['pipe', 'ignore', 'ignore'] })
+}
+setTimeout(box, 300)
+if (process.stdin.isTTY) process.stdin.setRawMode(true)
+process.stdin.setEncoding('utf8')
+let buf = ''
+process.stdin.on('data', (d) => {
+  if (d === '\u0003') process.exit(0)
+  if (d === '\u001b') { hook('Stop'); return }
+  buf += d
+  const plain = buf.replace(/\x1b\[200~[\s\S]*?\x1b\[201~/g, '')
+  if (!plain.includes('\r') || buf.includes('\x1b[200~') && !buf.includes('\x1b[201~')) return
+  const text = buf.replace(/\x1b\[20[01]~/g, '').replace(/\r$/, '').split('\r')[0]
+  buf = ''
+  if (text === 'ASK') {
+    hook('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '어느 방식으로 고칠까요?', header: '방식', multiSelect: false, options: [{ label: '작게 고친다', description: '해당 줄만 바꾼다' }, { label: '구조째 바꾼다', description: '관련 파일을 함께 정리한다' }] }] } })
+    return
+  }
+  n++
+  out('\nGOT: ' + text.replace(/\n/g, '⏎') + '\n')
+  rec({ type: 'user', uuid: 'u' + n, message: { role: 'user', content: text } })
+  hook('UserPromptSubmit')
+  rec({ type: 'assistant', uuid: 'a' + n + 'x', message: { id: 'm' + n, role: 'assistant', content: [{ type: 'tool_use', id: 't' + n, name: 'Bash', input: { command: 'echo fake-' + n } }] } })
+  rec({ type: 'user', uuid: 'r' + n, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't' + n, content: 'fake-' + n }] } })
+  rec({ type: 'assistant', uuid: 'a' + n + 'y', message: { id: 'm' + n + 'b', role: 'assistant', content: [{ type: 'text', text: '**ECHO ' + n + '**: ' + text }] } })
+  hook('Stop')
+  out('\n● Done.\n'); box()
+})
+`
+
+function fakeClaude(dir: string): string {
+  const js = join(dir, 'fake-claude.cjs')
+  writeFileSync(js, FAKE)
+  if (process.platform === 'win32') {
+    const p = join(dir, 'claude.cmd')
+    writeFileSync(p, ['@echo off', `node "${js}" claude %*`, ''].join('\r\n'))
+    return p
+  }
+  const p = join(dir, 'claude')
+  writeFileSync(p, ['#!/bin/sh', `exec node "${js}" claude "$@"`, ''].join('\n'))
+  chmodSync(p, 0o755)
+  return p
+}
+
 async function openSettings(page: Page, section: string): Promise<void> {
   if ((await page.locator('.settings-page.open').count()) === 0) await page.keyboard.press('Control+,')
   await page.click(`.settings-page .sp-nav [data-section="${section}"]`, { timeout: 5_000 })
@@ -78,6 +143,23 @@ for (const theme of THEMES) {
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'skipped.txt'), '')
       const { root, repo } = makeRepo()
+      // 채팅 보기 장면 — agentChat.spec 처럼 가짜 claude + 임시 홈(userData/e2e-home)의 기록·훅. 사용자 실제 ~/.claude 는 안 건드린다.
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      const claude = fakeClaude(bin)
+      const home = join(userDataDir, 'e2e-home')
+      const transcript = join(home, '.claude', 'projects', 'e2e-chat', 'fake-sid.jsonl')
+      const hookScript = join(home, '.ara', 'agent-hooks', process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh')
+      writeFileSync(
+        join(userDataDir, 'agents.json'),
+        JSON.stringify({
+          agents: { claude: { command: claude, env: { ARA_E2E_HOOK_SCRIPT: hookScript, ARA_E2E_TRANSCRIPT: transcript, CLAUDE_CONFIG_DIR: join(home, '.claude') } } },
+          migratedAiCliFlags: true,
+          chatNaming: false
+        })
+      )
+      const savedPath = process.env.PATH
+      process.env.PATH = bin + delimiter + (savedPath ?? '')
       try {
         const { app, page } = await launch(userDataDir)
         await app.evaluate(({ BrowserWindow }, w) => BrowserWindow.getAllWindows()[0].setSize(w[0], w[1]), [width, HEIGHT])
@@ -247,7 +329,49 @@ for (const theme of THEMES) {
           await page.click('[data-aiws="diff-open"]')
           await expect(page.locator('[data-diff="view"]')).toBeVisible({ timeout: 20_000 })
         })
+
+        // ── AI 채팅 보기(터미널 → 채팅 전환) ──
+        const chat = page.locator('[data-aiws="chat"]')
+        const chatInput = page.locator('[data-aiws="chat-input"]')
+        const sendChat = async (text: string): Promise<void> => {
+          await chatInput.fill(text)
+          await chatInput.press('Enter')
+          await expect(chatInput).toHaveValue('')
+        }
+        await step(c, 'ai-chat-view', async () => {
+          // agentChat.spec CHAT-1: 피커의 claude(9.9.9) → agent-launch → 훅 스크립트 생김 → chat-toggle → 채팅 입력으로 보냄 → msg·tool 확인
+          await page.click('.ai-rail [data-aiws="worktree"]')
+          const opt = page.locator('[data-aiws="agent-picker"] .aiws-mode[data-agent="claude"]')
+          if ((await opt.count()) > 0) {
+            await expect(opt).toContainText('9.9.9', { timeout: 20_000 })
+            await opt.click()
+            await page.click('[data-aiws="agent-launch"]')
+          }
+          await expect.poll(() => existsSync(hookScript), { timeout: 20_000 }).toBe(true)
+          await page.click('[data-aiws="chat-toggle"]')
+          await expect(chat).toBeVisible()
+          await sendChat('로그인 화면 버튼 정렬을 고쳐 줘')
+          await expect(chat.locator('.aiws-chat-msg.assistant').last()).toContainText('ECHO 1', { timeout: 15_000 })
+          await sendChat('테스트도 돌려 줘')
+          await expect(chat.locator('.aiws-chat-msg.assistant').last()).toContainText('ECHO 2', { timeout: 15_000 })
+          await chat.locator('.aiws-chat-tool[data-tool="Bash"]').first().locator('summary').click() // 도구 호출 펼침(CHAT-1 과 같은 자리)
+          await expect(chat.locator('.aiws-chat-msg.user')).toHaveCount(2)
+        })
+        await step(c, 'ai-chat-ask', async () => {
+          // 질문 카드는 훅(PreToolUse AskUserQuestion → status.ask)이 띄운다 — 가짜 claude 가 'ASK' 를 받으면 그 훅을 보낸다.
+          await sendChat('ASK')
+          await expect(page.locator('[data-aiws="ask-card"]')).toBeVisible({ timeout: 15_000 })
+        })
+        await step(c, 'ai-chat-input', async () => {
+          // 카드 [취소](ESC → 가짜 claude 가 Stop 훅)로 막힘을 푼 뒤 입력칸에 쓰다 만 글.
+          if ((await page.locator('[data-aiws="ask-card"]').count()) > 0) {
+            await page.click('[data-aiws="ask-cancel"]')
+            await expect(page.locator('[data-aiws="ask-card"]')).toHaveCount(0, { timeout: 15_000 })
+          }
+          await chatInput.fill('로그인 화면 말고 회원가입 화면도 같이 봐 줘')
+        })
       } finally {
+        process.env.PATH = savedPath
         rmDir(root)
       }
     })
