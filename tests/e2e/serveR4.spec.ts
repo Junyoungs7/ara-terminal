@@ -62,9 +62,10 @@ test('SERVE-R4-1 원격 Claude 탭 채팅 보기 — 서버 transcript 가 채�
     )
     writeFileSync(`${sftpRoot}/p.json`, J({ hook_event_name: 'UserPromptSubmit', session_id: 'e2e', transcript_path: tp, prompt: '원격 채팅 보기 확인' }))
 
-    const hostKey = `tester@127.0.0.1:${h.port}`
+    // connectNewSshProfile 의 기본 사용자 = dev(1차 실행 실패 원인: tester 로 가정해 동의 기록이 없는 호스트로 띄웠다).
+    const hostKey = `dev@127.0.0.1:${h.port}`
     const r = await page.evaluate(([cwd, host]) => window.ev.agents.launch('claude', cwd, undefined, undefined, undefined, host), [home, hostKey] as const)
-    expect(r.ok).toBe(true)
+    expect(r).toMatchObject({ ok: true })
     const sid = (r as { sessionId: string }).sessionId
     // 서버에 claude 가 없어도 셸은 남는다 — 그 세션 안에서 서버 훅을 부른다(ARA_ORCAD_SESSION 은 orcad 가 넣었다).
     await page.evaluate(([s]) => window.ev.session.input(s, 'python3 "$HOME/.ara-server/orcad.py" hook claude < "$HOME/p.json"\n'), [sid] as const)

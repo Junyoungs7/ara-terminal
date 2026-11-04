@@ -676,10 +676,30 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     for (const bad of [`${home}/.claude/projects/-repo/s4.jsonl`, `${home}/secret.jsonl`, `${home}/.ara-server/claude-shared/../../secret.jsonl`, `${home}/.ara-server/token`]) {
       await expect(agents.read('r4', bad, null), bad).rejects.toThrow('path not allowed')
     }
+
+    // 서버 본래 로그인(~/.claude/projects) — 그 세션의 훅이 알려 준 파일 하나만, 그 세션의 요청으로만. 다른 세션·projects 밖은 거절.
+    const own = `${home}/.claude/projects/-repo/own.jsonl`
+    await execSh(c, 'mkdir -p "$HOME/.claude/projects/-repo"')
+    writeFileSync(`${sftpRoot}/.claude/projects/-repo/own.jsonl`, lines[0] + '\n')
+    writeFileSync(`${sftpRoot}/own.json`, J({ hook_event_name: 'UserPromptSubmit', session_id: 'o1', transcript_path: own }))
+    writeFileSync(`${sftpRoot}/out.json`, J({ hook_event_name: 'UserPromptSubmit', session_id: 'o2', transcript_path: `${home}/secret.jsonl` }))
+    await agents.create(hostKey, c, { id: 'r4b', cwd: home, env: {}, meta: { agent: 'claude', title: '밖', startedAt: Date.now() } })
+    // 훅 전에는 그 세션도 못 연다.
+    await expect(agents.read('r4', own, null)).rejects.toThrow('path not allowed')
+    const before = status.length
+    backends.get('r4')!.write(`python3 "$HOME/.ara-server/orcad.py" hook claude < "$HOME/own.json"\n`)
+    backends.get('r4b')!.write(`python3 "$HOME/.ara-server/orcad.py" hook claude < "$HOME/out.json"\n`)
+    await waitFor(() => status.length >= before + 2, 20_000, '두 세션 훅')
+    expect((await agents.read('r4', own, null)).text).toBe(lines[0] + '\n')
+    await expect(agents.read('r4b', own, null), '다른 세션').rejects.toThrow('path not allowed')
+    await expect(agents.read('r4b', `${home}/secret.jsonl`, null), 'projects 밖').rejects.toThrow('path not allowed')
+    // 앱 쪽도 같은 길로 화면이 나온다(훅 → remoteChat → read).
+    await waitFor(() => pushed.some((e) => e.reset && e.messages.length === 1), 10_000, '본래 로그인 채팅')
+    await agents.kill(hostKey, c, 'r4b')
     rc.stop()
     await agents.kill(hostKey, c, 'r4')
     expect(out).toContain('HOOKED')
-    await execSh(c, 'rm -f "$HOME/p.json" "$HOME/secret.jsonl"')
+    await execSh(c, 'rm -rf "$HOME/p.json" "$HOME/own.json" "$HOME/out.json" "$HOME/secret.jsonl" "$HOME/.claude"')
     agents.detach(hostKey)
     expect(await uninstallHost(c)).toEqual([])
     c.end()

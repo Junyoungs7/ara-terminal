@@ -14,6 +14,8 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 #   claude-shared/ so any account can --resume any conversation. The user's own ~/.claude is never touched. All of it lives in this folder.
 # R4 (chat view on the server's transcript): 'read' returns whole lines of a .jsonl under claude-shared/ or accounts/ only
 #   (tail first, then by byte offset, capped). Hooks also pass transcript_path and the prompt (tab title / chat name).
+#   A session on the server's own login writes under ~/.claude/projects: only the one file that session's own hook named is
+#   readable, and only by a read for that session (bound in the session ledger).
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
 import codecs, errno, fcntl, hmac, json, os, pty, re, selectors, shutil, signal, socket, stat, struct, subprocess, sys, termios, time
@@ -118,6 +120,7 @@ class Session(object):
         self.replay = []
         self.size = 0
         self.status = None
+        self.transcript = None
         self.info = {'id': self.id, 'pid': pid, 'cwd': cwd, 'cols': cols, 'rows': rows, 'meta': spec.get('meta') or {}, 'account': self.account}
         self.resize(cols, rows)
 
@@ -347,6 +350,9 @@ def serve():
             # A subagent's tool event alone says little about the tab; late clients get the last top-level one.
             if not payload.get('agent_id'):
                 s.status = ev
+                own = own_transcript(payload.get('transcript_path'))
+                if own:
+                    s.transcript = own
             broadcast(s.id, ev, True)
             return None
         if t == 'write':
@@ -378,7 +384,8 @@ def serve():
         if t == 'limits':
             return None
         if t == 'read':
-            return read_transcript(r.get('path'), r.get('offset'), r.get('max'))
+            s = sessions.get(r.get('id'))
+            return read_transcript(r.get('path'), r.get('offset'), r.get('max'), s.transcript if s else None)
         if t == 'account':
             op = r.get('op')
             if op == 'add':
@@ -642,13 +649,23 @@ def slim(payload):
     return out
 
 
-def read_transcript(path, offset, want):
-    """R4 chat view: whole lines of a .jsonl under claude-shared/ or accounts/ (checked after resolving links - no escape).
-    offset None (first open) or past the end (file rewritten -> reset) = the tail. A line longer than the cap is skipped."""
+def own_transcript(path):
+    """A hook's transcript under the server login's ~/.claude/projects (resolved) - else None."""
+    if not isinstance(path, str) or not path.endswith('.jsonl') or not os.path.isabs(path) or '\0' in path:
+        return None
+    real = os.path.realpath(path)
+    root = os.path.realpath(os.path.join(os.path.expanduser('~'), '.claude', 'projects'))
+    return real if real.startswith(root + os.sep) and real.endswith('.jsonl') else None
+
+
+def read_transcript(path, offset, want, own=None):
+    """R4 chat view: whole lines of a .jsonl under claude-shared/ or accounts/ (checked after resolving links - no escape),
+    or own = the one file the asking session's hook named (server login). offset None (first open) or past the end
+    (file rewritten -> reset) = the tail. A line longer than the cap is skipped."""
     if not isinstance(path, str) or not path.endswith('.jsonl') or not os.path.isabs(path) or '\0' in path:
         raise ValueError('path not allowed')
     real = os.path.realpath(path)
-    if not any(real.startswith(os.path.realpath(root) + os.sep) for root in (SHARED, ACCOUNTS)):
+    if real != own and not any(real.startswith(os.path.realpath(root) + os.sep) for root in (SHARED, ACCOUNTS)):
         raise ValueError('path not allowed')
     if offset is not None and (not isinstance(offset, int) or isinstance(offset, bool) or offset < 0):
         raise ValueError('bad offset')

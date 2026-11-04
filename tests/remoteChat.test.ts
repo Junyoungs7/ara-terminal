@@ -173,7 +173,15 @@ describe.skipIf(!READY)('orcad read — 경로 검사 · 상한 · 꼬리 · 증
       'go("boolOffset", p, True, None)',
       'go("strOffset", p, "5", None)',
       'go("notStr", 5, None, None)',
-      'out["bigText"] = len(out["big"].pop("text").encode("utf-8"))',
+      // 서버 본래 로그인: 그 세션의 훅이 알려 준 ~/.claude/projects 파일 하나만(HOME 은 임시 폴더로 — 진짜 홈을 안 본다).
+      'os.environ["HOME"] = os.path.join(D, "home")',
+      'mine = os.path.join(D, "home", ".claude", "projects", "-repo", "x.jsonl")',
+      'out["ownOk"] = orcad.own_transcript(mine) == os.path.realpath(mine)',
+      'open(os.path.join(D, "home", ".claude", "settings.jsonl"), "w").write("{}\\n")',
+      'out["ownRejects"] = [orcad.own_transcript(p) for p in (os.path.join(D, "secret.jsonl"), os.path.join(D, "home", ".claude", "settings.jsonl"), os.path.join(D, "home", ".claude", "projects", "..", "settings.jsonl"), "home/.claude/projects/-repo/x.jsonl", os.path.join(D, "home", ".claude", "projects", "-repo", "dir.json"), 5)]',
+      'go("ownRead", mine, None, None, orcad.own_transcript(mine))',
+      'go("ownOther", mine, None, None, os.path.realpath(os.path.join(S, "projects", "-repo", "s.jsonl")))',
+      'out["bigText"] =len(out["big"].pop("text").encode("utf-8"))',
       'out["bigFirst"] = json.loads(orcad.read_transcript(big, None, None)["text"].split("\\n")[0])["n"]',
       'out["bigReal"] = os.path.getsize(big)',
       'out["READ_MAX"] = orcad.READ_MAX',
@@ -205,5 +213,10 @@ describe.skipIf(!READY)('orcad read — 경로 검사 · 상한 · 꼬리 · 증
     for (const k of ['dotdot', 'userClaude', 'link', 'relative', 'notJsonl', 'dir', 'notStr']) expect(o[k], k).toEqual({ error: 'path not allowed' })
     for (const k of ['badOffset', 'boolOffset', 'strOffset']) expect(o[k], k).toEqual({ error: 'bad offset' })
     expect(o.missing.error).toMatch(/No such file/)
+    // 서버 본래 로그인 — 그 세션이 받은 파일 하나만 열리고, 다른 파일을 받은 세션이면 거절. projects 밖·.. ·상대·종류는 묶지도 않는다.
+    expect(o.ownOk).toBe(true)
+    expect(o.ownRejects).toEqual([null, null, null, null, null, null])
+    expect(o.ownRead.text).toBe('{}\n')
+    expect(o.ownOther).toEqual({ error: 'path not allowed' })
   })
 })

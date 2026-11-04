@@ -182,7 +182,7 @@ export function createRemoteAgents(deps: {
     release,
     read(id, path, offset) {
       const x = backends.get(id)
-      return x ? x.b.conn.request<TranscriptSlice>({ type: 'read', path, offset }) : Promise.reject(new Error('not attached'))
+      return x ? x.b.conn.request<TranscriptSlice>({ type: 'read', id, path, offset }) : Promise.reject(new Error('not attached'))
     },
     meta(id, patch) {
       const x = backends.get(id)

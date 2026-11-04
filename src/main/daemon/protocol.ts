@@ -155,8 +155,8 @@ export type DaemonRequest =
   | { rid: number; type: 'limits'; limits: AgentLimits }
   /** 원격(orcad) R3 서버 계정 — 목록·추가·지우기(공유 기록은 남김)·기본 정하기. 답은 늘 목록(add 는 만든 계정). */
   | { rid: number; type: 'account'; op: 'list' | 'add' | 'remove' | 'default'; agent?: string; label?: string; id?: string | null }
-  /** 원격(orcad) R4 채팅 보기 — claude-shared·accounts 아래 .jsonl 의 온전한 줄만(offset 없음 = 꼬리, 상한 max). */
-  | { rid: number; type: 'read'; path: string; offset: number | null; max?: number }
+  /** 원격(orcad) R4 채팅 보기 — claude-shared·accounts 아래 .jsonl(또는 그 세션 id 의 훅이 알려 준 ~/.claude/projects 파일 하나)의 온전한 줄만(offset 없음 = 꼬리, 상한 max). */
+  | { rid: number; type: 'read'; id?: string; path: string; offset: number | null; max?: number }
 
 /** 데몬 → 앱: 답(rid) 또는 사건(data·exit). */
 export type DaemonReply = { type: 'reply'; rid: number; ok: boolean; error?: string; result?: unknown }
