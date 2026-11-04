@@ -143,6 +143,8 @@ async function start(launch: (ud: string) => Promise<{ app: import('@playwright/
   await expect.poll(() => term(sid), { timeout: 20_000 }).toContain('GOT: hello')
   // R0 전제: A 의 대화가 기본 폴더(공유)에 있다.
   await expect.poll(() => existsSync(join(home, '.claude', 'projects', 'e2e', 'fake-sid.jsonl')), { timeout: 10_000 }).toBe(true)
+  // 파일이 생긴 것과 훅이 앱에 닿은 것은 다른 시점 — 훅이 transcript 경로를 알려 줘야 resumeIds 가 id 를 준다(없으면 switchAccount 가 noSession 으로 조용히 멈춘다).
+  await expect.poll(() => page.evaluate(async (s) => (await window.ev.agents.resumeIds([s]))[s] ?? '', sid), { timeout: 20_000 }).toBe('fake-sid')
   return { page, sid, home }
 }
 
