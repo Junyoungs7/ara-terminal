@@ -9,7 +9,7 @@ import { areWorktreePathsEqual } from '@shared/worktrees'
 import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
 import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
-import { hostOfWorktree, useAiwsStore } from './store'
+import { ensureAiwsLoaded, hostOfWorktree, useAiwsStore } from './store'
 import { agentNotesEnabled, openNoteVia, pushNote } from '../../store/notify'
 import { isLockedNow } from '../../store/lock'
 import { t } from '../../i18n'
@@ -59,6 +59,8 @@ type AgentState = {
   activeTabByWorktree: Record<string, string>
   /** 탭(세션)별 에이전트 상태 — main 원장의 사본. */
   statusById: Record<string, AgentStatusView>
+  /** R1 원격 탭에 지금 붙은 PC 이름들(이 PC 포함 — 둘 이상이면 탭에 "PC n대"). 붙을 때 사건이 탭보다 먼저 올 수 있어 탭과 따로 둔다. */
+  viewersById: Record<string, string[]>
   /** 봤나(herdr seen). 없으면 본 것. */
   seenById: Record<string, boolean>
   /** 지금 화면에 보이는 에이전트 탭(AI 작업 공간이 열려 있고 그 탭이 고른 탭). 없으면 null. */
@@ -79,13 +81,18 @@ type AgentState = {
   setActiveTab: (worktreeId: string, sessionId: string) => void
   /** M8 DM-05 끊긴 원격 탭 [다시 연결] — 그 서버의 끊긴 탭을 모두 같은 세션으로 되살린다. 실패면 사유. */
   reconnectHost: (hostKey: string) => Promise<string | null>
+  /** R1 서버 세션에 붙기(다른 PC 가 만든 것도) — 이 PC 에 그 저장소가 없으면 등록하고, 그 탭으로 간다. 실패면 사유. */
+  attachRemote: (hostKey: string, sessionId: string) => Promise<string | null>
+  /** R1 탭 메뉴 "서버에서도 끝내기" — 서버의 에이전트를 끝내고 탭을 닫는다(다른 PC 의 탭도 끝남으로). */
+  endRemote: (sessionId: string) => Promise<void>
+  /** 탭 닫기. 원격 탭은 이 PC 에서만(R1 결정 4 ⓑ — 서버 세션은 산다). */
   closeTab: (sessionId: string) => void
   setViewing: (sessionId: string | null) => void
   setView: (view: AiwsView) => void
 }
 
 /** search = 왼쪽 목록 자리가 전체 검색(WS-09)으로 바뀌고 가운데는 작업 단위 그대로. */
-export type AiwsView = 'worktree' | 'dashboard' | 'activity' | 'sessions' | 'search'
+export type AiwsView = 'worktree' | 'dashboard' | 'activity' | 'sessions' | 'servers' | 'search'
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
   detected: null,
@@ -94,6 +101,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   tabs: [],
   activeTabByWorktree: {},
   statusById: {},
+  viewersById: {},
   seenById: {},
   viewing: null,
   view: 'worktree',
@@ -169,12 +177,54 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     return null
   },
 
+  attachRemote: async (hostKey, sessionId) => {
+    const go = (worktreeId: string): void => {
+      useAiwsStore.getState().setActiveWorktree(worktreeId)
+      get().setActiveTab(worktreeId, sessionId)
+      get().setView('worktree')
+    }
+    const open = get().tabs.find((x) => x.sessionId === sessionId)
+    if (open && !open.exited) {
+      go(open.worktreeId)
+      return null
+    }
+    await ensureAiwsLoaded() // F1 로 터미널 공간에서 왔으면 작업 단위 목록이 아직 없을 수 있다
+    const r = await window.ev.agents.attachRemote(hostKey, sessionId)
+    if (!r.ok) return r.error
+    const tab = r.tabs[0]
+    if (!tab) return t('servers.err.gone')
+    const find = (): string | undefined =>
+      Object.values(useAiwsStore.getState().worktreesByRepo)
+        .flat()
+        .find((w) => areWorktreePathsEqual(w.path, tab.cwd, 'other'))?.id
+    // 다른 PC 가 만든 세션 — 이 PC 에 그 원격 저장소가 없으면 등록한다(탭은 작업 단위에 산다).
+    if (!find()) {
+      const p = await useAiwsStore.getState().addRemoteRepo(hostKey, tab.cwd)
+      if (typeof p === 'string') return p
+    }
+    if (open) {
+      set((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === sessionId ? { ...x, exited: false, lost: false } : x)) }))
+      watchExit(sessionId)
+    } else restoreTabs(r.tabs)
+    const w = find()
+    if (w) go(w)
+    return null
+  },
+
+  endRemote: async (sessionId) => {
+    const tab = get().tabs.find((x) => x.sessionId === sessionId)
+    if (!tab?.host) return
+    await window.ev.agents.killRemote(tab.host, sessionId).catch(() => false)
+    get().closeTab(sessionId)
+  },
+
   closeTab: (sessionId) => {
     const tab = get().tabs.find((t) => t.sessionId === sessionId)
     if (!tab) return
+    // 원격 탭의 destroy = 이 PC 에서만 놓기(main RemoteBackend) — 서버 세션은 산다. 서버에서 끝내기는 endRemote.
     if (!tab.exited) void window.ev.session.destroy(sessionId)
-    // M8 R4 끊긴 원격 탭 — 서버의 에이전트도 끝낸다(Orca: 닫기 = 종료, 묻지 않는다). 잠깐 붙어서 끝내고, 못 붙으면 다음에 그 서버에 붙을 때.
-    else if (tab.lost && tab.host) void window.ev.agents.killRemote(tab.host, sessionId).catch(() => {})
+    // R1 끊긴 원격 탭 — 이 PC 에서만 닫는다(다음에 켜도 되살리지 않게 저장 목록에서만 뺀다). M8 R4 의 "닫기 = 서버에서 끝내기"를 바꿨다.
+    else if (tab.lost && tab.host) void window.ev.agents.forgetRemote(sessionId).catch(() => {})
     clearDraft(sessionId)
     const pending = pendingNotes.get(sessionId)
     if (pending) clearTimeout(pending.timer)
@@ -183,6 +233,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const tabs = s.tabs.filter((t) => t.sessionId !== sessionId)
       const { [sessionId]: _st, ...statusById } = s.statusById
       const { [sessionId]: _seen, ...seenById } = s.seenById
+      const { [sessionId]: _viewers, ...viewersById } = s.viewersById
       const { [sessionId]: _chat, ...chatOn } = s.chatOn
       writeChatOn(chatOn)
       const active = { ...s.activeTabByWorktree }
@@ -191,7 +242,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         if (rest.length) active[tab.worktreeId] = rest[rest.length - 1].sessionId
         else delete active[tab.worktreeId]
       }
-      return { tabs, activeTabByWorktree: active, statusById, seenById, chatOn }
+      return { tabs, activeTabByWorktree: active, statusById, seenById, viewersById, chatOn }
     })
   },
 
@@ -387,6 +438,8 @@ function startStatus(): void {
   window.ev.agents.onName((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, name: e.name } : x)) })))
   // M11 첫 지시로 지은 제목 — 터미널에서 친 첫 요청(훅)·채팅 입력. 실행 지시의 것은 launchAgent 가 바로 붙인다.
   window.ev.agents.onTitle((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, genTitle: e.title } : x)) })))
+  // R1 원격 탭에 붙은 PC(이 PC 포함).
+  window.ev.agents.onViewers((e) => useAgentStore.setState((s) => ({ viewersById: { ...s.viewersById, [e.sessionId]: e.viewers } })))
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
   void window.ev.agents
     .tabs()

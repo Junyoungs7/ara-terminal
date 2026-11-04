@@ -1,0 +1,103 @@
+/* R1 다른 PC 에서 이어 보기 — AI 공간 › 서버(목업 1-sessions A) · 원격 탭 "PC n대" 배지(목업 3-link A). 색은 토큰만. */
+.srv-page {
+  overflow: auto;
+}
+.srv-page .aiws-vault-head svg,
+.srv-hd svg,
+.srv-ic {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.srv-card {
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.srv-hd {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-hi);
+  flex-wrap: wrap;
+}
+.srv-mono {
+  font-family: var(--mono);
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srv-lo {
+  color: var(--text-lo);
+  font-size: var(--fs-micro);
+}
+.srv-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+}
+.srv-pill.ok {
+  color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok-line);
+}
+.srv-pill.off {
+  color: var(--err);
+  box-shadow: inset 0 0 0 1px var(--err-line);
+}
+.srv-pill.ai {
+  color: var(--sig-ai-ink);
+  box-shadow: inset 0 0 0 1px var(--sig-ai);
+}
+.srv-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-base);
+  color: var(--text-mid);
+}
+.srv-tbl th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.srv-tbl td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+.srv-tbl tr.here {
+  box-shadow: inset 2px 0 0 var(--sig-ai);
+}
+.srv-tt b {
+  display: block;
+  color: var(--text-hi);
+  font-weight: 500;
+}
+.srv-tt span {
+  font-size: var(--fs-micro);
+  color: var(--text-lo);
+}
+.srv-act {
+  white-space: nowrap;
+  text-align: right;
+}
+.srv-act .btn + .btn {
+  margin-left: var(--sp-2);
+}
+/* 원격 탭 — 다른 PC 도 붙어 있다(앰버 = 사람 신호). */
+.aiws-pcs {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  color: var(--sig-user-ink);
+  box-shadow: inset 0 0 0 1px var(--sig-user-line);
+}

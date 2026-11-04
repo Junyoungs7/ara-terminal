@@ -1,6 +1,6 @@
 // M8 관리형 서버 동의 화면 — 설정 › 관리형 서버의 [설치]와 Run on(새 작업 카드에서 동의 안 된 서버를 고를 때)이 같은 화면을 쓴다.
 // 진입 청크에 실려도 되는 작은 함수들(패널 본체는 lazy).
-import type { ManagedConsentPlan } from '@shared/managedServers'
+import { adoptKindOf, type ManagedConsentPlan } from '@shared/managedServers'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import { t } from '../../i18n'
 
@@ -31,8 +31,36 @@ export async function askManagedConsent(ask: (spec: DialogSpec) => Promise<Dialo
     await ask({ title: t('managed.consent.title'), message: t(`managed.unsupported.${plan.support.reason}`), detail: [{ label: t('managed.consent.host'), value: `${hostKey} · ${plan.probe.os || '?'} ${plan.probe.arch}` }], cancelLabel: null })
     return 'cancel'
   }
-  const r = await ask({ title: t('managed.consent.title'), message: t('managed.consent.message'), detail: consentRows(plan), confirmLabel: t('managed.install'), cancelLabel: t('managed.cancel') })
+  // R1 이미 설치됨(다른 PC 가 깐 서버) — 새로 설치하지 않고 이 PC 에서도 쓰는 채택 동의(목업 2-adopt A 모달).
+  const r = plan.probe.installed
+    ? await ask(adoptSpec(plan, plan.probe.installed))
+    : await ask({ title: t('managed.consent.title'), message: t('managed.consent.message'), detail: consentRows(plan), confirmLabel: t('managed.install'), cancelLabel: t('managed.cancel') })
   if (r !== 'confirm') return 'cancel'
   const rec = await window.ev.managed.install(hostKey)
   return rec.state === 'failed' ? { error: rec.note ?? t('managed.state.failed') } : 'installed'
+}
+
+/**
+ * R1 채택 동의 화면. 판이 같으면 이 PC 에 동의 기록만 남기고 서버에는 아무것도 안 쓴다.
+ * 서버가 옛 판이면 세션이 없을 때만 올리고(돌고 있으면 그 판으로 쓰다가 끝난 뒤), 새 판이면 낮추지 않는다(decideUpdate 규칙 그대로).
+ */
+export function adoptSpec(plan: ManagedConsentPlan, installed: string): DialogSpec {
+  const app = plan.app ?? installed
+  const kind = adoptKindOf(installed, app)
+  const n = plan.sessions ?? 0
+  const held = kind === 'older' && n > 0
+  return {
+    title: t('managed.adopt.title'),
+    message: t('managed.adopt.message'),
+    detail: [
+      { label: t('managed.consent.host'), value: plan.hostKey },
+      { label: t('managed.adopt.where'), value: plan.dir },
+      { label: t('managed.adopt.version'), value: `${installed} — ${t(`managed.adopt.${held ? 'held' : kind}`).replace('{app}', app)}` },
+      { label: t('managed.adopt.sessions'), value: t('managed.adopt.sessionsN').replace('{n}', String(n)) },
+      { label: t('managed.adopt.what'), value: t(kind === 'older' && !held ? 'managed.adopt.whatUpdate' : 'managed.adopt.whatNone') },
+      { label: t('managed.adopt.both'), value: t('managed.adopt.bothNote') }
+    ],
+    confirmLabel: held ? t('managed.adopt.okHeld').replace('{v}', installed) : t('managed.adopt.ok'),
+    cancelLabel: t('managed.cancel')
+  }
 }

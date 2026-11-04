@@ -3,6 +3,7 @@ import { MENUBAR, type MenuCommandId } from '../interactions/actions'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { t } from '../i18n'
 import { featureOf, type FeatureId, type FeatureShown } from '@shared/features'
+import type { ServerSessionsHost } from '@shared/managedServers'
 
 // F31 통합 검색(커맨드 팔레트) — 준영님 요청(2026-08-13):
 // "vscode처럼 상단에 통합 검색 버튼 제공하여 거기서 바로 킬 수 있도록, 프로필도 거기서 켜거나,
@@ -17,7 +18,7 @@ import { featureOf, type FeatureId, type FeatureShown } from '@shared/features'
 //
 // 화면(CommandPalette.tsx)은 여기서 나온 목록을 그리기만 한다. 아래는 전부 순수 함수다.
 
-export type PaletteKind = 'session' | 'action' | 'command' | 'profile' | 'work'
+export type PaletteKind = 'session' | 'server' | 'action' | 'command' | 'profile' | 'work'
 
 export type PaletteItem = {
   /** 목록 key + e2e 선택자. 종류별로 접두어가 달라 서로 부딪히지 않는다. */
@@ -42,6 +43,8 @@ export type PaletteRun =
   | { do: 'connect'; profileId: string }
   | { do: 'work'; workId: string }
   | { do: 'session'; sessionId: string }
+  /** R1 서버 세션에 붙기(AI 공간 탭으로). */
+  | { do: 'serverSession'; hostKey: string; sessionId: string }
 
 /**
  * KEYMAP 에 **같은 기능이 이미 있는** 메뉴 명령. 팔레트에 두 줄로 뜨지 않게 건너뛴다
@@ -56,6 +59,7 @@ const COMMAND_DUPES: Partial<Record<MenuCommandId, KeymapAction>> = { 'help.chea
 /** 종류별 머리말. 섞여 나오면 무엇을 고르는 중인지 흐려진다. */
 export const PALETTE_GROUPS: readonly { kind: PaletteKind; key: string }[] = [
   { kind: 'session', key: 'palette.group.open' },
+  { kind: 'server', key: 'palette.group.server' },
   { kind: 'action', key: 'palette.group.action' },
   { kind: 'command', key: 'palette.group.command' },
   { kind: 'profile', key: 'palette.group.profile' },
@@ -207,13 +211,15 @@ export function openItems(
 export function paletteHome(
   items: readonly PaletteItem[],
   open: readonly PaletteItem[],
-  recentProfileIds: readonly string[]
+  recentProfileIds: readonly string[],
+  servers: readonly PaletteItem[] = []
 ): { key: string; items: PaletteItem[] }[] {
   const recent = recentProfileIds
     .map((id) => items.find((i) => i.id === 'profile:' + id))
     .filter((i): i is PaletteItem => !!i)
   return [
     { key: 'palette.group.open', items: [...open] },
+    { key: 'palette.group.server', items: [...servers] },
     { key: 'palette.group.recent', items: recent },
     { key: 'palette.group.hidden', items: items.filter((i) => i.off) }
   ].filter((g) => g.items.length > 0)
@@ -236,6 +242,23 @@ export function noteRecentServer(profileId: string): void {
   } catch {
     /* 저장 못 하면 최근 목록만 빈다 */
   }
+}
+
+/**
+ * R1 F1 "서버 세션"(목업 1-sessions B) — 관리형 서버에 살아 있는 에이전트 세션. 고르면 AI 공간에서 그 세션에 붙는다(다른 PC 가 만든 것도).
+ * 보조 글: 서버 · 에이전트 · 만든 PC · 이 PC 에 열림/보는 PC.
+ */
+export function serverItems(hosts: readonly ServerSessionsHost[]): PaletteItem[] {
+  return hosts.flatMap((h) =>
+    h.sessions.map((s) => ({
+      id: `server:${h.hostKey}:${s.id}`,
+      kind: 'server' as const,
+      label: s.title,
+      hint: [h.label, s.agent, s.pc ? t('servers.from').replace('{pc}', s.pc) : '', s.here ? t('servers.here') : s.viewers.length ? t('servers.seeing').replace('{list}', s.viewers.join(', ')) : ''].filter(Boolean).join(' · '),
+      alias: `${h.hostKey} ${s.cwd}`,
+      run: { do: 'serverSession' as const, hostKey: h.hostKey, sessionId: s.id }
+    }))
+  )
 }
 
 /** ↑↓ 이동 — 끝에서 반대편으로 돈다(목록이 짧아 감아 도는 편이 빠르다). 빈 목록은 0. */

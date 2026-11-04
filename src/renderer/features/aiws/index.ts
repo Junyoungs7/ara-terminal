@@ -11,3 +11,5 @@ export const AiHome = lazy(() => import('./AiSpace').then((m) => ({ default: m.A
 export const AgentSettings = lazy(() => import('./AgentSettingsPanel').then((m) => ({ default: m.AgentSettingsPanel })))
 /** p3-M21 설정 › AI 작업 공간 › 시작하기(셋업 가이드). 그 섹션을 열 때 불러온다. */
 export const SetupGuideSettings = lazy(() => import('./setupGuide/SetupGuide').then((m) => ({ default: m.SetupGuideSettings })))
+/** R1 F1 "서버 세션"에서 고른 세션에 붙는다(AI 공간 탭으로) — 그때 AI 공간 상태 코드를 불러온다. 실패면 사유. */
+export const attachServerSession = (hostKey: string, sessionId: string): Promise<string | null> => import('./agentStore').then((m) => m.useAgentStore.getState().attachRemote(hostKey, sessionId))

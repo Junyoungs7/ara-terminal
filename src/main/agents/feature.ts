@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { hostname } from 'node:os'
 import { app, powerMonitor, powerSaveBlocker, type WebContents } from 'electron'
 import { handle } from '../ipc/handle'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
@@ -62,7 +63,7 @@ export function registerAgentsFeature(deps: {
   home: string
   mainWc: () => WebContents | null
   /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
-  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill'> | null
+  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
 }): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string> } {
@@ -109,6 +110,7 @@ export function registerAgentsFeature(deps: {
       if (!name || !tabMeta.has(sessionId)) return
       names.set(sessionId, name)
       saveNames()
+      deps.remote?.()?.meta(sessionId, { name })
       pushSend(deps.mainWc(), 'agents:name', { sessionId, name })
     })
   }
@@ -129,6 +131,8 @@ export function registerAgentsFeature(deps: {
     if (!title) return
     genTitles.set(sessionId, title)
     saveTitles()
+    // R1 원격 탭이면 서버에도(다른 PC 의 세션 목록·탭 제목). 로컬 탭이면 아무 일 없다.
+    deps.remote?.()?.meta(sessionId, { genTitle: title })
     pushSend(deps.mainWc(), 'agents:title', { sessionId, title })
   }
   // M11 깨어있기(Orca AgentAwakeService) — 상태 원장 push 를 따라 '일하는 중' 탭을 센다. 설정이 끔이면 아무것도 안 막는다.
@@ -209,8 +213,9 @@ export function registerAgentsFeature(deps: {
   const tabOf = (info: DaemonSessionInfo): AgentTabInfo | null => {
     const m = info.meta
     if (!isAgentId(m['agent']) || typeof m['title'] !== 'string') return null
-    const name = names.get(info.id)
-    const genTitle = genTitles.get(info.id)
+    // R1 다른 PC 가 지은 이름·제목은 서버 meta 에서.
+    const name = names.get(info.id) ?? (typeof m['name'] === 'string' ? m['name'] : undefined)
+    const genTitle = genTitles.get(info.id) ?? (typeof m['genTitle'] === 'string' ? m['genTitle'] : undefined)
     return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}), ...(genTitle ? { genTitle } : {}) }
   }
   const daemon = createAgentDaemon({
@@ -367,7 +372,7 @@ export function registerAgentsFeature(deps: {
     const t = ensureTracker() // tap 을 세션보다 먼저 건다 - 로컬 실행과 같은 순서
     try {
       // env 는 에이전트 env 만(원격 환경 위에 덧붙는다 — 아라의 Windows 환경을 보내지 않는다).
-      await remote.launch(host, { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host } })
+      await remote.launch(host, { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host, pc: hostname() } })
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -375,11 +380,10 @@ export function registerAgentsFeature(deps: {
     deps.sessions().write(sessionId, plan.line + '\r')
     return { ok: true, sessionId, title, line: plan.line }
   }
-  handle('agents:reconnect', async ({ hostKey }) => {
-    const remote = deps.remote?.()
-    if (!remote || typeof hostKey !== 'string') return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
+  // 원격 세션을 탭으로(다시 연결 · R1 서버 세션에 붙기 공통) — 상태 판정을 붙이고 탭 정보로.
+  const remoteTabs = async (job: () => Promise<DaemonSessionInfo[]>): Promise<{ ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string }> => {
     try {
-      const infos = await remote.reconnect(hostKey)
+      const infos = await job()
       const tabs: AgentTabInfo[] = []
       for (const info of infos) {
         const tab = tabOf(info)
@@ -391,6 +395,19 @@ export function registerAgentsFeature(deps: {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  }
+  handle('agents:reconnect', async ({ hostKey }) => {
+    const remote = deps.remote?.()
+    if (!remote || typeof hostKey !== 'string') return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
+    return remoteTabs(() => remote.reconnect(hostKey))
+  })
+  handle('agents:attachRemote', async ({ hostKey, sessionId }) => {
+    const remote = deps.remote?.()
+    if (!remote || typeof hostKey !== 'string' || typeof sessionId !== 'string') return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
+    return remoteTabs(() => remote.attachOne(hostKey, sessionId))
+  })
+  handle('agents:forgetRemote', ({ sessionId }) => {
+    if (typeof sessionId === 'string') deps.remote?.()?.forget(sessionId)
   })
 
   handle('agents:killRemote', async ({ hostKey, sessionId }) => {

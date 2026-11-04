@@ -4,6 +4,7 @@
 // 저장 안 함 등) 그 호스트로 열린 터미널 세션의 Client 를 빌린다(R1 방식). 원격 에이전트 다리는 자기 연결 위에 있어 터미널 탭을 닫아도 안 끊긴다.
 // 터미널 공간은 여기를 부르지 않는다 — 설치는 사람이 설정 › 관리형 서버에서 [설치]를 눌렀을 때만.
 import { appendFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Client } from 'ssh2'
 import { handle } from '../ipc/handle'
@@ -11,7 +12,7 @@ import { mainErrorLogPath } from '../log/MainErrorLog'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
-import { consentPlan, decideUpdate, hostKeyOf, type ManagedRecord, type ManagedState } from '@shared/managedServers'
+import { STOP_SCRIPT, consentPlan, decideUpdate, hostKeyOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerSessionsHost } from '@shared/managedServers'
 import type { ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
 import type { SshProfile } from '@shared/types'
 import { runOnHosts } from '@shared/runOn'
@@ -34,6 +35,8 @@ export function registerManagedFeature(deps: {
   appVersion: string
   /** M8 R4: 데몬 판을 바꿨을 때 알림 센터에 한 줄(묻지 않는 교체 — 동의 범위 안). */
   updated?: (e: { hostKey: string; from: string; to: string }) => void
+  /** R1 원격 탭에 붙은 PC 가 바뀌었다(탭의 "PC 2대" 표시). */
+  viewers?: (e: { sessionId: string; viewers: string[] }) => void
 }): ManagedFeature {
   const file = join(deps.userData, 'managed-servers.json')
   const log = (m: string): void => {
@@ -147,6 +150,10 @@ export function registerManagedFeature(deps: {
       const c = own.get(hostKey)
       if (files && c) void removeRemoteFiles(c, files)
     },
+    // R1 이 PC 에서만 닫았다 — 서버 세션은 산다. 다음에 켜도 '끊김'으로 되살리지 않는다.
+    released: (id) => dropTab(id),
+    viewers: (id, viewers) => deps.viewers?.({ sessionId: id, viewers }),
+    pc: hostname(),
     // 서버에 없는 저장 탭은 이미 끝난 것 — 지운다.
     listed: (hostKey, ids) => {
       const next = tabs.filter((x) => x.hostKey !== hostKey || ids.includes(x.info.id))
@@ -179,7 +186,9 @@ export function registerManagedFeature(deps: {
       if (d === 'current' || d === 'keepNewer') return put(hostKey, { state: 'installed', version: probe.installed })
       if (d === 'defer') return put(hostKey, { state: 'deferred', version: probe.installed, note: `에이전트 ${live}개가 돌고 있어 업데이트를 미뤘습니다.` })
       // install(사용자가 손으로 지움 — 동의는 남아 있다) · update: 옛 데몬은 세션이 없으니 다리를 닫으면 스스로 내려간다.
+      // R1: 다른 PC 가 연결만 붙여 둔 옛 데몬은 안 내려가고 새 토큰을 거절한다 — 세션이 0 이니 내린다(세션 보존 규칙 그대로).
       remote.detach(hostKey)
+      if (d === 'update') await execSh(client, STOP_SCRIPT)
       await installHost(client, deps.appVersion)
       if (d === 'update' && probe.installed) {
         log(`orcad ${hostKey} updated ${probe.installed} -> ${deps.appVersion}`)
@@ -194,8 +203,11 @@ export function registerManagedFeature(deps: {
   handle('managed:list', (): ManagedListResult => ({ records, targets: targets().map(({ hostKey, label }) => ({ hostKey, label })) }))
   handle('managed:plan', async ({ hostKey }) => {
     try {
-      const probe = await probeHost(await clientFor(hostKey))
-      return consentPlan(hostKey, probe, Buffer.byteLength(ORCAD_PY), TOKEN_BYTES * 2, Buffer.byteLength(deps.appVersion))
+      const client = await clientFor(hostKey)
+      const probe = await probeHost(client)
+      // R1 이미 설치됨(다른 PC) — 채택 화면에 판·살아 있는 세션 수. 서버가 안 돌면 세지 않는다(세려고 띄우지 않게).
+      const sessions = probe.installed && probe.running ? (await remote.list(hostKey, client).catch(() => [])).length : 0
+      return consentPlan(hostKey, probe, Buffer.byteLength(ORCAD_PY), TOKEN_BYTES * 2, Buffer.byteLength(deps.appVersion), { app: deps.appVersion, sessions })
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) }
     }
@@ -227,6 +239,21 @@ export function registerManagedFeature(deps: {
     }
   })
 
+  // R1 서버 세션 목록(설정·F1·AI 공간 › 서버) — 동의한 서버마다 붙지 않고 목록만. 못 붙은 서버는 사유 한 줄.
+  handle('managed:sessions', async (): Promise<ServerSessionsHost[]> =>
+    Promise.all(
+      records.map(async (r): Promise<ServerSessionsHost> => {
+        const label = profileOf(r.hostKey)?.name ?? r.hostKey
+        try {
+          const infos = await remote.list(r.hostKey, await clientFor(r.hostKey))
+          return { hostKey: r.hostKey, label, version: r.version, ok: true, sessions: serverRowsOf(r.hostKey, infos, (id) => remote.hostOf(id) === r.hostKey) }
+        } catch (e) {
+          return { hostKey: r.hostKey, label, version: r.version, ok: false, error: e instanceof Error ? e.message : String(e), sessions: [] }
+        }
+      })
+    )
+  )
+
   handle('managed:hosts', () => runOnHosts(deps.profiles.list().filter((p): p is SshProfile => p.type === 'ssh'), records))
 
   return {
@@ -240,11 +267,15 @@ export function registerManagedFeature(deps: {
       await remote.create(hostKey, await clientFor(hostKey), spec)
     },
     // 끊긴 원격 탭 [다시 연결] — 새 연결로 붙어 원격에 산 세션을 같은 id 로 되살린다(이미 붙은 것은 건너뛴다).
+    // R1: 이 PC 의 탭(저장한 것)만 — 다른 PC 의 세션은 서버 세션 목록에서 골라 붙는다(attachOne).
     reconnect: async (hostKey) => {
       const c = await clientFor(hostKey)
       await flushKills(hostKey, c)
-      return remote.attach(hostKey, c)
+      return remote.attach(hostKey, c, tabs.filter((x) => x.hostKey === hostKey).map((x) => x.info.id))
     },
+    attachOne: async (hostKey, id) => remote.attach(hostKey, await clientFor(hostKey), [id]),
+    forget: (id) => dropTab(id),
+    meta: (id, patch) => remote.meta(id, patch),
     savedTabs: () => tabs.map((x) => x.info),
     // 끊긴 원격 탭 닫기 — 잠깐 붙어서 끝낸다. 못 붙으면 기억해 두고 다음에 붙을 때 끝낸다(탭은 바로 닫힌다).
     async kill(hostKey, id) {
@@ -289,6 +320,12 @@ export type ManagedFeature = {
   /** DM-05 원격 에이전트 세션 만들기(준비 포함). */
   launch(hostKey: string, spec: DaemonCreateSpec): Promise<void>
   reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
+  /** R1 서버 세션 하나에 붙는다(다른 PC 가 만든 것도). 이미 붙었으면 빈 배열. */
+  attachOne(hostKey: string, id: string): Promise<DaemonSessionInfo[]>
+  /** R1 끊긴 원격 탭을 이 PC 에서만 닫았다 — 저장 목록에서만 뺀다(서버 세션은 산다). */
+  forget(id: string): void
+  /** R1 붙은 원격 세션의 meta 덧쓰기(제목 — 다른 PC 의 목록에 보인다). */
+  meta(id: string, patch: Record<string, unknown>): void
   /** 앱을 다시 켰을 때 '끊김'으로 되살릴 원격 탭(서버에 묻지 않는다 — 자동 재접속 없음). */
   savedTabs(): DaemonSessionInfo[]
   /** 끊긴 원격 탭을 닫을 때 서버의 세션을 끝낸다. false = 못 붙어서 다음 연결 때로 미룸. */

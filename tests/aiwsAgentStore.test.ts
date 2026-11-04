@@ -27,6 +27,8 @@ const ev = {
     }),
     onName: vi.fn(() => () => {}), // M5 AI-19
     onTitle: vi.fn(() => () => {}), // M11
+    onViewers: vi.fn(() => () => {}), // R1
+    forgetRemote: vi.fn(async () => {}),
     // M8 R4 끊긴 원격 탭 닫기·다시 연결
     killRemote: vi.fn(async () => true),
     reconnect: vi.fn(async () => ({ ok: true as const, tabs: [] }))
@@ -126,16 +128,25 @@ describe('agentStore', () => {
     expect(m.useAgentStore.getState().tabs.map((t) => t.worktreeId)).toEqual(['w2'])
   })
 
-  it('M8 R4: 끊긴 원격 탭을 닫으면 서버 세션도 끝내고(로컬 잃음 탭은 아님), [다시 연결] 때 서버에 없던 끊긴 탭은 종료로', async () => {
+  // R1 결정 4 ⓑ: 끊긴 원격 탭 닫기 = 이 PC 에서만(저장 목록에서만 뺀다 — 서버 세션은 산다). M8 R4 의 "닫기 = 서버에서 끝내기"를 바꿨다.
+  it('R1: 끊긴 원격 탭을 닫으면 이 PC 에서만 닫고(서버 세션은 그대로), [다시 연결] 때 서버에 없던 끊긴 탭은 종료로', async () => {
     const tab = (sessionId: string, host?: string) => ({ sessionId, agent: 'codex' as const, worktreeId: 'w', title: 't', line: 'l', exited: true, lost: true, ...(host ? { host } : {}) })
     m.useAgentStore.setState({ tabs: [tab('r1', 'u@h:22'), tab('r2', 'u@h:22'), tab('l1')] })
     m.useAgentStore.getState().closeTab('r1')
     m.useAgentStore.getState().closeTab('l1')
-    expect(ev.agents.killRemote).toHaveBeenCalledTimes(1)
-    expect(ev.agents.killRemote).toHaveBeenCalledWith('u@h:22', 'r1')
+    expect(ev.agents.killRemote).not.toHaveBeenCalled()
+    expect(ev.agents.forgetRemote).toHaveBeenCalledTimes(1)
+    expect(ev.agents.forgetRemote).toHaveBeenCalledWith('r1')
     expect(ev.session.destroy).not.toHaveBeenCalledWith('r1')
     expect(await m.useAgentStore.getState().reconnectHost('u@h:22')).toBeNull()
     expect(m.useAgentStore.getState().tabs).toMatchObject([{ sessionId: 'r2', exited: true, lost: false }])
+  })
+  it('R1: 탭 메뉴 "서버에서도 끝내기" = 서버의 세션을 끝내고 탭을 닫는다(붙은 탭은 destroy 로 놓기만)', async () => {
+    m.useAgentStore.setState({ tabs: [{ sessionId: 'r3', agent: 'codex', worktreeId: 'w', title: 't', line: 'l', exited: false, host: 'u@h:22' }] })
+    await m.useAgentStore.getState().endRemote('r3')
+    expect(ev.agents.killRemote).toHaveBeenCalledWith('u@h:22', 'r3')
+    expect(ev.session.destroy).toHaveBeenCalledWith('r3')
+    expect(m.useAgentStore.getState().tabs).toEqual([])
   })
 })
 

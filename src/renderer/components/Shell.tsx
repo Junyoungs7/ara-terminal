@@ -1,7 +1,8 @@
 import { AI_ENTRY, featuresOf, type FeatureShown } from '@shared/features'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Space } from '@shared/space'
-import { AiHome, AiRail, type AiwsLocation } from '../features/aiws'
+import { AiHome, AiRail, attachServerSession, type AiwsLocation } from '../features/aiws'
+import { useServerSessions } from '../features/managed/serverSessions'
 import { RightBar } from './RightBar'
 import { NotifyBell, NotifyToasts } from './NotifyCenter'
 import { attention, installTestNotify, pushNote, readNote, setNoteSpace, useNotes, type Note } from '../store/notify'
@@ -204,6 +205,11 @@ export function Shell() {
   useEffect(() => window.ev?.explorer.onShown(({ open }) => setExplorerOpen(open)), [])
   // F31 통합 검색(F1 · 타이틀바 돋보기). 목록은 기존 표(KEYMAP·MENUBAR·프로필)에서 만들어진다.
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // R1 F1 "서버 세션" — 열 때마다 새로 읽는다(동의한 서버가 없으면 바로 빈 목록).
+  const serverSessions = useServerSessions((s) => s.hosts)
+  useEffect(() => {
+    if (paletteOpen) void useServerSessions.getState().refresh()
+  }, [paletteOpen])
   // 연결 관리자를 어떤 상태로 열지(트리 "정보 수정" → 해당 프로필 / 그룹 "새 연결" → 그룹 기본값).
   const [modalReq, setModalReq] = useState<ConnModalRequest>(null)
 
@@ -1307,8 +1313,13 @@ export function Shell() {
             onEnable={(id) => mainRef.current?.showFeature(id)}
             sessions={paletteSessions}
             explorerOpen={explorerOpen}
+            servers={serverSessions}
             onRun={(run) => {
               if (run.do === 'action') dispatchAction(run.action)
+              else if (run.do === 'serverSession') {
+                pickSpace('ai')
+                void attachServerSession(run.hostKey, run.sessionId).then((err) => err && pushNote({ kind: 'error', space: 'ai', title: t('servers.err.attach'), body: err }))
+              }
               else if (run.do === 'session') selectSession(run.sessionId)
               else if (run.do === 'command') onMenuCommand(run.command)
               else if (run.do === 'connect') void connectProfile(run.profileId)

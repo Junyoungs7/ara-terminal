@@ -279,10 +279,14 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     backends.get('keep')!.write('echo "back-$ARA_T"\n')
     await waitFor(() => /back-산/.test(out.get('keep')!), 10_000, '되살린 뒤 입력')
 
-    // 붙은 탭 닫기(session.destroy → kill) → 끝 → 다리를 닫으면 데몬도 스스로 내려간다 → 원격 프로세스 0(설치 폴더만 남음).
+    // R1 결정 4 ⓑ: 붙은 탭 닫기(session.destroy → kill) = 이 PC 에서만 놓기 — 서버 세션은 산다(M8 R4 의 "닫기 = 끝내기"를 바꿨다).
     backends.get('keep')!.kill()
-    await waitFor(() => exits.has('keep'), 10_000, 'keep 끝남')
-    expect(exits.get('keep')).not.toBe(AGENT_SESSION_LOST_EXIT)
+    expect(second.hostOf('keep')).toBeUndefined()
+    expect(second.connected(hostKey)).toBe(false) // 붙은 탭이 없으니 다리째 닫았다
+    expect((await second.list(hostKey, c2)).map((x) => x.id)).toEqual(['keep'])
+    expect(gone).toEqual(['drop'])
+    // "서버에서도 끝내기" = kill → 끝 → 다리를 닫으면 데몬도 스스로 내려간다 → 원격 프로세스 0(설치 폴더만 남음).
+    await second.kill(hostKey, c2, 'keep')
     expect(gone).toEqual(['drop', 'keep'])
     second.detach(hostKey)
     const end2 = Date.now() + 20_000
@@ -295,5 +299,88 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     expect(left).toEqual(['dir'])
     expect(await uninstallHost(c2)).toEqual([])
     c2.end()
+  }, 180_000)
+
+  // R1 다른 PC 에서 이어 보기 — ssh2 연결 둘 + 클라이언트 상태 둘(= PC 둘). A 가 만든 세션을 B 가 목록으로 보고 붙어 replay 를 받고,
+  // 양쪽 입력이 같은 PTY 로(broadcast), A 가 끊겨도 B 는 계속 받고, B 가 "이 PC 에서만 닫기" 해도 서버 세션은 살고, "서버에서도 끝내기"면 사라진다.
+  it('PC 둘 — 목록·붙기·replay·양쪽 입력·한쪽 끊김·이 PC 에서만 닫기·서버에서 끝내기', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    type Pc = { agents: ReturnType<typeof createRemoteAgents>; out: Map<string, string>; exits: Map<string, number>; backends: Map<string, DaemonBackend>; viewers: Map<string, string[]> }
+    const pc = (name: string): Pc => {
+      const p: Pc = { out: new Map(), exits: new Map(), backends: new Map(), viewers: new Map(), agents: null as unknown as Pc['agents'] }
+      p.agents = createRemoteAgents({
+        adopt: (b) => {
+          p.backends.set(b.id, b)
+          p.out.set(b.id, '')
+          b.onData((d) => p.out.set(b.id, p.out.get(b.id) + d))
+          b.onExit((code) => p.exits.set(b.id, code))
+        },
+        viewers: (id, v) => p.viewers.set(id, v),
+        pc: name,
+        log: () => {}
+      })
+      return p
+    }
+    const cA = await connect(h.port, h.password)
+    const cB = await connect(h.port, h.password)
+    await installHost(cA, '2.11.0')
+    const A = pc('PC-A')
+    const B = pc('PC-B')
+
+    // A 가 만든다(만든 PC 를 meta 로).
+    await A.agents.create(hostKey, cA, { id: 'two', cwd: home, env: {}, meta: { agent: 'claude', title: '둘', pc: 'PC-A', startedAt: Date.now() } })
+    A.backends.get('two')!.write('echo "made-by-$((1+1))"\n')
+    await waitFor(() => /made-by-2/.test(A.out.get('two')!), 20_000, 'A 출력')
+    await waitFor(() => (A.viewers.get('two') ?? []).join() === 'PC-A', 10_000, 'A 보는 중')
+
+    // B: 붙지 않고 목록 — 만든 PC·보는 PC 가 보인다. 목록만 보면 다리를 남기지 않는다.
+    const listed = await B.agents.list(hostKey, cB)
+    expect(listed.map((x) => [x.id, x.meta['pc'], x.viewers])).toEqual([['two', 'PC-A', ['PC-A']]])
+    expect(B.agents.connected(hostKey)).toBe(false)
+
+    // B 가 그 세션 하나에 붙는다 → replay 로 A 의 출력을 받고, 양쪽에 "PC 2대".
+    const got = await B.agents.attach(hostKey, cB, ['two'])
+    expect(got.map((x) => x.id)).toEqual(['two'])
+    await waitFor(() => /made-by-2/.test(B.out.get('two') ?? ''), 10_000, 'B replay')
+    await waitFor(() => (A.viewers.get('two') ?? []).join() === 'PC-A,PC-B' && (B.viewers.get('two') ?? []).join() === 'PC-A,PC-B', 10_000, '보는 PC 둘')
+
+    // 양쪽 입력이 같은 PTY 로, 출력은 둘 다.
+    B.backends.get('two')!.write('echo "from-B-$((3*3))"\n')
+    await waitFor(() => /from-B-9/.test(A.out.get('two')!) && /from-B-9/.test(B.out.get('two')!), 10_000, 'B 입력 → 둘 다')
+    A.backends.get('two')!.write('echo "from-A-$((4*4))"\n')
+    await waitFor(() => /from-A-16/.test(A.out.get('two')!) && /from-A-16/.test(B.out.get('two')!), 10_000, 'A 입력 → 둘 다')
+
+    // meta 덧쓰기(제목) — 다른 PC 의 목록에 보인다.
+    A.agents.meta('two', { genTitle: '결제 재시도' })
+    const end1 = Date.now() + 10_000
+    while ((await B.agents.list(hostKey, cB))[0]?.meta['genTitle'] !== '결제 재시도') {
+      if (Date.now() > end1) throw new Error('시간 초과: meta')
+      await new Promise((r) => setTimeout(r, 100))
+    }
+
+    // A 가 끊긴다(PC 를 끔) → A 탭만 잃음, B 는 계속 받는다. 보는 PC 는 B 만.
+    cA.end()
+    await waitFor(() => A.exits.get('two') === AGENT_SESSION_LOST_EXIT, 20_000, 'A 끊김')
+    await waitFor(() => (B.viewers.get('two') ?? []).join() === 'PC-B', 10_000, 'B 만 보는 중')
+    B.backends.get('two')!.write('echo "after-A-$((5*5))"\n')
+    await waitFor(() => /after-A-25/.test(B.out.get('two')!), 10_000, 'A 끊긴 뒤 B')
+    expect(B.exits.has('two')).toBe(false)
+
+    // B: 이 PC 에서만 닫기(탭 ✕ = destroy → kill) → 서버 세션은 산다, 아무도 안 본다.
+    B.backends.get('two')!.kill()
+    expect(B.agents.hostOf('two')).toBeUndefined()
+    const still = await B.agents.list(hostKey, cB)
+    expect(still.map((x) => [x.id, x.viewers])).toEqual([['two', []]])
+
+    // 서버에서도 끝내기 → 사라진다.
+    await B.agents.kill(hostKey, cB, 'two')
+    const end2 = Date.now() + 15_000
+    while ((await B.agents.list(hostKey, cB)).length) {
+      if (Date.now() > end2) throw new Error('시간 초과: 서버에서 끝내기')
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    expect(await uninstallHost(cB)).toEqual([])
+    cB.end()
   }, 180_000)
 })

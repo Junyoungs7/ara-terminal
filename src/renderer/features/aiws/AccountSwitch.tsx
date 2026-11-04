@@ -1,7 +1,7 @@
 // 원격 3차 R0 다른 계정으로 이어서 — 화면(목업 mockups/v3/serve/5-switch.html, 준영님 확정: 채팅 보기 = A 카드, 터미널 보기 = B 띠).
 // 동작은 accountSwitch.ts 하나 — 카드·띠·탭 우클릭 메뉴가 같은 switchAccount 를 부른다.
 import { useState, type JSX } from 'react'
-import { ArrowLeftRight, Gauge, Plus } from 'lucide-react'
+import { ArrowLeftRight, CircleStop, Gauge, Plus } from 'lucide-react'
 import type { UsageState } from '@shared/usage'
 import { t } from '../../i18n'
 import { resetAtText, useUsage } from '../../store/usage'
@@ -10,6 +10,7 @@ import { pushNote } from '../../store/notify'
 import { ContextMenu, type MenuItem } from '../../interactions/ContextMenu'
 import { useAgentStore, type AgentTab } from './agentStore'
 import { accountChoices, accountProviderOf, limitOf, switchAccount, type AccountChoice } from './accountRestart'
+import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import './accountSwitch.css'
 
 const SYSTEM_ID = '__system'
@@ -56,7 +57,7 @@ export function pickAccount(u: UsageState, tab: AgentTab, id: string, run: (a: A
 }
 
 /** 탭 우클릭 메뉴 — 한도와 상관없이 늘 있다(로컬 Claude·Codex 탭). */
-export function AgentTabMenu({ tab, x, y, onClose }: { tab: AgentTab; x: number; y: number; onClose: () => void }): JSX.Element {
+export function AgentTabMenu({ tab, x, y, ask, onClose }: { tab: AgentTab; x: number; y: number; ask?: (spec: DialogSpec) => Promise<DialogResult>; onClose: () => void }): JSX.Element {
   const u = useUsage()
   const ok = !!accountProviderOf(tab) && !tab.exited && !tab.slept
   // 메뉴는 고르면 닫히므로(이 컴포넌트도 내려간다) 실패는 알림 센터로.
@@ -65,7 +66,9 @@ export function AgentTabMenu({ tab, x, y, onClose }: { tab: AgentTab; x: number;
   const items: MenuItem[] = [
     ok
       ? { id: 'acct', label: t('aiws.acct.continue'), icon: <ArrowLeftRight />, submenu: accountMenuItems(u, tab) }
-      : { id: 'acct', label: t('aiws.acct.continue'), icon: <ArrowLeftRight />, disabled: true, title: t('aiws.acct.cannot') }
+      : { id: 'acct', label: t('aiws.acct.continue'), icon: <ArrowLeftRight />, disabled: true, title: t('aiws.acct.cannot') },
+    // R1 결정 4 ⓑ — 탭 닫기(✕)는 이 PC 에서만. 서버의 에이전트까지 끝내는 것은 여기.
+    ...(tab.host ? [{ id: 'endRemote', label: t('servers.end'), icon: <CircleStop />, danger: true, title: t('servers.end.tip') }] : [])
   ]
   return (
     <ContextMenu
@@ -75,11 +78,21 @@ export function AgentTabMenu({ tab, x, y, onClose }: { tab: AgentTab; x: number;
       items={items}
       onPick={(id) => {
         onClose()
+        if (id === 'endRemote') return void endOnServer(tab, ask)
         pickAccount(u, tab, id, run)
       }}
       onClose={onClose}
     />
   )
+}
+
+/** R1 "서버에서도 끝내기" — 다른 PC 의 탭도 닫힌다는 것을 묻고(목업 1-sessions 끝내기 확인) 끝낸다. */
+async function endOnServer(tab: AgentTab, ask?: (spec: DialogSpec) => Promise<DialogResult>): Promise<void> {
+  if (ask) {
+    const r = await ask({ title: t('servers.end.ask'), message: t('servers.end.askMsg'), tone: 'danger', confirmLabel: t('servers.end.ok'), cancelLabel: t('managed.cancel') })
+    if (r !== 'confirm') return
+  }
+  await useAgentStore.getState().endRemote(tab.sessionId)
 }
 
 /** 터미널 보기 — 탭 위 띠(목업 B). 걸림 → [다른 계정으로 이어서 ▾] · 바꾸는 중 · 이어 띄움 [닫기]. */

@@ -1,5 +1,5 @@
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
-import { AppWindow, List, SquareTerminal, Star, Zap } from 'lucide-react'
+import { AppWindow, List, Server, SquareTerminal, Star, Zap } from 'lucide-react'
 import type { ConnectionProfile, WorkProfile } from '@shared/types'
 import { matchBinding } from '../../shared/keymap'
 import {
@@ -10,12 +10,14 @@ import {
   paletteHome,
   paletteItems,
   recentServers,
+  serverItems,
   PALETTE_GROUPS,
   type PaletteKind,
   type PaletteRun
 } from '../store/palette'
 import { t } from '../i18n'
 import type { FeatureId, FeatureShown } from '@shared/features'
+import type { ServerSessionsHost } from '@shared/managedServers'
 
 // F31 통합 검색. 목록·검색·묶기는 store/palette.ts 의 순수 함수이고 여기는 그리기만 한다.
 //
@@ -45,6 +47,8 @@ type Props = {
   /** 2.0 다듬기 R1: 빈 검색어의 [열린 창] — 세션 탭(+ 탐색기 창). */
   sessions?: readonly { id: string; title: string; server?: string }[]
   explorerOpen?: boolean
+  /** R1 관리형 서버의 살아 있는 세션(F1 "서버 세션"). 부르는 쪽이 열 때 새로 읽는다. */
+  servers?: readonly ServerSessionsHost[]
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
@@ -52,6 +56,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform
 // 줄 왼쪽 아이콘 — 종류별 하나(시안 Z-palette 의 24px 타일). 기능마다 그림을 따로 두면 표가 하나 더 생긴다.
 const KIND_ICON: Record<PaletteKind, () => JSX.Element> = {
   session: () => <AppWindow />,
+  server: () => <Server />,
   action: () => <Zap />,
   command: () => <List />,
   profile: () => <SquareTerminal />,
@@ -59,6 +64,7 @@ const KIND_ICON: Record<PaletteKind, () => JSX.Element> = {
 }
 
 const NO_SESSIONS: readonly { id: string; title: string; server?: string }[] = []
+const NO_SERVERS: readonly ServerSessionsHost[] = []
 
 export function CommandPalette({
   open,
@@ -70,7 +76,8 @@ export function CommandPalette({
   features,
   onEnable,
   sessions = NO_SESSIONS,
-  explorerOpen = false
+  explorerOpen = false,
+  servers = NO_SERVERS
 }: Props): JSX.Element {
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
@@ -82,16 +89,17 @@ export function CommandPalette({
     [profiles, workProfiles, features]
   )
   const opened = useMemo(() => openItems(sessions, explorerOpen), [sessions, explorerOpen])
+  const remote = useMemo(() => serverItems(servers), [servers])
   // 빈 검색어 = 열린 창 / 최근 서버 / 숨긴 기능(긴 단축키 목록 대신). 셋 다 비면 전체 목록.
   // 최근 서버는 열 때마다 다시 읽는다(접속은 이 컴포넌트 밖에서 일어난다).
   const groups = useMemo(() => {
-    const home = q.trim() ? [] : paletteHome(items, opened, open ? recentServers() : [])
+    const home = q.trim() ? [] : paletteHome(items, opened, open ? recentServers() : [], remote)
     if (home.length > 0) return home
-    return groupPalette(filterPalette([...opened, ...items], q)).map((g) => ({
+    return groupPalette(filterPalette([...opened, ...remote, ...items], q)).map((g) => ({
       key: PALETTE_GROUPS.find((x) => x.kind === g.kind)!.key,
       items: g.items
     }))
-  }, [items, opened, q, open])
+  }, [items, opened, remote, q, open])
   // 커서는 **화면에 보이는 순서**를 따른다 — 묶어서 그린 목록과 어긋나면 ↑↓ 가 위아래로 튄다.
   const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups])
   // 맞은 글자 강조(시안) — 첫 낱말만. 낱말 순서를 바꿔 쳐도 찾히지만 강조까지 따라가진 않는다.

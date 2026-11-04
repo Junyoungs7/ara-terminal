@@ -7,6 +7,7 @@
 export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 # A.R.A orcad - remote agent terminal daemon (M8 DM-02). Installed only with the user's per-host consent.
 # Same wire protocol as the local daemon (src/main/daemon/protocol.ts): NDJSON, hello+token, create/list/attach/write/resize/kill/killAll/shutdown.
+# R1 (several PCs): attach carries the PC name, detach (close on this PC only), meta (patch title etc.), viewers event (who is attached).
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
 import codecs, errno, fcntl, hmac, json, os, pty, selectors, signal, socket, stat, struct, subprocess, sys, termios, time
@@ -28,6 +29,8 @@ FRAME_MAX = 8 << 20
 GRACE_S = 30
 HELLO_S = 5
 KILL_WAIT_S = 3
+PC_MAX = 64
+META_MAX = 4096
 
 
 def log(msg):
@@ -126,6 +129,7 @@ class Client(object):
         self.inbuf = b''
         self.out = bytearray()
         self.born = time.time()
+        self.pc = ''
 
 
 def serve():
@@ -207,6 +211,20 @@ def serve():
         except (KeyError, ValueError):
             pass
         c.sock.close()
+        for sid in list(c.attached):
+            tell_viewers(sid)
+
+    def viewers_of(sid):
+        return sorted((c.pc or '?') for c in clients.values() if c.authed and sid in c.attached)
+
+    def tell_viewers(sid):
+        if sid in sessions:
+            broadcast(sid, {'type': 'viewers', 'id': sid, 'viewers': viewers_of(sid)}, True)
+
+    def info_of(s):
+        d = dict(s.info)
+        d['viewers'] = viewers_of(s.id)
+        return d
 
     def broadcast(sid, ev, only_attached):
         for c in list(clients.values()):
@@ -247,12 +265,36 @@ def serve():
         if t == 'create':
             return create(r.get('spec') or {})
         if t == 'list':
-            return [s.info for s in sessions.values()]
+            return [info_of(s) for s in sessions.values()]
         if t == 'attach':
             s = sessions.get(r.get('id'))
             if not s:
                 raise ValueError('no such session')
-            return s.info
+            if r.get('pc'):
+                c.pc = str(r.get('pc'))[:PC_MAX]
+            return info_of(s)
+        if t == 'detach':
+            sid = r.get('id')
+            if sid in c.attached:
+                c.attached.discard(sid)
+                tell_viewers(sid)
+            return None
+        if t == 'meta':
+            s = sessions.get(r.get('id'))
+            patch = r.get('meta')
+            if not s or not isinstance(patch, dict):
+                raise ValueError('no such session')
+            m = dict(s.info['meta'])
+            for k, v in patch.items():
+                if v is None:
+                    m.pop(str(k), None)
+                else:
+                    m[str(k)] = v
+            if len(json.dumps(m)) > META_MAX:
+                raise ValueError('meta too big')
+            s.info['meta'] = m
+            broadcast(s.id, {'type': 'meta', 'id': s.id, 'meta': m}, True)
+            return m
         if t == 'write':
             s = sessions.get(r.get('id'))
             if s:
@@ -308,6 +350,7 @@ def serve():
                 for chunk in s.replay:
                     put(c, {'type': 'data', 'id': s.id, 'data': chunk})
                 c.attached.add(s.id)
+                tell_viewers(s.id)
         except Stop:
             if rid:
                 put(c, {'type': 'reply', 'rid': rid, 'ok': True, 'result': None})

@@ -21,7 +21,8 @@ const ev = {
     tabs: vi.fn(async () => tabs),
     onStatus: vi.fn(() => () => {}),
     onName: vi.fn(() => () => {}),
-    onTitle: vi.fn(() => () => {})
+    onTitle: vi.fn(() => () => {}),
+    onViewers: vi.fn(() => () => {})
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
 }

@@ -1,6 +1,6 @@
 // M3 에이전트 — 기능 틀(docs/feature-module.md)의 preload 다리. preload/index.ts 가 api 에 펼쳐 넣는다.
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, AgentTitleEvent, EvApi } from '@shared/ipc'
+import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, AgentTitleEvent, AgentViewersEvent, EvApi } from '@shared/ipc'
 import type { AskAnswerKeyGroup } from '@shared/agentAsk'
 import type { AgentId, AgentSettings } from '@shared/agents'
 import type { AgentStatusView } from '@shared/agentHooks'
@@ -14,6 +14,13 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
     launch: (agent: AgentId, cwd: string, prompt?: string, resume?: string, options?: AgentLaunchOptions, host?: string) => ipcRenderer.invoke('agents:launch', { agent, cwd, prompt, resume, options, host }),
     reconnect: (hostKey: string) => ipcRenderer.invoke('agents:reconnect', { hostKey }),
     killRemote: (hostKey: string, sessionId: string) => ipcRenderer.invoke('agents:killRemote', { hostKey, sessionId }),
+    attachRemote: (hostKey: string, sessionId: string) => ipcRenderer.invoke('agents:attachRemote', { hostKey, sessionId }),
+    forgetRemote: (sessionId: string) => ipcRenderer.invoke('agents:forgetRemote', { sessionId }),
+    onViewers: (cb: (e: AgentViewersEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, v: AgentViewersEvent): void => cb(v)
+      ipcRenderer.on('agents:viewers', listener)
+      return () => ipcRenderer.removeListener('agents:viewers', listener)
+    },
     resumeIds: (sessionIds: string[]) => ipcRenderer.invoke('agents:resumeIds', { sessionIds }),
     models: (agent: AgentId, force?: boolean) => ipcRenderer.invoke('agents:models', { agent, force }),
     slash: (agent: AgentId, cwd: string) => ipcRenderer.invoke('agents:slash', { agent, cwd }),

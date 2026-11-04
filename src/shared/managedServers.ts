@@ -30,6 +30,8 @@ export const PROBE_SCRIPT = [
   // 판을 먼저 찍고, 필요한 모듈을 불러 본다(못 부르면 pymods 줄이 없다 → 지원 안 함).
   `[ -n "$P" ] && "$P" -c 'import sys;print("pyver=%d.%d"%sys.version_info[:2]);import pty,termios,fcntl,selectors;print("pymods=1")' 2>/dev/null`,
   D,
+  // R1 채택 화면: 돌고 있나(소켓이 있다) — 있을 때만 세션을 센다(세려고 서버를 띄우지 않게).
+  `[ -S "$D/orcad.sock" ] && echo running=1`,
   `[ -f "$D/version" ] && printf 'installed=%s\\n' "$(cat "$D/version")"`,
   `true`
 ].join('\n')
@@ -38,6 +40,8 @@ export const PROBE_SCRIPT = [
 export const MKDIR_SCRIPT = `${D}; mkdir -p "$D" && chmod 700 "$D"`
 /** 파일을 올린 뒤 권한·자가 시험. 마지막 줄이 protocol=N 이면 됐다. */
 export const FINISH_SCRIPT = `${D}; chmod 600 "$D/token" "$D/version" && chmod 700 "$D/orcad.py" && python3 "$D/orcad.py" version`
+/** R1 업데이트 직전: 세션이 0 일 때 옛 서버를 내린다 — 다른 PC 가 연결만 붙여 둔 옛 서버가 새 토큰을 거절하지 않게. */
+export const STOP_SCRIPT = `${D}; [ -f "$D/orcad.py" ] && python3 "$D/orcad.py" stop; true`
 /** 아라 쪽 연결 다리(stdin/stdout ↔ 원격 유닉스 소켓). 데몬이 없으면 띄운다. */
 export const BRIDGE_SCRIPT = `exec python3 "$HOME/${MANAGED_DIR}/orcad.py" connect`
 
@@ -81,11 +85,11 @@ const kv = (out: string): Map<string, string> => {
   return m
 }
 
-export type ManagedProbe = { os: string; arch: string; home: string; python: string; pyver: string; pymods: boolean; installed: string | null }
+export type ManagedProbe = { os: string; arch: string; home: string; python: string; pyver: string; pymods: boolean; installed: string | null; running?: boolean }
 
 export function parseProbe(out: string): ManagedProbe {
   const m = kv(out)
-  return { os: m.get('os') ?? '', arch: m.get('arch') ?? '', home: m.get('home') ?? '', python: m.get('python') ?? '', pyver: m.get('pyver') ?? '', pymods: m.get('pymods') === '1', installed: m.get('installed') || null }
+  return { os: m.get('os') ?? '', arch: m.get('arch') ?? '', home: m.get('home') ?? '', python: m.get('python') ?? '', pyver: m.get('pyver') ?? '', pymods: m.get('pymods') === '1', installed: m.get('installed') || null, running: m.get('running') === '1' }
 }
 
 /** 지원 판정. Linux 만(사내 서버 — x64 우선, 스크립트라 arm64 도 돈다). 나머지는 "지원 안 함"을 이유와 함께. */
@@ -179,9 +183,59 @@ export type ManagedConsentPlan = {
   process: string
   socket: string
   manualRemove: string
+  /** R1 이 PC 의 판(채택 화면이 서버 판과 비교). */
+  app?: string
+  /** R1 이미 설치된 서버에 살아 있는 세션 수(서버가 안 돌면 0). */
+  sessions?: number
 }
 
-export function consentPlan(hostKey: string, probe: ManagedProbe, scriptBytes: number, tokenBytes: number, versionBytes: number): ManagedConsentPlan {
+/**
+ * R1 이미 설치된 서버 채택 — 서버 판과 이 PC 판 비교.
+ * same: 그대로 · older: 서버가 옛 판(세션이 없으면 올리고, 있으면 그 판으로 쓰다가 끝난 뒤 올린다) · newer: 서버가 새 판(낮추지 않고 그대로).
+ */
+export type AdoptKind = 'same' | 'older' | 'newer'
+export const adoptKindOf = (installed: string, app: string): AdoptKind => {
+  const c = versionCmp(installed, app)
+  return c === 0 ? 'same' : c < 0 ? 'older' : 'newer'
+}
+
+// ── R1 서버 세션 목록(다른 PC 에서 이어 보기) ──
+export type ServerSessionRow = {
+  id: string
+  hostKey: string
+  cwd: string
+  title: string
+  agent: string
+  /** 만든 PC(옛 세션은 모름). */
+  pc: string | null
+  startedAt: number | null
+  /** 지금 붙은 PC 이름들(이 PC 포함). */
+  viewers: string[]
+  /** 이 PC 에 탭으로 열려 있다. */
+  here: boolean
+}
+export type ServerSessionsHost = { hostKey: string; label: string; version: string | null; ok: boolean; error?: string; sessions: ServerSessionRow[] }
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
+
+/** 서버 list 결과 → 목록 줄(최근 시작이 위). 제목은 이름 > 첫 지시 제목 > 실행 제목 순(탭 제목과 같은 순서). */
+export function serverRowsOf(hostKey: string, infos: readonly { id: string; cwd: string; meta: Record<string, unknown>; viewers?: string[] }[], here: (id: string) => boolean): ServerSessionRow[] {
+  return infos
+    .map((x) => ({
+      id: x.id,
+      hostKey,
+      cwd: x.cwd,
+      title: str(x.meta['name']) ?? str(x.meta['genTitle']) ?? str(x.meta['title']) ?? x.id,
+      agent: str(x.meta['agent']) ?? '',
+      pc: str(x.meta['pc']),
+      startedAt: typeof x.meta['startedAt'] === 'number' ? x.meta['startedAt'] : null,
+      viewers: Array.isArray(x.viewers) ? x.viewers.filter((v): v is string => typeof v === 'string') : [],
+      here: here(x.id)
+    }))
+    .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+}
+
+export function consentPlan(hostKey: string, probe: ManagedProbe, scriptBytes: number, tokenBytes: number, versionBytes: number, extra: { app?: string; sessions?: number } = {}): ManagedConsentPlan {
   const dir = probe.home ? `${probe.home}/${MANAGED_DIR}` : managedDirShown
   const bytes = { 'orcad.py': scriptBytes, token: tokenBytes, version: versionBytes }
   return {
@@ -193,6 +247,7 @@ export function consentPlan(hostKey: string, probe: ManagedProbe, scriptBytes: n
     runtimeFiles: MANAGED_RUNTIME_FILES.map((f) => `${dir}/${f}`),
     process: `python3 ${dir}/orcad.py serve`,
     socket: `${dir}/orcad.sock`,
-    manualRemove: MANUAL_REMOVE
+    manualRemove: MANUAL_REMOVE,
+    ...extra
   }
 }

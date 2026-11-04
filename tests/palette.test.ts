@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { KEYMAP } from '../src/shared/keymap'
 import { MENUBAR } from '../src/renderer/interactions/actions'
-import { filterPalette, groupPalette, moveCursor, openItems, paletteHome, paletteItems } from '../src/renderer/store/palette'
+import { filterPalette, groupPalette, moveCursor, openItems, paletteHome, paletteItems, serverItems } from '../src/renderer/store/palette'
 import { FEATURES, featuresOf } from '../src/shared/features'
 import type { ConnectionProfile, WorkProfile } from '../src/shared/types'
 
@@ -166,5 +166,36 @@ describe('중복 걸러내기', () => {
     const found = items.filter((i) => i.label.includes('치트'))
     expect(found).toHaveLength(1)
     expect(found[0].id).toBe('action:cheatsheet')
+  })
+})
+
+// R1 F1 "서버 세션" — 관리형 서버의 살아 있는 세션을 공급만 한다(고르면 그 세션에 붙기).
+describe('서버 세션 항목', () => {
+  const hosts = [
+    {
+      hostKey: 'dev@10.0.0.1:22',
+      label: 'dev-server',
+      version: '2.2.11',
+      ok: true,
+      sessions: [
+        { id: 's1', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '결제 재시도', agent: 'claude', pc: 'OFFICE', startedAt: 1, viewers: ['OFFICE'], here: false },
+        { id: 's2', hostKey: 'dev@10.0.0.1:22', cwd: '/home/dev/shop', title: '쿠폰 반올림', agent: 'codex', pc: null, startedAt: 2, viewers: [], here: true }
+      ]
+    },
+    { hostKey: 'ci@10.0.0.2:22', label: 'build', version: null, ok: false, error: 'x', sessions: [] }
+  ]
+  it('세션마다 한 줄 — 고르면 serverSession, 검색에 걸리고 자기 묶음에 선다', () => {
+    const items = serverItems(hosts)
+    expect(items.map((i) => i.run)).toEqual([
+      { do: 'serverSession', hostKey: 'dev@10.0.0.1:22', sessionId: 's1' },
+      { do: 'serverSession', hostKey: 'dev@10.0.0.1:22', sessionId: 's2' }
+    ])
+    expect(items[0].hint).toContain('dev-server')
+    expect(filterPalette(items, '쿠폰').map((i) => i.id)).toEqual(['server:dev@10.0.0.1:22:s2'])
+    expect(groupPalette(items).map((g) => g.kind)).toEqual(['server'])
+  })
+  it('빈 검색어 화면에도 서버 세션 묶음이 선다(열린 창 다음)', () => {
+    const home = paletteHome([], openItems([{ id: 'x', title: 't' }], false), [], serverItems(hosts))
+    expect(home.map((g) => g.key)).toEqual(['palette.group.open', 'palette.group.server'])
   })
 })

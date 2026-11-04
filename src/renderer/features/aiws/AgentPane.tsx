@@ -20,6 +20,7 @@ import { resolveAgentTabTitle } from '@shared/agentTabTitle'
 import { wakeTab } from './hibernation'
 import { AccountLimitBand, AgentTabMenu } from './AccountSwitch'
 import './hibernation.css'
+import '../managed/servers.css'
 
 // M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
 const CodeEditor = lazy(() => import('./CodeEditor'))
@@ -217,6 +218,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const tabs = allTabs.filter((x) => x.worktreeId === worktree.id)
   const statusById = useAgentStore((s) => s.statusById)
   const seenById = useAgentStore((s) => s.seenById)
+  const viewersById = useAgentStore((s) => s.viewersById)
   const chatOn = useAgentStore((s) => s.chatOn)
   const autoTitle = useAgentStore((s) => s.settings?.tabAutoTitle === true)
   const [picking, setPicking] = useState(false)
@@ -339,6 +341,12 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             <span>{AGENTS[x.agent].label}</span>
             {/* M11 탭 제목(Orca 순서: 채팅 이름 > 지난 세션 제목 > 첫 지시 제목(설정) > 에이전트가 정한 제목). */}
             <TabTitle title={resolveAgentTabTitle(x, statusById[x.sessionId]?.title, autoTitle)} />
+            {/* R1 다른 PC 도 이 세션에 붙어 있다(두 PC 모두 입력할 수 있다). */}
+            {x.host && !x.exited && (viewersById[x.sessionId]?.length ?? 0) > 1 && (
+              <span className="aiws-pcs" data-aiws="tab-viewers" title={t('servers.viewers.title').replace('{list}', viewersById[x.sessionId].join(', '))}>
+                {t('servers.viewers.n').replace('{n}', String(viewersById[x.sessionId].length))}
+              </span>
+            )}
             {(() => {
               const d = displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)
               // 답할 일(승인·질문) = 반전 칩(시안 C).
@@ -454,7 +462,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         )}
       </div>
       {tabMenu && tabs.some((x) => x.sessionId === tabMenu.id) && (
-        <AgentTabMenu tab={tabs.find((x) => x.sessionId === tabMenu.id)!} x={tabMenu.x} y={tabMenu.y} onClose={() => setTabMenu(null)} />
+        <AgentTabMenu tab={tabs.find((x) => x.sessionId === tabMenu.id)!} x={tabMenu.x} y={tabMenu.y} ask={ask} onClose={() => setTabMenu(null)} />
       )}
       {omni && (
         <Suspense fallback={null}>

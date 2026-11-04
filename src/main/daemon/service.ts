@@ -133,6 +133,7 @@ export function createAgentDaemon(deps: {
   const wire = (conn: DaemonConnection, kind: 'current' | 'drain'): void => {
     conn.onEvent((e) => {
       if (e.type === 'memoryOver') return deps.memoryOver?.(e)
+      if (e.type === 'viewers' || e.type === 'meta') return // 원격(orcad) 사건 — 로컬 데몬은 안 보낸다
       const b = backends.get(e.id)
       if (!b && !(e.type === 'exit' && parked.delete(e.id))) return
       if (e.type === 'data') return b?.emitData(e.data)

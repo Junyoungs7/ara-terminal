@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type JSX } from 'react'
 import { startHibernation } from './hibernation'
 import type { Worktree } from '@shared/worktrees'
-import { Bot, FolderGit2, GitBranch, History, LayoutGrid, Search, SlidersHorizontal, Zap } from 'lucide-react'
+import { Bot, FolderGit2, GitBranch, History, LayoutGrid, Search, Server, SlidersHorizontal, Zap } from 'lucide-react'
 import { t } from '../../i18n'
 import type { AiwsLocation } from '.'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
@@ -24,6 +24,8 @@ import { ScmPanel } from './ScmPanel'
 import { ExplorerPanel } from './ExplorerPanel'
 import { WorktreeJump } from './WorktreeJump'
 // M15 IN-03 첫 안내 — 처음 AI 공간에 들어왔을 때만 불러온다(다시 보지 않기 뒤에는 청크도 안 받는다).
+// R1 서버 세션 목록(다른 PC 에서 이어 보기) — 레일 [서버]를 누를 때 불러온다.
+const ServerSessionsPage = lazy(() => import('../managed/ServerSessionsPage').then((m) => ({ default: m.ServerSessionsPage })))
 const AiOnboarding = lazy(() => import('./AiOnboarding').then((m) => ({ default: m.AiOnboarding })))
 const ONBOARDING_KEY = 'aiws.onboarding.closed'
 let onboardingSeen = false
@@ -51,6 +53,7 @@ const NAV: readonly { id: string; Icon: () => JSX.Element }[] = [
   { id: 'worktree', Icon: () => <GitBranch /> },
   { id: 'agents', Icon: () => <Bot /> },
   { id: 'sessions', Icon: () => <History /> },
+  { id: 'servers', Icon: () => <Server /> },
   { id: 'search', Icon: () => <Search /> },
   { id: 'automations', Icon: () => <Zap /> },
   { id: 'dashboard', Icon: () => <LayoutGrid /> }
@@ -58,7 +61,7 @@ const NAV: readonly { id: string; Icon: () => JSX.Element }[] = [
 
 /** 레일 → 가운데 화면. 에이전트(Orca Agents 피드) = 활동 피드(AI-09), 지난 세션 = AI-07(M4), 대시보드 = AI-08.
  *  검색(M6 R2 WS-09) = 왼쪽 목록 자리가 전체 검색으로(가운데는 작업 단위 그대로). 자동화는 아직. */
-const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', sessions: 'sessions', search: 'search', dashboard: 'dashboard' }
+const RAIL_VIEW: Partial<Record<string, AiwsView>> = { worktree: 'worktree', agents: 'activity', sessions: 'sessions', servers: 'servers', search: 'search', dashboard: 'dashboard' }
 
 export function AiRail({ settingsOpen, onSettings }: { settingsOpen: boolean; onSettings: () => void }): JSX.Element {
   const view = useAgentStore((s) => s.view)
@@ -227,6 +230,10 @@ export function AiHome({ ask, onLocation }: { ask: AskFn; onLocation: (loc: Aiws
           <ActivityFeed />
         ) : view === 'sessions' ? (
           <VaultPanel ask={ask} />
+        ) : view === 'servers' ? (
+          <Suspense fallback={null}>
+            <ServerSessionsPage ask={ask} />
+          </Suspense>
         ) : composer ? (
           <NewWorkCard initialRepoId={composer.repoId} onClose={() => setComposer(null)} />
         ) : active ? (

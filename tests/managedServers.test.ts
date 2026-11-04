@@ -5,12 +5,14 @@ import {
   MANAGED_MARK,
   UNINSTALL_SCRIPT,
   VERIFY_SCRIPT,
+  adoptKindOf,
   consentOf,
   consentPlan,
   decideUpdate,
   hostKeyOf,
   parseProbe,
   remnantsOf,
+  serverRowsOf,
   supportOf,
   versionCmp,
   type ManagedRecord
@@ -106,5 +108,50 @@ describe('orcad.py 는 String.raw 안에 산다', () => {
     expect(ORCAD_PY.trimEnd().endsWith('sys.exit(64)')).toBe(true)
     // 파이썬의 '\n' 이 진짜 줄바꿈으로 바뀌지 않았다(String.raw).
     expect(ORCAD_PY).toContain("+ '\\n').encode('utf-8')")
+  })
+})
+
+// R1 다른 PC 에서 이어 보기 — 채택(이미 설치됨) 판 비교, 돌고 있나 읽기, 서버 세션 목록 줄.
+describe('R1 채택·서버 세션 목록', () => {
+  it('돌고 있나(소켓)를 읽는다 — 없으면 false(세려고 서버를 띄우지 않는다)', () => {
+    expect(parseProbe(linux + 'running=1\ninstalled=2.2.11\n')).toMatchObject({ running: true, installed: '2.2.11' })
+    expect(parseProbe(linux + 'installed=2.2.11\n').running).toBe(false)
+  })
+  it('채택 판 비교 — 같음·서버가 옛 판·서버가 새 판', () => {
+    expect(adoptKindOf('2.2.11', '2.2.11')).toBe('same')
+    expect(adoptKindOf('2.2.9', '2.2.11')).toBe('older')
+    expect(adoptKindOf('2.3.0', '2.2.11')).toBe('newer')
+    // 채택 뒤의 실제 처리는 decideUpdate — 옛 판 + 세션 있음 = 미룸(세션 보존), 없음 = 올림, 새 판 = 낮추지 않음.
+    expect(decideUpdate({ installed: '2.2.9', app: '2.2.11', liveSessions: 2 })).toBe('defer')
+    expect(decideUpdate({ installed: '2.2.9', app: '2.2.11', liveSessions: 0 })).toBe('update')
+    expect(decideUpdate({ installed: '2.3.0', app: '2.2.11', liveSessions: 0 })).toBe('keepNewer')
+  })
+  it('채택 화면 내용에 이 PC 판·세션 수가 실린다', () => {
+    const plan = consentPlan('dev@h:22', parseProbe(linux + 'installed=2.2.9\n'), 100, 64, 6, { app: '2.2.11', sessions: 3 })
+    expect(plan).toMatchObject({ app: '2.2.11', sessions: 3, dir: '/home/dev/.ara-server' })
+  })
+  it('서버 list → 목록 줄: 제목 순서(이름 > 첫 지시 제목 > 실행 제목), 만든 PC, 보는 PC, 이 PC 에 열림, 최근 시작이 위', () => {
+    const rows = serverRowsOf(
+      'dev@h:22',
+      [
+        { id: 'a', cwd: '/w/a', meta: { agent: 'claude', title: 'Claude · a', pc: 'OFFICE', startedAt: 100 }, viewers: ['OFFICE'] },
+        { id: 'b', cwd: '/w/b', meta: { agent: 'codex', title: 'Codex · b', genTitle: '쿠폰 반올림', startedAt: 300 }, viewers: [] },
+        { id: 'c', cwd: '/w/c', meta: { title: 'x', genTitle: 'g', name: '정산 CSV', startedAt: 200 } }
+      ],
+      (id) => id === 'a'
+    )
+    expect(rows.map((r) => [r.id, r.title])).toEqual([
+      ['b', '쿠폰 반올림'],
+      ['c', '정산 CSV'],
+      ['a', 'Claude · a']
+    ])
+    expect(rows[2]).toMatchObject({ hostKey: 'dev@h:22', agent: 'claude', pc: 'OFFICE', viewers: ['OFFICE'], here: true })
+    expect(rows[0]).toMatchObject({ pc: null, viewers: [], here: false })
+    expect(rows[1].viewers).toEqual([]) // 옛 서버(viewers 없음)
+  })
+  it('orcad 가 R1 요청(detach·meta)과 viewers 사건을 안다', () => {
+    expect(ORCAD_PY).toContain("if t == 'detach':")
+    expect(ORCAD_PY).toContain("if t == 'meta':")
+    expect(ORCAD_PY).toContain("'type': 'viewers'")
   })
 })

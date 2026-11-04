@@ -124,7 +124,8 @@ export function judgeDaemon(protocol: number, current = DAEMON_PROTOCOL_VERSION,
  * 덧붙인 선택 필드라 판(protocol)은 그대로다 — v1 데몬은 아직 배포 전(v2.2)이라 이것을 모르는 데몬이 사용자 PC 에 없다.
  */
 export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string; shellArgs?: string[] }
-export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown> }
+/** viewers: 원격(orcad) 만 — 지금 이 세션에 붙은 PC 이름들(R1 다른 PC 에서 이어 보기). 로컬 데몬은 안 채운다. */
+export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown>; viewers?: string[] }
 
 export type DaemonHello = { type: 'hello'; protocol: number; token: string }
 export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; pid: number; appVersion?: string; error?: string }
@@ -133,7 +134,11 @@ export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; p
 export type DaemonRequest =
   | { rid: number; type: 'create'; spec: DaemonCreateSpec }
   | { rid: number; type: 'list' }
-  | { rid: number; type: 'attach'; id: string }
+  /** pc: 원격(orcad) 만 — 붙는 PC 의 이름(다른 PC 에 "누가 보는 중"으로 보인다). */
+  | { rid: number; type: 'attach'; id: string; pc?: string }
+  /** 원격(orcad) R1 — 이 PC 에서만 닫기(세션은 서버에 산다)·meta 덧쓰기(제목 등, null = 지움). 옛 orcad 는 '모르는 요청'으로 답한다. */
+  | { rid: number; type: 'detach'; id: string }
+  | { rid: number; type: 'meta'; id: string; meta: Record<string, unknown> }
   | { rid: number; type: 'kill'; id: string }
   | { rid: number; type: 'killAll' }
   | { rid: number; type: 'shutdown' }
@@ -152,3 +157,6 @@ export type DaemonEvent =
   | { type: 'exit'; id: string; code: number; signal?: number }
   /** 그 세션 트리의 작업 세트가 상한을 넘었다(넘어설 때 한 번 — overMemory). 붙은 앱 모두에게. */
   | { type: 'memoryOver'; id: string; memory: number; limit: number }
+  /** 원격(orcad) R1 — 그 세션에 붙은 PC 가 바뀌었다 · meta 가 바뀌었다(붙은 쪽 모두에게). */
+  | { type: 'viewers'; id: string; viewers: string[] }
+  | { type: 'meta'; id: string; meta: Record<string, unknown> }
