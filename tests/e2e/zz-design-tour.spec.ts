@@ -100,7 +100,7 @@ for (const theme of THEMES) {
           await page.click('.ctx-submenu .ctx-item[data-action="split.horizontal"]')
           await expect(page.locator('.pane-grid .pane')).toHaveCount(2)
         })
-        for (const [id, name] of [['conn', 'conn'], ['file', 'file'], ['ai', 'ai']] as const) {
+        for (const [id, name] of [['conn', 'conn'], ['file', 'file']] as const) {
           await step(c, `sidebar-${name}`, async () => {
             await pickSidebarTab(page, id)
           })
@@ -117,6 +117,15 @@ for (const theme of THEMES) {
         await step(c, 'conn-manager-modal', async () => {
           await page.keyboard.press('Control+Shift+M')
           await expect(page.locator('.overlay.open:not(.dlg-overlay) .modal')).toBeVisible()
+        })
+        // 서버 목록 점(.pf-st) — 접속한 두 프로필(tour-alpha/beta)의 상태 점이 보이게. 같은 모달이 배경막(.overlay) 확인용도 겸한다.
+        await step(c, 'conn-manager-dot', async () => {
+          await page.keyboard.press('Control+Shift+M')
+          await expect(page.locator('.overlay.open .prof-list .prof .pf-st').first()).toBeVisible()
+        })
+        await step(c, 'modal-backdrop', async () => {
+          await page.keyboard.press('Control+Shift+K') // 명령어 북 — 아무 모달 하나(배경막은 화면 전체)
+          await expect(page.locator('.cheatsheet.open')).toBeVisible()
         })
         await step(c, 'command-book', async () => {
           await page.keyboard.press('Control+Shift+K')
@@ -143,7 +152,9 @@ for (const theme of THEMES) {
           await openBottomTool(page, 'sys')
         })
         await step(c, 'bottom-ports', async () => {
-          await openBottomTool(page, 'port') // console.spec 의 탭 id 목록: files ps svc disk sys port term pkg ctr k8s
+          // 포트는 하단 탭이 아니다(BOTTOM_IDS 에 없음) — [모니터] 탭 안의 포트 표(.pmon-list .ptbl, fixtures.portRows)다.
+          await openBottomTool(page, 'monitor')
+          await expect(page.locator('.pmon-list')).toBeVisible()
         })
         await step(c, 'explorer-window', async () => {
           // 탐색기는 OS 창이다 — page.screenshot 은 본창만 찍으므로 그 창의 Page 를 받아 찍는다.
@@ -169,9 +180,10 @@ for (const theme of THEMES) {
           })
         }
         await step(c, 'settings-dropdown-open', async () => {
-          await openSettings(page, 'general')
-          await page.locator('.settings-page [role="combobox"]').first().click()
-          await expect(page.locator('.settings-page [role="listbox"], [role="listbox"]').first()).toBeVisible()
+          // p3r2a.spec 과 같은 자리 — 설정 › 터미널의 테마 Dropdown(.dd), 목록은 .dd-list.
+          await openSettings(page, 'terminal')
+          await page.click('.settings-page [data-field="term.theme"] .dd')
+          await expect(page.locator('.dd-list').first()).toBeVisible()
         })
         await reset(page)
 
@@ -193,8 +205,13 @@ for (const theme of THEMES) {
           await expect(page.locator('[data-aiws="agent-picker"]')).toBeVisible({ timeout: 20_000 })
         })
         await step(c, 'ai-model-effort', async () => {
-          // 모델·추론 강도 — 채팅 모드의 선택기(없으면 skipped)
-          await page.locator('[data-aiws="chat-model"]').first().click({ timeout: 5_000 })
+          // 모델·추론 강도 — 에이전트 피커의 실행 옵션(AgentPane OptField: [data-aiws=opt-model|opt-effort] 안의 .dd).
+          // 에이전트를 아직 안 골랐으면 설치된 첫 것을 고른다(그래야 launch-options 가 그려진다).
+          const opts = page.locator('[data-aiws="launch-options"]')
+          if ((await opts.count()) === 0) await page.locator('[data-aiws="agent-picker"] [data-agent]:not([disabled])').first().click()
+          await expect(opts).toBeVisible()
+          await page.locator('[data-aiws="opt-model"] .dd, [data-aiws="opt-effort"] .dd, [data-aiws="opt-permission"] .dd').first().click()
+          await expect(page.locator('.dd-list').first()).toBeVisible()
         })
         await step(c, 'ai-setup-guide-modal', async () => {
           await page.click(`${side} [data-aiws="setup-entry"]`)
