@@ -3731,10 +3731,12 @@ button.sb-seg.upd:hover .val {
   cursor: var(--cur-hand, pointer);
   position: relative;
 }
+/* FB-2.2.3 A3: 호버 = 설정 내비(.sp-item)와 같은 밝은 반투명 면 — --bg-raised 는 글라스 위에서 검은 띠로 보였다. */
 .srv-node:hover,
 .sess-node:hover,
 .fav-node:hover {
-  background: var(--bg-raised);
+  background: var(--glass-hover);
+  color: var(--text-hi);
 }
 .srv-node.active,
 .sess-node.active {
@@ -9474,6 +9476,33 @@ button.sb-seg.upd:hover .val {
 .aiws-agents .aiws-mode {
   flex: 1 1 0;
   min-width: 0;
+}
+/* FB-2.2.3 A1: 에이전트 실행 카드 — 설정과 같은 문법. 선택지 = .seg-ctl(홈 + 고른 칸 글라스 면·위 1px 하이라이트),
+   모델·강도·권한 = 설정의 Dropdown(.dd) 칸. */
+[data-aiws='agent-picker'] .aiws-agents {
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: var(--bg-abyss);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+[data-aiws='agent-picker'] .aiws-agents .aiws-mode {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-4);
+  transition: var(--dur-quick);
+}
+[data-aiws='agent-picker'] .aiws-agents .aiws-mode:hover:not(:disabled) {
+  background: var(--glass-hover);
+}
+[data-aiws='agent-picker'] .aiws-agents .aiws-mode.on {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.aiws-launch-opts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-4);
 }
 .aiws-err {
   color: var(--text-hi);

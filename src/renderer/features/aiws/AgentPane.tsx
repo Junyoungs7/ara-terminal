@@ -11,6 +11,7 @@ import { displayOf } from './agentStatusView'
 import { AgentGlyph } from './AgentGlyph'
 import { AgentChatView } from './AgentChatView'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
+import { Dropdown } from '../../components/Dropdown'
 import { PLATFORM, useCodeStore, type CodeFile } from './codeStore'
 import { areWorktreePathsEqual } from '@shared/worktrees'
 import { changeCount, openDiff, useDiffStore } from './diffStore'
@@ -27,6 +28,21 @@ const MediaView = lazy(() => import('./MediaView'))
 // 3차 R1-B 새 탭 옴니박스 — [+]를 처음 누를 때만 불린다.
 const NewTabOmnibox = lazy(() => import('./NewTabOmnibox'))
 type AskFn = (spec: DialogSpec) => Promise<DialogResult>
+
+/** FB-2.2.3 A1: 실행 옵션 칸 — 네이티브 <select> 대신 설정과 같은 Dropdown(값↔라벨은 여기서 잇는다). */
+function OptField({ label, title, field, value, choices, onChange }: { label: string; title?: string; field: string; value: string; choices: [string, string][]; onChange: (v: string) => void }): JSX.Element {
+  return (
+    <div className="aiws-field" data-aiws={field} title={title}>
+      <span>{label}</span>
+      <Dropdown
+        ariaLabel={label}
+        value={choices.find(([v]) => v === value)?.[1] ?? choices[0][1]}
+        options={choices.map(([, l]) => l)}
+        onChange={(l) => onChange(choices.find(([, x]) => x === l)?.[0] ?? '')}
+      />
+    </div>
+  )
+}
 
 /**
  * M3 AI-01 피커 — Orca AgentLaunchPickerMenu·AgentCombobox(orcaRef 7a7f46f8a3)의 1차: 설치된 에이전트를 고르고 첫 지시를 적어 한 번에 실행.
@@ -108,45 +124,36 @@ export function AgentPicker({ worktree, onLaunched, onCancel, onDiff }: { worktr
       )}
       {detected && !detected.some((d) => d.installed) && <p className="aiws-note">{t('aiws.agent.none')}</p>}
       {chosen && (
-        <div className="aiws-chat-opts" data-aiws="launch-options">
+        <div className="aiws-launch-opts" data-aiws="launch-options">
           {models.length > 0 && (
-            <label className="aiws-pill">
-              <span>{t('aiws.opt.model')}</span>
-              <select data-aiws="opt-model" value={model} onChange={(e) => setModel(e.target.value)}>
-                <option value="">{t('aiws.opt.cliDefault')}</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id} title={m.description}>
-                    {m.label}
-                    {m.isDefault ? ` · ${t('aiws.opt.default')}` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OptField
+              label={t('aiws.opt.model')}
+              field="opt-model"
+              value={model}
+              choices={[['', t('aiws.opt.cliDefault')], ...models.map((m): [string, string] => [m.id, m.label + (m.isDefault ? ` · ${t('aiws.opt.default')}` : '')])]}
+              onChange={setModel}
+            />
           )}
           {efforts.length > 0 && (
-            <label className="aiws-pill">
-              <span>{t('aiws.opt.effort')}</span>
-              <select data-aiws="opt-effort" value={effort} onChange={(e) => setEffort(e.target.value)}>
-                <option value="">{t('aiws.opt.cliDefault')}</option>
-                {efforts.map((v) => (
-                  <option key={v} value={v}>
-                    {effortLabel(v)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OptField
+              label={t('aiws.opt.effort')}
+              field="opt-effort"
+              value={effort}
+              choices={[['', t('aiws.opt.cliDefault')], ...efforts.map((v): [string, string] => [v, effortLabel(v)])]}
+              onChange={setEffort}
+            />
           )}
-          <label className="aiws-pill" title={t('aiws.opt.permission.title')}>
-            <span>{t('aiws.opt.permission')}</span>
-            <select data-aiws="opt-permission" value={permission} onChange={(e) => setPermission(e.target.value as AgentPermissionChoice | '')}>
-              <option value="">{`${t('aiws.opt.fromSettings')} · ${t('settings.agents.perm.' + (settings?.agents[chosen].permission ?? 'own'))}`}</option>
-              {permissionChoicesFor(chosen).map((c) => (
-                <option key={c} value={c}>
-                  {t('settings.agents.perm.' + c)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <OptField
+            label={t('aiws.opt.permission')}
+            title={t('aiws.opt.permission.title')}
+            field="opt-permission"
+            value={permission}
+            choices={[
+              ['', `${t('aiws.opt.fromSettings')} · ${t('settings.agents.perm.' + (settings?.agents[chosen].permission ?? 'own'))}`],
+              ...permissionChoicesFor(chosen).map((c): [string, string] => [c, t('settings.agents.perm.' + c)])
+            ]}
+            onChange={(v) => setPermission(v as AgentPermissionChoice | '')}
+          />
         </div>
       )}
       <label className="aiws-field">

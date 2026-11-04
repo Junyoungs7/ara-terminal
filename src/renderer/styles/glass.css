@@ -226,4 +226,36 @@
     background: var(--bg-raised);
     border-top-color: var(--line-strong);
   }
+
+  /* FB-2.2.3 A1 에이전트 실행 카드 — 불투명 가운데 면 위에 뜨는 면 = 대화상자와 같은 유리. */
+  :root[data-glass='on'] [data-aiws='agent-picker'] {
+    background: var(--gl-2);
+    -webkit-backdrop-filter: var(--gl-blur);
+    backdrop-filter: var(--gl-blur);
+    border-color: var(--gl-edge);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 var(--gl-hl);
+  }
+  /* FB-2.2.3 A2 터미널 사이드바 [파일] 머리(아이콘 줄·경로 줄) — 불투명 --bg-raised 띠를 걷어 설정 내비처럼 유리가 이어지게.
+     경로 칸 = 설정 검색칸(.sp-search)과 같은 홈, 아이콘 버튼 = 설정 내비 항목(.sp-item)과 같은 호버·선택 면. */
+  :root[data-glass='on'] .sidebar :is(.sftp-path-bar, .fpath-row) {
+    background: transparent;
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .sidebar :is(.fpath-box, .fpath-in, .ffil) {
+    background: var(--gl-in);
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .sidebar .fpath-box:hover {
+    border-color: var(--line-strong);
+  }
+}
+
+/* FB-2.2.3 A2 — 버튼 면은 투명이 아니라 색이라 폴백에서도 같다. */
+:root[data-glass='on'] .sidebar .sftp-path-bar .sb-act:hover {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
+:root[data-glass='on'] .sidebar .sftp-path-bar .sb-act.on {
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }

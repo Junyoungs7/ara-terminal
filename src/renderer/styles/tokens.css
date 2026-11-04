@@ -123,11 +123,13 @@
      아닌 이유: 대비 게이트가 그 접두사를 기본 테마의 값으로 읽는다 — 글라스 값이 섞이면 기본 테마 검사가 흐려진다.
      층: 바탕 --gl-wall(움직이지 않는 radial 넷) · 구조 면 --gl-1(틴트만, 블러 없음) ·
          뜨는 면 --gl-2 + --gl-blur · 글이 많은 면 --gl-3(설정 본문) · 터미널·에디터·diff 는 불투명 그대로. */
-  --gl-wall: radial-gradient(55% 65% at 8% 12%, #1f44a8 0, transparent 70%),
-    radial-gradient(45% 55% at 92% 6%, #6a3424 0, transparent 70%),
-    radial-gradient(55% 60% at 86% 96%, #0e5e66 0, transparent 72%),
-    radial-gradient(45% 55% at 30% 104%, #2b2f7a 0, transparent 70%), #080b16;
-  --gl-1: rgba(10, 13, 24, 0.6);
+  /* FB-2.2.3 A4 "배경이 너무 어둡다" — 시안 C 보다 한 단 밝게(바탕 #080b16→#111729, 빛 덩이 한 단, 구조 면 틴트 .6→.52).
+     글자는 --gl-1 위에 앉으므로 틴트를 너무 걷지 않는다. --gl-* 는 글라스에서만 쓰여 다른 테마엔 영향 없다. */
+  --gl-wall: radial-gradient(55% 65% at 8% 12%, #2a55c2 0, transparent 70%),
+    radial-gradient(45% 55% at 92% 6%, #7d4230 0, transparent 70%),
+    radial-gradient(55% 60% at 86% 96%, #157079 0, transparent 72%),
+    radial-gradient(45% 55% at 30% 104%, #373c90 0, transparent 70%), #111729;
+  --gl-1: rgba(10, 13, 24, 0.52);
   --gl-2: rgba(30, 35, 52, 0.74);
   --gl-3: rgba(13, 15, 20, 0.78);
   --gl-edge: rgba(255, 255, 255, 0.08);
