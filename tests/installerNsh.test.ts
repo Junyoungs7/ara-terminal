@@ -67,3 +67,26 @@ describe('UB-2 1.x 먼저 제거', () => {
     expect(nsi.indexOf('!insertmacro initMultiUser')).toBeLessThan(nsi.indexOf('!insertmacro customInit'))
   })
 })
+
+// 2026-11-04 — 2.2.0 설치본이 Sophos Application Lockdown(브라우저로 받은 새 파일이 PowerShell 을 띄움)에 막혔다.
+// electron-builder 26 의 기본 실행 중 확인이 PowerShell 이라, customCheckAppRunning 으로 갈아 끼운다.
+// 설치 때 도는 매크로(customInit·customInstall·customCheckAppRunning)에는 PowerShell 이 없어야 한다(진짜 제거용 customUnInstall 은 설치 폴더의 제거 프로그램이라 예외).
+describe('설치 중 PowerShell 을 띄우지 않는다', () => {
+  const nsh = readFileSync(join(dir, 'installer.nsh'), 'utf8')
+  const tpl = readFileSync(join(__dirname, '..', 'node_modules', 'app-builder-lib', 'templates', 'nsis', 'include', 'allowOnlyOneInstallerInstance.nsh'), 'utf8')
+  const macro = (name: string): string => nsh.match(new RegExp(`!macro ${name}\\r?\\n([\\s\\S]*?)!macroend`))?.[1] ?? ''
+
+  it('customCheckAppRunning 이 있어 템플릿의 PowerShell 확인을 대신한다(양성 대조: 템플릿엔 PowerShell 이 있다)', () => {
+    expect(tpl).toMatch(/!ifmacrodef customCheckAppRunning/)
+    expect(tpl).toMatch(/powershell/i)
+    expect(macro('customCheckAppRunning')).toMatch(/FileOpen/)
+  })
+
+  for (const m of ['customInit', 'customInstall', 'customCheckAppRunning']) {
+    it(`${m} 에 PowerShell·cmd·nsExec 가 없다`, () => {
+      const body = macro(m)
+      expect(body.length).toBeGreaterThan(0)
+      expect(body).not.toMatch(/powershell|cmd\.exe|nsExec|ExecWait/i)
+    })
+  }
+})

@@ -120,6 +120,34 @@
 !define ARA_V1_GUID "de1cde4d-a29e-5c46-87e0-3dc2fcc68610"
 !define UNINSTALL_REGISTRY_KEY_2 "Software\Microsoft\Windows\CurrentVersion\Uninstall\${ARA_V1_GUID}"
 
+; 실행 중 확인 — electron-builder 26 기본은 PowerShell 로 프로세스를 찾는데, 브라우저로 받은 설치본이 PowerShell 을 띄우면
+; Sophos Intercept X 의 Application Lockdown(LockdownNewFile)이 막는다(2026-11-04 2.2.0 설치 때 실제로 걸림 — 1.x 의 eb 24 는 tasklist 라 안 걸렸다).
+; 자식 프로세스 없이 설치 폴더의 실행 파일이 잠겨 있는지(= 그 파일로 앱이 떠 있는지)만 본다. 이름으로 찾지 않는 이유: 로컬 데몬이
+; %LOCALAPPDATA%\ARA\daemon-host 에서 같은 이름(ARA.exe)으로 돈다 — 업데이트 뒤에도 에이전트가 살아야 하므로 건드리면 안 된다.
+; 업데이트는 앱이 스스로 끄고 오므로 잠시 기다리고, 그래도 떠 있으면 직접 닫아 달라고 한다(강제 종료 안 함).
+!macro customCheckAppRunning
+  StrCpy $R1 0
+  ara_app_check:
+  ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+    ClearErrors
+    FileOpen $R0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" a
+    ${If} ${Errors}
+      IntOp $R1 $R1 + 1
+      ${If} $R1 < 10
+        Sleep 1000
+        Goto ara_app_check
+      ${EndIf}
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY ara_app_retry
+      Quit
+      ara_app_retry:
+      StrCpy $R1 0
+      Goto ara_app_check
+    ${Else}
+      FileClose $R0
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 ; 위 길은 2.x 를 깔 범위에서만 1.x 를 찾는다. 1.x 를 "모든 사용자"로만 깔았던 PC 에 2.x 가 처음이면 설치 범위 기본값을 "모든 사용자"로
 ; 둔다(electron-builder 가 옛 설치의 범위를 따르는 것과 같게 — initMultiUser 는 2.x 키만 본다). 여기선 아무것도 지우지 않는다(창에서 취소하면 1.x 그대로).
 ; 관리자일 때만 — 아니면 그 단추가 꺼져 있다(MULTIUSER_INSTALLMODE_ALLOW_ELEVATION 없음). 관리자 아닌데 "나만"으로 깔면 1.x(모든 사용자)는 남는다.
