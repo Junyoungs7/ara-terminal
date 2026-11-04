@@ -9634,6 +9634,24 @@ progress {
   border-bottom: 1px solid var(--line);
   background: var(--bg-canvas);
 }
+/* 2.2.6 제보 — [+]는 마지막 탭 바로 뒤(크롬). 탭이 넘치면 탭(글자)이 줄어 [+]·채팅 전환이 늘 보인다. */
+.aiws-tabs > .aiws-tab:not(.aiws-chat-toggle) {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.aiws-tabs > .aiws-tab > * {
+  flex: none;
+}
+.aiws-tabs > .aiws-tab > :is(span:not([class]), .aiws-tab-name) {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aiws-tabs > [data-aiws='agent-add'] {
+  flex: none;
+}
 /* FB-2.2.4 D6 탭 줄 앞 워크트리 칩 — 이 탭 묶음이 어느 워크트리 것인지(Orca: 탭은 워크트리마다). */
 .aiws-tabs-wt {
   flex: none;

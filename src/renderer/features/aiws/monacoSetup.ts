@@ -127,6 +127,20 @@ function defineAraTheme(): void {
   }
   const line = hex('--line')
   if (line) colors['diffEditor.border'] = line
+  // 2.2.6 개요 띠(diff overview) — C#26 의 밝은 회색 판은 vs-dark 기본 바닥·보이는 영역 상자였다. 바닥 = 본문(--bg-terminal),
+  // 바뀐 곳 눈금 = --ok·--err, 보이는 영역 상자 = --text-hi 를 아주 옅게(스크롤 막대 손잡이도 같은 값).
+  if (bg) colors['editorOverviewRuler.background'] = bg
+  if (line) colors['editorOverviewRuler.border'] = line
+  const ok = hex('--ok')
+  const err = hex('--err')
+  if (ok?.length === 7) colors['diffEditorOverview.insertedForeground'] = ok + '99'
+  if (err?.length === 7) colors['diffEditorOverview.removedForeground'] = err + '99'
+  const ink = hex('--text-hi')
+  if (ink?.length === 7) {
+    colors['scrollbarSlider.background'] = ink + '14'
+    colors['scrollbarSlider.hoverBackground'] = ink + '24'
+    colors['scrollbarSlider.activeBackground'] = ink + '33'
+  }
   monaco.editor.defineTheme('ara', { base: luma > 128 ? 'vs' : 'vs-dark', inherit: true, rules: [], colors })
 }
 defineAraTheme()

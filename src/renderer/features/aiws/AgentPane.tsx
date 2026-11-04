@@ -427,6 +427,11 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             </button>
           </div>
         )}
+        {/* 3차 R1-B [+] = 새 탭 옴니박스(Orca) — 2.2.6 제보: 크롬처럼 마지막 탭 바로 뒤(채팅 전환은 margin-left:auto 로 오른쪽 끝). 탭이 넘치면 탭이 줄고 [+]는 늘 보인다.
+           열린 탭·파일·URL·에이전트. 예전 피커는 그 안의 [에이전트 고르기…]. */}
+        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('omni.title')} title={t('aiws.tabs.newTip').replace('{key}', PICK_KEY)} onClick={() => setOmni(true)}>
+          <Plus />
+        </button>
         {active && !covered && (
           <button
             type="button"
@@ -440,10 +445,6 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
             <span>{t(chatting ? 'aiws.chat.terminal' : 'aiws.chat.chat')}</span>
           </button>
         )}
-        {/* 3차 R1-B [+] = 새 탭 옴니박스(Orca) — 열린 탭·파일·URL·에이전트. 예전 피커는 그 안의 [에이전트 고르기…]. */}
-        <button type="button" className="aiws-ic" data-aiws="agent-add" aria-label={t('omni.title')} title={t('aiws.tabs.newTip').replace('{key}', PICK_KEY)} onClick={() => setOmni(true)}>
-          <Plus />
-        </button>
       </div>
       {omni && (
         <Suspense fallback={null}>

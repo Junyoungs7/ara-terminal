@@ -267,6 +267,24 @@
   :root[data-glass='on'] .set-note {
     border-left-color: var(--line-strong);
   }
+  /* 2.2.6 제보 변경 비교 — 파일 목록은 유리 사이드 면(설정 내비·워크트리 사이드와 같은 --gl-1 + 오른쪽 안쪽 하이라이트),
+     목록 머리·툴바는 옛 불투명 띠(--bg-surface·--bg-canvas)를 걷어 면이 이어지게. diff 본문(Monaco)은 불투명 그대로 — 테마가 --bg-terminal. */
+  :root[data-glass='on'] .diff-list {
+    background: var(--gl-1);
+    border-color: var(--gl-edge);
+    box-shadow: inset -1px 0 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] :is(.diff-list-head, .diff-bar) {
+    background: transparent;
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .diff-bar {
+    box-shadow: inset 0 1px 0 var(--gl-hl);
+  }
+  :root[data-glass='on'] :is(.diff-draft, .diff-cmts) {
+    background: var(--gl-in);
+    border-color: var(--gl-edge);
+  }
 }
 
 /* FB-2.2.3 A2 — 버튼 면은 투명이 아니라 색이라 폴백에서도 같다. */
@@ -284,6 +302,10 @@
 :root[data-glass='on'] :is(.frow:not(.sel), .sb-act, .tb-ctl:not(.close), .tb-help, .sb-search .field .sclear, .ara-pick-menu .it):hover,
 :root[data-glass='on'] .ara-btn:hover:not(:disabled) {
   background: var(--glass-hover);
+}
+/* 2.2.6 변경 비교 목록 — 경로는 모노(채팅 시안 A 의 도구 줄·경로와 같은 글꼴). 글꼴이라 폴백에서도 같다. */
+:root[data-glass='on'] .diff-row :is(.diff-name, .diff-dir) {
+  font-family: var(--mono);
 }
 /* C#7 드롭다운 현재 줄 — 유리 위 중성 회색 대신 선택 면. */
 :root[data-glass='on'] .dd-opt.cur {

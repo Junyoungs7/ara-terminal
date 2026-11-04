@@ -77,8 +77,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
       renderSideBySide: !useDiffStore.getState().inline,
       // Monaco 기본값은 폭 900px 이하면 [나란히]를 몰래 한 줄 보기로 바꾼다 — 사용자가 고른 보기를 그대로 지킨다.
       useInlineViewWhenSpaceIsLimited: false,
-      // FB-2.2.3 C#26 오른쪽 개요 띠(diff overview)가 밝은 회색 판으로 본문보다 눈에 띄었다 — 끈다. 바뀐 줄 표시는 각 쪽 스크롤 막대 눈금이 맡는다.
-      renderOverviewRuler: false,
+      // FB-2.2.3 C#26 개요 띠가 밝은 회색 판이었다 → 2.2.6 테마(monacoSetup)가 바닥을 본문색·눈금을 --ok/--err 로 칠해 다시 켠다.
+      renderOverviewRuler: true,
       theme: 'ara',
       // M12 R2: 에디터와 같은 글꼴(설정 › 편집기 [글꼴], 비면 터미널 글꼴 — Orca).
       ...editorFont(css)
@@ -175,6 +175,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     setNote(r.ok ? { ok: true, text: t('diff.send.done').replace('{n}', String(r.sent)) } : { ok: false, text: r.message })
   }
   const n = changeCount(d)
+  // 2.2.6 제보 — 빈 상태는 목록 칸(왼쪽 끝)이 아니라 본문 가운데 한 곳에만. 비었으면 남은 고른 파일의 로딩·diff 도 숨긴다.
+  const empty = !!result?.ok && n === 0 && !onlyConflicts
   // 3차 R2-B 그림(바이너리·너무 큼이어도 그림 파일이면 양쪽 그림) · HTML 렌더 비교.
   const imageDiff = !!sel && mediaOf(sel.path)?.kind === 'image' && !!diff?.ok && diff.kind !== 'text'
   const isHtml = !!sel && docKindOf(sel.path) === 'html'
@@ -231,7 +233,6 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
             {result.message}
           </p>
         )}
-        {result?.ok && n === 0 && <p className="aiws-note" data-diff="empty">{t('diff.empty')}</p>}
         {onlyConflicts && rows.length === 0 && result?.ok && (
           <p className="aiws-note" data-diff="no-conflicts">
             {t('diff.conflicts.none')}
@@ -345,15 +346,15 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
           </div>
         )}
         {/* FB-2.2.4 D3 빈 상태 — 목록이 비면 본문도 빈 판 대신 한 줄 안내. */}
-        {result?.ok && n === 0 && !onlyConflicts && (
+        {empty && (
           <div className="diff-empty" data-diff="empty-main">
             <FileDiff aria-hidden />
             <b>{t('diff.empty.title')}</b>
             <span>{t(d?.list === 'branch' ? 'diff.empty.branch' : 'diff.empty.working')}</span>
           </div>
         )}
-        {sel && !diff && <p className="aiws-note">{t('diff.loading')}</p>}
-        {diff && !diff.ok && (
+        {!empty && sel && !diff && <p className="aiws-note">{t('diff.loading')}</p>}
+        {!empty && diff && !diff.ok && (
           <p className="aiws-note aiws-err" role="alert">
             {diff.message}
           </p>
@@ -365,7 +366,7 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
         )}
         {imageDiff && diffArgs && <ImageDiff args={diffArgs} inline={inline} />}
         {htmlDiff && diffArgs && diff?.ok && diff.kind === 'text' && <HtmlDiff args={diffArgs} original={diff.original} modified={diff.modified} inline={inline} />}
-        <div className="diff-monaco" ref={host} hidden={!diff?.ok || diff.kind !== 'text' || htmlDiff} />
+        <div className="diff-monaco" ref={host} hidden={empty || !diff?.ok || diff.kind !== 'text' || htmlDiff} />
         {fileComments.length > 0 && (
           <ul className="diff-cmts" aria-label={t('diff.comments')}>
             {fileComments.map((c) => (
