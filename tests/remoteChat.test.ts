@@ -88,6 +88,35 @@ describe('remoteChat — 서버 transcript 를 orcad read 로', () => {
     expect(rc.has('t1')).toBe(false)
   })
 
+  it('SERVE-R4-1 과 같은 줄 · 같은 순서(채팅을 훅보다 먼저 연다) → 블록 글', async () => {
+    const srv = fakeServer()
+    const pushed: AgentChatEvent[] = []
+    const logs: string[] = []
+    const rc = createRemoteChat({ read: srv.read, push: (e) => pushed.push(e), pollMs: 20, log: (m) => logs.push(m) })
+    const p = '/tmp/ara-e2e-r4-x/.ara-server/claude-shared/projects/-repo/e2e.jsonl'
+    srv.files.set(
+      p,
+      [
+        J({ type: 'user', uuid: 'u1', message: { role: 'user', content: '원격 채팅 보기 확인' } }),
+        J({ type: 'assistant', uuid: 'a1', message: { id: 'm1', role: 'assistant', content: [{ type: 'thinking', thinking: '생각' }, { type: 'text', text: 'REMOTE CHAT OK' }] } })
+      ].join('\n') + '\n'
+    )
+    rc.bind('s', 'claude')
+    expect((await rc.open('s')).messages).toEqual([])
+    rc.hook('s', { hook_event_name: 'UserPromptSubmit', transcript_path: p, prompt: '원격 채팅 보기 확인' })
+    await tick(5)
+    const view = (ms: { blocks: { type: string; text?: string }[] }[]): string[] => ms.map((m) => m.blocks.map((b) => b.text ?? b.type).join('|'))
+    expect(view(pushed[0].messages)).toEqual(['원격 채팅 보기 확인', '생각|REMOTE CHAT OK'])
+    expect(view((await rc.open('s')).messages)).toEqual(['원격 채팅 보기 확인', '생각|REMOTE CHAT OK'])
+    expect(srv.calls[0]).toBeNull()
+    // 읽기 실패는 화면 하나에 한 번 남긴다.
+    srv.fail = 'path not allowed'
+    await rc.open('s')
+    await tick(80)
+    expect(logs).toEqual([`remote chat read s ${p}: path not allowed`])
+    rc.stop()
+  })
+
   it('옛 orcad(read 모름)면 그 화면은 그만 묻는다 · 끊김은 다시 묻는다', async () => {
     const srv = fakeServer()
     const rc = createRemoteChat({ read: srv.read, push: () => {}, pollMs: 20 })

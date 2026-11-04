@@ -95,7 +95,8 @@ export function registerAgentsFeature(deps: {
   const ensureRemoteChat = (): RemoteChat =>
     (rchat ??= createRemoteChat({
       read: (id, path, offset) => deps.remote?.()?.read(id, path, offset) ?? Promise.reject(new Error('remote off')),
-      push: (e) => pushSend(deps.mainWc(), 'agents:chat', e)
+      push: (e) => pushSend(deps.mainWc(), 'agents:chat', e),
+      log: (m) => logMainError('remote chat', new Error(m))
     }))
 
   // M5 AI-19 채팅 이름 — 탭마다 첫 요청 한 번. 이름은 userData/agent-names.json(데몬에 산 탭은 다시 켜도 그대로), 탭이 끝나면 지운다.

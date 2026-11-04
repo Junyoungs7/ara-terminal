@@ -128,10 +128,14 @@ test('SERVE-R4-1 원격 Claude 탭 채팅 보기 — 서버 transcript 가 채�
     // 단계 3: orcad 대장의 마지막 상태에 그 경로가 묶였다.
     const listed = JSON.parse(sh(`python3 -c '${LIST_PY.replace(/'/g, `'\\''`)}'`) || '[]') as { id: string; status?: { payload?: Record<string, unknown> } }[]
     expect(listed.find((x) => x.id === sid)?.status?.payload).toMatchObject({ hook_event_name: 'UserPromptSubmit', transcript_path: tp, prompt: '원격 채팅 보기 확인' })
-    // 단계 4: 앱 채팅(열린 화면이 훅으로 읽기 시작 · 다시 열어도 기억한 경로).
+    // 단계 3b: 앱이 그 status 사건을 받았다(같은 사건이 채팅 경로도 싣는다) — 상태가 훅에서 왔으면 '추정'이 아니다.
+    await expect
+      .poll(async () => (await page.evaluate(() => window.ev.agents.statuses())).find((v: { sessionId: string }) => v.sessionId === sid), { timeout: 15_000, message: '앱이 서버 훅 사건을 받음' })
+      .toMatchObject({ state: 'working', estimated: false })
+    // 단계 4: 앱 채팅(열린 화면이 훅으로 읽기 시작 · 다시 열어도 기억한 경로). 생각함 블록은 text 에 생각 글을 싣는다(3차 실행 실패 — 기대값이 'thinking' 이었다).
     await expect
       .poll(async () => (await page.evaluate((s) => window.ev.agents.chatOpen(s), sid)).messages.map((m: { blocks: { type: string; text?: string }[] }) => m.blocks.map((b) => b.text ?? b.type).join('|')), { timeout: 30_000, message: '앱 채팅' })
-      .toEqual(['원격 채팅 보기 확인', 'thinking|REMOTE CHAT OK'])
+      .toEqual(['원격 채팅 보기 확인', '생각|REMOTE CHAT OK'])
     await page.evaluate((s) => window.ev.agents.chatClose(s), sid)
     await page.evaluate(([host, s]) => window.ev.agents.killRemote(host, s), [hostKey, sid] as const)
   } finally {

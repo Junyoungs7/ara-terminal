@@ -6,7 +6,7 @@ import { createChatModel, DECODERS, takeLines, transcriptHint, type AgentChatEve
 
 export const REMOTE_CHAT_POLL_MS = 1000
 
-type Open = { offset: number | null; model: ChatModel; timer: ReturnType<typeof setInterval> | null; busy: boolean; again: boolean; dead: boolean }
+type Open = { offset: number | null; model: ChatModel; timer: ReturnType<typeof setInterval> | null; busy: boolean; again: boolean; dead: boolean; logged?: boolean }
 
 export type RemoteChat = {
   /** 원격 탭(띄울 때·붙을 때) — 디코더. */
@@ -20,7 +20,7 @@ export type RemoteChat = {
   stop(): void
 }
 
-export function createRemoteChat(deps: { read: (id: string, path: string, offset: number | null) => Promise<TranscriptSlice>; push: (e: AgentChatEvent) => void; pollMs?: number }): RemoteChat {
+export function createRemoteChat(deps: { read: (id: string, path: string, offset: number | null) => Promise<TranscriptSlice>; push: (e: AgentChatEvent) => void; pollMs?: number; log?: (msg: string) => void }): RemoteChat {
   const agents = new Map<string, AgentId>()
   const paths = new Map<string, string>()
   const open = new Map<string, Open>()
@@ -47,6 +47,11 @@ export function createRemoteChat(deps: { read: (id: string, path: string, offset
       if (reset) deps.push({ sessionId: id, messages: o.model.messages(), reset: true })
       else if (added.length) deps.push({ sessionId: id, messages: added })
     } catch (e) {
+      // 왜 비었는지 남긴다(화면 하나에 한 번 — 1초마다 쌓이지 않게).
+      if (!o.logged) {
+        o.logged = true
+        deps.log?.(`remote chat read ${id} ${path}: ${e instanceof Error ? e.message : String(e)}`)
+      }
       // 옛 orcad 는 read 를 모른다 — 그 화면은 더 묻지 않는다. 끊김·경로 거절은 다음 차례에 다시(경로는 훅이 바꿀 수 있다).
       if (e instanceof Error && e.message === 'unknown request') o.dead = true
     } finally {
