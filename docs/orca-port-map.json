@@ -1669,5 +1669,17 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "원격 3차 R2(v2.2): 훅 줄은 서버 사용자 설정(~/.claude·~/.gemini)이 아니라 설치 폴더의 claude-hooks.json(--settings)·gemini-hooks.json(GEMINI_CLI_SYSTEM_DEFAULTS_PATH) — Orca 는 원격 사용자 설정에 심는다(흔적 원칙으로 바꿈). 훅 명령 python3 \"$HOME/.ara-server/orcad.py\" hook <cli> → orcad hook 요청 → status 사건(붙은 PC) + 세션 대장 마지막 상태(list·attach). 페이로드는 서버에서 잘라 보냄(이벤트·도구·자식 id·16KB 이하 tool_input). 옛 orcad(hello hookDir 없음)·Codex 는 화면 판정. 뺀 것: Orca 릴레이 스풀·재생, 원격 Codex 훅(신뢰 해시), 원격 채팅 보기(R4)."
+  },
+  {
+    "id": "DM-08",
+    "feature": "서버 계정 — 관리형 서버에 Claude·Codex 계정 여러 개(설정 안 펼침 + 로그인 단계에만 작은 원격 터미널), 대화 기록은 서버 claude-shared 한곳, 원격 탭 \"다른 계정으로 이어서\"(띠·카드·탭 메뉴 — 서버에서 --resume 을 새 계정 env 로), 서버 제거 때 계정·자격 증명 흔적 0",
+    "orcaPaths": [
+      "src/main/orcad/orcad-account-services.ts",
+      "src/main/claude-accounts/claude-profile-history.ts",
+      "src/renderer/src/lib/agent-account-restart-startup.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "원격 3차 R3(v2.2): 계정 = ~/.ara-server/accounts/<id>/(700, CLAUDE_CONFIG_DIR·CODEX_HOME). orcad account 요청(list·add·remove·default) + create 의 account(id 없음 = 서버 기본 계정, null = 서버 본래 로그인). Claude 히스토리 폴더(R0 CLAUDE_HISTORY 와 같은 목록·충돌 보존)는 ~/.ara-server/claude-shared/ 로 링크 — 서버 ~/.claude 는 안 건드림. 지우기 = 링크를 끊고 그 계정 폴더만(쓰는 세션이 있으면 거절). 로그인은 그 계정 env 로 원격 PTY 에서 `claude auth login; exit`(Codex `codex login --device-auth`) — Orca 는 서버 셸 `orca account add` 만(원격 클라이언트에선 꺼짐), 아라는 설정에서 그 자리 터미널로. 원격 세션 id 는 서버 훅 session_id, 한도는 서버 훅 StopFailure error=rate_limit(풀리는 시각 모름). 제거 검증 VERIFY 에 accounts·creds 셈. 뺀 것: 원격 Codex 기록 공유·rollout 복사(원격 Codex 는 훅이 없어 세션 id 를 모름 → 새로 띄움), 원격 사용량(statusLine), 계정 이름 바꾸기."
   }
 ]
