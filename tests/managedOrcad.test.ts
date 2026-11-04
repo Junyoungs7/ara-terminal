@@ -14,8 +14,9 @@ import type { AgentChatEvent } from '../src/shared/agentChat'
 import { deriveGeneratedTabTitle } from '../src/shared/agentTabTitle'
 import type { DaemonBackend } from '../src/main/daemon/service'
 import { AGENT_SESSION_LOST_EXIT } from '../src/shared/agentHooks'
-import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, accountLoginLine, decideUpdate, remnantsOf, remoteHookLaunch, serverAccountsOf, serverStateOf, supportOf, type ServerAccount, type ServerAccounts } from '../src/shared/managedServers'
+import { STOP_SCRIPT, UNINSTALL_SCRIPT, VERIFY_SCRIPT, accountErrorText, accountLoginLine, residentScript, decideUpdate, remnantsOf, remoteHookLaunch, serverAccountsOf, serverStateOf, supportOf, type ServerAccount, type ServerAccounts } from '../src/shared/managedServers'
 import { applyHookEvent } from '../src/shared/agentHooks'
+import { ORCAD_PY } from '../src/main/managed/orcadScript'
 import { remoteAddWorktree, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../src/main/managed/remoteWorktrees'
 
 const DISTRO = process.env['ARA_TEST_WSL_DISTRO'] || 'Ubuntu'
@@ -236,7 +237,7 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
   }, 180_000)
 
   // M8 R4 — 앱 재시작 복귀(클라이언트 상태를 새로 만든 뒤 세션 조회 → 다시 연결) + 끊긴 탭 닫기 = 서버의 에이전트 끝내기 → 원격 세션 프로세스 0.
-  it('재시작 복귀 + 끊긴 탭 닫기 끝내기', async () => {
+  it('재시작 복귀 + 끊긴 탭 닫기 끝내기 + R5 상주(켜짐이면 세션 0·연결 0 에도 산다 / 끄면 다음 idle 에 끝난다)', async () => {
     const h = harness!
     const hostKey = `tester@127.0.0.1:${h.port}`
     const c1 = await connect(h.port, h.password)
@@ -289,10 +290,23 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     expect(second.connected(hostKey)).toBe(false) // 붙은 탭이 없으니 다리째 닫았다
     expect((await second.list(hostKey, c2)).map((x) => x.id)).toEqual(['keep'])
     expect(gone).toEqual(['drop'])
-    // "서버에서도 끝내기" = kill → 끝 → 다리를 닫으면 데몬도 스스로 내려간다 → 원격 프로세스 0(설치 폴더만 남음).
+    // "서버에서도 끝내기" = kill → 끝 → 다리를 닫아 세션 0·연결 0.
     await second.kill(hostKey, c2, 'keep')
     expect(gone).toEqual(['drop', 'keep'])
     second.detach(hostKey)
+    const procs = async (): Promise<number> => Number(remnantsOf((await execSh(c2, VERIFY_SCRIPT)).out).find((x) => x.startsWith('proc:'))?.slice(5) ?? 0)
+    // R5 상주(기본 켜짐): 세션 0·연결 0 이 된 뒤에도 서버(데몬 하나)가 남는다. 상주가 아니면 마지막 연결이 떠나는 즉시 끝난다 — 세션 셸이 다 끝나 1 이 된 뒤 몇 초 더 기다려 잰다.
+    expect((await probeHost(c2)).resident).toBe(true)
+    const end1 = Date.now() + 15_000
+    while ((await procs()) !== 1) {
+      if (Date.now() > end1) throw new Error('시간 초과: 세션 셸 끝남(상주 데몬 하나만)')
+      await new Promise((r) => setTimeout(r, 300))
+    }
+    await new Promise((r) => setTimeout(r, 3_000))
+    expect(await procs()).toBe(1)
+    // 상주 끄기(설정 › 관리형 서버) = 설치 폴더에 파일 하나 — 서버를 새로 띄우지 않고, 지금 서버는 다음 idle 에 스스로 끝난다 → 원격 프로세스 0(설치 폴더만 남음).
+    expect((await execSh(c2, residentScript(false))).code).toBe(0)
+    expect((await probeHost(c2)).resident).toBe(false)
     const end2 = Date.now() + 20_000
     let left = remnantsOf((await execSh(c2, VERIFY_SCRIPT)).out)
     while (left.some((x) => x.startsWith('proc:'))) {
@@ -704,4 +718,105 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     expect(await uninstallHost(c)).toEqual([])
     c.end()
   }, 120_000)
+
+  // 3차 R6 연결 견고성 — 다리를 강제로 끊고 다시 붙으면 같은 세션·replay 로 화면이 이어진다(렌더러의 자동 재시도가 부르는 것과 같은 attach) ·
+  // hello 의 부팅 id(재부팅으로 잃은 탭 가르기) · 다른 PC 입력 표시(typing 사건, 입력한 PC 에는 안 감) ·
+  // 옛 orcad(R2 판 흉내 — read·account 를 모름)에 새 요청 → '모르는 요청'으로 넘어가고 연결은 산다 · 통신 판이 다르면 붙지 않고 이유 한 줄 · 제거 흔적 0.
+  it('R6 끊김 → 다시 붙기·replay · 부팅 id · 다른 PC 입력 · 옛 서버에 새 요청 · 판 불일치', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    type Pc = { agents: ReturnType<typeof createRemoteAgents>; out: Map<string, string>; exits: Map<string, number>; backends: Map<string, DaemonBackend>; typing: string[]; boot: (string | null | undefined)[] }
+    const pc = (name: string): Pc => {
+      const p: Pc = { out: new Map(), exits: new Map(), backends: new Map(), typing: [], boot: [], agents: null as unknown as Pc['agents'] }
+      p.agents = createRemoteAgents({
+        adopt: (b, _info, _host, boot) => {
+          p.backends.set(b.id, b)
+          p.out.set(b.id, '')
+          p.boot.push(boot)
+          b.onData((d) => p.out.set(b.id, p.out.get(b.id) + d))
+          b.onExit((code) => p.exits.set(b.id, code))
+        },
+        typing: (id, who) => p.typing.push(`${id}:${who}`),
+        pc: name,
+        log: () => {}
+      })
+      return p
+    }
+    let cA = await connect(h.port, h.password)
+    const cB = await connect(h.port, h.password)
+    await installHost(cA, '2.11.0')
+    const A = pc('PC-A')
+    const B = pc('PC-B')
+    await A.agents.create(hostKey, cA, { id: 'r6', cwd: home, env: {}, meta: { agent: 'claude', title: 'r6' } })
+    A.backends.get('r6')!.write('echo "before-cut-$((7*6))"\n')
+    await waitFor(() => /before-cut-42/.test(A.out.get('r6')!), 20_000, 'A 출력')
+    // 부팅 id = 서버 커널의 것(옛 서버는 안 준다 → 재부팅 판정 없음).
+    const bootId = (await execSh(cB, 'cat /proc/sys/kernel/random/boot_id')).out.trim()
+    expect(bootId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(A.boot).toEqual([bootId])
+
+    // 다른 PC 입력 표시: B 가 붙어 입력하면 A 만 typing(PC-B)을 받는다(입력한 B 는 안 받는다). PC·세션마다 1초에 한 번까지.
+    await B.agents.attach(hostKey, cB, ['r6'])
+    B.backends.get('r6')!.write('echo "typed-by-B"\n')
+    await waitFor(() => A.typing.includes('r6:PC-B'), 10_000, 'A 가 B 의 입력을 안다')
+    B.backends.get('r6')!.write('true\n')
+    await waitFor(() => /typed-by-B/.test(A.out.get('r6')!), 10_000, 'B 입력 출력')
+    expect(A.typing.filter((x) => x === 'r6:PC-B')).toHaveLength(1)
+    expect(B.typing).toEqual([])
+    B.agents.release('r6')
+
+    // 다리 강제 끊기(노트북 절전·망 바뀜 흉내) → A 탭은 끊김(잃음 코드), 서버 세션은 산다 → 새 연결로 다시 붙으면 같은 id·replay 로 화면이 이어진다.
+    cA.end()
+    await waitFor(() => A.exits.get('r6') === AGENT_SESSION_LOST_EXIT, 20_000, '다리 끊김')
+    cA = await connect(h.port, h.password)
+    A.out.set('r6', '')
+    A.exits.clear()
+    expect((await A.agents.attach(hostKey, cA, ['r6'])).map((x) => x.id)).toEqual(['r6'])
+    await waitFor(() => /before-cut-42/.test(A.out.get('r6') ?? '') && /typed-by-B/.test(A.out.get('r6') ?? ''), 10_000, 'replay')
+    A.backends.get('r6')!.write('echo "after-relink-$((8*8))"\n')
+    await waitFor(() => /after-relink-64/.test(A.out.get('r6')!), 10_000, '다시 붙은 뒤 입력')
+    expect(A.boot).toEqual([bootId, bootId])
+    await A.agents.kill(hostKey, cA, 'r6')
+    A.agents.detach(hostKey)
+    B.agents.detach(hostKey)
+
+    // 옛 orcad(R2 판 흉내): read·account 요청과 hello 부팅 id 를 뺀 스크립트로 바꿔 띄운다.
+    const swap = async (py: string): Promise<void> => {
+      await execSh(cA, STOP_SCRIPT)
+      writeFileSync(`${sftpRoot}/.ara-server/orcad.py`, py)
+    }
+    const oldPy = ORCAD_PY.replace("if t == 'read':", "if t == '__no_read__':").replace("if t == 'account':", "if t == '__no_account__':").replace("'boot': read_boot(), ", '')
+    expect(oldPy).not.toContain("'boot': read_boot()")
+    await swap(oldPy)
+    const O = pc('PC-A')
+    await O.agents.create(hostKey, cA, { id: 'old', cwd: home, env: {}, meta: { title: 'old' } })
+    expect(O.boot).toEqual([undefined])
+    await expect(O.agents.read('old', `${home}/.ara-server/claude-shared/x.jsonl`, null)).rejects.toThrow('unknown request')
+    const acctErr = await O.agents.account(hostKey, cA, { op: 'list' }).then(
+      () => '',
+      (e: Error) => e.message
+    )
+    expect(acctErr).toMatch(/unknown request/)
+    expect(accountErrorText(acctErr)).toMatch(/옛 판/)
+    // 모르는 요청 뒤에도 연결은 산다 — 입력·출력이 그대로.
+    O.backends.get('old')!.write('echo "still-$((9*9))"\n')
+    await waitFor(() => /still-81/.test(O.out.get('old')!), 10_000, '옛 서버 연결 유지')
+    expect(O.exits.has('old')).toBe(false)
+    await O.agents.kill(hostKey, cA, 'old')
+    O.agents.detach(hostKey)
+
+    // 통신 판이 다르면(서버가 옛 판) 붙지 않고 이유 + 할 일 한 줄.
+    const p0 = ORCAD_PY.replace('PROTOCOL = 1\n', 'PROTOCOL = 0\n')
+    expect(p0).not.toBe(ORCAD_PY)
+    await swap(p0)
+    const P = pc('PC-A')
+    await expect(P.agents.create(hostKey, cA, { id: 'p0', cwd: home, env: {}, meta: {} })).rejects.toThrow(/옛 판.*다시 연결/)
+    expect(P.agents.connected(hostKey)).toBe(false)
+
+    // 제거 흔적 0.
+    expect(await uninstallHost(cA)).toEqual([])
+    expect(remnantsOf((await execSh(cA, VERIFY_SCRIPT)).out)).toEqual([])
+    cA.end()
+    cB.end()
+  }, 180_000)
 })

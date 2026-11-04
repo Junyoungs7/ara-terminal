@@ -29,6 +29,7 @@ const ev = {
     onTitle: vi.fn(() => () => {}), // M11
     onViewers: vi.fn(() => () => {}), // R1
     onRemoteLimit: vi.fn(() => () => {}), // R3
+    onTyping: vi.fn(() => () => {}), // R6
     forgetRemote: vi.fn(async () => {}),
     // M8 R4 끊긴 원격 탭 닫기·다시 연결
     killRemote: vi.fn(async () => true),
@@ -43,9 +44,10 @@ const ev = {
   }
 }
 
+const winListeners = new Map<string, () => void>()
 let m: typeof import('../src/renderer/features/aiws/agentStore')
 beforeAll(async () => {
-  ;(globalThis as unknown as { window: unknown }).window = { ev }
+  ;(globalThis as unknown as { window: unknown }).window = { ev, addEventListener: (name: string, cb: () => void) => winListeners.set(name, cb) }
   m = await import('../src/renderer/features/aiws/agentStore')
 })
 afterAll(() => {
@@ -148,6 +150,52 @@ describe('agentStore', () => {
     expect(ev.agents.killRemote).toHaveBeenCalledWith('u@h:22', 'r3')
     expect(ev.session.destroy).toHaveBeenCalledWith('r3')
     expect(m.useAgentStore.getState().tabs).toEqual([])
+  })
+})
+
+// 3차 R6 — 다리가 끊긴 원격 탭은 자동으로 다시 붙는다: 간격이 늘고(2·4·8·16·30초), 다 실패하면 멈추고 [다시 연결]만, 네트워크가 돌아오면 처음부터 바로.
+// R5 — 다시 붙어 보니 서버가 재부팅됐으면(main 이 부팅 id 로 가른 rebooted) 그 탭은 '재부팅으로 끝남'.
+describe('R6 자동 다시 연결 · R5 재부팅 표시', () => {
+  it('끊김 → 백오프 재시도 → 5번 실패면 멈춤 → online 이면 바로 → 붙으면 띠가 걷힌다 · 서버에 없던 탭은 재부팅으로 끝남', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = 'u@h:22'
+      const info = (sessionId: string) => ({ sessionId, agent: 'codex' as const, title: 't', line: 'l', cwd: '/r', host })
+      m.useAgentStore.setState({ tabs: [{ sessionId: 'q1', agent: 'codex', worktreeId: 'w', title: 't', line: 'l', exited: true, lost: true, host }, { sessionId: 'q2', agent: 'codex', worktreeId: 'w', title: 't', line: 'l', exited: true, lost: true, host }], relinkByHost: {} })
+      // 손으로 [다시 연결] 한 번(앱을 다시 켜 되살린 탭) — q1 이 붙어 지켜보기 시작한다.
+      ev.agents.reconnect.mockResolvedValueOnce({ ok: true, tabs: [info('q1')], rebooted: [] } as never)
+      expect(await m.useAgentStore.getState().reconnectHost(host)).toBeNull()
+      m.useAgentStore.setState((st) => ({ tabs: st.tabs.map((x) => (x.sessionId === 'q2' ? { ...x, lost: true } : x)) }))
+      const calls = (): number => ev.agents.reconnect.mock.calls.length
+      const before = calls()
+      // 다리가 끊김(잃음 코드) → 자동 재시도 예약(2초 뒤).
+      ev.agents.reconnect.mockResolvedValue({ ok: false, error: '연결 안 됨' } as never)
+      exits.get('q1')!({ id: 'q1', exitCode: AGENT_SESSION_LOST_EXIT })
+      expect(m.useAgentStore.getState().relinkByHost[host]).toMatchObject({ attempt: 0, busy: false })
+      await vi.advanceTimersByTimeAsync(1_900)
+      expect(calls()).toBe(before)
+      for (const [i, wait] of [2, 4, 8, 16, 30].entries()) {
+        await vi.advanceTimersByTimeAsync(wait * 1000)
+        expect(calls()).toBe(before + i + 1)
+      }
+      // 다섯 번 실패 → 멈춤(다음 시도 없음), 이유는 띠에.
+      expect(m.useAgentStore.getState().relinkByHost[host]).toMatchObject({ attempt: 5, at: null, busy: false, error: '연결 안 됨' })
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(calls()).toBe(before + 5)
+      // 네트워크가 돌아옴 → 바로 시도 → 붙음: 띠가 걷히고, 서버에 없던 q2 는 재부팅으로 끝남.
+      ev.agents.reconnect.mockResolvedValue({ ok: true, tabs: [info('q1')], rebooted: ['q2'] } as never)
+      winListeners.get('online')!()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(calls()).toBe(before + 6)
+      expect(m.useAgentStore.getState().relinkByHost[host]).toBeUndefined()
+      expect(m.useAgentStore.getState().tabs).toMatchObject([
+        { sessionId: 'q1', exited: false, lost: false },
+        { sessionId: 'q2', exited: true, lost: false, rebooted: true }
+      ])
+    } finally {
+      ev.agents.reconnect.mockResolvedValue({ ok: true, tabs: [] } as never)
+      vi.useRealTimers()
+    }
   })
 })
 

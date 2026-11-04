@@ -6,6 +6,7 @@ import type { AgentId, AgentSettings, DetectedAgent } from '@shared/agents'
 import type { AgentLaunchOptions, AgentLaunchResult, AgentTabInfo } from '@shared/ipc'
 import { AGENT_SESSION_LOST_EXIT, type AgentStatusView } from '@shared/agentHooks'
 import { areWorktreePathsEqual } from '@shared/worktrees'
+import { RELINK_DELAYS_S, TYPING_SHOW_MS } from '@shared/managedServers'
 import { AGENTS } from '@shared/agents'
 import { nextSeen } from './agentStatusView'
 import { FEED_CAP, feedKindOf, noteKindOf, type FeedEvent, type FeedKind } from './agentBoard'
@@ -48,7 +49,12 @@ export type AgentTab = {
   account?: string | null
   /** R0 다른 계정으로 이어 띄운 탭 — 그 계정 이름(한 줄 알림, [닫기]로 걷는다). */
   switched?: string
+  /** R5 서버가 재부팅되어 잃은 원격 탭(다시 연결해 보니 서버 부팅 id 가 바뀌었다). */
+  rebooted?: boolean
 }
+
+/** R6 다리가 끊긴 서버의 자동 다시 연결. attempt = 실패한 횟수, at = 다음 시도 시각(ms) · null = 멈춤(다 실패 — [다시 연결]만), busy = 지금 시도 중. */
+export type Relink = { attempt: number; at: number | null; busy: boolean; error?: string }
 
 type AgentState = {
   /** null = 아직 안 찾음. */
@@ -63,6 +69,12 @@ type AgentState = {
   viewersById: Record<string, string[]>
   /** R3 원격 탭이 한도에 걸렸다(서버 훅 StopFailure rate_limit — 다음 지시면 풀림). 탭보다 먼저 올 수 있어 따로 둔다. */
   limitById: Record<string, boolean>
+  /** R6 서버별 자동 다시 연결 상태(끊긴 원격 탭 띠에 "n번째 시도 · m초 뒤"). */
+  relinkByHost: Record<string, Relink>
+  /** R6 다른 PC 가 입력 중인 원격 탭 → 그 PC 이름(몇 초 뒤 사라진다). */
+  typingById: Record<string, string>
+  /** R6 [지금 다시 연결] — 기다리지 않고 바로 시도(실패하면 다음 간격으로, 다 실패했으면 멈춘 채). */
+  relinkNow: (hostKey: string) => void
   /** 봤나(herdr seen). 없으면 본 것. */
   seenById: Record<string, boolean>
   /** 지금 화면에 보이는 에이전트 탭(AI 작업 공간이 열려 있고 그 탭이 고른 탭). 없으면 null. */
@@ -105,6 +117,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   statusById: {},
   viewersById: {},
   limitById: {},
+  relinkByHost: {},
+  typingById: {},
+  relinkNow: (hostKey) => void tryRelink(hostKey),
   seenById: {},
   viewing: null,
   view: 'worktree',
@@ -170,11 +185,14 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   reconnectHost: async (hostKey) => {
     const r = await window.ev.agents.reconnect(hostKey)
     if (!r.ok) return r.error
+    stopRelink(hostKey)
     const ids = new Set(r.tabs.map((x) => x.sessionId))
+    const rebooted = new Set(r.rebooted ?? [])
     // 있던 탭은 그 자리에서 되살리고(같은 id — 터미널은 붙은 채라 원격 replay 가 그대로 그려진다), 이 창이 모르던 세션은 새 탭으로.
     const known = get().tabs.filter((x) => ids.has(x.sessionId))
     // M8 R4 그 서버의 끊긴 탭 중 서버에 없는 것은 이미 끝났다 — '끊김'이 아니라 '종료'로.
-    set((s) => ({ tabs: s.tabs.map((x) => (ids.has(x.sessionId) ? { ...x, exited: false, lost: false } : x.host === hostKey && x.lost ? { ...x, lost: false } : x)) }))
+    // R5 서버가 재부팅되어 잃은 탭은 '재부팅으로 끝남'으로.
+    set((s) => ({ tabs: s.tabs.map((x) => (ids.has(x.sessionId) ? { ...x, exited: false, lost: false } : x.host === hostKey && x.lost ? { ...x, lost: false, ...(rebooted.has(x.sessionId) ? { rebooted: true } : {}) } : x)) }))
     known.forEach((x) => watchExit(x.sessionId))
     restoreTabs(r.tabs)
     return null
@@ -339,7 +357,42 @@ function watchExit(sessionId: string): void {
     off()
     const lost = info.exitCode === AGENT_SESSION_LOST_EXIT
     useAgentStore.setState((s) => ({ tabs: s.tabs.map((t) => (t.sessionId === sessionId ? { ...t, exited: true, ...(lost ? { lost: true } : {}) } : t)) }))
+    // R6 다리가 끊긴 원격 탭 — 자동으로 다시 붙는다(백오프). 앱을 다시 켜 '끊김'으로 되살린 탭은 사람이 [다시 연결](시작할 때 서버에 붙지 않는다).
+    const host = useAgentStore.getState().tabs.find((t) => t.sessionId === sessionId)?.host
+    if (lost && host && !useAgentStore.getState().relinkByHost[host]) scheduleRelink(host, 0)
   })
+}
+
+// ── R6 자동 다시 연결 ── 간격 RELINK_DELAYS_S, 다 실패하면 멈추고 [다시 연결]만. 네트워크가 돌아오면(online) 처음부터 바로.
+const relinkTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const setRelink = (host: string, r: Relink | null): void =>
+  useAgentStore.setState((s) => {
+    const { [host]: _old, ...rest } = s.relinkByHost
+    return { relinkByHost: r ? { ...rest, [host]: r } : rest }
+  })
+function scheduleRelink(host: string, attempt: number, error?: string): void {
+  clearTimeout(relinkTimers.get(host))
+  relinkTimers.delete(host)
+  const delay = RELINK_DELAYS_S[attempt]
+  setRelink(host, { attempt, at: delay === undefined ? null : Date.now() + delay * 1000, busy: false, ...(error ? { error } : {}) })
+  if (delay !== undefined) relinkTimers.set(host, setTimeout(() => void tryRelink(host), delay * 1000))
+}
+function stopRelink(host: string): void {
+  clearTimeout(relinkTimers.get(host))
+  relinkTimers.delete(host)
+  setRelink(host, null)
+}
+async function tryRelink(host: string, fresh = false): Promise<void> {
+  const s = useAgentStore.getState()
+  if (!s.tabs.some((x) => x.host === host && x.lost)) return stopRelink(host)
+  const cur = s.relinkByHost[host]
+  if (cur?.busy) return
+  const attempt = fresh ? 0 : (cur?.attempt ?? 0)
+  clearTimeout(relinkTimers.get(host))
+  relinkTimers.delete(host)
+  setRelink(host, { attempt, at: null, busy: true })
+  const err = await s.reconnectHost(host).catch((e: unknown) => (e instanceof Error ? e.message : String(e)))
+  if (err !== null) scheduleRelink(host, attempt + 1, err)
 }
 
 /**
@@ -443,6 +496,26 @@ function startStatus(): void {
   window.ev.agents.onTitle((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, genTitle: e.title } : x)) })))
   // R1 원격 탭에 붙은 PC(이 PC 포함).
   window.ev.agents.onViewers((e) => useAgentStore.setState((s) => ({ viewersById: { ...s.viewersById, [e.sessionId]: e.viewers } })))
+  // R6 다른 PC 가 입력 중(서버 사건 — 1초에 한 번까지). 마지막 사건 뒤 TYPING_SHOW_MS 면 지운다.
+  const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  window.ev.agents.onTyping((e) => {
+    useAgentStore.setState((s) => ({ typingById: { ...s.typingById, [e.sessionId]: e.pc } }))
+    clearTimeout(typingTimers.get(e.sessionId))
+    typingTimers.set(
+      e.sessionId,
+      setTimeout(() => {
+        typingTimers.delete(e.sessionId)
+        useAgentStore.setState((s) => {
+          const { [e.sessionId]: _gone, ...typingById } = s.typingById
+          return { typingById }
+        })
+      }, TYPING_SHOW_MS)
+    )
+  })
+  // R6 네트워크가 돌아오면(절전에서 깨어남·망 바뀜) 끊긴 서버에 처음부터 바로 다시 붙는다.
+  window.addEventListener('online', () => {
+    for (const host of Object.keys(useAgentStore.getState().relinkByHost)) void tryRelink(host, true)
+  })
   // R3 원격 탭 한도(띠·카드).
   window.ev.agents.onRemoteLimit((e) => useAgentStore.setState((s) => ({ limitById: { ...s.limitById, [e.sessionId]: e.hit } })))
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.

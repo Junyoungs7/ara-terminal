@@ -3,6 +3,7 @@
 // 아라 쪽은 daemon/client.ts 를 그대로 쓴다(connectDaemonStream). 차이: 유닉스 소켓을 원격 설치 폴더에, 아라와는 SSH exec 다리(connect)로 잇는다.
 // 출처: stablyai/orca @fdfcfb3551 (MIT) src/main/orcad·managed-server/lifecycle/orcad-stdio-bridge-script.ts 의 구조(원격 데몬 + stdio 다리) — 코드는 새로 씀(Orca 는 Node).
 // 생애: 세션도 붙은 연결도 없으면 스스로 끝난다(띄우고 30초 안에 아무도 안 오면, 또는 마지막 연결이 떠나고 세션이 없으면). SSH 가 끊겨도 세션은 산다(setsid).
+// R5 상주(기본 켜짐): 설치 폴더에 resident-off 파일이 없으면 위 자동 종료를 하지 않는다 — 재부팅되면 멈춘다(systemd·crontab 안 씀). 끄면 다음 idle 에 끝난다.
 // ⚠️ String.raw 안이다 — 파이썬에 백틱·달러+여는중괄호를 쓰지 말 것(시험 managedServers.test.ts 가 원격 python 으로 문법을 본다).
 export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 # A.R.A orcad - remote agent terminal daemon (M8 DM-02). Installed only with the user's per-host consent.
@@ -16,8 +17,11 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 #   (tail first, then by byte offset, capped). Hooks also pass transcript_path and the prompt (tab title / chat name).
 #   A session on the server's own login writes under ~/.claude/projects: only the one file that session's own hook named is
 #   readable, and only by a read for that session (bound in the session ledger).
+# R5 (resident, default on): no idle exit unless the file resident-off exists (re-checked while idle). A reboot still ends it.
+# R6: hello carries boot (kernel boot id - the app tells 'lost to a reboot' from 'ended'); a write tells the OTHER attached
+#   clients 'typing' (pc name, at most once a second per client and session).
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
-# Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
+# Resident by default; with resident-off it exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
 import codecs, errno, fcntl, hmac, json, os, pty, re, selectors, shutil, signal, socket, stat, struct, subprocess, sys, termios, time
 
 PROTOCOL = 1
@@ -62,6 +66,9 @@ CLAUDE_HISTORY = ('projects', 'session-env', 'file-history', 'shell-snapshots', 
 MERGE = '.ara-merge'
 LABEL_MAX = 64
 ACCOUNT_ID = re.compile(r'^[0-9a-f]{12}$')
+RESIDENT_OFF = os.path.join(DIR, 'resident-off')
+BOOT_ID = '/proc/sys/kernel/random/boot_id'
+TYPING_S = 1.0
 
 
 def log(msg):
@@ -174,6 +181,7 @@ class Client(object):
         self.out = bytearray()
         self.born = time.time()
         self.pc = ''
+        self.typed = {}
 
 
 def serve():
@@ -363,6 +371,12 @@ def serve():
                     os.write(s.fd, data)
                 except OSError:
                     pass
+                now = time.time()
+                if now - c.typed.get(s.id, 0) >= TYPING_S:
+                    c.typed[s.id] = now
+                    for o in list(clients.values()):
+                        if o is not c and o.authed and s.id in o.attached:
+                            put(o, {'type': 'typing', 'id': s.id, 'pc': c.pc or '?'})
             return None
         if t == 'resize':
             s = sessions.get(r.get('id'))
@@ -406,7 +420,7 @@ def serve():
     def on_message(c, msg):
         if not c.authed:
             ok = isinstance(msg, dict) and msg.get('type') == 'hello' and hmac.compare_digest(str(msg.get('token') or '').encode(), token.encode())
-            reply = {'type': 'hello', 'ok': ok, 'protocol': PROTOCOL, 'pid': os.getpid(), 'appVersion': read_version()}
+            reply = {'type': 'hello', 'ok': ok, 'protocol': PROTOCOL, 'pid': os.getpid(), 'appVersion': read_version(), 'boot': read_boot(), 'resident': resident()}
             if ok:
                 reply['hookDir'] = DIR
             else:
@@ -493,7 +507,11 @@ def serve():
 
     try:
         while True:
-            if not sessions and not clients:
+            if not sessions and not clients and resident():
+                # Resident: stay. Look at the switch again soon; switched off -> the grace starts from now.
+                state['last_empty'] = time.time()
+                timeout = HELLO_S
+            elif not sessions and not clients:
                 left = GRACE_S - (time.time() - state['last_empty'])
                 if left <= 0:
                     shutdown_all('idle (no sessions, no clients)')
@@ -528,7 +546,7 @@ def serve():
                 if not c.authed and now - c.born > HELLO_S:
                     drop(c)
             # A client that was there and left with no sessions alive: nothing to keep -> go now (same as local daemon).
-            if not sessions and not clients and state.get('had_client'):
+            if not sessions and not clients and state.get('had_client') and not resident():
                 shutdown_all('idle (no sessions, no clients)')
                 break
             if clients:
@@ -545,6 +563,18 @@ def read_version():
             return f.read().strip()
     except OSError:
         return None
+
+
+def read_boot():
+    try:
+        with open(BOOT_ID) as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def resident():
+    return not os.path.exists(RESIDENT_OFF)
 
 
 def cleanup():

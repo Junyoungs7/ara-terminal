@@ -132,7 +132,8 @@ export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: nu
 
 export type DaemonHello = { type: 'hello'; protocol: number; token: string }
 /** hookDir: R2 orcad 만 — 설치 폴더(절대 경로, 훅 설정 파일이 있는 곳). 옛 orcad 는 안 준다 = 서버 상태 판정 없음. */
-export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; pid: number; appVersion?: string; error?: string; hookDir?: string }
+/** boot·resident: R5·R6 orcad 만 — 서버 부팅 id(재부팅으로 잃은 탭 가르기)·상주 모드. */
+export type DaemonHelloReply = { type: 'hello'; ok: boolean; protocol: number; pid: number; appVersion?: string; error?: string; hookDir?: string; boot?: string | null; resident?: boolean }
 
 /** 요청(앱 → 데몬). rid 로 답을 짝짓는다 — rid 0 은 답이 필요 없는 것(write·resize, 키 하나마다 답을 받지 않는다). */
 export type DaemonRequest =
@@ -169,3 +170,5 @@ export type DaemonEvent =
   | { type: 'viewers'; id: string; viewers: string[] }
   | { type: 'meta'; id: string; meta: Record<string, unknown> }
   | ({ type: 'status'; id: string } & DaemonHookStatus)
+  /** 원격(orcad) R6 — 다른 PC 가 그 세션에 입력했다(입력한 PC 에는 안 온다 · PC·세션마다 1초에 한 번). */
+  | { type: 'typing'; id: string; pc: string }

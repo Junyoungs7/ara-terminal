@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react'
 import type { ManagedRecord } from '@shared/managedServers'
 import type { ManagedListResult } from '@shared/ipc'
 import { t } from '../../i18n'
-import { Row } from '../../components/SettingsPage'
+import { Row, Toggle } from '../../components/SettingsPage'
 import { useDialog } from '../../components/Dialog'
 import { askManagedConsent } from './consent'
 import { ServerAccountsBox } from './ServerAccountsBox'
@@ -73,6 +73,22 @@ export function ManagedServersPanel(): JSX.Element {
             <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="remove" onClick={() => void remove(r.hostKey)}>
               {t('managed.remove')}
             </button>
+          </Row>
+          {/* R5 상주 모드(기본 켜짐, 목업 6-resident B) — 서버의 설치 폴더에 기록(다른 PC 도 같은 값). 끄면 할 일이 없을 때 스스로 끝난다. */}
+          <Row label={t('managed.resident')} desc={t('managed.resident.desc')} item={`managed.resident.${r.hostKey}`}>
+            <span data-managed="resident">
+              <Toggle
+                on={r.resident !== false}
+                label={t('managed.resident')}
+                disabled={busy !== null}
+                onChange={(on) =>
+                  void run(r.hostKey, async () => {
+                    const res = await window.ev.managed.resident(r.hostKey, on)
+                    setMsg('error' in res ? res.error : on ? t('managed.resident.onDone') : t('managed.resident.offDone'))
+                  })
+                }
+              />
+            </span>
           </Row>
           {acctOpen === r.hostKey && <ServerAccountsBox hostKey={r.hostKey} ask={dialog.ask} />}
         </div>

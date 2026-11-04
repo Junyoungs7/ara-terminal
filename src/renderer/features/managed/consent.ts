@@ -58,7 +58,8 @@ export function adoptSpec(plan: ManagedConsentPlan, installed: string): DialogSp
       { label: t('managed.adopt.version'), value: `${installed} — ${t(`managed.adopt.${held ? 'held' : kind}`).replace('{app}', app)}` },
       { label: t('managed.adopt.sessions'), value: t('managed.adopt.sessionsN').replace('{n}', String(n)) },
       { label: t('managed.adopt.what'), value: t(kind === 'older' && !held ? 'managed.adopt.whatUpdate' : 'managed.adopt.whatNone') },
-      { label: t('managed.adopt.both'), value: t('managed.adopt.bothNote') }
+      { label: t('managed.adopt.both'), value: t('managed.adopt.bothNote') },
+      { label: t('managed.consent.resident'), value: t('managed.consent.residentNote') }
     ],
     confirmLabel: held ? t('managed.adopt.okHeld').replace('{v}', installed) : t('managed.adopt.ok'),
     cancelLabel: t('managed.cancel')

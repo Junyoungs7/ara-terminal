@@ -23,6 +23,7 @@ const ev = {
     onName: vi.fn(() => () => {}),
     onTitle: vi.fn(() => () => {}),
     onViewers: vi.fn(() => () => {}),
+    onTyping: vi.fn(() => () => {}),
     onRemoteLimit: vi.fn(() => () => {})
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
@@ -33,7 +34,7 @@ let aiws: typeof import('../src/renderer/features/aiws/store')
 beforeAll(async () => {
   const g = globalThis as unknown as { window: unknown; localStorage: unknown }
   g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) }
-  g.window = { ev }
+  g.window = { ev, addEventListener: () => {} }
   // 지난 레이아웃: cold 탭이 맨 앞, 고른 탭도 그것, 고른 작업 단위 w.
   store.set(TAB_LAYOUT_KEY, JSON.stringify({ order: ['old-3', 'live-1', 'old-2'], active: { 'r::C:\\repo\\wt': 'old-2' }, worktree: 'r::C:\\repo\\wt' }))
   m = await import('../src/renderer/features/aiws/agentStore')

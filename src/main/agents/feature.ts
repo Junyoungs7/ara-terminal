@@ -65,7 +65,7 @@ export function registerAgentsFeature(deps: {
   home: string
   mainWc: () => WebContents | null
   /** M8 DM-05 원격 실행(관리형 서버 기능 — 뒤에 서므로 부를 때 찾는다). */
-  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta' | 'read'> | null
+  remote?: () => Pick<ManagedFeature, 'launch' | 'reconnect' | 'savedTabs' | 'kill' | 'attachOne' | 'forget' | 'meta' | 'read' | 'takeRebooted'> | null
   /** M9 R2 에이전트 웹 도구 — 로컬 실행에 Oriel 전용 MCP·지시를 붙인다(원격 실행은 안 붙임 — 서버에서 내 PC 의 Oriel 에 닿지 않는다). */
   oriel?: Pick<Oriel, 'status'>
 }): { stop(): Promise<void>; views(): AgentStatusView[]; limits(): AgentLimits; orielPath(): string; orielFeedUrl(): string; terminalDaemon: LocalDaemonHook; tabs(): { sessionId: string; agent: AgentId; cwd: string }[]; answer(sessionId: string, groups: AskAnswerKeyGroup[]): { ok: boolean }; followUp(sessionId: string, text: string): { ok: boolean }; screen(sessionId: string): Promise<string>; remoteHook(sessionId: string, source: string, payload: Record<string, unknown>): void } {
@@ -461,7 +461,9 @@ export function registerAgentsFeature(deps: {
   handle('agents:reconnect', async ({ hostKey }) => {
     const remote = deps.remote?.()
     if (!remote || typeof hostKey !== 'string') return { ok: false, error: '원격 실행을 쓸 수 없습니다.' }
-    return remoteTabs(() => remote.reconnect(hostKey))
+    const r = await remoteTabs(() => remote.reconnect(hostKey))
+    // R5 재부팅으로 잃은 탭(서버 부팅 id 가 바뀜) — 렌더러가 '재부팅으로 끝남'으로 표시한다.
+    return r.ok ? { ...r, rebooted: remote.takeRebooted(hostKey) } : r
   })
   handle('agents:attachRemote', async ({ hostKey, sessionId }) => {
     const remote = deps.remote?.()

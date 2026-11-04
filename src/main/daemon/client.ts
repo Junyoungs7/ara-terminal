@@ -86,7 +86,7 @@ function handshake(
           else p.reject(new Error(msg.error ?? '데몬 요청 실패'))
           return
         }
-        if (msg.type === 'data' || msg.type === 'exit' || msg.type === 'memoryOver' || msg.type === 'viewers' || msg.type === 'meta' || msg.type === 'status') for (const cb of eventCbs) cb(msg)
+        if (msg.type === 'data' || msg.type === 'exit' || msg.type === 'memoryOver' || msg.type === 'viewers' || msg.type === 'meta' || msg.type === 'status' || msg.type === 'typing') for (const cb of eventCbs) cb(msg)
       },
       () => socket.destroy()
     )

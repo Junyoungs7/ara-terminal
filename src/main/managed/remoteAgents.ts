@@ -7,12 +7,16 @@
 // R2 서버에서 상태 판정: 에이전트 훅이 orcad 에 닿으면 status 사건(붙은 PC 모두에게, 늦게 붙으면 attach 때 마지막 것) → deps.status.
 // R3 서버 계정: account 요청(목록·추가·지우기·기본) — 붙은 탭이 없으면 다리를 닫는다(list 와 같다).
 // R4 채팅 보기: read 요청(그 세션의 연결 그대로 — SFTP 를 따로 열지 않는다).
+// R6 연결 견고성: 통신 판이 다르면 붙지 않고 이유 + 할 일 한 줄로 실패 · 다른 PC 입력(typing 사건) · 부팅 id 를 adopt·listed 에 넘긴다(재부팅으로 잃은 탭).
+// 다시 붙기(자동 재시도)는 렌더러가 attach 를 다시 부른다 — 여기는 붙을 때마다 replay 로 화면이 이어질 뿐이다.
 import type { Client } from 'ssh2'
 import { AGENT_SESSION_LOST_EXIT } from '@shared/agentHooks'
 import type { TranscriptSlice } from '@shared/agentChat'
 import type { DaemonConnection } from '../daemon/client'
 import type { DaemonCreateSpec, DaemonSessionInfo } from '../daemon/protocol'
 import { DaemonBackend } from '../daemon/service'
+import { DAEMON_PROTOCOL_VERSION } from '../daemon/protocol'
+import { protocolErrorText } from '@shared/managedServers'
 import { openBridge } from './host'
 
 export type RemoteAgents = {
@@ -47,19 +51,22 @@ export type RemoteAgents = {
 }
 
 export function createRemoteAgents(deps: {
-  adopt: (backend: DaemonBackend, info: DaemonSessionInfo, hostKey: string) => void
+  /** boot = 그 서버의 부팅 id(R5 — 옛 서버는 없음). */
+  adopt: (backend: DaemonBackend, info: DaemonSessionInfo, hostKey: string, boot?: string | null) => void
   /** attach 로 되살린 세션(탭 복원·상태 판정 붙이기). adopt 뒤에 불린다. */
   restored?: (info: DaemonSessionInfo, hostKey: string) => void
   /** 세션이 서버에서 정말 끝났다(잃음 아님) — 저장한 탭 목록에서 뺀다. */
   gone?: (id: string, hostKey: string) => void
   /** attach 가 받은 서버의 세션 목록 전부(저장한 탭 중 서버에 없는 것을 거른다). */
-  listed?: (hostKey: string, ids: string[]) => void
+  listed?: (hostKey: string, ids: string[], boot?: string | null) => void
   /** R1 이 PC 에서만 닫았다(서버 세션은 산다) — 저장한 탭 목록에서 뺀다. */
   released?: (id: string, hostKey: string) => void
   /** R1 그 세션에 붙은 PC 가 바뀌었다(이 PC 포함). */
   viewers?: (id: string, viewers: string[]) => void
   /** R2 서버가 들은 에이전트 훅(이 PC 에 붙은 세션만). */
   status?: (id: string, source: string, payload: Record<string, unknown>) => void
+  /** R6 다른 PC 가 이 세션에 입력했다(PC 이름). */
+  typing?: (id: string, pc: string) => void
   /** R1 서버에 알릴 이 PC 의 이름. */
   pc?: string
   log: (msg: string) => void
@@ -79,6 +86,7 @@ export function createRemoteAgents(deps: {
       if (e.type === 'data') return x.b.emitData(e.data)
       if (e.type === 'viewers') return deps.viewers?.(e.id, e.viewers)
       if (e.type === 'status') return deps.status?.(e.id, e.source, e.payload)
+      if (e.type === 'typing') return deps.typing?.(e.id, e.pc)
       backends.delete(e.id)
       deps.gone?.(e.id, x.host)
       x.b.emitExit(e.code, e.signal)
@@ -101,6 +109,11 @@ export function createRemoteAgents(deps: {
     if (!p) {
       p = open(client)
         .then((conn) => {
+          const bad = protocolErrorText(conn.hello.protocol, DAEMON_PROTOCOL_VERSION)
+          if (bad) {
+            conn.close()
+            throw new Error(bad)
+          }
           conns.set(hostKey, conn)
           wire(hostKey, conn)
           deps.log(`orcad ${hostKey} attached pid=${conn.hello.pid} protocol=${conn.hello.protocol} version=${conn.hello.appVersion ?? '?'}`)
@@ -115,7 +128,7 @@ export function createRemoteAgents(deps: {
   const adoptOne = async (hostKey: string, conn: DaemonConnection, info: DaemonSessionInfo, restored: boolean): Promise<void> => {
     const b = new RemoteBackend(info.id, info.pid, conn, () => release(info.id))
     backends.set(info.id, { b, host: hostKey })
-    deps.adopt(b, info, hostKey)
+    deps.adopt(b, info, hostKey, conn.hello.boot)
     if (restored) deps.restored?.(info, hostKey)
     try {
       await conn.request({ type: 'attach', id: info.id, ...(deps.pc ? { pc: deps.pc } : {}) })
@@ -145,7 +158,7 @@ export function createRemoteAgents(deps: {
     async attach(hostKey, client, only) {
       const conn = await ensure(hostKey, client)
       const list = await conn.request<DaemonSessionInfo[]>({ type: 'list' })
-      deps.listed?.(hostKey, list.map((x) => x.id))
+      deps.listed?.(hostKey, list.map((x) => x.id), conn.hello.boot)
       const fresh = list.filter((info) => !backends.has(info.id) && (!only || only.includes(info.id)))
       // 붙을 것이 없으면 세려고 연 다리를 닫는다(서버가 혼자 남은 연결 때문에 살지 않게).
       if (!fresh.length && idle(hostKey)) detach(hostKey)

@@ -92,6 +92,7 @@ const ev = {
     onName: vi.fn(() => () => {}), // M5 AI-19
     onTitle: vi.fn(() => () => {}), // M11
     onViewers: vi.fn(() => () => {}), // R1
+    onTyping: vi.fn(() => () => {}), // R6
     onRemoteLimit: vi.fn(() => () => {}) // R3
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
@@ -99,7 +100,7 @@ const ev = {
 
 let m: typeof import('../src/renderer/features/aiws/agentStore')
 beforeAll(async () => {
-  ;(globalThis as unknown as { window: unknown }).window = { ev }
+  ;(globalThis as unknown as { window: unknown }).window = { ev, addEventListener: () => {} }
   m = await import('../src/renderer/features/aiws/agentStore')
   await m.useAgentStore.getState().loadAgents()
   await m.useAgentStore.getState().launchAgent({ agent: 'claude', worktreeId: 'r::w1', cwd: '/repo' })

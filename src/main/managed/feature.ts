@@ -13,7 +13,7 @@ import { mainErrorLogPath } from '../log/MainErrorLog'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
-import { LOGIN_SESSION_KIND, STOP_SCRIPT, accountErrorText, accountLoginLine, consentPlan, decideUpdate, hostKeyOf, isServerAccountAgent, serverAccountsOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerAccount, type ServerSessionsHost } from '@shared/managedServers'
+import { LOGIN_SESSION_KIND, STOP_SCRIPT, accountErrorText, lostToReboot, residentScript, accountLoginLine, consentPlan, decideUpdate, hostKeyOf, isServerAccountAgent, serverAccountsOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerAccount, type ServerSessionsHost } from '@shared/managedServers'
 import type { ManagedAccountsRequest, ManagedAccountsResult, ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
 import type { SshProfile } from '@shared/types'
 import type { TranscriptSlice } from '@shared/agentChat'
@@ -41,6 +41,8 @@ export function registerManagedFeature(deps: {
   viewers?: (e: { sessionId: string; viewers: string[] }) => void
   /** R2 서버가 들은 에이전트 훅 — 로컬 훅과 같은 상태 파이프라인으로. */
   status?: (sessionId: string, source: string, payload: Record<string, unknown>) => void
+  /** R6 다른 PC 가 원격 탭에 입력했다("노트북 입력 중"). */
+  typing?: (e: { sessionId: string; pc: string }) => void
 }): ManagedFeature {
   const file = join(deps.userData, 'managed-servers.json')
   const log = (m: string): void => {
@@ -140,12 +142,12 @@ export function registerManagedFeature(deps: {
   setRemoteClients(clientFor)
 
   const remote = createRemoteAgents({
-    adopt: (backend, info, hostKey) => {
+    adopt: (backend, info, hostKey, boot) => {
       const title = typeof info.meta['title'] === 'string' ? info.meta['title'] : 'agent'
       deps.sessions().adopt(backend, { type: 'ssh', title, serverKey: hostKey, cwd: info.cwd, profileId: null, space: 'ai', cols: info.cols, rows: info.rows }, info.id)
       // R3 계정 로그인 칸은 설정 화면 안에서만 산다 — 다시 켜도 되살리지 않는다.
       if (info.meta['kind'] === LOGIN_SESSION_KIND) return
-      tabs = [...tabs.filter((x) => x.info.id !== info.id), { hostKey, info: { id: info.id, pid: info.pid, cwd: info.cwd, cols: info.cols, rows: info.rows, meta: info.meta } }]
+      tabs = [...tabs.filter((x) => x.info.id !== info.id), { hostKey, info: { id: info.id, pid: info.pid, cwd: info.cwd, cols: info.cols, rows: info.rows, meta: info.meta }, ...(boot ? { boot } : {}) }]
       save()
     },
     gone: (id, hostKey) => {
@@ -160,9 +162,12 @@ export function registerManagedFeature(deps: {
     released: (id) => dropTab(id),
     viewers: (id, viewers) => deps.viewers?.({ sessionId: id, viewers }),
     status: (id, source, payload) => deps.status?.(id, source, payload),
+    typing: (id, pc) => deps.typing?.({ sessionId: id, pc }),
     pc: hostname(),
-    // 서버에 없는 저장 탭은 이미 끝난 것 — 지운다.
-    listed: (hostKey, ids) => {
+    // 서버에 없는 저장 탭은 이미 끝난 것 — 지운다. R5: 만들 때와 부팅 id 가 다르면 재부팅으로 잃은 것(다시 연결 결과로 알린다).
+    listed: (hostKey, ids, boot) => {
+      const lost = lostToReboot(tabs.filter((x) => x.hostKey === hostKey).map((x) => ({ id: x.info.id, boot: x.boot })), ids, boot)
+      if (lost.length) rebooted.set(hostKey, [...(rebooted.get(hostKey) ?? []), ...lost])
       const next = tabs.filter((x) => x.hostKey !== hostKey || ids.includes(x.info.id))
       if (next.length === tabs.length) return
       tabs = next
@@ -171,6 +176,7 @@ export function registerManagedFeature(deps: {
     log
   })
   const pasted = new Map<string, string[]>()
+  const rebooted = new Map<string, string[]>()
   /** 끊긴 채 닫아 못 끝낸 세션을 끝낸다(그 서버에 다시 붙을 때). */
   const flushKills = async (hostKey: string, client: Client): Promise<void> => {
     for (const k of kills.filter((x) => x.hostKey === hostKey)) {
@@ -186,12 +192,14 @@ export function registerManagedFeature(deps: {
     try {
       const client = await clientFor(hostKey)
       const probe = await probeHost(client)
-      const live = probe.installed ? await remote.liveSessions(hostKey, client).catch(() => 0) : 0
+      // 서버가 안 돌면 세지 않는다 — 세려고 띄우면 상주(R5 기본)라 그대로 남는다.
+      const live = probe.installed && probe.running ? await remote.liveSessions(hostKey, client).catch(() => 0) : 0
       const d = decideUpdate({ installed: probe.installed, app: deps.appVersion, liveSessions: live })
       // 세는 데 연 다리 — 세션이 없으면 닫는다(데몬이 혼자 남아 상주하지 않게: 연결도 세션도 없으면 스스로 끝난다).
       if (live === 0) remote.detach(hostKey)
-      if (d === 'current' || d === 'keepNewer') return put(hostKey, { state: 'installed', version: probe.installed })
-      if (d === 'defer') return put(hostKey, { state: 'deferred', version: probe.installed, note: `에이전트 ${live}개가 돌고 있어 업데이트를 미뤘습니다.` })
+      const resident = probe.resident !== false
+      if (d === 'current' || d === 'keepNewer') return put(hostKey, { state: 'installed', version: probe.installed, resident })
+      if (d === 'defer') return put(hostKey, { state: 'deferred', version: probe.installed, resident, note: `에이전트 ${live}개가 돌고 있어 업데이트를 미뤘습니다.` })
       // install(사용자가 손으로 지움 — 동의는 남아 있다) · update: 옛 데몬은 세션이 없으니 다리를 닫으면 스스로 내려간다.
       // R1: 다른 PC 가 연결만 붙여 둔 옛 데몬은 안 내려가고 새 토큰을 거절한다 — 세션이 0 이니 내린다(세션 보존 규칙 그대로).
       remote.detach(hostKey)
@@ -201,7 +209,7 @@ export function registerManagedFeature(deps: {
         log(`orcad ${hostKey} updated ${probe.installed} -> ${deps.appVersion}`)
         deps.updated?.({ hostKey, from: probe.installed, to: deps.appVersion })
       }
-      return put(hostKey, { state: 'installed', version: deps.appVersion })
+      return put(hostKey, { state: 'installed', version: deps.appVersion, resident })
     } catch (e) {
       return put(hostKey, { state: 'failed', note: e instanceof Error ? e.message : String(e) })
     }
@@ -298,6 +306,20 @@ export function registerManagedFeature(deps: {
     }
   })
 
+  // R5 상주 모드 켜고 끄기(설정 › 관리형 서버, 서버별) — 서버의 설치 폴더에 파일로 남긴다(다른 PC 도 같은 값). 서버를 띄우지 않는다.
+  handle('managed:resident', async ({ hostKey, on }): Promise<ManagedRecord | { error: string }> => {
+    const rec = records.find((r) => r.hostKey === hostKey)
+    if (!rec || typeof on !== 'boolean') return { error: '이 서버에는 아라 서버가 없습니다 — 먼저 [설치]해 주세요.' }
+    try {
+      const r = await execSh(await clientFor(hostKey), residentScript(on))
+      if (r.code !== 0) throw new Error(r.err.trim() || `종료 코드 ${r.code}`)
+      log(`orcad ${hostKey} resident ${on ? 'on' : 'off'}`)
+      return put(hostKey, { state: rec.state, ...(rec.note ? { note: rec.note } : {}), resident: on })
+    } catch (e) {
+      return { error: `상주 설정을 바꾸지 못했습니다(${e instanceof Error ? e.message : String(e)}) — 터미널에서 이 서버에 한 번 접속한 뒤 다시 해 보세요.` }
+    }
+  })
+
   handle('managed:hosts', () => runOnHosts(deps.profiles.list().filter((p): p is SshProfile => p.type === 'ssh'), records))
 
   return {
@@ -307,7 +329,7 @@ export function registerManagedFeature(deps: {
     // DM-05: 실행 직전에 준비(동의 확인 · 판 비교 → 같으면 그대로, 다르면 동의 범위 안에서 교체, 돌고 있으면 미룸) → 원격 세션.
     async launch(hostKey, spec) {
       const rec = await ensureReady(hostKey)
-      if (rec.state === 'failed' || rec.state === 'missing') throw new Error(rec.note ?? '이 서버의 아라 데몬을 준비하지 못했습니다.')
+      if (rec.state === 'failed' || rec.state === 'missing') throw new Error(rec.note ?? '이 서버의 아라 서버를 준비하지 못했습니다.')
       return remote.create(hostKey, await clientFor(hostKey), spec)
     },
     // 끊긴 원격 탭 [다시 연결] — 새 연결로 붙어 원격에 산 세션을 같은 id 로 되살린다(이미 붙은 것은 건너뛴다).
@@ -316,6 +338,11 @@ export function registerManagedFeature(deps: {
       const c = await clientFor(hostKey)
       await flushKills(hostKey, c)
       return remote.attach(hostKey, c, tabs.filter((x) => x.hostKey === hostKey).map((x) => x.info.id))
+    },
+    takeRebooted: (hostKey) => {
+      const ids = rebooted.get(hostKey) ?? []
+      rebooted.delete(hostKey)
+      return ids
     },
     attachOne: async (hostKey, id) => remote.attach(hostKey, await clientFor(hostKey), [id]),
     forget: (id) => dropTab(id),
@@ -365,6 +392,8 @@ export type ManagedFeature = {
   /** DM-05 원격 에이전트 세션 만들기(준비 포함). R2: 함수면 그 서버의 훅 폴더(옛 서버는 null)를 받아 spec 을 만든다. */
   launch(hostKey: string, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<DaemonSessionInfo>
   reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
+  /** R5 지난 연결에서 재부팅으로 잃었다고 가른 탭 id(한 번 읽으면 비운다). */
+  takeRebooted(hostKey: string): string[]
   /** R1 서버 세션 하나에 붙는다(다른 PC 가 만든 것도). 이미 붙었으면 빈 배열. */
   attachOne(hostKey: string, id: string): Promise<DaemonSessionInfo[]>
   /** R1 끊긴 원격 탭을 이 PC 에서만 닫았다 — 저장 목록에서만 뺀다(서버 세션은 산다). */
@@ -382,7 +411,8 @@ export type ManagedFeature = {
   closeAll(): void
 }
 
-type SavedTab = { hostKey: string; info: DaemonSessionInfo }
+/** boot: 만들 때(붙을 때) 본 서버 부팅 id(R5 — 재부팅으로 잃은 탭 가르기). */
+type SavedTab = { hostKey: string; info: DaemonSessionInfo; boot?: string }
 
 function failText(r: ConnectFailure): string {
   if (r.reason === 'hostKeyNew') return '처음 보는 서버 지문입니다 — 터미널에서 이 서버에 한 번 접속해 지문을 확인해 주세요.'

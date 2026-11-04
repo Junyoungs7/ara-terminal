@@ -38,10 +38,14 @@ test('MGD-1 설치 동의 화면 — 취소하면 서버에 아무것도 안 생
   await openManaged(ara.page)
   await ara.page.click(`${drawer} [data-managed="install"]`)
   const d = dialog(ara.page)
-  await expect(d).toContainText('이 서버에 아라 데몬을 설치할까요?')
+  await expect(d).toContainText('이 서버에 아라 서버를 설치할까요?')
   await expect(d).toContainText('/home/tester/.ara-server/orcad.py')
   await expect(d).toContainText('python3 /home/tester/.ara-server/orcad.py serve')
   await expect(d).toContainText('rm -rf ~/.ara-server')
+  // R5 상주 고지(기본 켜짐) · 쉬운 말 — 데몬이라는 말이 없다(파일 경로의 orcad.py 는 그대로 보인다).
+  await expect(d).toContainText('아라를 꺼도 서버에서 계속 실행')
+  await expect(d).toContainText('서버가 재부팅되면 멈추')
+  await expect(d).not.toContainText('데몬')
   await dialogCancel(ara.page)
   // 묻기 한 번뿐 — mkdir·sftp 쓰기 없음, 목록도 비어 있다.
   expect(ours().length).toBe(1)

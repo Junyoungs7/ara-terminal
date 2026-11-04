@@ -48,12 +48,12 @@ test('RUNON-1 실행 위치 고르기 — 동의 안 된 서버는 동의 화면
     const pick = page.locator('[data-aiws="new-runon"]')
     await expect(pick).toHaveValue('local')
     const hostKey = `dev@127.0.0.1:${h.port}` // connectNewSshProfile 의 기본 사용자(fillNewProfile)
-    await expect(pick.locator(`option[value="${hostKey}"]`)).toContainText('아라 데몬 설치 필요')
+    await expect(pick.locator(`option[value="${hostKey}"]`)).toContainText('아라 서버 설치 필요')
 
     // 서버를 고르면 동의 화면부터.
     await pick.selectOption(hostKey)
     const d = dialog(page)
-    await expect(d).toContainText('이 서버에 아라 데몬을 설치할까요?')
+    await expect(d).toContainText('이 서버에 아라 서버를 설치할까요?')
     await expect(d).toContainText('/home/tester/.ara-server/orcad.py')
     await dialogCancel(page)
 

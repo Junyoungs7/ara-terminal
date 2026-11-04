@@ -22,6 +22,12 @@ import {
   serverStateOf,
   supportOf,
   versionCmp,
+  RELINK_DELAYS_S,
+  RESIDENT_OFF,
+  lostToReboot,
+  protocolErrorText,
+  residentScript,
+  PROBE_SCRIPT,
   type ManagedRecord
 } from '../src/shared/managedServers'
 import { ORCAD_PY } from '../src/main/managed/orcadScript'
@@ -248,5 +254,45 @@ describe('R3 서버 계정', () => {
     expect(accountLoginLine('codex')).toBe('codex login --device-auth; exit')
     const rows = serverRowsOf('h', [{ id: 'l', cwd: '/', meta: { kind: 'login', title: 'B' } }, { id: 'x', cwd: '/', meta: { agent: 'claude', title: 't' } }], () => false)
     expect(rows.map((r) => r.id)).toEqual(['x'])
+  })
+})
+
+// 3차 R5 상주 모드(기본 켜짐) · R6 연결 견고성 — 순수 규칙. 원격 실증은 managedOrcad.test.ts 'R5 상주'·'R6 끊김'.
+describe('R5 상주 · R6 연결', () => {
+  it('상주는 기본 켜짐 — 끈 서버만 resident=0 을 찍는다(묻기 명령이 그 파일을 본다)', () => {
+    expect(parseProbe(linux).resident).toBe(true)
+    expect(parseProbe(`${linux}resident=0`).resident).toBe(false)
+    expect(PROBE_SCRIPT).toContain(`$D/${RESIDENT_OFF}`)
+  })
+  it('켜고 끄기는 설치 폴더 안 파일 하나만(서버를 띄우지 않는다) · 폴더가 없으면 만들지 않는다', () => {
+    expect(residentScript(true)).toContain(`rm -f "$D/${RESIDENT_OFF}"`)
+    expect(residentScript(false)).toContain(`[ -d "$D" ] && : > "$D/${RESIDENT_OFF}"`)
+    for (const on of [true, false]) expect(residentScript(on)).not.toMatch(/orcad\.py|mkdir|systemd|crontab/)
+  })
+  it('orcad 는 같은 파일 이름으로 상주를 가르고, hello 에 부팅 id 를, 입력에 typing 사건을 싣는다', () => {
+    expect(ORCAD_PY).toContain(`RESIDENT_OFF = os.path.join(DIR, '${RESIDENT_OFF}')`)
+    expect(ORCAD_PY).toContain("'boot': read_boot()")
+    expect(ORCAD_PY).toContain("'type': 'typing'")
+  })
+  it('재부팅으로 잃은 탭 = 서버 목록에 없고 부팅 id 가 바뀐 것만 · 부팅 id 를 모르면 가르지 않는다', () => {
+    const saved = [
+      { id: 'a', boot: 'B1' },
+      { id: 'b', boot: 'B1' },
+      { id: 'c' },
+      { id: 'd', boot: 'B2' }
+    ]
+    expect(lostToReboot(saved, ['a'], 'B2')).toEqual(['b'])
+    expect(lostToReboot(saved, ['a'], null)).toEqual([])
+    expect(lostToReboot(saved, ['a', 'b', 'd'], 'B2')).toEqual([])
+  })
+  it('통신 판이 다르면 이유 + 할 일 한 줄(서버가 옛 판 / 새 판), 같으면 null', () => {
+    expect(protocolErrorText(1, 1)).toBeNull()
+    expect(protocolErrorText(0, 1)).toMatch(/옛 판.*—.*다시 연결/)
+    expect(protocolErrorText(2, 1)).toMatch(/새 판.*—.*업데이트/)
+    for (const x of [protocolErrorText(0, 1), protocolErrorText(2, 1)]) expect(x).not.toMatch(/데몬|orcad|protocol/)
+  })
+  it('자동 다시 연결은 늘어나는 간격으로 몇 번만(무한히 두드리지 않는다)', () => {
+    expect(RELINK_DELAYS_S.length).toBeGreaterThan(1)
+    expect([...RELINK_DELAYS_S].every((d, i) => i === 0 || d > RELINK_DELAYS_S[i - 1])).toBe(true)
   })
 })

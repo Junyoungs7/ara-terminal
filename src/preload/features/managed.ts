@@ -12,6 +12,7 @@ export const managedBridge: Pick<EvApi, 'managed'> = {
     hosts: () => ipcRenderer.invoke('managed:hosts'),
     sessions: () => ipcRenderer.invoke('managed:sessions'),
     accounts: (req: ManagedAccountsRequest) => ipcRenderer.invoke('managed:accounts', req),
+    resident: (hostKey: string, on: boolean) => ipcRenderer.invoke('managed:resident', { hostKey, on }),
     onUpdated: (cb: (e: ManagedUpdated) => void) => {
       const listener = (_e: IpcRendererEvent, v: ManagedUpdated): void => cb(v)
       ipcRenderer.on('managed:updated', listener)

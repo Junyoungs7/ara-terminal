@@ -113,6 +113,8 @@ export type AgentRemoteLimitEvent = { sessionId: string; hit: boolean }
 export type ManagedUpdated = { hostKey: string; from: string; to: string }
 /** R1 원격 탭에 붙은 PC 이름들(push 'agents:viewers' — 둘 이상이면 탭에 "PC n대"). */
 export type AgentViewersEvent = { sessionId: string; viewers: string[] }
+/** R6 다른 PC 가 원격 탭에 입력했다(push 'agents:typing' — 탭에 "{pc} 입력 중", 몇 초 뒤 사라짐). */
+export type AgentTypingEvent = { sessionId: string; pc: string }
 import type { ExplorerAct, ExplorerReveal, ExplorerState } from './explorerWin'
 import type { PastLogTarget } from './pastLogWin'
 import type { SpanDisplay, SpanPlan } from './rdpSpan'
@@ -699,8 +701,10 @@ export type InvokeContract = {
   // R1 다른 PC 에서 이어 보기 — 동의한 서버마다 살아 있는 세션(붙지 않고 목록만).
   'managed:sessions': { req: void; res: ServerSessionsHost[] }
   'managed:accounts': { req: ManagedAccountsRequest; res: ManagedAccountsResult }
+  /** R5 서버별 상주 모드 켜고 끄기(서버 설치 폴더의 파일). */
+  'managed:resident': { req: { hostKey: string; on: boolean }; res: ManagedRecord | { error: string } }
   // M8 DM-05 끊긴 원격 탭 [다시 연결] = 새 SSH 연결로 같은 orcad 세션에 이어 붙기(같은 id, 원격 replay). 자동 재접속은 없다(2026-08-14 결정).
-  'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string } }
+  'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[]; rebooted?: string[] } | { ok: false; error: string } }
   // M8 R4 끊긴 원격 탭 닫기 = 서버의 세션도 끝낸다(Orca: 닫기 = 종료). 잠깐 붙어서 끝내고, 못 붙으면 다음 연결 때(false).
   'agents:killRemote': { req: { hostKey: string; sessionId: string }; res: boolean }
   // R1 서버 세션 하나에 붙기(다른 PC 가 만든 것도 — 같은 id, 원격 replay). 이미 이 PC 에 붙었으면 tabs 가 빈다.
@@ -1461,6 +1465,8 @@ export type EvApi = {
     sessions(): Promise<ServerSessionsHost[]>
     /** R3 서버 계정(목록·추가·다시 로그인·지우기·기본). */
     accounts(req: ManagedAccountsRequest): Promise<ManagedAccountsResult>
+    /** R5 서버별 상주 모드 켜고 끄기. */
+    resident(hostKey: string, on: boolean): Promise<ManagedRecord | { error: string }>
     /** M8 R4 데몬 판을 바꿨다(push 'managed:updated') — 알림 센터 한 줄. */
     onUpdated(cb: (e: ManagedUpdated) => void): () => void
   }
@@ -1476,6 +1482,8 @@ export type EvApi = {
     forgetRemote(sessionId: string): Promise<void>
     /** R1 원격 탭에 붙은 PC 가 바뀌었다(push 'agents:viewers'). */
     onViewers(cb: (e: AgentViewersEvent) => void): () => void
+    /** R6 다른 PC 가 원격 탭에 입력했다(push 'agents:typing'). */
+    onTyping(cb: (e: AgentTypingEvent) => void): () => void
     /** R3 원격 탭 한도 걸림/풀림(push 'agents:remoteLimit'). */
     onRemoteLimit(cb: (e: AgentRemoteLimitEvent) => void): () => void
     resumeIds(sessionIds: string[]): Promise<Record<string, string | null>>

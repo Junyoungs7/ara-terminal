@@ -219,6 +219,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const statusById = useAgentStore((s) => s.statusById)
   const seenById = useAgentStore((s) => s.seenById)
   const viewersById = useAgentStore((s) => s.viewersById)
+  const typingById = useAgentStore((s) => s.typingById)
   const chatOn = useAgentStore((s) => s.chatOn)
   const autoTitle = useAgentStore((s) => s.settings?.tabAutoTitle === true)
   const [picking, setPicking] = useState(false)
@@ -347,14 +348,20 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
                 {t('servers.viewers.n').replace('{n}', String(viewersById[x.sessionId].length))}
               </span>
             )}
+            {/* R6 다른 PC 가 지금 입력 중(서버 사건 — 몇 초 뒤 사라진다). */}
+            {x.host && !x.exited && typingById[x.sessionId] && (
+              <span className="aiws-pcs" data-aiws="tab-typing" title={t('servers.typing.title')}>
+                {t('servers.typing').replace('{pc}', typingById[x.sessionId])}
+              </span>
+            )}
             {(() => {
               const d = displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true)
               // 답할 일(승인·질문) = 반전 칩(시안 C).
               const ask = !x.exited && (d === 'blocked' || d === 'question')
               if (x.slept) return null
               return (
-                <span className={'aiws-tab-state' + (ask ? ' ag-ask-chip' : '')} data-aiws={ask ? 'tab-ask' : undefined} title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : undefined}>
-                  {x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${d}`)}
+                <span className={'aiws-tab-state' + (ask ? ' ag-ask-chip' : '')} data-aiws={ask ? 'tab-ask' : undefined} title={x.lost ? t(x.host ? 'aiws.agent.cut.title' : 'aiws.agent.lost.title') : x.rebooted ? t('aiws.agent.rebooted.title') : undefined}>
+                  {x.lost ? t(x.host ? 'aiws.agent.cut' : 'aiws.agent.lost') : x.rebooted ? t('aiws.agent.rebooted') : x.exited ? t('aiws.agent.exited') : t(`aiws.st.${d}`)}
                 </span>
               )
             })()}
@@ -488,7 +495,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         </div>
       )}
       {active && active.lost && active.host && !covered && <RemoteCut host={active.host} />}
-      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !covered && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} />}
+      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !covered && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} rebooted={active.rebooted} />}
       {/* p3-M21 잠든 탭 → 깨우는 중 / 깨어난 탭 → 한 줄(목업 sleep.html 안 1). */}
       {active && !covered && (active.slept || active.woke !== undefined) && (
         <div className="aiws-note aiws-hib" role="status" data-aiws={active.slept ? 'hib-waking' : 'hib-woke'}>
@@ -574,11 +581,11 @@ function RestartChip({ sessionId }: { sessionId: string }): JSX.Element {
 }
 
 /** Orca TerminalProcessExitOverlay — 끝난 탭의 출력은 그대로 두고 아래에 [닫기]·[다시 시작]. */
-function ExitedBar({ sessionId, shellAlive }: { sessionId: string; shellAlive: boolean }): JSX.Element {
+function ExitedBar({ sessionId, shellAlive, rebooted }: { sessionId: string; shellAlive: boolean; rebooted?: boolean }): JSX.Element {
   const r = useRestart(sessionId)
   return (
-    <div className="aiws-note aiws-exited" role="status" data-aiws="exited-bar">
-      <span>{t(shellAlive ? 'aiws.agent.exitedShell' : 'aiws.agent.exitedNote')}</span>
+    <div className="aiws-note aiws-exited" role="status" data-aiws={rebooted ? 'rebooted-bar' : 'exited-bar'}>
+      <span>{t(rebooted ? 'aiws.agent.rebooted.note' : shellAlive ? 'aiws.agent.exitedShell' : 'aiws.agent.exitedNote')}</span>
       <button type="button" className="btn sec" onClick={() => useAgentStore.getState().closeTab(sessionId)}>
         {t('aiws.agent.close')}
       </button>
@@ -591,31 +598,34 @@ function ExitedBar({ sessionId, shellAlive }: { sessionId: string; shellAlive: b
   )
 }
 
-/** M8 DM-05 끊긴 원격 탭 — 세션은 서버에 살아 있다. 자동으로 다시 붙지 않는다(2026-08-14 결정) — 사람이 [다시 연결]. */
+/**
+ * M8 DM-05 끊긴 원격 탭 — 세션은 서버에 살아 있다. R6: 다리가 끊기면 자동으로 다시 붙는다(백오프 — 목업 3-link A 띠 안에 횟수·다음 시도),
+ * 다 실패하면 멈추고 [다시 연결]만. 앱을 다시 켜 되살린 탭은 자동 시도 없이 [다시 연결].
+ */
 function RemoteCut({ host }: { host: string }): JSX.Element {
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const relink = useAgentStore((s) => s.relinkByHost[host])
+  const [, tick] = useState(0)
+  // 다음 시도까지 남은 초를 1초마다 다시 그린다(기다리는 동안만).
+  useEffect(() => {
+    if (!relink?.at) return
+    const id = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [relink?.at])
+  const busy = relink?.busy === true
+  const note = !relink
+    ? t('aiws.agent.cut.note').replace('{host}', host)
+    : relink.at !== null || busy
+      ? t('aiws.agent.relink.wait')
+          .replace('{n}', String(relink.attempt + 1))
+          .replace('{s}', String(Math.max(0, Math.ceil(((relink.at ?? Date.now()) - Date.now()) / 1000))))
+      : t('aiws.agent.relink.stopped').replace('{host}', host).replace('{n}', String(relink.attempt))
   return (
-    <div className="aiws-note aiws-err" role="alert" data-aiws="remote-cut">
-      <span>{t('aiws.agent.cut.note').replace('{host}', host)}</span>
-      <button
-        type="button"
-        className="btn sec"
-        data-aiws="remote-reconnect"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true)
-          setErr(null)
-          void useAgentStore
-            .getState()
-            .reconnectHost(host)
-            .then(setErr)
-            .finally(() => setBusy(false))
-        }}
-      >
-        {busy ? t('aiws.agent.cut.busy') : t('aiws.agent.cut.retry')}
+    <div className="aiws-note aiws-err" role="alert" data-aiws="remote-cut" data-relink={!relink ? 'manual' : busy ? 'busy' : relink.at !== null ? 'wait' : 'stopped'}>
+      <span>{busy ? t('aiws.agent.cut.busy') : note}</span>
+      <button type="button" className="btn sec" data-aiws="remote-reconnect" disabled={busy} onClick={() => useAgentStore.getState().relinkNow(host)}>
+        {relink && relink.at !== null ? t('aiws.agent.relink.now') : t('aiws.agent.cut.retry')}
       </button>
-      {err && <span>{err}</span>}
+      {relink?.error && !busy && <span>{relink.error}</span>}
     </div>
   )
 }

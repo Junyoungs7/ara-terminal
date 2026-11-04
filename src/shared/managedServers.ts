@@ -83,6 +83,8 @@ export function accountErrorText(e: string): string {
 
 // ── 원격 명령 ── 모두 `sh -c '<글>'` 로 보낸다(로그인 셸이 fish·csh 여도 같은 문법). 사용자 값은 끼우지 않는다 — 고정 글뿐.
 const D = `D="$HOME/${MANAGED_DIR}"`
+/** R5 상주 끄기 표식 — 설치 폴더 안 파일 하나(orcad.py RESIDENT_OFF 와 같아야 한다). 없으면 상주(기본). */
+export const RESIDENT_OFF = 'resident-off'
 
 /** 플랫폼·파이썬·설치된 판 묻기. 출력은 key=value 줄(parseProbe). */
 export const PROBE_SCRIPT = [
@@ -94,9 +96,14 @@ export const PROBE_SCRIPT = [
   D,
   // R1 채택 화면: 돌고 있나(소켓이 있다) — 있을 때만 세션을 센다(세려고 서버를 띄우지 않게).
   `[ -S "$D/orcad.sock" ] && echo running=1`,
+  // R5 상주(기본 켜짐) — 끈 서버에만 이 파일이 있다.
+  `[ -f "$D/${RESIDENT_OFF}" ] && echo resident=0`,
   `[ -f "$D/version" ] && printf 'installed=%s\\n' "$(cat "$D/version")"`,
   `true`
 ].join('\n')
+
+/** R5 서버별 상주 켜고 끄기 — 파일만 만들거나 지운다(서버를 띄우지 않는다). 끄면 서버는 다음 idle 에 스스로 끝난다. */
+export const residentScript = (on: boolean): string => (on ? `${D}; rm -f "$D/${RESIDENT_OFF}"` : `${D}; [ -d "$D" ] && : > "$D/${RESIDENT_OFF}"`)
 
 /** 설치 폴더 만들기(본인만 읽고 쓰게 700). */
 export const MKDIR_SCRIPT = `${D}; mkdir -p "$D" && chmod 700 "$D"`
@@ -150,11 +157,11 @@ const kv = (out: string): Map<string, string> => {
   return m
 }
 
-export type ManagedProbe = { os: string; arch: string; home: string; python: string; pyver: string; pymods: boolean; installed: string | null; running?: boolean }
+export type ManagedProbe = { os: string; arch: string; home: string; python: string; pyver: string; pymods: boolean; installed: string | null; running?: boolean; resident?: boolean }
 
 export function parseProbe(out: string): ManagedProbe {
   const m = kv(out)
-  return { os: m.get('os') ?? '', arch: m.get('arch') ?? '', home: m.get('home') ?? '', python: m.get('python') ?? '', pyver: m.get('pyver') ?? '', pymods: m.get('pymods') === '1', installed: m.get('installed') || null, running: m.get('running') === '1' }
+  return { os: m.get('os') ?? '', arch: m.get('arch') ?? '', home: m.get('home') ?? '', python: m.get('python') ?? '', pyver: m.get('pyver') ?? '', pymods: m.get('pymods') === '1', installed: m.get('installed') || null, running: m.get('running') === '1', resident: m.get('resident') !== '0' }
 }
 
 /** 지원 판정. Linux 만(사내 서버 — x64 우선, 스크립트라 arm64 도 돈다). 나머지는 "지원 안 함"을 이유와 함께. */
@@ -199,6 +206,32 @@ export function decideUpdate(o: { installed: string | null; app: string; liveSes
   return o.liveSessions > 0 ? 'defer' : 'update'
 }
 
+// ── R6 연결 견고성 ──
+/**
+ * 서버의 통신 판(hello protocol)이 이 PC 와 다르면 이유 + 할 일 한 줄. 같으면 null.
+ * 서버가 옛 판이면 세션이 끝난 뒤 저절로 오르고(decideUpdate), 새 판이면 이 PC 의 아라를 올려야 한다.
+ */
+export function protocolErrorText(server: number, app: number): string | null {
+  if (server === app) return null
+  return server < app
+    ? '서버의 아라 부품이 옛 판이라 붙지 못했습니다 — 서버에서 도는 에이전트가 모두 끝나면 새 판으로 바뀝니다. 그 뒤 다시 연결해 주세요.'
+    : '서버의 아라 부품이 이 PC 의 아라보다 새 판이라 붙지 못했습니다 — 이 PC 의 아라를 업데이트한 뒤 다시 연결해 주세요.'
+}
+
+/**
+ * R5 재부팅으로 잃은 탭 — 저장한 탭 중 서버 목록에 없고, 만들 때 본 부팅 id 가 지금 서버의 것과 다른 것.
+ * 부팅 id 를 모르면(옛 서버) 가르지 않는다(그냥 끝난 것으로).
+ */
+export function lostToReboot(saved: readonly { id: string; boot?: string | null }[], live: readonly string[], boot: string | null | undefined): string[] {
+  if (!boot) return []
+  return saved.filter((x) => !live.includes(x.id) && !!x.boot && x.boot !== boot).map((x) => x.id)
+}
+
+/** R6 자동 다시 연결 간격(초) — 이만큼 실패하면 멈추고 [다시 연결]만 남긴다(목업 3-link A "자동 재시도 멈춤(5회 실패)"). */
+export const RELINK_DELAYS_S = [2, 4, 8, 16, 30] as const
+/** R6 "다른 PC 입력 중" 표시가 마지막 입력 뒤 남아 있는 시간. */
+export const TYPING_SHOW_MS = 3000
+
 // ── 제거 검증 ──
 /** 남은 것 이름: dir(설치 폴더) · proc:N(프로세스 수) · cron:N · systemd:N · accounts:N(서버 계정)·creds:N(자격 증명 파일) · unknown:<키>(못 잼 — 없다고 말하지 않는다). */
 export function remnantsOf(out: string): string[] {
@@ -231,6 +264,8 @@ export type ManagedRecord = {
   checkedAt: string
   /** 실패·미룸 사유(사람이 읽는 글). */
   note?: string
+  /** R5 상주 모드(마지막으로 본 것 — 없으면 기본 켜짐). */
+  resident?: boolean
 }
 
 export type ManagedConsent = 'none' | 'consented'
