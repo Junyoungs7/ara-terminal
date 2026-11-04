@@ -183,7 +183,7 @@ describe('🔴 화면이 그 판정을 **실제로 쓰는가**', () => {
   })
 
   it('에이전트 칸(AgentPane)이 agent 를 넘긴다 — 안 넘기면 에이전트에 친 글이 디스크로 간다', () => {
-    expect(agentPane).toMatch(/<TerminalPane [^>]* agent \/>/)
+    expect(agentPane).toMatch(/<TerminalPane [^>]* agent[ />]/)
     expect(agentPane).not.toMatch(/aiCli=/)
   })
 
