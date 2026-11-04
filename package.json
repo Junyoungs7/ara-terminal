@@ -1,7 +1,7 @@
 {
   "name": "ara",
   "productName": "ARA",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "ARA — AI Terminal",
   "author": "Junyoung",
   "license": "MIT",
@@ -40,7 +40,7 @@
     "smoke:shutdown": "npm run shutdown:bundle && node tests/shutdown-smoke.cjs",
     "w2:bundle": "node scripts/bundle-w2-harness.mjs",
     "screenshot:w2": "electron-vite build && npm run w2:bundle && electron tests/w2-screenshot.cjs",
-    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --publish never && node scripts/check-packaged.mjs",
     "site:stage": "node scripts/stage-release.mjs",
     "site:deploy": "node scripts/deploy-site.mjs",
     "reports:deploy": "node scripts/deploy-reports.mjs",
