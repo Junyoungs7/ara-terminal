@@ -1,6 +1,6 @@
 // M3 에이전트 — 기능 틀(docs/feature-module.md)의 preload 다리. preload/index.ts 가 api 에 펼쳐 넣는다.
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, AgentTitleEvent, AgentViewersEvent, EvApi } from '@shared/ipc'
+import type { AgentLaunchOptions, AgentMemoryOver, AgentNameEvent, AgentRemoteLimitEvent, AgentTitleEvent, AgentViewersEvent, EvApi } from '@shared/ipc'
 import type { AskAnswerKeyGroup } from '@shared/agentAsk'
 import type { AgentId, AgentSettings } from '@shared/agents'
 import type { AgentStatusView } from '@shared/agentHooks'
@@ -20,6 +20,11 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
       const listener = (_e: IpcRendererEvent, v: AgentViewersEvent): void => cb(v)
       ipcRenderer.on('agents:viewers', listener)
       return () => ipcRenderer.removeListener('agents:viewers', listener)
+    },
+    onRemoteLimit: (cb: (e: AgentRemoteLimitEvent) => void) => {
+      const listener = (_e: IpcRendererEvent, v: AgentRemoteLimitEvent): void => cb(v)
+      ipcRenderer.on('agents:remoteLimit', listener)
+      return () => ipcRenderer.removeListener('agents:remoteLimit', listener)
     },
     resumeIds: (sessionIds: string[]) => ipcRenderer.invoke('agents:resumeIds', { sessionIds }),
     models: (agent: AgentId, force?: boolean) => ipcRenderer.invoke('agents:models', { agent, force }),

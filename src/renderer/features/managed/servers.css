@@ -101,3 +101,44 @@
   color: var(--sig-user-ink);
   box-shadow: inset 0 0 0 1px var(--sig-user-line);
 }
+/* R3 서버 계정(목업 4-accounts A — 설정 안 펼침 + 로그인 단계에만 작은 원격 터미널). */
+.srv-sp {
+  flex: 1;
+}
+.srv-acc {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.srv-acc .srv-tt {
+  flex: 1;
+  min-width: 0;
+}
+.srv-acc .srv-pill {
+  margin-left: var(--sp-3);
+}
+.srv-acc-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.srv-acc-name {
+  flex: 1;
+  min-width: 10em;
+}
+.srv-acc-agree {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  font-size: var(--fs-micro);
+  color: var(--text-mid);
+}
+.srv-acc-term {
+  position: relative;
+  height: 16em;
+}

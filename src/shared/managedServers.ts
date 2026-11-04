@@ -46,6 +46,41 @@ export function serverStateOf(status: unknown): ServerSessionState | null {
   return p.state === 'blocked' ? (p.kind === 'question' ? 'question' : 'blocked') : p.state === 'working' ? 'working' : 'idle'
 }
 
+// ── R3 서버 계정 ── 설치 폴더 안 accounts/<id>/ 하나가 CLI 로그인 하나(CLAUDE_CONFIG_DIR·CODEX_HOME, 700). Claude 대화 기록은 claude-shared/ 로 링크.
+export const ACCOUNTS_DIR = 'accounts'
+export const SHARED_DIR = 'claude-shared'
+/** 로그인하면 생기는 자격 증명 파일(Linux 는 키체인이 없어 계정 폴더에 파일로). orcad.py LOGIN_FILE 과 같아야 한다. */
+export const CREDENTIAL_FILES = ['.credentials.json', 'auth.json'] as const
+export const SERVER_ACCOUNT_AGENTS = ['claude', 'codex'] as const
+export type ServerAccountAgent = (typeof SERVER_ACCOUNT_AGENTS)[number]
+export const isServerAccountAgent = (v: unknown): v is ServerAccountAgent => v === 'claude' || v === 'codex'
+export type ServerAccount = { id: string; agent: ServerAccountAgent; label: string; loggedIn: boolean; email: string | null; createdAt: number | null }
+export type ServerAccounts = { accounts: ServerAccount[]; default: string | null }
+/** 서버에서 로그인 — 계정 env 는 orcad 가 붙인다. 끝나면 셸도 닫아 로그인 칸이 저절로 내려가게. Codex 는 서버에 브라우저 콜백이 안 닿아 기기 코드 방식. */
+export const accountLoginLine = (agent: ServerAccountAgent): string => `${agent === 'claude' ? 'claude auth login' : 'codex login --device-auth'}; exit`
+/** 로그인 칸 세션 표식(meta.kind) — 서버 세션 목록·되살릴 탭에서 뺀다. */
+export const LOGIN_SESSION_KIND = 'login'
+
+/** orcad 의 account 답 → 목록(모르는 모양은 거른다). */
+export function serverAccountsOf(v: unknown): ServerAccounts {
+  const o = (v && typeof v === 'object' ? v : {}) as { accounts?: unknown; default?: unknown }
+  const accounts = (Array.isArray(o.accounts) ? o.accounts : []).flatMap((a): ServerAccount[] => {
+    const x = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>
+    if (typeof x['id'] !== 'string' || !isServerAccountAgent(x['agent'])) return []
+    return [{ id: x['id'], agent: x['agent'], label: typeof x['label'] === 'string' && x['label'] ? x['label'] : x['id'], loggedIn: x['loggedIn'] === true, email: typeof x['email'] === 'string' ? x['email'] : null, createdAt: typeof x['createdAt'] === 'number' ? x['createdAt'] : null }]
+  })
+  const def = typeof o.default === 'string' && accounts.some((a) => a.id === o.default) ? o.default : null
+  return { accounts, default: def }
+}
+
+/** orcad 가 돌려준 실패(영어 한 단어) → 이유 + 할 일 한 줄. 모르는 것은 그대로. */
+export function accountErrorText(e: string): string {
+  if (/unknown request/.test(e)) return '이 서버의 아라 서버가 옛 판입니다 — 서버에서 도는 에이전트가 모두 끝난 뒤 다시 열면 새 판으로 바뀝니다.'
+  if (/account in use/.test(e)) return '이 계정으로 도는 원격 탭이 있습니다 — 그 탭을 서버에서 끝낸 뒤 지워 주세요.'
+  if (/no such account/.test(e)) return '서버에 그 계정이 없습니다 — 다른 PC 에서 지웠을 수 있습니다. 목록을 새로 고쳐 주세요.'
+  return e
+}
+
 // ── 원격 명령 ── 모두 `sh -c '<글>'` 로 보낸다(로그인 셸이 fish·csh 여도 같은 문법). 사용자 값은 끼우지 않는다 — 고정 글뿐.
 const D = `D="$HOME/${MANAGED_DIR}"`
 
@@ -83,6 +118,9 @@ export const VERIFY_SCRIPT = [
   `  if tr '\\000' '\\n' < "$p/environ" 2>/dev/null | grep -qxF "${MANAGED_MARK}=$D" || tr '\\000' ' ' < "$p/cmdline" 2>/dev/null | grep -qF "$D/orcad.py"; then n=$((n+1)); fi`,
   `done; echo proc=$n`,
   `echo cron=$(crontab -l 2>/dev/null | grep -c "${MANAGED_DIR}")`,
+  // R3 서버 계정: 계정 폴더 수 · 로그인 자격 증명 파일 수(설치 폴더 안 — 지우면 0. 서버의 ~/.claude 는 세지 않는다 — 아라 것이 아니다).
+  `echo accounts=$(ls -A "$D/${ACCOUNTS_DIR}" 2>/dev/null | grep -vxFc .default)`,
+  `echo creds=$(find "$D" -name ${CREDENTIAL_FILES.join(' -o -name ')} 2>/dev/null | wc -l)`,
   `echo systemd=$(ls "$HOME/.config/systemd/user" 2>/dev/null | grep -ci ara-)`
 ].join('\n')
 
@@ -162,14 +200,14 @@ export function decideUpdate(o: { installed: string | null; app: string; liveSes
 }
 
 // ── 제거 검증 ──
-/** 남은 것 이름: dir(설치 폴더) · proc:N(프로세스 수) · cron:N · systemd:N · unknown:<키>(못 잼 — 없다고 말하지 않는다). */
+/** 남은 것 이름: dir(설치 폴더) · proc:N(프로세스 수) · cron:N · systemd:N · accounts:N(서버 계정)·creds:N(자격 증명 파일) · unknown:<키>(못 잼 — 없다고 말하지 않는다). */
 export function remnantsOf(out: string): string[] {
   const m = kv(out)
   const left: string[] = []
   const dir = m.get('dir')
   if (dir === undefined) left.push('unknown:dir')
   else if (dir !== 'no') left.push('dir')
-  for (const k of ['proc', 'cron', 'systemd'] as const) {
+  for (const k of ['proc', 'cron', 'systemd', 'accounts', 'creds'] as const) {
     const v = m.get(k)
     const n = v === undefined || v === '' ? NaN : Number(v)
     if (!Number.isFinite(n)) left.push(`unknown:${k}`)
@@ -250,6 +288,7 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : nul
 /** 서버 list 결과 → 목록 줄(최근 시작이 위). 제목은 이름 > 첫 지시 제목 > 실행 제목 순(탭 제목과 같은 순서). */
 export function serverRowsOf(hostKey: string, infos: readonly { id: string; cwd: string; meta: Record<string, unknown>; viewers?: string[]; status?: unknown }[], here: (id: string) => boolean): ServerSessionRow[] {
   return infos
+    .filter((x) => x.meta['kind'] !== LOGIN_SESSION_KIND)
     .map((x) => ({
       id: x.id,
       hostKey,

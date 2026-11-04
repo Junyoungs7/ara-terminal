@@ -3,6 +3,7 @@
 // 연결: M8 R3 부터 저장된 SSH 프로필로 **셸 없이** 따로 붙는다(connectSshClient — 터미널 탭 없이 AI 공간만으로). 그 연결이 안 되면(비밀번호를
 // 저장 안 함 등) 그 호스트로 열린 터미널 세션의 Client 를 빌린다(R1 방식). 원격 에이전트 다리는 자기 연결 위에 있어 터미널 탭을 닫아도 안 끊긴다.
 // 터미널 공간은 여기를 부르지 않는다 — 설치는 사람이 설정 › 관리형 서버에서 [설치]를 눌렀을 때만.
+import { randomUUID } from 'node:crypto'
 import { appendFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -12,8 +13,8 @@ import { mainErrorLogPath } from '../log/MainErrorLog'
 import { cleanupTemp, readJsonWithBackup, writeJsonAtomic } from '../util/atomicJson'
 import type { MainSessionManager } from '../sessions/MainSessionManager'
 import type { ProfileStore } from '../secrets/ProfileStore'
-import { STOP_SCRIPT, consentPlan, decideUpdate, hostKeyOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerSessionsHost } from '@shared/managedServers'
-import type { ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
+import { LOGIN_SESSION_KIND, STOP_SCRIPT, accountErrorText, accountLoginLine, consentPlan, decideUpdate, hostKeyOf, isServerAccountAgent, serverAccountsOf, serverRowsOf, type ManagedRecord, type ManagedState, type ServerAccount, type ServerSessionsHost } from '@shared/managedServers'
+import type { ManagedAccountsRequest, ManagedAccountsResult, ManagedListResult, ManagedRemoveResult } from '@shared/ipc'
 import type { SshProfile } from '@shared/types'
 import { runOnHosts } from '@shared/runOn'
 import type { WorkspaceStore } from '../workspace/WorkspaceStore'
@@ -141,6 +142,8 @@ export function registerManagedFeature(deps: {
     adopt: (backend, info, hostKey) => {
       const title = typeof info.meta['title'] === 'string' ? info.meta['title'] : 'agent'
       deps.sessions().adopt(backend, { type: 'ssh', title, serverKey: hostKey, cwd: info.cwd, profileId: null, space: 'ai', cols: info.cols, rows: info.rows }, info.id)
+      // R3 계정 로그인 칸은 설정 화면 안에서만 산다 — 다시 켜도 되살리지 않는다.
+      if (info.meta['kind'] === LOGIN_SESSION_KIND) return
       tabs = [...tabs.filter((x) => x.info.id !== info.id), { hostKey, info: { id: info.id, pid: info.pid, cwd: info.cwd, cols: info.cols, rows: info.rows, meta: info.meta } }]
       save()
     },
@@ -257,6 +260,43 @@ export function registerManagedFeature(deps: {
     )
   )
 
+  // R3 서버 계정(설정 › 관리형 서버 › 계정) — 목록·추가(+ 그 자리 로그인 칸)·다시 로그인·지우기·기본. 실패는 이유 + 할 일 한 줄.
+  handle('managed:accounts', async (req: ManagedAccountsRequest): Promise<ManagedAccountsResult> => {
+    const { hostKey } = req
+    if (!records.some((r) => r.hostKey === hostKey)) return { ok: false, error: '이 서버에는 아라 서버가 없습니다 — 먼저 [설치]해 주세요.' }
+    try {
+      const op = req.op ?? 'list'
+      if (op === 'add') {
+        if (!isServerAccountAgent(req.agent)) return { ok: false, error: '모르는 에이전트입니다.' }
+        // 계정 추가는 새 판 서버가 필요하다 — 동의 범위 안에서 올린다(돌고 있는 에이전트가 있으면 미뤄 옛 판 그대로 → 아래 '옛 판' 한 줄).
+        await ensureReady(hostKey)
+      }
+      const client = await clientFor(hostKey)
+      const login = async (a: ServerAccount): Promise<string> => {
+        const id = randomUUID()
+        await remote.create(hostKey, client, { id, cwd: '', env: {}, account: { agent: a.agent, id: a.id }, meta: { kind: LOGIN_SESSION_KIND, title: a.label } })
+        deps.sessions().write(id, accountLoginLine(a.agent) + '\r')
+        return id
+      }
+      if (op === 'add') {
+        const made = serverAccountsOf({ accounts: [await remote.account(hostKey, client, { op: 'add', agent: req.agent, label: req.label ?? '' })] }).accounts[0]
+        if (!made) throw new Error('계정을 만들지 못했습니다.')
+        const loginSession = await login(made)
+        return { ok: true, ...serverAccountsOf(await remote.account(hostKey, client, { op: 'list' })), loginSession }
+      }
+      if (op === 'login') {
+        const all = serverAccountsOf(await remote.account(hostKey, client, { op: 'list' }))
+        const a = all.accounts.find((x) => x.id === req.id)
+        if (!a) throw new Error('no such account')
+        return { ok: true, ...all, loginSession: await login(a) }
+      }
+      const r = await remote.account(hostKey, client, op === 'list' ? { op } : { op, id: typeof req.id === 'string' ? req.id : null })
+      return { ok: true, ...serverAccountsOf(r) }
+    } catch (e) {
+      return { ok: false, error: accountErrorText(e instanceof Error ? e.message : String(e)) }
+    }
+  })
+
   handle('managed:hosts', () => runOnHosts(deps.profiles.list().filter((p): p is SshProfile => p.type === 'ssh'), records))
 
   return {
@@ -267,7 +307,7 @@ export function registerManagedFeature(deps: {
     async launch(hostKey, spec) {
       const rec = await ensureReady(hostKey)
       if (rec.state === 'failed' || rec.state === 'missing') throw new Error(rec.note ?? '이 서버의 아라 데몬을 준비하지 못했습니다.')
-      await remote.create(hostKey, await clientFor(hostKey), spec)
+      return remote.create(hostKey, await clientFor(hostKey), spec)
     },
     // 끊긴 원격 탭 [다시 연결] — 새 연결로 붙어 원격에 산 세션을 같은 id 로 되살린다(이미 붙은 것은 건너뛴다).
     // R1: 이 PC 의 탭(저장한 것)만 — 다른 PC 의 세션은 서버 세션 목록에서 골라 붙는다(attachOne).
@@ -321,7 +361,7 @@ export type ManagedFeature = {
   /** DM-04 원격 git — 그 서버에서 sh -c 한 번(연결은 clientFor). */
   run(hostKey: string): RemoteRun
   /** DM-05 원격 에이전트 세션 만들기(준비 포함). R2: 함수면 그 서버의 훅 폴더(옛 서버는 null)를 받아 spec 을 만든다. */
-  launch(hostKey: string, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<void>
+  launch(hostKey: string, spec: DaemonCreateSpec | ((hookDir: string | null) => DaemonCreateSpec)): Promise<DaemonSessionInfo>
   reconnect(hostKey: string): Promise<DaemonSessionInfo[]>
   /** R1 서버 세션 하나에 붙는다(다른 PC 가 만든 것도). 이미 붙었으면 빈 배열. */
   attachOne(hostKey: string, id: string): Promise<DaemonSessionInfo[]>

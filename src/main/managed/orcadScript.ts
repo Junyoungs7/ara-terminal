@@ -10,9 +10,11 @@ export const ORCAD_PY = String.raw`#!/usr/bin/env python3
 # R1 (several PCs): attach carries the PC name, detach (close on this PC only), meta (patch title etc.), viewers event (who is attached).
 # R2 (agent state on the server): agents get hook settings (claude --settings / gemini system defaults) that run 'orcad.py hook <cli>';
 #   the daemon broadcasts a status event to attached clients and keeps the last one (late clients get it on attach and in list).
+# R3 (server accounts): accounts/<id>/ is one CLI login (CLAUDE_CONFIG_DIR / CODEX_HOME, 700). Claude history folders are links into
+#   claude-shared/ so any account can --resume any conversation. The user's own ~/.claude is never touched. All of it lives in this folder.
 # Lives in ONE folder (this file's folder). Unix socket only (no TCP port). No root, no systemd, no crontab.
 # Exits by itself when it has no sessions and no clients. stdlib only, python >= 3.6, Linux.
-import codecs, errno, fcntl, hmac, json, os, pty, selectors, signal, socket, stat, struct, subprocess, sys, termios, time
+import codecs, errno, fcntl, hmac, json, os, pty, re, selectors, shutil, signal, socket, stat, struct, subprocess, sys, termios, time
 
 PROTOCOL = 1
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +40,19 @@ HOOK_IN_MAX = 2 << 20
 HOOK_WAIT_S = 1.5
 HOOK_STR_MAX = 256
 TOOL_INPUT_MAX = 16384
-HOOK_KEYS = ('hook_event_name', 'tool_name', 'agent_id', 'agent_type')
+# R3: session_id (resume under another account), error (StopFailure rate_limit -> 'switch account' band).
+HOOK_KEYS = ('hook_event_name', 'tool_name', 'agent_id', 'agent_type', 'session_id', 'error')
+ACCOUNTS = os.path.join(DIR, 'accounts')
+SHARED = os.path.join(DIR, 'claude-shared')
+ACCOUNT_META = '.ara-account.json'
+DEFAULT_F = os.path.join(ACCOUNTS, '.default')
+ACCOUNT_ENV = {'claude': 'CLAUDE_CONFIG_DIR', 'codex': 'CODEX_HOME'}
+LOGIN_FILE = {'claude': '.credentials.json', 'codex': 'auth.json'}
+# Same list as src/main/usage/accounts.ts CLAUDE_HISTORY (a test compares them).
+CLAUDE_HISTORY = ('projects', 'session-env', 'file-history', 'shell-snapshots', 'todos', 'paste-cache', 'tasks', 'plans', 'transcripts')
+MERGE = '.ara-merge'
+LABEL_MAX = 64
+ACCOUNT_ID = re.compile(r'^[0-9a-f]{12}$')
 
 
 def log(msg):
@@ -71,6 +85,16 @@ class Session(object):
         env['TERM'] = 'xterm-256color'
         env[MARK] = DIR
         env[SESSION_ENV] = self.id
+        # R3 account: {'agent': 'claude'|'codex', 'id': '<id>' | None (server's own login) | missing (the default account)}.
+        self.account = None
+        acc = spec.get('account')
+        if isinstance(acc, dict) and acc.get('agent') in ACCOUNT_ENV:
+            self.account = pick_account(acc.get('agent'), acc.get('id', '*'))
+            if self.account:
+                path = os.path.join(ACCOUNTS, self.account)
+                if acc.get('agent') == 'claude':
+                    share_history(path)
+                env[ACCOUNT_ENV[acc.get('agent')]] = path
         if os.path.islink(AGENT):
             env['SSH_AUTH_SOCK'] = AGENT
         shell = env.get('SHELL') or '/bin/sh'
@@ -87,7 +111,7 @@ class Session(object):
         self.replay = []
         self.size = 0
         self.status = None
-        self.info = {'id': self.id, 'pid': pid, 'cwd': cwd, 'cols': cols, 'rows': rows, 'meta': spec.get('meta') or {}}
+        self.info = {'id': self.id, 'pid': pid, 'cwd': cwd, 'cols': cols, 'rows': rows, 'meta': spec.get('meta') or {}, 'account': self.account}
         self.resize(cols, rows)
 
     def resize(self, cols, rows):
@@ -346,6 +370,21 @@ def serve():
             raise Stop()
         if t == 'limits':
             return None
+        if t == 'account':
+            op = r.get('op')
+            if op == 'add':
+                return add_account(r.get('agent'), r.get('label'))
+            if op == 'remove':
+                aid = str(r.get('id') or '')
+                account_path(aid)
+                if any(s.account == aid for s in sessions.values()):
+                    raise ValueError('account in use')
+                remove_account(aid)
+            elif op == 'default':
+                set_default(r.get('id'))
+            elif op != 'list':
+                raise ValueError('unknown request')
+            return list_accounts()
         raise ValueError('unknown request')
 
     def on_message(c, msg):
@@ -627,6 +666,169 @@ def hook(source):
                     pass
     finally:
         s.close()
+
+
+def account_path(aid):
+    aid = str(aid or '')
+    p = os.path.join(ACCOUNTS, aid)
+    if not ACCOUNT_ID.match(aid) or os.path.islink(p) or not os.path.isfile(os.path.join(p, ACCOUNT_META)):
+        raise ValueError('no such account')
+    return p
+
+
+def account_info(aid):
+    p = os.path.join(ACCOUNTS, aid)
+    with open(os.path.join(p, ACCOUNT_META)) as f:
+        m = json.load(f)
+    agent = m.get('agent')
+    email = None
+    if agent == 'claude':
+        try:
+            with open(os.path.join(p, '.claude.json')) as f:
+                email = (json.load(f).get('oauthAccount') or {}).get('emailAddress')
+        except (OSError, ValueError, AttributeError):
+            pass
+    return {'id': aid, 'agent': agent, 'label': m.get('label') or aid, 'createdAt': m.get('createdAt'),
+            'loggedIn': os.path.exists(os.path.join(p, LOGIN_FILE.get(agent, ACCOUNT_META + '-'))),
+            'email': email if isinstance(email, str) else None}
+
+
+def read_default():
+    try:
+        with open(DEFAULT_F) as f:
+            aid = f.read().strip()
+        account_path(aid)
+        return aid
+    except (OSError, ValueError):
+        return None
+
+
+def list_accounts():
+    out = []
+    if os.path.isdir(ACCOUNTS):
+        for aid in os.listdir(ACCOUNTS):
+            try:
+                account_path(aid)
+                out.append(account_info(aid))
+            except (OSError, ValueError):
+                pass
+    out.sort(key=lambda a: a.get('createdAt') or 0)
+    return {'accounts': out, 'default': read_default()}
+
+
+def pick_account(agent, aid):
+    """'*' = the default account if it is this agent's, None = the server's own login, else that account (must be this agent's)."""
+    if aid == '*':
+        d = read_default()
+        return d if d and account_info(d).get('agent') == agent else None
+    if aid is None:
+        return None
+    account_path(aid)
+    if account_info(aid).get('agent') != agent:
+        raise ValueError('no such account')
+    return str(aid)
+
+
+def private_dir(p):
+    os.makedirs(p, 0o700, exist_ok=True)
+    os.chmod(p, 0o700)
+
+
+def add_account(agent, label):
+    if agent not in ACCOUNT_ENV:
+        raise ValueError('unknown agent')
+    private_dir(ACCOUNTS)
+    aid = codecs.encode(os.urandom(6), 'hex').decode()
+    p = os.path.join(ACCOUNTS, aid)
+    os.mkdir(p, 0o700)
+    os.chmod(p, 0o700)
+    name = ' '.join(str(label or '').split())[:LABEL_MAX]
+    with open(os.path.join(p, ACCOUNT_META), 'w') as f:
+        json.dump({'agent': agent, 'label': name, 'createdAt': int(time.time() * 1000)}, f)
+    if agent == 'claude':
+        share_history(p)
+    return account_info(aid)
+
+
+def remove_account(aid):
+    """Only this account's folder. Links into claude-shared/ are unlinked first, never followed - the shared history stays."""
+    p = account_path(aid)
+    for name in os.listdir(p):
+        q = os.path.join(p, name)
+        if os.path.islink(q):
+            os.unlink(q)
+    shutil.rmtree(p)
+    if read_default() is None:
+        set_default(None)
+
+
+def set_default(aid):
+    if aid is None:
+        try:
+            os.unlink(DEFAULT_F)
+        except OSError:
+            pass
+        return
+    account_path(aid)
+    with open(DEFAULT_F, 'w') as f:
+        f.write(str(aid))
+
+
+def move_tree(src, dst):
+    """Move src's entries into dst; an entry already in dst stays in src (kept). Removes src when emptied. -> kept count."""
+    kept = 0
+    for name in os.listdir(src):
+        a = os.path.join(src, name)
+        b = os.path.join(dst, name)
+        try:
+            if not os.path.lexists(b):
+                os.rename(a, b)
+            elif os.path.isdir(a) and not os.path.islink(a) and os.path.isdir(b) and not os.path.islink(b):
+                kept += move_tree(a, b)
+            else:
+                kept += 1
+        except OSError:
+            kept += 1
+    if not os.listdir(src):
+        os.rmdir(src)
+    return kept
+
+
+def share_dir(acc, name):
+    """Same order as the app's local accounts (shareHistoryDir): set aside -> link -> move into shared (clashes stay in <name>.ara-merge)."""
+    src = os.path.join(acc, name)
+    dest = os.path.join(SHARED, name)
+    pending = src + MERGE
+    private_dir(SHARED)
+    os.makedirs(dest, exist_ok=True)
+    if os.path.isdir(pending) and not os.path.islink(pending) and os.path.islink(src):
+        move_tree(pending, dest)
+    if os.path.islink(src):
+        return True
+    had = os.path.lexists(src)
+    if had and not os.path.isdir(src):
+        return False
+    if had:
+        if os.path.lexists(pending):
+            return False
+        os.rename(src, pending)
+    try:
+        os.symlink(dest, src)
+    except OSError:
+        if had and not os.path.lexists(src):
+            os.rename(pending, src)
+        return False
+    if had:
+        move_tree(pending, dest)
+    return True
+
+
+def share_history(acc):
+    for name in CLAUDE_HISTORY:
+        try:
+            share_dir(acc, name)
+        except OSError:
+            pass
 
 
 def stop():

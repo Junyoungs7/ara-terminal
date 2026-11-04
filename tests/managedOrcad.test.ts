@@ -1,4 +1,4 @@
-// M8 DM-02·03 통합(+ 3차 R1 PC 둘 · R2 서버 훅) — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
+// M8 DM-02·03 통합(+ 3차 R1 PC 둘 · R2 서버 훅 · R3 서버 계정) — ssh2 하네스(tests/ssh-harness.ts)에 붙어 **임시 폴더를 원격 홈으로** 설치 → 에이전트 PTY 실행 → SSH 끊김에도 생존 →
 // 다시 붙어 이어 보기(replay) → 업데이트 미룸 판정 → 제거 → 흔적 0(폴더·프로세스·crontab·systemd)을 원격에서 잰다.
 // 원격 쪽 명령은 진짜 Linux 가 돌려야 한다(pty·유닉스 소켓·/proc): Windows 에서는 WSL(Ubuntu)의 임시 폴더를 홈으로, SFTP 는 \\wsl.localhost 로 같은 폴더를 노출한다.
 // WSL·python3 가 없으면 건너뛴다. 실서버·사내 서버에는 붙지 않는다(127.0.0.1 하네스만).
@@ -11,7 +11,7 @@ import { execSh, installHost, probeHost, uninstallHost } from '../src/main/manag
 import { createRemoteAgents } from '../src/main/managed/remoteAgents'
 import type { DaemonBackend } from '../src/main/daemon/service'
 import { AGENT_SESSION_LOST_EXIT } from '../src/shared/agentHooks'
-import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, decideUpdate, remnantsOf, remoteHookLaunch, serverStateOf, supportOf } from '../src/shared/managedServers'
+import { UNINSTALL_SCRIPT, VERIFY_SCRIPT, accountLoginLine, decideUpdate, remnantsOf, remoteHookLaunch, serverAccountsOf, serverStateOf, supportOf, type ServerAccount, type ServerAccounts } from '../src/shared/managedServers'
 import { applyHookEvent } from '../src/shared/agentHooks'
 import { remoteAddWorktree, remoteListWorktrees, remoteRemoveWorktree, remoteTopLevel, type RemoteRun } from '../src/main/managed/remoteWorktrees'
 
@@ -457,7 +457,7 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     ])
     // 큰 필드는 서버에서 잘라 보낸다(상태·카드에 쓰는 것만).
     const perm = A.status[1].payload
-    expect(perm).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm -rf build' } })
+    expect(perm).toEqual({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', session_id: 's', tool_input: { command: 'rm -rf build' } })
     expect(applyHookEvent(null, 'claude', perm, 0)).toMatchObject({ state: 'blocked', kind: 'permission' })
 
     // B: 붙지 않고 목록 — 마지막 상태가 대장에 있다(목록 상태 칸).
@@ -472,7 +472,7 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     run('Stop')
     await waitFor(() => A.status.length === 3 && B.status.length === 2, 10_000, '둘 다 Stop')
     expect(A.status[2]).toEqual(B.status[1])
-    expect(A.status[2].payload).toEqual({ hook_event_name: 'Stop' })
+    expect(A.status[2].payload).toEqual({ hook_event_name: 'Stop', session_id: 's' })
     expect(serverStateOf((await B.agents.list(hostKey, cB))[0]?.status)).toBe('idle')
 
     // 서버 사용자 설정은 그대로 · ~/.gemini 도 안 생긴다.
@@ -489,5 +489,126 @@ describe.skipIf(!READY)('orcad — 하네스 원격 홈에 설치 → 실행 →
     await execSh(cB, 'rm -rf "$HOME/.claude" "$HOME/fake-claude"')
     expect(await uninstallHost(cB)).toEqual([])
     cB.end()
+  }, 180_000)
+
+  // 3차 R3 서버 계정 — 가짜 claude(auth login 이 계정 폴더에 자격 증명 표식 파일을 만든다)로: 계정 둘 로그인 → A 로 대화 → B 로 --resume 해서
+  // 공유 기록(claude-shared)의 jsonl 을 찾는다(양성 대조) · 서버 본래 로그인(~/.claude)으로는 못 찾는다(음성 대조) · 기본 계정 · 쓰는 중 지우기 거절 ·
+  // 지우기 = 그 계정 폴더만(공유 기록은 남는다) · 제거 뒤 계정 폴더·자격 증명 흔적 0 · 서버 ~/.claude 바이트 그대로.
+  it('서버 계정 — 로그인 · 다른 계정으로 --resume · 지우기 · 제거 흔적 0 · 서버 ~/.claude 그대로', async () => {
+    const h = harness!
+    const hostKey = `tester@127.0.0.1:${h.port}`
+    const c = await connect(h.port, h.password)
+    await installHost(c, '2.11.0')
+    const userSettings = '{\n  "model": "opus"\n}\n'
+    await execSh(c, `mkdir -p "$HOME/.claude" "$HOME/bin" && printf '%s' '${userSettings}' > "$HOME/.claude/settings.json"`)
+    writeFileSync(
+      `${sftpRoot}/bin/claude`,
+      [
+        '#!/usr/bin/env python3',
+        'import glob, os, sys',
+        'cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.environ["HOME"], ".claude")',
+        'a = sys.argv[1:]',
+        'if a[:2] == ["auth", "login"]:',
+        '    open(os.path.join(cfg, ".credentials.json"), "w").write("{\\"fake\\": 1}")',
+        '    print("LOGGED-IN " + cfg)',
+        'elif a[:1] == ["new"]:',
+        '    d = os.path.join(cfg, "projects", "-repo")',
+        '    os.makedirs(d, exist_ok=True)',
+        '    open(os.path.join(d, a[1] + ".jsonl"), "w").write("{}\\n")',
+        '    print("NEW " + a[1])',
+        'elif a[:1] == ["--resume"]:',
+        '    hit = glob.glob(os.path.join(cfg, "projects", "*", a[1] + ".jsonl"))',
+        '    print(("RESUMED " if hit else "NOT-FOUND ") + a[1] + " CFG=" + cfg)',
+        ''
+      ].join('\n')
+    )
+    await execSh(c, 'chmod 700 "$HOME/bin/claude"')
+
+    const out = new Map<string, string>()
+    const exits = new Map<string, number>()
+    const backends = new Map<string, DaemonBackend>()
+    const agents = createRemoteAgents({
+      adopt: (b) => {
+        backends.set(b.id, b)
+        out.set(b.id, '')
+        b.onData((d) => out.set(b.id, out.get(b.id) + d))
+        b.onExit((code) => exits.set(b.id, code))
+      },
+      log: () => {}
+    })
+    const acct = async (req: Parameters<typeof agents.account>[2]): Promise<ServerAccounts> => serverAccountsOf(await agents.account(hostKey, c, req))
+    const add = async (label: string): Promise<ServerAccount> => serverAccountsOf({ accounts: [await agents.account(hostKey, c, { op: 'add', agent: 'claude', label })] }).accounts[0]!
+    const PATH = 'export PATH="$HOME/bin:$PATH"\n'
+    let n = 0
+    const run = async (account: { agent: string; id?: string | null }, line: string, meta: Record<string, unknown> = { agent: 'claude', title: 't' }): Promise<{ id: string; account: string | null | undefined }> => {
+      const id = `acct-${++n}`
+      const info = await agents.create(hostKey, c, { id, cwd: home, env: {}, account, meta })
+      backends.get(id)!.write(PATH + line + '\n')
+      return { id, account: info.account }
+    }
+
+    // 1) 계정 추가 — 설치 폴더 안, 본인만(700). 대화 기록 폴더는 claude-shared 로 링크.
+    const A = await add('업무 A')
+    expect(A).toMatchObject({ agent: 'claude', label: '업무 A', loggedIn: false })
+    const accDir = `${home}/.ara-server/accounts`
+    const perm = await execSh(c, `stat -c %a "${accDir}" "${accDir}/${A.id}" "${home}/.ara-server/claude-shared"; readlink "${accDir}/${A.id}/projects"`)
+    expect(perm.out.trim().split(/\s+/)).toEqual(['700', '700', '700', `${home}/.ara-server/claude-shared/projects`])
+
+    // 2) 로그인 칸 — 그 계정 env 로 `claude auth login; exit`(앱이 쓰는 줄 그대로) → 계정 폴더에 자격 증명 표식 · 셸이 닫힌다.
+    const login = await run({ agent: 'claude', id: A.id }, accountLoginLine('claude'), { kind: 'login', title: '업무 A' })
+    await waitFor(() => exits.has(login.id), 20_000, '로그인 셸 끝')
+    expect(out.get(login.id)).toContain(`LOGGED-IN ${accDir}/${A.id}`)
+    expect((await acct({ op: 'list' })).accounts.find((x) => x.id === A.id)?.loggedIn).toBe(true)
+    // 로그인 칸은 서버 세션 목록에 안 나온다(이미 끝났지만 — 목록 거르기는 단위 시험).
+    const B = await add('업무 B')
+    const loginB = await run({ agent: 'claude', id: B.id }, accountLoginLine('claude'), { kind: 'login', title: '업무 B' })
+    await waitFor(() => exits.has(loginB.id), 20_000, 'B 로그인 셸 끝')
+    // 양성 대조: 제거 검증이 계정 폴더·자격 증명을 실제로 센다(0 이 "못 찾음"이 아님을).
+    expect(remnantsOf((await execSh(c, VERIFY_SCRIPT)).out)).toEqual(expect.arrayContaining(['dir', 'accounts:2', 'creds:2']))
+
+    // 3) A 로 대화 → B 로 --resume: 공유 기록에서 찾는다. 서버 본래 로그인(~/.claude)으로는 못 찾는다(음성 대조).
+    const onA = await run({ agent: 'claude', id: A.id }, 'claude new sid-1')
+    expect(onA.account).toBe(A.id)
+    await waitFor(() => /NEW sid-1/.test(out.get(onA.id)!), 20_000, 'A 대화')
+    const onB = await run({ agent: 'claude', id: B.id }, 'claude --resume sid-1')
+    await waitFor(() => /(RESUMED|NOT-FOUND) sid-1/.test(out.get(onB.id)!), 20_000, 'B 재개')
+    expect(out.get(onB.id)).toContain(`RESUMED sid-1 CFG=${accDir}/${B.id}`)
+    const onBase = await run({ agent: 'claude', id: null }, 'claude --resume sid-1')
+    await waitFor(() => /(RESUMED|NOT-FOUND) sid-1/.test(out.get(onBase.id)!), 20_000, '본래 로그인 재개')
+    expect(onBase.account).toBeNull()
+    expect(out.get(onBase.id)).toContain(`NOT-FOUND sid-1 CFG=${home}/.claude`)
+
+    // 4) 기본 계정 — 계정을 안 정한 실행(id 없음)은 기본 계정으로.
+    expect((await acct({ op: 'default', id: B.id })).default).toBe(B.id)
+    const onDefault = await run({ agent: 'claude' }, 'true')
+    expect(onDefault.account).toBe(B.id)
+    // 없는 계정·다른 에이전트 계정은 거절.
+    await expect(agents.create(hostKey, c, { id: 'bad', cwd: home, env: {}, account: { agent: 'codex', id: A.id }, meta: {} })).rejects.toThrow(/no such account/)
+
+    // 5) 쓰는 중인 계정은 못 지운다 → 세션을 끝내면 지운다. 지우기 = 그 계정 폴더만(링크를 끊고 지운다 — 공유 기록은 남는다).
+    await expect(agents.account(hostKey, c, { op: 'remove', id: A.id })).rejects.toThrow(/account in use/)
+    for (const id of [onA.id, onB.id, onBase.id, onDefault.id]) await agents.kill(hostKey, c, id)
+    await waitFor(() => [onA.id, onB.id, onBase.id, onDefault.id].every((id) => exits.has(id)), 20_000, '세션 끝')
+    const afterRemove = await acct({ op: 'remove', id: A.id })
+    expect(afterRemove.accounts.map((x) => x.id)).toEqual([B.id])
+    const left = await execSh(c, `[ -e "${accDir}/${A.id}" ] && echo A-LEFT; ls "${home}/.ara-server/claude-shared/projects/-repo"`)
+    expect(left.out.trim()).toBe('sid-1.jsonl')
+    // 기본 계정을 지우면 기본은 서버 본래 로그인으로.
+    expect((await acct({ op: 'remove', id: B.id })).default).toBeNull()
+
+    // 6) 서버 사용자 ~/.claude 는 바이트 그대로(우리 기록·로그인은 설치 폴더 안).
+    const mine = await execSh(c, 'cat "$HOME/.claude/settings.json"; ls -a "$HOME/.claude"')
+    expect(mine.out).toBe(`${userSettings}.\n..\nsettings.json\n`)
+
+    // 7) 제거 뒤 계정 폴더·자격 증명 흔적 0(계정을 하나 더 로그인해 둔 채로 — 제거가 함께 지우는지).
+    const C = await add('업무 C')
+    const loginC = await run({ agent: 'claude', id: C.id }, accountLoginLine('claude'), { kind: 'login', title: '업무 C' })
+    await waitFor(() => exits.has(loginC.id), 20_000, 'C 로그인 셸 끝')
+    agents.detach(hostKey)
+    expect(await uninstallHost(c)).toEqual([])
+    const gone = await execSh(c, `find "$HOME" -name .credentials.json -o -name .ara-account.json | wc -l; cat "$HOME/.claude/settings.json"`)
+    expect(gone.out).toBe(`0\n${userSettings}`)
+    await execSh(c, 'rm -rf "$HOME/.claude" "$HOME/bin"')
+    c.end()
   }, 180_000)
 })

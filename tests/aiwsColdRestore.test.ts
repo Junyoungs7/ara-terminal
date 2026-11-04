@@ -22,7 +22,8 @@ const ev = {
     onStatus: vi.fn(() => () => {}),
     onName: vi.fn(() => () => {}),
     onTitle: vi.fn(() => () => {}),
-    onViewers: vi.fn(() => () => {})
+    onViewers: vi.fn(() => () => {}),
+    onRemoteLimit: vi.fn(() => () => {})
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
 }

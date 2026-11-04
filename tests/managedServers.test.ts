@@ -15,6 +15,9 @@ import {
   remoteHookCommand,
   remoteHookFile,
   remoteHookLaunch,
+  serverAccountsOf,
+  accountErrorText,
+  accountLoginLine,
   serverRowsOf,
   serverStateOf,
   supportOf,
@@ -23,6 +26,7 @@ import {
 } from '../src/shared/managedServers'
 import { ORCAD_PY } from '../src/main/managed/orcadScript'
 import { HOOK_TARGETS } from '../src/shared/agentHooks'
+import { CLAUDE_HISTORY } from '../src/main/usage/accounts'
 
 const linux = 'os=Linux\narch=x86_64\nhome=/home/dev\npython=/usr/bin/python3\npyver=3.10\npymods=1\n'
 
@@ -65,14 +69,14 @@ describe('판 비교·업데이트 판정', () => {
 
 describe('제거 검증 목록', () => {
   it('흔적 0', () => {
-    expect(remnantsOf('dir=no\nproc=0\ncron=0\nsystemd=0\n')).toEqual([])
+    expect(remnantsOf('dir=no\nproc=0\ncron=0\nsystemd=0\naccounts=0\ncreds=0\n')).toEqual([])
   })
   it('남은 것을 이름으로', () => {
-    expect(remnantsOf('dir=yes\nproc=2\ncron=1\nsystemd=0\n')).toEqual(['dir', 'proc:2', 'cron:1'])
+    expect(remnantsOf('dir=yes\nproc=2\ncron=1\nsystemd=0\naccounts=2\ncreds=1\n')).toEqual(['dir', 'proc:2', 'cron:1', 'accounts:2', 'creds:1'])
   })
   it('못 잰 것은 "없다"가 아니라 unknown', () => {
-    expect(remnantsOf('')).toEqual(['unknown:dir', 'unknown:proc', 'unknown:cron', 'unknown:systemd'])
-    expect(remnantsOf('dir=no\nproc=\ncron=x\nsystemd=0')).toEqual(['unknown:proc', 'unknown:cron'])
+    expect(remnantsOf('')).toEqual(['unknown:dir', 'unknown:proc', 'unknown:cron', 'unknown:systemd', 'unknown:accounts', 'unknown:creds'])
+    expect(remnantsOf('dir=no\nproc=\ncron=x\nsystemd=0\naccounts=0\ncreds=0')).toEqual(['unknown:proc', 'unknown:cron'])
   })
   it('검증·제거 명령이 설치 폴더와 표식을 본다(오타 한 글자면 0 이 거짓말이 된다)', () => {
     for (const s of [VERIFY_SCRIPT, UNINSTALL_SCRIPT]) {
@@ -198,5 +202,51 @@ describe('R2 서버 훅', () => {
     expect(ORCAD_PY).toContain("reply['hookDir'] = DIR")
     expect(ORCAD_PY).toContain('env[SESSION_ENV] = self.id')
     expect(ORCAD_PY).toContain("elif cmd == 'hook':")
+  })
+})
+
+describe('R3 서버 계정', () => {
+  it('orcad 의 공유 목록 = 로컬 계정의 CLAUDE_HISTORY(R0 와 같은 목록)', () => {
+    const m = ORCAD_PY.match(/^CLAUDE_HISTORY = \(([^)]*)\)/m)
+    expect(m).not.toBeNull()
+    expect(m![1].split(',').map((x) => x.trim().replace(/'/g, ''))).toEqual([...CLAUDE_HISTORY])
+  })
+  it('서버 훅은 session_id(다른 계정으로 이어서)·error(한도)를 넘긴다', () => {
+    expect(ORCAD_PY).toMatch(/HOOK_KEYS = \([^)]*'session_id'[^)]*'error'\)/)
+  })
+  it('제거 검증이 계정 폴더·자격 증명 파일을 센다', () => {
+    expect(VERIFY_SCRIPT).toContain('echo accounts=')
+    expect(VERIFY_SCRIPT).toContain('-name .credentials.json -o -name auth.json')
+  })
+  it('목록 읽기 — 모르는 모양은 거르고, 없는 기본은 null', () => {
+    const v = serverAccountsOf({
+      accounts: [
+        { id: 'a1', agent: 'claude', label: '업무 A', loggedIn: true, email: 'a@x', createdAt: 1 },
+        { id: 'a2', agent: 'gemini', label: '?' },
+        { id: 'a3', agent: 'codex', label: '' },
+        'x'
+      ],
+      default: 'zz'
+    })
+    expect(v).toEqual({
+      accounts: [
+        { id: 'a1', agent: 'claude', label: '업무 A', loggedIn: true, email: 'a@x', createdAt: 1 },
+        { id: 'a3', agent: 'codex', label: 'a3', loggedIn: false, email: null, createdAt: null }
+      ],
+      default: null
+    })
+    expect(serverAccountsOf(null)).toEqual({ accounts: [], default: null })
+  })
+  it('실패는 이유 + 할 일 한 줄(옛 서버·쓰는 중·없음), 모르는 것은 그대로', () => {
+    expect(accountErrorText('unknown request')).toMatch(/옛 판.*—/)
+    expect(accountErrorText('account in use')).toMatch(/끝낸 뒤/)
+    expect(accountErrorText('no such account')).toMatch(/새로 고쳐/)
+    expect(accountErrorText('boom')).toBe('boom')
+  })
+  it('로그인 줄은 끝나면 셸도 닫는다 · 로그인 칸은 서버 세션 목록에 안 나온다', () => {
+    expect(accountLoginLine('claude')).toBe('claude auth login; exit')
+    expect(accountLoginLine('codex')).toBe('codex login --device-auth; exit')
+    const rows = serverRowsOf('h', [{ id: 'l', cwd: '/', meta: { kind: 'login', title: 'B' } }, { id: 'x', cwd: '/', meta: { agent: 'claude', title: 't' } }], () => false)
+    expect(rows.map((r) => r.id)).toEqual(['x'])
   })
 })

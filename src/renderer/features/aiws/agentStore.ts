@@ -61,6 +61,8 @@ type AgentState = {
   statusById: Record<string, AgentStatusView>
   /** R1 원격 탭에 지금 붙은 PC 이름들(이 PC 포함 — 둘 이상이면 탭에 "PC n대"). 붙을 때 사건이 탭보다 먼저 올 수 있어 탭과 따로 둔다. */
   viewersById: Record<string, string[]>
+  /** R3 원격 탭이 한도에 걸렸다(서버 훅 StopFailure rate_limit — 다음 지시면 풀림). 탭보다 먼저 올 수 있어 따로 둔다. */
+  limitById: Record<string, boolean>
   /** 봤나(herdr seen). 없으면 본 것. */
   seenById: Record<string, boolean>
   /** 지금 화면에 보이는 에이전트 탭(AI 작업 공간이 열려 있고 그 탭이 고른 탭). 없으면 null. */
@@ -102,6 +104,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   activeTabByWorktree: {},
   statusById: {},
   viewersById: {},
+  limitById: {},
   seenById: {},
   viewing: null,
   view: 'worktree',
@@ -357,7 +360,7 @@ function restoreTabs(list: AgentTabInfo[], initial = false): void {
       const w = all.find((w) => areWorktreePathsEqual(w.path, x.cwd, /^[A-Za-z]:/.test(x.cwd) ? 'win32' : 'other'))
       if (w && x.cold) cold.push({ info: x, worktreeId: w.id, cwd: w.path })
       // M8 R4 cut = 앱을 다시 켰을 때의 원격 탭 — 붙지 않은 채 '끊김'으로(사람이 [다시 연결]).
-      else if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}), ...(x.genTitle ? { genTitle: x.genTitle } : {}) })
+      else if (w) found.push({ sessionId: x.sessionId, agent: x.agent, worktreeId: w.id, title: x.title, line: x.line, exited: !!x.cut, ...(x.cut ? { lost: true } : {}), ...(x.prompt ? { prompt: x.prompt } : {}), ...(x.name ? { name: x.name } : {}), ...(x.host ? { host: x.host } : {}), ...(x.genTitle ? { genTitle: x.genTitle } : {}), ...(x.account !== undefined ? { account: x.account } : {}) })
       return !w
     })
     if (found.length) {
@@ -440,6 +443,8 @@ function startStatus(): void {
   window.ev.agents.onTitle((e) => useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => (x.sessionId === e.sessionId ? { ...x, genTitle: e.title } : x)) })))
   // R1 원격 탭에 붙은 PC(이 PC 포함).
   window.ev.agents.onViewers((e) => useAgentStore.setState((s) => ({ viewersById: { ...s.viewersById, [e.sessionId]: e.viewers } })))
+  // R3 원격 탭 한도(띠·카드).
+  window.ev.agents.onRemoteLimit((e) => useAgentStore.setState((s) => ({ limitById: { ...s.limitById, [e.sessionId]: e.hit } })))
   // M4 DM-01: 앱을 다시 켰으면 데몬에 살아 있던 에이전트 탭을 되살린다.
   void window.ev.agents
     .tabs()

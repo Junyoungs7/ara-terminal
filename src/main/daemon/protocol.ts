@@ -123,11 +123,12 @@ export function judgeDaemon(protocol: number, current = DAEMON_PROTOCOL_VERSION,
  * M11 R2: space 'terminal' = 터미널 공간 로컬 셸(에이전트 탭 표식 ARA_PANE_KEY 를 안 넣는다), shell = 그 탭이 고른 셸. 없으면 에이전트 셸(1차 그대로).
  * 덧붙인 선택 필드라 판(protocol)은 그대로다 — v1 데몬은 아직 배포 전(v2.2)이라 이것을 모르는 데몬이 사용자 PC 에 없다.
  */
-export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string; shellArgs?: string[] }
+/** account: 원격(orcad) R3 만 — 서버 계정(id 없음 = 서버의 기본 계정, null = 서버 본래 로그인). 결과 DaemonSessionInfo.account = 실제로 쓴 계정. */
+export type DaemonCreateSpec = { id: string; cwd: string; cols?: number; rows?: number; env: Record<string, string>; meta: Record<string, unknown>; space?: 'terminal'; shell?: string; shellArgs?: string[]; account?: { agent: string; id?: string | null } }
 /** viewers: 원격(orcad) 만 — 지금 이 세션에 붙은 PC 이름들(R1 다른 PC 에서 이어 보기). 로컬 데몬은 안 채운다. */
 /** status: 원격(orcad) 만 — R2 서버가 훅으로 들은 그 세션의 마지막 상태(늦게 붙은 PC 도 받는다). */
 export type DaemonHookStatus = { source: string; payload: Record<string, unknown>; at: number }
-export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown>; viewers?: string[]; status?: DaemonHookStatus }
+export type DaemonSessionInfo = { id: string; pid: number; cwd: string; cols: number; rows: number; meta: Record<string, unknown>; viewers?: string[]; status?: DaemonHookStatus; account?: string | null }
 
 export type DaemonHello = { type: 'hello'; protocol: number; token: string }
 /** hookDir: R2 orcad 만 — 설치 폴더(절대 경로, 훅 설정 파일이 있는 곳). 옛 orcad 는 안 준다 = 서버 상태 판정 없음. */
@@ -152,6 +153,8 @@ export type DaemonRequest =
    * 메모리 상한은 바로. 덧붙인 요청이라 판(protocol)은 그대로다 — 이것을 모르는 옛 데몬은 '모르는 요청'으로 답하고 앱은 넘어간다.
    */
   | { rid: number; type: 'limits'; limits: AgentLimits }
+  /** 원격(orcad) R3 서버 계정 — 목록·추가·지우기(공유 기록은 남김)·기본 정하기. 답은 늘 목록(add 는 만든 계정). */
+  | { rid: number; type: 'account'; op: 'list' | 'add' | 'remove' | 'default'; agent?: string; label?: string; id?: string | null }
 
 /** 데몬 → 앱: 답(rid) 또는 사건(data·exit). */
 export type DaemonReply = { type: 'reply'; rid: number; ok: boolean; error?: string; result?: unknown }

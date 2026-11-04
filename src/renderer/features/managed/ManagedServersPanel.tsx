@@ -5,6 +5,7 @@ import { t } from '../../i18n'
 import { Row } from '../../components/SettingsPage'
 import { useDialog } from '../../components/Dialog'
 import { askManagedConsent } from './consent'
+import { ServerAccountsBox } from './ServerAccountsBox'
 
 /**
  * M8 DM-03 설정 › AI 작업 공간 › 관리형 서버 — Orca managed-runtime(ManagedRuntimeInstallRow·RemoveDialog, orcaRef fdfcfb3551)의 1차.
@@ -15,6 +16,8 @@ export function ManagedServersPanel(): JSX.Element {
   const [list, setList] = useState<ManagedListResult | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  // R3 서버 계정을 펼친 서버(펼칠 때 서버에 묻는다 — 설정을 열기만 해서는 붙지 않는다).
+  const [acctOpen, setAcctOpen] = useState<string | null>(null)
   const dialog = useDialog()
   const reload = useCallback(() => void window.ev.managed.list().then(setList), [])
   useEffect(reload, [reload])
@@ -59,14 +62,20 @@ export function ManagedServersPanel(): JSX.Element {
       </div>
       {list.records.length === 0 && <div className="set-note">{t('managed.empty')}</div>}
       {list.records.map((r) => (
-        <Row key={r.hostKey} label={r.hostKey} desc={recordDesc(r, connected.has(r.hostKey))} item={`managed.${r.hostKey}`}>
-          <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="check" onClick={() => void run(r.hostKey, async () => void (await window.ev.managed.check(r.hostKey)))}>
-            {t('managed.check')}
-          </button>
-          <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="remove" onClick={() => void remove(r.hostKey)}>
-            {t('managed.remove')}
-          </button>
-        </Row>
+        <div key={r.hostKey}>
+          <Row label={r.hostKey} desc={recordDesc(r, connected.has(r.hostKey))} item={`managed.${r.hostKey}`}>
+            <button type="button" className="btn sec" aria-expanded={acctOpen === r.hostKey} data-managed="accounts-toggle" onClick={() => setAcctOpen(acctOpen === r.hostKey ? null : r.hostKey)}>
+              {t('managed.acct.title')}
+            </button>
+            <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="check" onClick={() => void run(r.hostKey, async () => void (await window.ev.managed.check(r.hostKey)))}>
+              {t('managed.check')}
+            </button>
+            <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="remove" onClick={() => void remove(r.hostKey)}>
+              {t('managed.remove')}
+            </button>
+          </Row>
+          {acctOpen === r.hostKey && <ServerAccountsBox hostKey={r.hostKey} ask={dialog.ask} />}
+        </div>
       ))}
       <div className="set-sec-t" data-item="managed.install">
         {t('managed.installable')}

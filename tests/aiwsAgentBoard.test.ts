@@ -91,7 +91,8 @@ const ev = {
     }),
     onName: vi.fn(() => () => {}), // M5 AI-19
     onTitle: vi.fn(() => () => {}), // M11
-    onViewers: vi.fn(() => () => {}) // R1
+    onViewers: vi.fn(() => () => {}), // R1
+    onRemoteLimit: vi.fn(() => () => {}) // R3
   },
   session: { onExit: vi.fn(() => () => {}), destroy: vi.fn(async () => ({ ok: true })) }
 }

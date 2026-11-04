@@ -77,7 +77,7 @@ import type {
 import type { AgentId, AgentPermissionChoice, AgentSettings, DetectedAgent } from './agents'
 import type { VaultDeleteResult, VaultDetail, VaultSearchResult, VaultSession } from './vault'
 import type { AskAnswerKeyGroup } from './agentAsk'
-import type { ManagedConsentPlan, ManagedRecord, ServerSessionsHost } from './managedServers'
+import type { ManagedConsentPlan, ManagedRecord, ServerAccounts, ServerSessionsHost } from './managedServers'
 import type { RunOnHost } from './runOn'
 import type { AgentChatEvent, AgentChatSnapshot } from './agentChat'
 import type { ModelCatalog, SlashItem } from './agentOptions'
@@ -90,11 +90,11 @@ export type CliLaunchAgentRequest = { reqId: string; agent: AgentId; worktreeId:
 export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true; account?: string | null } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
 /** M11 R2 cold = 데몬째 죽어(PC 재부팅 등) 잃은 탭 — 렌더러가 같은 에이전트·같은 폴더로 다시 띄운다(resume = CLI 세션 id 를 알면 재개). sessionId 는 옛 id(레이아웃 자리 찾기용). */
-export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string; cold?: true; resume?: string }
+export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string; cold?: true; resume?: string; account?: string | null }
 /** M11 첫 지시로 지은 탭 제목(push 'agents:title' — Orca deriveGeneratedTabTitle). 보일지는 설정 tabAutoTitle. */
 export type AgentTitleEvent = { sessionId: string; title: string }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
-/** account(R0 다른 계정으로 이어서): 안 주면 고른 계정, null = 시스템 기본, id = 그 계정(Claude·Codex 로컬만). */
+/** account(R0 다른 계정으로 이어서): 안 주면 고른 계정, null = 시스템 기본, id = 그 계정. R3 원격 실행이면 서버 계정(안 주면 서버의 기본 계정, null = 서버 본래 로그인). */
 export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice; account?: string | null }
 /** M5 AI-19 채팅 이름(push 'agents:name'). */
 export type AgentNameEvent = { sessionId: string; name: string }
@@ -104,6 +104,11 @@ export type AgentMemoryOver = { sessionId: string; title: string; memory: number
 export type ManagedListResult = { records: ManagedRecord[]; targets: { hostKey: string; label: string }[] }
 /** 제거(= 동의 철회) 결과. remnants 가 비어야 ok — 원격에서 잰 남은 것(dir·proc:N·cron:N·systemd:N·unknown:키). */
 export type ManagedRemoveResult = { ok: boolean; remnants: string[]; error?: string }
+/** 원격 3차 R3 서버 계정 — op 없음 = 목록. add/login 이면 그 자리 로그인 칸(원격 PTY 세션 id)을 돌려준다. */
+export type ManagedAccountsRequest = { hostKey: string; op?: 'list' | 'add' | 'login' | 'remove' | 'default'; agent?: string; label?: string; id?: string | null }
+export type ManagedAccountsResult = ({ ok: true; loginSession?: string } & ServerAccounts) | { ok: false; error: string }
+/** R3 원격 탭이 한도에 걸렸다/풀렸다(push 'agents:remoteLimit' — 서버 훅 StopFailure rate_limit · 다음 지시면 풀림). */
+export type AgentRemoteLimitEvent = { sessionId: string; hit: boolean }
 /** M8 R4 관리형 서버의 데몬 판 교체(push 'managed:updated'). */
 export type ManagedUpdated = { hostKey: string; from: string; to: string }
 /** R1 원격 탭에 붙은 PC 이름들(push 'agents:viewers' — 둘 이상이면 탭에 "PC n대"). */
@@ -693,6 +698,7 @@ export type InvokeContract = {
   'managed:hosts': { req: void; res: RunOnHost[] }
   // R1 다른 PC 에서 이어 보기 — 동의한 서버마다 살아 있는 세션(붙지 않고 목록만).
   'managed:sessions': { req: void; res: ServerSessionsHost[] }
+  'managed:accounts': { req: ManagedAccountsRequest; res: ManagedAccountsResult }
   // M8 DM-05 끊긴 원격 탭 [다시 연결] = 새 SSH 연결로 같은 orcad 세션에 이어 붙기(같은 id, 원격 replay). 자동 재접속은 없다(2026-08-14 결정).
   'agents:reconnect': { req: { hostKey: string }; res: { ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string } }
   // M8 R4 끊긴 원격 탭 닫기 = 서버의 세션도 끝낸다(Orca: 닫기 = 종료). 잠깐 붙어서 끝내고, 못 붙으면 다음 연결 때(false).
@@ -1453,6 +1459,8 @@ export type EvApi = {
     remove(hostKey: string): Promise<ManagedRemoveResult>
     hosts(): Promise<RunOnHost[]>
     sessions(): Promise<ServerSessionsHost[]>
+    /** R3 서버 계정(목록·추가·다시 로그인·지우기·기본). */
+    accounts(req: ManagedAccountsRequest): Promise<ManagedAccountsResult>
     /** M8 R4 데몬 판을 바꿨다(push 'managed:updated') — 알림 센터 한 줄. */
     onUpdated(cb: (e: ManagedUpdated) => void): () => void
   }
@@ -1468,6 +1476,8 @@ export type EvApi = {
     forgetRemote(sessionId: string): Promise<void>
     /** R1 원격 탭에 붙은 PC 가 바뀌었다(push 'agents:viewers'). */
     onViewers(cb: (e: AgentViewersEvent) => void): () => void
+    /** R3 원격 탭 한도 걸림/풀림(push 'agents:remoteLimit'). */
+    onRemoteLimit(cb: (e: AgentRemoteLimitEvent) => void): () => void
     resumeIds(sessionIds: string[]): Promise<Record<string, string | null>>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>

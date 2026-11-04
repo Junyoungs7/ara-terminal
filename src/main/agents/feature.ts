@@ -38,7 +38,7 @@ import { lowerPriority } from '../resources/hostProcs'
 import type { AccountsFeature } from '../usage/accounts'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
-import { remoteHookLaunch } from '@shared/managedServers'
+import { accountErrorText, remoteHookLaunch } from '@shared/managedServers'
 import { GEMINI_DEFAULTS_ENV, orielGeminiDefaults, orielLaunch } from '@shared/oriel'
 import type { Oriel } from '../oriel/oriel'
 import { createAgentAwake } from './awake'
@@ -217,7 +217,7 @@ export function registerAgentsFeature(deps: {
     // R1 다른 PC 가 지은 이름·제목은 서버 meta 에서.
     const name = names.get(info.id) ?? (typeof m['name'] === 'string' ? m['name'] : undefined)
     const genTitle = genTitles.get(info.id) ?? (typeof m['genTitle'] === 'string' ? m['genTitle'] : undefined)
-    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}), ...(genTitle ? { genTitle } : {}) }
+    return { sessionId: info.id, agent: m['agent'], cwd: info.cwd, title: m['title'], line: typeof m['line'] === 'string' ? m['line'] : '', ...(typeof m['prompt'] === 'string' ? { prompt: m['prompt'] } : {}), ...(name ? { name } : {}), ...(typeof m['host'] === 'string' ? { host: m['host'] } : {}), ...(genTitle ? { genTitle } : {}), ...(info.account !== undefined ? { account: info.account } : {}) }
   }
   const daemon = createAgentDaemon({
     runtimeDir: daemonRuntimeDir(deps.userData),
@@ -350,8 +350,9 @@ export function registerAgentsFeature(deps: {
   }
   handle('agents:answer', ({ sessionId, groups }) => answer(sessionId, groups))
   // M10 WS-16 재우기 — 닫기 전에 탭마다 CLI 세션 id 를 받아 둔다(닫으면 transcript 경로를 잊는다).
+  // R3 원격 탭은 서버 훅이 알려 준 CLI 세션 id(로컬 transcript 가 없다).
   handle('agents:resumeIds', ({ sessionIds }) =>
-    Object.fromEntries((Array.isArray(sessionIds) ? sessionIds : []).filter((id): id is string => typeof id === 'string').map((id) => [id, ensureChat().resumeId(id)]))
+    Object.fromEntries((Array.isArray(sessionIds) ? sessionIds : []).filter((id): id is string => typeof id === 'string').map((id) => [id, remoteResume.get(id) ?? ensureChat().resumeId(id)]))
   )
   handle('agents:killBackground', async () => ({ killed: await daemon.killAll() }))
   handle('agents:quitCompletely', async () => {
@@ -365,8 +366,21 @@ export function registerAgentsFeature(deps: {
   // 보낸다 → remoteHook 이 로컬 훅과 같은 tracker 로. 옛 orcad(hookDir 없음)·Codex 는 화면 판정('추정')만. 채팅 보기·이름 짓기는
   // 로컬 transcript·로컬 CLI 를 읽으므로 걸지 않는다. 명령줄은 POSIX 셸 기준(원격 로그인 셸)으로 만든다.
   /** R2 서버 orcad 가 들은 훅(status 사건) — 로컬 훅과 같은 상태 파이프라인(질문·승인 카드·알림 규칙 그대로). */
+  // R3: 서버 훅의 session_id = 다른 계정으로 이어서(--resume) 할 id · StopFailure rate_limit = 한도 걸림(다음 지시면 풀림). 자식 이벤트는 안 본다.
+  const remoteResume = new Map<string, string>()
+  const remoteLimit = new Set<string>()
   const remoteHook = (sessionId: string, source: string, payload: Record<string, unknown>): void => {
-    if (isHookSource(source)) tracker?.hook({ source, paneKey: sessionId, payload })
+    if (!isHookSource(source)) return
+    tracker?.hook({ source, paneKey: sessionId, payload })
+    if (payload['agent_id']) return
+    const sid = payload['session_id']
+    if (typeof sid === 'string' && sid) remoteResume.set(sessionId, sid)
+    const ev = payload['hook_event_name']
+    const hit = ev === 'StopFailure' && payload['error'] === 'rate_limit' ? true : ev === 'UserPromptSubmit' ? false : null
+    if (hit === null || hit === remoteLimit.has(sessionId)) return
+    if (hit) remoteLimit.add(sessionId)
+    else remoteLimit.delete(sessionId)
+    pushSend(deps.mainWc(), 'agents:remoteLimit', { sessionId, hit })
   }
   const launchRemote = async (host: string, agent: AgentId, cwd: string, prompt: string | undefined, resume: string | undefined, options: unknown): Promise<AgentLaunchResult> => {
     const remote = deps.remote?.()
@@ -379,19 +393,24 @@ export function registerAgentsFeature(deps: {
     const title = `${AGENTS[agent].label} · ${remoteBaseName(cwd)}`
     const sessionId = randomUUID()
     const t = ensureTracker() // tap 을 세션보다 먼저 건다 - 로컬 실행과 같은 순서
+    // R3 서버 계정(Claude·Codex): 옵션 account 를 안 주면 서버의 기본 계정, null = 서버 본래 로그인. 실제로 쓴 계정은 서버가 알려 준다.
+    const wanted = accountOptionOf(options)
+    const account = agent === 'claude' || agent === 'codex' ? { agent, ...(wanted !== undefined ? { id: wanted } : {}) } : undefined
+    let used: string | null | undefined
     try {
       // env 는 에이전트 env 만(원격 환경 위에 덧붙는다 — 아라의 Windows 환경을 보내지 않는다). R2 훅 설정은 그 서버 orcad 가 훅 폴더를 알려 줄 때만.
-      await remote.launch(host, (hookDir) => {
+      const info = await remote.launch(host, (hookDir) => {
         const p = planOf(hookDir)
         if (p.ok) plan = p
-        return { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host, pc: hostname() } }
+        return { id: sessionId, cwd, env: plan.env, meta: { agent, title, line: plan.line, startedAt: Date.now(), host, pc: hostname() }, ...(account ? { account } : {}) }
       })
+      used = account ? (info.account ?? null) : undefined
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      return { ok: false, error: accountErrorText(err instanceof Error ? err.message : String(err)) }
     }
     t.track({ sessionId, agent, prompt: plan.deferredPrompt })
     deps.sessions().write(sessionId, plan.line + '\r')
-    return { ok: true, sessionId, title, line: plan.line }
+    return { ok: true, sessionId, title, line: plan.line, ...(used !== undefined ? { account: used } : {}) }
   }
   // 원격 세션을 탭으로(다시 연결 · R1 서버 세션에 붙기 공통) — 상태 판정을 붙이고 탭 정보로.
   const remoteTabs = async (job: () => Promise<DaemonSessionInfo[]>): Promise<{ ok: true; tabs: AgentTabInfo[] } | { ok: false; error: string }> => {

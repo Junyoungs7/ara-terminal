@@ -28,6 +28,7 @@ const ev = {
     onName: vi.fn(() => () => {}), // M5 AI-19
     onTitle: vi.fn(() => () => {}), // M11
     onViewers: vi.fn(() => () => {}), // R1
+    onRemoteLimit: vi.fn(() => () => {}), // R3
     forgetRemote: vi.fn(async () => {}),
     // M8 R4 끊긴 원격 탭 닫기·다시 연결
     killRemote: vi.fn(async () => true),
