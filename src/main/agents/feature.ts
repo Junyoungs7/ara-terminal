@@ -34,6 +34,7 @@ import { createTerminalDaemonHook, isTerminalInfo, terminalSessionOf } from '../
 import type { LocalDaemonHook } from '../sessions/MainSessionManager'
 import { pickColdTabs, readTabRecords, type AgentTabRecord } from './coldRestore'
 import { lowerPriority } from '../resources/hostProcs'
+import type { AccountsFeature } from '../usage/accounts'
 import type { ManagedFeature } from '../managed/feature'
 import { remoteAgentSettings, remoteBaseName } from '@shared/runOn'
 import { GEMINI_DEFAULTS_ENV, orielGeminiDefaults, orielLaunch } from '@shared/oriel'
@@ -52,8 +53,8 @@ export function registerAgentsFeature(deps: {
   onAgentWorking?: (sessionId: string, working: boolean) => void
   /** 3차 R2-B 브랜치 자동 개명 — 로컬 에이전트 탭에 지시가 들어올 때(실행 지시·훅 UserPromptSubmit). cwd = 그 탭의 폴더. */
   onPrompt?: (cwd: string, prompt: unknown) => void
-  /** M13 계정 — 고른 Claude·Codex 계정의 실행 env(CLAUDE_CONFIG_DIR·CODEX_HOME). 시스템 기본이면 빈 객체. 로컬 실행에만. */
-  accountEnv?: (agent: 'claude' | 'codex') => Record<string, string>
+  /** M13 계정 — Claude·Codex 계정의 실행 env(CLAUDE_CONFIG_DIR·CODEX_HOME). 시스템 기본이면 빈 객체. 로컬 실행에만. R0: 실행 옵션 account 로 고른 계정 대신 다른 계정. */
+  accounts?: () => Pick<AccountsFeature, 'launchEnv' | 'view'>
   sessions: () => MainSessionManager
   /** 옛 설정 [AI] 의 터미널 AI 기본 플래그(workspace.json ui.aiCliFlags) — 처음 한 번 옮긴다. */
   readAiCliFlags: () => unknown
@@ -415,7 +416,12 @@ export function registerAgentsFeature(deps: {
     const hookEnv: Record<string, string> = {}
     const extraArgs: string[] = []
     // M13 고른 계정(Orca: 계정 폴더 env) — 사용자 설정의 CLAUDE_CONFIG_DIR·CODEX_HOME 보다 앞선다(시스템 기본을 고르면 안 붙는다).
-    const extraEnv: Record<string, string> = agent === 'claude' || agent === 'codex' ? { ...deps.accountEnv?.(agent) } : {}
+    // R0 다른 계정으로 이어서: 옵션 account(null = 시스템 기본)가 오면 그 계정. Codex 재개면 그 rollout 을 대상 폴더로 복사해 둔다(accounts.ts).
+    const acc = agent === 'claude' || agent === 'codex' ? deps.accounts?.() : undefined
+    const wanted = accountOptionOf(options)
+    if (acc && typeof wanted === 'string' && !acc.view()[agent as 'claude' | 'codex'].list.some((a) => a.id === wanted)) return { ok: false, error: '없는 계정입니다' }
+    const account = acc ? (wanted === undefined ? acc.view()[agent as 'claude' | 'codex'].active : wanted) : undefined
+    const extraEnv: Record<string, string> = acc ? { ...acc.launchEnv(agent as 'claude' | 'codex', account, typeof resume === 'string' && resume ? resume : undefined) } : {}
     // Gemini 시스템 기본값 파일은 env 하나라 훅·Oriel MCP 를 한 파일에 담는다.
     const geminiDefaults: Record<string, unknown> = {}
     if (isHookSource(agent)) {
@@ -501,7 +507,7 @@ export function registerAgentsFeature(deps: {
     deps.onPrompt?.(cwd, prompt)
     // 막 뜬 셸에 바로 친다 — conpty 가 입력을 담아 두고 셸이 읽기 시작하면 받는다(터미널 AI 시작과 같은 순서).
     deps.sessions().write(sessionId, plan.line + '\r')
-    return { ok: true, sessionId, title, line: plan.line, ...(noOriel ? { noOriel: true as const } : {}) }
+    return { ok: true, sessionId, title, line: plan.line, ...(noOriel ? { noOriel: true as const } : {}), ...(account !== undefined ? { account } : {}) }
   })
   return {
     stop: () => {
@@ -535,4 +541,10 @@ function launchOptionsOf(v: unknown): { model?: string; effort?: string; permiss
     ...(isOptionValue(o.effort) ? { effort: o.effort } : {}),
     ...(PERMISSION_CHOICES.includes(o.permission as AgentPermissionChoice) ? { permission: o.permission } : {})
   }
+}
+
+/** R0 실행 옵션 account — 안 오면 undefined(고른 계정), null = 시스템 기본, 문자열 = 그 계정 id. */
+function accountOptionOf(v: unknown): string | null | undefined {
+  const a = v && typeof v === 'object' ? (v as AgentLaunchOptions).account : undefined
+  return a === null || typeof a === 'string' ? a : undefined
 }

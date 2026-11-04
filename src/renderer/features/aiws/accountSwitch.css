@@ -1,0 +1,26 @@
+/* 원격 3차 R0 다른 계정으로 이어서 — 띠(목업 5-switch B: 왼쪽 막대 색 = 걸림 경고 · 바꾸는 중 AI · 이어짐 사람). */
+.aiws-acct-band {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+.aiws-acct-band.ai {
+  box-shadow: inset 3px 0 0 var(--sig-ai);
+}
+.aiws-acct-band.ok {
+  box-shadow: inset 3px 0 0 var(--sig-user);
+}
+.aiws-acct-band svg,
+.aiws-acct-warn {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.aiws-acct-band.warn svg:first-child,
+.aiws-acct-warn {
+  color: var(--warn);
+}
+.aiws-acct-sp {
+  flex: 1;
+}

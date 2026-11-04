@@ -81,7 +81,9 @@ describe('계정 폴더 — 링크 공유', () => {
     expect(isLink(join(dir, 'CLAUDE.md'))).toBe(false)
     expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toBe('# 내 지시')
     expect(readFileSync(join(dir, 'settings.json'), 'utf8')).toBe('{"model":"opus"}')
-    for (const n of ['.credentials.json', 'history.jsonl', 'projects', 'sessions', 'agent-memory-x']) expect(existsSync(join(dir, n))).toBe(false)
+    for (const n of ['.credentials.json', 'history.jsonl', 'sessions', 'agent-memory-x']) expect(existsSync(join(dir, n))).toBe(false)
+    // R0: 대화 기록(projects 등)은 공용 링크가 아니라 기본 폴더로 합치는 전용 링크(accountsHistory.test.ts).
+    expect(isLink(join(dir, 'projects'))).toBe(true)
   })
   it('Codex: Orca 자원 목록만(skills·prompts·.tmp/bundled-marketplaces 링크, AGENTS.md·config.toml 복사), auth.json·sessions 없음', () => {
     const { acc } = setup()

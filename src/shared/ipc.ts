@@ -87,14 +87,15 @@ export type LegacyAiNotice = { projects: string[]; remote: number }
 /** noOriel: Oriel 이 없어 웹 도구 없이 띄웠다(앱 실행 중 처음 한 번만 — 알림 센터 한 줄). */
 /** M14 R2 CLI → 렌더러: 이 작업 단위에 에이전트 탭을 띄워 달라(앱의 [+] 와 같은 길). */
 export type CliLaunchAgentRequest = { reqId: string; agent: AgentId; worktreeId: string; cwd: string; prompt?: string }
-export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true } | { ok: false; error: string }
+export type AgentLaunchResult = { ok: true; sessionId: string; title: string; line: string; noOriel?: true; account?: string | null } | { ok: false; error: string }
 /** M4 DM-01: 앱을 다시 켰을 때 데몬에 살아 있던 에이전트 탭. 워크트리는 cwd 로 렌더러가 찾는다. */
 /** M11 R2 cold = 데몬째 죽어(PC 재부팅 등) 잃은 탭 — 렌더러가 같은 에이전트·같은 폴더로 다시 띄운다(resume = CLI 세션 id 를 알면 재개). sessionId 는 옛 id(레이아웃 자리 찾기용). */
 export type AgentTabInfo = { sessionId: string; agent: AgentId; cwd: string; title: string; line: string; prompt?: string; name?: string; host?: string; cut?: true; genTitle?: string; cold?: true; resume?: string }
 /** M11 첫 지시로 지은 탭 제목(push 'agents:title' — Orca deriveGeneratedTabTitle). 보일지는 설정 tabAutoTitle. */
 export type AgentTitleEvent = { sessionId: string; title: string }
 /** M5 R2 첫 실행 옵션(피커 초안 — AI-15 모델·강도, AI-18 이번 탭 권한). 값은 main 이 다시 거른다. */
-export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice }
+/** account(R0 다른 계정으로 이어서): 안 주면 고른 계정, null = 시스템 기본, id = 그 계정(Claude·Codex 로컬만). */
+export type AgentLaunchOptions = { model?: string; effort?: string; permission?: AgentPermissionChoice; account?: string | null }
 /** M5 AI-19 채팅 이름(push 'agents:name'). */
 export type AgentNameEvent = { sessionId: string; name: string }
 /** M4 R3: 에이전트 세션 트리 메모리가 상한을 넘었다(push 'agents:memoryOver', 넘어설 때 한 번). 바이트. */

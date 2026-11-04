@@ -18,6 +18,7 @@ import { changeCount, useDiffStore } from './diffStore'
 import { shortBranch } from './sidebarRows'
 import { resolveAgentTabTitle } from '@shared/agentTabTitle'
 import { wakeTab } from './hibernation'
+import { AccountLimitBand, AgentTabMenu } from './AccountSwitch'
 import './hibernation.css'
 
 // M6 WS-07: Monaco 는 이 청크가 아니라 CodeEditor 청크에 산다 — 파일 탭이 처음 생길 때만 불린다.
@@ -220,6 +221,8 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
   const autoTitle = useAgentStore((s) => s.settings?.tabAutoTitle === true)
   const [picking, setPicking] = useState(false)
   const [omni, setOmni] = useState(false)
+  // R0 탭 우클릭 — [다른 계정으로 이어서 ›](한도와 상관없이 늘).
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   // M6 파일 탭 — 이 작업 단위에서 연 파일과 지금 보이는 파일(있으면 에이전트 탭 대신 에디터가 보인다).
   const allFiles = useCodeStore((s) => s.files)
   const files = allFiles.filter((f) => f.worktreeId === worktree.id)
@@ -314,6 +317,10 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
               useCodeStore.getState().setActive(worktree.id, null)
               useDiffStore.getState().setShown(worktree.id, false)
               useAgentStore.getState().setActiveTab(worktree.id, x.sessionId)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setTabMenu({ id: x.sessionId, x: e.clientX, y: e.clientY })
             }}
           >
             {x.slept ? (
@@ -446,6 +453,9 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           </button>
         )}
       </div>
+      {tabMenu && tabs.some((x) => x.sessionId === tabMenu.id) && (
+        <AgentTabMenu tab={tabs.find((x) => x.sessionId === tabMenu.id)!} x={tabMenu.x} y={tabMenu.y} onClose={() => setTabMenu(null)} />
+      )}
       {omni && (
         <Suspense fallback={null}>
           <NewTabOmnibox worktree={worktree} onClose={() => setOmni(false)} onPick={() => setPicking(true)} />
@@ -478,6 +488,8 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
           <span>{active.slept ? t('aiws.hib.waking') : t('aiws.hib.woke').replace('{n}', String(active.woke))}</span>
         </div>
       )}
+      {/* R0 한도 → 다른 계정으로 이어서(터미널 보기 = 띠, 채팅 보기는 AgentChatView 안 카드). */}
+      {active && !covered && !chatting && <AccountLimitBand tab={active} />}
       {active && !active.slept && chatting && !covered && <AgentChatView key={active.sessionId} tab={active} cwd={worktree.path} status={statusById[active.sessionId]} onTerminal={() => useAgentStore.getState().toggleChat(active.sessionId)} />}
       {tabs.filter((x) => !x.slept).map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || covered}>

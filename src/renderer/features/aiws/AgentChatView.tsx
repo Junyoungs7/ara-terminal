@@ -10,6 +10,7 @@ import { registerPasteTarget } from '../../store/pasteFiles'
 import { ChatComposer, useChatInput } from './ChatComposer'
 import type { AgentTab } from './agentStore'
 import { AgentAskCard } from './AgentAskCard'
+import { AccountSwitchCard } from './AccountSwitch'
 import { AgentGlyph } from './AgentGlyph'
 import '../../styles/agentChat.css'
 
@@ -217,6 +218,8 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
       </div>
       {/* M11 질문/승인 카드(훅이 질문·승인 글을 준 막힘) — 없으면 예전처럼 '터미널에서 답하기' 줄. */}
       {blocked && status?.ask && !tab.exited && <AgentAskCard sessionId={sid} agent={tab.agent} ask={status.ask} onTerminal={onTerminal} />}
+      {/* R0 한도에 걸리면 다른 계정으로 이어서(목업 5-switch A 카드). */}
+      <AccountSwitchCard tab={tab} />
       {blocked && !status?.ask && (
         <div className="aiws-chat-blocked" role="status" data-aiws="chat-blocked">
           <span className="ag-ask-chip">{t('aiws.ask.turn')}</span>

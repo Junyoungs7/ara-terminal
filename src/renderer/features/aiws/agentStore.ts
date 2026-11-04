@@ -44,6 +44,10 @@ export type AgentTab = {
   slept?: { resume: string; minutes: number }
   /** p3-M21 잠들었다 깨어난 탭 — 그 탭을 보는 동안 한 줄 알림(분). */
   woke?: number
+  /** R0 띄운 계정(main 이 알려 준 것 — null = 시스템 기본). 없으면 모름(예전·되살린 탭 — 지금 고른 계정으로 본다). */
+  account?: string | null
+  /** R0 다른 계정으로 이어 띄운 탭 — 그 계정 이름(한 줄 알림, [닫기]로 걷는다). */
+  switched?: string
 }
 
 type AgentState = {
@@ -122,7 +126,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body'), go: () => openSettings('agents', 'agents.oriel'), extra: OrielInstallButton })
     // M11 실행 지시로 지은 제목 — main 도 같은 규칙으로 짓지만 그 push 는 launch 응답보다 먼저 와 버려진다(되살리기용으로 main 이 남긴다).
     const genTitle = prompt ? deriveGeneratedTabTitle(prompt) : null
-    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}) }
+    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}), ...(r.account !== undefined ? { account: r.account } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
     writeChatOn(chatOn)
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))
