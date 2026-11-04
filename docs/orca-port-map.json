@@ -1645,5 +1645,17 @@
     "orcaRef": "ec112c6b01",
     "status": "porting",
     "notes": "원격 3차 R0(v2.2): Claude 히스토리 폴더(projects·transcripts 등 9개)를 기본 ~/.claude 로 합치고 계정 폴더에서 junction/symlink(충돌은 <이름>.ara-merge 에 보존, 링크 실패 시 되돌림). 다른 계정으로 이어서 = resumeIds → 세션 종료 → --resume <id> 를 새 계정 env 로(옛 탭 자리). Codex 는 rollout 복사. 한도 신호 = 사용량 저장소(고른 계정 100%). 뺀 것: history.jsonl 병합, 실행 설정 되살리기, Codex 인증 동기화, [풀리면 알림], 원격(R3)."
+  },
+  {
+    "id": "DM-06",
+    "feature": "다른 PC 에서 이어 보기 — 이미 설치된 서버 채택·서버 세션 목록(AI 공간·F1)·두 PC 동시 입력(PC n대)·탭 닫기 = 이 PC 에서만",
+    "orcaPaths": [
+      "docs/site/content/docs/remote-servers.mdx",
+      "src/main/managed-server/host-state/orcad-machine-home.ts",
+      "src/main/managed-server/host-state/orcad-machine-claim-command.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "원격 3차 R1(v2.2, A안 orcad.py 확장): probe 에 running·채택 동의 화면(같은/옛/새 판 — decideUpdate 규칙 그대로, 업데이트 직전 세션 0 이면 옛 서버 stop). orcad 에 attach pc·detach·meta 요청과 viewers·meta 사건(옛 orcad 는 모르는 요청으로 넘어감). 탭 ✕ = detach(서버 세션 유지), 탭 메뉴 [서버에서도 끝내기] = kill. [다시 연결]은 이 PC 의 탭만. 뺀 것: 페어링·WS·E2EE·기기 grant(SSH 위 stdio 다리 그대로), 서버 쪽 상태 판정(R2), '세션 목록 먼저 보기' 버튼, 설치한 PC 기록."
   }
 ]
