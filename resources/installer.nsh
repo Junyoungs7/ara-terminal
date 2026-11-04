@@ -124,7 +124,10 @@
 ; Sophos Intercept X 의 Application Lockdown(LockdownNewFile)이 막는다(2026-11-04 2.2.0 설치 때 실제로 걸림 — 1.x 의 eb 24 는 tasklist 라 안 걸렸다).
 ; 자식 프로세스 없이 설치 폴더의 실행 파일이 잠겨 있는지(= 그 파일로 앱이 떠 있는지)만 본다. 이름으로 찾지 않는 이유: 로컬 데몬이
 ; %LOCALAPPDATA%\ARA\daemon-host 에서 같은 이름(ARA.exe)으로 돈다 — 업데이트 뒤에도 에이전트가 살아야 하므로 건드리면 안 된다.
-; 업데이트는 앱이 스스로 끄고 오므로 잠시 기다리고, 그래도 떠 있으면 직접 닫아 달라고 한다(강제 종료 안 함).
+; 업데이트는 앱이 스스로 끄고 오므로 잠시 기다린다. 떠 있으면 1.x(eb 24)처럼 묻고(조용한 설치는 묻지 않고) taskkill.exe 로 닫는다 —
+; cmd·PowerShell 을 거치지 않고 taskkill 만 직접(1.x 의 cmd+taskkill 은 Lockdown 에 안 걸렸다). 이름으로 닫으므로 데몬도 같이 닫힌다:
+; 업데이트는 기다리는 동안 앱이 먼저 꺼져 여기까지 오지 않고, 손으로 다시 까는 경우만 에이전트가 끊긴다(새 앱이 데몬을 다시 띄운다).
+; 2026-11-04 2.2.1 이 첫 실행 오류 창을 띄운 채 남아 2.2.2 설치가 "닫아 주세요"에서 멈췄다 — 그래서 직접 닫는다.
 !macro customCheckAppRunning
   StrCpy $R1 0
   ara_app_check:
@@ -133,7 +136,25 @@
     FileOpen $R0 "$INSTDIR\${APP_EXECUTABLE_FILENAME}" a
     ${If} ${Errors}
       IntOp $R1 $R1 + 1
-      ${If} $R1 < 10
+      ${If} ${isUpdated}
+      ${AndIf} $R1 < 10
+        Sleep 1000
+        Goto ara_app_check
+      ${EndIf}
+      ${If} $R1 < 20
+        ${IfNot} ${isUpdated}
+        ${AndIf} $R1 == 1
+          MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK ara_app_kill
+          Quit
+        ${EndIf}
+        ara_app_kill:
+        ReadEnvStr $R2 USERNAME
+        ${If} $R1 < 15
+          nsExec::Exec `"$SYSDIR\taskkill.exe" /IM "${APP_EXECUTABLE_FILENAME}" /FI "USERNAME eq $R2"`
+        ${Else}
+          nsExec::Exec `"$SYSDIR\taskkill.exe" /F /IM "${APP_EXECUTABLE_FILENAME}" /FI "USERNAME eq $R2"`
+        ${EndIf}
+        Pop $R3
         Sleep 1000
         Goto ara_app_check
       ${EndIf}

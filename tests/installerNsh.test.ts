@@ -82,11 +82,20 @@ describe('설치 중 PowerShell 을 띄우지 않는다', () => {
     expect(macro('customCheckAppRunning')).toMatch(/FileOpen/)
   })
 
-  for (const m of ['customInit', 'customInstall', 'customCheckAppRunning']) {
+  for (const m of ['customInit', 'customInstall']) {
     it(`${m} 에 PowerShell·cmd·nsExec 가 없다`, () => {
       const body = macro(m)
       expect(body.length).toBeGreaterThan(0)
       expect(body).not.toMatch(/powershell|cmd\.exe|nsExec|ExecWait/i)
     })
   }
+
+  // 떠 있는 앱은 닫아야 한다(2.2.1 오류 창이 남아 2.2.2 설치가 멈췄다) — 단 taskkill.exe 만 직접, 셸을 거치지 않는다.
+  it('customCheckAppRunning 은 떠 있으면 taskkill.exe 로만 닫는다(PowerShell·cmd 없음)', () => {
+    const body = macro('customCheckAppRunning')
+    expect(body).not.toMatch(/powershell|cmd\.exe|ExecWait/i)
+    const execs = [...body.matchAll(/nsExec::Exec\s+`([^`]*)`/g)].map((m) => m[1])
+    expect(execs.length).toBeGreaterThan(0)
+    for (const e of execs) expect(e).toMatch(/^"\$SYSDIR\\taskkill\.exe" /)
+  })
 })
