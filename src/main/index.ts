@@ -491,6 +491,12 @@ if (!app.isPackaged && process.env['ARA_E2E'] === '1' && process.env['ARA_E2E_ON
   })
 }
 
+// Windows 알림(토스트)은 앱 ID 가 시작 메뉴 바로가기의 AUMID(electron-builder appId)와 같아야 뜬다. 안 걸면
+// Windows 가 조용히 버린다 — 아라를 내려 두면 승인·완료 알림을 못 보던 원인(2026-11-04 준영님 제보).
+// electron-builder.yml appId 와 같은 값이어야 한다(tests/appUserModelId.test.ts 가 맞춰 본다).
+export const ARA_APP_ID = 'com.junyoung.ara'
+if (process.platform === 'win32') app.setAppUserModelId(ARA_APP_ID)
+
 app.whenReady().then(async () => {
   // 기본 메뉴 가속키(Ctrl+R 새로고침 등)를 끈다 — 이유는 appMenu.ts. 창을 만들기 전에.
   const menu = appMenuTemplate(process.platform, !app.isPackaged)
