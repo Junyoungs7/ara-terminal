@@ -14,10 +14,8 @@ const OSC = 'https://example.com/osc8'
 const FAKE = String.raw`
 const args = process.argv.slice(3)
 if (args[0] === '--version') { console.log('9.9.9 (fake claude)'); process.exit(0) }
-process.stdout.write('plain ' + '%s' + '
-')
-process.stdout.write('osc ]8;;%sLINKTEXT]8;; end
-')
+process.stdout.write('plain %s\r\n')
+process.stdout.write('osc \x1b]8;;%s\x07LINKTEXT\x1b]8;;\x07 end\r\n')
 setInterval(() => {}, 1000)
 `.replace('%s', PLAIN).replace('%s', OSC)
 
