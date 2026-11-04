@@ -1632,5 +1632,18 @@
     ],
     "orcaRef": "ec112c6b01",
     "status": "porting"
+  },
+  {
+    "id": "US-06",
+    "feature": "계정 간 대화 기록 공유 · 다른 계정으로 이어서(한도 카드·띠·탭 메뉴)",
+    "orcaPaths": [
+      "src/main/claude-accounts/claude-profile-history.ts",
+      "src/main/claude-accounts/claude-profile-setup.ts",
+      "src/renderer/src/lib/agent-account-restart-startup.ts",
+      "src/main/codex/codex-legacy-session-resume.ts"
+    ],
+    "orcaRef": "ec112c6b01",
+    "status": "porting",
+    "notes": "원격 3차 R0(v2.2): Claude 히스토리 폴더(projects·transcripts 등 9개)를 기본 ~/.claude 로 합치고 계정 폴더에서 junction/symlink(충돌은 <이름>.ara-merge 에 보존, 링크 실패 시 되돌림). 다른 계정으로 이어서 = resumeIds → 세션 종료 → --resume <id> 를 새 계정 env 로(옛 탭 자리). Codex 는 rollout 복사. 한도 신호 = 사용량 저장소(고른 계정 100%). 뺀 것: history.jsonl 병합, 실행 설정 되살리기, Codex 인증 동기화, [풀리면 알림], 원격(R3)."
   }
 ]
