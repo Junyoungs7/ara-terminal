@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { ArrowUp, Check, ChevronRight, ImageIcon, SquareTerminal } from 'lucide-react'
-import { mergeMessages, type ChatBlock, type ChatMessage } from '@shared/agentChat'
+import { fmtDuration, mergeMessages, type ChatBlock, type ChatMessage } from '@shared/agentChat'
 import { effortLabel, optionCommand, type ModelOption } from '@shared/agentOptions'
 import type { AgentStatusView } from '@shared/agentHooks'
 import { AGENTS } from '@shared/agents'
@@ -284,9 +284,30 @@ function Block({ b, role, onTerminal }: { b: ChatBlock; role: ChatMessage['role'
         <ChevronRight className="aiws-chat-caret" aria-hidden />
         <b className="aiws-chat-tool-vb">{b.name}</b>
         <span className="aiws-mono">{b.summary}</span>
-        {(b.result === undefined || b.error) && <span className="aiws-chat-tool-rs">{b.result === undefined ? t('aiws.chat.running') : t('aiws.chat.toolError')}</span>}
+        <ToolRs b={b} />
       </summary>
       {b.result !== undefined && <pre className="aiws-mono">{b.result || t('aiws.chat.noOutput')}</pre>}
     </details>
+  )
+}
+
+/** 도구 줄 오른쪽 — 실행 중… / 오류 / 줄 수·테스트·소요 시간(있는 것만). */
+function ToolRs({ b }: { b: Extract<ChatBlock, { type: 'tool' }> }): JSX.Element | null {
+  if (b.result === undefined) return <span className="aiws-chat-tool-rs">{t('aiws.chat.running')}</span>
+  if (b.error) return <span className="aiws-chat-tool-rs">{t('aiws.chat.toolError')}</span>
+  const dur = b.ms === undefined ? null : fmtDuration(b.ms)
+  const edit = b.add !== undefined || b.del !== undefined
+  if (!dur && !edit && !b.tests) return null
+  return (
+    <span className="aiws-chat-tool-rs">
+      {edit && (
+        <>
+          <span className="p">+{b.add ?? 0}</span>
+          {!!b.del && <span className="m"> −{b.del}</span>}
+        </>
+      )}
+      {b.tests && <span className={b.tests.pass === b.tests.total ? 'p' : 'm'}>{t('aiws.chat.testsPassed').replace('{pass}', String(b.tests.pass)).replace('{total}', String(b.tests.total))}</span>}
+      {dur && <span className="d">{dur}</span>}
+    </span>
   )
 }

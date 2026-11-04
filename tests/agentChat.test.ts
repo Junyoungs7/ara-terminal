@@ -4,7 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { composeChatText, createChatModel, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
+import { composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
 import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
@@ -354,5 +354,32 @@ describe('M10 WS-16 재우기 — transcript 머리에서 CLI 세션 id(resumeId
     expect(w.resumeId('p1')).toBe('sid-7')
     expect(w.resumeId('p2')).toBeNull()
     w.stop()
+  })
+})
+
+describe('도구 줄 요약(시간·줄 수·테스트)', () => {
+  it('소요 시간 형식', () => {
+    expect([300, 12400, 64000, -1].map(fmtDuration)).toEqual(['0.3s', '12.4s', '1m 4s', null])
+  })
+  it('편집 줄 수는 근사', () => {
+    expect(editLines('Edit', { old_string: 'a\nb', new_string: 'a\nb\nc\nd' })).toEqual({ add: 4, del: 2 })
+    expect(editLines('MultiEdit', { edits: [{ old_string: 'a', new_string: 'x\ny' }, { old_string: 'b', new_string: 'z' }] })).toEqual({ add: 3, del: 2 })
+    expect(editLines('Write', { content: 'a\nb\nc' })).toEqual({ add: 3, del: 0 })
+    expect(editLines('Bash', { command: 'ls' })).toBeNull()
+  })
+  it('테스트 결과 3형식 · 못 찾음', () => {
+    expect(parseTests(' Test Files  1 passed (1)\n      Tests  3 passed | 1 failed (4)\n')).toEqual({ pass: 3, total: 4 })
+    expect(parseTests('===== 3 passed, 1 failed in 0.12s =====')).toEqual({ pass: 3, total: 4 })
+    expect(parseTests('Running 4 tests\n  1 failed\n    [chromium] a.spec.ts\n  3 passed (4s)\n')).toEqual({ pass: 3, total: 4 })
+    expect(parseTests('3 passed')).toBeNull()
+    expect(parseTests('build ok')).toBeNull()
+  })
+  it('timestamp 로 소요 시간 · 줄 수 · 테스트가 블록에 붙는다', () => {
+    const m = createChatModel()
+    m.add([
+      J({ type: 'assistant', uuid: 'a', timestamp: '2026-01-01T00:00:00.000Z', message: { id: 'm', content: [{ type: 'tool_use', id: 'e', name: 'Edit', input: { old_string: 'a', new_string: 'a\nb' } }, { type: 'tool_use', id: 'b', name: 'Bash', input: { command: 'vitest' } }] } }),
+      J({ type: 'user', uuid: 'u', timestamp: '2026-01-01T00:00:12.400Z', message: { content: [{ type: 'tool_result', tool_use_id: 'e', content: 'ok' }, { type: 'tool_result', tool_use_id: 'b', content: 'Tests  2 passed (2)' }] } })
+    ])
+    expect(m.messages()[0].blocks).toMatchObject([{ ms: 12400, add: 2, del: 1 }, { ms: 12400, tests: { pass: 2, total: 2 } }])
   })
 })

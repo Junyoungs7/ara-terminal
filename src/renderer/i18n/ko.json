@@ -2100,6 +2100,7 @@
   "aiws.chat.answered": "답했습니다",
   "aiws.chat.answerInTerminal": "터미널에서 답하기",
   "aiws.chat.running": "실행 중…",
+  "aiws.chat.testsPassed": "{pass}/{total} 통과",
   "aiws.chat.noOutput": "(출력 없음)",
   "aiws.chat.me": "나",
   "aiws.chat.toolError": "오류",

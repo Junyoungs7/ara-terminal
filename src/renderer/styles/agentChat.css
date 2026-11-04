@@ -172,6 +172,17 @@
   color: var(--text-lo);
   white-space: nowrap;
 }
+.aiws-chat-tool-rs {
+  display: inline-flex;
+  gap: var(--sp-5);
+  font-variant-numeric: tabular-nums;
+}
+.aiws-chat-tool-rs .p {
+  color: var(--ok);
+}
+.aiws-chat-tool-rs .m {
+  color: var(--err);
+}
 .aiws-chat-tool.err .aiws-chat-tool-rs {
   color: var(--t-red);
 }

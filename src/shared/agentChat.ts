@@ -10,11 +10,14 @@
 import type { AgentId } from './agents'
 import { INJECTED } from './vault'
 
+/** 도구 줄 오른쪽 요약용 — 테스트 통과/전체. */
+export type TestCount = { pass: number; total: number }
+
 export type ChatBlock =
   | { type: 'text'; text: string }
   | { type: 'image' }
   /** 도구 호출 — 결과(tool_result)가 오면 같은 블록에 붙는다. 화면은 접어서 그린다. */
-  | { type: 'tool'; id: string; name: string; summary: string; result?: string; error?: boolean }
+  | { type: 'tool'; id: string; name: string; summary: string; result?: string; error?: boolean; at?: number; ms?: number; add?: number; del?: number; tests?: TestCount }
   /** AskUserQuestion — 질문 카드 자리(답은 터미널에서). answered = 결과가 왔다. */
   | { type: 'question'; id: string; questions: string[]; answered: boolean }
 
@@ -59,13 +62,71 @@ export function toolSummary(name: string, input: unknown): string {
   return clip(s.replace(/\s+/g, ' ').trim(), SUMMARY_CHARS) || name
 }
 
+/** 소요 시간 글 — 1초 미만 0.3s · 60초 이상 1m 4s. 잘못된 값이면 null. */
+export function fmtDuration(ms: number): string | null {
+  if (!Number.isFinite(ms) || ms < 0) return null
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  const s = Math.round(ms / 1000)
+  return `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+const lineCount = (s: unknown): number => (typeof s === 'string' && s ? s.split('\n').length : 0)
+
+/**
+ * Edit/Write/MultiEdit 입력의 줄 수 변화.
+ * ponytail: 정확한 diff 가 아니라 old/new 문자열의 줄 수 차이(바뀐 줄이 같은 수면 +N −N). 진짜 diff 가 필요하면 줄 단위 LCS.
+ */
+export function editLines(name: string, input: unknown): { add: number; del: number } | null {
+  const i = rec(input)
+  if (!i) return null
+  if (name === 'Write') return typeof i.content === 'string' ? { add: lineCount(i.content), del: 0 } : null
+  const pairs = name === 'MultiEdit' && Array.isArray(i.edits) ? i.edits.map(rec) : name === 'Edit' ? [i] : null
+  if (!pairs) return null
+  let add = 0
+  let del = 0
+  for (const e of pairs) {
+    add += lineCount(e?.new_string)
+    del += lineCount(e?.old_string)
+  }
+  return { add, del }
+}
+
+/**
+ * Bash 결과 글에서 흔한 테스트 요약만 — vitest/jest `Tests  3 passed | 1 failed (4)`, pytest `3 passed, 1 failed`, playwright `3 passed`·`1 failed` 줄.
+ * 못 찾으면 null. ponytail: 마지막 "N passed/failed" 묶음만 읽는다(skipped·flaky 는 전체에 안 넣음).
+ */
+export function parseTests(text: string): TestCount | null {
+  const lines = text.split('\n')
+  // 한 줄에 합계가 있는 형식(vitest/jest "Tests  3 passed | 1 failed (4)" · pytest "=== 3 passed, 1 failed in 1s ===") — 마지막 것.
+  for (let k = lines.length - 1; k >= 0; k--) {
+    const l = lines[k]
+    if (!/^\s*Tests\b|^[=\s]*\d+\s+(passed|failed)\b.*\bin\s+[\d.]+s/.test(l)) continue
+    const pass = /(\d+)\s+passed\b/.exec(l)
+    const fail = /(\d+)\s+failed\b/.exec(l)
+    if (pass || fail) return { pass: pass ? +pass[1] : 0, total: (pass ? +pass[1] : 0) + (fail ? +fail[1] : 0) }
+  }
+  // playwright — "  3 passed (4s)" · "  1 failed" 가 줄마다 따로(들여쓴 줄). 마지막 실행 묶음의 합.
+  let pass = 0
+  let fail = 0
+  for (const l of lines) {
+    const m = /^\s+(\d+)\s+(passed|failed)\b/.exec(l)
+    if (m) m[2] === 'passed' ? (pass = +m[1]) : (fail = +m[1])
+  }
+  return pass || fail ? { pass, total: pass + fail } : null
+}
+
 function questionsOf(input: unknown): string[] {
   const qs = rec(input)?.questions
   if (!Array.isArray(qs)) return []
   return qs.map((q) => str(rec(q)?.question) ?? '').filter(Boolean)
 }
 
-type Decoded = { id: string; groupId: string | null; role: ChatMessage['role']; blocks: ChatBlock[]; results: { id: string; text: string; error: boolean }[] }
+type Decoded = { id: string; groupId: string | null; role: ChatMessage['role']; blocks: ChatBlock[]; results: { id: string; text: string; error: boolean; ts?: number; tests?: TestCount }[] }
+/** 줄 timestamp(ISO) → ms. */
+const tsOf = (v: unknown): number | undefined => {
+  const n = typeof v === 'string' ? Date.parse(v) : NaN
+  return Number.isFinite(n) ? n : undefined
+}
 
 /** jsonl 한 줄 → 메시지 조각 + 도구 결과. 대화 줄이 아니면 null. */
 export function decodeClaudeLine(line: string, fallbackId: string): Decoded | null {
@@ -88,7 +149,7 @@ export function decodeClaudeLine(line: string, fallbackId: string): Decoded | nu
     if (!b) continue
     if (b.type === 'tool_result') {
       const tid = str(b.tool_use_id)
-      if (tid) results.push({ id: tid, text: clip(toolResultText(b.content), RESULT_CHARS), error: b.is_error === true })
+      if (tid) results.push({ id: tid, text: clip(toolResultText(b.content), RESULT_CHARS), error: b.is_error === true, ts: tsOf(r.timestamp), tests: parseTests(toolResultText(b.content)) ?? undefined })
       continue
     }
     if (injected) continue
@@ -103,7 +164,11 @@ export function decodeClaudeLine(line: string, fallbackId: string): Decoded | nu
       const tid = str(b.id) ?? `${id}:${blocks.length}`
       const name = str(b.name) ?? 'tool'
       if (name === 'AskUserQuestion') blocks.push({ type: 'question', id: tid, questions: questionsOf(b.input), answered: false })
-      else blocks.push({ type: 'tool', id: tid, name, summary: toolSummary(name, b.input) })
+      else {
+        const ed = editLines(name, b.input)
+        const at = tsOf(r.timestamp)
+        blocks.push({ type: 'tool', id: tid, name, summary: toolSummary(name, b.input), ...(at !== undefined ? { at } : {}), ...(ed ? ed : {}) })
+      }
     }
     // thinking 은 뺀다(1차 — Orca 는 접힌 추론 줄).
   }
@@ -258,7 +323,15 @@ export function createChatModel(cap = CHAT_CAP, decode: LineDecoder = decodeClau
           list[at] = {
             ...m,
             blocks: m.blocks.map((b) =>
-              b.type === 'tool' && b.id === res.id ? { ...b, result: res.text, error: res.error } : b.type === 'question' && b.id === res.id ? { ...b, answered: true } : b
+              b.type === 'tool' && b.id === res.id
+                ? {
+                    ...b,
+                    result: res.text,
+                    error: res.error,
+                    ...(b.at !== undefined && res.ts !== undefined ? { ms: res.ts - b.at } : {}),
+                    ...(b.name === 'Bash' && res.tests ? { tests: res.tests } : {})
+                  }
+                : b.type === 'question' && b.id === res.id ? { ...b, answered: true } : b
             )
           }
           changed.add(m.id)
