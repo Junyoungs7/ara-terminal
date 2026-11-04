@@ -11,3 +11,9 @@ it('main 의 setAppUserModelId 값 = electron-builder.yml appId', () => {
   expect(main).toMatch(/app\.setAppUserModelId\(ARA_APP_ID\)/)
   expect(main).toContain(`ARA_APP_ID = '${appId}'`)
 })
+
+// 같은 tag 로 두 번째 알림이 오면 Windows 는 renotify 없이는 토스트를 안 띄운다(2.2.12 실측: 첫 알림만 뜨고 목록만 바뀜).
+it('에이전트 OS 알림은 renotify 를 켠다', () => {
+  const src = readFileSync(join(__dirname, '..', 'src/renderer/features/aiws/agentStore.ts'), 'utf8')
+  expect(src).toMatch(/tag: `ara-agent-\$\{sessionId\}-\$\{kind\}`, renotify: true/)
+})

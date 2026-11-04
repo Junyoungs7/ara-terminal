@@ -320,7 +320,9 @@ function sendAgentNote(sessionId: string, kind: FeedKind): void {
   try {
     // 앱 잠금 중에는 내용 없이(작업 이름·에이전트를 화면 밖으로 흘리지 않는다).
     const hide = isLockedNow()
-    const n = new Notification(hide ? t('lock.notify.title') : title, { body: hide ? t('lock.notify.body') : note.body, tag: `ara-agent-${sessionId}-${kind}` })
+    // renotify: 같은 tag 로 다시 오면 Windows 는 목록만 바꾸고 토스트를 안 띄운다(2.2.12 실측 — 첫 알림만 뜸). TS dom lib 에서 빠진 필드라 넓혀 넘긴다.
+    const opts = { body: hide ? t('lock.notify.body') : note.body, tag: `ara-agent-${sessionId}-${kind}`, renotify: true } as NotificationOptions
+    const n = new Notification(hide ? t('lock.notify.title') : title, opts)
     n.onclick = () => {
       window.focus()
       openNoteVia(note)
