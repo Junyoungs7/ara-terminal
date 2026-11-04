@@ -5,7 +5,8 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ORIEL_INSTRUCTIONS, orielCandidates, orielGeminiDefaults, orielLaunch, orielMcpServers, parseOrielVersion, pickOriel, type OrielRunner } from '../src/shared/oriel'
-import { araOrielRunner, createOriel, FOREGROUND_SCRIPT, orielAppDir, orielKindOf, standaloneOrielExe } from '../src/main/oriel/oriel'
+import { createServer, type Server } from 'node:net'
+import { araOrielRunner, createOriel, FOREGROUND_SCRIPT, orielAppDir, orielControlFile, orielKindOf, orielPipeRequest, standaloneOrielExe } from '../src/main/oriel/oriel'
 import { defaultAgentSettings, planAgentLaunch } from '../src/shared/agents'
 import type { RunResult } from '../src/main/util/runProcess'
 
@@ -208,7 +209,7 @@ describe('OR-1 — runner·링크 포커스·file:/UNC', () => {
     orielLaunch('gemini', 'D:/o/bin/oriel.mjs', write, runner)
     expect(JSON.parse(files['oriel-gemini']).mcpServers.oriel).toEqual({ command: 'C:/ARA/electron.exe', args: ['D:/o/bin/oriel.mjs', 'mcp', '--launch'], env: runner.env })
   })
-  it('★ 전경 허락 PowerShell 은 사용자 동작({gesture})일 때만, open 직전에 끝까지 기다린 뒤 — MCP·에이전트 경로(인자 없음)는 절대 안 부른다', async () => {
+  it('★ 전경 허락 PowerShell 은 사용자 동작({gesture})일 때만, open 과 동시에(기다리지 않음) — MCP·에이전트 경로(인자 없음)는 절대 안 부른다', async () => {
     const { dir, versionJson } = fakeOriel()
     const calls: string[] = []
     const o = createOriel({
@@ -230,7 +231,9 @@ describe('OR-1 — runner·링크 포커스·file:/UNC', () => {
     expect(calls.some((c) => c.startsWith('ps:'))).toBe(false)
     calls.length = 0
     await o.open('http://localhost:2', { gesture: true })
-    expect(calls).toEqual(['ps:start', 'ps:end:true', 'open'])
+    expect(calls).toEqual(['ps:start', 'open']) // open 이 PowerShell 끝을 기다리지 않는다
+    await new Promise((r) => setTimeout(r, 40))
+    expect(calls).toEqual(['ps:start', 'open', 'ps:end:true'])
     expect(FOREGROUND_SCRIPT).toContain('AllowSetForegroundWindow(-1)')
   })
   it('MCP oriel_open 은 사용자 동작 표시 없이 부른다(tools.ts) — IPC oriel:open 만 gesture', () => {
@@ -381,5 +384,139 @@ describe('OR-3 — Oriel 단독 설치본 감지·우선순위(실행 중 > 단�
     s = await make([other.dir]).status()
     expect(s.installed && s.info.appPath).toBe(other.dir)
     expect(asked).toEqual([])
+  })
+})
+
+// Oriel 0.1.4+ 직접 경로 — 가짜 named pipe 서버(진짜 Oriel 아님). 줄 단위 JSON, 연결 하나에 요청 하나.
+describe('Oriel 직접 경로(파이프) — CLI 프로세스 없이 즉시', () => {
+  const TOKEN = 'deadbeefcafe0123456789'
+  const servers: Server[] = []
+  afterEach(() => {
+    for (const s of servers.splice(0)) s.close()
+  })
+  const pipeName = (): string =>
+    process.platform === 'win32' ? `\\\\.\\pipe\\ara-oriel-test-${process.pid}-${Math.random().toString(36).slice(2)}` : join(tmp(), 'p.sock')
+  /** reply(요청) → 답(객체) | 'hang'(답 안 함) | 'close'(답 없이 닫음). 받은 요청을 기록한다. */
+  async function fakePipe(reply: (req: Record<string, unknown>) => Record<string, unknown> | 'hang' | 'close'): Promise<{ pipe: string; got: Record<string, unknown>[] }> {
+    const pipe = pipeName()
+    const got: Record<string, unknown>[] = []
+    const srv = createServer((sock) => {
+      let buf = ''
+      sock.setEncoding('utf8')
+      sock.on('data', (d: string) => {
+        buf += d
+        if (!buf.includes('\n')) return
+        const req = JSON.parse(buf.slice(0, buf.indexOf('\n')))
+        got.push(req)
+        const r = reply(req)
+        if (r === 'close') sock.destroy()
+        else if (r !== 'hang') sock.end(JSON.stringify(r) + '\n')
+      })
+      sock.on('error', () => {})
+    })
+    servers.push(srv)
+    await new Promise<void>((res) => srv.listen(pipe, res))
+    return { pipe, got }
+  }
+  const control = (pipe: string, token = TOKEN): string => {
+    const f = join(tmp(), 'control.json')
+    writeFileSync(f, JSON.stringify({ pipe, token }))
+    return f
+  }
+  const answer = (req: Record<string, unknown>): Record<string, unknown> =>
+    req['token'] !== TOKEN ? { t: 'error', error: 'unauthorized' } : req['op'] === 'theme' ? { t: 'themed', ok: true } : { t: 'opened', ok: true }
+  /** CLI·OS 브라우저 호출을 기록하는 Oriel(설치됨, open-theme 지원). */
+  function make(controlFile: string | null) {
+    const { dir, versionJson } = fakeOriel()
+    const withCaps = JSON.stringify({ ...JSON.parse(versionJson), capabilities: ['open-theme'] })
+    const cli: string[][] = []
+    const external: string[] = []
+    const o = createOriel({
+      candidates: () => [dir],
+      openExternal: async (u) => void external.push(u),
+      platform: 'linux',
+      controlFile,
+      run: async (_f, args) => (cli.push(args.slice(1)), args[1] === 'version' ? ok(withCaps) : ok(''))
+    })
+    return { o, cli, external }
+  }
+
+  it('토큰 파일 자리 = %APPDATA%\\oriel\\control.json(아라 userData 아님), APPDATA 없으면 null', () => {
+    expect(orielControlFile('C:\\Users\\u\\AppData\\Roaming')).toBe(join('C:\\Users\\u\\AppData\\Roaming', 'oriel', 'control.json'))
+    expect(orielControlFile('')).toBeNull()
+  })
+  it('★ 열림 — 파이프로 theme(처음 한 번만)·open, CLI 는 안 뜬다(version 감지도 안 함)', async () => {
+    const { pipe, got } = await fakePipe(answer)
+    const { o, cli, external } = make(control(pipe))
+    expect(await o.open('https://example.com/a')).toBe('oriel')
+    expect(await o.open('https://example.com/b')).toBe('oriel')
+    expect(got).toEqual([
+      { token: TOKEN, op: 'theme', theme: 'dark' },
+      { token: TOKEN, op: 'open', url: 'https://example.com/a' },
+      { token: TOKEN, op: 'open', url: 'https://example.com/b' }
+    ])
+    expect(cli).toEqual([])
+    expect(external).toEqual([])
+  })
+  it('ok:false → OS 브라우저(CLI 종료 코드 1·2 와 같은 결과), CLI 로 다시 안 연다', async () => {
+    const { pipe } = await fakePipe((req) => (req['op'] === 'theme' ? { t: 'themed', ok: true } : { t: 'opened', ok: false, error: 'blocked' }))
+    const { o, cli, external } = make(control(pipe))
+    expect(await o.open('https://example.com/x')).toBe('external')
+    expect(external).toEqual(['https://example.com/x'])
+    expect(cli).toEqual([])
+  })
+  it('Oriel 꺼짐(ENOENT) → 바로 CLI `open --theme`(CLI 가 켜고 연다) / 토큰 파일 없음 → 지금 동작 그대로', async () => {
+    const a = make(control(pipeName()))
+    expect(await a.o.open('https://example.com/c')).toBe('oriel')
+    expect(a.cli.at(-1)).toEqual(['open', 'https://example.com/c', '--theme', 'dark'])
+    const b = make(join(tmp(), 'none', 'control.json'))
+    expect(await b.o.open('https://example.com/d')).toBe('oriel')
+    expect(b.cli.map((c) => c[0])).toEqual(['version', 'open'])
+    const c = make(null)
+    expect(await c.o.open('https://example.com/e')).toBe('oriel')
+    expect(c.cli.at(-1)?.[0]).toBe('open')
+  })
+  it('★ 인증 실패 → 토큰 파일을 다시 읽고 한 번 더(Oriel 이 다시 켜져 새 토큰), 두 번째도 실패면 CLI', async () => {
+    let file = ''
+    const { pipe, got } = await fakePipe((req) => {
+      if (req['token'] !== TOKEN) writeFileSync(file, JSON.stringify({ pipe, token: TOKEN })) // 그 사이 Oriel 이 새 토큰을 씀
+      return answer(req)
+    })
+    file = control(pipe, 'stale')
+    const { o, cli } = make(file)
+    expect(await o.open('https://example.com/f')).toBe('oriel')
+    expect(got.map((g) => g['token'] === TOKEN)).toEqual([false, true, true])
+    expect(cli).toEqual([])
+    const bad = await fakePipe(() => ({ t: 'error', error: 'unauthorized' }))
+    const m = make(control(bad.pipe, 'stale'))
+    expect(await m.o.open('https://example.com/g')).toBe('oriel')
+    expect(bad.got).toHaveLength(2) // 한 번 더까지만
+    expect(m.cli.at(-1)?.[0]).toBe('open')
+  })
+  it('시간 초과(답 없음) → 상한(1.5초)에서 끊고 CLI', async () => {
+    const { pipe } = await fakePipe(() => 'hang')
+    const { o, cli } = make(control(pipe))
+    const t0 = Date.now()
+    expect(await o.open('https://example.com/h')).toBe('oriel')
+    expect(Date.now() - t0).toBeLessThan(3_000)
+    expect(cli.at(-1)).toEqual(['open', 'https://example.com/h', '--theme', 'dark'])
+  }, 10_000)
+  it('테마가 실패하면 다음에 다시 보낸다(성공해야 기억)', async () => {
+    let themeOk = false
+    const { pipe, got } = await fakePipe((req) => (req['op'] === 'theme' ? { t: 'themed', ok: themeOk } : { t: 'opened', ok: true }))
+    const { o } = make(control(pipe))
+    await o.open('https://example.com/1')
+    themeOk = true
+    await o.open('https://example.com/2')
+    await o.open('https://example.com/3')
+    expect(got.map((g) => g['op'])).toEqual(['theme', 'open', 'theme', 'open', 'open'])
+  })
+  it('★ 토큰은 오류에 안 섞인다(시간 초과·닫힘·꺼짐)', async () => {
+    const hang = await fakePipe(() => 'hang')
+    const close = await fakePipe(() => 'close')
+    const errs: unknown[] = []
+    for (const pipe of [hang.pipe, close.pipe, pipeName()]) await orielPipeRequest({ pipe, token: TOKEN }, { op: 'pid' }, 200).catch((e) => errs.push(e))
+    expect(errs.map((e) => (e as { code: string }).code)).toEqual(['ETIMEDOUT', 'ECLOSED', 'ENOENT'])
+    for (const e of errs) expect(`${String(e)} ${(e as Error).stack} ${JSON.stringify(e)}`).not.toContain(TOKEN)
   })
 })
