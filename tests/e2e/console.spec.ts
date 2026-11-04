@@ -182,7 +182,7 @@ test('CON-35★ 작업대 창을 닫았다 다시 열면 열린 도구 탭이 �
   await expect.poll(() => explorerShownByOs(ara.app), { timeout: 10_000 }).toBe(false)
   await expect.poll(() => explorerVisible(wb), { timeout: 10_000 }).toBe(false)
   expect(explorerWindowCount(ara.app)).toBe(1)
-  await expect(ara.page.locator('.lrail-item.active[data-activity="explorer"]')).toHaveCount(0)
+  await expect(ara.page.locator('.lrail-item.open[data-activity="explorer"]')).toHaveCount(0)
   const again = await explorerWindow(ara.app, () => ara.page.click('.lrail-item[data-activity="explorer"]'))
   expect(again).toBe(wb)
   await expect.poll(() => explorerVisible(again), { timeout: 10_000 }).toBe(true)

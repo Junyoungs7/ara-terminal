@@ -26,7 +26,7 @@ function SecretField({ field, has, placeholder, onSave }: { field: string; has: 
     <>
       <div className="ai-key-ctl">
         <input type="password" className="ai-key-input" data-field={field} autoComplete="off" spellCheck={false} placeholder={placeholder} value={v} onChange={(e) => setV(e.target.value)} />
-        <button type="button" className="btn" data-action={field + '.save'} disabled={!v.trim()} onClick={() => void onSave(v).then(() => setV(''))}>
+        <button type="button" className="btn sec" data-action={field + '.save'} disabled={!v.trim()} onClick={() => void onSave(v).then(() => setV(''))}>
           {t('settings.ai.key.save')}
         </button>
         <button type="button" className="btn sec" data-action={field + '.delete'} disabled={!has} onClick={() => void onSave('')}>
@@ -218,7 +218,7 @@ export function GitLabMrCreate({ cwd, title, body, base }: { cwd: string; title:
   }
   return (
     <>
-      <button type="button" className="btn" data-scm="mrCreate" disabled={busy || !title.trim() || !base} onClick={() => void create()}>
+      <button type="button" className="btn sec" data-scm="mrCreate" disabled={busy || !title.trim() || !base} onClick={() => void create()}>
         {t('gitlab.mr.create')}
       </button>
       {msg && (

@@ -58,7 +58,7 @@ export function CliSection({ onSkillInstalled }: { onSkillInstalled?: () => void
           {cli?.detail ? ` — ${cli.detail}` : ''}
         </span>
         <span className="acct-actions">
-          <button type="button" className="btn" data-action="cli.toggle" disabled={busy || !cli || cli.state === 'unsupported' || cli.state === 'unknown'} onClick={() => void toggle()}>
+          <button type="button" className="btn sec" data-action="cli.toggle" disabled={busy || !cli || cli.state === 'unsupported' || cli.state === 'unknown'} onClick={() => void toggle()}>
             {t(cli?.state === 'installed' ? 'cli.uninstall' : 'cli.install')}
           </button>
         </span>
@@ -79,7 +79,7 @@ export function CliSection({ onSkillInstalled }: { onSkillInstalled?: () => void
               {t(`cli.skill.${x.state}`)} · {x.path}
             </span>
             <span className="acct-actions">
-              <button type="button" className="btn" data-action="cli.skill.install" disabled={x.state === 'installed'} onClick={() => void installSkill(x.rootId)}>
+              <button type="button" className="btn sec" data-action="cli.skill.install" disabled={x.state === 'installed'} onClick={() => void installSkill(x.rootId)}>
                 {t(x.state === 'differs' ? 'cli.skill.update' : 'cli.skill.install')}
               </button>
             </span>

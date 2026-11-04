@@ -2258,6 +2258,21 @@
   width: 2px;
   background: var(--accent);
 }
+/* C#11 열려 있는 도구 창(탐색기·하단 패널) — 막대 대신 아이콘 아래 작은 점. 막대는 지금 보는 탭 하나만. */
+.lrail-item.open {
+  color: var(--text-hi);
+}
+.lrail-item.open::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 /* 위 묶음(연결…지난 세션)과 맨 아래 [설정]을 가른다. */
 .lrail-spacer {
   flex: 1;
@@ -2688,6 +2703,17 @@
 }
 .bp-tabscroll::-webkit-scrollbar {
   display: none;
+}
+/* C#12 넘치면 오른쪽 끝을 흐려 뒤에 탭이 더 있다고 말한다(⌄ 버튼과 짝 — BottomPanel). */
+.bp-tabscroll.over {
+  -webkit-mask-image: linear-gradient(to right, var(--void) calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, var(--void) calc(100% - 28px), transparent);
+}
+.bp-overflow {
+  align-self: stretch;
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--line-soft);
 }
 /* `white-space: nowrap` 과 `flex: none` 은 **서로를 대신하지 못한다**(2026-08-16 실측):
    <button> 기본이 `white-space: normal` 이라 좁아지면 **찌그러지기 전에 라벨이 두 줄로 접히고**,
@@ -3370,7 +3396,8 @@ button.sb-seg.upd:hover .val {
 }
 .sb-spark polyline {
   fill: none;
-  stroke: var(--accent);
+  /* C#15 그래프 선은 중성 — 앰버는 사람·선택 신호라 지표에 쓰지 않는다(경고는 --warn 이 따로 말한다). */
+  stroke: var(--text-mid);
   stroke-width: 1.5;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -3381,7 +3408,7 @@ button.sb-seg.upd:hover .val {
   stroke: none;
 }
 .sb-spark.mem polyline {
-  stroke: var(--accent-bright);
+  stroke: var(--sig-slate);
 }
 .sb-spark.mem polygon {
   fill: var(--graph-fill-mem);
@@ -3627,6 +3654,17 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-md);
   color: var(--text-lo);
   text-align: center;
+}
+.tree .empty.slim {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  font-size: var(--fs-micro);
+}
+.tree .empty.slim .btn {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-micro);
 }
 
 /* ── 사이드바 연결 트리 (목업 S1 — 순수 트리) ───────────────────────────────
@@ -3908,10 +3946,15 @@ button.sb-seg.upd:hover .val {
   font-weight: 400;
   color: var(--text-hi);
 }
-/* 경로는 뒤쪽(현재 폴더)이 중요하다 — 잘릴 때 앞을 자른다. */
+/* 경로는 뒤쪽(현재 폴더)이 중요하다 — 잘릴 때 앞을 자른다.
+   C#14 이름이 먼저다 — 경로가 62% 를 먼저 차지해 "셸…"만 남아 두 행이 구별되지 않았다. 이름은 줄지 않고(최대 60%), 경로가 남는 폭만 쓴다. */
+.sess-node .sess-name {
+  flex: none;
+  max-width: 60%;
+}
 .sess-node .sess-name + .sess-cwd {
   margin-left: auto;
-  max-width: 62%;
+  flex: 0 1 auto;
 }
 .sess-node .sess-cwd {
   font-family: var(--mono);
@@ -4375,7 +4418,8 @@ button.sb-seg.upd:hover .val {
 .seg-ctl {
   display: flex;
   gap: var(--sp-2);
-  background: var(--bg-abyss);
+  /* FB-2.2.3 C#9 세그먼트는 이것 하나 — 홈 = 안으로 꺼진 면(--gl-in), 고른 칸 = 앰버 테두리(§8.5 선택 = 앰버). */
+  background: var(--gl-in);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   padding: var(--sp-2);
@@ -4408,11 +4452,24 @@ button.sb-seg.upd:hover .val {
   width: 14px;
   height: 14px;
 }
-/* 고른 칸 = 글라스 면 + 위 1px 하이라이트(시안 Z-connect .seg — 1.x 의 틴트+테두리 상자가 아니다). */
+/* 고른 칸 = 글라스 면 + 앰버 테두리(C#9 — 흰 7% 만으로는 안 보였다). 글라스를 끄면 --accent 가 파랑이라 같이 따라간다. */
+.seg-ctl button:hover:not(.on):not(:disabled) {
+  background: var(--glass-hover);
+  color: var(--text-hi);
+}
 .seg-ctl button.on {
   background: var(--glass);
   color: var(--text-hi);
-  box-shadow: inset 0 1px 0 var(--glass-hi);
+  box-shadow: inset 0 0 0 1px var(--accent-line), inset 0 1px 0 var(--glass-hi);
+}
+/* 좁은 띠 안(변경 비교 툴바·목록 머리) — 한 단 작게. */
+.diff-view .seg-ctl {
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+}
+.diff-view .seg-ctl button {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-micro);
 }
 .key-file {
   display: flex;
@@ -4625,6 +4682,9 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   overflow-y: auto;
   padding: var(--sp-2) var(--sp-4) var(--sp-8);
+  /* C#25 스크롤하면 항목이 검색칸 바로 밑에서 반쯤 잘려 보였다 — 위 가장자리를 흐린다(첫 그룹 머리는 위 여백 안이라 안 흐려진다). */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, var(--void) var(--sp-5));
+  mask-image: linear-gradient(to bottom, transparent, var(--void) var(--sp-5));
 }
 .sp-group {
   display: flex;
@@ -4682,6 +4742,15 @@ button.sb-seg.upd:hover .val {
   bottom: 6px;
   width: 2px;
   background: var(--accent);
+}
+.sp-soon-tag {
+  margin-left: auto;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  font-weight: 400;
+  color: var(--text-lo);
 }
 .sp-hits {
   margin-left: auto;
@@ -5449,6 +5518,11 @@ button.sb-seg.upd:hover .val {
   color: var(--text-mid);
   white-space: pre-wrap;
   word-break: break-all;
+}
+/* FB-2.2.3 C#8 네이티브 컨트롤(체크박스·라디오·슬라이더·진행 막대) 전부 — OS 파랑 대신 테마 강조색(글라스 = 앰버). */
+input,
+progress {
+  accent-color: var(--accent);
 }
 /* 체크박스 — 네이티브 checkbox(별도 토글 위젯을 만들지 않는다), accent-color 만 테마에 맞춘다.
    F24 피드백 폼에서 왔지만 그 기능은 2026-08-13 에 걷어냈고, 클래스는 디스크 창(가상 FS 보기)이
@@ -7029,32 +7103,9 @@ button.sb-seg.upd:hover .val {
    #83(2026-08-15): 우측 레일 → **하단 패널**(서버 자원이니 아래 — §4.8). 아래쪽 배치는 이 블록
    맨 끝 `.sysm.embedded` 가 덮어쓴다. */
 .sysm-tabs {
+  /* C#9 모양은 .seg-ctl — 여기선 자리만. */
   flex: none;
-  display: flex;
-  gap: var(--sp-1);
-  padding: 0 var(--sp-4) var(--sp-3);
-  border-bottom: 1px solid var(--line);
-}
-.sysm-tab {
-  flex: 1;
-  min-height: 26px;
-  padding: 0 var(--sp-4);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  color: var(--text-lo);
-  font-family: var(--ui);
-  font-size: var(--fs-md);
-  cursor: var(--cur-hand, pointer);
-}
-.sysm-tab:hover {
-  color: var(--text-hi);
-  background: var(--bg-raised);
-}
-.sysm-tab.active {
-  color: var(--text-hi);
-  background: var(--bg-raised);
-  border-color: var(--line-strong);
+  margin: 0 var(--sp-4) var(--sp-3);
 }
 .sysm-body {
   flex: 1;
@@ -7113,7 +7164,8 @@ button.sb-seg.upd:hover .val {
 }
 .sysm-spark polyline {
   fill: none;
-  stroke: var(--accent);
+  /* C#15 그래프 선은 중성 — 앰버는 사람·선택 신호라 지표에 쓰지 않는다(경고는 --warn 이 따로 말한다). */
+  stroke: var(--text-mid);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
@@ -7122,7 +7174,7 @@ button.sb-seg.upd:hover .val {
   stroke: none;
 }
 .sysm-spark.mem polyline {
-  stroke: var(--accent-bright);
+  stroke: var(--sig-slate);
 }
 .sysm-spark.mem polygon {
   fill: var(--graph-fill-mem);
@@ -9171,8 +9223,9 @@ button.sb-seg.upd:hover .val {
   gap: var(--sp-1);
 }
 .aiws-ic {
-  width: 22px;
-  height: 22px;
+  /* C#17 22 → 28px 표적. */
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: none;
@@ -9185,10 +9238,15 @@ button.sb-seg.upd:hover .val {
   width: 14px;
   height: 14px;
 }
-.aiws-ic:hover:not(:disabled),
-.aiws-ic.on {
+.aiws-ic:hover:not(:disabled) {
   background: var(--glass-hover);
   color: var(--text-hi);
+}
+/* C#17 켜짐이 hover 와 같은 흰 4% 라 안 보였다 — 글라스 면 + 강조색 아이콘(글라스 = 앰버). */
+.aiws-ic.on {
+  background: var(--glass);
+  color: var(--accent-bright);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
 }
 .aiws-ic:disabled {
   color: var(--text-dim);
@@ -9274,8 +9332,11 @@ button.sb-seg.upd:hover .val {
   background: var(--glass);
   box-shadow: inset 0 1px 0 var(--glass-hi);
 }
-.aiws-row:focus-visible {
-  box-shadow: var(--focus-ring-inset);
+/* C#24 행·탭의 키보드 포커스 링은 안쪽 1px — 바깥 2px 링이 고른 행의 앰버 막대·하단 탭 밑줄을 덮고 이웃 행을 침범했다.
+   (옛 `box-shadow: var(--focus-ring-inset)` 은 -2px 라 무효였다 — 전역 바깥 링이 그대로 그려졌다.) 마우스 클릭엔 원래 안 뜬다(:focus-visible). */
+:is(.aiws-row, .frow, .exp-node, .tree [role='treeitem'], .bp-tab):focus-visible {
+  outline-width: 1px;
+  outline-offset: -1px;
 }
 .aiws-row-l1,
 .aiws-row-l2 {
@@ -9443,7 +9504,7 @@ button.sb-seg.upd:hover .val {
   font-weight: 500;
 }
 .aiws-mode.on {
-  border-color: var(--line-strong);
+  border-color: var(--accent-line);
   background: var(--glass);
 }
 .aiws-mode:disabled {
@@ -9501,7 +9562,7 @@ button.sb-seg.upd:hover .val {
 [data-aiws='agent-picker'] .aiws-agents {
   gap: var(--sp-2);
   padding: var(--sp-2);
-  background: var(--bg-abyss);
+  background: var(--gl-in);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
 }
@@ -9516,7 +9577,7 @@ button.sb-seg.upd:hover .val {
 }
 [data-aiws='agent-picker'] .aiws-agents .aiws-mode.on {
   background: var(--glass);
-  box-shadow: inset 0 1px 0 var(--glass-hi);
+  box-shadow: inset 0 0 0 1px var(--accent-line), inset 0 1px 0 var(--glass-hi);
 }
 .aiws-launch-opts {
   display: grid;
@@ -9853,6 +9914,21 @@ button.sb-seg.upd:hover .val {
 }
 .code-bar > span {
   flex: 1;
+  min-width: 0;
+}
+/* FB-2.2.3 C#2 좁은 폭(1024)에서 버튼 글자가 세로로 쪼개지던 것 — 버튼은 줄지 않고, 모자라면 다음 줄로. 경로가 먼저 줄어든다. */
+.code-bar > :is(.btn, .seg-ctl) {
+  flex: none;
+  white-space: nowrap;
+}
+.diff-bar {
+  flex-wrap: wrap;
+}
+.diff-bar > span {
+  flex: 1 1 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .code-bar.warn {
   color: var(--text-hi);
@@ -9867,6 +9943,13 @@ button.sb-seg.upd:hover .val {
   flex: 1;
   min-height: 0;
   display: flex;
+  container-type: inline-size;
+}
+/* C#2 좁으면 변경 목록을 줄여 diff 본문 자리를 남긴다. */
+@container (max-width: 860px) {
+  .diff-list {
+    width: 200px;
+  }
 }
 .diff-view[hidden] {
   display: none;
@@ -9887,13 +9970,7 @@ button.sb-seg.upd:hover .val {
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--line);
 }
-.diff-seg {
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.diff-list-head .diff-seg {
+.diff-list-head .seg-ctl {
   flex: 1;
 }
 .diff-seg-btn {
@@ -9906,9 +9983,11 @@ button.sb-seg.upd:hover .val {
   white-space: nowrap;
   cursor: var(--cur-hand, pointer);
 }
+/* 충돌만 보기 토글(세그먼트 아님) — 켜짐도 앰버 테두리. */
 .diff-seg-btn.on {
-  background: var(--bg-raised);
+  background: var(--glass);
   color: var(--text-hi);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 .diff-meta {
   margin: 0;
@@ -10504,11 +10583,11 @@ button.sb-seg.upd:hover .val {
   font-size: var(--fs-micro);
   color: var(--text-mid);
 }
-.aiws-pill select {
+.aiws-pill-dd .dd-btn {
   border: 0;
   background: transparent;
-  color: var(--text-hi);
-  font: inherit;
+  padding: 0 var(--sp-1);
+  font-size: var(--fs-micro);
 }
 .aiws-chat-slash {
   max-height: 240px;
@@ -12889,10 +12968,6 @@ button.sb-seg.upd:hover .val {
 .aiws-vault-controls input[type='search'] {
   flex: 1;
   min-width: calc(var(--sp-8) * 12);
-}
-.aiws-seg {
-  display: inline-flex;
-  gap: var(--sp-1);
 }
 .aiws-vault-agents {
   display: inline-flex;

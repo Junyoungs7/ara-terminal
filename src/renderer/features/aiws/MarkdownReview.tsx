@@ -113,7 +113,7 @@ export function MarkdownReview({ file, hostRef, resolve }: { file: CodeFile; hos
             <button type="button" className="btn sec" onClick={close}>
               {t('doc.note.cancel')}
             </button>
-            <button type="button" className="btn" data-doc="note-save" disabled={!body.trim()} onClick={submit}>
+            <button type="button" className="btn sec" data-doc="note-save" disabled={!body.trim()} onClick={submit}>
               {t('doc.note.save')}
             </button>
           </div>

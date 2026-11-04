@@ -1,7 +1,9 @@
-import { type JSX, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { t } from '../i18n'
-import { IconClose } from './icons'
+import { IconChevronDown, IconClose } from './icons'
+import { ContextMenu } from '../interactions/ContextMenu'
+import { isTabOverflowing } from '../store/tabOverflow'
 import { BOTTOM_IDS, type BottomId } from '@shared/types'
 import { holdTermResize } from '../terminal/resizeGate'
 
@@ -96,6 +98,19 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
   const openedRef = useRef<BottomId[]>([])
   const hRef = useRef(h)
   hRef.current = h
+  // FB-2.2.3 C#12 탭이 넘치면(좁은 폭·아라 패널) 오른쪽 끝 페이드 + ⌄ 목록 — 터미널 탭바와 같은 방식.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  const [overMenu, setOverMenu] = useState<{ x: number; y: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const measure = (): void => setOverflowing(isTabOverflowing(el.clientWidth, el.scrollWidth))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [tab, ids])
 
   /** 지금 붙들고 있는 게이트. 끄는 도중 이 컴포넌트가 사라져도 풀 수 있게 밖에 둔다(아래 참고). */
   const heldRef = useRef<(() => void) | null>(null)
@@ -179,7 +194,7 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
         {/* 탭만 스크롤한다(2026-08-16). `.bp-tabs` 통째로 overflow 를 걸면 **닫기 버튼까지**
             스크롤 밖으로 밀려나 탭이 많을 때 패널을 못 닫는다 — 서버명·최대화·닫기는 밖에 남긴다.
             이 div 가 flex:1 이라 옛 .sb-tab-spacer 역할도 겸한다. */}
-        <div className="bp-tabscroll">
+        <div className={'bp-tabscroll' + (overflowing ? ' over' : '')} ref={scrollRef}>
           {shownIds.map((id) => (
             <button
               key={id}
@@ -197,6 +212,23 @@ export function BottomPanel({ tab, onTab, onClose, ids, server, flash, children 
         {/* #84·#91: 하단은 **지금 세션의 서버**를 따라간다(여기에 서버 선택 UI 는 없다).
             그러면 어느 서버 것인지가 화면에 남아야 한다 — 세션 탭을 보고 유추하게 두면
             "이 프로세스 목록이 어느 서버였지"가 된다(작업대 창은 제목줄에 늘 찍는다). */}
+        {overflowing && (
+          <button type="button" className="tt-overflow-btn bp-overflow" title={t('tab.overflow')} onClick={(e) => setOverMenu({ x: e.clientX, y: e.clientY })}>
+            <IconChevronDown />
+          </button>
+        )}
+        <ContextMenu
+          open={overMenu !== null}
+          x={overMenu?.x ?? 0}
+          y={overMenu?.y ?? 0}
+          items={shownIds.map((id) => ({ id, label: t(LABEL[id]), ...(id === tab ? { hint: t('tab.active') } : {}) }))}
+          onPick={(id) => {
+            setOverMenu(null)
+            onTab(id as BottomId)
+            scrollRef.current?.querySelector(`[data-bottom="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+          }}
+          onClose={() => setOverMenu(null)}
+        />
         {server && <span className="con-srv bp-srv">{server}</span>}
         {/* 최대화는 닫기와 **다른 클래스**여야 한다(bp-max). 처음에 bp-close 를 돌려 썼더니
             `.bottom-panel .bp-close` 로 닫던 e2e 세 개가 최대화를 눌러 버렸다 — 모양이 같다고

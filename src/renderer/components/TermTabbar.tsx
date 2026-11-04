@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionTip, type Session } from '../store/sessions'
 import { sessionState } from '../store/sessionState'
 import { StateDot } from './StateDot'
@@ -182,6 +182,12 @@ export function TermTabbar({
     ro.observe(el)
     return () => ro.disconnect()
   }, [sessions])
+
+  // FB-2.2.3 C#13 넘친 탭바에서 활성 탭이 밖으로 밀려 밑줄 조각만 보이던 것 — 바뀔 때마다 보이는 곳으로.
+  useEffect(() => {
+    if (!activeId) return
+    scrollRef.current?.querySelector(`[data-session-id="${activeId}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeId])
 
   const dndFor = (s: Session): TabDnd => ({
     dragging: dragId === s.id,

@@ -530,11 +530,12 @@ export function ConnTree({
         {...treeKeys}
         onContextMenu={(e) => openCtx(e, 'sidebar', { kind: 'local' })}
       >
+      {/* C#18 로컬 세션이 있으면 "비었음"이 크게 뜨면 모순으로 읽힌다 — 그때는 작은 한 줄 + 보조 버튼. */}
       {profiles.length === 0 && (
-        <div className="empty">
+        <div className={'empty' + (sessions.length > 0 ? ' slim' : '')}>
           {t('conn.tree.empty')}
           {onNewConn && (
-            <button type="button" className="btn pri tree-empty-new" data-action="conn.new" onClick={onNewConn}>
+            <button type="button" className={'btn tree-empty-new ' + (sessions.length > 0 ? 'sec' : 'pri')} data-action="conn.new" onClick={onNewConn}>
               {t('sidebar.act.newConn')}
             </button>
           )}

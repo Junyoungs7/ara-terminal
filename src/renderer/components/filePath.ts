@@ -49,7 +49,7 @@ export function pastePaths(paths: readonly string[]): string {
 
 // 바이트 → 사람이 읽는 크기(목업 표기: 2.1K / 18M).
 export function humanSize(n: number): string {
-  if (n < 1024) return String(n)
+  if (n < 1024) return n + 'B' // C#22 단위 없는 맨 숫자(41)는 뜻을 몰랐다 — 바이트도 단위를 단다.
   const u = ['K', 'M', 'G', 'T']
   let v = n / 1024
   let i = 0

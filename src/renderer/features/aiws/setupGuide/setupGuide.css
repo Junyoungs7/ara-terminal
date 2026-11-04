@@ -118,14 +118,16 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: var(--sp-4);
-  height: var(--sp-4);
-  border: 1px solid var(--line-strong);
+  /* C#20 8px·연한 테두리라 완료/미완료가 안 갈렸다 → 14px, 미완료 = 진한 테두리 빈 원, 완료 = 채운 원 + 체크. */
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text-lo);
   border-radius: 50%;
 }
 .sg-step.done .sg-check {
-  border-color: var(--sig-go);
-  color: var(--sig-go);
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--bg-abyss);
 }
 .sg-check svg {
   width: 70%;

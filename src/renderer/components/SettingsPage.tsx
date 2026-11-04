@@ -240,7 +240,7 @@ function UpdateRow() {
         {st.status === 'available' && (
           <button
             type="button"
-            className="btn"
+            className="btn sec"
             data-action="update.download"
             onClick={() => void window.ev?.app?.updateDownload?.()}
           >
@@ -250,7 +250,7 @@ function UpdateRow() {
         {st.status === 'ready' && (
           <button
             type="button"
-            className="btn"
+            className="btn sec"
             data-action="update.install"
             onClick={() => void window.ev?.app?.updateInstall?.()}
           >
@@ -354,7 +354,7 @@ function LocalNetworkRow() {
       <div className="row">
         <input type="text" className="ai-key-input" data-field="localNet.host" spellCheck={false} placeholder="192.168.0.10" value={host} onChange={(e) => setHost(e.target.value)} />
         <input type="text" className="ai-key-input" data-field="localNet.port" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value)} />
-        <button type="button" className="btn" data-action="localNet.test" disabled={!host.trim()} onClick={() => void test()}>
+        <button type="button" className="btn sec" data-action="localNet.test" disabled={!host.trim()} onClick={() => void test()}>
           {t('settings.localNet.test')}
         </button>
       </div>
@@ -527,7 +527,7 @@ function AiSection({
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
-          <button type="button" className="btn" data-action="ai.key.save" disabled={busy || !key.trim()} onClick={() => void save(key)}>
+          <button type="button" className="btn sec" data-action="ai.key.save" disabled={busy || !key.trim()} onClick={() => void save(key)}>
             {t('settings.ai.key.save')}
           </button>
           <button
@@ -905,7 +905,7 @@ function McpSection({ ask }: { ask?: (spec: DialogSpec) => Promise<DialogResult>
                 placeholder={state.hasToken ? t('settings.mcp.token.saved') : t('settings.mcp.token.none')}
                 onFocus={(e) => e.currentTarget.select()}
               />
-              <button type="button" className="btn" data-action="mcp.token.issue" disabled={busy} onClick={() => void issueToken()}>
+              <button type="button" className="btn sec" data-action="mcp.token.issue" disabled={busy} onClick={() => void issueToken()}>
                 {t('settings.mcp.token.issue')}
               </button>
             </div>
@@ -1518,9 +1518,12 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
         aria-selected={!q && section === d.id}
         data-section={d.id}
         className={'sp-item' + (!q && section === d.id ? ' on' : '') + (d.soon ? ' soon' : '')}
+        title={d.soon ? t('settings.soon') : undefined}
         onClick={() => go(d.id)}
       >
         <Hl text={t('settings.nav.' + d.id)} q={q} />
+        {/* C#21 흐린 이유를 말한다 — 못 누르는 게 아니라 아직 기능이 없는 자리. */}
+        {d.soon && <span className="sp-soon-tag">{t('settings.soonTag')}</span>}
         {hit && hit.items.length > 0 && <span className="sp-hits">{hit.items.length}</span>}
       </button>
     )
@@ -1795,7 +1798,7 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                 <Toggle on={prefs.pet.enabled} label={t('settings.pet.enabled')} onChange={(enabled) => onPrefsChange({ pet: { ...prefs.pet, enabled } })} />
               </Row>
               <Row label={t('settings.pet.image')} desc={t(prefs.pet.image ? 'settings.pet.image.has' : 'settings.pet.image.none')} item="pet.image">
-                <button type="button" className="btn" data-action="pet.upload" onClick={() => void importPet(prefs.pet, (pet) => onPrefsChange({ pet }))}>
+                <button type="button" className="btn sec" data-action="pet.upload" onClick={() => void importPet(prefs.pet, (pet) => onPrefsChange({ pet }))}>
                   {t('pet.upload')}
                 </button>
                 <button type="button" className="btn sec" data-action="pet.clear" disabled={!prefs.pet.image} onClick={() => onPrefsChange({ pet: { ...prefs.pet, image: '' } })}>

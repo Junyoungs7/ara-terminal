@@ -208,7 +208,7 @@ export function TermExtraRows({ prefs, onPrefsChange, onFont }: Props) {
                     {t('settings.term.import.skipped').replace('{n}', String(it.unsupported.length))}
                   </span>
                 )}
-                <button type="button" className="btn" data-action="term.import.take" onClick={() => take(it)}>
+                <button type="button" className="btn sec" data-action="term.import.take" onClick={() => take(it)}>
                   {t('settings.term.import.take')}
                 </button>
               </div>

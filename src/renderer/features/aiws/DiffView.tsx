@@ -75,6 +75,8 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
       renderSideBySide: !useDiffStore.getState().inline,
       // Monaco 기본값은 폭 900px 이하면 [나란히]를 몰래 한 줄 보기로 바꾼다 — 사용자가 고른 보기를 그대로 지킨다.
       useInlineViewWhenSpaceIsLimited: false,
+      // FB-2.2.3 C#26 오른쪽 개요 띠(diff overview)가 밝은 회색 판으로 본문보다 눈에 띄었다 — 끈다. 바뀐 줄 표시는 각 쪽 스크롤 막대 눈금이 맡는다.
+      renderOverviewRuler: false,
       theme: 'ara',
       // M12 R2: 에디터와 같은 글꼴(설정 › 편집기 [글꼴], 비면 터미널 글꼴 — Orca).
       ...editorFont(css)
@@ -179,9 +181,9 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
     <div className="diff-view" data-diff="view" hidden={hidden}>
       <aside className="diff-list" aria-label={t('diff.list')}>
         <div className="diff-list-head">
-          <div className="diff-seg" role="radiogroup" aria-label={t('diff.list')}>
+          <div className="seg-ctl" role="radiogroup" aria-label={t('diff.list')}>
             {(['working', 'branch'] as const).map((l) => (
-              <button key={l} type="button" role="radio" aria-checked={d?.list === l} className={'diff-seg-btn' + (d?.list === l ? ' on' : '')} data-diff-list={l} onClick={() => useDiffStore.getState().setList(worktree, l)}>
+              <button key={l} type="button" role="radio" aria-checked={d?.list === l} className={d?.list === l ? 'on' : undefined} data-diff-list={l} onClick={() => useDiffStore.getState().setList(worktree, l)}>
                 {t('diff.list.' + l)}
               </button>
             ))}
@@ -269,9 +271,9 @@ export default function DiffView({ worktree, hidden }: { worktree: Worktree; hid
           <span className="aiws-mono" data-diff="path">
             {sel ? `${sel.oldPath ? sel.oldPath + ' → ' : ''}${sel.path}` : ''}
           </span>
-          <div className="diff-seg" role="radiogroup" aria-label={t('diff.layout')}>
+          <div className="seg-ctl" role="radiogroup" aria-label={t('diff.layout')}>
             {[false, true].map((v) => (
-              <button key={String(v)} type="button" role="radio" aria-checked={inline === v} className={'diff-seg-btn' + (inline === v ? ' on' : '')} data-diff-layout={v ? 'inline' : 'split'} onClick={() => useDiffStore.getState().setInline(v)}>
+              <button key={String(v)} type="button" role="radio" aria-checked={inline === v} className={inline === v ? 'on' : undefined} data-diff-layout={v ? 'inline' : 'split'} onClick={() => useDiffStore.getState().setInline(v)}>
                 {t(v ? 'diff.inline' : 'diff.split')}
               </button>
             ))}

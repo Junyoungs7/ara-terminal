@@ -33,7 +33,7 @@ describe('filePath — 경로 헬퍼', () => {
   })
 
   it('humanSize — 1024 단위, 10 이상은 정수', () => {
-    expect(humanSize(512)).toBe('512')
+    expect(humanSize(512)).toBe('512B')
     expect(humanSize(2150)).toBe('2.1K')
     expect(humanSize(18 * 1024 * 1024)).toBe('18M')
   })

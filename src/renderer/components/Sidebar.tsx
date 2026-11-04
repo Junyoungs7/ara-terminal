@@ -52,6 +52,8 @@ function railTip(label: string, action?: KeymapAction, where?: 'sidebar' | 'wind
  *
  * 접혀 있으면 어떤 아이콘도 눌린 상태가 아니다: 눌림은 "그 패널이 지금 화면에 있다"는 뜻이어야 한다.
  */
+const RAIL_TOOLS = new Set(['explorer', 'bottombar'])
+
 export function SidebarRail({
   active,
   collapsed,
@@ -89,6 +91,7 @@ export function SidebarRail({
   // 사이드바 탭이 아닌 것(창·하단 패널·설정 덮개). 여닫이(하단 패널·설정)는 눌림(aria-pressed)이고,
   // 탐색기는 **토글이 아니다**(다시 눌러도 안 닫히고 앞으로 온다 — 리뷰 B6) — 눌림 대신 이름이 "열기"다.
   // `active` 는 그대로 "그 창이 지금 열려 있다"는 표시로 둔다.
+  // FB-2.2.3 C#11 앰버 막대는 "지금 보는 것"(사이드바 탭·지난 세션·설정) 하나만. 열려 있는 도구 창(탐색기·하단 패널)은 아이콘 아래 점(.open).
   const tool = (
     id: string,
     on: boolean,
@@ -100,7 +103,7 @@ export function SidebarRail({
     <button
       key={id}
       type="button"
-      className={'lrail-item' + (on ? ' active' : '')}
+      className={'lrail-item' + (on ? (RAIL_TOOLS.has(id) ? ' open' : ' active') : '')}
       {...(name ? { 'aria-label': name } : { 'aria-pressed': on })}
       data-activity={id}
       title={tip}

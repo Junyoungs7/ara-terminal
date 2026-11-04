@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type { ConnectionProfile, ProfileInput } from '@shared/types'
-import { connDotClass, type ConnState } from '../store/profiles'
+import { serverDotClass, type ConnState } from '../store/profiles'
+import type { Session } from '../store/sessions'
+import { sessionState, useSessionStates } from '../store/sessionState'
 import { Dropdown } from './Dropdown'
 import { matchProfile } from '../store/groups'
 import { t } from '../i18n'
@@ -107,6 +109,8 @@ type Props = {
   groups: string[]
   /** 서버별 연결 상태 — 목록의 상태 점에 쓴다. 트리와 같은 값을 받아 같은 색을 그린다. */
   conn?: ConnState
+  /** 열린 세션 — 상태 점을 사이드바 트리와 **같은 판정**(serverDotClass)으로 그린다(FB-2.2.3 C, B 의 남은 것). */
+  sessions?: readonly Session[]
   onClose: () => void
   onSave: (input: ProfileInput) => Promise<ConnectionProfile>
   // Shell 의 connectProfile — 호스트키 확인·실패 다이얼로그까지 처리하고 성공 여부만 돌려준다
@@ -120,9 +124,11 @@ type Props = {
 }
 
 // 연결 관리자 모달 (design-system §5.3, 목업 variant-final-3.html 919행~). 좌:프로필 리스트 / 우:폼.
-export function ConnectionModal({ open, request, profiles, groups, conn, onClose, onSave, onConnect, onDuplicate, onDelete }: Props) {
+export function ConnectionModal({ open, request, profiles, groups, conn, sessions = [], onClose, onSave, onConnect, onDuplicate, onDelete }: Props) {
   const [form, setForm] = useState<Form>(emptyForm)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 세션 상태(on·exit·lost)가 바뀌면 점을 다시 그린다 — ConnTree 와 같다.
+  useSessionStates()
   const [error, setError] = useState<string>('')
   const [busy, setBusy] = useState(false)
   // [접속 테스트]·[저장] 결과 한 줄. error 와 자리를 나눠 쓰지 않는다 — 성공을 빨간 오류 자리에
@@ -392,7 +398,7 @@ export function ConnectionModal({ open, request, profiles, groups, conn, onClose
                     이 화면에서는 늘 회색이었다. 같은 서버가 화면마다 다른 색이면 안 된다. */}
                 {/* 2026-08-13 감사: 여기가 var(--idle) 하드코딩이라, 트리에서 초록인 서버가
                     이 화면에서는 늘 회색이었다. 같은 서버가 화면마다 다른 색이면 안 된다. */}
-                <span className={'pf-st ' + connDotClass(conn?.[p.id])} />
+                <span className={'pf-st ' + serverDotClass(sessions.filter((s) => (p.type === 'rdp' ? s.profileId === p.id : s.serverKey === p.name)).map((s) => sessionState(s.id)), conn?.[p.id])} />
               </div>
             ))}
             {/* 목록 맨 아래. 칸 전체가 스크롤되므로 sticky 로 바닥에 붙여 둔다 — 서버가 스무 개면

@@ -1602,6 +1602,7 @@ export function Shell() {
         profiles={profiles}
         groups={groups}
         conn={conn}
+        sessions={sessions.sessions}
         onClose={() => setModalOpen(false)}
         onSave={save}
         onConnect={connectProfile}

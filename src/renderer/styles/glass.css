@@ -64,8 +64,12 @@
   box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -2px 0 -0.5px var(--sig-ai-m);
 }
 /* 에이전트 탭 밑줄 · 작업 중인 워크트리 행/카드 옅은 틴트 · 아라 채팅 머리 선 */
-:root[data-glass='on'] .aiws-tab.on {
+:root[data-glass='on'] .aiws-tab.on[data-agent-tab] {
   background: var(--sig-ai) bottom / 100% 2px no-repeat, var(--bg-surface);
+}
+/* FB-2.2.3 C#10 파일·diff 탭(과 채팅 전환)은 AI 가 아니다 — 터미널 탭과 같은 앰버 밑줄. */
+:root[data-glass='on'] .aiws-tab.on:not([data-agent-tab]) {
+  background: var(--sig-user) bottom / 100% 2px no-repeat, var(--bg-surface);
 }
 :root[data-glass='on'] .aiws-row:has(.ag-spin),
 :root[data-glass='on'] .aiws-card:has(.ag-spin) {
@@ -111,8 +115,9 @@
   }
 }
 
-/* ── G2 고른 행 = 앰버 왼쪽 막대(시안 C .row.act) — 워크트리·서버·세션·파일·탐색기 행. 포커스 링이 있으면 링이 이긴다. ── */
-:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on):not(:focus-visible) {
+/* ── G2 고른 행 = 앰버 왼쪽 막대(시안 C .row.act) — 워크트리·서버·세션·파일·탐색기 행.
+   C#24 포커스 링이 안쪽 1px 라 막대와 같이 그린다(옛 :not(:focus-visible) 로 막대를 끄던 분기는 뺐다). ── */
+:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on) {
   box-shadow: inset 2px 0 0 var(--sig-user), inset 0 1px 0 var(--glass-hi);
 }
 
@@ -202,8 +207,8 @@
     background: var(--gl-3);
   }
 
-  /* 뜨는 면: 진짜 유리 */
-  :root[data-glass='on'] :is(.cp-drop, .qo-drop, .ntf-menu, .ntf-toast, .ntf-more, .tb-menu, .ctx-menu, .modal) {
+  /* 뜨는 면: 진짜 유리. FB-2.2.3 C#7 드롭다운 목록·툴팁·상태바 팝오버·시작하기 모달도(중성 회색 불투명이라 남색 유리 모달과 색조가 달랐다). */
+  :root[data-glass='on'] :is(.cp-drop, .qo-drop, .ntf-menu, .ntf-toast, .ntf-more, .tb-menu, .ctx-menu, .modal, .dd-list, .ara-tip, .res-pop, .mcp-pop, .sg-modal) {
     background: var(--gl-2);
     -webkit-backdrop-filter: var(--gl-blur);
     backdrop-filter: var(--gl-blur);
@@ -248,6 +253,18 @@
   :root[data-glass='on'] .sidebar .fpath-box:hover {
     border-color: var(--line-strong);
   }
+  /* FB-2.2.3 C#6 유리 면 안에 남아 있던 불투명 띠·상자 — 파일 아래 줄·아라 경로 줄은 걷고, 안내 상자·라이선스 카드는 꺼진 홈. */
+  :root[data-glass='on'] :is(.fstat, .ara-path) {
+    background: transparent;
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] :is(.set-note, .license-row) {
+    background: var(--gl-in);
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .set-note {
+    border-left-color: var(--line-strong);
+  }
 }
 
 /* FB-2.2.3 A2 — 버튼 면은 투명이 아니라 색이라 폴백에서도 같다. */
@@ -258,4 +275,15 @@
 :root[data-glass='on'] .sidebar .sftp-path-bar .sb-act.on {
   background: var(--glass);
   box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+
+/* FB-2.2.3 C#5 유리 면 안의 hover — 불투명 회색 토큰(--bg-raised·--bg-overlay)이 탁한 덩어리로 보였다. 서버 행처럼 --glass-hover 로.
+   (색이라 폴백에서도 같다.) 창 닫기의 빨강·고른 파일 행은 그대로. */
+:root[data-glass='on'] :is(.frow:not(.sel), .sb-act, .tb-ctl:not(.close), .tb-help, .sb-search .field .sclear, .ara-pick-menu .it):hover,
+:root[data-glass='on'] .ara-btn:hover:not(:disabled) {
+  background: var(--glass-hover);
+}
+/* C#7 드롭다운 현재 줄 — 유리 위 중성 회색 대신 선택 면. */
+:root[data-glass='on'] .dd-opt.cur {
+  background: var(--glass);
 }

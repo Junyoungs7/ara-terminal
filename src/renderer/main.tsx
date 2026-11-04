@@ -16,6 +16,8 @@ import { LockScreen } from './components/LockScreen'
 import { installTooltips } from './store/tooltip'
 import { installErrorRing } from './store/errorRing'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { applyGlass } from './glass'
+import { prefsFrom } from './terminal/termPrefs'
 import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/shell.css'
@@ -68,6 +70,14 @@ const lockHost = document.createElement('div')
 lockHost.id = LOCK_HOST_ID
 document.body.appendChild(lockHost)
 createRoot(lockHost).render(<LockScreen variant={isMainWin ? 'clock' : 'card'} />)
+
+// FB-2.2.3 C#1 따로 뜨는 창도 본창과 같은 글라스 — 본창은 MainArea 가 설정을 읽어 켜고, 보조 창은 여기서 읽는다.
+if (!isMainWin) {
+  window.ev?.workspace
+    .load()
+    .then((snap) => applyGlass(prefsFrom(snap.ui).glass))
+    .catch(() => {})
+}
 
 const renderApp = (): void => {
   // M14 R1 예약 실행 — 본창만 띄우기를 받는다(받으면 그때 AI 작업 공간 코드를 불러온다). 잠긴 채 켜면 풀린 뒤부터.

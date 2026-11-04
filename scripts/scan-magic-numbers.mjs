@@ -516,7 +516,9 @@ const ACCENT_OK = new RegExp(
     // M1 라운드 2 — AI 작업 레일·오른쪽 아이콘 바 활성(레일과 같은 규칙) · 공간 스위치 고른 아이콘·맥박 점(시안 SW-final)
     String.raw`\.(?:ai-rail|rbar)-item\.active\b|\.tb-spaces button\.on svg|\.tb-spaces-dot|tb-spaces-pulse`,
     // M1 라운드 3 — 알림 센터: 벨 안 읽음 점 · 기다림 아이콘·수명 막대 · 안 읽은 항목 점 · 토스트 호버 테두리(시안 SW-final)
-    String.raw`\.tb-bell-dot|\.ntf-(?:k|life)\.wait|\.ntf-item\.unread \.ntf-time::after|\.ntf-toast:hover`
+    String.raw`\.tb-bell-dot|\.ntf-(?:k|life)\.wait|\.ntf-item\.unread \.ntf-time::after|\.ntf-toast:hover`,
+    // FB-2.2.3 C — 세그먼트·카드형 고름·충돌 토글 켜짐(선택 = 앰버 테두리) · 켜진 아이콘 토글 · 레일 열린 도구 점 · 네이티브 컨트롤 accent-color
+    String.raw`\.seg-ctl button\.on|\.aiws-mode\.on|\.diff-seg-btn\.on|\.aiws-ic\.on|\.lrail-item\.open::after|^input, progress$`
   ].join('|')
 )
 let accentOk = 0

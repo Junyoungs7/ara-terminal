@@ -48,7 +48,7 @@
 
   /* 시맨틱 */
   --ok: #6bbf8a;
-  --warn: #e2c35f;
+  --warn: #ff7a45; /* 앱 tokens.css 와 같게(FB-2.2.3 C#15) */
   --err: #e0766e;
   --info: #81a0c6; /* 사이트 전용 — 옛 #7f9dc4 는 overlay 위 4.49 */
   --on-accent: #0a1424; /* 액센트 배경 위 글자(.btn-primary) */

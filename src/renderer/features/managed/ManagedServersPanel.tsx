@@ -60,10 +60,10 @@ export function ManagedServersPanel(): JSX.Element {
       {list.records.length === 0 && <div className="set-note">{t('managed.empty')}</div>}
       {list.records.map((r) => (
         <Row key={r.hostKey} label={r.hostKey} desc={recordDesc(r, connected.has(r.hostKey))} item={`managed.${r.hostKey}`}>
-          <button type="button" className="btn" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="check" onClick={() => void run(r.hostKey, async () => void (await window.ev.managed.check(r.hostKey)))}>
+          <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="check" onClick={() => void run(r.hostKey, async () => void (await window.ev.managed.check(r.hostKey)))}>
             {t('managed.check')}
           </button>
-          <button type="button" className="btn" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="remove" onClick={() => void remove(r.hostKey)}>
+          <button type="button" className="btn sec" disabled={busy !== null || !connected.has(r.hostKey)} data-managed="remove" onClick={() => void remove(r.hostKey)}>
             {t('managed.remove')}
           </button>
         </Row>
@@ -74,7 +74,7 @@ export function ManagedServersPanel(): JSX.Element {
       {fresh.length === 0 && <div className="set-note">{t('managed.noTargets')}</div>}
       {fresh.map((x) => (
         <Row key={x.hostKey} label={x.label} desc={x.hostKey} item={`managed.add.${x.hostKey}`}>
-          <button type="button" className="btn" disabled={busy !== null} data-managed="install" onClick={() => void consent(x.hostKey)}>
+          <button type="button" className="btn sec" disabled={busy !== null} data-managed="install" onClick={() => void consent(x.hostKey)}>
             {t('managed.install')}
           </button>
         </Row>

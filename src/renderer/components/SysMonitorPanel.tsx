@@ -195,9 +195,9 @@ export function SysMonitorPanel({
           </button>
         </div>
       )}
-      <div className="sysm-tabs" role="tablist">
+      <div className="sysm-tabs seg-ctl" role="tablist">
         <button
-          className={'sysm-tab' + (tab === 'local' ? ' active' : '')}
+          className={'sysm-tab' + (tab === 'local' ? ' on' : '')}
           role="tab"
           aria-selected={tab === 'local'}
           onClick={() => setTab('local')}
@@ -205,7 +205,7 @@ export function SysMonitorPanel({
           {t('sysm.tab.local')}
         </button>
         <button
-          className={'sysm-tab' + (tab === 'panel' ? ' active' : '')}
+          className={'sysm-tab' + (tab === 'panel' ? ' on' : '')}
           role="tab"
           aria-selected={tab === 'panel'}
           onClick={() => setTab('panel')}

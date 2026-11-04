@@ -45,7 +45,7 @@ export function AgentSettingsPanel(): JSX.Element {
         )
       })}
       <Row label={t('settings.agents.redetect')} desc={t('settings.agents.redetect.desc')}>
-        <button type="button" className="btn" disabled={detecting} data-aiws="agents-redetect" onClick={() => void useAgentStore.getState().loadAgents(true)}>
+        <button type="button" className="btn sec" disabled={detecting} data-aiws="agents-redetect" onClick={() => void useAgentStore.getState().loadAgents(true)}>
           {t('aiws.agent.redetect')}
         </button>
       </Row>
@@ -114,14 +114,14 @@ export function AgentSettingsPanel(): JSX.Element {
       </div>
       <div className="set-note">{t('settings.agents.daemon.desc')}</div>
       <Row label={t('settings.agents.killBackground')} desc={killed === null ? t('settings.agents.killBackground.desc') : t('settings.agents.killBackground.done').replace('{n}', String(killed))} item="agents.killBackground">
-        <button type="button" className="btn" data-aiws="agents-kill-background" onClick={() => void window.ev.agents.killBackground().then((r) => setKilled(r.killed))}>
+        <button type="button" className="btn sec" data-aiws="agents-kill-background" onClick={() => void window.ev.agents.killBackground().then((r) => setKilled(r.killed))}>
           {t('settings.agents.killBackground')}
         </button>
       </Row>
       <Row label={t('settings.agents.quitCompletely')} desc={t('settings.agents.quitCompletely.desc')} item="agents.quitCompletely">
         <button
           type="button"
-          className="btn"
+          className="btn sec"
           data-aiws="agents-quit-completely"
           onClick={() =>
             void dialog
@@ -241,7 +241,7 @@ function OrielRow({ path, onPath }: { path: string; onPath: (p: string) => Promi
           void onPath(e.target.value.trim()).then(() => probe(true))
         }}
       />
-      <button type="button" className="btn" data-aiws="oriel-redetect" onClick={() => probe(true)}>
+      <button type="button" className="btn sec" data-aiws="oriel-redetect" onClick={() => probe(true)}>
         {t('aiws.agent.redetect')}
       </button>
     </Row>

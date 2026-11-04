@@ -56,7 +56,7 @@ export function SkillsPanel(): JSX.Element {
           ))}
         </select>
         <input className="aiws-input" data-field="skills.search" placeholder={t('skills.search')} value={q} onChange={(e) => setQ(e.target.value)} />
-        <button type="button" className="btn" data-action="skills.refresh" onClick={load}>
+        <button type="button" className="btn sec" data-action="skills.refresh" onClick={load}>
           {t('skills.refresh')}
         </button>
       </div>
@@ -78,7 +78,7 @@ export function SkillsPanel(): JSX.Element {
               {s.description ? ` — ${s.description}` : ''}
             </span>
             <span className="acct-actions">
-              <button type="button" className="btn" data-action="skills.delete" disabled={block !== null} title={block ? t(`skills.block.${block}`) : undefined} onClick={() => void remove(s)}>
+              <button type="button" className="btn sec" data-action="skills.delete" disabled={block !== null} title={block ? t(`skills.block.${block}`) : undefined} onClick={() => void remove(s)}>
                 {t('skills.delete')}
               </button>
             </span>
@@ -94,7 +94,7 @@ export function SkillsPanel(): JSX.Element {
             </option>
           ))}
         </select>
-        <button type="button" className="btn" data-action="skills.add" onClick={() => void add()}>
+        <button type="button" className="btn sec" data-action="skills.add" onClick={() => void add()}>
           {t('skills.add')}
         </button>
       </div>

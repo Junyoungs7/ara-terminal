@@ -20,7 +20,7 @@ test('SYSM-1 액티비티 바에서 열리고 기본 탭은 [내 PC] 다', async
   const { page } = ara
   await openSys(page)
   // 준영님 지시: "기본적으로는 내 로컬 시스템의 정보를 보여주고".
-  await expect(page.locator('.sysm-tab.active')).toHaveText('내 PC')
+  await expect(page.locator('.sysm-tab.on')).toHaveText('내 PC')
   // 세션이 하나도 없어도 내 PC 는 보인다 — 세션에 매인 telemetry 와 다른 채널이라 그렇다.
   // toBeVisible 까지 보는 이유(#83): 하단으로 내리면서 .sysm-body 를 통째로 격자로 만들었더니
   // 말줄임(overflow:hidden)을 쓰는 이 줄이 **높이 0** 으로 접혔다. 글자는 DOM 에 있었으므로

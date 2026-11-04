@@ -867,6 +867,8 @@ export function AraChatPanel({
           {t('ara.phase.' + phase)}
         </div>
         {/* 상태줄(#25) — 늘 한 줄: 5H ▬ 25% (2h38m) │ 주간 │ 맥락. 이번 대화 토큰·비용은 툴팁. 좁으면 CSS 가 막대를 접고 말줄임. */}
+        {/* C#23 쓴 것도 한도도 없으면(대체 글 '—' 한 칸) 줄을 숨긴다 — "대기 중" 밑에 대시 하나만 떠 있었다. */}
+        {!(segs.length === 1 && segs[0].key === 'text' && !usage) && (
         <div className="ara-us" data-field="ara.usage" title={segs[0]?.key === 'text' ? undefined : usageTitle(usage) || undefined}>
           {segs.map((g, i) => (
             <span className={'seg ' + g.key} key={g.key} data-seg={g.key}>
@@ -884,6 +886,7 @@ export function AraChatPanel({
             </span>
           ))}
         </div>
+        )}
       </div>
     </div>
   )

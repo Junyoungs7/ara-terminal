@@ -19,7 +19,7 @@ function ServerRow({ s, onRemove }: { s: McpServerSummary; onRemove?: () => void
       </span>
       {onRemove && (
         <span className="acct-actions">
-          <button type="button" className="btn" data-action="mcp.remove" onClick={onRemove}>
+          <button type="button" className="btn sec" data-action="mcp.remove" onClick={onRemove}>
             {t('mcpsrv.remove')}
           </button>
         </span>
@@ -96,7 +96,7 @@ export function McpPanel(): JSX.Element {
             <span className="acct-name">{s.label}</span>
             <span className="acct-usage">{s.exists ? s.path : `${s.path} · ${t('mcpsrv.missing')}`}</span>
             {s.exists && (
-              <button type="button" className="btn" data-action="mcp.open" onClick={() => void window.ev.mcpServers.open(s.path)}>
+              <button type="button" className="btn sec" data-action="mcp.open" onClick={() => void window.ev.mcpServers.open(s.path)}>
                 {t('mcpsrv.open')}
               </button>
             )}
@@ -115,11 +115,11 @@ export function McpPanel(): JSX.Element {
             </option>
           ))}
         </select>
-        <button type="button" className="btn" data-action="mcp.refresh" onClick={load}>
+        <button type="button" className="btn sec" data-action="mcp.refresh" onClick={load}>
           {t('skills.refresh')}
         </button>
         {project && !detected.length && (
-          <button type="button" className={'btn' + (confirmStarter ? ' pri' : '')} data-action="mcp.starter" onClick={() => void starter()}>
+          <button type="button" className={'btn ' + (confirmStarter ? 'pri' : 'sec')} data-action="mcp.starter" onClick={() => void starter()}>
             {confirmStarter ? t('mcpsrv.starter.confirm') : t('mcpsrv.starter')}
           </button>
         )}
@@ -131,7 +131,7 @@ export function McpPanel(): JSX.Element {
           <div className="acct-foot">
             <span className="acct-name">{s.label}</span>
             <span className={'acct-usage' + (s.status === 'invalid' ? ' na' : '')}>{s.status === 'invalid' ? s.error : t('mcpsrv.count').replace('{n}', String(s.servers.length))}</span>
-            <button type="button" className="btn" data-action="mcp.open" onClick={() => void window.ev.mcpServers.open(s.path)}>
+            <button type="button" className="btn sec" data-action="mcp.open" onClick={() => void window.ev.mcpServers.open(s.path)}>
               {t('mcpsrv.open')}
             </button>
           </div>
@@ -150,7 +150,7 @@ export function McpPanel(): JSX.Element {
             <input className="aiws-input aiws-mono" data-field="mcp.url" placeholder={t('mcpsrv.f.url')} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
           </div>
           <div className="acct-foot">
-            <button type="button" className="btn" data-action="mcp.add" onClick={() => void add()}>
+            <button type="button" className="btn sec" data-action="mcp.add" onClick={() => void add()}>
               {t('mcpsrv.add')}
             </button>
             <span className="set-note">{t('mcpsrv.add.desc')}</span>

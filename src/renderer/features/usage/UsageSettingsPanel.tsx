@@ -91,13 +91,13 @@ function AccountsBlock({ provider }: { provider: AccountProvider }): JSX.Element
             <AccountUsageText u={usage[key(id)]} d={d} />
             {a && (
               <span className="acct-actions">
-                <button type="button" className="btn" disabled={busy === a.id} data-action="usage.acct.login" onClick={() => void act(a.id, () => window.ev.usage.account({ op: 'login', provider, id: a.id }))}>
+                <button type="button" className="btn sec" disabled={busy === a.id} data-action="usage.acct.login" onClick={() => void act(a.id, () => window.ev.usage.account({ op: 'login', provider, id: a.id }))}>
                   {busy === a.id ? t('usage.acct.loggingIn') : t('usage.acct.login')}
                 </button>
-                <button type="button" className="btn" data-action="usage.acct.rename" onClick={() => void rename(a.id, a.label)}>
+                <button type="button" className="btn sec" data-action="usage.acct.rename" onClick={() => void rename(a.id, a.label)}>
                   {t('usage.acct.rename')}
                 </button>
-                <button type="button" className="btn" data-action="usage.acct.remove" onClick={() => void remove(a.id, a.label)}>
+                <button type="button" className="btn sec" data-action="usage.acct.remove" onClick={() => void remove(a.id, a.label)}>
                   {t('usage.acct.remove')}
                 </button>
               </span>
@@ -106,7 +106,7 @@ function AccountsBlock({ provider }: { provider: AccountProvider }): JSX.Element
         )
       })}
       <div className="acct-foot">
-        <button type="button" className="btn" data-action="usage.acct.add" onClick={() => void add()}>
+        <button type="button" className="btn sec" data-action="usage.acct.add" onClick={() => void add()}>
           {t('usage.acct.add')}
         </button>
         {msg && <span className="set-note err">{msg}</span>}
@@ -160,7 +160,7 @@ function StatsBlock(): JSX.Element {
             </button>
           ))}
         </div>
-        <button type="button" className="btn" data-action="usage.stats.reload" disabled={loading} onClick={() => load(true)}>
+        <button type="button" className="btn sec" data-action="usage.stats.reload" disabled={loading} onClick={() => load(true)}>
           {loading ? t('usage.loading') : t('usage.refresh')}
         </button>
       </div>

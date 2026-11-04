@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
+import { History } from 'lucide-react'
 import { AGENT_IDS, AGENTS } from '@shared/agents'
 import { pathKey, SEARCH_MIN_CHARS, type VaultDetail, type VaultSession } from '@shared/vault'
 import type { Worktree } from '@shared/worktrees'
 import { t } from '../../i18n'
 import { writeClipboard } from '../../store/clipboardWrite'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
+import { Dropdown } from '../../components/Dropdown'
 import { useAiwsStore } from './store'
 import { useAgentStore } from './agentStore'
 import { groupSessions, mergeSearch, VAULT_GROUPS, VAULT_SCOPES, VAULT_SORTS, vaultViewOf, viewSessions, type VaultView } from './vaultView'
@@ -178,34 +180,33 @@ export function VaultPanel({ ask }: { ask: AskFn }): JSX.Element {
         </button>
       </div>
       <div className="aiws-vault-controls" data-aiws="vault-controls">
-        <div className="aiws-seg" role="radiogroup" aria-label={t('aiws.vault.scope')}>
+        <div className="seg-ctl" role="radiogroup" aria-label={t('aiws.vault.scope')}>
           {VAULT_SCOPES.map((sc) => (
-            <button key={sc} type="button" role="radio" aria-checked={view.scope === sc} className={'aiws-mode' + (view.scope === sc ? ' on' : '')} data-vault-scope={sc} onClick={() => setView({ ...view, scope: sc })}>
+            <button key={sc} type="button" role="radio" aria-checked={view.scope === sc} className={view.scope === sc ? 'on' : undefined} data-vault-scope={sc} onClick={() => setView({ ...view, scope: sc })}>
               {t('aiws.vault.scope.' + sc)}
             </button>
           ))}
         </div>
         <input className="aiws-input" type="search" data-aiws="vault-search" placeholder={t('aiws.vault.searchPh')} value={query} onChange={(e) => setQuery(e.target.value)} />
-        <label className="aiws-pill">
+        {/* C#8 OS <select> 대신 공용 Dropdown(앱 목록 모양·앰버 선택). */}
+        <div className="aiws-pill aiws-pill-dd" data-aiws="vault-sort">
           <span>{t('aiws.vault.sort')}</span>
-          <select data-aiws="vault-sort" value={view.sort} onChange={(e) => setView({ ...view, sort: e.target.value as VaultView['sort'] })}>
-            {VAULT_SORTS.map((x) => (
-              <option key={x} value={x}>
-                {t('aiws.vault.sort.' + x)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="aiws-pill">
+          <Dropdown
+            ariaLabel={t('aiws.vault.sort')}
+            value={t('aiws.vault.sort.' + view.sort)}
+            options={VAULT_SORTS.map((x) => t('aiws.vault.sort.' + x))}
+            onChange={(v) => setView({ ...view, sort: VAULT_SORTS.find((x) => t('aiws.vault.sort.' + x) === v) ?? view.sort })}
+          />
+        </div>
+        <div className="aiws-pill aiws-pill-dd" data-aiws="vault-group">
           <span>{t('aiws.vault.group')}</span>
-          <select data-aiws="vault-group" value={view.group} onChange={(e) => setView({ ...view, group: e.target.value as VaultView['group'] })}>
-            {VAULT_GROUPS.map((x) => (
-              <option key={x} value={x}>
-                {t('aiws.vault.group.' + x)}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Dropdown
+            ariaLabel={t('aiws.vault.group')}
+            value={t('aiws.vault.group.' + view.group)}
+            options={VAULT_GROUPS.map((x) => t('aiws.vault.group.' + x))}
+            onChange={(v) => setView({ ...view, group: VAULT_GROUPS.find((x) => t('aiws.vault.group.' + x) === v) ?? view.group })}
+          />
+        </div>
         <div className="aiws-vault-agents" role="group" aria-label={t('aiws.vault.agents')}>
           {AGENT_IDS.map((id) => (
             <label key={id} className="aiws-pill">
@@ -226,7 +227,16 @@ export function VaultPanel({ ask }: { ask: AskFn }): JSX.Element {
       ) : view.agents.length === 0 ? (
         <p className="aiws-note">{t('aiws.vault.noAgents')}</p>
       ) : shown.length === 0 ? (
-        <p className="aiws-note">{list.length === 0 ? t('aiws.vault.empty') : t('aiws.vault.noMatch')}</p>
+        list.length === 0 ? (
+          // C#19 빈 상태 = 가운데 아이콘 + 제목 + 안내(AI 첫 화면과 같은 문법). 검색·필터로 0건은 한 줄 그대로.
+          <div className="aiws-empty">
+            <History className="aiws-home-ic" aria-hidden />
+            <b>{t('aiws.vault.emptyTitle')}</b>
+            <span>{t('aiws.vault.empty')}</span>
+          </div>
+        ) : (
+          <p className="aiws-note">{t('aiws.vault.noMatch')}</p>
+        )
       ) : (
         groups.map((g) => (
           <section key={g.key} className="aiws-vault-group" data-vault-group={g.key}>

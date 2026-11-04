@@ -198,7 +198,7 @@ function Editor({ initial, targets, onDone }: { initial: Automation | null; targ
         <button type="button" className="btn pri" data-action="auto.save" onClick={() => void save()}>
           {t('auto.save')}
         </button>
-        <button type="button" className="btn" data-action="auto.cancel" onClick={onDone}>
+        <button type="button" className="btn sec" data-action="auto.cancel" onClick={onDone}>
           {t('auto.cancel')}
         </button>
         {err && <span className="set-note err">{err}</span>}
@@ -216,7 +216,7 @@ function RunRow({ r, onRerun }: { r: AutomationRun; onRerun: () => void }): JSX.
       {r.error && <span className="set-note err">{r.error}</span>}
       {r.precheckResult && <span className="set-note">{t('auto.precheckExit').replace('{c}', String(r.precheckResult.exitCode ?? '—'))}</span>}
       {(r.status === 'dispatch_failed' || r.status === 'skipped_unavailable') && (
-        <button type="button" className="btn" data-action="auto.rerun" onClick={onRerun}>
+        <button type="button" className="btn sec" data-action="auto.rerun" onClick={onRerun}>
           {t('auto.rerun')}
         </button>
       )}
@@ -283,13 +283,13 @@ export function AutomationsPanel(): JSX.Element {
                 {last ? ` · ${t(`auto.status.${last.status}`)}` : ` · ${t('auto.neverRan')}`}
               </span>
               <span className="acct-actions">
-                <button type="button" className="btn" data-action="auto.runNow" onClick={() => void window.ev.automations.runNow(a.id)}>
+                <button type="button" className="btn sec" data-action="auto.runNow" onClick={() => void window.ev.automations.runNow(a.id)}>
                   {t('auto.runNow')}
                 </button>
-                <button type="button" className="btn" data-action="auto.edit" onClick={() => setEditing(a)}>
+                <button type="button" className="btn sec" data-action="auto.edit" onClick={() => setEditing(a)}>
                   {t('auto.edit')}
                 </button>
-                <button type="button" className="btn" data-action="auto.remove" onClick={() => void remove(a)}>
+                <button type="button" className="btn sec" data-action="auto.remove" onClick={() => void remove(a)}>
                   {t('auto.remove')}
                 </button>
               </span>

@@ -187,7 +187,7 @@ test('EXP-2b 좌측 레일 아이콘으로 탐색기를 연다', async ({ ara })
   await newLocalShell(ara.page)
   await explorerWindow(ara.app, () => ara.page.click('.lrail-item[data-activity="explorer"]'))
   // 열려 있는 동안 레일 아이콘이 켜져 있다(main 이 explorer:shown 으로 알린다).
-  await expect(ara.page.locator('.lrail-item.active[data-activity="explorer"]')).toHaveCount(1)
+  await expect(ara.page.locator('.lrail-item.open[data-activity="explorer"]')).toHaveCount(1)
   // 토글이 아니라 눌림(aria-pressed)이 없고 이름이 "열기"다(다듬기 R1 — 리뷰 B6).
   await expect(ara.page.locator('.lrail-item[data-activity="explorer"]')).toHaveAttribute('aria-label', '탐색기 창 열기')
   await expect(ara.page.locator('.lrail-item[data-activity="explorer"][aria-pressed]')).toHaveCount(0)

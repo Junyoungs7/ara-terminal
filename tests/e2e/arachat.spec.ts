@@ -36,7 +36,8 @@ test('ARA2-1★ 레일을 열면 대화가 시작되고, 보낸 말·도구 묶�
   //    v2: 시작 안내 줄은 없다 — 폴더는 경로 줄이, 엔진·모델은 선택기가 말한다.
   await expect(panel.locator('.ara-note')).toHaveCount(0)
   await expect(panel.locator('.ara-path')).toHaveCount(0) // 아라 폴더 + 대상 없음 → 보일 경로가 없다
-  await expect(panel.locator('[data-field="ara.usage"]')).toHaveText('—')
+  // C#23 쓴 것·한도가 없으면 상태줄을 숨긴다(옛 '—' 한 칸).
+  await expect(panel.locator('[data-field="ara.usage"]')).toHaveCount(0)
 
   // ② 보낸 말은 즉시 뜬다(답을 기다리는 동안 화면이 비면 안 된다).
   const input = panel.locator('.ara-input')

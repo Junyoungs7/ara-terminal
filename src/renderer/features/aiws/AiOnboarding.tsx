@@ -96,7 +96,7 @@ export function AiOnboarding({ onClose }: { onClose: () => void }): JSX.Element 
           <button type="button" className="btn sec" data-onb="never" onClick={() => close(true)}>
             {t('aiws.onb.never')}
           </button>
-          <button type="button" className="btn" data-onb="close" onClick={() => close(false)}>
+          <button type="button" className="btn sec" data-onb="close" onClick={() => close(false)}>
             {t('aiws.onb.close')}
           </button>
         </div>

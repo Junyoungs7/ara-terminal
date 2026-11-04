@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import { Bot } from 'lucide-react'
 import { AGENTS } from '@shared/agents'
 import { t } from '../../i18n'
 import { revealAgent, useAgentStore, worktreeName } from './agentStore'
@@ -25,7 +26,12 @@ export function AgentDashboard(): JSX.Element {
     <div className="aiws-board" role="region" aria-label={t('aiws.nav.dashboard')} data-aiws="dashboard">
       <h2 className="aiws-new-ttl">{t('aiws.nav.dashboard')}</h2>
       {cards.length === 0 ? (
-        <p className="aiws-note">{t('aiws.board.empty')}</p>
+        // C#19 빈 상태 = 가운데 아이콘 + 제목 + 안내(AI 첫 화면 .aiws-empty 와 같은 문법).
+        <div className="aiws-empty">
+          <Bot className="aiws-home-ic" aria-hidden />
+          <b>{t('aiws.board.emptyTitle')}</b>
+          <span>{t('aiws.board.empty')}</span>
+        </div>
       ) : (
         <div className="aiws-board-cols">
           {BOARD_BUCKETS.map((b) => (
@@ -68,7 +74,11 @@ export function ActivityFeed(): JSX.Element {
     <div className="aiws-board" role="region" aria-label={t('aiws.nav.agents')} data-aiws="activity">
       <h2 className="aiws-new-ttl">{t('aiws.feed.title')}</h2>
       {items.length === 0 ? (
-        <p className="aiws-note">{t('aiws.feed.empty')}</p>
+        <div className="aiws-empty">
+          <Bot className="aiws-home-ic" aria-hidden />
+          <b>{t('aiws.feed.emptyTitle')}</b>
+          <span>{t('aiws.feed.empty')}</span>
+        </div>
       ) : (
         <div className="aiws-feed" role="list">
           {items.map((e) => {
