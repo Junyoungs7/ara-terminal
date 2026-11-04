@@ -3010,6 +3010,14 @@
   height: 100%;
   padding: var(--sp-2) var(--sp-3);
 }
+/* 2026-11-04 준영님 제보 "세션이 전체 화면이 안 된다, 검은 라운드가 쳐진다": xterm.css 의
+   `.xterm:not(.allow-transparency) .xterm-viewport { background-color: 검정 }` — 이 빈 요소는
+   .xterm 의 패딩 상자 전체(absolute inset 0)를 덮는다. xterm 5 는 여기에 테마 배경을 칠했지만
+   xterm 6 은 .xterm 자신과 스크롤 요소에만 칠한다 → 패딩(위 4px·옆 6px)과 셀 나머지가 검은 띠가 됐다.
+   비우면 xterm 이 .xterm 에 칠한 테마 배경이 보인다(테마를 바꾸면 xterm 이 같이 바꾼다). */
+.term-pane .xterm:not(.allow-transparency) .xterm-viewport {
+  background-color: transparent;
+}
 /* F11 인라인 고스트 자동완성 — 히스토리에서 찾은 나머지를 커서 뒤에 흐리게 겹쳐 보여 준다.
    xterm 데코레이션 요소라 위치·크기(px)는 xterm 이 인라인으로 정한다. 여기서는 색과 클리핑만.
    실제 입력이 아니므로 클릭·선택 대상이 되면 안 된다(pointer-events:none). */
