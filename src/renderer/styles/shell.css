@@ -10009,8 +10009,12 @@ progress {
 .diff-view {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   container-type: inline-size;
+  /* 안쪽(Monaco diff, automaticLayout)이 바깥 .aiws-center(overflow:auto)를 몇 px 넘치면 스크롤바가 생겼다
+     사라지기를 매 프레임 되풀이해 툴바가 6px 씩 흔들렸다(2026-11-04 DIFF-1·P3R2B-1) — 넘침은 여기서 끊는다. */
+  overflow: hidden;
 }
 /* C#2 좁으면 변경 목록을 줄여 diff 본문 자리를 남긴다. */
 @container (max-width: 860px) {
