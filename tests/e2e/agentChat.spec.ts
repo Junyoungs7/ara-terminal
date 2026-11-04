@@ -6,7 +6,7 @@
 //    설치된 진짜 훅 스크립트로 UserPromptSubmit(transcript_path 포함)을 보낸다 — 앱은 그 경로를 꼬리 읽기로 따라간다.
 // 🔴 기록·훅은 임시 홈(userData/e2e-home)에만. CLAUDE_CONFIG_DIR 도 그 안으로(Orca 시험 방식) — 사용자 실제 ~/.claude 는 안 건드린다.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { test, expect, tempDir, rmDir } from './fixtures'
 
@@ -48,6 +48,16 @@ process.stdin.on('data', (d) => {
   buf = ''
   n++
   out('\nGOT: ' + text.replace(/\n/g, '⏎') + '\n')
+  // 긴 대화(CHAT-1 뒤쪽 스크롤 시험) · 작업 중 붙잡기/놓기(UserPromptSubmit 만 → working, Stop → 끝).
+  if (text === 'many') {
+    for (let k = 1; k <= 60; k++) {
+      rec({ type: 'user', uuid: 'mu' + k, message: { role: 'user', content: 'Q ' + k } })
+      rec({ type: 'assistant', uuid: 'ma' + k, message: { id: 'mm' + k, role: 'assistant', content: [{ type: 'text', text: ('LONG ' + k + ' ').repeat(40) }] } })
+    }
+    return box()
+  }
+  if (text === 'hold') { hook('UserPromptSubmit'); return box() }
+  if (text === 'release') { hook('Stop'); return box() }
   rec({ type: 'user', uuid: 'u' + n, message: { role: 'user', content: text } })
   hook('UserPromptSubmit')
   rec({ type: 'assistant', uuid: 'a' + n + 'x', message: { id: 'm' + n, role: 'assistant', content: [{ type: 'tool_use', id: 't' + n, name: 'Bash', input: { command: 'echo fake-' + n } }] } })
@@ -160,6 +170,41 @@ test('CHAT-1★ 가짜 claude 의 transcript → 채팅 화면 · 채팅 입력 
     await page.locator('[data-aiws="chat-input"]').press('Enter')
     await expect(page.locator('[data-aiws="chat"] .aiws-chat-msg.assistant').last()).toContainText('ECHO 2', { timeout: 15_000 })
     await expect(page.locator('[data-aiws="chat"] .aiws-chat-msg.user')).toHaveCount(2)
+
+    // 스크롤(2.2.5 제보) — 긴 대화를 다시 열면 맨 아래. 위로 올린 뒤 새 내용이 와도 그 자리 그대로 + [새 내용] → 누르면 맨 아래.
+    const list = page.locator('[data-aiws="chat"] .aiws-chat-list')
+    const gap = (): Promise<number> => list.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)
+    await page.locator('[data-aiws="chat-input"]').fill('many')
+    await page.locator('[data-aiws="chat-input"]').press('Enter')
+    await expect(page.locator('[data-aiws="chat"] .aiws-chat-msg.assistant').last()).toContainText('LONG 60', { timeout: 15_000 })
+    await page.keyboard.press(win ? 'Control+Shift+U' : 'Meta+Shift+U')
+    await expect(page.locator('[data-aiws="chat"]')).toBeHidden()
+    await page.keyboard.press(win ? 'Control+Shift+U' : 'Meta+Shift+U')
+    await expect(page.locator('[data-aiws="chat"] .aiws-chat-msg.assistant').last()).toContainText('LONG 60')
+    expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight * 3)).toBe(true)
+    await expect.poll(gap).toBeLessThan(48)
+    await list.evaluate((el) => (el.scrollTop = 0))
+    await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(0)
+    const late = { type: 'assistant', uuid: 'late1', sessionId: 'fake-sid', timestamp: new Date().toISOString(), message: { id: 'late1', role: 'assistant', content: [{ type: 'text', text: 'LATE ARRIVAL' }] } }
+    appendFileSync(transcript, JSON.stringify(late) + '\n')
+    await expect(page.locator('[data-aiws="chat"] .aiws-chat-msg.assistant').last()).toContainText('LATE ARRIVAL', { timeout: 15_000 })
+    const newBtn = page.locator('[data-aiws="chat-new"]')
+    await expect(newBtn).toBeVisible()
+    expect(await list.evaluate((el) => el.scrollTop)).toBe(0)
+    await newBtn.click()
+    await expect.poll(gap).toBeLessThan(48)
+    await expect(newBtn).toHaveCount(0)
+
+    // 작업 중 — 훅이 working 이면 마지막 메시지 뒤에 도는 고리 + '작업 중…', 끝나면 사라진다.
+    const working = page.locator('[data-aiws="chat-working"]')
+    await expect(working).toHaveCount(0)
+    await page.locator('[data-aiws="chat-input"]').fill('hold')
+    await page.locator('[data-aiws="chat-input"]').press('Enter')
+    await expect(working).toBeVisible({ timeout: 15_000 })
+    await expect(working.locator('.ag-spin')).toBeVisible()
+    await page.locator('[data-aiws="chat-input"]').fill('release')
+    await page.locator('[data-aiws="chat-input"]').press('Enter')
+    await expect(working).toHaveCount(0, { timeout: 15_000 })
   } finally {
     process.env.PATH = savedPath
     rmDir(root)

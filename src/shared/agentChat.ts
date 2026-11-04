@@ -62,6 +62,14 @@ export function toolSummary(name: string, input: unknown): string {
   return clip(s.replace(/\s+/g, ' ').trim(), SUMMARY_CHARS) || name
 }
 
+/**
+ * 채팅 목록이 바닥에 붙어 있나 — 붙어 있을 때만 새 내용을 따라 내려간다(stick-to-bottom).
+ * 바닥에서 px 안이면 붙어 있다. 내용이 칸보다 짧으면(스크롤 없음) 늘 붙어 있다.
+ */
+export function nearBottom(el: { scrollHeight: number; scrollTop: number; clientHeight: number }, px = 48): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < px
+}
+
 /** 소요 시간 글 — 1초 미만 0.3s · 60초 이상 1m 4s. 잘못된 값이면 null. */
 export function fmtDuration(ms: number): string | null {
   if (!Number.isFinite(ms) || ms < 0) return null

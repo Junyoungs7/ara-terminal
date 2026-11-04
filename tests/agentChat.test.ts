@@ -4,7 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
+import { composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, nearBottom, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
 import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
@@ -381,5 +381,17 @@ describe('도구 줄 요약(시간·줄 수·테스트)', () => {
       J({ type: 'user', uuid: 'u', timestamp: '2026-01-01T00:00:12.400Z', message: { content: [{ type: 'tool_result', tool_use_id: 'e', content: 'ok' }, { type: 'tool_result', tool_use_id: 'b', content: 'Tests  2 passed (2)' }] } })
     ])
     expect(m.messages()[0].blocks).toMatchObject([{ ms: 12400, add: 2, del: 1 }, { ms: 12400, tests: { pass: 2, total: 2 } }])
+  })
+})
+
+describe('nearBottom — 채팅 스크롤 따라가기 판정', () => {
+  it('바닥 근처면 붙어 있다, 위로 올렸으면 아니다', () => {
+    expect(nearBottom({ scrollHeight: 5000, scrollTop: 4600, clientHeight: 400 })).toBe(true)
+    expect(nearBottom({ scrollHeight: 5000, scrollTop: 4560, clientHeight: 400 })).toBe(true)
+    expect(nearBottom({ scrollHeight: 5000, scrollTop: 4500, clientHeight: 400 })).toBe(false)
+    expect(nearBottom({ scrollHeight: 5000, scrollTop: 0, clientHeight: 400 })).toBe(false)
+  })
+  it('내용이 칸보다 짧으면 늘 붙어 있다', () => {
+    expect(nearBottom({ scrollHeight: 300, scrollTop: 0, clientHeight: 400 })).toBe(true)
   })
 })
