@@ -452,6 +452,14 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
     // R3.3 URL: Ctrl(⌘)+클릭만 연다. 그냥 클릭으로 열면 로그를 훑다가 브라우저가 튀어나온다.
     // 여는 주체는 언제나 main 이다(OS 브라우저든 내장 브라우저든) — 렌더러는 스킴 검증된 IPC 만 호출한다.
     // F8: SSH 세션의 loopback·OAuth 링크는 포워딩을 거쳐 내장 브라우저로 간다(라우팅은 상위가 판단).
+    // OSC 8 하이퍼링크(Claude Code 등이 글자에 링크를 숨겨 찍는 것)도 같은 규칙으로 — 기본 처리기는 window.open 이라 열리지 않았다.
+    term.options.linkHandler = {
+      activate: (e, uri) => {
+        if (!e.ctrlKey && !e.metaKey) return
+        linkRef.current?.(sessionId, uri, !local, e.altKey)
+      },
+      allowNonHttpProtocols: false
+    }
     term.loadAddon(
       new WebLinksAddon(
         (e, uri) => {

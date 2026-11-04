@@ -203,6 +203,13 @@ const PICK_KEY = pickKey ? (isMac() ? pickKey.mac : pickKey.win) : ''
  * 터미널은 아라의 TerminalPane 그대로(로컬 PTY). 탭을 바꿔도 다른 탭의 xterm 은 붙은 채 숨긴다(스크롤백 유지).
  * 탭이 없거나 [+] 를 누르면 피커.
  */
+// 에이전트 탭의 Ctrl+클릭 링크 — 터미널 공간(MainArea openLink)과 같게 Oriel(없으면 OS 브라우저), Alt 를 같이 누르면 OS 브라우저.
+// 2026-11-04 준영님 제보: 에이전트 탭은 onLink 를 넘기지 않아 밑줄만 생기고 열리지 않았다.
+// ponytail: 원격(M8) 에이전트 탭의 loopback 링크 포워딩은 안 한다 — 필요해지면 MainArea 의 planLink 길을 공용으로 뺀다.
+function openAgentLink(_sessionId: string, url: string, _isSsh: boolean, external?: boolean): void {
+  void (external ? window.ev?.app.openExternal(url) : window.ev?.oriel.open(url))
+}
+
 export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: AskFn }): JSX.Element {
   const allTabs = useAgentStore((s) => s.tabs)
   const activeId = useAgentStore((s) => s.activeTabByWorktree[worktree.id])
@@ -474,7 +481,7 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
       {tabs.filter((x) => !x.slept).map((x) => (
         <div key={x.sessionId} className="aiws-term" hidden={x !== active || chatting || covered}>
           {/* M8 R4 원격 탭은 원격 터미널로 — 붙여넣은 이미지·파일을 그 서버에 올리고 원격 경로를 넣는다(로컬 경로를 넣지 않는다). */}
-          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !covered} local={!x.host} serverKey={x.host ?? 'localhost'} agent />
+          <TerminalPane sessionId={x.sessionId} active={x === active && !chatting && !covered} local={!x.host} serverKey={x.host ?? 'localhost'} agent onLink={openAgentLink} />
         </div>
       ))}
       {/* 파일을 하나라도 열었으면 에디터를 붙여 둔다(숨겨도 모델·스크롤 유지). 처음 열 때만 Monaco 청크가 불린다. */}
