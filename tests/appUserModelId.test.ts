@@ -17,3 +17,9 @@ it('에이전트 OS 알림은 renotify 를 켠다', () => {
   const src = readFileSync(join(__dirname, '..', 'src/renderer/features/aiws/agentStore.ts'), 'utf8')
   expect(src).toMatch(/tag: `ara-agent-\$\{sessionId\}-\$\{kind\}`, renotify: true/)
 })
+
+// 알림을 눌러도 최소화된 아라가 안 올라오던 것(2.2.13 실측) — 렌더러 window.focus() 는 restore 를 못 한다.
+it('에이전트 OS 알림 클릭은 main 의 window:focus(restore 포함)를 부른다', () => {
+  const src = readFileSync(join(__dirname, '..', 'src/renderer/features/aiws/agentStore.ts'), 'utf8')
+  expect(src).toMatch(/n\.onclick = \(\) => \{[\s\S]{0,200}window\.ev\?\.window\.focus\(\)/)
+})

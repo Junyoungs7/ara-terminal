@@ -324,7 +324,8 @@ function sendAgentNote(sessionId: string, kind: FeedKind): void {
     const opts = { body: hide ? t('lock.notify.body') : note.body, tag: `ara-agent-${sessionId}-${kind}`, renotify: true } as NotificationOptions
     const n = new Notification(hide ? t('lock.notify.title') : title, opts)
     n.onclick = () => {
-      window.focus()
+      // window.focus() 는 최소화된 창을 못 올린다(2.2.13 실측) — main 이 restore 까지 하는 window:focus 로.
+      void window.ev?.window.focus().catch(() => {})
       openNoteVia(note)
     }
   } catch {
