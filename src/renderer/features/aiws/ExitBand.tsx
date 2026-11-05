@@ -4,7 +4,6 @@
 import { useEffect, useState, type JSX } from 'react'
 import { History, Play, Power, RotateCw, X } from 'lucide-react'
 import { AGENTS } from '@shared/agents'
-import { formatDuration } from '@shared/usageStats'
 import { t } from '../../i18n'
 import { useAgentStore, type AgentTab } from './agentStore'
 import './accountSwitch.css'
@@ -12,7 +11,15 @@ import './accountSwitch.css'
 /** 띠·카드 머리 글 — "Claude 세션이 끝났습니다 · 1h 12m"(시간은 이 창이 띄운 탭만). */
 export function exitBandText(tab: AgentTab): string {
   const base = t('aiws.exit.ended').replace('{agent}', AGENTS[tab.agent].label.split(' ')[0])
-  return tab.ranMs ? `${base} · ${formatDuration(tab.ranMs)}` : base
+  // 1분 미만은 안 적는다("· 0m" 은 정보가 아니라 잡음 — fb2214 실측).
+  return tab.ranMs && tab.ranMs >= 60_000 ? `${base} · ${koDuration(tab.ranMs)}` : base
+}
+
+/** "1시간 12분" · "7분" — 띠 글은 한국어 문장이라 1h 12m 대신. */
+export function koDuration(ms: number): string {
+  const m = Math.floor(ms / 60_000)
+  const h = Math.floor(m / 60)
+  return h ? `${h}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`
 }
 
 /** 띠·카드가 같이 쓰는 동작. resume = 이어 갈 세션 id(undefined = 묻는 중 · null = 모름). */
