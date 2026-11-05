@@ -606,7 +606,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
         if (r.ok) got.push(r.path)
         else notifyPasteFallback(`${t('paste.image.failed')} — ${r.message}`)
       }
-      if (got.length) window.ev.session.input(sessionId, pastePaths(got))
+      if (got.length) term.paste(pastePaths(got))
     }
     const pasteLocalImages = async (images: readonly File[]): Promise<void> => {
       const got: string[] = []
@@ -615,7 +615,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
         if ('path' in r) got.push(r.path)
         else notifyPasteFallback(r.error)
       }
-      if (got.length) window.ev.session.input(sessionId, pastePaths(got))
+      if (got.length) term.paste(pastePaths(got))
     }
 
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
@@ -638,8 +638,7 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
         return true
       }
       // M8 herdr H10: 원격 세션에 붙인 클립보드 이미지는 SFTP 로 원격 임시 폴더(~/.ara-paste)에 올리고
-      // **그 원격 경로**를 넣는다. 로컬 세션은 지금처럼 아무것도 안 한다(xterm 에 넘김).
-      // 로컬은 채팅 입력창과 같이 다운로드\agent 에 저장하고 그 경로를 넣는다(fb2215 — 캡처를 저장·탐색기에서 끌어 오던 것).
+      // **그 원격 경로**를 넣는다. 로컬은 채팅 입력창과 같이 다운로드\agent 에 저장하고 그 경로를 넣는다(fb2215 — 캡처를 저장·탐색기에서 끌어 오던 것).
       const images = clipImages(files, (f) => window.ev.app.pathForFile(f))
       if (paths.length === 0 && images.length > 0) {
         void (local ? pasteLocalImages(images) : pasteRemoteImages(images))
@@ -649,7 +648,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       if (paths.length === 0) return false
       // 원격이라도 [파일] 탭이 그 세션에 붙어 있지 않으면 큐가 없다 → 경로 붙여넣기로 폴백.
       if (!local && uploadFiles(sessionId, paths)) return true
-      window.ev.session.input(sessionId, pastePaths(paths))
+      // 경로는 term.paste 로(괄호 붙여넣기) — Claude 는 붙여넣은 이미지 경로를 [Image #1] 첨부로 바꾼다(타자로 치면 글자로 남는다, fb2216).
+      term.paste(pastePaths(paths))
       // 원격인데 업로드로 못 넘어갔다면 **기대와 다르게 동작한 것**이다 — 조용히 넘기지 않는다
       // (2026-08-16). 슬롯은 이제 세션별이라(#201 B-2) 여기 오는 것은 그 세션에 원격 트리가 없을 때뿐이다.
       if (!local) notifyPasteFallback(t('paste.noQueue'))
