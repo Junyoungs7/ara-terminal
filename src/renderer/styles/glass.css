@@ -117,7 +117,7 @@
 
 /* ── G2 고른 행 = 앰버 왼쪽 막대(시안 C .row.act) — 워크트리·서버·세션·파일·탐색기 행.
    C#24 포커스 링이 안쪽 1px 라 막대와 같이 그린다(옛 :not(:focus-visible) 로 막대를 끄던 분기는 뺐다). ── */
-:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on, .diff-row.on) {
+:root[data-glass='on'] :is(.aiws-row.act, .srv-node.active, .sess-node.active, .frow.sel, .exp-node.on, .diff-row.on, .pl-row.picked) {
   box-shadow: inset 2px 0 0 var(--sig-user), inset 0 1px 0 var(--glass-hi);
 }
 
@@ -285,6 +285,21 @@
     background: var(--gl-in);
     border-color: var(--gl-edge);
   }
+  /* fb2214 터미널 사이드바 [지난 세션] — 불투명 패널(--bg-surface)·머리(--bg-canvas)·카드(--bg-raised)가 유리 사이드바를 덮었다.
+     패널·머리는 걷고(파일 탭 머리와 같이), 줄 = AI 대시보드 카드와 같은 유리 면. */
+  :root[data-glass='on'] .sidebar .pastlog {
+    background: transparent;
+  }
+  :root[data-glass='on'] .sidebar .pastlog .mon-head {
+    background: transparent;
+    border-color: var(--gl-edge);
+  }
+  :root[data-glass='on'] .pl-row {
+    background: var(--glass);
+  }
+  :root[data-glass='on'] .pl-row:not(.live) {
+    border-color: var(--gl-edge);
+  }
 }
 
 /* FB-2.2.3 A2 — 버튼 면은 투명이 아니라 색이라 폴백에서도 같다. */
@@ -299,13 +314,9 @@
 
 /* FB-2.2.3 C#5 유리 면 안의 hover — 불투명 회색 토큰(--bg-raised·--bg-overlay)이 탁한 덩어리로 보였다. 서버 행처럼 --glass-hover 로.
    (색이라 폴백에서도 같다.) 창 닫기의 빨강·고른 파일 행은 그대로. */
-:root[data-glass='on'] :is(.frow:not(.sel), .sb-act, .tb-ctl:not(.close), .tb-help, .sb-search .field .sclear, .ara-pick-menu .it):hover,
+:root[data-glass='on'] :is(.frow:not(.sel), .sb-act, .tb-ctl:not(.close), .tb-help, .sb-search .field .sclear, .ara-pick-menu .it, .pl-row):hover,
 :root[data-glass='on'] .ara-btn:hover:not(:disabled) {
   background: var(--glass-hover);
-}
-/* 2.2.6 변경 비교 목록 — 경로는 모노(채팅 시안 A 의 도구 줄·경로와 같은 글꼴). 글꼴이라 폴백에서도 같다. */
-:root[data-glass='on'] .diff-row :is(.diff-name, .diff-dir) {
-  font-family: var(--mono);
 }
 /* C#7 드롭다운 현재 줄 — 유리 위 중성 회색 대신 선택 면. */
 :root[data-glass='on'] .dd-opt.cur {

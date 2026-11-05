@@ -104,6 +104,17 @@ export function resetTermModes(sessionId: string): boolean {
   return true
 }
 
+/**
+ * fb2214 에이전트가 끝나 셸만 남았을 때 — 화면·스크롤백을 비우고 커서 줄(셸 프롬프트)만 맨 위에 남긴다(xterm clear()), 커서 뒤 옛 글자도 지운다(EL).
+ * xterm 쪽만 — 셸에는 아무것도 안 보낸다. 칸이 없으면(잠든 탭) 아무것도 안 한다.
+ */
+export function clearTermKeepPrompt(sessionId: string): void {
+  const e = terms.get(sessionId)
+  if (!e) return
+  e.term.clear()
+  e.term.write('[K')
+}
+
 export function getSelection(sessionId: string): string {
   return terms.get(sessionId)?.term.getSelection() ?? ''
 }

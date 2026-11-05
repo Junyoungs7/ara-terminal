@@ -222,3 +222,36 @@ describe('에이전트 상태(R2) — 봄/안 봄', () => {
     expect(m.useAgentStore.getState().statusById[id]).toBeUndefined()
   })
 })
+
+describe('fb2214 에이전트만 끝남(셸 남음) — 끝남 띠', () => {
+  const v = (sessionId: string, extra: Partial<AgentStatusView> = {}): AgentStatusView => ({ sessionId, state: 'idle', estimated: false, children: [], source: 'screen:x', ...extra })
+  it('agentExited 가 켜지면 xterm 만 비우고(셸엔 안 씀) 실행 시간을 재며, 다시 뜨면 띠 상태를 걷는다 · [이 대화 이어 하기]는 그 id 로 재개해 옛 탭 자리에', async () => {
+    const reg = await import('../src/renderer/terminal/termRegistry')
+    const { useAiwsStore } = await import('../src/renderer/features/aiws/store')
+    useAiwsStore.setState({ worktreesByRepo: { r: [{ id: 'wr', repoId: 'r', path: '/repo-r', displayName: 'r' } as never] } })
+    await m.useAgentStore.getState().loadAgents()
+    const a = await m.useAgentStore.getState().launchAgent({ agent: 'claude', worktreeId: 'wr', cwd: '/repo-r' })
+    if (!a.ok) throw new Error('x')
+    const term = { clear: vi.fn(), write: vi.fn() }
+    reg.registerTerm(a.sessionId, { term } as never)
+    pushStatus!(v(a.sessionId, { agentExited: true }))
+    expect(term.clear).toHaveBeenCalledTimes(1)
+    expect(term.write).toHaveBeenCalledWith('\x1b[K')
+    expect(m.useAgentStore.getState().tabs[0].ranMs).toBeGreaterThanOrEqual(0)
+    pushStatus!(v(a.sessionId, { agentExited: true, state: null })) // 계속 끝난 상태 — 다시 안 지운다
+    expect(term.clear).toHaveBeenCalledTimes(1)
+    m.useAgentStore.setState((s) => ({ tabs: s.tabs.map((x) => ({ ...x, exitBandOff: true as const })) }))
+    pushStatus!(v(a.sessionId)) // 그 셸에서 에이전트가 다시 뜸
+    expect(m.useAgentStore.getState().tabs[0]).not.toHaveProperty('exitBandOff')
+    expect(m.useAgentStore.getState().tabs[0]).not.toHaveProperty('ranMs')
+    pushStatus!(v(a.sessionId, { agentExited: true }))
+    reg.unregisterTerm(a.sessionId)
+    expect(await m.useAgentStore.getState().restartTab(a.sessionId, 'conv-1')).toBeNull()
+    expect(ev.agents.launch).toHaveBeenLastCalledWith('claude', '/repo-r', undefined, 'conv-1', undefined, undefined)
+    const s = m.useAgentStore.getState()
+    expect(s.tabs).toHaveLength(1)
+    expect(s.tabs[0].sessionId).not.toBe(a.sessionId)
+    expect(ev.session.destroy).toHaveBeenCalledWith(a.sessionId)
+    useAiwsStore.setState({ worktreesByRepo: {} })
+  })
+})

@@ -18,6 +18,7 @@ import { clearDraft, readChatOn, writeChatOn } from './chatDraft'
 import { deriveGeneratedTabTitle } from '@shared/agentTabTitle'
 import { openSettings } from '../../store/settingsNav'
 import { OrielInstallButton } from './OrielInstall'
+import { clearTermKeepPrompt } from '../../terminal/termRegistry'
 import { layoutOf, orderTabs, readTabLayout, restoreActive, writeTabLayout } from './tabLayout'
 
 export type AgentTab = {
@@ -51,6 +52,10 @@ export type AgentTab = {
   switched?: string
   /** R5 서버가 재부팅되어 잃은 원격 탭(다시 연결해 보니 서버 부팅 id 가 바뀌었다). */
   rebooted?: boolean
+  /** fb2214 띄운 시각(이 창이 띄운 탭만 — 되살린 탭은 모름) · 에이전트가 끝날 때 잰 실행 시간 · 끝남 띠 [✕]. 새 에이전트가 그 셸에서 뜨면 ranMs·exitBandOff 는 걷힌다. */
+  startedAt?: number
+  ranMs?: number
+  exitBandOff?: true
 }
 
 /** R6 다리가 끊긴 서버의 자동 다시 연결. attempt = 실패한 횟수, at = 다음 시도 시각(ms) · null = 멈춤(다 실패 — [다시 연결]만), busy = 지금 시도 중. */
@@ -91,7 +96,8 @@ type AgentState = {
   /** resume = 지난 세션 id(M4 AI-07) — 첫 지시 대신 재개로 띄운다. */
   launchAgent: (o: { agent: AgentId; worktreeId: string; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions; vaultTitle?: string }) => Promise<AgentLaunchResult>
   /** M11 재시작 칩(Orca Restart chip) — 끝난 탭(또는 에이전트만 끝난 탭) 자리에서 같은 에이전트·같은 폴더로 새로 띄운다. 실패면 사유. */
-  restartTab: (sessionId: string) => Promise<string | null>
+  /** resume = fb2214 끝남 띠 [이 대화 이어 하기] — 그 세션 id 로 재개(지난 세션 [재개]와 같은 launchAgent 길). */
+  restartTab: (sessionId: string, resume?: string) => Promise<string | null>
   setActiveTab: (worktreeId: string, sessionId: string) => void
   /** M8 DM-05 끊긴 원격 탭 [다시 연결] — 그 서버의 끊긴 탭을 모두 같은 세션으로 되살린다. 실패면 사유. */
   reconnectHost: (hostKey: string) => Promise<string | null>
@@ -152,7 +158,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     if (r.noOriel) pushNote({ kind: 'info', space: 'ai', title: t('aiws.note.noOriel'), body: t('aiws.note.noOriel.body'), go: () => openSettings('agents', 'agents.oriel'), extra: OrielInstallButton })
     // M11 실행 지시로 지은 제목 — main 도 같은 규칙으로 짓지만 그 push 는 launch 응답보다 먼저 와 버려진다(되살리기용으로 main 이 남긴다).
     const genTitle = prompt ? deriveGeneratedTabTitle(prompt) : null
-    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}), ...(r.account !== undefined ? { account: r.account } : {}) }
+    const tab: AgentTab = { sessionId: r.sessionId, agent, worktreeId, title: r.title, line: r.line, exited: false, startedAt: Date.now(), ...(prompt?.trim() ? { prompt } : {}), ...(host ? { host } : {}), ...(vaultTitle?.trim() ? { vaultTitle } : {}), ...(genTitle ? { genTitle } : {}), ...(r.account !== undefined ? { account: r.account } : {}) }
     const chatOn = { ...get().chatOn, [r.sessionId]: get().settings?.agents[agent].view === 'chat' }
     writeChatOn(chatOn)
     set((s) => ({ tabs: [...s.tabs, tab], activeTabByWorktree: { ...s.activeTabByWorktree, [worktreeId]: r.sessionId }, chatOn }))
@@ -160,7 +166,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     return r
   },
 
-  restartTab: async (sessionId) => {
+  restartTab: async (sessionId, resume) => {
     const old = get().tabs.find((x) => x.sessionId === sessionId)
     // 끝난 탭(셸까지 끝남) 또는 에이전트만 끝나고 셸이 남은 탭(main 화면 판정 agentExited — 그 셸은 닫는다).
     if (!old || !(old.exited || get().statusById[sessionId]?.agentExited)) return null
@@ -168,7 +174,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       .flat()
       .find((x) => x.id === old.worktreeId)
     if (!w) return t('aiws.agent.restart.noWorktree')
-    const r = await get().launchAgent({ agent: old.agent, worktreeId: old.worktreeId, cwd: w.path, ...(old.vaultTitle ? { vaultTitle: old.vaultTitle } : {}) })
+    const r = await get().launchAgent({ agent: old.agent, worktreeId: old.worktreeId, cwd: w.path, ...(resume ? { resume } : {}), ...(old.vaultTitle ? { vaultTitle: old.vaultTitle } : {}) })
     if (!r.ok) return r.error
     // 새 탭(끝에 붙음)을 옛 탭 자리로 옮기고 옛 탭은 닫는다(셸이 남아 있으면 closeTab 이 끈다).
     set((s) => {
@@ -478,6 +484,22 @@ function saveLayoutFromNowOn(pending: () => ReadonlySet<string>): void {
   })
 }
 
+/**
+ * fb2214 에이전트만 끝나고 셸이 남음(main 화면 판정 agentExited)이 켜질 때 — 겹친 잔상(데몬 replay 와 어긋난 옛 화면)을 xterm 쪽에서만 지우고 실행 시간을 잰다.
+ * 셸에는 아무것도 안 보낸다(cls 를 몰래 치면 셸 히스토리가 더러워진다). 꺼질 때(그 셸에서 에이전트가 다시 뜸) 띠 상태를 걷는다.
+ */
+function onAgentExit(sessionId: string, ended: boolean): void {
+  if (ended) clearTermKeepPrompt(sessionId)
+  const now = Date.now()
+  useAgentStore.setState((s) => ({
+    tabs: s.tabs.map((x) => {
+      if (x.sessionId !== sessionId) return x
+      const { ranMs: _r, exitBandOff: _o, ...rest } = x
+      return ended && x.startedAt ? { ...rest, ranMs: now - x.startedAt } : rest
+    })
+  }))
+}
+
 let statusStarted = false
 /** 상태 구독 — AI 작업 공간을 처음 열 때(피커가 감지를 부를 때) 한 번. 창이 늦게 떠도 지금까지의 상태를 받아 온다. */
 function startStatus(): void {
@@ -491,6 +513,7 @@ function startStatus(): void {
     const seen = nextSeen(prev, v, s.seenById[v.sessionId] ?? true, viewingNow)
     useAgentStore.setState((x) => ({ statusById: { ...x.statusById, [v.sessionId]: v }, seenById: { ...x.seenById, [v.sessionId]: seen } }))
     onTransition(prev, v, viewingNow)
+    if (!!prev?.agentExited !== !!v.agentExited) onAgentExit(v.sessionId, !!v.agentExited)
   }
   window.ev.agents.onStatus(apply)
   // M5 AI-19 — 이름이 정해지면 그 탭에(탭이 아직 없으면 버린다 — 되살릴 때 tabs() 가 다시 준다).

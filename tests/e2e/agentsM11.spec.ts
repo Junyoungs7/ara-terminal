@@ -113,13 +113,13 @@ test('AG-M11★ 탭 제목(에이전트가 정한 OSC 제목) · 에이전트가
     // 에이전트만 끝낸다(셸은 남음) → 재시작 칩·끝남 줄.
     await page.evaluate((s) => window.ev.session.input(s,'quit\r'), first)
     await expect(tab.locator('[data-aiws="restart-chip"]')).toBeVisible({ timeout: 20_000 })
-    await expect(page.locator('[data-aiws="exited-bar"]')).toBeVisible()
+    await expect(page.locator('[data-aiws="exit-band"]')).toBeVisible()
     await tab.locator('[data-aiws="restart-chip"]').click()
     await expect(page.locator('.aiws-tab[data-agent-tab="claude"]')).toHaveCount(1)
     await expect
       .poll(async () => page.evaluate(async () => (await window.ev.session.list()).filter((s) => s.space === 'ai').map((s) => s.id)))
       .not.toContain(first)
-    await expect(page.locator('[data-aiws="exited-bar"]')).toHaveCount(0, { timeout: 20_000 })
+    await expect(page.locator('[data-aiws="exit-band"]')).toHaveCount(0, { timeout: 20_000 })
   } finally {
     process.env.PATH = savedPath
     rmDir(root)

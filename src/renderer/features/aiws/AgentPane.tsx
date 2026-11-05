@@ -19,6 +19,7 @@ import { shortBranch } from './sidebarRows'
 import { resolveAgentTabTitle } from '@shared/agentTabTitle'
 import { wakeTab } from './hibernation'
 import { AccountLimitBand, AgentTabMenu } from './AccountSwitch'
+import { ExitBand } from './ExitBand'
 import './hibernation.css'
 import '../managed/servers.css'
 
@@ -495,7 +496,9 @@ export function AgentWorkspace({ worktree, ask }: { worktree: Worktree; ask: Ask
         </div>
       )}
       {active && active.lost && active.host && !covered && <RemoteCut host={active.host} />}
-      {active && !active.slept && (active.exited ? !(active.lost && active.host) : statusById[active.sessionId]?.agentExited) && !covered && <ExitedBar sessionId={active.sessionId} shellAlive={!active.exited} rebooted={active.rebooted} />}
+      {active && !active.slept && active.exited && !(active.lost && active.host) && !covered && <ExitedBar sessionId={active.sessionId} rebooted={active.rebooted} />}
+      {/* fb2214 에이전트만 끝나고 셸이 남음 → 위 띠(채팅 보기는 AgentChatView 안 카드). */}
+      {active && !active.slept && !active.exited && statusById[active.sessionId]?.agentExited && !covered && !chatting && <ExitBand key={active.sessionId} tab={active} />}
       {/* p3-M21 잠든 탭 → 깨우는 중 / 깨어난 탭 → 한 줄(목업 sleep.html 안 1). */}
       {active && !covered && (active.slept || active.woke !== undefined) && (
         <div className="aiws-note aiws-hib" role="status" data-aiws={active.slept ? 'hib-waking' : 'hib-woke'}>
@@ -581,11 +584,11 @@ function RestartChip({ sessionId }: { sessionId: string }): JSX.Element {
 }
 
 /** Orca TerminalProcessExitOverlay — 끝난 탭의 출력은 그대로 두고 아래에 [닫기]·[다시 시작]. */
-function ExitedBar({ sessionId, shellAlive, rebooted }: { sessionId: string; shellAlive: boolean; rebooted?: boolean }): JSX.Element {
+function ExitedBar({ sessionId, rebooted }: { sessionId: string; rebooted?: boolean }): JSX.Element {
   const r = useRestart(sessionId)
   return (
     <div className="aiws-note aiws-exited" role="status" data-aiws={rebooted ? 'rebooted-bar' : 'exited-bar'}>
-      <span>{t(rebooted ? 'aiws.agent.rebooted.note' : shellAlive ? 'aiws.agent.exitedShell' : 'aiws.agent.exitedNote')}</span>
+      <span>{t(rebooted ? 'aiws.agent.rebooted.note' : 'aiws.agent.exitedNote')}</span>
       <button type="button" className="btn sec" onClick={() => useAgentStore.getState().closeTab(sessionId)}>
         {t('aiws.agent.close')}
       </button>

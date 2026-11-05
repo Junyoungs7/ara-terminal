@@ -47,7 +47,7 @@
 .set-dir-path {
   flex: 1;
   min-width: 0;
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-md);
   color: var(--text-mid);
   white-space: nowrap;
@@ -684,7 +684,7 @@
   flex: none;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-md);
   color: var(--text-lo);
 }
@@ -768,7 +768,7 @@
   border-radius: var(--radius);
   background: var(--bg-canvas);
   color: var(--text-hi);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-md);
   outline: none;
 }
@@ -1685,7 +1685,8 @@
   box-shadow: 0 0 0 3px var(--ok-tint-2);
 }
 .pdest {
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   font-weight: 400;
   color: var(--ok);
@@ -2123,7 +2124,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-mid);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-md);
 }
 .dsk-dir {
@@ -3980,7 +3981,7 @@ button.sb-seg.upd:hover .val {
   flex: 0 1 auto;
 }
 .sess-node .sess-cwd {
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-micro);
   color: var(--text-lo);
   overflow: hidden;
@@ -4062,7 +4063,7 @@ button.sb-seg.upd:hover .val {
 }
 .fav-node .fav-p {
   margin-left: auto;
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 400;
   color: var(--text-lo);
@@ -6358,7 +6359,7 @@ progress {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   color: var(--text-hi);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-md);
   padding: var(--sp-3) var(--sp-4);
 }
@@ -8182,7 +8183,8 @@ progress {
   color: var(--text-lo);
   font-size: var(--fs-micro);
   font-weight: 400;
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .ara-fold .in {
   border-top: 1px solid var(--line);
@@ -8259,7 +8261,8 @@ progress {
 .ara-ask .pill .num,
 .ara-choices .pill .num {
   color: var(--text-mid);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   font-weight: 400;
 }
@@ -9217,6 +9220,11 @@ progress {
 .aiws-mono {
   font-family: var(--mono);
 }
+/* fb2214 레일·사이드바가 여는 화면(대시보드·활동·지난 세션·서버·새 작업·목록·변경 비교)의 경로·이름·id 는 UI 글꼴.
+   나눔고딕코딩(--mono)은 그대로 복사해 실행할 명령줄·코드에만 — 설정의 명령·인자 칸, 채팅 도구 줄은 그대로다. */
+:is(.aiws-board, .aiws-new, .aiws-side, .diff-view) .aiws-mono {
+  font-family: var(--ui);
+}
 
 /* 사이드바 */
 .aiws-side {
@@ -9388,7 +9396,7 @@ progress {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--mono);
+  font-family: var(--ui);
 }
 /* 상태 점 자리(M3 에이전트 상태). 지금은 고른 줄만 강조색. */
 .aiws-dot {
@@ -9421,7 +9429,8 @@ progress {
 }
 .aiws-diffn {
   margin-left: auto;
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .aiws-diffn .p {
   color: var(--ok);
@@ -9905,7 +9914,8 @@ progress {
   flex: none;
   color: var(--text-lo);
   font-size: var(--fs-micro);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 /* M4 AI-07 지난 세션 — 피드 줄 모양을 쓰고, 고른 줄 밑에 상세(메타·버튼·최근 턴)를 편다. */
 .aiws-vault-head {
@@ -9929,6 +9939,9 @@ progress {
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
+  /* fb2214 펼친 상세 = 대시보드 카드와 같은 유리 면(전엔 면 없이 떠 있었다). */
+  border-radius: var(--radius);
+  background: var(--glass);
 }
 .aiws-vault-meta {
   display: grid;
@@ -10122,7 +10135,7 @@ progress {
   height: 16px;
   border-radius: var(--radius-sm);
   background: var(--gl-in);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-micro);
   font-weight: 500;
   color: var(--text-lo);
@@ -10174,7 +10187,8 @@ progress {
   flex: none;
   display: flex;
   gap: var(--sp-2);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
 }
 .diff-add {
@@ -10550,7 +10564,8 @@ progress {
   flex: none;
   min-width: var(--sp-9);
   color: var(--text-lo);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   text-align: right;
 }
@@ -11255,7 +11270,7 @@ progress {
 .scm-st {
   flex: none;
   min-width: var(--sp-5);
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: var(--fs-micro);
   text-align: center;
   color: var(--text-lo);
@@ -12559,7 +12574,8 @@ progress {
   flex: 1;
   color: var(--text-mid);
   font-size: var(--fs-micro);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .acct-usage.na {
   font-family: inherit;
@@ -12616,7 +12632,8 @@ progress {
   color: var(--text-mid);
 }
 .auto-run-when {
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .auto-run-status {
   color: var(--text-hi);
@@ -12634,7 +12651,8 @@ progress {
 .stat-val {
   color: var(--text-hi);
   font-size: var(--fs-xl);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .stat-lbl {
   color: var(--text-lo);
@@ -12669,7 +12687,8 @@ progress {
   text-align: right;
   padding: var(--sp-1) var(--sp-3);
   border-bottom: 1px solid var(--line);
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 .stats-models th:first-child,
 .stats-models td:first-child {
@@ -12940,7 +12959,9 @@ progress {
 }
 .aiws-vault-group-t {
   margin: var(--sp-4) 0 var(--sp-2);
+  padding: 0 var(--sp-2);
   font-size: var(--fs-micro);
+  font-weight: 500;
   color: var(--text-mid);
 }
 .aiws-vault-snippet {
@@ -12993,7 +13014,7 @@ progress {
 }
 .aiws-dlg .aiws-cp-text {
   resize: vertical;
-  font-family: var(--mono);
+  font-family: var(--ui);
 }
 .aiws-cp-status,
 .aiws-ext-src {
@@ -13041,7 +13062,7 @@ progress {
   border-radius: var(--radius);
 }
 .aiws-ext-name {
-  font-family: var(--mono);
+  font-family: var(--ui);
   color: var(--text-hi);
 }
 .aiws-ext-path {

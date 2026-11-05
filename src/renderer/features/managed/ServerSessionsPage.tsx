@@ -56,7 +56,17 @@ export function ServerSessionsPage({ ask }: { ask: (spec: DialogSpec) => Promise
           {err}
         </p>
       )}
-      {!hosts.length && <p className="aiws-note">{loading ? t('managed.loading') : t('servers.empty')}</p>}
+      {!hosts.length &&
+        (loading ? (
+          <p className="aiws-note">{t('managed.loading')}</p>
+        ) : (
+          // fb2214 빈 상태 = 가운데 아이콘 + 제목 + 안내(대시보드·지난 세션 .aiws-empty 와 같은 문법).
+          <div className="aiws-empty">
+            <Server className="aiws-home-ic" aria-hidden />
+            <b>{t('servers.emptyTitle')}</b>
+            <span>{t('servers.empty')}</span>
+          </div>
+        ))}
       {hosts.map((h) => (
         <HostCard key={h.hostKey} host={h} busy={busy} onAttach={(r) => void attach(r)} onEnd={(r) => void end(r)} />
       ))}
