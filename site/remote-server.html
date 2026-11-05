@@ -30,10 +30,11 @@
       <aside class="toc">
         <div class="t">원격 서버에서 계속 실행</div>
         <a href="#why">1. 왜 서버에 데몬을 두나</a>
-        <a href="#footprint">2. 서버에 무엇이 남나</a>
-        <a href="#optional">3. 꼭 써야 하나</a>
-        <a href="#accounts">4. 서버·로컬 계정 따로 쓰기</a>
-        <a href="#status">5. 확인 상태</a>
+        <a href="#tmux">2. tmux 와 무엇이 다른가</a>
+        <a href="#footprint">3. 서버에 무엇이 남나</a>
+        <a href="#optional">4. 꼭 써야 하나</a>
+        <a href="#accounts">5. 서버·로컬 계정 따로 쓰기</a>
+        <a href="#status">6. 확인 상태</a>
       </aside>
 
       <main>
@@ -65,8 +66,31 @@
           <p>원리는 서버에서 <code>tmux</code> 를 띄워 두고 쓰는 것과 같습니다. 아라는 그 위에 상태 표시·승인·알림·계정 전환을 얹었습니다.</p>
         </section>
 
+        <section id="tmux">
+          <h2>2. tmux 와 무엇이 다른가</h2>
+          <p>
+            <b>끊겨도 살려 두는 것은 tmux 와 같습니다.</b> 데몬도 tmux 처럼 접속한 SSH 계정으로 도는 프로세스 하나입니다(root·포트·서비스 등록 없음).
+            다른 점은 화면만 읽지 않고 <b>Claude 가 직접 보내는 신호</b>(승인 대기·답 끝남·대화 파일 위치)를 받아 PC 로 넘긴다는 것입니다.
+          </p>
+          <table class="keys">
+            <thead><tr><th></th><th>tmux</th><th>아라 데몬</th></tr></thead>
+            <tbody>
+              <tr><td>끊겨도 살아 있음</td><td>됨</td><td>됨</td></tr>
+              <tr><td>서버에 필요한 것</td><td>tmux 설치(없으면 관리자 권한으로 설치)</td><td>python3 하나(대부분 기본 설치)</td></tr>
+              <tr><td>일하는 중 · 승인 대기 판단</td><td>화면을 긁어서 추측</td><td>Claude 가 보내는 이벤트가 먼저, 화면은 보조</td></tr>
+              <tr><td>Claude 가 업데이트돼 화면 모양이 바뀌면</td><td>상태 표시 전체가 틀어짐</td><td>이벤트로 받는 상태는 그대로, 화면에 기대는 부분만 손봄</td></tr>
+              <tr><td>한도에 걸리면 다른 계정으로</td><td>없음</td><td>같은 대화를 다른 계정으로 이어 감</td></tr>
+              <tr><td>아라 터미널 안에서 스크롤 · 복사</td><td>tmux 자체 스크롤 · 단축키와 부딪힘</td><td>아라 터미널 그대로</td></tr>
+            </tbody>
+          </table>
+          <div class="note">
+            <b>실제 사례:</b> 2026-11-05 Claude Code 2.1.300 은 입력 줄 머리 글자를 <code>❯</code> 에서 <code>&gt;</code> 로 바꿨습니다.
+            아라에서도 화면을 보조로 읽던 부분(채팅 보기에서 글 넣기)이 그날 바로 멈췄습니다(2.2.16 에서 고침). 화면에만 기대면 CLI 가 바뀔 때마다 상태 표시 전체가 이렇게 깨집니다.
+          </div>
+        </section>
+
         <section id="footprint">
-          <h2>2. 서버에 무엇이 남나</h2>
+          <h2>3. 서버에 무엇이 남나</h2>
           <table class="keys">
             <thead><tr><th>항목</th><th>내용</th></tr></thead>
             <tbody>
@@ -80,7 +104,7 @@
         </section>
 
         <section id="optional">
-          <h2>3. 꼭 써야 하나</h2>
+          <h2>4. 꼭 써야 하나</h2>
           <p>
             아닙니다. 데몬 없이 일반 SSH 터미널에서 Claude 를 그대로 써도 됩니다 — 연결이 끊기면 같이 끝나는 것만 감수하면 됩니다.
             관리형 서버로 등록한 서버만 데몬을 쓰고, 서버마다 끄고 켤 수 있습니다(설정 › 관리형 서버, <b>상주 모드</b> 기본 켜짐).
@@ -91,7 +115,7 @@
         </section>
 
         <section id="accounts">
-          <h2>4. 서버·로컬 계정 따로 쓰기</h2>
+          <h2>5. 서버·로컬 계정 따로 쓰기</h2>
           <p>됩니다. 로컬 계정과 서버 계정은 저장되는 곳부터 다릅니다.</p>
           <table class="keys">
             <thead><tr><th></th><th>로컬</th><th>서버</th></tr></thead>
@@ -102,11 +126,16 @@
               <tr><td>예</td><td>개인 계정</td><td>개발 서버 A 는 팀 계정, B 는 다른 계정</td></tr>
             </tbody>
           </table>
+          <p>
+            <b>한도에 걸렸을 때 다른 계정으로 이어 가는 방법:</b> 토큰을 옮기거나 넣지 않습니다. 계정마다 로그인 폴더가 따로 있고(처음 한 번 그 폴더로 <code>claude</code> 로그인),
+            전환하면 아라가 지금 Claude 를 끝내고 <b>다른 계정 폴더로 <code>claude --resume &lt;대화 id&gt;</code></b> 를 다시 띄웁니다.
+            대화 기록 폴더는 계정끼리 같이 쓰기 때문에 새 계정에서도 같은 대화가 그대로 이어집니다. 로그인 정보는 각 폴더 안에만 있고 아라가 꺼내 보지 않습니다.
+          </p>
           <p>SSH 로그인 계정(예: <code>dev</code>, <code>deploy</code>)도 서버마다 따로입니다. 데몬은 그 SSH 계정으로 돌기 때문에 계정끼리 섞이지 않습니다.</p>
         </section>
 
         <section id="status">
-          <h2>5. 확인 상태</h2>
+          <h2>6. 확인 상태</h2>
           <ul>
             <li>시험용 서버(사내 PC 의 SSH·WSL)에서 설치·실행·끊김 뒤 재접속·다른 PC 에서 이어 보기·서버 계정 전환·제거까지 자동 시험이 모두 통과했습니다.</li>
             <li><b>아직 안 한 것:</b> 실제 회사 개발 서버에서의 첫 연결과 서버에서의 <code>claude</code> 로그인. 다음 단계로 개발 서버 한 대에서 함께 확인합니다.</li>
