@@ -215,7 +215,7 @@
 }
 .aiws-chat-tool summary .aiws-mono {
   min-width: 0;
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -225,7 +225,8 @@
 .aiws-chat-tool-rs {
   flex: none;
   margin-left: auto;
-  font-family: var(--mono);
+  font-family: var(--ui);
+  font-variant-numeric: tabular-nums;
   color: var(--text-lo);
   white-space: nowrap;
 }
