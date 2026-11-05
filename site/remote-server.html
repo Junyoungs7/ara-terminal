@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>원격 서버에서 계속 실행</title>
+    <meta name="description" content="아라가 개발 서버에 데몬을 두는 이유, 서버에 남는 것, 서버·로컬 계정을 따로 쓰는 방법." />
+    <link rel="icon" href="assets/ara-icon.svg" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script src="assets/release.js"></script>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/ara-icon.svg" alt="" /><span>ARA</span></a>
+        <nav class="nav-links">
+          <a href="index.html#diff">무엇이 다른가</a>
+          <a href="manual-v2.html">2.x 사용 설명서</a>
+          <a href="remote-server.html" class="on">원격 서버</a>
+          <a href="manual.html">1.x 사용 설명서</a>
+          <a href="changelog.html">패치 내역</a>
+          <a href="reports.html">오류 신고</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+        <a class="btn btn-primary btn-sm" data-dl href="downloads/" download>내려받기</a>
+      </div>
+    </header>
+
+    <div class="wrap doc">
+      <aside class="toc">
+        <div class="t">원격 서버에서 계속 실행</div>
+        <a href="#why">1. 왜 서버에 데몬을 두나</a>
+        <a href="#footprint">2. 서버에 무엇이 남나</a>
+        <a href="#optional">3. 꼭 써야 하나</a>
+        <a href="#accounts">4. 서버·로컬 계정 따로 쓰기</a>
+        <a href="#status">5. 확인 상태</a>
+      </aside>
+
+      <main>
+        <div class="doc-hd">
+          <h1>원격 서버에서 계속 실행</h1>
+          <p class="lead">
+            아라는 개발 서버에서 돌리는 Claude·Codex 가 <b>PC 연결이 끊겨도 죽지 않도록</b> 서버에 작은 도우미 프로그램(데몬)을 둡니다.
+            쓰고 싶은 서버에만 켜는 선택 기능이고, 서버 계정과 로컬 계정은 따로 쓸 수 있습니다. (2.2.12 부터)
+          </p>
+        </div>
+
+        <section id="why">
+          <h2>1. 왜 서버에 데몬을 두나</h2>
+          <p>
+            SSH 로 서버에 붙어 Claude 를 돌리면 Claude 는 <b>그 연결에 매달려</b> 있습니다. PC 를 끄거나, 노트북을 덮거나,
+            와이파이·VPN 이 잠깐 끊기면 서버의 Claude 도 같이 끝나고 하던 일이 멈춥니다. 데몬은 연결과 상관없이 서버에서 계속 돌게 붙잡아 둡니다.
+          </p>
+          <table class="keys">
+            <thead><tr><th>상황</th><th>데몬 없이 (일반 SSH)</th><th>데몬 있음 (관리형 서버)</th></tr></thead>
+            <tbody>
+              <tr><td>PC 를 끄거나 절전</td><td>서버의 에이전트도 끝남</td><td>서버에서 계속 진행</td></tr>
+              <tr><td>와이파이·VPN 끊김</td><td>끝남, 처음부터 다시</td><td>자동으로 다시 붙고 화면도 이어짐</td></tr>
+              <tr><td>다음 날 · 다른 PC 에서</td><td>이어 볼 방법 없음</td><td>[서버 세션] 화면·F1 에서 붙어 이어 봄</td></tr>
+              <tr><td>일하는 중 · 승인 대기 표시</td><td>안 보임</td><td>로컬과 똑같이 보임</td></tr>
+              <tr><td>승인 카드 · Windows 알림 · 채팅 보기</td><td>없음</td><td>로컬과 똑같이 됨</td></tr>
+              <tr><td>한도에 걸려 다른 계정으로</td><td>직접 다시 로그인</td><td>같은 대화를 다른 계정으로 이어 감</td></tr>
+            </tbody>
+          </table>
+          <p>원리는 서버에서 <code>tmux</code> 를 띄워 두고 쓰는 것과 같습니다. 아라는 그 위에 상태 표시·승인·알림·계정 전환을 얹었습니다.</p>
+        </section>
+
+        <section id="footprint">
+          <h2>2. 서버에 무엇이 남나</h2>
+          <table class="keys">
+            <thead><tr><th>항목</th><th>내용</th></tr></thead>
+            <tbody>
+              <tr><td>실행 계정 · 권한</td><td>접속한 <b>SSH 계정 그대로</b>. root·sudo 를 쓰지 않습니다.</td></tr>
+              <tr><td>네트워크</td><td>포트를 열지 않습니다. PC 와는 기존 SSH 연결 안에서만 이야기합니다.</td></tr>
+              <tr><td>서비스 등록</td><td>없음(systemd·cron 안 씀). 서버가 재부팅되면 멈추고 저절로 살아나지 않습니다.</td></tr>
+              <tr><td>파일</td><td>그 계정 홈의 <code>~/.ara-server</code> 한 폴더(본인만 읽기·쓰기, 권한 700). 필요한 것은 서버의 <code>python3</code> 하나.</td></tr>
+              <tr><td>설치 · 제거</td><td>처음 연결할 때 설명을 보여 주고 동의를 받은 뒤 설치합니다. 설정 › 관리형 서버 › [제거] 하면 서버 계정 정보까지 흔적 없이 지웁니다.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="optional">
+          <h2>3. 꼭 써야 하나</h2>
+          <p>
+            아닙니다. 데몬 없이 일반 SSH 터미널에서 Claude 를 그대로 써도 됩니다 — 연결이 끊기면 같이 끝나는 것만 감수하면 됩니다.
+            관리형 서버로 등록한 서버만 데몬을 쓰고, 서버마다 끄고 켤 수 있습니다(설정 › 관리형 서버, <b>상주 모드</b> 기본 켜짐).
+          </p>
+          <div class="note">
+            <b>권장:</b> 운영 서버가 아니라 <b>개발 서버</b>에서만 쓰세요. 서버 계정 정보(Claude 로그인)를 그 서버에 두기 때문입니다.
+          </div>
+        </section>
+
+        <section id="accounts">
+          <h2>4. 서버·로컬 계정 따로 쓰기</h2>
+          <p>됩니다. 로컬 계정과 서버 계정은 저장되는 곳부터 다릅니다.</p>
+          <table class="keys">
+            <thead><tr><th></th><th>로컬</th><th>서버</th></tr></thead>
+            <tbody>
+              <tr><td>등록하는 곳</td><td>설정 › 사용량·계정</td><td>설정 › 관리형 서버 › 서버 계정 (서버마다)</td></tr>
+              <tr><td>저장 위치</td><td>이 PC</td><td>그 서버의 <code>~/.ara-server/accounts</code></td></tr>
+              <tr><td>여러 계정 · 전환</td><td>됨</td><td>됨 — 한도에 걸리면 같은 대화를 다른 계정으로 이어 감</td></tr>
+              <tr><td>예</td><td>개인 계정</td><td>개발 서버 A 는 팀 계정, B 는 다른 계정</td></tr>
+            </tbody>
+          </table>
+          <p>SSH 로그인 계정(예: <code>dev</code>, <code>deploy</code>)도 서버마다 따로입니다. 데몬은 그 SSH 계정으로 돌기 때문에 계정끼리 섞이지 않습니다.</p>
+        </section>
+
+        <section id="status">
+          <h2>5. 확인 상태</h2>
+          <ul>
+            <li>시험용 서버(사내 PC 의 SSH·WSL)에서 설치·실행·끊김 뒤 재접속·다른 PC 에서 이어 보기·서버 계정 전환·제거까지 자동 시험이 모두 통과했습니다.</li>
+            <li><b>아직 안 한 것:</b> 실제 회사 개발 서버에서의 첫 연결과 서버에서의 <code>claude</code> 로그인. 다음 단계로 개발 서버 한 대에서 함께 확인합니다.</li>
+            <li>Codex 는 대화 번호를 알 수 없어 계정을 바꾸면 새 대화로 시작합니다.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <div class="wrap">
+        <span class="brand"><img src="assets/ara-icon.svg" alt="" style="width: 20px; height: 20px" />ARA</span>
+        <span class="muted">사내 배포용 · 베리굿투어</span>
+        <nav>
+          <a href="index.html">홈</a>
+          <a href="index.html#download">다운로드</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="assets/site.js"></script>
+  </body>
+</html>
