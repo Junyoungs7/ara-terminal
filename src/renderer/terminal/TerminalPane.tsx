@@ -28,6 +28,7 @@ import { notifyPasteFallback, uploadFiles } from '../store/uploadBus'
 import { clipImages, filePaths, registerPasteTarget } from '../store/pasteFiles'
 import { PASTE_IMAGE_MAX_BYTES, pasteImageExt } from '@shared/pasteImage'
 import { pastePaths } from '../components/filePath'
+import { saveClipFile } from '../features/aiws/ChatComposer'
 import { isAppShortcut } from '../../shared/keymap'
 import { t } from '../i18n'
 import '@xterm/xterm/css/xterm.css'
@@ -607,6 +608,15 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       }
       if (got.length) window.ev.session.input(sessionId, pastePaths(got))
     }
+    const pasteLocalImages = async (images: readonly File[]): Promise<void> => {
+      const got: string[] = []
+      for (const f of images) {
+        const r = await saveClipFile(f, 'agent')
+        if ('path' in r) got.push(r.path)
+        else notifyPasteFallback(r.error)
+      }
+      if (got.length) window.ev.session.input(sessionId, pastePaths(got))
+    }
 
     // F14 + A-3: 클립보드 **파일** 붙여넣기. 키다운이 아니라 진짜 paste 이벤트에서 받는다 —
     // 그래야 Windows 에서도 여러 개가 다 온다. 텍스트는 여기 오지 않는다(xterm 이 처리).
@@ -629,9 +639,10 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       }
       // M8 herdr H10: 원격 세션에 붙인 클립보드 이미지는 SFTP 로 원격 임시 폴더(~/.ara-paste)에 올리고
       // **그 원격 경로**를 넣는다. 로컬 세션은 지금처럼 아무것도 안 한다(xterm 에 넘김).
-      const images = local ? [] : clipImages(files, (f) => window.ev.app.pathForFile(f))
+      // 로컬은 채팅 입력창과 같이 다운로드\agent 에 저장하고 그 경로를 넣는다(fb2215 — 캡처를 저장·탐색기에서 끌어 오던 것).
+      const images = clipImages(files, (f) => window.ev.app.pathForFile(f))
       if (paths.length === 0 && images.length > 0) {
-        void pasteRemoteImages(images)
+        void (local ? pasteLocalImages(images) : pasteRemoteImages(images))
         return true
       }
       // 텍스트 붙여넣기는 xterm 이 자기 textarea 로 처리한다(bracketed paste 포함) — 넘긴다.

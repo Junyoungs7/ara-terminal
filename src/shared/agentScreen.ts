@@ -233,6 +233,9 @@ function compiledRules(agent: string): { rule: Rule; gate: CompiledGate }[] | nu
   return rules
 }
 
+/** 맨 아래 가로줄 둘 사이(claude 입력 상자 안) — 매니페스트 밖에서 그 자리를 볼 때. */
+export const promptBoxBody = (screen: string): string => region({ screen }, 'prompt_box_body')
+
 /** 실린 매니페스트 id(시험·보고용). */
 export const manifestIds = (): string[] => Object.keys(MANIFESTS)
 

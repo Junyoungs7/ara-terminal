@@ -6,11 +6,11 @@
 // store/pasteFiles.ts), 합성 KeyboardEvent 로는 브라우저가 클립보드를 건드리지 않는다.
 // 그래서 paste 이벤트를 직접 만들어 넣는다 — 우리 리스너는 document 캡처에 달려 있어 이 경로로 온다.
 // 실제 탐색기 복사 → Ctrl+V 는 수동 항목(PASTE-M1)으로 남긴다.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { test, expect, connectNewSshProfile, focusTerminal, newLocalShell, openFileTab, pickSidebarTab, termText } from './fixtures'
+import { test, expect, connectNewSshProfile, downloadsOf, focusTerminal, newLocalShell, openFileTab, pickSidebarTab, termText } from './fixtures'
 
 // OS 클립보드는 **머신 전역 자원**이다. 텍스트 붙여넣기 검사는 실제 클립보드에 써 넣고 확인하므로
 // 병렬로 돌면 서로 덮어쓴다(실측: PASTE-6 이 PASTE-9 가 써 둔 값을 읽었다) — 이 파일은 순차로 돈다.
@@ -143,6 +143,22 @@ test('PASTE-4 로컬 셸에서는 파일 경로가 붙여넣어진다', async ({
   // 줄바꿈이 따라 들어가 실행되지는 않는다 — 프롬프트가 한 줄에 그대로 있다.
   const lines = (await termText(page, id)).split('\n').filter((l) => l.trim())
   expect(lines[lines.length - 1]).toContain('path_only.txt')
+})
+
+// PASTE-10 로컬 터미널에 캡처 이미지(경로 없는 클립보드 그림) — 다운로드\agent 에 저장하고 그 경로를 넣는다(fb2215).
+test('PASTE-10 로컬 셸에 클립보드 이미지를 붙이면 저장한 경로가 들어간다', async ({ ara }) => {
+  const { page } = ara
+  const id = await newLocalShell(page)
+  await focusTerminal(page)
+  await page.evaluate(() => {
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0))
+    const ev = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(ev, 'clipboardData', { value: { files: [new File([png], 'image.png', { type: 'image/png' })] } })
+    document.dispatchEvent(ev)
+  })
+  const dir = join(downloadsOf(ara), 'agent')
+  await expect.poll(() => (existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.png')).length : 0), { timeout: 20_000 }).toBe(1)
+  await expect.poll(() => termText(page, id), { timeout: 20_000 }).toContain('.png')
 })
 
 // PASTE-6 클립보드에 파일이 없으면 종전 텍스트 붙여넣기 그대로

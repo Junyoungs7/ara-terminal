@@ -8,7 +8,7 @@
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { AgentId } from '@shared/agents'
-import { detectScreen, type ScreenDetection, type ScreenInput } from '@shared/agentScreen'
+import { detectScreen, promptBoxBody, type ScreenDetection, type ScreenInput } from '@shared/agentScreen'
 import { applyHookEvent, HOOK_SILENT_MS, resolveStatus, type AgentStatusView, type HookPane } from '@shared/agentHooks'
 import type { Session } from '@shared/types'
 import type { SessionTap } from '../sessions/MainSessionManager'
@@ -34,7 +34,9 @@ const SLASH_PLAIN_MAX = 1024
  */
 export function composerReady(agent: AgentId, input: ScreenInput, d: ScreenDetection): boolean {
   if (d.state === 'blocked' || d.skip) return false
-  if (agent === 'claude') return d.rule === 'live_prompt_box'
+  // 2.1.300 은 입력 줄 머리가 ❯ 가 아니라 > 다(2.2.15 실측 — 못 알아봐 채팅 전송·끝남 띠가 둘 다 죽었다).
+  // herdr 매니페스트(live_prompt_box)는 원본과 같게 두고 여기서 받는다.
+  if (agent === 'claude') return d.rule === 'live_prompt_box' || (d.state === 'idle' && /^\s*>/m.test(promptBoxBody(input.screen)))
   const lines = input.screen.split('\n')
   if (agent === 'codex') {
     if (d.state === 'working') return false

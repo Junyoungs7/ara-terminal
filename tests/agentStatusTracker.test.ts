@@ -24,6 +24,11 @@ describe('입력 상자 판정(첫 지시를 넣어도 되나)', () => {
     expect(ready('claude', ['Do you trust the files in this folder?', '', ' ❯ 1. Yes, proceed', '   2. No, exit', '', ' Enter to confirm · Esc to cancel'].join('\n'))).toBe(false)
     expect(ready('claude', 'PS C:\\work> claude --dangerously-skip-permissions')).toBe(false)
   })
+  it('claude 2.1.300: 입력 줄 머리가 ❯ 가 아니라 > 다(2.2.15 실측 — 못 알아봐 채팅 전송·끝남 띠가 둘 다 죽었다)', () => {
+    const screen = ['Claude Code v2.1.300', 'Opus 5.5 · Claude Team', 'D:\\AI\\OFA · /rc', '', RULE, '> Try "edit <filepath> to..."', RULE, '  branch:master | 15', '  ▸▸ bypass permissions on (shift+tab to cycle) · ← for agents'].join('\n')
+    expect(ready('claude', screen)).toBe(true)
+    expect(ready('claude', [RULE, '> ', RULE].join('\n'))).toBe(true)
+  })
   it('codex: 현재 입력 줄 › 이 있고 신뢰 확인이 아니면 준비', () => {
     expect(ready('codex', ['>_ OpenAI Codex (v0.163.0)', '', '› Ask Codex to do anything', '', '  100% context left'].join('\n'))).toBe(true)
     expect(ready('codex', ['> You are in C:\\work', '', '  Do you trust the contents of this directory?', '', '› 1. Yes, continue', '  2. No, quit', '', '  Press enter to continue'].join('\n'))).toBe(false)
