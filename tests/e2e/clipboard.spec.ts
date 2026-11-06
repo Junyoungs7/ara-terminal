@@ -149,7 +149,9 @@ test('CLIP-6 선택 시 자동 복사는 기본 켜짐이고 설정에서 끌 �
   await focusTerminal(page)
   const pane = page.locator('.pane-grid .pane:visible .term-pane').first()
   await page.evaluate((sid) => window.__evTerm(sid)?.selectAll(), id)
-  await pane.dispatchEvent('mouseup')
+  // 칸에서 누르고 **칸 밖에서** 놓아도 복사한다(2.2.18 #31·#32 — 줄 끝 너머·상태줄에서 놓던 것).
+  await pane.dispatchEvent('mousedown', { button: 0 })
+  await page.evaluate(() => document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })))
   await expect.poll(() => readClipboard(app), { timeout: 10_000 }).toContain('자동복사_대상')
 
   // 끄면 같은 선택으로도 클립보드가 바뀌지 않는다.
@@ -160,6 +162,7 @@ test('CLIP-6 선택 시 자동 복사는 기본 켜짐이고 설정에서 끌 �
   await writeClipboard(app, '유지되어야_함')
   await focusTerminal(page)
   await page.evaluate((sid) => window.__evTerm(sid)?.selectAll(), id)
+  await pane.dispatchEvent('mousedown', { button: 0 })
   await pane.dispatchEvent('mouseup')
   await page.waitForTimeout(1000)
   expect(await readClipboard(app)).toBe('유지되어야_함')

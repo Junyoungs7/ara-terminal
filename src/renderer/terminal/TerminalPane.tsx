@@ -710,7 +710,12 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       const sel = term.getSelection()
       if (sel) void writeClipboard(sel)
     }
-    host.addEventListener('mouseup', onMouseUp)
+    // 2.2.18(#31·#32): 놓는 자리가 칸 밖이어도(줄 끝 너머·상태줄) 받는다 — xterm 도 드래그를 document 에서 쫓는다.
+    // capture 인 이유: 마우스 추적(tmux) + Shift 면 xterm SelectionService 가 mousedown 을 stopPropagation 한다.
+    const onMouseDown = (e: MouseEvent): void => {
+      if (e.button === 0) host.ownerDocument.addEventListener('mouseup', onMouseUp, { once: true })
+    }
+    host.addEventListener('mousedown', onMouseDown, true)
 
     // R5 시각 벨: xterm 5 에는 bellStyle 옵션이 없고 onBell 이벤트만 있다. 설정이 visual 일 때만
     // 패널을 한 번 번쩍인다(CSS .term-pane.bell). off 면 BEL 은 아무 표시도 남기지 않는다.
@@ -839,7 +844,8 @@ export function TerminalPane({ sessionId, active, local, serverKey, agent, onTit
       // 죽은 pane 의 fit 을 대기줄에 남기지 않는다(게이트가 붙들린 동안 탭을 닫은 경우).
       cancelPendingResize(doFit)
       textarea?.removeEventListener('focus', onFocus)
-      host.removeEventListener('mouseup', onMouseUp)
+      host.removeEventListener('mousedown', onMouseDown, true)
+      host.ownerDocument.removeEventListener('mouseup', onMouseUp)
       offData()
       offExit()
       onDataDisp.dispose()

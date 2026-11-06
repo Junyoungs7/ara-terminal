@@ -223,3 +223,19 @@ test('DROP-3★ [다시 접속]을 누르면 그 서버로 되살아난다', asy
   // 죽은 세션이 탭에 남아 있으면 안 된다(껍데기 탭 금지).
   await expect(page.locator('.term-tabbar .ttab')).toHaveCount(1)
 })
+
+// DROP-4★ 카드의 [닫기]는 탭까지 닫는다(2.2.18 #33 — exit 뒤 [닫기]를 눌렀는데 껍데기 탭이 남던 것).
+test('DROP-4★ 끊긴 카드의 [닫기]를 누르면 칸과 탭이 함께 닫힌다', async ({ ara, ssh }) => {
+  const { page } = ara
+  const h = await ssh({ password: 'pw-drop4' })
+  await connectNewSshProfile(page, { name: 'drop4', port: h.port, password: 'pw-drop4' })
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+
+  h.dropAll()
+  const card = page.locator('.restore-err-card.over')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await card.locator('.rec-btn:not(.primary)', { hasText: '닫기' }).click()
+  await expect(page.locator('.restore-err-card')).toHaveCount(0)
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(0)
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(0)
+})

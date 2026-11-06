@@ -870,7 +870,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     const dismissError = useCallback(
       (errId: string) => {
         /**
-         * 🔴 **살아 있는 세션 위의 카드는 카드만 걷는다**(1.0.9).
+         * 🔴 ~~살아 있는 세션 위의 카드는 카드만 걷는다(1.0.9)~~ → 2.2.18 부터 칸·탭도 닫는다(아래).
          *
          * 두 종류가 이 함수를 함께 쓴다:
          *  · 부팅 복원 실패 placeholder — 세션이 **없다**. 칸을 지우는 것이 곧 치우는 것이다
@@ -882,6 +882,10 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
          * 위에 얹을지 정한다(`err && !session` vs `err && session`) — **두 곳이 같은 축을 본다.**
          */
         if (list.some((x) => x.id === errId)) {
+          // 2.2.18(#33): 지금은 실 세션 위 카드가 onExit(끊김·exit) 하나뿐이라 그 셸은 **이미 죽었다.**
+          // 카드만 걷으면 껍데기 탭이 남는다 — ✕ 와 같게 칸·탭을 함께 치운다(close 는 forget 만 한다).
+          layout.removeSession(errId)
+          close(errId)
           clearError(errId)
           return
         }
@@ -889,7 +893,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
         if (cell) layout.closePane(cell.id)
         clearError(errId)
       },
-      [layout, list, clearError]
+      [layout, list, close, clearError]
     )
 
     // 분할(R2.0): 새 패널에는 이미 열려 있는 배경 탭(패널 미배치 세션)을 최근 사용 순으로 올린다.
