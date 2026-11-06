@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type JSX } from 'react'
 import { ArrowDown, ArrowUp, Brain, Check, ChevronRight, ImageIcon, SquareTerminal } from 'lucide-react'
-import { fmtDuration, mergeMessages, nearBottom, type ChatBlock, type ChatMessage } from '@shared/agentChat'
+import { fmtDuration, mergeMessages, nearBottom, settlePending, type ChatBlock, type ChatMessage, type PendingSend } from '@shared/agentChat'
 import { effortLabel, optionCommand, type ModelOption } from '@shared/agentOptions'
 import type { AgentStatusView } from '@shared/agentHooks'
 import { AGENTS } from '@shared/agents'
@@ -38,6 +38,8 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
   const [shown, setShown] = useState(PAGE)
   const [dropping, setDropping] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** 보낸 글을 transcript 가 받기 전까지 바로 보인다(보내는 중 · 전달 안 됨). */
+  const [pending, setPending] = useState<readonly PendingSend[]>([])
   const listRef = useRef<HTMLDivElement>(null)
   const flowRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -124,7 +126,24 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
 
   useEffect(() => {
     if (!stick.current && messages.length) setUnseen(true)
+    setPending((p) => settlePending(p, messages))
   }, [messages])
+
+  // 넣지 못함(status.ts deliver 제한 시간) — 막 켜진 때만. 그 뒤에 보낸 글은 main 이 promptFailed 를 내리고 다시 시도한다.
+  const failed = !!status?.promptFailed
+  useEffect(() => {
+    if (failed) setPending((p) => (p.some((x) => !x.failed) ? p.map((x) => ({ ...x, failed: true as const })) : p))
+  }, [failed])
+  // ponytail: 턴이 끝났는데도 못 맞춘 글(Codex rollout 을 못 찾음·transcript 가 글을 바꿔 적음)은 들어간 것으로 보고 내린다 — 줄 선 글이면 잠깐 사라졌다 transcript 로 다시 온다.
+  const state = tab.exited ? null : status?.state
+  const wasWorking = useRef(false)
+  useEffect(() => {
+    if (state === 'working') wasWorking.current = true
+    else if (state === 'idle' && wasWorking.current) {
+      wasWorking.current = false
+      setPending((p) => (p.some((x) => !x.failed) ? p.filter((x) => x.failed) : p))
+    }
+  }, [state])
 
   const toBottom = (): void => {
     const el = listRef.current
@@ -150,14 +169,25 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
 
   const send = async (text: string): Promise<boolean> => {
     if (!text.trim() || tab.exited) return false
+    // 슬래시 명령은 transcript 에 사람 글로 안 남는다 — 메아리 없이.
+    const id = text.startsWith('/') ? null : `p${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    if (id) {
+      setPending((p) => [...p, { id, text, after: messages[messages.length - 1]?.id ?? null }])
+      toBottom()
+    }
     const r = await window.ev.agents.chatSend(sid, tab.agent, text)
     if (!r.ok) {
+      if (id) setPending((p) => p.filter((x) => x.id !== id))
       setError(t('aiws.chat.sendFailed'))
       return false
     }
     setError(null)
     toBottom()
     return true
+  }
+  const resend = (p: PendingSend): void => {
+    setPending((cur) => cur.filter((x) => x.id !== p.id))
+    void send(p.text)
   }
 
   const from = Math.max(0, messages.length - shown)
@@ -202,6 +232,30 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
           {messages.slice(from).map((m, i, list) => (
             <Row key={m.id} m={m} who={m.role === 'system' || list[i - 1]?.role === m.role ? undefined : m.role === 'user' ? t('aiws.chat.me') : AGENTS[tab.agent].label} onTerminal={onTerminal} />
           ))}
+          {/* 보낸 글 — transcript 가 받으면 위 목록의 진짜 메시지로 바뀐다(시안 chat-live A). */}
+          {pending.map((p) => (
+            <div key={p.id} className={'aiws-chat-msg user head ' + (p.failed ? 'failed' : 'pending')} data-role="user" data-aiws={p.failed ? 'chat-failed' : 'chat-pending'}>
+              <div className="aiws-chat-who">
+                {t('aiws.chat.me')}
+                {!p.failed && (
+                  <>
+                    <span className="aiws-chat-spin" aria-hidden />
+                    <span className="aiws-chat-tag">{t('aiws.chat.sending')}</span>
+                  </>
+                )}
+              </div>
+              <div className="aiws-chat-text">{p.text}</div>
+              {p.failed && (
+                <div className="aiws-chat-fail" role="alert">
+                  <span>{t('aiws.chat.notSent')}</span>
+                  <span className="aiws-chat-tag">·</span>
+                  <button type="button" className="btn sec" disabled={tab.exited} onClick={() => resend(p)}>
+                    {t('aiws.chat.resend')}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
           {/* 터미널 탭 머리와 같은 도는 고리(AgentGlyph) — 마지막 메시지 뒤, 일하는 동안만. */}
           {working && (
             <div className="aiws-chat-working" role="status" data-aiws="chat-working">
@@ -231,7 +285,7 @@ export function AgentChatView({ tab, cwd, status, onTerminal }: { tab: AgentTab;
           </button>
         </div>
       )}
-      {status?.promptFailed && !blocked && (
+      {status?.promptFailed && !blocked && !pending.some((p) => p.failed) && (
         <p className="aiws-note aiws-err" role="alert" data-aiws="chat-not-delivered">
           {t('aiws.chat.notDelivered')}
         </p>

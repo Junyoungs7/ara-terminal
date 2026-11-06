@@ -277,6 +277,52 @@
   border-color: var(--sig-ai-ink);
   border-top-color: transparent;
 }
+/* 보내는 중 · 전달 안 됨(시안 chat-live A — 흐린 글, 옅은 앰버 막대, 이름줄 옆 작은 고리 + 캡션).
+   고리는 .ag-spin 이 아니다 — 유리 테마가 그걸 AI 그라데이션으로 칠한다(사람 글엔 앰버). */
+.aiws-chat-msg.user .aiws-chat-who:has(.aiws-chat-tag) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  white-space: nowrap;
+}
+.aiws-chat-msg.user.pending .aiws-chat-who {
+  color: var(--text-lo);
+}
+.aiws-chat-msg.user.pending .aiws-chat-text {
+  color: var(--text-lo);
+  box-shadow: inset 2px 0 0 var(--sig-user-line);
+}
+.aiws-chat-spin {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--sig-user-ink);
+  border-top-color: transparent;
+  animation: ai-key-spin 0.9s linear infinite;
+}
+.aiws-chat-tag {
+  font-weight: 400;
+  color: var(--text-lo);
+}
+.aiws-chat-fail {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-7);
+  box-shadow: inset 2px 0 0 var(--err);
+  color: var(--text-hi);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aiws-chat-spin {
+    animation: none;
+    border-top-color: var(--sig-user-ink);
+  }
+}
 /* 위로 올라가 있을 때 새 내용 — 목록 바닥에 붙는 작은 알약 */
 .aiws-chat-new.btn {
   position: sticky;

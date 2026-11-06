@@ -4,8 +4,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { IMAGE_MAX_CHARS, composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, nearBottom, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage } from '@shared/agentChat'
-import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
+import { IMAGE_MAX_CHARS, composeChatText, createChatModel, editLines, fmtDuration, parseTests, decodeClaudeLine, decodeCodexLine, decodeGeminiLine, DECODERS, draftOf, geminiDocLines, mergeMessages, nearBottom, settlePending, takeLines, transcriptHint, type AgentChatEvent, type ChatMessage, type PendingSend } from '@shared/agentChat'
+import { claudeProjectsDirs, codexSessionsDirs, createChatWatcher, findCodexRollout, INITIAL_TAIL_BYTES, MISSING_POLL_MAX_MS, MISSING_POLL_MS, resolveClaudeTranscript, resolveGeminiTranscript, resumeIdFromTranscript } from '../src/main/agents/chat'
 
 const J = (o: unknown): string => JSON.stringify(o)
 const user = (uuid: string, content: unknown, extra: object = {}): string => J({ type: 'user', uuid, message: { role: 'user', content }, ...extra })
@@ -416,5 +416,53 @@ describe('nearBottom — 채팅 스크롤 따라가기 판정', () => {
   })
   it('내용이 칸보다 짧으면 늘 붙어 있다', () => {
     expect(nearBottom({ scrollHeight: 300, scrollTop: 0, clientHeight: 400 })).toBe(true)
+  })
+})
+
+// 채팅 즉시성 — 보내는 중 메아리(Orca native-chat-pending-sends)·훅 경로 파일이 늦게 생길 때 폴링(Orca transcript-watch 0.5→5초).
+describe('보내는 중(settlePending)', () => {
+  const um = (id: string, text: string): ChatMessage => ({ id, role: 'user', blocks: [{ type: 'text', text }] })
+  const am = (id: string, text: string): ChatMessage => ({ id, role: 'assistant', blocks: [{ type: 'text', text }] })
+  const p = (id: string, text: string, after: string | null, failed?: true): PendingSend => ({ id, text, after, ...(failed ? { failed } : {}) })
+
+  it('보낸 뒤의 사람 메시지에 그 글이 오면 내린다 — 보내기 전 같은 글·도구 결과·에이전트 글로는 안 내린다', () => {
+    const list = [p('x', '안녕', 'u1')]
+    const before = [um('u1', '안녕'), am('a1', '안녕하세요')]
+    expect(settlePending(list, before)).toBe(list) // 바뀐 것 없음 = 같은 배열
+    expect(settlePending(list, [...before, { id: 'u2', role: 'user', blocks: [] }])).toBe(list)
+    expect(settlePending(list, [...before.slice(0, 1), um('u2', '안녕')])).toEqual([])
+  })
+  it('이어 붙여 넣은 글(못 넣고 쌓인 둘)·줄바꿈 차이도 맞춘다 · 경계를 못 찾으면(reset) 전부에서', () => {
+    const list = [p('x', '첫째  줄\n둘째', null), p('y', '셋째', null)]
+    expect(settlePending(list, [um('u1', '첫째 줄 둘째\n셋째')])).toEqual([])
+    expect(settlePending([p('z', '고쳐 줘', 'gone')], [um('n1', '고쳐 줘')])).toEqual([])
+  })
+  it('전달 안 됨(failed)도 나중에 기록에 오면 내린다 · 안 오면 남는다', () => {
+    const list = [p('x', '다시', 'u1', true), p('y', '남음', 'u1')]
+    expect(settlePending(list, [um('u1', 'a'), um('u2', '다시')])).toEqual([list[1]])
+  })
+})
+
+describe('훅 경로 파일이 늦게 생길 때(폴링)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ara-chat-poll-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  afterEach(() => vi.useRealTimers())
+
+  it('0.5초부터 두 배씩 다시 본다(5초 상한) — 생기면 그다음 차례에 바로 읽어 민다', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const file = join(root, 'late.jsonl')
+    const events: AgentChatEvent[] = []
+    const w = createChatWatcher({ push: (e) => events.push(e), store: join(root, 's.json'), home: root })
+    w.hook('p', { hook_event_name: 'UserPromptSubmit', transcript_path: file })
+    expect(w.open('p')).toEqual({ messages: [], file })
+    // 확인 시각: 0.5 · 1.5 · 3.5 · 7.5 …(간격 0.5·1·2·4·5…)
+    vi.advanceTimersByTime(1600)
+    writeFileSync(file, user('u1', '안녕') + '\n')
+    vi.advanceTimersByTime(3500 - 1600 - 1)
+    expect(events).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(events.flatMap((e) => e.messages).map((m) => m.id)).toEqual(['u1'])
+    expect([MISSING_POLL_MS, MISSING_POLL_MAX_MS]).toEqual([500, 5000])
+    w.stop()
   })
 })

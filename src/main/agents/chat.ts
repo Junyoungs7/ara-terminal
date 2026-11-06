@@ -2,7 +2,8 @@
 // 출처: stablyai/orca @fdfcfb3551 (MIT) src/main/native-chat/session-file-resolver.ts(경로)·transcript-tail-reader.ts·
 // transcript-incremental-reader.ts(끝에서 시작·이어 읽기·잘리면 처음부터) — 핵심만. 뺀 것: WSL·SSH 경로, 계정별 프로필 폴더, 취소 신호.
 //
-// 성능 원칙: **열린 채팅 화면만** 감시한다(open/close). 파일 변경 이벤트(fs.watch) + 스로틀. 파일이 아직 없으면 1초마다 다시 건다.
+// 성능 원칙: **열린 채팅 화면만** 감시한다(open/close). 파일 변경 이벤트(fs.watch) + 스로틀. 파일이 아직 없으면 0.5초부터 5초까지 늘려 가며 다시 건다
+// (Orca transcript-watch 해석 폴링 — Claude 는 첫 메시지를 쓸 때 파일을 만들어 훅이 준 경로가 잠깐 비어 있다).
 // 경로: 훅(UserPromptSubmit 등)이 주는 transcript_path 가 정답(Orca: "Hook paths are authoritative"). 탭 → 경로를 userData 에
 // 남겨 앱을 다시 켜도(데몬에 산 에이전트) 바로 연다.
 // R2 Codex·Gemini: Codex 는 아라가 훅을 안 심어(신뢰 해시) 경로를 못 받는다 — $CODEX_HOME/sessions/Y/M/D/rollout-*.jsonl 중 그 탭의
@@ -17,9 +18,12 @@ import { parseGeminiDocument, parseSessionLines } from '@shared/vault'
 
 /** 처음 열 때 끝에서 이만큼만 읽는다(긴 대화 — Orca 꼬리 읽기). 잘린 첫 줄은 버린다. */
 export const INITIAL_TAIL_BYTES = 2 * 1024 * 1024
-/** 변경 이벤트 → 읽기까지. 이 사이 쓰기는 한 번으로 묶인다. */
-export const CHAT_THROTTLE_MS = 150
+/** 변경 이벤트 → 읽기까지. 이 사이 쓰기는 한 번으로 묶인다(Orca transcript-watch-scheduler 40ms). */
+export const CHAT_THROTTLE_MS = 40
 const RETRY_MS = 1000
+/** 훅이 준 경로에 파일이 아직 없을 때 다시 보는 간격 — 처음 0.5초, 두 배씩 5초까지(Orca INITIAL/MAX_RESOLVE_POLL_MS). */
+export const MISSING_POLL_MS = 500
+export const MISSING_POLL_MAX_MS = 5000
 
 /** Claude 기록 뿌리 — CLAUDE_CONFIG_DIR 이 있으면 그것, 없으면 <home>/.claude (Orca claudeProjectsHostDirs). */
 export function claudeProjectsDirs(home: string, env: NodeJS.ProcessEnv = process.env): string[] {
@@ -131,7 +135,7 @@ export function resolveGeminiTranscript(sessionId: string, home: string): string
   return null
 }
 
-type Watched = { agent: AgentId; path: string | null; offset: number; stamp: string; carry: string; model: ChatModel; watcher: FSWatcher | null; timer: ReturnType<typeof setTimeout> | null }
+type Watched = { agent: AgentId; path: string | null; offset: number; stamp: string; carry: string; model: ChatModel; watcher: FSWatcher | null; timer: ReturnType<typeof setTimeout> | null; poll: number }
 
 export type ChatWatcher = {
   /** 탭이 무슨 에이전트·어느 폴더·언제 띄웠나(디코더·Codex 파일 찾기). 띄울 때·되살릴 때. */
@@ -257,6 +261,12 @@ export function createChatWatcher(deps: { push: (e: AgentChatEvent) => void; sto
       }
     }
     if (w.watcher) return
+    if (!existsSync(w.path)) {
+      schedule(id, w, w.poll)
+      w.poll = Math.min(w.poll * 2, MISSING_POLL_MAX_MS)
+      return
+    }
+    w.poll = MISSING_POLL_MS
     try {
       w.watcher = watch(w.path, () => schedule(id, w))
       w.watcher.on('error', () => {
@@ -271,7 +281,7 @@ export function createChatWatcher(deps: { push: (e: AgentChatEvent) => void; sto
 
   const start = (id: string): Watched => {
     const agent = agentOf(id)
-    const w: Watched = { agent, path: findPath(id), offset: 0, stamp: '', carry: '', model: createChatModel(undefined, DECODERS[agent]), watcher: null, timer: null }
+    const w: Watched = { agent, path: findPath(id), offset: 0, stamp: '', carry: '', model: createChatModel(undefined, DECODERS[agent]), watcher: null, timer: null, poll: MISSING_POLL_MS }
     open.set(id, w)
     arm(id, w)
     read(w) // 처음 것은 open 의 응답(스냅숏)으로 간다 — 따로 밀지 않는다

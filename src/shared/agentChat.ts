@@ -416,6 +416,27 @@ export function mergeMessages(list: readonly ChatMessage[], incoming: readonly C
   return out.length > cap ? out.slice(-cap) : out
 }
 
+/**
+ * 보내는 중(낙관적 메아리 — Orca native-chat-pending-sends). after = 보낼 때 마지막 메시지 id. failed = 전달 안 됨(status promptFailed).
+ * transcript 의 그 뒤 사람 메시지에 그 글이 들어 있으면 내린다 — 못 넣고 쌓인 글은 한 번에 이어 붙여 넣으므로(status.ts submit) '같다'가 아니라 '들어 있다'.
+ */
+export type PendingSend = { id: string; text: string; after: string | null; failed?: true }
+const flat = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
+/** 확정된 것을 뺀 목록. 바뀐 것이 없으면 같은 배열(다시 그리지 않게). */
+export function settlePending(list: readonly PendingSend[], messages: readonly ChatMessage[]): readonly PendingSend[] {
+  if (!list.length) return list
+  const users = (after: string | null): string[] => {
+    const i = after === null ? -1 : messages.findIndex((m) => m.id === after) // 못 찾으면(reset·상한) 전부
+    return messages
+      .slice(i + 1)
+      .filter((m) => m.role === 'user')
+      .map((m) => flat(m.blocks.map((b) => (b.type === 'text' ? b.text : '')).join(' ')))
+  }
+  const left = list.filter((p) => !users(p.after).some((u) => u.includes(flat(p.text))))
+  return left.length === list.length ? list : left
+}
+
 // ── 세션 id → transcript 경로(Orca session-file-resolver 의 Claude 갈래) ──
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
