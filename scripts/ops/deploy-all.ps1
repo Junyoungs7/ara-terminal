@@ -16,7 +16,9 @@ if ($pw) {
 } else { 'NO_PASSWORD'; exit 2 }
 if ($args -contains '-ImportOnly') { exit 0 }
 $env:ARA_DEPLOY_PW = $pw; $env:ARA_REPORTS_ADMIN_PW = $pw; Remove-Variable pw
-Set-Location 'D:\AI\OFA'
+# 신고 서버 코드는 2.2 부터 OFA-v22 에 있다(master 의 server.mjs 는 옛것 — 내 신고 API 없음)
+Set-Location 'D:\AI\OFA-v22'
 '=== reports:deploy'; npm run reports:deploy; if ($LASTEXITCODE -ne 0) { 'REPORTS_DEPLOY_FAIL'; exit 3 }
+Set-Location 'D:\AI\OFA'
 '=== site:deploy'; npm run site:deploy; if ($LASTEXITCODE -ne 0) { 'SITE_DEPLOY_FAIL'; exit 4 }
 'DEPLOY_OK'
