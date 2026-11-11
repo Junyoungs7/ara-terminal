@@ -10,6 +10,9 @@ import { SshBackend } from './ssh/SshBackend'
 import { parseOsc7Cwd } from './osc7'
 import type { Session } from '@shared/types'
 import { usableSize } from '@shared/termSize'
+import { Terminal } from '@xterm/headless'
+import { SerializeAddon } from '@xterm/addon-serialize'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 
 // 백프레셔 메커니즘 1: flush당 상한 바이트. 초과 시 즉시 flush.
 const FLUSH_BYTE_BUDGET = 64 * 1024
@@ -17,6 +20,9 @@ const FLUSH_BYTE_BUDGET = 64 * 1024
 const FLUSH_INTERVAL_MS = 16
 // 세션당 재생 버퍼 상한. renderer 가 xterm 을 새로 만들 때(세션 전환·재마운트·부트 복원) 이만큼을 되감아 준다.
 const BACKLOG_LIMIT = 256 * 1024
+// 2.2.22: 링이 잘린 뒤의 재생은 헤드리스 화면(mirror)을 직렬화해 준다 — 그 화면이 들고 있는 스크롤백 줄 수.
+// ponytail: 고정 1000 줄. 렌더러 스크롤백 설정(기본 5000)만큼 되감아야 하면 그 값을 넘겨받는다.
+const MIRROR_SCROLLBACK = 1000
 
 // conpty 는 세션이 열리는 즉시 셸 실행 파일 경로를 OSC 제목으로 보낸다(C:\WINDOWS\SYSTEM32\cmd.exe).
 // 그대로 받으면 로컬 탭이 전부 같은 이름이 돼 "셸 1 / 셸 2" 구분(R2.1)이 통째로 무너진다.
@@ -54,6 +60,18 @@ type Handle = {
   // attach 전 출력은 링버퍼에만 쌓고 내보내지 않는다. 구독자가 없는 시점의 출력(adopt 직후·부트 복원 중)이
   // 유실되던 경로를 없앤다 — renderer 는 xterm 을 만든 뒤 attach 로 한 번에 받아 간다.
   attached: boolean
+  /**
+   * 2.2.22(준영님 제보: Claude 칸 아래쪽 줄이 비고 숫자 몇 개만 남음, 창 크기를 바꾸면 돌아옴).
+   * 링이 앞을 버린 뒤 재생하면 **처음 한 번 그린 화면이 빠지고 바뀐 칸만 고쳐 쓴 조각**만 남는다 — Claude 같은
+   * 차분 그리기 TUI 는 정적인 테두리·라벨을 다시 안 보내므로 탭을 다시 열면(작업 단위·레일 화면 전환 = 재마운트)
+   * 숫자만 남은 화면이 된다. 괄호 붙여넣기 같은 모드 켜기도 함께 잘려 나간다. 그래서 같은 바이트를 헤드리스 xterm 에도
+   * 그려 두고, 잘린 뒤의 attach 는 **그려진 결과**를 직렬화해 준다(daemon/protocol.ts ReplayBuffer 주석이 예고한 길).
+   */
+  mirror: Terminal
+  ser: SerializeAddon
+  /** mirror 에 넣었지만 아직 안 그려진 조각(write 는 비동기) — 직렬화 뒤에 그대로 이어 붙이면 정확히 지금 화면이다. */
+  unparsed: Uint8Array[]
+  trimmed: boolean
 }
 
 // F12 세션 로그 tee. main/index.ts 가 늦게 주입한다(로거는 userData 경로를 알아야 만들 수 있다).
@@ -129,7 +147,8 @@ export class MainSessionManager implements ISessionManager {
       // M3: AI 작업 공간 에이전트 탭 — 터미널 공간이 건너뛰는 표시.
       ...(spec.space === 'ai' ? { space: 'ai' as const } : {})
     }
-    this.register(backend, meta)
+    const sized = usableSize(spec.cols, spec.rows)
+    this.register(backend, meta, sized ? { cols: spec.cols as number, rows: spec.rows as number } : undefined)
     return meta.id
   }
 
@@ -142,9 +161,20 @@ export class MainSessionManager implements ISessionManager {
   }
 
   // 백엔드를 세션 핸들로 편입하고 스트림을 건다(로컬 create / SSH adopt 공통).
-  private register(backend: SessionBackend, meta: Session): void {
+  private register(backend: SessionBackend, meta: Session, size?: { cols: number; rows: number }): void {
     const id = meta.id
+    // pty 와 같은 치수로(PtyBackend 와 같은 기본 80×24). 그 뒤는 resize() 가 따라 바꾼다.
+    const mirror = new Terminal({ cols: size?.cols ?? meta.cols ?? 80, rows: size?.rows ?? meta.rows ?? 24, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
+    const ser = new SerializeAddon()
+    mirror.loadAddon(ser)
+    // 렌더러와 같은 폭 규칙(screenText.ts 와 같은 이유) — 안 맞추면 한글·기호 뒤 칸이 밀린다.
+    mirror.loadAddon(new Unicode11Addon())
+    mirror.unicode.activeVersion = '11'
     const h: Handle = {
+      mirror,
+      ser,
+      unparsed: [],
+      trimmed: false,
       backend,
       meta,
       buf: [],
@@ -170,6 +200,7 @@ export class MainSessionManager implements ISessionManager {
       // 렌더러는 셸이 스스로 끝난 것(exit)만 탭을 닫는다. 종료 중(destroyAll) 탭을 치우면 빈 스냅샷이 저장된다.
       const killed = !this.handles.has(id)
       this.flush(id) // 종료 전 잔여 출력 방출
+      h.mirror.dispose()
       this.log?.close(id) // 남은 꼬리를 흘려보내고 파일을 닫는다
       this.handles.delete(id)
       this.tap?.exit(id)
@@ -232,7 +263,10 @@ export class MainSessionManager implements ISessionManager {
     h.backlogBytes += chunk.length
     while (h.backlogBytes > BACKLOG_LIMIT && h.backlog.length > 1) {
       h.backlogBytes -= h.backlog.shift()!.length
+      h.trimmed = true
     }
+    h.unparsed.push(chunk)
+    h.mirror.write(chunk, () => void h.unparsed.shift())
   }
 
   // renderer 가 xterm 을 만든 직후 호출한다. 지금까지의 출력을 한 덩어리로 돌려주고 라이브 스트림을 연다.
@@ -242,7 +276,12 @@ export class MainSessionManager implements ISessionManager {
     if (!h) return new Uint8Array(0)
     this.flush(id) // 대기 중인 배치까지 재생 버퍼에 반영한 뒤 스냅샷.
     h.attached = true
-    return this.snapshotBacklog(h)
+    return h.trimmed ? this.screenSnapshot(h) : this.snapshotBacklog(h)
+  }
+
+  /** 잘린 링 대신 그려진 화면 — 직렬화(스크롤백·화면·커서·모드) + 아직 안 그려진 조각. 조각은 통째로만 그려지므로 경계가 정확하다. */
+  private screenSnapshot(h: Handle): Uint8Array {
+    return new Uint8Array(Buffer.concat([Buffer.from(h.ser.serialize({ scrollback: MIRROR_SCROLLBACK }), 'utf8'), ...h.unparsed]))
   }
 
   // F23: MCP session_read 의 읽기 전용 접근자. attach() 와 달리 attached 플래그를 건드리지 않는다
@@ -315,6 +354,7 @@ export class MainSessionManager implements ISessionManager {
      */
     if (!h || !usableSize(cols, rows)) return
     h.backend.resize(cols, rows)
+    h.mirror.resize(cols, rows)
     this.tap?.resize(id, cols, rows)
     // 복원이 이 값으로 pty 를 연다(`Session.cols` 주석) — snapshot() 이 meta 를 그대로 싣는다.
     h.meta.cols = cols

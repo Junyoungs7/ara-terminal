@@ -54,7 +54,13 @@ export function pickPasteTarget(list: readonly PasteTarget[], active: Element | 
 function onPaste(e: ClipboardEvent): void {
   const t = pickPasteTarget(targets, document.activeElement)
   if (!t) return
-  if (t.onFiles(Array.from(e.clipboardData?.files ?? []))) e.preventDefault()
+  if (!t.onFiles(Array.from(e.clipboardData?.files ?? []))) return
+  e.preventDefault()
+  // 2.2.22(준영님: 캡처 붙여넣기 뒤 이상한 글자·두 번 써짐) — preventDefault 만으로는 xterm 이 안 멈춘다. 그 paste 리스너(textarea·element)는
+  // defaultPrevented 를 안 보고 text/plain 을 읽어 붙인다 — 그림만 있는 클립보드면 빈 괄호 붙여넣기 `ESC[200~ESC[201~` 가 칸에 간다.
+  // 우리는 그림을 저장해 경로를 따로 넣으므로 한 번의 붙여넣기가 칸에 두 번 간다. (추정: Claude Code 는 빈 붙여넣기를 "클립보드에 그림"으로 읽고
+  // 스스로 클립보드를 읽는다 — 실제 Win+Shift+S 확인은 준영님 몫. 고친 것은 확인된 부분 = 빈 붙여넣기가 더는 안 나간다.)
+  e.stopPropagation()
 }
 
 let installed = false

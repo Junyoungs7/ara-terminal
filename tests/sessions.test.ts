@@ -2,6 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { MainSessionManager } from '../src/main/sessions/MainSessionManager'
 import type { SessionSink, SessionSpec } from '../src/main/sessions/ISessionManager'
 import type { Session } from '../src/shared/types'
+import { Terminal } from '@xterm/headless'
+import { SerializeAddon } from '@xterm/addon-serialize'
+
+// 2.2.22 핸들의 헤드리스 화면(재생 버퍼가 잘린 뒤 attach 가 쓴다) — register() 와 같은 모양.
+const mirrorOf = () => {
+  const mirror = new Terminal({ cols: 80, rows: 24, scrollback: 1000, allowProposedApi: true })
+  const ser = new SerializeAddon()
+  mirror.loadAddon(ser)
+  return { mirror, ser, unparsed: [] as Uint8Array[], trimmed: false }
+}
 
 // 실제 node-pty 셸을 스폰하는 통합성 단위 테스트. 짧은 명령을 실행해 라운드트립을 검증한다.
 const isWin = process.platform === 'win32'
@@ -107,7 +117,7 @@ describe('MainSessionManager 배칭(백프레셔 메커니즘 1)', () => {
       enqueue: (id: string, data: string) => void
       flush: (id: string) => void
     }
-    anyMgr.handles.set('t', { buf: [], bufBytes: 0, timer: null, backlog: [], backlogBytes: 0, attached: true } as never)
+    anyMgr.handles.set('t', { buf: [], bufBytes: 0, timer: null, backlog: [], backlogBytes: 0, attached: true, ...mirrorOf() } as never)
     anyMgr.enqueue('t', 'a')
     anyMgr.enqueue('t', 'b')
     anyMgr.enqueue('t', 'c')
@@ -128,7 +138,7 @@ describe('MainSessionManager 재생 버퍼(attach)', () => {
       handles: Map<string, unknown>
       enqueue: (id: string, data: string) => void
     }
-    anyMgr.handles.set(id, { buf: [], bufBytes: 0, timer: null, backlog: [], backlogBytes: 0, attached: false } as never)
+    anyMgr.handles.set(id, { buf: [], bufBytes: 0, timer: null, backlog: [], backlogBytes: 0, attached: false, ...mirrorOf() } as never)
     return (data: string) => anyMgr.enqueue(id, data)
   }
   const text = (u: Uint8Array) => Buffer.from(u).toString('utf8')
@@ -156,16 +166,17 @@ describe('MainSessionManager 재생 버퍼(attach)', () => {
     expect(text(mgr.attach('a'))).toBe('첫줄\r\n둘째줄\r\n')
   })
 
-  it('재생 버퍼는 상한(256KB)을 넘지 않는다', () => {
+  it('재생 버퍼는 상한(256KB)을 넘지 않는다 — 넘으면 attach 는 잘린 원문 대신 그려진 화면을 준다(2.2.22)', () => {
     const mgr = new MainSessionManager(collect().sink)
     const write = seed(mgr, 'a')
     const chunk = 'x'.repeat(32 * 1024)
     for (let i = 0; i < 20; i++) write(chunk) // 640KB 주입
-    const backlog = mgr.attach('a')
-    expect(backlog.length).toBeLessThanOrEqual(256 * 1024)
-    expect(backlog.length).toBeGreaterThan(128 * 1024) // 상한 근처까지는 보존
-    // 최근 출력이 남는다(앞에서부터 버린다).
-    expect(text(backlog).endsWith('x')).toBe(true)
+    const h = (mgr as unknown as { handles: Map<string, { backlogBytes: number; trimmed: boolean }> }).handles.get('a')!
+    expect(h.backlogBytes).toBeLessThanOrEqual(256 * 1024)
+    expect(h.backlogBytes).toBeGreaterThan(128 * 1024) // 상한 근처까지는 보존
+    expect(h.trimmed).toBe(true)
+    // 화면(직렬화) + 아직 안 그려진 조각 — 최근 출력으로 끝난다.
+    expect(text(mgr.attach('a')).endsWith('x')).toBe(true)
   })
 
   it('없는 세션 attach 는 빈 버퍼(예외 없음)', () => {

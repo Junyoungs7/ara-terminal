@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { test, expect, connectNewSshProfile, downloadsOf, focusTerminal, newLocalShell, openFileTab, pickSidebarTab, termText } from './fixtures'
+import { test, expect, connectNewSshProfile, downloadsOf, focusTerminal, newLocalShell, openFileTab, pickSidebarTab, runCommand, sendInput, termText } from './fixtures'
 
 // OS 클립보드는 **머신 전역 자원**이다. 텍스트 붙여넣기 검사는 실제 클립보드에 써 넣고 확인하므로
 // 병렬로 돌면 서로 덮어쓴다(실측: PASTE-6 이 PASTE-9 가 써 둔 값을 읽었다) — 이 파일은 순차로 돈다.
@@ -188,4 +188,49 @@ test('PASTE-9 Ctrl+V 로 두 번 붙지 않는다', async ({ ara }) => {
       .filter((l) => l.trim())
       .pop() ?? ''
   expect(cursorLine.split('DOUBLEPASTE').length - 1).toBe(1)
+})
+
+// PASTE-11 (2.2.22 준영님 제보: 캡처 직후 Ctrl+V → 이상한 글자·두 번 써짐) — 그림 붙여넣기는 **칸에 한 번만** 간다.
+// 실제 순서 그대로: paste 이벤트는 문서가 아니라 **xterm textarea** 에서 일어난다(PASTE-10 은 document 에 쏴서 xterm 리스너를 안 지났다).
+// 받는 쪽은 Claude 처럼 괄호 붙여넣기를 켠 가짜 TUI — 받은 붙여넣기를 센다. 고치기 전엔 빈 붙여넣기(ESC[200~ESC[201~)가 하나 더 왔다.
+// 진짜 클립보드는 안 쓴다(읽기·쓰기 모두) — 그림은 이벤트에 직접 싣는다.
+test('PASTE-11 그림 붙여넣기는 빈 괄호 붙여넣기를 따로 보내지 않는다', async ({ ara }) => {
+  const { page } = ara
+  const id = await newLocalShell(page)
+  const dir = mkdtempSync(join(tmpdir(), 'ara-paste11-'))
+  const tui = join(dir, 'tui.cjs')
+  writeFileSync(
+    tui,
+    String.raw`let buf = '', empty = 0, pastes = 0
+process.stdout.write('\x1b[?2004hTUI_READY\r\n')
+process.stdin.setRawMode(true)
+process.stdin.on('data', (d) => {
+  buf += d.toString('latin1')
+  if (buf.includes('\x03')) process.exit(0)
+  let m
+  while ((m = /\x1b\[200~([\s\S]*?)\x1b\[201~/.exec(buf))) { pastes++; if (m[1] === '') empty++; buf = buf.slice(0, m.index) + buf.slice(m.index + m[0].length) }
+  process.stdout.write('PASTES=' + pastes + ' EMPTY=' + empty + ' KEYS=' + buf.replace(/[^a-z]/g, '') + '\r\n')
+})
+`
+  )
+  await runCommand(page, id, `node "${tui}"`)
+  await expect.poll(() => termText(page, id), { timeout: 30_000 }).toContain('TUI_READY')
+  await focusTerminal(page)
+  await expect.poll(() => page.evaluate((sid) => window.__evTerm(sid)?.modes?.().paste, id), { timeout: 10_000 }).toBe(true)
+  await page.evaluate(() => {
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0))
+    const ev = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(ev, 'clipboardData', { value: { files: [new File([png], 'image.png', { type: 'image/png' })], getData: () => '' } })
+    document.activeElement!.dispatchEvent(ev)
+  })
+  await expect.poll(() => termText(page, id), { timeout: 20_000 }).toContain('PASTES=1')
+  await page.waitForTimeout(1_500) // 늦게 오는 두 번째까지
+  const text = await termText(page, id)
+  expect(text).not.toContain('EMPTY=1')
+  expect(text).not.toContain('PASTES=2')
+  // 붙여넣은 뒤 치는 글자도 한 번씩만 간다(리스너가 겹쳐 붙지 않았다)
+  await page.keyboard.type('ab')
+  await expect.poll(() => termText(page, id), { timeout: 10_000 }).toContain('KEYS=ab')
+  expect(await termText(page, id)).not.toContain('KEYS=aab')
+  await sendInput(page, id, '\x03')
 })

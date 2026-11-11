@@ -77,6 +77,25 @@ export async function launchAra(userData: string, keepIntro = false): Promise<Ar
     env: { ...process.env, ARA_AI_FAKE: '1', ARA_E2E: '1', ARA_EXIT_TRACE: trace, ARA_NO_WEBGL: '1' }
   })
   const page = await app.firstWindow()
+  // 2.2.22: 준영님 클립보드는 읽지도 쓰지도 않는다 — 클립보드는 PC 전체가 하나라 시험 앱이 쓰면 준영님이 복사해 둔 것이 날아간다
+  // (메모 tooling-must-not-touch-user-machine). 앱의 읽기·쓰기는 전부 main 의 electron.clipboard 를 지나므로 그 자리를 시험 앱 안 메모리로 바꾼다.
+  // clipboard.spec 처럼 app.evaluate 로 clipboard 를 읽는 검사도 같은 메모리를 본다. 못 막는 것: Chromium 자체 복사(입력칸 Ctrl+C·execCommand).
+  await app.evaluate(({ clipboard }) => {
+    let text = ''
+    const cb = clipboard as unknown as Record<string, unknown>
+    cb.writeText = (t: string) => {
+      text = t
+    }
+    cb.readText = () => text
+    cb.availableFormats = () => (text ? ['text/plain'] : [])
+    cb.readBuffer = () => Buffer.alloc(0)
+    cb.readHTML = () => ''
+    cb.clear = () => {
+      text = ''
+    }
+  })
+  // 바꿔치기가 안 먹었으면 시험을 멈춘다(그대로 가면 진짜 클립보드를 건드린다). 확인도 진짜 클립보드를 부르지 않고 함수 모양으로만.
+  if (!(await app.evaluate(({ clipboard }) => String(clipboard.writeText).includes('text = t')))) throw new Error('e2e 클립보드 격리 실패 — 진짜 클립보드를 쓰지 않으려고 멈춘다')
   await page.waitForSelector('.app', { timeout: 30_000 })
   // 부트 복원이 끝나 화면이 확정될 때까지(빈 상태는 안내 없이 .pane-grid 만 남으므로 그 자체로 충분 — UI-tabbar).
   // M1: AI 작업 공간으로 저장된 채 다시 켜지면 터미널 칸(.pane-grid)은 숨어 있다 — 그 공간의 첫 화면(.aiws-home)도 '확정'으로 친다.
