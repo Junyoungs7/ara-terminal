@@ -937,7 +937,8 @@ export type SendContract = {
 export type SendChannel = keyof SendContract
 
 // main → renderer 이벤트. session:data는 Uint8Array transferable (백프레셔 메커니즘 3).
-export type SessionExit = { id: string; exitCode: number; signal?: number }
+/** killed: 앱이 죽였다(탭 ✕·종료·session_destroy). 없으면 셸이 스스로 끝났다(#35 탭 자동 닫기는 이때만). */
+export type SessionExit = { id: string; exitCode: number; signal?: number; killed?: boolean }
 // F7: OSC7 로 감지한 cwd 변경(session:cwd:{id}) → SFTP 트리 자동 이동.
 export type SessionCwd = { id: string; cwd: string }
 // W1 F9/F10: 폴링 한 바퀴의 결과(telemetry:data:{sessionId}). stats 는 파싱 실패 시 null —

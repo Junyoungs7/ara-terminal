@@ -14,7 +14,7 @@ import type { Space } from '@shared/space'
 import { ContextInteractions } from '../interactions/ContextInteractions'
 import type { ActionId } from '../interactions/actions'
 import { getSelection, resetTermModes } from '../terminal/termRegistry'
-import { applyUiPrefs, prefsFrom } from '../terminal/termPrefs'
+import { applyUiPrefs, prefsFrom, termPrefs } from '../terminal/termPrefs'
 import { TerminalSearch } from './TerminalSearch'
 import { SettingsPage, SIZE_MAX, SIZE_MIN } from './SettingsPage'
 import { useFont } from '../store/font'
@@ -776,12 +776,25 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
     //
     // 그전에는 TerminalPane 이 회색 한 줄("[프로세스 종료 — code 0]")만 찍고 끝이었다 — 탭은
     // 껍데기로 남고 다시 붙는 길이 화면에 없었다. F6 부팅 복원이 쓰던 카드를 그대로 재사용한다.
+    //
+    // 신고 #35(2.2.19): **로컬** 셸이 정상 종료(`exit`, code 0)하면 그 칸·탭을 닫는다(설정 › 터미널
+    // [셸을 끝내면 탭 닫기], 기본 켬). 탭 ✕ 와 같은 길(layout.removeSession + close)이라 분할 칸이면
+    // 그 칸만, 마지막 탭이면 빈 화면이 된다(본창은 닫지 않는다). 코드≠0 은 회색 한 줄과 함께 남긴다 —
+    // 왜 죽었는지 볼 자리가 그 화면뿐이다. SSH 는 원격 exit 과 끊김을 이 이벤트로 가를 수 없어 그대로 카드.
     useEffect(() => {
       const offs = list
-        .filter((s) => s.type === 'ssh')
+        .filter((s) => s.type === 'ssh' || s.type === 'local')
         .map((s) =>
-          window.ev?.session.onExit(s.id, () => {
+          window.ev?.session.onExit(s.id, ({ exitCode, killed }) => {
             if (closedByUser.current.delete(s.id)) return // 사용자가 닫은 것 — 조용히 보낸다
+            if (s.type === 'local') {
+              // killed = 앱이 죽인 것(종료 중 destroyAll 등). 그때 칸을 치우면 persist 가 빈 스냅샷을 쓴다.
+              if (exitCode === 0 && !killed && termPrefs.closeOnExit) {
+                removePane(s.id)
+                close(s.id)
+              }
+              return
+            }
             // (D(#168) 의 "AI 탭은 끝난 것" 예외는 2026-10-12 에 걷었다 — AI 는 이제 셸 안에서 돌고,
             // 셸이 끊긴 것은 AI 가 돌았든 아니든 끊긴 것이다.)
             // 탭의 점도 함께 바뀐다(#166) — 칸 머리는 아래 오류 카드로 이미 알지만 탭은
@@ -814,7 +827,7 @@ export const MainArea = forwardRef<MainAreaHandle, MainAreaProps>(
           })
         )
       return () => offs.forEach((off) => off?.())
-    }, [list])
+    }, [list, removePane, close])
 
     // 세션 활성화(탭 클릭·트리 클릭 공통): 이미 패널에 있으면 그 패널 포커스,
     // 없으면 포커스 패널의 세션을 교체(xterm 재마운트 없이 display 전환).

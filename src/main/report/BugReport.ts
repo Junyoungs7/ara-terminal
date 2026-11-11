@@ -73,6 +73,7 @@ const SETTINGS_KEYS = [
   'cursorBlink',
   'bell',
   'termCompletion',
+  'closeOnExit',
   'mcpEnabled',
   'sessionLog',
   'logRetentionDays',

@@ -1198,6 +1198,8 @@
   "settings.copyOnSelect.desc": "드래그로 선택하면 바로 클립보드에 넣습니다.",
   "settings.scrollback": "스크롤백",
   "settings.scrollback.desc": "세션마다 보관할 지난 출력 줄 수입니다. 클수록 메모리를 더 씁니다.",
+  "settings.closeOnExit": "셸을 끝내면 탭 닫기",
+  "settings.closeOnExit.desc": "로컬 셸에서 exit 로 정상 종료하면 그 칸·탭을 닫습니다. 오류로 끝났거나 SSH 가 끊긴 경우는 원인을 볼 수 있게 남깁니다.",
   "settings.cursorStyle": "커서 모양",
   "settings.cursorStyle.desc": "열려 있는 세션에도 바로 적용됩니다.",
   "settings.cursor.block": "블록",

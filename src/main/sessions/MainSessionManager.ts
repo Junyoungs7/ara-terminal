@@ -166,6 +166,9 @@ export class MainSessionManager implements ISessionManager {
       this.sink.cwd(id, cwd)
     })
     backend.onExit((exitCode, signal) => {
+      // #35: destroy()·destroyAll() 은 kill 전에 핸들을 지운다 — 그래서 여기서 핸들이 없으면 **우리가 죽인 것**이다.
+      // 렌더러는 셸이 스스로 끝난 것(exit)만 탭을 닫는다. 종료 중(destroyAll) 탭을 치우면 빈 스냅샷이 저장된다.
+      const killed = !this.handles.has(id)
       this.flush(id) // 종료 전 잔여 출력 방출
       this.log?.close(id) // 남은 꼬리를 흘려보내고 파일을 닫는다
       this.handles.delete(id)
@@ -174,7 +177,7 @@ export class MainSessionManager implements ISessionManager {
       // 비어 본창으로 떨어진다. 창은 **이 클로저의 meta** 로 알린다 — 핸들의 meta 와 같은 객체라
       // moveToWindow 가 옮긴 값이 그대로 살아 있다. 지우는 순서를 뒤로 미는 대신 이렇게 한 이유:
       // destroy() 길은 순서를 어떻게 바꿔도 이미 지워진 뒤라 못 고친다.
-      this.sink.exit(id, exitCode, signal, meta.winId)
+      this.sink.exit(id, exitCode, signal, meta.winId, killed)
     })
     // 스트림을 다 건 뒤에 알린다 — 받은 창이 곧바로 attach 해도 출력이 이미 흐르고 있어야 한다.
     this.sink.opened?.(meta)

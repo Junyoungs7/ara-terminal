@@ -155,3 +155,17 @@ test('LOCAL-4 하위 세션은 숫자가 아니라 아이콘으로 표시되고 
   const elbow = await rows.first().evaluate((el) => getComputedStyle(el, '::before').content)
   expect(elbow).toBe('none')
 })
+
+// LOCAL-EXIT★ 신고 #35(2.2.19): 셸을 `exit` 로 정상 종료하면 그 탭을 닫는다(설정 기본 켬).
+// 코드≠0 은 원인을 보게 남긴다 — 회색 [프로세스 종료 — code N] 줄과 함께.
+test('LOCAL-EXIT★ exit(0) 은 탭을 닫고, exit 3 은 남긴다(#35)', async ({ ara }) => {
+  const { page } = ara
+  const keep = await newLocalShell(page)
+  const gone = await newLocalShell(page)
+  await runCommand(page, keep, 'exit 3')
+  await expectTermText(page, keep, /code 3/)
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(2) // 코드≠0 — 탭이 남는다
+  await runCommand(page, gone, 'exit')
+  await expect(page.locator('.term-tabbar .ttab')).toHaveCount(1, { timeout: 20_000 })
+  await expect(page.locator('.pane-grid .pane')).toHaveCount(1)
+})

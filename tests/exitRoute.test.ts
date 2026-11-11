@@ -13,12 +13,12 @@ import type { SessionSink } from '../src/main/sessions/ISessionManager'
 import type { SessionBackend } from '../src/main/sessions/SessionBackend'
 
 function rig() {
-  const exits: { id: string; winId: string | undefined; routerSaw: string | undefined }[] = []
+  const exits: { id: string; winId: string | undefined; routerSaw: string | undefined; killed?: boolean }[] = []
   const sink: SessionSink = {
     data() {},
     cwd() {},
-    exit(id, _code, _signal, winId) {
-      exits.push({ id, winId, routerSaw: mgr.winIdOf(id) })
+    exit(id, _code, _signal, winId, killed) {
+      exits.push({ id, winId, routerSaw: mgr.winIdOf(id), killed })
     }
   }
   const mgr = new MainSessionManager(sink)
@@ -74,6 +74,27 @@ describe('#201 B-4 — exit 은 그 세션의 창으로 간다', () => {
       { id: 'a', winId: 'win-3' },
       { id: 'b', winId: undefined }
     ])
+  })
+})
+
+// #35: 렌더러는 셸이 **스스로** 끝난 것(exit)만 탭을 닫는다. 앱이 죽인 것(✕·종료 중 destroyAll)까지 닫으면
+// 종료 때 탭이 치워지고 persist 가 빈 스냅샷을 쓴다(destroyAll 주석의 그 사고).
+describe('#35 — exit 이 "스스로 끝남"과 "우리가 죽임"을 가른다', () => {
+  it('★ 셸이 스스로 끝나면 killed 가 없다', () => {
+    const { exits, add, fire } = rig()
+    add('a')
+    fire('a')
+    expect(exits[0].killed).toBe(false)
+  })
+  it('★ destroy()·destroyAll() 뒤의 exit 은 killed', () => {
+    const { mgr, exits, add, fire } = rig()
+    add('a')
+    add('b')
+    mgr.destroy('a')
+    mgr.destroyAll()
+    fire('a')
+    fire('b')
+    expect(exits.map((e) => e.killed)).toEqual([true, true])
   })
 })
 

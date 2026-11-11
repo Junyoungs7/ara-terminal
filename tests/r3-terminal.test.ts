@@ -137,6 +137,14 @@ describe('터미널 설정 기본값', () => {
     applyUiPrefs(uiOf()) // 다른 테스트로 새지 않게 되돌린다.
   })
 
+  it('#35 셸을 끝내면 탭 닫기는 미지정이면 켬, 명시적 false 만 끈다', () => {
+    applyUiPrefs(uiOf())
+    expect(termPrefs.closeOnExit).toBe(true)
+    applyUiPrefs(uiOf({ closeOnExit: false }))
+    expect(termPrefs.closeOnExit).toBe(false)
+    applyUiPrefs(uiOf())
+  })
+
   it('스크롤백 슬라이더 범위는 1k–100k', () => {
     expect(SCROLLBACK_MIN).toBe(1000)
     expect(SCROLLBACK_MAX).toBe(100000)

@@ -37,7 +37,8 @@ export interface SessionSink {
   // 배치된 출력 청크 (바이트 버짓 배칭 후). Uint8Array transferable로 전송.
   data(id: string, chunk: Uint8Array): void
   // winId: 그 세션을 가진 창(undefined = 본창). 알릴 때 핸들은 이미 없어 라우터가 못 찾는다(#201 B-4).
-  exit(id: string, exitCode: number, signal?: number, winId?: string): void
+  /** killed: 우리가 죽였다(destroy·destroyAll — 핸들이 이미 없었다). 셸이 스스로 끝난 것과 가른다(#35). */
+  exit(id: string, exitCode: number, signal?: number, winId?: string, killed?: boolean): void
   // F7: OSC7 로 cwd 가 바뀌면 알림 → SFTP 파일 트리 자동 이동(터미널→트리 동기).
   cwd(id: string, cwd: string): void
   /**

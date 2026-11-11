@@ -235,6 +235,12 @@ export const DEFAULT_CURSOR_BLINK = true
  */
 export const DEFAULT_TERM_COMPLETION = true
 
+/**
+ * 신고 #35(2.2.19): 로컬 셸이 **정상 종료(code 0)** 하면 그 칸·탭을 닫을까. **기본은 켬** —
+ * 다른 터미널(Windows Terminal·VS Code)이 그렇다. 코드≠0 과 SSH 끊김은 이 값과 무관하게 남긴다(원인을 봐야 한다).
+ */
+export const DEFAULT_CLOSE_ON_EXIT = true
+
 // 벨(BEL, \x07). xterm 5 에는 소리·시각 벨 옵션이 없고 onBell 이벤트만 있으므로 시각 벨은
 // 패널을 한 번 번쩍이는 것으로 구현한다(소리는 사내 환경에서 원한 적이 없어 넣지 않는다).
 export const BELL_STYLES = ['off', 'visual'] as const
@@ -359,6 +365,8 @@ export type UiPrefs = {
   bell: BellStyle
   // #194 ④ 자동완성 켜기/끄기. 미지정 스냅샷은 prefsFrom 이 **켬**으로 채운다.
   termCompletion: boolean
+  /** #35 로컬 셸이 code 0 으로 끝나면 칸·탭 닫기. 미지정 스냅샷은 prefsFrom 이 **켬**으로 채운다. */
+  closeOnExit: boolean
   // F12: 세션 로그 기록 여부·보존 기간. 전용 설정 채널을 만들지 않고 이 묶음에 얹는다.
   sessionLog: boolean
   logRetentionDays: number
@@ -474,6 +482,8 @@ export type UiState = {
    *    RdpProfile.multiMonitor 와 같은 규칙이다.
    */
   termCompletion?: boolean
+  /** #35 셸을 끝내면 탭 닫기. **미지정 = 켬**, false 만 끈다. 🔴 선택 필드 — SCHEMA_VERSION 그대로. */
+  closeOnExit?: boolean
   /**
    * F23 [MCP]: 서버를 켜 둘까. **미지정 = 켬**(2026-08-26 준영님 지시: *"mcp는 무조건 기본으로
    * 켜지게"*). 이 앱에서 아라가 우리 도구를 쓰는 길이 MCP 하나뿐이라, 꺼진 채로 시작하면

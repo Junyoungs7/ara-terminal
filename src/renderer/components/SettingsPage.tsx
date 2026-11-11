@@ -1865,6 +1865,14 @@ export function SettingsPage({ open, font, prefs, version, onClose, onChange, on
                   onChange={(termCompletion) => onPrefsChange({ termCompletion })}
                 />
               </Row>
+              {/* #35 셸을 끝내면 탭 닫기 — 기본 켬. */}
+              <Row label={t('settings.closeOnExit')} desc={t('settings.closeOnExit.desc')} item="closeOnExit">
+                <Toggle
+                  on={prefs.closeOnExit}
+                  label={t('settings.closeOnExit')}
+                  onChange={(closeOnExit) => onPrefsChange({ closeOnExit })}
+                />
+              </Row>
               <Row label={t('settings.cursorStyle')} desc={t('settings.cursorStyle.desc')} item="cursorStyle">
                 <Seg
                   value={prefs.cursorStyle}

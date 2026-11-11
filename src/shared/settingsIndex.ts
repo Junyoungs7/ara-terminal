@@ -180,7 +180,7 @@ export const SETTINGS_INDEX: SettingsSectionDef[] = [
     id: 'terminal',
     group: 'terminal',
     items: [
-      s('termCompletion'), s('cursorStyle'), s('cursorBlink'), s('bell'), s('copyOnSelect'), s('scrollback'),
+      s('termCompletion'), s('closeOnExit'), s('cursorStyle'), s('cursorBlink'), s('bell'), s('copyOnSelect'), s('scrollback'),
       // P3 R2-A 터미널 3차.
       s('term.shell'), s('term.shellArgs'), s('term.theme'), i('term.contrast', 'settings.term.contrast', 'settings.term.contrast.auto'),
       s('term.import'), s('term.inlineImages'), s('term.osc52')

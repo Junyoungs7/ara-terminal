@@ -10,6 +10,7 @@ import {
   DEFAULT_SCROLLBACK,
   DEFAULT_SESSION_LOG,
   DEFAULT_TERM_COMPLETION,
+  DEFAULT_CLOSE_ON_EXIT,
   UI_SCALE_FACTOR,
   uiScaleOf,
   mouseCursorOf,
@@ -71,6 +72,8 @@ export const termPrefs: Omit<
   // 이미 열려 있는 터미널도 applyTermPrefsToAll 없이 따라온다(끈 순간 이미 그려져 있던 고스트
   // 하나는 다음 키에서 걷힌다 — 그 키가 사람이 터미널을 다시 만지는 순간이라 그대로 뒀다).
   termCompletion: DEFAULT_TERM_COMPLETION,
+  // #35 — MainArea 의 exit 감시가 exit 이 온 순간 읽는다.
+  closeOnExit: DEFAULT_CLOSE_ON_EXIT,
   // P3 R2-A 터미널 3차 — 새 xterm 이 읽는다(셸은 새 로컬 세션을 만들 때 store/sessions 가, OSC 52 는 받는 순간 TerminalPane 이).
   termExtra: DEFAULT_TERM_EXTRA
 }
@@ -87,6 +90,7 @@ export function prefsFrom(
     | 'cursorBlink'
     | 'bell'
     | 'termCompletion'
+    | 'closeOnExit'
     | 'sessionLog'
     | 'logRetentionDays'
     | 'sessionLogDir'
@@ -120,6 +124,8 @@ export function prefsFrom(
     bell: ui.bell ?? DEFAULT_BELL,
     // #194 ④ 미지정이면 **켬** — 옛 스냅샷(필드 자체가 없다)은 지금까지의 동작을 그대로 잇는다.
     termCompletion: ui.termCompletion !== false,
+    // #35 미지정이면 **켬**(2.2.19 부터 기본 동작). false 만 끈다.
+    closeOnExit: ui.closeOnExit !== false,
     // 기본 off — 사용자가 켜지 않으면 파일이 생기지 않는다(설계 §5.5 / 보안 체크리스트).
     sessionLog: ui.sessionLog ?? DEFAULT_SESSION_LOG,
     logRetentionDays: ui.logRetentionDays ?? DEFAULT_LOG_RETENTION_DAYS,
@@ -173,6 +179,7 @@ export function applyUiPrefs(prefs: UiPrefs): void {
   termPrefs.cursorBlink = prefs.cursorBlink
   termPrefs.bell = prefs.bell
   termPrefs.termCompletion = prefs.termCompletion
+  termPrefs.closeOnExit = prefs.closeOnExit
   if (prefs.termExtra) {
     termPrefs.termExtra = prefs.termExtra
     // 열린 터미널에도 테마·대비 하한을 바로(termRegistry). DOM 없는 단위 시험에서는 등록된 xterm 이 없어 그냥 지나간다.

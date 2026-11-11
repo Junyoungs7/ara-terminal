@@ -290,7 +290,7 @@ test('SET-12★ 옮긴 설정 항목이 새 자리에 있다', async ({ ara }) =
   // M3 S1: 옛 [AI CLI 기본 플래그] 줄(ai.cli·ai.cliPick·ai.cliFlags)은 지웠다 — 에이전트 설정이 그 자리다.
   await at('agents', ['agents.detect', 'agents.permission', 'agents.args'])
   await expect(page.locator(`${drawer} .sp-pane [data-item="ai.cliFlags"]`)).toHaveCount(0)
-  await at('terminal', ['termCompletion', 'cursorStyle', 'cursorBlink', 'bell', 'copyOnSelect', 'scrollback'])
+  await at('terminal', ['termCompletion', 'closeOnExit', 'cursorStyle', 'cursorBlink', 'bell', 'copyOnSelect', 'scrollback'])
   await at('update', ['update'])
   await at('mcp', ['mcp.enable', 'sec.mcp'])
   await at('advanced', ['gpu', 'probe', 'dir.app'])
