@@ -40,6 +40,7 @@ export const agentsBridge: Pick<EvApi, 'agents'> = {
       return () => ipcRenderer.removeListener('agents:name', listener)
     },
     statuses: () => ipcRenderer.invoke('agents:statuses'),
+    forgetChild: (sessionId: string, childId: string) => ipcRenderer.invoke('agents:forgetChild', { sessionId, childId }),
     tabs: () => ipcRenderer.invoke('agents:tabs'),
     killBackground: () => ipcRenderer.invoke('agents:killBackground'),
     quitCompletely: () => ipcRenderer.invoke('agents:quitCompletely'),

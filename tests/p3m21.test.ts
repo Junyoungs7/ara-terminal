@@ -78,7 +78,7 @@ describe('잠재우기 후보(Orca agent-hibernation-planner)', () => {
     expect(planHibernation(snap({ statusById: { a: idle('a', { agentExited: true }) } }))).toEqual([])
   })
   it('하위 에이전트가 남아 있으면 아님', () => {
-    expect(planHibernation(snap({ statusById: { a: idle('a', { children: [{ id: 'c', state: 'working', startedAt: 0 }] }) } }))).toEqual([])
+    expect(planHibernation(snap({ statusById: { a: idle('a', { children: [{ id: 'c', state: 'working', startedAt: 0, at: 0 }] }) } }))).toEqual([])
   })
   it('기다림이 덜 찼으면 아님, 떠난 시각이 더 늦으면 그때부터 잰다', () => {
     expect(planHibernation(snap({ now: 39 * MIN }))).toEqual([])

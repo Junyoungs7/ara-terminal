@@ -32,7 +32,7 @@ import type { ConnectionProfile } from '@shared/types'
 import type { GroupLayout } from '../../store/groups'
 import { useAgentStore } from './agentStore'
 import { aggregate, displayOf } from './agentStatusView'
-import { AgentChildRows, AgentGlyph } from './AgentGlyph'
+import { AgentChildRows, AgentGlyph, type AgentChildItem } from './AgentGlyph'
 import { ContextMenu, type MenuItem } from '../../interactions/ContextMenu'
 import { useDialog } from '../../components/Dialog'
 import { pushNote } from '../../store/notify'
@@ -158,6 +158,10 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
     const ctx = e.type === 'contextmenu'
     setMenu({ x: ctx ? e.clientX : r.left, y: ctx ? e.clientY : r.bottom, items, pick })
   }
+
+  // 2.2.21 서브에이전트 자식 줄을 목록에서만 뺀다(끝난 뒤 SubagentStop 이 안 와 남은 줄 — 프로세스는 건드리지 않는다).
+  const forgetChild = (c: AgentChildItem): void => void window.ev.agents.forgetChild(c.sessionId, c.id)
+  const childMenu = (e: ReactMouseEvent, c: AgentChildItem): void => openMenu(e, [{ id: 'forget', label: t('aiws.st.childForget') }], () => forgetChild(c))
 
   const newGroupFor = async (repo: Project): Promise<void> => {
     const name = await dialog.askText({
@@ -472,7 +476,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
           const sleeping = !!w.sleep
           const live = agentTabs.filter((x) => x.worktreeId === w.id && !x.exited)
           const glyph = aggregate(live.map((x) => ({ display: displayOf(statusById[x.sessionId], seenById[x.sessionId] ?? true), estimated: statusById[x.sessionId]?.estimated ?? true })))
-          const children = live.flatMap((x) => statusById[x.sessionId]?.children ?? [])
+          const children = live.flatMap((x) => (statusById[x.sessionId]?.children ?? []).map((c) => ({ ...c, sessionId: x.sessionId })))
           const meta = sleeping
             ? t('aiws.sleep.asleep')
             : r.repo.kind === 'folder'
@@ -607,7 +611,7 @@ export function WorktreeSidebar({ onNew, onRemove }: { onNew: (repoId?: string) 
                   </span>
                 )}
               </div>
-              <AgentChildRows items={children} />
+              <AgentChildRows items={children} onForget={forgetChild} onMenu={childMenu} />
             </div>
           )
         })}

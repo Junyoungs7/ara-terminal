@@ -9808,6 +9808,32 @@ progress {
   font-family: var(--mono);
   color: var(--text-lo);
 }
+/* 2.2.21 오래 조용한 자식(응답 없음)은 흐리게, [×](목록에서만 지움)는 줄에 올렸을 때·응답 없음일 때 보인다. */
+.ag-child.stale {
+  opacity: 0.55;
+}
+.ag-child-x {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-lo);
+  cursor: var(--cur-hand, pointer);
+  visibility: hidden;
+}
+.ag-child:hover .ag-child-x,
+.ag-child.stale .ag-child-x,
+.ag-child-x:focus-visible {
+  visibility: visible;
+}
+.ag-child-x:hover {
+  color: var(--text-hi);
+}
+.ag-child-x svg {
+  width: 12px;
+  height: 12px;
+}
 /* M3 R3 AI-08 대시보드(상태별 네 칸)·AI-09 활동 피드(시간순 줄). 카드·줄은 사이드바 .aiws-row 와 같은 유리 톤. */
 .aiws-board {
   flex: 1;

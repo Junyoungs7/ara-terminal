@@ -7,6 +7,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyHookEvent,
+  CHILD_STALE_MS,
+  childStale,
+  ENDED_MS,
+  forgetChild,
+  HOOK_TARGETS,
   HOOK_ENV,
   HOOK_PANE_HEADER,
   HOOK_SILENT_MS,
@@ -62,7 +67,7 @@ describe('서브에이전트 자식 줄(AI-06, Orca claude-subagent-roster)', ()
     ])
     expect(p?.state).toBe('working')
     expect(p?.tool).toBeUndefined()
-    expect(p?.children).toEqual([{ id: 'a1', agentType: 'Explore', state: 'working', tool: 'Grep', startedAt: T + 1 }])
+    expect(p?.children).toEqual([{ id: 'a1', agentType: 'Explore', state: 'working', tool: 'Grep', startedAt: T + 1, at: T + 2 }])
   })
   it('자식이 승인을 기다리면 부모도 막힘, 자식이 다시 일하면 부모도 풀린다', () => {
     const blocked = run([ev('UserPromptSubmit'), ev('SubagentStart', { agent_id: 'a1' }), ev('PermissionRequest', { agent_id: 'a1', tool_name: 'Bash' })])
@@ -79,6 +84,90 @@ describe('서브에이전트 자식 줄(AI-06, Orca claude-subagent-roster)', ()
   })
   it('너무 긴 id 는 줄을 만들지 않는다(Orca 64자 상한)', () => {
     expect(run([ev('SubagentStart', { agent_id: 'x'.repeat(65) })])?.children).toEqual([])
+  })
+})
+
+// 2.2.21 끝난 서브에이전트가 목록에 남던 문제. 순서는 2.2.21 실측(claude 2.1.300 -p, 훅 기록)에서 옮겼다.
+describe('끝난 자식이 목록에 남지 않는다(2.2.21)', () => {
+  const at = (p: HookPane | null, e: Record<string, unknown>, t: number): HookPane | null => applyHookEvent(p, 'claude', e, t) ?? p
+  const replay = (steps: [number, Record<string, unknown>][]): HookPane | null => steps.reduce<HookPane | null>((p, [t, e]) => at(p, e, T + t), null)
+  it('실측 순서(배경 + 앞 자식, 훅 도착이 뒤섞임) — 둘 다 끝나면 목록이 빈다', () => {
+    const p = replay([
+      [0, ev('UserPromptSubmit')],
+      [1, ev('PreToolUse', { tool_name: 'Agent' })],
+      [2, ev('PostToolUse', { tool_name: 'Agent' })], // 배경 Agent 의 PostToolUse 가 SubagentStart 보다 먼저 도착
+      [2, ev('SubagentStart', { agent_id: 'bg', agent_type: 'general-purpose' })],
+      [3, ev('SubagentStart', { agent_id: 'fg', agent_type: 'general-purpose' })],
+      [4, ev('PreToolUse', { agent_id: 'bg', tool_name: 'Bash' })],
+      [5, ev('PreToolUse', { agent_id: 'fg', tool_name: 'Bash' })],
+      [6, ev('PostToolUse', { agent_id: 'bg', tool_name: 'Bash' })],
+      [7, ev('PostToolUse', { agent_id: 'fg', tool_name: 'Bash' })],
+      [8, ev('SubagentStop', { agent_id: 'bg' })],
+      [9, ev('SubagentStop', { agent_id: 'fg' })],
+      [10, ev('Stop')]
+    ])
+    expect(p?.children).toEqual([])
+    expect(p?.state).toBe('idle')
+  })
+  it('SubagentStop 뒤에 늦게 도착한 같은 id 의 도구 이벤트는 줄을 되살리지 않는다', () => {
+    const p = replay([
+      [0, ev('SubagentStart', { agent_id: 'a1' })],
+      [1, ev('SubagentStop', { agent_id: 'a1' })],
+      [2, ev('PostToolUse', { agent_id: 'a1', tool_name: 'Bash' })],
+      [3, ev('PermissionRequest', { agent_id: 'a1', tool_name: 'Bash' })]
+    ])
+    expect(p?.children).toEqual([])
+    expect(p?.state).not.toBe('blocked')
+  })
+  it('ENDED_MS 가 지난 뒤의 같은 id 활동은 진짜 활동이라 다시 보인다', () => {
+    const p = replay([
+      [0, ev('SubagentStart', { agent_id: 'a1' })],
+      [1, ev('SubagentStop', { agent_id: 'a1' })],
+      [ENDED_MS + 2, ev('PreToolUse', { agent_id: 'a1', tool_name: 'Read' })]
+    ])
+    expect(p?.children.map((c) => c.id)).toEqual(['a1'])
+  })
+  it('SendMessage 재개(같은 id 의 SubagentStart — 실측으로 다시 온다)는 바로 되살리고, 다시 끝나면 빠진다', () => {
+    const resumed = replay([
+      [0, ev('SubagentStart', { agent_id: 'a1' })],
+      [1, ev('SubagentStop', { agent_id: 'a1' })],
+      [2, ev('SubagentStart', { agent_id: 'a1' })],
+      [3, ev('PreToolUse', { agent_id: 'a1', tool_name: 'Bash' })]
+    ])
+    expect(resumed?.children).toMatchObject([{ id: 'a1', tool: 'Bash', at: T + 3 }])
+    expect(at(resumed, ev('SubagentStop', { agent_id: 'a1' }), T + 4)?.children).toEqual([])
+  })
+  it('부모 SessionEnd(/clear·종료)면 자식이 다 빠진다', () => {
+    const p = replay([
+      [0, ev('SubagentStart', { agent_id: 'a1' })],
+      [1, ev('SubagentStart', { agent_id: 'a2' })],
+      [2, ev('SessionEnd', { reason: 'clear' })]
+    ])
+    expect(p?.children).toEqual([])
+    expect(p?.state).toBe('idle')
+    expect(HOOK_TARGETS.claude.events).toContain('SessionEnd')
+  })
+  it('[목록에서 지우기]는 그 줄만 빼고, 늦은 이벤트로 되살리지 않는다', () => {
+    const p = replay([
+      [0, ev('SubagentStart', { agent_id: 'a1' })],
+      [1, ev('SubagentStart', { agent_id: 'a2' })]
+    ]) as HookPane
+    const f = forgetChild(p, 'a1', T + 2)
+    expect(f.children.map((c) => c.id)).toEqual(['a2'])
+    expect(at(f, ev('PostToolUse', { agent_id: 'a1', tool_name: 'Bash' }), T + 3)?.children.map((c) => c.id)).toEqual(['a2'])
+  })
+  it('끝남 기록은 ENDED_MS 지나면 버려진다(오래 켜 둔 세션에서 쌓이지 않게)', () => {
+    const p = replay([
+      [0, ev('SubagentStop', { agent_id: 'a1' })],
+      [ENDED_MS + 1, ev('SubagentStop', { agent_id: 'a2' })]
+    ])
+    expect(Object.keys(p?.ended ?? {})).toEqual(['a2'])
+  })
+  it('응답 없음: 30분 넘게 조용한 일하는 자식만(막힘은 아님)', () => {
+    const c = { id: 'a', state: 'working' as const, startedAt: 0, at: 0 }
+    expect(childStale(c, CHILD_STALE_MS)).toBe(false)
+    expect(childStale(c, CHILD_STALE_MS + 1)).toBe(true)
+    expect(childStale({ ...c, state: 'blocked' }, CHILD_STALE_MS + 1)).toBe(false)
   })
 })
 

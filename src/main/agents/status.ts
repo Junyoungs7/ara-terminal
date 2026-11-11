@@ -9,7 +9,7 @@ import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { AgentId } from '@shared/agents'
 import { detectScreen, promptBoxBody, type ScreenDetection, type ScreenInput } from '@shared/agentScreen'
-import { applyHookEvent, HOOK_SILENT_MS, resolveStatus, type AgentStatusView, type HookPane } from '@shared/agentHooks'
+import { applyHookEvent, forgetChild, HOOK_SILENT_MS, resolveStatus, type AgentStatusView, type HookPane } from '@shared/agentHooks'
 import type { Session } from '@shared/types'
 import type { SessionTap } from '../sessions/MainSessionManager'
 import type { HookEvent } from './hooks'
@@ -103,6 +103,8 @@ export type AgentStatusTracker = SessionTap & {
   /** M5 채팅 입력 — 첫 지시와 같은 길(입력 상자가 뜬 뒤). 바로 쓰면 셸(PSReadLine 미리 읽기)이 먹는다. 추적 안 하는 탭이면 false. */
   submit(sessionId: string, text: string): boolean
   hook(e: HookEvent): void
+  /** 2.2.21 자식 줄 하나를 목록에서 뺀다(표시만 — 서브에이전트를 끝내지 않는다). */
+  forgetChild(sessionId: string, childId: string): void
   views(): AgentStatusView[]
 }
 
@@ -239,6 +241,12 @@ ${text}` : text, deadline: now() + promptTimeout }
       if (!next) return
       e.hook = { pane: next, event: String(ev.payload['hook_event_name']) }
       publish(ev.paneKey, e)
+    },
+    forgetChild(sessionId, childId) {
+      const e = entries.get(sessionId)
+      if (!e?.hook) return
+      e.hook = { ...e.hook, pane: forgetChild(e.hook.pane, childId, now()) }
+      publish(sessionId, e)
     },
     views: () => [...entries.values()].flatMap((e) => (e.view ? [e.view] : [])),
     data(meta: Session, chunk: Uint8Array) {

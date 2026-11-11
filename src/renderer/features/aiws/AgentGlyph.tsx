@@ -1,8 +1,11 @@
-import type { JSX } from 'react'
-import { MessageCircleQuestion } from 'lucide-react'
-import type { AgentChild } from '@shared/agentHooks'
+import { useEffect, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
+import { MessageCircleQuestion, X } from 'lucide-react'
+import { childStale, type AgentChild } from '@shared/agentHooks'
 import { t } from '../../i18n'
 import type { AgentDisplay } from './agentStatusView'
+
+/** "응답 없음" 판정을 다시 보는 간격(이벤트가 없으면 다시 그릴 일이 없다). */
+const STALE_TICK_MS = 60_000
 
 /**
  * M3 R2 AI-11 상태 글리프 — Orca StatusIndicator·AgentWorkingSpinner·AgentQuestionIcon(orcaRef 7a7f46f8a3)의 모양:
@@ -19,18 +22,48 @@ export function AgentGlyph({ display, estimated, detail }: { display: AgentDispl
   )
 }
 
-/** 서브에이전트 자식 줄(AI-06, Orca agent-child-row-model 의 이름 · 지금 도구). */
-export function AgentChildRows({ items }: { items: AgentChild[] }): JSX.Element | null {
+/** 서브에이전트 자식 줄(AI-06, Orca agent-child-row-model 의 이름 · 지금 도구). sessionId = 그 자식의 부모 에이전트 탭. */
+export type AgentChildItem = AgentChild & { sessionId: string }
+
+/**
+ * 2.2.21 오래(CHILD_STALE_MS) 조용한 자식은 흐리게 "응답 없음". [×]·우클릭은 **목록에서만** 뺀다(서브에이전트를 끝내지 않는다).
+ * 막힘 자식은 사람을 기다리는 중이라 응답 없음으로 치지 않는다.
+ */
+export function AgentChildRows({ items, onForget, onMenu }: { items: AgentChildItem[]; onForget?: (c: AgentChildItem) => void; onMenu?: (e: ReactMouseEvent, c: AgentChildItem) => void }): JSX.Element | null {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (items.length === 0) return
+    const id = setInterval(() => setNow(Date.now()), STALE_TICK_MS)
+    return () => clearInterval(id)
+  }, [items.length])
   if (items.length === 0) return null
   return (
     <div className="ag-children" role="list" aria-label={t('aiws.st.subagents')}>
-      {items.map((c) => (
-        <div key={c.id} className="ag-child" role="listitem" data-child={c.id}>
-          <AgentGlyph display={c.state === 'blocked' ? 'blocked' : 'working'} estimated={false} />
-          <span className="ag-child-name">{c.agentType ?? t('aiws.st.subagent')}</span>
-          {c.tool && <span className="ag-child-tool">{c.tool}</span>}
-        </div>
-      ))}
+      {items.map((c) => {
+        const stale = childStale(c, now)
+        return (
+          <div key={c.sessionId + c.id} className={'ag-child' + (stale ? ' stale' : '')} role="listitem" data-child={c.id} data-stale={stale || undefined} title={stale ? t('aiws.st.childStale') : undefined} onContextMenu={onMenu ? (e) => onMenu(e, c) : undefined}>
+            <AgentGlyph display={c.state === 'blocked' ? 'blocked' : stale ? 'idle' : 'working'} estimated={false} />
+            <span className="ag-child-name">{c.agentType ?? t('aiws.st.subagent')}</span>
+            {stale ? <span className="ag-child-tool">{t('aiws.st.childStaleShort')}</span> : c.tool && <span className="ag-child-tool">{c.tool}</span>}
+            {onForget && (
+              <button
+                type="button"
+                className="ag-child-x"
+                data-aiws="child-forget"
+                title={t('aiws.st.childForget')}
+                aria-label={t('aiws.st.childForget')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onForget(c)
+                }}
+              >
+                <X aria-hidden />
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

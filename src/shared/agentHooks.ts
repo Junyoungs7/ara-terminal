@@ -26,6 +26,8 @@ export type AgentChild = {
   tool?: string
   state: 'working' | 'blocked'
   startedAt: number
+  /** 이 자식의 마지막 이벤트 시각 — 오래 조용하면 렌더러가 "응답 없음"으로 흐리게 그린다(CHILD_STALE_MS). */
+  at: number
 }
 
 /** 훅으로 들은 한 칸(pane = 에이전트 탭 세션)의 상태. */
@@ -37,6 +39,8 @@ export type HookPane = {
   at: number
   /** M11 질문/승인 카드 글(Orca interactivePrompt — AskUserQuestion 입력 또는 {approval}). 막힘일 때만. */
   ask?: string
+  /** 2.2.21 끝난(SubagentStop·목록에서 지움) 자식 id → 그 시각. ENDED_MS 안에 늦게 온 같은 id 의 도구 이벤트로 줄을 되살리지 않는다. */
+  ended?: Record<string, number>
 }
 
 /** 화면에 내보내는 상태(main → 렌더러 `agents:status`). 봄/안 봄(done·idle)은 렌더러가 가른다. */
@@ -62,6 +66,15 @@ export type AgentStatusView = {
 }
 
 const CHILD_ID_MAX = 64
+/**
+ * 끝난 자식의 늦은 이벤트를 버리는 시간. 훅은 이벤트마다 따로 뜬 프로세스(curl)라 도착 순서가 보장되지 않는다
+ * (2.2.21 실측: 같은 순간의 PostToolUse·SubagentStart 가 뒤바뀌어 도착) — 그 사이에 온 자식 도구 이벤트가 줄을 되살렸다.
+ * 이보다 늦은 이벤트는 진짜 활동으로 본다. 같은 id 의 SubagentStart(SendMessage 재개 — 실측으로 다시 온다)는 언제든 되살린다.
+ */
+export const ENDED_MS = 60_000
+/** 이만큼 이벤트가 없는 자식은 "응답 없음"(흐리게 + [×]). 막힘은 사람을 기다리는 중이라 제외. 자동으로 지우지는 않는다. */
+export const CHILD_STALE_MS = 30 * 60_000
+export const childStale = (c: AgentChild, now: number): boolean => c.state !== 'blocked' && now - c.at > CHILD_STALE_MS
 const str = (o: Record<string, unknown>, k: string): string | undefined => {
   const v = o[k]
   return typeof v === 'string' && v.length > 0 ? v : undefined
@@ -71,8 +84,21 @@ const isQuestionTool = (tool: string | undefined): boolean => tool === 'AskUserQ
 function withChild(children: AgentChild[], id: string, patch: Partial<AgentChild>, now: number): AgentChild[] {
   if (id.length > CHILD_ID_MAX) return children
   const cur = children.find((c) => c.id === id)
-  if (cur) return children.map((c) => (c.id === id ? { ...c, ...patch, agentType: patch.agentType ?? c.agentType } : c))
-  return [...children, { id, state: 'working', startedAt: now, ...patch }]
+  if (cur) return children.map((c) => (c.id === id ? { ...c, ...patch, agentType: patch.agentType ?? c.agentType, at: now } : c))
+  return [...children, { id, state: 'working', startedAt: now, at: now, ...patch }]
+}
+
+/** 끝난 자식 기록(ENDED_MS 지난 것은 버린다 — 오래 켜 둔 세션에서 쌓이지 않게). */
+function withEnded(ended: Record<string, number> | undefined, id: string | null, now: number): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, t] of Object.entries(ended ?? {})) if (now - t <= ENDED_MS) out[k] = t
+  if (id) out[id] = now
+  return out
+}
+
+/** 자식 줄 하나를 목록에서 뺀다(2.2.21 [목록에서 지우기] — 표시만, 프로세스는 그대로). 끝난 것으로 기록해 늦은 이벤트가 되살리지 않는다. */
+export function forgetChild(prev: HookPane, id: string, now: number): HookPane {
+  return { ...prev, children: prev.children.filter((c) => c.id !== id), ended: withEnded(prev.ended, id, now) }
 }
 
 /**
@@ -104,10 +130,18 @@ function applyHookEventInner(prev: HookPane | null, source: HookSource, payload:
   const waits = event === 'PermissionRequest' || (event === 'PreToolUse' && isQuestionTool(tool))
   const kind: BlockKind = isQuestionTool(tool) ? 'question' : 'permission'
 
-  if (event === 'SubagentStart' && agentId) return { ...base, children: withChild(base.children, agentId, { agentType, state: 'working' }, now), at: now }
-  if ((event === 'SubagentStop' || event === 'StopFailure') && agentId) return { ...base, children: base.children.filter((c) => c.id !== agentId), at: now }
+  if (event === 'SubagentStart' && agentId) {
+    const { [agentId]: _revived, ...ended } = base.ended ?? {}
+    return { ...base, children: withChild(base.children, agentId, { agentType, state: 'working' }, now), ended, at: now }
+  }
+  if ((event === 'SubagentStop' || event === 'StopFailure') && agentId) return { ...forgetChild(base, agentId, now), at: now }
+  // 부모 세션이 끝났다(/clear·종료) — 그 세션의 자식은 다 끝났다. 새 세션은 빈 목록으로.
+  if (event === 'SessionEnd') return { state: 'idle', children: [], at: now }
 
   if (agentId) {
+    // 방금 끝난 자식의 늦은 도구 이벤트는 버린다(되살리지 않는다).
+    const endedAt = base.ended?.[agentId]
+    if (endedAt !== undefined && now - endedAt <= ENDED_MS) return null
     // 자식의 도구 이벤트. 막힘만 부모로 — 나머지는 자식 줄의 "지금 하는 일"이다.
     if (waits) return { ...base, state: 'blocked', kind, ask: deriveInteractivePrompt(tool, payload['tool_input'], event), children: withChild(base.children, agentId, { agentType, state: 'blocked', tool }, now), at: now }
     if (event === 'PreToolUse' || event === 'PostToolUse' || event === 'PostToolUseFailure') {
@@ -170,7 +204,8 @@ export const HOOK_TARGETS: Record<HookSource, { configDir: string; events: reado
   // Orca CLAUDE_EVENTS 에서 상태·자식 줄에 쓰는 것만. matcher '*' 는 도구 이벤트(모든 도구).
   claude: {
     configDir: '.claude',
-    events: ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Stop', 'StopFailure', 'SubagentStart', 'SubagentStop'],
+    // 2.2.21 SessionEnd — /clear·종료 때 자식 줄을 비운다(SubagentStop 이 안 온 자식이 남지 않게).
+    events: ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Stop', 'StopFailure', 'SubagentStart', 'SubagentStop', 'SessionEnd'],
     matcherEvents: ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest'],
     timeout: 10
   },

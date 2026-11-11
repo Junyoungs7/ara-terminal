@@ -310,6 +310,9 @@ export function registerAgentsFeature(deps: {
     return saved
   })
   handle('agents:statuses', () => tracker?.views() ?? [])
+  handle('agents:forgetChild', ({ sessionId, childId }) => {
+    if (typeof sessionId === 'string' && typeof childId === 'string') tracker?.forgetChild(sessionId, childId)
+  })
   // AI-15 모델 목록 — 설치된 CLI 에 처음 한 번 묻고 기억(같이 부르면 한 번만). 실패는 기억하지 않는다(다음에 다시).
   const models = new Map<AgentId, Promise<ModelCatalog>>()
   handle('agents:models', ({ agent, force }) => {

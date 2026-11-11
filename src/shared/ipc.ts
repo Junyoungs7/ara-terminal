@@ -677,6 +677,8 @@ export type InvokeContract = {
   'agents:launch': { req: { agent: AgentId; cwd: string; prompt?: string; resume?: string; options?: AgentLaunchOptions; host?: string }; res: AgentLaunchResult }
   // M3 R2: 지금 에이전트 탭 상태들(창이 늦게 떠도 그 사이 것을 받아 간다). 바뀔 때마다 'agents:status' 로 민다.
   'agents:statuses': { req: void; res: AgentStatusView[] }
+  // 2.2.21 서브에이전트 자식 줄을 목록에서만 뺀다(프로세스는 그대로).
+  'agents:forgetChild': { req: { sessionId: string; childId: string }; res: void }
   // M4 DM-01: 켤 때 데몬에서 되살린 에이전트 탭 · 백그라운드 에이전트 모두 종료 · 완전 종료(에이전트까지 끝내고 앱 종료).
   'agents:tabs': { req: void; res: AgentTabInfo[] }
   // M5 AI-13 채팅으로 보기: 열면 그때까지의 메시지(스냅숏) + 그 뒤로 'agents:chat' push. 닫으면 감시를 내린다.
@@ -1490,6 +1492,7 @@ export type EvApi = {
     resumeIds(sessionIds: string[]): Promise<Record<string, string | null>>
     /** M3 R2 에이전트 탭 상태(훅 + 화면 판정). */
     statuses(): Promise<AgentStatusView[]>
+    forgetChild(sessionId: string, childId: string): Promise<void>
     /** M4 DM-01 데몬(앱을 꺼도 사는 에이전트). */
     tabs(): Promise<AgentTabInfo[]>
     killBackground(): Promise<{ killed: number }>
