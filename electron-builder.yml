@@ -63,7 +63,7 @@ publish:
   channel: latest
 win:
   target: nsis
-  # 아이콘: 브랜드 키트(D:\AI\OFA\docs\brand\final\kit\ara\ara.ico — 16·20·24·32·40·48·64·256, 48 이하는 픽셀 정렬 평면 판)를
+  # 아이콘: 브랜드 키트(D:\AI\OFA\docs\brand\final\kit\ara\ara-tile.ico — 보라 판+흰 별(신고 #34 시안 B, 2.2.20), 16·20·24·32·40·48·64·256, 48 이하는 별 굵기 보정)를
   # 그대로 복사한 것. **.ico 를 주면 electron-builder 는 변환 없이 그대로 쓴다.**
   # PNG 를 주면 만들어 주긴 하는데 **256 한 장짜리**라 작업 표시줄·Alt+Tab(16~48px)에서 깨진다
   # (2026-09-04 0.9.9 설치본). 마크가 바뀌면 키트를 다시 굽고 복사한 뒤 `npm run icons:svg`(scripts/make-brand-svg.mjs 머리주석).
@@ -84,7 +84,7 @@ mac:
   target:
     - dmg
     - zip
-  # mac 은 PNG 그대로(키트 ara-macos-1024.png — 검은 판) — .icns 는 한 장에서 잘 나온다(Windows 와 달리 여기서 깨진 적 없다).
+  # mac 은 PNG 그대로(키트 ara-tile-1024.png — 보라 판, 2.2.20 부터. 그 전엔 ara-macos-1024.png 검은 판) — .icns 는 한 장에서 잘 나온다(Windows 와 달리 여기서 깨진 적 없다).
   icon: resources/icons/ara-icon.png
   # 서명: 인증서가 없으므로 electron-builder 의 서명 단계를 건너뛴다(null). 그 뒤 설치한 앱에
   # scripts/sign-adhoc.sh 로 ad-hoc 서명(codesign --sign -)과 quarantine 제거를 한다 — 절차는 docs/build-macos.md.
