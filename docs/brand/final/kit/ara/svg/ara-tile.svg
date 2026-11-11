@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="ARA">
+  <defs><linearGradient id="ara-tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E61DA"/><stop offset="1" stop-color="#9A7BF0"/></linearGradient></defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#ara-tile)"/>
+  <path d="M524.82 665.92 C550.29 538.38 497.29 500.87 120.63 599.29 C376.57 532.41 625.16 360.88 691.27 199.17 C588.45 450.67 629.90 482.79 903.37 495.99 C743.83 458.40 592.52 532.67 524.82 665.92Z" fill="#FFFFFF"/>
+  <path d="M903.37 495.99 C785.95 490.32 513.52 708.31 481.42 824.83 C498.54 762.71 516.18 709.14 524.82 665.92 C592.52 532.67 743.83 458.40 903.37 495.99Z" fill="#DCD2FF"/>
+</svg>

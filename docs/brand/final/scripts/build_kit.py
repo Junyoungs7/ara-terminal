@@ -275,6 +275,64 @@ def build(name):
     save_icns(name, d)
 
 
+# ── 판 아이콘(시안 B, 신고 #34 — 2026-11-11 준영님 확정) ─────────────────────────
+# 실행 파일·창·작업 표시줄 아이콘 전용. 앱 안 로고(BrandOrb 등)는 위 투명 마크 그대로.
+# 판: 캔버스 꽉 찬 둥근 사각(rx 230/1024), 왼쪽 위→오른쪽 아래 그라데이션. 별: 흰색(면 a)·연보라(면 b) 2톤.
+# 비율은 시안 그대로 — 평면 SVG(SMALL_FILL) 를 0.78 배 → 마크 긴 변 = 0.98×0.78.
+TILE_GRAD = ('#5E61DA', '#9A7BF0')
+TILE_STAR = {'a': '#FFFFFF', 'b': '#DCD2FF'}
+TILE_RX = 230/1024
+TILE_FILL = SMALL_FILL*0.78
+# 작은 판 별 굵기 보정: 면 윤곽에 덧그리는 선 폭(px, 최종 크기 기준) — 16·24px 에서 가는 갈래가 판색에 묻히지 않게.
+TILE_BOLD = {16: 1.1, 20: 1.0, 24: 0.9, 32: 0.7, 40: 0.5, 48: 0.4}
+
+
+def tile_png(name, size, ss=16):
+    N = size*ss
+    k = N/1024
+    pm = Image.new('L', (N, N), 0)
+    ImageDraw.Draw(pm).rounded_rectangle([0, 0, N-1, N-1], radius=TILE_RX*N, fill=255)
+    yy, xx = (np.mgrid[0:N, 0:N]+0.5)/N
+    t = ((xx+yy)/2)[..., None]
+    g0, g1 = rgb(TILE_GRAD[0]), rgb(TILE_GRAD[1])
+    img = np.zeros((N, N, 4))
+    img[..., :3] = g0+(g1-g0)*t
+    img[..., 3] = (np.asarray(pm) > 0)*255
+    f, _ = place(name, size, TILE_FILL)
+    lab = Image.new('L', (N, N), 0)
+    dr = ImageDraw.Draw(lab)
+    fa, fb, _ = faces(name)
+    w = TILE_BOLD.get(size, 0)*ss
+    for v, face in ((1, fa), (2, fb)):
+        pts = [tuple(p*ss) for p in polygon(face, f, 64)]
+        dr.polygon(pts, fill=v)
+        if w:
+            dr.line(pts+[pts[0]], fill=v, width=max(1, round(w)), joint='curve')
+    lab = np.asarray(lab)
+    for v, key in ((1, 'a'), (2, 'b')):
+        img[lab == v, :3] = rgb(TILE_STAR[key])
+    return to_im(downsample(img, ss))
+
+
+def svg_tile(name):
+    f, _ = place(name, 1024, TILE_FILL)
+    fa, fb, _ = faces(name)
+    label = 'ARA' if name == 'ara' else 'Oriel'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="{label}">\n'
+            f'  <defs><linearGradient id="{name}-tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{TILE_GRAD[0]}"/><stop offset="1" stop-color="{TILE_GRAD[1]}"/></linearGradient></defs>\n'
+            f'  <rect width="1024" height="1024" rx="{TILE_RX*1024:.0f}" fill="url(#{name}-tile)"/>\n'
+            f'  <path d="{path_d(fa, f)}" fill="{TILE_STAR["a"]}"/>\n  <path d="{path_d(fb, f)}" fill="{TILE_STAR["b"]}"/>\n</svg>\n')
+
+
+def build_tile(name):
+    d = os.path.join(KIT, name)
+    open(os.path.join(d, 'svg', f'{name}-tile.svg'), 'w', encoding='utf-8', newline='\n').write(svg_tile(name))
+    pngs = {sz: tile_png(name, sz, 16 if sz <= 256 else 4) for sz in PNG_SIZES}
+    for sz, im in pngs.items():
+        im.save(os.path.join(d, 'png', f'{name}-tile-{sz}.png'))
+    save_ico([pngs[s] if s in pngs else tile_png(name, s) for s in ICO_SIZES], os.path.join(d, f'{name}-tile.ico'))
+
+
 def tokens():
     out = {'measured_from': 'docs/brand/final/source-board.png (PIL, 면을 5px 깎은 안쪽 픽셀의 중앙값)'}
     for n in ('ara', 'oriel'):
@@ -299,5 +357,6 @@ if __name__ == '__main__':
     os.makedirs(KIT, exist_ok=True)
     for n in ('ara', 'oriel'):
         build(n)
+    build_tile('ara')
     tokens()
     print('kit →', KIT)
