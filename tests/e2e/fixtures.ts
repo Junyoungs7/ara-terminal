@@ -30,6 +30,8 @@ type TermProbe = {
   text: () => string
   /** M15 R2 Reset Terminal 확인용 */
   modes?: () => { mouse: string; paste: boolean }
+  /** 2.2.23 스크롤 진단 */
+  buffer?: () => { type: string; length: number; rows: number; cols: number }
 }
 declare global {
   interface Window {

@@ -23,6 +23,15 @@ const BACKLOG_LIMIT = 256 * 1024
 // 2.2.22: 링이 잘린 뒤의 재생은 헤드리스 화면(mirror)을 직렬화해 준다 — 그 화면이 들고 있는 스크롤백 줄 수.
 // ponytail: 고정 1000 줄. 렌더러 스크롤백 설정(기본 5000)만큼 되감아야 하면 그 값을 넘겨받는다.
 const MIRROR_SCROLLBACK = 1000
+/**
+ * 2.2.23(준영님 제보: 전체 화면에서 탭을 옮겼다 오면 Claude 칸 휠이 아예 안 먹고, 전체 화면을 풀면 다시 된다).
+ * @xterm/addon-serialize 는 마우스 **추적** 모드(?1000/1002/1003)는 싣지만 **보고 인코딩**(?1006 SGR·?1016 SGR 픽셀·?1005·?1015)은
+ * 안 싣는다. Claude 전체 화면(tui: fullscreen)은 ?1000h?1002h?1003h?1006h 로 휠을 받는데,
+ * 직렬화로 다시 붙으면 렌더러 xterm 이 옛 X10 인코딩(ESC[M + 글자 3개)으로 휠을 보낸다 — 열 96~127 은 C1 글자라 ConPTY 가 버리고
+ * 224 열부터는 xterm 이 아예 안 보낸다(넓은 전체 화면에서 휠 0). 창 크기를 바꾸면 Claude 가 모드를 다시 보내 풀린다.
+ * 그래서 이 모드들은 직접 따라가 직렬화 뒤에 다시 켠다.
+ */
+const UNSERIALIZED_MODES = new Set([1005, 1006, 1015, 1016])
 
 // conpty 는 세션이 열리는 즉시 셸 실행 파일 경로를 OSC 제목으로 보낸다(C:\WINDOWS\SYSTEM32\cmd.exe).
 // 그대로 받으면 로컬 탭이 전부 같은 이름이 돼 "셸 1 / 셸 2" 구분(R2.1)이 통째로 무너진다.
@@ -72,6 +81,8 @@ type Handle = {
   /** mirror 에 넣었지만 아직 안 그려진 조각(write 는 비동기) — 직렬화 뒤에 그대로 이어 붙이면 정확히 지금 화면이다. */
   unparsed: Uint8Array[]
   trimmed: boolean
+  /** UNSERIALIZED_MODES 중 지금 켜진 것(켜진 순서 — 1006·1016 은 나중 것이 이긴다). */
+  modes: Set<number>
 }
 
 // F12 세션 로그 tee. main/index.ts 가 늦게 주입한다(로거는 userData 경로를 알아야 만들 수 있다).
@@ -175,6 +186,7 @@ export class MainSessionManager implements ISessionManager {
       ser,
       unparsed: [],
       trimmed: false,
+      modes: new Set(),
       backend,
       meta,
       buf: [],
@@ -185,6 +197,17 @@ export class MainSessionManager implements ISessionManager {
       backlogBytes: 0,
       attached: false
     }
+    // 보기만 하고 false — xterm 의 원래 처리는 그대로 간다. ponytail: RIS(ESC c)·DECSTR 로 모드가 풀리는 건 안 따라간다.
+    const track = (on: boolean) => (params: (number | number[])[]): boolean => {
+      for (const p of params) {
+        if (typeof p !== 'number' || !UNSERIALIZED_MODES.has(p)) continue
+        h.modes.delete(p)
+        if (on) h.modes.add(p)
+      }
+      return false
+    }
+    mirror.parser.registerCsiHandler({ prefix: '?', final: 'h' }, track(true))
+    mirror.parser.registerCsiHandler({ prefix: '?', final: 'l' }, track(false))
     this.handles.set(id, h)
     backend.onData((data) => this.enqueue(id, data))
     // SSH 는 셸 출력이 아니라 /proc 에서 cwd 를 읽어 온다(remoteCwd.ts) — 도착 경로만 다르고
@@ -279,9 +302,10 @@ export class MainSessionManager implements ISessionManager {
     return h.trimmed ? this.screenSnapshot(h) : this.snapshotBacklog(h)
   }
 
-  /** 잘린 링 대신 그려진 화면 — 직렬화(스크롤백·화면·커서·모드) + 아직 안 그려진 조각. 조각은 통째로만 그려지므로 경계가 정확하다. */
+  /** 잘린 링 대신 그려진 화면 — 직렬화(스크롤백·화면·커서·모드) + 직렬화가 빠뜨리는 모드 + 아직 안 그려진 조각. 조각은 통째로만 그려지므로 경계가 정확하다. */
   private screenSnapshot(h: Handle): Uint8Array {
-    return new Uint8Array(Buffer.concat([Buffer.from(h.ser.serialize({ scrollback: MIRROR_SCROLLBACK }), 'utf8'), ...h.unparsed]))
+    const modes = [...h.modes].map((m) => `\x1b[?${m}h`).join('')
+    return new Uint8Array(Buffer.concat([Buffer.from(h.ser.serialize({ scrollback: MIRROR_SCROLLBACK }) + modes, 'utf8'), ...h.unparsed]))
   }
 
   // F23: MCP session_read 의 읽기 전용 접근자. attach() 와 달리 attached 플래그를 건드리지 않는다

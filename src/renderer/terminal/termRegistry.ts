@@ -56,6 +56,8 @@ if (typeof window !== 'undefined') {
       getSelection: () => e.term.getSelection(),
       // M15 R2 TM-03 Reset Terminal 확인용(마우스 추적·bracketed paste 가 꺼졌나).
       modes: () => ({ mouse: e.term.modes.mouseTrackingMode, paste: e.term.modes.bracketedPasteMode }),
+      // 2.2.23 스크롤 진단(e2e SCROLL-1): 지금 버퍼(대체 화면이면 스크롤백 없음 = 스크롤 막대 없음)와 줄 수.
+      buffer: () => ({ type: e.term.buffer.active.type, length: e.term.buffer.active.length, rows: e.term.rows, cols: e.term.cols }),
       // WebGL 렌더러가 붙으면 화면 내용이 canvas 로 가서 DOM textContent 가 비어 있다.
       // 렌더러 종류와 무관하게 버퍼를 읽는 유일한 경로.
       text: () => {

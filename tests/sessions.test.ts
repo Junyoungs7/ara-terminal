@@ -10,7 +10,7 @@ const mirrorOf = () => {
   const mirror = new Terminal({ cols: 80, rows: 24, scrollback: 1000, allowProposedApi: true })
   const ser = new SerializeAddon()
   mirror.loadAddon(ser)
-  return { mirror, ser, unparsed: [] as Uint8Array[], trimmed: false }
+  return { mirror, ser, unparsed: [] as Uint8Array[], trimmed: false, modes: new Set<number>() }
 }
 
 // 실제 node-pty 셸을 스폰하는 통합성 단위 테스트. 짧은 명령을 실행해 라운드트립을 검증한다.

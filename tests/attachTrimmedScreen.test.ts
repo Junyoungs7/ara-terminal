@@ -82,6 +82,45 @@ describe('2.2.22 잘린 재생 버퍼 — 아래쪽 줄 사라짐', () => {
     expect(back.buffer.active.cursorX).toBe(live.buffer.active.cursorX)
   })
 
+  // 2.2.23 준영님 제보 — 전체 화면에서 탭을 옮겼다 오면 Claude 칸 휠이 아예 안 먹는다(전체 화면을 풀면 다시 된다).
+  // Claude 전체 화면(tui: fullscreen)은 대체 화면 + 마우스 추적 + SGR 인코딩(?1006)으로 휠을 받는다.
+  // 직렬화가 ?1006 을 빠뜨려 다시 붙은 xterm 이 옛 X10 인코딩으로 휠을 보냈다. 고치기 전 이 시험은 DEFAULT ≠ SGR 로 실패했다.
+  it('★ 링이 잘린 뒤 다시 붙어도 마우스 보고 인코딩(SGR)이 그대로다 — 휠이 같은 바이트로 간다', async () => {
+    const { mgr, id, emit } = rig()
+    const live = fresh()
+    const send = async (s: string): Promise<void> => {
+      emit(s)
+      await W(live, s)
+      await sleep(20)
+    }
+    await send('\x1b[?9001h\x1b[?1004h') // ConPTY 첫 출력
+    await send('\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[H') // Claude 전체 화면 켜기
+    await send(cup(ROWS - 3, 1) + '─'.repeat(COLS) + cup(ROWS - 2, 1) + '> ')
+    const frame = (n: number): string => `\x1b[?2026h${cup(ROWS, 1)}\x1b[2K✻ Working… (${n}s)\x1b[?2026l`
+    let chunk = ''
+    for (let n = 1, total = 0; total < 300 * 1024; n++) {
+      chunk += frame(n)
+      total += Buffer.byteLength(frame(n))
+      if (chunk.length > 60 * 1024) {
+        await send(chunk)
+        chunk = ''
+      }
+    }
+    if (chunk) await send(chunk)
+
+    const back = fresh()
+    await W(back, mgr.attach(id))
+    expect(back.buffer.active.type).toBe('alternate')
+    expect(rows(back)).toEqual(rows(live))
+    // 비공개 API(시험에서만): 휠 위로 한 칸이 어떤 바이트로 나가는지 — 렌더러 xterm 과 같은 인코더다.
+    type MouseSvc = { activeEncoding: string; encodeMouseEvent(e: object): string }
+    const svc = (t: Terminal): MouseSvc => (t as unknown as { _core: { mouseStateService: MouseSvc } })._core.mouseStateService
+    const wheelUp = (t: Terminal): string => svc(t).encodeMouseEvent({ col: 100, row: 5, x: 0, y: 0, button: 4, action: 0, ctrl: false, alt: false, shift: false })
+    expect(svc(back).activeEncoding).toBe('SGR')
+    expect(wheelUp(back)).toBe(wheelUp(live))
+    expect(wheelUp(back)).toBe('\x1b[<64;100;5M')
+  })
+
   it('링이 안 잘렸으면 원래 출력을 그대로 돌려준다(스크롤백까지 바이트 그대로)', async () => {
     const { mgr, id, emit } = rig()
     emit('hello\r\n')
