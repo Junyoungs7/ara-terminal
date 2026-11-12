@@ -284,7 +284,9 @@ TILE_STAR = {'a': '#FFFFFF', 'b': '#DCD2FF'}
 TILE_RX = 230/1024
 TILE_FILL = SMALL_FILL*0.78
 # 작은 판 별 굵기 보정: 면 윤곽에 덧그리는 선 폭(px, 최종 크기 기준) — 16·24px 에서 가는 갈래가 판색에 묻히지 않게.
-TILE_BOLD = {16: 1.1, 20: 1.0, 24: 0.9, 32: 0.7, 40: 0.5, 48: 0.4}
+TILE_BOLD = {16: 1.1, 20: 1.0, 22: 0.95, 24: 0.9, 28: 0.8, 32: 0.7, 33: 0.68, 40: 0.5, 44: 0.45, 48: 0.4}
+# ARA 3 아이콘 줄 왼쪽 위 로고(22 논리 px) 전용 — 배율 100·125·150·200% 의 실제 픽셀. 사이 굵기는 이웃 값 사이(2026-11-12).
+TILE_RAIL = (22, 28, 33, 44)
 
 
 def tile_png(name, size, ss=16):
@@ -330,6 +332,9 @@ def build_tile(name):
     pngs = {sz: tile_png(name, sz, 16 if sz <= 256 else 4) for sz in PNG_SIZES}
     for sz, im in pngs.items():
         im.save(os.path.join(d, 'png', f'{name}-tile-{sz}.png'))
+    for sz in TILE_RAIL:
+        if sz not in pngs:
+            tile_png(name, sz).save(os.path.join(d, 'png', f'{name}-tile-{sz}.png'))
     save_ico([pngs[s] if s in pngs else tile_png(name, s) for s in ICO_SIZES], os.path.join(d, f'{name}-tile.ico'))
 
 
