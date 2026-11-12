@@ -1987,10 +1987,12 @@ const checks = []
   // ponytail: 텍스트만 보존한다. 이미지·파일 목록이 들어 있었다면 그건 못 살린다
   //   (readImage/readBuffer 까지 백업하는 건 테스트 하나에 과하다). 그 경우 clear() 로
   //   최소한 우리 문자열은 남기지 않는다. 필요해지면 그때 확장해라.
-  const savedClipboard = clipboard.readText()
+  // 2.2.23: ARA_FORCE_CLIPBOARD_BLOCKED=1 이면 진짜 클립보드를 **읽지도 쓰지도 않는다**(전엔 강제 SKIP 이어도 한 번 덮어썼다 복원했다).
+  const forceBlocked = process.env.ARA_FORCE_CLIPBOARD_BLOCKED === '1'
+  const savedClipboard = forceBlocked ? '' : clipboard.readText()
   let pasted = false
-  let clipboardBlocked = false
-  try {
+  let clipboardBlocked = forceBlocked
+  if (!forceBlocked) try {
     clipboard.writeText(PASTE_PROBE)
     // write 직후 read 가 우리 값이 아니면 OS 가 이 프로세스의 클립보드 접근을 거부한 것이다
     // (사내 DLP 등). 그러면 이 검사는 PASS 도 FAIL 도 아니고 **판정 불가**다 — 아래에서 SKIP 처리.
@@ -2011,7 +2013,7 @@ const checks = []
       pasted = INPUTS.some((i) => i.data.includes(PASTE_PROBE))
     }
   } finally {
-    try {
+    if (!forceBlocked) try {
       if (savedClipboard) clipboard.writeText(savedClipboard)
       else clipboard.clear()
     } catch {
