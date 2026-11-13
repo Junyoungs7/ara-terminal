@@ -20,6 +20,9 @@ import { ACCOUNT_PROVIDERS, EMPTY_ACCOUNTS, type AccountProvider, type AccountsV
 
 export const ACCOUNT_ENV: Record<AccountProvider, string> = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME' }
 const LOGIN_TIMEOUT_MS = 10 * 60 * 1000
+/** 자격 파일을 보는 간격, 그 뒤 CLI 가 스스로 끝나기를 기다리는 시간(그 뒤엔 끝낸다 — 마무리 전송이 사내망에서 늦어도 등록은 끝났다). */
+const LOGIN_POLL_MS = 1000
+const LOGIN_GRACE_MS = 10_000
 const MAX_LABEL = 40
 
 type Run = (file: string, args: readonly string[], opts?: RunOptions) => Promise<RunResult>
@@ -38,8 +41,14 @@ export type AccountsFeature = {
    * resume(Codex): 그 rollout 이 대상 폴더에 없으면 다른 폴더(기본·다른 계정)에서 복사해 둔다 — 같은 대화로 이어 띄우게.
    */
   launchEnv(p: AccountProvider, account?: string | null, resume?: string): Record<string, string>
-  /** 그 계정 폴더로 CLI 로그인 명령을 돌린다(끝날 때까지). */
+  /** 그 계정 폴더로 CLI 로그인 명령을 돌린다(끝날 때까지 — 자격 파일이 새로 생기면 그때 끝). */
   login(p: AccountProvider, id: string): Promise<{ ok: boolean; error?: string }>
+  /**
+   * 2.2.24 도는 로그인에 손대기: code = 브라우저가 보여 준 코드를 CLI stdin 에(CLI 의 'Paste code here if prompted'),
+   * retry = 지금 CLI 를 끝내고 같은 login() 안에서 새로 띄운다(브라우저 로그인 중에 OAuth 화면을 잃었을 때 — 이제 로그인돼 있으니 바로 넘어간다),
+   * cancel = 끝낸다. 도는 로그인이 없으면 false.
+   */
+  loginCtl(p: AccountProvider, id: string, ctl: { op: 'code'; code: string } | { op: 'retry' } | { op: 'cancel' }): boolean
 }
 
 export const labelOf = (v: unknown): string => (typeof v === 'string' ? v.replace(/[\r\n\t]+/g, ' ').trim().slice(0, MAX_LABEL) : '')
@@ -217,6 +226,7 @@ export function createAccountsFeature(deps: {
   run?: Run
   platform?: NodeJS.Platform
   onChange?: (v: AccountsView) => void
+  loginTiming?: { pollMs: number; graceMs: number }
 }): AccountsFeature {
   const file = join(deps.userData, 'usage-accounts.json')
   const root = join(deps.userData, 'accounts')
@@ -229,6 +239,9 @@ export function createAccountsFeature(deps: {
   }
   const pathOf = (p: AccountProvider, id: string): string => join(root, p, id)
   const has = (p: AccountProvider, id: string): boolean => view[p].list.some((a) => a.id === id)
+  /** 도는 로그인(계정마다 하나). */
+  const logins = new Map<string, { write: (s: string) => void; next: (why: 'retry' | 'cancel') => void }>()
+  const timing = deps.loginTiming ?? { pollMs: LOGIN_POLL_MS, graceMs: LOGIN_GRACE_MS }
   /** 기본 폴더의 공유 항목을 계정 폴더에 건다(폴더 = 링크, 파일 = 복사). 만들 때와 띄울 때마다 — 나중에 깐 스킬·플러그인도 따라온다. */
   const seed = (p: AccountProvider, dir: string): void => {
     const src = deps.defaultDir(p)
@@ -318,15 +331,88 @@ export function createAccountsFeature(deps: {
       if (!has(p, id)) return { ok: false, error: '없는 계정' }
       const dir = pathOf(p, id)
       mkdirSync(dir, { recursive: true })
+      const key = `${p}:${id}`
+      logins.get(key)?.next('cancel') // 같은 계정의 옛 로그인(설정 화면을 나갔다 와서 다시 누름)은 끝낸다
+      const cred = join(dir, p === 'claude' ? '.credentials.json' : 'auth.json')
+      const mtime = (): number | null => statSync(cred, { throwIfNoEntry: false })?.mtimeMs ?? null
+      const before = mtime()
+      /** 이번 로그인이 자격 파일을 새로 썼나 — 판단의 기준(CLI 가 끝났는지가 아니다). */
+      const fresh = (): boolean => {
+        const m = mtime()
+        return m !== null && m !== before
+      }
       // Orca claude-login-session: `claude auth login --claudeai` · codex-login-session: `codex login`. 브라우저는 CLI 가 연다.
       const [bin, args] = p === 'claude' ? ['claude', ['auth', 'login', '--claudeai']] : ['codex', ['login']]
-      // Windows npm 셔임(.cmd)은 cmd 없이 못 뜬다(detect.ts 와 같은 이유) — 이름은 표의 상수라 셸 주입 자리가 없다.
-      const r = win
-        ? await run(process.env['ComSpec'] || 'cmd.exe', ['/d', '/c', bin, ...args], { env: { [ACCOUNT_ENV[p]]: dir }, timeoutMs: LOGIN_TIMEOUT_MS })
-        : await run(bin, args, { env: { [ACCOUNT_ENV[p]]: dir }, timeoutMs: LOGIN_TIMEOUT_MS })
-      if (r.error) return { ok: false, error: r.error.message }
-      const credFile = p === 'claude' ? '.credentials.json' : 'auth.json'
-      return existsSync(join(dir, credFile)) ? { ok: true } : { ok: false, error: '로그인이 끝나지 않았습니다' }
+      let why: 'retry' | 'cancel' | null = null
+      let child: { pid: number | undefined; write: (s: string) => void } | null = null
+      let ac = new AbortController()
+      let wake: () => void = () => {}
+      // Windows 는 cmd 를 거쳐 띄우므로 cmd 만 끊으면 claude.exe 가 남아 계속 기다린다 — 트리째(taskkill /t).
+      const kill = (): void => {
+        if (win && child?.pid) void run('taskkill', ['/pid', String(child.pid), '/t', '/f'], { timeoutMs: 5000 })
+        else ac.abort()
+      }
+      const me = {
+        write: (s: string) => child?.write(s),
+        next: (w: 'retry' | 'cancel') => {
+          why = w
+          kill()
+          wake()
+        }
+      }
+      logins.set(key, me)
+      try {
+        for (;;) {
+          why = null
+          child = null
+          ac = new AbortController()
+          // 🔴 stdin 을 열어 둔다: 브라우저가 로그인 뒤 코드를 보여 주는 길(수동 흐름)이면 CLI 는 'Paste code here if prompted >' 에서 stdin 을 기다린다.
+          // 2.2.23 까지는 아무도 안 쓰는 stdin 이라 그 길이면 10분을 멈췄다(준영님 2026-11-13: 브라우저 로그인부터 하면 첫 등록이 안 됨 — 다시 누르면 이미 로그인돼 바로 됐다).
+          const opts: RunOptions = { env: { [ACCOUNT_ENV[p]]: dir }, timeoutMs: LOGIN_TIMEOUT_MS, signal: ac.signal, onSpawn: (c) => (child = c) }
+          // Windows npm 셔임(.cmd)은 cmd 없이 못 뜬다(detect.ts 와 같은 이유) — 이름은 표의 상수라 셸 주입 자리가 없다.
+          const proc = win ? run(process.env['ComSpec'] || 'cmd.exe', ['/d', '/c', bin, ...args], opts) : run(bin, args, opts)
+          // 자격 파일이 새로 생기면 등록은 끝났다 — CLI 가 그 뒤 마무리에서 늦어도 기다리지 않는다(graceMs 뒤 끝낸다).
+          let timer: ReturnType<typeof setInterval> | undefined
+          const event = await Promise.race([
+            proc.then((r) => ({ kind: 'exit' as const, r })),
+            new Promise<{ kind: 'cred' }>((res) => (timer = setInterval(() => fresh() && res({ kind: 'cred' }), timing.pollMs))),
+            new Promise<{ kind: 'ctl' }>((res) => (wake = () => res({ kind: 'ctl' })))
+          ])
+          clearInterval(timer)
+          if (event.kind === 'cred') {
+            const done = await Promise.race([proc.then(() => true), new Promise<false>((res) => setTimeout(() => res(false), timing.graceMs))])
+            if (!done) kill()
+            return { ok: true }
+          }
+          if (event.kind === 'ctl' && why === 'retry') {
+            await proc // 옛 CLI 가 끝나고(포트·stdin 정리) 새로
+            continue
+          }
+          if (event.kind === 'ctl') await proc
+          if (fresh()) return { ok: true }
+          if (why === 'cancel') return { ok: false, error: '로그인을 취소했습니다' }
+          const r = event.kind === 'exit' ? event.r : await proc
+          if (r.error) {
+            // 'Command failed: cmd /d /c …' 대신 CLI 가 말한 줄(Login failed: …)을.
+            const said = r.stderr.split(/\r?\n/).find((l) => /fail|error|invalid/i.test(l))
+            return { ok: false, error: said?.trim() || r.error.message }
+          }
+          return { ok: false, error: '로그인이 끝나지 않았습니다' }
+        }
+      } finally {
+        if (logins.get(key) === me) logins.delete(key)
+      }
+    },
+    loginCtl(p, id, ctl) {
+      const l = logins.get(`${p}:${id}`)
+      if (!l) return false
+      if (ctl.op === 'code') {
+        // 코드는 'code#state' 한 줄 — 줄바꿈·제어 문자를 빼고 넣는다(두 줄이 되면 CLI 가 둘을 따로 읽는다).
+        const code = ctl.code.replace(/[\x00-\x1f\x7f]/g, '').trim()
+        if (!code) return false
+        l.write(code + '\n')
+      } else l.next(ctl.op)
+      return true
     }
   }
 }

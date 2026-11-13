@@ -54,6 +54,19 @@ export function limitOf(u: UsageState, tab: AgentTab, now: number, srv: ServerAc
   return { resetsAt: at.length ? Math.max(...at) : null, label: accountLabel(u, p, cur) }
 }
 
+/**
+ * 2.2.24 설정에서 계정을 바꿨는데 이 탭은 옛 계정 — 도는 Claude·Codex 는 프로세스라 계정을 못 바꾼다(env 는 띄울 때 한 번).
+ * 준영님 2026-11-13 "설정에서 계정을 스위칭해도 에이전트로 돌아오면 안 바뀌어 있다": 예전엔 이때 한도 띠마저 사라졌다(limitOf 는 고른 계정의 사용량만 안다).
+ * 탭 계정과 고른 계정이 다르면 { from: 탭 계정 이름, to: 고른 계정 } — 띠가 [그 계정으로 이어서]를 조용히 권한다. 원격 탭·모르는 계정(옛 탭)은 null.
+ */
+export function movedOf(u: UsageState, tab: AgentTab): { from: string; to: AccountChoice } | null {
+  const p = accountProviderOf(tab)
+  if (!p || tab.host || tab.exited || tab.slept || tab.account === undefined) return null
+  const active = u.accounts[p].active
+  if (tab.account === active) return null
+  return { from: accountLabel(u, p, tab.account), to: { id: active, label: accountLabel(u, p, active) } }
+}
+
 const switching = new Set<string>()
 
 /** 이 탭을 그 계정으로 이어 띄운다. 실패면 사유, 성공이면 null. */

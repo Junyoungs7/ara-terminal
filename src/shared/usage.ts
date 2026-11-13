@@ -423,4 +423,7 @@ export type AccountAction =
   | { op: 'rename'; provider: AccountProvider; id: string; label: string }
   | { op: 'select'; provider: AccountProvider; id: string | null }
   | { op: 'login'; provider: AccountProvider; id: string }
+  /** 2.2.24 도는 로그인에: 브라우저가 보여 준 코드 넣기 · 브라우저 로그인 화면 다시 열기(CLI 새로) · 취소. */
+  | { op: 'loginCode'; provider: AccountProvider; id: string; code: string }
+  | { op: 'loginRetry' | 'loginCancel'; provider: AccountProvider; id: string }
 export type AccountActionResult = { ok: boolean; id?: string; error?: string }

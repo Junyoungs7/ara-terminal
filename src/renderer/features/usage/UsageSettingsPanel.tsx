@@ -29,6 +29,48 @@ function AccountUsageText({ u, d }: { u: ProviderUsage | null | undefined; d: Us
   )
 }
 
+/**
+ * 2.2.24 로그인하는 동안 그 줄 아래 — 브라우저 로그인부터 하면 첫 등록이 안 되던 것(준영님 2026-11-13).
+ * 브라우저가 로그인 뒤 코드를 보여 주면 여기 붙여 넣는다(CLI 의 'Paste code here if prompted' — 예전엔 넣을 자리가 없었다).
+ * 로그인 화면을 잃었으면 [로그인 화면 다시 열기] = 같은 줄에서 CLI 를 새로(이제 브라우저가 로그인돼 있어 바로 넘어간다).
+ */
+function LoginHelp({ provider, id }: { provider: AccountProvider; id: string }): JSX.Element {
+  const [code, setCode] = useState('')
+  const ctl = (a: { op: 'loginCode'; code: string } | { op: 'loginRetry' | 'loginCancel' }): void => void window.ev.usage.account({ ...a, provider, id }).catch(() => {})
+  const send = (): void => {
+    if (!code.trim()) return
+    ctl({ op: 'loginCode', code })
+    setCode('')
+  }
+  return (
+    <div className="acct-login" data-account-login={id}>
+      <span className="set-note">{t('usage.acct.loginHelp')}</span>
+      <div className="acct-actions">
+        <input
+          type="text"
+          className="ai-key-input"
+          data-field="usage.acct.code"
+          spellCheck={false}
+          autoComplete="off"
+          placeholder={t('usage.acct.codePh')}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+        />
+        <button type="button" className="btn sec" data-action="usage.acct.code" disabled={!code.trim()} onClick={send}>
+          {t('usage.acct.codeSend')}
+        </button>
+        <button type="button" className="btn sec" data-action="usage.acct.retry" onClick={() => ctl({ op: 'loginRetry' })}>
+          {t('usage.acct.retry')}
+        </button>
+        <button type="button" className="btn sec" data-action="usage.acct.loginCancel" onClick={() => ctl({ op: 'loginCancel' })}>
+          {t('usage.acct.cancel')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AccountsBlock({ provider }: { provider: AccountProvider }): JSX.Element {
   const u = useUsage()
   const view = u.accounts[provider]
@@ -102,6 +144,7 @@ function AccountsBlock({ provider }: { provider: AccountProvider }): JSX.Element
                 </button>
               </span>
             )}
+            {a && busy === a.id && <LoginHelp provider={provider} id={a.id} />}
           </div>
         )
       })}

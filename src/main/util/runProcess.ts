@@ -35,6 +35,8 @@ export type RunOptions = {
   windowsVerbatimArguments?: boolean
   /** 3차 R2-B 결과에 날 바이트(stdoutBytes)도 싣는다. */
   raw?: boolean
+  /** 2.2.24 계정 로그인 — 도는 동안 stdin 에 줄을 넣고(CLI 의 'Paste code here') 트리째 끝낼 pid 를 받는다. stdin 은 열어 둔다(input 과 같이 쓰지 않는다). */
+  onSpawn?: (c: { pid: number | undefined; write: (s: string) => void }) => void
 }
 
 export type RunResult = {
@@ -110,6 +112,9 @@ export function runProcess(file: string, args: readonly string[], opts: RunOptio
     if (opts.input !== undefined) {
       child.stdin?.on('error', () => {}) // 먼저 끝난 프로세스 — 결과는 콜백이 알린다
       child.stdin?.end(opts.input)
+    } else if (opts.onSpawn) {
+      child.stdin?.on('error', () => {})
+      opts.onSpawn({ pid: child.pid, write: (s) => void child.stdin?.write(s) })
     }
   })
 }

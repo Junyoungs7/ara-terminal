@@ -12607,6 +12607,16 @@ progress {
   font-family: inherit;
   color: var(--text-lo);
 }
+/* 2.2.24 로그인하는 동안 그 줄 아래(UsageSettingsPanel LoginHelp) — 줄을 접어 한 줄 전체를 쓴다. */
+.acct-row:has(.acct-login) {
+  flex-wrap: wrap;
+}
+.acct-login {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
 .acct-actions,
 .acct-foot,
 .stats-head {

@@ -4,7 +4,7 @@
 //    'limit' 을 받으면 --settings 파일의 statusLine 명령에 rate_limits(5시간 100%)를 흘린다 — 앱의 실제 사용량 길(statusLine → usage)로 한도 신호가 선다.
 // 🔴 기록·계정·훅은 임시 홈(userData/e2e-home)과 userData 안에만. 사용자 실제 ~/.claude 는 안 건드린다.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { Page } from '@playwright/test'
 import { test, expect, tempDir } from './fixtures'
@@ -21,6 +21,19 @@ const { spawnSync } = require('node:child_process')
 const args = process.argv.slice(3)
 const win = process.platform === 'win32'
 if (args[0] === '--version') { console.log('9.9.9 (fake claude)'); process.exit(0) }
+// 2.2.24 가짜 'claude auth login --claudeai': 진짜처럼 브라우저 안내와 'Paste code here if prompted > ' 를 내고 stdin 의 'code#state' 줄을 기다린다
+// (브라우저 로그인부터 한 길 — 브라우저가 코드를 보여 준다). 받으면 그 CLAUDE_CONFIG_DIR 에 자격 파일. 브라우저는 열지 않는다.
+if (args[0] === 'auth' && args[1] === 'login') {
+  process.stdout.write("Opening browser to sign in…\nIf the browser didn't open, visit: https://example.invalid/oauth\nPaste code here if prompted > ")
+  require('node:readline').createInterface({ input: process.stdin }).on('line', (l) => {
+    const [code, state] = l.trim().split('#')
+    if (!code || !state) return process.stderr.write('Invalid code. Please make sure the full code was copied.\n')
+    require('node:fs').writeFileSync(require('node:path').join(process.env.CLAUDE_CONFIG_DIR, '.credentials.json'), JSON.stringify({ e2e: l.trim() }))
+    process.stdout.write('Login successful.\n')
+    process.exit(0)
+  })
+  return
+}
 const out = (s) => process.stdout.write(s.replace(/\n/g, '\r\n'))
 const cfg = process.env.CLAUDE_CONFIG_DIR || process.env.ARA_E2E_DEFAULT_CFG
 const ri = args.indexOf('--resume')
@@ -216,6 +229,75 @@ test('ACCT-3 탭 우클릭 메뉴(한도 없이도): [다른 계정으로 이어
     await expect.poll(term, { timeout: 20_000 }).toContain('--resume fake-sid')
     await expect.poll(term).toContain('CFG: (system)')
     await expect.poll(term).toContain('RESUMED fake-sid') // 기본 폴더 = 공유 자리
+  } finally {
+    process.env.PATH = savedPath
+  }
+})
+
+// 2.2.24 준영님 2026-11-13 "설정에서 계정을 스위칭해도 에이전트로 돌아오면 계정이 안 바뀌어 있다" — 도는 탭은 프로세스라 계정을 못 바꾼다.
+// 예전: 고른 계정이 바뀌면 그 탭의 한도 띠마저 사라져(limitOf 는 고른 계정 사용량만 안다) 아무 말이 없었다. 이제: 조용한 띠 [B 로 이어서].
+test('ACCT-4★ 한도 탭에서 설정 › 계정을 B 로 바꾸고 돌아오면: 한도 띠 대신 "이 탭은 A · 새 에이전트는 B" [B 로 이어서] → B 로 --resume', async ({ launch, userDataDir }) => {
+  const savedPath = process.env.PATH
+  try {
+    const { page, sid } = await start(launch, userDataDir)
+    await page.evaluate((s) => window.ev.session.input(s, 'limit\r'), sid)
+    await expect(page.locator('[data-aiws="acct-band"]')).toContainText('업무 A', { timeout: 20_000 })
+    await expect(page.locator('[data-aiws="acct-moved"]')).toHaveCount(0)
+    // 설정 › 계정·사용량에서 업무 B 를 고르고 돌아온다(사람이 하는 길).
+    await page.keyboard.press('Control+,')
+    await page.click('.settings-page .sp-nav [data-section="usage"]')
+    const pane = page.locator('.sp-pane[data-section="usage"]')
+    await pane.locator(`[data-accounts="claude"] [data-account="${B}"] [data-action="usage.acct.select"]`).click()
+    await expect(pane.locator(`[data-accounts="claude"] [data-account="${B}"]`)).toHaveClass(/on/)
+    await page.click('.settings-page [data-action="settings.close"]') // 설정의 [뒤로]
+    await expect(page.locator('.settings-page.open')).toHaveCount(0)
+    const moved = page.locator('[data-aiws="acct-moved"]')
+    await expect(moved).toContainText('업무 A')
+    await expect(moved).toContainText('업무 B')
+    await expect(page.locator('[data-aiws="acct-band"]')).toHaveCount(0)
+    await moved.locator('[data-aiws="acct-moved-switch"]').click()
+    const fresh = await termOfNewTab(page, sid)
+    const term = () => page.evaluate((x) => window.__evTerm(x)?.text() ?? '', fresh)
+    await expect.poll(term, { timeout: 20_000 }).toContain('--resume fake-sid')
+    await expect.poll(term).toContain(`CFG: ${join(userDataDir, 'accounts', 'claude', B)}`)
+    await expect(page.locator('[data-aiws="acct-switched"]')).toContainText('업무 B')
+    await expect(moved).toHaveCount(0) // 새 탭은 고른 계정 B
+  } finally {
+    process.env.PATH = savedPath
+  }
+})
+
+// 2.2.24 준영님 2026-11-13 "브라우저에 로그인이 안 된 상태로 로그인부터 하면 첫 등록이 안 된다" — 그 길에서 브라우저가 코드를 보여 주면
+// CLI 는 'Paste code here if prompted >' 로 stdin 을 기다리는데 아라엔 넣을 자리가 없었다. 가짜 CLI 가 그 길을 밟는다(실제 계정·브라우저 없음).
+test('ACCT-5★ 설정 › 계정 추가 → 로그인 중 줄에 브라우저 코드 붙여 넣기 → 한 번에 등록(자격 파일), 줄이 닫힌다', async ({ launch, userDataDir }) => {
+  const savedPath = process.env.PATH
+  try {
+    const root = realpathSync(tempDir('ara-e2e-acct-login-'))
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    fakeClaude(bin)
+    process.env.PATH = bin + delimiter + (process.env.PATH ?? '')
+    const { page } = await launch(userDataDir)
+    await page.keyboard.press('Control+,')
+    await page.click('.settings-page .sp-nav [data-section="usage"]')
+    const block = page.locator('.sp-pane[data-section="usage"] [data-accounts="claude"]')
+    await block.locator('[data-action="usage.acct.add"]').click()
+    await page.fill('.dlg-input', '업무 C')
+    await page.locator('.modal-ft .btn.pri').click()
+    const help = block.locator('[data-account-login]')
+    await expect(help).toBeVisible({ timeout: 20_000 })
+    const id = (await help.getAttribute('data-account-login'))!
+    const cred = join(userDataDir, 'accounts', 'claude', id, '.credentials.json')
+    // 코드를 넣기 전엔 등록이 안 된다(CLI 가 stdin 을 기다린다).
+    await page.waitForTimeout(1500)
+    expect(existsSync(cred)).toBe(false)
+    await expect(help).toBeVisible()
+    await help.locator('[data-field="usage.acct.code"]').fill('abc#st')
+    await help.locator('[data-action="usage.acct.code"]').click()
+    await expect(help).toHaveCount(0, { timeout: 20_000 })
+    expect(JSON.parse(readFileSync(cred, 'utf8'))).toEqual({ e2e: 'abc#st' })
+    await expect(block.locator('.set-note.err')).toHaveCount(0)
+    await expect(block.locator(`[data-account="${id}"] [data-action="usage.acct.login"]`)).toHaveText('로그인')
   } finally {
     process.env.PATH = savedPath
   }

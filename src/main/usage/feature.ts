@@ -88,7 +88,10 @@ export function registerUsageFeature(deps: {
     if (a.op === 'remove') accounts.remove(a.provider, a.id)
     else if (a.op === 'rename') accounts.rename(a.provider, a.id, a.label)
     else if (a.op === 'select') accounts.select(a.provider, a.id)
-    else if (a.op === 'login') {
+    else if (a.op === 'loginCode' || a.op === 'loginRetry' || a.op === 'loginCancel') {
+      const ok = accounts.loginCtl(a.provider, a.id, a.op === 'loginCode' ? { op: 'code', code: String(a.code ?? '') } : { op: a.op === 'loginRetry' ? 'retry' : 'cancel' })
+      return ok ? { ok: true } : { ok: false, error: '진행 중인 로그인이 없습니다' }
+    } else if (a.op === 'login') {
       const r = await accounts.login(a.provider, a.id)
       // 고른 계정에 로그인했으면 바로 다시 묻는다.
       if (r.ok && accounts.view()[a.provider].active === a.id) void svc.refresh(true)

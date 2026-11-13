@@ -12,7 +12,7 @@ import { openSettings } from '../../store/settingsNav'
 import { pushNote } from '../../store/notify'
 import { ContextMenu, type MenuItem } from '../../interactions/ContextMenu'
 import { useAgentStore, type AgentTab } from './agentStore'
-import { accountChoices, accountProviderOf, limitOf, switchAccount, type AccountChoice } from './accountRestart'
+import { accountChoices, accountProviderOf, limitOf, movedOf, switchAccount, type AccountChoice } from './accountRestart'
 import type { DialogResult, DialogSpec } from '../../components/Dialog'
 import './accountSwitch.css'
 
@@ -114,7 +114,7 @@ export function AccountLimitBand({ tab }: { tab: AgentTab }): JSX.Element | null
     )
   if (tab.switched) return <SwitchedNote tab={tab} />
   const text = limitText(u, tab, now, srv)
-  if (!text) return null
+  if (!text) return <MovedNote tab={tab} u={u} run={s.run} err={s.err} />
   return (
     <div className="aiws-note aiws-acct-band warn" role="alert" data-aiws="acct-band">
       <Gauge aria-hidden />
@@ -165,7 +165,7 @@ export function AccountSwitchCard({ tab }: { tab: AgentTab }): JSX.Element | nul
     )
   if (tab.switched) return <SwitchedNote tab={tab} />
   const text = limitText(u, tab, now, srv)
-  if (!text) return null
+  if (!text) return <MovedNote tab={tab} u={u} run={s.run} err={s.err} />
   const list = accountChoices(u, tab, srv)
   const chosen = list.find((a) => idOf(a) === pick) ?? list[0]
   return (
@@ -214,6 +214,39 @@ function SwitchedNote({ tab }: { tab: AgentTab }): JSX.Element {
         type="button"
         className="btn sec"
         onClick={() => useAgentStore.setState((st) => ({ tabs: st.tabs.map((x) => (x.sessionId === tab.sessionId ? { ...x, switched: undefined } : x)) }))}
+      >
+        {t('aiws.agent.close')}
+      </button>
+    </div>
+  )
+}
+
+/** 닫은 안내(탭·고른 계정 짝) — 다시 바꾸면 또 뜬다. */
+const movedClosed = new Set<string>()
+
+/** 2.2.24 설정에서 계정을 바꾼 뒤 옛 계정으로 도는 탭 — "이 탭은 A 로 돌고 있습니다 · 새 에이전트는 B" [B(으)로 이어서] [닫기]. */
+function MovedNote({ tab, u, run, err }: { tab: AgentTab; u: UsageState; run: (a: AccountChoice) => void; err: string | null }): JSX.Element | null {
+  const [, redraw] = useState(0)
+  const m = movedOf(u, tab)
+  const key = `${tab.sessionId}|${m?.to.id ?? ''}`
+  if (!m || movedClosed.has(key)) return null
+  return (
+    <div className="aiws-note aiws-acct-band ai" role="status" data-aiws="acct-moved">
+      <ArrowLeftRight aria-hidden />
+      <span>{t('aiws.acct.moved').replace('{from}', m.from).replace('{to}', m.to.label)}</span>
+      <span className="aiws-acct-sp" />
+      {err && <span className="aiws-err">{err}</span>}
+      <button type="button" className="btn sec" data-aiws="acct-moved-switch" onClick={() => run(m.to)}>
+        {t('aiws.acct.continueTo').replace('{name}', m.to.label)}
+      </button>
+      <button
+        type="button"
+        className="btn sec"
+        data-aiws="acct-moved-close"
+        onClick={() => {
+          movedClosed.add(key)
+          redraw((n) => n + 1)
+        }}
       >
         {t('aiws.agent.close')}
       </button>
