@@ -141,7 +141,9 @@ function rowIcon(kind: RowKind, name: string): JSX.Element {
 
 // 전송·삭제 큐 항목. pct=null 은 진행률을 알 수 없는 작업(재귀 삭제).
 // files = 폴더째 받기(R15)의 "받은 수/전체 수". 파일 하나짜리 전송에는 없다.
-type QueueItem = { id: string; label: string; pct: number | null; files?: string }
+// state = 끝난 뒤의 결과(신고 #36). 완료·취소는 XFER_LINGER_MS 동안 남았다가 걷히고, 실패는 [×] 로 닫을 때까지 남는다.
+type QueueItem = { id: string; label: string; pct: number | null; files?: string; state?: 'done' | 'failed' | 'canceled'; msg?: string }
+const XFER_LINGER_MS = 4000
 
 // 로컬 fs / 원격 SFTP 공통 백엔드. remote=true 인 쪽만 전송(다운·업로드)을 갖는다.
 type Backend = {
@@ -555,49 +557,64 @@ export function FileTree({
   )
 
   // ── 전송 큐(SFTP 전용): 순차 실행 · 항목별 진행률 · 개별 취소 ──
+  // 신고 #36: 큐는 **여러 번의 runQueue 가 함께 쓰는 목록**이다. 전에는 시작할 때 setQueue(items) 로 통째로
+  // 갈아 끼우고 끝날 때 setQueue([]) 로 통째로 비워서, 받는 중에 또 받으면 앞 줄이 사라지고 먼저 끝난 쪽이
+  // 남의 줄까지 지웠다(파일은 둘 다 받아졌다). 이제 자기 항목만 붙이고, 자기 항목만 결과로 바꾼다.
+  const settleItem = useCallback((id: string, state: NonNullable<QueueItem['state']>, msg?: string) => {
+    setQueue((cur) => cur.map((x) => (x.id === id ? { ...x, state, msg, pct: state === 'done' ? 100 : x.pct } : x)))
+    if (state !== 'failed') setTimeout(() => setQueue((cur) => cur.filter((x) => x.id !== id)), XFER_LINGER_MS)
+  }, [])
+
   const runQueue = useCallback(
     async (jobs: { label: string; run: (transferId: string) => Promise<SftpXferResult> }[]) => {
       if (jobs.length === 0) return
       const items: QueueItem[] = jobs.map((j) => ({ id: newId('x-'), label: j.label, pct: 0 }))
-      setQueue(items)
+      setQueue((cur) => [...cur, ...items])
       setError(null) // 지난 문구는 여기서 걷는다 — 끝의 새로고침은 이번 실패 문구를 남긴다
       for (let i = 0; i < jobs.length; i++) {
         const item = items[i]
-        if (canceled.current.has(item.id)) continue
+        if (canceled.current.has(item.id)) {
+          canceled.current.delete(item.id)
+          continue // 대기 중 취소 — cancelItem 이 이미 '취소됨'으로 바꿨다
+        }
         const off = window.ev.sftp.onProgress(item.id, (p: SftpProgress) => {
           // 신고 #8: 폴더째 받기는 세는 동안이 길다 — 그동안은 흐르는 막대 + 센 파일 수.
           if (p.scanning) {
             const files = t('sftp.dir.scanning').replace('{n}', (p.files ?? 0).toLocaleString('ko-KR'))
-            setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct: null, files } : x)))
+            setQueue((cur) => cur.map((x) => (x.id === item.id && !x.state ? { ...x, pct: null, files } : x)))
             return
           }
           const pct = p.total > 0 ? Math.min(100, Math.round((p.transferred / p.total) * 100)) : 0
           const files = p.fileTotal ? `${p.files ?? 0}/${p.fileTotal}` : undefined
-          setQueue((cur) => cur.map((x) => (x.id === item.id ? { ...x, pct, files } : x)))
+          setQueue((cur) => cur.map((x) => (x.id === item.id && !x.state ? { ...x, pct, files } : x)))
         })
         const res = await jobs[i].run(item.id)
         off()
-        setQueue((cur) => cur.filter((x) => x.id !== item.id))
         canceled.current.delete(item.id)
-        if (!res.ok) {
-          if (res.canceled) setError(res.cleaned === false ? t('sftp.cleanFail') : t('sftp.canceled'))
-          else setError(res.message || t('sftp.failed'))
+        if (res.ok) settleItem(item.id, 'done')
+        else if (res.canceled) {
+          settleItem(item.id, 'canceled')
+          if (res.cleaned === false) setError(t('sftp.cleanFail'))
+        } else {
+          settleItem(item.id, 'failed', res.message || t('sftp.failed'))
+          setError(res.message || t('sftp.failed'))
         }
       }
-      setQueue([])
       void load(path, true, true)
     },
-    [load, path]
+    [load, path, settleItem]
   )
 
-  // 큐 항목 취소: 진행 중이면 main 에 취소 요청, 대기 중이면 루프가 건너뛴다.
+  // 큐 항목 [×]: 끝난 줄이면 닫기, 진행 중이면 main 에 취소 요청, 대기 중이면 루프가 건너뛴다.
   const cancelItem = useCallback(
     (id: string) => {
+      const item = queue.find((x) => x.id === id)
+      if (item?.state) return setQueue((cur) => cur.filter((x) => x.id !== id))
       canceled.current.add(id)
       backend?.cancel(id)
-      setQueue((cur) => cur.filter((x) => x.id !== id))
+      settleItem(id, 'canceled')
     },
-    [backend]
+    [backend, queue, settleItem]
   )
 
   const selectedEntries = useCallback(() => shown.filter((e) => sel.includes(e.name)), [shown, sel])
@@ -881,9 +898,9 @@ export function FileTree({
     if (r !== 'confirm') return
     const opId = newId('rm-')
     // 재귀 삭제는 오래 걸릴 수 있어 큐에 진행 항목으로 띄운다(취소 가능 — SFTP 는 실제로 멈춘다).
-    setQueue([{ id: opId, label: `${t('file.del.progress')} ${targets.length}`, pct: null }])
+    setQueue((cur) => [...cur, { id: opId, label: `${t('file.del.progress')} ${targets.length}`, pct: null }])
     const res = await backend.remove(targets.map((e) => joinPath(path, e.name)), opId)
-    setQueue([])
+    setQueue((cur) => cur.filter((x) => x.id !== opId))
     canceled.current.delete(opId)
     applyOp(res)
   }, [backend, selectedEntries, ask, path, applyOp])
@@ -1673,17 +1690,25 @@ export function FileTree({
       {queue.length > 0 && (
         <div className="sftp-xfer">
           {queue.map((item) => (
-            <div key={item.id} className="xfer-item">
+            <div key={item.id} className="xfer-item" data-state={item.state}>
               <div className="xfer-row">
                 <span className="xfer-label">{item.label}</span>
-                <span className="xfer-cancel" title={t('sftp.cancel')} onClick={() => cancelItem(item.id)}>
+                <span className="xfer-cancel" title={t(item.state ? 'dlg.close' : 'sftp.cancel')} onClick={() => cancelItem(item.id)}>
                   <IconClose />
                 </span>
               </div>
               <div className="xfer-bar">
-                <div className={'xfer-fill' + (item.pct === null ? ' indet' : '')} style={item.pct === null ? undefined : { width: `${item.pct}%` }} />
+                <div
+                  className={'xfer-fill' + (item.pct === null && !item.state ? ' indet' : '')}
+                  style={item.pct === null ? (item.state ? { width: '100%' } : undefined) : { width: `${item.pct}%` }}
+                />
               </div>
-              {item.pct !== null ? (
+              {item.state ? (
+                <span className="xfer-pct xfer-state" title={item.msg}>
+                  {t(`sftp.xfer.${item.state}`)}
+                  {item.msg ? ` — ${item.msg}` : ''}
+                </span>
+              ) : item.pct !== null ? (
                 <span className="xfer-pct">
                   {item.pct}%{item.files ? ` · ${item.files}` : ''}
                 </span>

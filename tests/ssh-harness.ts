@@ -50,6 +50,8 @@ export async function startPasswordServer(opts?: {
   password?: string
   hostKeyPem?: string
   sftpRoot?: string
+  // 신고 #36: sftp READ 지연(ms) — 큰 파일 둘을 겹쳐 받는 순서를 재현할 시간을 번다.
+  sftpReadDelayMs?: number
   // F7: shell 이 `cd <path>` 입력을 받으면 그 경로로 OSC7 을 방출한다(터미널→트리 자동 이동 실증용).
   emitOsc7OnCd?: boolean
   // FB-0007①: 실제 bash 의 PROMPT_COMMAND 훅을 흉내낸다 — SHELL_INTEGRATION.ssh 주입(마커: "PROMPT_COMMAND")
@@ -222,7 +224,7 @@ export async function startPasswordServer(opts?: {
                 sftp.name(reqid, [{ filename: target, longname: target, attrs }])
               })
             }
-            if (sftpRoot) serveSftp(sftp, sftpRoot)
+            if (sftpRoot) serveSftp(sftp, sftpRoot, opts?.sftpReadDelayMs ?? 0)
           })
         }
       })

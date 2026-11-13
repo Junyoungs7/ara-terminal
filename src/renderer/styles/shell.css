@@ -1191,6 +1191,16 @@
     opacity: 0.45;
   }
 }
+/* 신고 #36: 끝난 줄 — 완료는 다 찬 막대, 실패·취소는 막대 색으로 가른다. */
+.sftp-xfer .xfer-item[data-state='failed'] .xfer-fill {
+  background: var(--err);
+}
+.sftp-xfer .xfer-item[data-state='canceled'] .xfer-fill {
+  background: var(--text-lo);
+}
+.sftp-xfer .xfer-item[data-state='failed'] .xfer-state {
+  color: var(--err);
+}
 .sftp-xfer .xfer-pct {
   display: block;
   margin-top: var(--sp-2);

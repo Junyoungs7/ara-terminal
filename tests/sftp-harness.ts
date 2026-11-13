@@ -25,7 +25,8 @@ type FileHandle = { type: 'file'; fd: number }
 type DirHandle = { type: 'dir'; path: string; sent: boolean }
 
 // serveSftp: accept 로 얻은 sftp 스트림에 op 핸들러를 배선. root 밖 접근은 차단(권한 거부 시뮬레이션 아님, 안전).
-export function serveSftp(sftp: any, root: string): void {
+// readDelayMs: READ 응답을 늦춰 큰 파일 전송이 화면에 머물게 한다(동시 전송 재현 — 신고 #36).
+export function serveSftp(sftp: any, root: string, readDelayMs = 0): void {
   const handles = new Map<number, FileHandle | DirHandle>()
   let seq = 0
   const makeHandle = (h: FileHandle | DirHandle): Buffer => {
@@ -146,7 +147,8 @@ export function serveSftp(sftp: any, root: string): void {
       return sftp.status(reqid, STATUS_CODE.FAILURE)
     }
     if (n === 0) return sftp.status(reqid, STATUS_CODE.EOF)
-    sftp.data(reqid, buf.subarray(0, n))
+    if (readDelayMs > 0) setTimeout(() => sftp.data(reqid, buf.subarray(0, n)), readDelayMs)
+    else sftp.data(reqid, buf.subarray(0, n))
   })
 
   sftp.on('WRITE', (reqid: number, h: Buffer, offset: number, data: Buffer) => {

@@ -139,6 +139,45 @@ test('SFTP-5 큰 파일 전송을 취소하면 부분 파일이 정리된다', a
   await expect.poll(() => existsSync(savePath), { timeout: 15_000 }).toBe(false)
 })
 
+// SFTP-5b 신고 #36 — 큰 파일을 받는 중에 또 받으면 앞의 진행 창이 사라지고, 둘 다 끝나도 화면엔 아무것도
+// 안 남았다(파일은 둘 다 받아짐). runQueue 가 목록을 **통째로 갈아 끼우고** 끝날 때 **통째로 비웠다.**
+// 신고 순서 그대로: [다른 위치에 받기] A → A 진행 중 → [다른 위치에 받기] B.
+test('SFTP-5b 큰 파일 둘을 겹쳐 받으면 진행 줄이 둘 다 보이고 각자 완료가 뜬다', async ({ ara, ssh }) => {
+  const remote = makeRemote()
+  const SIZE = 8 * 1024 * 1024
+  writeFileSync(join(remote, 'big_A.bin'), Buffer.alloc(SIZE, 0x41))
+  writeFileSync(join(remote, 'big_B.bin'), Buffer.alloc(SIZE, 0x42))
+  // READ 마다 40ms — 64KB 씩 순차로 읽으니 한 파일에 5초 남짓. 두 번째를 누를 시간이 넉넉하다.
+  const h = await ssh({ password: 'pw-sftp5b', sftpRoot: remote, sftpReadDelayMs: 40 })
+  await openRemoteTree(ara.page, h.port, 'pw-sftp5b')
+  const localDir = mkdtempSync(join(tmpdir(), 'ara-r36-'))
+  const pathA = join(localDir, 'A', 'big_A.bin')
+  const pathB = join(localDir, 'B', 'big_B.bin')
+  mkdirSync(join(localDir, 'A'))
+  mkdirSync(join(localDir, 'B'))
+  const xfer = ara.page.locator('.sftp-xfer .xfer-item')
+  const downloadAs = async (name: string, savePath: string) => {
+    await stubPickers(ara.app, { savePath, saveDir: localDir, uploadPaths: [] })
+    await row(ara.page, name).click()
+    await row(ara.page, name).click({ button: 'right' })
+    await ara.page.click('.ctx-menu .ctx-item[data-action="file.downloadAs"]')
+  }
+
+  await downloadAs('big_A.bin', pathA)
+  await expect(xfer).toHaveCount(1, { timeout: 20_000 })
+  await downloadAs('big_B.bin', pathB)
+  // 🔴 고치기 전: 여기서 1 — A 의 줄이 B 로 갈아 끼워졌다.
+  await expect(xfer).toHaveCount(2, { timeout: 10_000 })
+  await expect(xfer.nth(0).locator('.xfer-label')).toContainText('big_A.bin')
+  await expect(xfer.nth(1).locator('.xfer-label')).toContainText('big_B.bin')
+  // 둘 다 끝나면 각자 "완료"를 보인다(먼저 끝난 쪽이 남의 줄을 지우지 않는다).
+  await expect(ara.page.locator('.sftp-xfer .xfer-item[data-state="done"]')).toHaveCount(2, { timeout: 60_000 })
+  expect(readFileSync(pathA).length).toBe(SIZE)
+  expect(readFileSync(pathB).length).toBe(SIZE)
+  // 완료 줄은 잠시 남았다가 걷힌다.
+  await expect(ara.page.locator('.sftp-xfer')).toHaveCount(0, { timeout: 20_000 })
+})
+
 // SFTP-6 원격 파일 조작(새 폴더 · 이름 변경 · 삭제)
 test('SFTP-6 원격에서 새 폴더·이름 변경·삭제를 한다', async ({ ara, ssh }) => {
   const remote = makeRemote()
